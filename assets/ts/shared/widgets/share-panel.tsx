@@ -35,6 +35,7 @@ import type { ParsedContact } from "../invite-parser";
 import { registrationInviteCreateSchema, peerInviteResultSchema } from "../../../shared/schemas/registration";
 import { postJson, ApiClientError } from "../api-client";
 import { Alert } from "../../ui/Alert";
+import { CopyLinkRow } from "./copy-link-row";
 import { Button, ButtonLink } from "../../ui/Button";
 import { Field } from "../../ui/Field";
 import { Panel, PanelBody } from "../../ui/Panel";
@@ -53,6 +54,12 @@ export interface SharePanelOptions {
   lastName?: string | null;
   manageToken?: string | null;
   eventSlug?: string | null;
+  /**
+   * The viewer is themself waiting for an in-person seat. Telling them seats
+   * are limited and spots fill fast is their own situation read back to them
+   * as a sales line, so the invitation drops the urgency.
+   */
+  waitlisted?: boolean;
 }
 
 function nameSlug(firstName?: string | null, lastName?: string | null): string {
@@ -130,37 +137,9 @@ function OgBadge({
         <ButtonLink
           href={`${ogBadgeUrl}${ogBadgeUrl.includes("?") ? "&" : "?"}download=1&name=${encodeURIComponent(badgeFilename)}`}
           download={badgeFilename}
-          size="sm"
         >
           <span aria-hidden="true">⬇</span> Download badge
         </ButtonLink>
-      </div>
-    </div>
-  );
-}
-
-function CopyLinkRow({ shareUrl }: { shareUrl: string }) {
-  const [copyStatus, setCopyStatus] = useState("");
-
-  const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(shareUrl).then(
-      () => setCopyStatus("Link copied to your clipboard."),
-      () => setCopyStatus("Could not copy automatically — select the link above and copy it."),
-    );
-  }, [shareUrl]);
-
-  return (
-    <div class="pk-stack pk-stack--snug">
-      <Field label="Your unique sharing link" help="Registrations made through this link are credited to you.">
-        {(control) => <TextInput {...control} class="pk-mono" value={shareUrl} readOnly />}
-      </Field>
-      <div class="pk-cluster">
-        <Button size="sm" onClick={handleCopy}>
-          Copy link
-        </Button>
-        <p class="pk-small" role="status">
-          {copyStatus}
-        </p>
       </div>
     </div>
   );
@@ -178,20 +157,14 @@ function SocialLinks({
   return (
     <div class="pk-cluster">
       <span class="pk-small">Share on:</span>
-      <ButtonLink
-        href={twitterUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        size="sm"
-        aria-label="Share on X / Twitter"
-      >
+      <ButtonLink href={twitterUrl} external aria-label="Share on X / Twitter">
         <IconXTwitter />X
       </ButtonLink>
-      <ButtonLink href={blueskyUrl} target="_blank" rel="noopener noreferrer" size="sm" aria-label="Share on Bluesky">
+      <ButtonLink href={blueskyUrl} external aria-label="Share on Bluesky">
         <IconBluesky />
         Bluesky
       </ButtonLink>
-      <ButtonLink href={redditUrl} target="_blank" rel="noopener noreferrer" size="sm" aria-label="Share on Reddit">
+      <ButtonLink href={redditUrl} external aria-label="Share on Reddit">
         <IconReddit />
         Reddit
       </ButtonLink>
@@ -262,13 +235,7 @@ function InviteRow({
           to tell which one they are about to delete. */}
       <div class="pk-cluster pk-cluster--end">
         {showRemove && (
-          <Button
-            size="sm"
-            variant="danger-quiet"
-            icon
-            aria-label={`Remove invite ${position}`}
-            onClick={() => onRemove(row.id)}
-          >
+          <Button variant="danger-quiet" icon aria-label={`Remove invite ${position}`} onClick={() => onRemove(row.id)}>
             <span aria-hidden="true">×</span>
           </Button>
         )}
@@ -463,12 +430,8 @@ function InvitePanel({ manageToken, eventSlug }: { manageToken: string; eventSlu
           ))}
         </div>
         <div class="pk-cluster">
-          {rows.length < MAX_INVITES && (
-            <Button size="sm" onClick={() => addRow()}>
-              Add row
-            </Button>
-          )}
-          <Button size="sm" variant="primary" loading={sending} onClick={() => void handleSend()}>
+          {rows.length < MAX_INVITES && <Button onClick={() => addRow()}>Add row</Button>}
+          <Button variant="primary" loading={sending} onClick={() => void handleSend()}>
             {sending ? "Sending…" : "Send invites"}
           </Button>
         </div>
@@ -506,20 +469,20 @@ function SharePanelInner({ options }: { options: SharePanelOptions }) {
       <PanelBody class="pk-stack pk-stack--snug">
         {ogBadgeUrl && <OgBadge ogBadgeUrl={ogBadgeUrl} eventName={eventName} badgeFilename={badgeFilename} />}
 
-        <h3>Invite a colleague — seats are limited</h3>
-        <p class="pk-small">
-          In-person spots fill fast. Every registration through your personal link helps us prioritize attendees and
-          shape the program.
-        </p>
+        {options.waitlisted ? (
+          <h3>Invite a colleague</h3>
+        ) : (
+          <>
+            <h3>Invite a colleague — seats are limited</h3>
+            <p class="pk-small">
+              In-person spots fill fast. Every registration through your personal link helps us prioritize attendees and
+              shape the program.
+            </p>
+          </>
+        )}
 
         <div class="pk-cluster">
-          <ButtonLink
-            href={linkedinUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            variant="primary"
-            aria-label="Share on LinkedIn"
-          >
+          <ButtonLink href={linkedinUrl} external variant="primary" aria-label="Share on LinkedIn">
             <IconLinkedIn />
             Share on LinkedIn
           </ButtonLink>
@@ -527,7 +490,11 @@ function SharePanelInner({ options }: { options: SharePanelOptions }) {
 
         {canInvite && <InvitePanel manageToken={manageToken as string} eventSlug={eventSlug as string} />}
 
-        <CopyLinkRow shareUrl={shareUrl} />
+        <CopyLinkRow
+          url={shareUrl}
+          label="Your unique sharing link"
+          help="Registrations made through this link are credited to you."
+        />
         <SocialLinks twitterUrl={twitterUrl} blueskyUrl={blueskyUrl} redditUrl={redditUrl} />
       </PanelBody>
     </Panel>

@@ -198,7 +198,7 @@ export function GroupMailingListRecord({
                 </section>
               )}
             </ProfileHeader>
-            <aside class="pk-stack">
+            <div class="pk-stack">
               {tab === "subscribers" && (
                 <RepresentationSummary
                   representation={representation?.listId === list.id ? representation.counts : null}
@@ -210,7 +210,7 @@ export function GroupMailingListRecord({
                 />
               )}
               <GroupMailingListStanding key={list.id} groupId={groupId} list={list} onSaved={detail.reload} />
-            </aside>
+            </div>
           </div>
         </BreadcrumbBranch>
       )}

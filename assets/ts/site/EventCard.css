@@ -1,0 +1,6 @@
+@layer components {
+  .event-card-badge--now {
+    background: var(--pk-accent-strong);
+    color: var(--pk-accent-on);
+  }
+}

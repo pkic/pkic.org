@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, readdirSync, rmdirSync, rmSync, writeFileSyn
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { wranglerTargetArgs } from "./lib/wrangler-target.mjs";
 
 const migrationName = "0035_membership_portal_governance.sql";
 const retirementMigrationName = "0037_retire_legacy_account_role.sql";
@@ -20,6 +21,11 @@ function wrangler(args, stdio = "inherit") {
   return result.stdout;
 }
 
+/** Wrangler D1 arguments for the target's remote database; preview adds --preview. */
+export function remoteD1Args(environment) {
+  return ["DB", ...wranglerTargetArgs(environment), "--remote"];
+}
+
 export function buildImportSql(sql, name = migrationName) {
   return `${sql.trimEnd()}\nINSERT INTO d1_migrations (name) VALUES ('${name}');\n`;
 }
@@ -30,7 +36,7 @@ export function pendingMigrationNames(appliedNames, localNames) {
 }
 
 function readRemoteRows(environment, query) {
-  const output = wrangler(["execute", "DB", "--env", environment, "--remote", "--json", "--command", query], "pipe");
+  const output = wrangler(["execute", ...remoteD1Args(environment), "--json", "--command", query], "pipe");
   const result = JSON.parse(output);
   if (result.length !== 1 || result[0].success !== true) {
     throw new Error("D1 preflight did not return one successful result");
@@ -45,7 +51,7 @@ function importMigration(environment, name) {
   const importFile = join(temporaryDir, name);
   try {
     writeFileSync(importFile, buildImportSql(readFileSync(join(migrationDir, name), "utf8"), name));
-    wrangler(["execute", "DB", "--env", environment, "--remote", "--file", importFile]);
+    wrangler(["execute", ...remoteD1Args(environment), "--file", importFile]);
   } finally {
     rmSync(importFile, { force: true });
     rmdirSync(temporaryDir);
@@ -56,7 +62,7 @@ function importMigration(environment, name) {
 
 export function apply(environment) {
   // Wrangler creates an empty migration ledger when listing a fresh database.
-  wrangler(["migrations", "list", "DB", "--env", environment, "--remote"]);
+  wrangler(["migrations", "list", ...remoteD1Args(environment)]);
   const appliedNames = readRemoteRows(environment, "SELECT name FROM d1_migrations").map((row) => row.name);
   const localNames = readdirSync(migrationDir)
     .filter((name) => name.endsWith(".sql"))
@@ -89,7 +95,7 @@ export function apply(environment) {
     }
   }
 
-  wrangler(["migrations", "apply", "DB", "--env", environment, "--remote"]);
+  wrangler(["migrations", "apply", ...remoteD1Args(environment)]);
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {

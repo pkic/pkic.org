@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
-import app, { openapi } from "../functions/router";
+import app from "../functions/router";
+import { openapi } from "../functions/http-router";
 import { decorateOpenApiSpec } from "../functions/_lib/openapi/mcp";
 import { eventManagementDetailResponseSchema } from "../assets/shared/schemas/event-management";
 import { eventAnalyticsResponseSchema } from "../assets/shared/schemas/event-analytics";

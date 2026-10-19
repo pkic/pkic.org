@@ -10,11 +10,15 @@ import {
 export type DonationSession = z.infer<typeof donationSessionCompletedResponseSchema>;
 export type PendingDonationSession = z.infer<typeof donationSessionPendingResponseSchema>;
 export type TerminalDonationSession =
-  z.infer<typeof donationSessionFailedResponseSchema> | z.infer<typeof donationSessionExpiredResponseSchema>;
+  | z.infer<typeof donationSessionFailedResponseSchema>
+  | z.infer<typeof donationSessionExpiredResponseSchema>;
 export type DonationSessionResponse = z.infer<typeof donationSessionPollResponseSchema>;
 
 export type DonationPollResult =
-  { state: "pending" } | { state: "failed" } | { state: "expired" } | { state: "confirmed"; session: DonationSession };
+  | { state: "pending" }
+  | { state: "failed" }
+  | { state: "expired" }
+  | { state: "confirmed"; session: DonationSession };
 
 export function classifyDonationPollResult(data: DonationSessionResponse): DonationPollResult {
   if ("failed" in data) return { state: "failed" };

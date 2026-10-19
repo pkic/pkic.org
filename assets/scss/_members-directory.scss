@@ -44,7 +44,7 @@
 // ─── Members A-Z sidebar layout ───────────────────────────────────────
 
 .members-search-bar {
-  max-width: 560px;
+  max-width: 35rem;
   margin-left: auto;
   margin-right: auto;
 }
@@ -58,11 +58,11 @@
 // Sidebar shape
 @mixin az-sidebar-shape {
   flex-shrink: 0;
-  width: 34px;
+  width: 2.125rem;
   display: flex;
   flex-direction: column;
   gap: 1px;
-  max-height: calc(100vh - 88px);
+  max-height: calc(100vh - 5.5rem);
   overflow-y: auto;
   scrollbar-width: none;
   &::-webkit-scrollbar {
@@ -73,8 +73,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 26px;
+    width: 2rem;
+    height: 1.625rem;
     border-radius: 5px;
     font-size: 0.67rem;
     font-weight: 700;
@@ -104,7 +104,7 @@
 .members-az-sidebar {
   @include az-sidebar-shape;
   position: sticky;
-  top: calc(var(--pkic-navbar-height) + 48px);
+  top: calc(var(--pkic-navbar-height) + 3rem);
 
   // The rail is a wide-viewport affordance: below this width the grid is a
   // single column and there is nothing to scan past. This used to be a

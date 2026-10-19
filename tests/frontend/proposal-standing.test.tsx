@@ -18,6 +18,7 @@ const proposal: ProposalDetailRecord = {
   updated_at: "2026-08-02T00:00:00.000Z",
   canceled_at: null,
   cancellation_comment: null,
+  committee_notes: null,
   proposer_email: "proposer@example.test",
   proposer_first_name: "Proposal",
   proposer_last_name: "Owner",
@@ -74,23 +75,31 @@ describe("proposal review standing", () => {
     expect(root.querySelector("section")?.getAttribute("aria-label")).toBe("Review standing");
     const list = root.querySelector("dl.pk-datalist") as HTMLElement;
     const terms = [...list.querySelectorAll(":scope > dt")].map((dt) => dt.textContent);
-    expect(terms).toEqual([
-      "Workflow status",
-      "Decision",
-      "Reviews",
-      "Average score",
-      "Recommendations",
-      "Decided",
-      "Last updated",
-    ]);
+    expect(terms).toEqual(["Status", "Reviews", "Average score", "Recommendations", "Decided", "Last updated"]);
     const values = [...list.querySelectorAll(":scope > dd")];
-    expect(values[1].textContent).toBe("Pending");
-    expect(values[2].textContent).toContain("1 of 2 required");
-    expect(values[2].querySelector(".pk-badge--warn")?.textContent).toBe("Quorum not met");
-    expect(values[3].textContent).toBe("3.5");
-    expect(values[4].textContent).toContain("Accept 1");
+    expect(values[1].textContent).toContain("1 review (2 required)");
+    // Falling short of quorum is the one fact that asks for something: a mark, not a pill.
+    expect(values[1].querySelector(".pk-attention-mark")?.textContent).toBe("Quorum not met");
+    expect(list.querySelector(".pk-badge")).toBeNull();
+    expect(values[2].textContent).toBe("3.5");
+    expect(values[3].textContent).toBe("Accept 1");
     // A fact the record does not have is a dash, not a blank.
-    expect(values[5].textContent).toBe("—");
+    expect(values[4].textContent).toBe("—");
+  });
+
+  it("states one status when the decision says the same thing, and the decision only when it differs", () => {
+    const decided = mount({ proposal: { ...proposal, status: "accepted", decision_status: "accepted" } });
+    const terms = () => [...decided.querySelectorAll("dl.pk-datalist > dt")].map((dt) => dt.textContent);
+    expect(terms()).not.toContain("Decision");
+    expect(decided.textContent?.match(/Accepted/g)).toHaveLength(1);
+
+    const pending = mount({ proposal: { ...proposal, status: "under_review", decision_status: "accepted" } });
+    expect([...pending.querySelectorAll("dl.pk-datalist > dt")].map((dt) => dt.textContent)).toContain("Decision");
+  });
+
+  it("counts reviews before the threshold they are measured against", () => {
+    const root = mount({ quorumMet: true, reviewCount: 3 });
+    expect(root.textContent).toContain("3 reviews (2 required)");
   });
 
   it("says quorum is met in words when it is", () => {
@@ -98,6 +107,20 @@ describe("proposal review standing", () => {
     const reviews = [...root.querySelectorAll("dl.pk-datalist > dt")].find(
       (term) => term.textContent === "Reviews",
     )?.nextElementSibling;
-    expect(reviews?.querySelector(".pk-badge--ok")?.textContent).toBe("Quorum met");
+    expect(reviews?.textContent).toContain("Quorum met");
+    expect(reviews?.querySelector(".pk-attention-mark, .pk-badge")).toBeNull();
+  });
+
+  it("states status and recommendations as plain text", () => {
+    const root = mount({
+      proposal: { ...proposal, status: "accepted", decision_status: "accepted" },
+      quorumMet: true,
+      reviewCount: 6,
+      recommendationCounts: { accept: 2, "needs-work": 4, reject: 0 },
+    });
+    expect(root.querySelector(".pk-badge")).toBeNull();
+    const values = [...root.querySelectorAll("dl.pk-datalist > dd")].map((dd) => dd.textContent);
+    expect(values[0]).toBe("Accepted");
+    expect(values).toContain("Accept 2, Needs work 4");
   });
 });

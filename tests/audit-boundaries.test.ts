@@ -42,6 +42,7 @@ describe("atomic service audit boundaries", () => {
         source: "hugo",
         event: {
           slug: "audited-event",
+          basePath: "/events/audited-event/",
           name: "Audited event",
           timezone: "UTC",
           visibility: "invitation_only",
@@ -63,6 +64,7 @@ describe("atomic service audit boundaries", () => {
         source: "hugo",
         event: {
           slug: "rolled-back-event",
+          basePath: "/events/rolled-back-event/",
           name: "Rolled back event",
           timezone: "UTC",
           visibility: "invitation_only",

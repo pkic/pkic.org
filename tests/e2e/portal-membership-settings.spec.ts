@@ -81,18 +81,20 @@ test("a permitted staff identity reads and updates membership settings through t
 
   await page.goto("/portal/#/settings/membership-categories");
   await expect(page.getByRole("heading", { name: "Membership categories" })).toBeVisible();
-  // The catalog is a list (#122): one row per category, and editing one is a
-  // page of its own at the category's address, reached from the row's menu.
-  // The row is found by the record link it carries — the whole row opens the
-  // edit page — since the code cell's accessible name includes that link.
+  // Editing uses the shared dialog at the category's address, with the catalog behind it.
   const categoryRow = page.getByRole("row").filter({ has: page.getByRole("link", { name: "Edit category H8" }) });
   await expect(categoryRow).toHaveCount(1);
   await expect(page.locator("form")).toHaveCount(0);
   async function editCategory() {
     await runRowAction(page, categoryRow, "Edit…");
     await expect(page).toHaveURL(/#\/settings\/membership-categories\/H8$/);
+    await expect(page.getByRole("dialog", { name: "Edit category H8", exact: true })).toBeVisible();
     await expect(page.getByRole("form", { name: "Edit category H8" })).toBeVisible();
   }
+  await editCategory();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(categoryRow.getByRole("button", { name: "Actions for category H8", exact: true })).toBeFocused();
   await editCategory();
   const categoryLabel = page.getByLabel("Name");
   const updatedLabel = `${await categoryLabel.inputValue()} (E2E)`;
@@ -228,10 +230,9 @@ test(
       const email = `membership-form-${Date.now()}@organization-e2e.test`;
       const sinceVerification = await capturedEmailCount();
       await page.goto("/join/");
-      await page.getByLabel("Yes — I am employed by or own an organization").check();
       await page.getByLabel("Your official work or organization email address").fill(email);
       await page.getByRole("button", { name: "Continue" }).click();
-      await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible();
+      await expect(page.getByText("Check your email", { exact: true })).toBeVisible();
 
       const verification = await waitForCapturedEmail(email, "Verify your email address", {
         since: sinceVerification,

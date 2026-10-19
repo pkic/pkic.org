@@ -20,7 +20,7 @@ import { PROFESSIONAL_PROFILE_DOMAINS } from "../../assets/shared/schemas/form-f
 const ROOT = process.cwd();
 const STYLE_ROOTS = ["assets/scss", "assets/design", "assets/ts", "static"];
 
-/** Brand colours. A stylesheet that names one has decided a platform is special. */
+/** Brand colors. A stylesheet that names one has decided a platform is special. */
 const BRAND_COLORS = [
   "#0077b5", // LinkedIn
   "#0a66c2", // LinkedIn (current)
@@ -58,7 +58,7 @@ describe("one vocabulary for profile links", () => {
     expect(files.length).toBeGreaterThan(0);
   });
 
-  it("gives no platform a brand colour of its own", () => {
+  it("gives no platform a brand color of its own", () => {
     const offenders: string[] = [];
     for (const file of files) {
       const source = fs.readFileSync(file, "utf8").toLowerCase();

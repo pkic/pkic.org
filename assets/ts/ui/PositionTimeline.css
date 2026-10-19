@@ -1,0 +1,53 @@
+/*
+ * Positions within one tie: a dot per position and a rail between them, so
+ * several roles at one place read as one history.
+ */
+@layer components {
+  .pk-positions {
+    display: grid;
+    gap: var(--pk-3);
+    margin: var(--pk-2) 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .pk-positions__item {
+    position: relative;
+    padding-inline-start: var(--pk-5);
+  }
+
+  .pk-positions__item::before {
+    content: "";
+    position: absolute;
+    inset-block-start: 0.45rem;
+    inset-inline-start: 0.3rem;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: var(--pk-line-strong);
+  }
+
+  /* The rail runs from this dot to the next one, through the row gap. */
+  .pk-positions__item:not(:last-child)::after {
+    content: "";
+    position: absolute;
+    inset-block: 1.2rem calc(-1 * var(--pk-3) + 0.2rem);
+    inset-inline-start: 0.5rem;
+    width: 2px;
+    background: var(--pk-line);
+  }
+
+  .pk-positions__title {
+    font-weight: 600;
+  }
+
+  .pk-positions__detail {
+    margin-block-start: var(--pk-1);
+    max-width: 18rem;
+  }
+
+  .pk-positions__item--past .pk-positions__title,
+  .pk-positions__item--past .pk-positions__detail {
+    opacity: 0.72;
+  }
+}

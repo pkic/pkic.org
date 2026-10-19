@@ -1,5 +1,7 @@
+import { prepareParticipationReconciliation } from "./event-participation/reconciliation";
 import { all } from "../db/queries";
 import { AppError } from "../errors";
+import { attendanceMethodName, dayAttendanceTypeNotConfiguredError, dayNotConfiguredError } from "./event-day-refusals";
 import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
 import type { DatabaseLike, StatementLike } from "../types";
@@ -64,6 +66,15 @@ export function resolveAttendanceOptions(
     { value: "virtual", label: "Virtual", capacity: null },
     { value: "on_demand", label: "On-demand", capacity: null },
   ];
+}
+
+/** The organizer's label for an attendance value on any day of the event, if one names it. */
+export function attendanceOptionLabel(days: readonly EventDayRecord[], value: string): string | null {
+  for (const day of days) {
+    const option = resolveAttendanceOptions(day).find((candidate) => candidate.value === value);
+    if (option) return option.label;
+  }
+  return null;
 }
 
 export async function listEventDays(db: DatabaseLike, eventId: string): Promise<EventDayRecord[]> {
@@ -243,14 +254,17 @@ export async function prepareReplaceRegistrationDayAttendanceStatements(
 
   for (const selection of selections) {
     const day = dayMap.get(selection.dayDate);
-    if (!day) {
-      throw new AppError(400, "DAY_NOT_CONFIGURED", `Day '${selection.dayDate}' is not configured for this event`);
-    }
-    if (!resolveAttendanceOptions(day).some((option) => option.value === selection.attendanceType)) {
-      throw new AppError(
-        400,
-        "DAY_ATTENDANCE_TYPE_NOT_CONFIGURED",
-        `Attendance type '${selection.attendanceType}' is not configured for day '${selection.dayDate}'`,
+    if (!day) throw dayNotConfiguredError(selection.dayDate);
+    // A day the registration keeps as it holds it is not re-judged. The
+    // whole roster is resent with every change, so checking an untouched day
+    // against options the organizer narrowed after it was taken refused the
+    // change of an unrelated day — moving a speaker's first day to virtual
+    // failed because of their second.
+    const unchanged = previousByDayId.get(day.id) === selection.attendanceType;
+    if (!unchanged && !resolveAttendanceOptions(day).some((option) => option.value === selection.attendanceType)) {
+      throw dayAttendanceTypeNotConfiguredError(
+        day,
+        attendanceMethodName(selection.attendanceType, attendanceOptionLabel(eventDays, selection.attendanceType)),
       );
     }
 
@@ -328,5 +342,6 @@ export async function prepareReplaceRegistrationDayAttendanceStatements(
     }
   }
 
+  statements.push(...prepareParticipationReconciliation(db, payload.eventId));
   return statements;
 }

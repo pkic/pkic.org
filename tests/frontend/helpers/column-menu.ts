@@ -4,7 +4,7 @@
  * A column's filter lives behind the `…` trigger in its head, named
  * "<Header> column options"; the choices are `menuitemradio` items with the
  * one in force checked. These helpers resolve the trigger through that name
- * — which fails exactly when the labelling is broken — open the menu, and
+ * — which fails exactly when the labeling is broken — open the menu, and
  * pick an option by its visible label, so a test asserts the query the
  * server receives rather than the shape of a select that no longer exists.
  */
@@ -57,5 +57,5 @@ export async function chooseColumnFilter(container: ParentNode, column: string, 
 /** What a column's head says it is narrowed to, or undefined when it is open. */
 export function columnFilterSummary(container: ParentNode, column: string): string | undefined {
   const head = [...container.querySelectorAll("th")].find((th) => th.textContent!.includes(column));
-  return head?.querySelector(".pk-table__head-filter")?.textContent ?? undefined;
+  return head?.querySelector("[data-column-filter]")?.textContent ?? undefined;
 }

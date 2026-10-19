@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { exampleMembershipCategories } from "./helpers/membership-category-catalog";
 vi.mock("../../assets/ts/hooks/useMembershipCategoryCatalog", () => ({
   useMembershipCategoryCatalog: () => exampleMembershipCategories,
@@ -14,13 +14,11 @@ import { act } from "preact/test-utils";
 const navigate = vi.fn();
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", navigate] }));
 import { UserAffiliationsPanel } from "../../assets/ts/member-flows/portal/sections/system-users/UserAffiliationsPanel";
-import { UserIdentityGrantForm } from "../../assets/ts/member-flows/portal/sections/system-users/UserIdentityGrantForm";
 import { identityCreateSchema } from "../../assets/shared/schemas/identity";
 import { individualMembershipGrantSchema } from "../../assets/shared/schemas/membership-management";
 import { organizationIdentityCreateRequestSchema } from "../../assets/shared/schemas/route-contracts-identities";
 import { normalizeValidation } from "../../assets/ts/shared/form/validation-map";
-import { buttonNamed, chooseComboboxOption, chooseOption, controlFor, typeInto } from "./helpers/labelled-control";
-import { menuItemNamed } from "./helpers/row-actions";
+import { buttonNamed, chooseComboboxOption, chooseOption, controlFor, typeInto } from "./helpers/labeled-control";
 import {
   MEMBER_ID,
   PICKED_ORGANIZATION_ID,
@@ -30,7 +28,6 @@ import {
   fieldOf,
   fieldRefusal,
   jsonResponse,
-  menuTrigger,
   mount,
   press,
   settle,
@@ -42,6 +39,16 @@ import {
 } from "./helpers/affiliation-fixtures";
 
 describe("UserAffiliationsPanel", () => {
+  beforeEach(() => {
+    // jsdom has the element but not its modal behavior; mirror the platform's open state.
+    HTMLDialogElement.prototype.showModal = function showModal(this: HTMLDialogElement) {
+      this.setAttribute("open", "");
+    };
+    HTMLDialogElement.prototype.close = function close(this: HTMLDialogElement) {
+      this.removeAttribute("open");
+    };
+  });
+
   it("exposes the empty membership list as a live status region", () => {
     const container = mount();
     void act(() => render(<UserAffiliationsPanel user={userWith([])} onChanged={vi.fn()} canManage />, container));
@@ -49,30 +56,40 @@ describe("UserAffiliationsPanel", () => {
     expect(container.querySelector('[role="status"]')?.textContent).toContain("No active identities.");
   });
 
-  // The grant form is a page under the record (#107); the panel's command
-  // only leads there, so the form is mounted the way the route mounts it.
+  // The grant form is the body of the dialog the panel's header button opens.
   function openGrantForm(): HTMLElement {
     const container = mount();
     void act(() =>
       render(
-        <UserIdentityGrantForm user={userWith([])} canActivate onGranted={() => {}} cancelHref="/users/user-1" />,
+        <UserAffiliationsPanel user={userWith([])} onChanged={async () => {}} canManage canActivateIdentity />,
         container,
       ),
     );
+    void act(() => container.querySelector<HTMLButtonElement>('button[aria-label="Add identity"]')!.click());
     return container;
   }
 
-  it("leads to the identity grant page rather than unfolding a form in the panel", () => {
+  it("opens the grant form in a dialog from the header button, and Cancel closes it", () => {
     const container = mount();
     void act(() =>
       render(<UserAffiliationsPanel user={userWith([])} onChanged={async () => {}} canManage />, container),
     );
-    void act(() => menuTrigger(container, "Affiliation settings").click());
-    const add = menuItemNamed(container, "Add identity…");
-    if (!add) throw new Error('the panel offers no "Add identity…"');
-    void act(() => add.click());
     expect(container.querySelector("form")).toBeNull();
-    expect(navigate).toHaveBeenCalledWith(`/users/${USER_ID}/affiliations/new`);
+    const add = container.querySelector<HTMLButtonElement>('button[aria-label="Add identity"]');
+    if (!add) throw new Error('the panel offers no "Add identity" button');
+    expect(add.title).toBe("Add identity");
+    void act(() => add.click());
+    const dialog = container.querySelector("dialog");
+    expect(dialog?.hasAttribute("open")).toBe(true);
+    expect(dialog?.getAttribute("aria-labelledby")).toBeTruthy();
+    expect(dialog?.textContent).toContain("Add identity");
+    expect(dialog?.querySelector('section[aria-label="Add identity"] form')).not.toBeNull();
+    // The dialog owns the actions; the form carries no buttons of its own.
+    expect(dialog?.querySelector("form button[type=submit]")).toBeNull();
+    expect(navigate).not.toHaveBeenCalled();
+    void act(() => buttonNamed(container, "Cancel").click());
+    expect(container.querySelector("form")).toBeNull();
+    expect(container.querySelector("dialog")?.hasAttribute("open")).toBe(false);
   });
 
   // The organization is found by typing into one picker: no separate search
@@ -161,6 +178,7 @@ describe("UserAffiliationsPanel", () => {
     const container = openGrantForm();
 
     const organization = await pickOrganizationOne(container);
+    await typeInto(controlFor(container, "Job title"), "Standards lead");
     await press(container, "Grant");
 
     expect(fieldOf(organization).classList.contains("pk-field--invalid")).toBe(true);
@@ -179,6 +197,10 @@ describe("UserAffiliationsPanel", () => {
 
     await pickOrganizationOne(container);
     expect(container.textContent).toContain("Example A (A)");
+    // An organization identity is never granted without a job title.
+    const jobTitle = controlFor(container, "Job title");
+    expect(jobTitle.required).toBe(true);
+    await typeInto(jobTitle, "Standards lead");
 
     const activate = container.querySelector<HTMLInputElement>("input#identity-activate-immediately");
     await act(() => {
@@ -207,6 +229,7 @@ describe("UserAffiliationsPanel", () => {
     expect(identityCreateSchema.parse(post?.body)).toMatchObject({
       userReference: "existing_user",
       userId: USER_ID,
+      jobTitle: "Standards lead",
       showOnOrganizationProfile: true,
       activation: { mode: "immediate", reason: "Board approved on 2026-08-30" },
     });
@@ -222,6 +245,7 @@ describe("UserAffiliationsPanel", () => {
     const container = openGrantForm();
 
     const organization = await pickOrganizationOne(container);
+    await typeInto(controlFor(container, "Job title"), "Standards lead");
     await press(container, "Grant");
 
     expect(container.querySelector('[role="alert"]')?.textContent).toContain(

@@ -1,0 +1,21 @@
+/* The attendee's check-in camera and outcome. */
+@layer components {
+  .pk-check-in-camera {
+    display: block;
+    inline-size: min(100%, 28rem);
+    aspect-ratio: 1;
+    object-fit: cover;
+    border-radius: var(--pk-radius);
+    background: var(--pk-chrome);
+  }
+
+  .pk-check-in-camera--idle {
+    opacity: 0.6;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .pk-check-in-camera {
+      transition: opacity var(--pk-dur) var(--pk-ease);
+    }
+  }
+}

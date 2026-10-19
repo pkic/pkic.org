@@ -15,7 +15,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { groupEventRegistrationSettingsUpdateSchema } from "../../assets/shared/schemas/group-events";
 import { EventRegistrationSettingsEditor } from "../../assets/ts/member-flows/portal/sections/management/EventRegistrationSettingsEditor";
-import { buttonNamed, chooseOption, controlFor } from "./helpers/labelled-control";
+import { buttonNamed, chooseOption, controlFor } from "./helpers/labeled-control";
 
 const GROUP_ID = "00000000-0000-4000-8000-000000000010";
 const EVENT_ID = "00000000-0000-4000-8000-000000000011";
@@ -72,6 +72,7 @@ function editor(onRevision = vi.fn()) {
     <EventRegistrationSettingsEditor
       groupId={GROUP_ID}
       eventId={EVENT_ID}
+      clock="Europe/Amsterdam"
       expectedUpdatedAt={UPDATED_AT}
       onRevision={onRevision}
       showFormConfiguration={false}

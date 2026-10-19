@@ -1,0 +1,21 @@
+---
+/*
+ * One page for every room's broadcast overlays. The output and layout ride the
+ * query; the event, the room and its read-only access ride the fragment,
+ * which never reaches a server.
+ */
+---
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=1920, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow, noarchive" />
+    <meta name="referrer" content="no-referrer" />
+    <title>Live session overlay</title>
+  </head>
+  <body>
+    <div id="live-overlay"></div>
+    <script>import "../../assets/ts/live-session/overlay-page";</script>
+  </body>
+</html>

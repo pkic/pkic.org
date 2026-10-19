@@ -1,6 +1,8 @@
+import { TableCodedLabel } from "../../../../ui/TableCodedLabel";
+import { ApplicationStageBadge } from "./ApplicationStageBadge";
 import { useRef } from "preact/hooks";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
-import { Badge, statusLabel } from "../../../../components/Badge";
+import { statusLabel } from "../../../../components/Badge";
 // `pk-mono` is written here as a class name rather than reached through a
 // component, so this module pulls its stylesheet into its own chunk.
 import "../../../../ui/Content.css";
@@ -43,28 +45,20 @@ export function ApplicationsList() {
             sort: { asc: "organization_name", desc: "-organization_name" },
           },
           {
-            // The slack column: the category labels are the longest prose in
-            // the row ("Certification Authorities and Trust Service
-            // Providers"), so the wide screen's leftover width belongs here.
-            // Left to the default it went to the applicant, and the labels
-            // wrapped down four-line ribbons beside a half-empty name column.
             header: "Category",
             cell: (a) => (
-              <>
-                {a.membershipCategoryLabel} <span class="pk-mono pk-muted pk-small">({a.membershipCategory})</span>
-              </>
+              <TableCodedLabel
+                code={a.membershipCategory}
+                name={a.membershipCategoryLabel}
+                title={a.membershipCategoryLabel}
+              />
             ),
-            width: "primary",
+            width: "compact",
             sort: { asc: "membership_category", desc: "-membership_category" },
           },
           {
             header: "Stage",
-            cell: (a) => (
-              <div class="pk-stack pk-stack--snug">
-                <Badge status={a.stage} />
-                {a.currentRequirement && <span class="pk-small">{a.currentRequirement}</span>}
-              </div>
-            ),
+            cell: (a) => <ApplicationStageBadge application={a} />,
             width: "fit",
             sort: { asc: "stage", desc: "-stage" },
             // The stage filter is the column's, beside the sort it shares a

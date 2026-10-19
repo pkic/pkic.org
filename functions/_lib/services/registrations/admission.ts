@@ -1,6 +1,7 @@
 import { all } from "../../db/queries";
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../db/authorization-guard";
 import { AppError } from "../../errors";
+import { dayNotConfiguredError } from "../event-day-refusals";
 import type { DatabaseLike, D1StatementResult, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
@@ -60,7 +61,7 @@ async function buildAdmission(db: DatabaseLike, payload: AdmissionPayload): Prom
     : eventDays.map((day) => day.day_date);
   for (const dayDate of admittedDayDates) {
     if (!dayByDate.has(dayDate)) {
-      throw new AppError(400, "DAY_NOT_CONFIGURED", `Day '${dayDate}' is not configured for this event`);
+      throw dayNotConfiguredError(dayDate);
     }
   }
 

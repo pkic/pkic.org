@@ -12,6 +12,7 @@ for (const publish of [false, true]) {
     `staff compose visual blocks and preserve saved Markdown${publish ? " on the published member page" : " after reloading"}`,
     { tag: publish ? "@publication" : [] },
     async ({ page }, testInfo) => {
+      test.slow(publish, "Native publication rebuilds and verifies the complete static release.");
       await signInToPortal(page, e2eAdminEmail("portal-organizations"));
       const created = await page.evaluate(async (name) => {
         const response = await fetch("/api/v1/organizations", {
@@ -32,7 +33,7 @@ for (const publish of [false, true]) {
       const detail = organizationDetailResponseSchema.parse(created.body).organization;
       await page.goto(`/portal/#/organizations/${detail.id}`);
       const edit = async () => {
-        await page.getByRole("button", { name: "About actions", exact: true }).click();
+        await page.getByRole("button", { name: "Record actions", exact: true }).click();
         await page.getByRole("menuitem", { name: "Edit organization…" }).click();
       };
       await expect(page.getByRole("textbox", { name: "Member page content", exact: true })).toHaveCount(0);
@@ -113,7 +114,7 @@ for (const publish of [false, true]) {
       await page.setViewportSize({ width: 1440, height: 1100 });
       await canvas.scrollIntoViewIfNeeded();
       await contentEditor.screenshot({ path: testInfo.outputPath("visual-editor-desktop.png") });
-      await page.setViewportSize({ width: 390, height: 844 });
+      await page.setViewportSize({ width: 375, height: 844 });
       await canvas.scrollIntoViewIfNeeded();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       await contentEditor.getByRole("button", { name: "More formatting", exact: true }).click();
@@ -158,6 +159,19 @@ for (const publish of [false, true]) {
         await expect(page.getByRole("heading", { name: "Learn more", exact: true })).toBeVisible();
         await expect(page.locator("blockquote")).toContainText("Built for interoperability.");
         await page.screenshot({ path: testInfo.outputPath("member-page-rendered.png"), fullPage: true });
+        await page.getByRole("button", { name: "Open search", exact: true }).filter({ visible: true }).click();
+        await page
+          .getByRole("searchbox", { name: "Search", exact: true })
+          .filter({ visible: true })
+          .fill('"Security begins with clear information"');
+        const result = page.locator("#pkicSearchPanel").getByRole("link").filter({ hasText: detail.name }).first();
+        await expect(result).toBeVisible();
+        await expect(result).toHaveAttribute("href", detail.publicProfileHref!);
+        await page.screenshot({ path: testInfo.outputPath("published-member-search.png"), fullPage: true });
+        await page.keyboard.press("Escape");
+        await page.setViewportSize({ width: 375, height: 844 });
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+        await page.screenshot({ path: testInfo.outputPath("member-page-rendered-phone.png"), fullPage: true });
       }
     },
   );

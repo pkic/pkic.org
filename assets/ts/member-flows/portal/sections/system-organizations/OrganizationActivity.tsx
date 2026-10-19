@@ -13,7 +13,7 @@
  * through its columns' menus rather than a row of selects above the table,
  * and every row opens the record it refers to wherever the portal routes one.
  */
-import { useState } from "preact/hooks";
+import { useRouteView } from "../../../../hooks/useRouteView";
 import type { ComponentChildren } from "preact";
 
 import {
@@ -28,7 +28,7 @@ import {
 import { PROPOSAL_ADMIN_STATUS_FILTERS } from "../../../../../shared/schemas/proposal-status";
 import { ApiDataTable } from "../../../../components/ApiDataTable";
 import { Badge, statusLabel } from "../../../../components/Badge";
-import { EmptyState } from "../../../../ui/RecordEmptyState";
+import { EmptyState } from "../../../../ui/EmptyState";
 import type { Column } from "../../../../components/Table";
 import { TabList } from "../../../../ui/TabList";
 import { usePortalHashLocation } from "../../hash-location";
@@ -98,6 +98,7 @@ const GROUP_COLUMNS: Column<OrganizationGroupParticipation>[] = [
 function OrganizationGroupParticipationTable({ organizationId }: { organizationId: string }) {
   return (
     <ApiDataTable
+      urlState="organization-groups"
       caption="Group participation"
       endpoint={organizationEndpoint(organizationId, "groups")}
       responseSchema={organizationGroupsListResponseSchema}
@@ -185,6 +186,7 @@ const EVENT_COLUMNS: Column<OrganizationEventParticipation>[] = [
 function OrganizationEventParticipationTable({ organizationId }: { organizationId: string }) {
   return (
     <ApiDataTable
+      urlState="organization-events"
       caption="Event participation"
       endpoint={organizationEndpoint(organizationId, "events")}
       responseSchema={organizationEventsListResponseSchema}
@@ -253,7 +255,6 @@ const PROPOSAL_COLUMNS: Column<OrganizationProposal>[] = [
       <>
         {proposal.proposerName}
         <br />
-        <span class="pk-small pk-muted">{proposal.proposerEmail}</span>
       </>
     ),
   },
@@ -268,6 +269,7 @@ const PROPOSAL_COLUMNS: Column<OrganizationProposal>[] = [
 function OrganizationProposalsTable({ organizationId }: { organizationId: string }) {
   return (
     <ApiDataTable
+      urlState="organization-proposals"
       caption="Session proposals"
       endpoint={organizationEndpoint(organizationId, "proposals")}
       responseSchema={organizationProposalsListResponseSchema}
@@ -303,14 +305,13 @@ export function OrganizationActivity({
   organizationId: string;
   canReadSponsorships: boolean;
 }) {
-  const [tab, setTab] = useState<ActivityTab>("groups");
-
   const tabs: ActivityTab[] = [
     "groups",
     "events",
     "proposals",
     ...(canReadSponsorships ? (["sponsorships"] as const) : []),
   ];
+  const [tab, setTab] = useRouteView(`/organizations/${encodeURIComponent(organizationId)}`, tabs, "groups");
   // A viewer who loses sponsorship access mid-session must not be left on a
   // tab that is no longer in the set.
   const activeTab = tabs.includes(tab) ? tab : "groups";

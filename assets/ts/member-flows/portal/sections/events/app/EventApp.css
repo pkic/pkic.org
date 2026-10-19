@@ -1,0 +1,88 @@
+/*
+ * Event app cards and lists.
+ *
+ * Panels keep the portal's surface, border and theme tokens; the event app
+ * tightens the corner to the kit's 6px, softens the border, and labels each
+ * card with the kit's mono eyebrow.
+ */
+
+@layer components {
+  .pk-event-card {
+    border-color: var(--pk-line-soft);
+    border-radius: var(--pk-radius);
+  }
+
+  .pk-event-card--live {
+    border-inline-start: var(--pk-1) solid var(--pk-accent);
+  }
+
+  .pk-event-card__eyebrow {
+    margin: 0;
+    color: var(--pk-ink-muted);
+    font-family: var(--pk-font-mono);
+    font-size: var(--pk-text-2xs);
+    font-weight: 500;
+    letter-spacing: var(--pk-tracking-label);
+    text-transform: uppercase;
+  }
+
+  .pk-event-card--live .pk-event-card__eyebrow {
+    color: var(--pk-accent-ink);
+  }
+
+  .pk-event-card__title {
+    margin: 0;
+    color: var(--pk-ink);
+    font-size: var(--pk-text-xl);
+    font-weight: 700;
+    line-height: 1.25;
+    letter-spacing: -0.01em;
+  }
+
+  .pk-event-card__meta {
+    margin: 0;
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-sm);
+  }
+
+  .pk-event-card p {
+    margin: 0;
+  }
+
+  .pk-event-home {
+    align-items: start;
+  }
+
+  /* The greeting spans the whole home: it is the page's opening line, not a card. */
+  .pk-event-welcome {
+    grid-column: 1 / -1;
+    display: grid;
+    gap: var(--pk-1);
+  }
+
+  .pk-event-welcome p {
+    margin: 0;
+  }
+
+  .pk-event-welcome__greeting {
+    font-size: var(--pk-text-xl);
+    font-weight: 600;
+    line-height: 1.2;
+  }
+
+  .pk-event-welcome__status {
+    color: var(--pk-accent-strong);
+    font-family: var(--pk-font-mono);
+    font-size: var(--pk-text-sm);
+    letter-spacing: var(--pk-tracking-label);
+    text-transform: uppercase;
+  }
+
+  .pk-event-welcome__standing {
+    color: var(--pk-ink-muted);
+  }
+
+  .pk-event-venue {
+    font-style: normal;
+  }
+}

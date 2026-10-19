@@ -5,16 +5,10 @@ import {
   organizationContentReviewsListResponseSchema,
   organizationContentReviewsListRouteSchema,
 } from "../../../../../../assets/shared/schemas/organization-self-service";
-import { getConfig } from "../../../../../_lib/config";
 import type { AdminContext } from "../../../../../_lib/db/context";
 import { json } from "../../../../../_lib/http";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
-import {
-  listMyOrganizationReviews,
-  processOrganizationContentReviewNotificationsBackground,
-  submitOrgContentChange,
-} from "../../../../../_lib/services/organization-content";
-import { buildManagementLink } from "../../../../../_lib/services/management-links";
+import { listMyOrganizationReviews, submitOrgContentChange } from "../../../../../_lib/services/organization-content";
 import { requireOrganizationMember, requireOrganizationMemberMutation } from "../../authorization";
 
 export const OrganizationContentReviewsGet = openApiRoute(
@@ -35,13 +29,7 @@ export const OrganizationContentReviewPost = openApiRoute(
   organizationContentReviewCreateRouteSchema,
   async (c: AdminContext, data) => {
     const { db, member } = await requireOrganizationMemberMutation(c, data.params.organizationId);
-    const { review } = await submitOrgContentChange(
-      db,
-      member,
-      data.body,
-      buildManagementLink(getConfig(c.env, c.req.raw).appBaseUrl, { kind: "organization-content-reviews" }),
-    );
-    c.executionCtx.waitUntil(processOrganizationContentReviewNotificationsBackground(db, c.env));
+    const { review } = await submitOrgContentChange(db, member, data.body);
     return json(organizationContentReviewCreateResponseSchema.parse({ review }));
   },
 );

@@ -28,8 +28,11 @@ export const OrganizationIdentitiesGet = openApiRoute(
     const memberId = await resolveOrganizationMemberId(db, data.params.organizationId);
     await requireOrganizationIdentityManagement(db, {
       memberId,
+      organizationId: data.params.organizationId,
       actorUserId: actor.userId,
       databaseUserId: actor.databaseUserId,
+      sessionId: actor.sessionId,
+      sessionExpiresAt: actor.sessionExpiresAt,
       staffAuthorized: actor.staffAuthorized,
     });
     return jsonPrivate(

@@ -22,6 +22,8 @@ export interface PortalAccess {
   hasOrganizationsAccess: boolean;
   hasOrganizationsDirectory: boolean;
   canCreateOrganizations: boolean;
+  /** A merge moves representatives as well as the record, so it needs both permissions its route checks. */
+  canMergeOrganizations: boolean;
   hasMembershipQueue: boolean;
   hasMembersRoll: boolean;
   canGrantMembership: boolean;
@@ -29,7 +31,6 @@ export interface PortalAccess {
   hasUserRecords: boolean;
   hasDonationsAccess: boolean;
   hasSettingsAccess: boolean;
-  hasAccountAccess: boolean;
   hasAdminCapacity: boolean;
   canReadAnalytics: boolean;
 }
@@ -55,13 +56,15 @@ export function derivePortalAccess(session: PortalSession | null): PortalAccess 
     hasOrganizationsAccess: portalSectionEnabled(session, "organizations"),
     hasOrganizationsDirectory: portalHasAnyGlobalPermission(session, ["organizations:read", "membership:write"]),
     canCreateOrganizations: activatesOnWrite,
+    canMergeOrganizations:
+      portalHasGlobalPermission(session, "organizations:write") &&
+      portalHasGlobalPermission(session, "membership:write"),
     hasMembershipQueue: portalSectionEnabled(session, "membership"),
     hasMembersRoll: portalSectionEnabled(session, "members"),
     canGrantMembership: activatesOnWrite,
     hasUserRecords: portalSectionEnabled(session, "users"),
     hasDonationsAccess: portalSectionEnabled(session, "donations"),
     hasSettingsAccess: portalSectionEnabled(session, "settings"),
-    hasAccountAccess: portalSectionEnabled(session, "account"),
     hasAdminCapacity: Boolean(session?.staff),
     canReadAnalytics: portalHasGlobalPermission(session, "analytics:read"),
   };

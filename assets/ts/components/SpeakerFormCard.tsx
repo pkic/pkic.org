@@ -1,4 +1,6 @@
 import type { ComponentChildren, Ref } from "preact";
+import { useRef } from "preact/hooks";
+import { confirmAction } from "./ConfirmDialog";
 import { ProfileLinksInput, type ProfileLinksHandle } from "./ProfileLinksInput";
 import { SPEAKER_ROLE_OPTIONS } from "../shared/speaker-roles";
 import { Button } from "../ui/Button";
@@ -18,8 +20,6 @@ export interface SpeakerFieldNames {
   firstName: string;
   lastName: string;
   email: string;
-  organizationName: string;
-  jobTitle: string;
   bio: string;
   role?: string;
 }
@@ -33,9 +33,22 @@ interface SpeakerFormCardProps {
   emailHelp: string;
   bioHelp: string;
   autocomplete?: boolean;
+  /** A verified person's summary replaces the duplicate editable personal fields. */
+  personSummary?: ComponentChildren;
   defaultRole?: string;
   errorPaths?: Partial<Record<"firstName" | "lastName" | "email" | "bio", string>>;
   onRemove?: () => void;
+  /** Names the card being removed, such as "Remove speaker 2". */
+  removeLabel?: string;
+}
+
+/** Whether the reader has typed or chosen anything a removal would discard. */
+function hasEnteredContent(card: HTMLElement): boolean {
+  return [...card.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input, textarea")].some(
+    (control) =>
+      !(control instanceof HTMLInputElement && ["radio", "checkbox", "button", "submit"].includes(control.type)) &&
+      control.value.trim() !== "",
+  );
 }
 
 interface SpeakerFieldProps {
@@ -50,7 +63,7 @@ interface SpeakerFieldProps {
 }
 
 /**
- * One labelled control inside the speaker card: the design system's `Field`,
+ * One labeled control inside the speaker card: the design system's `Field`,
  * with the message slot the card's DOM-driven validator writes into after
  * render (`applyFieldErrors` addresses it by `data-field-error`), and the
  * caller's id so the surrounding form's markup can keep addressing it.
@@ -72,81 +85,80 @@ export function SpeakerFormCard({
   emailHelp,
   bioHelp,
   autocomplete,
+  personSummary,
   defaultRole = "speaker",
   errorPaths,
   onRemove,
+  removeLabel = `Remove ${title}`,
 }: SpeakerFormCardProps) {
   const roleField = fields.role;
+  const card = useRef<HTMLDivElement>(null);
+  async function remove(): Promise<void> {
+    if (!onRemove) return;
+    if (card.current && hasEnteredContent(card.current)) {
+      const confirmed = await confirmAction({
+        title: `${removeLabel}?`,
+        consequences: ["The details entered for this speaker are discarded"],
+        confirmLabel: removeLabel,
+        cancelLabel: "Keep speaker",
+        tone: "danger",
+      });
+      if (!confirmed) return;
+    }
+    onRemove();
+  }
 
   return (
-    <div class="pk">
+    <div class="pk" ref={card}>
       {/* The card names itself as a region, so a reader moving between several
           speakers lands on "Speaker 2" rather than on an anonymous group. */}
       <Panel aria-label={title}>
         <PanelHeader title={title} headingLevel={4}>
           {onRemove && (
-            <Button variant="danger-quiet" size="sm" onClick={onRemove}>
-              Remove
+            <Button type="button" variant="danger-quiet" onClick={() => void remove()}>
+              {removeLabel}
             </Button>
           )}
         </PanelHeader>
         <PanelBody class="pk-stack">
-          <div class="pk-grid">
-            <SpeakerField id={`${idPrefix}-first`} label="First name" errorPath={errorPaths?.firstName}>
-              {(control) => (
-                <TextInput
-                  {...control}
-                  name={fields.firstName}
-                  required
-                  {...(autocomplete ? { autocomplete: "given-name" } : {})}
-                />
-              )}
-            </SpeakerField>
-            <SpeakerField id={`${idPrefix}-last`} label="Last name" errorPath={errorPaths?.lastName}>
-              {(control) => (
-                <TextInput
-                  {...control}
-                  name={fields.lastName}
-                  required
-                  {...(autocomplete ? { autocomplete: "family-name" } : {})}
-                />
-              )}
-            </SpeakerField>
-          </div>
+          {personSummary ?? (
+            <>
+              <div class="pk-grid">
+                <SpeakerField id={`${idPrefix}-first`} label="First name" errorPath={errorPaths?.firstName}>
+                  {(control) => (
+                    <TextInput
+                      {...control}
+                      name={fields.firstName}
+                      required
+                      {...(autocomplete ? { autocomplete: "given-name" } : {})}
+                    />
+                  )}
+                </SpeakerField>
+                <SpeakerField id={`${idPrefix}-last`} label="Last name" errorPath={errorPaths?.lastName}>
+                  {(control) => (
+                    <TextInput
+                      {...control}
+                      name={fields.lastName}
+                      required
+                      {...(autocomplete ? { autocomplete: "family-name" } : {})}
+                    />
+                  )}
+                </SpeakerField>
+              </div>
 
-          <SpeakerField id={`${idPrefix}-email`} label="Email" help={emailHelp} errorPath={errorPaths?.email}>
-            {(control) => (
-              <TextInput
-                {...control}
-                name={fields.email}
-                type="email"
-                required
-                {...(autocomplete ? { autocomplete: "email" } : {})}
-              />
-            )}
-          </SpeakerField>
-
-          <div class="pk-grid">
-            <SpeakerField id={`${idPrefix}-org`} label="Organization" optional>
-              {(control) => (
-                <TextInput
-                  {...control}
-                  name={fields.organizationName}
-                  {...(autocomplete ? { autocomplete: "organization" } : {})}
-                />
-              )}
-            </SpeakerField>
-            <SpeakerField id={`${idPrefix}-title`} label="Job title" optional>
-              {(control) => (
-                <TextInput
-                  {...control}
-                  name={fields.jobTitle}
-                  {...(autocomplete ? { autocomplete: "organization-title" } : {})}
-                />
-              )}
-            </SpeakerField>
-          </div>
-
+              <SpeakerField id={`${idPrefix}-email`} label="Email" help={emailHelp} errorPath={errorPaths?.email}>
+                {(control) => (
+                  <TextInput
+                    {...control}
+                    name={fields.email}
+                    type="email"
+                    required
+                    {...(autocomplete ? { autocomplete: "email" } : {})}
+                  />
+                )}
+              </SpeakerField>
+            </>
+          )}
           <SpeakerField id={`${idPrefix}-bio`} label="Bio" help={bioHelp} errorPath={errorPaths?.bio}>
             {/* The shared Markdown editor (#114). It posts the Markdown through
                 a hidden input under the field's name, so the form still reads
@@ -164,7 +176,6 @@ export function SpeakerFormCard({
               />
             )}
           </SpeakerField>
-
           {roleField && (
             // A fieldset with a legend names the radio group in the markup,
             // which is what a reader hears on entering it.

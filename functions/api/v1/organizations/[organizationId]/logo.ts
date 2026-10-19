@@ -6,14 +6,11 @@ import {
   organizationLogoReviewCreateRouteSchema,
   organizationLogoReviewResponseSchema,
 } from "../../../../../assets/shared/schemas/organization-self-service";
-import { getConfig } from "../../../../_lib/config";
 import type { AdminContext } from "../../../../_lib/db/context";
 import { AppError } from "../../../../_lib/errors";
 import { json } from "../../../../_lib/http";
-import { buildManagementLink } from "../../../../_lib/services/management-links";
 import {
   prepareAuthorizedOrganizationLogoStage,
-  processOrganizationContentReviewNotificationsBackground,
   requireOrgContact,
 } from "../../../../_lib/services/organization-content";
 import { buildOrganizationLogoHandlers } from "../../../../_lib/openapi/organization-logo-handlers";
@@ -47,10 +44,7 @@ export const OrganizationLogoReviewPost = openApiRoute(
     const image = await readValidatedUploadedSvgLogo(c.req.raw);
     const extension = imageExtension(image.contentType);
     const r2Key = `org-logos/${organization.id}/staging-${crypto.randomUUID()}.${extension}`;
-    const reviewUrl = buildManagementLink(getConfig(c.env, c.req.raw).appBaseUrl, {
-      kind: "organization-content-reviews",
-    });
-    const prepared = await prepareAuthorizedOrganizationLogoStage(db, member, organization.id, r2Key, reviewUrl);
+    const prepared = await prepareAuthorizedOrganizationLogoStage(db, member, organization.id, r2Key);
 
     try {
       await withStorageUploadCompensation({
@@ -68,7 +62,6 @@ export const OrganizationLogoReviewPost = openApiRoute(
     if (prepared.previousStagingKey && prepared.previousStagingKey !== r2Key) {
       c.executionCtx.waitUntil(processStorageDeletionForKey(db, c.env, prepared.previousStagingKey, "assets"));
     }
-    c.executionCtx.waitUntil(processOrganizationContentReviewNotificationsBackground(db, c.env));
     return json(organizationLogoReviewResponseSchema.parse({ success: true }));
   },
 );

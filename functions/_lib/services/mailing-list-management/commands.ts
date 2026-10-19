@@ -17,6 +17,7 @@ import {
   type MailingListMutationOptions,
 } from "./authorization";
 import { translateMailingListWriteError, validateMailingListConfiguration } from "./configuration";
+import { prepareMailingListPublication } from "./publication";
 import { loadMailingList } from "./read-model";
 import { MAILING_LIST_COLUMNS, type MailingListRow, toMailingList } from "./record";
 
@@ -74,6 +75,7 @@ export async function createMailingList(
         null,
         options.auditScope,
       ),
+      prepareMailingListPublication(db, id, now),
     ]);
   } catch (error) {
     if (isAuthorizationGuardFailure(error)) {
@@ -111,6 +113,7 @@ export async function updateMailingList(
   try {
     await db.batch([
       ...(options.authorizationGuards ?? []),
+      prepareMailingListPublication(db, id, now, input),
       db.prepare(`UPDATE mailing_lists SET ${setters.join(", ")} WHERE id = ?`).bind(...values),
       prepareReconcileMailingListStatement(db, id, now),
       prepareAuditLog(

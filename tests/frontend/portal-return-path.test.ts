@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  eventFlowReturnPath,
   portalHashPath,
   portalIdentityInvitationToken,
   portalMagicLinkReturnPath,
@@ -45,5 +46,14 @@ describe("portal return path", () => {
     );
     expect(userAuthRequestSchema.safeParse({ email: "a@b.test", returnPath: "/groups/cm" }).success).toBe(true);
     expect(userAuthRequestSchema.safeParse({ email: "a@b.test" }).success).toBe(true);
+  });
+
+  it("returns a sign-in begun on a public event form to that form, and nowhere else outside the portal", () => {
+    const next = portalMagicLinkReturnPath("#/verify?next=%2Fevents%2F2026%2Fpqc%2Fregister%2F%3Fref%3Dx&token=t");
+    expect(next).toBe("/events/2026/pqc/register/?ref=x");
+    expect(eventFlowReturnPath(next)).toBe("/events/2026/pqc/register/?ref=x");
+    expect(eventFlowReturnPath("/events/2026/pqc/")).toBeNull();
+    expect(eventFlowReturnPath("/groups/cm")).toBeNull();
+    expect(eventFlowReturnPath(null)).toBeNull();
   });
 });

@@ -245,7 +245,7 @@ describe("application status page", () => {
 
     const status = region("[data-flow-status]");
     // The failure reaches a screen reader through the live region, and is
-    // marked as an error by state rather than by colour alone.
+    // marked as an error by state rather than by color alone.
     expect(status.getAttribute("role")).toBe("alert");
     expect(status.getAttribute("aria-live")).toBe("polite");
     expect(status.hidden).toBe(false);

@@ -16,7 +16,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MembershipApplicationDetail } from "../../assets/shared/schemas/membership-application-management";
 import type { MembershipCategoryCatalogEntry } from "../../assets/shared/schemas/membership-categories";
 import { ApplicationOverviewCard } from "../../assets/ts/member-flows/portal/sections/membership-applications/ApplicationOverviewCard";
-import { buttonNamed, buttonNames, controlFor, labelNames, typeInto } from "./helpers/labelled-control";
+import { buttonNamed, buttonNames, controlFor, labelNames, typeInto } from "./helpers/labeled-control";
 
 const NOW = "2026-08-31T09:00:00.000Z";
 
@@ -137,7 +137,7 @@ describe("membership application overview card", () => {
     expect(valueOf(page, "Category").textContent).toContain("(F)");
     // The stage is a pill whose word says the stage, so the tone is not the
     // only thing carrying it.
-    expect(valueOf(page, "Stage").textContent).toBe("Processing");
+    expect(valueOf(page, "Stage").textContent).toBe(detail().currentRequirement);
 
     // It is a list, not a grid: as an unnamed table it was announced as one.
     expect(page.querySelector("table")).toBeNull();

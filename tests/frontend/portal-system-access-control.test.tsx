@@ -11,7 +11,7 @@ import { roleCreateSchema, roleUpdateSchema, userRoleAssignSchema } from "../../
 import { PERMISSIONS } from "../../assets/shared/schemas/permissions";
 import { confirmationButton } from "./helpers/confirm-dialog";
 import { beginRecordEdit } from "./helpers/record-edit";
-import { buttonNamed, controlFor } from "./helpers/labelled-control";
+import { buttonNamed, controlFor } from "./helpers/labeled-control";
 import { rowActionControlNames, runRowAction } from "./helpers/row-actions";
 
 const navigate = vi.fn();
@@ -323,7 +323,7 @@ describe("portal system access control", () => {
 
       expect(container.textContent).toContain("custom_reviewer");
       expect(container.textContent).toContain("Ada Lovelace");
-      expect(container.textContent).toContain("ada@example.test");
+      expect(container.textContent).not.toContain("ada@example.test");
 
       // UserPicker debounces its search by 250ms (see assets/ts/components/UserPicker.tsx);
       // advance fake timers past it rather than racing a real one.
@@ -339,7 +339,7 @@ describe("portal system access control", () => {
       vi.useRealTimers();
       await settle();
       const graceOption = Array.from(container.querySelectorAll("button")).find((button) =>
-        button.textContent?.includes("grace@example.test"),
+        button.textContent?.includes("Grace Hopper"),
       );
       expect(graceOption).toBeTruthy();
       void act(() => graceOption!.click());

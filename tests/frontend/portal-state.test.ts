@@ -15,11 +15,14 @@ import type { PortalSession } from "../../assets/ts/member-flows/portal/types";
 
 const SESSION: PortalSession = {
   success: true,
+  sessionId: "00000000-0000-4000-8000-000000000004",
   expiresAt: "2099-01-01T00:00:00.000Z",
   idleExpiresAt: "2099-01-01T00:00:00.000Z",
   identity: { id: "user-1", email: "user@example.test" },
   sponsors: [],
   pendingIdentityCount: 0,
+  actingIdentities: [],
+  actingIdentityId: null,
 };
 
 function resetPortalState(): void {

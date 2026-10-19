@@ -5,6 +5,7 @@
  * shared `openApiRoute`/`paginationQuerySchema` pattern used by every
  * canonical listing endpoint.
  */
+import { userSelectionProfileSchema } from "./user-selection-profile";
 import { z } from "zod";
 import { userIdParamsSchema, successResponseSchema } from "./api-common";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
@@ -67,6 +68,7 @@ const userResponseBaseSchema = z.object({
 export const USER_LIST_ORGANIZATION_NAMES = 2;
 
 export const userListItemSchema = userResponseBaseSchema.extend({
+  ...userSelectionProfileSchema.shape,
   active: z.union([z.literal(0), z.literal(1)]),
   type: z.enum(USER_TYPE_VALUES),
   /** The organizations this person actively represents, first names first. */
@@ -80,14 +82,16 @@ export const usersListResponseSchema = paginatedResponseSchema("users", userList
 
 export const userIdentityDetailSchema = z.object({
   identityId: z.string(),
-  memberId: z.string(),
-  membershipCategory: membershipCategorySchema,
-  status: memberStatusSchema,
+  memberId: z.string().nullable(),
+  membershipCategory: membershipCategorySchema.nullable(),
+  status: memberStatusSchema.nullable(),
   showOnOrgProfile: z.boolean(),
   /** The identity this person's record speaks from when it has to choose one. */
   isDefault: z.boolean(),
   organizationId: z.string().nullable(),
   organizationName: z.string().nullable(),
+  /** The email domain the organization tie follows, when it follows one. */
+  organizationEmailDomain: z.string().nullable(),
   emailId: z.string().nullable(),
   email: z.string().email(),
   jobTitle: z.string().nullable(),
@@ -111,6 +115,15 @@ export const userFormerIdentitySchema = z.object({
   jobTitle: z.string().nullable(),
   startedAt: z.string().nullable(),
   endedAt: z.string(),
+  /** The address the identity answered to; the owner reinstates it by confirming this address. */
+  emailAddress: z.string(),
+  /** Whether the end can still be undone: nothing has taken the identity's place. */
+  reinstatable: z.boolean(),
+  /**
+   * Whether the owner can reinstate it themselves by email: it is reinstatable
+   * and its address still resolves to the organization. Managers use `reinstatable`.
+   */
+  selfReinstatable: z.boolean(),
 });
 
 export const userDetailSchema = userResponseBaseSchema.extend({

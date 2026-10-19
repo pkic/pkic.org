@@ -1,3 +1,4 @@
+import { applicationHoldRequestSchema } from "../../../../../assets/shared/schemas/membership-application-management";
 import { prepareAuthorizationGuard, isAuthorizationGuardFailure } from "../../../db/authorization-guard";
 /**
  * Membership application stage machine. Split out of the former
@@ -69,7 +70,6 @@ export interface StageTransitionResult {
 export interface StageTransitionNotification {
   statusUrl: string;
   deadlineDays: number;
-  requestDetails?: string;
   reason?: string;
 }
 
@@ -80,6 +80,7 @@ export interface StageTransitionParams {
   actor: AuthAdmin | null;
   onHoldSubtype?: string | null;
   note?: string | null;
+  requestDetails?: string;
   notification?: StageTransitionNotification;
   email?: QueueEmailPayload;
 }
@@ -126,6 +127,14 @@ export function prepareApplicationStageTransition(
     throw new AppError(422, "ON_HOLD_SUBTYPE_REQUIRED", "A valid on_hold subtype is required");
   }
 
+  const request = applicationHoldRequestSchema.safeParse({
+    toStage: params.toStage,
+    onHoldSubtype: params.onHoldSubtype ?? undefined,
+    requestDetails: params.requestDetails,
+  });
+  if (!request.success)
+    throw new AppError(422, "VALIDATION_ERROR", "Check the information request", request.error.flatten());
+
   const now = nowIso();
   const nextOnHoldSubtype = params.toStage === "on_hold" ? (params.onHoldSubtype as string) : null;
   const fromStage = application.stage;
@@ -149,7 +158,7 @@ export function prepareApplicationStageTransition(
             applicantName: application.applicant_name,
             statusUrl: params.notification.statusUrl,
             deadlineDays: params.notification.deadlineDays,
-            requestDetails: params.notification.requestDetails ?? "",
+            requestDetails: request.data.requestDetails ?? "",
             reason: params.notification.reason ?? "",
           },
         }

@@ -1,20 +1,19 @@
 /**
  * Membership application form.
  *
- * Starts from mailbox verification, then renders only the server-authorized
- * application path. The browser never decides whether a person may join for
+ * Starts from the shared email-first step and mailbox verification, then
+ * renders only the server-authorized application path. The browser never decides whether a person may join for
  * an organization or as an individual.
  */
 import { getJson, postJson } from "../shared/api-client";
 import { renderCustomFields, readCustomFieldValues } from "../shared/widgets/custom-fields";
-import { setFieldMessage } from "../shared/form/validation-map";
-import { applyFieldState } from "../ui/field-state";
-import { clearStatus, installLiveValidation, validateBeforeSubmit } from "../shared/form/validation";
+import { render } from "preact";
+import { useState } from "preact/hooks";
+import { installLiveValidation, validateBeforeSubmit } from "../shared/form/validation";
 import { withLoadingButton, handleSubmitError } from "../shared/form/submit";
 import { setStatus, readField, findSubmitButton } from "../shared/form/helpers";
 import { SuccessPanel } from "../components/SuccessPanel";
 import { replaceFormWithSuccess } from "../shared/form/success-panel";
-import { isPersonalEmailAddress } from "../../shared/constants/email-domains";
 import { formatCurrencyAmount } from "../../shared/format-currency";
 import {
   filterApplicationFieldsForApplicantKind,
@@ -35,11 +34,14 @@ import {
   memberJoinVerifySchema,
 } from "../../shared/schemas/member-join";
 import { ButtonLink } from "../ui/Button";
+import { EmailFirstStep } from "../components/EmailFirstStep";
 // This module writes design-system class names into markup it builds itself,
 // so it has to pull in the stylesheets that define them: component CSS ships
 // in the chunk of whoever imports it, not in the entry sheet.
 import "../ui/Content.css";
 import "../ui/Field.css";
+
+import { installMembershipLegalValidation } from "./membership-legal-validation";
 
 const API_BASE = "/api/v1";
 
@@ -47,9 +49,6 @@ type JoinApplicationContext = Extract<z.infer<typeof memberJoinVerifyResponseSch
 type MembershipCategory = MemberApplicationFormResponse["categories"][number];
 type JoinApplicantKind = JoinApplicationContext["applicantKind"];
 type MembershipApplicationField = NonNullable<MemberApplicationFormResponse["form"]>["fields"][number];
-
-export const ORGANIZATION_EMAIL_POLICY_MESSAGE =
-  "Use your official work or organization email address. Personal or free email addresses such as Gmail are not accepted for organization participation.";
 
 // ── Pure/testable helpers ──────────────────────────────────────────────────
 
@@ -185,79 +184,19 @@ export function configureMembershipLegalFields(
   );
 }
 
-/**
- * Draws the email control as invalid, or stops drawing it that way.
- *
- * The modifier goes on the field group the label, control and message share,
- * because that is where the design system's state tokens are read from — a
- * class on the input alone styles nothing. The `is-invalid` this replaces was
- * already inert here: Bootstrap only paints it on a `.form-control`, and this
- * control is a `pk-input`.
- */
-function markJoinEmailInvalid(email: HTMLInputElement, invalid: boolean): void {
-  // The field group, not the path-details wrapper: `pk-field--invalid` sets the
-  // `--state-*` variables the border, the mark and the message read, and on an
-  // ancestor that is not a `pk-field` it set variables nothing looked at.
-  applyFieldState(email.closest(".pk-field"), invalid ? "invalid" : null);
-}
-
-function clearOrganizationEmailPolicyError(form: HTMLFormElement, email: HTMLInputElement): void {
-  if (email.dataset.joinEmailPolicyError !== "true") return;
-  if (email.validationMessage === ORGANIZATION_EMAIL_POLICY_MESSAGE) email.setCustomValidity("");
-  delete email.dataset.joinEmailPolicyError;
-  markJoinEmailInvalid(email, false);
-  if (email.checkValidity()) email.removeAttribute("aria-invalid");
-  const error = form.querySelector<HTMLElement>('[data-field-error="email"]');
-  if (error?.textContent === ORGANIZATION_EMAIL_POLICY_MESSAGE) setFieldMessage(error, "");
-}
-
-/** Adds immediate field-level guidance while the server remains the policy authority. */
-export function applyJoinEmailPolicy(form: HTMLFormElement, applicantKind: JoinApplicantKind | null): boolean {
-  const email = form.querySelector<HTMLInputElement>("#joinEmail");
-  if (!email) return true;
-  clearOrganizationEmailPolicyError(form, email);
-
-  const blocked =
-    applicantKind === "organization" &&
-    email.value.trim().length > 0 &&
-    email.checkValidity() &&
-    isPersonalEmailAddress(email.value);
-  if (!blocked) return true;
-
-  email.setCustomValidity(ORGANIZATION_EMAIL_POLICY_MESSAGE);
-  email.dataset.joinEmailPolicyError = "true";
-  markJoinEmailInvalid(email, true);
-  email.setAttribute("aria-invalid", "true");
-  setFieldMessage(form.querySelector<HTMLElement>('[data-field-error="email"]'), ORGANIZATION_EMAIL_POLICY_MESSAGE);
-  return false;
-}
-
-/** Keeps the organization and individual join-start states mutually exclusive. */
-export function applyJoinApplicantKindUI(form: HTMLFormElement, applicantKind: JoinApplicantKind | null): void {
-  const details = form.querySelector<HTMLElement>("[data-join-path-details]");
-  const organizationPolicy = form.querySelector<HTMLElement>("[data-join-organization-policy]");
-  const individualPolicy = form.querySelector<HTMLElement>("[data-join-individual-policy]");
-  const individualCategories = form.querySelector<HTMLElement>("[data-join-individual-categories]");
-  const email = form.querySelector<HTMLInputElement>("#joinEmail");
-  const emailLabel = form.querySelector<HTMLElement>('[data-join-email-label], label[for="joinEmail"]');
-  const emailHelp = form.querySelector<HTMLElement>("[data-join-email-help], #joinEmail-help");
-  if (!details || !organizationPolicy || !individualPolicy || !email || !emailLabel || !emailHelp) return;
-
-  const selected = applicantKind !== null;
-  const individual = applicantKind === "individual";
-  details.hidden = !selected;
-  organizationPolicy.hidden = applicantKind !== "organization";
-  individualPolicy.hidden = !individual;
-  if (individualCategories) individualCategories.hidden = !individual;
-  email.disabled = !selected;
-  emailLabel.textContent = individual
-    ? "Your personal or university email address"
-    : "Your official work or organization email address";
-  email.placeholder = individual ? "you@example.com" : "you@organization.example";
-  emailHelp.textContent = individual
-    ? "We will verify this address before continuing with an eligible individual application."
-    : "We will verify this address before showing the appropriate organization path.";
-  clearOrganizationEmailPolicyError(form, email);
+/** Start with active participation without replacing an applicant's saved choice. */
+export function renderMembershipApplicationQuestions(
+  container: HTMLElement,
+  fields: MembershipApplicationField[],
+  answers: Record<string, unknown> = {},
+): void {
+  const contribution = fields.find((field) => field.key === "contribution_type");
+  const defaults =
+    contribution?.fieldType === "select" &&
+    contribution.options?.some((option) => option.value === "active" && option.active)
+      ? { contribution_type: "active" }
+      : {};
+  renderCustomFields(container, fields).setValues({ ...defaults, ...answers });
 }
 
 export function renderMembershipCategories(container: HTMLElement, categories: MembershipCategory[]): void {
@@ -310,12 +249,6 @@ function readSelectedCategory(form: HTMLFormElement): string {
   return form.querySelector<HTMLInputElement>('input[name="category"]:checked')?.value ?? "";
 }
 
-function readJoinApplicantKind(form: HTMLFormElement): JoinApplicantKind | null {
-  const value = form.querySelector<HTMLInputElement>('input[name="applicantKind"]:checked')?.value;
-  if (value === "organization" || value === "individual") return value;
-  return null;
-}
-
 function showSuccessPanel(
   root: HTMLElement,
   form: HTMLFormElement,
@@ -329,7 +262,7 @@ function showSuccessPanel(
     root,
     form,
     <SuccessPanel icon="🎉" title={`Thanks${applicantName ? `, ${applicantName}` : ""}!`}>
-      {/* `event-flow-success-body` took its colour from a Bootstrap custom
+      {/* `event-flow-success-body` took its color from a Bootstrap custom
           property and set its own bottom margin. Inside `SuccessPanel`'s
           stack the gap comes from the parent and the tone from a token. */}
       <p class="pk-muted">
@@ -337,11 +270,35 @@ function showSuccessPanel(
         status at any time.
       </p>
       <p>
-        <ButtonLink href={statusUrl} size="sm">
-          Check application status →
-        </ButtonLink>
+        <ButtonLink href={statusUrl}>Check application status →</ButtonLink>
       </p>
     </SuccessPanel>,
+  );
+}
+
+/** Joining starts from the shared email-first step; the individual path is the explicit attestation. */
+function JoinEmailStep({ onIndividualChange }: { onIndividualChange: (individual: boolean) => void }) {
+  const [email, setEmail] = useState("");
+  const [individual, setIndividual] = useState(false);
+  const [sentTo, setSentTo] = useState<string | null>(null);
+  return (
+    <EmailFirstStep
+      flow="join"
+      schema={memberJoinStartSchema}
+      email={email}
+      onEmailChange={setEmail}
+      individual={individual}
+      onIndividualChange={(value) => {
+        setIndividual(value);
+        onIndividualChange(value);
+      }}
+      onContinue={async (step) => {
+        await postJson(`${API_BASE}/members/join/start`, step, memberJoinStartResponseSchema);
+        setSentTo(step.email);
+      }}
+      sentTo={sentTo}
+      onChangeEmail={() => setSentTo(null)}
+    />
   );
 }
 
@@ -350,13 +307,12 @@ async function main(): Promise<void> {
   if (!root) return;
   const statusEl = root.querySelector<HTMLElement>("[data-flow-status]");
   const startSection = root.querySelector<HTMLElement>("[data-join-start]");
-  const startForm = root.querySelector<HTMLFormElement>("[data-join-start-form]");
+  const emailStep = root.querySelector<HTMLElement>("[data-join-email-step]");
   const applicationForm = root.querySelector<HTMLFormElement>("[data-join-application-form]");
-  const pendingSection = root.querySelector<HTMLElement>("[data-join-verification-pending]");
   const accessSection = root.querySelector<HTMLElement>("[data-join-organization-access]");
   const existingMemberSection = root.querySelector<HTMLElement>("[data-join-already-member]");
   const supportSection = root.querySelector<HTMLElement>("[data-join-support-required]");
-  const pendingEmail = root.querySelector<HTMLElement>("[data-join-pending-email]");
+  const individualCategories = root.querySelector<HTMLElement>("[data-join-individual-categories]");
   const verifiedEmail = root.querySelector<HTMLElement>("[data-verified-application-email]");
   const verifiedKind = root.querySelector<HTMLElement>("[data-verified-application-kind]");
   const categoryContainer = root.querySelector<HTMLElement>("[data-membership-categories]");
@@ -365,15 +321,15 @@ async function main(): Promise<void> {
   if (
     !statusEl ||
     !startSection ||
-    !startForm ||
+    !emailStep ||
     !applicationForm ||
-    !pendingSection ||
     !accessSection ||
     !supportSection ||
     !existingMemberSection
   )
     return;
 
+  let legalValidation: ReturnType<typeof installMembershipLegalValidation> | undefined;
   let applicationContext: JoinApplicationContext | null = null;
   let categories: MembershipCategory[] = [];
   let applicationFields: MembershipApplicationField[] = [];
@@ -399,14 +355,7 @@ async function main(): Promise<void> {
   };
 
   const showSection = (section: HTMLElement) => {
-    for (const candidate of [
-      startSection,
-      pendingSection,
-      accessSection,
-      existingMemberSection,
-      supportSection,
-      applicationForm,
-    ]) {
+    for (const candidate of [startSection, accessSection, existingMemberSection, supportSection, applicationForm]) {
       candidate.hidden = candidate !== section;
     }
     section.focus();
@@ -424,8 +373,13 @@ async function main(): Promise<void> {
       renderMembershipCategories(categoryContainer, categories);
       const fields = definition.form?.fields ?? [];
       applicationFields = configureMembershipLegalFields(applicationForm, fields, context.applicantKind);
+      legalValidation?.dispose();
+      legalValidation = installMembershipLegalValidation(applicationForm, fields);
       if (customFieldsContainer)
-        renderCustomFields(customFieldsContainer, membershipApplicationFields(applicationFields, categories[0]));
+        renderMembershipApplicationQuestions(
+          customFieldsContainer,
+          membershipApplicationFields(applicationFields, categories[0]),
+        );
       if (verifiedEmail) verifiedEmail.textContent = context.applicantEmail;
       if (verifiedKind) {
         verifiedKind.textContent =
@@ -440,67 +394,16 @@ async function main(): Promise<void> {
     }
   };
 
-  installLiveValidation(startForm, statusEl);
   installLiveValidation(applicationForm, statusEl);
-  // A visitor can answer while the deferred bundle is still loading. Reconcile
-  // that already-checked state instead of relying only on a later change event.
-  const initialApplicantKind = readJoinApplicantKind(startForm);
-  applyJoinApplicantKindUI(startForm, initialApplicantKind);
-  if (initialApplicantKind === "individual") void loadIndividualCategorySummary();
-
-  startForm.addEventListener("input", (event) => {
-    const target = event.target;
-    if (!(target instanceof HTMLInputElement) || target.id !== "joinEmail") return;
-    if (applyJoinEmailPolicy(startForm, readJoinApplicantKind(startForm))) clearStatus(statusEl);
-  });
-
-  startForm.addEventListener("change", (event) => {
-    const target = event.target;
-    if (!(target instanceof HTMLInputElement) || target.name !== "applicantKind") return;
-    const applicantKind = target.value === "individual" ? "individual" : "organization";
-    const email = startForm.querySelector<HTMLInputElement>("#joinEmail");
-    if (email) email.value = "";
-    applyJoinApplicantKindUI(startForm, applicantKind);
-    clearStatus(statusEl);
-    if (applicantKind === "individual") void loadIndividualCategorySummary();
-    email?.focus();
-  });
-
-  startForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    // `was-validated` is not set here any more: `validateBeforeSubmit` adds it
-    // in the one case it means anything — a submission that failed — and
-    // setting it up front marked a form the reader had not got wrong yet.
-    const applicantKind = readJoinApplicantKind(startForm);
-    if (!applyJoinEmailPolicy(startForm, applicantKind) || !validateBeforeSubmit(startForm, statusEl)) return;
-    const email = readField(startForm, "email");
-    const unaffiliatedAttestation = applicantKind === "individual";
-
-    await withLoadingButton(findSubmitButton(startForm), async () => {
-      try {
-        const result = await postJson(
-          `${API_BASE}/members/join/start`,
-          memberJoinStartSchema.parse({ email, unaffiliatedAttestation }),
-          memberJoinStartResponseSchema,
-        );
-        if (result.status === "unaffiliated_attestation_required") {
-          applyJoinEmailPolicy(startForm, "organization");
-          clearStatus(statusEl);
-          startForm.querySelector<HTMLInputElement>("#joinEmail")?.focus();
-          return;
-        }
-        if (pendingEmail) pendingEmail.textContent = email;
-        showSection(pendingSection);
-      } catch (error) {
-        handleSubmitError(error, startForm, statusEl);
-      }
-    });
-  });
-
-  root.querySelector<HTMLButtonElement>("[data-edit-join-email]")?.addEventListener("click", () => {
-    showSection(startSection);
-    startForm.querySelector<HTMLInputElement>("#joinEmail")?.focus();
-  });
+  render(
+    <JoinEmailStep
+      onIndividualChange={(individual) => {
+        if (individualCategories) individualCategories.hidden = !individual;
+        if (individual) void loadIndividualCategorySummary();
+      }}
+    />,
+    emailStep,
+  );
 
   applicationForm.addEventListener("change", (event) => {
     const target = event.target;
@@ -516,7 +419,7 @@ async function main(): Promise<void> {
         if (Array.isArray(answer)) answers[field.key] = answer.filter((value) => eligible.has(value));
         else if (typeof answer === "string" && !eligible.has(answer)) delete answers[field.key];
       }
-      renderCustomFields(customFieldsContainer, fields).setValues(answers);
+      renderMembershipApplicationQuestions(customFieldsContainer, fields, answers);
     }
     applyCategoryUI(
       applicationForm,
@@ -526,7 +429,9 @@ async function main(): Promise<void> {
 
   applicationForm.addEventListener("submit", async (event) => {
     event.preventDefault();
-    if (!validateBeforeSubmit(applicationForm, statusEl)) return;
+    const fieldsValid = validateBeforeSubmit(applicationForm, statusEl);
+    const agreementsValid = legalValidation?.validate() ?? true;
+    if (!fieldsValid || !agreementsValid) return;
     const category = readSelectedCategory(applicationForm);
     if (!category || !applicationContext) {
       setStatus(statusEl, "Your verified membership path has expired. Please start again.", true);
@@ -537,7 +442,8 @@ async function main(): Promise<void> {
       try {
         const configuredCategory = categories.find((entry) => entry.code === category);
         if (!configuredCategory) throw new Error("Choose an available membership category");
-        const payload = memberApplicationCreateSchemaForCategory(configuredCategory).parse(
+        const formFields = (await getApplicationDefinition()).form?.fields ?? [];
+        const payload = memberApplicationCreateSchemaForCategory(configuredCategory, formFields).parse(
           buildApplicationPayload(applicationForm, category, context),
         );
         const result = await postJson(
@@ -548,6 +454,7 @@ async function main(): Promise<void> {
         showSuccessPanel(root, applicationForm, result.applicationId, result.manageToken, payload.applicantName);
       } catch (error) {
         handleSubmitError(error, applicationForm, statusEl);
+        legalValidation?.refuse(error);
       }
     });
   });

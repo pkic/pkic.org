@@ -8,7 +8,7 @@ import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { GroupEventInvitations } from "../../assets/ts/member-flows/portal/sections/management/GroupEventInvitations";
 import { GroupEventWorkspace } from "../../assets/ts/member-flows/portal/sections/management/GroupEventWorkspace";
 import { chooseColumnFilter, columnFilterOptions, columnFilterSummary } from "./helpers/column-menu";
-import { controlFor } from "./helpers/labelled-control";
+import { controlFor } from "./helpers/labeled-control";
 import { rowActionControlNames, runRowAction } from "./helpers/row-actions";
 
 vi.mock("wouter/use-hash-location", () => ({
@@ -138,10 +138,12 @@ describe("portal event invitations", () => {
       await act(async () => selectAll.click());
       await settle();
       const revoke = [...container.querySelectorAll("button")].find(
-        (button) => button.textContent === "Revoke selected",
+        (button) => button.textContent === "Revoke selected…",
       )!;
       await act(async () => revoke.click());
       await settle();
+      expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("Revoke 2 invitations?");
+      expect(paths).toEqual([]);
       await act(async () => confirmDialogButton("Revoke invitations").click());
       await settle();
       await settle();
@@ -446,7 +448,9 @@ describe("portal event invitations", () => {
       registrationPolicy: "no_registration",
       visibility: "group_members",
       inviteLimitAttendee: 5,
-      location: null,
+      city: null,
+      country: null,
+      meetingLocation: null,
       links: [],
       nextOccurrenceAt: null,
       updatedAt: "2026-08-01T12:00:00.000Z",

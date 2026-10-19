@@ -1,0 +1,160 @@
+/*
+ * The MCP consent page: the request on top, one card below with the
+ * permissions beside the account and the decision. On a phone the card stacks:
+ * account first, so the reader sees whose access it is before what it allows.
+ */
+@layer components {
+  .pk-consent {
+    display: grid;
+    gap: var(--pk-6);
+    max-width: 60rem;
+    margin-inline: auto;
+    padding: var(--pk-7) var(--pk-4);
+  }
+
+  .pk-consent__head {
+    display: grid;
+    justify-items: center;
+    gap: var(--pk-2);
+    text-align: center;
+  }
+
+  .pk-consent__marks {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-3);
+    margin-bottom: var(--pk-3);
+  }
+
+  .pk-consent__pkic {
+    width: 3rem;
+    height: 3rem;
+    color: var(--pk-ink);
+  }
+
+  /* The connection between the two marks: a dashed line broken by an arrow. */
+  .pk-consent__link {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-1);
+    color: var(--pk-muted);
+  }
+
+  .pk-consent__link::before,
+  .pk-consent__link::after {
+    content: "";
+    width: 1.5rem;
+    border-top: 1px dashed var(--pk-line-strong);
+  }
+
+  .pk-consent__title {
+    margin: 0;
+    font-size: var(--pk-text-2xl);
+  }
+
+  .pk-consent__card {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    overflow: hidden;
+    border: 1px solid var(--pk-line);
+    border-radius: var(--pk-radius-lg);
+    background: var(--pk-surface);
+  }
+
+  /* The brand rule along the top, inside the rounded corner as on a panel. */
+  .pk-consent__card::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto;
+    z-index: 1;
+    height: 0.1875rem;
+    background: var(--pk-grad-brand);
+  }
+
+  /* Clear of the brand rule, so the matrix header starts below it. */
+  .pk-consent__scopes {
+    padding: 0.1875rem 0 var(--pk-5);
+    border-right: 1px solid var(--pk-line-soft);
+  }
+
+  /* The card continues below the last area, so a rule closes the list. */
+  .pk-consent__scopes .pk-permission-matrix__area:last-child {
+    border-bottom: 1px solid var(--pk-line-soft);
+  }
+
+  .pk-consent__decision {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pk-3);
+    padding: var(--pk-5);
+  }
+
+  .pk-consent__account {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-3);
+    padding: var(--pk-3) var(--pk-4);
+    border: 1px solid var(--pk-line);
+    border-radius: var(--pk-radius);
+  }
+
+  .pk-consent__account-text p {
+    margin: 0;
+  }
+
+  .pk-consent__note {
+    margin-top: auto;
+    padding-top: var(--pk-4);
+    text-align: center;
+  }
+
+  .pk-consent__note p {
+    margin: 0;
+  }
+
+  /* Two stacked alternatives in a narrow single-purpose card: full width. */
+  .pk-consent__actions {
+    display: grid;
+    gap: var(--pk-2);
+  }
+
+  @media (max-width: 48rem) {
+    .pk-consent {
+      padding-block: var(--pk-5);
+    }
+
+    .pk-consent__card {
+      grid-template-columns: 1fr;
+    }
+
+    .pk-consent__scopes {
+      order: 2;
+      border-right: 0;
+    }
+
+    .pk-consent__decision {
+      display: contents;
+    }
+
+    .pk-consent__account {
+      order: 1;
+      margin: var(--pk-4) var(--pk-4) 0;
+    }
+
+    .pk-consent__account + .pk-consent__account {
+      margin-top: var(--pk-2);
+    }
+
+    .pk-consent__note,
+    .pk-consent__decision > .pk-alert,
+    .pk-consent__actions {
+      order: 3;
+      margin-inline: var(--pk-4);
+    }
+
+    .pk-consent__actions {
+      margin-bottom: var(--pk-4);
+    }
+  }
+}

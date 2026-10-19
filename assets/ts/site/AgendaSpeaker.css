@@ -1,0 +1,230 @@
+@layer components {
+  .pk-agenda-speaker {
+    min-inline-size: 0;
+  }
+  .pk-agenda-speaker__open,
+  .pk-agenda-speaker__name {
+    display: block;
+    inline-size: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+  }
+  .pk-agenda-speaker__open .pk-content-agenda__speaker {
+    margin: 0;
+  }
+  .pk-agenda-speaker__open:hover strong,
+  .pk-agenda-speaker__name:hover {
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+  }
+  /*
+ * The speaker profile wears the session details' shell (AgendaSessionDetails.css): the brand header
+ * names the person beside their portrait, the body holds affiliations, biography and sessions.
+ */
+  /* Profiles rendered once beside the program or a card take no room of their own. */
+  .pk-agenda-dialogs {
+    display: contents;
+  }
+  /* The dialog box itself, as the session details' (AgendaDesign.css), a little narrower for one person. */
+  dialog.pk-agenda-speaker-profile {
+    inline-size: min(47.5rem, calc(100% - 3rem));
+    max-block-size: calc(100dvh - 3rem);
+    padding: 0;
+    overflow: hidden;
+    border: 0;
+    border-radius: var(--pk-radius-lg);
+    background: var(--pk-surface);
+    color: var(--pk-ink);
+    box-shadow: var(--pk-agenda-dialog-shadow);
+  }
+  dialog.pk-agenda-speaker-profile[open] {
+    display: flex;
+    flex-direction: column;
+  }
+  .pk-agenda-speaker-profile::backdrop {
+    background: var(--pk-agenda-dialog-backdrop);
+  }
+  /* The header keeps its height; only the body scrolls. */
+  .pk-agenda-speaker-profile > .session-modal__body {
+    flex: 1 1 auto;
+    min-block-size: 0;
+    overflow-y: auto;
+  }
+  @media (max-width: 46rem) {
+    dialog.pk-agenda-speaker-profile {
+      inline-size: calc(100% - 1.5rem);
+      max-block-size: calc(100dvh - 1.5rem);
+    }
+  }
+  .pk-agenda-speaker-profile__identity {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-4);
+    min-inline-size: 0;
+  }
+  .pk-agenda-speaker-profile__portrait {
+    flex: none;
+    display: flex;
+  }
+  .pk-agenda-speaker-profile__portrait .pk-avatar {
+    box-shadow: 0 0 0 2px var(--pk-agenda-dialog-control-line);
+  }
+  .pk-agenda-speaker-profile__name {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--pk-2);
+    min-inline-size: 0;
+  }
+  .pk-agenda-speaker-profile__roles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--pk-1);
+  }
+  .pk-agenda-speaker-profile__affiliations {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--pk-3);
+  }
+  .pk-agenda-speaker-profile__affiliations .pk-agenda-speaker-affiliations {
+    margin: 0;
+  }
+  .pk-agenda-speaker-profile .session-modal__body > p {
+    margin: 0;
+  }
+  /* The speaker's own page lists sessions per event under the event's name. */
+  .pk-agenda-speaker-profile__sessions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pk-2);
+  }
+  .pk-agenda-speaker-profile__sessions > :is(h2, h3) {
+    margin: 0;
+  }
+  @media (max-width: 46rem) {
+    .pk-agenda-speaker-profile__identity {
+      gap: var(--pk-3);
+    }
+    .pk-agenda-speaker-profile__portrait .pk-avatar {
+      --pk-avatar-size: 3.5rem;
+    }
+  }
+
+  /*
+ * Every organization mark has the same height and takes only the width its logo needs, up to a cap,
+ * so wordmarks retain their proportions; missing logos are represented by organization text.
+ */
+  .pk-agenda-speaker-organization {
+    --pk-agenda-mark-block: 22px;
+    --pk-agenda-mark-inline: 112px;
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: flex-start;
+    block-size: var(--pk-agenda-mark-block);
+    inline-size: auto;
+    max-inline-size: var(--pk-agenda-mark-inline);
+  }
+  .pk-agenda-speaker-organization--card {
+    --pk-agenda-mark-block: 16px;
+    --pk-agenda-mark-inline: 96px;
+  }
+  .pk-agenda-speaker-organization--profile {
+    --pk-agenda-mark-block: 24px;
+    --pk-agenda-mark-inline: 144px;
+  }
+  .pk-agenda-speaker-organization__logo {
+    display: block;
+    inline-size: auto;
+    max-inline-size: 100%;
+    block-size: 100%;
+    object-fit: contain;
+    object-position: left center;
+  }
+  /* Affiliations side by side: each a calm unit of mark and text, separated by the shared gap. */
+  .pk-agenda-speaker-affiliations {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--pk-2) var(--pk-5);
+    margin: var(--pk-2) 0 0;
+    padding: 0;
+    list-style: none;
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-sm);
+    line-height: 1.3;
+  }
+  .pk-agenda-speaker-affiliations li {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--pk-2);
+    min-inline-size: 0;
+  }
+  .pk-agenda-speaker-affiliations__organization {
+    display: inline-flex;
+  }
+  /* A speaker row without room shows one affiliation at a time, in the row's quiet type. */
+  .pk-content-agenda__speaker-info .pk-affiliation-rotation {
+    display: flex;
+    margin-block-start: 2px;
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-xs);
+    line-height: 1.4;
+  }
+  /* A role is a quiet marker beside the name, smaller than a status chip. */
+  .pk-content-agenda__speaker-name .pk-badge {
+    padding: 0 var(--pk-2);
+    font-size: var(--pk-text-2xs);
+    line-height: 1.6;
+  }
+  /* The name and the speaker's own links share one line; the links stay small and quiet. */
+  .pk-content-agenda__speaker-name {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--pk-1) var(--pk-2);
+    max-inline-size: 100%;
+  }
+  .pk-content-agenda__speaker-name > :is(h1, h3) {
+    margin: 0;
+    padding: 0;
+  }
+  .pk-content-agenda__speaker-name .pk-link-list {
+    gap: 0;
+  }
+  .pk-content-agenda__speaker-name .pk-link-list__link {
+    padding: 0.2rem;
+    opacity: 0.75;
+  }
+  .pk-content-agenda__speaker-name .pk-link-list__link:hover,
+  .pk-content-agenda__speaker-name .pk-link-list__link:focus-visible {
+    opacity: 1;
+  }
+  .pk-content-agenda__speaker-name .pk-link-list__mark {
+    inline-size: 0.8125rem;
+    block-size: 0.8125rem;
+  }
+  /* Opening the profile focuses the name so screen readers start there; it is not a control. */
+  .pk-content-agenda__speaker-name > :is(h1, h3):focus {
+    outline: none;
+  }
+  .pk-agenda-speaker__portrait {
+    flex: 0 0 auto;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+  }
+  @media print {
+    dialog.pk-agenda-speaker-profile {
+      display: none !important;
+    }
+  }
+}

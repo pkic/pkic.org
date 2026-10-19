@@ -1,7 +1,11 @@
-import { first, run } from "../db/queries";
+import { first } from "../db/queries";
 import { normalizeEmail } from "../validation";
 import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
+import { PUBLIC_PERSON_PROFILE_HOLDER_SOURCE_SQL } from "./people/profile-publication-sql";
+import { publicGroupProfileUserCondition } from "./groups/profile-publication";
+import { PUBLIC_MEMBER_USER_SOURCE_SQL } from "./membership/public-profile-sql";
+import { prepareSitePublicationRequest } from "./site-publication-requests";
 import type { DatabaseLike, StatementLike } from "../types";
 
 export interface UserRecord {
@@ -11,10 +15,6 @@ export interface UserRecord {
   first_name: string | null;
   last_name: string | null;
   preferred_name: string | null;
-  organization_name: string | null;
-  job_title: string | null;
-  biography: string | null;
-  links_json: string | null;
   data_json: string | null;
 }
 
@@ -25,10 +25,6 @@ const USER_RECORD_COLUMN_NAMES = [
   "first_name",
   "last_name",
   "preferred_name",
-  "organization_name",
-  "job_title",
-  "biography",
-  "links_json",
   "data_json",
 ] as const;
 
@@ -53,7 +49,7 @@ export function userRecordColumns(tableAlias?: string): string {
  * Matches a `users` row by its primary email OR by any secondary email
  * recorded in `user_emails` (admin-managed aliases) -- so find-or-create
  * flows recognize a person by any known address instead of creating a
- * duplicate `users` row. Human login resolves only verified aliases through
+ * duplicate `users` row. Human login requires a verified, explicitly enabled alias through
  * `_lib/auth/user-session.ts`; this broader helper must never be used as an
  * authentication decision.
  */
@@ -86,25 +82,23 @@ export interface FindOrCreateUserPayload {
   email: string;
   firstName?: string;
   lastName?: string;
-  organizationName?: string;
-  jobTitle?: string;
-  biography?: string | null;
-  linksJson?: string | null;
   preferredName?: string | null;
   dataJson?: string | null;
   /** Whether to merge submitted profile fields into an existing record.
    *  Default: false — public submissions do not update existing profiles. */
   allowProfileUpdate?: boolean;
+  /**
+   * Every person holds an identity. A new account receives an individual
+   * identity in the same batch, unless the caller creates an identity for
+   * the person in that batch itself.
+   */
+  identityInBatch?: boolean;
 }
 
 export interface UserProfilePatch {
   firstName?: string | null;
   lastName?: string | null;
   preferredName?: string | null;
-  organizationName?: string | null;
-  jobTitle?: string | null;
-  biography?: string | null;
-  linksJson?: string | null;
   headshotR2Key?: string | null;
 }
 
@@ -112,10 +106,6 @@ interface UserProfilePatchSnapshot {
   first_name: string | null;
   last_name: string | null;
   preferred_name: string | null;
-  organization_name: string | null;
-  job_title: string | null;
-  biography: string | null;
-  links_json: string | null;
   headshot_r2_key: string | null;
 }
 
@@ -127,8 +117,7 @@ export async function userProfilePatchWouldChange(
 ): Promise<boolean> {
   const user = await first<UserProfilePatchSnapshot>(
     db,
-    `SELECT first_name, last_name, preferred_name, organization_name, job_title,
-            biography, links_json, headshot_r2_key
+    `SELECT first_name, last_name, preferred_name, headshot_r2_key
        FROM users WHERE id = ?`,
     [userId],
   );
@@ -137,43 +126,94 @@ export async function userProfilePatchWouldChange(
     (payload.firstName !== undefined && payload.firstName !== user.first_name) ||
     (payload.lastName !== undefined && payload.lastName !== user.last_name) ||
     (payload.preferredName !== undefined && payload.preferredName !== user.preferred_name) ||
-    (payload.organizationName !== undefined && payload.organizationName !== user.organization_name) ||
-    (payload.jobTitle !== undefined && payload.jobTitle !== user.job_title) ||
-    (payload.biography !== undefined && payload.biography !== user.biography) ||
-    (payload.linksJson !== undefined && payload.linksJson !== user.links_json) ||
     (payload.headshotR2Key !== undefined && payload.headshotR2Key !== user.headshot_r2_key)
   );
 }
 
-/** Shared explicit-presence profile patch for every authenticated/admin flow. */
-export function prepareUserProfileStatement(
+/** The request precedes the UPDATE, which stays last for callers' immediate change/audit guards. */
+export function prepareUserProfileStatements(
   db: DatabaseLike,
   userId: string,
   payload: UserProfilePatch,
-): StatementLike {
-  const now = nowIso();
+  now = nowIso(),
+): StatementLike[] {
   const assignments: string[] = [];
   const values: Array<string | null> = [];
+  const memberDifferences: string[] = [];
+  const memberValues: Array<string | null> = [];
+  const personNameDifferences: string[] = [];
+  const personNameValues: Array<string | null> = [];
 
-  const add = (column: string, value: string | null | undefined): void => {
+  const add = (column: string, value: string | null | undefined, onMemberPage = true): void => {
     if (value === undefined) return;
     assignments.push(`${column} = ?`);
     values.push(value);
+    if (column === "first_name" || column === "last_name" || column === "preferred_name") {
+      personNameDifferences.push(`person.${column} IS NOT ?`);
+      personNameValues.push(value);
+    }
+    if (onMemberPage) {
+      memberDifferences.push(`person.${column} IS NOT ?`);
+      memberValues.push(value);
+    }
   };
   add("first_name", payload.firstName);
   add("last_name", payload.lastName);
-  add("preferred_name", payload.preferredName);
-  add("organization_name", payload.organizationName);
-  add("job_title", payload.jobTitle);
-  add("biography", payload.biography);
-  add("links_json", payload.linksJson);
+  add("preferred_name", payload.preferredName, false);
   if (payload.headshotR2Key !== undefined) {
     add("headshot_r2_key", payload.headshotR2Key);
-    add("headshot_updated_at", payload.headshotR2Key ? now : null);
+    add("headshot_updated_at", payload.headshotR2Key ? now : null, false);
   }
   assignments.push("updated_at = ?");
   values.push(now);
-  return db.prepare(`UPDATE users SET ${assignments.join(", ")} WHERE id = ?`).bind(...values, userId);
+  const groups = publicGroupProfileUserCondition(userId);
+  const sources = [
+    ...(memberDifferences.length
+      ? [
+          {
+            sql: `EXISTS(SELECT 1 ${PUBLIC_MEMBER_USER_SOURCE_SQL} AND person.id=? AND (${memberDifferences.join(" OR ")}))`,
+            bindings: [userId, ...memberValues],
+          },
+        ]
+      : []),
+    ...(memberDifferences.length
+      ? [
+          {
+            sql: `EXISTS(SELECT 1 FROM users person WHERE person.id=? AND (${memberDifferences.join(" OR ")}) AND (${groups.sql}))`,
+            bindings: [userId, ...memberValues, ...groups.bindings],
+          },
+        ]
+      : []),
+    ...(personNameDifferences.length
+      ? [
+          {
+            sql: `EXISTS(SELECT 1 ${PUBLIC_PERSON_PROFILE_HOLDER_SOURCE_SQL} AND person.id=? AND (${personNameDifferences.join(" OR ")}))`,
+            bindings: [userId, ...personNameValues],
+          },
+        ]
+      : []),
+  ];
+  return [
+    ...(sources.length
+      ? [
+          prepareSitePublicationRequest(
+            db,
+            {
+              resourceType: "user_profile",
+              resourceId: userId,
+              revision: Date.parse(now),
+              reasonCode: "user_profile_changed",
+              deduplicationKey: `user-profile:${userId}:${crypto.randomUUID()}`,
+            },
+            {
+              sql: sources.map((source) => source.sql).join(" OR "),
+              bindings: sources.flatMap((source) => source.bindings),
+            },
+          ),
+        ]
+      : []),
+    db.prepare(`UPDATE users SET ${assignments.join(", ")} WHERE id = ?`).bind(...values, userId),
+  ];
 }
 
 /**
@@ -183,13 +223,46 @@ export function prepareUserProfileStatement(
  * and `buildFindOrCreateUserStatement` (returns an unexecuted statement for
  * a caller-assembled atomic `db.batch()`).
  */
-async function resolveUserWrite(
-  db: DatabaseLike,
-  payload: FindOrCreateUserPayload,
-): Promise<
-  | { user: UserRecord; query: string; values: unknown[]; created: boolean }
-  | { user: UserRecord; query: null; created: false }
-> {
+interface ResolvedUserWrite {
+  user: UserRecord;
+  created: boolean;
+  statements: StatementLike[];
+}
+
+/** The individual identity a new account starts with: no organization, no title, not on any profile. */
+export function prepareAccountIdentityStatement(db: DatabaseLike, userId: string, at: string): StatementLike {
+  return db
+    .prepare(
+      `INSERT INTO identities (
+        id, user_id, organization_id, source, show_on_organization_profile,
+        invited_at, started_at, created_at, updated_at
+      ) VALUES (?, ?, NULL, 'account', 0, ?, ?, ?, ?)`,
+    )
+    .bind(uuid(), userId, at, at, at, at);
+}
+
+/**
+ * The same individual identity for an existing person who holds none — for
+ * example one who only held organization identities and now takes part as an
+ * individual. Inserts nothing when they already hold an active one.
+ */
+export function prepareIndividualIdentityStatement(db: DatabaseLike, userId: string, at: string): StatementLike {
+  return db
+    .prepare(
+      `INSERT INTO identities (
+        id, user_id, organization_id, source, show_on_organization_profile,
+        invited_at, started_at, created_at, updated_at
+      )
+      SELECT ?, ?, NULL, 'account', 0, ?, ?, ?, ?
+       WHERE NOT EXISTS (
+         SELECT 1 FROM identities held
+          WHERE held.user_id = ? AND held.organization_id IS NULL
+            AND held.started_at IS NOT NULL AND held.ended_at IS NULL AND held.blocked_at IS NULL)`,
+    )
+    .bind(uuid(), userId, at, at, at, at, userId);
+}
+
+async function resolveUserWrite(db: DatabaseLike, payload: FindOrCreateUserPayload): Promise<ResolvedUserWrite> {
   const normalized = normalizeEmail(payload.email);
   const existing = await findExistingUserByAnyEmail(db, normalized);
 
@@ -201,52 +274,43 @@ async function resolveUserWrite(
       first_name: payload.firstName ?? null,
       last_name: payload.lastName ?? null,
       preferred_name: payload.preferredName ?? null,
-      organization_name: payload.organizationName ?? null,
-      job_title: payload.jobTitle ?? null,
-      biography: payload.biography ?? null,
-      links_json: payload.linksJson ?? null,
       data_json: payload.dataJson ?? null,
     };
 
     const now = nowIso();
-    return {
-      user,
-      created: true,
-      query: `INSERT INTO users (
+    const insert = db
+      .prepare(
+        `INSERT INTO users (
         id, email, normalized_email, first_name, last_name, preferred_name,
-        organization_name, job_title, biography, links_json,
         data_json, active, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
-      values: [
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+      )
+      .bind(
         user.id,
         user.email,
         user.normalized_email,
         user.first_name,
         user.last_name,
         user.preferred_name,
-        user.organization_name,
-        user.job_title,
-        user.biography,
-        user.links_json,
         user.data_json,
         now,
         now,
-      ],
+      );
+    return {
+      user,
+      created: true,
+      statements: payload.identityInBatch ? [insert] : [insert, prepareAccountIdentityStatement(db, user.id, now)],
     };
   }
 
   // Public submissions must not overwrite existing profile data.
   if (!payload.allowProfileUpdate) {
-    return { user: existing, query: null, created: false };
+    return { user: existing, created: false, statements: [] };
   }
 
   const updatedFirstName = payload.firstName ?? existing.first_name;
   const updatedLastName = payload.lastName ?? existing.last_name;
   const updatedPreferredName = payload.preferredName ?? existing.preferred_name;
-  const updatedOrganizationName = payload.organizationName ?? existing.organization_name;
-  const updatedJobTitle = payload.jobTitle ?? existing.job_title;
-  const updatedBiography = payload.biography ?? existing.biography;
-  const updatedLinksJson = payload.linksJson ?? existing.links_json;
   const updatedDataJson = payload.dataJson ?? existing.data_json;
 
   const user: UserRecord = {
@@ -254,40 +318,21 @@ async function resolveUserWrite(
     first_name: updatedFirstName,
     last_name: updatedLastName,
     preferred_name: updatedPreferredName,
-    organization_name: updatedOrganizationName,
-    job_title: updatedJobTitle,
-    biography: updatedBiography,
-    links_json: updatedLinksJson,
     data_json: updatedDataJson,
   };
 
-  return {
-    user,
-    created: false,
-    query: `UPDATE users
+  const update = db
+    .prepare(
+      `UPDATE users
      SET first_name = ?,
          last_name = ?,
          preferred_name = ?,
-         organization_name = ?,
-         job_title = ?,
-         biography = ?,
-         links_json = ?,
          data_json = ?,
          updated_at = ?
      WHERE id = ?`,
-    values: [
-      updatedFirstName,
-      updatedLastName,
-      updatedPreferredName,
-      updatedOrganizationName,
-      updatedJobTitle,
-      updatedBiography,
-      updatedLinksJson,
-      updatedDataJson,
-      nowIso(),
-      existing.id,
-    ],
-  };
+    )
+    .bind(updatedFirstName, updatedLastName, updatedPreferredName, updatedDataJson, nowIso(), existing.id);
+  return { user, created: false, statements: [update] };
 }
 
 /**
@@ -301,15 +346,13 @@ async function resolveUserWrite(
  */
 export async function findOrCreateUser(db: DatabaseLike, payload: FindOrCreateUserPayload): Promise<UserRecord> {
   const resolved = await resolveUserWrite(db, payload);
-  if (resolved.query) {
-    await run(db, resolved.query, resolved.values);
-  }
+  if (resolved.statements.length > 0) await db.batch(resolved.statements);
   return resolved.user;
 }
 
 /**
- * Same resolution as `findOrCreateUser`, but returns an unexecuted
- * statement instead of writing immediately — lets a caller that's already
+ * Same resolution as `findOrCreateUser`, but returns the unexecuted
+ * statements (a new account's identity included) instead of writing immediately — lets a caller that's already
  * assembling a larger atomic `db.batch()` (for example, membership
  * provisioning or application approval)
  * fold the user write into that same transition instead of committing it
@@ -318,14 +361,6 @@ export async function findOrCreateUser(db: DatabaseLike, payload: FindOrCreateUs
 export async function buildFindOrCreateUserStatement(
   db: DatabaseLike,
   payload: FindOrCreateUserPayload,
-): Promise<{ user: UserRecord; statement: StatementLike | null; created: boolean }> {
-  const resolved = await resolveUserWrite(db, payload);
-  if (!resolved.query) {
-    return { user: resolved.user, statement: null, created: resolved.created };
-  }
-  return {
-    user: resolved.user,
-    statement: db.prepare(resolved.query).bind(...resolved.values),
-    created: resolved.created,
-  };
+): Promise<ResolvedUserWrite> {
+  return resolveUserWrite(db, payload);
 }

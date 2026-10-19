@@ -5,6 +5,7 @@
  * `GET/PUT /api/v1/events/:eventSlug/sponsors/tiers`.
  */
 import { z } from "zod";
+import { SPONSORSHIP_END_REASONS } from "../sponsorship-logo-policy";
 import { databaseIdSchema } from "./identifiers";
 import { eventIdSchema, eventSlugParamsSchema, normalizedEmailSchema, trimmedString } from "./api-common";
 import {
@@ -335,10 +336,24 @@ export const sponsorshipUpdateRouteSchema = {
 
 // ── Stage transition ────────────────────────────────────────────────────
 
-export const sponsorshipStageUpdateSchema = z.object({
-  toStage: sponsorshipPipelineStageSchema,
-  note: trimmedString(0, 2000).nullable().optional(),
-});
+export const sponsorshipStageUpdateSchema = z
+  .object({
+    endReason: z.enum(SPONSORSHIP_END_REASONS).optional(),
+    toStage: sponsorshipPipelineStageSchema,
+    note: trimmedString(0, 2000).nullable().optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.endReason && value.toStage !== "lapsed" && value.toStage !== "not_proceeding") {
+      ctx.addIssue({
+        code: "custom",
+        path: ["endReason"],
+        message: "Choose an end reason only when ending a sponsorship",
+      });
+    }
+    if (value.endReason === "ordinary_expiry" && value.toStage !== "lapsed") {
+      ctx.addIssue({ code: "custom", path: ["endReason"], message: "Ordinary expiry requires the lapsed stage" });
+    }
+  });
 
 export const sponsorshipStageUpdateRouteSchema = {
   ...requiresPermissions("sponsorships:write"),

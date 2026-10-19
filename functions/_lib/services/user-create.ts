@@ -22,10 +22,10 @@ export async function createUser(db: DatabaseLike, actor: UserBackedAuthAdmin, i
     firstName: input.firstName ?? undefined,
     lastName: input.lastName ?? undefined,
   });
-  if (!prepared.created || !prepared.statement) throw emailAlreadyUsed();
+  if (!prepared.created) throw emailAlreadyUsed();
   try {
     await guarded.batch([
-      prepared.statement,
+      ...prepared.statements,
       prepareAuditLog(guarded, "admin", actor.id, "user_created", "user", prepared.user.id, { email: input.email }),
     ]);
   } catch (error) {

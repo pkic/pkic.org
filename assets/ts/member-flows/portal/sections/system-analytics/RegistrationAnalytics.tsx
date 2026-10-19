@@ -1,4 +1,4 @@
-import { useState } from "preact/hooks";
+import { useHashQueryParam } from "../../../../hooks/useHashQueryParam";
 import { StackedBarChart } from "../../../../ui/StackedBarChart";
 import { statusBars } from "../../../../ui/chart";
 import { statusLabel } from "../../../../components/Badge";
@@ -17,7 +17,7 @@ const PERIODS = [
 ];
 
 export function RegistrationAnalytics() {
-  const [period, setPeriod] = useState("weekly");
+  const [period, setPeriod] = useHashQueryParam("registrationPeriod", "weekly");
   const state = useData(() => getJson("/api/v1/analytics/registrations", registrationAnalyticsResponseSchema), []);
   if (state.loading) return <Spinner label="Loading registration analytics…" />;
   if (state.error) return <ErrorAlert error={state.error} />;

@@ -2,7 +2,7 @@
   /*
    * A working group's sub-pages carry the group's own accent: the header
    * gradient, the rule above the section nav, the current tab and the card
-   * tint all read from one custom property, so a new group needs a colour
+   * tint all read from one custom property, so a new group needs a color
    * and nothing else.
    */
   .pk-wg {

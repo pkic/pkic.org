@@ -67,6 +67,7 @@ function sortButtons(container: HTMLElement): HTMLButtonElement[] {
 }
 
 afterEach(() => {
+  history.replaceState(null, "", location.pathname);
   for (const container of mounted.splice(0)) {
     void act(() => render(null, container));
     container.remove();
@@ -214,6 +215,7 @@ describe("canonical offset pagination", () => {
             Filter
           </button>
           <ApiDataTable
+            urlState="offset-pagination"
             caption="Table rows"
             endpoint="/api/table"
             responseSchema={responseSchema}

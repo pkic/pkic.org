@@ -28,6 +28,7 @@ export const CurrentUserIdentityPost = openApiRoute(
       sessionId: actor.sessionId,
       organizationId: data.body.organizationId,
       emailId: data.body.emailId,
+      jobTitle: data.body.jobTitle,
     });
     return jsonPrivate(identityMutationResponseSchema.parse({ success: true, ...result }), 201);
   },

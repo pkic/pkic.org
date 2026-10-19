@@ -1,0 +1,24 @@
+/*
+ * The tones of a message to the speaker, each a fixed pair of colors with
+ * readable contrast on the stage display's dark field: a calm white card, the
+ * event's deep blue, its orange, and red for what cannot wait. The stage
+ * timer and the control room's swatches read the same pairs.
+ */
+@layer components {
+  [data-speaker-tone] {
+    --speaker-tone: var(--pk-pqc-paper);
+    --speaker-tone-ink: var(--pk-pqc-ink);
+  }
+  [data-speaker-tone="info"] {
+    --speaker-tone: var(--pk-pqc-blue-deep);
+    --speaker-tone-ink: var(--pk-pqc-on-field);
+  }
+  [data-speaker-tone="warning"] {
+    --speaker-tone: var(--pk-pqc-orange);
+    --speaker-tone-ink: var(--pk-pqc-ink);
+  }
+  [data-speaker-tone="urgent"] {
+    --speaker-tone: var(--pk-danger-strong);
+    --speaker-tone-ink: var(--pk-on-solid);
+  }
+}

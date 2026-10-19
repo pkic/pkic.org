@@ -29,7 +29,7 @@ const reportOnly = process.argv.includes("--report");
 const bootstrapSurvey = process.argv.includes("--bootstrap");
 
 /** Trees that can put a class on an element. Stylesheets deliberately are not. */
-const RENDERING_TREES = ["layouts", "assets/ts", "assets/js"];
+const RENDERING_TREES = ["site", "functions/_lib", "assets/ts", "assets/js"];
 
 const FAMILIES =
   /\.(btn|card|row|col|alert|badge|nav|navbar|modal|dropdown|form-control|form-select|form-check|form-label|form-text|input-group|invalid-feedback|valid-feedback|list-group|table|spinner-border|visually-hidden|text-muted|text-danger|text-success|fs-|fw-|fst-|d-none|d-flex|page-|pagination|accordion|offcanvas|toast|progress)[a-z0-9-]*\b/g;
@@ -55,20 +55,27 @@ function renderedClasses() {
   const exact = new Set();
   const prefixes = new Set();
 
-  const attribute = /\bclass(?:Name)?\s*=\s*(?:"([^"]*)"|'([^']*)'|\{`([^`]*)`\}|\{"([^"]*)"\}|\{'([^']*)'\})/g;
+  // A template literal may nest another inside a `${}` (a conditional extra
+  // class), so its body is matched as text or balanced interpolations.
+  const attribute =
+    /\bclass(?:Name)?\s*=\s*(?:"([^"]*)"|'([^']*)'|\{`((?:[^`$]|\$\{(?:[^{}`]|`[^`]*`)*\})*)`\}|\{"([^"]*)"\}|\{'([^']*)'\})/g;
+  // Markdown and HTML processors set classes as `className: ["a", "b"]`.
+  const propertyList = /\bclassName:\s*\[([^\]]*)\]/g;
+  // A class name passed down as a prop with a literal fallback.
+  const fallback = /\b[A-Za-z]*Class(?:Name)?\b[^\n;]*?\?\?\s*"([^"]*)"/g;
   const runtime = /classList\.(?:add|remove|toggle|replace)\(\s*(?:"([^"]*)"|'([^']*)'|`([^`]*)`)/g;
   const template = /`([^`]*\bpk-[^`]*)`/g;
 
   for (const tree of RENDERING_TREES) {
     let files;
     try {
-      files = walk(resolve(root, tree), /\.(html|tsx?|js|mjs)$/);
+      files = walk(resolve(root, tree), /\.(astro|html|tsx?|js|mjs)$/);
     } catch {
       continue; // A tree that does not exist in this checkout.
     }
     for (const file of files) {
       const source = readFileSync(file, "utf8");
-      for (const pattern of [attribute, runtime, template]) {
+      for (const pattern of [attribute, propertyList, fallback, runtime, template]) {
         pattern.lastIndex = 0;
         let match;
         while ((match = pattern.exec(source)) !== null) {
@@ -76,7 +83,7 @@ function renderedClasses() {
           // Hugo actions and JS expressions split a value into literal pieces;
           // each piece contributes whole tokens, and a piece cut off mid-token
           // contributes a prefix.
-          const pieces = value.split(/\{\{[^}]*\}\}|\$\{[^}]*\}/);
+          const pieces = value.replace(/["',]/g, " ").split(/\{\{[^}]*\}\}|\$\{(?:[^{}`]|`[^`]*`)*\}/);
           pieces.forEach((piece, index) => {
             const tokens = piece.split(/\s+/).filter(Boolean);
             tokens.forEach((token, position) => {

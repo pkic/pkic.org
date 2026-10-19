@@ -52,6 +52,16 @@ describe("Panel", () => {
     expect(h3?.textContent).toBe("Test");
   });
 
+  it("puts the PanelHeader menu left of its buttons", () => {
+    const container = mount(
+      <PanelHeader title="Form" menu={<button type="button">Actions</button>}>
+        <button type="button">Publish</button>
+      </PanelHeader>,
+    );
+    const toolbar = [...container.querySelectorAll(".pk-panel__toolbar button")].map((button) => button.textContent);
+    expect(toolbar).toEqual(["Actions", "Publish"]);
+  });
+
   it("renders PanelHeader with h2 when headingLevel is 2", () => {
     const container = mount(
       <Panel>

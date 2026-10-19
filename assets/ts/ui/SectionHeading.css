@@ -1,0 +1,22 @@
+/*
+ * A SectionHeading renders at the level its outline gives it but keeps the
+ * size it was authored at, so a screen hosted under a different title does not
+ * resize its sections. Zero specificity, so any component class still sets its
+ * own size. Loaded with the component, keeping the entry stylesheet in budget.
+ */
+@layer components {
+  :where(.pk [data-heading-level="2"]) {
+    font-size: var(--pk-text-xl);
+    letter-spacing: -0.01em;
+  }
+
+  :where(.pk [data-heading-level="3"]) {
+    font-size: var(--pk-text-lg);
+    letter-spacing: normal;
+  }
+
+  :where(.pk [data-heading-level="4"], .pk [data-heading-level="5"], .pk [data-heading-level="6"]) {
+    font-size: var(--pk-text-md);
+    letter-spacing: normal;
+  }
+}

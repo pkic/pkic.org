@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * Button behaviour that a visual specimen cannot show: what the control
+ * Button behavior that a visual specimen cannot show: what the control
  * exposes to assistive technology, and what it does while busy.
  */
 
@@ -42,17 +42,17 @@ describe("Button", () => {
   it("applies the variant and size as modifiers", () => {
     const button = buttonIn(
       mount(
-        <Button variant="danger" size="sm">
+        <Button variant="danger" size="lg">
           Remove
         </Button>,
       ),
     );
     expect(button.className).toContain("pk-btn--danger");
-    expect(button.className).toContain("pk-btn--sm");
+    expect(button.className).toContain("pk-btn--lg");
   });
 
-  it("omits the size modifier at the default size", () => {
-    expect(buttonIn(mount(<Button>Plain</Button>)).className).not.toContain("pk-btn--md");
+  it("has no size modifier at the default size", () => {
+    expect(buttonIn(mount(<Button>Plain</Button>)).className).not.toContain("pk-btn--lg");
   });
 
   it("stays focusable while loading, so the user is not thrown out of the form", () => {

@@ -1,8 +1,6 @@
 /**
- * Canonical flexible-link schema and `links_json` codec. Split out of
- * api.ts so it and its URL primitive dependency can be loaded directly by
- * plain Node tooling (e.g. the member importer) without a bundler — see
- * scripts/migrate-members/sql-renderer.mjs.
+ * Canonical flexible-link schema and `links_json` codec, kept in its own
+ * module apart from api.ts.
  */
 import { z } from "zod";
 import { httpUrlSchema, sanitizeLegacyHttpUrl } from "./urls.ts";

@@ -1,5 +1,5 @@
 import type { EventRegistrationDayAttendanceChange } from "../../../../assets/shared/schemas/event-registration-detail";
-import { AppError } from "../../errors";
+import { dayNotConfiguredError, registrationCancelledDayChangeError } from "../event-day-refusals";
 import type { DatabaseLike, D1StatementResult, StatementLike } from "../../types";
 import { deriveEventAttendanceType, getRegistrationDayAttendance, listEventDays } from "../event-days";
 import type { EventRecord } from "../events";
@@ -24,11 +24,7 @@ export async function updateRegistrationDayAttendance(
   // plan fails with REGISTRATION_CHANGED instead of replacing their roster.
   const registration = await getRegistrationByIdForEvent(db, event.id, input.registrationId);
   if (registration.status === "cancelled") {
-    throw new AppError(
-      409,
-      "REGISTRATION_CANCELLED",
-      "Cancelled registrations cannot be changed through attendance management",
-    );
+    throw registrationCancelledDayChangeError();
   }
 
   const [eventDays, current] = await Promise.all([
@@ -38,7 +34,7 @@ export async function updateRegistrationDayAttendance(
   const configuredDates = new Set(eventDays.map((day) => day.day_date));
   for (const dayDate of input.change.dayDates) {
     if (!configuredDates.has(dayDate)) {
-      throw new AppError(400, "DAY_NOT_CONFIGURED", `Day '${dayDate}' is not configured for this event`);
+      throw dayNotConfiguredError(dayDate);
     }
   }
   const next = new Map(current.map((entry) => [entry.dayDate, entry.attendanceType]));

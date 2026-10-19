@@ -1,6 +1,6 @@
 import { act } from "preact/test-utils";
 
-import { typeInto } from "./labelled-control";
+import { typeInto } from "./labeled-control";
 
 /**
  * Driving the form definition editor the way a person does.

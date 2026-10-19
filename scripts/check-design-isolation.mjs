@@ -7,7 +7,7 @@
  *   1. A component reaching for a Bootstrap class or a `--bs-*` variable.
  *      It works today, breaks when Bootstrap is removed, and means the
  *      component is no longer described by its own stylesheet.
- *   2. A colour, radius, or duration literal in component CSS. One hex in one
+ *   2. A color, radius, or duration literal in component CSS. One hex in one
  *      component is how a token system quietly stops being the single source.
  *
  * Scope is the design system only — the legacy tree is expected to violate
@@ -24,8 +24,8 @@ const root = process.cwd();
 /**
  * Surfaces that have adopted the design system and must stay free of
  * Bootstrap. This list is the ratchet for the framework removal: a surface
- * joins it once it is clean, and can then never regress. Nothing is ever
- * removed from it.
+ * joins it once it is clean, and can then never regress. An entry leaves the
+ * list only when the surface itself is deleted.
  *
  * Deliberately NOT a baseline of tolerated violations — a surface is added
  * only after its violations are gone, so the gate always demands zero.
@@ -34,16 +34,20 @@ const scanned = [
   "assets/ts/ui",
   "assets/ts/site",
   "assets/design",
-  "layouts/design",
+  "assets/ts/live-session",
+  "assets/ts/member-flows/portal/sections/events/detail/live",
+  // The event app and its management: the participant screens, the agenda
+  // editor, the scanner and the group's event workspace.
+  "assets/ts/member-flows/portal/sections/events",
+  "assets/ts/member-flows/portal/sections/management",
+  "assets/ts/components/events",
+  "assets/ts/member-flows/portal/sections/system-organizations",
+  "assets/ts/member-flows/portal/sections/AffiliationReviews.tsx",
+  "assets/ts/member-flows/portal/sections/AffiliationOfferCard.tsx",
+  // The portal shell, including the sign-in screen's brand panel.
+  "assets/ts/member-flows/portal/shell",
   // Individual files, so a directory can be locked in one surface at a time
   // rather than waiting for every file in it to be migrated at once.
-  "layouts/wg/wg-sub.html",
-  "layouts/wg/section.html",
-  "layouts/shortcodes/joinform.html",
-  "layouts/shortcodes/invite-decline.html",
-  "layouts/shortcodes/event-proposal.html",
-  "layouts/shortcodes/event-proposal-manage.html",
-  "layouts/shortcodes/event-sponsor-checkout.html",
   "assets/ts/member-flows/portal/sections/AccountSettings.tsx",
   "assets/ts/components/proposals/ProposalDecisionPanel.tsx",
   // The shared components every surface renders. Migrating their internals
@@ -114,7 +118,6 @@ const scanned = [
   "assets/ts/components/UserPicker.tsx",
   "assets/ts/components/EnumSelect.tsx",
   "assets/ts/components/FilterSelect.tsx",
-  "layouts/partials/navbar.html",
   "assets/js/session-registration.js",
   "assets/js",
   "assets/ts/member-flows/portal/sections/management/GroupStatistics.tsx",
@@ -137,12 +140,8 @@ const scanned = [
   "assets/ts/member-flows/portal/sections/management/MeetingSeriesFields.tsx",
   "assets/ts/member-flows/portal/shell/McpAuthorization.tsx",
   "assets/ts/member-flows/portal/shell/Login.tsx",
-  "layouts/partials/hero.html",
-  "layouts/index.html",
   "assets/ts/member-flows/portal/sections/management/GroupLeadership.tsx",
   "assets/ts/member-flows/portal/sections/management/GroupLeadershipAssignmentForm.tsx",
-  "layouts/shortcodes/agenda.html",
-  "layouts/shortcodes/event-speaker-presentation.html",
   "assets/ts/member-flows/portal/sections/system-analytics/AnalyticsOverview.tsx",
   "assets/ts/member-flows/portal/sections/system-analytics/RegistrationAnalytics.tsx",
   "assets/ts/member-flows/portal/sections/system-analytics/Tables.tsx",
@@ -166,7 +165,6 @@ const scanned = [
   "assets/ts/shared/widgets/share-panel.tsx",
   "assets/ts/shared/donation/widget.tsx",
   "assets/ts/shared/donation/form.tsx",
-  "layouts/partials/footer.html",
   "assets/ts/member-flows/vote-detail-page.tsx",
   "assets/ts/member-flows/portal/sections/Votes/VoteDetails.tsx",
   "assets/ts/member-flows/portal/sections/management/MeetingOccurrenceFields.tsx",
@@ -183,19 +181,13 @@ const scanned = [
   "assets/ts/shared/donation/thank-you.tsx",
   "assets/ts/member-flows/portal/sections/system-users/UserDetail.tsx",
   "assets/ts/member-flows/member-detail-page.tsx",
-  "layouts/shortcodes/event-registration-confirm.html",
-  "layouts/events/list.html",
-  "layouts/shortcodes/sponsorform.html",
-  "layouts/shortcodes/event-registration.html",
-  "layouts/partials/donations/form-widget.html",
-  "assets/ts/shared/form/button-loading.tsx",
+  "assets/ts/shared/form/button-busy.ts",
   "assets/ts/shared/form/success-panel.tsx",
   "assets/ts/member-flows/portal/sections/management/GroupVoteLifecycleActions.tsx",
   "assets/ts/member-flows/portal/sections/management/MeetingSeriesSettings.tsx",
   "assets/ts/member-flows/portal/sections/access-control/roles/RoleEditForm.tsx",
   "assets/ts/components/RecurrenceEditor.tsx",
   "assets/ts/member-flows/portal/sections/sponsors/management/SponsorshipTierConfig.tsx",
-  "layouts/partials/wg-sub-navigation.html",
   "assets/ts/member-flows/portal/sections/access-control/roles/RoleAssignForm.tsx",
   "assets/ts/member-flows/portal/sections/events/detail/settings/SponsorTiersTab.tsx",
   "assets/ts/member-flows/portal/sections/management/EventFormPlacementEditor.tsx",
@@ -206,7 +198,6 @@ const scanned = [
   "assets/ts/member-flows/portal/sections/sponsors/management/CompanyDetailPanel.tsx",
   "assets/ts/member-flows/portal/sections/management/EventRegistrationSettingsEditor.tsx",
   "assets/ts/components/MembershipCategoryPicker.tsx",
-  "layouts/shortcodes/news.html",
   "assets/ts/event-flows/speaker-manage-page.tsx",
   "assets/ts/components/forms/FormSubmissionForm.tsx",
   "assets/ts/member-flows/portal/sections/management/MeetingOccurrenceEditor.tsx",
@@ -214,33 +205,29 @@ const scanned = [
   "assets/ts/member-flows/portal/sections/sponsors/index.tsx",
   "assets/ts/member-flows/portal/sections/access-control/TargetPicker.tsx",
   "assets/ts/shared/widgets/link-recovery.tsx",
-  "layouts/shortcodes/livestream.html",
   "assets/ts/member-flows/portal/sections/management/ResourceCapabilities.tsx",
   "assets/ts/member-flows/portal/sections/system-operations/ScheduledWork.tsx",
-  "layouts/partials/social.html",
-  "layouts/shortcodes/carousel.html",
   "assets/ts/member-flows/portal/sections/settings/SettingsSection.tsx",
   "assets/ts/member-flows/portal/sections/settings/SettingsIndex.tsx",
   "assets/ts/member-flows/portal/sections/system-organizations/OrganizationLogo.tsx",
-  "layouts/partials/menu.html",
-  "layouts/shortcodes/members.html",
   "assets/ts/components/icons/index.tsx",
   "assets/ts/member-flows/portal/sections/events/detail/proposal-detail/AuditLogSection.tsx",
   "assets/ts/member-flows/portal/sections/management/GroupEventCommunications.tsx",
   "assets/ts/member-flows/portal/sections/events/EventWorkspace.tsx",
-  "layouts/shortcodes/glossary.html",
   "assets/ts/member-flows/portal/sections/management/GroupMeetingSeriesDetail.tsx",
-  "layouts/partials/events/webinar-disclaimer.html",
-  "layouts/partials/events/conference-schema.html",
-  "layouts/partials/wg/spotlight-card.html",
   "assets/ts/components/proposals/ProposalCoSpeakerInviteForm.tsx",
   "assets/ts/member-flows/portal/sections/Votes/BallotForm.tsx",
   "assets/ts/member-flows/meeting-join/App.tsx",
   "assets/ts/components/TimeZoneSelect.tsx",
   "assets/ts/member-flows/portal/sections/events/EventList.tsx",
-  "assets/ts/components/LogoManager.tsx",
+  // LogoManager.tsx and the headshot managers were replaced by the one tile.
+  "assets/ts/components/PictureTile.tsx",
+  "assets/ts/components/PictureTile.css",
+  "assets/ts/components/usePictureCommands.ts",
+  "assets/ts/shared/headshot/HeadshotTile.tsx",
+  "assets/ts/shared/headshot/endpoints.ts",
+  "assets/ts/member-flows/portal/sections/sponsors/management/SponsorshipLogo.tsx",
   "assets/ts/member-flows/portal/sections/system-analytics/SystemAnalytics.tsx",
-  "assets/ts/member-flows/portal/sections/Placeholder.tsx",
   "assets/ts/member-flows/portal/sections/management/MeetingOccurrenceDetail.tsx",
   "assets/ts/member-flows/portal/sections/system-users/Users.tsx",
   "assets/ts/components/forms/form-answers.ts",
@@ -253,7 +240,7 @@ function isAdopted(rel) {
 
 /** Everything still on Bootstrap, measured by `--report` so the remaining
  *  distance is visible without pretending it is acceptable. */
-const remaining = ["assets/ts", "assets/js", "assets/scss", "layouts"];
+const remaining = ["assets/ts", "assets/js", "assets/scss"];
 
 /**
  * Bootstrap utilities and components, matched as WHOLE class tokens.
@@ -272,8 +259,8 @@ function isBootstrapClassList(value) {
     .some((token) => BOOTSTRAP_CLASS.test(token));
 }
 
-/** A colour literal in any of the forms a stylesheet accepts. */
-const COLOUR_LITERAL = /(#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(|\boklch\(|\blab\()/;
+/** A color literal in any of the forms a stylesheet accepts. */
+const COLOR_LITERAL = /(#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(|\boklch\(|\blab\()/;
 
 /**
  * Every `pk-` class the stylesheets actually define. A component referencing a
@@ -281,8 +268,9 @@ const COLOUR_LITERAL = /(#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(|\boklch\(|\blab
  * valid, the build passes, and the surface is just quietly wrong. This has
  * already happened once, with an invented `pk-field--checkbox`.
  */
-function definedClasses() {
+function definedNames() {
   const names = new Set();
+  const properties = new Set();
   const collect = (dir) => {
     for (const entry of readdirSync(dir)) {
       const full = join(dir, entry);
@@ -290,10 +278,17 @@ function definedClasses() {
         collect(full);
         continue;
       }
-      if (!/\.(css|scss)$/.test(entry)) continue;
-      for (const match of readFileSync(full, "utf8").matchAll(/\.(pk-[a-z0-9_-]+)/g)) {
-        names.add(match[1]);
+      if (/\.tsx?$/.test(entry)) {
+        // A custom property a script sets at runtime is declared there.
+        for (const match of readFileSync(full, "utf8").matchAll(/["'`](--pk-[a-z0-9-]+)["'`]/g)) {
+          properties.add(match[1]);
+        }
+        continue;
       }
+      if (!/\.(css|scss)$/.test(entry)) continue;
+      const text = readFileSync(full, "utf8");
+      for (const match of text.matchAll(/\.(pk-[a-z0-9_-]+)/g)) names.add(match[1]);
+      for (const match of text.matchAll(/(--pk-[a-z0-9-]+)\s*:/g)) properties.add(match[1]);
     }
   };
   // Every stylesheet under assets/ts, not only the primitives'. A component
@@ -306,10 +301,10 @@ function definedClasses() {
       // Nothing to collect.
     }
   }
-  return names;
+  return { names, properties };
 }
 
-const known = definedClasses();
+const { names: known, properties: declaredProperties } = definedNames();
 const failures = [];
 
 function walk(dir) {
@@ -337,6 +332,9 @@ function inspect(file) {
   const isGeneratedTokens =
     rel === "assets/design/tokens.generated.css" ||
     rel === "assets/design/tokens.public.generated.css" ||
+    rel === "assets/design/tokens.agenda.generated.css" ||
+    rel === "assets/design/tokens.scanner.generated.css" ||
+    rel === "assets/design/tokens.event.generated.css" ||
     rel === "assets/design/tokens.template.generated.css";
   const isTokenSource = rel.startsWith("assets/design/") && /\.ts$/.test(rel);
 
@@ -417,8 +415,22 @@ function inspect(file) {
         report(file, lineNumber, line, "uses an inline style attribute");
       }
 
-      if (/\.(css|scss)$/.test(file) && !isGeneratedTokens && COLOUR_LITERAL.test(code)) {
-        report(file, lineNumber, line, "hard-codes a colour instead of reading a token");
+      if (/\.(css|scss)$/.test(file) && !isGeneratedTokens && COLOR_LITERAL.test(code)) {
+        report(file, lineNumber, line, "hard-codes a color instead of reading a token");
+      }
+
+      /*
+       * A token nobody declares resolves to nothing: `var(--pk-muted)` paints
+       * the inherited color and `gap: var(--pk-space-2)` collapses to zero,
+       * and both look like a design decision rather than a typo. A reference
+       * with a fallback is a deliberate local knob and is left alone.
+       */
+      if (/\.(css|scss)$/.test(file)) {
+        for (const match of code.matchAll(/var\((--pk-[a-z0-9-]+)\s*\)/g)) {
+          if (!declaredProperties.has(match[1])) {
+            report(file, lineNumber, line, `reads "${match[1]}", which no stylesheet declares`);
+          }
+        }
       }
 
       // Only the values that must stay systematic are policed. A gap or an

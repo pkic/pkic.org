@@ -1,14 +1,15 @@
 /**
- * Member directory listing. Replaces the Hugo-data-driven
- * A-Z grid (layouts/partials/members/listing.html, driven by hugo.Data.members
- * at build time) with a Preact component that fetches GET /api/v1/members.
+ * Member directory listing. Replaces the build-time,
+ * YAML-driven A-Z grid with a Preact component that fetches GET /api/v1/members.
  *
  * D1 is now the source of truth (Step 2 has run). Search, sorting, and
  * pagination are sent to the API and performed in D1; the browser only
  * groups the complete directory into presentation buckets.
  */
 import { render } from "preact";
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
+import { useSyncExternalStore } from "preact/compat";
+import { subscribeUrlQuery, urlQuerySnapshot, writeUrlQuery } from "../ui/url-query";
 import { DirectoryGrid, MemberCard } from "../site/MemberDirectory";
 import { Spinner } from "../components/Spinner";
 import { ErrorAlert } from "../components/ErrorAlert";
@@ -66,8 +67,10 @@ export function MemberDirectory({
   prefix: string;
   label: string;
 }) {
-  const [searchInput, setSearchInput] = useState("");
-  const [search, setSearch] = useState("");
+  const location = new URL(useSyncExternalStore(subscribeUrlQuery, urlQuerySnapshot));
+  const search = location.searchParams.get("q") ?? "";
+  const [searchInput, setSearchInput] = useState(search);
+  useEffect(() => setSearchInput(search), [search]);
   const listing = useMemberDirectory(apiBase, group, search);
   const members = listing.data?.members;
 
@@ -76,7 +79,11 @@ export function MemberDirectory({
 
   function submitSearch(event: SubmitEvent): void {
     event.preventDefault();
-    setSearch(searchInput.trim());
+    const params = new URLSearchParams(location.search);
+    const next = searchInput.trim();
+    if (next) params.set("q", next);
+    else params.delete("q");
+    writeUrlQuery({ source: "search", ownerPath: location.pathname, params, mode: "push" });
   }
 
   return (

@@ -89,6 +89,37 @@ describe("seeded email templates", () => {
     expect(text).toContain("Final line.");
   });
 
+  it("tells a sponsor who and what is active, in plain text and HTML, without printing a tag or an instant", async () => {
+    // The migration is the seed for this template; the payload is what
+    // `sponsorship/pipeline.ts` queues, so the two are joined here.
+    const migration = readFileSync(join(MIGRATIONS_DIR, "0035_membership_portal_governance.sql"), "utf8");
+    const seeded = migration.match(
+      /'sponsorship-active-confirmation', 1,\s*'((?:[^']|'')*)',\s*'((?:[^']|'')*)',\s*'markdown'/,
+    );
+    expect(seeded).not.toBeNull();
+    const { html, text } = await renderEmail(
+      seeded![2].replaceAll("''", "'"),
+      {
+        contactNameText: "Morgan Sponsor",
+        organizationNameText: "Sponsor email review",
+        tierText: "Bronze",
+        startDate: "2026-09-07",
+      },
+      "{{{body_html}}}",
+    );
+
+    for (const body of [html, text]) {
+      expect(body).toContain("Morgan Sponsor");
+      expect(body).toContain("Sponsor email review");
+      expect(body).toContain("Bronze");
+      expect(body).toMatch(/thank you/i);
+      expect(body).not.toContain("{{");
+      expect(body).not.toMatch(/\d{2}:\d{2}:\d{2}\.\d{3}Z/);
+    }
+    expect(text).toContain("as of 2026-09-07");
+    expect(text).toContain("reply to this email");
+  });
+
   it("open and close only the blocks the renderer implements", () => {
     const offenders: string[] = [];
     for (const { file, text } of templateSources()) {

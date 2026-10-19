@@ -7,7 +7,7 @@ import {
 } from "../../../../../../shared/schemas/sponsorship-management";
 import { ApiDataTable } from "../../../../../components/ApiDataTable";
 import { Badge, statusLabel } from "../../../../../components/Badge";
-import { EmptyState } from "../../../../../ui/RecordEmptyState";
+import { EmptyState } from "../../../../../ui/EmptyState";
 import type { Column } from "../../../../../components/Table";
 import { PageHeader } from "../../../../../ui/PageHeader";
 import { fmtCalendarDate } from "../../../ui";
@@ -52,7 +52,7 @@ export function CompanyDetailPanel({ selectedCompany }: { selectedCompany: Spons
       cell: (row) => statusLabel(row.sponsorType),
       width: "fit",
       // The endpoint narrows by sponsor type but does not order by it, so the
-      // column offers the filter it can honour and claims no sort it cannot.
+      // column offers the filter it can honor and claims no sort it cannot.
       filter: {
         param: "type",
         options: [

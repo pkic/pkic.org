@@ -7,13 +7,12 @@
  */
 import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
+import { callApi } from "./helpers/app";
 import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
 import { createMemberSession } from "./helpers/auth";
 import { queryAll } from "./helpers/context";
-import { seedOrganizationAggregate, addRepresentative } from "./helpers/membership";
-import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
-import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
+import { seedOrganizationAggregate, addRepresentative, insertIndividualMembershipForUser } from "./helpers/membership";
 import { seedMemberApplication } from "./helpers/member-applications";
 import { myApplicationsListResponseSchema, myProfileSchema } from "../assets/shared/schemas/me";
 import {
@@ -22,10 +21,11 @@ import {
   requireMemberFromRequest,
 } from "../functions/_lib/auth/member";
 import { updateMyProfile } from "../functions/_lib/services/member-self-service";
-import { mutateBeforeNextBatch } from "./helpers/database-races";
+import { mutateBeforeMatchingQuery, mutateBeforeNextBatch } from "./helpers/database-races";
 import {
   getUserHeadshotRecord,
   removeUserHeadshotForRequest,
+  removeUserHeadshot,
   userHeadshotTargetGuard,
 } from "../functions/_lib/services/user-headshot";
 
@@ -37,11 +37,7 @@ function requestWithAuth(token: string, path: string, init: RequestInit = {}): R
 }
 
 async function call(token: string, path: string, init: RequestInit = {}): Promise<Response> {
-  return app.fetch(
-    requestWithAuth(token, path, init),
-    env as any,
-    { passThroughOnException: () => {}, waitUntil: () => {} } as any,
-  );
+  return callApi(env, requestWithAuth(token, path, init));
 }
 
 const INDIVIDUAL_CATEGORIES = new Set(["H5", "H6", "H7"]);
@@ -56,16 +52,7 @@ async function insertActiveMember(email: string, category: string): Promise<stri
     .run();
 
   if (INDIVIDUAL_CATEGORIES.has(category)) {
-    const now = new Date().toISOString();
-    const { statements } = buildCreateIndividualMemberStatements(env.DB, userId, category, now);
-    const identity = await buildCreateIdentityStatement(env.DB, {
-      userId,
-      organizationId: null,
-      source: "staff",
-      startImmediately: true,
-      now,
-    });
-    await env.DB.batch([...statements, identity.statement]);
+    await insertIndividualMembershipForUser(env.DB, userId, category);
     return userId;
   }
 
@@ -87,6 +74,14 @@ describe("Current-user and application self-service", () => {
 
   it("GET /api/v1/users/current returns my profile", async () => {
     const userId = await insertActiveMember("me@example.test", "F");
+    await env.DB.prepare(
+      "UPDATE identities SET job_title = 'Security architect' WHERE user_id = ? AND organization_id IS NOT NULL",
+    )
+      .bind(userId)
+      .run();
+    await env.DB.prepare("UPDATE users SET headshot_r2_key = 'headshots/test-headshot.png' WHERE id = ?")
+      .bind(userId)
+      .run();
     const token = await createMemberSession(env.DB, userId, "me-profile-token");
 
     const response = await call(token, "/api/v1/users/current");
@@ -95,6 +90,10 @@ describe("Current-user and application self-service", () => {
     expect(body.email).toBe("me@example.test");
     expect(body.membershipCategory).toBe("F");
     expect(body.organizationId).not.toBeNull();
+    expect(body.organizationIdentities?.find((identity) => identity.userId === userId)).toMatchObject({
+      jobTitle: "Security architect",
+      headshotUrl: `/api/v1/users/${userId}/headshots/test-headshot.png`,
+    });
   });
 
   it("PATCH /api/v1/users/current updates editable fields", async () => {
@@ -136,9 +135,18 @@ describe("Current-user and application self-service", () => {
     const userId = await insertActiveMember("visibility@example.test", "F");
     const token = await createMemberSession(env.DB, userId, "visibility-token");
 
-    const response = await call(token, "/api/v1/users/current", {
+    // An organization identity saved before the job-title rule stays readable, but its next edit needs the title.
+    const untitled = await call(token, "/api/v1/users/current", {
       method: "PATCH",
       body: JSON.stringify({ showOnOrgProfile: false }),
+    });
+    expect(untitled.status).toBe(400);
+    expect(await untitled.json()).toMatchObject({
+      error: { details: { fieldErrors: { jobTitle: ["Enter your job title at this organization."] } } },
+    });
+    const response = await call(token, "/api/v1/users/current", {
+      method: "PATCH",
+      body: JSON.stringify({ showOnOrgProfile: false, jobTitle: "Program lead" }),
     });
     expect(response.status).toBe(200);
     expect(myProfileSchema.parse(await response.json()).showOnOrgProfile).toBe(false);
@@ -150,6 +158,120 @@ describe("Current-user and application self-service", () => {
       userId,
     );
     expect(rows[0].show_on_organization_profile).toBe(0);
+  });
+
+  it("queues public name changes through the owner's form, but not unchanged or preferred-only saves", async () => {
+    const userId = await insertActiveMember("name-publication@example.test", "H6");
+    const token = await createMemberSession(env.DB, userId, "name-publication-token");
+    const save = async (body: unknown) => {
+      const response = await call(token, "/api/v1/users/current", { method: "PATCH", body: JSON.stringify(body) });
+      expect(response.status, await response.clone().text()).toBe(200);
+      return myProfileSchema.parse(await response.json());
+    };
+    expect(await save({ firstName: "Published", lastName: "Member" })).toMatchObject({
+      firstName: "Published",
+      lastName: "Member",
+    });
+    expect(await queryAll(env.DB, "SELECT resource_id,reason_code FROM site_publication_requests")).toEqual([
+      { resource_id: userId, reason_code: "user_profile_changed" },
+    ]);
+    await save({ firstName: "Published", lastName: "Member" });
+    await save({ preferredName: "Preferred" });
+    expect(await queryAll(env.DB, "SELECT id FROM site_publication_requests")).toHaveLength(1);
+  });
+
+  it("queues roster removal and restoration, while hidden edits and no-ops stay quiet", async () => {
+    const userId = await insertActiveMember("roster-publication@example.test", "F");
+    const token = await createMemberSession(env.DB, userId, "roster-publication-token");
+    await env.DB.prepare("UPDATE identities SET job_title='Researcher' WHERE user_id=?").bind(userId).run();
+    const save = async (body: unknown) => {
+      const response = await call(token, "/api/v1/users/current", { method: "PATCH", body: JSON.stringify(body) });
+      expect(response.status, await response.clone().text()).toBe(200);
+    };
+    const count = () =>
+      env.DB.prepare("SELECT COUNT(*) AS count FROM site_publication_requests").first<number>("count");
+    await save({ showOnOrgProfile: false });
+    expect(await count()).toBe(1);
+    await save({ biography: "Not on the member page", links: ["https://example.test/private"] });
+    expect(await count()).toBe(1);
+    await save({ showOnOrgProfile: true });
+    expect(await count()).toBe(2);
+    await save({
+      showOnOrgProfile: true,
+      biography: "Not on the member page",
+      links: ["https://example.test/private"],
+    });
+    expect(await count()).toBe(2);
+    await save({ biography: "New public biography" });
+    expect(await count()).toBe(3);
+    await save({ emailId: null });
+    expect(await count()).toBe(3);
+  });
+
+  it.each(["audit_log", "site_publication_requests"] as const)(
+    "rolls back a public profile and its request when %s refuses the transaction",
+    async (table) => {
+      const userId = await insertActiveMember("profile-atomic@example.test", "F");
+      const token = await createMemberSession(env.DB, userId, "profile-atomic-token");
+      await env.DB.prepare("UPDATE identities SET job_title='Original role' WHERE user_id=?").bind(userId).run();
+      await env.DB.prepare(`CREATE TRIGGER fail_profile_publication BEFORE INSERT ON ${table}
+        BEGIN SELECT RAISE(ABORT,'SYNTHETIC_PROFILE_TRANSACTION_FAILURE'); END`).run();
+      try {
+        const response = await call(token, "/api/v1/users/current", {
+          method: "PATCH",
+          body: JSON.stringify({
+            firstName: "Must roll back",
+            jobTitle: "Must roll back",
+            biography: "Must roll back",
+          }),
+        });
+        expect(response.status).toBe(500);
+        expect(await env.DB.prepare("SELECT first_name FROM users WHERE id=?").bind(userId).first("first_name")).toBe(
+          "Test",
+        );
+        expect(
+          await env.DB.prepare("SELECT job_title,biography FROM identities WHERE user_id=?").bind(userId).first(),
+        ).toMatchObject({ job_title: "Original role", biography: null });
+        expect(await env.DB.prepare("SELECT COUNT(*) FROM site_publication_requests").first<number>("COUNT(*)")).toBe(
+          0,
+        );
+        expect(
+          await env.DB.prepare("SELECT COUNT(*) FROM audit_log WHERE action='identity_profile_updated'").first<number>(
+            "COUNT(*)",
+          ),
+        ).toBe(0);
+      } finally {
+        await env.DB.prepare("DROP TRIGGER fail_profile_publication").run();
+      }
+    },
+  );
+
+  it("leaves no publication intent when a concurrent identity edit wins", async () => {
+    const userId = await insertActiveMember("profile-cas@example.test", "F");
+    const token = await createMemberSession(env.DB, userId, "profile-cas-token");
+    await env.DB.prepare("UPDATE identities SET job_title='Original role' WHERE user_id=?").bind(userId).run();
+    const request = requestWithAuth(token, "/api/v1/users/current");
+    const member = await requireMemberFromRequest(env.DB, request, env);
+    const racingDb = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => sql.startsWith("UPDATE identities"),
+      () =>
+        env.DB.prepare(
+          "UPDATE identities SET biography='Concurrent winner',updated_at='2099-01-01T00:00:00.000Z' WHERE user_id=?",
+        )
+          .bind(userId)
+          .run(),
+    );
+    await expect(
+      updateMyProfile(guardMemberSessionMutationDatabase(racingDb, member), member, {
+        biography: "Losing edit",
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(
+      await env.DB.prepare("SELECT biography FROM identities WHERE user_id=?").bind(userId).first("biography"),
+    ).toBe("Concurrent winner");
+    expect(await queryAll(env.DB, "SELECT id FROM site_publication_requests")).toHaveLength(0);
+    expect(await queryAll(env.DB, "SELECT id FROM audit_log WHERE action='identity_profile_updated'")).toHaveLength(0);
   });
 
   it("rolls back profile changes when the exact user session is revoked before the D1 batch", async () => {
@@ -176,9 +298,116 @@ describe("Current-user and application self-service", () => {
       userId,
     );
     expect(identity.job_title).toBeNull();
+    expect(await queryAll(env.DB, "SELECT id FROM site_publication_requests")).toHaveLength(0);
     await expect(
-      queryAll(env.DB, "SELECT id FROM audit_log WHERE entity_id = ? AND action = 'user_profile_updated'", userId),
+      queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'identity_profile_updated'"),
     ).resolves.toHaveLength(0);
+  });
+
+  it("keeps an individual identity's job title as the person's individual title and clears it with an empty value", async () => {
+    const userId = await insertActiveMember("individual-title@example.test", "H6");
+    const token = await createMemberSession(env.DB, userId, "individual-title-token");
+
+    const saved = await call(token, "/api/v1/users/current", {
+      method: "PATCH",
+      body: JSON.stringify({ jobTitle: "Independent Consultant" }),
+    });
+    expect(saved.status).toBe(200);
+    expect(myProfileSchema.parse(await saved.json()).jobTitle).toBe("Independent Consultant");
+    expect(await queryAll(env.DB, "SELECT job_title FROM individual_job_titles WHERE user_id = ?", userId)).toEqual([
+      { job_title: "Independent Consultant" },
+    ]);
+    const [audit] = await queryAll<{ entity_type: string; details_json: string }>(
+      env.DB,
+      "SELECT entity_type, details_json FROM audit_log WHERE action = 'identity_profile_updated'",
+    );
+    expect(audit.entity_type).toBe("identity");
+    expect(JSON.parse(audit.details_json).jobTitle).toEqual({ from: null, to: "Independent Consultant" });
+
+    const cleared = await call(token, "/api/v1/users/current", {
+      method: "PATCH",
+      body: JSON.stringify({ jobTitle: "" }),
+    });
+    expect(cleared.status).toBe(200);
+    expect(myProfileSchema.parse(await cleared.json()).jobTitle).toBeNull();
+    expect(await queryAll(env.DB, "SELECT user_id FROM individual_job_titles WHERE user_id = ?", userId)).toEqual([]);
+  });
+
+  it("audits an organization identity edit with the values it replaced", async () => {
+    const userId = await insertActiveMember("identity-audit@example.test", "F");
+    const token = await createMemberSession(env.DB, userId, "identity-audit-token");
+    await call(token, "/api/v1/users/current", { method: "PATCH", body: JSON.stringify({ jobTitle: "CTO" }) });
+    await call(token, "/api/v1/users/current", {
+      method: "PATCH",
+      body: JSON.stringify({ jobTitle: "CEO", biography: "Leads the company" }),
+    });
+
+    const rows = await queryAll<{ entity_id: string; details_json: string }>(
+      env.DB,
+      "SELECT entity_id, details_json FROM audit_log WHERE action = 'identity_profile_updated' ORDER BY created_at, rowid",
+    );
+    expect(rows).toHaveLength(2);
+    const [identity] = await queryAll<{ id: string }>(
+      env.DB,
+      "SELECT id FROM identities WHERE user_id = ? AND ended_at IS NULL",
+      userId,
+    );
+    expect(rows[1].entity_id).toBe(identity.id);
+    expect(JSON.parse(rows[1].details_json)).toMatchObject({
+      jobTitle: { from: "CTO", to: "CEO" },
+      biography: { from: null, to: "Leads the company" },
+    });
+  });
+
+  it("gives a selected work address to the identity and refuses one another identity of the person owns", async () => {
+    const userId = await insertActiveMember("work-address@example.test", "F");
+    const token = await createMemberSession(env.DB, userId, "work-address-token");
+    const [identity] = await queryAll<{ id: string }>(
+      env.DB,
+      "SELECT id FROM identities WHERE user_id = ? AND ended_at IS NULL",
+      userId,
+    );
+    const workEmailId = crypto.randomUUID();
+    const formerEmailId = crypto.randomUUID();
+    const formerOrganizationId = crypto.randomUUID();
+    const formerIdentityId = crypto.randomUUID();
+    const at = "2026-01-01T00:00:00.000Z";
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO user_emails (id, user_id, email, normalized_email, verified_at, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+      ).bind(workEmailId, userId, "work@example.test", "work@example.test", at, at),
+      env.DB.prepare(
+        "INSERT INTO organizations (id, name, normalized_name, created_at, updated_at) VALUES (?, 'Former Org', 'former org', ?, ?)",
+      ).bind(formerOrganizationId, at, at),
+      env.DB.prepare(
+        `INSERT INTO identities (id, user_id, organization_id, source, invited_at, started_at, ended_at, created_at, updated_at)
+         VALUES (?, ?, ?, 'staff', ?, ?, ?, ?, ?)`,
+      ).bind(formerIdentityId, userId, formerOrganizationId, at, at, at, at, at),
+      env.DB.prepare(
+        "INSERT INTO user_emails (id, user_id, email, normalized_email, verified_at, identity_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      ).bind(formerEmailId, userId, "former@example.test", "former@example.test", at, formerIdentityId, at),
+    ]);
+
+    const selected = await call(token, "/api/v1/users/current", {
+      method: "PATCH",
+      body: JSON.stringify({ emailId: workEmailId, jobTitle: "Program lead" }),
+    });
+    expect(selected.status).toBe(200);
+    const profile = myProfileSchema.parse(await selected.json());
+    expect(profile.emailAddresses.find((address) => address.id === workEmailId)?.identityId).toBe(identity.id);
+    expect(profile.emailAddresses.find((address) => address.id === formerEmailId)?.identityId).toBe(formerIdentityId);
+
+    const refused = await call(token, "/api/v1/users/current", {
+      method: "PATCH",
+      body: JSON.stringify({ emailId: formerEmailId }),
+    });
+    expect(refused.status).toBe(409);
+    expect(((await refused.json()) as { error?: { code?: string } }).error?.code).toBe(
+      "IDENTITY_EMAIL_OWNED_BY_OTHER_IDENTITY",
+    );
+    expect(await queryAll(env.DB, "SELECT email_id FROM identities WHERE id = ?", identity.id)).toEqual([
+      { email_id: workEmailId },
+    ]);
   });
 
   it("GET /api/v1/users/current/applications lists applications bound to my identity and selected capacity", async () => {
@@ -444,6 +673,9 @@ describe("Current-user headshot removal", () => {
     // The pointer is gone before the object is, so the image stops being
     // reachable even if the storage deletion is still queued.
     expect(await storedHeadshotKey(userId)).toBeNull();
+    expect(await queryAll(env.DB, "SELECT resource_id,reason_code FROM site_publication_requests")).toEqual([
+      { resource_id: userId, reason_code: "user_headshot_changed" },
+    ]);
     expect(
       await queryAll<{ actor_type: string; actor_id: string }>(
         env.DB,
@@ -463,6 +695,32 @@ describe("Current-user headshot removal", () => {
     ).toEqual([{ status: "deleted" }]);
   });
 
+  it("retains the portrait and deletion state when its publication request cannot commit", async () => {
+    const { userId, bucket, key } = await seedMemberWithHeadshot(
+      "headshot-publication-atomic@example.test",
+      "headshot-publication-atomic",
+    );
+    await env.DB.prepare(`CREATE TRIGGER fail_headshot_publication BEFORE INSERT ON site_publication_requests
+      BEGIN SELECT RAISE(ABORT,'SYNTHETIC_HEADSHOT_PUBLICATION_FAILURE'); END`).run();
+    try {
+      await expect(
+        removeUserHeadshot({
+          db: env.DB,
+          userId,
+          previousKey: key,
+          audit: { actorType: "member", actorId: userId, action: "headshot_removed" },
+        }),
+      ).rejects.toThrow("SYNTHETIC_HEADSHOT_PUBLICATION_FAILURE");
+      expect(await storedHeadshotKey(userId)).toBe(key);
+      expect(bucket.keys()).toEqual([key]);
+      expect(await queryAll(env.DB, "SELECT id FROM site_publication_requests")).toEqual([]);
+      expect(await queryAll(env.DB, "SELECT object_key FROM storage_deletion_outbox")).toEqual([]);
+      expect(await queryAll(env.DB, "SELECT id FROM audit_log WHERE action='headshot_removed'")).toEqual([]);
+    } finally {
+      await env.DB.prepare("DROP TRIGGER fail_headshot_publication").run();
+    }
+  });
+
   it("succeeds without a stored object for a member who has no headshot on file", async () => {
     const userId = await insertActiveMember("headshot-remove-empty@example.test", "F");
     const sessionToken = await createMemberSession(env.DB, userId, "headshot-remove-empty-token");
@@ -475,6 +733,7 @@ describe("Current-user headshot removal", () => {
 
     expect(response.status).toBe(200);
     expect(await storedHeadshotKey(userId)).toBeNull();
+    expect(await queryAll(env.DB, "SELECT id FROM site_publication_requests")).toEqual([]);
     expect(await queryAll(env.DB, "SELECT object_key FROM storage_deletion_outbox")).toEqual([]);
   });
 
@@ -521,6 +780,7 @@ describe("Current-user headshot removal", () => {
     // The winning replacement stands, and nothing was queued for deletion on
     // behalf of the request that lost.
     expect(await storedHeadshotKey(userId)).toBe(replacementKey);
+    expect(await queryAll(env.DB, "SELECT id FROM site_publication_requests")).toEqual([]);
     expect(bucket.keys()).toEqual([key]);
     expect(await queryAll(env.DB, "SELECT object_key FROM storage_deletion_outbox")).toEqual([]);
     expect(

@@ -52,10 +52,10 @@ async function insertLeader(
   const [firstName, ...rest] = name.split(" ");
   await env.DB.prepare(
     `INSERT INTO users
-       (id, email, normalized_email, first_name, last_name, job_title, active, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, 1, datetime('now'), datetime('now'))`,
+       (id, email, normalized_email, first_name, last_name, active, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, 1, datetime('now'), datetime('now'))`,
   )
-    .bind(userId, `${userId}@example.test`, `${userId}@example.test`, firstName, rest.join(" ") || null, jobTitle)
+    .bind(userId, `${userId}@example.test`, `${userId}@example.test`, firstName, rest.join(" ") || null)
     .run();
   if (jobTitle !== null) {
     const organizationId = await insertOrganization(env.DB, `${name} Organization`);
@@ -133,7 +133,7 @@ describe("public generic group directory", () => {
     const groupId = await insertGroup({ slug: "independent-chair", name: "Example Working Group", publicRoster: true });
     const userId = await insertLeader(groupId, "role-group_lead", "Independent User");
     await env.DB.prepare(
-      "UPDATE member_category_assignments SET category_code = 'H6' WHERE member_id IN (SELECT id FROM members WHERE user_id = ?)",
+      "UPDATE member_category_assignments SET category_code = 'H6' WHERE member_id IN (SELECT member.id FROM members member JOIN identities personal ON personal.id = member.identity_id WHERE personal.user_id = ?)",
     )
       .bind(userId)
       .run();

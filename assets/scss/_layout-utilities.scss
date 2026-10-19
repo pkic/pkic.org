@@ -3,37 +3,37 @@
 
 .content-width-sm {
   width: 100%;
-  max-width: 440px;
+  max-width: 27.5rem;
 }
 
 .content-width-form {
   width: 100%;
-  max-width: 640px;
+  max-width: 40rem;
 }
 
 .content-width-schedule {
   width: 100%;
-  max-width: 700px;
+  max-width: 43.75rem;
 }
 
 .content-width-md {
   width: 100%;
-  max-width: 720px;
+  max-width: 45rem;
 }
 
 .content-width-reading {
   width: 100%;
-  max-width: 800px;
+  max-width: 50rem;
 }
 
 .content-width-lg {
   width: 100%;
-  max-width: 900px;
+  max-width: 56.25rem;
 }
 
 .content-width-xl {
   width: 100%;
-  max-width: 960px;
+  max-width: 60rem;
 }
 
 .is-clickable {
@@ -44,7 +44,7 @@
   white-space: pre-wrap;
 }
 
-// The section side menu (layouts/partials/menu.html). Replaces Bootstrap's
+// The section side menu. Replaces Bootstrap's
 // `.list-unstyled` plus the per-item `pt-*`/`pb-*`/`px-*` utilities the list
 // used to carry: one gap on the parent instead of a padding decision per row.
 .section-menu {

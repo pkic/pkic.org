@@ -18,19 +18,27 @@ import { resolve, relative, dirname } from "node:path";
 import { writeFileSync, mkdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
+import { portalOfflineAssetsPlugin } from "./lib/portal-offline-assets.mjs";
+import { publicAssetsDirectory } from "./publication/build-context.mjs";
 import { entryStylesheets } from "./lib/frontend-entry-assets.mjs";
 import { assertFrontendBundleBudget } from "./lib/frontend-bundle-budget.mjs";
+import { preactAlias, preactEsbuild } from "./lib/preact-vite.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
-const outDir = resolve(root, "public", "js", "built");
+const outDir = resolve(publicAssetsDirectory(), "js", "built");
 
 const entries = {
   loader: resolve(root, "assets/ts/loader.ts"),
   publicSite: resolve(root, "assets/ts/public-site.ts"),
 };
 
-const isDev = process.argv.includes("--dev") || process.argv.includes("--client-dev");
+// The hot-reloading rehearsal sets PKIC_CLIENT_DEV so the publication it prerenders links the
+// same stable development names that the watching rebuild keeps rewriting.
+const isDev =
+  process.argv.includes("--dev") || process.argv.includes("--client-dev") || process.env.PKIC_CLIENT_DEV === "1";
+// The hot-reloading dev server rebuilds on every source change; dev names keep the URLs stable.
+const isWatch = isDev && process.argv.includes("--watch");
 
 /** @type {import('vite').UserConfig} */
 const config = {
@@ -42,25 +50,12 @@ const config = {
   // base must match the public URL prefix so chunk imports resolve correctly.
   // Without this, dynamic imports reference /chunks/... instead of /js/built/chunks/...
   base: "/js/built/",
-  resolve: {
-    // Redirect React imports to Preact's compatibility layer so that
-    // React-peer-dependent libraries (e.g. wouter) use Preact instead.
-    alias: {
-      react: "preact/compat",
-      "react-dom/test-utils": "preact/test-utils",
-      "react-dom": "preact/compat",
-      "react/jsx-dev-runtime": "preact/jsx-runtime",
-      "react/jsx-runtime": "preact/jsx-runtime",
-    },
-  },
-  esbuild: {
-    // Use Preact's JSX runtime for all .tsx files.
-    jsxImportSource: "preact",
-    jsx: "automatic",
-  },
+  resolve: { alias: preactAlias },
+  esbuild: preactEsbuild,
   build: {
     outDir,
-    emptyOutDir: true,
+    // Keep prepared assets available while the dev server indexes its public directory.
+    emptyOutDir: !isWatch,
     minify: !isDev,
     sourcemap: isDev ? "inline" : false,
     rollupOptions: {
@@ -128,8 +123,9 @@ const config = {
       },
     },
     target: "es2022",
+    watch: isWatch ? {} : null,
   },
-  plugins: [manifestPlugin({ entries, outDir, root, isDev })],
+  plugins: [manifestPlugin({ entries, outDir, root, isDev }), portalOfflineAssetsPlugin("/js/built/")],
 };
 
 await build(config);

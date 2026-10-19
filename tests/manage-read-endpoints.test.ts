@@ -333,7 +333,11 @@ describe("manage read endpoints", () => {
     );
     expect(updateResponse.status).toBe(200);
     const updatePayload = registrationManageUpdateResponseSchema.parse(await updateResponse.clone().json());
-    expect(updatePayload).toEqual({ success: true, emailChanged: false });
+    expect(updatePayload).toEqual({
+      success: true,
+      emailChanged: false,
+      sponsorSharing: { allowed: false, withdrawnAt: null },
+    });
     expect(updatePayload).not.toHaveProperty("registration");
     const [audit] = await queryAll<{ actor_type: string; actor_id: string }>(
       env.DB,
@@ -557,8 +561,8 @@ describe("manage read endpoints", () => {
 
     await env.DB.batch([
       env.DB.prepare(`
-        INSERT INTO users (id, email, normalized_email, first_name, last_name, biography, created_at, updated_at)
-        VALUES ('${userId}', 'speaker@example.test', 'speaker@example.test', 'Sam', 'Taylor', 'Speaker bio with enough detail for testing.', datetime('now'), datetime('now'))
+        INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+        VALUES ('${userId}', 'speaker@example.test', 'speaker@example.test', 'Sam', 'Taylor', datetime('now'), datetime('now'))
       `),
       env.DB.prepare(`
         INSERT INTO session_proposals (
@@ -617,8 +621,8 @@ describe("manage read endpoints", () => {
 
     await env.DB.batch([
       env.DB.prepare(`
-        INSERT INTO users (id, email, normalized_email, first_name, last_name, biography, created_at, updated_at)
-        VALUES ('${userId}', 'panel-lead@example.test', 'panel-lead@example.test', 'Panel', 'Lead', 'Speaker bio with enough detail for testing.', datetime('now'), datetime('now'))
+        INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+        VALUES ('${userId}', 'panel-lead@example.test', 'panel-lead@example.test', 'Panel', 'Lead', datetime('now'), datetime('now'))
       `),
       env.DB.prepare(`
         INSERT INTO session_proposals (

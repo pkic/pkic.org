@@ -646,7 +646,6 @@ describe("event email campaign recipients", () => {
       profileKey: "workshop",
       registrationPolicy: "no_registration",
       inviteLimitAttendee: 5,
-      location: "Online",
       links: [],
     });
     const token = await createAdminSession(env.DB, administratorId, `campaign-group-${crypto.randomUUID()}`);

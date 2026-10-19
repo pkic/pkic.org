@@ -33,6 +33,7 @@ export function ProposalPrograms() {
           </p>
         </PanelBody>
         <ApiDataTable
+          urlState="proposal-programs"
           caption="Proposal programs"
           endpoint="/api/v1/proposals/programs"
           responseSchema={proposalProgramsListResponseSchema}

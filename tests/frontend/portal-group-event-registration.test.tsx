@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { EventFormsResponse } from "../../assets/shared/schemas/forms";
 import type { GroupEvent } from "../../assets/shared/schemas/group-events";
 import { GroupEventRegistrationPanel } from "../../assets/ts/member-flows/portal/sections/management/GroupEventRegistrationPanel";
-import { groupNames, namedGroup } from "./helpers/labelled-control";
+import { groupNames, namedGroup } from "./helpers/labeled-control";
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const EVENT_ID = "20000000-0000-4000-8000-000000000001";
@@ -44,7 +44,9 @@ const event: GroupEvent = {
   registrationPolicy: "required",
   visibility: "group_members",
   inviteLimitAttendee: 5,
-  location: "Online",
+  city: null,
+  country: null,
+  meetingLocation: null,
   links: [],
   nextOccurrenceAt: null,
   updatedAt: "2026-08-01T00:00:00.000Z",

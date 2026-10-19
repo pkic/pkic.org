@@ -1,0 +1,225 @@
+/*
+ * The layout editor's canvas: the real overlay drawn at 16:9 with each
+ * element's box over it. A box sits at its fractions of the frame through
+ * custom properties; a drag moves it with a transform and the box settles on
+ * release. Handles are drawn small but each takes a 24px target.
+ */
+@layer components {
+  .pk-layout-canvas-figure {
+    display: grid;
+    gap: var(--pk-2);
+    min-inline-size: 0;
+    margin: 0;
+  }
+  .pk-layout-canvas {
+    position: relative;
+    display: grid;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    border: 1px solid var(--pk-line);
+    border-radius: var(--pk-radius);
+    background: var(--pk-chrome-deep);
+    touch-action: none;
+    user-select: none;
+  }
+  .pk-layout-canvas > .pk-live-overlay__frame {
+    grid-area: 1 / 1;
+    inline-size: 100%;
+    block-size: 100%;
+    pointer-events: none;
+  }
+  .pk-layout-canvas__options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--pk-2) var(--pk-4);
+  }
+  /*
+   * The safe areas, as quiet labeled guides: action safe (3.5% in) keeps
+   * what matters on any display; title safe (5% in, which snapping uses)
+   * keeps text clear of overscan.
+   */
+  .pk-layout-canvas__safe {
+    position: absolute;
+    inset: 5%;
+    border: 1px dashed color-mix(in srgb, var(--pk-on-solid) 40%, transparent);
+    pointer-events: none;
+  }
+  .pk-layout-canvas__safe[data-area="action"] {
+    inset: 3.5%;
+    border-style: dotted;
+    border-color: color-mix(in srgb, var(--pk-on-solid) 25%, transparent);
+  }
+  .pk-layout-canvas__safe > span {
+    position: absolute;
+    inset-block-end: 0;
+    inset-inline-end: 0;
+    padding: 0 var(--pk-1);
+    color: color-mix(in srgb, var(--pk-on-solid) 70%, transparent);
+    font-size: var(--pk-text-2xs);
+    line-height: 1.6;
+  }
+  .pk-layout-canvas__safe[data-area="action"] > span {
+    inset-block-end: auto;
+    inset-block-start: 100%;
+  }
+  .pk-layout-canvas__boxes {
+    position: absolute;
+    inset: 0;
+  }
+  .pk-layout-canvas__box {
+    --box-x: 0;
+    --box-y: 0;
+    --box-w: 0;
+    --box-h: 0;
+    position: absolute;
+    inset-inline-start: calc(var(--box-x) * 100%);
+    inset-block-start: calc(var(--box-y) * 100%);
+    inline-size: calc(var(--box-w) * 100%);
+    block-size: calc(var(--box-h) * 100%);
+    box-sizing: border-box;
+    min-inline-size: 0;
+    margin: 0;
+    padding: 0;
+    border: 1px dashed color-mix(in srgb, var(--pk-on-solid) 55%, transparent);
+    border-radius: 0;
+    background: transparent;
+    color: var(--pk-on-solid);
+    font: inherit;
+    cursor: grab;
+  }
+  .pk-layout-canvas__box:hover {
+    border-style: solid;
+    background: color-mix(in srgb, var(--pk-accent) 10%, transparent);
+  }
+  .pk-layout-canvas__box:focus-visible {
+    outline: 2px solid var(--pk-focus);
+    outline-offset: 2px;
+  }
+  .pk-layout-canvas__box[data-selected] {
+    z-index: 1;
+    border: 2px solid var(--pk-accent);
+    background: color-mix(in srgb, var(--pk-accent) 14%, transparent);
+  }
+  .pk-layout-canvas__box[data-hidden] {
+    border-color: color-mix(in srgb, var(--pk-on-solid) 30%, transparent);
+    background: repeating-linear-gradient(
+      135deg,
+      transparent 0 6px,
+      color-mix(in srgb, var(--pk-on-solid) 8%, transparent) 6px 12px
+    );
+  }
+  .pk-layout-canvas__box[data-gesture] {
+    cursor: grabbing;
+    transition: none;
+  }
+  .pk-layout-canvas__label {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-start: 0;
+    max-inline-size: 100%;
+    overflow: hidden;
+    padding: 0 var(--pk-1);
+    /* Solid, so the tag reads on light and dark samples alike. */
+    background: var(--pk-chrome-deep);
+    color: var(--pk-on-solid);
+    font-size: var(--pk-text-2xs);
+    line-height: 1.6;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .pk-layout-canvas__box[data-label="bottom"] .pk-layout-canvas__label {
+    inset-block-start: auto;
+    inset-block-end: 0;
+  }
+  .pk-layout-canvas__box[data-selected] .pk-layout-canvas__label {
+    background: var(--pk-accent);
+    color: var(--pk-accent-on);
+  }
+  .pk-layout-canvas__box[data-hidden] .pk-layout-canvas__label {
+    color: color-mix(in srgb, var(--pk-on-solid) 70%, transparent);
+  }
+  /* A 24px target around a small visible square, centered on the box's corner or side. */
+  .pk-layout-canvas__handle {
+    position: absolute;
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+    translate: -50% -50%;
+    touch-action: none;
+  }
+  .pk-layout-canvas__handle::after {
+    content: "";
+    position: absolute;
+    inset: 0.4375rem;
+    border: 2px solid var(--pk-accent);
+    border-radius: var(--pk-radius-sm);
+    background: var(--pk-surface);
+  }
+  .pk-layout-canvas__handle[data-handle="nw"] {
+    inset-inline-start: 0;
+    inset-block-start: 0;
+    cursor: nwse-resize;
+  }
+  .pk-layout-canvas__handle[data-handle="n"] {
+    inset-inline-start: 50%;
+    inset-block-start: 0;
+    cursor: ns-resize;
+  }
+  .pk-layout-canvas__handle[data-handle="ne"] {
+    inset-inline-start: 100%;
+    inset-block-start: 0;
+    cursor: nesw-resize;
+  }
+  .pk-layout-canvas__handle[data-handle="e"] {
+    inset-inline-start: 100%;
+    inset-block-start: 50%;
+    cursor: ew-resize;
+  }
+  .pk-layout-canvas__handle[data-handle="se"] {
+    inset-inline-start: 100%;
+    inset-block-start: 100%;
+    cursor: nwse-resize;
+  }
+  .pk-layout-canvas__handle[data-handle="s"] {
+    inset-inline-start: 50%;
+    inset-block-start: 100%;
+    cursor: ns-resize;
+  }
+  .pk-layout-canvas__handle[data-handle="sw"] {
+    inset-inline-start: 0;
+    inset-block-start: 100%;
+    cursor: nesw-resize;
+  }
+  .pk-layout-canvas__handle[data-handle="w"] {
+    inset-inline-start: 0;
+    inset-block-start: 50%;
+    cursor: ew-resize;
+  }
+  /* The line a dragged box snapped to, shown only while it holds there. */
+  .pk-layout-canvas__guide {
+    --guide: 0;
+    position: absolute;
+    display: none;
+    background: var(--pk-accent-strong);
+    pointer-events: none;
+  }
+  .pk-layout-canvas__guide[data-active] {
+    display: block;
+  }
+  .pk-layout-canvas__guide[data-axis="vertical"] {
+    inset-block: 0;
+    inset-inline-start: calc(var(--guide) * 100%);
+    inline-size: 1px;
+  }
+  .pk-layout-canvas__guide[data-axis="horizontal"] {
+    inset-inline: 0;
+    inset-block-start: calc(var(--guide) * 100%);
+    block-size: 1px;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .pk-layout-canvas__box {
+      transition:
+        border-color var(--pk-dur-fast) var(--pk-ease),
+        background-color var(--pk-dur-fast) var(--pk-ease);
+    }
+  }
+}

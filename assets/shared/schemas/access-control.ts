@@ -9,7 +9,7 @@ import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { permissionSchema } from "./permissions";
 import { userCatalogListQuerySchema, userCatalogListResponseSchema } from "./user-catalog";
 
-export const authorizationContextTypeSchema = z.enum(["event", "group", "organization"]);
+export const authorizationContextTypeSchema = z.enum(["event", "group", "organization", "event_sponsor"]);
 
 /** Stable identifiers for system roles seeded by the membership migration. */
 export const SYSTEM_ROLE_IDS = {
@@ -44,7 +44,7 @@ const scopedContextFields = {
   expiresAt: utcInstantSchema.nullable().optional(),
 };
 
-function validateScopedContext(
+export function validateAuthorizationContext(
   value: { contextType?: string | null; contextId?: string | null },
   ctx: z.core.$RefinementCtx,
 ): void {
@@ -64,7 +64,7 @@ export const accessGrantCreateSchema = z
     permission: permissionSchema,
     ...scopedContextFields,
   })
-  .superRefine(validateScopedContext);
+  .superRefine(validateAuthorizationContext);
 export type AccessGrantCreateInput = z.infer<typeof accessGrantCreateSchema>;
 
 export const accessGrantResponseSchema = z.object({
@@ -252,8 +252,9 @@ export type RoleUpdateInput = z.infer<typeof roleUpdateSchema>;
 
 export const roleUpdateRouteSchema = {
   tags: ["Roles"],
-  summary: "Update a custom role",
-  description: "Updates a custom role's name, description, or bundled permissions. System roles cannot be edited.",
+  summary: "Update a role",
+  description:
+    "Updates a role permission bundle or description. System role IDs and names are immutable and system roles cannot be deleted. Added permissions require grant authority and possession of those permissions; removed permissions require revoke authority. At least one active administrator must retain global access management. Role responsibilities and assignment scopes remain in effect.",
   "x-pkic-auth": { required: true, scopes: ["access:grant"] },
   request: {
     params: roleIdParamsSchema,
@@ -270,7 +271,7 @@ export const roleUpdateRouteSchema = {
     "404": { description: "Role not found." },
     "409": {
       description:
-        "System roles cannot be edited; a role with this name already exists; or the role changed concurrently.",
+        "A system role name is immutable; a role name already exists; the last access administrator would be lost; or the role or authority changed concurrently.",
     },
   },
 };
@@ -332,7 +333,7 @@ export const userRoleAssignSchema = z
     roleId: roleIdSchema,
     ...scopedContextFields,
   })
-  .superRefine(validateScopedContext);
+  .superRefine(validateAuthorizationContext);
 export type UserRoleAssignInput = z.infer<typeof userRoleAssignSchema>;
 
 export const userRoleResponseSchema = roleAssignmentTargetSchema.extend({

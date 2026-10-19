@@ -19,9 +19,9 @@ interface EditableProposalWithEvent extends EditableProposal {
 }
 
 /**
- * Correct a proposal title or abstract. Accepted abstracts may be corrected by
- * the narrow `proposals:edit_accepted_abstract` capability; titles still need
- * `proposals:manage` because they change the accepted program.
+ * Correct a proposal title or abstract. Both accepted fields use the narrow
+ * `proposals:edit_accepted_abstract` capability; other proposals require
+ * `proposals:manage`.
  */
 export async function editProposal(
   db: DatabaseLike,
@@ -41,17 +41,8 @@ export async function editProposal(
 
   const access = await getProposalAccessForEvent(db, current.event_id, actor);
   const accepted = current.status === "accepted";
-  const requiredPermissions: Permission[] = accepted
-    ? [
-        ...(patch.title !== undefined ? (["proposals:manage"] as const) : []),
-        ...(patch.abstract !== undefined ? (["proposals:edit_accepted_abstract"] as const) : []),
-      ]
-    : ["proposals:manage"];
-  if (
-    (!accepted && !access.canFinalize) ||
-    (accepted && patch.title !== undefined && !access.canFinalize) ||
-    (accepted && patch.abstract !== undefined && !access.canEditAcceptedAbstract)
-  ) {
+  const requiredPermissions: Permission[] = accepted ? ["proposals:edit_accepted_abstract"] : ["proposals:manage"];
+  if ((!accepted && !access.canFinalize) || (accepted && !access.canEditAcceptedAbstract)) {
     throw new AppError(403, "FORBIDDEN", "Missing permission to edit the requested proposal fields");
   }
 

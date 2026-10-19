@@ -80,7 +80,7 @@
 }
 
 .footer-logo-img {
-  height: 42px;
+  height: 2.625rem;
   width: auto;
   opacity: 0.9;
 }
@@ -98,12 +98,12 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
+    width: 2rem;
+    height: 2rem;
     border-radius: 6px;
     background: rgba(#fff, 0.05);
     color: rgba(#fff, 0.65);
-    margin-right: 6px;
+    margin-right: 0.375rem;
     transition:
       background 0.2s ease,
       color 0.2s ease;
@@ -139,7 +139,7 @@
   color: rgba(#fff, 0.65);
   border: 1px solid rgba(#fff, 0.1);
   border-radius: 8px;
-  padding: 7px 9px;
+  padding: 0.4375rem 0.5625rem;
   text-decoration: none;
   font-size: 0.72rem;
   font-weight: 500;
@@ -147,7 +147,7 @@
   white-space: nowrap;
 
   // Width transition for label reveal
-  max-width: 36px;
+  max-width: 2.25rem;
   transition:
     max-width 0.25s ease,
     color 0.2s ease,
@@ -169,15 +169,15 @@
   }
 
   &:hover {
-    max-width: 180px;
+    max-width: 11.25rem;
     color: rgba(#fff, 0.9);
     border-color: rgba($green, 0.5);
     background: rgba(#1a1a1a, 0.95);
 
     .edit-on-github-label {
       opacity: 1;
-      max-width: 140px;
-      margin-left: 6px;
+      max-width: 8.75rem;
+      margin-left: 0.375rem;
     }
   }
 
@@ -194,7 +194,7 @@
   z-index: 1100;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 0.375rem;
 
   background: rgba(#1a1a1a, 0.92);
   backdrop-filter: blur(8px);
@@ -202,7 +202,7 @@
   color: rgba(#fff, 0.9);
   border: 1px solid rgba($green, 0.5);
   border-radius: 6px;
-  padding: 5px 10px;
+  padding: 0.3125rem 0.625rem;
   font-size: 0.72rem;
   font-weight: 500;
   letter-spacing: 0.03em;
@@ -323,9 +323,9 @@
 }
 
 .member-logo {
-  margin: 5px 20px;
-  height: 18px;
-  max-width: 90px;
+  margin: 0.3125rem 1.25rem;
+  height: 1.125rem;
+  max-width: 5.625rem;
   filter: var(--pk-member-logo-filter);
   mix-blend-mode: var(--pk-member-logo-blend);
   transition:

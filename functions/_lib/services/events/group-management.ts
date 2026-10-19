@@ -13,7 +13,7 @@ import {
 } from "../registrations/event-attendance-registrations";
 import type { AuthAdmin, DatabaseLike } from "../../types";
 import { AppError } from "../../errors";
-import { initialEventSettings, buildEventSettingsMutationStatements } from "./settings";
+import { buildEventSettingsMutationStatements } from "./settings";
 import {
   commitEventResourceManagementBatch,
   guardEventResourceManagementDatabase,
@@ -45,7 +45,8 @@ export async function createGroupManagedEvent(
     registrationMode: input.registrationPolicy,
     visibility: input.visibility ?? "group_members",
     inviteLimitAttendee: input.inviteLimitAttendee,
-    settings: initialEventSettings(input),
+    city: input.city ?? null,
+    country: input.country ?? null,
     ownerGroupId: group.id,
     profileKey: input.profileKey,
     sourceMode: "portal",
@@ -159,6 +160,9 @@ export async function updateGroupManagedEventSettings(
     }
     if (isAuditChangeGuardFailure(error)) {
       throw new AppError(409, "GROUP_EVENT_CHANGED", "The event changed; reload before saving");
+    }
+    if (error instanceof Error && error.message.includes("UNIQUE constraint failed: events.slug")) {
+      throw new AppError(409, "EVENT_SLUG_EXISTS", "An event with this slug already exists");
     }
     throw error;
   }

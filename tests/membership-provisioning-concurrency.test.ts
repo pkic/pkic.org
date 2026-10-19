@@ -61,6 +61,12 @@ describe("provisionOrganizationMembership concurrency", () => {
 
     const fulfilled = results.filter((r) => r.status === "fulfilled");
     const rejected = results.filter((r) => r.status === "rejected");
+    const requests = await queryAll<{ resource_id: string }>(
+      env.DB,
+      "SELECT resource_id FROM site_publication_requests WHERE resource_type='membership'",
+    );
+    expect(requests).toHaveLength(fulfilled.length);
+    expect(requests.every((request) => aggregates.some((member) => member.id === request.resource_id))).toBe(true);
 
     // Empirically observed outcome of this test against the real D1
     // binding (not simulated): the two `provisionOrganizationMembership`

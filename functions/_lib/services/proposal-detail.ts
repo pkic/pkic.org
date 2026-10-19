@@ -17,6 +17,7 @@ interface ProposalDetailRow {
   updated_at: string;
   canceled_at: string | null;
   cancellation_comment: string | null;
+  committee_notes: string | null;
   form_placement_id: string | null;
   proposer_email: string;
   proposer_first_name: string | null;
@@ -38,7 +39,7 @@ export async function getProposalDetailData(db: DatabaseLike, proposalId: string
     `SELECT
        sp.id, sp.event_id, sp.proposer_user_id, sp.status, sp.proposal_type,
        sp.title, sp.abstract, sp.details_json, sp.form_placement_id, sp.review_round, sp.submitted_at, sp.updated_at,
-       sp.canceled_at, sp.cancellation_comment,
+       sp.canceled_at, sp.cancellation_comment, sp.committee_notes,
        u.email AS proposer_email, u.first_name AS proposer_first_name,
        u.last_name AS proposer_last_name, e.settings_json AS event_settings_json,
        e.starts_at AS event_starts_at, e.ends_at AS event_ends_at, e.timezone AS event_timezone,
@@ -83,6 +84,7 @@ export async function getProposalDetailData(db: DatabaseLike, proposalId: string
       updated_at: proposal.updated_at,
       canceled_at: proposal.canceled_at,
       cancellation_comment: proposal.cancellation_comment,
+      committee_notes: proposal.committee_notes,
       proposer_email: proposal.proposer_email,
       proposer_first_name: proposal.proposer_first_name,
       proposer_last_name: proposal.proposer_last_name,

@@ -9,12 +9,16 @@ import {
   prepareQueueEmailStatement,
   queueEmail,
   processPendingOutbox,
+  processOutboxById,
   processSelectedOutbox,
   resetFailedOutbox,
 } from "../functions/_lib/email/outbox";
 import { createTemplateVersion, activateTemplateVersion } from "../functions/_lib/email/templates";
 import { createD1QueryBudgetedDatabase } from "../functions/_lib/db/query-budget";
 import type { Env } from "../functions/_lib/types";
+import { newCapabilityLinkSecret, queuedCapabilityToken } from "../functions/_lib/services/capability-links";
+import { buildBadgeAttachment } from "../functions/_lib/email/attachments";
+import { validPngBytes } from "./helpers/raster-images";
 
 const env = workerEnv as unknown as Env;
 
@@ -96,6 +100,86 @@ describe("email outbox batch processing", () => {
 
     const rows = await queryAll<{ status: string }>(env.DB, "SELECT status FROM email_outbox");
     expect(rows.every((r) => r.status === "sent")).toBe(true);
+  });
+
+  it("leaves future mail unchanged without a timer and sends its cached badge once when due", async () => {
+    const fetchMock = makeSendgridMock();
+    vi.stubGlobal("fetch", fetchMock);
+    const registrationId = crypto.randomUUID();
+    const manageSecret = newCapabilityLinkSecret();
+    const assetsBucket = env.ASSETS_BUCKET;
+    if (!assetsBucket) throw new Error("Badge attachment fixture requires ASSETS_BUCKET");
+    const get = vi.fn(assetsBucket.get.bind(assetsBucket));
+    const mailEnv = { ...env, ASSETS_BUCKET: { ...assetsBucket, get } };
+    const now = new Date().toISOString();
+    await env.DB.prepare(
+      `INSERT INTO registrations (id, event_id, user_id, status, attendance_type, source_type, manage_link_secret, created_at, updated_at)
+       VALUES (?, ?, ?, 'registered', 'virtual', 'test', ?, ?, ?)`,
+    )
+      .bind(registrationId, eventId, adminId, manageSecret, now, now)
+      .run();
+    const manageUrl = `https://app.test/manage?token=${queuedCapabilityToken("registration_manage", registrationId)}`;
+    const badge = buildBadgeAttachment({ badgeCode: registrationId, badgeType: "attendee", firstName: "Future" });
+    const outboxId = await queueEmail(env.DB, {
+      eventId,
+      templateKey: "attendee_invite",
+      recipientEmail: "future@example.test",
+      messageType: "transactional",
+      sendAfterSeconds: 90,
+      capabilityLinkValues: [manageUrl],
+      data: { firstName: "Future", manageUrl },
+      attachments: [badge],
+    });
+    const readState = () =>
+      queryAll(
+        env.DB,
+        "SELECT status, attempts, send_after, updated_at, sent_at, processing_token, lease_expires_at, payload_json FROM email_outbox WHERE id = ?",
+        outboxId,
+      );
+    const before = await readState();
+    const budgeted = createD1QueryBudgetedDatabase(env.DB, 2);
+    const timer = vi.spyOn(globalThis, "setTimeout");
+    try {
+      await processOutboxById(budgeted.db, mailEnv, outboxId);
+      expect(timer).not.toHaveBeenCalled();
+    } finally {
+      timer.mockRestore();
+    }
+    expect(budgeted.budget.usedQueries()).toBe(2);
+    expect(get).not.toHaveBeenCalled();
+    expect(await readState()).toEqual(before);
+    expect(await queryAll(env.DB, "SELECT manage_link_secret FROM registrations WHERE id = ?", registrationId)).toEqual(
+      [{ manage_link_secret: manageSecret }],
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await processPendingOutbox(env.DB, env, 10)).toEqual({ processed: 0, failed: 0 });
+    expect(await processSelectedOutbox(env.DB, env, [outboxId])).toEqual({ processed: 0, failed: 0, skipped: 1 });
+
+    const png = validPngBytes();
+    await assetsBucket.put(badge.r2Key, png, { httpMetadata: { contentType: "image/png" } });
+    await env.DB.prepare("UPDATE email_outbox SET send_after = ? WHERE id = ?")
+      .bind("2000-01-01T00:00:00.000Z", outboxId)
+      .run();
+    expect(await processPendingOutbox(env.DB, mailEnv, 10)).toEqual({ processed: 1, failed: 0 });
+    await processOutboxById(env.DB, env, outboxId);
+    expect(await processPendingOutbox(env.DB, env, 10)).toEqual({ processed: 0, failed: 0 });
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(get).toHaveBeenCalledOnce();
+    expect(await queryAll(env.DB, "SELECT status, attempts FROM email_outbox WHERE id = ?", outboxId)).toEqual([
+      { status: "sent", attempts: 0 },
+    ]);
+    expect(await queryAll(env.DB, "SELECT manage_link_secret FROM registrations WHERE id = ?", registrationId)).toEqual(
+      [{ manage_link_secret: manageSecret }],
+    );
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body)).attachments).toEqual([
+      {
+        filename: `${badge.filenameBase}.png`,
+        type: "image/png",
+        disposition: "attachment",
+        content: btoa(String.fromCharCode(...png)),
+      },
+    ]);
   });
 
   it("sends from the sender the template names, and from the configured sender otherwise", async () => {

@@ -49,7 +49,6 @@ export async function createGroupEventInvitationFixture(
     profileKey: "workshop",
     registrationPolicy: "no_registration",
     inviteLimitAttendee: overrides.inviteLimitAttendee ?? 5,
-    location: "Online",
     links: [],
   });
   const token = await createAdminSession(db, actor.id, `${label}-session-${suffix}`);

@@ -15,6 +15,7 @@ import {
 } from "./capability-links";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../types";
 import {
+  isProposalCommitteeNotesEditableStatus,
   isProposalSelfServiceEditableStatus,
   type ProposalDecisionStatus,
   type ProposalStatus,
@@ -47,11 +48,13 @@ export interface ProposalRecord {
   updated_at: string;
   withdrawn_at: string | null;
   presentation_deadline?: string | null;
+  /** Private to reviewers and organizers; never published. */
+  committee_notes?: string | null;
 }
 
 export const PROPOSAL_COLUMNS = `id, event_id, proposer_user_id, status, proposal_type, title, abstract,
   details_json, form_placement_id, referral_code, manage_link_secret, review_round, submitted_at, updated_at, withdrawn_at,
-  presentation_deadline`;
+  presentation_deadline, committee_notes`;
 
 export interface ProposalListRecord extends ProposalRecord {
   proposer_email: string;
@@ -75,6 +78,8 @@ export async function buildCreateProposal(
     proposalType: ProposalType;
     title: string;
     abstract: string;
+    /** Private to reviewers and organizers; never published. */
+    committeeNotes?: string | null;
     detailsJson?: string | null;
     formPlacementId?: string | null;
     referredByCode?: string | null;
@@ -100,6 +105,7 @@ export async function buildCreateProposal(
     submitted_at: now,
     updated_at: now,
     withdrawn_at: null,
+    committee_notes: payload.committeeNotes?.trim() || null,
   };
 
   const statements: StatementLike[] = [
@@ -107,8 +113,9 @@ export async function buildCreateProposal(
       .prepare(
         `INSERT INTO session_proposals (
       id, event_id, proposer_user_id, status, proposal_type, title, abstract,
-      details_json, form_placement_id, referral_code, manage_link_secret, submitted_at, updated_at, withdrawn_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      details_json, form_placement_id, referral_code, manage_link_secret, submitted_at, updated_at, withdrawn_at,
+      committee_notes
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         proposal.id,
@@ -125,6 +132,7 @@ export async function buildCreateProposal(
         proposal.submitted_at,
         proposal.updated_at,
         proposal.withdrawn_at,
+        proposal.committee_notes,
       ),
     prepareEngagementStatement(db, {
       userId: proposal.proposer_user_id,
@@ -262,11 +270,18 @@ export async function updateProposalForVerifiedOwner(
     title?: string;
     abstract?: string;
     detailsJson?: string | null;
+    committeeNotes?: string | null;
     formRevisionGuard?: StatementLike | null;
     formPlacementId?: string | null;
     formSubmissionStatements?: StatementLike[];
   },
 ): Promise<ProposalRecord> {
+  if (payload.committeeNotes !== undefined && !isProposalCommitteeNotesEditableStatus(proposal.status))
+    throw new AppError(
+      409,
+      "PROPOSAL_COMMITTEE_NOTES_LOCKED",
+      "The notes for the program committee are locked because the proposal has been decided.",
+    );
   if (!isProposalSelfServiceEditableStatus(proposal.status)) {
     throw new AppError(409, "PROPOSAL_NOT_EDITABLE", "This proposal can no longer be changed");
   }
@@ -337,20 +352,35 @@ export async function updateProposalForVerifiedOwner(
     return withdrawn;
   }
 
-  const next = {
+  const content = {
     proposalType: payload.proposalType ?? proposal.proposal_type,
     title: payload.title ?? proposal.title,
     abstract: payload.abstract ?? proposal.abstract,
     detailsJson: payload.detailsJson !== undefined ? payload.detailsJson : proposal.details_json,
+  };
+  // Only a change to what is reviewed resubmits a proposal; private notes for the committee do not.
+  const resubmits =
+    proposal.status === "needs-work" &&
+    (content.proposalType !== proposal.proposal_type ||
+      content.title !== proposal.title ||
+      content.abstract !== proposal.abstract ||
+      content.detailsJson !== proposal.details_json);
+  const next = {
+    ...content,
+    committeeNotes:
+      payload.committeeNotes !== undefined
+        ? payload.committeeNotes?.trim() || null
+        : (proposal.committee_notes ?? null),
     formPlacementId: payload.detailsJson !== undefined ? (payload.formPlacementId ?? null) : proposal.form_placement_id,
-    status: proposal.status === "needs-work" ? "resubmitted" : proposal.status,
-    reviewRound: proposal.status === "needs-work" ? proposal.review_round + 1 : proposal.review_round,
+    status: resubmits ? "resubmitted" : proposal.status,
+    reviewRound: resubmits ? proposal.review_round + 1 : proposal.review_round,
   };
   const changes: Record<string, { from: unknown; to: unknown }> = {};
   for (const [key, from, to] of [
     ["proposalType", proposal.proposal_type, next.proposalType],
     ["title", proposal.title, next.title],
     ["abstract", proposal.abstract, next.abstract],
+    ["committeeNotes", proposal.committee_notes ?? null, next.committeeNotes],
     [
       "details",
       parseJsonSafe<Record<string, unknown> | null>(proposal.details_json, null),
@@ -364,7 +394,7 @@ export async function updateProposalForVerifiedOwner(
   }
   if (Object.keys(changes).length === 0) return proposal;
 
-  const requiresDecisionRelease = proposal.status === "needs-work";
+  const requiresDecisionRelease = resubmits;
   let updateResults;
   try {
     updateResults = await db.batch([
@@ -375,8 +405,8 @@ export async function updateProposalForVerifiedOwner(
         .prepare(
           `UPDATE session_proposals
          SET proposal_type = ?, title = ?, abstract = ?, details_json = ?, form_placement_id = ?,
-             status = ?, review_round = ?, updated_at = ?
-         WHERE id = ? AND proposal_type = ? AND title = ? AND abstract = ? AND details_json IS ?
+             status = ?, review_round = ?, updated_at = ?, committee_notes = ?
+         WHERE id = ? AND proposal_type = ? AND title = ? AND abstract = ? AND details_json IS ? AND committee_notes IS ?
            AND status = ? AND review_round = ? AND updated_at = ? AND deleted_at IS NULL
            AND (? = 0 OR EXISTS (
              SELECT 1 FROM proposal_decisions
@@ -392,11 +422,13 @@ export async function updateProposalForVerifiedOwner(
           next.status,
           next.reviewRound,
           now,
+          next.committeeNotes,
           proposal.id,
           proposal.proposal_type,
           proposal.title,
           proposal.abstract,
           proposal.details_json,
+          proposal.committee_notes ?? null,
           proposal.status,
           proposal.review_round,
           proposal.updated_at,

@@ -40,7 +40,7 @@ import {
   markdownValue,
   typeInto,
   typeMarkdown,
-} from "./helpers/labelled-control";
+} from "./helpers/labeled-control";
 
 const NOW = "2026-08-31T09:00:00.000Z";
 
@@ -161,7 +161,7 @@ describe("membership application communications card", () => {
     expect(page.textContent).toContain("Nothing has been emailed or noted on this application yet.");
   });
 
-  it("shows each record with the word for its kind, not only a colour", async () => {
+  it("shows each record with the word for its kind, not only a color", async () => {
     const page = mountCard({
       detail: detail([
         communication(),
@@ -179,9 +179,55 @@ describe("membership application communications card", () => {
     expect(rows[0]?.textContent).toContain("Emailed");
     expect(rows[0]?.textContent).toContain("Your application");
     expect(rows[1]?.textContent).toContain("Internal note");
-    expect(rows[1]?.textContent).toContain("Waiting on the signed agreement.");
+    expect(rows[1]?.textContent).not.toContain("Waiting on the signed agreement.");
     // The kinds differ by their words, so the two tones are not the signal.
     expect(rows[1]?.textContent).not.toContain("Emailed");
+  });
+
+  it("lets read-only staff expand and collapse full notes and emailed messages independently", async () => {
+    const body = "Imported review note.\n\n" + "Additional context for the membership review. ".repeat(80);
+    const page = mountCard({
+      canWrite: false,
+      detail: detail([
+        communication({ kind: "note", subject: null, body }),
+        communication({ id: "00000000-0000-4000-8000-000000000402" }),
+      ]),
+    });
+    const triggers = [...page.querySelectorAll<HTMLButtonElement>("button[aria-expanded]")];
+    expect(triggers).toHaveLength(2);
+    expect(triggers.map((trigger) => trigger.getAttribute("aria-expanded"))).toEqual(["false", "false"]);
+
+    await act(() => triggers[0]!.click());
+    const contentId = triggers[0]!.getAttribute("aria-controls");
+    expect(contentId).toBeTruthy();
+    const paragraphs = [...document.getElementById(contentId!)!.querySelectorAll("p")];
+    expect(paragraphs.map((paragraph) => paragraph.textContent)).toEqual(body.split("\n\n"));
+    expect(triggers[0]!.getAttribute("aria-expanded")).toBe("true");
+    expect(triggers[1]!.getAttribute("aria-expanded")).toBe("false");
+
+    await act(() => triggers[1]!.click());
+    expect(document.getElementById(triggers[1]!.getAttribute("aria-controls")!)?.textContent).toBe(
+      "We have received your application.",
+    );
+    await act(() => triggers[0]!.click());
+    expect(document.getElementById(contentId!)).toBeNull();
+    expect(triggers[0]!.getAttribute("aria-expanded")).toBe("false");
+    expect(triggers[1]!.getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("reads a note as Markdown, so fenced source metadata shows as a code block", async () => {
+    const metadata = JSON.stringify({ number: 42, state: "closed" }, null, 2);
+    const body = `**Original application:** imported\n\nOriginal source metadata:\n\n\`\`\`json\n${metadata}\n\`\`\``;
+    const page = mountCard({ detail: detail([communication({ kind: "note", subject: null, body })]) });
+
+    const trigger = buttonNamed(page, "Read message");
+    await act(() => trigger.click());
+    const content = document.getElementById(trigger.getAttribute("aria-controls")!)!;
+
+    expect(content.querySelector("strong")?.textContent).toBe("Original application:");
+    // The JSON keeps its own lines and indentation instead of running together.
+    expect(content.querySelector("pre code")?.textContent).toBe(metadata);
+    expect(content.textContent).not.toContain("```");
   });
 
   it("names every control through its own label", async () => {
@@ -191,7 +237,8 @@ describe("membership application communications card", () => {
     expect(controlFor(page, "Subject").value).toBe("");
     // The message is the shared Markdown editor (#114), a textbox canvas.
     expect((await markdownControl(page, "Message")).getAttribute("role")).toBe("textbox");
-    expect(controlFor<HTMLTextAreaElement>(page, "Internal note").tagName).toBe("TEXTAREA");
+    // A note is written in the same editor it is read back as Markdown from.
+    expect((await markdownControl(page, "Internal note")).getAttribute("role")).toBe("textbox");
     // The help text is the promise the contract keeps: what is typed is what
     // is sent.
     expect(page.textContent).toContain(
@@ -222,7 +269,7 @@ describe("membership application communications card", () => {
     expect(describedBy(page, body)?.textContent).toContain("Enter the message to send.");
 
     // The other form is untouched by the first one's failure.
-    expect(controlFor<HTMLTextAreaElement>(page, "Internal note").getAttribute("aria-invalid")).toBeNull();
+    expect((await markdownControl(page, "Internal note")).getAttribute("aria-invalid")).not.toBe("true");
   });
 
   it("sends a communication the canonical contract accepts, then clears the form", async () => {
@@ -294,7 +341,7 @@ describe("membership application communications card", () => {
     expect(document.activeElement).toBe(subject);
     expect(subject.value).toBe("Decision");
     // The other form is untouched by this one's refusal.
-    expect(controlFor<HTMLTextAreaElement>(page, "Internal note").getAttribute("aria-invalid")).toBeNull();
+    expect((await markdownControl(page, "Internal note")).getAttribute("aria-invalid")).not.toBe("true");
   });
 
   it("records a note the canonical contract accepts, and reports an empty one", async () => {
@@ -307,20 +354,20 @@ describe("membership application communications card", () => {
 
     await submit(formUnder(page, "Add internal note"));
     expect(added).toHaveLength(0);
-    const note = controlFor<HTMLTextAreaElement>(page, "Internal note");
+    const note = await markdownControl(page, "Internal note");
     expect(fieldOf(note).classList.contains("pk-field--invalid")).toBe(true);
     expect(note.getAttribute("aria-invalid")).toBe("true");
     const message = describedBy(page, note);
     expect(message?.getAttribute("role")).toBe("alert");
     expect(message?.textContent).toContain("Enter the note to record.");
 
-    await typeInto(note, "  Chased the signed agreement.  ");
+    await typeMarkdown(page, "Internal note", "  Chased the signed agreement.  ");
     await submit(formUnder(page, "Add internal note"));
 
     expect(added).toHaveLength(1);
     expect(applicationNoteCreateSchema.parse(added[0])).toEqual({ body: "Chased the signed agreement." });
-    expect(controlFor<HTMLTextAreaElement>(page, "Internal note").value).toBe("");
-    expect(controlFor<HTMLTextAreaElement>(page, "Internal note").getAttribute("aria-invalid")).toBeNull();
+    expect(await markdownValue(page, "Internal note")).toBe("");
+    expect((await markdownControl(page, "Internal note")).getAttribute("aria-invalid")).not.toBe("true");
   });
 
   it("offers a reader without write access the record, and no way to add to it", async () => {
@@ -329,6 +376,6 @@ describe("membership application communications card", () => {
     expect(page.querySelector("caption")?.textContent).toBe("Communication and note history");
     expect(page.querySelectorAll("form")).toHaveLength(0);
     expect(labelNames(page)).toEqual([]);
-    expect(buttonNames(page)).toEqual([]);
+    expect(buttonNames(page)).toEqual(["Read message"]);
   });
 });

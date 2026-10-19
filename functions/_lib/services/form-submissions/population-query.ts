@@ -13,6 +13,7 @@ import type { DatabaseLike } from "../../types";
 import type { FormRow, FormSubmissionFilters } from "./types";
 import type { FormPlacement } from "../../../../assets/shared/schemas/forms";
 import { getFormByKey } from "./form-definition";
+import { affiliationOrganizationNameSql } from "../identities/affiliation-projection";
 
 interface SqlFragment {
   sql: string;
@@ -129,7 +130,9 @@ function nativeSubmissionBranch(params: {
       : params.eventId && isProposal
         ? optionalEquality("source_proposal.event_id", params.eventId)
         : { sql: "", bindings: [] };
-  const organization = isRegistration ? registrationOrganizationSql("source_registration") : "u.organization_name";
+  const organization = isRegistration
+    ? registrationOrganizationSql("source_registration")
+    : affiliationOrganizationNameSql("u.id");
   const searchExpressions = [
     "u.email",
     "u.first_name",
@@ -265,7 +268,7 @@ function legacyProposalBranch(params: {
     "u.email",
     "u.first_name",
     "u.last_name",
-    "u.organization_name",
+    affiliationOrganizationNameSql("u.id"),
     "sp.status",
     "sp.title",
     "sp.details_json",
@@ -286,7 +289,7 @@ function legacyProposalBranch(params: {
        u.email AS user_email,
        u.first_name AS user_first_name,
        u.last_name AS user_last_name,
-       u.organization_name AS user_organization,
+       ${affiliationOrganizationNameSql("u.id")} AS user_organization,
        sp.details_json AS answers_json,
        ${submitter} AS submitter
      FROM session_proposals sp

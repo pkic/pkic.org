@@ -10,6 +10,8 @@ import {
   signCapabilityToken,
   verifyCapabilityToken,
   verifyDatabaseCapability,
+  signStatelessCapabilityToken,
+  verifyStatelessCapabilityToken,
 } from "../functions/_lib/services/capability-links";
 import { buildAddProposalSpeaker, queuedSpeakerManageToken } from "../functions/_lib/services/proposal-speakers";
 import { resetDb } from "./helpers/reset-db";
@@ -85,6 +87,48 @@ async function seedSpeakerCapability(): Promise<void> {
 
 describe("public capability links", () => {
   beforeEach(async () => resetDb());
+
+  it.each(["event_proposal_verify", "event_proposal_continue"] as const)(
+    "keeps %s purpose-bound, expiring, and server-authorized at email delivery",
+    async (purpose) => {
+      const resourceId = "event-proposal-context";
+      const marker = queuedCapabilityToken(purpose, resourceId, 60);
+      const unapproved = { verificationUrl: `https://example.test/propose#verify=${marker}` };
+      expect(
+        await materializeQueuedCapabilityLinks(env.DB, { INTERNAL_SIGNING_SECRET: signingSecret }, unapproved),
+      ).toEqual(unapproved);
+      const approved = authorizeQueuedCapabilityLinks(unapproved, [marker]);
+      const materialized = await materializeQueuedCapabilityLinks(
+        env.DB,
+        { INTERNAL_SIGNING_SECRET: signingSecret },
+        approved,
+      );
+      const token = String(materialized.verificationUrl).split("#verify=")[1];
+      await expect(verifyStatelessCapabilityToken({ signingSecret, purpose, token })).resolves.toMatchObject({
+        ok: true,
+        resourceId,
+      });
+      const otherPurpose = purpose === "event_proposal_verify" ? "event_proposal_continue" : "event_proposal_verify";
+      await expect(verifyStatelessCapabilityToken({ signingSecret, purpose: otherPurpose, token })).resolves.toEqual({
+        ok: false,
+        reason: "invalid",
+      });
+      await expect(
+        verifyStatelessCapabilityToken({ signingSecret, purpose: "member_join_verify", token }),
+      ).resolves.toEqual({ ok: false, reason: "invalid" });
+      const expired = await signStatelessCapabilityToken({
+        signingSecret,
+        purpose,
+        resourceId,
+        ttlSeconds: 1,
+        nowSeconds: 1,
+      });
+      await expect(verifyStatelessCapabilityToken({ signingSecret, purpose, token: expired })).resolves.toEqual({
+        ok: false,
+        reason: "expired",
+      });
+    },
+  );
 
   it("signs purpose-bound, expiring tokens and invalidates them after secret rotation", async () => {
     const linkSecret = newCapabilityLinkSecret();
@@ -330,6 +374,71 @@ describe("public capability links", () => {
     expect(outbox?.last_error).toContain("registration-capability");
   });
 
+  it.each([true, false])(
+    "materializes a speaker invitation at its canonical secondary mailbox (verified=%s)",
+    async (verified) => {
+      await seedSpeakerCapability();
+      const email = "speaker-work@example.test";
+      const verifiedAt = verified ? nowIso() : null;
+      await run(
+        env.DB,
+        "INSERT INTO user_emails(id,user_id,email,normalized_email,verified_at,created_at) VALUES(?,?,?,?,?,?)",
+        ["speaker-work-email", "user-speaker", email, email, verifiedAt, nowIso()],
+      );
+      const marker = await queuedSpeakerManageToken(env.DB, "speaker-capability");
+      const payload = authorizeQueuedCapabilityLinks({ manageUrl: marker }, [marker], { recipientEmail: email });
+      const materialized = await materializeQueuedCapabilityLinks(
+        env.DB,
+        { INTERNAL_SIGNING_SECRET: signingSecret },
+        payload,
+      );
+      expect(materialized.manageUrl).toMatch(/^pkc1_/);
+      await expect(
+        verifyDatabaseCapability({
+          db: env.DB,
+          signingSecret,
+          purpose: "speaker_manage",
+          token: String(materialized.manageUrl),
+        }),
+      ).resolves.toMatchObject({ resourceId: "speaker-capability" });
+      expect(
+        await env.DB.prepare("SELECT verified_at FROM user_emails WHERE id=?")
+          .bind("speaker-work-email")
+          .first("verified_at"),
+      ).toBe(verifiedAt);
+      expect(await env.DB.prepare("SELECT email FROM users WHERE id=?").bind("user-speaker").first("email")).toBe(
+        "speaker@example.test",
+      );
+    },
+  );
+
+  it.each(["deleted", "foreign"] as const)(
+    "refuses queued speaker delivery through a %s secondary mailbox",
+    async (state) => {
+      await seedSpeakerCapability();
+      const email = "speaker-work@example.test";
+      await run(
+        env.DB,
+        "INSERT INTO user_emails(id,user_id,email,normalized_email,verified_at,created_at) VALUES(?,?,?,?,?,?)",
+        ["speaker-work-email", "user-speaker", email, email, nowIso(), nowIso()],
+      );
+      const marker = await queuedSpeakerManageToken(env.DB, "speaker-capability");
+      const payload = authorizeQueuedCapabilityLinks({ manageUrl: marker }, [marker], { recipientEmail: email });
+      if (state === "deleted") await run(env.DB, "DELETE FROM user_emails WHERE id=?", ["speaker-work-email"]);
+      else {
+        await run(
+          env.DB,
+          "INSERT INTO users(id,email,normalized_email,active,created_at,updated_at) VALUES(?,?,?,1,?,?)",
+          ["foreign-mail-owner", "foreign@example.test", "foreign@example.test", nowIso(), nowIso()],
+        );
+        await run(env.DB, "UPDATE user_emails SET user_id=? WHERE id=?", ["foreign-mail-owner", "speaker-work-email"]);
+      }
+      await expect(
+        materializeQueuedCapabilityLinks(env.DB, { INTERNAL_SIGNING_SECRET: signingSecret }, payload),
+      ).rejects.toMatchObject({ status: 410, code: "CAPABILITY_RESOURCE_STALE" });
+    },
+  );
+
   it("binds queued speaker capabilities to the recipient's current canonical email", async () => {
     await seedSpeakerCapability();
     expect(() => queuedCapabilityToken("speaker_manage", "speaker-capability")).toThrow(
@@ -517,25 +626,22 @@ describe("public capability links", () => {
 
   it("initializes a legacy speaker secret with Web Crypto when first issuing a link", async () => {
     await seedSpeakerCapability();
-    await run(env.DB, "UPDATE proposal_speakers SET id = ?, manage_link_secret = NULL WHERE id = ?", [
-      "speaker-legacy",
-      "speaker-capability",
-    ]);
+    await run(env.DB, "UPDATE proposal_speakers SET manage_link_secret = NULL WHERE id = ?", ["speaker-capability"]);
 
     const token = await issueDatabaseCapability({
       db: env.DB,
       signingSecret,
       purpose: "speaker_manage",
-      resourceId: "speaker-legacy",
+      resourceId: "speaker-capability",
     });
     const row = await env.DB.prepare("SELECT manage_link_secret FROM proposal_speakers WHERE id = ?")
-      .bind("speaker-legacy")
+      .bind("speaker-capability")
       .first<{ manage_link_secret: string | null }>();
 
     expect(row?.manage_link_secret).toMatch(/^[A-Za-z0-9_-]{43}$/);
     await expect(
       verifyDatabaseCapability({ db: env.DB, signingSecret, purpose: "speaker_manage", token }),
-    ).resolves.toMatchObject({ ok: true, resourceId: "speaker-legacy" });
+    ).resolves.toMatchObject({ ok: true, resourceId: "speaker-capability" });
   });
 
   it("applies the consolidated schema migration without retaining obsolete token columns", async () => {

@@ -10,7 +10,7 @@ import {
 } from "../../assets/shared/schemas/resource-grants";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { ResourceSharingEditor } from "../../assets/ts/member-flows/portal/sections/management/ResourceSharingEditor";
-import { buttonNamed, chooseComboboxOption, chooseOption, controlFor } from "./helpers/labelled-control";
+import { buttonNamed, chooseComboboxOption, chooseOption, controlFor } from "./helpers/labeled-control";
 import { rowActionControlNames, runRowAction } from "./helpers/row-actions";
 
 const OWNER_GROUP_ID = "10000000-0000-4000-8000-000000000001";
@@ -160,7 +160,7 @@ describe("portal resource sharing editor", () => {
     );
 
     // Both controls are resolved through the `for`/`id` pair that names
-    // them, so the lookup fails exactly when the labelling is broken.
+    // them, so the lookup fails exactly when the labeling is broken.
     const capabilitySelect = controlFor<HTMLSelectElement>(container, "Capability");
     expect([...capabilitySelect.options].map((option) => option.value)).toContain(selectedCapability);
     await chooseComboboxOption(container, "Group", GRANTEE_GROUP_ID);

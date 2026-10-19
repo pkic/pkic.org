@@ -1,0 +1,27 @@
+@layer components {
+  .pk-live-desk__questions .pk-live-questions__list {
+    margin: 0;
+    padding: 0;
+  }
+  .pk-live-desk__questions .pk-live-question {
+    grid-template-columns: minmax(0, 1fr);
+    padding: var(--pk-3);
+    border: 0;
+    border-block-end: 1px solid var(--pk-line-soft);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  .pk-live-desk__questions .pk-live-question__actions {
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  /* Marks a pending question for operator presence without changing the row's layout. */
+  .pk-live-desk__question-presence {
+    display: contents;
+  }
+  .pk-live-desk__questions .pk-live-questions__empty {
+    margin: 0;
+    padding: var(--pk-3);
+  }
+}

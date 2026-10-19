@@ -17,6 +17,7 @@ import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { Select, TextInput } from "../../../../ui/TextControl";
 import { toast } from "../../ui";
 import { MarkdownEditor } from "../../../../components/markdown-editor/MarkdownInput";
+import "./OrganizationCreateForm.css";
 
 interface PersonDraft {
   name: string;
@@ -90,7 +91,7 @@ export function OrganizationCreateForm({
     identities: people.map((person) => ({
       name: person.name.trim(),
       email: person.email.trim(),
-      ...(person.jobTitle.trim() ? { jobTitle: person.jobTitle.trim() } : {}),
+      jobTitle: person.jobTitle,
     })),
     workingGroupSlugs: [],
     ...(people.length > 0 ? { activationReason: activationReason.trim() } : {}),
@@ -124,7 +125,7 @@ export function OrganizationCreateForm({
       {/* The page's way back: creation has its own address, so leaving it is
           navigation rather than the disappearance of a layer. */}
       <div class="pk-cluster">
-        <Button size="sm" onClick={onCancel} disabled={busy}>
+        <Button onClick={onCancel} disabled={busy}>
           ← All organizations
         </Button>
       </div>
@@ -236,8 +237,8 @@ export function OrganizationCreateForm({
                   fieldName="organization.links"
                   label="Other links"
                   value={links}
-                  inputAriaLabel="Additional organization URL"
-                  helpText="One URL per line. Each is labeled by its site — a linkedin.com address shows as LinkedIn."
+                  inputAriaLabel="Additional organization link"
+                  helpText="Add one link at a time. Each is labeled by its site — a linkedin.com address shows as LinkedIn."
                   onChange={setLinks}
                 />
               </fieldset>
@@ -260,16 +261,17 @@ export function OrganizationCreateForm({
                     {people.map((person, index) => (
                       // The frame is load-bearing: it is what keeps a person's
                       // "Name" from reading as another field of the organization.
-                      <fieldset class="pk-fieldset pk-fieldset--boxed pk-field" key={index}>
+                      <fieldset class="pk-fieldset pk-organization-person pk-field" key={index}>
                         {/* A boxed card, so its legend names the card rather than
                         opening a section — the frame already does the work a
                         section heading would. */}
                         <legend class="pk-field__label">Person {index + 1}</legend>
                         <div class="pk-stack pk-stack--snug">
-                          <Field label="Name" required>
+                          <Field label="Name" required {...form.of(`identities.${index}.name`)}>
                             {(control) => (
                               <TextInput
                                 {...control}
+                                name={`identities.${index}.name`}
                                 value={person.name}
                                 onInput={(event) =>
                                   updatePerson(index, { name: (event.target as HTMLInputElement).value })
@@ -277,11 +279,12 @@ export function OrganizationCreateForm({
                               />
                             )}
                           </Field>
-                          <Field label="Email" required>
+                          <Field label="Email" required {...form.of(`identities.${index}.email`)}>
                             {(control) => (
                               <TextInput
                                 {...control}
                                 type="email"
+                                name={`identities.${index}.email`}
                                 value={person.email}
                                 onInput={(event) =>
                                   updatePerson(index, { email: (event.target as HTMLInputElement).value })
@@ -289,10 +292,11 @@ export function OrganizationCreateForm({
                               />
                             )}
                           </Field>
-                          <Field label="Job title">
+                          <Field label="Job title" required {...form.of(`identities.${index}.jobTitle`)}>
                             {(control) => (
                               <TextInput
                                 {...control}
+                                name={`identities.${index}.jobTitle`}
                                 value={person.jobTitle}
                                 onInput={(event) =>
                                   updatePerson(index, { jobTitle: (event.target as HTMLInputElement).value })
@@ -303,7 +307,6 @@ export function OrganizationCreateForm({
                           <div class="pk-cluster pk-cluster--end">
                             <Button
                               variant="danger-quiet"
-                              size="sm"
                               onClick={() =>
                                 setPeople((current) => current.filter((_, position) => position !== index))
                               }
@@ -316,7 +319,6 @@ export function OrganizationCreateForm({
                     ))}
                     <div class="pk-cluster">
                       <Button
-                        size="sm"
                         disabled={people.length >= MAX_PEOPLE}
                         onClick={() => setPeople((current) => [...current, { name: "", email: "", jobTitle: "" }])}
                       >

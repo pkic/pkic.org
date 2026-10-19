@@ -2,6 +2,8 @@ import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { handleError } from "../functions/_lib/http";
 import app from "../functions/router";
+import "./helpers/app";
+import { insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
 import { onRequest as organizationLogoRequest } from "../functions/api/v1/organizations/[organizationId]/logo";
 import { createAdminSession } from "./helpers/auth";
 import { createContext, queryAll, seedEventAndAdmin } from "./helpers/context";
@@ -122,6 +124,32 @@ describe("shared organization logo route transport", () => {
     ).toBeNull();
   });
 
+  it.each(["active", "inactive"] as const)(
+    "queues changed logos only for %s member visibility through mounted routes",
+    async (status) => {
+      const token = await setupAdmin();
+      const id = await insertOrganization(env.DB, "Public logo publisher");
+      const memberId = await seedOrganizationAggregate(env.DB, id, "F");
+      if (status === "inactive")
+        await env.DB.prepare("UPDATE members SET status='inactive' WHERE id=?").bind(memberId).run();
+      const count = () =>
+        env.DB.prepare("SELECT COUNT(*) AS count FROM site_publication_requests WHERE resource_id=?")
+          .bind(id)
+          .first<number>("count");
+      const put = await callMountedLogoRoute(
+        imageRequest(`/api/v1/organizations/${id}/logo`, token, "PUT", VALID_LOGO_SVG, "image/svg+xml"),
+      );
+      expect(put.status, await put.clone().text()).toBe(200);
+      expect(await count()).toBe(status === "active" ? 1 : 0);
+      const remove = await callMountedLogoRoute(imageRequest(`/api/v1/organizations/${id}/logo`, token, "DELETE"));
+      expect(remove.status).toBe(200);
+      expect(await count()).toBe(status === "active" ? 2 : 0);
+      const repeat = await callMountedLogoRoute(imageRequest(`/api/v1/organizations/${id}/logo`, token, "DELETE"));
+      expect(repeat.status).toBe(200);
+      expect(await count()).toBe(status === "active" ? 2 : 0);
+    },
+  );
+
   it("uploads and removes a non-member sponsorship logo through the sponsorship adapter", async () => {
     const token = await setupAdmin();
     const id = crypto.randomUUID();
@@ -138,7 +166,8 @@ describe("shared organization logo route transport", () => {
     );
     expect(putResponse.status).toBe(200);
     const putBody = (await putResponse.json()) as { logoUrl: string; r2Key: string };
-    expect(putBody.logoUrl).toBe(`/api/v1/sponsors/${id}/logo`);
+    // The address names the uploaded file, so caches may keep it.
+    expect(putBody.logoUrl).toBe(`/api/v1/sponsors/${id}/logo?v=${putBody.r2Key.split("/").pop()}`);
     expect(putBody.r2Key).toMatch(new RegExp(`^sponsor-logos/${id}/`));
     expect(await env.ASSETS_BUCKET!.get(putBody.r2Key)).not.toBeNull();
 

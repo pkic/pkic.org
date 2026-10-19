@@ -2,7 +2,7 @@
 /**
  * The three pages that used to be one "Membership Settings" screen (#40).
  *
- * The behaviour asserted here is the behaviour that screen had — canonical
+ * The behavior asserted here is the behavior that screen had — canonical
  * membership APIs, revision-guarded writes, a read-only rendering with no
  * controls, and the paragraph that answers issue #16 — but each page now
  * carries only its own subject, heads itself, and loads only what it shows.
@@ -20,11 +20,11 @@ import { ApplicationWorkflow } from "../../assets/ts/member-flows/portal/section
 import { MembershipApplicationForm } from "../../assets/ts/member-flows/portal/sections/membership-settings/MembershipApplicationForm";
 import { MembershipCategories } from "../../assets/ts/member-flows/portal/sections/membership-settings/MembershipCategories";
 import { beginRecordEdit } from "./helpers/record-edit";
-import { buttonNamed, controlFor, typeInto } from "./helpers/labelled-control";
+import { buttonNamed, controlFor, typeInto } from "./helpers/labeled-control";
 import { openQuestion } from "./helpers/form-editor";
 import { rowMenuTrigger } from "./helpers/row-actions";
 
-// The categories page routes its edit page through the portal's location
+// The categories page routes its edit dialog through the portal's location
 // hook, which has no dispatcher in a bare mount.
 const navigate = vi.fn();
 vi.mock("wouter/use-hash-location", () => ({
@@ -404,7 +404,7 @@ describe("membership categories page", () => {
     expect(page.querySelectorAll("form")).toHaveLength(0);
   });
 
-  it("opens a category's edit page from its row, at the category's own address", async () => {
+  it("opens a category's edit dialog from its row, at the category's own address", async () => {
     stubApi((url) => (url.pathname === CATEGORIES_API ? json({ categories: [category] }) : null));
 
     const page = mount(<MembershipCategories canWrite />);
@@ -432,9 +432,10 @@ describe("membership categories page", () => {
 
     const page = mount(<MembershipCategories canWrite categoryCode="H1" />);
     await settle();
-    // The edit page heads itself with the category, under the list's trail.
-    expect(page.querySelector("h2")?.textContent).toBe(`${category.label} (H1)`);
-    expect(page.querySelector('nav[aria-label="Breadcrumb"]')?.textContent).toContain("Membership categories");
+    const dialog = page.querySelector("dialog[open]");
+    expect(dialog?.querySelector("h2")?.textContent).toBe("Edit category H1");
+    expect(dialog?.querySelector("form")?.hasAttribute("novalidate")).toBe(true);
+    expect(page.querySelector("table")).not.toBeNull();
     await typeInto(controlFor(page, "Code"), "ORG");
     expect(page.querySelector('[name="displayOrder"]')).toBeNull();
     await typeInto(controlFor(page, "Name"), "Government PKI participants");
@@ -532,7 +533,7 @@ describe("application workflow table", () => {
     const labels = headings.map(
       (heading) =>
         heading.querySelector(
-          ".pk-table__head-content > button > span, .pk-table__head-content > span:not(.pk-table__head-end):not(.pk-table__head-tools):not(.pk-table__head-filter)",
+          ".pk-table__head-content > button > span, .pk-table__head-content > span:not(.pk-table__head-end):not(.pk-table__head-tools)",
         )?.textContent,
     );
     expect(labels).toEqual(["Workflow", "Version", "Status", "Required steps"]);

@@ -14,8 +14,8 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { eventDayReadModelSchema, type EventDayReadModel } from "../../assets/shared/schemas/event-read-models";
-import { DayAttendancePicker } from "../../assets/ts/components/DayAttendancePicker";
-import { groupNames } from "./helpers/labelled-control";
+import { ATTENDANCE_WAITLIST_COPY, DayAttendancePicker } from "../../assets/ts/components/DayAttendancePicker";
+import { groupNames } from "./helpers/labeled-control";
 
 /** Parsed through the shared read model, so a fixture cannot drift from it. */
 function day(overrides: Record<string, unknown> = {}): EventDayReadModel {
@@ -97,6 +97,29 @@ describe("day attendance picker", () => {
     const badge = picker.querySelector(".event-flow-attendance-badge");
     expect(badge?.getAttribute("aria-label")).toBe("Limited spots remaining");
     expect(badge?.textContent).toBe("Limited spots");
+  });
+
+  it("says a full option joins the waitlist, on the option and in its description", () => {
+    const picker = mount(
+      <DayAttendancePicker
+        days={[
+          day({
+            attendanceOptions: [
+              { value: "in_person", label: "In person", spotsRemainingPercent: 0 },
+              { value: "virtual", label: "Virtual", spotsRemainingPercent: null },
+            ],
+          }),
+        ]}
+        lowCapacityThreshold={60}
+      />,
+    );
+    const full = picker.querySelector<HTMLInputElement>("#dayAttendance-2026-10-03-in_person")!;
+    expect(full.labels?.[0]?.textContent).toBe(`In person${ATTENDANCE_WAITLIST_COPY.badge}`);
+    expect(document.getElementById(full.getAttribute("aria-describedby")!)?.textContent).toBe(
+      ATTENDANCE_WAITLIST_COPY.line("In person"),
+    );
+    // A full option is not also "limited".
+    expect(picker.querySelector('[aria-label="Limited spots remaining"]')).toBeNull();
   });
 
   it("says so plainly when the event has no per-day choice to make", () => {

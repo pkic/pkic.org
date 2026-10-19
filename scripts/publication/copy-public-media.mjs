@@ -1,4 +1,4 @@
-import { publicationCacheDirectory } from "./build-context.mjs";
+import { publicationCacheDirectory, publicationOmitsMissingR2Media } from "./build-context.mjs";
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
@@ -48,6 +48,7 @@ export async function copyPublicMedia({
   output,
   cacheDirectory = undefined,
   manifest = /** @type {import("./public-media-cache.mjs").PublicMediaManifest | undefined} */ (undefined),
+  omitMissingSources = publicationOmitsMissingR2Media(),
 }) {
   const started = performance.now();
   const revision = createHash("sha256")
@@ -68,8 +69,24 @@ export async function copyPublicMedia({
     console.warn(`[publication] Unusable approved member logo ${reference}; using the missing-logo fallback`);
     serialized = serialized.replaceAll(JSON.stringify(reference), "null");
   };
+  let omitted = 0;
+  const read = async (key) => {
+    try {
+      return await cache.read(key);
+    } catch (error) {
+      if (omitMissingSources && error.name === "MissingPublishedImageSource") return null;
+      throw error;
+    }
+  };
   for (const [reference, key] of Object.entries(keys)) {
-    const { object, cached, store } = await cache.read(key);
+    const source = await read(key);
+    if (!source) {
+      // A restored backup carries no R2 uploads: render the page as if no image were approved.
+      omitted++;
+      serialized = serialized.replaceAll(JSON.stringify(reference), "null");
+      continue;
+    }
+    const { object, cached, store } = source;
     if (cached) {
       const path = `/_published/media/${cached.filename}`;
       const destination = resolve(output, path.slice(1));
@@ -126,10 +143,17 @@ export async function copyPublicMedia({
     await store(bytes, "webp");
     serialized = serialized.replaceAll(JSON.stringify(reference), JSON.stringify(path));
   }
+  // A credited portrait the person has since replaced or removed is no longer public; show initials.
+  serialized = serialized.replace(/(?<!\\)"\/api\/v1\/users\/[^"/\\]+\/headshots\/[^"/\\]+"/g, (reference) => {
+    console.warn(`[publication] Credited portrait ${reference} is no longer current; using initials`);
+    return "null";
+  });
   const published = JSON.parse(serialized);
   // Profile/directory logos are nullable and render initials. Legacy logo walls
   // require a URL and already use the consortium mark when a logo is missing.
   for (const entry of published.memberWall ?? []) entry.logoUrl ??= "/img/logo.svg";
+  if (omitted)
+    console.warn(`[publication] ${omitted} approved image(s) have no local R2 object and are published as missing`);
   console.log(
     `[publication] R2 media: ${cache.stats.reused} reused, ${cache.stats.downloaded} downloaded (${(cache.stats.downloadedBytes / 1024 / 1024).toFixed(2)} MiB), ${((performance.now() - started) / 1000).toFixed(2)} s`,
   );

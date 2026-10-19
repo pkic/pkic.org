@@ -1,3 +1,5 @@
+@use "sass:string";
+
 // ── The tier wall's spacing ladder ──────────────────────────────────────────
 // Five distances, each one token step apart, so the wall groups itself by
 // proximity rather than by anything the reader has to work out:
@@ -125,7 +127,7 @@ $sponsors-tier-heights: (
   // The tier's name, read as a caption sitting in a gap in the rule. The rule
   // is drawn as the two lines flanking the name rather than as a border the
   // name is knocked out of with a solid background: a knockout has to repaint
-  // whatever the page is painted on, so it renders a chip of the wrong colour
+  // whatever the page is painted on, so it renders a chip of the wrong color
   // the moment the caption sits on anything but the plain page surface.
   .sponsor-level {
     display: flex;
@@ -209,7 +211,7 @@ $sponsors-tier-heights: (
 
   .sponsor-logo {
     display: block;
-    max-width: unquote("min(100%, var(--sponsor-logo-max-width, 100%))");
+    max-width: string.unquote("min(100%, var(--sponsor-logo-max-width, 100%))");
     object-fit: contain;
   }
 }
@@ -225,20 +227,20 @@ $sponsors-tier-heights: (
 }
 
 .sponsor-grid-height-20 {
-  height: calc(20px * var(--sponsor-weight, 1));
+  height: calc(1.25rem * var(--sponsor-weight, 1));
 }
 
 .sponsor-grid-max-height-20 {
-  max-height: calc(20px * var(--sponsor-weight, 1));
+  max-height: calc(1.25rem * var(--sponsor-weight, 1));
 }
 
 .sponsor-grid-max-width-60 {
   --sponsor-logo-max-width: calc(60px * var(--sponsor-weight, 1));
-  max-width: unquote("min(100%, var(--sponsor-logo-max-width))");
+  max-width: string.unquote("min(100%, var(--sponsor-logo-max-width))");
 }
 
 // The strip's own label, when a caller supplies none of its own. Its width,
-// centring, spacing, case and colour were five Bootstrap utility classes
+// centring, spacing, case and color were five Bootstrap utility classes
 // written into `sponsors-wall.tsx`; they belong beside the rest of the label's
 // appearance instead.
 .sponsor-strip-default-label {
@@ -250,11 +252,11 @@ $sponsors-tier-heights: (
   text-align: center;
   text-transform: uppercase;
   // The strip sits over the hero's dark media, so the label takes the ink
-  // meant for a solid ground rather than the page's body colour.
+  // meant for a solid ground rather than the page's body color.
   color: var(--pk-on-solid);
 }
 
 .sponsor-strip-default-logo {
   width: auto;
-  max-height: 40px;
+  max-height: 2.5rem;
 }

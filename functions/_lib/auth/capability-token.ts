@@ -12,7 +12,12 @@ export const CAPABILITY_TOKEN_PREFIX = "pkc1_";
 export const DEFAULT_TTL_SECONDS = 30 * 24 * 60 * 60;
 const SIGNING_DOMAIN = "pkic-public-capability:v1";
 
-export type EmailAuthCapabilityPurpose = "user_sign_in" | "sponsor_sign_in" | "identity_invitation";
+export type EmailAuthCapabilityPurpose =
+  | "user_sign_in"
+  | "sponsor_sign_in"
+  | "identity_invitation"
+  | "identity_reinstatement"
+  | "email_address_verification";
 
 export type CapabilityPurpose =
   | "application_status"
@@ -24,12 +29,23 @@ export type CapabilityPurpose =
   | "meeting_guest_verify"
   | "member_join_verify"
   | "member_join_apply"
+  | "event_proposal_verify"
+  | "event_proposal_continue"
+  | "registration_email_verify"
+  | "attendance_point"
   | EmailAuthCapabilityPurpose;
 
-export type StatelessCapabilityPurpose = "member_join_verify" | "member_join_apply" | EmailAuthCapabilityPurpose;
+export type StatelessCapabilityPurpose =
+  | "member_join_verify"
+  | "member_join_apply"
+  | "event_proposal_verify"
+  | "event_proposal_continue"
+  | "registration_email_verify"
+  | EmailAuthCapabilityPurpose;
 
 export type CapabilityVerifyResult =
-  { ok: true; resourceId: string; expiresAt: number } | { ok: false; reason: "invalid" | "expired" };
+  | { ok: true; resourceId: string; expiresAt: number }
+  | { ok: false; reason: "invalid" | "expired" };
 
 interface ParsedCapabilityToken {
   purpose: CapabilityPurpose;
@@ -49,9 +65,15 @@ const purposeCodes: Record<CapabilityPurpose, string> = {
   meeting_guest_verify: "mgv",
   member_join_verify: "mjv",
   member_join_apply: "mja",
+  event_proposal_verify: "epv",
+  event_proposal_continue: "epc",
+  registration_email_verify: "rev",
+  attendance_point: "ap",
   user_sign_in: "usi",
   sponsor_sign_in: "ssi",
   identity_invitation: "iid",
+  identity_reinstatement: "irs",
+  email_address_verification: "eav",
 };
 
 const purposesByCode = Object.fromEntries(
@@ -172,9 +194,14 @@ export function isStatelessCapabilityPurpose(purpose: CapabilityPurpose): purpos
   return (
     purpose === "member_join_verify" ||
     purpose === "member_join_apply" ||
+    purpose === "event_proposal_verify" ||
+    purpose === "event_proposal_continue" ||
+    purpose === "registration_email_verify" ||
     purpose === "user_sign_in" ||
     purpose === "sponsor_sign_in" ||
-    purpose === "identity_invitation"
+    purpose === "identity_invitation" ||
+    purpose === "identity_reinstatement" ||
+    purpose === "email_address_verification"
   );
 }
 

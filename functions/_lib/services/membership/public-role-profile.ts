@@ -1,3 +1,4 @@
+import { versionedImagePath } from "../image-cache";
 import { getFeaturedLink, parseLinksJson } from "../../../../assets/shared/schemas/links";
 import { sanitizeLegacyHttpUrl } from "../../../../assets/shared/schemas/urls";
 import { publicMembershipAffiliation } from "../../../../assets/shared/schemas/membership-categories";
@@ -32,9 +33,13 @@ export function toPublicRoleProfile(row: PublicRoleProfileRow): PublicRoleProfil
     name: [row.first_name, row.last_name].filter(Boolean).join(" ") || "Unknown",
     jobTitle: row.org_id ? row.job_title : publicMembershipAffiliation(row.membership_category, row.job_title),
     organizationName: row.org_name,
-    organizationLogoUrl: row.org_logo_r2_key && row.org_id ? `/api/v1/members/${row.org_id}/logo` : null,
+    organizationLogoUrl: row.org_id
+      ? versionedImagePath(`/api/v1/members/${row.org_id}/logo`, row.org_logo_r2_key)
+      : null,
     organizationWebsite: sanitizeLegacyHttpUrl(row.org_website),
-    photoUrl: row.headshot_r2_key && row.identity_id ? `/api/v1/members/${row.identity_id}/logo` : null,
+    photoUrl: row.identity_id
+      ? versionedImagePath(`/api/v1/members/${row.identity_id}/logo`, row.headshot_r2_key)
+      : null,
     featuredLink: getFeaturedLink(parseLinksJson(row.links_json)),
   };
 }

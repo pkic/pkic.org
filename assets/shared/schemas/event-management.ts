@@ -1,3 +1,5 @@
+import { EVENT_PHASES } from "../event-phase";
+import { addPlacementIssues } from "./forms";
 import { eventParticipationSchema } from "./event-participation";
 import { z } from "zod";
 import { httpOrSameOriginUrlSchema, httpUrlSchema } from "./urls";
@@ -16,6 +18,10 @@ import { databaseIdSchema } from "./identifiers";
 import { linksSchema } from "./links";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { attendanceTypeSchema, registrationLifecycleStatusSchema } from "./registration";
+import { eventBadgeTemplateSchema } from "./event-badge-template";
+import { countryCodeSchema } from "../countries";
+import { eventCitySchema, eventPlaceSchema } from "../event-place";
+import { eventAttendanceSettingsSchema } from "../attendance-attribution";
 
 /**
  * D1-backed event profile catalog projection. The key remains a validated
@@ -40,10 +46,12 @@ export const eventProfileCatalogResponseSchema = z.object({
  * generic portal-event setting.
  */
 export const EVENT_MANAGED_SETTING_KEYS = [
+  "agenda",
+  "attendance",
+  "badgeTemplate",
   "forms",
   "frontend",
   "heroImageUrl",
-  "location",
   "proposal",
   "venue",
   "virtualUrl",
@@ -74,7 +82,16 @@ export const attendeeInviteLimitSchema = z.number().int().min(0).max(50);
  * Shared event configuration. Individual route families compose this base
  * with their own policy dialect rather than duplicating the common fields.
  */
+export const eventProposalSubmissionWindowSchema = z
+  .object({
+    opensAt: utcInstantSchema.nullable(),
+    closesAt: utcInstantSchema.nullable(),
+  })
+  .superRefine(addPlacementIssues);
+
 export const eventSettingsSchema = z.object({
+  slug: z.string().trim().min(1).max(180).regex(slugPattern).optional(),
+  confirmSlugChange: z.boolean().optional(),
   name: trimmedString(3, 180).optional(),
   timezone: timeZoneSchema.optional(),
   startsAt: utcInstantSchema.nullable().optional(),
@@ -82,7 +99,8 @@ export const eventSettingsSchema = z.object({
   venue: trimmedString(2, 500).nullable().optional(),
   virtualUrl: httpUrlSchema.nullable().optional(),
   heroImageUrl: httpOrSameOriginUrlSchema.nullable().optional(),
-  location: trimmedString(2, 200).nullable().optional(),
+  city: eventCitySchema.nullable().optional(),
+  country: countryCodeSchema.nullable().optional(),
   sessionTypes: proposalSessionTypesSchema.nullable().optional(),
   registrationFormKey: z
     .string()
@@ -104,6 +122,9 @@ export const eventSettingsSchema = z.object({
   visibility: eventVisibilitySchema.optional(),
   inviteLimitAttendee: attendeeInviteLimitSchema.optional(),
   settings: eventCustomSettingsSchema.optional(),
+  badgeTemplate: eventBadgeTemplateSchema.nullable().optional(),
+  /** How self check-ins are attributed to sessions; stored under `attendance` in the event settings. */
+  attendance: eventAttendanceSettingsSchema.optional(),
   userRetentionDays: z.number().int().positive().max(3650).optional(),
 });
 export type EventSettingsInput = z.infer<typeof eventSettingsSchema>;
@@ -120,6 +141,8 @@ export const eventCreateSchema = z.object({
   inviteLimitAttendee: attendeeInviteLimitSchema.default(5),
   venue: trimmedString(2, 500).nullable().optional(),
   virtualUrl: httpUrlSchema.nullable().optional(),
+  city: eventSettingsSchema.shape.city,
+  country: eventSettingsSchema.shape.country,
 });
 export type EventCreateInput = z.infer<typeof eventCreateSchema>;
 
@@ -129,11 +152,24 @@ export type EventCreateInput = z.infer<typeof eventCreateSchema>;
  * capabilities, and other view-specific data instead of copying the event
  * identity and scheduling shape.
  */
+/** Whether the event's call for proposals takes submissions now, and the public form to submit through. */
+export const eventProposalCallSchema = z.object({
+  open: z.boolean(),
+  path: z.string().nullable(),
+  /** When an open call stops taking proposals; null when it is closed or has no end. */
+  closesAt: utcInstantSchema.nullable(),
+});
+export type EventProposalCall = z.infer<typeof eventProposalCallSchema>;
+
 export const eventResourceCoreSchema = z.object({
   participation: eventParticipationSchema.optional(),
+  /** Event detail only, like `participation`; lists leave it out rather than query each row. */
+  proposalCall: eventProposalCallSchema.optional(),
   id: eventIdSchema,
   slug: z.string(),
   name: z.string(),
+  /** Existing event hero used by bounded discovery cards. */
+  heroImageUrl: httpOrSameOriginUrlSchema.nullable().optional(),
   timezone: z.string(),
   startsAt: z.string().nullable(),
   endsAt: z.string().nullable(),
@@ -142,6 +178,8 @@ export const eventResourceCoreSchema = z.object({
   registrationPolicy: eventRegistrationPolicySchema,
   visibility: eventVisibilitySchema,
   inviteLimitAttendee: attendeeInviteLimitSchema,
+  /** Where the event takes place; composed for display only through `formatEventPlace`. */
+  ...eventPlaceSchema.shape,
   /** Exact persisted D1 revision; clients must return it unchanged for compare-and-set writes. */
   updatedAt: z.string().min(1).max(40),
 });
@@ -151,19 +189,26 @@ export type EventResourceCore = z.infer<typeof eventResourceCoreSchema>;
  * Per-day state of the viewer's own registration, keyed by the event day's
  * calendar date. Present only for events with day-level registration; a
  * single-attendance-type registration has no day rows and yields `[]`.
+ *
+ * `attendanceType` is how the viewer asked to attend that day; `state` says
+ * whether they hold it. An in-person day still waiting for, or offered, a
+ * seat is `waitlisted`, so "in person" alone never implies a seat.
  */
 export const eventViewerDayStateSchema = z.enum(["registered", "waitlisted"]);
 export const eventViewerDaySchema = z.object({
   date: eventDayDateSchema,
+  attendanceType: attendanceTypeSchema,
   state: eventViewerDayStateSchema,
 });
 export type EventViewerDay = z.infer<typeof eventViewerDaySchema>;
 
 /**
  * The caller's own standing for an event, derived from their registration.
- * `waitlisted` is true when at least one of the registration's day-waitlist
- * rows is active (day waitlist rows are the sole authoritative waitlist
- * state); `days` mirrors that per day. Null for anonymous callers and for
+ * `waitlisted` is true when at least one in-person day is still waiting for,
+ * or offered, a seat (day waitlist rows are the sole authoritative waitlist
+ * state, and an accepted offer holds its seat); `days` mirrors that per day.
+ * `attendanceType` is the registration-level derivation (in person if any
+ * day is), never a confirmed seat: read the days for that. Null for anonymous callers and for
  * callers with no standing (non-existent or cancelled registration).
  */
 export const eventViewerStateSchema = z.object({
@@ -171,18 +216,27 @@ export const eventViewerStateSchema = z.object({
   attendanceType: attendanceTypeSchema,
   waitlisted: z.boolean(),
   days: z.array(eventViewerDaySchema).max(31),
+  /** Whether any of the viewer's verified addresses, primary or secondary, is a work address. */
+  holdsWorkAddress: z.boolean(),
 });
 export type EventViewerState = z.infer<typeof eventViewerStateSchema>;
 
 /** Public/member-safe event representation; management configuration is deliberately absent. */
+export const eventScannerAccessSchema = z.object({
+  canScan: z.boolean(),
+  sponsors: z.array(z.object({ id: z.string(), name: z.string() })),
+});
+
 export const eventAudienceDetailSchema = eventResourceCoreSchema
   .omit({ sourceMode: true, inviteLimitAttendee: true, updatedAt: true })
   .extend({
     accessLevel: z.enum(["public", "participant"]),
-    location: z.string().nullable(),
     links: linksSchema,
     /** The public page path for this event, when the event has one. */
     basePath: z.string().nullable(),
+    scannerAccess: eventScannerAccessSchema.optional(),
+    /** Discovery only; each contact request independently checks the exact live sponsor scope. */
+    sponsorLeadAccess: z.boolean(),
     viewer: eventViewerStateSchema.nullable(),
     registrationPath: z.string().nullable().optional(),
   });
@@ -195,9 +249,9 @@ export type EventAudienceDetail = z.infer<typeof eventAudienceDetailSchema>;
  * instead of restating the event identity in a separate management contract.
  */
 export const eventManagementSummarySchema = eventResourceCoreSchema.extend({
-  location: z.string().nullable().optional(),
   ownerGroupId: groupIdSchema.nullable(),
   ownerGroupName: z.string().nullable(),
+  ownerGroupTypeLabel: z.string().nullable().default(null),
   sourcePath: z.string().nullable(),
   basePath: z.string().nullable(),
   totalRegistrations: z.number().int().nonnegative(),
@@ -221,6 +275,7 @@ export const EVENT_MANAGEMENT_LIST_SORT_COLUMNS = [
 export const eventsListQuerySchema = listQuerySchema(EVENT_MANAGEMENT_LIST_SORT_COLUMNS).extend({
   visibility: eventVisibilitySchema.optional(),
   kind: z.enum(["standalone", "series"]).optional(),
+  phase: z.enum(EVENT_PHASES).optional(),
   from: utcInstantSchema.optional(),
   to: utcInstantSchema.optional(),
 });
@@ -240,6 +295,7 @@ export type EventManagementCapability = z.infer<typeof eventManagementCapability
 
 /** Full event-management read model for an authenticated event-scoped actor. */
 export const eventDetailSchema = eventResourceCoreSchema.extend({
+  scannerAccess: eventScannerAccessSchema.optional(),
   ownerGroupId: groupIdSchema.nullable(),
   seriesId: databaseIdSchema.nullable(),
   basePath: z.string().nullable(),
@@ -247,7 +303,6 @@ export const eventDetailSchema = eventResourceCoreSchema.extend({
   venue: z.string().nullable(),
   virtualUrl: httpUrlSchema.nullable(),
   heroImageUrl: httpOrSameOriginUrlSchema.nullable(),
-  location: z.string().nullable(),
   sessionTypes: proposalSessionTypesSchema.nullable(),
   links: linksSchema,
   settings: z.record(z.string(), z.unknown()),
@@ -259,6 +314,7 @@ export const eventDetailResponseSchema = z.object({ event: z.union([eventDetailS
 
 /** Direct event updates always use optimistic concurrency. */
 export const eventSettingsUpdateSchema = eventSettingsSchema.extend({
+  proposalSubmissionWindow: eventProposalSubmissionWindowSchema.optional(),
   expectedUpdatedAt: z.string().min(1).max(40),
 });
 export type EventSettingsUpdateInput = z.infer<typeof eventSettingsUpdateSchema>;

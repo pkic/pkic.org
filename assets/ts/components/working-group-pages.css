@@ -272,7 +272,7 @@
     top: 0;
     left: 0;
     right: 0;
-    height: 4px;
+    height: 0.25rem;
     background: var(--pk-spectrum-gradient);
     border-radius: 1.5rem 1.5rem 0 0;
   }
@@ -585,12 +585,12 @@
   }
 
   .wg-sub-header-watermark {
-    width: clamp(220px, 32vw, 380px);
+    width: clamp(13.75rem, 32vw, 23.75rem);
     height: auto;
   }
 
   .pkic-page-hero-watermark {
-    width: clamp(260px, 38vw, 480px);
+    width: clamp(16.25rem, 38vw, 30rem);
     height: auto;
     bottom: -4rem;
     right: -4rem;
@@ -629,11 +629,11 @@
 
   .wg-sidebar-wrap {
     position: sticky;
-    top: calc(100px + 1.5rem);
+    top: calc(6.25rem + 1.5rem);
     align-self: flex-start;
     flex-shrink: 0;
-    width: 260px;
-    max-height: calc(100vh - 180px);
+    width: 16.25rem;
+    max-height: calc(100vh - 11.25rem);
     overflow-x: hidden;
     overflow-y: auto;
     transition: width 0.25s ease;
@@ -755,8 +755,8 @@
   .wg-nav-tree-panel {
     position: fixed;
     z-index: 1035;
-    min-width: 260px;
-    max-width: 320px;
+    min-width: 16.25rem;
+    max-width: 20rem;
     max-height: 70vh;
     overflow-y: auto;
     background: #16161e;
@@ -772,7 +772,7 @@
   }
 
   .wg-sidebar {
-    width: 260px;
+    width: 16.25rem;
     background: #16161e;
     border-radius: 0.5rem;
     padding: 1rem 1.4rem 1.25rem 0.75rem;
@@ -858,8 +858,8 @@
 
   .wg-sidebar-chevron {
     flex-shrink: 0;
-    width: 20px;
-    height: 20px;
+    width: 1.25rem;
+    height: 1.25rem;
     display: flex;
     align-items: center;
     justify-content: center;

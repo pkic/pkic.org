@@ -1,12 +1,8 @@
+import "./ListingCards.css";
 import type { SiteListingItem } from "../../shared/site-content";
 
 import { workingGroupIconMarkup } from "./WorkingGroupIcon";
-
-function WorkingGroupIcon({ name }: { name?: string }) {
-  const svg = workingGroupIconMarkup(name);
-  if (!svg) return null;
-  return <span class="pkic-wg-spotlight-icon" dangerouslySetInnerHTML={{ __html: svg }} />;
-}
+import { ExternalLink } from "../ui/ExternalLink";
 
 /**
  * A working group, as the published spotlight card shows it.
@@ -21,21 +17,25 @@ export function WorkingGroupCard({ item }: { item: SiteListingItem }) {
   // watermark is the icon the group names, which is not always the same
   // (TCWG draws the `tc` mark, and CA names none at all).
   const slug = item.tag?.toLowerCase() ?? "default";
-  const icon = item.theme ?? slug;
+  const icon = workingGroupIconMarkup(item.theme ?? slug);
   return (
     <article class={`pkic-wg-spotlight pkic-wg-spotlight--${slug}`}>
-      <a class="pkic-wg-spotlight-header-link" href={item.href} tabIndex={-1} aria-hidden="true">
-        <div class="pkic-wg-spotlight-header">
-          <span class="pkic-wg-spotlight-abbr">{item.tag ?? ""}</span>
-          <WorkingGroupIcon name={icon} />
-        </div>
-      </a>
+      {item.tag || icon ? (
+        <a class="pkic-wg-spotlight-header-link" href={item.href} tabIndex={-1} aria-hidden="true">
+          <div class="pkic-wg-spotlight-header">
+            {item.tag ? <span class="pkic-wg-spotlight-abbr">{item.tag}</span> : null}
+            {icon ? <span class="pkic-wg-spotlight-icon" dangerouslySetInnerHTML={{ __html: icon }} /> : null}
+          </div>
+        </a>
+      ) : null}
       <div class="pkic-wg-spotlight-body">
-        <h3>
-          <a class="pkic-wg-spotlight-title-link" href={item.href}>
-            {item.title.replace(/ Working Group$/i, "")}
-          </a>
-        </h3>
+        <div class="pkic-wg-spotlight-heading">
+          <h3 class="pkic-wg-spotlight-title">
+            <a class="pkic-wg-spotlight-title-link" href={item.href}>
+              {item.title.replace(/ Working Group$/i, "")}
+            </a>
+          </h3>
+        </div>
         {item.summary ? <p>{item.summary}</p> : null}
       </div>
       {item.links?.length ? (
@@ -45,15 +45,14 @@ export function WorkingGroupCard({ item }: { item: SiteListingItem }) {
             // stays in place.
             const external = /^[a-z]+:\/\//i.test(link.href);
             return (
-              <a
+              <ExternalLink
                 class={`pkic-wg-chip pkic-wg-chip-${link.tone ?? "muted"}`}
                 href={link.href}
                 key={link.href}
-                rel={external ? "external" : undefined}
-                target={external ? "_blank" : undefined}
+                external={external}
               >
                 {link.label}
-              </a>
+              </ExternalLink>
             );
           })}
         </div>

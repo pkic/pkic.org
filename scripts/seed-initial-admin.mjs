@@ -12,6 +12,8 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { E2E_WORKER_COUNT, e2eAdminEmailsForWorkerCount } from "./e2e-admin-identities.mjs";
 import { readSeedDatabaseRows } from "./lib/production-seed-guard.mjs";
+import { buildWranglerD1ExecuteArgs } from "./lib/seed-cli.mjs";
+import { individualIdentityFallbackSql } from "./lib/individual-identity-sql.mjs";
 
 function parseArgs(argv) {
   let mode = "local";
@@ -61,7 +63,7 @@ function parseArgs(argv) {
 }
 
 // Only under --e2e-worker-pool (passed by scripts/e2e-start.sh, never by
-// `pnpm run seed:local|preview|production`): seeds one admin account per auth
+// `pnpm seed --preview|--production`): seeds one admin account per auth
 // scenario and worker slot, so each spec gets an isolated magic-link identity
 // instead of colliding on EMAIL_RATE_LIMITER's 3-per-60s-per-address limit.
 // Both the scenario names and the worker count come from
@@ -134,6 +136,10 @@ function insertStatements(emails, { recover = false } = {}) {
             AND ur.role_id = 'role-admin' AND ur.context_type IS NULL AND ur.context_id IS NULL
             AND ur.revoked_at IS NULL);`,
     );
+    // Every person holds an identity; an admin seeded here starts with an individual one.
+    statements.push(
+      individualIdentityFallbackSql(`(SELECT id FROM users WHERE normalized_email = '${email}')`, "staff").trim(),
+    );
   }
   return statements;
 }
@@ -165,17 +171,7 @@ function runSeed(mode, database, wranglerEnv, persistTo, e2eWorkerPool, recover)
   const sqlPath = path.join(tmpdir(), `pkic-seed-initial-admin-${String(process.pid)}.sql`);
   fs.writeFileSync(sqlPath, `${insertStatements(emails, { recover }).join("\n")}\n`, "utf8");
 
-  const args = [
-    "wrangler",
-    "d1",
-    "execute",
-    database,
-    ...(wranglerEnv ? ["--env", wranglerEnv] : []),
-    mode === "remote" ? "--remote" : "--local",
-    ...(persistTo ? [`--persist-to=${persistTo}`] : []),
-    "--file",
-    sqlPath,
-  ];
+  const args = [...buildWranglerD1ExecuteArgs(options), "--file", sqlPath];
 
   try {
     execFileSync("pnpm", ["exec", ...args], {

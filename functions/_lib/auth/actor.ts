@@ -3,7 +3,6 @@
  * operations. Staff and member are live capacities of that user, not separate
  * authentication actors or session types.
  */
-import { AppError } from "../errors";
 import { resolveUserSessionFromRequest } from "./user-session";
 import type { DatabaseLike, Env } from "../types";
 
@@ -22,7 +21,6 @@ export async function requireAnyActorFromRequest(
   const session = await resolveUserSessionFromRequest(db, request, {
     INTERNAL_SIGNING_SECRET: env?.INTERNAL_SIGNING_SECRET,
   });
-  if (!session.staff && !session.member) throw new AppError(401, "AUTH_REQUIRED", "No active user capacity");
   return {
     kind: "user",
     id: session.identity.id,

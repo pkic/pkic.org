@@ -1,0 +1,14 @@
+@layer components {
+  /* Each added link wears its network's mark, so a list of URLs reads as LinkedIn, GitHub, a website. */
+  .pk-profile-links__chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--pk-1);
+  }
+
+  .pk-profile-links__mark {
+    flex: none;
+    width: 0.875rem;
+    height: 0.875rem;
+  }
+}

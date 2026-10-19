@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * The Menu's keyboard contract and focus behaviour.
+ * The Menu's keyboard contract and focus behavior.
  *
  * A row menu is operated by keyboard far more than its appearance suggests,
  * and every one of these cases is a way it can strand a keyboard user: focus
@@ -380,5 +380,25 @@ describe("Menu", () => {
     expect(selected).toHaveBeenCalledOnce();
     expect(container.querySelector('[role="menu"]')).toBeNull();
     expect(document.activeElement).toBe(trigger(container));
+  });
+
+  it("opens in the top layer, so no pinned header or stacking context of the page covers it", () => {
+    const shown: HTMLElement[] = [];
+    // jsdom has no popover API; a browser that has one promotes the popup before placing it.
+    Object.defineProperty(HTMLElement.prototype, "showPopover", {
+      configurable: true,
+      value(this: HTMLElement) {
+        shown.push(this);
+      },
+    });
+    try {
+      const container = mount(<Menu label="Row actions" items={items()} />);
+      void act(() => trigger(container).click());
+      const popup = container.querySelector<HTMLElement>("[role=menu]")!;
+      expect(popup.getAttribute("popover")).toBe("manual");
+      expect(shown).toEqual([popup]);
+    } finally {
+      delete (HTMLElement.prototype as { showPopover?: unknown }).showPopover;
+    }
   });
 });

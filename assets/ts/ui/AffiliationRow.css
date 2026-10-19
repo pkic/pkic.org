@@ -47,17 +47,27 @@
     gap: var(--pk-2);
   }
 
+  .pk-affiliation__subtitle {
+    font-size: var(--pk-text-sm);
+  }
+
   /* Same middot treatment as the profile header's facts: generated, so the
      separator is never announced as content. */
+  /* Each term stays whole and carries its separator after it, so a wrapped
+     line ends with a middot instead of opening the next line with one. */
   .pk-affiliation__terms {
-    display: flex;
-    flex-wrap: wrap;
     margin: 0;
     padding: 0;
     list-style: none;
   }
 
-  .pk-affiliation__terms > li + li::before {
+  .pk-affiliation__terms > li {
+    display: inline-block;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .pk-affiliation__terms > li:not(:last-child)::after {
     content: "·";
     margin-inline: 0.4rem;
     color: var(--pk-ink-faint);
@@ -81,7 +91,7 @@
 
   /*
    * A tie that has ended. Dimmed and desaturated together: opacity alone
-   * leaves a colour logo louder than a current one that happens to be grey.
+   * leaves a color logo louder than a current one that happens to be grey.
    * The dates in `terms` are what actually say it ended — this only stops a
    * finished tie competing with a live one for attention.
    */

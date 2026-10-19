@@ -3,10 +3,9 @@
  * contact) — ordinary `roles`/
  * `user_roles` rows (consolidated migration 0035), not a bespoke role table. Kept in a
  * dependency-free shared module (only import is implicit — none) so it can
- * be consumed both by the backend service
+ * be consumed by the backend service
  * (functions/_lib/services/membership/representative-roles.ts, the
- * previous sole owner of this vocabulary) and by plain Node tooling like
- * the member importer (scripts/migrate-members/), which cannot resolve
+ * previous sole owner of this vocabulary) without pulling in
  * Workers-runtime-dependent backend modules.
  */
 export const REPRESENTATIVE_ROLE_IDS = {

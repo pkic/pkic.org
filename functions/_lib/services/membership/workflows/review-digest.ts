@@ -1,5 +1,5 @@
 import type { MembershipWorkflowStep } from "../../../../../assets/shared/schemas/membership-workflows";
-import { membershipReviewDigestSendAt } from "../../../../../assets/shared/membership-review-notifications";
+import { reviewDigestSendAt } from "../../../../../assets/shared/review-notifications";
 import { prepareAuthorizationGuard } from "../../../db/authorization-guard";
 import { prepareQueueEmailStatement } from "../../../email/outbox";
 import { emailPlainText } from "../../../email/plain-text";
@@ -8,6 +8,7 @@ import { sha256Hex } from "../../../utils/crypto";
 import { stringifyJson } from "../../../utils/json";
 import type { MembershipExecution } from "./execution";
 import { membershipReviewDigestSnapshot } from "./review-digest-snapshot";
+import { audienceSeesApplicantEmail } from "./reviewer-eligibility";
 import { MEMBERSHIP_REVIEW_DIGEST_CONTENT_SQL } from "./review-digest-content";
 
 /** Append inside the same atomic command that opens the application requirement. */
@@ -20,7 +21,7 @@ export async function prepareMembershipReviewDigest(
   now: string,
   objections: Array<{ body: string; author: string | null }>,
 ) {
-  const sendAt = membershipReviewDigestSendAt(now);
+  const sendAt = reviewDigestSendAt(now);
   // Categories and versions with identical review policy can share a digest.
   // Different audiences, windows, destinations, or instructions cannot.
   const { id: _stepId, ...policy } = step;
@@ -28,7 +29,13 @@ export async function prepareMembershipReviewDigest(
   const id = hash.slice(0, 32);
   const application = execution.application;
   const reviewUrl = `${appBaseUrl}/portal/#/membership/applications/${encodeURIComponent(application.id)}/review`;
-  const snapshot = await membershipReviewDigestSnapshot(db, application, reviewUrl, objections);
+  const snapshot = await membershipReviewDigestSnapshot(
+    db,
+    application,
+    reviewUrl,
+    objections,
+    audienceSeesApplicantEmail(step.audience),
+  );
   const queued = prepareQueueEmailStatement(
     db,
     {

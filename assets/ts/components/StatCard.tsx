@@ -10,12 +10,13 @@
  *     the red from the green, so the tint alone says nothing to them. The
  *     meaning is kept by saying it — the state becomes the first clause of
  *     the note — and the tint becomes the system card's tone, so the reader
- *     who does see colour gets the Badge's own for that state.
+ *     who does see color gets the Badge's own for that state.
  *
  * Keeping the prop means no call site changes; keeping the meaning means the
  * tint is not simply dropped on the floor.
  */
 
+import { formatNumber } from "../../shared/format-number";
 import { StatCard as SystemStatCard, type StatCardTone } from "../ui/StatCard";
 
 export type StatCardVariant = "default" | "success" | "warning" | "danger" | "info";
@@ -51,7 +52,7 @@ export function StatCard({ label, value, note, variant = "default", href }: Stat
   return (
     <SystemStatCard
       label={label}
-      value={String(value)}
+      value={typeof value === "number" ? formatNumber(value) : value}
       note={fullNote || undefined}
       href={href}
       tone={variant === "default" ? undefined : VARIANT_TONE[variant]}

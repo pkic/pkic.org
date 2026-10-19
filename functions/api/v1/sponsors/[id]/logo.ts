@@ -26,24 +26,52 @@ import {
 import { deleteStoredImageInBackground } from "../../../../_lib/services/stored-image-pointer";
 import { PUBLIC_IMAGE_CACHE_CONTROL, storedImageResponse } from "../../../../_lib/services/image-response";
 import { readValidatedUploadedSvgLogo } from "../../../../_lib/utils/image-upload";
+import {
+  IMMUTABLE_BRAND_IMAGE_CACHE_CONTROL,
+  PRIVATE_IMAGE_CACHE_CONTROL,
+  assertImageVersion,
+  imageEntityTag,
+  notModifiedImage,
+  storedImageVersion,
+  versionedImagePath,
+  withImageEntityTag,
+} from "../../../../_lib/services/image-cache";
 
+/**
+ * A listed sponsor's logo is public; any other is shown only to staff with
+ * sponsorship access, and never kept by a shared cache.
+ */
 export async function onRequestGet(c: any): Promise<Response> {
   const id = c.req.param("id");
-  const logoR2Key = await getNonMemberSponsorLogoR2Key(c.env.DB, id);
-  if (!logoR2Key) {
+  const version = new URL(c.req.raw.url).searchParams.get("v") ?? undefined;
+  const logo = await getNonMemberSponsorLogoR2Key(c.env.DB, id);
+  if (!logo) {
     throw new AppError(404, "LOGO_NOT_FOUND", "No logo on file for this sponsor");
   }
+  if (!logo.listed) await requireStaffPermission(c, "sponsorships:read");
+  assertImageVersion(logo.key, version);
+  const cacheControl = !logo.listed
+    ? PRIVATE_IMAGE_CACHE_CONTROL
+    : version !== undefined
+      ? IMMUTABLE_BRAND_IMAGE_CACHE_CONTROL
+      : PUBLIC_IMAGE_CACHE_CONTROL;
+  const entityTag = imageEntityTag(storedImageVersion(logo.key));
+  const unchanged = notModifiedImage(c.req.raw, entityTag, cacheControl);
+  if (unchanged) return unchanged;
 
   const bucket = c.env.ASSETS_BUCKET;
   if (!bucket) {
     throw new AppError(503, "UPLOADS_NOT_CONFIGURED", "Asset storage is not configured");
   }
 
-  return storedImageResponse(bucket, logoR2Key, {
-    notFoundCode: "LOGO_NOT_FOUND",
-    notFoundMessage: "Logo file missing from storage",
-    cacheControl: PUBLIC_IMAGE_CACHE_CONTROL,
-  });
+  return withImageEntityTag(
+    await storedImageResponse(bucket, logo.key, {
+      notFoundCode: "LOGO_NOT_FOUND",
+      notFoundMessage: "Logo file missing from storage",
+      cacheControl,
+    }),
+    entityTag,
+  );
 }
 
 // Thin openApiRoute wrap — onRequestGet is imported directly by
@@ -65,7 +93,11 @@ export const SponsorsIdLogoPut = openApiRoute(sponsorshipLogoPutRouteSchema, asy
   );
   c.executionCtx.waitUntil(deleteStoredImageInBackground(db, c.env, result.previousKey, "assets"));
   return json(
-    logoUploadResponseSchema.parse({ success: true, r2Key: result.r2Key, logoUrl: `/api/v1/sponsors/${id}/logo` }),
+    logoUploadResponseSchema.parse({
+      success: true,
+      r2Key: result.r2Key,
+      logoUrl: versionedImagePath(`/api/v1/sponsors/${id}/logo`, result.r2Key),
+    }),
   );
 });
 

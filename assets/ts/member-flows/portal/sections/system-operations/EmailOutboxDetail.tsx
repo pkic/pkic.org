@@ -8,6 +8,7 @@ import { Panel, PanelBody } from "../../../../ui/Panel";
 import { Spinner } from "../../../../components/Spinner";
 import { Badge } from "../../../../components/Badge";
 import { fmt } from "../../ui";
+import { SectionHeading } from "../../../../ui/SectionHeading";
 
 function decodeOutboxRouteId(id: string): string {
   try {
@@ -73,7 +74,7 @@ export function EmailOutboxDetail({ id }: { id: string }) {
             />
             {message.bodyContent !== null && (
               <section class="pk-stack pk-stack--tight" aria-label="Queued message">
-                <h2>Queued message</h2>
+                <SectionHeading level={3}>Queued message</SectionHeading>
                 <p class="pk-small">
                   This message is stored in the outbox. Recipient variables are filled in when it is sent.
                 </p>
@@ -82,7 +83,7 @@ export function EmailOutboxDetail({ id }: { id: string }) {
             )}
             {message.bodyContent === null && message.customText !== null && (
               <section class="pk-stack pk-stack--tight" aria-label="Custom message text">
-                <h2>Custom message text</h2>
+                <SectionHeading level={3}>Custom message text</SectionHeading>
                 <p class="pk-small">
                   This text is stored with the outbox message and applied to the template when it is sent.
                 </p>

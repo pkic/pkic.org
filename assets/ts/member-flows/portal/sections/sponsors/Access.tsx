@@ -6,7 +6,7 @@
  * controls are `Field`s that own their `for`/`id` pair and their required
  * annotation instead of hand-written ids. The confirmation is an `Alert`
  * rather than a green box opening with a bare "✓", which a screen reader
- * reads out as a character and which was the only thing besides the colour
+ * reads out as a character and which was the only thing besides the color
  * saying the send had worked.
  */
 import { useState } from "preact/hooks";

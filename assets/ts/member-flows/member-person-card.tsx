@@ -2,8 +2,8 @@ import { memberProfileLinks } from "../../shared/member-profile-links";
 /**
  * A person named on a page, resolved through the member they act for.
  *
- * Replaces `layouts/partials/person-card.html`, which scanned every file
- * under `data/members/` at build time to find a representative by name, then
+ * Replaces a build-time partial that scanned every file under
+ * `data/members/` to find a representative by name, then
  * resolved their headshot and their organization's logo out of
  * `assets/images/members/`. That is issue #8's shape: the card described the
  * repository rather than the consortium, and a speaker whose photo or

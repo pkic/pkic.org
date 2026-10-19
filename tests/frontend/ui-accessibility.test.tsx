@@ -5,10 +5,10 @@
  * axe catches a specific, useful class of defect — missing names, broken ARIA
  * relationships, invalid role nesting — and catches it on every future change
  * without anyone remembering to look. It is a floor, not a ceiling: keyboard
- * behaviour and focus order are asserted in each component's own test file,
+ * behavior and focus order are asserted in each component's own test file,
  * because axe cannot press a key.
  *
- * Colour-contrast rules are disabled here and only here. jsdom computes no
+ * Color-contrast rules are disabled here and only here. jsdom computes no
  * layout and resolves no custom properties, so every contrast result would be
  * a fabrication. Contrast is a property of the token pairs and is verified
  * against the real values in tests/frontend/design-contrast.test.ts.
@@ -20,6 +20,8 @@ import { render } from "preact";
 import type { ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 
+import { axeViolations } from "./helpers/axe";
+
 import { Alert } from "../../assets/ts/ui/Alert";
 import { Avatar } from "../../assets/ts/ui/Avatar";
 import { Badge } from "../../assets/ts/ui/Badge";
@@ -29,6 +31,7 @@ import { Chip } from "../../assets/ts/ui/Chip";
 import { DataTable } from "../../assets/ts/ui/DataTable";
 import { Dialog } from "../../assets/ts/ui/Dialog";
 import { EmptyState } from "../../assets/ts/ui/EmptyState";
+import { ChoiceCard, ChoiceCards } from "../../assets/ts/ui/ChoiceCard";
 import { Field } from "../../assets/ts/ui/Field";
 import { Kicker } from "../../assets/ts/ui/Kicker";
 import { Menu } from "../../assets/ts/ui/Menu";
@@ -59,18 +62,7 @@ afterEach(() => {
   }
 });
 
-async function violationsIn(container: HTMLElement): Promise<string[]> {
-  const results = await axe.run(container, {
-    rules: {
-      // See the file header: jsdom has no layout, so any contrast verdict here
-      // would be invented. Contrast is checked against the real token values.
-      "color-contrast": { enabled: false },
-    },
-  });
-  return results.violations.map(
-    (violation) => `${violation.id}: ${violation.help} (${violation.nodes.length} node(s))`,
-  );
-}
+const violationsIn = (container: HTMLElement) => axeViolations(container);
 
 const members = [
   { id: "mh", name: "Marit Halvorsen", organization: "Nordsec AS" },
@@ -133,7 +125,7 @@ const specimens: ReadonlyArray<[string, () => ComponentChildren]> = [
         <Alert tone="ok" title="Saved">
           Members see the new charter immediately.
         </Alert>
-        <Alert tone="warn" title="Two groups share a colour">
+        <Alert tone="warn" title="Two groups share a color">
           CBOM Profiles and Training are both teal.
         </Alert>
         <Alert tone="danger" title="Could not end membership">
@@ -165,7 +157,7 @@ const specimens: ReadonlyArray<[string, () => ComponentChildren]> = [
       <div>
         <Avatar name="Marit Halvorsen" />
         <Avatar name="Marit Halvorsen" src="/img/example.png" />
-        <PersonCell name="Marit Halvorsen" email="m.halvorsen@nordsec.example" />
+        <PersonCell name="Marit Halvorsen" />
       </div>
     ),
   ],
@@ -177,6 +169,31 @@ const specimens: ReadonlyArray<[string, () => ComponentChildren]> = [
         <StatCard label="Attendance" value="78%" note="4 points" trend="down" />
         <StatCard label="Open votes" value="3" />
       </div>
+    ),
+  ],
+  [
+    "ChoiceCards, a gain and a cost",
+    () => (
+      <ChoiceCards legend="How will you attend?">
+        <ChoiceCard
+          name="attendance"
+          value="venue"
+          checked
+          icon={<span>V</span>}
+          title="At the venue"
+          description="Doors open at nine."
+          points={["A seat in every session"]}
+        />
+        <ChoiceCard
+          name="attendance"
+          value="online"
+          icon={<span>O</span>}
+          iconMark={<span>!</span>}
+          title="Online"
+          points={["No hallway conversations"]}
+          pointTone="cost"
+        />
+      </ChoiceCards>
     ),
   ],
   [
@@ -254,9 +271,7 @@ const specimens: ReadonlyArray<[string, () => ComponentChildren]> = [
     () => (
       <Panel>
         <PanelHeader title="Members">
-          <Button variant="primary" size="sm">
-            Add member
-          </Button>
+          <Button variant="primary">Add member</Button>
         </PanelHeader>
         <PanelBody>Body</PanelBody>
       </Panel>

@@ -27,17 +27,18 @@ import {
 } from "../../../../../assets/shared/schemas/membership-application-form";
 import { eligibleApplicationWorkingGroupIds } from "../application-groups";
 import { requireMembershipApplicationPolicyFields } from "../application-form";
-import { getOrganizationDomainClaim, prepareClaimDomainForApplication } from "../organization-domain-claims";
+import {
+  getOrganizationDomainClaim,
+  organizationLinkDomain,
+  prepareClaimDomainForApplication,
+} from "../organization-domain-claims";
 import { requireMembershipCategory } from "../categories";
 import { membershipApplicantPolicySchema } from "../../../../../assets/shared/schemas/membership-applicant-policy";
+import { mailboxKind } from "../../../email-domains/classification";
 import { normalizeOrgName } from "../../../../../assets/shared/organization-name";
 import { first } from "../../../db/queries";
 import type { DatabaseLike, StatementLike } from "../../../types";
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../../db/authorization-guard";
-
-export function emailDomain(email: string): string {
-  return email.split("@")[1]?.toLowerCase() ?? "";
-}
 
 /**
  * Refuses an application for an organization the consortium already has.
@@ -127,7 +128,7 @@ export async function createMemberApplication(
   const category = await requireMembershipCategory(db, input.membershipCategory);
   const workflow = await requireCategoryWorkflow(db, category);
   const isIndividual = category.isIndividual;
-  const applicantPolicy = membershipApplicantPolicySchema(category).safeParse({
+  const applicantPolicy = membershipApplicantPolicySchema(category, mailboxKind(input.applicantEmail)).safeParse({
     applicantEmail: input.applicantEmail,
     organizationName: input.organizationName ?? undefined,
   });
@@ -167,7 +168,8 @@ export async function createMemberApplication(
     );
   }
   if (!isIndividual && input.organizationName) await refuseIfAlreadyAMember(db, input.organizationName);
-  const organizationDomain = isIndividual ? null : emailDomain(input.applicantEmail);
+  // An organization application holds the domain its address links through (normally the registrable domain).
+  const organizationDomain = isIndividual ? null : await organizationLinkDomain(db, input.applicantEmail);
   const statusUrl = `${input.appBaseUrl}/application-status/?id=${encodeURIComponent(id)}&token=${encodeURIComponent(manageToken)}`;
 
   const statements: StatementLike[] = [

@@ -1,3 +1,5 @@
+import { eventVirtualRoomRoute } from "../../shared/event-participation-link";
+
 export type TemplateHelperCategory = "Variables" | "Conditions" | "CTAs";
 
 export interface TemplateHelperItem {
@@ -25,6 +27,7 @@ export const PREVIEW_DEFAULTS: Record<string, unknown> = {
   // Event
   eventName: "PKI Consortium Conference 2026",
   eventUrl: "https://pkic.org/events/2026/conference/",
+  virtualRoomUrl: `https://pkic.org/portal/#${eventVirtualRoomRoute("conference")}`,
   eventTimezone: "America/New_York",
   eventStartsAt: "2026-10-01T09:00:00Z",
   eventEndsAt: "2026-10-03T17:00:00Z",
@@ -46,6 +49,7 @@ export const PREVIEW_DEFAULTS: Record<string, unknown> = {
   attendanceType: "in_person",
   attendanceLabel: "In-person",
   manageUrl: "https://pkic.org/events/2026/conference/manage/?token=sample",
+  myAgendaUrl: "https://pkic.org/portal/#/events/2026-conference/agenda",
   registrationUrl: "https://pkic.org/events/2026/conference/register/?invite=sample",
   proposalUrl: "https://pkic.org/events/2026/conference/propose/?invite=sample",
   profileUrl: "https://pkic.org/events/2026/conference/speaker/manage/?token=sample",
@@ -75,6 +79,7 @@ export const TEMPLATE_HELPERS: TemplateHelperItem[] = [
   // Event
   { category: "Variables", label: "eventName", snippet: "{{eventName}}", target: "subject" },
   { category: "Variables", label: "eventUrl", snippet: "{{eventUrl}}", target: "body" },
+  { category: "Variables", label: "virtualRoomUrl", snippet: "{{virtualRoomUrl}}", target: "body" },
   { category: "Variables", label: "eventTimezone", snippet: "{{eventTimezone}}", target: "body" },
   // Registrant
   { category: "Variables", label: "firstName", snippet: "{{firstName}}" },
@@ -93,6 +98,7 @@ export const TEMPLATE_HELPERS: TemplateHelperItem[] = [
   { category: "Variables", label: "attendanceType", snippet: "{{attendanceType}}" },
   { category: "Variables", label: "attendanceLabel", snippet: "{{attendanceLabel}}" },
   { category: "Variables", label: "manageUrl", snippet: "{{manageUrl}}" },
+  { category: "Variables", label: "myAgendaUrl", snippet: "{{myAgendaUrl}}" },
   { category: "Variables", label: "registrationUrl", snippet: "{{registrationUrl}}" },
   { category: "Variables", label: "proposalUrl", snippet: "{{proposalUrl}}" },
   { category: "Variables", label: "profileUrl", snippet: "{{profileUrl}}" },

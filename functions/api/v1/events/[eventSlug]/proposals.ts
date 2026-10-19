@@ -1,7 +1,12 @@
 import type { ValidatedData } from "chanfana";
 import { openApiRoute } from "../../../../_lib/openapi/route";
 import { json } from "../../../../_lib/http";
-import { getEventBySlug, getRequiredTerms, recordHugoEventBasePath } from "../../../../_lib/services/events";
+import {
+  getEventBySlug,
+  getRequiredTerms,
+  recordHugoEventBasePath,
+  resolveEventSessionTypes,
+} from "../../../../_lib/services/events";
 import { toEventFormResolutionEvent, validateCustomAnswersForSubmission } from "../../../../_lib/services/forms";
 import { seedGravatarAndProcessBadgeRenderJob } from "../../../../_lib/services/registration-badge-regeneration";
 import { findInviteByToken, type InviteRecord } from "../../../../_lib/services/invites";
@@ -17,6 +22,7 @@ import { getProposalAccessForEvent } from "../../../../_lib/auth/proposal-access
 import { listEventProposals } from "../../../../_lib/services/event-proposals-list";
 import type { AdminContext } from "../../../../_lib/db/context";
 import { requireEventPermission } from "./authorization";
+import { resolveOptionalIdentityFromRequest } from "../../../../_lib/auth/user-session";
 
 async function handleProposalCreate(
   c: any,
@@ -54,6 +60,7 @@ async function handleProposalCreate(
   const proposalDetails = validatedForm.answers;
 
   const submitted = await submitProposal(c.env.DB, {
+    actor: await resolveOptionalIdentityFromRequest(c.env.DB, c.req.raw, c.env),
     event,
     body,
     appBaseUrl,
@@ -101,6 +108,7 @@ export const EventProposalsListGet = openApiRoute(eventProposalsListRouteSchema,
     eventProposalsResponseSchema.parse({
       event: { id: event.id, slug: event.slug, name: event.name },
       access,
+      sessionTypes: resolveEventSessionTypes(event.settings_json),
       ...result,
     }),
   );

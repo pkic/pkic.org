@@ -3,20 +3,15 @@ import { z } from "zod";
 import { normalizedEmailSchema } from "./api-common";
 import { authMemberSchema } from "./member-auth";
 import { publicOperation } from "./route-contract";
+import { screensWorkEmailDomain, workEmailStepSchema } from "./work-email";
 
 export const memberJoinApplicantKindSchema = z.enum(["organization", "individual"]);
 export type MemberJoinApplicantKind = z.infer<typeof memberJoinApplicantKindSchema>;
 
-export const memberJoinStartSchema = z.object({
-  email: normalizedEmailSchema,
-  /** Explicit policy attestation, never inferred from choosing an easy category. */
-  unaffiliatedAttestation: z.boolean().default(false),
-});
+/** Joining starts from the shared email-first step; the individual capacity is an explicit attestation. */
+export const memberJoinStartSchema = workEmailStepSchema;
 
-export const memberJoinStartResponseSchema = z.discriminatedUnion("status", [
-  z.object({ status: z.literal("verification_sent") }),
-  z.object({ status: z.literal("unaffiliated_attestation_required") }),
-]);
+export const memberJoinStartResponseSchema = z.object({ status: z.literal("verification_sent") });
 
 export const memberJoinVerifySchema = z.object({ token: z.string().min(32).max(1024) });
 export const memberJoinVerifyResponseSchema = z.discriminatedUnion("status", [
@@ -38,6 +33,7 @@ export const memberJoinVerifyResponseSchema = z.discriminatedUnion("status", [
 export const memberJoinStartRouteSchema = {
   ...protectsPublicAction("membership_join", "membership:write"),
   ...publicOperation(),
+  ...screensWorkEmailDomain(),
   tags: ["Members"],
   summary: "Start a verified membership join flow",
   description:
@@ -48,7 +44,7 @@ export const memberJoinStartRouteSchema = {
       description: "A generic next step that does not disclose organization membership.",
       content: { "application/json": { schema: memberJoinStartResponseSchema } },
     },
-    "422": { description: "Disposable or invalid email address." },
+    "400": { description: "Invalid, disposable, or free email address without the individual capacity." },
     "429": { description: "Too many verification requests." },
   },
 };

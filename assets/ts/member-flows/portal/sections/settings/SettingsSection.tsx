@@ -10,7 +10,7 @@ import { lazy, Suspense } from "preact/compat";
 
 import type { PortalSession } from "../../types";
 import { portalHasGlobalPermission, portalSettingsPages } from "../../shell/portal-navigation";
-import { EmptyState } from "../../../../ui/RecordEmptyState";
+import { EmptyState } from "../../../../ui/EmptyState";
 import { Spinner } from "../../../../components/Spinner";
 import { Breadcrumb } from "../../../../ui/Breadcrumb";
 import { PageHeader } from "../../../../ui/PageHeader";
@@ -34,6 +34,9 @@ const MembershipCategories = lazy(() =>
 );
 const OrganizationContentReviews = lazy(() =>
   import("../OrganizationContentReviews").then((module) => ({ default: module.OrganizationContentReviews })),
+);
+const AffiliationReviews = lazy(() =>
+  import("../AffiliationReviews").then((module) => ({ default: module.AffiliationReviews })),
 );
 const SystemAuditLog = lazy(() => import("../SystemAuditLog").then((module) => ({ default: module.SystemAuditLog })));
 const SystemAuditLogDetail = lazy(() =>
@@ -101,6 +104,8 @@ export function SettingsSection({
         />
       ) : requested === "/settings/organization-content-reviews" ? (
         <OrganizationContentReviews reviewId={resourceId} />
+      ) : requested === "/settings/affiliation-reviews" ? (
+        <AffiliationReviews groupKey={resourceId} canWrite={portalHasGlobalPermission(session, "users:write")} />
       ) : requested === "/settings/audit-log" ? (
         resourceId ? (
           <SystemAuditLogDetail id={resourceId} />
@@ -143,7 +148,7 @@ export function SettingsSection({
   // The same navigation entry supplies the sidebar, index, and page trail.
   // Access control owns a deeper trail for its tabs and records; addressable
   // detail pages provide their record-specific leaf after loading it.
-  if (resourceId || page === "access-control") return content;
+  if ((resourceId && page !== "membership-categories") || page === "access-control") return content;
   return (
     <div class="pk pk-stack pk-stack--snug">
       <Breadcrumb

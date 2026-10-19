@@ -31,6 +31,7 @@ import {
 // `pk-mono` is defined in Content.css, which ships in a lazy chunk, so the
 // module that writes the class name has to import the stylesheet itself.
 import "../../../../../ui/Content.css";
+import { ContactOrganization } from "../../../../../components/ContactOrganization";
 
 const ATTENDANCE_CHANGE_PRESETS: Record<string, string> = {
   "attendance-changed": "any",
@@ -80,12 +81,7 @@ export function RegistrationsList({
       // The same face-then-name cell every roster uses (#90).
       header: "Attendee",
       cell: (r) => (
-        <PersonCell
-          name={r.display_name ?? r.user_email ?? "—"}
-          email={r.display_name && r.user_email ? r.user_email : undefined}
-          avatarSrc={r.headshot_url ?? undefined}
-          size="sm"
-        />
+        <PersonCell name={r.display_name ?? r.user_email ?? "—"} avatarSrc={r.headshot_url ?? undefined} size="sm" />
       ),
       width: "primary",
       sort: { asc: "display_name", desc: "-display_name" },
@@ -93,7 +89,18 @@ export function RegistrationsList({
     // Who they represent and what they do, as the account states it (#119).
     // The title is there for the reader who wants it, hidden by default so
     // the row keeps its width for the days.
-    { header: "Organization", cell: (r) => r.organization_name ?? "—", className: "pk-small" },
+    {
+      header: "Organization",
+      cell: (r) => (
+        <ContactOrganization
+          organization={r.organization_name}
+          personalEmail={r.personal_email}
+          handledLast={r.waitlist_handled_last}
+          audience="organizer"
+        />
+      ),
+      className: "pk-small",
+    },
     { header: "Job title", cell: (r) => r.job_title ?? "—", className: "pk-small", defaultHidden: true },
     {
       header: "Status",
@@ -165,32 +172,6 @@ export function RegistrationsList({
                 <div class="pk-stack pk-stack--tight pk-small">
                   <div class="pk-strong">{attendanceJourneyLabel(history)}</div>
                   <div class="pk-muted pk-mono">Last changed {fmt(latest.changedAt)}</div>
-                  {history.length > 1 && (
-                    <details onClick={(event) => event.stopPropagation()}>
-                      <summary>View {history.length} updates</summary>
-                      {/* The left rule and indent this had were Bootstrap's
-                          `border-start ps-2`; the disclosure already marks the
-                          entries as subordinate, so the nesting is carried by
-                          the control rather than by a border with no
-                          design-system equivalent. */}
-                      <div class="pk-stack pk-stack--tight">
-                        {history.map((change) => (
-                          <div key={change.changedAt} class="pk-stack pk-stack--tight">
-                            {change.transitions.map((transition) => (
-                              <div key={`${transition.fromType}->${transition.toType}`}>
-                                {attendanceTypeLabel(transition.fromType)} → {attendanceTypeLabel(transition.toType)}
-                                <span class="pk-muted">
-                                  {" "}
-                                  · {transition.days.map((day) => day.label ?? day.dayDate).join(", ")}
-                                </span>
-                              </div>
-                            ))}
-                            <div class="pk-muted pk-mono">{fmt(change.changedAt)}</div>
-                          </div>
-                        ))}
-                      </div>
-                    </details>
-                  )}
                 </div>
               ) : (
                 "—"
@@ -204,7 +185,7 @@ export function RegistrationsList({
           {
             header: "Consent",
             /*
-             * A green tick with a `title` was the whole signal: colour, which
+             * A green tick with a `title` was the whole signal: color, which
              * not every reader can separate, plus a tooltip a screen reader
              * and a touch device never surface. The mark stays as the visual
              * and the word goes beside it, hidden, so the cell is announced
@@ -271,6 +252,7 @@ export function RegistrationsList({
     <div class="pk pk-stack">
       {!embedded && stats && <RegistrationTotals stats={stats} />}
       <ApiDataTable
+        urlState="event-registrations"
         caption="Event registrations"
         endpoint={eventRegistrationsPath(slug)}
         responseSchema={eventRegistrationsListResponseSchema}

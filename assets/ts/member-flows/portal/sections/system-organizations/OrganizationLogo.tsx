@@ -32,7 +32,6 @@ export function OrganizationLogo({
       alt={`${organization.name} logo`}
       canChange={canWrite}
       removeConfirmation="Remove this organization's logo?"
-      removeLabel="Remove"
       accept="image/svg+xml"
       hint="SVG only. The logo is sanitized, cropped to its content, and made responsive automatically."
       onUpload={(file) =>

@@ -19,8 +19,9 @@ import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { isAuditChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "../audit";
 import { prepareGroupManagementAuthorizationGuard, requireGroupManagement } from "./governance";
-import { LEADERSHIP_ROLE_PREDICATE_SQL } from "./leadership-read";
-import { buildLeadershipSeatStatement, resolveEligibleLeadershipCapacity } from "./leadership-seating";
+import { LEADERSHIP_ROLE_PREDICATE_SQL } from "./leadership-sql";
+import { prepareGroupLeadershipPublication } from "./leadership-publication";
+import { prepareLeadershipSeat, resolveEligibleLeadershipCapacity } from "./leadership-seating";
 
 /** Splits one requested end instant into the authorization columns it means. */
 function termEndColumns(endsAt: string | null, now: string): { revokedAt: string | null; expiresAt: string | null } {
@@ -100,18 +101,17 @@ export async function assignLocalGroupLeadership(
    * once as the chair they were and once as a plain member for the same
    * dates. A former seat is its own fact, recorded on the Members tab.
    */
-  const seatStatements =
+  const createdSeat =
     capacity || closedTerm
-      ? []
-      : [
-          buildLeadershipSeatStatement(db, actor, {
-            groupId,
-            userId: input.userId,
-            seat,
-            joinedAt: startsAt,
-            at,
-          }),
-        ];
+      ? null
+      : prepareLeadershipSeat(db, actor, {
+          groupId,
+          userId: input.userId,
+          seat,
+          joinedAt: startsAt,
+          at,
+        });
+  const seatStatements = createdSeat ? [createdSeat.statement] : [];
   if (
     !closedTerm &&
     (await first(
@@ -182,6 +182,13 @@ export async function assignLocalGroupLeadership(
           seated: seatStatements.length > 0,
         },
       ),
+      prepareGroupLeadershipPublication(db, {
+        groupId,
+        userRoleId,
+        at,
+        activeAfter: !closedTerm,
+        createdSeatId: createdSeat?.membershipId,
+      }),
     ]);
   } catch (error) {
     translateLeadershipWriteError(error);
@@ -272,6 +279,17 @@ export async function updateLocalGroupLeadership(
   try {
     await db.batch([
       prepareGroupManagementAuthorizationGuard(db, actor, [groupId]),
+      prepareGroupLeadershipPublication(db, {
+        groupId,
+        userRoleId,
+        at,
+        activeAfter: willBeActive,
+        condition: {
+          sql: `COALESCE(ur.starts_at,ur.created_at) IS NOT ? OR ur.expires_at IS NOT ? OR ur.revoked_at IS NOT ?
+            ${patch.title === undefined ? "" : "OR COALESCE(ur.title, CASE ur.role_id WHEN 'role-group_lead' THEN gt.lead_title ELSE gt.deputy_lead_title END) IS NOT ?"}`,
+          bindings: [startsAt, end.expiresAt, end.revokedAt, ...(patch.title === undefined ? [] : [patch.title])],
+        },
+      }),
       db
         .prepare(
           `UPDATE user_roles SET ${setters.join(", ")}
@@ -319,6 +337,7 @@ export async function revokeLocalGroupLeadership(
   try {
     await db.batch([
       prepareGroupManagementAuthorizationGuard(db, actor, [groupId]),
+      prepareGroupLeadershipPublication(db, { groupId, userRoleId, at, activeAfter: false }),
       db
         .prepare(
           `UPDATE user_roles

@@ -2,7 +2,7 @@
 /**
  * The retention queue's presentation: what the table is called, what its
  * cells are allowed to say, and what the surface does when the query fails.
- * Its paging behaviour is covered by the offset-pagination suite.
+ * Its paging behavior is covered by the offset-pagination suite.
  */
 import { render } from "preact";
 import { act } from "preact/test-utils";

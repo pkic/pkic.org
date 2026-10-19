@@ -1,27 +1,13 @@
+import type { ComponentChildren } from "preact";
+import type { EventPhase } from "../../shared/event-phase";
+import type { HeadingTag } from "../ui/HeadingOutline";
+import "./EventCard.css";
+import "./ListingCards.css";
 import { SiteImage } from "./SiteImage";
+import { IconMapPin } from "../ui/MediaIcons";
 import type { SiteListingItem } from "../../shared/site-content";
 
 import "./BlogCard.css";
-
-function LocationGlyph() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="12"
-      height="12"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-      <circle cx="12" cy="10" r="3" />
-    </svg>
-  );
-}
 
 /**
  * An event, as `partials/events/card.html` renders it.
@@ -31,7 +17,20 @@ function LocationGlyph() {
  * header image is cropped to the header's box rather than laid inside it, so
  * a portrait hero and a landscape one both fill the same shape.
  */
-export function EventCard({ item, upcoming }: { item: SiteListingItem; upcoming: boolean }) {
+export function EventCard({
+  item,
+  upcoming,
+  phase,
+  heading: Heading = "h2",
+  children,
+}: {
+  item: SiteListingItem;
+  upcoming?: boolean;
+  phase?: EventPhase | null;
+  heading?: HeadingTag;
+  children?: ComponentChildren;
+}) {
+  const state = phase === undefined ? (upcoming ? "upcoming" : "past") : phase;
   return (
     <article class="event-card blog-card">
       <div
@@ -41,24 +40,31 @@ export function EventCard({ item, upcoming }: { item: SiteListingItem; upcoming:
           <SiteImage src={item.imageSrc} alt={item.title} loading="lazy" width="600" height="320" />
         ) : null}
         <div class="blog-card-header-overlay" />
-        <span class={`blog-card-tag event-card-badge event-card-badge--${upcoming ? "upcoming" : "past"}`}>
-          {upcoming ? "Upcoming" : "Past event"}
-        </span>
+        {state && (
+          <span class={`blog-card-tag event-card-badge event-card-badge--${state}`}>
+            {state === "now" ? "Happening now" : state === "upcoming" ? "Upcoming" : "Past event"}
+          </span>
+        )}
         <div class="blog-card-header-content">
-          <h2 class="blog-card-title">
+          <Heading class="blog-card-title">
             <a href={item.href} class="pk-stretched">
               {item.title}
             </a>
-          </h2>
+          </Heading>
           {item.location ? (
             <p class="blog-card-date event-card-location">
-              <LocationGlyph />
+              <IconMapPin width="12" height="12" />
               {item.location}
             </p>
           ) : null}
         </div>
       </div>
-      <div class="blog-card-body">{item.summary ? <p class="blog-card-summary">{item.summary}</p> : null}</div>
+      {(item.summary || children) && (
+        <div class="blog-card-body">
+          {item.summary ? <p class="blog-card-summary">{item.summary}</p> : null}
+          {children}
+        </div>
+      )}
     </article>
   );
 }

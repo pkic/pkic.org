@@ -1,3 +1,9 @@
+import { eventTeamRosterResponseSchema } from "../../../../../assets/shared/schemas/event-team";
+import { eventTeamRosterRouteSchema } from "../../../../../assets/shared/schemas/route-contracts-events";
+import { requestDb } from "../../../../_lib/db/context";
+import { requireUserBackedAdminFromRequest } from "../../../../_lib/auth/admin";
+import { getEventBySlug } from "../../../../_lib/services/events";
+import { listEventTeamRoster } from "../../../../_lib/services/events/team-roster";
 import type { ValidatedData } from "chanfana";
 import {
   eventTeamRoleCreateResponseSchema,
@@ -26,3 +32,10 @@ export const EventTeamRoleCreate = openApiRoute(
     return json(eventTeamRoleCreateResponseSchema.parse({ role }), 201);
   },
 );
+
+export const EventTeamRosterList = openApiRoute(eventTeamRosterRouteSchema, async (c: AdminContext, data) => {
+  const db = requestDb(c);
+  const actor = await requireUserBackedAdminFromRequest(db, c.req.raw, c.env);
+  const event = await getEventBySlug(db, data.params.eventSlug);
+  return json(eventTeamRosterResponseSchema.parse(await listEventTeamRoster(db, actor, event.id, data.query)));
+});

@@ -8,6 +8,7 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
 import app from "../functions/router";
+import "./helpers/app";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
@@ -29,6 +30,14 @@ async function call(token: string, path: string, init: RequestInit = {}): Promis
     env as any,
     { passThroughOnException: () => {}, waitUntil: () => {} } as any,
   );
+}
+
+async function publicationCount(memberId: string) {
+  return env.DB.prepare(
+    "SELECT COUNT(*) AS count FROM site_publication_requests WHERE resource_type='membership' AND resource_id=?",
+  )
+    .bind(memberId)
+    .first<number>("count");
 }
 
 async function insertUser(email: string): Promise<string> {
@@ -144,6 +153,7 @@ describe("membership provisioning and capacities", () => {
     expect(aggregateRows).toHaveLength(1);
     expect(aggregateRows[0].member_type).toBe("organization");
     expect(aggregateRows[0].status).toBe("active");
+    expect(await publicationCount(aggregateRows[0].id)).toBe(1);
     // Regression guard: the old provisioning route accepted `memberSince` in the
     // request but never write it anywhere (consolidated migration 0035 added the column,
     // now on `members`, not `organizations`).
@@ -216,6 +226,11 @@ describe("membership provisioning and capacities", () => {
 
     const orgCount = await queryAll(env.DB, "SELECT id FROM organizations");
     expect(orgCount).toHaveLength(0);
+    const [individual] = await queryAll<{ id: string }>(
+      env.DB,
+      "SELECT id FROM members WHERE member_type='individual'",
+    );
+    expect(await publicationCount(individual.id)).toBe(1);
   });
 
   it.each([
@@ -420,6 +435,44 @@ describe("membership provisioning and capacities", () => {
       ).toHaveLength(1);
     });
 
+    it("publishes active visibility/category changes and suppresses unchanged or private-only changes", async () => {
+      const memberId = await createOrganizationMember();
+      expect(await publicationCount(memberId)).toBe(1);
+      async function change(body: Record<string, string>, expected: number) {
+        const response = await call(adminToken, `/api/v1/members/${memberId}`, {
+          method: "PATCH",
+          body: JSON.stringify(body),
+        });
+        expect(response.status, await response.clone().text()).toBe(200);
+        expect(await publicationCount(memberId)).toBe(expected);
+      }
+      await change({ status: "active", membershipCategory: "F" }, 1);
+      await change({ membershipCategory: "A" }, 2);
+      await change({ status: "inactive" }, 3);
+      await change({ status: "lapsed", membershipCategory: "B" }, 3);
+      await change({ status: "active" }, 4);
+      await change({ status: "active" }, 4);
+    });
+
+    it("rolls back a membership publication request when the audited status write fails", async () => {
+      const memberId = await createOrganizationMember();
+      await env.DB.prepare(`CREATE TRIGGER fail_membership_audit BEFORE INSERT ON audit_log
+        WHEN NEW.action='membership_updated' BEGIN SELECT RAISE(ABORT,'forced membership audit failure'); END`).run();
+      try {
+        const response = await call(adminToken, `/api/v1/members/${memberId}`, {
+          method: "PATCH",
+          body: JSON.stringify({ status: "inactive" }),
+        });
+        expect(response.status).toBe(500);
+        expect(await publicationCount(memberId)).toBe(1);
+        expect(await env.DB.prepare("SELECT status FROM members WHERE id=?").bind(memberId).first("status")).toBe(
+          "active",
+        );
+      } finally {
+        await env.DB.prepare("DROP TRIGGER fail_membership_audit").run();
+      }
+    });
+
     it("refuses a category that belongs to the other kind of membership", async () => {
       const memberId = await createOrganizationMember();
 
@@ -535,7 +588,7 @@ describe("membership provisioning and capacities", () => {
     expect(response.status).toBe(403);
   });
 
-  it("a plain user with no staff-eligible role cannot even obtain access (401)", async () => {
+  it("refuses membership writes by an authenticated user without permission", async () => {
     const staffId = await insertUser("no-permission@example.test");
     const staffToken = await createAdminSession(env.DB, staffId, "staff-no-permission-token");
 
@@ -543,6 +596,7 @@ describe("membership provisioning and capacities", () => {
       method: "POST",
       body: JSON.stringify(orgMemberBody()),
     });
-    expect(response.status).toBe(401);
+    expect(response.status).toBe(403);
+    expect(await queryAll(env.DB, "SELECT id FROM site_publication_requests")).toEqual([]);
   });
 });

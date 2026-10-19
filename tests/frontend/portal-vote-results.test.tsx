@@ -2,7 +2,7 @@
 /**
  * How a closed vote reads back.
  *
- * The Bootstrap version signalled the outcome twice over with colour — a green
+ * The Bootstrap version signalled the outcome twice over with color — a green
  * `text-bg-success` pill for the winner, `text-success`/`text-info` numbers in
  * the motion tally — and left the per-round tallies as a stack of unnamed
  * lists. What is asserted here is what a visual review cannot see: that every
@@ -111,7 +111,10 @@ describe("closed vote results", () => {
   it("gives every election round a heading, so the tallies are not a stack of unnamed lists", () => {
     const view = mount(<ElectionResultView result={election()} candidates={candidates()} />);
 
-    expect([...view.querySelectorAll("h6")].map((heading) => heading.textContent)).toEqual(["Round 1", "Round 2"]);
+    expect([...view.querySelectorAll("h1, h2, h3, h4, h5, h6")].map((heading) => heading.textContent)).toEqual([
+      "Round 1",
+      "Round 2",
+    ]);
     // Each heading introduces exactly one list of tallies.
     expect(view.querySelectorAll("ul")).toHaveLength(2);
     expect(view.querySelector("ul")?.textContent).toContain("Ada Lovelace: 4");

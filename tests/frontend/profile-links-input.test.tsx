@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * The profile-links widget's own behaviour, as opposed to the normalizer it
+ * The profile-links widget's own behavior, as opposed to the normalizer it
  * is populated from (tests/frontend/profile-links.test.ts).
  *
  * Ten surfaces render this control, so what it rejects and what it announces
@@ -13,7 +13,7 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ProfileLinksInput } from "../../assets/ts/components/ProfileLinksInput";
-import { typeInto } from "./helpers/labelled-control";
+import { typeInto } from "./helpers/labeled-control";
 
 const mounted: HTMLElement[] = [];
 
@@ -41,7 +41,7 @@ function addButton(root: ParentNode): HTMLButtonElement {
 }
 
 describe("ProfileLinksInput", () => {
-  it("refuses a URL that is not http(s) and says so as an error, not just in a colour", async () => {
+  it("refuses a URL that is not http(s) and says so as an error, not just in a color", async () => {
     const onChange = vi.fn();
     const container = mount(<ProfileLinksInput fieldName="profile.links" value={[]} onChange={onChange} />);
 

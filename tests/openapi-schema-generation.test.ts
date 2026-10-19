@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { ALLOWED_PRESENTATION_MIME_TYPES } from "../assets/shared/presentation-upload";
 import { registrationConfirmResponseSchema } from "../assets/shared/schemas/registration";
 import { AUTH_EXTENSION, decorateOpenApiSpec } from "../functions/_lib/openapi/mcp";
-import { openapi } from "../functions/router";
+import { openapi } from "../functions/http-router";
 
 describe("OpenAPI schema generation", () => {
   it("generates the full API document", () => {

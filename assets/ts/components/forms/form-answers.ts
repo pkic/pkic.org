@@ -7,6 +7,7 @@
  */
 
 import type { FormFieldDefinition } from "../../../shared/schemas/forms";
+import { countryByCode } from "../../shared/countries";
 
 export interface FormAnswerRow {
   key: string;
@@ -49,6 +50,10 @@ function stringifyAnswer(value: unknown): string {
 
 export function formatFormAnswerValue(value: unknown, field?: FormFieldDefinition): string[] {
   const labels = optionLabelMap(field?.options);
+  // A country is stored as its ISO code ("NL") and read by people as its name.
+  if (field?.validation?.format === "iso_country" && typeof value === "string" && value.trim()) {
+    return [countryByCode(value.trim())?.label ?? value];
+  }
 
   if (Array.isArray(value)) {
     if (value.length === 0) return ["-"];

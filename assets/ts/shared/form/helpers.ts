@@ -145,7 +145,7 @@ export function statusBadgeClass(status: string): string {
 
 /**
  * The same mapping in the design system's vocabulary — `pk-badge` plus its
- * tone modifier, both of which ship with the entry stylesheet.
+ * tone modifier, both of which ship with the public-site stylesheet.
  */
 export function statusBadgeToneClass(status: string): string {
   return `pk-badge pk-badge--${statusTone(status)}`;

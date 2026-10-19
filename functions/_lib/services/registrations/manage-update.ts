@@ -12,6 +12,7 @@ import { getNormalizedEmailForUser } from "../users";
 import type { z } from "zod";
 import type { RegistrationRecord } from "./types";
 import type { ParticipantAuthority } from "../participant-authority";
+import { withdrawRegistrationSponsorSharing } from "./sponsor-sharing";
 import {
   updateRegistrationByIdWithEmailChange,
   updateRegistrationByIdWithNotification,
@@ -50,28 +51,18 @@ export async function updateManagedRegistration(
   input: ManageRegistrationUpdateInput,
 ): Promise<ManageRegistrationUpdateResult> {
   const { body, registration: current } = input;
+  if (body.action === "withdraw_sponsor_sharing") {
+    if (input.isAdminManageJwt || (input.authenticatedActor && input.authenticatedActor.id !== current.user_id))
+      throw new AppError(
+        403,
+        "REGISTRATION_CONSENT_AUTHORITY_REQUIRED",
+        "Withdraw sharing using your own registration link or session.",
+      );
+    const registration = await withdrawRegistrationSponsorSharing(db, input.manageToken, input.signingSecret, current);
+    return { registration, outboxId: null, outboxIds: [], emailChanged: false };
+  }
   const event = await getEventById(db, current.event_id);
   const attendanceType = body.attendanceType ?? deriveEventAttendanceType(body.dayAttendance) ?? undefined;
-  if (current.registration_identity_id && body.action === "update") {
-    const identity = {
-      organization_name: current.registration_organization_name,
-      job_title: current.registration_job_title,
-    };
-    if (
-      !identity ||
-      (body.organizationName !== undefined && body.organizationName !== (identity.organization_name ?? "")) ||
-      (body.jobTitle !== undefined && body.jobTitle !== (identity.job_title ?? "")) ||
-      (body.customAnswers?.organization_name !== undefined &&
-        body.customAnswers.organization_name !== (identity.organization_name ?? "")) ||
-      (body.customAnswers?.job_title !== undefined && body.customAnswers.job_title !== (identity.job_title ?? ""))
-    ) {
-      throw new AppError(
-        422,
-        "REGISTRATION_IDENTITY_PROFILE_MANAGED",
-        "These are the identity details confirmed for this event.",
-      );
-    }
-  }
   const validatedForm =
     body.customAnswers !== undefined
       ? await validateCustomAnswersForSubmission(db, {
@@ -100,8 +91,6 @@ export async function updateManagedRegistration(
       ? {
           firstName: body.firstName,
           lastName: body.lastName,
-          organizationName: current.registration_identity_id ? undefined : body.organizationName,
-          jobTitle: current.registration_identity_id ? undefined : body.jobTitle,
         }
       : undefined;
 

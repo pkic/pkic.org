@@ -83,6 +83,7 @@ describe("POST organization identities — self-service coworker invitations", (
       method: "POST",
       body: JSON.stringify({
         userReference: "email",
+        jobTitle: "Representative",
         name: "New Coworker",
         email: "coworker@example.test",
         activation: { mode: "invitation" },
@@ -116,7 +117,7 @@ describe("POST organization identities — self-service coworker invitations", (
 
     const memberRows = await queryAll<{ total: number }>(
       env.DB,
-      "SELECT COUNT(*) AS total FROM members WHERE user_id = ?",
+      "SELECT COUNT(*) AS total FROM members member JOIN identities personal ON personal.id = member.identity_id WHERE personal.user_id = ?",
       createdUser.id,
     );
     expect(Number(memberRows[0].total)).toBe(0);
@@ -132,6 +133,7 @@ describe("POST organization identities — self-service coworker invitations", (
       method: "POST",
       body: JSON.stringify({
         userReference: "email",
+        jobTitle: "Representative",
         name: "Another Coworker",
         email: "another-coworker@example.test",
         activation: { mode: "invitation" },
@@ -164,6 +166,7 @@ describe("POST organization identities — self-service coworker invitations", (
       method: "POST",
       body: JSON.stringify({
         userReference: "email",
+        jobTitle: "Representative",
         name: "Should Fail",
         email: "should-fail@example.test",
         activation: { mode: "invitation" },
@@ -184,6 +187,7 @@ describe("POST organization identities — self-service coworker invitations", (
       method: "POST",
       body: JSON.stringify({
         userReference: "email",
+        jobTitle: "Representative",
         name: "Should Fail",
         email: "should-fail-2@example.test",
         activation: { mode: "invitation" },
@@ -207,6 +211,7 @@ describe("POST organization identities — self-service coworker invitations", (
       method: "POST",
       body: JSON.stringify({
         userReference: "email",
+        jobTitle: "Representative",
         name: "Existing Rep",
         email: "existing-rep@example.test",
         activation: { mode: "invitation" },
@@ -226,6 +231,7 @@ describe("POST organization identities — self-service coworker invitations", (
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           userReference: "email",
+          jobTitle: "Representative",
           name: "Nobody",
           email: "nobody@example.test",
           activation: { mode: "invitation" },

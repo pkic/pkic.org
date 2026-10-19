@@ -24,7 +24,7 @@
    * container around an alert, a cluster of event cards, a button. Every one of
    * them painted the canvas over whatever it was sitting on: grey bands down
    * both sides of the home page's announcement, a footer bar that lost its
-   * black, a `Panel` whose own surface colour was overridden by the class that
+   * black, a `Panel` whose own surface color was overridden by the class that
    * was only meant to give it the right font.
    *
    * A page-level surface that wants the ground asks for it by name.
@@ -36,10 +36,6 @@
     color: var(--pk-ink);
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
-  }
-
-  .pk-canvas {
-    background: var(--pk-canvas);
   }
 
   /*
@@ -98,6 +94,26 @@
     max-width: 100%;
   }
 
+  /*
+   * One line weight for every UI icon — globally, because icons sit in
+   * server-rendered chrome as well as inside `.pk` surfaces.
+   *
+   * The weight is stated in rendered pixels: `non-scaling-stroke` draws each
+   * outline at `--pk-icon-stroke` whatever size the glyph is shown at and
+   * whatever grid it was authored on, so a 12px pill icon and a 22px tab icon
+   * read as the same family. A component marks a selected state with
+   * `--pk-icon-stroke-strong` rather than a number of its own.
+   */
+  .pk-icon {
+    stroke-width: var(--pk-icon-stroke);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .pk-icon * {
+    vector-effect: non-scaling-stroke;
+  }
+
   .pk h1,
   .pk h2,
   .pk h3,
@@ -127,9 +143,22 @@
     margin: var(--pk-2) 0;
   }
 
+  /*
+   * Almost everything a reader clicks in the product is a click-through — a
+   * name to its record, a group to its page — so a link is colored, not
+   * underlined, and underlines only under the pointer or keyboard focus.
+   * A link inside running text is the exception: in a sentence, color alone
+   * would be the only thing telling it apart, so prose keeps the underline.
+   */
   .pk a {
     color: var(--pk-accent-ink);
+    text-decoration: none;
     text-underline-offset: 2px;
+  }
+
+  .pk a:where(:hover, :focus-visible),
+  .pk :where(p, blockquote, .pk-markdown, .pk-prose-block) a {
+    text-decoration: underline;
   }
 
   .pk :where(ul, ol) {
@@ -144,7 +173,7 @@
 
   /* Digits that sit in columns line up. Applied here because it is a property
      of the typeface's use, not of any one component. */
-  .pk :where(table, .pk-num) {
+  .pk :where(table) {
     font-variant-numeric: tabular-nums;
   }
 
@@ -183,7 +212,7 @@
     display: none !important;
   }
 
-  /* Honour the setting rather than merely shortening durations: a vestibular
+  /* Honor the setting rather than merely shortening durations: a vestibular
      trigger is the movement itself, not its length. */
   @media (prefers-reduced-motion: reduce) {
     .pk *,

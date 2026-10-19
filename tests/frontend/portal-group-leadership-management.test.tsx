@@ -6,7 +6,7 @@ import { groupLeadershipAssignSchema, groupLeadershipUpdateSchema } from "../../
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { GroupLeadership } from "../../assets/ts/member-flows/portal/sections/management/GroupLeadership";
 import { GroupLeadershipAssignmentForm } from "../../assets/ts/member-flows/portal/sections/management/GroupLeadershipAssignmentForm";
-import { chooseComboboxOption, controlFor } from "./helpers/labelled-control";
+import { chooseComboboxOption, controlFor } from "./helpers/labeled-control";
 import { chooseColumnFilter, columnFilterOptions } from "./helpers/column-menu";
 
 const navigate = vi.fn();
@@ -344,7 +344,7 @@ describe("portal group leadership management", () => {
     const participant = controlFor(container, "Participant");
     expect(participant.getAttribute("role")).toBe("combobox");
     expect(participant.getAttribute("aria-autocomplete")).toBe("list");
-    // Nothing labelled Search exists to be pressed, before or after typing.
+    // Nothing labeled Search exists to be pressed, before or after typing.
     const searchButtons = () =>
       [...container.querySelectorAll("button")].filter((candidate) => /search/i.test(candidate.textContent ?? ""));
     expect(searchButtons()).toEqual([]);

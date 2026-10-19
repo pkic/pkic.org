@@ -3,7 +3,7 @@ import { IconPlus, IconRefresh } from "../../../../components/icons";
 import { Toolbar } from "../../../../ui/Toolbar";
 import { invalidateMembershipCategoryCatalog } from "../../../../hooks/useMembershipCategoryCatalog";
 import { MembershipCategoryForm } from "./MembershipCategoryForm";
-/** Category catalog with separate create/edit pages and guarded deletion of unused entries. */
+/** Category catalog with a create page and bookmarkable edit dialogs and guarded deletion of unused entries. */
 import { useCallback, useEffect, useState } from "preact/hooks";
 import {
   membershipCategoryCatalogResponseSchema,
@@ -13,7 +13,7 @@ import {
   type MembershipCategoryCatalogEntry,
 } from "../../../../../shared/schemas/membership-categories";
 import { DataTable, type Column } from "../../../../components/Table";
-import { EmptyState } from "../../../../ui/RecordEmptyState";
+import { EmptyState } from "../../../../ui/EmptyState";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
 import { Badge } from "../../../../ui/Badge";
@@ -61,7 +61,7 @@ export function MembershipCategories({
   categoryCode,
 }: {
   canWrite: boolean;
-  /** The code of the category whose edit page is open; undefined for the list. */
+  /** The code of the open category dialog; undefined for the list. */
   categoryCode?: string;
 }) {
   const [, navigate] = usePortalHashLocation();
@@ -163,17 +163,8 @@ export function MembershipCategories({
         </div>
       );
     }
-    // Keyed by revision so a save that comes back through the list starts a
-    // fresh draft rather than editing on top of a stale one.
-    return (
-      <MembershipCategoryForm
-        key={`${category.code}:${category.revision}`}
-        category={category}
-        canWrite={canWrite}
-        onSaved={load}
-      />
-    );
   }
+  const editingCategory = categoryCode ? categories.find((category) => category.code === categoryCode) : undefined;
 
   const columns: Column<MembershipCategoryCatalogEntry>[] = [
     {
@@ -295,6 +286,14 @@ export function MembershipCategories({
             }
           />
         </section>
+      )}
+      {editingCategory && (
+        <MembershipCategoryForm
+          key={`${editingCategory.code}:${editingCategory.revision}`}
+          category={editingCategory}
+          canWrite={canWrite}
+          onSaved={load}
+        />
       )}
     </div>
   );

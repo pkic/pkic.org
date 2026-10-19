@@ -14,6 +14,7 @@ import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike, UserBackedAuthAdmin } from "../../types";
 import { nowIso } from "../../utils/time";
 import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
+import { prepareSitePublicationRequest } from "../site-publication-requests";
 import { authorizedMembershipMutationDb } from "../membership-authorization";
 
 interface MemberAggregateRow {
@@ -58,7 +59,31 @@ export async function updateMemberAggregate(
 
   const at = nowIso();
   const authorizedDb = authorizedMembershipMutationDb(db, actor, ["membership:write"]);
-  const statements: StatementLike[] = [];
+  const statements: StatementLike[] = [
+    prepareSitePublicationRequest(
+      authorizedDb,
+      {
+        resourceType: "membership",
+        resourceId: memberId,
+        revision: Date.parse(at),
+        reasonCode: "membership_changed",
+        deduplicationKey: `membership:${memberId}:${crypto.randomUUID()}`,
+      },
+      {
+        sql: `EXISTS(SELECT 1 FROM members member WHERE member.id=? AND (
+      (member.status='active') <> (COALESCE(?,member.status)='active')
+      OR (member.status='active' AND COALESCE(?,member.status)='active' AND ? IS NOT NULL AND EXISTS(
+        SELECT 1 FROM member_category_assignments assignment WHERE assignment.member_id=member.id AND assignment.category_code IS NOT ?))))`,
+        bindings: [
+          memberId,
+          input.status ?? null,
+          input.status ?? null,
+          input.membershipCategory ?? null,
+          input.membershipCategory ?? null,
+        ],
+      },
+    ),
+  ];
   if (input.membershipCategory !== undefined) {
     statements.push(
       prepareMembershipCategoryGuard(authorizedDb, input.membershipCategory, member.member_type === "individual"),

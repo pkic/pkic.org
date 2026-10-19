@@ -1,3 +1,6 @@
+import { PUBLIC_GROUP_MEMBER_SEAT_SOURCE_SQL } from "./public-group-seat-sql";
+import { versionedImagePath } from "../image-cache";
+import { livePersonHeadshotSql } from "../live-session/live-person-photo";
 import { all, first } from "../../db/queries";
 import { batchFirst, batchRows, queryPage } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
@@ -13,8 +16,8 @@ import type {
 } from "../../../../assets/shared/schemas/members-directory";
 
 /**
- * Public member directory. D1 is the source of truth,
- * populated from data/members/*.yaml by scripts/migrate-members-yaml-to-d1.mjs.
+ * Public member directory. D1 is the source of truth; its rows were originally
+ * imported from the legacy member YAML in data/members/.
  * Most content fields (description/website/slogan/content/blog/
  * press/careers/social) live on the real `organizations` columns added in
  * consolidated migration 0035 — `data_json` predates that migration and is nothing writes
@@ -66,11 +69,9 @@ function toSummary(row: DirectoryRow): PublicMemberSummary {
 
   const logoUrl = row.organization_id
     ? row.org_logo_r2_key
-      ? `/api/v1/members/${row.organization_id}/logo`
+      ? versionedImagePath(`/api/v1/members/${row.organization_id}/logo`, row.org_logo_r2_key)
       : sanitizeLegacyHttpOrSameOriginUrl(orgData.logoUrl)
-    : row.headshot_r2_key
-      ? `/api/v1/members/${row.member_id}/logo`
-      : null;
+    : versionedImagePath(`/api/v1/members/${row.member_id}/logo`, row.headshot_r2_key);
 
   return {
     id: row.organization_id ?? row.member_id,
@@ -96,17 +97,17 @@ const DIRECTORY_COLUMNS = `
          o.logo_r2_key AS org_logo_r2_key,
          u.first_name, u.last_name,
          CASE WHEN m.organization_id IS NULL THEN mc.label ELSE NULL END AS job_title,
-         individual_identity.biography, individual_identity.links_json, u.headshot_r2_key,
+         individual_identity.biography, individual_identity.links_json, ${livePersonHeadshotSql("u")} AS headshot_r2_key,
          mca.category_code, m.tier, m.member_since, m.created_at`;
 const DIRECTORY_FROM = `
   FROM members m
   LEFT JOIN organizations o ON o.id = m.organization_id
-  LEFT JOIN users u ON u.id = m.user_id
+  LEFT JOIN identities member_holder ON member_holder.id = m.identity_id
+  LEFT JOIN users u ON u.id = member_holder.user_id
   JOIN member_category_assignments mca ON mca.member_id = m.id
   JOIN membership_categories mc ON mc.code = mca.category_code
   LEFT JOIN identities individual_identity
-    ON individual_identity.user_id = m.user_id
-   AND individual_identity.organization_id IS NULL
+    ON individual_identity.id = m.identity_id
    AND individual_identity.started_at IS NOT NULL
    AND individual_identity.ended_at IS NULL
    AND individual_identity.blocked_at IS NULL
@@ -160,13 +161,8 @@ export async function listPublicMembers(
    */
   if (params.workingGroup) {
     conditions.push(`EXISTS (
-      SELECT 1
-        FROM group_memberships membership
-        JOIN groups g ON g.id = membership.group_id AND g.active = 1 AND (g.slug = ? OR g.id = ?)
-        JOIN users seated ON seated.id = membership.user_id AND seated.active = 1
-        JOIN identities identity ON identity.id = membership.identity_id
-         AND identity.started_at IS NOT NULL AND identity.ended_at IS NULL AND identity.blocked_at IS NULL
-       WHERE membership.member_id = m.id AND membership.left_at IS NULL
+      SELECT 1 ${PUBLIC_GROUP_MEMBER_SEAT_SOURCE_SQL}
+        AND membership.member_id=m.id AND (g.slug=? OR g.id=?)
     )`);
     args.push(params.workingGroup, params.workingGroup);
   }
@@ -227,7 +223,7 @@ function toPublicIdentity(row: PublicIdentityRow): PublicMemberDetail["identitie
     bio: row.biography,
     featuredLink: getFeaturedLink(links),
     links,
-    photoUrl: row.headshot_r2_key ? `/api/v1/members/${row.identity_id}/logo` : null,
+    photoUrl: versionedImagePath(`/api/v1/members/${row.identity_id}/logo`, row.headshot_r2_key),
   };
 }
 
@@ -250,7 +246,7 @@ export async function getPublicMemberById(db: DatabaseLike, idOrSlug: string): P
     db
       .prepare(
         `SELECT identity.id AS identity_id, u.first_name, u.last_name,
-                identity.job_title, identity.biography, identity.links_json, u.headshot_r2_key
+                identity.job_title, identity.biography, identity.links_json, ${livePersonHeadshotSql("u")} AS headshot_r2_key
          FROM identities identity
          JOIN users u ON u.id = identity.user_id
          WHERE identity.organization_id = (SELECT organization_id FROM (${profileSql}) AS selected_member)
@@ -298,26 +294,31 @@ function publicMemberDetail(row: MemberDetailRow, identityRows: PublicIdentityRo
  * organization identity has no organization logo row of its own. In every
  * non-organization case the photo lives on `users.headshot_r2_key`.
  */
-export async function getMemberLogoR2Key(db: DatabaseLike, id: string): Promise<string | null> {
+export async function getMemberLogoR2Key(
+  db: DatabaseLike,
+  id: string,
+): Promise<{ key: string; person: boolean } | null> {
   // Each branch is a primary-key lookup. Preserve entity precedence even when
   // its image is null, without three sequential D1 round trips for identities.
-  const row = await first<{ image_key: string | null }>(
+  // A person's photo is the one a live room may show: none once erased or merged.
+  const row = await first<{ image_key: string | null; priority: number }>(
     db,
     `SELECT logo_r2_key AS image_key, 0 AS priority FROM organizations WHERE id = ?
      UNION ALL
-     SELECT u.headshot_r2_key AS image_key, 1 AS priority
+     SELECT ${livePersonHeadshotSql("u")} AS image_key, 1 AS priority
      FROM members m
-     JOIN users u ON u.id = m.user_id
+     JOIN identities holder ON holder.id = m.identity_id
+     JOIN users u ON u.id = holder.user_id
      WHERE m.id = ?
      UNION ALL
-     SELECT u.headshot_r2_key AS image_key, 2 AS priority
+     SELECT ${livePersonHeadshotSql("u")} AS image_key, 2 AS priority
      FROM identities identity
      JOIN users u ON u.id = identity.user_id
      WHERE identity.id = ?
      ORDER BY priority LIMIT 1`,
     [id, id, id],
   );
-  return row?.image_key ?? null;
+  return row?.image_key ? { key: row.image_key, person: row.priority > 0 } : null;
 }
 
 // ── Working groups ──────────────────────────────────────────────────────────
@@ -333,7 +334,7 @@ export async function readPublicMemberPublicationBatch(db: DatabaseLike, after: 
     db
       .prepare(
         `SELECT identity.id AS identity_id, identity.organization_id,
-      u.first_name, u.last_name, identity.job_title, identity.biography, identity.links_json, u.headshot_r2_key
+      u.first_name, u.last_name, identity.job_title, identity.biography, identity.links_json, ${livePersonHeadshotSql("u")} AS headshot_r2_key
       FROM identities identity JOIN users u ON u.id = identity.user_id
       WHERE identity.organization_id IN (SELECT organization_id FROM (${profile}))
         AND identity.started_at IS NOT NULL AND identity.ended_at IS NULL

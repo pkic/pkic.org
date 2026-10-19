@@ -3,6 +3,9 @@ import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PortalNavigationShell } from "../../assets/ts/member-flows/portal/shell/PortalNavigationShell";
 import { portalSessionFixture } from "../helpers/portal-session";
+import { myActiveIdentitySwitchSchema } from "../../assets/shared/schemas/me";
+import { rememberedActingIdentityId } from "../../assets/ts/member-flows/portal/acting-identity";
+import { memoryStorage } from "./helpers/browser-storage";
 
 vi.mock("wouter", () => ({
   Link: ({ children, href, ...props }: JSX.HTMLAttributes<HTMLAnchorElement> & { href: string }) => (
@@ -61,6 +64,9 @@ beforeEach(() => {
   window.location.hash = "#/groups";
   container = document.createElement("div");
   document.body.append(container);
+  const slot = document.createElement("div");
+  slot.id = "pkic-account-menu";
+  document.body.append(slot);
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL) => {
@@ -79,6 +85,7 @@ beforeEach(() => {
 afterEach(() => {
   void act(() => render(null, container));
   container.remove();
+  document.getElementById("pkic-account-menu")?.remove();
   window.location.hash = "";
   vi.unstubAllGlobals();
 });
@@ -101,22 +108,43 @@ function mountNavigation(session = portalSessionFixture({ staff: true }), headsh
 }
 
 describe("portal navigation shell", () => {
+  it("keeps labeled navigation icons and the account avatar usable after collapsing", async () => {
+    mountNavigation();
+    await settle();
+    void act(() => container.querySelector<HTMLButtonElement>('button[aria-label="Collapse main menu"]')!.click());
+    expect(container.querySelector("#portal-root")?.classList.contains("portal-sidebar-collapsed")).toBe(true);
+    const links = [...container.querySelectorAll<HTMLAnchorElement>(".portal-sidebar-link")];
+    expect(links.length).toBeGreaterThan(0);
+    for (const link of links) {
+      expect(link.getAttribute("aria-label")).toBe(link.querySelector(".portal-sidebar-label")?.textContent);
+      expect(link.querySelector(".portal-sidebar-icon svg")).not.toBeNull();
+      expect(link.title).toBe(link.getAttribute("aria-label"));
+    }
+    const account = document.querySelector<HTMLButtonElement>('button[aria-label="Account menu"]')!;
+    expect(account.querySelector(".pk-avatar")).not.toBeNull();
+    void act(() => account.click());
+    expect(document.querySelector('[role="menu"]')?.textContent).toContain("Sign out");
+    void act(() => container.querySelector<HTMLButtonElement>('button[aria-label="Expand main menu"]')!.click());
+    expect(container.querySelector("#portal-root")?.classList.contains("portal-sidebar-collapsed")).toBe(false);
+  });
+
   it("makes pending identity invitations visible to a signed-in user", async () => {
     mountNavigation(portalSessionFixture({ staff: true, pendingIdentityCount: 1 }));
     await settle();
     const invitation = container.querySelector<HTMLElement>(".portal-identity-invitation");
     expect(invitation?.textContent).toContain("an identity invitation");
-    expect(invitation?.querySelector('a[href="#/account"]')?.textContent).toContain("Review invitation");
+    const ownRecord = `#/users/${portalSessionFixture({}).identity.id}`;
+    expect(invitation?.querySelector(`a[href="${ownRecord}"]`)?.textContent).toContain("Review invitation");
 
     void act(() => render(null, container));
-    currentLocation.value = "/account";
-    window.location.hash = "#/account";
+    currentLocation.value = ownRecord.slice(1);
+    window.location.hash = ownRecord;
     mountNavigation(portalSessionFixture({ staff: true, pendingIdentityCount: 1 }));
     await settle();
     expect(container.querySelector(".portal-identity-invitation")).toBeNull();
   });
 
-  it("exposes one labelled navigation and controlled mobile drawer", async () => {
+  it("exposes one labeled navigation and controlled mobile drawer", async () => {
     mountNavigation();
     await settle();
     const toggle = container.querySelector<HTMLButtonElement>("#portal-sidebar-toggle")!;
@@ -209,6 +237,77 @@ describe("portal navigation shell", () => {
     expect(groupsList.querySelector(".portal-sidebar-group-role")).toBeNull();
   });
 
+  it("names the acting identity in the account menu and switches it from a submenu", async () => {
+    const puts: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        if (url.pathname === "/api/v1/users/current/identities/active" && init?.method === "PUT") {
+          puts.push(myActiveIdentitySwitchSchema.parse(JSON.parse(String(init.body))).identityId);
+          return json({ ...session, actingIdentityId: puts.at(-1) });
+        }
+        if (url.pathname === "/api/v1/users/current/organizations") return json(emptyPage("organizations"));
+        if (url.pathname === "/api/v1/users/current/groups") return json(emptyPage("groups"));
+        if (url.pathname === "/api/v1/groups") return json(emptyPage("groups"));
+        throw new Error(`Unexpected request: ${url.pathname}`);
+      }),
+    );
+    vi.stubGlobal("localStorage", memoryStorage());
+    const alpha = {
+      id: "00000000-0000-4000-8000-0000000000a1",
+      organizationId: "00000000-0000-4000-8000-0000000000b1",
+      organizationName: "Alpha Org",
+      jobTitle: "Delegate",
+    };
+    const individual = {
+      id: "00000000-0000-4000-8000-0000000000a2",
+      organizationId: null,
+      organizationName: null,
+      jobTitle: null,
+    };
+    const session = {
+      ...portalSessionFixture({ staff: true }),
+      actingIdentities: [alpha, individual],
+      actingIdentityId: alpha.id,
+    };
+    mountNavigation(session);
+    await settle();
+
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>('button[aria-label="Account menu"]')!.click();
+    });
+    expect(document.querySelector(".pk-menu__heading")?.textContent).toBe("Acting as Alpha Org · Delegate");
+    const switchItem = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((item) =>
+      item.textContent?.includes("Switch identity"),
+    )!;
+    await act(async () => switchItem.click());
+    const choices = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')];
+    expect(
+      choices.map((choice) => [choice.textContent?.replace("✓", ""), choice.getAttribute("aria-checked")]),
+    ).toEqual([
+      ["Alpha Org · Delegate", "true"],
+      ["Personal", "false"],
+    ]);
+    await act(async () => choices[1].click());
+    await settle();
+    expect(puts).toEqual([individual.id]);
+    expect(rememberedActingIdentityId(session.identity.id)).toBe(individual.id);
+  });
+
+  it("offers no identity switch to a person with one identity", async () => {
+    mountNavigation(portalSessionFixture({ staff: true, member: true }));
+    await settle();
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>('button[aria-label="Account menu"]')!.click();
+    });
+    expect(document.querySelector(".pk-menu__heading")?.textContent).toBe("Acting personally");
+    expect(container.textContent).not.toContain("Switch identity");
+  });
+
   it("lists applicant reminders as its own Settings page", async () => {
     currentLocation.value = "/settings/application-workflow";
     window.location.hash = "#/settings/application-workflow";
@@ -271,7 +370,7 @@ describe("portal navigation shell", () => {
     expect(container.querySelector('ul[aria-label="Your groups"]')).toBeNull();
   });
 
-  it("lists the donations pages under Donations, and only while it is open (#43)", async () => {
+  it("groups authorized donation pages under Sponsors without granting sponsorship access", async () => {
     const donationsReader = portalSessionFixture({
       staff: true,
       member: true,
@@ -287,14 +386,15 @@ describe("portal navigation shell", () => {
     mountNavigation(donationsReader);
     await settle();
 
-    const pages = container.querySelector('ul[aria-label="Donations pages"]')!;
+    const pages = container.querySelector('ul[aria-label="Sponsors pages"]')!;
     const entries = [...pages.querySelectorAll("a")].map((link) => [link.textContent, link.getAttribute("href")]);
     expect(entries).toEqual([
+      ["Donations", "#/donations"],
       ["Share links", "#/donations/promoters"],
       ["Analytics", "#/donations/analytics"],
     ]);
     // The page being read is the one marked, so the sidebar says where you are.
-    expect(pages.querySelector("a.active")?.textContent).toBe("Share links");
+    expect(pages.querySelector('a[aria-current="page"]')?.textContent).toBe("Share links");
 
     // Reading another section folds them away again.
     void act(() => render(null, container));
@@ -302,10 +402,33 @@ describe("portal navigation shell", () => {
     window.location.hash = "#/groups";
     mountNavigation(donationsReader);
     await settle();
-    expect(container.querySelector('ul[aria-label="Donations pages"]')).toBeNull();
+    expect(container.querySelector('ul[aria-label="Sponsors pages"]')).toBeNull();
   });
 
-  it("keeps account settings in the user menu, not the sidebar items", async () => {
+  it("groups applications under Members only with membership permission", async () => {
+    currentLocation.value = "/membership/applications";
+    mountNavigation(
+      portalSessionFixture({
+        staff: true,
+        administrator: false,
+        grants: [{ permission: "membership:read", contextType: null, contextId: null }],
+      }),
+    );
+    await settle();
+    expect(container.querySelector('.portal-sidebar-link[aria-label="Members"]')?.classList.contains("active")).toBe(
+      true,
+    );
+    expect(container.querySelector('.portal-sidebar-link[aria-label="Applications"]')).toBeNull();
+    expect(
+      container.querySelector('ul[aria-label="Members pages"] a[href="#/membership/applications"]')?.textContent,
+    ).toBe("Applications");
+    void act(() => render(null, container));
+    mountNavigation(portalSessionFixture({ staff: true, administrator: false, grants: [] }));
+    await settle();
+    expect(container.querySelector('a[href="#/membership/applications"]')).toBeNull();
+  });
+
+  it("keeps the profile in the user menu, not the sidebar items", async () => {
     mountNavigation(portalSessionFixture({ staff: true, member: true }));
     await settle();
 
@@ -315,15 +438,15 @@ describe("portal navigation shell", () => {
     // Located by what it is — the menu button named "Account menu" — rather
     // than by the class its content happens to carry, so restyling the trigger
     // does not break a test about where account settings live.
-    const userButton = container.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')!;
+    const userButton = document.querySelector<HTMLButtonElement>('button[aria-label="Account menu"]')!;
     expect(userButton.getAttribute("aria-label")).toBe("Account menu");
-    expect(userButton.textContent).toContain("Portal Tester");
+    expect(container.querySelector("#portal-sidebar [aria-label='Account menu']")).toBeNull();
     expect(userButton.textContent).toContain("PT");
 
     void act(() => userButton.click());
     await settle();
-    const items = [...container.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent);
-    expect(items).toEqual(["My profile", "Account settings", "Sign out"]);
+    const items = [...document.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent);
+    expect(items).toEqual(["Portal", "My profile", "My applications", "Sign out"]);
   });
 
   it("nests subgroups beneath their listed parent and names an absent parent as context", async () => {
@@ -406,18 +529,18 @@ describe("portal navigation shell", () => {
     await settle();
     await settle();
 
-    const userButton = container.querySelector<HTMLButtonElement>(".portal-sidebar-user")!;
+    const userButton = document.querySelector<HTMLButtonElement>('button[aria-label="Account menu"]')!;
     void act(() => userButton.click());
     await settle();
-    const items = [...container.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent);
-    expect(items).toEqual(["My profile", "Example Trust Services", "Account settings", "Sign out"]);
+    const items = [...document.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent);
+    expect(items).toEqual(["Portal", "My profile", "My applications", "Example Trust Services", "Sign out"]);
   });
 
   it("shows the headshot in the user button when one is available", async () => {
     mountNavigation(portalSessionFixture({ staff: true, member: true }), "/images/headshots/tester.jpg");
     await settle();
 
-    const avatar = container.querySelector(".portal-user-avatar img");
+    const avatar = document.querySelector("#pkic-account-menu .pk-avatar img");
     expect(avatar?.getAttribute("src")).toBe("/images/headshots/tester.jpg");
     expect(avatar?.getAttribute("alt")).toBe("");
   });

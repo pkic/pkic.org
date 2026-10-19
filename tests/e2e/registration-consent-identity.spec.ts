@@ -1,6 +1,7 @@
 /** @covers event.3.2.b */
 import { expect, test } from "@playwright/test";
 import { registerInBrowser } from "./helpers/registration";
+import { EMAIL_FIRST_COPY } from "../../assets/shared/email-first-copy";
 import { userDetailResponseSchema, usersListResponseSchema } from "../../assets/shared/schemas/user-management";
 import { userParticipationResponseSchema } from "../../assets/shared/schemas/user-participation";
 import {
@@ -13,6 +14,7 @@ import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
 import { createMember } from "./helpers/member-provisioning";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
+import { acceptConfirmDialog } from "./helpers/confirm-dialog";
 
 test("event confirmation joins nobody; explicit organization consent joins once and an identity can then be selected for the event", async ({
   page,
@@ -50,10 +52,9 @@ test("event confirmation joins nobody; explicit organization consent joins once 
     const since = await capturedEmailCount();
     const initial = await registerInBrowser(attendee, email);
     expect(initial.request.identityId).toBeUndefined();
-    expect(initial.result.status).toBe("pending_email_confirmation");
-    const confirmEmail = await waitForCapturedEmail(email, "Confirm your registration", { since });
-    await attendee.goto(extractEmailUrl(confirmEmail, "/register/confirm"));
-    await attendee.getByRole("button", { name: /Confirm my registration/i }).click();
+    // Verified first, so the registration is final when submitted. The address is on the representative
+    // organization's own domain, which already decides: no organization is asked.
+    expect(initial.result.status).toBe("registered");
     await expect(attendee.getByRole("heading", { name: /You're registered/i })).toBeVisible();
     const confirmedEmail = await waitForCapturedEmail(email, "registration is confirmed", { since });
     const manageUrl = extractEmailUrl(confirmedEmail, "/register/manage/");
@@ -62,7 +63,10 @@ test("event confirmation joins nobody; explicit organization consent joins once 
     );
     const userId = users.users.find((user) => user.email === email)!.id;
     const detail = userDetailResponseSchema.parse(await (await page.request.get(`/api/v1/users/${userId}`)).json());
-    expect(detail.user.identities).toEqual([]);
+    // Confirming joins no organization: the account holds only the individual identity it started with.
+    expect(detail.user.identities).toEqual([
+      expect.objectContaining({ organizationId: null, organizationName: null, memberId: null }),
+    ]);
     const participation = userParticipationResponseSchema.parse(
       await (await page.request.get(`/api/v1/users/${userId}/participation`)).json(),
     );
@@ -72,47 +76,50 @@ test("event confirmation joins nobody; explicit organization consent joins once 
 
     const sinceJoin = await capturedEmailCount();
     await attendee.goto("/join/");
-    await attendee.getByLabel("Yes — I am employed by or own an organization").check();
-    await attendee.getByLabel("Your official work or organization email address").fill(email);
-    await attendee.getByRole("button", { name: "Continue", exact: true }).click();
-    await expect(attendee.getByRole("heading", { name: "Check your email", exact: true })).toBeVisible();
+    await attendee.getByLabel(EMAIL_FIRST_COPY.join.work.label).fill(email);
+    await attendee.getByRole("button", { name: EMAIL_FIRST_COPY.join.work.action, exact: true }).click();
+    await expect(attendee.getByText("Check your email", { exact: true })).toBeVisible();
     const joinEmail = await waitForCapturedEmail(email, "Verify your email address", { since: sinceJoin });
     const joinUrl = extractEmailUrl(joinEmail, "/join/");
     const joinToken = new URLSearchParams(new URL(joinUrl).hash.slice(1)).get("verify")!;
     await attendee.goto(joinUrl);
     await expect(attendee.getByRole("heading", { name: "Organization access is ready", exact: true })).toBeVisible();
     await attendee.getByRole("link", { name: "Continue to the portal", exact: true }).click();
-    await expect(attendee.getByRole("complementary", { name: "Portal navigation" })).toBeVisible();
-    const identities = identitiesListResponseSchema.parse(
-      await (await attendee.request.get("/api/v1/users/current/identities?active=true")).json(),
-    );
-    expect(identities.identities).toHaveLength(1);
-    expect(identities.identities[0].organizationName).toBe(organizationName);
+    await expect(attendee.getByRole("navigation", { name: "Portal navigation" })).toBeVisible();
+    // Joining adds the organization identity beside the individual one the account started with.
+    const activeIdentities = async () =>
+      identitiesListResponseSchema.parse(
+        await (await attendee.request.get("/api/v1/users/current/identities?active=true")).json(),
+      ).identities;
+    const joined = await activeIdentities();
+    expect(joined.filter((entry) => entry.organizationId === null)).toHaveLength(1);
+    const organizationIdentities = joined.filter((entry) => entry.organizationId !== null);
+    expect(organizationIdentities).toHaveLength(1);
+    expect(organizationIdentities[0]!.organizationName).toBe(organizationName);
     expect((await subscribers()).subscribers).toMatchObject([{ subscribed: true }]);
     const replay = await attendee.request.post("/api/v1/members/join/verify", { data: { token: joinToken } });
     expect(replay.status()).toBe(200);
     expect(await replay.json()).toEqual({ status: "already_member" });
     expect(replay.headers()["set-cookie"]).toBeUndefined();
-    expect(
-      identitiesListResponseSchema.parse(
-        await (await attendee.request.get("/api/v1/users/current/identities?active=true")).json(),
-      ).identities,
-    ).toHaveLength(1);
+    expect(await activeIdentities()).toEqual(joined);
 
     await attendee.goto(manageUrl);
-    await attendee.getByRole("button", { name: "Cancel registration", exact: true }).click();
-    await attendee.getByRole("button", { name: "Yes, cancel my registration", exact: true }).click();
+    await attendee.getByRole("button", { name: "Cancel my registration…", exact: true }).click();
+    await acceptConfirmDialog(attendee, "Cancel registration");
     await expect(attendee.getByRole("heading", { name: "Registration cancelled", exact: true })).toBeVisible();
     const sinceSelected = await capturedEmailCount();
     const selected = await registerInBrowser(attendee, email, organizationName);
-    expect(selected.request.identityId).toBe(identities.identities[0].id);
+    expect(selected.request.identityId).toBe(organizationIdentities[0]!.id);
     expect(selected.result.registrationId).toBe(initial.result.registrationId);
     expect(selected.result.status).toBe("registered");
     await expect(attendee.getByRole("heading", { name: /You're registered/i })).toBeVisible();
     const selectedEmail = await waitForCapturedEmail(email, "registration is confirmed", { since: sinceSelected });
     await attendee.goto(extractEmailUrl(selectedEmail, "/register/manage/"));
-    await expect(attendee.getByLabel("Organization", { exact: true })).toHaveValue(organizationName);
-    await expect(attendee.getByLabel("Organization", { exact: true })).toHaveAttribute("readonly", "");
+    // The organization comes from the selected identity: read-only, managed with the identities.
+    await expect(attendee.getByRole("definition").filter({ hasText: organizationName })).toBeVisible();
+    await attendee.getByRole("button", { name: "Edit details", exact: true }).click();
+    await expect(attendee.getByRole("textbox", { name: "Organization", exact: true })).toHaveCount(0);
+    await expect(attendee.getByRole("link", { name: "Manage identities", exact: true })).toBeVisible();
     const badge = attendee.locator("[data-og-badge-img]");
     await expect(badge).toHaveAttribute("src", /[?]v=/);
     await expect

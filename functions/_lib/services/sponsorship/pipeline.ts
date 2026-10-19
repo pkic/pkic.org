@@ -1,6 +1,8 @@
 /**
  * Staff sponsorship sales pipeline. Split out of sponsorship.ts.
  */
+import type { SponsorshipEndReason } from "../../../../assets/shared/sponsorship-logo-policy";
+import { prepareActiveSponsorshipPeriodPatch } from "./logo-periods";
 import { uuid } from "../../utils/ids";
 import { nowIso, calendarDateOf } from "../../utils/time";
 import { AppError } from "../../errors";
@@ -18,6 +20,7 @@ import {
   type SponsorshipPipelineStage,
 } from "../../../../assets/shared/schemas/sponsorship-management";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../../types";
+import { prepareSponsorshipContentPublication } from "./publication";
 
 export { SPONSORSHIP_PIPELINE_STAGES };
 export type { SponsorshipPipelineStage };
@@ -192,6 +195,29 @@ export async function updateSponsorship(
           .bind(...values, id, existing.transition_revision),
         prepareAuditLogAfterOneChange(db, "admin", actorUserId, "sponsorship_updated", "sponsorship", id, patch, now),
       ];
+      if (existing.pipeline_stage === "active" && (patch.tier !== undefined || patch.renewalDate !== undefined)) {
+        statements.push(
+          ...prepareActiveSponsorshipPeriodPatch(db, {
+            id,
+            tierChanged: patch.tier !== undefined && patch.tier !== existing.tier,
+            at: now,
+          }),
+        );
+      }
+      statements.unshift(
+        prepareSponsorshipContentPublication(
+          db,
+          existing,
+          {
+            non_member_name: patch.nonMemberName === undefined ? existing.non_member_name : patch.nonMemberName,
+            non_member_website:
+              patch.nonMemberWebsite === undefined ? existing.non_member_website : patch.nonMemberWebsite,
+            tier: patch.tier === undefined ? existing.tier : patch.tier,
+            renewal_date: patch.renewalDate === undefined ? existing.renewal_date : patch.renewalDate,
+          },
+          now,
+        ),
+      );
       if (
         patch.tier !== undefined &&
         existing.sponsor_type === "consortium" &&
@@ -238,6 +264,7 @@ export async function advanceSponsorshipStage(
     toStage: string;
     actor: AuthAdmin;
     note: string | null;
+    endReason?: SponsorshipEndReason;
     notifications: { appBaseUrl: string; magicLinkTtlMinutes: number; signingSecret: string };
   },
 ): Promise<AdvanceSponsorshipStageResult> {
@@ -251,7 +278,7 @@ export async function advanceSponsorshipStage(
   }
 
   const fromStage = existing.pipeline_stage;
-  if (params.toStage === fromStage) {
+  if (params.toStage === fromStage && params.endReason === undefined) {
     return {
       sponsorship: existing,
       becameActive: false,
@@ -271,12 +298,22 @@ export async function advanceSponsorshipStage(
       "Set a future renewal date before activating a sponsorship",
     );
   }
+  if (
+    params.endReason === "ordinary_expiry" &&
+    (!existing.renewal_date || existing.renewal_date > utcDate() || params.toStage !== "lapsed")
+  ) {
+    throw new AppError(409, "SPONSORSHIP_NOT_EXPIRED", "Ordinary expiry requires a renewal date that has passed");
+  }
+  if (params.endReason && params.toStage !== "lapsed" && params.toStage !== "not_proceeding") {
+    throw new AppError(422, "INVALID_END_REASON", "Choose an end reason only when ending a sponsorship");
+  }
   const now = nowIso();
   const preparedTransition = prepareSponsorshipStageTransition(db, existing, {
     toStage: params.toStage,
     actor: params.actor,
     note: params.note,
     auditAction: "sponsorship_stage_advanced",
+    endReason: params.endReason,
     now,
   });
   const { becameActive, becameLapsed } = preparedTransition;

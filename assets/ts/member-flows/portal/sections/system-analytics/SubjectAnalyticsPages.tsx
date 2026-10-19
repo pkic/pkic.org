@@ -18,6 +18,7 @@ import {
   organizationAnalyticsResponseSchema,
   userAnalyticsResponseSchema,
 } from "../../../../../shared/schemas/analytics";
+import { formatNumber } from "../../../../../shared/format-number";
 import { SubjectAnalytics } from "./SubjectAnalytics";
 
 interface CategoryRow {
@@ -34,7 +35,7 @@ interface CategoryRow {
  * domain's own words already, and inventing a second vocabulary for them here
  * is how a legend and a filter end up disagreeing.
  */
-function labelled(counts: Record<string, number>): Record<string, number> {
+function labeled(counts: Record<string, number>): Record<string, number> {
   return Object.fromEntries(
     Object.entries(counts).map(([key, count]) => [key.charAt(0).toUpperCase() + key.slice(1), count]),
   );
@@ -45,7 +46,7 @@ export function MembershipAnalytics() {
   const members = state.data?.members;
   const categoryColumns: Column<CategoryRow>[] = [
     { header: "Category", cell: (row) => `${row.label} (${row.code})` },
-    { header: "Members", cell: (row) => String(row.count), width: "fit" },
+    { header: "Members", cell: (row) => formatNumber(row.count), align: "end", width: "fit" },
   ];
 
   return (
@@ -59,12 +60,12 @@ export function MembershipAnalytics() {
         {
           label: "Represented",
           value: members?.representation.withRepresentatives ?? 0,
-          note: `${members?.representation.withoutRepresentatives ?? 0} with nobody seated`,
+          note: `${formatNumber(members?.representation.withoutRepresentatives ?? 0)} with nobody seated`,
         },
         { label: "Organizations", value: members?.byKind.organization ?? 0 },
         { label: "Individuals", value: members?.byKind.individual ?? 0 },
       ]}
-      splits={[{ title: "By standing", counts: labelled(members?.byStatus ?? {}) }]}
+      splits={[{ title: "By standing", counts: labeled(members?.byStatus ?? {}) }]}
       series={
         members
           ? { title: "Memberships begun, by month", points: members.joinedMonthly, valueHeader: "Memberships" }
@@ -95,17 +96,17 @@ export function OrganizationAnalytics() {
         {
           label: "Members",
           value: organizations?.members ?? 0,
-          note: `${organizations?.recordedOnly ?? 0} recorded only`,
+          note: `${formatNumber(organizations?.recordedOnly ?? 0)} recorded only`,
         },
         {
           label: "Represented",
           value: organizations?.withRepresentatives ?? 0,
-          note: `${organizations?.withoutRepresentatives ?? 0} with nobody seated`,
+          note: `${formatNumber(organizations?.withoutRepresentatives ?? 0)} with nobody seated`,
         },
         {
           label: "With a logo",
           value: organizations?.withLogo ?? 0,
-          note: `${organizations?.withWebsite ?? 0} with a website`,
+          note: `${formatNumber(organizations?.withWebsite ?? 0)} with a website`,
         },
       ]}
       splits={[
@@ -146,15 +147,15 @@ export function UserAnalytics() {
       error={state.error}
       figures={[
         { label: "Accounts", value: users?.total ?? 0 },
-        { label: "Active", value: users?.active ?? 0, note: `${users?.inactive ?? 0} deactivated` },
+        { label: "Active", value: users?.active ?? 0, note: `${formatNumber(users?.inactive ?? 0)} deactivated` },
         {
           label: "Acting in a capacity",
           value: users?.withIdentities ?? 0,
-          note: `${users?.withoutIdentities ?? 0} contacts only`,
+          note: `${formatNumber(users?.withoutIdentities ?? 0)} contacts only`,
         },
       ]}
       splits={[
-        { title: "Active role holders", counts: labelled(users?.byRole ?? {}) },
+        { title: "Active role holders", counts: labeled(users?.byRole ?? {}) },
         {
           title: "By standing",
           counts: { Active: users?.active ?? 0, Deactivated: users?.inactive ?? 0 },

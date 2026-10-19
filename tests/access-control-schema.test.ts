@@ -7,6 +7,8 @@
  * that embed it.
  */
 import { describe, expect, it } from "vitest";
+import { PERMISSION_METADATA, PERMISSION_DOMAINS } from "../assets/shared/permission-metadata";
+import { PERMISSIONS, permissionSchema } from "../assets/shared/schemas/permissions";
 import {
   userRoleAssignSchema,
   accessGrantCreateSchema,
@@ -110,4 +112,75 @@ describe("access-control contextTypeSchema", () => {
       expect(schema.safeParse({ ...common, contextId: crypto.randomUUID() }).success).toBe(false);
     },
   );
+});
+
+describe("canonical permission metadata", () => {
+  it("defines every supported scope exactly once with an existing domain", () => {
+    expect(PERMISSIONS).toEqual(permissionSchema.options);
+    expect(new Set(PERMISSIONS).size).toBe(PERMISSIONS.length);
+    for (const permission of PERMISSIONS)
+      expect(PERMISSION_DOMAINS).toHaveProperty(PERMISSION_METADATA[permission].domain);
+    expect(permissionSchema.safeParse("events:*").success).toBe(false);
+  });
+  it.each([
+    "donations:sync",
+    "retention:run",
+    "access:grant",
+    "proposals:score",
+    "agenda:scan",
+    "agenda:live_moderate",
+  ] as const)("classifies %s as a write without guessing its suffix", (permission) => {
+    expect(PERMISSION_METADATA[permission].access).toBe("write");
+  });
+  it.each(["agenda:attendance_read", "agenda:leads_view", "agenda:leads_export", "agenda:check"] as const)(
+    "classifies %s as a read without granting scanner writes",
+    (permission) => {
+      expect(PERMISSION_METADATA[permission].access).toBe("read");
+    },
+  );
+});
+
+describe("OAuth selected scopes and contextual ceilings", () => {
+  it.each([undefined, [], ["forms:*"], ["unknown:read"], ["forms:read", "forms:read"], "forms:read"])(
+    "rejects invalid selected scopes (%j)",
+    async (selectedScopes) => {
+      const { mcpOauthAuthorizeActionSchema } = await import("../assets/shared/schemas/mcp-oauth");
+      expect(
+        mcpOauthAuthorizeActionSchema.safeParse({
+          action: "approve",
+          return_to: "/api/v1/auth/oauth/authorize",
+          scopes: selectedScopes,
+          actingIdentityId: null,
+        }).success,
+      ).toBe(false);
+    },
+  );
+  it("accepts a canonical subset without requiring every requested scope", async () => {
+    const { mcpOauthAuthorizeActionSchema } = await import("../assets/shared/schemas/mcp-oauth");
+    expect(
+      mcpOauthAuthorizeActionSchema.safeParse({
+        action: "approve",
+        return_to: "/api/v1/auth/oauth/authorize",
+        scopes: ["forms:read"],
+        actingIdentityId: null,
+      }).success,
+    ).toBe(true);
+  });
+  it("requires the displayed identity even when approving without a membership", async () => {
+    const { mcpOauthAuthorizeActionSchema } = await import("../assets/shared/schemas/mcp-oauth");
+    expect(
+      mcpOauthAuthorizeActionSchema.safeParse({
+        action: "approve",
+        return_to: "/api/v1/auth/oauth/authorize",
+        scopes: ["forms:read"],
+      }).success,
+    ).toBe(false);
+  });
+  it("requires paired contexts and rejects duplicate permission limits", async () => {
+    const { oauthAuthorizationScopesSchema } = await import("../assets/shared/schemas/oauth-authorizations");
+    const scope = { permission: "forms:read", contextType: "event", contextId: crypto.randomUUID() };
+    expect(oauthAuthorizationScopesSchema.safeParse([scope]).success).toBe(true);
+    expect(oauthAuthorizationScopesSchema.safeParse([scope, scope]).success).toBe(false);
+    expect(oauthAuthorizationScopesSchema.safeParse([{ ...scope, contextId: null }]).success).toBe(false);
+  });
 });

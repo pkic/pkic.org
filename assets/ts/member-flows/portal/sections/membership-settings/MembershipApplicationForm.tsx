@@ -24,6 +24,7 @@ import { PageHeader } from "../../../../ui/PageHeader";
 import { Panel, PanelBody } from "../../../../ui/Panel";
 import { getJson, patchJson } from "../../../../shared/api-client";
 import { toast } from "../../ui";
+import { SectionHeading } from "../../../../ui/SectionHeading";
 
 const APPLICATION_FORM_DEFINITION_API = "/api/v1/members/applications/form/definition";
 
@@ -94,7 +95,7 @@ export function MembershipApplicationForm({ canWrite }: { canWrite: boolean }) {
           ) : detail ? (
             <>
               <div class="pk-stack pk-stack--snug">
-                <h3>Required policy acknowledgements</h3>
+                <SectionHeading level={3}>Required policy acknowledgements</SectionHeading>
                 <p class="pk-small">These workflow-owned consent fields are mandatory and cannot be changed here.</p>
                 <ul class="pk-stack pk-stack--tight" aria-label="Required policy acknowledgements">
                   {policyFields.map((field) => (

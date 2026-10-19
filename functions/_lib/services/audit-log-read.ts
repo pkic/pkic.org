@@ -44,9 +44,14 @@ const USER_BACKED_ACTOR_TYPES_SQL = USER_BACKED_AUDIT_ACTOR_TYPES.map((actorType
 const AUDIT_LOG_SELECT_SQL = `SELECT
   al.id, al.actor_type, al.actor_id,
   COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS actor_display,
+  acting_identity.id AS actor_identity_id, acting_organization.name AS actor_organization_name,
   al.action, al.entity_type, al.entity_id, al.details_json, al.created_at`;
+// The acting identity resolves through its primary key; the organization name
+// is the organization's current name.
 const AUDIT_LOG_FROM_SQL = `FROM audit_log al
-  LEFT JOIN users u ON al.actor_type IN (${USER_BACKED_ACTOR_TYPES_SQL}) AND u.id = al.actor_id`;
+  LEFT JOIN users u ON al.actor_type IN (${USER_BACKED_ACTOR_TYPES_SQL}) AND u.id = al.actor_id
+  LEFT JOIN identities acting_identity ON acting_identity.id = al.actor_identity_id
+  LEFT JOIN organizations acting_organization ON acting_organization.id = acting_identity.organization_id`;
 
 const SCOPED_AUDIT_SORT_POLICY: AuditLogSortPolicy = {
   expressions: {

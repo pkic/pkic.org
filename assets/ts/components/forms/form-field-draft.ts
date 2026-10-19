@@ -241,3 +241,115 @@ export function rulesToDraftPatch(
     advancedValidationText: Object.keys(advanced).length ? JSON.stringify(advanced, null, 2) : "{}",
   };
 }
+
+// ── field definition ↔ draft ──────────────────────────────────────────────────
+
+/** A blank question of the given type, at the given position. */
+export function emptyFieldDraft(index: number, fieldType: FieldType = "text"): FieldDraft {
+  return {
+    key: "",
+    label: "",
+    fieldType,
+    required: false,
+    sortOrder: (index + 1) * 10,
+    optionsText: "",
+    optionSource: undefined,
+    adminVisualization: "auto",
+    placeholder: "",
+    helpText: "",
+    uiWidget: "",
+    format: "",
+    pattern: "",
+    patternMessage: "",
+    minLength: "",
+    maxLength: "",
+    min: "",
+    max: "",
+    step: "",
+    minItems: "",
+    maxItems: "",
+    allowCustom: false,
+    allowedDomainsText: "",
+    advancedValidationText: "{}",
+    rawMode: false,
+    rawValidationText: "{}",
+  };
+}
+
+function visualizationConfig(value: unknown): VisualizationConfig {
+  return value === "bar" || value === "pie" || value === "wordcloud" || value === "list" ? value : "auto";
+}
+
+/** The draft an editor opens a stored field as; validation keys it has no control for stay in the overflow. */
+export function fieldToDraft(
+  field: Pick<
+    FormFieldDefinition,
+    "key" | "label" | "fieldType" | "required" | "sortOrder" | "options" | "optionSource" | "validation"
+  >,
+): FieldDraft {
+  const validation: Record<string, unknown> = isRec(field.validation) ? field.validation : {};
+  const allowedDomains = validation.allowedDomains;
+  const advanced = Object.fromEntries(Object.entries(validation).filter(([key]) => !KNOWN_KEYS.has(key)));
+  return {
+    key: field.key,
+    label: field.label,
+    fieldType: field.fieldType,
+    required: field.required,
+    sortOrder: field.sortOrder,
+    optionSource: field.optionSource ?? undefined,
+    optionsText: field.optionSource
+      ? ""
+      : Array.isArray(field.options)
+        ? field.options.map((entry) => (typeof entry === "string" ? entry : String(entry.value ?? ""))).join("\n")
+        : "",
+    adminVisualization: visualizationConfig(validation.adminVisualization ?? validation.visualization),
+    placeholder: sv(validation, "placeholder"),
+    helpText: sv(validation, "helpText"),
+    uiWidget: sv(validation, "uiWidget"),
+    format: sv(validation, "format"),
+    pattern: sv(validation, "pattern"),
+    patternMessage: sv(validation, "patternMessage"),
+    minLength: nv(validation, "minLength"),
+    maxLength: nv(validation, "maxLength"),
+    min: nv(validation, "min"),
+    max: nv(validation, "max"),
+    step: nv(validation, "step"),
+    minItems: nv(validation, "minItems"),
+    maxItems: nv(validation, "maxItems"),
+    allowCustom: validation.allowCustom === true,
+    allowedDomainsText: Array.isArray(allowedDomains)
+      ? allowedDomains.filter((entry): entry is string => typeof entry === "string").join("\n")
+      : "",
+    advancedValidationText: Object.keys(advanced).length ? JSON.stringify(advanced, null, 2) : "{}",
+    rawMode: false,
+    rawValidationText: "{}",
+  };
+}
+
+/**
+ * The draft as the field-authoring contract reads it, before that contract
+ * parses it. Rules JSON that does not parse is passed on as its text, so the
+ * contract refuses it on the question rather than the editor throwing.
+ */
+export function fieldDraftToInput(field: FieldDraft, sortOrder: number) {
+  let validation: unknown;
+  try {
+    validation = buildFieldValidation(field);
+  } catch {
+    validation = field.rawMode ? field.rawValidationText : field.advancedValidationText;
+  }
+  const options = field.optionsText
+    .split(/\n/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  return {
+    key: field.key.trim(),
+    label: field.label.trim(),
+    fieldType: field.fieldType,
+    required: field.required,
+    sortOrder,
+    options: options.length > 0 ? options : undefined,
+    optionSource: field.optionSource,
+    validation,
+  };
+}

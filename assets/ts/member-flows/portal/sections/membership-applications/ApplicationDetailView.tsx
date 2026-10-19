@@ -1,3 +1,4 @@
+import { ApplicationStageBadge } from "./ApplicationStageBadge";
 import { WorkflowMigrationCard } from "./WorkflowMigrationCard";
 import { isApplicationTerminalStage } from "../../../../../shared/schemas/member-applications";
 import { WorkflowReviewPage } from "./WorkflowReviewPage";
@@ -14,7 +15,6 @@ import { WorkflowReviewPage } from "./WorkflowReviewPage";
 import { useState } from "preact/hooks";
 import { Spinner } from "../../../../components/Spinner";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
-import { Badge } from "../../../../components/Badge";
 import { Tabs } from "../../../../components/Tabs";
 import { usePortalHashLocation } from "../../hash-location";
 import { Avatar } from "../../../../ui/Avatar";
@@ -91,7 +91,7 @@ export function ApplicationDetailView({
       <ProfileHeader
         media={<Avatar name={detail.applicantName} size="xl" />}
         title={detail.applicantName}
-        context={<Badge status={detail.stage} />}
+        context={<ApplicationStageBadge application={detail} />}
         lede={detail.organizationName ?? "Individual applicant"}
         facts={[
           detail.applicantEmail,
@@ -123,7 +123,7 @@ export function ApplicationDetailView({
             <ApplicationAnswersCard detail={detail} />
             <ApplicationDocumentsCard applicationId={detail.id} />
           </div>
-          <aside class="pk-stack">
+          <div class="pk-stack">
             {(canWrite || canApprove) && (
               <ApplicationTransitionCard detail={detail} canWrite={canWrite} onTransition={transition} />
             )}
@@ -131,7 +131,7 @@ export function ApplicationDetailView({
               <WorkflowMigrationCard applicationId={applicationId} />
             )}
             <ApplicationTimelineCard detail={detail} />
-          </aside>
+          </div>
         </div>
       )}
       {activeTab === "review" && <WorkflowReviewPage applicationId={applicationId} embedded onSaved={reload} />}

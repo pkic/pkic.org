@@ -6,9 +6,9 @@
  * be a Badge that could not be reused. The system owns the six tones and how
  * they look; this owns which of our statuses mean what.
  *
- * The map used to name Bootstrap colours, including `dark` and `light` as
+ * The map used to name Bootstrap colors, including `dark` and `light` as
  * two more shades of grey. Those collapse into `neutral`: the distinction
- * between an archived thing and a draft one was carried by colour alone,
+ * between an archived thing and a draft one was carried by color alone,
  * which is exactly the signal nobody can rely on, and the label says it.
  */
 const STATUS_TONE = {
@@ -18,6 +18,10 @@ const STATUS_TONE = {
   pending_email_confirmation: "warn",
   waitlisted: "info",
   cancelled: "neutral",
+  // session seats
+  reserved: "ok",
+  approval_pending: "warn",
+  invited: "info",
   // waitlist offer lifecycle
   waiting: "warn",
   offered: "info",
@@ -42,6 +46,9 @@ const STATUS_TONE = {
   "needs-work": "warn",
   needs_revision: "warn",
   withdrawn: "neutral",
+  // affiliation reviews
+  resolved: "ok",
+  dismissed: "neutral",
   // review recommendation
   accept: "ok",
   reject: "danger",
@@ -123,6 +130,7 @@ const STATUS_TONE = {
 const STATUS_LABEL: Record<string, string> = {
   not_registered: "Not registered",
   pending_email_confirmation: "Pending confirmation",
+  approval_pending: "Awaiting approval",
   under_review: "Under review",
   needs_work: "Needs work",
   "needs-work": "Needs work",

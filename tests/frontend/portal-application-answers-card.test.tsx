@@ -15,6 +15,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import type { MembershipApplicationDetail } from "../../assets/shared/schemas/membership-application-management";
 import { ApplicationAnswersCard } from "../../assets/ts/member-flows/portal/sections/membership-applications/ApplicationAnswersCard";
+import { NEW_TAB_HINT } from "../../assets/ts/ui/new-tab";
 
 const NOW = "2026-08-31T09:00:00.000Z";
 
@@ -162,7 +163,7 @@ describe("membership application answers card", () => {
     // The organization's website stays an address a reviewer reads and checks,
     // minus the scheme every other address row also drops.
     const website = answerTo(page, "Organization website").querySelector("a")!;
-    expect(website.textContent).toBe("example.test");
+    expect(website.textContent).toBe(`example.test ${NEW_TAB_HINT}`);
 
     const groups = answerTo(page, "Working groups requested").querySelectorAll("li");
     expect([...groups].map((item) => item.textContent)).toEqual(["Working Group One", "Working Group Two"]);

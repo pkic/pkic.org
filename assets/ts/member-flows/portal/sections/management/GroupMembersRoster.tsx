@@ -1,6 +1,6 @@
 import { groupMembershipsParticipantListResponseSchema } from "../../../../../shared/schemas/groups";
 import { ApiDataTable } from "../../../../components/ApiDataTable";
-import { PersonCell } from "../../../../components/PersonCell";
+import { PersonCellPreview } from "../../../../components/identities/PersonCellPreview";
 import { EmptyState } from "../../../../ui/EmptyState";
 
 /**
@@ -14,6 +14,7 @@ export function GroupMembersRoster({ groupId }: { groupId: string }) {
   return (
     <div class="pk">
       <ApiDataTable
+        urlState="group-roster"
         caption="Members"
         endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/memberships`}
         responseSchema={groupMembershipsParticipantListResponseSchema}
@@ -27,19 +28,15 @@ export function GroupMembersRoster({ groupId }: { groupId: string }) {
             header: "Member",
             width: "primary",
             cell: (participant) => (
-              <PersonCell
-                firstName={participant.name}
-                lastName={null}
-                email={null}
-                headshotUrl={participant.headshotUrl}
+              <PersonCellPreview
+                name={participant.name || "—"}
+                title={participant.jobTitle}
+                organization={participant.organizationName}
+                avatarSrc={participant.headshotUrl}
+                size="sm"
               />
             ),
             sort: { asc: "user_name", desc: "-user_name", defaultDirection: "asc" },
-          },
-          {
-            header: "Represents",
-            cell: (participant) => participant.organizationName ?? "—",
-            sort: { asc: "organization_name", desc: "-organization_name", defaultDirection: "asc" },
           },
         ]}
         empty={<EmptyState title="No matching members" body="Nobody in this group matches this search." />}

@@ -1,8 +1,9 @@
 ---
+import { publication } from "../publication";
 import { siteConferencePrograms } from "../../functions/_lib/services/site-content";
 import "../../assets/scss/conference-overlays.scss";
 export function getStaticPaths() {
-  return siteConferencePrograms().filter((event) => event.outputs.includes("event-overlays"))
+  return siteConferencePrograms(publication).filter((event) => event.outputs.includes("event-overlays"))
     .map((event) => ({ params: { conferenceOverlays: `${event.route}event-overlays`.replace(/^\//, "") }, props: { event } }));
 }
 const { event } = Astro.props;

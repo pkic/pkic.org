@@ -26,7 +26,7 @@ import {
   typeInto,
   typeMarkdown,
   markdownControl,
-} from "./helpers/labelled-control";
+} from "./helpers/labeled-control";
 
 vi.mock("wouter/use-hash-location", () => ({
   useHashLocation: () => ["", vi.fn()],
@@ -106,7 +106,7 @@ describe("one review card", () => {
     expect(card?.getAttribute("aria-label")).toBe("Review by Review Owner");
   });
 
-  it("states the recommendation and the score in words, not in colour", async () => {
+  it("states the recommendation and the score in words, not in color", async () => {
     const root = mount(<ProposalReviewCard review={review} />);
 
     // Roughly one man in twelve cannot separate the accept and reject hues, so
@@ -242,7 +242,7 @@ describe("shared proposal management components", () => {
     expect(controlFor<HTMLSelectElement>(root, "Recommendation").tagName).toBe("SELECT");
     expect(controlFor(root, "Score (1–10)").required).toBe(true);
     // One man in twelve cannot separate the warn and ok hues, so the count is
-    // spelled out rather than left to the badge's colour.
+    // spelled out rather than left to the badge's color.
     expect(root.textContent).toContain("1 more review needed");
   });
 

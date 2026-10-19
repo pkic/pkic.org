@@ -3,7 +3,7 @@
  *
  * A transient confirmation message. The tone is resolved through a modifier
  * class that sets the --tone local variable, which the dot and action button
- * use for their colours. The component uses role="status", not role="alert",
+ * use for their colors. The component uses role="status", not role="alert",
  * because a toast is a confirmation, not an interruption.
  */
 

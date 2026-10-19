@@ -13,7 +13,7 @@ import { env } from "cloudflare:workers";
 
 import { userParticipationSchema } from "../assets/shared/schemas/user-participation";
 import { callApi } from "./helpers/app";
-import { createAdminSession } from "./helpers/auth";
+import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { getUserParticipation } from "../functions/_lib/services/user-participation";
 import { resetDb } from "./helpers/reset-db";
 import {
@@ -22,6 +22,7 @@ import {
   seedOrganizationAggregate,
   insertIndividualMember,
   insertOrgRepresentative,
+  insertUser,
 } from "./helpers/membership";
 
 const NOW = () => new Date().toISOString();
@@ -70,6 +71,26 @@ async function insertOccurrence(seriesId: string, startsAt: string, status = "sc
     .bind(id, seriesId, startsAt, endsAt, status, NOW(), NOW())
     .run();
   return id;
+}
+
+async function insertEvent(slug: string): Promise<string> {
+  const id = crypto.randomUUID();
+  await env.DB.prepare(
+    `INSERT INTO events (id, slug, name, timezone, registration_mode, invite_limit_attendee, settings_json, created_at, updated_at)
+     VALUES (?, ?, ?, 'UTC', 'invite_or_open', 5, '{}', ?, ?)`,
+  )
+    .bind(id, slug, slug, NOW(), NOW())
+    .run();
+  return id;
+}
+
+async function register(eventId: string, userId: string, status: "registered" | "cancelled"): Promise<void> {
+  await env.DB.prepare(
+    `INSERT INTO registrations (id, event_id, user_id, status, attendance_type, source_type, manage_link_secret, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'virtual', 'direct', ?, ?, ?)`,
+  )
+    .bind(crypto.randomUUID(), eventId, userId, status, crypto.randomUUID(), NOW(), NOW())
+    .run();
 }
 
 async function recordAttendance(occurrenceId: string, userId: string): Promise<void> {
@@ -132,17 +153,18 @@ describe("user participation read model", () => {
     await env.DB.prepare("UPDATE group_memberships SET title = 'Legacy treasurer' WHERE user_id = ?")
       .bind(member.userId)
       .run();
-    expect((await getUserParticipation(env.DB, member.userId)).groups).toMatchObject([{ title: null }]);
+    expect((await getUserParticipation(env.DB, member.userId)).groups).toMatchObject([{ title: null }, { title: null }]);
     const leadership = await grantGroupLeadershipCapacity(env.DB, groupId, member.userId);
     await env.DB.prepare("UPDATE user_roles SET title = 'Chair' WHERE id = ?").bind(leadership.roleAssignmentId).run();
     const participation = await getUserParticipation(env.DB, member.userId);
-    expect(participation.groups).toHaveLength(1);
-    expect(participation.groups[0].title).toBe("Chair");
+    // Two capacities are two seats; the leadership title belongs to one of them.
+    expect(participation.groups).toHaveLength(2);
+    expect(participation.groups.map((seat) => seat.title).sort()).toEqual(["Chair", null]);
     expect(participation.summary.groupCount).toBe(1);
     await env.DB.prepare("UPDATE user_roles SET revoked_at = ? WHERE id = ?")
       .bind(NOW(), leadership.roleAssignmentId)
       .run();
-    expect((await getUserParticipation(env.DB, member.userId)).groups[0].title).toBeNull();
+    expect((await getUserParticipation(env.DB, member.userId)).groups.map((seat) => seat.title)).toEqual([null, null]);
   });
 
   it("counts only meetings held since the person joined, and only those they attended", async () => {
@@ -250,20 +272,84 @@ describe("user participation read model", () => {
     });
   });
 
-  it("does not count a group the person has left", async () => {
+  it("returns a past seat with its interval but keeps it out of the summary", async () => {
     const member = await insertIndividualMember(env.DB, "H6", "departed@example.test");
     const userId = member.userId;
     const groupId = await insertGroup("Departed", "departed");
     const seriesId = await insertSeriesForGroup(groupId, "departed");
+    const leftAt = daysFromNow(-15);
     await joinGroup(groupId, member, daysFromNow(-30));
-    await insertOccurrence(seriesId, daysFromNow(-10));
-    await env.DB.prepare("UPDATE group_memberships SET left_at = ? WHERE user_id = ?")
-      .bind(daysFromNow(-5), userId)
+    const duringSeat = await insertOccurrence(seriesId, daysFromNow(-20));
+    await insertOccurrence(seriesId, daysFromNow(-25)); // held, missed
+    const afterLeaving = await insertOccurrence(seriesId, daysFromNow(-10));
+    await recordAttendance(duringSeat, userId);
+    await recordAttendance(afterLeaving, userId);
+    await env.DB.prepare("UPDATE group_memberships SET left_at = ?, title = 'Former chair' WHERE user_id = ?")
+      .bind(leftAt, userId)
       .run();
 
     const participation = userParticipationSchema.parse(await getUserParticipation(env.DB, userId));
 
-    expect(participation.groups).toEqual([]);
-    expect(participation.summary.groupCount).toBe(0);
+    expect(participation.groups).toHaveLength(1);
+    expect(participation.groups[0]).toMatchObject({
+      identityId: member.identityId,
+      leftAt,
+      title: "Former chair",
+      held: 2,
+      attended: 1,
+    });
+    expect(participation.groups[0]?.lastAttendedAt).not.toBeNull();
+    expect(participation.summary).toMatchObject({ groupCount: 0, meetingsAttended: 0, meetingsHeld: 0 });
+  });
+
+  it("lists current seats before past ones and keeps each rejoin interval separate", async () => {
+    const member = await insertIndividualMember(env.DB, "H6", "rejoined@example.test");
+    const userId = member.userId;
+    const groupId = await insertGroup("Rejoined", "rejoined");
+    const seriesId = await insertSeriesForGroup(groupId, "rejoined");
+    await joinGroup(groupId, member, daysFromNow(-60));
+    await env.DB.prepare("UPDATE group_memberships SET left_at = ? WHERE user_id = ?")
+      .bind(daysFromNow(-40), userId)
+      .run();
+    await joinGroup(groupId, member, daysFromNow(-20));
+    await insertOccurrence(seriesId, daysFromNow(-50)); // first interval
+    await insertOccurrence(seriesId, daysFromNow(-30)); // between seats
+    await insertOccurrence(seriesId, daysFromNow(-10)); // second interval
+
+    const participation = userParticipationSchema.parse(await getUserParticipation(env.DB, userId));
+
+    expect(participation.groups.map((seat) => [seat.leftAt === null, seat.held])).toEqual([
+      [true, 1],
+      [false, 1],
+    ]);
+    expect(participation.summary).toMatchObject({ groupCount: 1, meetingsHeld: 1 });
+  });
+
+  it("counts the events a person registered for, but not a cancelled registration", async () => {
+    const userId = await insertUser(env.DB, "registered-only@example.test");
+    await register(await insertEvent("first-conference"), userId, "registered");
+    await register(await insertEvent("cancelled-conference"), userId, "cancelled");
+
+    const participation = userParticipationSchema.parse(await getUserParticipation(env.DB, userId));
+
+    expect(participation.summary).toMatchObject({ groupCount: 0, eventCount: 1 });
+  });
+
+  it("lets a registered attendee without a membership read their own participation, and nobody else's", async () => {
+    const userId = await insertUser(env.DB, "attendee-self@example.test");
+    const otherId = await insertUser(env.DB, "attendee-other@example.test");
+    await register(await insertEvent("self-conference"), userId, "registered");
+    const token = await createMemberSession(env.DB, userId, "attendee-self-session", undefined, null);
+
+    const own = await callApi(env, `/api/v1/users/${userId}/participation`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(own.status, await own.clone().text()).toBe(200);
+    expect(await own.json()).toMatchObject({ participation: { summary: { groupCount: 0, eventCount: 1 } } });
+
+    const other = await callApi(env, `/api/v1/users/${otherId}/participation`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(other.status).toBe(403);
   });
 });

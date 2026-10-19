@@ -20,13 +20,13 @@ import type { FieldPresentation } from "../../../../hooks/useContractForm";
 import { DescriptionList, type DescriptionListItem } from "../../../../ui/DescriptionList";
 import { Field } from "../../../../ui/Field";
 import { LinkList } from "../../../../ui/LinkList";
-import { Menu } from "../../../../ui/Menu";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { Select, TextInput } from "../../../../ui/TextControl";
 import { fmt, fmtDate } from "../../ui";
 import type { OrganizationDraft, OrganizationTextField } from "./OrganizationDraft";
 import "../../../../ui/Content.css";
 import { Markdown } from "../../../../ui/Markdown";
+import { ExternalLink } from "../../../../ui/ExternalLink";
 
 /** What a card needs to read the record and, while the page edits, the draft. */
 export interface OrganizationCardProps {
@@ -37,7 +37,6 @@ export interface OrganizationCardProps {
   busy?: boolean;
   /** Each field's live validation state, by field name. */
   fields?: (name: string) => FieldPresentation;
-  onEdit?: () => void;
 }
 
 interface EditorProps {
@@ -140,15 +139,7 @@ export function OrganizationAbout(props: OrganizationCardProps) {
   // again here printed the same line twice on one screen.
   return (
     <Panel aria-label="About">
-      <PanelHeader title="About">
-        {props.onEdit && (
-          <Menu
-            label="About actions"
-            align="end"
-            items={[{ id: "edit", label: "Edit organization…", onSelect: props.onEdit }]}
-          />
-        )}
-      </PanelHeader>
+      <PanelHeader title="About" />
       <PanelBody class="pk-stack pk-stack--snug">
         {organization.description ? (
           <Markdown className="pk-prose-block pk-prose-block--full" markdown={organization.description} />
@@ -204,9 +195,9 @@ export function OrganizationLinks(props: OrganizationCardProps) {
     pages.push({
       term: label,
       value: (
-        <a class="pk-break" href={url} target="_blank" rel="noopener noreferrer">
+        <ExternalLink class="pk-break" href={url} external>
           {url.replace(/^https?:\/\//, "")}
-        </a>
+        </ExternalLink>
       ),
     });
   }
@@ -284,9 +275,9 @@ export function OrganizationMembershipCard(props: OrganizationCardProps) {
                     // away rather than a URL to assemble by hand.
                     term: "Member page",
                     value: (
-                      <a class="pk-break" href={organization.publicProfileHref} target="_blank" rel="noopener">
+                      <ExternalLink class="pk-break" href={organization.publicProfileHref} external>
                         {organization.publicProfileHref}
-                      </a>
+                      </ExternalLink>
                     ),
                   },
                   created,

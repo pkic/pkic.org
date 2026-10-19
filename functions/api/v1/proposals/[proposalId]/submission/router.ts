@@ -9,7 +9,6 @@ import { onRequestGet, onRequestPatch } from "../../access/[token]";
 import { handleCoSpeakerInvite } from "../../access/[token]/speakers";
 import { handleProposalSpeakerPatch, onRequestDelete } from "../../access/[token]/speakers/[userId]";
 import { handleProposalSpeakerReminder } from "../../access/[token]/speakers/[userId]/reminders";
-import * as photo from "../../access/[token]/speakers/[userId]/headshot";
 
 const app = new Hono<RequestDbContext>();
 const routes = fromHono(app);
@@ -67,30 +66,6 @@ routes.post(
     contracts.participantSpeakerRemind,
     async (c: AdminContext, data) =>
       handleProposalSpeakerReminder(c, { ...data, params: { ...data.params, ...(await params(c, data.params)) } }),
-    markResponseSensitive,
-  ),
-);
-routes.get(
-  "/speakers/:userId/headshot",
-  openApiRoute(
-    contracts.participantSpeakerPhotoRead,
-    async (c: AdminContext, data) => photo.onGet(c, { ...data.params, ...(await params(c, data.params)) }),
-    markResponseSensitive,
-  ),
-);
-routes.put(
-  "/speakers/:userId/headshot",
-  openApiRoute(
-    contracts.participantSpeakerPhotoUpdate,
-    async (c: AdminContext, data) => photo.onPut(c, { ...data.params, ...(await params(c, data.params)) }),
-    markResponseSensitive,
-  ),
-);
-routes.delete(
-  "/speakers/:userId/headshot",
-  openApiRoute(
-    contracts.participantSpeakerPhotoDelete,
-    async (c: AdminContext, data) => photo.onDelete(c, { ...data.params, ...(await params(c, data.params)) }),
     markResponseSensitive,
   ),
 );

@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { UserProfileEditor } from "../../assets/ts/member-flows/portal/sections/system-users/UserProfileEditor";
 
 import type { UserDetail } from "../../assets/ts/member-flows/portal/sections/system-users/model";
-import { controlFor, groupNames, labelNames, namedGroup, submitForm, typeInto } from "./helpers/labelled-control";
+import { controlFor, groupNames, labelNames, namedGroup, submitForm, typeInto } from "./helpers/labeled-control";
 import { userUpdateSchema } from "../../assets/shared/schemas/user-management";
 // Resolved through the mock below, which keeps the real class.
 import { ApiClientError } from "../../assets/ts/shared/api-client";
@@ -159,7 +159,7 @@ describe("portal System Users profile permissions", () => {
 
     // Refused as typed by the update contract rather than by a second regular
     // expression written here: the field shows the invalid state with the
-    // contract's own reason, announced rather than only coloured.
+    // contract's own reason, announced rather than only colored.
     expect(fieldOf(email).classList.contains("pk-field--invalid")).toBe(true);
     expect(email.getAttribute("aria-invalid")).toBe("true");
     const message = container.querySelector(`[id="${email.getAttribute("aria-describedby")}"]`)!;
@@ -228,6 +228,7 @@ describe("portal System Users profile permissions", () => {
           isDefault: false,
           organizationId: "organization-1",
           organizationName: "Canonical Organization",
+          organizationEmailDomain: null,
           emailId: null,
           email: "role@canonical.example",
           jobTitle: "Canonical role",

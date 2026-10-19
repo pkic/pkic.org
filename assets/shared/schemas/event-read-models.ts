@@ -1,3 +1,4 @@
+import { parseDateTimeLocal } from "../timezone";
 import { z } from "zod";
 import { eventIdSchema, termKeyPattern, versionPattern } from "./api-common";
 
@@ -21,7 +22,15 @@ export const requiredTermSchema = z.object({
 export const eventDayDateSchema = z
   .string()
   .trim()
-  .regex(/^\d{4}-\d{2}-\d{2}$/);
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .refine((value) => {
+    try {
+      parseDateTimeLocal(`${value}T00:00`);
+      return true;
+    } catch {
+      return false;
+    }
+  }, "Enter a valid calendar date.");
 
 /** Configurable per-day attendance option identifier. */
 export const eventAttendanceTypeValueSchema = z

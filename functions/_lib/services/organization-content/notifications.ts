@@ -1,220 +1,133 @@
 import { all } from "../../db/queries";
-import { chunkJsonRows } from "../../db/json-bulk";
-import {
-  prepareBulkQueueEmailChunkStatements,
-  processSelectedOutboxBackground,
-  type BulkEmailQueueRow,
-} from "../../email/outbox";
-import { sha256Hex } from "../../utils/crypto";
-import { logError } from "../../logging";
-import type { DatabaseLike, Env, StatementLike } from "../../types";
+import { prepareAuthorizationGuard } from "../../db/authorization-guard";
+import { prepareQueueEmailStatementWhen } from "../../email/outbox";
 import { staffPermissionPredicate } from "../../auth/permissions";
+import { sha256Hex } from "../../utils/crypto";
+import { nowIso } from "../../utils/time";
+import { emailPlainText } from "../../email/plain-text";
+import { reviewDigestSendAt } from "../../../../assets/shared/review-notifications";
+import { buildManagementLink } from "../management-links";
+import type { DatabaseLike, StatementLike } from "../../types";
 
 const CONTENT_REVIEW_PERMISSION = "organizations:content-review";
-const CONTENT_REVIEW_TEMPLATE = "org-content-submitted";
+export const ORGANIZATION_CONTENT_REVIEW_DIGEST_TEMPLATE = "org-content-review-digest";
+/** The email previews a bounded queue; the linked shared queue contains every review. */
+const DIGEST_PREVIEW_LIMIT = 50;
 
-export interface PendingOrganizationContentReviewNotificationIntent {
-  reviewId: string;
-  recipientEmail: string;
-  recipientUserId: string | null;
-  organizationName: string;
-  submitterName: string;
-  reviewUrl: string;
-}
-
-/**
- * Snapshots the intended staff recipients in the same D1 batch as review
- * creation. The recipient email is the logical key to preserve the existing
- * distinct-email fan-out behavior, while the user ID remains useful for
- * outbox/audit inspection.
- */
-export function prepareOrganizationContentReviewNotificationIntents(
-  db: DatabaseLike,
-  reviewId: string,
-  organizationId: string,
-  submitterName: string,
-  reviewUrl: string,
-  createdAt: string,
-): StatementLike {
+/** Recompute unsent digests from the live queue inside the review's command boundary. */
+export function prepareRefreshOrganizationContentReviewDigests(db: DatabaseLike, now: string): StatementLike {
   return db
-    .prepare(
-      `WITH eligible_users AS (
-         SELECT u.id, u.email
-         FROM users u
-         WHERE u.active = 1 AND ${staffPermissionPredicate("u")}
-       )
-       INSERT INTO organization_content_review_notification_intents (
-         review_id, recipient_email, recipient_user_id, organization_name,
-         submitter_name, review_url, created_at, queued_outbox_id, queued_at
-       )
-       SELECT ?, e.email, MIN(e.id), o.name, ?, ?, ?, NULL, NULL
-       FROM eligible_users e
-       JOIN organizations o ON o.id = ?
-       JOIN organization_content_reviews r ON r.id = ? AND r.organization_id = o.id
-       GROUP BY e.email, o.name
-       ON CONFLICT(review_id, recipient_email) DO NOTHING`,
+    .prepare(`WITH pending AS MATERIALIZED (
+      SELECT r.id, o.name FROM organization_content_reviews r
+      JOIN organizations o ON o.id = r.organization_id
+      WHERE r.status = 'pending'
+      ORDER BY r.submitted_at ASC, r.id ASC LIMIT ?
+    ), content AS MATERIALIZED (
+      SELECT (SELECT COUNT(*) FROM organization_content_reviews WHERE status = 'pending') AS pending_count,
+        COALESCE((SELECT json_group_array(json_object('organizationName', json_object(?, name))) FROM pending), '[]') AS reviews
     )
+    UPDATE email_outbox SET payload_json = json_set(payload_json,
+      '$.pendingCount', (SELECT pending_count FROM content),
+      '$.reviews', json((SELECT reviews FROM content)),
+      '$.hasMore', json(CASE WHEN (SELECT pending_count FROM content) > ? THEN 'true' ELSE 'false' END)),
+      status = CASE WHEN (SELECT pending_count FROM content) = 0 OR NOT EXISTS (
+        SELECT 1 FROM users u WHERE u.id = email_outbox.recipient_user_id AND u.active = 1
+          AND u.email = email_outbox.recipient_email AND ${staffPermissionPredicate("u")}
+      ) THEN 'cancelled' ELSE status END,
+      updated_at = ?
+    WHERE template_key = ? AND status IN ('queued', 'retrying')`)
     .bind(
+      DIGEST_PREVIEW_LIMIT,
+      Object.keys(emailPlainText(""))[0],
+      DIGEST_PREVIEW_LIMIT,
       CONTENT_REVIEW_PERMISSION,
       CONTENT_REVIEW_PERMISSION,
-      reviewId,
-      submitterName,
-      reviewUrl,
-      createdAt,
-      organizationId,
-      reviewId,
+      now,
+      ORGANIZATION_CONTENT_REVIEW_DIGEST_TEMPLATE,
     );
 }
 
-export async function listPendingOrganizationContentReviewNotificationIntents(
-  db: DatabaseLike,
-  limit: number,
-): Promise<PendingOrganizationContentReviewNotificationIntent[]> {
-  const rows = await all<{
-    review_id: string;
-    recipient_email: string;
-    recipient_user_id: string | null;
-    organization_name: string;
-    submitter_name: string;
-    review_url: string;
-  }>(
-    db,
-    `SELECT review_id, recipient_email, recipient_user_id,
-            organization_name, submitter_name, review_url
-     FROM organization_content_review_notification_intents
-     WHERE queued_outbox_id IS NULL
-     ORDER BY created_at ASC, review_id ASC, recipient_email ASC
-     LIMIT ?`,
-    [Math.max(0, Math.floor(limit))],
-  );
-  return rows.map((row) => ({
-    reviewId: row.review_id,
-    recipientEmail: row.recipient_email,
-    recipientUserId: row.recipient_user_id,
-    organizationName: row.organization_name,
-    submitterName: row.submitter_name,
-    reviewUrl: row.review_url,
-  }));
-}
-
-interface PreparedOrganizationContentReviewDelivery {
-  reviewId: string;
-  recipientEmail: string;
-  outboxId: string;
-  idempotencyKey: string;
-}
-
-function prepareMarkOrganizationContentReviewNotificationIntents(
-  db: DatabaseLike,
-  deliveries: PreparedOrganizationContentReviewDelivery[],
-  queuedAt: string,
-): StatementLike[] {
-  return chunkJsonRows(deliveries).map((chunk) =>
-    db
-      .prepare(
-        `WITH input AS (
-           SELECT
-             json_extract(value, '$.reviewId') AS review_id,
-             json_extract(value, '$.recipientEmail') AS recipient_email,
-             json_extract(value, '$.outboxId') AS outbox_id,
-             json_extract(value, '$.idempotencyKey') AS idempotency_key
-           FROM json_each(?)
-         )
-         UPDATE organization_content_review_notification_intents
-         SET queued_outbox_id = (
-               SELECT input.outbox_id
-               FROM input
-               WHERE input.review_id = organization_content_review_notification_intents.review_id
-                 AND input.recipient_email = organization_content_review_notification_intents.recipient_email
-             ),
-             queued_at = ?
-         WHERE queued_outbox_id IS NULL
-           AND EXISTS (
-             SELECT 1
-             FROM input
-             JOIN email_outbox e
-               ON e.id = input.outbox_id
-              AND e.idempotency_key = input.idempotency_key
-             WHERE input.review_id = organization_content_review_notification_intents.review_id
-               AND input.recipient_email = organization_content_review_notification_intents.recipient_email
-           )`,
-      )
-      .bind(chunk.json, queuedAt),
-  );
-}
-
-export interface OrganizationContentReviewNotificationDrainResult {
-  queued: number;
-  outboxIds: string[];
+/** A delivery that already owns its snapshot must finish before a review can be resolved. */
+export function prepareOrganizationContentReviewDigestDeliveryGuard(db: DatabaseLike): StatementLike {
+  return prepareAuthorizationGuard(db, {
+    sql: "SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM email_outbox WHERE template_key = ? AND status = 'sending')",
+    bindings: [ORGANIZATION_CONTENT_REVIEW_DIGEST_TEMPLATE],
+  });
 }
 
 /**
- * Converts a bounded set of immutable intents into idempotent email-outbox
- * rows. Both inserts and intent marks are one D1 batch, so queue failures
- * leave the intent pending for a later retry.
+ * One durable message per reviewer and completed UTC day, on the same cadence
+ * as membership review digests. The scheduled due-work lane owns retries.
+ * Recipients come from user identities, not individual role grants or aliases.
  */
-export async function drainOrganizationContentReviewNotificationIntents(
+export async function queueOrganizationContentReviewDigests(
   db: DatabaseLike,
+  appBaseUrl: string,
   limit = 100,
-): Promise<OrganizationContentReviewNotificationDrainResult> {
-  const pending = await listPendingOrganizationContentReviewNotificationIntents(db, limit);
-  if (pending.length === 0) return { queued: 0, outboxIds: [] };
-
-  const prepared = await Promise.all(
-    pending.map(async (intent) => {
-      const idempotencyKey = `organization-content-review-submitted:${intent.reviewId}:${intent.recipientEmail}`;
-      return {
-        intent,
-        idempotencyKey,
-        outboxId: (await sha256Hex(idempotencyKey)).slice(0, 32),
-      };
+  now = nowIso(),
+): Promise<{ queued: number }> {
+  const sendAt = reviewDigestSendAt(now);
+  const prefix = `organization-content-review-digest:${now.slice(0, 10)}:`;
+  const recipients = await all<{ id: string; email: string }>(
+    db,
+    `SELECT u.id, u.email FROM users u
+     WHERE u.active = 1 AND ${staffPermissionPredicate("u")}
+       AND EXISTS (SELECT 1 FROM organization_content_reviews WHERE status = 'pending')
+       AND NOT EXISTS (SELECT 1 FROM email_outbox WHERE idempotency_key = ? || u.id AND status <> 'cancelled')
+     ORDER BY u.id LIMIT ?`,
+    [CONTENT_REVIEW_PERMISSION, CONTENT_REVIEW_PERMISSION, prefix, Math.max(0, Math.floor(limit))],
+  );
+  const statements = await Promise.all(
+    recipients.map(async (recipient) => {
+      const idempotencyKey = `${prefix}${recipient.id}`;
+      return prepareQueueEmailStatementWhen(
+        db,
+        {
+          outboxId: (await sha256Hex(idempotencyKey)).slice(0, 32),
+          idempotencyKey,
+          templateKey: ORGANIZATION_CONTENT_REVIEW_DIGEST_TEMPLATE,
+          recipientUserId: recipient.id,
+          recipientEmail: recipient.email,
+          subject: `Pending organization content reviews — ${now.slice(0, 10)} UTC`,
+          messageType: "transactional",
+          sendAt,
+          data: {
+            pendingCount: 0,
+            reviews: [],
+            reviewUrl: buildManagementLink(appBaseUrl, { kind: "organization-content-reviews" }),
+          },
+        },
+        {
+          sql: `SELECT 1 FROM users u WHERE u.id = ? AND u.active = 1 AND u.email = ?
+        AND ${staffPermissionPredicate("u")}
+        AND EXISTS (SELECT 1 FROM organization_content_reviews WHERE status = 'pending')`,
+          bindings: [recipient.id, recipient.email, CONTENT_REVIEW_PERMISSION, CONTENT_REVIEW_PERMISSION],
+        },
+        now,
+      ).statement;
     }),
   );
-
-  const emailRows: BulkEmailQueueRow[] = prepared.map(({ intent, idempotencyKey, outboxId }) => ({
-    outboxId,
-    idempotencyKey,
-    templateKey: CONTENT_REVIEW_TEMPLATE,
-    recipientUserId: intent.recipientUserId,
-    recipientEmail: intent.recipientEmail,
-    subject: `Organization content change submitted for review — ${intent.organizationName}`,
-    messageType: "transactional",
-    data: {
-      organizationName: intent.organizationName,
-      submitterName: intent.submitterName,
-      reviewUrl: intent.reviewUrl,
-    },
-  }));
-  const deliveries: PreparedOrganizationContentReviewDelivery[] = prepared.map(
-    ({ intent, idempotencyKey, outboxId }) => ({
-      reviewId: intent.reviewId,
-      recipientEmail: intent.recipientEmail,
-      outboxId,
-      idempotencyKey,
-    }),
-  );
-
-  const queuedAt = new Date().toISOString();
-  const emailStatements = prepareBulkQueueEmailChunkStatements(db, emailRows, queuedAt).map((chunk) => chunk.statement);
-  const markStatements = prepareMarkOrganizationContentReviewNotificationIntents(db, deliveries, queuedAt);
-  const results = await db.batch([...emailStatements, ...markStatements]);
-  const queued = results
-    .slice(emailStatements.length)
-    .reduce((total, result) => total + Number(result.meta?.changes ?? 0), 0);
-  return { queued, outboxIds: prepared.map(({ outboxId }) => outboxId) };
-}
-
-/** Request-path convenience; the scheduled due-work lane remains the retry owner. */
-export async function processOrganizationContentReviewNotificationsBackground(
-  db: DatabaseLike,
-  env: Env,
-): Promise<void> {
-  try {
-    const { outboxIds } = await drainOrganizationContentReviewNotificationIntents(db);
-    await processSelectedOutboxBackground(db, env, outboxIds);
-  } catch (error) {
-    logError("ORGANIZATION_CONTENT_REVIEW_NOTIFICATION_DRAIN_FAILED", {
-      error: error instanceof Error ? error.message : "Unknown notification drain error",
-    });
-  }
+  // Refresh prior days' retries as well as today's new messages before the
+  // normal outbox runner claims any due mail. Cancel the retired immediate notices.
+  const results = await db.batch([
+    ...statements,
+    // A queue emptied and refilled before midnight still belongs in that day's overview.
+    db
+      .prepare(`UPDATE email_outbox SET status = 'queued', updated_at = ?
+      WHERE template_key = ? AND status = 'cancelled' AND attempts = 0 AND send_after > ?
+      AND json_extract(payload_json, '$.pendingCount') = 0
+      AND EXISTS (SELECT 1 FROM organization_content_reviews WHERE status = 'pending')`)
+      .bind(now, ORGANIZATION_CONTENT_REVIEW_DIGEST_TEMPLATE, now),
+    prepareRefreshOrganizationContentReviewDigests(db, now),
+    db
+      .prepare(
+        "UPDATE email_outbox SET status = 'cancelled', updated_at = ? WHERE template_key = 'org-content-submitted' AND status IN ('queued', 'retrying')",
+      )
+      .bind(now),
+  ]);
+  return {
+    queued: results
+      .slice(0, statements.length + 1)
+      .reduce((count, result) => count + Number(result.meta?.changes ?? 0), 0),
+  };
 }

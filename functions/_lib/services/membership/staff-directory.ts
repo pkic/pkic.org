@@ -71,7 +71,8 @@ const MEMBER_NAME_ORDER =
 
 const STAFF_MEMBER_FROM = `FROM members m
   LEFT JOIN organizations o ON o.id = m.organization_id
-  LEFT JOIN users u ON u.id = m.user_id
+  LEFT JOIN identities member_holder ON member_holder.id = m.identity_id
+  LEFT JOIN users u ON u.id = member_holder.user_id
   JOIN member_category_assignments mca ON mca.member_id = m.id
   JOIN membership_categories mc ON mc.code = mca.category_code`;
 
@@ -126,7 +127,7 @@ export async function listStaffMembers(
   const fromSql = `${STAFF_MEMBER_FROM}${conditions.length ? ` WHERE ${conditions.join(" AND ")}` : ""}`;
   const { rows, total } = await queryPage<StaffMemberRow>(db, {
     source: {
-      selectSql: `SELECT m.id, m.member_type, m.organization_id, m.user_id, o.name AS org_name,
+      selectSql: `SELECT m.id, m.member_type, m.organization_id, u.id AS user_id, o.name AS org_name,
               o.logo_r2_key AS org_logo_r2_key, u.headshot_r2_key,
               u.first_name, u.last_name, u.email, mca.category_code, mc.label AS category_label, m.status,
               ${REPRESENTATIVE_COUNT} AS representative_count,

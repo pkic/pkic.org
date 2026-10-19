@@ -14,7 +14,8 @@ export interface ValidatedRasterImage extends DetectedImageFormat {
 }
 
 export type RasterImageValidationResult =
-  { ok: true; image: ValidatedRasterImage } | { ok: false; reason: "invalid" | "dimensions" };
+  | { ok: true; image: ValidatedRasterImage }
+  | { ok: false; reason: "invalid" | "dimensions" };
 
 /**
  * Limits decoded raster size before images are retained or embedded in SVG.

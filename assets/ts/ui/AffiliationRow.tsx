@@ -24,6 +24,11 @@ export interface AffiliationRowProps {
   /** Where the name should lead — the other subject's own record. */
   href?: string;
   /**
+   * A line under the name, in body ink: on an experience entry the title is
+   * the position held and this names where it was held.
+   */
+  subtitle?: ComponentChildren;
+  /**
    * A standing within the tie, shown beside the name: "Primary contact",
    * "Billing owner". Not the role — that belongs in `terms`.
    */
@@ -59,6 +64,7 @@ export function AffiliationRow({
   media,
   title,
   href,
+  subtitle,
   marker,
   terms,
   children,
@@ -81,6 +87,8 @@ export function AffiliationRow({
           )}
           {marker !== undefined && <span class="pk-small pk-muted">{marker}</span>}
         </div>
+
+        {subtitle !== undefined && <div class="pk-affiliation__subtitle">{subtitle}</div>}
 
         {terms !== undefined && terms.length > 0 && (
           <ul class="pk-affiliation__terms pk-small pk-muted">

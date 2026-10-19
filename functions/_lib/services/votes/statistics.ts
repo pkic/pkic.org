@@ -45,7 +45,7 @@ function count(value: number | null | undefined): number {
 
 /**
  * Manager-only, identity-free participation read model. Eligibility is
- * deliberately labelled as current: group participation and representation
+ * deliberately labeled as current: group participation and representation
  * can change after a ballot was cast, while the accepted ballot remains part
  * of the vote history. The two explicit counts keep that state visible rather
  * than publishing a misleading turnout percentage.

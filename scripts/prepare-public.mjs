@@ -3,13 +3,14 @@ import { basename, dirname, extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { buildBylines } from "./lib/bylines.mjs";
+import { publicAssetsDirectory } from "./publication/build-context.mjs";
 import { webinarSponsors } from "./lib/webinar-assets.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const root = resolve(scriptDir, "..");
 const sourceDir = resolve(root, "static");
 const contentDir = resolve(root, "content");
-const publicDir = resolve(root, "public");
+const publicDir = publicAssetsDirectory();
 const contentMediaDir = resolve(publicDir, "content-media");
 
 function isPortableSource(source) {

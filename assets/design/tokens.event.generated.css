@@ -1,0 +1,24 @@
+/* GENERATED FILE — source: assets/design/tokens.ts. */
+@layer legacy, tokens, base, components, utilities;
+@layer tokens {
+  :root {
+    --pk-pqc-ink: #0b0d0c;
+    --pk-pqc-ink-muted: #4a524f;
+    --pk-pqc-paper: #ffffff;
+    --pk-pqc-rule: #e1e5e3;
+    --pk-pqc-forest: #0b2a1c;
+    --pk-pqc-green-deep: #125c3c;
+    --pk-pqc-blue-deep: #20506e;
+    --pk-pqc-copper: #b0581f;
+    --pk-pqc-green: #198754;
+    --pk-pqc-blue: #5a9bd5;
+    --pk-pqc-orange: #ed7d31;
+    --pk-pqc-on-field: #ffffff;
+    --pk-pqc-on-field-muted: rgba(255,255,255,0.88);
+    --pk-pqc-field: linear-gradient(135deg, #0b2a1c 0%, #125c3c 32%, #20506e 74%, #b0581f 100%);
+    --pk-pqc-light: radial-gradient(110% 80% at 8% 0%, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0) 60%);
+    --pk-pqc-stripe: linear-gradient(90deg, #198754 0%, #5a9bd5 50%, #ed7d31 100%);
+    --pk-pqc-dots: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Ccircle cx='16' cy='16' r='1.7' fill='rgba(255,255,255,0.22)'/%3E%3C/svg%3E");
+    --pk-pqc-dots-fine: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14'%3E%3Ccircle cx='7' cy='7' r='1.1' fill='rgba(255,255,255,0.22)'/%3E%3C/svg%3E");
+  }
+}

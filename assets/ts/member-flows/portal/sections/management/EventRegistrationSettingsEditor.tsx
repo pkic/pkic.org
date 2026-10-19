@@ -1,3 +1,4 @@
+import { type ClockZone } from "../../../../../shared/event-clock";
 import { useCallback, useEffect, useState } from "preact/hooks";
 import type { z } from "zod";
 import {
@@ -19,18 +20,22 @@ import { Select } from "../../../../ui/TextControl";
 import { getJson, putJson } from "../../../../shared/api-client";
 import { toast } from "../../ui";
 import { EventFormPlacementEditor } from "./EventFormPlacementEditor";
+import { SectionHeading } from "../../../../ui/SectionHeading";
 
 type RegistrationSettings = z.infer<typeof groupEventRegistrationSettingsResponseSchema>;
 
 export function EventRegistrationSettingsEditor({
   groupId,
   eventId,
+  clock,
   expectedUpdatedAt,
   onRevision,
   showFormConfiguration = true,
 }: {
   groupId: string;
   eventId: string;
+  /** The event's clock, for the registration form's submission window. */
+  clock: ClockZone;
   expectedUpdatedAt: string;
   onRevision: (updatedAt: string) => void;
   showFormConfiguration?: boolean;
@@ -94,7 +99,7 @@ export function EventRegistrationSettingsEditor({
     <div class="pk pk-stack pk-stack--loose">
       <form class="pk-stack" noValidate {...form.handlers} onSubmit={(event) => void saveSettings(event)}>
         <div class="pk-cluster pk-cluster--between">
-          <h4>Registration policy</h4>
+          <SectionHeading level={4}>Registration policy</SectionHeading>
           <EditActions
             label="Registration policy actions"
             editing={editing}
@@ -150,6 +155,7 @@ export function EventRegistrationSettingsEditor({
           groupId={groupId}
           eventId={eventId}
           purpose="event_registration"
+          clock={clock}
           expectedUpdatedAt={expectedUpdatedAt}
           onRevision={onRevision}
         />

@@ -7,6 +7,31 @@ import {
   type StoredImagePointerDefinition,
   type StoredImagePointerRow,
 } from "../stored-image-pointer";
+import { publicNonMemberSponsorPredicate } from "../public-sponsors";
+import { prepareSitePublicationRequest } from "../site-publication-requests";
+
+function sponsorshipLogoPublication(db: DatabaseLike) {
+  return (row: StoredImagePointerRow, nextKey: string | null, at: string) => {
+    if (row.object_key === nextKey) return [];
+    return [
+      prepareSitePublicationRequest(
+        db,
+        {
+          resourceType: "sponsorship",
+          resourceId: row.id,
+          revision: Date.parse(at),
+          reasonCode: "sponsorship_changed",
+          deduplicationKey: `sponsorship-logo:${row.id}:${crypto.randomUUID()}`,
+        },
+        {
+          sql: `EXISTS(SELECT 1 FROM sponsorships sponsorship WHERE sponsorship.id=?
+        AND sponsorship.organization_id IS NULL AND ${publicNonMemberSponsorPredicate("sponsorship")})`,
+          bindings: [row.id],
+        },
+      ),
+    ];
+  };
+}
 
 const SPONSORSHIP_LOGO: StoredImagePointerDefinition = {
   table: "sponsorships",
@@ -44,6 +69,7 @@ export async function replaceSponsorshipLogo(
     id,
     image,
     validateRow: assertNonMemberSponsorship,
+    prepareRelatedStatements: sponsorshipLogoPublication(db),
     audit: { actorType: "admin", actorId: actor.id, action: "sponsorship_logo_uploaded" },
   });
 }
@@ -56,6 +82,7 @@ export async function removeSponsorshipLogo(db: DatabaseLike, actor: AuthAdmin, 
     definition: SPONSORSHIP_LOGO,
     id,
     validateRow: assertNonMemberSponsorship,
+    prepareRelatedStatements: sponsorshipLogoPublication(db),
     audit: { actorType: "admin", actorId: actor.id, action: "sponsorship_logo_removed" },
   });
 }

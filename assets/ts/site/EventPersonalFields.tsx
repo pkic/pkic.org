@@ -1,7 +1,7 @@
 import { Field } from "../ui/Field";
 import { TextInput } from "../ui/TextControl";
 
-/** The same personal-detail controls across event management forms. */
+/** The same personal-detail controls across event management forms; organization and title come from identities. */
 export function EventPersonalFields({ prefix }: { prefix: string }) {
   return (
     <div class="pk-stack pk-stack--snug">
@@ -13,12 +13,6 @@ export function EventPersonalFields({ prefix }: { prefix: string }) {
           {(control) => <TextInput {...control} name="lastName" autoComplete="family-name" />}
         </Field>
       </div>
-      <Field id={`${prefix}-org`} label="Organization (optional)" errorSlot="organizationName">
-        {(control) => <TextInput {...control} name="organizationName" autoComplete="organization" />}
-      </Field>
-      <Field id={`${prefix}-job`} label="Job title (optional)" errorSlot="jobTitle">
-        {(control) => <TextInput {...control} name="jobTitle" autoComplete="organization-title" />}
-      </Field>
     </div>
   );
 }

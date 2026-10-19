@@ -1,3 +1,5 @@
+import type { ComponentChildren } from "preact";
+import "./SupportBanner.css";
 import { ButtonLink } from "../ui/Button";
 
 export interface SupportBannerLink {
@@ -15,7 +17,7 @@ function safeHref(value?: string): string {
  * The support call to action between sections, as `partials/banner.html`
  * draws it.
  *
- * It carries no `pk` root: the card's ink and its quiet link are coloured by
+ * It carries no `pk` root: the card's ink and its quiet link are colored by
  * the site's own stylesheet, which the design system's base layer would beat,
  * and the card is dark. The card itself is `pk-on-solid`, because it paints
  * its own gradient and a filled button would otherwise be dark on dark.
@@ -29,6 +31,8 @@ export function SupportBanner({
   stat,
   statLabel,
   variant = "inline",
+  actions,
+  reveal = true,
 }: {
   body?: string;
   heading?: string;
@@ -37,6 +41,8 @@ export function SupportBanner({
   statLabel?: string;
   /** `inline` sits between sections in its own card; `banner` runs full width. */
   variant?: string;
+  actions?: ComponentChildren;
+  reveal?: boolean;
 }) {
   if (!heading) return null;
   const inner = (
@@ -50,7 +56,9 @@ export function SupportBanner({
       <div class="support-cta-text">
         <p class="support-cta-heading">{heading}</p>
         {body ? <div class="support-cta-body" dangerouslySetInnerHTML={{ __html: body }} /> : null}
-        {links?.length ? (
+        {actions ? (
+          <div class="support-cta-actions">{actions}</div>
+        ) : links?.length ? (
           <div class="support-cta-actions">
             {links.map((link, index) =>
               link.primary ? (
@@ -69,7 +77,7 @@ export function SupportBanner({
     </div>
   );
   return (
-    <div class={`support-cta support-cta--${variant}`} data-reveal>
+    <div class={`support-cta support-cta--${variant}`} data-reveal={reveal || undefined}>
       {variant === "banner" ? <div class="pk-container">{inner}</div> : <div class="support-cta-card">{inner}</div>}
     </div>
   );

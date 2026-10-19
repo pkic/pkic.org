@@ -1,24 +1,38 @@
-import { mountMarkdownField } from "../components/markdown-editor/mount-markdown-field";
 import { render } from "preact";
 import { Alert } from "../ui/Alert";
 import { getJson, patchJson } from "../shared/api-client";
 import { formatDateTime } from "../shared/ui";
 import { normalizeValidation } from "../shared/form/validation-map";
-import { renderProfileLinks, normalizeProfileLinks, type ProfileLinksWidget } from "../shared/widgets/profile-links";
 import { renderConsentInputs, readConsentValues, syncConsentValidation } from "../shared/widgets/consents";
 import { withLoadingButton } from "../shared/form/submit";
 import { setStatus } from "./boot";
-import { wireTokenHeadshotSection } from "./registration-manage-headshot";
+import { mountTokenHeadshot } from "./token-headshot";
 import { eventTermsResponseSchema, type RequiredTerm } from "../../shared/schemas/forms";
-import { readField, formatStatusLabel, statusBadgeToneClass, findSubmitButton } from "../shared/form/helpers";
+import type { ConsentItem } from "../../shared/schemas/registration";
+import { formatStatusLabel, statusBadgeToneClass, findSubmitButton } from "../shared/form/helpers";
+import { IdentityProfileForm } from "../components/identities/IdentityProfileForm";
 import { loadSpeakerPageData } from "./speaker-link-recovery";
 import {
   speakerSelfServiceReadResponseSchema,
   speakerParticipationResponseSchema,
+  speakerProfileUpdateResponseSchema,
   type SpeakerSelfServiceReadResponse,
 } from "../../shared/schemas/speaker-self-service";
-import { successResponseSchema } from "../../shared/schemas/api-common";
-import { speakerProfilePatchSchema, speakerParticipationPatchSchema } from "../../shared/schemas/proposal-management";
+import { SpeakerParticipationIdentity } from "../components/SpeakerParticipationIdentity";
+import {
+  eventProposalProofIdentityPatchSchema,
+  eventProposalProofIdentityPatchResponseSchema,
+} from "../../shared/schemas/event-proposal-proof";
+import type { PersonalNamePatch } from "../components/ParticipationPersonalDetails";
+import {
+  newAffiliationDetails,
+  type ParticipationPerson,
+  type ProposalEntrySelection,
+} from "../components/useProposalEntryIdentity";
+import {
+  speakerSelfProfilePatchSchema,
+  speakerParticipationPatchSchema,
+} from "../../shared/schemas/proposal-management";
 import { proposalSpeakerAccessPath } from "../../shared/proposal-access-paths";
 
 async function main(): Promise<void> {
@@ -29,6 +43,7 @@ async function main(): Promise<void> {
   });
   if (!loaded) return;
   const { boot, token, data, loadingEl, contentEl } = loaded;
+  let initialProof = loaded.initialProof;
 
   // Summary
   const proposalTitle = boot.root.querySelector<HTMLElement>("[data-proposal-title]");
@@ -53,6 +68,7 @@ async function main(): Promise<void> {
   // Participation section
   const speakerStatusBadge = boot.root.querySelector<HTMLElement>("[data-speaker-status-badge]");
   const confirmPanel = boot.root.querySelector<HTMLElement>("[data-confirm-panel]");
+  const participationActions = boot.root.querySelector<HTMLElement>("[data-participation-actions]");
   const declinePanel = boot.root.querySelector<HTMLElement>("[data-decline-panel]");
   const confirmedMsg = boot.root.querySelector<HTMLElement>("[data-confirmed-msg]");
   const declinedMsg = boot.root.querySelector<HTMLElement>("[data-declined-msg]");
@@ -79,6 +95,7 @@ async function main(): Promise<void> {
 
   if (data.speaker.status === "invited") {
     if (confirmPanel) confirmPanel.hidden = false;
+    if (participationActions) participationActions.hidden = false;
     toggleEditableSections(false);
   } else if (data.speaker.status === "confirmed") {
     if (confirmedMsg) confirmedMsg.hidden = false;
@@ -97,20 +114,37 @@ async function main(): Promise<void> {
   const confirmForm = boot.root.querySelector<HTMLFormElement>("[data-confirm-form]");
   const consentContainer = boot.root.querySelector<HTMLElement>("[data-speaker-consents]");
   let speakerTerms: RequiredTerm[] = [];
+  let speakerTermsLoaded = false;
+  let representationSaved = data.profile.actingIdentitySelection !== "unrecorded";
+  const confirmationButton = boot.root.querySelector<HTMLButtonElement>("[data-confirm-participation]");
+  const representationNotice = document.createElement("div");
+  confirmForm?.before(representationNotice);
+  function syncRepresentationConfirmation(): void {
+    if (confirmationButton) confirmationButton.disabled = !speakerTermsLoaded || !representationSaved;
+    render(
+      representationSaved ? null : (
+        <Alert tone="warn">Confirm and save your speaker identity before confirming participation.</Alert>
+      ),
+      representationNotice,
+    );
+  }
+  syncRepresentationConfirmation();
 
-  if (confirmForm && consentContainer && data.speaker.status === "invited") {
+  if (confirmForm && consentContainer) {
     try {
       const termsResponse = await getJson(
         `${boot.apiBase}/events/${encodeURIComponent(boot.eventSlug)}/terms?audience=speaker`,
         eventTermsResponseSchema,
       );
       speakerTerms = termsResponse.terms ?? [];
-      renderConsentInputs(consentContainer, speakerTerms);
+      speakerTermsLoaded = true;
+      if (data.speaker.status === "invited") renderConsentInputs(consentContainer, speakerTerms);
     } catch (error) {
       console.error("Failed to load speaker terms", error);
       render(<Alert tone="danger">Could not load required terms right now.</Alert>, consentContainer);
     }
   }
+  syncRepresentationConfirmation();
 
   confirmForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -126,8 +160,12 @@ async function main(): Promise<void> {
       setStatus(boot.statusEl, "Please accept all required speaker terms to continue.", true);
       return;
     }
+    if (!representationSaved) {
+      setStatus(boot.statusEl, "Confirm and save your speaker identity before confirming participation.", true);
+      return;
+    }
 
-    await withLoadingButton(findSubmitButton(confirmForm), async () => {
+    await withLoadingButton(confirmationButton, async () => {
       try {
         await patchJson(
           proposalSpeakerAccessPath(boot.apiBase, token, "participation"),
@@ -172,23 +210,15 @@ async function main(): Promise<void> {
     });
   });
 
-  // Bio + links
+  // Speaker identity
   const profileForm = boot.root.querySelector<HTMLFormElement>("[data-profile-form]");
   const profileFormWrap = boot.root.querySelector<HTMLElement>("[data-profile-form-wrap]");
   const profileSavedState = boot.root.querySelector<HTMLElement>("[data-profile-saved-state]");
   const profileEditButton = boot.root.querySelector<HTMLButtonElement>("[data-profile-edit]");
-  const firstNameField = profileForm?.querySelector<HTMLInputElement>('input[name="firstName"]');
-  const lastNameField = profileForm?.querySelector<HTMLInputElement>('input[name="lastName"]');
-  const organizationField = profileForm?.querySelector<HTMLInputElement>('input[name="organizationName"]');
-  const jobTitleField = profileForm?.querySelector<HTMLInputElement>('input[name="jobTitle"]');
-  const bioField = profileForm?.querySelector<HTMLTextAreaElement>("#speaker-bio");
-  const linksContainer = boot.root.querySelector<HTMLElement>("[data-profile-links-container]");
-  let linksWidget: ProfileLinksWidget | null = null;
 
   function showProfileEditForm(): void {
     if (profileSavedState) profileSavedState.hidden = true;
     if (profileFormWrap) profileFormWrap.hidden = false;
-    firstNameField?.focus();
   }
 
   function showProfileSavedState(): void {
@@ -198,35 +228,153 @@ async function main(): Promise<void> {
 
   profileEditButton?.addEventListener("click", showProfileEditForm);
 
-  if (firstNameField) firstNameField.value = data.profile.firstName ?? "";
-  if (lastNameField) lastNameField.value = data.profile.lastName ?? "";
-  if (organizationField) organizationField.value = data.profile.organizationName ?? "";
-  if (jobTitleField) jobTitleField.value = data.profile.jobTitle ?? "";
-  if (bioField) bioField.value = data.profile.biography ?? "";
-  await mountMarkdownField(bioField ?? null, "Biography", speakerProfilePatchSchema.shape.biography);
-  if (linksContainer) {
-    linksWidget = renderProfileLinks(linksContainer, "links", { max: 10 });
-    linksWidget.setLinks(normalizeProfileLinks(data.profile.links));
+  // The profile of the identity the speaker speaks as: edited on the identity itself, through this speaker link.
+  const identityProfileSection = boot.root.querySelector<HTMLElement>("[data-identity-profile]");
+  const identityProfileMount = boot.root.querySelector<HTMLElement>("[data-identity-profile-form]");
+  function renderIdentityProfile(): void {
+    const representation = data.currentRepresentation;
+    if (identityProfileSection) identityProfileSection.hidden = !representation;
+    if (!identityProfileMount) return;
+    render(
+      representation ? (
+        <IdentityProfileForm
+          key={`${representation.identityId}:${representation.updatedAt}`}
+          identity={representation}
+          editor="owner"
+          save={async (body) => {
+            const saved = await patchJson(
+              `${boot.apiBase}/events/${encodeURIComponent(boot.eventSlug)}/proposals/proof/identities/${encodeURIComponent(representation.identityId)}`,
+              eventProposalProofIdentityPatchSchema.parse({ ...body, speakerManagementToken: token }),
+              eventProposalProofIdentityPatchResponseSchema,
+            );
+            data.currentRepresentation = { ...representation, ...saved };
+          }}
+          onSaved={() => {
+            setStatus(boot.statusEl, "Profile updated.");
+            // The identity view above shows the saved title too.
+            identityViewRevision += 1;
+            renderIdentity();
+            renderIdentityProfile();
+          }}
+          cancel={null}
+        />
+      ) : null,
+      identityProfileMount,
+    );
   }
+
+  let entry: ProposalEntrySelection | null = null;
+  let identityChanged = false;
+  let identityRevision = 0;
+  let identityViewRevision = 0;
+  const identityContainer = profileForm?.querySelector<HTMLElement>("[data-speaker-identity]");
+  const invited = data.speaker.status === "invited";
+  const acceptedConsents = () => readConsentValues(invited ? confirmForm! : profileForm!);
+  const updateEntry = (selection: ProposalEntrySelection | null): void => {
+    if (selection !== entry) {
+      identityRevision += 1;
+      identityChanged = true;
+      representationSaved = false;
+      syncRepresentationConfirmation();
+    }
+    entry = selection;
+  };
+  const editIdentity = (): void => {
+    identityChanged = true;
+    identityRevision += 1;
+    representationSaved = false;
+    syncRepresentationConfirmation();
+  };
+  async function savePersonalDetails(names: PersonalNamePatch): Promise<ParticipationPerson> {
+    await patchJson(
+      proposalSpeakerAccessPath(boot.apiBase, token, "profile"),
+      speakerSelfProfilePatchSchema.parse(names),
+      speakerProfileUpdateResponseSchema,
+    );
+    const saved = await getJson(proposalSpeakerAccessPath(boot.apiBase, token), speakerSelfServiceReadResponseSchema);
+    data.profile.firstName = saved.profile.firstName;
+    data.profile.lastName = saved.profile.lastName;
+    return { ...saved.profile, bio: saved.profile.biography };
+  }
+  /** A returning email confirmation carries the terms already agreed: draw them as agreed, never ask again. */
+  function recordTerms(consents: ConsentItem[]): void {
+    if (data.speaker.status === "invited" && consentContainer)
+      renderConsentInputs(consentContainer, speakerTerms, consents);
+    renderIdentity();
+  }
+  function renderIdentity(): void {
+    if (!identityContainer) return;
+    const selected = acceptedConsents();
+    const accepted = speakerTerms.every(
+      (term) =>
+        !term.required ||
+        selected.some((consent) => consent.termKey === term.termKey && consent.version === term.version),
+    );
+    render(
+      <SpeakerParticipationIdentity
+        key={identityViewRevision}
+        data={data}
+        initialProof={initialProof}
+        eventSlug={boot.eventSlug}
+        token={token}
+        terms={speakerTerms}
+        termsAccepted={accepted}
+        termsReady={speakerTermsLoaded}
+        consents={acceptedConsents}
+        onChange={updateEntry}
+        onEditing={editIdentity}
+        onTermsRecorded={recordTerms}
+        savePersonalDetails={savePersonalDetails}
+      />,
+      identityContainer,
+    );
+  }
+  renderIdentity();
+  confirmForm?.addEventListener("change", renderIdentity);
 
   profileForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
+    if (identityChanged && !entry) {
+      setStatus(boot.statusEl, "Confirm your identity and email before saving your profile.", true);
+      return;
+    }
+    const submittedEntry = identityChanged ? entry : null;
     await withLoadingButton(findSubmitButton(profileForm), async () => {
+      const submittedIdentityRevision = identityRevision;
       try {
-        await patchJson(
+        const saved = await patchJson(
           proposalSpeakerAccessPath(boot.apiBase, token, "profile"),
-          speakerProfilePatchSchema.parse({
-            firstName: firstNameField?.value.trim() || null,
-            lastName: lastNameField?.value.trim() || null,
-            organizationName: organizationField?.value.trim() || null,
-            jobTitle: jobTitleField?.value.trim() || null,
-            biography: readField(profileForm!, "biography"),
-            links: linksWidget?.getLinks() ?? [],
+          speakerSelfProfilePatchSchema.parse({
+            ...(submittedEntry
+              ? {
+                  actingIdentityId: submittedEntry.actingIdentityId,
+                  continuationToken: submittedEntry.continuationToken,
+                  unaffiliatedAttestation: submittedEntry.unaffiliatedAttestation,
+                  independentCapacity: submittedEntry.independentCapacity,
+                  consents: acceptedConsents(),
+                  ...newAffiliationDetails(submittedEntry),
+                }
+              : {}),
           }),
-          successResponseSchema,
+          speakerProfileUpdateResponseSchema,
         );
-        setStatus(boot.statusEl, "Profile updated.");
-        showProfileSavedState();
+        data.profile = saved.profile;
+        data.currentRepresentation = saved.currentRepresentation;
+        renderIdentityProfile();
+        if (identityRevision === submittedIdentityRevision) identityChanged = false;
+        if (submittedEntry && !identityChanged) {
+          representationSaved = true;
+          initialProof = undefined;
+          history.replaceState({}, "", `${location.pathname}${location.search}`);
+        }
+        if (!identityChanged) {
+          identityViewRevision += 1;
+          renderIdentity();
+        }
+        syncRepresentationConfirmation();
+        setStatus(boot.statusEl, "Speaker identity saved.");
+        if (identityChanged) showProfileEditForm();
+        else showProfileSavedState();
       } catch (error) {
         const normalized = normalizeValidation(error);
         setStatus(boot.statusEl, normalized.globalMessage, true);
@@ -239,16 +387,12 @@ async function main(): Promise<void> {
     toggleEditableSections(false);
   } else {
     toggleEditableSections(true);
-    wireTokenHeadshotSection({
-      root: boot.root,
-      initialHeadshotUrl: data.profile.headshotUrl,
-      statusEl: boot.statusEl,
-      uploadUrl: proposalSpeakerAccessPath(boot.apiBase, token, "headshot"),
-      deleteUrl: proposalSpeakerAccessPath(boot.apiBase, token, "headshot"),
-      emptyLabel: "No headshot uploaded yet.",
-      uploadSuccessStatus: "Headshot uploaded successfully.",
-      deleteSuccessStatus: "Headshot removed successfully.",
-      confirmDeleteMessage: "Remove your headshot?",
+    renderIdentityProfile();
+    mountTokenHeadshot({
+      section: headshotSection,
+      name: [data.profile.firstName, data.profile.lastName].filter(Boolean).join(" ") || data.profile.email,
+      initialUrl: data.profile.headshotUrl,
+      url: proposalSpeakerAccessPath(boot.apiBase, token, "headshot"),
     });
   }
 

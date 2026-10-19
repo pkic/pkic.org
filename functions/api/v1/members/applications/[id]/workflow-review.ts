@@ -16,6 +16,8 @@ import {
   membershipObjectionResolveRouteSchema,
 } from "../../../../../../assets/shared/schemas/membership-review-routes";
 import { resolveUserSessionFromRequest } from "../../../../../_lib/auth/user-session";
+import { sessionHoldsCapacity } from "../../../../../_lib/auth/user-session-result";
+import { AppError } from "../../../../../_lib/errors";
 import { getConfig } from "../../../../../_lib/config";
 import { requestDb, markResponseSensitive, type AdminContext } from "../../../../../_lib/db/context";
 import { json } from "../../../../../_lib/http";
@@ -30,6 +32,9 @@ async function reviewContext(c: AdminContext) {
   markResponseSensitive(c);
   const db = requestDb(c);
   const session = await resolveUserSessionFromRequest(db, c.req.raw, c.env);
+  // A user with no capacity reaches only their own account, never an applicant's review, even one they once objected to.
+  if (!sessionHoldsCapacity(session))
+    throw new AppError(403, "MEMBERSHIP_REVIEW_FORBIDDEN", "This application review is not available to your account.");
   return {
     db,
     actor: { userId: session.identity.id, staff: session.staff },

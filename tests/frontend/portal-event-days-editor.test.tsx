@@ -3,7 +3,7 @@ import { beginRecordEdit } from "./helpers/record-edit";
 /**
  * The attendance-days editor after its move onto the design system.
  *
- * The Bootstrap version labelled every control with a bare `form-label`, drew
+ * The Bootstrap version labeled every control with a bare `form-label`, drew
  * the day cards with `card`/`row`/`col-md-*`, and reported the outcome of a
  * save in a `text-muted` / `text-danger` span. These assert what replaced
  * them: labels bound to real controls, an announced empty state, and a save
@@ -35,7 +35,9 @@ const event: GroupEvent = {
   registrationPolicy: "no_registration",
   visibility: "group_members",
   inviteLimitAttendee: 5,
-  location: "Online",
+  city: null,
+  country: null,
+  meetingLocation: null,
   links: [],
   nextOccurrenceAt: null,
   updatedAt: "2026-08-01T00:00:00.000Z",
@@ -118,7 +120,7 @@ function byId(container: HTMLElement, id: string): HTMLElement | null {
   return [...container.querySelectorAll<HTMLElement>("[id]")].find((element) => element.id === id) ?? null;
 }
 
-function labelled(container: HTMLElement, text: string): HTMLInputElement[] {
+function labeled(container: HTMLElement, text: string): HTMLInputElement[] {
   return [...container.querySelectorAll<HTMLLabelElement>("label.pk-field__label")]
     .filter((label) => (label.textContent ?? "").startsWith(text))
     .map((label) => byId(container, label.htmlFor))
@@ -152,7 +154,7 @@ describe("event attendance days editor", () => {
       expect(byId(container, label.htmlFor), `label "${label.textContent ?? ""}" points at nothing`).not.toBeNull();
     }
 
-    const [date] = labelled(container, "Date");
+    const [date] = labeled(container, "Date");
     expect(date.value).toBe("2026-09-01");
     expect(date.required).toBe(true);
     // The asterisk is decorative; the word behind it is what is announced.
@@ -160,12 +162,12 @@ describe("event attendance days editor", () => {
 
     // The end-to-end flow reaches the option's label with `getByLabel("Label")
     // .last()`, so the day's own label must keep coming first in the DOM.
-    const labelFields = labelled(container, "Label");
+    const labelFields = labeled(container, "Label");
     expect(labelFields.map((input) => input.value)).toEqual(["Workshop day", "In person"]);
 
     // The times are the event's wall clock, not the raw UTC instant.
-    expect(labelled(container, "Starts at")[0].value).toBe("09:00");
-    const startsHelp = labelled(container, "Starts at")[0].getAttribute("aria-describedby") ?? "";
+    expect(labeled(container, "Starts at")[0].value).toBe("09:00");
+    const startsHelp = labeled(container, "Starts at")[0].getAttribute("aria-describedby") ?? "";
     expect(byId(container, startsHelp)?.textContent).toContain("Europe/Amsterdam");
 
     // Each remove control says which option it removes; twenty buttons all

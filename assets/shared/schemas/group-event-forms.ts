@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { jsonErrorResponse, utcInstantSchema } from "./api-common";
 import {
-  addDuplicateFormFieldIssues,
+  addFormFieldPolicyIssues,
   eventFormsPurposeSchema,
   addPlacementIssues,
   formDefinitionCreateBaseSchema,
@@ -40,7 +40,7 @@ export const groupEventFormCreateSchema = eventConfigurationRevisionSchema.exten
   definition: formDefinitionCreateBaseSchema
     .omit({ purpose: true })
     .safeExtend({ status: z.literal("active").default("active") })
-    .superRefine(addDuplicateFormFieldIssues),
+    .superRefine(addFormFieldPolicyIssues),
 });
 
 /**

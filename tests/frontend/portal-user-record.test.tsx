@@ -7,6 +7,7 @@
  * file was over its line budget carrying both.
  */
 import { render } from "preact";
+import { IDENTITY_ID, membership } from "./helpers/affiliation-fixtures";
 import { act } from "preact/test-utils";
 import { menuItemNamed } from "./helpers/row-actions";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -163,6 +164,7 @@ describe("portal System Users detail record", () => {
           isDefault: false,
           organizationId: "organization-1",
           organizationName: "Organization A",
+          organizationEmailDomain: null,
           emailId: null,
           email: "ada@organization-a.example",
           jobTitle: "Standards lead",
@@ -185,19 +187,48 @@ describe("portal System Users detail record", () => {
     expect(cardNamed(writer, "Visibility")?.textContent).toContain("Organization A");
   });
 
-  it("offers nothing on your own record that only makes sense aimed at someone else", async () => {
+  it("offers only actions that work, on your own record and on someone else's", async () => {
     stubDetail(user);
 
-    const other = await mountDetail(READ_ONLY, "somebody-else");
-    expect(other.querySelector('button[aria-label="Message — not available yet"]')).not.toBeNull();
-    expect(other.querySelector('button[aria-label="Follow — not available yet"]')).not.toBeNull();
+    // Messaging and following have no domain behind them, so the record does
+    // not advertise them as disabled controls; the actions menu is the only
+    // action either reader sees.
+    for (const viewer of ["somebody-else", user.id]) {
+      const root = await mountDetail(READ_ONLY, viewer);
+      const labels = [...root.querySelectorAll("button")].map(
+        (button) => button.getAttribute("aria-label") ?? button.textContent?.trim() ?? "",
+      );
+      expect(labels.filter((label) => /^(Message|Follow)\b/.test(label))).toEqual([]);
+      expect(root.textContent).not.toContain("not available yet");
+      expect(root.querySelector('button[aria-label="Record actions"]')).not.toBeNull();
+    }
+  });
 
-    // Nobody messages or follows themselves. The actions menu stays, because
-    // the record is still one the reader may act on.
+  it("lets a reader vouch for somebody else's skills but never for their own", async () => {
+    stubDetail(user);
+    const withoutSkills = apiClient.getJson.getMockImplementation()!;
+    apiClient.getJson.mockImplementation(async (url: string) =>
+      url === `/api/v1/users/${user.id}/skills`
+        ? {
+            skills: [{ skillId: "skill-1", slug: "eidas", name: "eIDAS", vouchCount: 2, vouchedByViewer: false }],
+            totalVouches: 2,
+          }
+        : withoutSkills(url),
+    );
+
+    // Somebody else's record: each skill is a toggle carrying its own state.
+    const other = await mountDetail(READ_ONLY, "somebody-else");
+    const skills = other.querySelector('[aria-label="Skills"]')!;
+    expect(skills.querySelector('button[aria-pressed="false"]')?.textContent).toContain("eIDAS");
+    expect(skills.textContent).toContain("only members who share a group can vouch");
+
+    // The reader's own record states the rule instead of offering a control
+    // that could only ever answer with a refusal.
     const own = await mountDetail(READ_ONLY, user.id);
-    expect(own.querySelector('button[aria-label="Message — not available yet"]')).toBeNull();
-    expect(own.querySelector('button[aria-label="Follow — not available yet"]')).toBeNull();
-    expect(own.querySelector('button[aria-label="Record actions"]')).not.toBeNull();
+    const ownSkills = own.querySelector('[aria-label="Skills"]')!;
+    expect(ownSkills.textContent).toContain("eIDAS");
+    expect(ownSkills.querySelector("button")).toBeNull();
+    expect(ownSkills.textContent).toContain("Nobody vouches for their own skills.");
   });
 
   it("offers editing in the record's own actions menu, not as a band across the page", async () => {
@@ -249,39 +280,44 @@ describe("portal System Users detail record", () => {
     );
   });
 
-  it("edits the account fields in the card that states them, not in a panel of its own", async () => {
+  it("edits the account fields in a dialog from the Account panel menu, never inline", async () => {
     /*
-     * #46: the fields are edited where they are shown.
-     *
-     * Taking "Edit profile" used to append a whole second panel further down
-     * the record carrying the same fields the Account card beside it was
-     * already stating — the reader saw one name twice, and the two could
-     * disagree while the draft was open. The command turns that card's own
-     * list into that card's own fields instead.
+     * The panel always states the facts; a quick edit opens in a dialog from
+     * the panel's "…" menu, and the record's own "Edit profile" opens the same one.
      */
     stubDetail(user);
     const container = await mountDetail({ ...READ_ONLY, canWrite: true });
 
-    const headings = () => [...container.querySelectorAll("h2, h3")].map((heading) => heading.textContent);
-    expect(headings()).not.toContain("Profile");
-    expect(headings()).not.toContain("Edit profile");
-    // Closed, the card states the facts rather than offering them as fields.
     const account = container.querySelector<HTMLElement>('section[aria-label="Account"]')!;
     expect(account.querySelectorAll("input")).toHaveLength(0);
     expect(account.textContent).toContain("First name");
+    expect(account.querySelector('button[aria-label="Edit profile"]')).toBeNull();
 
+    const menu = account.querySelector<HTMLButtonElement>('button[aria-label="Account actions"]')!;
+    void act(() => menu.click());
+    expect([...account.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent)).toEqual([
+      "Edit account…",
+    ]);
+    void act(() => menuItemNamed(container, "Edit account…")?.click());
+
+    const dialog = account.querySelector<HTMLElement>("dialog")!;
+    expect(dialog).not.toBeNull();
+    expect(dialog.querySelector("form")).not.toBeNull();
+    // The Dialog's confirm submits; the form carries no button row of its own.
+    expect(dialog.querySelector("form button")).toBeNull();
+    for (const label of ["First name", "Last name", "Preferred name"]) {
+      const field = [...dialog.querySelectorAll("label")].find((node) => node.textContent?.trim() === label);
+      expect(field, `${label} is edited in the dialog`).toBeDefined();
+    }
+  });
+
+  it("opens the same dialog from the record's Edit profile command", async () => {
+    stubDetail(user);
+    const container = await mountDetail({ ...READ_ONLY, canWrite: true });
     const menu = container.querySelector<HTMLButtonElement>(".pk-menu__trigger");
     void act(() => menu!.click());
     void act(() => menuItemNamed(container, "Edit profile")?.click());
-
-    // No second panel appeared; the card it names is now the form.
-    expect(headings()).not.toContain("Edit profile");
-    expect(account.querySelectorAll("input").length).toBeGreaterThan(0);
-    // And the name fields are in that card, not merely somewhere on the page.
-    for (const label of ["First name", "Last name", "Preferred name"]) {
-      const field = [...account.querySelectorAll("label")].find((node) => node.textContent?.trim() === label);
-      expect(field, `${label} is edited in the Account card`).toBeDefined();
-    }
+    expect(container.querySelector('section[aria-label="Account"] dialog form')).not.toBeNull();
   });
 
   it("opens the group a participation row names, rather than listing it inertly", async () => {
@@ -290,22 +326,30 @@ describe("portal System Users detail record", () => {
      * `href` rather than a click handler, so the reader can open it in a new
      * tab the way they can open any other link on the page.
      */
-    stubDetail(user, {
-      summary: { groups: 1, meetingsHeld: 2, meetingsAttended: 1, votesCast: 0, votesEligible: 0 },
-      groups: [
-        {
-          group: {
-            id: "20000000-0000-4000-8000-000000000003",
-            slug: "pqc",
-            name: "PQC Working Group",
-            type: { key: "working_group", singularLabel: "Working Group", pluralLabel: "Working Groups" },
+    // A seat is shown under the identity it was taken as.
+    stubDetail(
+      { ...user, identities: [membership()] },
+      {
+        summary: { groups: 1, meetingsHeld: 2, meetingsAttended: 1, votesCast: 0, votesEligible: 0 },
+        groups: [
+          {
+            group: {
+              id: "20000000-0000-4000-8000-000000000003",
+              slug: "pqc",
+              name: "PQC Working Group",
+              type: { key: "working_group", singularLabel: "Working Group", pluralLabel: "Working Groups" },
+            },
+            identityId: IDENTITY_ID,
+            title: null,
+            joinedAt: "2026-02-01T00:00:00.000Z",
+            leftAt: null,
+            held: 2,
+            attended: 1,
+            lastAttendedAt: null,
           },
-          title: null,
-          held: 2,
-          attended: 1,
-        },
-      ],
-    });
+        ],
+      },
+    );
     const container = await mountDetail(READ_ONLY);
 
     const link = [...container.querySelectorAll<HTMLAnchorElement>("a")].find(
@@ -349,7 +393,7 @@ describe("portal System Users detail record", () => {
     expect(apiClient.getJson).not.toHaveBeenCalled();
   });
 
-  it("says an account is anonymized in words, not only in a colour, and withdraws its controls", async () => {
+  it("says an account is anonymized in words, not only in a color, and withdraws its controls", async () => {
     const redacted: UserDetail = { ...user, pii_redacted_at: "2026-02-02T10:00:00.000Z" };
     stubDetail(redacted);
 

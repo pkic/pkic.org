@@ -12,6 +12,7 @@
  * (`functions/og/[...path].ts`), which waits for this read and the logo loads
  * it starts — the same reason the chair panel beside it is a mount.
  */
+import { Avatar } from "../ui/Avatar";
 import { render } from "preact";
 import type { PublicMemberSummary } from "../../shared/schemas/members-directory";
 import { API_BASE_FALLBACK, useMemberRoll } from "./member-roll";
@@ -57,16 +58,13 @@ export function MemberLogoWall({
   const members = useMemberRoll(apiBase, { workingGroup, limit: MAX_LOGOS });
   if (!members) return null;
 
-  // A logo wall is made of logos: a member without one is left out rather
-  // than shown as its name or as a gap in the grid.
-  const withLogos = members.filter((member) => member.logoUrl);
-  if (withLogos.length === 0) return null;
+  if (members.length === 0) return null;
 
   return (
     <div class={containerClass} aria-hidden="true">
-      {arrange(withLogos, workingGroup ?? "members").map((member) => (
+      {arrange(members, workingGroup ?? "members").map((member) => (
         <div class={logoClass} key={member.id}>
-          <img src={member.logoUrl ?? ""} alt="" />
+          <Avatar name={member.name} src={member.logoUrl ?? undefined} shape="square" class="pk-member-wall-avatar" />
         </div>
       ))}
     </div>

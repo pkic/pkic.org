@@ -27,20 +27,20 @@ export const PROFILE_FLOW = {
     {
       id: "11.4",
       title: "A contact record offers different things on your own page than on somebody else's",
-      status: "covered",
-      note: "The same route, two readings. Editing affordances follow permission rather than the page you happen to be on.",
+      status: "unit",
+      note: "Covered in portal-user-record, portal-user-record-self, member-skills-vouching and user-administration-section: neither reader is offered Message or Follow, somebody else's skills are toggles that carry their own state while the reader's own are stated as not vouchable, the actions menu offers editing without arriving in edit mode, and account administration is a closed disclosure. The same route, two readings: affordances follow permission rather than the page you happen to be on.",
     },
     {
       id: "11.5",
       title: "Home shows the organization, upcoming meetings, and a pending review once one exists",
-      status: "covered",
-      note: "And an individual member with no organization sees an honest empty state rather than a broken card.",
+      status: "unit",
+      note: "Covered in portal-home: the landing greets the member, lists upcoming meetings with their calendar and join links, carries a pending organization review as a to-do that opens the organization, and says an unaffiliated member participates as an individual. The organization feed is covered in user-organizations-feed.",
     },
     {
       id: "11.6",
       title: "A freshly approved member sees useful shortcuts without empty activity panels",
-      status: "covered",
-      note: "The dashboard shows actionable work when it exists, without listing old application and activity history.",
+      status: "unit",
+      note: "Covered in portal-home: Needs your voice is omitted when nothing waits, the other panels announce an empty state rather than listing old history, and the quick links stay. The dashboard shows actionable work when it exists.",
     },
     {
       id: "11.7",

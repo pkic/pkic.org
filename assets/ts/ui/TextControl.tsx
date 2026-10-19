@@ -8,7 +8,7 @@
  *
  * They intentionally do not own a label or a message. A control that renders
  * its own label cannot be composed into a layout that needs the label
- * elsewhere, and two labelling paths is how forms end up with orphaned `for`
+ * elsewhere, and two labeling paths is how forms end up with orphaned `for`
  * attributes.
  */
 

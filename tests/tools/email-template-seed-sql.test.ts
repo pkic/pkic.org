@@ -1,5 +1,7 @@
+import { emailPlainText } from "../../functions/_lib/email/plain-text";
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
+import { escapeMarkdownText } from "../../functions/_lib/email/markdown";
 import { renderEmail } from "../../functions/_lib/email/render";
 import { DEFAULT_LAYOUT_HTML, DEFAULT_TEMPLATES } from "../../scripts/seed-email-templates.mjs";
 import { buildTemplateSqlStatements } from "../../scripts/lib/email-template-seed-sql.mjs";
@@ -12,16 +14,29 @@ const template = {
 };
 
 const EXPECTED_BASELINE_TEMPLATE_KEYS = [
+  "agenda_changed",
+  "agenda_session_booking",
+  "agenda_session_invitation",
+  "agenda_session_reminder",
+  "agenda_speaker_declined",
   "attendee_invite",
   "co_speaker_invite",
   "donation_expired",
   "donation_payment_failed",
   "donation_thank_you",
   "email_layout",
+  "event_proposal_verify",
+  "membership-participation-warning",
   "membership-workflow-review-digest",
   "msg_attendee_inperson_check_plans",
+  "msg_attendee_session_favorites",
+  "msg_attendee_session_reminder",
+  "msg_attendee_session_reservations",
+  "msg_attendee_session_waitlist",
   "msg_dear_firstname",
   "msg_message_only",
+  "org-content-review-digest",
+  "organization_identity_reinstatement",
   "partial_about_pkic",
   "partial_donation_request",
   "partial_membership_review_details",
@@ -32,10 +47,13 @@ const EXPECTED_BASELINE_TEMPLATE_KEYS = [
   "presentation_upload_request",
   "proposal_decision",
   "proposal_manage_link_transferred",
+  "proposal_organizational_representation_request",
+  "proposal_representation_review",
   "proposal_submitted",
   "registration_confirm_email",
   "registration_confirmation_reminder",
   "registration_confirmed",
+  "registration_email_verify",
   "registration_manage_link",
   "registration_unauthorized",
   "registration_updated",
@@ -45,10 +63,80 @@ const EXPECTED_BASELINE_TEMPLATE_KEYS = [
   "speaker_invite",
   "speaker_profile_reminder",
   "speaker_profile_request",
+  "sponsorship-new-inquiry",
+  "user_email_verification",
   "user_magic_link",
 ] as const;
 
 describe("buildTemplateSqlStatements", () => {
+  it.each([1, 2, 51])("renders the bounded organization digest with %s pending profiles", async (pendingCount) => {
+    const digest = DEFAULT_TEMPLATES.find((item) => item.key === "org-content-review-digest")!;
+    const rendered = await renderEmail(
+      digest.content,
+      {
+        pendingCount,
+        reviews: [{ organizationName: emailPlainText("[Untrusted name](https://attacker.invalid)") }],
+        hasMore: pendingCount > 50,
+        reviewUrl: "https://example.test/portal/#/settings/organization-content-reviews",
+      },
+      DEFAULT_LAYOUT_HTML,
+    );
+    expect(rendered.text).toContain(
+      `${pendingCount} organization ${pendingCount === 1 ? "profile is" : "profiles are"}`,
+    );
+    expect(rendered.html).toContain('href="https://example.test/portal/#/settings/organization-content-reviews"');
+    expect(rendered.html).not.toContain('href="https://attacker.invalid"');
+    expect(rendered.text.includes("first 50 organizations")).toBe(pendingCount > 50);
+  });
+
+  it.each(["Interested in Gold sponsorship.", "", "[Review agreement](https://attacker.invalid)\n# Urgent"])(
+    "renders the seeded staff inquiry template using the submission payload: %s",
+    async (notes) => {
+      const staffTemplate = DEFAULT_TEMPLATES.find((item) => item.key === "sponsorship-new-inquiry")!;
+      const rendered = await renderEmail(
+        staffTemplate.content,
+        {
+          contactNameText: escapeMarkdownText("Dana Sponsor"),
+          contactEmailText: escapeMarkdownText("dana@sponsor.example"),
+          organizationNameText: escapeMarkdownText("Example Sponsor"),
+          sponsorTypeText: "consortium",
+          tierText: "Not specified",
+          notesText: escapeMarkdownText(notes),
+          managementUrl: "https://example.test/portal/#/sponsorships",
+        },
+        DEFAULT_LAYOUT_HTML,
+        staffTemplate.contentType,
+        "https://example.test",
+      );
+      expect(rendered.text).toContain("Dana Sponsor");
+      expect(rendered.text).toContain("dana@sponsor.example");
+      expect(rendered.text).toContain("Example Sponsor");
+      expect(rendered.text).toContain("Not specified");
+      expect(rendered.html).toContain('href="https://example.test/portal/#/sponsorships"');
+      expect(rendered.text.includes("Notes:")).toBe(Boolean(notes));
+      expect(rendered.html).not.toContain('href="https://attacker.invalid"');
+      expect(rendered.html).not.toContain("<h1>Urgent</h1>");
+      expect(rendered.html).not.toContain("{{");
+    },
+  );
+  it("delivers a dedicated speaker representation link without depending on the configured submission template", async () => {
+    const review = DEFAULT_TEMPLATES.find((item) => item.key === "proposal_representation_review")!;
+    const rendered = await renderEmail(
+      review.content,
+      {
+        firstName: "Alex",
+        proposalTitle: "A speaker proposal",
+        eventName: "Example conference",
+        speakerManageUrl: "https://example.test/private-speaker-profile",
+      },
+      DEFAULT_LAYOUT_HTML,
+      "markdown",
+      "https://example.test",
+    );
+    expect(rendered.text).toContain("https://example.test/private-speaker-profile");
+    expect(rendered.text).toContain("individual presentation");
+    expect(rendered.text).toContain("only your own speaker profile");
+  });
   it.each([true, false])(
     "keeps profile reminders independent of decisions (invited: %s)",
     async (requiresConfirmation) => {

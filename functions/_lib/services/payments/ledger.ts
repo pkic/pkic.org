@@ -1,13 +1,21 @@
 import type { z } from "zod";
 import type { stripeEventEnvelopeSchema } from "../../../../assets/shared/schemas/stripe";
 import { first } from "../../db/queries";
-import type { DatabaseLike } from "../../types";
+import type { DatabaseLike, StatementLike } from "../../types";
 import { nowIso } from "../../utils/time";
 
 type StripeEvent = z.infer<typeof stripeEventEnvelopeSchema>;
 type PaymentPurpose = "donation" | "membership" | "sponsorship" | "event";
 type PaymentStatus =
-  "pending" | "processing" | "paid" | "failed" | "expired" | "refunded" | "disputed" | "cancelled" | "requires_review";
+  | "pending"
+  | "processing"
+  | "paid"
+  | "failed"
+  | "expired"
+  | "refunded"
+  | "disputed"
+  | "cancelled"
+  | "requires_review";
 
 interface LedgerEntryRow {
   id: string;
@@ -202,16 +210,16 @@ function newEntryId(purpose: PaymentPurpose, object: StripeObject, domain: Domai
 }
 
 /** Record a verified Stripe event after its domain handler accepts it. */
-export async function recordStripePaymentEvent(
+export async function prepareStripePaymentEvent(
   db: DatabaseLike,
   purpose: PaymentPurpose,
   event: StripeEvent,
   domainOutcome: string | null = null,
-): Promise<void> {
-  if (!event.id) return;
+): Promise<StatementLike[]> {
+  if (!event.id) return [];
   const object = stripeObject(event);
   const providerStatus = financialStatus(event, object, domainOutcome);
-  if (!providerStatus) return;
+  if (!providerStatus) return [];
   const domain = await domainPayment(db, purpose, object);
   const nextStatus =
     domainOutcome === "rejected_mismatch"
@@ -219,7 +227,7 @@ export async function recordStripePaymentEvent(
       : (domainFinancialStatus(domain, event.type) ?? providerStatus);
   const existing = await existingEntry(db, purpose, object, domain);
   const paymentId = existing?.id ?? newEntryId(purpose, object, domain);
-  if (!paymentId) return;
+  if (!paymentId) return [];
 
   const now = nowIso();
   const created = eventCreated(event);
@@ -233,7 +241,7 @@ export async function recordStripePaymentEvent(
   const resourceId = domain?.resource_id ?? null;
   const eventOrdinal = created ?? 0;
 
-  await db.batch([
+  return [
     db
       .prepare(
         `INSERT INTO payment_ledger_entries
@@ -316,5 +324,16 @@ export async function recordStripePaymentEvent(
         occurredAt,
         now,
       ),
-  ]);
+  ];
+}
+
+/** Commit the payment evidence alone when its domain handler has no additional atomic effects. */
+export async function recordStripePaymentEvent(
+  db: DatabaseLike,
+  purpose: PaymentPurpose,
+  event: StripeEvent,
+  domainOutcome: string | null = null,
+): Promise<void> {
+  const statements = await prepareStripePaymentEvent(db, purpose, event, domainOutcome);
+  if (statements.length) await db.batch(statements);
 }

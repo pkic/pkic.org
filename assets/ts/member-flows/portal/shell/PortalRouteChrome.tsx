@@ -8,17 +8,13 @@
 import { type ComponentChildren } from "preact";
 import { useEffect } from "preact/hooks";
 import { usePortalHashLocation } from "../hash-location";
-import { EmptyState } from "../../../ui/RecordEmptyState";
+import { EmptyState } from "../../../ui/EmptyState";
 import type { PortalSession } from "../types";
 import { portalCapacityFallbackPath } from "./portal-navigation";
 
-export function SectionWrapper({ title, children }: { title?: string; children: ComponentChildren }) {
-  return (
-    <div class="portal-section">
-      {title && <h4 class="portal-section-title">{title}</h4>}
-      {children}
-    </div>
-  );
+/** The section frame. A section names itself through its own title, the screen's `<h1>`. */
+export function SectionWrapper({ children }: { children: ComponentChildren }) {
+  return <div class="portal-section">{children}</div>;
 }
 
 export function PortalRouteFallback({ session }: { session: PortalSession | null }) {

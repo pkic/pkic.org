@@ -10,7 +10,7 @@ import {
 } from "../../assets/shared/schemas/event-registration-detail";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { DayAttendanceManager } from "../../assets/ts/components/event-registrations/DayAttendanceManager";
-import { controlFor } from "./helpers/labelled-control";
+import { controlFor } from "./helpers/labeled-control";
 import { openRowMenu, runRowAction } from "./helpers/row-actions";
 
 const REGISTRATION_ENDPOINT = "/api/v1/groups/g1/events/e1/registrations/r1";
@@ -146,7 +146,7 @@ function button(container: HTMLElement, text: string): HTMLButtonElement {
   const found = Array.from(container.querySelectorAll("button")).find(
     (candidate) => candidate.textContent?.trim() === text,
   );
-  if (!found) throw new Error(`No button labelled "${text}"`);
+  if (!found) throw new Error(`No button labeled "${text}"`);
   return found;
 }
 
@@ -320,7 +320,7 @@ describe("day attendance manager", () => {
     installApi();
     const container = mount({ canVip: true });
 
-    expect(container.querySelector("caption")?.textContent).toBe("Attendance by event day");
+    expect(container.querySelector("caption")?.textContent).toBe("Attendance by day");
     // The override is a dialog the row's command opens, not a form on the page.
     expect(container.querySelector("dialog")).toBeNull();
     await runRowAction(container, "Day one", "Admit beyond capacity…");
@@ -329,7 +329,7 @@ describe("day attendance manager", () => {
     expect(container.querySelector("dialog")?.textContent).toContain("Day one");
     expect(container.querySelector("dialog input[type='checkbox']")).toBeNull();
     // Resolved through the label's own for/id pair, so the lookup fails
-    // exactly when the labelling contract does.
+    // exactly when the labeling contract does.
     const reason = controlFor<HTMLTextAreaElement>(container, "Required reason");
     expect(reason.tagName).toBe("TEXTAREA");
     expect(reason.required).toBe(true);

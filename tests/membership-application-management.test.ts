@@ -1,3 +1,5 @@
+// Compile the real lazy HTTP graph before timed endpoint journeys.
+import "../functions/http-router";
 import { administratorGrants } from "./helpers/administrator";
 /**
  * membership-application-management.test.ts
@@ -25,7 +27,11 @@ import { updateMembershipSettings } from "../functions/_lib/services/membership-
 import { runOnHoldReminders } from "../functions/_lib/services/membership/on-hold-reminders";
 import { updateMembershipApplication } from "../functions/_lib/services/membership/applications/management";
 import type { UserBackedAuthAdmin } from "../functions/_lib/types";
-import { membershipApplicationsListResponseSchema } from "../assets/shared/schemas/membership-application-management";
+import { pinReviewedStaffWorkflow } from "./helpers/membership-workflows";
+import {
+  membershipApplicationDetailSchema,
+  membershipApplicationsListResponseSchema,
+} from "../assets/shared/schemas/membership-application-management";
 import { membershipCategoryCatalogResponseSchema } from "../assets/shared/schemas/membership-categories";
 import { grantGroupLeadershipCapacity } from "./helpers/group-leadership";
 
@@ -101,6 +107,26 @@ describe("PATCH /api/v1/members/applications/:id (Fix 3 — edit application fie
       grants: administratorGrants,
     };
     adminToken = await createAdminSession(env.DB, adminId, "membership-application-management-token");
+  });
+
+  it("returns the same configured active requirement in list and detail, and clears it for terminal applications", async () => {
+    const { id } = await createApplication({ stage: "processing" });
+    await pinReviewedStaffWorkflow(env.DB, id, "F", false);
+    const listed = membershipApplicationsListResponseSchema.parse(
+      await (await call(adminToken, "/api/v1/members/applications")).json(),
+    );
+    const detailResponse = await call(adminToken, `/api/v1/members/applications/${id}`);
+    expect(detailResponse.status).toBe(200);
+    const record = membershipApplicationDetailSchema.parse(await detailResponse.json());
+    expect(record.currentRequirement).toBe("Review organization and user");
+    expect(listed.applications.find((application) => application.id === id)?.currentRequirement).toBe(
+      record.currentRequirement,
+    );
+    await env.DB.prepare("UPDATE member_applications SET stage='withdrawn' WHERE id=?").bind(id).run();
+    const withdrawn = membershipApplicationDetailSchema.parse(
+      await (await call(adminToken, `/api/v1/members/applications/${id}`)).json(),
+    );
+    expect(withdrawn.currentRequirement).toBeNull();
   });
 
   it("persists contribution, preferences and group corrections while enforcing legal acceptance", async () => {
@@ -418,6 +444,79 @@ describe("PATCH /api/v1/members/applications/:id (Fix 3 — edit application fie
     expect(auditRows).toHaveLength(1);
     expect(auditRows[0].entity_type).toBe("member_application");
     expect(auditRows[0].actor_id).toBe(adminId);
+  });
+
+  it("corrects a pinned category and restarts completed review evidence without deleting history", async () => {
+    const { id } = await createApplication({ stage: "processing" });
+    await pinReviewedStaffWorkflow(env.DB, id);
+    const response = await call(adminToken, `/api/v1/members/applications/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ membershipCategory: "A" }),
+    });
+    expect(response.status, await response.clone().text()).toBe(200);
+    const detail = membershipApplicationDetailSchema.parse(await response.json());
+    expect(detail.membershipCategory).toBe("A");
+    const workflows = await queryAll<{ generation: number; category_code: string; superseded_at: string | null }>(
+      env.DB,
+      "SELECT generation, category_code, superseded_at FROM membership_application_workflows WHERE application_id = ? ORDER BY generation",
+      id,
+    );
+    expect(workflows).toEqual([
+      { generation: 1, category_code: "F", superseded_at: expect.any(String) },
+      { generation: 2, category_code: "A", superseded_at: null },
+    ]);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT step_id FROM membership_application_steps WHERE application_id = ? AND generation = 1 AND completed_at IS NOT NULL",
+        id,
+      ),
+    ).toHaveLength(1);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT step_id FROM membership_application_steps WHERE application_id = ? AND generation = 2 AND completed_at IS NOT NULL",
+        id,
+      ),
+    ).toHaveLength(0);
+  });
+
+  it("rolls back a category correction when its workflow evidence changes before commit", async () => {
+    const { id } = await createApplication({ stage: "processing" });
+    await pinReviewedStaffWorkflow(env.DB, id);
+    const gate = gateNextBatch(env.DB);
+    const correction = updateMembershipApplication(gate.db, id, adminActor, { membershipCategory: "A" });
+    await gate.reached;
+    await env.DB.prepare("UPDATE membership_application_workflows SET revision = revision + 1 WHERE application_id = ?")
+      .bind(id)
+      .run();
+    gate.release();
+    await expect(correction).rejects.toMatchObject({ status: 409, code: "APPLICATION_CHANGED" });
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT membership_category, transition_revision FROM member_applications WHERE id = ?",
+        id,
+      ),
+    ).toEqual([{ membership_category: "F", transition_revision: 0 }]);
+    expect(
+      await queryAll(env.DB, "SELECT generation FROM membership_application_workflows WHERE application_id = ?", id),
+    ).toEqual([{ generation: 1 }]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'application_edited' AND entity_id = ?", id),
+    ).toHaveLength(0);
+  });
+
+  it.each(["approved", "declined", "withdrawn"])("protects the category of a %s application", async (stage) => {
+    const { id } = await createApplication({ stage });
+    const response = await call(adminToken, `/api/v1/members/applications/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ membershipCategory: "A" }),
+    });
+    expect(response.status).toBe(409);
+    expect(await queryAll(env.DB, "SELECT membership_category FROM member_applications WHERE id = ?", id)).toEqual([
+      { membership_category: "F" },
+    ]);
   });
 
   it("clears organizationName when the category is edited to an individual (org-less) category", async () => {

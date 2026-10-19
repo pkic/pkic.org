@@ -7,8 +7,8 @@
    * so it sits inside a panel or on the canvas without a second frame. A
    * card with a tone borrows the Badge's exact treatment — soft ground, a
    * dot beside the label, the tone's ink on the figure — so the figure and
-   * the badge for the same state are recognisably the same colour, and a
-   * figure that is only a count carries no colour at all (issue 110).
+   * the badge for the same state are recognizably the same color, and a
+   * figure that is only a count carries no color at all (issue 110).
    */
   .pk-stat-card {
     --tone: var(--pk-ink-muted);
@@ -65,17 +65,22 @@
     --tone-ink: var(--pk-ink-muted);
   }
 
+  /*
+   * Sentence case at the small size, not tracked-out capitals: the caps made
+   * "Pending confirmation" wider than a phone's tile, and the label broke as
+   * "CONFIRMATI ON". A long label wraps to a second line between words; it is
+   * never cut short or split inside a word, since the label is what says what
+   * the figure counts.
+   */
   .pk-stat-card__label {
     min-width: 0;
-    font-size: var(--pk-text-2xs);
+    font-size: var(--pk-text-xs);
     font-weight: 600;
-    letter-spacing: var(--pk-tracking-label);
     line-height: 1.3;
     color: var(--pk-ink-muted);
-    text-transform: uppercase;
-    /* A long label wraps to a second line; it is never cut short, since the
-       label is what says what the figure counts. */
-    overflow-wrap: anywhere;
+    overflow-wrap: normal;
+    word-break: normal;
+    hyphens: manual;
   }
 
   /* The Badge's dot, on the label of a card that has a state to report. */
@@ -129,7 +134,7 @@
     padding: 0;
     margin: -1px;
     overflow: hidden;
-    clip: rect(0, 0, 0, 0);
+    clip-path: inset(50%);
     white-space: nowrap;
     border-width: 0;
   }
@@ -168,7 +173,7 @@
   }
 
   /*
-   * The glance density: figure first, label under it, centred.
+   * The glance density: figure first, label under it, centered.
    *
    * `column-reverse` rather than reordering the markup — the tile is
    * announced label-then-value at both densities, so a screen reader hears
@@ -190,11 +195,7 @@
   }
 
   .pk-stat-card--compact .pk-stat-card__label {
-    /* Sentence case, not the dashboard's tracked-out caps: at this size the
-       letter-spacing is what makes three tiles look like a busy row. */
-    font-size: var(--pk-text-xs);
+    /* Lighter at the glance size, where three tiles sit in a narrow aside. */
     font-weight: 400;
-    letter-spacing: normal;
-    text-transform: none;
   }
 }

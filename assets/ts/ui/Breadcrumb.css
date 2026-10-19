@@ -47,4 +47,32 @@
   .pk-breadcrumb__item [aria-current="page"] {
     color: var(--pk-ink);
   }
+
+  /*
+   * On a phone a five-level trail wrapped to three lines and pushed the page
+   * below the fold. It collapses to the one step a phone needs — up — and
+   * the page's own header already names where the reader is.
+   */
+  @media (max-width: 42rem) {
+    .pk-breadcrumb__item {
+      display: none;
+    }
+    .pk-breadcrumb__item:nth-last-child(2) {
+      display: flex;
+      min-width: 0;
+    }
+    .pk-breadcrumb__item:nth-last-child(2)::before {
+      content: "‹";
+      margin: 0 0.4rem 0 0;
+    }
+    .pk-breadcrumb__item:nth-last-child(2) .pk-breadcrumb__link {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    /* A trail of one has no parent to show, so it keeps its only item. */
+    .pk-breadcrumb__item:only-child {
+      display: flex;
+    }
+  }
 }

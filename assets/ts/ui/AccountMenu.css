@@ -1,0 +1,29 @@
+@layer components {
+  #pkic-account-menu:has(.pk-account-menu) > a {
+    display: none;
+  }
+  .pk-account-menu {
+    --pk-avatar-size: 2.25rem;
+  }
+  /* Match the brand's original row height while retaining a 44px target. */
+  #pkic-account-menu .pk-account-menu {
+    display: flex;
+    align-items: center;
+    height: calc(var(--pkic-navbar-logo-height) + 2 * var(--pkic-navbar-brand-padding));
+  }
+  .pk-account-menu .pk-avatar {
+    border: 1px solid color-mix(in srgb, var(--pk-on-solid) 72%, transparent);
+  }
+  .pk-account-menu .pk-menu__trigger--plain {
+    border: 0;
+    border-radius: 50%;
+    padding: 0;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
+  .pk-account-menu > .pk-alert {
+    position: fixed;
+    inset: auto 1rem 1rem;
+    z-index: 1051;
+  }
+}

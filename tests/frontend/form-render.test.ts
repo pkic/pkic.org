@@ -1,7 +1,8 @@
 import { h, render } from "preact";
 // @vitest-environment jsdom
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { act } from "preact/test-utils";
+import type { FormField } from "../../assets/ts/shared/types";
 import { renderConsentInputs, readConsentValues, syncConsentValidation } from "../../assets/ts/shared/widgets/consents";
 import {
   CustomFieldList,
@@ -10,7 +11,7 @@ import {
 } from "../../assets/ts/shared/widgets/custom-fields";
 import { findFieldErrorTarget } from "../../assets/ts/shared/form/validation-map";
 import { installLiveValidation, validateBeforeSubmit } from "../../assets/ts/shared/form/validation";
-import { controlFor } from "./helpers/labelled-control";
+import { controlFor } from "./helpers/labeled-control";
 
 const option = (value: string) => ({ value, label: value, active: true });
 
@@ -167,6 +168,71 @@ describe("frontend field rendering", () => {
     void act(() => render(null, form));
   });
 
+  it("offers a single choice as a visible radio list, prefilled and read back as its one value", () => {
+    const form = document.createElement("form");
+    const field = {
+      ...base("track", "Track"),
+      fieldType: "select" as const,
+      options: [option("a"), option("b")],
+      validation: { uiWidget: "radios" as const },
+    };
+    void act(() =>
+      render(
+        h(CustomFieldList, { fields: [field], context: { dayAttendance: [] }, initialValues: { track: "b" } }),
+        form,
+      ),
+    );
+    const radios = [...form.querySelectorAll<HTMLInputElement>("input[type=radio]")];
+    expect(radios.map((radio) => radio.checked)).toEqual([false, true]);
+    expect(form.querySelector("[role=radiogroup]")?.getAttribute("aria-label")).toBe("Track");
+    expect(readCustomFieldValues(form)).toEqual({ track: "b" });
+    radios[0].checked = true;
+    expect(readCustomFieldValues(form)).toEqual({ track: "a" });
+    void act(() => render(null, form));
+  });
+
+  it("keeps topic suggestions in place through input, selection, and unrelated form rerenders", () => {
+    const form = document.createElement("form");
+    const field = {
+      ...base("topics", "Topics"),
+      fieldType: "multi_select" as const,
+      options: [option("PKI"), option("PQC"), option("Certificate operations")],
+      validation: { uiWidget: "tags", allowCustom: true },
+    } satisfies FormField;
+    const random = vi.spyOn(Math, "random").mockReturnValue(0);
+    const display = (current = field) => {
+      void act(() => render(h(CustomFieldList, { fields: [current], context: { dayAttendance: [] } }), form));
+    };
+    const chips = () => Array.from(form.querySelectorAll<HTMLButtonElement>("[data-tag-chip]"));
+    const order = () => chips().map((chip) => chip.dataset.value);
+    try {
+      display();
+      const initialOrder = order();
+      const initialChips = chips();
+      random.mockReturnValue(0.99);
+      display({ ...field });
+      expect(order()).toEqual(initialOrder);
+      expect(chips()).toEqual(initialChips);
+      const input = controlFor(form, "Topics");
+      void act(() => {
+        input.value = "Migration";
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(new Event("focusout", { bubbles: true }));
+      });
+      expect(order()).toEqual(initialOrder);
+      void act(() => initialChips[0].click());
+      expect(order()).toEqual(initialOrder);
+      expect(initialChips[0].getAttribute("aria-pressed")).toBe("true");
+      expect(readCustomFieldValues(form)).toEqual({ topics: [initialOrder[0]] });
+      display({ ...field, options: [...field.options, option("New topic")] });
+      expect(order()).toEqual(["PKI", "PQC", "Certificate operations", "New topic"]);
+      expect(readCustomFieldValues(form)).toEqual({ topics: [initialOrder[0]] });
+    } finally {
+      random.mockRestore();
+      void act(() => render(null, form));
+    }
+  });
+
   it("renders custom widgets and serializes values", () => {
     const host = document.createElement("div");
     renderCustomFields(host, [
@@ -307,7 +373,7 @@ describe("frontend field rendering", () => {
 
     const scores = [...host.querySelectorAll<HTMLButtonElement>("button[data-value]")];
     expect(scores.every((button) => button.getAttribute("aria-pressed") === "false")).toBe(true);
-    for (const button of scores) expect(button.className).toBe("pk-btn pk-btn--sm pk-btn--secondary");
+    for (const button of scores) expect(button.className).toBe("pk-btn pk-btn--secondary");
 
     const nine = scores.find((button) => button.dataset.value === "9");
     nine?.click();

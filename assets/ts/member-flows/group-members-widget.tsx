@@ -1,7 +1,7 @@
 /**
  * The member organizations participating in a group, named inline.
  *
- * This replaces `layouts/shortcodes/wgmembers.html`, which read the YAML
+ * This replaces a build-time shortcode that read the YAML
  * under `data/members/` at build time and so listed whoever was in a file
  * rather than whoever is in the group (#8). It reads the canonical members
  * roll narrowed to the group — one member per row however many people it

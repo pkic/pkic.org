@@ -70,6 +70,7 @@ test("an organization contact adds a colleague and can take the access away agai
   await expect(form).toBeVisible();
   await form.locator('input[name="name"]').fill(`Colleague ${suffix}`);
   await form.locator('input[name="email"]').fill(colleagueEmail);
+  await form.getByRole("textbox", { name: /^Job title/ }).fill("PKI Engineer");
   const emailCount = await capturedEmailCount();
   const added = page.waitForResponse(
     (response) =>
@@ -82,7 +83,7 @@ test("an organization contact adds a colleague and can take the access away agai
   // representatives are listed — the page that owns them, now that a person's
   // own record is their user record rather than a separate profile page.
   await expect(page).toHaveURL(/#\/organizations\/[^/]+$/);
-  await expect(page.getByText(colleagueEmail, { exact: false }).first()).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("row").filter({ hasText: `Colleague ${suffix}` })).toBeVisible({ timeout: 15_000 });
 
   // The email opens a read-only review page. No portal session is needed to
   // confirm, and merely following the URL does not activate the identity.
@@ -99,7 +100,9 @@ test("an organization contact adds a colleague and can take the access away agai
   );
   await page.getByRole("button", { name: "Accept identity" }).click();
   expect((await accepted).status()).toBe(200);
-  await expect(page.getByText("Identity accepted")).toBeVisible();
+  await expect(page).toHaveURL(/\/portal\/#\/users\/current$/);
+  await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toBeEnabled();
+  await expect(page.getByRole("link", { name: "Open portal" })).toHaveCount(0);
 
   // The accepted identity now grants organization-derived membership.
   await signInToPortal(page, colleagueEmail);
@@ -115,11 +118,11 @@ test("an organization contact adds a colleague and can take the access away agai
   await openMyOrganization(page, organizationName);
   const identityRow = page.getByRole("row").filter({ hasText: `Colleague ${suffix}` });
   await expect(identityRow).toBeVisible({ timeout: 15_000 });
-  await runRowAction(page, identityRow, "End identity");
-  await acceptConfirmDialog(page, "End identity");
-  await expect(page.locator(".my-toast", { hasText: "Identity ended" })).toBeVisible({ timeout: 15_000 });
+  await runRowAction(page, identityRow, "End representation…");
+  await acceptConfirmDialog(page, /^End representation$/);
+  await expect(page.locator(".my-toast", { hasText: "Representation ended" })).toBeVisible({ timeout: 15_000 });
 
-  // Ended history is immutable; a later role period requires a successor identity.
+  // Ending representation removes its organization-derived membership.
   await expect.poll(async () => await activeIdentityEmails(page)).not.toContain(colleagueEmail);
 });
 

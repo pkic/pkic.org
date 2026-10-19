@@ -1,4 +1,5 @@
 import { REGISTRATION_ORGANIZATION_SQL, REGISTRATION_JOB_TITLE_SQL } from "./selected-identity";
+import type { CountryCode } from "../../../../assets/shared/countries";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import { prepareQueueEmailStatement } from "../../email/outbox";
@@ -15,6 +16,7 @@ import type { UserProfilePatch } from "../users";
 import { REGISTRATION_RECIPIENT_EMAIL_SQL } from "./recipient-email";
 import { REGISTRATION_COLUMNS, type RegistrationRecord } from "./types";
 import { registrationConfirmationUrl, registrationManageCapability } from "./capability-urls";
+import { myAgendaPageUrl } from "../frontend-links";
 
 interface UserRow {
   id: string;
@@ -35,6 +37,9 @@ export interface RegistrationStatusEmailEvent {
   ends_at: string | null;
   base_path: string | null;
   settings_json: string;
+  /** Where the event takes place; the calendar invite falls back to it without a venue. */
+  city?: string | null;
+  country?: CountryCode | null;
 }
 
 /** What an email says about a held day; a builder passing its own rows need not carry timestamps. */
@@ -84,9 +89,6 @@ async function loadRegistrationEmailContext(
     ...storedUser,
     first_name: patch?.firstName === undefined ? storedUser.first_name : (patch.firstName ?? null),
     last_name: patch?.lastName === undefined ? storedUser.last_name : (patch.lastName ?? null),
-    organization_name:
-      patch?.organizationName === undefined ? storedUser.organization_name : (patch.organizationName ?? null),
-    job_title: patch?.jobTitle === undefined ? storedUser.job_title : (patch.jobTitle ?? null),
   };
   const [dayAttendance, dayWaitlist, customAnswerRows, acceptedTermsText] = await Promise.all([
     overrides.dayAttendance ?? getRegistrationDayAttendance(db, registration.id),
@@ -152,6 +154,7 @@ export async function prepareRegistrationStatusEmail(
       acceptedTermsText: acceptedTermsText || undefined,
       ...statusData,
       manageUrl,
+      myAgendaUrl: myAgendaPageUrl(params.appBaseUrl, params.event),
       shareUrl: null,
       waitlistOfferNotice: params.noticeKind === "waitlist_offer",
       adminAdmitNotice: params.noticeKind === "admin_admit",
@@ -243,6 +246,7 @@ export async function prepareRegistrationConfirmedEmail(
       ...statusData,
       registrationId: registration.id,
       manageUrl,
+      myAgendaUrl: myAgendaPageUrl(params.appBaseUrl, params.event),
       shareUrl,
       ...(shareUrl
         ? {

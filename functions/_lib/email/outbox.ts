@@ -1,3 +1,4 @@
+import { validateEmailDeliveryGuard } from "./delivery-guard";
 import { getAvailability } from "../availability";
 import { all, first, run } from "../db/queries";
 import { buildD1JsonMembershipFilter } from "../db/json-membership";
@@ -250,17 +251,10 @@ async function processOutboxRow(
   context: OutboxProcessingContext,
 ): Promise<boolean> {
   if (getAvailability(env, Date.now(), "email").mode !== "normal") return false;
-  // Honour send_after — sleep until the scheduled time before sending.
-  const sendAfterMs = new Date(row.send_after).getTime() - Date.now();
-  if (sendAfterMs > 0) {
-    await new Promise<void>((resolve) => setTimeout(resolve, sendAfterMs));
-  }
-
   // Selection and delivery are intentionally separate operations. Multiple
   // scheduled/admin/direct processors may therefore select the same queued
-  // row. Claim it with a guarded write before contacting SendGrid so only one
-  // invocation owns the external side effect.
-  if (getAvailability(env, Date.now(), "email").mode !== "normal") return false;
+  // row. Claim only a due row before contacting SendGrid so one invocation owns
+  // the external side effect; future rows remain queued for the due processor.
   const claim = await claimOutboxForSending(db, row.id);
   if (!claim) return false;
   const processingToken = claim.token;
@@ -272,6 +266,9 @@ async function processOutboxRow(
     // A queued message can change after selection. The atomic claim returns
     // its current payload so a withdrawn snapshot cannot leak from that read.
     const storedPayload = parseJsonSafe<Record<string, unknown>>(claim.payloadJson, {});
+    // Cancel obsolete guarded deliveries before rendering or resolving capability links.
+    // The second check immediately before sending still closes eligibility changes during rendering.
+    await validateEmailDeliveryGuard(db, storedPayload);
     const payload = await materializeQueuedCapabilityLinks(db, env, storedPayload);
     const { partials, layoutHtml } = await loadRenderResources(db, context);
     const emailBaseUrl = resolveEmailBaseUrl(payload, env);
@@ -357,6 +354,7 @@ async function processOutboxRow(
       ? payload.__bccRecipients.filter((item): item is string => typeof item === "string" && item.includes("@"))
       : undefined;
 
+    await validateEmailDeliveryGuard(db, storedPayload);
     acceptedMessageId = await sendViaSendgrid(env, {
       outboxId: row.id,
       to: row.recipient_email,

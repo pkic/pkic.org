@@ -33,7 +33,10 @@ type ResourceSharingKind = "event" | "formPlacement" | "vote" | "mailingList";
 
 type EventGrantResponse = z.infer<typeof eventGroupGrantRouteSchemas.listResponseSchema>;
 type ResourceGrantCapability =
-  EventGroupCapability | FormGroupCapability | VoteGroupCapability | MailingListGroupCapability;
+  | EventGroupCapability
+  | FormGroupCapability
+  | VoteGroupCapability
+  | MailingListGroupCapability;
 type ResourceGrant = Omit<EventGrantResponse["grants"][number], "capability"> & {
   capability: ResourceGrantCapability;
 };
@@ -197,7 +200,7 @@ export function ResourceSharingEditor({
             </Field>
           </fieldset>
           <div class="pk-cluster">
-            <Button type="submit" variant="primary" size="sm" loading={saving} disabled={!selectedGroup}>
+            <Button type="submit" variant="primary" loading={saving} disabled={!selectedGroup}>
               {saving ? "Saving…" : "Share"}
             </Button>
           </div>
@@ -206,6 +209,7 @@ export function ResourceSharingEditor({
         <ErrorAlert error={error} />
       </PanelBody>
       <ApiDataTable
+        urlState="resource-sharing"
         caption={`Groups this ${resourceLabel} is shared with`}
         endpoint={endpoint}
         responseSchema={config.listResponseSchema}

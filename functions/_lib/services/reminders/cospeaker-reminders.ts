@@ -6,7 +6,7 @@ import { type DueSpeakerInviteRow, type EventRouteRow, type ReminderCandidatePre
 import { batchQueueEmailsAndUpdateState, prepareCoSpeakerInviteReminderGuard } from "./shared";
 import { buildProposalInviteEmailContextMap, proposalInviteEmailTextVariables } from "../proposal-invite-email-context";
 import type { DatabaseLike } from "../../types";
-import { proposalSpeakerEffectiveProfileColumns, queuedSpeakerManageToken } from "../proposal-speakers";
+import { proposalSpeakerProfileColumns, queuedSpeakerManageToken } from "../proposal-speakers";
 import { PROPOSAL_INACTIVE_STATUS_SQL_LIST } from "../proposal-status-policy";
 import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import { activeEffectiveInviteExpirySql, effectiveProposalSpeakerInviteExpirySql } from "../../invite-validity";
@@ -34,7 +34,7 @@ export async function runCoSpeakerInviteReminders(
           `SELECT
          ps.id AS speaker_id, ps.proposal_id, ps.user_id, ps.manage_link_secret, ps.role, ps.status AS speaker_status,
          u.email, u.normalized_email,
-         ${proposalSpeakerEffectiveProfileColumns("u", "ps", "", ["firstName", "lastName"])},
+         ${proposalSpeakerProfileColumns("u", "ps", "", ["firstName", "lastName"])},
          sp.title AS proposal_title, sp.status AS proposal_status, pu.first_name AS proposer_first_name,
          sp.event_id, e.name AS event_name, e.slug AS event_slug,
          e.base_path AS event_base_path, e.starts_at AS event_starts_at,

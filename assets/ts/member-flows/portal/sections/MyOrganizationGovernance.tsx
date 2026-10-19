@@ -1,12 +1,16 @@
-import type { JSX } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import {
   organizationActiveSponsorshipResponseSchema,
   organizationSecondaryContactNominationResponseSchema,
+  organizationSecondaryContactNominationSchema,
 } from "../../../../shared/schemas/organization-self-service";
 import { statusLabel } from "../../../components/Badge";
 import { ErrorAlert } from "../../../components/ErrorAlert";
 import { Spinner } from "../../../components/Spinner";
+import { useContractForm } from "../../../hooks/useContractForm";
+import { Button } from "../../../ui/Button";
+import { DescriptionList } from "../../../ui/DescriptionList";
+import { PersonCellPreview } from "../../../components/identities/PersonCellPreview";
 import { Field } from "../../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
 import { Select } from "../../../ui/TextControl";
@@ -28,11 +32,17 @@ function SecondaryContactSection({
   org: MyOrganizationProfile;
   reload: () => Promise<void>;
 }) {
-  const identities = (profileSignal.value?.organizationIdentities ?? []).filter(
-    (identity) => !identity.isPrimaryContact,
+  const profile = profileSignal.value;
+  const identities = (profile?.organizationId === organizationId ? (profile.organizationIdentities ?? []) : []).filter(
+    (identity) => !identity.isPrimaryContact && identity.userId !== org.primaryContact?.userId,
   );
   const [value, setValue] = useState(org.pendingSecondaryContactUserId ?? "");
   const [saving, setSaving] = useState(false);
+  const form = useContractForm(
+    organizationSecondaryContactNominationSchema,
+    { userId: value },
+    { quietWhenEmpty: true },
+  );
 
   useEffect(() => setValue(org.pendingSecondaryContactUserId ?? ""), [org.pendingSecondaryContactUserId]);
 
@@ -42,7 +52,9 @@ function SecondaryContactSection({
     try {
       const path = `${organizationPath(organizationId)}/contacts/secondary/nomination`;
       if (next) {
-        await putJson(path, { userId: next }, organizationSecondaryContactNominationResponseSchema);
+        const checked = form.submit();
+        if (!checked.data) return;
+        await putJson(path, checked.data, organizationSecondaryContactNominationResponseSchema);
       } else {
         await deleteJson(path, organizationSecondaryContactNominationResponseSchema);
       }
@@ -50,91 +62,73 @@ function SecondaryContactSection({
       await reload();
     } catch (error) {
       setValue(org.pendingSecondaryContactUserId ?? "");
+      form.refuse(error);
       toast(error instanceof ApiClientError ? error.message : "Could not update nomination.", "error");
     } finally {
       setSaving(false);
     }
   }
 
-  const nominee = identities.find((identity) => identity.userId === org.pendingSecondaryContactUserId);
+  if (!org.isPrimaryContact && !org.pendingSecondaryContactUserId) return null;
+
   return (
     <div class="pk-stack pk-stack--snug">
-      {org.isPrimaryContact ? (
-        // The selector used to carry no label at all — only the heading above
-        // it, which a screen reader does not attach to a control. The Field
-        // supplies the for/id pair and hangs the explanation off the control
-        // through aria-describedby rather than leaving it as loose prose.
-        <Field
-          label="Nominee"
-          help="A second organization identity that can manage the organization profile. Nominations are held until confirmed by staff."
+      {org.pendingSecondaryContactUserId && (
+        <p>
+          Pending staff confirmation: {org.pendingSecondaryContact?.userName ?? "Nominee no longer available"}.
+          {org.secondaryContact && " The current secondary contact remains assigned until confirmation."}
+        </p>
+      )}
+      {org.isPrimaryContact && (
+        <form
+          noValidate
+          {...form.handlers}
+          class="pk-stack pk-stack--snug"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void handleChange(value);
+          }}
         >
-          {(control) => (
-            <IdentitySelect
-              {...control}
-              className="portal-identity-select"
-              value={value}
-              disabled={saving}
-              emptyLabel="None"
-              identities={identities}
-              onChange={(event) => void handleChange((event.target as HTMLSelectElement).value)}
-            />
-          )}
-        </Field>
-      ) : (
-        <>
-          <p class="pk-small">
-            A second organization identity that can manage the organization profile. Nominations are held until
-            confirmed by staff.
-          </p>
-          <p>
-            {org.pendingSecondaryContactUserId
-              ? `Pending: ${nominee?.name ?? nominee?.email ?? "an identity"}`
-              : "None pending"}
-          </p>
-        </>
+          <Field
+            label={org.secondaryContact ? "Replacement nominee" : "Nominee"}
+            help={
+              org.secondaryContact
+                ? "A replacement takes effect after staff confirmation."
+                : "Nominate a secondary contact for staff confirmation."
+            }
+            {...form.of("userId")}
+          >
+            {(control) => (
+              <Select
+                {...control}
+                name="userId"
+                class="portal-identity-select"
+                value={value}
+                disabled={saving}
+                onChange={(event) => setValue((event.target as HTMLSelectElement).value)}
+              >
+                <option value="">None</option>
+                {identities.map((identity) => (
+                  <option key={identity.identityId} value={identity.userId}>
+                    {identity.name ?? identity.email}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+          <div class="pk-cluster">
+            <Button type="submit" variant="primary" disabled={saving || !form.valid}>
+              Send nomination
+            </Button>
+            {org.pendingSecondaryContactUserId && (
+              <Button type="button" disabled={saving} onClick={() => void handleChange("")}>
+                Withdraw nomination
+              </Button>
+            )}
+          </div>
+        </form>
       )}
     </div>
-  );
-}
-
-export interface IdentitySelectProps extends Omit<
-  JSX.SelectHTMLAttributes<HTMLSelectElement>,
-  "value" | "onChange" | "class"
-> {
-  /** A surface-local layout class, e.g. the portal's measured select width. */
-  className?: string;
-  value: string;
-  disabled?: boolean;
-  emptyLabel: string;
-  identities: Array<{ userId: string; name: string | null; email: string }>;
-  onChange: (event: Event) => void;
-}
-
-/**
- * The organization's identities as a choice.
- *
- * It takes the rest of its props through, so a `Field` can hand it the id and
- * the ARIA the control has to carry: the selector is meaningless without a
- * name, and generating one inside here would compete with the caller's label.
- */
-export function IdentitySelect({
-  className,
-  value,
-  disabled,
-  emptyLabel,
-  identities,
-  onChange,
-  ...rest
-}: IdentitySelectProps) {
-  return (
-    <Select {...rest} class={className} value={value} disabled={disabled} onChange={onChange}>
-      <option value="">{emptyLabel}</option>
-      {identities.map((identity) => (
-        <option key={identity.userId} value={identity.userId}>
-          {identity.name ?? identity.email}
-        </option>
-      ))}
-    </Select>
   );
 }
 
@@ -148,9 +142,38 @@ export function OrganizationGovernanceCard({
   reload: () => Promise<void>;
 }) {
   return (
-    <Panel class="pk" aria-label="Secondary contact">
-      <PanelHeader title="Secondary contact" />
+    <Panel class="pk" aria-label="Contacts">
+      <PanelHeader title="Contacts" />
       <PanelBody class="pk-stack pk-stack--loose">
+        <DescriptionList
+          items={[
+            {
+              term: "Your role",
+              value: org.isPrimaryContact
+                ? "Primary contact"
+                : org.isSecondaryContact
+                  ? "Secondary contact"
+                  : "Representative",
+            },
+            ...(
+              [
+                ["Primary contact", org.primaryContact],
+                ["Secondary contact", org.secondaryContact],
+              ] as const
+            ).map(([term, identity]) => ({
+              term,
+              value: identity ? (
+                <PersonCellPreview
+                  name={identity.userName}
+                  title={identity.jobTitle}
+                  avatarSrc={identity.headshotUrl}
+                />
+              ) : (
+                "Not assigned"
+              ),
+            })),
+          ]}
+        />
         <SecondaryContactSection organizationId={organizationId} org={org} reload={reload} />
       </PanelBody>
     </Panel>

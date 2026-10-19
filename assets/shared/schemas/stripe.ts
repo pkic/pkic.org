@@ -14,3 +14,15 @@ export const stripeEventEnvelopeSchema = z
     data: z.object({ object: z.unknown() }),
   })
   .passthrough();
+
+/** Signed charge/dispute webhooks identify their previously recorded payment intent. */
+export const stripePaymentAdjustmentObjectSchema = z
+  .object({
+    payment_intent: stripeIdentifierSchema,
+  })
+  .passthrough();
+export const stripePaymentAdjustmentEventSchema = stripeEventEnvelopeSchema.extend({
+  id: stripeIdentifierSchema,
+  type: z.enum(["charge.refunded", "charge.dispute.created"]),
+  data: z.object({ object: stripePaymentAdjustmentObjectSchema }),
+});

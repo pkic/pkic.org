@@ -7,9 +7,6 @@ import type { Hono } from "hono";
 import { AUTH_SCOPES } from "../auth/scopes";
 import type { Env } from "../types";
 import {
-  MCP_OAUTH_AUTHORIZE_PATH,
-  MCP_OAUTH_REGISTER_PATH,
-  MCP_OAUTH_TOKEN_PATH,
   parseMcpOauthProps,
   resolveMcpExternalToken,
   toOAuthErrorResponse,
@@ -17,24 +14,16 @@ import {
   type McpOAuthProps,
 } from "../auth/oauth/authorization";
 import { createMcpAuthorizeHandler } from "../auth/oauth/consent";
-import {
-  authorizationHeaderForMcp,
-  mcpAuthenticationError,
-  mcpTokenLifetime,
-} from "../auth/oauth/session-authorization";
+import { authorizationHeaderForMcp, mcpAuthenticationError } from "../auth/oauth/session-authorization";
 
-export const MCP_PATH = "/api/v1/mcp";
+import { MCP_PATH } from "../auth/oauth/policy";
+import { mcpOauthProviderSettings } from "../auth/oauth/provider-settings";
+export { MCP_PATH } from "../auth/oauth/policy";
 export const MCP_OPENAPI_JSON_PATH = "/api/v1/mcp/openapi.json";
 
 interface McpWorkerOptions {
   app: Hono<{ Bindings: Env }>;
   getMcpOpenApiSchema: (request: Request, env: Env) => Promise<Record<string, unknown>>;
-}
-
-function ttlSeconds(value: string | undefined, fallback: number): number {
-  if (!value) return fallback;
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 class MissingWorkerLoaderExecutor implements Executor {
@@ -130,21 +119,12 @@ export function createMcpWorkerFetch(
       return await options.app.fetch(request, env, ctx);
     }
 
-    const accessTokenTTL = ttlSeconds(env.MCP_OAUTH_ACCESS_TOKEN_TTL_SECONDS, 60 * 60);
     const oauthProvider = new OAuthProvider<McpOAuthEnv>({
+      ...mcpOauthProviderSettings(env),
       apiRoute: MCP_PATH,
       apiHandler: McpApiHandler,
       defaultHandler: mcpOauthDefaultHandler,
-      authorizeEndpoint: MCP_OAUTH_AUTHORIZE_PATH,
-      tokenEndpoint: MCP_OAUTH_TOKEN_PATH,
-      clientRegistrationEndpoint: MCP_OAUTH_REGISTER_PATH,
-      scopesSupported: [...AUTH_SCOPES],
-      accessTokenTTL,
-      refreshTokenTTL: ttlSeconds(env.MCP_OAUTH_REFRESH_TOKEN_TTL_SECONDS, 8 * 60 * 60),
-      allowPlainPKCE: false,
-      clientIdMetadataDocumentEnabled: true,
       resolveExternalToken: resolveMcpExternalToken,
-      tokenExchangeCallback: ({ props }) => mcpTokenLifetime(env, props, accessTokenTTL),
       resourceMetadata: {
         resource: new URL(MCP_PATH, request.url).toString(),
         scopes_supported: [...AUTH_SCOPES],

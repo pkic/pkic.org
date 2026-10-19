@@ -4,7 +4,8 @@ import { usePortalHashLocation } from "../../hash-location";
 import { formatDate } from "../../../../shared/ui";
 import { Badge } from "../../../../components/Badge";
 import { Alert } from "../../../../ui/Alert";
-import { Button, ButtonLink } from "../../../../ui/Button";
+import { Button } from "../../../../ui/Button";
+import { DownloadAction } from "../../../../ui/DownloadAction";
 import { PageHeader } from "../../../../ui/PageHeader";
 import { Panel, PanelBody } from "../../../../ui/Panel";
 import { Spinner } from "../../../../components/Spinner";
@@ -126,7 +127,6 @@ function DonationDetailView({ donationId, canSync }: { donationId: string; canSy
           <>
             {canSync && needsSync && (
               <Button
-                size="sm"
                 variant="secondary"
                 loading={syncing}
                 disabled={syncing}
@@ -136,11 +136,11 @@ function DonationDetailView({ donationId, canSync }: { donationId: string; canSy
               </Button>
             )}
             {d.status === "completed" && (
-              // A link, not a button: it fetches a file from a URL, so it can
-              // be opened in a new tab and copied like any other address.
-              <ButtonLink size="sm" href={badgeUrl} download={`${d.name.replace(/[^\w\s-]/g, "")}-donation-badge.jpeg`}>
-                Download badge
-              </ButtonLink>
+              <DownloadAction
+                label="Download donation badge (JPEG)"
+                href={badgeUrl}
+                filename={`${d.name.replace(/[^\w\s-]/g, "")}-donation-badge.jpeg`}
+              />
             )}
           </>
         }

@@ -15,15 +15,23 @@
  * that the browser then handled as navigation.
  */
 
+import type { ComponentChildren } from "preact";
 import { useActiveTabVisibility } from "./useActiveTabVisibility";
+import { Badge } from "./Badge";
 
 import "./Tabs.css";
 
 export interface TabListItem {
   readonly id: string;
-  readonly label: string;
+  readonly label: ComponentChildren;
   /** The id of the panel this tab controls, so the two are linked. */
   readonly panelId?: string;
+  /**
+   * Names why the hidden panel needs the reader, e.g. a field there was
+   * refused. Shown as a danger badge so a problem behind an unselected tab
+   * is still discoverable, and announced as part of the tab's name.
+   */
+  readonly attention?: string;
 }
 
 export interface TabListProps {
@@ -100,6 +108,7 @@ export function TabList({ items, activeId, onSelect, label, idPrefix, class: cla
               onKeyDown={(event) => onKeyDown(event, index)}
             >
               {item.label}
+              {item.attention && <Badge tone="danger" label={item.attention} />}
             </button>
           );
         })}

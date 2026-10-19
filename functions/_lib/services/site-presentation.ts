@@ -84,13 +84,13 @@ export function createSitePresentation<TDocument extends SitePresentationDocumen
   const titleFor = (document: TDocument): string =>
     String(paramsFor(document).heroTitle ?? document.data.heroTitle ?? document.data.title ?? "PKI Consortium");
 
-  const PAGE_COLOURS = new Set<SiteHeroTone>(["blue", "green", "orange", "purple", "teal"]);
+  const PAGE_COLORS = new Set<SiteHeroTone>(["blue", "green", "orange", "purple", "teal"]);
 
   const heroToneFor = (document: TDocument): SiteHeroTone => {
-    // A page that declares its own colour takes that theme, which is how each
+    // A page that declares its own color takes that theme, which is how each
     // working group's hero carries the group's accent rather than one green.
     const declared = String(paramsFor(document).color ?? document.data.color ?? "").toLowerCase() as SiteHeroTone;
-    if (PAGE_COLOURS.has(declared)) return declared;
+    if (PAGE_COLORS.has(declared)) return declared;
     const route = document.route.slice(siteContentLanguagePrefix(document.language).length);
     if (route === "/wg/" || route.startsWith("/wg/")) return "default";
     if (route === "/blog/" || /^\/\d{4}\/\d{2}\/\d{2}\//.test(route)) return "blog";
@@ -257,8 +257,15 @@ export function createSitePresentation<TDocument extends SitePresentationDocumen
           candidate.data.draft !== true,
       )
       .sort((a, b) => (a.data.weight ?? 0) - (b.data.weight ?? 0) || titleFor(a).localeCompare(titleFor(b)));
+    // Attendees reach their event app (portal event page) from every event page until the event ends.
+    const rootParams = paramsFor(root);
+    const eventSlug = typeof rootParams.sponsoringSlug === "string" ? rootParams.sponsoringSlug : undefined;
+    const eventDate = Date.parse(String(rootParams.eventDate ?? ""));
+    const eventDays = Number(rootParams.eventDuration ?? 1);
+    const eventEnded = Number.isFinite(eventDate) && eventDate + Math.max(1, eventDays) * 86_400_000 < Date.now();
     return {
       currentPath: document.route,
+      ...(eventSlug && !eventEnded ? { appHref: `/portal/#/events/${encodeURIComponent(eventSlug)}` } : {}),
       items: [root, ...children].map((item) => ({
         href: item.route,
         label: item.data.linkTitle ?? item.data.title ?? titleFor(item),

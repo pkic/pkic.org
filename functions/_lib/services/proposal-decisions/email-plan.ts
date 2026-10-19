@@ -3,8 +3,9 @@ import { first } from "../../db/queries";
 import { emailMarkdownText, emailPlainText } from "../../email/plain-text";
 import { AppError } from "../../errors";
 import type { AuthAdmin, DatabaseLike } from "../../types";
-import { buildEventEmailVariables, resolveEventSessionTypes } from "../events";
+import { buildEventEmailVariables } from "../events";
 import { listProposalSpeakersWithStatus, type ProposalSpeakerWithUser } from "../proposal-speakers";
+import { eventSessionTypeRequiresPresentation } from "../event-presentation";
 import type { ProposalDecisionEmailMessage, ProposalDecisionEmailPlan } from "./types";
 import { assertProposalDecisionStateAllowed, assertProposalFinalizeAccess } from "./context";
 import { snapshotProposalDecisionSpeaker } from "./snapshot";
@@ -65,9 +66,7 @@ export async function buildProposalDecisionEmailPlan(
   const messages: ProposalDecisionEmailMessage[] = [];
   const presentationReminderUserIds = new Set<string>();
   const proposalManageUrl = await options.resolveProposalManageUrl(event, proposal.id);
-  const sessionTypeConfig = resolveEventSessionTypes(event.settings_json).find(
-    (sessionType) => sessionType.label.toLowerCase() === proposal.proposal_type.toLowerCase(),
-  );
+  const requiresPresentation = eventSessionTypeRequiresPresentation(event.settings_json, proposal.proposal_type);
 
   for (const speaker of speakers) {
     if (speaker.user_id === proposal.proposer_user_id) {
@@ -115,7 +114,7 @@ export async function buildProposalDecisionEmailPlan(
       },
     });
 
-    if (!sessionTypeConfig?.requiresPresentation) continue;
+    if (!requiresPresentation) continue;
     messages.push({
       id: `presentation-upload:${speaker.user_id}`,
       templateKey: "presentation_upload_request",

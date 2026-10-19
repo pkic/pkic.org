@@ -121,8 +121,12 @@ export function createWorkingGroupPages(source: WorkingGroupPagesSource) {
     const today = new Date().toISOString().slice(0, 10);
     const eventDate = (page: ContentDocument) =>
       String(page.data.params?.eventDate ?? page.data.eventDate ?? "").slice(0, 10);
+    // A conference without a date belongs in neither band.
     const conferences = documents
-      .filter((page) => (page.data.params?.eventType ?? page.data.eventType) === "conference" && isPublished(page))
+      .filter(
+        (page) =>
+          (page.data.params?.eventType ?? page.data.eventType) === "conference" && isPublished(page) && eventDate(page),
+      )
       .sort((a, b) => eventDate(b).localeCompare(eventDate(a)));
     return {
       past: conferences.filter((page) => eventDate(page) < today).map(listingItem),

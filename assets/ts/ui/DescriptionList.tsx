@@ -3,7 +3,7 @@
  *
  * Every record screen in the portal shows the same thing: a stack of labels
  * with values beside them. Each one built it again, and they disagree about
- * the element, the gap, the label colour, and what a missing value looks like
+ * the element, the gap, the label color, and what a missing value looks like
  * — usually nothing at all, which reads as a rendering fault rather than as an
  * absence. This is that block, once.
  *

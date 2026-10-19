@@ -5,7 +5,7 @@
 .member-hovercard {
   position: fixed;
   z-index: 9999;
-  width: 210px;
+  width: 13.125rem;
   background: var(--pk-surface-raise);
   border-radius: 10px;
   box-shadow:
@@ -24,7 +24,7 @@
 }
 
 .member-hovercard-body {
-  padding: 12px 14px 10px;
+  padding: 0.75rem 0.875rem 0.625rem;
 }
 
 .member-hovercard-name {
@@ -39,13 +39,13 @@
   display: block;
   font-size: 0.72rem;
   color: var(--pk-ink-muted);
-  margin-top: 4px;
+  margin-top: 0.25rem;
   line-height: 1.4;
 }
 
 .member-hovercard-footer {
   display: block;
-  padding: 5px 14px 6px;
+  padding: 0.3125rem 0.875rem 0.375rem;
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.09em;
@@ -88,7 +88,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 0.625rem;
   background: var(--pk-surface);
   opacity: 0;
   pointer-events: none;
@@ -110,7 +110,7 @@
   background: var(--pk-logo-surface);
   border-radius: var(--pk-radius-sm);
   padding: var(--pk-3);
-  max-height: 72px;
+  max-height: 4.5rem;
   max-width: 55%;
   width: auto;
   object-fit: contain;
@@ -120,9 +120,9 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 0.25rem;
   text-align: center;
-  padding: 0 28px;
+  padding: 0 1.75rem;
 }
 
 .member-zoom-name {
@@ -140,7 +140,7 @@
 
 .member-zoom-badge {
   display: inline-block;
-  padding: 4px 16px 5px;
+  padding: 0.25rem 1rem 0.3125rem;
   border-radius: 20px;
   font-size: 0.66rem;
   font-weight: 700;
@@ -193,7 +193,7 @@
 
   // Viewport: clips the scrolling track to a fixed visible height
   .members {
-    height: 280px;
+    height: 17.5rem;
     overflow: hidden;
     position: relative;
     // mask top/bottom edges so logos fade in/out softly
@@ -222,7 +222,7 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 10px 0;
+  gap: 0.625rem 0;
   flex-shrink: 0;
 }
 

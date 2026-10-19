@@ -15,7 +15,7 @@ import {
   TargetPicker,
   type PickedTarget,
 } from "../../assets/ts/member-flows/portal/sections/access-control/TargetPicker";
-import { chooseOption, controlFor, labelNames } from "./helpers/labelled-control";
+import { chooseOption, controlFor, labelNames } from "./helpers/labeled-control";
 
 const mounted: HTMLElement[] = [];
 
@@ -52,6 +52,7 @@ describe("permission target picker", () => {
       "Event",
       "Group",
       "Organization",
+      "Event sponsor",
     ]);
     // The help is wired to the control rather than floating beside it, so the
     // two are read together.

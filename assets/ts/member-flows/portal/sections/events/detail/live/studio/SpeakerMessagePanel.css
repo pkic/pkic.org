@@ -1,0 +1,100 @@
+@layer components {
+  /* The controls scroll; what is on stage stays as the panel's footer, with its Clear. */
+  /* The composer scrolls on its own; what is on stage stays below it, never over a control. */
+  .pk-studio-message {
+    display: flex;
+    flex-direction: column;
+    block-size: 100%;
+  }
+  .pk-studio-message__body {
+    display: flex;
+    flex: 1;
+    min-block-size: 0;
+    overflow: auto;
+    flex-direction: column;
+    gap: var(--pk-2);
+    padding: var(--pk-2) var(--pk-3);
+  }
+  .pk-studio-message__options {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--pk-2) var(--pk-3);
+  }
+  .pk-studio-message__tone-option {
+    gap: var(--pk-1);
+  }
+  /* The tone's own color pair, as the stage display draws it. */
+  .pk-studio-message__swatch {
+    flex: none;
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+    border: 1px solid var(--pk-line-strong);
+    border-radius: 50%;
+    background: var(--speaker-tone);
+  }
+  /* Ready-made messages as compact chips, each edged in its tone. */
+  .pk-studio-message__presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--pk-1);
+  }
+  .pk-studio-message__preset {
+    border: 1px solid var(--pk-line);
+    border-inline-start: 4px solid var(--speaker-tone);
+    border-radius: var(--pk-radius-pill, var(--pk-radius));
+  }
+  /* The words with Send or Update beside them: the one action that reaches the stage, always in view. */
+  .pk-studio-message__group {
+    display: flex;
+    gap: var(--pk-2);
+    min-inline-size: 0;
+  }
+  .pk-studio-message__group > .pk-input {
+    flex: 1;
+    min-inline-size: 0;
+  }
+  .pk-studio-message__group > .pk-btn {
+    flex: none;
+  }
+  .pk-studio-message__flashing {
+    color: var(--pk-ink-muted);
+    font-weight: 400;
+  }
+  /* What is on stage, and the actions on it; the actions wrap under the words in a narrow panel. */
+  .pk-studio-message__live {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--pk-2);
+    min-block-size: 2.75rem;
+    padding: var(--pk-2) var(--pk-3);
+    border-block-start: 1px solid var(--pk-line-soft);
+    background: var(--pk-surface);
+    font-size: var(--pk-text-sm);
+  }
+  /* "On stage" is the expected state of a sent message: words, with its tone as a small swatch. */
+  .pk-studio-message__state {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: var(--pk-1);
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-xs);
+    font-weight: 600;
+  }
+  .pk-studio-message__state::before {
+    content: "";
+    inline-size: 0.6rem;
+    block-size: 0.6rem;
+    border: 1px solid var(--pk-line-strong);
+    border-radius: 50%;
+    background: var(--speaker-tone);
+  }
+  .pk-studio-message__text {
+    flex: 1 1 10rem;
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+    font-weight: 600;
+  }
+}

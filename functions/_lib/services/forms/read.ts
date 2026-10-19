@@ -208,7 +208,9 @@ type PlacedEventFormRow = FormRow & {
 };
 
 /**
- * Finds a currently open exact placement. Hugo compatibility may use any
+ * Finds an exact proposal placement even outside its window, so a closed call
+ * cannot inherit an open installation form. Other purposes retain their open-window policy.
+ * Hugo compatibility may use any
  * historic event placement; portal events must use the event owner's group
  * form and fail closed for malformed records.
  */
@@ -238,7 +240,7 @@ async function findPlacedEventForm(
        ${ownership === "portal_owner" ? "AND event.source_mode = 'portal'" : ""}
        ${purpose === "event_registration" || purpose === "proposal_submission" ? "AND fp.audience = ?" : ""}
        ${key ? "AND f.key = ?" : ""}
-       AND ${formSubmissionWindowOpenSql("fp")}
+       ${purpose === "proposal_submission" ? "" : `AND ${formSubmissionWindowOpenSql("fp")}`}
      ORDER BY fp.created_at ASC, fp.id ASC
      LIMIT 2`,
     [
@@ -262,7 +264,11 @@ async function findPlacedEventForm(
   ) {
     return null;
   }
-  const placement = await findActiveFormPlacement(db, row.id, { placementId: row.placement_id });
+  const placement = await (purpose === "proposal_submission" ? findFormPlacement : findActiveFormPlacement)(
+    db,
+    row.id,
+    { placementId: row.placement_id },
+  );
   return placement ? { form: row, placement } : null;
 }
 
@@ -277,6 +283,10 @@ async function findActiveForm(
     const linkedKey = settings.forms?.[purpose as keyof NonNullable<EventSettings["forms"]>];
     if (linkedKey === null) {
       return null;
+    }
+    if (purpose === "proposal_submission") {
+      const exact = await findPlacedEventForm(db, eventId, purpose);
+      if (exact) return exact;
     }
     if (typeof linkedKey === "string" && linkedKey) {
       const placed = await findPlacedEventForm(db, eventId, purpose, linkedKey);

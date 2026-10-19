@@ -5,6 +5,7 @@ import { Alert } from "../../ui/Alert";
 import { Button } from "../../ui/Button";
 import { Panel, PanelBody } from "../../ui/Panel";
 import "../../ui/Content.css";
+import { ExternalLink } from "../../ui/ExternalLink";
 
 /** A portal gate controls entry to this page; YouTube links can still be reshared. */
 export function BroadcastViewer({
@@ -78,9 +79,9 @@ export function BroadcastViewer({
             />
             <div class="pk-cluster">
               <Button onClick={() => setReload((value) => value + 1)}>Reload player</Button>
-              <a href={destination} target="_blank" rel="noopener noreferrer">
+              <ExternalLink href={destination} external>
                 Video not playing? Open on YouTube
-              </a>
+              </ExternalLink>
             </div>
             <p class="pk-small pk-muted">
               Your invitation controls access to this page. YouTube links can be saved or shared. Opening the player

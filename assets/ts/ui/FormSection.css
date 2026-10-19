@@ -60,8 +60,28 @@
     clear: both;
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(min(var(--pk-field-min, 18rem), 100%), 1fr));
+    /* A field's label sits `pk-2` from its own control (in `Field.css`) and
+       fields sit `pk-4` apart, twice as far, so the label reads as belonging to
+       the control below it and not to the field above. */
     gap: var(--pk-4);
     padding-block-start: var(--pk-3);
+  }
+
+  /* A disabled-able wrapper around a section's fields passes the same rhythm
+     on: without its own gap its fields would touch. */
+  .pk-form-section__fields > .pk-fieldset {
+    display: grid;
+    gap: var(--pk-4);
+  }
+
+  .pk-form-section__fields--stack {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .pk-form-section__fields--stack > .pk-btn {
+    justify-self: start;
+    align-self: start;
   }
 
   /*
@@ -73,6 +93,11 @@
    * loses the boundary the group exists to draw.
    */
   .pk-form-section__fields > fieldset {
+    grid-column: 1 / -1;
+  }
+
+  /* A disclosure groups several fields and keeps the full form width. */
+  .pk-form-section__fields > .pk-panel {
     grid-column: 1 / -1;
   }
 

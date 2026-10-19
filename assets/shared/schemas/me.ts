@@ -8,16 +8,20 @@ import { successResponseSchema } from "./api-common";
 import { httpOrSameOriginUrlSchema } from "./urls";
 import { databaseIdSchema } from "./identifiers";
 import { linksSchema } from "./links";
+import { identityProfileUpdateSchema } from "./own-identity-profile";
 import { applicationStageSchema } from "./member-applications";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { requiresSession } from "./route-contract";
 import { verifiedEmailIdentitySchema } from "./identity";
+import { userAuthSessionResponseSchema } from "./user-auth";
 
 export const myActingIdentitySchema = z.object({
   identityId: databaseIdSchema,
   userId: databaseIdSchema,
   name: z.string().nullable(),
   email: z.string(),
+  jobTitle: z.string().nullable().default(null),
+  headshotUrl: httpOrSameOriginUrlSchema.nullable().default(null),
   showOnOrgProfile: z.boolean(),
   isPrimaryContact: z.boolean(),
   isSecondaryContact: z.boolean(),
@@ -36,6 +40,8 @@ export const myActiveIdentitySchema = z.object({
 
 export const myProfileSchema = z.object({
   userId: databaseIdSchema,
+  /** The identity this profile describes and edits: the one the session acts as; null for a user who acts as none. */
+  identityId: databaseIdSchema.nullable(),
   emailId: databaseIdSchema.nullable(),
   email: z.string(),
   emailAddresses: z.array(verifiedEmailIdentitySchema),
@@ -45,10 +51,10 @@ export const myProfileSchema = z.object({
   jobTitle: z.string().nullable(),
   biography: z.string().nullable(),
   links: linksSchema,
-  membershipCategory: z.string(),
+  membershipCategory: z.string().nullable(),
   organizationId: databaseIdSchema.nullable(),
   organizationName: z.string().nullable(),
-  memberSince: z.string(),
+  memberSince: z.string().nullable(),
   showOnOrgProfile: z.boolean(),
   headshotUrl: httpOrSameOriginUrlSchema.nullable(),
   // Member portal (self-service coworker enrollment): true when this member
@@ -59,11 +65,11 @@ export const myProfileSchema = z.object({
   // the member has no organization.
   organizationIdentities: z.array(myActingIdentitySchema).nullable(),
   // Every membership context this member is currently eligible to act
-  // through. Always at least one entry (the one reflected in the fields
-  // above); more than one only when the caller represents multiple
+  // through. Empty for a user who holds no membership; otherwise at least one entry (the one reflected in the fields
+  // above), and more than one only when the caller represents multiple
   // organizations (or an organization plus their own individual
   // membership) concurrently.
-  activeIdentities: z.array(myActiveIdentitySchema).min(1),
+  activeIdentities: z.array(myActiveIdentitySchema),
 });
 
 export const myProfileGetRouteSchema = {
@@ -82,26 +88,27 @@ export const myActiveIdentitySwitchSchema = z.object({
 export const myActiveIdentitySwitchRouteSchema = {
   ...requiresSession(),
   tags: ["Users"],
-  summary: "Replace the current user's active acting identity",
+  summary: "Replace the identity the current session acts as",
   description:
-    "Only meaningful for a user with more than one active identity. Re-verifies identityId against the caller's live identities, derives the matching Member aggregate, and reissues the shared human session cookie scoped to that exact identity.",
+    "Re-verifies identityId against the caller's own live identities — an organization affiliation or the individual capacity — and reissues the shared human session scoped to that identity. Audit records written by the session name it as the acting identity.",
   request: {
     body: { content: { "application/json": { schema: myActiveIdentitySwitchSchema } }, required: true },
   },
   responses: {
-    "200": { description: "Switched.", content: { "application/json": { schema: myProfileSchema } } },
+    "200": {
+      description: "The session, now acting as the selected identity.",
+      content: { "application/json": { schema: userAuthSessionResponseSchema } },
+    },
     "403": { description: "The caller does not actively hold this identity." },
   },
 };
 
-export const myProfileUpdateSchema = z.object({
+/** The person's names and the acting identity's profile, edited together. */
+export const myProfileUpdateSchema = identityProfileUpdateSchema.extend({
   firstName: z.string().trim().min(1).max(120).optional(),
   lastName: z.string().trim().min(1).max(120).optional(),
   preferredName: z.string().trim().max(120).optional(),
   emailId: databaseIdSchema.nullable().optional(),
-  jobTitle: z.string().trim().max(160).optional(),
-  biography: z.string().trim().max(5000).optional(),
-  links: linksSchema.optional(),
   showOnOrgProfile: z.boolean().optional(),
 });
 
@@ -110,7 +117,7 @@ export const myProfileUpdateRouteSchema = {
   tags: ["Users"],
   summary: "Update the current user's member profile",
   description:
-    "Updates global person naming plus the selected identity profile. Individual identities cannot set a job title or organization affiliation.",
+    "Updates global person naming plus the selected identity profile. An organization identity carries its own job title; an individual identity's job title is the person's title held without an organization (an empty value clears it). Neither can set an organization affiliation. Every edit is audited with the previous values, because records that name the identity show the edited values.",
   request: {
     body: { content: { "application/json": { schema: myProfileUpdateSchema } }, required: true },
   },

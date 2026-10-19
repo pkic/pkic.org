@@ -16,6 +16,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act } from "preact/test-utils";
 
 import { proposalCreateSchema } from "../../assets/shared/schemas/proposal-management";
+import { renderToString } from "preact-render-to-string";
+import { EventProposalForm } from "../../assets/ts/site/EventProposalForm";
+import { eventProposalProofVerifySchema } from "../../assets/shared/schemas/event-proposal-proof";
+import { completeIndependentCapacityDisclosure } from "./helpers/independent-capacity";
+import { JOB_TITLE_REQUIRED } from "../../assets/shared/schemas/api-common";
 
 const PLACEMENTS = "/api/v1/events/pqc-2026/forms/placements/proposal_submission";
 const PROPOSALS = "/api/v1/events/pqc-2026/proposals";
@@ -74,26 +79,8 @@ function installApi(routes: Record<string, () => Response>): Captured[] {
 
 /** The shortcode's markup, reduced to the parts the submit path reaches for. */
 function mountShell(): HTMLFormElement {
-  document.body.innerHTML = `
-    <div class="event-flow pk"
-      data-event-proposal
-      data-event-slug="pqc-2026"
-      data-api-base="/api/v1">
-      <form novalidate>
-        <input name="firstName" required>
-        <input name="lastName" required>
-        <input name="email" type="email" required>
-        <input name="title" required>
-        <textarea name="abstract" required></textarea>
-        <div data-session-types></div>
-        <div data-consents></div>
-        <div data-custom-fields></div>
-        <div data-proposal-speakers></div>
-        <button type="submit">Submit proposal</button>
-      </form>
-      <p data-flow-status class="pk-alert pk-sr-only" role="status" aria-live="polite" hidden></p>
-    </div>
-  `;
+  document.body.innerHTML = renderToString(<EventProposalForm />);
+  document.querySelector<HTMLElement>("[data-event-proposal]")!.dataset.eventSlug = "pqc-2026";
   const form = document.querySelector("form");
   if (!form) throw new Error("shell did not mount");
   return form;
@@ -103,6 +90,12 @@ async function boot(): Promise<void> {
   await act(async () => {
     await import("../../assets/ts/event-flows/proposal-page");
     await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  await vi.waitFor(() => {
+    expect(
+      !document.querySelector("[data-consents]")?.textContent?.includes("Loading") ||
+        document.querySelector<HTMLElement>("[data-flow-status]")?.dataset.state === "error",
+    ).toBe(true);
   });
 }
 
@@ -132,6 +125,65 @@ afterEach(() => {
 });
 
 describe("proposal submission gate", () => {
+  it("shows the event's configured session name while submitting its stable identifier", async () => {
+    mountShell();
+    installApi({
+      [PLACEMENTS]: () =>
+        json({
+          ...placements(),
+          sessionTypes: [{ label: "talk", name: "Technical presentation", requiresPresentation: true }],
+        }),
+    });
+    await boot();
+    const radio = document.querySelector<HTMLInputElement>('input[name="proposalType"][value="talk"]');
+    expect(radio).not.toBeNull();
+    expect(document.querySelector("[data-session-types]")?.textContent).toContain("Technical presentation");
+    expect(radio?.checked).toBe(true);
+    expect(radio?.value).toBe("talk");
+  });
+
+  it.each(["scheduled", "closed"])(
+    "disables the public proposal form when its canonical event window is %s",
+    async (state) => {
+      const form = mountShell();
+      const id = "10000000-0000-4000-8000-000000000001";
+      const at = new Date().toISOString();
+      const requests = installApi({
+        [PLACEMENTS]: () =>
+          json({
+            ...placements(),
+            form: {
+              id,
+              key: "website-proposals",
+              title: "Proposal form",
+              description: null,
+              fields: [],
+              placement: {
+                id,
+                formId: id,
+                ownerGroupId: null,
+                contextType: "event",
+                contextRef: "20000000-0000-4000-8000-000000000001",
+                audience: "speaker",
+                active: true,
+                createdAt: at,
+                updatedAt: at,
+                opensAt: state === "scheduled" ? "2099-01-01T00:00:00.000Z" : null,
+                closesAt: state === "closed" ? "2000-01-01T00:00:00.000Z" : null,
+              },
+            },
+          }),
+      });
+      await boot();
+      expect([...form.querySelectorAll<HTMLInputElement>("input")].every((control) => control.disabled)).toBe(true);
+      expect(document.querySelector("[data-flow-status]")?.textContent).toContain(
+        state === "scheduled" ? "has not opened yet" : "is closed",
+      );
+      await submit(form);
+      expect(requests.some(({ method }) => method === "POST")).toBe(false);
+    },
+  );
+
   it("refuses an incomplete proposal before it reaches the network", async () => {
     const form = mountShell();
     const requests = installApi({ [PLACEMENTS]: () => json(placements()) });
@@ -171,40 +223,201 @@ describe("proposal submission gate", () => {
     expect(document.querySelector(`[id="${messageId!.split(" ").at(-1)!}"]`)?.getAttribute("role")).toBe("alert");
   });
 
-  it("submits a complete proposal through the shared create contract", async () => {
+  it("reuses verified personal details without serializing duplicate personal fields", async () => {
+    window.history.replaceState({}, "", "/events/2026/pqc-2026/propose/#verify=" + "v".repeat(40));
     const form = mountShell();
     const requests = installApi({
       [PLACEMENTS]: () => json(placements([term()])),
+      [PROPOSALS + "/proof/verify"]: () =>
+        json({
+          status: "ready",
+          continuationToken: "c".repeat(40),
+          entryContext: {
+            inviteToken: "refreshed-invitation-capability",
+            inviteId: "40000000-0000-4000-8000-000000000001",
+            sourceType: "invite",
+            sourceRef: "invite",
+            referralCode: "ABC12345",
+          },
+          applicantKind: "individual",
+          consents: [{ termKey: "speaker-agreement", version: "1" }],
+          email: "ada@example.test",
+          organization: null,
+          person: {
+            email: "ada@example.test",
+            firstName: "Ada",
+            lastName: "Lovelace",
+            organizationName: null,
+            jobTitle: null,
+            bio: null,
+            links: [],
+          },
+        }),
       [PROPOSALS]: () => json({ success: true, proposalId: "30000000-0000-4000-8000-000000000001" }),
     });
-
     await boot();
+    // The confirmation carries the terms agreed before the email was sent: the person is not asked again,
+    // and continues straight on the contact step.
+    await vi.waitFor(() => expect(form.textContent).toContain("Ada Lovelace"));
+    await vi.waitFor(() => expect(form.querySelector<HTMLElement>('[data-step="2"]')!.hidden).toBe(false));
+    expect(form.querySelector<HTMLElement>('[data-step="1"]')!.hidden).toBe(true);
+    expect(form.querySelector<HTMLInputElement>("input[data-consent-input]")!.checked).toBe(true);
+    await completeIndependentCapacityDisclosure(form);
+    expect(form.querySelector<HTMLButtonElement>("[data-step-next]")!.hidden).toBe(false);
+    const verified = requests.find(({ path }) => path.endsWith("proof/verify"));
+    expect(eventProposalProofVerifySchema.parse(verified?.body).token).toBe("v".repeat(40));
+    expect(form.elements.namedItem("firstName")).toBeNull();
+    expect(form.elements.namedItem("email")).toBeNull();
+    // Whether the contact also presents is a speaker question, asked on the Speakers step.
+    const speakersStep = form.querySelector<HTMLElement>('[data-step="4"]')!;
+    expect(speakersStep.querySelector("#proposal-is-presenting")).not.toBeNull();
+    await act(() => {
+      const presenting = form.querySelector<HTMLInputElement>("#proposal-is-presenting")!;
+      presenting.checked = true;
+      presenting.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await vi.waitFor(() => expect(form.elements.namedItem("proposerBio")).not.toBeNull());
+    expect(form.elements.namedItem("proposerSpeakerFirstName")).toBeNull();
+    expect(form.elements.namedItem("proposerSpeakerEmail")).toBeNull();
     fill(form, {
-      firstName: "Ada",
-      lastName: "Lovelace",
-      email: "ada@example.test",
       title: "Post-quantum migration",
-      // The shared contract asks for at least eighty characters, so the
-      // fixture satisfies the real rule rather than a sentence-long stand-in.
       abstract:
         "A walk through migrating a working certificate authority to post-quantum algorithms, with the rollbacks we needed.",
+      proposerBio: "A speaker biography with enough detail to satisfy the canonical submission contract.",
+      committeeNotes: "Happy to adapt this into a panel.",
     });
-    const consent = document.querySelector<HTMLInputElement>("input[data-consent-input]")!;
-    await act(async () => {
-      consent.checked = true;
-      consent.dispatchEvent(new Event("change", { bubbles: true }));
+    await act(() => {
+      form.querySelector<HTMLButtonElement>('[aria-label="Markdown source"]')!.click();
+    });
+    await act(() => {
+      const abstract = form.querySelector<HTMLTextAreaElement>('textarea[name="abstract"]')!;
+      abstract.value =
+        "A walk through migrating a working certificate authority to post-quantum algorithms, with the rollbacks we needed.";
+      abstract.dispatchEvent(new Event("input", { bubbles: true }));
     });
     await submit(form);
-
-    const posted = requests.find(({ method }) => method === "POST");
-    expect(posted?.path).toBe(PROPOSALS);
-    // Parsed through the shared request schema rather than compared literally,
-    // so the case fails when the contract moves rather than agreeing with a
-    // stale copy of it.
-    const parsed = proposalCreateSchema.parse(posted?.body);
-    expect(parsed.proposer.email).toBe("ada@example.test");
-    expect(parsed.proposal.title).toBe("Post-quantum migration");
+    const submitted = requests.find(({ path, method }) => path === PROPOSALS && method === "POST");
+    expect(submitted, document.querySelector("[data-flow-status]")?.textContent ?? "").toBeDefined();
+    const parsed = proposalCreateSchema.parse(submitted?.body);
+    expect(parsed.continuationToken).toBe("c".repeat(40));
     expect(parsed.consents).toEqual([{ termKey: "speaker-agreement", version: "1" }]);
+    expect(parsed.inviteToken).toBe("refreshed-invitation-capability");
+    expect(parsed.inviteId).toBe("40000000-0000-4000-8000-000000000001");
+    expect(parsed.sourceType).toBe("invite");
+    expect(parsed.sourceRef).toBe("invite");
+    expect(parsed.referralCode).toBe("ABC12345");
+    expect(parsed.unaffiliatedAttestation).toBe(true);
+    expect(parsed.proposer.actingIdentityId).toBeNull();
+    expect(parsed.proposer.firstName).toBeUndefined();
+    expect(parsed.proposer.email).toBeUndefined();
+    expect(parsed.proposer.bio).toContain("speaker biography");
+    // Private notes travel apart from the abstract, which is what gets published.
+    expect(parsed.proposal.committeeNotes).toBe("Happy to adapt this into a panel.");
+    expect(parsed.proposal.abstract).not.toContain("panel");
+  });
+
+  it("requires the job title of a contact taking part on behalf of an organization before the contact step", async () => {
+    window.history.replaceState({}, "", "/events/2026/pqc-2026/propose/#verify=" + "v".repeat(40));
+    const form = mountShell();
+    installApi({
+      [PLACEMENTS]: () => json(placements([term()])),
+      [PROPOSALS + "/proof/verify"]: () =>
+        json({
+          status: "ready",
+          consents: [{ termKey: "speaker-agreement", version: "1" }],
+          continuationToken: "c".repeat(40),
+          applicantKind: "organization",
+          email: "ada@official.example",
+          organization: { id: "40000000-0000-4000-8000-000000000002", name: "Official Organization", jobTitle: null },
+          person: null,
+        }),
+    });
+    await boot();
+    await vi.waitFor(() => expect(form.querySelector<HTMLElement>('[data-step="2"]')!.hidden).toBe(false));
+    fill(form, { firstName: "Ada", lastName: "Lovelace" });
+    for (const name of ["firstName", "lastName"])
+      (form.elements.namedItem(name) as HTMLInputElement).dispatchEvent(new Event("input", { bubbles: true }));
+    const jobTitle = form.querySelector<HTMLInputElement>('input[name="jobTitle"]')!;
+    expect(jobTitle.required).toBe(true);
+    await act(async () => {
+      form.querySelector<HTMLButtonElement>("[data-step-next]")!.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    // The contract refuses on the field itself, and the person stays on the contact step.
+    expect(form.querySelector<HTMLElement>('[data-step="2"]')!.hidden).toBe(false);
+    const message = form.querySelector<HTMLElement>('[data-field-error="proposer.jobTitle"]')!;
+    expect(message.textContent).toBe(JOB_TITLE_REQUIRED);
+    expect(message.hidden).toBe(false);
+
+    await act(async () => {
+      jobTitle.value = "Security Architect";
+      jobTitle.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      form.querySelector<HTMLButtonElement>("[data-step-next]")!.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(form.querySelector<HTMLElement>('[data-step="3"]')!.hidden).toBe(false);
+  });
+
+  it("shows a short abstract's contract error on the Markdown field, as on any other field", async () => {
+    window.history.replaceState({}, "", "/events/2026/pqc-2026/propose/#verify=" + "v".repeat(40));
+    const form = mountShell();
+    installApi({
+      [PLACEMENTS]: () => json(placements([term()])),
+      [PROPOSALS + "/proof/verify"]: () =>
+        json({
+          status: "ready",
+          consents: [{ termKey: "speaker-agreement", version: "1" }],
+          continuationToken: "c".repeat(40),
+          applicantKind: "individual",
+          email: "ada@example.test",
+          organization: null,
+          person: {
+            email: "ada@example.test",
+            firstName: "Ada",
+            lastName: "Lovelace",
+            organizationName: null,
+            jobTitle: null,
+            bio: null,
+            links: [],
+          },
+        }),
+    });
+    await boot();
+    await vi.waitFor(() => expect(form.textContent).toContain("Ada Lovelace"));
+    await completeIndependentCapacityDisclosure(form);
+    const next = form.querySelector<HTMLButtonElement>("[data-step-next]")!;
+    await act(async () => {
+      next.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    const proposalStep = form.querySelector<HTMLElement>('[data-step="3"]')!;
+    expect(proposalStep.hidden).toBe(false);
+    fill(form, { title: "Post-quantum migration" });
+    await act(() => {
+      form.querySelector<HTMLButtonElement>('[aria-label="Markdown source"]')!.click();
+    });
+    await act(() => {
+      const abstract = form.querySelector<HTMLTextAreaElement>('textarea[name="abstract"]')!;
+      abstract.value = "Too short to review.";
+      abstract.dispatchEvent(new Event("input", { bubbles: true }));
+      abstract.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+    });
+    await act(async () => {
+      next.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(proposalStep.hidden).toBe(false);
+    const abstract = form.querySelector<HTMLTextAreaElement>('textarea[name="abstract"]')!;
+    const field = abstract.closest(".pk-field")!;
+    expect(field.classList.contains("pk-field--invalid")).toBe(true);
+    expect(field.classList.contains("pk-field--ok")).toBe(false);
+    expect(abstract.getAttribute("aria-invalid")).toBe("true");
+    const message = field.querySelector<HTMLElement>('.pk-field__message[role="alert"]');
+    expect(message?.hidden).toBe(false);
+    expect(message?.textContent).toContain("80");
+    expect(abstract.getAttribute("aria-describedby")).toContain(message!.id);
   });
 
   it("announces a failed placement load in the flow's live region", async () => {
@@ -217,7 +430,7 @@ describe("proposal submission gate", () => {
     expect(status?.getAttribute("role")).toBe("status");
     expect(status?.hidden).toBe(false);
     // The tone is in the data attribute as well as the styling, so failure is
-    // not told apart from success by colour alone.
+    // not told apart from success by color alone.
     expect(status?.dataset["state"]).toBe("error");
     expect(status?.textContent).toContain("Could not load proposal form details.");
   });

@@ -1,6 +1,7 @@
 import { createExecutionContext, env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
-import app, { openapi } from "../functions/router";
+import app from "../functions/router";
+import { openapi } from "../functions/http-router";
 import { resetDb } from "./helpers/reset-db";
 import { AUTH_EXTENSION } from "../functions/_lib/openapi/mcp";
 import { ALL_PERSONAS, ALL_PERSONA_KEYS, onlyPersona } from "./personas/catalog";
@@ -31,6 +32,7 @@ interface DeclaredOperation {
 /** A well-formed identifier that matches no row, so path validation passes. */
 const ABSENT_ID = "00000000000000000000000000000000";
 const ABSENT_SLUG = "no-such-slug";
+const ABSENT_DOMAIN = "no-such-domain.example";
 // Each permission sweep calls every declared route in sequence. CI workerd
 // can take longer than Vitest's five-second default without any route failing.
 const ROUTE_SWEEP_TIMEOUT_MS = 30_000;
@@ -39,7 +41,7 @@ function fillPath(path: string): string | null {
   // Only sweep paths whose parameters can be filled with something
   // structurally valid. Anything else would answer 400 and prove nothing.
   const filled = path.replace(/\{([^}]+)\}/g, (_match, name: string) =>
-    /slug|key|purpose|body|token/i.test(name) ? ABSENT_SLUG : ABSENT_ID,
+    name === "domain" ? ABSENT_DOMAIN : /slug|key|purpose|body|token/i.test(name) ? ABSENT_SLUG : ABSENT_ID,
   );
   return filled.includes("{") ? null : filled;
 }

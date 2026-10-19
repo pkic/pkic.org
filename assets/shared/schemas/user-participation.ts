@@ -17,7 +17,12 @@ import { userIdParamsSchema, utcInstantSchema } from "./api-common";
 import { groupLabelSchema } from "./groups";
 
 /**
- * One group the person sits in, with how reliably they attend it.
+ * One seat the person holds or held in a group, as one of their identities,
+ * with how reliably they attended it while seated.
+ *
+ * A seat belongs to the identity it was taken as, so the record can show it
+ * under that identity; a person seated twice in one group, as two identities,
+ * has two seats. A past seat keeps its interval: `leftAt` is when it ended.
  *
  * `held` counts the meetings that have already happened, so a group whose
  * first meeting is next week reads as 0 of 0 rather than as an absence. A
@@ -27,12 +32,16 @@ import { groupLabelSchema } from "./groups";
  */
 export const userGroupParticipationSchema = z.object({
   group: groupLabelSchema,
-  /** The current leadership title; null means ordinary group participation. */
+  /** The identity the seat was taken as. */
+  identityId: z.string().min(1),
+  /** The leadership title of a current seat, or the roster title of a past one; null means ordinary participation. */
   title: z.string().nullable(),
   joinedAt: utcInstantSchema,
-  /** Meetings of this group the person joined. */
+  /** When the seat ended; null while it is held. */
+  leftAt: utcInstantSchema.nullable(),
+  /** Meetings of this group the person joined while seated. */
   attended: z.number().int().nonnegative(),
-  /** Meetings of this group that have taken place since they joined. */
+  /** Meetings of this group that took place while they held the seat. */
   held: z.number().int().nonnegative(),
   /** When they were last in one, or null if never. */
   lastAttendedAt: utcInstantSchema.nullable(),

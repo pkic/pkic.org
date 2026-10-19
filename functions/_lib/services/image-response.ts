@@ -36,17 +36,29 @@ export async function storedImageResponse(
   });
 }
 
+/** Response headers every served raster image carries. */
+export function rasterImageResponse(bytes: ArrayBuffer, contentType: string, cacheControl: string): Response {
+  return new Response(bytes, {
+    headers: {
+      "Content-Type": contentType,
+      "Cache-Control": cacheControl,
+      "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
+}
+
 /**
- * Serves a retained headshot with bounded byte and pixel dimensions.
+ * Reads a retained headshot with bounded byte and pixel dimensions.
  * R2 exposes the object size before its body is read, so legacy objects never
  * cause an unbounded buffer at a Worker response boundary.
  */
-export async function storedRasterImageResponse(
+export async function readStoredRasterImage(
   bucket: R2Bucket,
   key: string,
-  options: { notFoundCode: string; notFoundMessage: string; cacheControl: string },
+  options: { notFoundCode: string; notFoundMessage: string },
   maxBytes = key.startsWith("member-photos/") ? IMPORTED_PORTRAIT_MAX_BYTES : STANDARD_HEADSHOT_MAX_BYTES,
-): Promise<Response> {
+): Promise<{ bytes: ArrayBuffer; contentType: string }> {
   const object = await bucket.get(key);
   if (!object || object.size > maxBytes) {
     throw new AppError(404, options.notFoundCode, options.notFoundMessage);
@@ -66,13 +78,16 @@ export async function storedRasterImageResponse(
   if (!validation.ok) {
     throw new AppError(404, options.notFoundCode, options.notFoundMessage);
   }
+  return { bytes, contentType: validation.image.contentType };
+}
 
-  return new Response(bytes, {
-    headers: {
-      "Content-Type": validation.image.contentType,
-      "Cache-Control": options.cacheControl,
-      "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
-      "X-Content-Type-Options": "nosniff",
-    },
-  });
+/** Serves a retained headshot read through `readStoredRasterImage`. */
+export async function storedRasterImageResponse(
+  bucket: R2Bucket,
+  key: string,
+  options: { notFoundCode: string; notFoundMessage: string; cacheControl: string },
+  maxBytes?: number,
+): Promise<Response> {
+  const image = await readStoredRasterImage(bucket, key, options, maxBytes);
+  return rasterImageResponse(image.bytes, image.contentType, options.cacheControl);
 }

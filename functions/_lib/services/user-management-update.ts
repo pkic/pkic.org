@@ -1,13 +1,15 @@
 import type { z } from "zod";
 import { executiveCouncilSeatSql } from "../auth/executive-council";
 import { userUpdateSchema } from "../../../assets/shared/schemas/user-management";
+import { nowIso } from "../utils/time";
+import { prepareUserLifecyclePublication } from "./user-lifecycle-publication";
 import { first } from "../db/queries";
 import { requirePermission } from "../auth/permissions";
 import { AppError } from "../errors";
 import type { DatabaseLike, StatementLike, UserBackedAuthAdmin } from "../types";
 import { normalizeEmail } from "../validation";
 import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "./audit";
-import { prepareUserProfileStatement, type UserProfilePatch } from "./users";
+import { prepareUserProfileStatements, type UserProfilePatch } from "./users";
 import { buildUserAccessOffboardingStatements } from "./membership/offboarding";
 import { findUserEmailOwner } from "./user-emails";
 import {
@@ -114,7 +116,7 @@ export async function updateUser(db: DatabaseLike, actor: UserBackedAuthAdmin, u
     return { id: user.id, email, active, isEcMember };
   }
   const statements: StatementLike[] = [];
-  const at = new Date().toISOString();
+  const at = nowIso();
   const clearPendingEmailChange =
     email !== user.email && Boolean(user.pending_email && user.pending_email_change_registration_id);
   if (promotedSecondaryEmail) {
@@ -174,7 +176,7 @@ export async function updateUser(db: DatabaseLike, actor: UserBackedAuthAdmin, u
       ...(active !== Boolean(user.active) ? { active: { from: Boolean(user.active), to: active } } : {}),
     }),
   );
-  if (Object.keys(patch).length > 0) statements.push(prepareUserProfileStatement(db, user.id, patch));
+  if (Object.keys(patch).length > 0) statements.push(...prepareUserProfileStatements(db, user.id, patch));
   const deactivating = user.active === 1 && !active;
   const changingPrimaryEmail = email !== user.email;
   const authorizedDb = authorizedUserMutationDb(db, actor, [
@@ -197,6 +199,7 @@ export async function updateUser(db: DatabaseLike, actor: UserBackedAuthAdmin, u
     );
   }
   if (deactivating) {
+    statements.unshift(prepareUserLifecyclePublication(db, user.id, at, "deactivate"));
     statements.push(
       ...(await buildUserAccessOffboardingStatements(db, {
         userId: user.id,

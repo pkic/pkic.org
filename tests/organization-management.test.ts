@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import app from "../functions/router";
+import "./helpers/app";
 import { createUserBackedAuthAdmin } from "../functions/_lib/auth/admin-identity";
 import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
 import { updateOrganization } from "../functions/_lib/services/organization-management";
@@ -65,7 +66,13 @@ function createBody(name = "Canonical Organization") {
     name,
     membershipCategory: "F",
     memberSince: "2026-01-15",
-    identities: [{ name: "Jane Doe", email: `${name.toLowerCase().replaceAll(" ", ".")}@example.test` }],
+    identities: [
+      {
+        name: "Jane Doe",
+        email: `${name.toLowerCase().replaceAll(" ", ".")}@example.test`,
+        jobTitle: "Representative",
+      },
+    ],
     workingGroupSlugs: [],
     activationReason: "Initial verified organization identity",
   };
@@ -168,7 +175,7 @@ describe("canonical organization management", () => {
       method: "POST",
       body: JSON.stringify({
         name: "Peopled Non Member",
-        identities: [{ name: "Ada Lovelace", email: "ada@non-member.example.test" }],
+        identities: [{ name: "Ada Lovelace", email: "ada@non-member.example.test", jobTitle: "Representative" }],
         activationReason: "Testing the refusal.",
         workingGroupSlugs: [],
       }),
@@ -250,12 +257,24 @@ describe("canonical organization management", () => {
       body: JSON.stringify(createBody("Revision Organization")),
     });
     const organization = (await created.json()) as { organization: { id: string; updatedAt: string } };
+    expect(
+      await env.DB.prepare("SELECT status FROM members WHERE organization_id=?")
+        .bind(organization.organization.id)
+        .first("status"),
+    ).toBe("active");
 
     const stale = await call(`/api/v1/organizations/${organization.organization.id}`, admin.token, {
       method: "PATCH",
       body: JSON.stringify({ revision: "stale-revision", description: "must not persist" }),
     });
     expect(stale.status).toBe(409);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT id FROM site_publication_requests WHERE resource_id=?",
+        organization.organization.id,
+      ),
+    ).toEqual([]);
 
     const writer = await grantToken("organizations:write");
     const actor = createUserBackedAuthAdmin({
@@ -282,6 +301,13 @@ describe("canonical organization management", () => {
         organization.organization.id,
       ),
     ).toEqual([{ description: null }]);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT id FROM site_publication_requests WHERE resource_id=?",
+        organization.organization.id,
+      ),
+    ).toEqual([]);
   });
 
   it("keeps list search, sorting, and pagination in a single D1 projection", async () => {

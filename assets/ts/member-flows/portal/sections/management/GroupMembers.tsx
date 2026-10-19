@@ -1,3 +1,4 @@
+import { useHashQueryParam } from "../../../../hooks/useHashQueryParam";
 import { groupStatsResponseSchema } from "../../../../../shared/schemas/group-statistics";
 import { useData } from "../../../../hooks/useData";
 import { RepresentationSummary } from "./RepresentationSummary";
@@ -77,7 +78,8 @@ function GroupMembersManager({
   const [, navigate] = usePortalHashLocation();
   const categories = useMembershipCategoryLabels();
   const membersPath = `/groups/${encodeURIComponent(groupId)}/members`;
-  const [view, setView] = useState<SeatView>("current");
+  const [active] = useHashQueryParam("group-members.f.active", "true", ["true", "false"]);
+  const view: SeatView = active === "false" ? "former" : "current";
   const [busyId, setBusyId] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [editing, setEditing] = useState<GroupMembership | null>(null);
@@ -193,6 +195,7 @@ function GroupMembersManager({
       {mutationError && <ErrorAlert error={mutationError} />}
       <div class="pk-record">
         <ApiDataTable
+          urlState="group-members"
           caption="Members"
           endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/memberships`}
           responseSchema={groupMembershipsManagementListResponseSchema}
@@ -210,7 +213,6 @@ function GroupMembersManager({
           // seat that ends stays as the group's history: the roster a governing
           // body publishes is the current seats, so that is what opens.
           initialFilters={{ active: "true" }}
-          onFiltersChange={(filters) => setView(filters.active === "false" ? "former" : "current")}
           columns={[
             {
               header: "Person",
@@ -222,7 +224,8 @@ function GroupMembersManager({
                   name={membership.userName}
                   // A person with no name on file is named by the address; it is
                   // not then repeated as a second line (#117).
-                  email={membership.userName === membership.email ? undefined : membership.email}
+                  organization={membership.organizationName}
+                  title={membership.jobTitle}
                   avatarSrc={membership.headshotUrl ?? undefined}
                   size="sm"
                 />
@@ -328,7 +331,7 @@ function GroupMembersManager({
             )
           }
         />
-        <aside class="pk-stack">
+        <div class="pk-stack">
           {statistics.error ? (
             <ErrorAlert error={statistics.error} />
           ) : (
@@ -337,7 +340,7 @@ function GroupMembersManager({
               description="Current members across the whole group. Each organization is counted once, regardless of how many people represent it."
             />
           )}
-        </aside>
+        </div>
       </div>
     </div>
   );

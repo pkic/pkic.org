@@ -1,0 +1,47 @@
+import { LIVE_EMBLEM } from "../../shared/live-lower-third";
+
+/** The consortium emblem's shapes in its own square box (`LIVE_EMBLEM`), in the event kit's colors. */
+export function LiveEmblemPaths() {
+  return (
+    <>
+      <path
+        class="pk-live-overlay__emblem-blue"
+        d="M208.803 323.222C200.41 337.77 198.765 357.85 180 357.85C161.235 357.85 159.59 337.77 151.197 323.222A146.09 146.09 0 0 1 78.134 284.717L92.552 271.088A126.27 126.27 0 0 0 267.448 271.088L281.866 284.717A146.09 146.09 0 0 1 208.803 323.222Z"
+      />
+      <path
+        class="pk-live-overlay__emblem-orange"
+        d="M289.632 83.444C306.428 83.439 324.64 74.824 334.023 91.075C343.405 107.326 326.838 118.791 318.436 133.333A146.09 146.09 0 0 1 321.62 215.86L302.608 210.188A126.27 126.27 0 0 0 215.161 58.724L219.754 39.423A146.09 146.09 0 0 1 289.632 83.444Z"
+      />
+      <path
+        class="pk-live-overlay__emblem-green"
+        d="M41.564 133.333C33.162 118.791 16.595 107.326 25.977 91.075C35.36 74.824 53.572 83.439 70.368 83.444A146.09 146.09 0 0 1 140.246 39.423L144.839 58.724A126.27 126.27 0 0 0 57.392 210.188L38.38 215.86A146.09 146.09 0 0 1 41.564 133.333Z"
+      />
+      <path
+        class="pk-live-overlay__emblem-ink"
+        fill-rule="evenodd"
+        d="M189.905 81.165A99.33 99.33 0 0 1 270.546 220.839L311.47 244.467L301.565 261.623L260.641 237.995A99.33 99.33 0 0 1 99.359 237.995L58.435 261.623L48.53 244.467L89.454 220.839A99.33 99.33 0 0 1 170.095 81.165L170.095 33.91L189.905 33.91ZM180 100.48A79.52 79.52 0 0 0 180 259.52A79.52 79.52 0 0 0 180 100.48Z"
+      />
+      <path
+        class="pk-live-overlay__emblem-ink"
+        d="M169.025 175.7L155.295 228.84L204.705 228.84L190.975 175.7A23.625 23.625 0 1 0 169.025 175.7Z"
+      />
+    </>
+  );
+}
+
+/** The emblem on its own, in its square box centered on the rotation center, so a spin never wobbles. */
+export function OverlayEmblem() {
+  return (
+    <svg
+      class="pk-live-overlay__emblem"
+      viewBox={`0 0 ${LIVE_EMBLEM.box} ${LIVE_EMBLEM.box}`}
+      x="0"
+      y="0"
+      width={LIVE_EMBLEM.box}
+      height={LIVE_EMBLEM.box}
+      aria-hidden="true"
+    >
+      <LiveEmblemPaths />
+    </svg>
+  );
+}

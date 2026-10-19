@@ -57,6 +57,7 @@ export function RetentionDueTable({ actionsRef }: { actionsRef?: MutableRef<ApiT
         </p>
       </PanelBody>
       <ApiDataTable
+        urlState="retention-due"
         caption="Events due for retention redaction"
         endpoint="/api/v1/retention/due"
         responseSchema={retentionDueListResponseSchema}

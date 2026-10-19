@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "preact/hooks";
 import {
   CONTENT_REVIEW_STATUSES,
+  contentReviewStatusSchema,
+  organizationContentReviewDefaultSort,
   organizationContentReviewDecisionResponseSchema,
   organizationContentReviewDetailResponseSchema,
   organizationContentReviewRejectSchema,
@@ -34,6 +36,12 @@ type ReviewStatus = (typeof CONTENT_REVIEW_STATUSES)[number];
  * deliberately no "all statuses" state — a moderation queue is not an archive.
  */
 const DEFAULT_QUEUE_STATUS: ReviewStatus = "pending";
+
+/** The pending queue reads oldest first; decided reviews read newest first. */
+function reviewQueueSort(filters: Readonly<Record<string, string>>): string {
+  const status = contentReviewStatusSchema.safeParse(filters.status);
+  return organizationContentReviewDefaultSort(status.success ? status.data : DEFAULT_QUEUE_STATUS);
+}
 
 /**
  * A field value as text to compare. `links` arrives as an array and is read
@@ -176,10 +184,10 @@ function ReviewDetail({ reviewId, onDecided }: { reviewId: string; onDecided: ()
               )}
             </Field>
             <div class="pk-cluster">
-              <Button variant="primary" size="sm" loading={busy} onClick={() => void decide("approve")}>
+              <Button variant="primary" loading={busy} onClick={() => void decide("approve")}>
                 Approve
               </Button>
-              <Button variant="danger-quiet" size="sm" loading={busy} onClick={() => void decide("reject")}>
+              <Button variant="danger-quiet" loading={busy} onClick={() => void decide("reject")}>
                 Reject
               </Button>
             </div>
@@ -224,6 +232,7 @@ export function OrganizationContentReviews({ reviewId }: { reviewId?: string }) 
           Settings hub, which meant the strip named it and the page did not. */}
       <PageHeader title="Content reviews" />
       <ApiDataTable
+        urlState="organization-content-reviews"
         caption="Organization content reviews"
         endpoint={API_BASE}
         responseSchema={organizationContentReviewsListResponseSchema}
@@ -231,8 +240,8 @@ export function OrganizationContentReviews({ reviewId }: { reviewId?: string }) 
         resolvePage={(data) => data.page}
         paginate
         searchPlaceholder="organization, submitter, or note…"
-        initialSort="-submittedAt"
-        params={{ status: DEFAULT_QUEUE_STATUS }}
+        initialSort={reviewQueueSort}
+        initialFilters={{ status: DEFAULT_QUEUE_STATUS }}
         columns={[
           {
             header: "Organization",
@@ -257,7 +266,7 @@ export function OrganizationContentReviews({ reviewId }: { reviewId?: string }) 
             filter: {
               param: "status",
               options: CONTENT_REVIEW_STATUSES.map((value) => ({
-                value: value === DEFAULT_QUEUE_STATUS ? "" : value,
+                value,
                 label: statusLabel(value),
               })),
             },

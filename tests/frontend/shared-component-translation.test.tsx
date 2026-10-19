@@ -14,7 +14,8 @@ import type { ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { AuditLogTable } from "../../assets/ts/components/AuditLogTable";
 import { Markdown } from "../../assets/ts/ui/Markdown";
-import { PersonCell } from "../../assets/ts/components/PersonCell";
+import { personDisplayName } from "../../assets/shared/person-display";
+import { PersonCell } from "../../assets/ts/ui/PersonCell";
 import { StatCard } from "../../assets/ts/components/StatCard";
 
 const mounted: HTMLElement[] = [];
@@ -37,7 +38,7 @@ afterEach(() => {
 
 describe("shared component translation layer", () => {
   it("PersonCell falls back to a placeholder name and omits the second line when nothing is on file", () => {
-    const container = mount(<PersonCell firstName={null} lastName={null} email={null} />);
+    const container = mount(<PersonCell name={personDisplayName(null, null, null)} />);
     expect(container.textContent).toContain("—");
     // The face repeats what the name says, so it is decoration rather than a
     // second announcement of the same person.
@@ -45,12 +46,12 @@ describe("shared component translation layer", () => {
     expect(container.querySelector(".pk-person-cell__email")).toBeNull();
   });
 
-  it("PersonCell keeps the email as the quiet second line unless it is already the name", () => {
-    const named = mount(<PersonCell firstName="Ada" lastName="Lovelace" email="ada@example.test" />);
+  it("PersonCell names a person without showing their address, and falls back to it only as the name", () => {
+    const named = mount(<PersonCell name={personDisplayName("Ada", "Lovelace", "ada@example.test")} />);
     expect(named.querySelector(".pk-person-cell__name")?.textContent).toBe("Ada Lovelace");
-    expect(named.querySelector(".pk-person-cell__email")?.textContent).toBe("ada@example.test");
+    expect(named.textContent).not.toContain("ada@example.test");
 
-    const unnamed = mount(<PersonCell firstName={null} lastName={null} email="ada@example.test" />);
+    const unnamed = mount(<PersonCell name={personDisplayName(null, null, "ada@example.test")} />);
     expect(unnamed.querySelector(".pk-person-cell__name")?.textContent).toBe("ada@example.test");
     expect(unnamed.querySelector(".pk-person-cell__email")).toBeNull();
   });

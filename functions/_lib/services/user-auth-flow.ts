@@ -1,3 +1,4 @@
+import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../db/authorization-guard";
 import { queueUserSignInCapability } from "../auth/user-session";
 import { prepareQueueEmailStatement } from "../email/outbox-queue";
 import type { DatabaseLike } from "../types";
@@ -13,7 +14,8 @@ export function portalVerifyLinkBase(appBaseUrl: string, returnPath?: string): s
   return returnPath ? `${base}?next=${encodeURIComponent(returnPath)}` : base;
 }
 
-function magicLinkUrl(baseUrl: string, token: string): string {
+/** A portal route with an emailed capability token appended to its hash query. */
+export function capabilityLinkUrl(baseUrl: string, token: string): string {
   const url = new URL(baseUrl);
   const separator = url.hash.includes("?") ? "&" : "?";
   url.hash = `${url.hash}${separator}token=${encodeURIComponent(token)}`;
@@ -36,25 +38,31 @@ export async function requestUserSignInLink(
 
   const email = prepareQueueEmailStatement(db, {
     templateKey: "user_magic_link",
-    recipientEmail: magic.identity.email,
+    recipientEmail: magic.recipientEmail,
     recipientUserId: magic.identity.id,
     eventId: null,
     messageType: "transactional",
     subject: "Your PKI Consortium sign-in link",
     data: {
-      email: magic.identity.email,
-      magicLinkUrl: magicLinkUrl(payload.magicLinkBaseUrl, magic.queuedToken),
+      email: magic.recipientEmail,
+      magicLinkUrl: capabilityLinkUrl(payload.magicLinkBaseUrl, magic.queuedToken),
       expiresInMinutes: payload.ttlMinutes,
     },
     capabilityLinkValues: [magic.queuedToken],
   });
 
-  await db.batch([
-    email.statement,
-    prepareAuditLog(db, "user", magic.identity.id, "user_magic_link_requested", "user_identity", magic.identity.id, {
-      capacities: magic.capacities,
-      email: magic.identity.email,
-    }),
-  ]);
+  try {
+    await db.batch([
+      prepareAuthorizationGuard(db, magic.authorizationEvidence),
+      email.statement,
+      prepareAuditLog(db, "user", magic.identity.id, "user_magic_link_requested", "user_identity", magic.identity.id, {
+        capacities: magic.capacities,
+        email: magic.recipientEmail,
+      }),
+    ]);
+  } catch (error) {
+    if (isAuthorizationGuardFailure(error)) return { outboxId: null, identityFound: false };
+    throw error;
+  }
   return { outboxId: email.id, identityFound: true };
 }

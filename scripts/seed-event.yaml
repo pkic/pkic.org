@@ -17,8 +17,10 @@ event:
   endsAt: "2026-12-03T18:00:00.000Z"
   registrationMode: invite_or_open
   inviteLimitAttendee: 5
-  # location: Short location label displayed on OG badges and in UI.
-  location: "Amsterdam, The Netherlands"
+  # city and country: where the event takes place. The country is an ISO 3166-1
+  # alpha-2 code; pages, badges and calendar invites show its name ("Amsterdam, Netherlands").
+  city: Amsterdam
+  country: NL
   # heroImageUrl: Full URL to the event hero/banner image.
   # Used in emails and OG social badges. Must be an absolute URL.
   heroImageUrl: "/events/2026/pqc-conference-amsterdam-nl/amsterdam-nl.png"
@@ -87,7 +89,7 @@ terms:
     - termKey: sponsor-data-sharing
       version: v1
       required: false
-      helpText: "To offer this event free of charge, our sponsors contribute between $100 and $300 per attendee daily to cover venue, catering, and production costs. By opting in, you allow us to share your professional profile (name, organization, job title, and email) with the sponsors of this specific event for networking and follow-up purposes."
+      helpText: "Our sponsors cover the venue, catering, and production costs that keep this event free. By opting in, you allow us to share your professional profile (name, organization, job title, and email) with the sponsors of this specific event for networking and follow-up purposes."
       displayText: I consent to the PKI Consortium sharing my professional profile with event sponsors and partners.
   speaker:
     - termKey: physical-presence
@@ -119,13 +121,9 @@ organizers:
   - email: admin@pkic.org
     firstName: PKIC
     lastName: Admin
-    organizationName: PKI Consortium
-    jobTitle: Event Organizer
   - email: paul.vanbrouwershaven@pkic.org
     firstName: Paul
     lastName: van Brouwershaven
-    organizationName: PKI Consortium
-    jobTitle: Chair
 
 forms:
   - key: pqc-2026-registration
@@ -134,26 +132,10 @@ forms:
     description: Event registration additional questions.
     fields:
       # ── Profile fields ─────────────────────────────────────────────────────
-      # Keys organization_name and job_title are automatically promoted to the
-      # user profile by the registration service. Country / state_region are
-      # stored in custom answers for sponsor and logistics purposes.
-      - key: organization_name
-        label: Organization
-        type: text
-        required: true
-        sortOrder: 1
-        validation:
-          maxLength: 120
-          placeholder: Your company or institution
-          helpText: Helps us tailor session recommendations and connects you with relevant sponsors.
-      - key: job_title
-        label: Job title
-        type: text
-        required: true
-        sortOrder: 2
-        validation:
-          maxLength: 120
-          placeholder: e.g. CISO, Software Engineer, Policy Advisor
+      # Organization and job title come from the registrant's identity, so a
+      # form cannot define organization_name or job_title fields. Country /
+      # state_region are stored in custom answers for sponsor and logistics
+      # purposes.
       - key: country
         label: Country
         type: text

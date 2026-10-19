@@ -75,7 +75,7 @@ export const GROUPS_FLOW = {
       id: "8.13",
       title: "Assigning a chair offers matching people as you type",
       status: "gap",
-      note: "dev-pkic.org#26. The picker asks for a name, then a search, then a selection, where it used to suggest as you typed. A regression in interaction rather than in behaviour, and the board-member picker is the shape to match.",
+      note: "dev-pkic.org#26. The picker asks for a name, then a search, then a selection, where it used to suggest as you typed. A regression in interaction rather than in behavior, and the board-member picker is the shape to match.",
     },
     {
       id: "8.11",

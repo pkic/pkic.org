@@ -6,6 +6,7 @@ import { Panel, PanelBody } from "../../ui/Panel";
 import { Select, Textarea, TextInput } from "../../ui/TextControl";
 import { fieldTypeProfile } from "./form-field-types";
 import type { FieldDraft } from "./form-field-draft";
+import { SectionHeading } from "../../ui/SectionHeading";
 
 /** The control a respondent actually meets for one question. */
 function PreviewControl({ field, name }: { field: FieldDraft; name: string }) {
@@ -141,7 +142,7 @@ export function FormRespondentPreview({
         <div class="pk-formcard__rule" aria-hidden="true" />
         <PanelBody class="pk-stack">
           <div class="pk-stack pk-stack--tight">
-            <h2>{title.trim() || "Untitled form"}</h2>
+            <SectionHeading level={3}>{title.trim() || "Untitled form"}</SectionHeading>
             {description.trim() && <p class="pk-muted">{description}</p>}
           </div>
 

@@ -308,14 +308,22 @@ describe("Vite public-site rendering", () => {
     expect(html).toContain("pk-content-agenda");
     expect(html).toContain('data-module="site/agenda"');
     expect(html).toContain("pk-content-agenda__tabs");
-    expect(html).toContain("pk-content-agenda__filters");
+    expect(html).toContain("pk-content-agenda__filter-controls");
+    expect(html).toContain("data-agenda-location-trigger");
     expect(html).toContain(">Red hall<");
     expect(html).toContain("105 min");
     expect(html).toContain('data-local-time-format="time"');
     const portraits = await publicPageImages(html, ".pk-content-agenda__speaker .pk-avatar__img");
     expect(portraits.length).toBeGreaterThan(0);
     expect(portraits[0]?.src).toMatch(/^\/_assets\//);
+    // Published portraits are bounded renditions chosen by width, never the stored upload.
+    const portraitWidths = [...portraits[0]!.srcset.matchAll(/ (\d+)w\b/g)].map(([, width]) => Number(width));
+    expect(portraitWidths.length).toBeGreaterThan(0);
+    expect(Math.max(...portraitWidths)).toBeLessThanOrEqual(384);
     expect((await SELF.fetch(`https://app.test${portraits[0]!.src}`)).status).toBe(200);
+    // Profile dialogs and the Speakers tab hold published portraits until they are shown.
+    expect(html).toMatch(/data-deferred-src="\/_assets\//);
+    expect(html).not.toMatch(/data-deferred-src(?:set)?="\/api\//);
     const [hero] = await publicPageImages(html, ".pkic-hero-media__image");
     expect(hero?.src).toMatch(/^\/_assets\/.*\.webp$/);
     expect((await SELF.fetch(`https://app.test${hero!.src}`)).status).toBe(200);

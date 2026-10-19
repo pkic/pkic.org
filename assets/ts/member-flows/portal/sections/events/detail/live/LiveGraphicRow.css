@@ -1,0 +1,23 @@
+@layer components {
+  .pk-live-graphic-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--pk-1) var(--pk-2);
+    padding: var(--pk-2) var(--pk-3);
+    border-block-end: 1px solid var(--pk-line-soft);
+  }
+  .pk-live-graphic-row__name {
+    display: flex;
+    flex: 1 1 8rem;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+  .pk-live-graphic-row__detail {
+    overflow: hidden;
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-sm);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+}

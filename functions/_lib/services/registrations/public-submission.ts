@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import type {
+  RegistrationConfirmOrganization,
   RegistrationSubmissionResponse,
   registrationCreateSchema,
 } from "../../../../assets/shared/schemas/registration";
@@ -14,15 +15,24 @@ import { buildAttendanceEmailData, buildRegistrationEmailStatusData } from "../.
 import { buildAcceptedTermsText, getCustomAnswerRows } from "../../utils/registration-email";
 import { prepareValidatedAttendeeRegistration } from "../attendee-registration";
 import { buildEventEmailVariables, getEventBySlug, recordHugoEventBasePath } from "../events";
-import { registrationManagePageUrl } from "../frontend-links";
+import { myAgendaPageUrl, registrationManagePageUrl } from "../frontend-links";
 import { findInviteByToken, type InviteRecord } from "../invites";
 import { prepareBadgeRenderJob } from "../badge-render-job-statements";
 import { seedGravatarAndProcessBadgeRenderJob } from "../registration-badge-regeneration";
 import { commitRegistrationSubmission } from "../registration-submission";
 import { registrationConfirmationUrl, registrationManageCapability } from "./capability-urls";
+import { readRegistrationAffiliation } from "./selected-identity";
 import type { VerifiedRegistrationIdentityContext } from "./types";
+import { nowIso } from "../../utils/time";
+import { linkVerifiedAddressToDomainOrganization } from "../identities/email-domain-link";
+import {
+  linkConfirmedRegistrationOrganization,
+  type RegistrationOrganizationOutcome,
+} from "./confirmation-organization";
+import { eventTakesRegistrations } from "./email-proof";
 
-type RegistrationCreateInput = z.infer<typeof registrationCreateSchema>;
+/** The individual capacity only gates the public contract's work-email policy; the use case does not read it. */
+type RegistrationCreateInput = Omit<z.infer<typeof registrationCreateSchema>, "unaffiliatedAttestation">;
 
 export interface PublicRegistrationSubmissionConfig {
   maxPendingConfirmationReminders: number;
@@ -45,6 +55,8 @@ export interface EventRegistrationSubmissionMetadata {
   signingSecret: string;
   config: PublicRegistrationSubmissionConfig;
   verifiedIdentity?: VerifiedRegistrationIdentityContext;
+  /** The submission carried a verification link for its address: it is registered without a confirmation email. */
+  mailboxVerified?: boolean;
   authorizationGuards?: readonly StatementLike[];
 }
 
@@ -54,7 +66,7 @@ function requireRegistrationPolicy(
 ): void {
   // An automatic meeting invites its group's members itself (#103); like a
   // meeting without registration, it takes no registrations.
-  if (registrationMode === "no_registration" || registrationMode === "automatic") {
+  if (!eventTakesRegistrations(registrationMode)) {
     throw new AppError(403, "EVENT_REGISTRATION_DISABLED", "This event does not use registration");
   }
   if (registrationMode === "public" || registrationMode === "open" || registrationMode === "invite_or_open") return;
@@ -68,6 +80,31 @@ function requireRegistrationPolicy(
     return;
   }
   throw new AppError(403, "EVENT_REGISTRATION_ACCESS_REQUIRED", "Registration requires an invitation or group access");
+}
+
+/**
+ * After a verified registration commits, as the confirmation did: the proved
+ * address joins the organization its domain belongs to when the shared rule
+ * links it, and an organization the form asked for is linked or queued for
+ * review in its own command, never undoing the registration.
+ */
+async function linkVerifiedRegistrant(
+  db: DatabaseLike,
+  input: {
+    registrationId: string;
+    userId: string;
+    normalizedEmail: string;
+    organization?: RegistrationConfirmOrganization;
+  },
+): Promise<RegistrationOrganizationOutcome | null> {
+  await linkVerifiedAddressToDomainOrganization(db, { userId: input.userId, normalizedEmail: input.normalizedEmail });
+  return input.organization
+    ? linkConfirmedRegistrationOrganization(db, {
+        registrationId: input.registrationId,
+        organization: input.organization,
+        at: nowIso(),
+      })
+    : null;
 }
 
 /** Canonical registration use case shared by public and authenticated group adapters. */
@@ -92,7 +129,7 @@ export async function submitEventRegistration(
     authorizedByGroup: Boolean(metadata.verifiedIdentity?.registrationGroupId),
   });
 
-  if (!metadata.verifiedIdentity) {
+  if (!metadata.verifiedIdentity && !metadata.mailboxVerified) {
     const mxResult = await checkEmailDomainMx(body.email);
     if (!mxResult.hasMxRecords) {
       throw new AppError(
@@ -120,6 +157,7 @@ export async function submitEventRegistration(
     authorizationGuards: metadata.authorizationGuards,
     event: { id: event.id, source_mode: event.source_mode },
     verifiedIdentity: metadata.verifiedIdentity,
+    mailboxVerified: metadata.mailboxVerified,
   });
   const { user, referralCode } = prepared;
   const registration = prepared.registration;
@@ -129,8 +167,8 @@ export async function submitEventRegistration(
   // anonymous submitter owns it. Existing identities receive their management
   // capability only through the durable email outbox. A newly created,
   // unprivileged identity may keep the immediate correction link so a typo can
-  // still be fixed before confirmation.
-  const exposeManageCapability = prepared.identityWasCreated;
+  // still be fixed before confirmation. A verified mailbox is that proof.
+  const exposeManageCapability = prepared.identityWasCreated || Boolean(metadata.mailboxVerified);
   const shareUrl = `${metadata.appBaseUrl}/r/${referralCode}`;
   const dayWaitlist = prepared.plannedDayWaitlist;
   const attendanceData = buildAttendanceEmailData(registration.attendance_type, prepared.dayAttendance, dayWaitlist);
@@ -142,13 +180,17 @@ export async function submitEventRegistration(
     answersJson: registration.custom_answers_json,
   });
   const acceptedTermsText = buildAcceptedTermsText(body.consents, requiredTerms);
+  const affiliation = await readRegistrationAffiliation(db, {
+    identityId: registration.registration_identity_id,
+    userId: user.id,
+  });
   const commonData = {
     ...buildEventEmailVariables(event, metadata.appBaseUrl),
     firstName: user.first_name ?? "",
     lastName: user.last_name ?? "",
     email: user.email,
-    organizationName: user.organization_name ?? "",
-    jobTitle: user.job_title ?? "",
+    organizationName: affiliation.organizationName ?? "",
+    jobTitle: affiliation.jobTitle ?? "",
     attendanceLabel: attendanceData.attendanceLabel,
     dayAttendance: attendanceData.dayAttendance,
     dayWaitlist,
@@ -216,7 +258,11 @@ export async function submitEventRegistration(
           lastName: user.last_name ?? "",
         }),
       ],
-      data: { ...commonData, attendanceType: registration.attendance_type },
+      data: {
+        ...commonData,
+        attendanceType: registration.attendance_type,
+        myAgendaUrl: myAgendaPageUrl(metadata.appBaseUrl, event),
+      },
       bounceAddress: rsvpEmail,
       calendar: {
         registrationId: registration.id,
@@ -230,6 +276,14 @@ export async function submitEventRegistration(
 
   const badgeRenderJob = prepareBadgeRenderJob(db, referralCode);
   await commitRegistrationSubmission(db, prepared, [queuedEmail.statement, badgeRenderJob.statement]);
+  const organizationOutcome = metadata.mailboxVerified
+    ? await linkVerifiedRegistrant(db, {
+        registrationId: registration.id,
+        userId: user.id,
+        normalizedEmail: body.email,
+        organization: body.organization,
+      })
+    : null;
   return {
     response: {
       success: true,
@@ -240,6 +294,7 @@ export async function submitEventRegistration(
       shareUrl,
       dayAttendance: prepared.dayAttendance,
       dayWaitlist,
+      organizationOutcome,
     },
     backgroundTasks: [
       processOutboxByIdBackground(db, env, queuedEmail.id),

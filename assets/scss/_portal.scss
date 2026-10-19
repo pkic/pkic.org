@@ -1,53 +1,41 @@
 // Unified portal navigation shell, scoped under the portal mount.
 
-// The portal's chrome, from the tokens rather than from fixed colours.
+// The portal's chrome, from the tokens rather than from fixed colors.
 //
 // These were three hexes, so the portal stayed light while the components
 // inside it followed the reader's theme: a white sidebar and a grey page
-// around dark tables and inputs. `$portal-green` keeps its literal because
-// Sass reads it through `rgba()`, which a custom property cannot pass through.
+// around dark tables and inputs. The accent comes from the tokens too: a fixed
+// green and its tints failed text contrast in the sidebar.
 $portal-bg: var(--pk-canvas);
 $portal-surface: var(--pk-surface);
 $portal-border: var(--pk-line);
-$portal-green: #198754;
 $portal-sidebar-width: 240px;
 
-.portal-organization-logo {
-  max-height: 140px;
-}
-
-.portal-organization-logo-placeholder {
-  height: 100px;
-}
-
 .portal-category-select {
-  max-width: 360px;
+  max-width: 22.5rem;
 }
 
 .portal-identity-select {
-  max-width: 320px;
+  max-width: 20rem;
 }
 
 .portal-access-role-user-picker {
-  max-width: 400px;
+  max-width: 25rem;
 }
 
+// The permission matrix framed like every other bordered region; its header
+// band takes the top corners, so the frame clips it. Kept narrow so the Read
+// and Write columns stay next to the area they belong to.
 .portal-access-role-permissions {
-  max-height: 180px;
-  overflow-y: auto;
-
-  // The frame and the inset were `p-2 border rounded` in the markup. They
-  // belong with the scroll behaviour that is already this box's own shape,
-  // and they read design-system tokens so the box matches every other
-  // framed region rather than choosing its own border and radius.
-  padding: var(--pk-2);
+  max-width: 40rem;
+  overflow: hidden;
   border: 1px solid var(--pk-line);
   border-radius: var(--pk-radius);
 }
 
 #portal-root {
   display: flex;
-  min-height: calc(100vh - var(--pkic-navbar-height, 57px));
+  min-height: calc(100vh - var(--pkic-navbar-height, 3.5625rem));
   background: $portal-bg;
 }
 
@@ -79,14 +67,20 @@ $portal-sidebar-width: 240px;
   display: flex;
   flex-direction: column;
   position: sticky;
-  top: var(--pkic-navbar-height, 57px);
-  height: calc(100vh - var(--pkic-navbar-height, 57px));
+  // A sticky box is its own stacking context, so the account menu's popup is layered only as high as the
+  // sidebar is. Lift the sidebar over positioned page content so a wide menu is not painted beneath it.
+  z-index: 210;
+  top: var(--pkic-navbar-height, 3.5625rem);
+  height: calc(100vh - var(--pkic-navbar-height, 3.5625rem));
   overflow-y: auto;
   box-shadow: 2px 0 8px rgba(0, 0, 0, 0.04);
 }
 
+// A plain container inside the document's one <main>, so it restates the
+// horizontal clip the site gives that element.
 #portal-main {
   flex: 1;
+  overflow-x: clip;
   overflow-y: auto;
   padding: 1.75rem 2rem;
   min-width: 0;
@@ -105,11 +99,14 @@ $portal-sidebar-width: 240px;
 .portal-brand {
   font-size: 0.95rem;
   font-weight: 700;
-  color: $portal-green;
+  color: var(--pk-accent-ink);
 }
 
 .portal-sidebar-link {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: var(--pk-3);
+  min-height: 2.75rem;
   padding: 0.5rem 1rem;
   font-size: 0.875rem;
   font-weight: 500;
@@ -124,13 +121,16 @@ $portal-sidebar-width: 240px;
 
   &:hover {
     background: color-mix(in srgb, var(--pk-accent) 10%, transparent);
-    color: $portal-green;
+    color: var(--pk-accent-ink);
     text-decoration: none;
   }
 
+  // The accent's text shade, not the accent itself: #198754 on the active
+  // tint measured 4.08:1, under the 4.5:1 that text needs (WCAG 1.4.3). The
+  // ink token is the accent's strong shade in light and a lifted one in dark.
   &.active {
-    background: rgba($portal-green, 0.08);
-    color: $portal-green;
+    background: var(--pk-accent-soft);
+    color: var(--pk-accent-ink);
     font-weight: 600;
 
     &::before {
@@ -139,9 +139,9 @@ $portal-sidebar-width: 240px;
       left: 0;
       top: 15%;
       height: 70%;
-      width: 3px;
+      width: 0.1875rem;
       border-radius: 0 3px 3px 0;
-      background: $portal-green;
+      background: var(--pk-accent);
     }
   }
 }
@@ -166,13 +166,13 @@ $portal-sidebar-width: 240px;
 
   &:hover {
     background: color-mix(in srgb, var(--pk-accent) 10%, transparent);
-    color: $portal-green;
+    color: var(--pk-accent-ink);
     text-decoration: none;
   }
 
   &.active {
-    background: rgba($portal-green, 0.08);
-    color: $portal-green;
+    background: var(--pk-accent-soft);
+    color: var(--pk-accent-ink);
     font-weight: 600;
   }
 }
@@ -246,29 +246,7 @@ summary.portal-sidebar-group {
   &:hover,
   &:focus-visible {
     background: color-mix(in srgb, var(--pk-accent) 10%, transparent);
-    color: $portal-green;
-  }
-}
-
-.portal-user-avatar {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  width: 1.75rem;
-  height: 1.75rem;
-  border-radius: 50%;
-  overflow: hidden;
-  background: rgba($portal-green, 0.12);
-  color: $portal-green;
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-
-  img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
+    color: var(--pk-accent-ink);
   }
 }
 
@@ -276,14 +254,6 @@ summary.portal-sidebar-group {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-// Slightly larger than the account-menu avatar so a headshot or initials
-// stays legible at row height in the representatives and users directories.
-.portal-user-avatar--table {
-  width: 2rem;
-  height: 2rem;
-  font-size: 0.75rem;
 }
 
 // The public site uppercases every `main h5` for its editorial look; inside
@@ -319,7 +289,7 @@ summary.portal-sidebar-group {
 // second implementation of both, in hard-coded greys with no dark theme, and
 // it was the better one: it flipped the popup above the trigger when there was
 // no room below and clamped it into the viewport, which the design-system Menu
-// did not. Those behaviours moved into the primitive rather than being lost.
+// did not. Those behaviors moved into the primitive rather than being lost.
 
 .pkic-empty-state {
   padding: 2rem 1rem;
@@ -339,10 +309,6 @@ summary.portal-sidebar-group {
   color: var(--pk-ink-muted);
 }
 
-.portal-section-title {
-  margin-bottom: 1.25rem;
-}
-
 // A workspace names itself by its subject (the group), not a generic label;
 // the public heading scale squashes h4 inside main, so size it explicitly.
 .portal-context-title {
@@ -352,15 +318,15 @@ summary.portal-sidebar-group {
 }
 
 .portal-management-picker {
-  max-width: 640px;
+  max-width: 40rem;
 }
 
 .portal-management-context dl > div {
-  min-width: 80px;
+  min-width: 5rem;
 }
 
 .portal-management-search {
-  max-width: 720px;
+  max-width: 45rem;
 }
 
 #portal-toast-area {
@@ -380,7 +346,7 @@ summary.portal-sidebar-group {
     font-size: 0.85rem;
     font-weight: 500;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
-    max-width: 320px;
+    max-width: 20rem;
   }
 }
 
@@ -392,15 +358,15 @@ summary.portal-sidebar-group {
   #portal-topbar {
     display: flex;
     position: sticky;
-    top: var(--pkic-navbar-height, 57px);
+    top: var(--pkic-navbar-height, 3.5625rem);
     z-index: 200;
   }
 
   #portal-sidebar {
     position: fixed;
-    left: -260px;
-    top: var(--pkic-navbar-height, 57px);
-    height: calc(100vh - var(--pkic-navbar-height, 57px));
+    left: -16.25rem;
+    top: var(--pkic-navbar-height, 3.5625rem);
+    height: calc(100vh - var(--pkic-navbar-height, 3.5625rem));
     z-index: 210;
     transition: left 0.2s ease;
 
@@ -412,7 +378,7 @@ summary.portal-sidebar-group {
   #portal-sidebar-backdrop.active {
     display: block;
     position: fixed;
-    inset: var(--pkic-navbar-height, 57px) 0 0 $portal-sidebar-width;
+    inset: var(--pkic-navbar-height, 3.5625rem) 0 0 $portal-sidebar-width;
     background: rgba(0, 0, 0, 0.35);
     z-index: 205;
   }
@@ -442,4 +408,78 @@ summary.portal-sidebar-group {
 }
 .portal-mailing-list-fields .pk-datalist {
   grid-column: 1 / -1;
+}
+
+.portal-sidebar-collapse {
+  display: none;
+}
+@media (min-width: 901px) {
+  .portal-sidebar-collapse {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 2.25rem;
+    height: 2.25rem;
+    padding: 0.5rem;
+    border: 0;
+    border-radius: var(--pk-radius);
+    background: transparent;
+    color: var(--pk-ink-muted);
+    cursor: pointer;
+  }
+  .portal-sidebar-collapse:hover {
+    background: var(--pk-canvas);
+  }
+  .portal-sidebar-collapsed #portal-sidebar {
+    width: 4rem;
+    min-width: 4rem;
+  }
+  .portal-sidebar-heading {
+    height: 3rem;
+    min-height: 3rem;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+  .portal-sidebar-heading .portal-sidebar-brand {
+    padding: 0;
+    margin: 0;
+    min-width: 0;
+    line-height: 1.2;
+  }
+  .portal-sidebar-collapsed .portal-sidebar-brand,
+  .portal-sidebar-collapsed .portal-sidebar-label,
+  .portal-sidebar-collapsed .portal-user-name,
+  .portal-sidebar-collapsed .portal-sidebar-groups {
+    display: none;
+  }
+  .portal-sidebar-collapsed .portal-sidebar-link {
+    justify-content: center;
+    padding-inline: var(--pk-2);
+  }
+  .portal-sidebar-collapsed .portal-sidebar-heading {
+    justify-content: center;
+  }
+  .portal-sidebar-collapsed .portal-sidebar-user {
+    justify-content: center;
+    min-height: 2.75rem;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+  }
+
+  .portal-sidebar-collapsed .portal-sidebar-footer {
+    padding-inline: 0;
+  }
+}
+
+.portal-sidebar-icon {
+  display: inline-flex;
+  flex: 0 0 1.25rem;
+  align-items: center;
+  justify-content: center;
+}
+.portal-sidebar-label {
+  min-width: 0;
 }

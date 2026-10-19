@@ -1,0 +1,11 @@
+@layer components {
+  /* The words carry the meaning; the ink only tells the two offers apart at a
+     glance, so a reader who cannot see the difference loses nothing. */
+  .pk-availability-offer--employment {
+    color: var(--pk-ok-ink);
+  }
+
+  .pk-availability-offer--contract {
+    color: var(--pk-info-ink);
+  }
+}

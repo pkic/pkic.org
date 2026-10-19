@@ -4,12 +4,12 @@ import { ApiClientError, getJson } from "../../../../shared/api-client";
 import { ApiDataTable } from "../../../../components/ApiDataTable";
 import type { CollectionLoader } from "../../../../hooks/useServerCollection";
 import { Alert } from "../../../../ui/Alert";
-import { IconDownload } from "../../../../components/icons";
-import { ButtonLink } from "../../../../ui/Button";
+import { DownloadAction } from "../../../../ui/DownloadAction";
 import type { Column } from "../../../../components/Table";
 import { EmptyState } from "../../../../ui/EmptyState";
 import type { SponsorAttendee, SponsorCapacity } from "../../../../../shared/schemas/sponsor-access";
 import { sponsorAttendeesListResponseSchema } from "../../../../../shared/schemas/sponsor-access";
+import { ContactOrganization } from "../../../../components/ContactOrganization";
 
 function fmtName(a: SponsorAttendee): string {
   return [a.firstName, a.lastName].filter(Boolean).join(" ").trim() || "—";
@@ -32,7 +32,10 @@ const ATTENDEE_COLUMNS: Column<SponsorAttendee>[] = [
   // A bounded value: `fit` keeps the address on one line instead of letting
   // the primary column squeeze it into a one-character-per-line tower.
   { header: "Email", cell: (a) => a.email ?? "—" },
-  { header: "Organization", cell: (a) => a.organizationName ?? "—" },
+  {
+    header: "Organization",
+    cell: (a) => <ContactOrganization organization={a.organizationName} personalEmail={a.personalEmail} />,
+  },
   { header: "Job title", cell: (a) => a.jobTitle ?? "—" },
   // A bounded vocabulary hugs its content instead of claiming slack.
   { header: "Attendance", width: "fit", cell: (a) => fmtAttendanceType(a.attendanceType) },
@@ -96,6 +99,7 @@ export function SponsorAttendees({
       </p>
 
       <ApiDataTable
+        urlState="consenting-attendees"
         caption={`Consenting attendees for ${eventLabel}`}
         columns={ATTENDEE_COLUMNS}
         endpoint={endpoint}
@@ -107,21 +111,11 @@ export function SponsorAttendees({
         load={load}
         rowKey={(attendee) => attendee.registrationId}
         toolbar={() => (
-          <>
-            {" "}
-            {/* A download is a navigation to a representation of this list, so it
-            is an anchor wearing the button's clothes rather than a button that
-            fakes one. */}
-            <ButtonLink
-              icon
-              aria-label="Download CSV"
-              title="Download CSV"
-              href={`/api/v1/sponsors/${encodeURIComponent(capacity.sponsorId)}/events/${encodeURIComponent(capacity.eventSlug)}/attendees?format=csv`}
-              download={`attendees-${capacity.eventSlug}.csv`}
-            >
-              <IconDownload />
-            </ButtonLink>
-          </>
+          <DownloadAction
+            label="Download consenting attendees (CSV)"
+            href={`/api/v1/sponsors/${encodeURIComponent(capacity.sponsorId)}/events/${encodeURIComponent(capacity.eventSlug)}/attendees?format=csv`}
+            filename={`attendees-${capacity.eventSlug}.csv`}
+          />
         )}
         empty={
           <EmptyState

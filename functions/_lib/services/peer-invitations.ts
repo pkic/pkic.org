@@ -14,6 +14,7 @@ import { firstReferralCodeQuerySql } from "./referral-code-projection";
 import { inviteDeclineUrl, proposalPageUrl, registrationPageUrl } from "./frontend-links";
 import type { Env } from "../types";
 import { emailPlainText } from "../email/plain-text";
+import { REGISTRATION_ORGANIZATION_SQL } from "./registrations/selected-identity";
 import { buildEventInviteRecipientVariables } from "./event-invite-email-variables";
 
 type PeerInviteBody = z.infer<typeof registrationInviteCreateSchema>;
@@ -97,7 +98,13 @@ export async function createPeerInvitations(
     first_name: string | null;
     last_name: string | null;
     organization_name: string | null;
-  }>(env.DB, "SELECT first_name, last_name, organization_name FROM users WHERE id = ?", [registration.user_id]);
+  }>(
+    env.DB,
+    `SELECT u.first_name, u.last_name, ${REGISTRATION_ORGANIZATION_SQL} AS organization_name
+       FROM registrations r JOIN users u ON u.id = r.user_id
+      WHERE r.id = ?`,
+    [registration.id],
+  );
   const inviterName = displayName(user);
   const appBaseUrl = resolveAppBaseUrl(env, request);
   const referralCode =

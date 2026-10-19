@@ -39,7 +39,7 @@ export const AFFILIATION_FLOW = {
       id: "14.3",
       title: "Membership is re-derived at the new employer, never carried from the old",
       status: "unit",
-      note: "Membership belongs to the organization, not to the person who represented it, and the capacity is taken from the new employer's own membership rather than moved across. Writing this turned up the harder half: an organization identity cannot exist at all where the organization has no member aggregate — a trigger refuses it — so leaving for a company the consortium does not know as a Member is an ending with nothing to arrive at. The person holds no organization identity until that company becomes one, which is a product decision worth making deliberately rather than meeting as a constraint.",
+      note: "Membership belongs to the organization, and capacity derives from the new employer's actual membership rather than moving across. Canonical affiliation also supports nonmember organizations without granting Member capacity. If that organization becomes a Member, its already-linked active users derive membership through the same affiliation.",
     },
     {
       id: "14.0",
@@ -87,13 +87,13 @@ export const AFFILIATION_FLOW = {
       id: "14.6",
       title: "A speaker on a past proposal keeps the organization and role they spoke under",
       status: "gap",
-      note: "DECIDED: link the identity. It freezes the organization by itself — an identity never moves between organizations — while bio, headshot and links stay shared, so a speaker enters them once instead of on every proposal and no session overwrites what another collected. A past listing shows the role as spoken, not whatever the person does later. Bio and title still follow the identity if it is edited, which 14.0.b covers with a warning rather than a prohibition. A published agenda (event 3.9) freezes the document as issued, which is a separate thing from the record and not a substitute for it. The point of an identity is that a bio and a headshot are entered once and updated when they change, so a fifth talk and a tenth event resolve through the same tie rather than asking again. Today a proposal can hold per-speaker overrides and the record holds where one was set; where none was, the card falls back to users.organization_name and follows the person, so a programme reprints with an affiliation that was never true of that talk.",
+      note: "DECIDED: link the identity. It freezes the organization by itself — an identity never moves between organizations — while bio, headshot and links stay shared, so a speaker enters them once instead of on every proposal and no session overwrites what another collected. A past listing shows the role as spoken, not whatever the person does later. Bio and title still follow the identity if it is edited, which 14.0.b covers with a warning rather than a prohibition. A published agenda (event 3.9) freezes the document as issued, which is a separate thing from the record and not a substitute for it. The point of an identity is that a bio and a headshot are entered once and updated when they change, so a fifth talk and a tenth event resolve through the same tie rather than asking again. Today a proposal can hold per-speaker overrides and the record holds where one was set; where none was, the card falls back to users.organization_name and follows the person, so a program reprints with an affiliation that was never true of that talk.",
     },
     {
       id: "14.7",
       title: "A proposer editing a co-speaker changes only that proposal",
-      status: "covered",
-      note: "The proposer may set another speaker's name, organization, job title, biography and links. It writes a per-proposal override rather than the person's own profile, which is the design that makes the authority safe to hand out.",
+      status: "unit",
+      note: "Covered in proposal-self-service-states, which sets a co-speaker's job title as the proposer and reads it back from the proposal while the person's own profile stays empty, and in proposal-speaker-public-profile for the override reaching the public badge. The proposer may set another speaker's name, organization, job title, biography and links. It writes a per-proposal override rather than the person's own profile, which is the design that makes the authority safe to hand out.",
     },
   ],
 };

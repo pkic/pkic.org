@@ -1,0 +1,219 @@
+/*
+ * The stage display: a full 1920 × 1080 speaker-facing screen, not a
+ * transparent layer. It is read from a few metres away on a stage monitor, so
+ * it is white on near-black, set large, with the brand only as a thin stripe.
+ * Sizes are fixed on the frame: the display tokens follow the viewport, which
+ * a scaled frame is not.
+ */
+@layer components {
+  .pk-live-stage-display {
+    --stage-muted: color-mix(in srgb, var(--pk-on-solid) 72%, var(--pk-chrome-deep));
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    gap: 40px;
+    box-sizing: border-box;
+    inline-size: 1920px;
+    block-size: 1080px;
+    padding: 56px 96px 64px;
+    border-block-start: 12px solid transparent;
+    border-image: var(--pk-pqc-stripe) 1;
+    background: var(--pk-chrome-deep);
+    color: var(--pk-on-solid);
+    font-family: var(--pk-font);
+    font-size: calc(var(--pk-text-3xl) * 1.25);
+    line-height: 1.2;
+  }
+  .pk-live-stage-display__session {
+    display: flex;
+    justify-content: space-between;
+    gap: 48px;
+    color: var(--stage-muted);
+  }
+  .pk-live-stage-display__session > span:first-child {
+    min-inline-size: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .pk-live-stage-display__session > span:last-child {
+    flex: none;
+    font-variant-numeric: tabular-nums;
+  }
+  /* The question and the timer share the middle: the question leads, the timer keeps a column beside it. */
+  .pk-live-stage-display__main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0.75fr);
+    align-items: center;
+    gap: 72px;
+    min-block-size: 0;
+  }
+  .pk-live-stage-display:not([data-question]) .pk-live-stage-display__main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pk-live-stage-display__label {
+    margin: 0;
+    color: var(--stage-muted);
+    font-size: calc(var(--pk-text-3xl) * 1.125);
+    font-weight: 500;
+  }
+  .pk-live-stage-display__timers {
+    display: grid;
+    grid-template-columns: repeat(var(--timer-columns), minmax(0, 1fr));
+    gap: 40px;
+    min-inline-size: 0;
+  }
+  .pk-live-stage-display__timer {
+    display: grid;
+    gap: 8px;
+    justify-items: center;
+  }
+  .pk-live-stage-display__countdown {
+    margin: 0;
+    font-family: var(--pk-font-mono);
+    font-size: calc(var(--pk-text-3xl) * 8.75 / var(--timer-columns) * var(--timer-text-scale));
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  /* Beside a question the timer steps down, still the largest figure on screen after the question. */
+  .pk-live-stage-display[data-question] .pk-live-stage-display__countdown {
+    font-size: calc(var(--pk-text-3xl) * 4.5 / var(--timer-columns) * var(--timer-text-scale));
+  }
+  .pk-live-stage-display__countdown[data-tone="warn"] {
+    color: var(--pk-danger);
+  }
+  .pk-live-stage-display__countdown[data-tone="over"] {
+    color: var(--pk-danger);
+  }
+  .pk-live-stage-display__countdown[data-tone] {
+    animation: pk-stage-timer-warning 1s ease-in-out 3;
+  }
+  @keyframes pk-stage-timer-warning {
+    50% {
+      opacity: 0.55;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pk-live-stage-display__countdown[data-tone] {
+      animation: none;
+    }
+  }
+  .pk-live-stage-display__question {
+    display: grid;
+    gap: 16px;
+    min-inline-size: 0;
+    margin: 0;
+  }
+  /*
+   * The question sets large while short and a step smaller for each longer
+   * band, never below the smallest size read comfortably from the stage;
+   * past that it is clamped to a fixed number of lines.
+   */
+  .pk-live-stage-display__question-text {
+    --stage-lines: 5;
+    display: -webkit-box;
+    margin: 0;
+    overflow: hidden;
+    font-size: calc(var(--pk-text-3xl) * 3);
+    font-weight: 600;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: var(--stage-lines);
+    line-clamp: var(--stage-lines);
+  }
+  .pk-live-stage-display__question-text[data-fit="long"] {
+    font-size: calc(var(--pk-text-3xl) * 2.5);
+  }
+  .pk-live-stage-display__question-text[data-fit="longer"] {
+    font-size: calc(var(--pk-text-3xl) * 2);
+  }
+  .pk-live-stage-display__question-text[data-fit="longest"] {
+    font-size: calc(var(--pk-text-3xl) * 1.75);
+  }
+  .pk-live-stage-display__asker {
+    margin: 0;
+    color: var(--stage-muted);
+    font-size: calc(var(--pk-text-3xl) * 1.125);
+    overflow-wrap: anywhere;
+  }
+  /* The next question: smaller, below a rule, so it never competes with the one being answered. */
+  .pk-live-stage-display__after:not(:empty) {
+    padding-block-start: 32px;
+    border-block-start: 2px solid color-mix(in srgb, var(--pk-on-solid) 28%, var(--pk-chrome-deep));
+  }
+  .pk-live-stage-display__question[data-next] {
+    gap: 8px;
+  }
+  .pk-live-stage-display__question[data-next] .pk-live-stage-display__question-text {
+    --stage-lines: 2;
+    font-size: calc(var(--pk-text-3xl) * 1.5);
+    font-weight: 500;
+  }
+  .pk-live-stage-display__question[data-next] .pk-live-stage-display__asker,
+  .pk-live-stage-display__question[data-next] .pk-live-stage-display__label {
+    font-size: var(--pk-text-3xl);
+  }
+  .pk-live-stage-display__line {
+    margin: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .pk-live-stage-display__line > .pk-live-stage-display__label {
+    display: inline;
+    font-size: inherit;
+  }
+  /*
+   * The message to the speaker, in its tone's colors. It sets large while
+   * it is short, a step smaller when longer, and never below a size read
+   * comfortably from the stage; past that it wraps to at most three lines
+   * and ends with an ellipsis.
+   */
+  .pk-live-stage-display__message {
+    display: -webkit-box;
+    margin: 0;
+    padding: 24px 40px;
+    overflow: hidden;
+    border-radius: var(--pk-radius-lg);
+    background: var(--speaker-tone);
+    color: var(--speaker-tone-ink);
+    font-size: calc(var(--pk-text-3xl) * 2.25);
+    font-weight: 700;
+    line-height: 1.15;
+    text-align: center;
+    overflow-wrap: anywhere;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+  }
+  /*
+   * Flash: until an operator stops it, the message's background swells
+   * slowly to a brighter tint of its tone and back, one smooth cycle a
+   * second, with a glowing ring the speaker catches from the side of their
+   * eye. It is a gentle pulse on the message alone, never a strobe of the
+   * screen, so it stays far below three flashes a second. With reduced
+   * motion the message holds a steady bright ring instead.
+   */
+  .pk-live-stage-display__message[data-flash] {
+    animation: pk-live-stage-flash calc(var(--pk-dur-slow) * 2) ease-in-out infinite;
+  }
+  @keyframes pk-live-stage-flash {
+    50% {
+      background: color-mix(in srgb, var(--speaker-tone) 62%, var(--pk-pqc-paper));
+      box-shadow: 0 0 0 16px color-mix(in srgb, var(--speaker-tone) 55%, transparent);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pk-live-stage-display__message[data-flash] {
+      animation: none;
+      box-shadow: 0 0 0 12px var(--pk-pqc-paper);
+    }
+  }
+  .pk-live-stage-display__message[data-fit="long"] {
+    font-size: calc(var(--pk-text-3xl) * 1.8);
+  }
+  .pk-live-stage-display__message[data-fit="longer"] {
+    font-size: calc(var(--pk-text-3xl) * 1.4);
+  }
+}

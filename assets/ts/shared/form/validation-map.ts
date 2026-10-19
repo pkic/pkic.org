@@ -94,15 +94,21 @@ export function normalizeValidation(error: unknown): ValidationState {
       .map(([key, value]) => [key, value[0] ?? "Invalid value"]),
   );
 
-  const formError = details?.formErrors?.[0] ?? error.message;
-  const globalMessage =
-    formError === "Invalid custom answers" && Object.keys(flattened).length > 0
-      ? "Please correct the highlighted custom fields."
-      : formError;
   return {
-    globalMessage,
+    globalMessage: details?.formErrors?.[0] ?? error.message,
     fields: flattened,
   };
+}
+
+/**
+ * A refusal said in one sentence, for a command that has no fields of its own
+ * to mark (a row menu, a day roster, a button). A field's reason is more
+ * specific than the envelope's summary, so it is preferred; the summary — the
+ * server's own sentence for a domain refusal — is the fallback.
+ */
+export function refusalSentence(error: unknown): string {
+  const refusal = normalizeValidation(error);
+  return Object.values(refusal.fields)[0] ?? refusal.globalMessage;
 }
 
 /**
@@ -112,7 +118,7 @@ export function normalizeValidation(error: unknown): ValidationState {
  * so a server-rendered slot hides itself to match: an empty but visible
  * paragraph is announced on every `aria-live` update and reserves a line under
  * the control. The state modifier travels with the message because it is what
- * colours the border and draws the mark — a template that ships the right
+ * colors the border and draws the mark — a template that ships the right
  * markup still looks unstyled until something sets it.
  */
 export function setFieldMessage(element: HTMLElement | null, message: string, state: FieldState = "invalid"): void {

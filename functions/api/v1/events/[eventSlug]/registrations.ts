@@ -1,4 +1,6 @@
-import { requireIdentityFromRequest } from "../../../../_lib/auth/user-session";
+import { requireIdentityFromRequest, resolveOptionalIdentityFromRequest } from "../../../../_lib/auth/user-session";
+import { getEventBySlug } from "../../../../_lib/services/events";
+import { requireRegistrationEmailProof } from "../../../../_lib/services/registrations/email-proof";
 import { AppError } from "../../../../_lib/errors";
 import {
   selectRegistrationIdentity,
@@ -26,8 +28,12 @@ async function handlePublicRegistration(
     email: data.body.email,
     clientIp: getClientIp(request),
   });
-  const actor = data.body.identityId ? await requireIdentityFromRequest(c.env.DB, request, c.env) : null;
-  if (actor && actor.email.toLowerCase() !== data.body.email.toLowerCase()) {
+  // Choosing an identity needs the session; without one, a session for the same address still proves the mailbox.
+  const actor = data.body.identityId
+    ? await requireIdentityFromRequest(c.env.DB, request, c.env)
+    : await resolveOptionalIdentityFromRequest(c.env.DB, request, c.env);
+  const sessionOwnsAddress = Boolean(actor && actor.email.toLowerCase() === data.body.email.toLowerCase());
+  if (data.body.identityId && !sessionOwnsAddress) {
     throw new AppError(
       422,
       "REGISTRATION_SESSION_EMAIL_REQUIRED",
@@ -39,9 +45,22 @@ async function handlePublicRegistration(
       ? await selectRegistrationIdentity(c.env.DB, actor.userId, data.body.identityId)
       : undefined;
   const config = getConfig(c.env, request);
+  const event = await getEventBySlug(c.env.DB, data.params.eventSlug);
+  if (data.body.emailProof)
+    await requireRegistrationEmailProof(requireInternalSecret(c.env), {
+      token: data.body.emailProof,
+      eventId: event.id,
+      email: data.body.email,
+      unaffiliatedAttestation: data.body.unaffiliatedAttestation,
+    });
   const result = await submitPublicRegistration(c.env.DB, c.env, data.body, {
     eventSlug: data.params.eventSlug,
-    verifiedIdentity: selectedIdentity ? { userId: selectedIdentity.userId, selectedIdentity } : undefined,
+    verifiedIdentity: selectedIdentity
+      ? { userId: selectedIdentity.userId, selectedIdentity }
+      : actor && sessionOwnsAddress
+        ? { userId: actor.userId }
+        : undefined,
+    mailboxVerified: Boolean(data.body.emailProof),
     authorizationGuards:
       selectedIdentity && actor
         ? [

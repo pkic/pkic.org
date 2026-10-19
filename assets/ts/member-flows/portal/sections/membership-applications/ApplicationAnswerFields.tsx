@@ -110,7 +110,6 @@ export function ApplicationAnswerFields({
           <span>{names[slug] ?? slug}</span>
           <Button
             type="button"
-            size="sm"
             aria-label={`Remove ${names[slug] ?? slug}`}
             onClick={() =>
               onChange({ ...answers, working_groups: answers.working_groups?.filter((value) => value !== slug) })

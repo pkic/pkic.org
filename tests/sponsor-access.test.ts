@@ -1,9 +1,9 @@
 /** Canonical portal authentication and attendee access for event sponsors. */
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
-import app from "../functions/router";
+import { callApi } from "./helpers/app";
 import { sponsorAttendeesListQuerySchema } from "../assets/shared/schemas/sponsor-access";
-import { redeemSponsorSignInCapability } from "../functions/_lib/auth/user-session";
+import { redeemSponsorSignInCapability } from "../functions/_lib/auth/sponsor-sign-in-session";
 import {
   listSponsorAttendeesForExport,
   listSponsorAttendeesPageWithAudit,
@@ -27,7 +27,7 @@ function getRequest(path: string, token?: string): Request {
 }
 
 async function call(request: Request): Promise<Response> {
-  return app.fetch(request, env as never, { passThroughOnException: () => {}, waitUntil: () => {} } as never);
+  return callApi(env, request);
 }
 
 async function callAs(token: string, path: string, init: RequestInit = {}): Promise<Response> {
@@ -63,8 +63,8 @@ async function seedConsentingRegistration(eventId: string, email: string, term: 
   await env.DB.batch([
     env.DB.prepare(
       `INSERT INTO users
-           (id, email, normalized_email, first_name, last_name, organization_name, job_title, active, created_at, updated_at)
-         VALUES (?, ?, ?, 'Ada', 'Attendee', 'Attendee Org', 'Engineer', 1, datetime('now'), datetime('now'))`,
+           (id, email, normalized_email, first_name, last_name, active, created_at, updated_at)
+         VALUES (?, ?, ?, 'Ada', 'Attendee', 1, datetime('now'), datetime('now'))`,
     ).bind(userId, email, email),
     env.DB.prepare(
       `INSERT INTO registrations
@@ -87,6 +87,12 @@ describe("sponsor capacity in the canonical portal session", () => {
   beforeEach(async () => {
     await resetDb();
     ({ eventId } = await seedEventAndAdmin(env.DB));
+    await env.DB.prepare(
+      `INSERT INTO event_terms(id,event_id,audience_type,term_key,version,required,active,created_at)
+       VALUES(?,?,'attendee','sponsor-data-sharing','v1',0,1,?)`,
+    )
+      .bind(crypto.randomUUID(), eventId, new Date().toISOString())
+      .run();
     const [admin] = await queryAll<{ id: string }>(
       env.DB,
       "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1",
@@ -235,14 +241,24 @@ describe("sponsor capacity in the canonical portal session", () => {
     await env.DB.prepare("UPDATE sponsorships SET contact_email = ?, updated_at = datetime('now') WHERE id = ?")
       .bind("replacement@sponsor.test", sponsorId)
       .run();
-    expect(await call(getRequest(`/api/v1/auth/session`, token))).toMatchObject({ status: 401 });
+    const contactChangedSession = await call(getRequest(`/api/v1/auth/session`, token));
+    expect(contactChangedSession.status).toBe(200);
+    await expect(contactChangedSession.json()).resolves.toMatchObject({ sponsors: [] });
+    expect(await call(getRequest(`/api/v1/sponsors/${sponsorId}/events/${eventId}/attendees`, token))).toMatchObject({
+      status: 403,
+    });
 
     const replacementToken = await createSponsorUserSession("replacement@sponsor.test");
     await callAs(adminToken, `/api/v1/sponsors/${sponsorId}/stage`, {
       method: "PATCH",
       body: JSON.stringify({ toStage: "lapsed" }),
     });
-    expect(await call(getRequest(`/api/v1/auth/session`, replacementToken))).toMatchObject({ status: 401 });
+    const endedSession = await call(getRequest(`/api/v1/auth/session`, replacementToken));
+    expect(endedSession.status).toBe(200);
+    await expect(endedSession.json()).resolves.toMatchObject({ sponsors: [] });
+    expect(
+      await call(getRequest(`/api/v1/sponsors/${sponsorId}/events/${eventId}/attendees`, replacementToken)),
+    ).toMatchObject({ status: 403 });
   });
 
   it("rolls back sponsor redemption if the contact changes before its D1 batch", async () => {

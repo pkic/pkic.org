@@ -1,0 +1,50 @@
+/*
+ * Row list: short rows with a hairline between them.
+ *
+ * Reset here rather than relying on `pk-plain-list`, so the list has no
+ * default indent wherever it is used.
+ */
+
+@layer components {
+  .pk-row-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .pk-row-list__item {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-3);
+    padding: var(--pk-3) var(--pk-4);
+    border-block-start: 1px solid var(--pk-line-soft);
+  }
+
+  .pk-row-list__item:first-child {
+    border-block-start: 0;
+  }
+
+  .pk-row-list__text {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .pk-row-list__main {
+    overflow-wrap: anywhere;
+  }
+
+  .pk-row-list__meta {
+    font-size: var(--pk-text-sm);
+    color: var(--pk-ink-muted);
+  }
+
+  .pk-row-list__end {
+    flex: none;
+  }
+
+  @media (max-width: 48rem) {
+    .pk-row-list__item {
+      padding-inline: var(--pk-3);
+    }
+  }
+}

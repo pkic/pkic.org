@@ -242,6 +242,7 @@ export function GroupVoteBallots({ groupId, voteId }: { groupId: string; voteId:
   const base = `/api/v1/groups/${encodeURIComponent(groupId)}/votes/${encodeURIComponent(voteId)}`;
   return (
     <ApiDataTable
+      urlState="vote-ballots"
       caption="Identifiable ballots"
       endpoint={`${base}/ballots`}
       responseSchema={groupVoteBallotsAuditResponseSchema}

@@ -46,8 +46,9 @@ export function describeRegistrationDays(days: readonly RegistrationDayState[], 
 /**
  * One line per registration (#119). Most attendees hold every day the same
  * way, so the row says "Virtual" once; only the exceptions spell out the
- * distinct states — "In-person, Virtual" — still on one line, with the days
- * behind each state in the badge's tooltip. A three-day event used to stack
+ * distinct states — "In-person, Virtual" — with the days behind each state
+ * in the badge's tooltip. The two may stack when the row is tight, rather
+ * than push the list wider than its panel. A three-day event used to stack
  * three badges per row, and a five-day one would have been five.
  */
 export function RegistrationDayStates({
@@ -72,7 +73,7 @@ export function RegistrationDayStates({
   return (
     // A list, so a screen reader announces "2 items" before reading the
     // states rather than running the badges together as one string.
-    <ul class="pk-cluster pk-cluster--nowrap pk-plain-list" aria-label="Attendance by day">
+    <ul class="pk-cluster pk-plain-list" aria-label="Attendance by day">
       {[...states.entries()].map(([label, entry]) => (
         <li key={label} title={single ? undefined : entry.days.join(", ")}>
           <Badge tone={entry.tone}>{label}</Badge>

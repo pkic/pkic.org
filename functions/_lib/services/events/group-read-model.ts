@@ -1,4 +1,5 @@
 import { normalizeEventRegistrationPolicy } from "./detail";
+import type { CountryCode } from "../../../../assets/shared/countries";
 import {
   GROUP_EVENTS_SORT_COLUMNS,
   groupEventDetailResponseSchema,
@@ -27,6 +28,7 @@ import {
   type GroupResourceViewer,
 } from "../resource-grants";
 import { getProposalAccessForEvent } from "../../auth/proposal-access";
+import { readEventProposalCall } from "./proposal-call";
 import { buildEventAudiencePredicate } from "./visibility";
 
 interface GroupEventRow {
@@ -44,7 +46,9 @@ interface GroupEventRow {
   registration_policy: GroupEvent["registrationPolicy"];
   visibility: GroupEvent["visibility"];
   invite_limit_attendee: number;
-  location: string | null;
+  city: string | null;
+  country: CountryCode | null;
+  meeting_location: string | null;
   links_json: string | null;
   next_occurrence_at: string | null;
   event_created_at: string;
@@ -55,20 +59,28 @@ interface GroupEventRow {
 }
 
 const NEXT_OCCURRENCE_CTE = `next_occurrence AS (
-  SELECT occurrence.series_id, MIN(occurrence.starts_at) AS next_occurrence_at
+  SELECT occurrence.series_id, MIN(occurrence.starts_at) AS next_occurrence_at,
+         MAX(occurrence.ends_at) AS last_occurrence_ends_at
     FROM event_occurrences occurrence
    WHERE occurrence.status = 'scheduled'
      AND unixepoch(occurrence.ends_at) >= unixepoch()
    GROUP BY occurrence.series_id
 )`;
-const EVENT_LOCATION = `COALESCE(series.location,
-  CASE WHEN json_valid(event.settings_json) THEN json_extract(event.settings_json, '$.location') END)`;
+/** When the event, or its series' next remaining occurrence, starts; null while unscheduled. */
+const EVENT_SCHEDULED_START = "COALESCE(next_occurrence.next_occurrence_at, event.starts_at, event.ends_at)";
+/** When the event, or its series' last remaining occurrence, ends. */
+const EVENT_SCHEDULED_END = "COALESCE(next_occurrence.last_occurrence_ends_at, event.ends_at, event.starts_at)";
+/**
+ * The date the list shows for a row. Its sort keys lead with `IS NULL` so an
+ * unscheduled event follows every scheduled one in either direction.
+ */
+const SCHEDULED_START_ORDER = "COALESCE(next_occurrence_at, event_starts_at)";
 const EVENT_SELECT = `SELECT event.id AS event_id, event.owner_group_id, series.id AS series_id,
   event.slug AS event_slug, event.base_path AS event_base_path, event.name AS event_name, event.timezone AS event_timezone,
   event.starts_at AS event_starts_at, event.ends_at AS event_ends_at,
   event.profile_key, event.source_mode, event.registration_mode AS registration_policy, event.visibility,
   event.invite_limit_attendee,
-  ${EVENT_LOCATION} AS location, event.links_json, next_occurrence.next_occurrence_at,
+  event.city, event.country, series.location AS meeting_location, event.links_json, next_occurrence.next_occurrence_at,
   event.created_at AS event_created_at, event.updated_at AS event_updated_at,
   GROUP_CONCAT(DISTINCT grant_row.capability) AS granted_capabilities`;
 function grantedCapabilities(row: Pick<GroupEventRow, "granted_capabilities">): EventGroupCapability[] {
@@ -100,7 +112,9 @@ function mapGroupEvent(row: GroupEventRow, groupId: string): GroupEvent {
     registrationPolicy: normalizeEventRegistrationPolicy(row.registration_policy),
     visibility: row.visibility,
     inviteLimitAttendee: row.invite_limit_attendee,
-    location: row.series_id ? outboundMeetingLocation(row.location) : row.location,
+    city: row.city,
+    country: row.country,
+    meetingLocation: row.series_id ? outboundMeetingLocation(row.meeting_location) : null,
     links: parseLinksJson(row.links_json),
     nextOccurrenceAt: row.next_occurrence_at,
     updatedAt: row.event_updated_at,
@@ -142,20 +156,24 @@ export function buildGroupEventsPageQuery(
     conditions.push("event.registration_mode = ?");
     bindings.push(query.registrationPolicy);
   }
-  if (query.sourceMode) {
-    conditions.push("event.source_mode = ?");
-    bindings.push(query.sourceMode);
-  }
   if (query.from) {
-    conditions.push("COALESCE(next_occurrence.next_occurrence_at, event.starts_at, event.ends_at) >= ?");
+    // An unscheduled event has not happened yet, so it stays with the upcoming ones.
+    conditions.push(`(${EVENT_SCHEDULED_END} >= ? OR ${EVENT_SCHEDULED_START} IS NULL)`);
     bindings.push(query.from);
   }
   if (query.to) {
-    conditions.push("COALESCE(next_occurrence.next_occurrence_at, event.starts_at, event.ends_at) <= ?");
+    conditions.push(`${EVENT_SCHEDULED_START} <= ?`);
     bindings.push(query.to);
   }
   if (query.q) {
-    const search = buildD1TextSearchFilter(query.q, ["event.name", "event.slug", "event.timezone", EVENT_LOCATION]);
+    const search = buildD1TextSearchFilter(query.q, [
+      "event.name",
+      "event.slug",
+      "event.timezone",
+      "event.city",
+      "event.country",
+      "series.location",
+    ]);
     conditions.push(search.sql);
     bindings.push(...search.bindings);
   }
@@ -178,11 +196,12 @@ export function buildGroupEventsPageQuery(
       query.sort,
       {
         name: "event_name COLLATE NOCASE",
-        starts_at: "event_starts_at",
-        next_occurrence_at: "COALESCE(next_occurrence_at, event_starts_at)",
+        starts_at: "event_starts_at IS NULL, event_starts_at",
+        next_occurrence_at: `${SCHEDULED_START_ORDER} IS NULL, ${SCHEDULED_START_ORDER}`,
         created_at: "event_created_at",
       } satisfies Record<(typeof GROUP_EVENTS_SORT_COLUMNS)[number], string>,
-      "COALESCE(next_occurrence_at, event_starts_at, '9999') ASC",
+      // Past alone reads most recent first; otherwise the soonest comes first.
+      `${SCHEDULED_START_ORDER} IS NULL, ${SCHEDULED_START_ORDER} ${query.to && !query.from ? "DESC" : "ASC"}`,
       "event_id ASC",
     ),
     limit: query.limit,
@@ -232,5 +251,7 @@ export async function getGroupEvent(db: DatabaseLike, viewer: GroupResourceViewe
     throw new AppError(404, "EVENT_NOT_FOUND", "The event is not available through this group");
   }
   const proposalAccess = viewer.admin ? await getProposalAccessForEvent(db, event.id, viewer.admin) : null;
-  return groupEventDetailResponseSchema.parse({ event: { ...event, proposalAccess } });
+  // The managed event's call for proposals, from the one server definition of "open" that the public event detail uses.
+  const proposalCall = await readEventProposalCall(db, event.id);
+  return groupEventDetailResponseSchema.parse({ event: { ...event, proposalAccess, proposalCall } });
 }

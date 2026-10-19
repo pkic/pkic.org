@@ -1,6 +1,7 @@
 /**
  * @covers event.3.1
  */
+import { EMAIL_FIRST_COPY } from "../../assets/shared/email-first-copy";
 import { expect, test } from "@playwright/test";
 import {
   groupEventDetailResponseSchema,
@@ -22,6 +23,8 @@ test.use({ timezoneId: "Europe/Amsterdam" });
 const GROUP_ID = "20000000-0000-4000-8000-000000000003";
 
 test("a portal manager creates and edits a group-owned standalone event", async ({ page }) => {
+  // The journey ends with a real Astro site release, which alone takes most of the default budget.
+  test.setTimeout(240_000);
   await useEmailPreviewLogoFixture(page);
   await signInToPortal(page, e2eAdminEmail("portal-event-management"));
   await page.goto(`/portal/#/groups/${GROUP_ID}/events`);
@@ -51,7 +54,8 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   await page.getByLabel("Event profile").selectOption("workshop");
   await page.getByLabel("Visibility", { exact: true }).selectOption("public");
   await page.getByLabel("Peer invitation limit").fill("7");
-  await page.getByLabel("Location").fill("Amsterdam and online");
+  await page.getByLabel("City").fill("Amsterdam");
+  await page.getByLabel("Country").fill("Netherlands");
   await page.getByLabel("Event resource URL").fill("https://example.test/portal-workshop");
   await page.getByRole("button", { name: "Add profile link" }).click();
   const eventCreated = page.waitForResponse(
@@ -70,7 +74,7 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   await expect(row).toBeVisible({ timeout: 10_000 });
   await openRow(row, `Open ${eventName}`);
   const detail = page.getByRole("region", { name: `${eventName} workspace` });
-  await expect(detail.getByText("Amsterdam and online", { exact: true })).toBeVisible();
+  await expect(detail.getByText("Amsterdam, Netherlands", { exact: true })).toBeVisible();
   await expect(detail.locator('a[href="https://example.test/portal-workshop"]')).toHaveAttribute(
     "href",
     "https://example.test/portal-workshop",
@@ -269,10 +273,10 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   const editor = page.getByRole("region", { name: "Edit event" });
   await expect(editor.getByLabel("Peer invitation limit")).toHaveValue("7");
   await editor.getByLabel("Peer invitation limit").fill("9");
-  await editor.getByLabel("Location").fill("Rotterdam and online");
+  await editor.getByLabel("City").fill("Rotterdam");
   await editor.getByRole("button", { name: "Save event" }).click();
   await tab(detail, "Overview").click();
-  await expect(detail.getByText("Rotterdam and online", { exact: true })).toBeVisible();
+  await expect(detail.getByText("Rotterdam, Netherlands", { exact: true })).toBeVisible();
 
   const stored = await page.evaluate(
     async ({ groupId, query }) => {
@@ -291,7 +295,8 @@ test("a portal manager creates and edits a group-owned standalone event", async 
       sourceMode: "portal",
       registrationPolicy: "optional",
       inviteLimitAttendee: 9,
-      location: "Rotterdam and online",
+      city: "Rotterdam",
+      country: "NL",
     }),
   );
 
@@ -351,5 +356,5 @@ test("a portal manager creates and edits a group-owned standalone event", async 
 
   await page.goto(`/events/2027/${eventSlug}/register/`);
   await expect(page.locator("[data-event-registration]")).toBeVisible();
-  await expect(page.getByLabel("First name")).toBeVisible();
+  await expect(page.getByLabel(EMAIL_FIRST_COPY.registration.work.label)).toBeVisible();
 });

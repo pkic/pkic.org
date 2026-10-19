@@ -6,6 +6,115 @@ import { expect, it } from "vitest";
 import { assembleStaticRelease } from "../../scripts/publication/assemble-static-release.mjs";
 import { preparePublicationPublicAssets } from "../../scripts/publication/prepare-public-assets.mjs";
 import { publicationBindingConfig } from "../../scripts/publication/binding-config.mjs";
+import { createReleaseIntegrity } from "../../scripts/publication/release-integrity.mjs";
+import { createTemporaryDirectory } from "./helpers/temporary-directory";
+import { createTestHarness, unstable_readConfig as readConfig } from "wrangler";
+
+it("protects the generic error asset and its canonical path without adding application routes", async () => {
+  const root = await createTemporaryDirectory("publication-error-headers");
+  const source = resolve(root, "source"),
+    destination = resolve(root, "destination");
+  const files = ["index.html", "404.html"];
+  const privatePaths = ["/404.html"];
+  try {
+    await mkdir(source, { recursive: true });
+    await writeFile(resolve(source, "index.html"), "Approved home");
+    await writeFile(resolve(source, "404.html"), "Generic page not found");
+    const release = sitePublicationReleaseSchema.parse({
+      version: 1,
+      source: "native",
+      snapshotId: "4".repeat(64),
+      sourceSequence: 1,
+      environment: "production",
+      files,
+      privatePaths,
+      integrity: await createReleaseIntegrity(source, files),
+    });
+    await writeFile(resolve(source, "publication.json"), JSON.stringify(release));
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await assembleStaticRelease(source, destination, "production");
+      const headers = await readFile(resolve(destination, "_headers"), "utf8");
+      const rules = headers.split(/\r?\n/).filter((line) => line && !/^(?:\s|#)/.test(line));
+      expect(rules.length).toBeLessThanOrEqual(100);
+      for (const path of ["/404.html", "/404"]) {
+        expect(rules.filter((rule) => rule === path)).toHaveLength(1);
+        expect(headers).toContain(
+          `${path}\n    ! Cache-Control\n    Cache-Control: no-store, max-age=0\n    ! Referrer-Policy\n    Referrer-Policy: no-referrer\n    ! X-Robots-Tag\n    X-Robots-Tag: noindex, nofollow, noarchive`,
+        );
+      }
+      const installed = sitePublicationReleaseSchema.parse(
+        JSON.parse(await readFile(resolve(destination, "publication.json"), "utf8")),
+      );
+      expect(installed.privatePaths).toEqual(privatePaths);
+      expect(installed.redirects).not.toContainEqual(expect.objectContaining({ from: "/404" }));
+      expect(await readFile(resolve(destination, "404.html"), "utf8")).toBe("Generic page not found");
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+it("moves retired PKIMM model tool links to the 1.0.0 release tools", async () => {
+  const root = await createTemporaryDirectory("publication-pkimm-tools");
+  const source = resolve(root, "source"),
+    destination = resolve(root, "destination");
+  const files = [
+    "wg/pkimm/1.0.0/tools/index.html",
+    "wg/pkimm/1.0.0/tools/self-assessment/index.html",
+    "wg/pkimm/1.0.0/tools/PKI_Maturity_Assessment_Tool_v240318.xlsx",
+  ];
+  const main = resolve(root, "worker.mjs");
+  const config = readConfig({ config: resolve("wrangler.jsonc"), env: "local" });
+  const server = createTestHarness({
+    workers: [
+      {
+        config: {
+          name: "pkimm-tool-redirects",
+          main,
+          compatibility_date: config.compatibility_date,
+          assets: { ...config.assets, directory: destination },
+        },
+      },
+    ],
+  });
+  try {
+    for (const file of files) {
+      await mkdir(dirname(resolve(source, file)), { recursive: true });
+      await writeFile(resolve(source, file), `Published ${file}`);
+    }
+    const release = sitePublicationReleaseSchema.parse({
+      version: 1,
+      source: "native",
+      snapshotId: "5".repeat(64),
+      sourceSequence: 1,
+      environment: "production",
+      files,
+      integrity: await createReleaseIntegrity(source, files),
+    });
+    await writeFile(resolve(source, "publication.json"), JSON.stringify(release));
+    await assembleStaticRelease(source, destination, "production");
+    await writeFile(main, 'export default { fetch() { return new Response("Worker invoked", { status: 599 }); } };');
+    await server.listen();
+    for (const [from, to] of [
+      ["/wg/pkimm/model/tools", "/wg/pkimm/1.0.0/tools/"],
+      ["/wg/pkimm/model/tools/", "/wg/pkimm/1.0.0/tools/"],
+      ["/wg/pkimm/model/tools/self-assessment/", "/wg/pkimm/1.0.0/tools/self-assessment/"],
+      [
+        "/wg/pkimm/model/tools/PKI_Maturity_Assessment_Tool_v240318.xlsx",
+        "/wg/pkimm/1.0.0/tools/PKI_Maturity_Assessment_Tool_v240318.xlsx",
+      ],
+    ]) {
+      const moved = await server.fetch(from, { redirect: "manual" });
+      expect(moved.status, from).toBe(301);
+      const target = new URL(moved.headers.get("location")!, "https://pkic.org").pathname;
+      expect(target, from).toBe(to);
+      expect((await server.fetch(target)).status, to).toBe(200);
+    }
+  } finally {
+    await server.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 it("replaces withdrawn pages and media without removing unrelated Vite assets", async () => {
   const root = await mkdtemp(resolve(tmpdir(), "pkic-release-"));
@@ -54,6 +163,16 @@ it("replaces withdrawn pages and media without removing unrelated Vite assets", 
     await put(source, "js/built/loader.release.js", 'import("./form.release.js")');
     await put(source, "js/built/form.release.js", "published form");
     await put(source, "js/built/manifest.json", '{"loader":{"url":"/js/built/loader.release.js"}}');
+    const incoming = JSON.parse(await readFile(resolve(source, "publication.json"), "utf8"));
+    await put(
+      source,
+      "publication.json",
+      JSON.stringify({
+        ...incoming,
+        sourceSequence: 0,
+        integrity: await createReleaseIntegrity(source, incoming.files),
+      }),
+    );
     await assembleStaticRelease(source, destination, "preview");
     expect((await stat(sharedStylesheet)).ino).toBe(stylesheetIdentity.ino);
     await expect(readFile(resolve(destination, "_assets/withdrawn.css"))).rejects.toMatchObject({ code: "ENOENT" });
@@ -127,24 +246,50 @@ it("uses only the target's native D1 and public-source R2 bindings", () => {
   const config = {
     account_id: "synthetic-account",
     compatibility_date: "2026-09-30",
-    d1_databases: [{ binding: "DB", database_id: "preview-db" }],
+    d1_databases: [{ binding: "DB", database_id: "local-db" }],
     r2_buckets: [
-      { binding: "ASSETS_BUCKET", bucket_name: "preview-assets" },
-      { binding: "SPEAKER_UPLOADS_BUCKET", bucket_name: "preview-portraits" },
+      { binding: "ASSETS_BUCKET", bucket_name: "local-assets" },
+      { binding: "SPEAKER_UPLOADS_BUCKET", bucket_name: "local-portraits" },
       { binding: "PRIVATE_UPLOADS", bucket_name: "private" },
     ],
   };
-  expect(publicationBindingConfig(config, "preview")).toMatchObject({
+  expect(publicationBindingConfig(config, "local")).toMatchObject({
+    d1_databases: [{ database_id: "local-db", remote: false }],
+    r2_buckets: [
+      { bucket_name: "local-assets", remote: false },
+      { bucket_name: "local-portraits", remote: false },
+    ],
+  });
+});
+
+it("publishes a preview from the production Worker's previews bindings only", () => {
+  const config = {
+    account_id: "synthetic-account",
+    compatibility_date: "2026-09-30",
+    d1_databases: [{ binding: "DB", database_id: "production-db" }],
+    r2_buckets: [{ binding: "ASSETS_BUCKET", bucket_name: "production-assets" }],
+    previews: {
+      d1_databases: [{ binding: "DB", database_name: "preview-database", database_id: "preview-db" }],
+      r2_buckets: [
+        { binding: "ASSETS_BUCKET", bucket_name: "preview-assets" },
+        { binding: "SPEAKER_UPLOADS_BUCKET", bucket_name: "preview-portraits" },
+      ],
+    },
+  };
+  const bindings = publicationBindingConfig(config, "preview");
+  expect(bindings).toMatchObject({
     d1_databases: [{ database_id: "preview-db", remote: true }],
     r2_buckets: [
       { bucket_name: "preview-assets", remote: true },
       { bucket_name: "preview-portraits", remote: true },
     ],
   });
-  expect(publicationBindingConfig(config, "local").d1_databases[0].remote).toBe(false);
+  expect(JSON.stringify(bindings)).not.toContain("production");
+  expect(() => publicationBindingConfig({ ...config, previews: undefined }, "preview")).toThrow(/previews bindings/);
 });
 
-it.each(["preview", "production"])("keeps %s publication on its deployment resources", (environment) => {
+it("keeps production publication on its deployment resources", () => {
+  const environment = "production";
   const config = {
     account_id: "synthetic-account",
     compatibility_date: "2026-09-30",
@@ -207,6 +352,8 @@ it("keeps conference exports public while excluding them from indexing and remov
         version: 1,
         source: "native",
         snapshotId: "3".repeat(64),
+        sourceSequence: 0,
+        integrity: await createReleaseIntegrity(source, ownedFiles),
         environment: "production",
         files: ownedFiles,
         redirects: [],

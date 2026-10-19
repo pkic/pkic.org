@@ -1,0 +1,21 @@
+#!/bin/sh
+# Fast checks on staged files only: formatting and lint, no tests.
+# Focused tests run while you work; `pnpm run check` runs before a push and in CI.
+# Opt in with `git config core.hooksPath .githooks`; skip once with `git commit --no-verify`.
+set -eu
+
+staged() {
+  git diff --cached --name-only --diff-filter=ACMR -z -- "$@" | tr '\0' '\n'
+}
+
+# The same trees `pnpm run format:check` covers.
+formatted=$(staged 'functions/*.ts' 'assets/ts/*.ts' 'assets/ts/*.tsx' 'assets/shared/*.ts' 'assets/design/*.ts' 'tests/*.ts' 'tests/*.tsx')
+linted=$(staged '*.ts' '*.tsx' '*.mjs' '*.js' '*.cjs')
+
+if [ -n "$formatted" ]; then
+  printf '%s\n' "$formatted" | xargs pnpm exec oxfmt --check ||
+    { echo "pre-commit: run \`pnpm run format\` and stage the result." >&2; exit 1; }
+fi
+if [ -n "$linted" ]; then
+  printf '%s\n' "$linted" | xargs pnpm exec oxlint --deny-warnings --no-error-on-unmatched-pattern
+fi

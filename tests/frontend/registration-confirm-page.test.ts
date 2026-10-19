@@ -12,8 +12,13 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act } from "preact/test-utils";
-import { registrationResendConfirmationSchema } from "../../assets/shared/schemas/registration";
-import { controlFor } from "./helpers/labelled-control";
+import {
+  registrationConfirmSchema,
+  registrationResendConfirmationSchema,
+} from "../../assets/shared/schemas/registration";
+import { ORGANIZATION_JOB_TITLE_COPY, REGISTRATION_ORGANIZATION_COPY } from "../../assets/shared/email-first-copy";
+import { JOB_TITLE_REQUIRED, ORGANIZATION_NAME_REQUIRED } from "../../assets/shared/schemas/api-common";
+import { controlFor } from "./helpers/labeled-control";
 
 const CONFIRM_INFO = "/api/v1/events/pqc-2026/registrations/confirm-info";
 const RESEND = "/api/v1/events/pqc-2026/registrations/resend-confirmation";
@@ -73,7 +78,8 @@ function mountShell(): HTMLElement {
       data-api-base="/api/v1">
       <div data-confirm-loading></div>
       <div data-confirm-content hidden>
-        <form novalidate><button type="submit">Confirm my registration</button></form>
+        <p data-confirm-intro>Hi there, you're one click away!</p>
+        <form novalidate><div data-confirm-organization hidden></div><button type="submit">Confirm my registration</button></form>
       </div>
       <p data-flow-status class="alert visually-hidden" role="status" aria-live="polite" hidden></p>
     </div>
@@ -133,7 +139,7 @@ describe("registration confirmation shell", () => {
     expect(status?.hidden).toBe(false);
     expect(status?.textContent).toContain("Missing confirmation token");
     // The tone is carried in the data attribute as well as the styling, so a
-    // reader is not asked to tell success from failure by colour.
+    // reader is not asked to tell success from failure by color.
     expect(status?.dataset["state"]).toBe("error");
     expect(requests).toHaveLength(0);
     // Nothing was revealed, so the reader is not left with a dead form.
@@ -159,7 +165,7 @@ describe("registration confirmation shell", () => {
     await boot();
 
     // Resolved through the `for`/`id` pair itself, so the lookup fails exactly
-    // when the labelling contract is broken.
+    // when the labeling contract is broken.
     const control = controlFor(root, "Email address");
     expect(control.type).toBe("email");
     expect(control.required).toBe(true);
@@ -290,7 +296,7 @@ describe("registration confirmation shell", () => {
     // The failure lives beside the control, not in the page-level banner at
     // the foot of the flow.
     expect(root.querySelector<HTMLElement>("[data-flow-status]")?.hidden).toBe(true);
-    // Relabelling the button mid-interaction would move its accessible name
+    // Relabeling the button mid-interaction would move its accessible name
     // under the reader's cursor, so the name has to survive the failure.
     expect(buttonNamed(root, "Send me a new link").disabled).toBe(false);
   });
@@ -353,8 +359,82 @@ describe("registration confirmation shell", () => {
     // reachable from a heading list.
     const heading = [...root.querySelectorAll("h1, h2, h3, h4")].map((el) => el.textContent);
     expect(heading).toContain("Next steps");
-    const manage = [...root.querySelectorAll("a")].find((link) => link.textContent === "Manage registration");
+    const manage = [...root.querySelectorAll("a")].find((link) => link.textContent?.startsWith("Manage registration"));
     expect(manage?.getAttribute("href")).toContain("/register/manage/");
+  });
+
+  it("asks a work address with no known organization for it once, and sends it with the confirmation", async () => {
+    window.history.replaceState({}, "", "/events/2026/pqc-2026/register/confirm/?token=live-token-0123456789");
+    const root = mountShell();
+    const requests = installApi({
+      [CONFIRM_INFO]: () => json(confirmInfo({ firstName: "Ada", asksOrganization: true })),
+      "/api/v1/events/pqc-2026/registrations/confirm-email": () =>
+        json({
+          success: true,
+          stage: "confirmed",
+          status: "registered",
+          shareUrl: null,
+          dayAttendance: [],
+          dayWaitlist: [],
+          manageUrl: "https://pkic.org/events/2026/pqc-2026/register/manage/?token=manage-token-0123456789",
+          manageToken: "manage-token-0123456789",
+          organizationOutcome: "review_required",
+        }),
+    });
+    await boot();
+    await settle();
+
+    const form = root.querySelector<HTMLFormElement>("form")!;
+    // The question says what confirming needs, in place of the one-click greeting.
+    expect(root.querySelector<HTMLElement>("[data-confirm-intro]")?.hidden).toBe(true);
+    expect(root.textContent).toContain(REGISTRATION_ORGANIZATION_COPY.question);
+    const name = controlFor(root, REGISTRATION_ORGANIZATION_COPY.nameLabel);
+    const submit = async () =>
+      act(async () => {
+        form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+    await submit();
+    expect(requests.some((request) => request.method === "POST")).toBe(false);
+    expect(name.getAttribute("aria-invalid")).toBe("true");
+    expect(root.textContent).toContain(ORGANIZATION_NAME_REQUIRED);
+    expect(root.textContent).not.toContain("Invalid input");
+
+    await act(() => {
+      name.value = "Unknown Works";
+      name.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await submit();
+    // Registering on behalf of the organization requires the job title, refused on its field before the network.
+    const jobTitle = controlFor(root, ORGANIZATION_JOB_TITLE_COPY.label);
+    expect(jobTitle.required).toBe(true);
+    expect(jobTitle.getAttribute("aria-invalid")).toBe("true");
+    expect(root.textContent).toContain(JOB_TITLE_REQUIRED);
+    expect(requests.some((request) => request.method === "POST")).toBe(false);
+
+    await act(() => {
+      jobTitle.value = "Security Architect";
+      jobTitle.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await submit();
+    await settle();
+    const posted = requests.find((request) => request.method === "POST");
+    expect(registrationConfirmSchema.parse(posted?.body)).toEqual({
+      token: "live-token-0123456789",
+      organization: { name: "Unknown Works", jobTitle: "Security Architect" },
+    });
+    expect(root.textContent).toContain(REGISTRATION_ORGANIZATION_COPY.reviewRequired);
+    // Once confirmed, only the outcome stays: the invitation to confirm is gone.
+    expect(root.querySelector<HTMLElement>("[data-confirm-content]")?.hidden).toBe(true);
+  });
+
+  it("asks nothing when the address already names an organization", async () => {
+    window.history.replaceState({}, "", "/events/2026/pqc-2026/register/confirm/?token=live-token");
+    const root = mountShell();
+    installApi({ [CONFIRM_INFO]: () => json(confirmInfo({ firstName: "Ada", asksOrganization: false })) });
+    await boot();
+    expect(root.querySelector<HTMLElement>("[data-confirm-organization]")?.hidden).toBe(true);
+    expect(root.querySelectorAll("input")).toHaveLength(0);
   });
 
   it("falls back to the resend panel when the server rejects the token at submit time", async () => {
@@ -382,7 +462,7 @@ describe("registration confirmation shell", () => {
     expect(root.querySelector<HTMLElement>("[data-flow-status]")?.hidden).toBe(true);
   });
 
-  it("puts an unrecognised submit failure in the flow's live region", async () => {
+  it("puts an unrecognized submit failure in the flow's live region", async () => {
     window.history.replaceState({}, "", "/events/2026/pqc-2026/register/confirm/?token=live-token");
     const root = mountShell();
     installApi({

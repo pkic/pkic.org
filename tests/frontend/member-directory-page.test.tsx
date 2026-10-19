@@ -13,7 +13,7 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemberDirectory } from "../../assets/ts/member-flows/member-directory-page";
 import { publicMembersListResponseSchema } from "../../assets/shared/schemas/members-directory";
-import { buttonNamed, controlFor, typeInto } from "./helpers/labelled-control";
+import { buttonNamed, controlFor, typeInto } from "./helpers/labeled-control";
 
 const mounted: HTMLElement[] = [];
 
@@ -70,6 +70,7 @@ afterEach(() => {
     void act(() => render(null, container));
     container.remove();
   }
+  history.replaceState(null, "", "/");
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
@@ -211,5 +212,39 @@ describe("public member directory", () => {
     expect(container.querySelector<HTMLAnchorElement>(".member-card a.pk-stretched")?.getAttribute("href")).toBe(
       "/members/49e927b2-1163-4efb-b1b3-c5bd7971b685/",
     );
+  });
+});
+
+describe("directory bookmarks and history", () => {
+  it("initializes submitted search from the URL and restores it on browser history", async () => {
+    history.replaceState(null, "", "/members/?q=Example#m-A");
+    const fetchMock = stubFetch(listingResponse([member()]));
+    const container = await mountDirectory();
+    expect((controlFor(container, "Search members") as HTMLInputElement).value).toBe("Example");
+    expect(String(fetchMock.mock.calls[0][0])).toContain("q=Example");
+    await act(() => {
+      history.replaceState(null, "", "/members/?q=History#m-H");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    await vi.waitFor(() => expect((controlFor(container, "Search members") as HTMLInputElement).value).toBe("History"));
+    expect(location.hash).toBe("#m-H");
+  });
+  it("writes only submitted search, preserves unrelated query and anchor, omits empty defaults", async () => {
+    history.replaceState(null, "", "/members/?campaign=event#m-A");
+    stubFetch(listingResponse([member()]));
+    const container = await mountDirectory();
+    await act(() => typeInto(controlFor(container, "Search members"), "Example"));
+    expect(location.search).toBe("?campaign=event");
+    await act(() => {
+      container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    await vi.waitFor(() => expect(new URL(location.href).searchParams.get("q")).toBe("Example"));
+    expect(location.hash).toBe("#m-A");
+    await vi.waitFor(() => expect(container.querySelector("form")).not.toBeNull());
+    await act(() => typeInto(controlFor(container, "Search members"), ""));
+    await act(() => {
+      container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    expect(location.search).toBe("?campaign=event");
   });
 });

@@ -5,8 +5,6 @@ import { BreadcrumbScope } from "../../../../ui/BreadcrumbScope";
  * members, leaders, and staff — the backend decides what each may do.
  */
 import { lazy, Suspense } from "preact/compat";
-import { Link } from "wouter";
-import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import "../../../../ui/Content.css";
 import {
   authenticatedGroupDetailResponseSchema,
@@ -19,8 +17,9 @@ import { Badge as StatusBadge } from "../../../../components/Badge";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
 import { Tabs } from "../../../../components/Tabs";
-import { Badge } from "../../../../ui/Badge";
-import { PageHeader } from "../../../../ui/PageHeader";
+import { Avatar } from "../../../../ui/Avatar";
+import { ProfileHeader } from "../../../../ui/ProfileHeader";
+import { formatNumber } from "../../../../../shared/format-number";
 import { useData } from "../../../../hooks/useData";
 import { useEffect } from "preact/hooks";
 import { getJson } from "../../../../shared/api-client";
@@ -48,28 +47,31 @@ const GroupStatistics = lazy(() => import("./GroupStatistics").then((module) => 
 
 const OVERVIEW_VIEW = "overview";
 
-/** The group owns the page title at its root and becomes navigation context inside a record. */
-function GroupContextHeader({ group }: { group: AuthenticatedGroup }) {
+/**
+ * The group's hero: the record every view of the group belongs to, so a vote,
+ * a form or the roster always opens under whose it is.
+ */
+function GroupRecordHero({ group }: { group: AuthenticatedGroup }) {
   return (
-    <PageHeader
+    <ProfileHeader
+      media={<Avatar name={group.abbreviatedName ?? group.name} shape="square" size="xl" />}
       title={group.abbreviatedName ? `${group.name} (${group.abbreviatedName})` : group.name}
-      context={
-        <>
-          <Badge tone="neutral">{group.type.singularLabel}</Badge>
-          {!group.active && <StatusBadge status="inactive" />}
-        </>
-      }
-      description={group.parentGroup ? `Part of ${group.parentGroup.name}` : undefined}
+      pill={group.active ? undefined : <StatusBadge status="inactive" />}
+      lede={group.parentGroup ? `Part of ${group.parentGroup.name}` : undefined}
+      facts={[
+        group.type.singularLabel,
+        `${formatNumber(group.participantCount)} ${group.participantCount === 1 ? "participant" : "participants"}`,
+      ]}
     />
   );
 }
 
 /**
- * Join from the group itself: the same capacity-aware participation card the
+ * Manage participation from the group itself: the same capacity-aware participation card the
  * catalog uses, fetched for exactly this group. Renders nothing while the
- * viewer already participates or holds no member capacity.
+ * viewer holds neither a current seat nor an eligible member capacity.
  */
-function GroupJoinPanel({ groupId, onChanged }: { groupId: string; onChanged: () => void | Promise<void> }) {
+function GroupParticipationPanel({ groupId, onChanged }: { groupId: string; onChanged: () => void | Promise<void> }) {
   const selfGroup = useData(
     () =>
       getJson(
@@ -79,7 +81,7 @@ function GroupJoinPanel({ groupId, onChanged }: { groupId: string; onChanged: ()
     [groupId],
   );
   const row = selfGroup.data?.groups[0];
-  if (!row || row.eligibleCapacities.length === 0) return null;
+  if (!row || (row.eligibleCapacities.length === 0 && row.memberships.length === 0)) return null;
   return (
     <GroupParticipationCard
       group={row}
@@ -160,6 +162,8 @@ export function GroupWorkspace({
     return `/groups/${encodeURIComponent(groupId)}/${nextView}`;
   }
 
+  const nestedEventRecord = view === "events" && Boolean(resourceId) && resourceId !== "new" && resourceId !== "list";
+
   const trail = group
     ? [
         { label: "Groups", href: usePortalHashLocation.hrefs("/groups") },
@@ -192,14 +196,18 @@ export function GroupWorkspace({
           items={trail}
           label="Group navigation"
         >
-          <GroupContextHeader group={group} />
-          <Tabs
-            items={views.map((item) => ({ key: item.key, label: item.label }))}
-            active={view}
-            label={`${group.name} sections`}
-            onChange={(nextView) => navigate(viewPath(nextView))}
-            hrefFor={viewPath}
-          />
+          {!nestedEventRecord && (
+            <>
+              <GroupRecordHero group={group} />
+              <Tabs
+                items={views.map((item) => ({ key: item.key, label: item.label }))}
+                active={view}
+                label={`${group.name} sections`}
+                onChange={(nextView) => navigate(viewPath(nextView))}
+                hrefFor={viewPath}
+              />
+            </>
+          )}
           <Suspense fallback={<Spinner />}>
             {view === OVERVIEW_VIEW && (
               <div class={canParticipate || portalSession.value?.member ? "pk-record" : "pk-stack"}>
@@ -210,17 +218,8 @@ export function GroupWorkspace({
                   representedMemberCount={group.representedMemberCount}
                   childCount={group.childCount}
                 />
-                {!canParticipate && Boolean(portalSession.value?.member) && (
-                  <GroupJoinPanel groupId={group.id} onChanged={detail.reload} />
-                )}
-                {canParticipate && (
-                  <Panel>
-                    <PanelHeader title="Your participation" />
-                    <PanelBody class="pk-stack">
-                      <p>You participate in this group.</p>
-                      <Link href="/groups">Manage your participation</Link>
-                    </PanelBody>
-                  </Panel>
+                {Boolean(portalSession.value?.member) && (
+                  <GroupParticipationPanel groupId={group.id} onChanged={detail.reload} />
                 )}
               </div>
             )}

@@ -13,13 +13,18 @@ import {
   proposalSpeakerRemovalResponseSchema,
   proposalResendManageLinkSchema,
   proposalResendSpeakerManageLinkSchema,
-  proposerSpeakerPatchSchema,
+  proposalSpeakerPatchSchema,
   speakerParticipationPatchSchema,
-  speakerProfilePatchSchema,
+  speakerSelfProfilePatchSchema,
 } from "./proposal-management";
+import { identitiesListQuerySchema, identitiesListResponseSchema } from "./identity";
 import { jsonResponse, requiredJsonBody } from "./openapi";
 import { speakerReminderPreferencePatchSchema, speakerReminderPreferenceResponseSchema } from "./speaker-reminders";
-import { speakerParticipationResponseSchema, speakerSelfServiceReadResponseSchema } from "./speaker-self-service";
+import {
+  speakerParticipationResponseSchema,
+  speakerProfileUpdateResponseSchema,
+  speakerSelfServiceReadResponseSchema,
+} from "./speaker-self-service";
 import { publicOperation } from "./route-contract";
 
 const genericAcceptedResponse = jsonResponse(
@@ -182,15 +187,16 @@ export const proposalAccessSpeakerReminderCreateRouteSchema = {
 export const proposalAccessSpeakerPatchRouteSchema = {
   ...publicOperation(),
   tags: ["Proposals", "Speakers"],
-  summary: "Update a proposal speaker through proposal management",
-  description: "Updates a speaker profile and role using the proposer management capability.",
+  summary: "Change a proposal speaker's role through proposal management",
+  description:
+    "Changes a speaker's role using the proposer management capability. A speaker's name, photo and profile belong to the person and the identity they speak as, which only they edit.",
   request: {
     params: proposalAccessSpeakerParamsSchema,
-    body: requiredJsonBody(proposerSpeakerPatchSchema),
+    body: requiredJsonBody(proposalSpeakerPatchSchema),
   },
   responses: {
-    "200": jsonResponse("Speaker profile updated.", successResponseSchema),
-    "400": { description: "Invalid speaker profile." },
+    "200": jsonResponse("Speaker role updated.", successResponseSchema),
+    "400": { description: "Invalid speaker role." },
     "403": { description: "Speaker has declined participation." },
     "404": { description: "Proposal management capability or speaker not found." },
     "409": { description: "The proposal or speaker profile changed concurrently." },
@@ -248,14 +254,37 @@ export const proposalSpeakerProfileUpdateRouteSchema = {
   summary: "Update speaker self-service profile",
   request: {
     params: proposalAccessTokenParamsSchema,
-    body: requiredJsonBody(speakerProfilePatchSchema),
+    body: requiredJsonBody(speakerSelfProfilePatchSchema),
   },
   responses: {
-    "200": jsonResponse("Speaker profile updated.", successResponseSchema),
+    "200": jsonResponse("Speaker profile updated.", speakerProfileUpdateResponseSchema),
     "400": { description: "Invalid speaker profile." },
     "403": { description: "Speaker has declined participation." },
     "404": { description: "Speaker management capability not found." },
     "409": { description: "Proposal or speaker profile changed concurrently." },
+    "410": { description: "Speaker management capability expired." },
+  },
+};
+
+export const proposalSpeakerIdentitiesRouteSchema = {
+  ...publicOperation(),
+  tags: ["Proposals", "Identities"],
+  summary: "List the bound speaker's own available identities",
+  request: {
+    params: proposalAccessTokenParamsSchema,
+    query: identitiesListQuerySchema.omit({
+      userId: true,
+      memberId: true,
+      organizationId: true,
+      active: true,
+      blocked: true,
+    }),
+  },
+  responses: {
+    "200": jsonResponse("Owned speaker identity choices.", identitiesListResponseSchema),
+    "403": { description: "Speaker participation declined." },
+    "404": { description: "Speaker management authority not found." },
+    "409": { description: "Proposal closed." },
     "410": { description: "Speaker management capability expired." },
   },
 };

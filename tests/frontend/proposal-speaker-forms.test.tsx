@@ -5,7 +5,6 @@ import { act } from "preact/test-utils";
 import { SpeakerFormCard } from "../../assets/ts/components/SpeakerFormCard";
 import type { ProfileLinksHandle } from "../../assets/ts/components/ProfileLinksInput";
 import { ProposalSpeakersPanel } from "../../assets/ts/components/proposals/ProposalSpeakersPanel";
-import { ProposalInternalCommentsPanel } from "../../assets/ts/components/proposals/ProposalInternalCommentsPanel";
 import { proposalSpeakerEndpoints } from "../../assets/ts/member-flows/portal/sections/events/detail/proposal-detail/SpeakerCard";
 import { applyFieldErrors } from "../../assets/ts/shared/form/validation-map";
 import {
@@ -13,9 +12,14 @@ import {
   type ProposalSpeaker,
   type ProposalSpeakersResponse,
 } from "../../assets/shared/schemas/proposal-speakers";
-import type { ProposalInternalComment } from "../../assets/shared/schemas/proposal-comments";
 import { PROPOSAL_SPEAKER_ROLES } from "../../assets/shared/schemas/participant-roles";
-import { buttonNamed, controlFor, groupNames, labelNames, markdownControl } from "./helpers/labelled-control";
+import { buttonNamed, controlFor, groupNames, labelNames, markdownControl } from "./helpers/labeled-control";
+import { confirmAction } from "../../assets/ts/components/ConfirmDialog";
+
+vi.mock("../../assets/ts/components/ConfirmDialog", async (original) => ({
+  ...(await original<typeof import("../../assets/ts/components/ConfirmDialog")>()),
+  confirmAction: vi.fn(async () => true),
+}));
 
 let container: HTMLElement | null = null;
 
@@ -52,8 +56,6 @@ function speakerCard(overrides: Partial<Parameters<typeof SpeakerFormCard>[0]> =
           firstName: "speaker.1.firstName",
           lastName: "speaker.1.lastName",
           email: "speaker.1.email",
-          organizationName: "speaker.1.organizationName",
-          jobTitle: "speaker.1.jobTitle",
           bio: "speaker.1.bio",
           role: "speaker.1.role",
         }}
@@ -74,6 +76,18 @@ function speakerCard(overrides: Partial<Parameters<typeof SpeakerFormCard>[0]> =
 }
 
 describe("SpeakerFormCard", () => {
+  it("reuses a verified person summary while keeping session biography, role, and links editable", async () => {
+    const root = mount(
+      speakerCard({ personSummary: <p>Ada Lovelace · Example Labs · Engineer · ada@example.test</p> }),
+    );
+    await settle();
+    expect(root.textContent).toContain("Ada Lovelace · Example Labs · Engineer · ada@example.test");
+    for (const name of ["firstName", "lastName", "email"])
+      expect(root.querySelector(`[name="speaker.1.${name}"]`)).toBeNull();
+    expect(await markdownControl(root, "Bio")).not.toBeNull();
+    expect(root.querySelector('[name="speaker.1.role"]')).not.toBeNull();
+    expect(root.querySelector('input[type="url"]')).not.toBeNull();
+  });
   it("names every control through its own for/id pair and every group by a legend", async () => {
     const root = mount(speakerCard());
     const form = root.querySelector("form")!;
@@ -82,8 +96,6 @@ describe("SpeakerFormCard", () => {
       "First name",
       "Last name",
       "Email",
-      "Organization (optional)",
-      "Job title (optional)",
       "Bio",
       "Proposer",
       "Speaker",
@@ -176,18 +188,40 @@ describe("SpeakerFormCard", () => {
     expect(offered).toEqual([...PROPOSAL_SPEAKER_ROLES]);
   });
 
-  it("offers removal as a button, and offers none when the card cannot be removed", async () => {
+  it("names the card it removes, and offers no removal when the card cannot be removed", async () => {
+    vi.mocked(confirmAction).mockClear();
     const onRemove = vi.fn();
-    const root = mount(speakerCard({ onRemove }));
+    const root = mount(speakerCard({ onRemove, removeLabel: "Remove speaker 1" }));
 
-    const remove = buttonNamed(root, "Remove");
+    const remove = buttonNamed(root, "Remove speaker 1");
     expect(remove.type).toBe("button");
-    void act(() => remove.click());
+    // An empty card holds nothing to lose, so it goes without a question.
+    await act(async () => remove.click());
+    expect(confirmAction).not.toHaveBeenCalled();
     expect(onRemove).toHaveBeenCalledOnce();
 
     void act(() => render(null, container!));
     const fixed = mount(speakerCard());
     expect(() => buttonNamed(fixed, "Remove")).toThrow();
+    expect(() => buttonNamed(fixed, "Remove speaker 1")).toThrow();
+  });
+
+  it("confirms before discarding a card that already holds details", async () => {
+    vi.mocked(confirmAction).mockClear();
+    vi.mocked(confirmAction).mockResolvedValueOnce(false);
+    const onRemove = vi.fn();
+    const root = mount(speakerCard({ onRemove, removeLabel: "Remove speaker 1" }));
+    controlFor(root, "First name").value = "Ada";
+
+    await act(async () => buttonNamed(root, "Remove speaker 1").click());
+    expect(confirmAction).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Remove speaker 1?", confirmLabel: "Remove speaker 1", tone: "danger" }),
+    );
+    expect(onRemove).not.toHaveBeenCalled();
+
+    await act(async () => buttonNamed(root, "Remove speaker 1").click());
+    expect(confirmAction).toHaveBeenCalledTimes(2);
+    expect(onRemove).toHaveBeenCalledOnce();
   });
 
   it("omits the role group entirely when the caller collects no role", async () => {
@@ -197,8 +231,6 @@ describe("SpeakerFormCard", () => {
           firstName: "proposerSpeakerFirstName",
           lastName: "proposerSpeakerLastName",
           email: "proposerSpeakerEmail",
-          organizationName: "proposerSpeakerOrg",
-          jobTitle: "proposerSpeakerTitle",
           bio: "proposerBio",
         },
       }),
@@ -213,6 +245,9 @@ describe("SpeakerFormCard", () => {
 
 function rosterSpeaker(overrides: Partial<ProposalSpeaker> = {}): ProposalSpeaker {
   return {
+    actingIdentityId: null,
+    actingIdentitySelectedAt: null,
+    actingIdentitySelection: "unrecorded",
     userId: "30000000-0000-4000-8000-000000000001",
     role: "co_speaker",
     status: "confirmed",
@@ -238,7 +273,14 @@ function rosterSpeaker(overrides: Partial<ProposalSpeaker> = {}): ProposalSpeake
   };
 }
 
-function roster(speakers: ProposalSpeaker[]): ProposalSpeakersResponse {
+function roster(
+  speakers: Array<
+    ProposalSpeaker & {
+      identityId?: string | null;
+      registration?: ProposalSpeakersResponse["speakers"][number]["registration"];
+    }
+  >,
+): ProposalSpeakersResponse {
   // Built through the canonical transport contract rather than cast, so the
   // fixture cannot drift away from what the endpoint actually returns.
   return proposalSpeakersResponseSchema.parse({
@@ -258,7 +300,12 @@ function roster(speakers: ProposalSpeaker[]): ProposalSpeakersResponse {
       profileComplete: 0,
       presentationUploaded: 0,
     },
-    speakers: speakers.map((speaker) => ({ ...speaker, registrationStatus: null })),
+    speakers: speakers.map((speaker) => ({
+      registration: null,
+      identityId: null,
+      ...speaker,
+      independentCapacity: null,
+    })),
   });
 }
 
@@ -356,101 +403,145 @@ describe("ProposalSpeakersPanel", () => {
     // The form itself is not on the roster: nothing here asks for an address.
     expect(operator.querySelector("form")).toBeNull();
   });
-});
 
-// ── ProposalInternalCommentsPanel ────────────────────────────────────────────
-
-function comment(overrides: Partial<ProposalInternalComment> = {}): ProposalInternalComment {
-  return {
-    id: "comment-1",
-    proposal_id: "proposal-1",
-    author_user_id: "reviewer-1",
-    comment: "Worth a second reviewer.",
-    created_at: "2026-08-02T09:00:00.000Z",
-    updated_at: "2026-08-02T09:00:00.000Z",
-    author_email: "reviewer@example.test",
-    author_first_name: "Review",
-    author_last_name: "Owner",
-    ...overrides,
-  };
-}
-
-function commentsPanel(overrides: Partial<Parameters<typeof ProposalInternalCommentsPanel>[0]> = {}) {
-  return (
-    <ProposalInternalCommentsPanel
-      commentDraft=""
-      savingComment={false}
-      comments={[comment()]}
-      commentsPage={{ limit: 25, offset: 0, total: 1, hasMore: false }}
-      loadingMoreComments={false}
-      onCommentDraftChange={() => {}}
-      onAddComment={async () => {}}
-      onLoadMoreComments={async () => {}}
-      {...overrides}
-    />
-  );
-}
-
-describe("ProposalInternalCommentsPanel", () => {
-  it("gives the comment box a name and describes what happens to what is typed", async () => {
-    const root = mount(commentsPanel());
-
-    expect(root.querySelector("section")?.getAttribute("aria-label")).toBe("Internal comments");
-    expect(labelNames(root)).toEqual(["Add a comment"]);
-    const box = await markdownControl(root, "Add a comment");
-    expect(box.getAttribute("role")).toBe("textbox");
-    const describedBy = box.getAttribute("aria-describedby")!;
-    expect(root.querySelector(`#${describedBy}`)?.textContent).toContain("Private to the program committee");
-  });
-
-  it("refuses to post a draft that is only whitespace", async () => {
-    const onAddComment = vi.fn(async () => {});
-    const root = mount(commentsPanel({ commentDraft: "   ", onAddComment }));
-
-    const submit = buttonNamed(root, "Add Comment");
-    expect(submit.disabled).toBe(true);
-    await act(() => submit.click());
-    expect(onAddComment).not.toHaveBeenCalled();
-  });
-
-  it("holds off a second write while the first is still in flight", async () => {
-    const onAddComment = vi.fn(async () => {});
-    const root = mount(commentsPanel({ commentDraft: "Needs a second reviewer.", savingComment: true, onAddComment }));
-
-    const submit = buttonNamed(root, "Adding…");
-    expect(submit.disabled).toBe(true);
-    expect(submit.getAttribute("aria-busy")).toBe("true");
-    await act(() => submit.click());
-    expect(onAddComment).not.toHaveBeenCalled();
-  });
-
-  it("posts a usable draft once", async () => {
-    const onAddComment = vi.fn(async () => {});
-    const root = mount(commentsPanel({ commentDraft: "Needs a second reviewer.", onAddComment }));
-
-    const submit = buttonNamed(root, "Add Comment");
-    expect(submit.disabled).toBe(false);
-    await act(async () => {
-      root.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-    expect(onAddComment).toHaveBeenCalledOnce();
-  });
-
-  it("names an empty discussion and offers more through a button when there is more", async () => {
-    const empty = mount(commentsPanel({ comments: [], commentsPage: null }));
-    expect(empty.querySelector('[role="status"]')?.textContent).toContain("No internal comments yet");
-
-    void act(() => render(null, container!));
-    const onLoadMoreComments = vi.fn(async () => {});
-    const more = mount(
-      commentsPanel({
-        commentsPage: { limit: 25, offset: 0, total: 30, hasMore: true },
-        onLoadMoreComments,
+  describe("a speaker's standing on the card", () => {
+    const registered = {
+      identityId: "60000000-0000-4000-8000-000000000001",
+      ...rosterSpeaker({
+        userId: "20000000-0000-4000-8000-000000000001",
+        firstName: "Mira",
+        lastName: "Lind",
+        role: "speaker",
+        status: "confirmed",
+        confirmedAt: "2026-10-03T09:00:00.000Z",
+        hasBio: true,
+        hasHeadshot: true,
+        headshotUrl: "https://app.test/api/v1/users/20000000-0000-4000-8000-000000000001/headshots/face.webp",
       }),
-    );
-    const button = buttonNamed(more, "Load more comments");
-    await act(() => button.click());
-    expect(onLoadMoreComments).toHaveBeenCalledOnce();
+      registration: {
+        id: "30000000-0000-4000-8000-000000000001",
+        status: "registered" as const,
+        attendanceType: "in_person" as const,
+      },
+    };
+    const pending = rosterSpeaker({
+      userId: "20000000-0000-4000-8000-000000000002",
+      firstName: "Pavel",
+      lastName: "Petrov",
+      role: "co_speaker",
+      status: "invited",
+      confirmedAt: null,
+      inviteExpiresAt: "2026-11-01T00:00:00.000Z",
+      hasBio: false,
+      hasHeadshot: false,
+      headshotUrl: null,
+    });
+
+    async function organizerRoster(): Promise<HTMLElement> {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => Response.json(roster([registered, pending]))),
+      );
+      const root = mount(
+        speakersPanel({
+          access: { canReview: true, canFinalize: true },
+          profileAccess: { canEditIdentity: true, canEditHeadshot: true },
+          userHref: (userId) => `#/users/${userId}`,
+          identityHref: (userId) => `#/users/${userId}/profile`,
+          registrationHref: (registrationId) => `#/events/pqc/registrations/detail/${registrationId}`,
+        }),
+      );
+      await settle();
+      return root;
+    }
+
+    function card(root: HTMLElement, name: string): HTMLElement {
+      return root.querySelector<HTMLElement>(`article[aria-label="Speaker ${name}"]`)!;
+    }
+
+    it("says the role, answer and registration in plain text, with no row of pills", async () => {
+      const root = await organizerRoster();
+      const mira = card(root, "Mira Lind");
+
+      expect(mira.querySelector(".pk-badge")).toBeNull();
+      const standing = [...mira.querySelectorAll(".pk-speaker-portrait-standing > dd")].map((dd) => dd.textContent);
+      expect(standing[0]).toBe("Speaker");
+      expect(standing[1]).toMatch(/^Accepted .+ · Registered \(in-person\)$/);
+      // Nothing to chase: no checklist at all.
+      expect(mira.querySelector(".pk-attention-list")).toBeNull();
+    });
+
+    it("lists only what an organizer has to chase, as a checklist", async () => {
+      const root = await organizerRoster();
+      const pavel = card(root, "Pavel Petrov");
+
+      expect(pavel.querySelector(".pk-badge")).toBeNull();
+      const standing = [...pavel.querySelectorAll(".pk-speaker-portrait-standing > dd")].map((dd) => dd.textContent);
+      expect(standing).toEqual(["Co-speaker", "Not registered"]);
+      const checklist = pavel.querySelector('ul.pk-attention-list[aria-label="Still needed for Pavel Petrov"]');
+      const items = [...(checklist?.querySelectorAll("li") ?? [])].map((item) => item.textContent);
+      expect(items).toHaveLength(2);
+      expect(items[0]).toMatch(/^Not yet accepted \(invitation expires .+\)$/);
+      expect(items[1]).toBe("No bio");
+      // The empty photo already says the headshot is missing; the checklist does not repeat it.
+      expect(items.join(" ")).not.toContain("headshot");
+    });
+
+    it("shows a missing headshot in the photo's place, with the way to add the person's own", async () => {
+      const root = await organizerRoster();
+      const pavel = card(root, "Pavel Petrov");
+      const mira = card(root, "Mira Lind");
+
+      const missing = pavel.querySelector(".pk-speaker-portrait-missing");
+      expect(missing?.textContent).toContain("No headshot");
+      expect(pavel.querySelector(".pk-avatar__initials")).toBeNull();
+      expect(buttonNamed(missing!, "Add headshot")).not.toBeNull();
+      await act(() => buttonNamed(missing!, "Add headshot")!.click());
+      // The way to add it is the shared picture tile on the person's own headshot, in a dialog.
+      expect(root.querySelector('dialog button[aria-label$="photo of Pavel Petrov"]')).not.toBeNull();
+      // A speaker with a photo shows the photo.
+      expect(mira.querySelector(".pk-speaker-portrait-missing")).toBeNull();
+      expect(mira.querySelector("img")).not.toBeNull();
+    });
+
+    it("opens the user, the identity they speak as and their registration from the card's menu", async () => {
+      const root = await organizerRoster();
+      const links = async (name: string) => {
+        const menu = card(root, name).querySelector<HTMLButtonElement>(`button[aria-label="Actions for ${name}"]`)!;
+        await act(() => menu.click());
+        const found = Object.fromEntries(
+          [...card(root, name).querySelectorAll<HTMLAnchorElement>('[role="menu"] a')].map((link) => [
+            link.textContent?.trim(),
+            link.getAttribute("href"),
+          ]),
+        );
+        await act(() => menu.click());
+        return found;
+      };
+      // Navigation lives in the menu, not as a row of links on the card.
+      expect(card(root, "Mira Lind").querySelector(".pk-agenda-speaker-directory__footer")).toBeNull();
+
+      expect(await links("Mira Lind")).toEqual({
+        "Open user": "#/users/20000000-0000-4000-8000-000000000001",
+        "Open identity": "#/users/20000000-0000-4000-8000-000000000001/profile",
+        "Open registration": "#/events/pqc/registrations/detail/30000000-0000-4000-8000-000000000001",
+      });
+      expect(await links("Pavel Petrov")).toEqual({ "Open user": "#/users/20000000-0000-4000-8000-000000000002" });
+    });
+
+    it("leaves out the links a viewer may not open", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => Response.json(roster([registered]))),
+      );
+      const root = mount(speakersPanel({ userHref: () => undefined }));
+      await settle();
+
+      const menu = card(root, "Mira Lind").querySelector<HTMLButtonElement>(
+        'button[aria-label="Actions for Mira Lind"]',
+      )!;
+      await act(() => menu.click());
+      expect(card(root, "Mira Lind").querySelector('[role="menu"] a')).toBeNull();
+    });
   });
 });

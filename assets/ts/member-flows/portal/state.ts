@@ -16,6 +16,11 @@ export const portalSession = signal<PortalSession | null>(null);
 export const profile = signal<MyProfile | null>(null);
 export const isAuthed = computed(() => authStatus.value === "authenticated" && Boolean(portalSession.value));
 
+/** The name the account menu shows: the preferred name, else first and last name, else "Account". */
+export function accountDisplayName(person: MyProfile | null): string {
+  return person?.preferredName || [person?.firstName, person?.lastName].filter(Boolean).join(" ").trim() || "Account";
+}
+
 /**
  * Whether this session was established by an emailed link.
  *
@@ -25,6 +30,7 @@ export const isAuthed = computed(() => authStatus.value === "authenticated" && B
  * which is right — the offer belongs to the sign-in, not to the account.
  */
 export const signedInWithLink = signal(false);
+export const logoutNotice = signal<string | null>(null);
 
 export function setAuthChecking(): void {
   authStatus.value = "loading";
@@ -38,14 +44,14 @@ export function clearMemberProfile(): void {
   profile.value = null;
 }
 
-export function savePortalSession(next: PortalSession): void {
+export function savePortalSession(next: PortalSession, options: { restoreReturnPath?: boolean } = {}): void {
   if (Math.min(Date.parse(next.expiresAt), Date.parse(next.idleExpiresAt)) <= Date.now()) {
     expirePortalSession();
     return;
   }
   portalSession.value = next;
   authStatus.value = "authenticated";
-  restoreReturnPath();
+  if (options.restoreReturnPath !== false) restoreReturnPath();
 }
 
 export function clearUserSession(): void {
@@ -92,6 +98,10 @@ function clearSessionStorage(key: string): void {
   } catch {
     // ignore — sessionStorage unavailable
   }
+}
+
+export function clearSignOutReturnPath(): void {
+  clearSessionStorage(RETURN_PATH_KEY);
 }
 
 /** Records the current hash location so it survives a forced sign-out. */

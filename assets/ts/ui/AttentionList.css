@@ -1,0 +1,42 @@
+/*
+ * AttentionList — a checklist of what needs doing, one line per item.
+ *
+ * The text keeps the surrounding ink; only the mark before it takes the
+ * warning tone, so a card with two open items reads as text with two marks,
+ * not as two colored pills.
+ */
+
+@layer components {
+  .pk-attention-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pk-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: var(--pk-text-sm);
+    line-height: 1.4;
+  }
+
+  .pk-attention-list__item,
+  .pk-attention-mark {
+    display: flex;
+    align-items: baseline;
+    gap: var(--pk-2);
+  }
+
+  .pk-attention-mark {
+    display: inline-flex;
+  }
+
+  .pk-attention-list__item::before,
+  .pk-attention-mark::before {
+    content: "";
+    flex: none;
+    inline-size: 0.5rem;
+    block-size: 0.5rem;
+    border-radius: 50%;
+    background: var(--pk-warn);
+    transform: translateY(-0.05em);
+  }
+}

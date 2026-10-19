@@ -1,0 +1,11 @@
+/* Loaded with FieldStatus only, so the entry stylesheet does not carry it. */
+@layer components {
+  /* A Field's message placed by its caller: one line kept, so nothing below or beside it moves. */
+  .pk-field__status {
+    margin: 0;
+    min-block-size: calc(var(--pk-text-xs) * 1.5);
+    font-size: var(--pk-text-xs);
+    line-height: 1.5;
+    color: var(--state-ink, var(--pk-ink-muted));
+  }
+}

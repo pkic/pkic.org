@@ -26,7 +26,7 @@ import { advanceSponsorshipStage } from "../functions/_lib/services/sponsorship/
 import { authorizedSponsorshipMutationDb, createSponsorship } from "../functions/_lib/services/sponsorship";
 import { getCurrentUserBackedAdmin } from "../functions/_lib/auth/admin";
 import { decorateOpenApiSpec } from "../functions/_lib/openapi/mcp";
-import { openapi } from "../functions/router";
+import { openapi } from "../functions/http-router";
 import type { AuthAdmin } from "../functions/_lib/types";
 
 const NOTIFICATIONS = {

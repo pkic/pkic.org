@@ -138,7 +138,7 @@ describe("public vote detail page", () => {
     expect(status?.textContent).toContain("Loading vote…");
   });
 
-  it("names a decided motion with the product's own word for it, not just a colour", async () => {
+  it("names a decided motion with the product's own word for it, not just a color", async () => {
     window.history.replaceState({}, "", "/votes/detail/?slug=membership-fee-motion");
     stubFetch(
       voteResponse({
@@ -157,7 +157,7 @@ describe("public vote detail page", () => {
     // badges above it are facts, not statuses, and render without one.
     const badge = container.querySelector(".pk-badge--dot");
     expect(badge?.textContent).toBe("Passed");
-    // The tone is repeated as a dot rather than resting on the fill colour.
+    // The tone is repeated as a dot rather than resting on the fill color.
     expect(badge?.className).toContain("pk-badge--ok");
     expect(badge?.className).toContain("pk-badge--dot");
     expect(container.textContent).toContain("12 in favor · 3 opposed · 1 abstained");

@@ -6,6 +6,8 @@
     border-radius: var(--pk-radius);
     background: var(--pk-surface-raise);
     color: var(--pk-ink);
+    /* The shared control height; both halves stretch to fill it inside the frame. */
+    block-size: var(--pk-control-size);
   }
 
   .pk-split-button--primary {
@@ -18,7 +20,7 @@
      as a single control. The menu remains free of overflow clipping. */
   .pk-split-button .pk-btn,
   .pk-split-button .pk-menu__trigger {
-    height: 100%;
+    block-size: auto;
     margin: 0;
     border: 0;
     background: transparent;
@@ -35,8 +37,10 @@
   }
 
   .pk-split-button .pk-menu__trigger {
-    min-block-size: 100%;
-    padding: var(--pk-control-y) var(--pk-3);
+    padding: 0 var(--pk-3);
+    font-size: var(--pk-control-text);
+    font-weight: 500;
+    line-height: 1.35;
     border-radius: 0 var(--pk-radius) var(--pk-radius) 0;
     aspect-ratio: auto;
     cursor: pointer;
@@ -75,5 +79,21 @@
     border-block-end: 1px solid currentColor;
     rotate: 45deg;
     translate: 0 -0.1rem;
+  }
+}
+
+/* Keep the frame and its touch targets the same height. Otherwise the larger
+   menu trigger overflows the compact frame and shifts its inline baseline. */
+@layer utilities {
+  @media (any-pointer: coarse) {
+    .pk-split-button {
+      block-size: calc(var(--pk-6) + var(--pk-3));
+    }
+
+    .pk-split-button > .pk-btn,
+    .pk-split-button .pk-menu .pk-menu__trigger {
+      min-block-size: calc(var(--pk-6) + var(--pk-3) - 2px);
+      min-inline-size: calc(var(--pk-6) + var(--pk-3) - 2px);
+    }
   }
 }

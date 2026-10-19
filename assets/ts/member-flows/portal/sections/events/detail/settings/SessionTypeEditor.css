@@ -1,0 +1,32 @@
+@layer components {
+  .pk-session-type-editor-row {
+    display: grid;
+    grid-template-columns: minmax(12rem, 1fr) minmax(8rem, 12rem) minmax(8rem, 10rem) auto;
+    align-items: end;
+    gap: var(--pk-3);
+  }
+
+  .pk-session-type-editor-row__actions {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-3);
+    font-size: var(--pk-text-md);
+    min-height: calc(1.35em + 2 * var(--pk-control-y) + 2px);
+    white-space: nowrap;
+  }
+
+  @media (max-width: 40rem) {
+    .pk-session-type-editor-row {
+      grid-template-columns: minmax(0, 1fr) 8rem;
+    }
+
+    .pk-session-type-editor-row > .pk-field:first-child {
+      grid-column: 1 / -1;
+    }
+
+    .pk-session-type-editor-row__actions {
+      grid-column: 1 / -1;
+      justify-content: space-between;
+    }
+  }
+}

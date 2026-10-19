@@ -1,3 +1,4 @@
+import { formatNumber } from "../../../../../shared/format-number";
 /** Event registration and invitation summaries, with a link to browsable event records. */
 import { recentActivityChart, statusBars } from "../../../../ui/chart";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
@@ -32,22 +33,26 @@ export function AnalyticsOverview() {
     <div class="pk pk-stack">
       <div class="pk-stat-row">
         <StatCard
-          label="Total Registrations"
+          label="Total registrations"
           value={registrations.total}
-          note={`${registrations.byStatus.registered ?? 0} confirmed`}
+          note={`${formatNumber(registrations.byStatus.registered ?? 0)} confirmed`}
         />
-        <StatCard label="Pending Invites" value={invites.byStatus.sent ?? 0} note={`${invites.total} total`} />
+        <StatCard
+          label="Pending invitations"
+          value={invites.byStatus.sent ?? 0}
+          note={`${formatNumber(invites.total)} total`}
+        />
       </div>
 
       <div class="pk-grid pk-grid--cards">
         <Panel>
-          <PanelHeader title="Registrations by Status" />
+          <PanelHeader title="Registrations by status" />
           <PanelBody>
             <div dangerouslySetInnerHTML={{ __html: statusBars(registrations.byStatus, registrations.total) }} />
           </PanelBody>
         </Panel>
         <Panel>
-          <PanelHeader title="Top Events" />
+          <PanelHeader title="Top events" />
           <PanelBody class="pk-stack">
             <div
               dangerouslySetInnerHTML={{

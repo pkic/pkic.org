@@ -137,7 +137,7 @@ describe("portal donation analytics", () => {
     await settle();
 
     expect(requests[0]?.pathname).toBe("/api/v1/analytics/donations");
-    expect(container.textContent).toContain("Total Gross (USD)");
+    expect(container.textContent).toContain("Total gross (USD)");
     // The page is its own place under Donations now, not a tab above the list.
     expect(container.querySelector(".pk-page-header__title")?.textContent).toBe("Donation analytics");
   });
@@ -166,7 +166,7 @@ describe("portal donation analytics", () => {
     expect(tabNames(byStatus)).toEqual(["By status", "Daily", "Weekly", "Monthly"]);
     expect(captions(byStatus)).toEqual(["Donations by status and currency"]);
     // The totals belong to every view, so they stay above the strip.
-    expect(byStatus.textContent).toContain("Total Gross (USD)");
+    expect(byStatus.textContent).toContain("Total gross (USD)");
 
     const weekly = mount(<Donations pageSegment="analytics" view="weekly" />);
     await settle();

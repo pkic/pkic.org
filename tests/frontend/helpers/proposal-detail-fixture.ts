@@ -6,6 +6,7 @@
  */
 import { act } from "preact/test-utils";
 import { vi } from "vitest";
+import { proposalSpeakersResponseSchema } from "../../../assets/shared/schemas/proposal-speakers";
 
 export const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 export const EVENT_ID = "20000000-0000-4000-8000-000000000001";
@@ -50,11 +51,17 @@ export function proposal() {
   };
 }
 
+/** The identity the proposer speaks as; the second speaker holds none. */
+export const SPEAKER_IDENTITY_ID = "60000000-0000-4000-8000-000000000001";
+
 export function speaker(userId: string, role: "proposer" | "speaker" = "speaker") {
   return {
     userId,
     role,
     status: "confirmed",
+    actingIdentityId: null,
+    actingIdentitySelectedAt: null,
+    actingIdentitySelection: "unrecorded",
     email: `${userId}@example.test`,
     firstName: userId.endsWith("0001") ? "Proposal" : "Second",
     lastName: "Speaker",
@@ -138,7 +145,13 @@ export function stubFetch(
             endsAt: "2026-09-01T17:00:00.000Z",
             timezone: "UTC",
           },
-          proposal: { ...proposal(), details: null, canceled_at: null, cancellation_comment: null },
+          proposal: {
+            ...proposal(),
+            details: null,
+            canceled_at: null,
+            cancellation_comment: null,
+            committee_notes: "Happy to adapt this into a panel.",
+          },
           access: currentAccess(),
           form: null,
           minReviewsRequired: 2,
@@ -146,22 +159,53 @@ export function stubFetch(
         });
       }
       if (url === `/api/v1/proposals/${PROPOSAL_ID}/speakers`) {
+        return json(
+          proposalSpeakersResponseSchema.parse({
+            proposal: {
+              id: PROPOSAL_ID,
+              title: "Read-only proposal",
+              status: "submitted",
+              presentationDeadline: null,
+              presentationUploaded: false,
+              presentationUploadedAt: null,
+            },
+            summary: { total: 2, confirmed: 2, pending: 0, declined: 0, profileComplete: 0, presentationUploaded: 0 },
+            speakers: [
+              {
+                ...speaker("40000000-0000-4000-8000-000000000001", "proposer"),
+                identityId: SPEAKER_IDENTITY_ID,
+                registration: null,
+                independentCapacity: null,
+              },
+              {
+                ...speaker("40000000-0000-4000-8000-000000000002"),
+                identityId: null,
+                registration: {
+                  id: "50000000-0000-4000-8000-000000000002",
+                  status: "registered",
+                  attendanceType: "in_person",
+                },
+                independentCapacity: null,
+              },
+            ],
+          }),
+        );
+      }
+      if (url === `/api/v1/identities/${SPEAKER_IDENTITY_ID}`) {
         return json({
-          proposal: {
-            id: PROPOSAL_ID,
-            title: "Read-only proposal",
-            status: "submitted",
-            presentationDeadline: null,
-            presentationUploaded: false,
-            presentationUploadedAt: null,
-          },
-          summary: { total: 2, confirmed: 2, pending: 0, declined: 0, profileComplete: 0, presentationUploaded: 0 },
-          speakers: [
-            { ...speaker("40000000-0000-4000-8000-000000000001", "proposer"), registrationStatus: null },
-            { ...speaker("40000000-0000-4000-8000-000000000002"), registrationStatus: "registered" },
-          ],
+          identityId: SPEAKER_IDENTITY_ID,
+          userId: "40000000-0000-4000-8000-000000000001",
+          personName: "Proposal Speaker",
+          organizationId: "60000000-0000-4000-8000-000000000009",
+          organizationName: "PKI Consortium",
+          endedAt: null,
+          hiddenFromPublicProfile: false,
+          jobTitle: "Researcher",
+          biography: "A speaker biography.",
+          links: [],
         });
       }
+      if (url.endsWith("/gravatar")) return json({ success: true, source: "gravatar" });
       if (url.startsWith(`/api/v1/proposals/${PROPOSAL_ID}/audit-log`)) {
         return json({
           auditLog: [
@@ -171,6 +215,8 @@ export function stubFetch(
               actor_type: "admin",
               actor_id: "reviewer-1",
               actor_display: "Reviewer",
+              actor_identity_id: null,
+              actor_organization_name: null,
               action: "proposal_decision_recorded",
               entity_type: "proposal",
               entity_id: PROPOSAL_ID,

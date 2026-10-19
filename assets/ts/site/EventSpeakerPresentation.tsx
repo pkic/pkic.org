@@ -34,7 +34,7 @@ export function EventSpeakerPresentation() {
           <p class="pk-small" data-presentation-status-msg />
           <p class="pk-alert pk-alert--info" data-cospeaker-upload-notice hidden />
           <div class="pk-cluster" data-presentation-upload-controls>
-            <Button type="button" variant="secondary" size="sm" data-presentation-upload-label>
+            <Button type="button" variant="secondary" data-presentation-upload-label>
               Upload presentation
             </Button>
             <Field id="speaker-presentation-file" label="Presentation file">

@@ -6,9 +6,9 @@ import { administratorGrants, grantAdministrator } from "./helpers/administrator
  * `user_roles`) — (tests/roles.test.ts).
  * tables/endpoints exclusively. .
  */
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { env } from "cloudflare:workers";
-import app from "../functions/router";
+import { callApi } from "./helpers/app";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
@@ -32,11 +32,7 @@ function request(token: string, path: string, init: RequestInit = {}): Request {
 }
 
 async function call(token: string, path: string, init: RequestInit = {}): Promise<Response> {
-  return app.fetch(
-    request(token, path, init),
-    env as any,
-    { passThroughOnException: () => {}, waitUntil: () => {} } as any,
-  );
+  return callApi(env, request(token, path, init));
 }
 
 async function insertUser(email: string): Promise<string> {
@@ -83,9 +79,14 @@ describe("roles (Built-in and custom roles)", () => {
   let eventBId: string;
   let eventBSlug: string;
   let staffUserId: string;
+  let adminPermissionRows: { id: string; permission: string; created_at: string }[] = [];
 
   beforeEach(async () => {
     await resetDb();
+    adminPermissionRows = await queryAll(
+      env.DB,
+      "SELECT id, permission, created_at FROM role_permissions WHERE role_id = 'role-admin'",
+    );
     const { eventId } = await seedEventAndAdmin(env.DB);
     eventAId = eventId;
     eventASlug = "pqc-2026";
@@ -97,6 +98,18 @@ describe("roles (Built-in and custom roles)", () => {
     adminId = adminRow.id;
     adminToken = await createAdminSession(env.DB, adminId, "admin-roles-token");
     staffUserId = await insertUser("staff-roles@example.test");
+  });
+
+  afterEach(async () => {
+    // System bundles are editable reference data; restore this suite's mutations.
+    await env.DB.batch([
+      env.DB.prepare("DELETE FROM role_permissions WHERE role_id = 'role-admin'"),
+      ...adminPermissionRows.map((row) =>
+        env.DB.prepare(
+          "INSERT INTO role_permissions (id,role_id,permission,created_at) VALUES (?,'role-admin',?,?)",
+        ).bind(row.id, row.permission, row.created_at),
+      ),
+    ]);
   });
 
   it("a user can be assigned multiple roles simultaneously; each role's permissions are unioned", async () => {
@@ -134,7 +147,9 @@ describe("roles (Built-in and custom roles)", () => {
     const staffToken = await createAdminSession(env.DB, staffUserId, "staff-union-token");
 
     // No role, no grant yet -> denied.
-    expect((await call(staffToken, "/api/v1/permissions/grants")).status).toBe(401);
+    const denied = await call(staffToken, "/api/v1/permissions/grants");
+    expect(denied.status).toBe(403);
+    await expect(denied.json()).resolves.toMatchObject({ error: { code: "PERMISSION_REQUIRED" } });
 
     // An individual permission_grants override is enough on its own, with no role assigned.
     await env.DB.prepare(
@@ -178,7 +193,11 @@ describe("roles (Built-in and custom roles)", () => {
     const replacementToken = await createAdminSession(env.DB, replacementUserId, "replacement-address-token");
 
     expect((await call(originalToken, `/api/v1/events/${eventASlug}`)).status).toBe(200);
-    expect((await call(replacementToken, `/api/v1/events/${eventASlug}`)).status).toBe(401);
+    const denied = await call(replacementToken, `/api/v1/events/${eventASlug}`);
+    expect(denied.status).toBe(404);
+    await expect(denied.json()).resolves.toMatchObject({ error: { code: "EVENT_NOT_FOUND" } });
+    expect(await queryAll(env.DB, "SELECT id FROM user_roles WHERE user_id=?", [replacementUserId])).toEqual([]);
+    expect(await queryAll(env.DB, "SELECT id FROM permission_grants WHERE user_id=?", [replacementUserId])).toEqual([]);
   });
 
   it("expired user_roles records are not honored", async () => {
@@ -300,16 +319,212 @@ describe("roles (Built-in and custom roles)", () => {
       ).toHaveLength(1);
     });
 
-    it("rejects editing a system role", async () => {
+    it("rejects renaming a system role", async () => {
       const systemRole = await queryAll<{ id: string }>(env.DB, "SELECT id FROM roles WHERE name = 'admin'");
       const response = await call(adminToken, `/api/v1/roles/${systemRole[0].id}`, {
         method: "PATCH",
-        body: JSON.stringify({ description: "Should not apply", revision: "irrelevant" }),
+        body: JSON.stringify({ name: "renamed_admin", revision: "irrelevant" }),
       });
       expect(response.status).toBe(409);
       expect((await response.json()) as { error: { code: string } }).toMatchObject({
         error: { code: "SYSTEM_ROLE" },
       });
+    });
+
+    async function systemRole() {
+      const id = `role-system-${crypto.randomUUID()}`;
+      const now = new Date().toISOString();
+      await env.DB.prepare(
+        "INSERT INTO roles (id, name, is_system_role, created_at, updated_at) VALUES (?, ?, 1, ?, ?)",
+      )
+        .bind(id, `system_${crypto.randomUUID().replaceAll("-", "")}`, now, now)
+        .run();
+      await env.DB.prepare(
+        "INSERT INTO role_permissions (id, role_id, permission, created_at) VALUES (?, ?, 'events:read', ?)",
+      )
+        .bind(crypto.randomUUID(), id, now)
+        .run();
+      return { id, revision: now };
+    }
+
+    it("edits a system bundle, preserves its identity, and changes live holder permissions", async () => {
+      const role = await systemRole();
+      await assignRole(staffUserId, role.id, adminId);
+      const holderToken = await createAdminSession(env.DB, staffUserId, "system-role-holder");
+      const before = await call(holderToken, `/api/v1/events/${eventASlug}`);
+      expect(before.status).toBe(200);
+      const response = await call(adminToken, `/api/v1/roles/${role.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ permissions: ["donations:read"], revision: role.revision }),
+      });
+      expect(response.status, await response.clone().text()).toBe(200);
+      const updated = (await response.json()) as { role: { id: string; isSystemRole: boolean; permissions: string[] } };
+      expect(updated.role).toMatchObject({ id: role.id, isSystemRole: true, permissions: ["donations:read"] });
+      expect((await call(holderToken, `/api/v1/events/${eventASlug}`)).status).toBe(404);
+      expect(
+        await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'role_updated' AND entity_id = ?", [role.id]),
+      ).toHaveLength(1);
+    });
+
+    it("requires revoke authority for removed permissions but does not require possession of retained permissions", async () => {
+      const role = await systemRole();
+      await env.DB.prepare(
+        "INSERT INTO permission_grants (id,user_id,permission,created_at) VALUES (?,?,'access:grant',?)",
+      )
+        .bind(crypto.randomUUID(), staffUserId, role.revision)
+        .run();
+      const token = await createAdminSession(env.DB, staffUserId, "system-role-editor");
+      const removal = await call(token, `/api/v1/roles/${role.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ permissions: [], revision: role.revision }),
+      });
+      expect(removal.status).toBe(403);
+      const retained = await call(token, `/api/v1/roles/${role.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ permissions: ["events:read"], description: "Updated", revision: role.revision }),
+      });
+      expect(retained.status, await retained.clone().text()).toBe(200);
+      const updated = (await retained.json()) as { role: { updatedAt: string } };
+      const addition = await call(token, `/api/v1/roles/${role.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ permissions: ["events:read", "donations:read"], revision: updated.role.updatedAt }),
+      });
+      expect(addition.status).toBe(403);
+    });
+
+    it("protects the last global access administrator and accepts equivalent direct grants", async () => {
+      const role = await queryAll<{ updated_at: string }>(env.DB, "SELECT updated_at FROM roles WHERE id='role-admin'");
+      const input = { permissions: [], revision: role[0].updated_at };
+      const refused = await call(adminToken, "/api/v1/roles/role-admin", {
+        method: "PATCH",
+        body: JSON.stringify(input),
+      });
+      expect(refused.status).toBe(409);
+      expect(await refused.json()).toMatchObject({ error: { code: "LAST_ACCESS_ADMINISTRATOR" } });
+      expect(
+        await queryAll(env.DB, "SELECT id FROM audit_log WHERE action='role_updated' AND entity_id='role-admin'"),
+      ).toHaveLength(0);
+      for (const permission of ["access:grant", "access:revoke"]) {
+        await env.DB.prepare("INSERT INTO permission_grants (id,user_id,permission,created_at) VALUES (?,?,?,?)")
+          .bind(crypto.randomUUID(), staffUserId, permission, new Date().toISOString())
+          .run();
+      }
+      const accepted = await call(adminToken, "/api/v1/roles/role-admin", {
+        method: "PATCH",
+        body: JSON.stringify(input),
+      });
+      expect(accepted.status, await accepted.clone().text()).toBe(200);
+    });
+
+    it.each(["scoped", "expired", "revoked", "inactive"])(
+      "does not count %s grants as a remaining global administrator",
+      async (condition) => {
+        for (const permission of ["access:grant", "access:revoke"]) {
+          await env.DB.prepare(
+            "INSERT INTO permission_grants (id,user_id,permission,context_type,context_id,expires_at,revoked_at,created_at) VALUES (?,?,?,?,?,?,?,?)",
+          )
+            .bind(
+              crypto.randomUUID(),
+              staffUserId,
+              permission,
+              condition === "scoped" ? "event" : null,
+              condition === "scoped" ? eventAId : null,
+              condition === "expired" ? "2000-01-01T00:00:00.000Z" : null,
+              condition === "revoked" ? new Date().toISOString() : null,
+              new Date().toISOString(),
+            )
+            .run();
+        }
+        if (condition === "inactive")
+          await env.DB.prepare("UPDATE users SET active=0 WHERE id=?").bind(staffUserId).run();
+        const [{ updated_at: revision }] = await queryAll<{ updated_at: string }>(
+          env.DB,
+          "SELECT updated_at FROM roles WHERE id='role-admin'",
+        );
+        const response = await call(adminToken, "/api/v1/roles/role-admin", {
+          method: "PATCH",
+          body: JSON.stringify({ permissions: [], revision }),
+        });
+        expect(response.status).toBe(409);
+        expect(await response.json()).toMatchObject({ error: { code: "LAST_ACCESS_ADMINISTRATOR" } });
+      },
+    );
+
+    it("rolls back bundle and audit if revoke authority disappears before commit", async () => {
+      const role = await systemRole();
+      const actor: AuthAdmin = {
+        identityType: "user",
+        id: adminId,
+        email: "admin@pkic.org",
+        grants: administratorGrants,
+      };
+      const racingDb = mutateBeforeNextBatch(env.DB, () =>
+        env.DB.prepare("DELETE FROM role_permissions WHERE role_id='role-admin' AND permission='access:revoke'").run(),
+      );
+      await expect(
+        updateRole(racingDb, actor, role.id, { permissions: [], revision: role.revision }),
+      ).rejects.toMatchObject({ code: "ACCESS_CONTROL_AUTHORIZATION_CHANGED" });
+      expect(await queryAll(env.DB, "SELECT permission FROM role_permissions WHERE role_id=?", [role.id])).toEqual([
+        { permission: "events:read" },
+      ]);
+      expect(
+        await queryAll(env.DB, "SELECT id FROM audit_log WHERE action='role_updated' AND entity_id=?", [role.id]),
+      ).toHaveLength(0);
+    });
+
+    it("advances revisions even when the prior timestamp is ahead of the clock", async () => {
+      const role = await systemRole();
+      const revision = new Date(Date.now() + 1000).toISOString();
+      await env.DB.prepare("UPDATE roles SET updated_at=? WHERE id=?").bind(revision, role.id).run();
+      const actor: AuthAdmin = {
+        identityType: "user",
+        id: adminId,
+        email: "admin@pkic.org",
+        grants: administratorGrants,
+      };
+      const updated = await updateRole(env.DB, actor, role.id, { description: "First", revision });
+      expect(updated.updatedAt > revision).toBe(true);
+      await expect(
+        updateRole(env.DB, actor, role.id, { description: "Stale", permissions: [], revision }),
+      ).rejects.toMatchObject({ code: "ACCESS_CONTROL_TARGET_CHANGED" });
+      expect(await queryAll(env.DB, "SELECT permission FROM role_permissions WHERE role_id=?", [role.id])).toEqual([
+        { permission: "events:read" },
+      ]);
+    });
+
+    it("rechecks the last administrator inside the permission replacement transaction", async () => {
+      for (const permission of ["access:grant", "access:revoke"]) {
+        await env.DB.prepare("INSERT INTO permission_grants (id,user_id,permission,created_at) VALUES (?,?,?,?)")
+          .bind(crypto.randomUUID(), staffUserId, permission, new Date().toISOString())
+          .run();
+      }
+      const [{ updated_at: revision }] = await queryAll<{ updated_at: string }>(
+        env.DB,
+        "SELECT updated_at FROM roles WHERE id='role-admin'",
+      );
+      const actor: AuthAdmin = {
+        identityType: "user",
+        id: adminId,
+        email: "admin@pkic.org",
+        grants: administratorGrants,
+      };
+      const racingDb = mutateBeforeNextBatch(env.DB, () =>
+        env.DB.prepare("UPDATE users SET active=0 WHERE id=?").bind(staffUserId).run(),
+      );
+      await expect(updateRole(racingDb, actor, "role-admin", { permissions: [], revision })).rejects.toMatchObject({
+        code: "ACCESS_CONTROL_AUTHORIZATION_CHANGED",
+      });
+      expect(
+        (
+          await queryAll(
+            env.DB,
+            "SELECT permission FROM role_permissions WHERE role_id='role-admin' AND permission='access:grant'",
+          )
+        ).length,
+      ).toBe(1);
+      expect(
+        await queryAll(env.DB, "SELECT id FROM audit_log WHERE action='role_updated' AND entity_id='role-admin'"),
+      ).toHaveLength(0);
     });
 
     it("rejects a stale revision without recording a false audit entry", async () => {

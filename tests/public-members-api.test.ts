@@ -13,6 +13,7 @@ import {
   addRepresentative as addRepresentativeRow,
   insertOrganization,
   insertUser,
+  INDIVIDUAL_MEMBERSHIPS_OF_USER_SQL,
 } from "./helpers/membership";
 import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
 import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
@@ -81,21 +82,23 @@ async function seedIndividualMember(params: { userId: string; status: string; ti
   )
     .bind(params.userId, `${params.userId}@example.test`, `${params.userId}@example.test`, "Solo", "Member")
     .run();
-  const { statements } = buildCreateIndividualMemberStatements(
-    env.DB,
-    params.userId,
-    params.tier ?? "H6",
-    new Date().toISOString(),
-  );
   const identity = await buildCreateIdentityStatement(env.DB, {
     userId: params.userId,
     organizationId: null,
     source: "staff",
     startImmediately: true,
   });
-  await env.DB.batch([...statements, identity.statement]);
+  const { statements } = buildCreateIndividualMemberStatements(
+    env.DB,
+    identity.identityId,
+    params.tier ?? "H6",
+    new Date().toISOString(),
+  );
+  await env.DB.batch([identity.statement, ...statements]);
   if (params.status !== "active") {
-    await env.DB.prepare("UPDATE members SET status = ? WHERE user_id = ?").bind(params.status, params.userId).run();
+    await env.DB.prepare("UPDATE members SET status = ? WHERE identity_id = ?")
+      .bind(params.status, identity.identityId)
+      .run();
   }
 }
 
@@ -611,7 +614,7 @@ describe("GET /api/v1/members/:id", () => {
     const repRow = await env.DB.prepare(`SELECT id FROM identities WHERE user_id = ? AND organization_id = ?`)
       .bind(repUserId, organizationId)
       .first<{ id: string }>();
-    expect(body.identities[0].photoUrl).toBe(`/api/v1/members/${repRow!.id}/logo`);
+    expect(body.identities[0].photoUrl).toBe(`/api/v1/members/${repRow!.id}/logo?v=rep-person.jpg`);
   });
 
   it("returns the individual member's own bio/job title, with no organization identity list", async () => {
@@ -620,7 +623,7 @@ describe("GET /api/v1/members/:id", () => {
     await env.DB.prepare(`UPDATE identities SET biography = ? WHERE user_id = ? AND organization_id IS NULL`)
       .bind("Works on PQC migration.", userId)
       .run();
-    const memberRow = await env.DB.prepare(`SELECT id FROM members WHERE user_id = ?`).bind(userId).first<{
+    const memberRow = await env.DB.prepare(INDIVIDUAL_MEMBERSHIPS_OF_USER_SQL).bind(userId).first<{
       id: string;
     }>();
 
@@ -698,13 +701,13 @@ describe("GET /api/v1/members/:id/logo", () => {
     const bytes = new Uint8Array([5, 6, 7, 8]);
     await env.ASSETS_BUCKET!.put(r2Key, bytes);
 
-    const memberRow = await env.DB.prepare(`SELECT id FROM members WHERE user_id = ?`).bind(userId).first<{
+    const memberRow = await env.DB.prepare(INDIVIDUAL_MEMBERSHIPS_OF_USER_SQL).bind(userId).first<{
       id: string;
     }>();
 
     const listResponse = await callPublicApi("https://pkic.org/api/v1/members");
     const listBody = (await listResponse.json()) as { members: Array<{ id: string; logoUrl: string | null }> };
-    expect(listBody.members[0].logoUrl).toBe(`/api/v1/members/${memberRow!.id}/logo`);
+    expect(listBody.members[0].logoUrl).toBe(`/api/v1/members/${memberRow!.id}/logo?v=photo.jpg`);
 
     const response = await callEndpoint(
       getMemberLogo,

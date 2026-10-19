@@ -70,6 +70,15 @@ describe("MCP authorization through canonical portal authentication", () => {
       staffEmail: "admin@pkic.org",
       requestedScopes: ["events:read"],
       grantedScopes: ["events:read"],
+      redirectHost: "client.example",
+      actingIdentityId: null,
+      areas: [
+        {
+          key: "events",
+          label: "Events",
+          permissions: [{ permission: "events:read", access: "read", allResources: true, resourceCount: 0 }],
+        },
+      ],
     });
   });
 

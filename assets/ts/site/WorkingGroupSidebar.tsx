@@ -1,4 +1,5 @@
 import type { SiteSidebarNode, SiteSidebarTree } from "../../shared/site-content";
+import { IconChevron } from "../ui/MediaIcons";
 
 /**
  * The section tree a working group's deliverables carry.
@@ -8,25 +9,6 @@ import type { SiteSidebarNode, SiteSidebarTree } from "../../shared/site-content
  * class names and the `details`/`summary` shape are the published site's, so
  * `global-ui.js` keeps driving the disclosures and the collapse button.
  */
-function Chevron({ size }: { size: number }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="2.5"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      aria-hidden="true"
-    >
-      <polyline points="9 18 15 12 9 6" />
-    </svg>
-  );
-}
-
 /**
  * One row, at the depth it sits.
  *
@@ -51,7 +33,7 @@ function SidebarNode({ depth, node }: { depth: number; node: SiteSidebarNode }) 
           {node.label}
         </a>
         <span class="wg-sidebar-chevron">
-          <Chevron size={14} />
+          <IconChevron pointing="right" width="14" height="14" />
         </span>
       </summary>
       <ul class={`wg-sidebar-children${depth > 1 ? " wg-sidebar-level3" : ""}`}>
@@ -96,20 +78,7 @@ export function WorkingGroupSidebar({ tree, wgId }: { tree: SiteSidebarTree; wgI
   return (
     <aside class={`wg-sidebar-wrap wg-${wgId.toLowerCase()}`} id="wg-sidebar-wrap">
       <button class="wg-sidebar-toggle" id="wg-sidebar-collapse-btn" aria-label="Collapse sidebar" aria-expanded="true">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="12"
-          height="12"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2.5"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
-        >
-          <polyline points="15 18 9 12 15 6" />
-        </svg>
+        <IconChevron pointing="left" width="12" height="12" />
       </button>
       <nav class="wg-sidebar" aria-label="Section navigation">
         <WorkingGroupSidebarTree tree={tree} />

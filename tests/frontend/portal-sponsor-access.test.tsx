@@ -28,10 +28,10 @@ async function settle(): Promise<void> {
   });
 }
 
-function controlLabelled(root: ParentNode, label: string): HTMLInputElement {
+function controlLabeled(root: ParentNode, label: string): HTMLInputElement {
   const match = [...root.querySelectorAll("label")].find((candidate) => candidate.textContent?.startsWith(label));
   const control = match?.htmlFor ? root.querySelector<HTMLInputElement>(`#${match.htmlFor}`) : null;
-  if (!control) throw new Error(`No control labelled ${label}`);
+  if (!control) throw new Error(`No control labeled ${label}`);
   return control;
 }
 
@@ -62,7 +62,7 @@ describe("SponsorAccess", () => {
     const root = mount();
 
     for (const label of ["Email", "Event"]) {
-      const control = controlLabelled(root, label);
+      const control = controlLabeled(root, label);
       expect(control.required).toBe(true);
       // The required marker reaches a screen reader as a word, not a glyph.
       const marker = [...root.querySelectorAll("label")]
@@ -77,7 +77,7 @@ describe("SponsorAccess", () => {
     history.replaceState({}, "", "/portal/#/sponsors/access?event=pqc-conference-amsterdam-nl");
     const root = mount();
 
-    expect(controlLabelled(root, "Event").value).toBe("pqc-conference-amsterdam-nl");
+    expect(controlLabeled(root, "Event").value).toBe("pqc-conference-amsterdam-nl");
   });
 
   it("sends a body the shared access-link contract accepts, and confirms in words", async () => {
@@ -96,8 +96,8 @@ describe("SponsorAccess", () => {
     );
 
     const root = mount();
-    await typeInto(controlLabelled(root, "Email"), " sponsor@example.test ");
-    await typeInto(controlLabelled(root, "Event"), " pqc-2026 ");
+    await typeInto(controlLabeled(root, "Email"), " sponsor@example.test ");
+    await typeInto(controlLabeled(root, "Event"), " pqc-2026 ");
     await act(async () => {
       root.querySelector("form")?.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
       await Promise.resolve();
@@ -121,7 +121,7 @@ describe("SponsorAccess", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const root = mount();
-    await typeInto(controlLabelled(root, "Email"), "sponsor@example.test");
+    await typeInto(controlLabeled(root, "Email"), "sponsor@example.test");
     await act(async () => {
       root.querySelector("form")?.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
       await Promise.resolve();
@@ -145,8 +145,8 @@ describe("SponsorAccess", () => {
     );
 
     const root = mount();
-    await typeInto(controlLabelled(root, "Email"), "sponsor@example.test");
-    await typeInto(controlLabelled(root, "Event"), "pqc-2026");
+    await typeInto(controlLabeled(root, "Email"), "sponsor@example.test");
+    await typeInto(controlLabeled(root, "Event"), "pqc-2026");
     await act(async () => {
       root.querySelector("form")?.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
       await Promise.resolve();

@@ -27,6 +27,7 @@ import path from "node:path";
 import { DEMO_GROUPS, demoGroupSql, meetingsSql, seatSql } from "./lib/seed-demo-groups.mjs";
 import { memberProfileId as stableId } from "./lib/seed-ids.mjs";
 import { NOW, RANDOM_ID, sqlString } from "./lib/sql.mjs";
+import { REPRESENTATIVE_ROLE_IDS } from "../assets/shared/schemas/representative-roles.ts";
 import { slugifyOr } from "../assets/shared/slug.ts";
 
 const ROOT = new URL("..", import.meta.url).pathname;
@@ -260,24 +261,46 @@ SELECT ${sqlString(IDENTITY_ID)}, u.id, ${sqlString(ORG_ID)},
  WHERE u.email = ${sqlString(DEMO_MEMBER)}
    AND NOT EXISTS (SELECT 1 FROM identities WHERE id = ${sqlString(IDENTITY_ID)});`,
 
-    /* A second member, so vouching has somebody to come from. */
-    `INSERT INTO members (id, member_type, user_id, status, created_at, updated_at)
-SELECT ${sqlString(PEER_MEMBER_ID)}, 'individual', u.id, 'active', ${NOW}, ${NOW}
-  FROM users u WHERE u.email = ${sqlString(DEMO_PEER)}
-   AND NOT EXISTS (SELECT 1 FROM members WHERE id = ${sqlString(PEER_MEMBER_ID)});`,
+    /* Make the demo organization editable through a real contact grant. Never replace an existing contact. */
+    `INSERT INTO user_roles
+      (id, user_id, role_id, context_type, context_id, identity_id, single_holder_per_context, created_at)
+     SELECT ${sqlString(stableId("demo-primary-contact"))}, identity.user_id,
+       ${sqlString(REPRESENTATIVE_ROLE_IDS.primaryContact)}, 'organization', ${sqlString(MEMBER_ID)}, identity.id, 1, ${NOW}
+     FROM identities identity JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
+     WHERE identity.id = ${sqlString(IDENTITY_ID)} AND capacity.member_id = ${sqlString(MEMBER_ID)}
+       AND identity.started_at IS NOT NULL AND identity.ended_at IS NULL AND identity.blocked_at IS NULL
+       AND NOT EXISTS (SELECT 1 FROM user_roles existing WHERE existing.id = ${sqlString(stableId("demo-primary-contact"))})
+       AND NOT EXISTS (SELECT 1 FROM user_roles existing WHERE existing.context_type = 'organization'
+         AND existing.context_id = ${sqlString(MEMBER_ID)} AND existing.role_id = ${sqlString(REPRESENTATIVE_ROLE_IDS.primaryContact)}
+         AND existing.revoked_at IS NULL);`,
 
-    `INSERT INTO member_category_assignments (member_id, category_code, created_at, updated_at)
-SELECT ${sqlString(PEER_MEMBER_ID)}, 'H6', ${NOW}, ${NOW}
- WHERE EXISTS (SELECT 1 FROM members WHERE id = ${sqlString(PEER_MEMBER_ID)})
-   AND NOT EXISTS (SELECT 1 FROM member_category_assignments WHERE member_id = ${sqlString(PEER_MEMBER_ID)});`,
-
+    /* A second member, so vouching has somebody to come from: a personal
+       identity holding an individual membership. */
     `INSERT INTO identities
   (id, user_id, organization_id, source, show_on_organization_profile, invited_at, started_at, created_at, updated_at)
 -- An individual capacity has no organization profile to appear on, which the
 -- table's CHECK enforces: no job title and never shown.
 SELECT ${sqlString(PEER_IDENTITY_ID)}, u.id, NULL, 'migration', 0, ${NOW}, ${NOW}, ${NOW}, ${NOW}
   FROM users u WHERE u.email = ${sqlString(DEMO_PEER)}
-   AND NOT EXISTS (SELECT 1 FROM identities WHERE id = ${sqlString(PEER_IDENTITY_ID)});`,
+   AND NOT EXISTS (SELECT 1 FROM identities WHERE id = ${sqlString(PEER_IDENTITY_ID)})
+   -- Every account already holds one live personal identity; the membership reuses it.
+   AND NOT EXISTS (
+     SELECT 1 FROM identities personal
+      WHERE personal.user_id = u.id AND personal.organization_id IS NULL
+        AND personal.started_at IS NOT NULL AND personal.ended_at IS NULL AND personal.blocked_at IS NULL
+   );`,
+
+    `INSERT INTO members (id, member_type, identity_id, status, created_at, updated_at)
+SELECT ${sqlString(PEER_MEMBER_ID)}, 'individual', identity.id, 'active', ${NOW}, ${NOW}
+  FROM identities identity JOIN users u ON u.id = identity.user_id
+ WHERE u.email = ${sqlString(DEMO_PEER)} AND identity.organization_id IS NULL
+   AND identity.started_at IS NOT NULL AND identity.ended_at IS NULL AND identity.blocked_at IS NULL
+   AND NOT EXISTS (SELECT 1 FROM members WHERE id = ${sqlString(PEER_MEMBER_ID)});`,
+
+    `INSERT INTO member_category_assignments (member_id, category_code, created_at, updated_at)
+SELECT ${sqlString(PEER_MEMBER_ID)}, 'H6', ${NOW}, ${NOW}
+ WHERE EXISTS (SELECT 1 FROM members WHERE id = ${sqlString(PEER_MEMBER_ID)})
+   AND NOT EXISTS (SELECT 1 FROM member_category_assignments WHERE member_id = ${sqlString(PEER_MEMBER_ID)});`,
   ];
 }
 
@@ -363,7 +386,7 @@ SELECT ${RANDOM_ID}, u.id, ${sqlString(entry.key)}, ${sqlString(entry.label)}, $
     ON CONFLICT(user_id, recognition_key) DO NOTHING;`;
 }
 
-function buildSql() {
+function buildStatements() {
   const statements = [...SKILLS.map(skillSql), ...demoOrganizationSql()];
 
   /* The groups this seed owns, before anything that hangs off them. */
@@ -400,7 +423,7 @@ function buildSql() {
   }
 
   statements.push(...RECOGNITIONS.map(recognitionSql));
-  return statements.join("\n\n");
+  return statements;
 }
 
 function main() {
@@ -409,26 +432,29 @@ function main() {
   const cfg = ENVS[env];
   const persist = persistTo(argv);
   const tmpPath = path.join(os.tmpdir(), `pkic-seed-member-profiles-${String(Date.now())}.sql`);
-  fs.writeFileSync(tmpPath, buildSql(), "utf8");
 
   try {
-    execFileSync(
-      "pnpm",
-      [
-        "exec",
-        "wrangler",
-        "d1",
-        "execute",
-        cfg.database,
-        "--env",
-        cfg.wranglerEnv,
-        cfg.wranglerFlag,
-        ...(persist ? ["--persist-to", persist] : []),
-        "--file",
-        tmpPath,
-      ],
-      { cwd: ROOT, stdio: "inherit" },
-    );
+    const statements = buildStatements();
+    for (let index = 0; index < statements.length; index += 40) {
+      fs.writeFileSync(tmpPath, statements.slice(index, index + 40).join("\n\n"), "utf8");
+      execFileSync(
+        "pnpm",
+        [
+          "exec",
+          "wrangler",
+          "d1",
+          "execute",
+          cfg.database,
+          "--env",
+          cfg.wranglerEnv,
+          cfg.wranglerFlag,
+          ...(persist ? ["--persist-to", persist] : []),
+          "--file",
+          tmpPath,
+        ],
+        { cwd: ROOT, stdio: "inherit" },
+      );
+    }
   } finally {
     fs.rmSync(tmpPath, { force: true });
   }

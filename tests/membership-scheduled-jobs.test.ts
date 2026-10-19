@@ -160,6 +160,7 @@ describe("Membership scheduled jobs", () => {
       applicationId: id,
       toStage: "on_hold",
       onHoldSubtype: "request_information",
+      requestDetails: "Please clarify your application.",
       actor: null,
     });
     await env.DB.prepare("UPDATE member_applications SET stage_entered_at = datetime('now', '-5 days') WHERE id = ?")

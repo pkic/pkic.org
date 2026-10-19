@@ -1,0 +1,147 @@
+{
+  "version": 1,
+  "skills": {
+    "accessibility": {
+      "source": "addyosmani/web-quality-skills",
+      "sourceType": "github",
+      "skillPath": "skills/accessibility/SKILL.md",
+      "computedHash": "612f913bcb03f0787b103c848cd7664b676a9aaf31f25d3270cc69cf5caaab95"
+    },
+    "accessibility-review": {
+      "source": "anthropics/knowledge-work-plugins",
+      "ref": "main",
+      "sourceType": "github",
+      "skillPath": "design/skills/accessibility-review/SKILL.md",
+      "computedHash": "987e6d762060025045c4cc243cbc2feefc5397bb2998d666b4c334c4c1e19d8a"
+    },
+    "agents-sdk": {
+      "source": "cloudflare/skills",
+      "sourceType": "github",
+      "skillPath": "skills/agents-sdk/SKILL.md",
+      "computedHash": "f0f05a346b672f9f8672ec2b1d0acd1af4414351f7c2e53f2e6da5896c4e5c01"
+    },
+    "cloudflare": {
+      "source": "cloudflare/skills",
+      "sourceType": "github",
+      "skillPath": "skills/cloudflare/SKILL.md",
+      "computedHash": "4f0291c3924bb6cfec5311b23cc9798ee0292c055ce88543cf2d2cc3001174f6"
+    },
+    "cloudflare-email-service": {
+      "source": "cloudflare/skills",
+      "sourceType": "github",
+      "skillPath": "skills/cloudflare-email-service/SKILL.md",
+      "computedHash": "166ed23ba8d915c24a674f50d6f6e8b3e1e7e8f26900c8b9461ea43748e86645"
+    },
+    "database-schema-designer": {
+      "source": "softaworks/agent-toolkit",
+      "sourceType": "github",
+      "skillPath": "skills/database-schema-designer/SKILL.md",
+      "computedHash": "6a26ca15216bb4bfee66ebf813edcb1e31a8002f3f641f16f550df814b522217"
+    },
+    "design-critique": {
+      "source": "anthropics/knowledge-work-plugins",
+      "ref": "main",
+      "sourceType": "github",
+      "skillPath": "design/skills/design-critique/SKILL.md",
+      "computedHash": "55100e100ac2789175128df2899e8ace3c8732300cd2719df26c57b13e391ff8"
+    },
+    "design-system": {
+      "source": "anthropics/knowledge-work-plugins",
+      "ref": "main",
+      "sourceType": "github",
+      "skillPath": "design/skills/design-system/SKILL.md",
+      "computedHash": "83a5c0b188fd242ee36817e0fd18c603654b2bd5227bf1ba5fc80af1d706ff8f"
+    },
+    "durable-objects": {
+      "source": "cloudflare/skills",
+      "sourceType": "github",
+      "skillPath": "skills/durable-objects/SKILL.md",
+      "computedHash": "f328205f9d11381902a160ace4622cd1ac9602acba00b091f6d63f59a6869900"
+    },
+    "frontend-design": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "skillPath": "skills/frontend-design/SKILL.md",
+      "computedHash": "89496d5dd00f4810205f351759594fc2742bf8eea85a2f2b2d1de59f4bd91576"
+    },
+    "hono": {
+      "source": "honojs/skills",
+      "sourceType": "github",
+      "skillPath": "skills/hono/SKILL.md",
+      "computedHash": "f469bac28a53d010bb47bd61109d0cfebe9a4f3fd407310746114549886b5870"
+    },
+    "playwright-best-practices": {
+      "source": "currents-dev/playwright-best-practices-skill",
+      "sourceType": "github",
+      "skillPath": "playwright-best-practices/SKILL.md",
+      "computedHash": "7eb144f734450fee649dc1d209114775ddda07cbf45be84fe969d3d4f3971dce"
+    },
+    "preact-forms-events": {
+      "source": "jovidecroock/skills",
+      "sourceType": "github",
+      "skillPath": "preact-forms-events/SKILL.md",
+      "computedHash": "dec26ac42ec5a588aedb853ba89b1da0b6eb5c96ef347ab5ee1fd1689d2241a0"
+    },
+    "preact-hooks-debugging": {
+      "source": "jovidecroock/skills",
+      "sourceType": "github",
+      "skillPath": "preact-hooks-debugging/SKILL.md",
+      "computedHash": "96cd2e755e95d32b307ba33225b85a25d750230605f5a733bfcbf239304c2f25"
+    },
+    "preact-signals-core": {
+      "source": "jovidecroock/skills",
+      "sourceType": "github",
+      "skillPath": "preact-signals-core/SKILL.md",
+      "computedHash": "66e0d537efd40c87192fd21df1292945f1e728b4745a2a73af0e46dcfffd6208"
+    },
+    "security-best-practices": {
+      "source": "openai/skills",
+      "sourceType": "github",
+      "skillPath": "skills/.curated/security-best-practices/SKILL.md",
+      "computedHash": "c27616fb4e27999605b90b261dc729784420c8d77bd1a98748384ffaa5b35704"
+    },
+    "security-review": {
+      "source": "getsentry/skills",
+      "sourceType": "github",
+      "skillPath": "skills/security-review/SKILL.md",
+      "computedHash": "6b3e784d5589c67a11bbcc881b479fc8c2fdc1661a28d3f9d0213772b38fbd80"
+    },
+    "ux-copy": {
+      "source": "anthropics/knowledge-work-plugins",
+      "ref": "main",
+      "sourceType": "github",
+      "skillPath": "design/skills/ux-copy/SKILL.md",
+      "computedHash": "f7addd20b733b196d870154c3e86ee3ada83e7a16b1ad910c861607f8b472735"
+    },
+    "vitest": {
+      "source": "antfu/skills",
+      "sourceType": "github",
+      "skillPath": "skills/vitest/SKILL.md",
+      "computedHash": "21af2b13d47d31f3094b61c0f41abc8d6a7eed0df3c9a4029ea671f6978b7209"
+    },
+    "web-perf": {
+      "source": "cloudflare/skills",
+      "sourceType": "github",
+      "skillPath": "skills/web-perf/SKILL.md",
+      "computedHash": "72d0dd9706147e19bf3c1a36fdc02570f77685541d89d901a3a2f570824ba3cb"
+    },
+    "workers-best-practices": {
+      "source": "cloudflare/skills",
+      "sourceType": "github",
+      "skillPath": "skills/workers-best-practices/SKILL.md",
+      "computedHash": "e1c30e93854345114dfa6a0a077363119eb99c03e5c64a8f2109349802e1f2aa"
+    },
+    "wrangler": {
+      "source": "cloudflare/skills",
+      "sourceType": "github",
+      "skillPath": "skills/wrangler/SKILL.md",
+      "computedHash": "6d2bade1438d89034a750b1ddf30d0e5b62823306eccf85a5b25ccc4352ff8a9"
+    },
+    "write-endpoints": {
+      "source": "cloudflare/chanfana",
+      "sourceType": "github",
+      "skillPath": "skills/write-endpoints/SKILL.md",
+      "computedHash": "384598a597d0ba4edbbb41f539f95649b5889cb85ba9dbc8480f27f8c204715b"
+    }
+  }
+}

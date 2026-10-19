@@ -105,6 +105,7 @@ export function FormSubmissionsTable<Response extends { submissions: FormSubmiss
 
   return (
     <ApiDataTable
+      urlState="form-responses"
       caption="Form responses"
       endpoint={endpoint}
       responseSchema={responseSchema}
@@ -195,9 +196,7 @@ export function FormSubmissionRecord<Response extends { submissions: FormSubmiss
   return (
     <div class="pk pk-stack">
       <div class="pk-cluster">
-        <Button size="sm" onClick={onBack}>
-          ← All responses
-        </Button>
+        <Button onClick={onBack}>← All responses</Button>
       </div>
       <Panel>
         <PanelHeader title={who} />

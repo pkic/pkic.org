@@ -13,6 +13,7 @@ vi.mock("wouter", () => ({
 import type { ComponentChildren } from "preact";
 import { ProposalDetailPage } from "../../assets/ts/member-flows/portal/sections/events/detail/ProposalDetailPage";
 import { isCurrentTab, tabs } from "./helpers/tabs";
+import { PROPOSAL_COMMITTEE_NOTES_COPY } from "../../assets/shared/proposal-committee-notes-copy";
 
 import {
   EVENT_SLUG,
@@ -54,6 +55,19 @@ async function openProposalActions(root: HTMLElement): Promise<HTMLButtonElement
  * the operator's commands are one actions menu in the header.
  */
 describe("proposal record routing and actions", () => {
+  it("shows reviewers the private notes for the program committee beside the abstract", async () => {
+    const calls: RequestRecord[] = [];
+    stubFetch(calls, { ...access, canReview: true, eventPermissions: ["proposals:score"] });
+    container = document.createElement("div");
+    document.body.append(container);
+    await act(() => render(<ProposalDetailPage slug={EVENT_SLUG} proposalId={PROPOSAL_ID} />, container!));
+    await settle();
+    await settle();
+    expect(container.textContent).toContain(PROPOSAL_COMMITTEE_NOTES_COPY.reviewTitle);
+    expect(container.textContent).toContain(PROPOSAL_COMMITTEE_NOTES_COPY.reviewHelp);
+    expect(container.textContent).toContain("Happy to adapt this into a panel.");
+  });
+
   it("opens the facet the URL names when the caller routes the facets", async () => {
     const calls: RequestRecord[] = [];
     stubFetch(calls, { ...access, canReview: true, eventPermissions: ["proposals:score"] });

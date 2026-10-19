@@ -3,6 +3,7 @@ import ICAL from "ical.js";
 import type { EventRecord } from "../services/events";
 import { resolveEventVenue, resolveEventVirtualUrl } from "../services/events";
 import { generateSignedRsvpAddress } from "../email/rsvp";
+import { formatEventPlace } from "../../../assets/shared/event-place";
 
 type IcsDateTuple = [number, number, number, number, number];
 
@@ -193,13 +194,15 @@ export interface IcsFile {
  * - Each VEVENT uses the event's daily start/end times (derived from
  *   event.starts_at / event.ends_at) — e.g. 09:00–18:00 UTC for every day.
  * - Location is set per attendance type:
- *     in_person → venue address from settings_json.venue
- *     virtual   → virtual page URL (settings_json.virtualUrl or auto-derived)
+ *     in_person → venue address from settings_json.venue, else the event's
+ *                 city and country ("Amsterdam, Netherlands")
+ *     virtual   → system-generated attendee virtual room URL
  * - Both in-person and virtual VEVENTs include 24 h and 1 h display reminders.
  * - Falls back to a single spanning event when no live day attendance is present.
  */
 export async function buildRegistrationIcs(
-  event: Pick<EventRecord, "name" | "slug" | "base_path" | "starts_at" | "ends_at" | "settings_json">,
+  event: Pick<EventRecord, "name" | "slug" | "base_path" | "starts_at" | "ends_at" | "settings_json"> &
+    Partial<Pick<EventRecord, "city" | "country">>,
   registrationId: string,
   manageUrl: string,
   dayAttendance: DayAttendanceEntry[] = [],
@@ -211,7 +214,8 @@ export async function buildRegistrationIcs(
   const uid = `${registrationId}@pkic.org`;
   const baseUrl = appBaseUrl ?? "https://pkic.org";
 
-  const venueAddress = resolveEventVenue(event);
+  // A calendar file has no reader locale, so the country is named in English.
+  const venueAddress = resolveEventVenue(event) ?? formatEventPlace(event, "en");
   const virtualUrl = resolveEventVirtualUrl(event, baseUrl);
 
   const liveDays = dayAttendance.filter((d) => LIVE_ATTENDANCE_TYPES.has(d.attendanceType));

@@ -9,7 +9,7 @@ import {
 } from "../../assets/shared/schemas/organization-management";
 import { identitiesListResponseSchema, identityCreateSchema } from "../../assets/shared/schemas/identity";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
-import { controlFor, namedGroup, typeInto } from "./helpers/labelled-control";
+import { controlFor, namedGroup, typeInto } from "./helpers/labeled-control";
 import { OrganizationDetail } from "../../assets/ts/member-flows/portal/sections/system-organizations/OrganizationDetail";
 import { Organizations } from "../../assets/ts/member-flows/portal/sections/system-organizations/Organizations";
 
@@ -72,6 +72,9 @@ function detail() {
       links: [],
       primaryContactUserId: userId,
       secondaryContactUserId: null,
+      emailDomains: [],
+      claimedDomains: [],
+      mergedInto: null,
       identities: [
         {
           identityId,
@@ -338,7 +341,7 @@ describe("portal System Organizations", () => {
     const mark = row?.querySelector(".pk-avatar");
     expect(mark?.classList.contains("pk-avatar--square")).toBe(true);
     expect(mark?.textContent).not.toBe("");
-    // Neither absence is carried by a colour class any more.
+    // Neither absence is carried by a color class any more.
     expect(row?.querySelector("[class*='text-danger']")).toBeNull();
     expect(row?.querySelector("[class*='fst-italic']")).toBeNull();
   });
@@ -401,7 +404,17 @@ describe("portal System Organizations", () => {
       />,
     );
     await settle();
-    expect(writer.querySelector('section[aria-label="About"] button[aria-label="About actions"]')).not.toBeNull();
+    expect(writer.querySelector('section[aria-label="About"] button')).toBeNull();
+    const actions = writer.querySelector<HTMLButtonElement>('.pk-profile-header button[aria-label="Record actions"]');
+    expect(actions).not.toBeNull();
+    await act(async () => actions!.click());
+    const edit = [...document.querySelectorAll('[role="menuitem"]')].find(
+      (item) => item.textContent === "Edit organization…",
+    );
+    expect(edit).toBeDefined();
+    await act(async () => (edit as HTMLElement).click());
+    expect(writer.querySelector('button[aria-label="Record actions"]')).toBeNull();
+    expect(writer.querySelector('section[aria-label="About"] input[name="name"]')).not.toBeNull();
     expect(writer.textContent).toContain("Contacts");
     // Reading another facet is a tab away, and its bounded query runs then.
     const menuTrigger = await waitForElement(() =>
@@ -411,7 +424,7 @@ describe("portal System Organizations", () => {
     expect(writer.textContent).toContain("Active");
 
     await act(async () => menuTrigger.click());
-    expect(writer.textContent).toContain("End identity");
+    expect(writer.textContent).toContain("End representation…");
   });
 
   it("submits the canonical identity invitation command and accepts its mutation receipt", async () => {
@@ -526,16 +539,16 @@ describe("portal System Organizations", () => {
     );
     await act(async () => menuTrigger.click());
     const removeItem = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
-      (candidate) => candidate.textContent === "End identity",
+      (candidate) => candidate.textContent === "End representation…",
     );
-    if (!removeItem) throw new Error("missing End identity menu item");
+    if (!removeItem) throw new Error("missing End representation menu item");
     await act(async () => removeItem.click());
 
     const dialog = container.querySelector('[role="alertdialog"]');
-    expect(dialog?.textContent).toContain("End Ada Lovelace's identity for this organization?");
+    expect(dialog?.textContent).toContain("End Ada Lovelace's representation of this organization?");
     expect(requests.some((request) => request.method === "PATCH")).toBe(false);
 
-    await act(async () => dialogButton(container, "End identity").click());
+    await act(async () => dialogButton(container, "End representation").click());
     await settle();
 
     expect(requests).toContainEqual({
@@ -571,9 +584,9 @@ describe("portal System Organizations", () => {
     );
     await act(async () => menuTrigger.click());
     const removeItem = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
-      (candidate) => candidate.textContent === "End identity",
+      (candidate) => candidate.textContent === "End representation…",
     );
-    if (!removeItem) throw new Error("missing End identity menu item");
+    if (!removeItem) throw new Error("missing End representation menu item");
     const callsBeforeCancel = fetchMock.mock.calls.length;
     await act(async () => removeItem.click());
 

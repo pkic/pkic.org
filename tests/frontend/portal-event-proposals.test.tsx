@@ -4,6 +4,11 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", vi.fn()] }));
+// The consent asked before a photo import is the shared disclaimer's own test; here it is given.
+vi.mock("../../assets/ts/shared/headshot/upload", async (original) => ({
+  ...(await original<typeof import("../../assets/ts/shared/headshot/upload")>()),
+  showHeadshotDisclaimer: () => Promise.resolve(true),
+}));
 vi.mock("wouter", () => ({
   Link: ({ children, href, ...rest }: { children?: ComponentChildren; href: string } & Record<string, unknown>) => (
     <a href={`#${href}`} {...rest}>
@@ -14,9 +19,10 @@ vi.mock("wouter", () => ({
 import type { ComponentChildren } from "preact";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { ProposalDetailPage } from "../../assets/ts/member-flows/portal/sections/events/detail/ProposalDetailPage";
-import { proposalSpeakerAssetPath } from "../../assets/ts/member-flows/portal/sections/events/detail/proposal-detail/SpeakerCard";
+import { portalSession } from "../../assets/ts/member-flows/portal/state";
+import { portalSessionFixture } from "../helpers/portal-session";
 import { proposalPatchSchema } from "../../assets/shared/schemas/proposal-management";
-import { markdownControl, markdownValue, submitForm, typeMarkdown } from "./helpers/labelled-control";
+import { markdownControl, markdownValue, submitForm, typeMarkdown } from "./helpers/labeled-control";
 import { runCardAction } from "./helpers/row-actions";
 
 import {
@@ -32,12 +38,14 @@ import {
 let container: HTMLElement | null = null;
 
 afterEach(() => {
+  history.replaceState(null, "", location.pathname);
   if (container) {
     void act(() => render(null, container!));
     container.remove();
     container = null;
   }
   vi.unstubAllGlobals();
+  portalSession.value = null;
 });
 
 /**
@@ -100,7 +108,7 @@ describe("group event proposal portal", () => {
     await act(async () => presentationTab?.click());
     await settle();
     expect(container.textContent).toContain("presentation.pdf");
-    expect(container.textContent).toContain("Download");
+    expect(container.querySelector('a[aria-label="Download version 1, presentation.pdf"]')).not.toBeNull();
     expect(container.textContent).not.toContain("Upload on behalf of speaker");
     expect(
       Array.from(container.querySelectorAll<HTMLButtonElement>("button")).some(
@@ -124,7 +132,7 @@ describe("group event proposal portal", () => {
     await settle();
 
     expect(container.textContent).toContain("Read-only proposal");
-    expect(container.textContent).not.toContain("Internal Comments");
+    expect(container.textContent).not.toContain("Reviewer comments");
     expect(calls.some(({ url }) => url.includes("/reviews"))).toBe(false);
     expect(calls.some(({ url }) => url.includes("/comments"))).toBe(false);
     expect(calls.some(({ url }) => url.includes("/audit-log"))).toBe(false);
@@ -155,6 +163,7 @@ describe("group event proposal portal", () => {
   });
 
   it("loads speakers through the canonical proposal resource and keeps all actions off admin paths", async () => {
+    portalSession.value = portalSessionFixture({ staff: true });
     const calls: RequestRecord[] = [];
     stubFetch(calls, { ...access, canReview: true, canFinalize: true, eventPermissions: ["proposals:manage"] });
     container = document.createElement("div");
@@ -190,20 +199,23 @@ describe("group event proposal portal", () => {
     expect(container.textContent).toContain("Not registered");
     expect(container.textContent).toContain("Registered");
 
-    // The speaker's commands sit behind the card's own menu.
-    await runCardAction(container, "Proposal Speaker", "Edit profile");
-    const form = container.querySelector('section[aria-label="Speaker Proposal Speaker"] form');
+    // The speaker's commands sit behind the card's own menu. Editing edits
+    // the identity they speak as, on the identity's own resource.
+    await runCardAction(container, "Proposal Speaker", "Edit identity");
+    await settle();
+    const form = container.querySelector("dialog form");
     expect(form).not.toBeNull();
+    expect(form?.textContent).toContain("Job title for this organization");
     await act(async () => {
       form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     });
     await settle();
     expect(
       calls.some(
-        ({ url, method }) =>
-          method === "PATCH" && url.endsWith(`/speakers/${encodeURIComponent("40000000-0000-4000-8000-000000000001")}`),
+        ({ url, method }) => method === "PATCH" && url.endsWith("/identities/60000000-0000-4000-8000-000000000001"),
       ),
     ).toBe(true);
+    expect(calls.some(({ url, method }) => method === "PATCH" && url.includes("/speakers/"))).toBe(false);
 
     await runCardAction(container, "Proposal Speaker", "Send profile reminder");
     await settle();
@@ -213,16 +225,20 @@ describe("group event proposal portal", () => {
     await settle();
     expect(calls.filter(({ url, method }) => method === "POST" && url.endsWith("/reminders"))).toHaveLength(2);
 
-    await runCardAction(container, "Proposal Speaker", "Use Gravatar photo");
+    // The headshot is the person's own; the import asks for consent first.
+    await runCardAction(container, "Proposal Speaker", "Import photo from Gravatar…");
     await settle();
-    expect(calls.some(({ url, method }) => method === "POST" && url.endsWith("/headshot"))).toBe(true);
-    expect(proposalSpeakerAssetPath(PROPOSAL_ID, "speaker-1", "headshot")).toContain("/speakers/speaker-1/headshot");
+    expect(
+      calls.some(
+        ({ url, method }) => method === "POST" && url.endsWith("/users/40000000-0000-4000-8000-000000000001/gravatar"),
+      ),
+    ).toBe(true);
 
     // Removing the proposer passes the proposal on: the replacement is chosen
     // in the card's own dialog before the removal is confirmed.
     await runCardAction(container, "Proposal Speaker", "Remove speaker");
     const removeDialog = container.querySelector<HTMLDialogElement>(
-      'section[aria-label="Speaker Proposal Speaker"] ~ dialog, dialog',
+      'article[aria-label="Speaker Proposal Speaker"] ~ dialog, dialog',
     );
     expect(removeDialog).not.toBeNull();
     const replacement = removeDialog?.querySelector<HTMLSelectElement>("[data-replacement-proposer]");
@@ -273,7 +289,7 @@ describe("group event proposal portal", () => {
     await settle();
 
     const abstractPanel = panelTitled(container, "Abstract");
-    await beginRecordEdit(abstractPanel, "Abstract actions", "Edit");
+    await beginRecordEdit(abstractPanel, "Abstract actions", "Edit title and abstract");
 
     // Resolving through the `for`/`id` pair fails exactly when the pair is
     // broken, which is the half a visual review cannot see.
@@ -295,7 +311,7 @@ describe("group event proposal portal", () => {
     expect(await markdownValue(panelTitled(container, "Abstract"), "Abstract")).toBe(draft);
   });
 
-  it("summarizes the proposal beside its facets without leaning on colour to say whether quorum is met", async () => {
+  it("summarizes the proposal beside its facets without leaning on color to say whether quorum is met", async () => {
     const calls: RequestRecord[] = [];
     stubFetch(calls, { ...access, canReview: true, eventPermissions: ["proposals:score"] });
     container = document.createElement("div");
@@ -307,14 +323,14 @@ describe("group event proposal portal", () => {
     // No band of stat cards restating the header; the record opens with its
     // subject, and what it is called is in the heading itself.
     expect(container.querySelector(".pk-stat-card")).toBeNull();
-    expect(container.querySelector("h3.pk-profile-header__title")?.textContent).toBe("Read-only proposal");
+    expect(container.querySelector("h2.pk-profile-header__title")?.textContent).toBe("Read-only proposal");
     // Stored vocabulary is capitalized in the text itself, not by a CSS
     // transform a screen reader never sees.
     expect(container.querySelector(".pk-profile-header__lede")?.textContent).toBe("Talk · proposed by Proposal Owner");
 
     const standing = container.querySelector('section[aria-label="Review standing"]')!;
-    expect(standing.textContent).toContain("0 of 2 required");
-    expect(standing.querySelector(".pk-badge--warn")?.textContent).toBe("Quorum not met");
+    expect(standing.textContent).toContain("0 reviews (2 required)");
+    expect(standing.querySelector(".pk-attention-mark")?.textContent).toBe("Quorum not met");
     expect(standing.textContent).toContain("Accepted");
   });
 });

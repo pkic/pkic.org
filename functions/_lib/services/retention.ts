@@ -1,6 +1,12 @@
+import { prepareSitePublicationRequestSelection } from "./site-publication-requests";
+import { PUBLIC_PERSON_PROFILE_HOLDER_SOURCE_SQL } from "./people/profile-publication-sql";
+import { publicGroupProfileIdentityPredicate } from "./groups/profile-publication";
+import { livePersonHeadshotSql } from "./live-session/live-person-photo";
+import { PUBLIC_MEMBER_USER_SOURCE_SQL } from "./membership/public-profile-sql";
 import { all } from "../db/queries";
 import { nowIso } from "../utils/time";
 import type { DatabaseLike } from "../types";
+import { prepareAffiliationRedactionStatements } from "./identities/affiliation-redaction";
 
 export interface RetentionPreviewEvent {
   eventId: string;
@@ -29,6 +35,13 @@ export const DUE_RETENTION_PREDICATE = `
   e.ends_at IS NOT NULL
   AND datetime(e.ends_at) < datetime('now', '-' || rp.user_retention_days || ' days')
 `;
+
+const DUE_RETENTION_USER_IDS_SQL = `
+  SELECT r.user_id
+    FROM registrations r
+    JOIN retention_policies rp ON rp.event_id = r.event_id
+    JOIN events e ON e.id = rp.event_id
+   WHERE ${DUE_RETENTION_PREDICATE}`;
 
 /**
  * One set-based D1 read replaces the former policy loop (event lookup plus
@@ -106,10 +119,40 @@ export async function runRetentionJob(db: DatabaseLike): Promise<{
 
   const now = nowIso();
   await db.batch([
+    prepareSitePublicationRequestSelection(
+      db,
+      {
+        resourceType: "user_profile",
+        revision: Date.parse(now),
+        reasonCode: "user_profile_changed",
+        deduplicationKey: `retention:${crypto.randomUUID()}`,
+      },
+      {
+        sql: `WITH due_users AS (${DUE_RETENTION_USER_IDS_SQL})
+        SELECT person.id AS resource_id ${PUBLIC_MEMBER_USER_SOURCE_SQL}
+        AND person.id IN (SELECT user_id FROM due_users)
+        AND (NULLIF(person.first_name,'') IS NOT NULL OR NULLIF(person.last_name,'') IS NOT NULL
+          OR NULLIF(${livePersonHeadshotSql("person")},'') IS NOT NULL
+          OR (identity.started_at IS NOT NULL AND identity.ended_at IS NULL AND identity.blocked_at IS NULL
+            AND ((identity.organization_id IS NOT NULL AND identity.job_title IS NOT NULL)
+              OR identity.biography IS NOT NULL
+              OR EXISTS(SELECT 1 FROM json_each(CASE WHEN json_valid(identity.links_json) THEN identity.links_json ELSE '[]' END)))))
+        UNION ALL SELECT person.id AS resource_id ${PUBLIC_PERSON_PROFILE_HOLDER_SOURCE_SQL}
+          AND person.id IN (SELECT user_id FROM due_users)
+        UNION ALL SELECT holder.id AS resource_id FROM users holder JOIN identities held ON held.user_id=holder.id
+          WHERE holder.id IN (SELECT user_id FROM due_users)
+            AND (NULLIF(holder.first_name,'') IS NOT NULL OR NULLIF(holder.last_name,'') IS NOT NULL
+              OR NULLIF(${livePersonHeadshotSql("holder")},'') IS NOT NULL
+              OR (held.organization_id IS NOT NULL AND held.job_title IS NOT NULL)
+              OR EXISTS(SELECT 1 FROM json_each(CASE WHEN json_valid(held.links_json) THEN held.links_json ELSE '[]' END)))
+            AND ${publicGroupProfileIdentityPredicate("held")}`,
+        bindings: [],
+      },
+    ),
     db
       .prepare(
         `UPDATE registrations
-         SET custom_answers_json = NULL, registration_organization_name = NULL, registration_job_title = NULL, source_ref = NULL, updated_at = ?
+         SET custom_answers_json = NULL, source_ref = NULL, updated_at = ?
          WHERE EXISTS (
            SELECT 1
            FROM retention_policies rp
@@ -123,8 +166,7 @@ export async function runRetentionJob(db: DatabaseLike): Promise<{
       .prepare(
         `UPDATE users
          SET first_name = NULL, last_name = NULL, preferred_name = NULL,
-             organization_name = NULL, job_title = NULL, biography = NULL,
-             links_json = NULL, data_json = NULL, pii_redacted_at = ?, updated_at = ?
+             data_json = NULL, pii_redacted_at = ?, updated_at = ?
          WHERE EXISTS (
            SELECT 1
            FROM registrations r
@@ -135,6 +177,7 @@ export async function runRetentionJob(db: DatabaseLike): Promise<{
          )`,
       )
       .bind(now, now),
+    ...prepareAffiliationRedactionStatements(db, DUE_RETENTION_USER_IDS_SQL, [], now),
   ]);
 
   return {

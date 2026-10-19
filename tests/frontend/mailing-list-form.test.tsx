@@ -10,7 +10,7 @@ import { groupMailingListCreateSchema } from "../../assets/shared/schemas/mailin
 import { MEMBERSHIP_CATEGORIES, type MembershipCategory } from "../../assets/shared/schemas/membership-categories";
 import { MailingListForm } from "../../assets/ts/components/mailing-lists/MailingListForm";
 import { emptyMailingListDraft, mailingListDraftToPayload } from "../../assets/ts/components/mailing-lists/model";
-import { controlFor, labelNames, typeInto } from "./helpers/labelled-control";
+import { controlFor, labelNames, typeInto } from "./helpers/labeled-control";
 
 const mounted: HTMLElement[] = [];
 
@@ -221,7 +221,7 @@ describe("shared mailing-list form model", () => {
     /*
      * The categories are named, not coded. A row of thirteen bare letters is
      * not a choice a reader can weigh — the same complaint #53 made about the
-     * organization form's category select. The catalogue that carries the
+     * organization form's category select. The catalog that carries the
      * words is fetched, so with none loaded each keeps its code rather than
      * rendering blank.
      */

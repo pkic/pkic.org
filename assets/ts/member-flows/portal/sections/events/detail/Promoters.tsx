@@ -1,3 +1,4 @@
+import { formatNumber } from "../../../../../../shared/format-number";
 /**
  * Who is bringing people to the event, and through which links.
  *
@@ -48,7 +49,8 @@ function promoterColumns(pageOffset: number): Array<Column<EventPromoter>> {
           name={promoterName(row)}
           avatarSrc={row.headshotUrl ?? undefined}
           avatarStatus={{ label: `#${pageOffset + index + 1}` }}
-          detail={[row.jobTitle, row.organization].filter(Boolean).join(" · ")}
+          title={row.jobTitle}
+          organization={row.organization}
         />
       ),
       width: "primary",
@@ -57,7 +59,7 @@ function promoterColumns(pageOffset: number): Array<Column<EventPromoter>> {
       header: "Invitations",
       cell: (row) => (
         <div class="pk-stack pk-stack--tight">
-          <span>{row.invitesSent} sent</span>
+          <span>{formatNumber(row.invitesSent)} sent</span>
           <div
             dangerouslySetInnerHTML={{
               __html: svgSegmentBar(
@@ -87,7 +89,7 @@ function promoterColumns(pageOffset: number): Array<Column<EventPromoter>> {
       cell: (row) => (
         <div class="pk-stack pk-stack--tight">
           <span>
-            {row.referralClicks} clicks · {row.referralConversions} registrations
+            {formatNumber(row.referralClicks)} clicks · {formatNumber(row.referralConversions)} registrations
           </span>
           <div
             dangerouslySetInnerHTML={{
@@ -110,8 +112,8 @@ function promoterColumns(pageOffset: number): Array<Column<EventPromoter>> {
     },
     {
       header: "Impact",
-      cell: (row) => <span class="pk-record-title">{row.impactScore.toFixed(0)}</span>,
-      className: "pk-end",
+      cell: (row) => <span class="pk-record-title">{formatNumber(Math.round(row.impactScore))}</span>,
+      align: "end",
       width: "fit",
       sort: { asc: "impact", desc: "-impact", defaultDirection: "desc" },
     },
@@ -124,11 +126,11 @@ const REFERRAL_CODE_COLUMNS: Array<Column<EventReferralCode>> = [
     header: "Owner",
     cell: (row) => [row.ownerFirstName, row.ownerLastName].filter(Boolean).join(" ") || "Unnamed user",
   },
-  { header: "Clicks", cell: (row) => row.clicks, className: "pk-end", width: "fit" },
+  { header: "Clicks", cell: (row) => formatNumber(row.clicks), align: "end", width: "fit" },
   {
     header: "Conversions",
-    cell: (row) => row.conversions,
-    className: "pk-end",
+    cell: (row) => formatNumber(row.conversions),
+    align: "end",
     width: "fit",
     sort: { asc: "conversions", desc: "-conversions", defaultDirection: "desc" },
   },
@@ -166,18 +168,18 @@ export function Promoters({
             <div class="pk-stat-row">
               <StatCard
                 label="Active promoters"
-                value={String(summary.activePromoters)}
-                note={`${String(summary.promotersWithRegistrations)} with registrations`}
+                value={formatNumber(summary.activePromoters)}
+                note={`${formatNumber(summary.promotersWithRegistrations)} with registrations`}
               />
-              <StatCard label="Invites sent" value={String(summary.totalInvitesSent)} />
+              <StatCard label="Invites sent" value={formatNumber(summary.totalInvitesSent)} />
               <StatCard
                 label="Invites accepted"
-                value={String(summary.totalInvitesAccepted)}
+                value={formatNumber(summary.totalInvitesAccepted)}
                 note={inviteConversion}
                 tone="ok"
               />
-              <StatCard label="Link clicks" value={String(summary.totalReferralClicks)} />
-              <StatCard label="Link registrations" value={String(summary.totalReferralConversions)} />
+              <StatCard label="Link clicks" value={formatNumber(summary.totalReferralClicks)} />
+              <StatCard label="Link registrations" value={formatNumber(summary.totalReferralConversions)} />
             </div>
           </PanelBody>
         </Panel>
@@ -188,7 +190,7 @@ export function Promoters({
         items={VIEWS.map(({ key, label }) => ({
           key,
           label: summary
-            ? `${label} (${String(key === "promoters" ? summary.activePromoters : summary.referralCodeCount)})`
+            ? `${label} (${formatNumber(key === "promoters" ? summary.activePromoters : summary.referralCodeCount)})`
             : label,
         }))}
         active={view}
@@ -197,6 +199,7 @@ export function Promoters({
 
       {view === "promoters" ? (
         <ApiDataTable
+          urlState="event-promoters"
           key="promoters"
           caption="Promoters, ranked by impact"
           endpoint={endpoint}
@@ -225,6 +228,7 @@ export function Promoters({
         />
       ) : (
         <ApiDataTable
+          urlState="event-referral-codes"
           key="codes"
           caption="Referral codes"
           endpoint={endpoint}

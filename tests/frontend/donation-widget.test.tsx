@@ -4,7 +4,7 @@ import { act } from "preact/test-utils";
 import { donationCheckoutSchema } from "../../assets/shared/schemas/donation";
 import { buildDonationWidget } from "../../assets/ts/shared/donation/widget";
 import { initDonationForm } from "../../assets/ts/shared/donation/form";
-import { controlFor, labelNames } from "./helpers/labelled-control";
+import { controlFor, labelNames } from "./helpers/labeled-control";
 
 const GEO_PATH = "/api/v1/geolocation/country";
 const CHECKOUT_PATH = "/api/v1/donations/checkout";
@@ -97,7 +97,7 @@ describe("donation widget markup", () => {
     ]);
 
     // Resolved through the `for`/`id` pair itself, so the lookup fails exactly
-    // when the labelling contract is broken.
+    // when the labeling contract is broken.
     expect(controlFor(widget, "Full name").required).toBe(true);
     expect(controlFor(widget, "Full name").hasAttribute("data-donation-name-input")).toBe(true);
     expect(controlFor<HTMLSelectElement>(widget, "Currency").tagName).toBe("SELECT");
@@ -129,7 +129,7 @@ describe("donation widget markup", () => {
     expect(widget.querySelector<HTMLInputElement>("[data-donation-name-input]")?.type).toBe("hidden");
   });
 
-  it("leaves the preset amounts to the behaviour that knows the currency", () => {
+  it("leaves the preset amounts to the behavior that knows the currency", () => {
     const widget = place(buildDonationWidget());
 
     expect(widget.querySelector("[data-donation-presets]")?.children).toHaveLength(0);
@@ -145,24 +145,27 @@ describe("donation widget wiring", () => {
     const presets = widget.querySelectorAll("[data-preset-amount]");
     expect(presets.length).toBeGreaterThan(0);
     // The default amount is pre-selected, which is only possible if the
-    // container the behaviour renders into is the one this markup built.
+    // container the behavior renders into is the one this markup built.
     expect(widget.querySelector('[data-preset-amount="500"]')?.getAttribute("aria-pressed")).toBe("true");
     expect(submitButton(widget).textContent).toContain("Donate");
   });
 
   it("sends a checkout request the shared contract accepts, and reports the refusal", async () => {
     const requests = installApi();
-    const widget = place(buildDonationWidget());
+    const widget = place(buildDonationWidget({ source: "event:local-demo" }));
     await start(widget);
 
     controlFor(widget, "Full name").value = "Ada Lovelace";
+    initDonationForm(widget.querySelector<HTMLElement>("[data-donation-form]")!);
     await click(submitButton(widget));
 
+    expect(requests.filter((request) => request.path === CHECKOUT_PATH)).toHaveLength(1);
     const checkout = requests.find((request) => request.path === CHECKOUT_PATH);
     // Parsing proves the backend would accept it; a literal comparison would
     // only prove the widget sends what the widget sends.
     const body = donationCheckoutSchema.parse(checkout?.body);
     expect(body.name).toBe("Ada Lovelace");
+    expect(body.metadata?.source).toBe("event:local-demo");
     expect(body.currency).toBe("usd");
     expect(body.amount).toBeGreaterThan(0);
 
@@ -171,6 +174,35 @@ describe("donation widget wiring", () => {
     expect(status?.textContent).toBe("Payments are paused.");
     // A refused checkout must hand the button back rather than stay busy.
     expect(submitButton(widget).disabled).toBe(false);
+  });
+
+  it("creates a valid checkout attempt when randomUUID is unavailable on local HTTP", async () => {
+    const uuid = vi.spyOn(crypto, "randomUUID").mockImplementation(() => {
+      throw new Error("Unavailable on HTTP");
+    });
+    const requests = installApi();
+    const widget = place(buildDonationWidget({ name: "Local Attendee" }));
+    try {
+      await start(widget);
+      await click(submitButton(widget));
+      const request = requests.find((item) => item.path === CHECKOUT_PATH);
+      expect(donationCheckoutSchema.parse(request?.body).checkoutAttemptId).toBeTruthy();
+      expect(uuid).not.toHaveBeenCalled();
+    } finally {
+      uuid.mockRestore();
+    }
+  });
+
+  it("keeps currency selection usable when the browser locale is invalid", async () => {
+    const language = vi.spyOn(navigator, "language", "get").mockReturnValue("invalid_locale");
+    const widget = place(buildDonationWidget());
+    try {
+      await start(widget);
+      expect(widget.querySelector<HTMLSelectElement>("[data-donation-currency]")?.value).toBe("usd");
+      expect(widget.querySelectorAll("[data-preset-amount]").length).toBeGreaterThan(0);
+    } finally {
+      language.mockRestore();
+    }
   });
 
   it("refuses to check out without a name, and never reaches the network", async () => {
@@ -184,5 +216,24 @@ describe("donation widget wiring", () => {
     expect(status?.textContent).toBe("Please enter your full name.");
     expect(status?.hidden).toBe(false);
     expect(requests.some((request) => request.path === CHECKOUT_PATH)).toBe(false);
+  });
+  it("destroys embedded checkout when its hosting dialog is disposed", async () => {
+    const checkout = { mount: vi.fn(), destroy: vi.fn() };
+    vi.stubGlobal("Stripe", () => ({ initEmbeddedCheckout: async () => checkout }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input, init) => {
+        donationCheckoutSchema.parse(JSON.parse(String(init?.body)));
+        return json({ clientSecret: "local-checkout-secret", publishableKey: "pk_test_local" });
+      }),
+    );
+    const widget = place(buildDonationWidget({ name: "Local Attendee", email: "attendee@example.test" }));
+    await start(widget);
+    const dispose = initDonationForm(widget.querySelector<HTMLElement>("[data-donation-form]")!);
+    await click(submitButton(widget));
+    await settle();
+    expect(checkout.mount).toHaveBeenCalledOnce();
+    dispose?.();
+    expect(checkout.destroy).toHaveBeenCalledOnce();
   });
 });

@@ -1,7 +1,7 @@
 /**
  * The submit / cancel pair a management form ends with.
  *
- * The version this replaces sized and coloured its own buttons (`btn btn-sm
+ * The version this replaces sized and colored its own buttons (`btn btn-sm
  * btn-success`) and reported the outcome in a `small text-muted` span. Both
  * are now the design system's: a primary Button for the affirmative action, a
  * secondary one for the way out, and an outcome that carries a role rather
@@ -39,16 +39,16 @@ export function FormActions({
       {/* `loading` alongside `disabled`: the spinner and aria-busy say the
           save is in flight, and `disabled` still stops a second submit, which
           `loading` alone would not do on a submit button. */}
-      <Button type="submit" variant="primary" size="sm" loading={busy} disabled={busy || disabled}>
+      <Button type="submit" variant="primary" loading={busy} disabled={busy || disabled}>
         {busy ? busyLabel : submitLabel}
       </Button>
-      <Button type="button" variant="secondary" size="sm" onClick={onCancel} disabled={busy}>
+      <Button type="button" variant="secondary" onClick={onCancel} disabled={busy}>
         Cancel
       </Button>
       {status &&
         (statusVariant === "danger" ? (
           // A failure is an Alert, so it is announced as one and is told apart
-          // from a routine "Saved." by more than its colour.
+          // from a routine "Saved." by more than its color.
           <Alert tone="danger">{status}</Alert>
         ) : (
           <span class="pk-small" role="status">

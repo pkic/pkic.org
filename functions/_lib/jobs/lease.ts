@@ -20,3 +20,11 @@ export function createDurableJobLease(now = new Date()): DurableJobLease {
     expiresAt: new Date(now.getTime() + DURABLE_JOB_LEASE_SECONDS * 1_000).toISOString(),
   };
 }
+
+/** Shared render retry cadence: capped exponential delay, ten bounded attempts. */
+export function durableRenderRetry(attempts: number) {
+  return {
+    delaySeconds: Math.min(3600, 2 ** Math.min(attempts, 10) * 15),
+    status: attempts >= 10 ? ("failed" as const) : ("retrying" as const),
+  };
+}

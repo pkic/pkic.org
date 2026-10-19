@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { userSelectionProfileSchema } from "./user-selection-profile";
 import { groupReferenceParamsSchema } from "./groups";
 import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, paginatedResponseSchema, searchTermSchema } from "./pagination";
@@ -6,14 +7,13 @@ import { requiresSession } from "./route-contract";
 
 export const USER_CATALOG_SORT_COLUMNS = ["email", "first_name", "last_name", "organization_name"] as const;
 
-/** Data-minimized identity projection shared by user-selection controls. */
-export const userCatalogItemSchema = z.object({
+export const userSelectionItemSchema = userSelectionProfileSchema.extend({
   id: databaseIdSchema,
-  email: z.email(),
+  email: z.string(),
   first_name: z.string().nullable(),
   last_name: z.string().nullable(),
-  organization_name: z.string().nullable(),
 });
+export const userCatalogItemSchema = userSelectionItemSchema.extend({ email: z.email() });
 export type UserCatalogItem = z.infer<typeof userCatalogItemSchema>;
 
 export const userCatalogListQuerySchema = listQuerySchema(USER_CATALOG_SORT_COLUMNS, {

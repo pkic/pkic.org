@@ -1,0 +1,151 @@
+/*
+ * The session editor wears the session details dialog's header: the brand field, the location as a
+ * mono kicker with its board color, the session title, and the mono line of when it runs. The body
+ * stays the portal's form surface, so the fields read exactly as they do everywhere else.
+ */
+@layer components {
+  @media (min-width: 48rem) {
+    .pk-dialog.pk-session-editor-dialog {
+      width: min(60rem, calc(100vw - 3rem));
+    }
+  }
+
+  /*
+   * One height for every tab, so switching from Session to Publishing does not re-center the dialog and move
+   * its header and actions; a short tab leaves room below its fields, a long one scrolls in the body.
+   */
+  .pk-dialog.pk-session-editor-dialog {
+    block-size: min(52rem, calc(100dvh - 4rem));
+    overflow: hidden;
+    border: 0;
+    box-shadow: var(--pk-agenda-dialog-shadow);
+  }
+  /* The speakers who have not accepted stay with the time, on the session details dialog's meta line. */
+  .pk-session-editor-dialog__status {
+    display: inline-flex;
+    margin-inline-start: var(--pk-2);
+    font-family: var(--pk-font);
+    vertical-align: middle;
+  }
+
+  .pk-session-editor-dialog > .pk-dialog__head {
+    position: relative;
+    isolation: isolate;
+    padding: var(--pk-5) var(--pk-6) var(--pk-5);
+    background: var(--pk-agenda-dialog-field);
+    color: var(--pk-on-solid);
+  }
+
+  /* The details dialog's square tile, fading in from the left. */
+  .pk-session-editor-dialog > .pk-dialog__head::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    inset: 0 0 0 45%;
+    opacity: 0.16;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48'%3E%3Crect x='20' y='20' width='8' height='8' fill='%23fff'/%3E%3C/svg%3E")
+      0 0 / 30px 30px repeat;
+    mask-image: linear-gradient(90deg, transparent, var(--pk-agenda-mask-opaque));
+    pointer-events: none;
+  }
+
+  .pk-session-editor-dialog .pk-dialog__heading {
+    gap: var(--pk-2);
+  }
+
+  .pk-session-editor-dialog .pk-dialog__title {
+    font-size: var(--pk-text-2xl);
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+    overflow-wrap: anywhere;
+  }
+
+  .pk-session-editor-dialog .pk-dialog__kicker,
+  .pk-session-editor-dialog .pk-dialog__meta {
+    font-family: var(--pk-font-mono);
+    color: inherit;
+  }
+
+  .pk-session-editor-dialog .pk-dialog__meta {
+    font-size: var(--pk-text-sm);
+    color: var(--pk-agenda-dialog-meta-ink);
+  }
+
+  /* The zone stays with its times; only the date may wrap before them. */
+  .pk-session-editor-dialog__time {
+    white-space: nowrap;
+  }
+
+  .pk-session-editor-dialog__location {
+    --pk-session-editor-location: var(--pk-accent);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: var(--pk-text-xs);
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .pk-session-editor-dialog__location::before {
+    content: "";
+    flex: none;
+    inline-size: 0.5rem;
+    block-size: 0.5rem;
+    border-radius: 50%;
+    background: var(--pk-session-editor-location);
+    box-shadow: 0 0 0 1.5px var(--pk-agenda-dialog-dot-ring);
+  }
+
+  .pk-session-editor-dialog__location[data-location="1"] {
+    --pk-session-editor-location: var(--pk-agenda-location-1);
+  }
+  .pk-session-editor-dialog__location[data-location="2"] {
+    --pk-session-editor-location: var(--pk-agenda-location-2);
+  }
+  .pk-session-editor-dialog__location[data-location="3"] {
+    --pk-session-editor-location: var(--pk-agenda-location-3);
+  }
+  .pk-session-editor-dialog__location[data-location="4"] {
+    --pk-session-editor-location: var(--pk-agenda-location-4);
+  }
+  .pk-session-editor-dialog__location[data-location="5"] {
+    --pk-session-editor-location: var(--pk-agenda-location-5);
+  }
+  .pk-session-editor-dialog__location[data-location="6"] {
+    --pk-session-editor-location: var(--pk-agenda-location-6);
+  }
+
+  /* The close control sits on the brand field, as in the details dialog. */
+  .pk-session-editor-dialog > .pk-dialog__head > .pk-close.pk-btn {
+    border-color: var(--pk-agenda-dialog-control-line);
+  }
+  .pk-session-editor-dialog > .pk-dialog__head > .pk-close.pk-btn:hover:not(:disabled, [aria-disabled="true"]) {
+    background: var(--pk-agenda-dialog-control-hover);
+  }
+
+  /* The form reads at the portal's body size and ink, not the confirmation dialog's muted note size. */
+  .pk-session-editor-dialog > .pk-dialog__body {
+    flex: 1 1 auto;
+    min-block-size: 0;
+    padding: var(--pk-4) var(--pk-6) var(--pk-5);
+    font-size: var(--pk-text-md);
+    color: var(--pk-ink);
+  }
+
+  .pk-session-editor-dialog > .pk-dialog__foot {
+    padding-inline: var(--pk-6);
+  }
+
+  @media (max-width: 46rem) {
+    .pk-session-editor-dialog > .pk-dialog__head,
+    .pk-session-editor-dialog > .pk-dialog__body,
+    .pk-session-editor-dialog > .pk-dialog__foot {
+      padding-inline: var(--pk-4);
+    }
+    .pk-session-editor-dialog .pk-dialog__title {
+      font-size: var(--pk-text-xl);
+    }
+  }
+}

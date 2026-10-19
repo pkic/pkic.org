@@ -29,11 +29,21 @@ describe("Permission subjects and targets", () => {
   it("returns a bounded, data-minimized active user catalog and rejects API keys", async () => {
     const activeId = crypto.randomUUID();
     const inactiveId = crypto.randomUUID();
+    const organizationId = crypto.randomUUID();
     await env.DB.batch([
       env.DB.prepare(
-        `INSERT INTO users (id, email, normalized_email, first_name, last_name, organization_name, active, created_at, updated_at)
-           VALUES (?, 'ada.catalog@example.test', 'ada.catalog@example.test', 'Ada', 'Lovelace', 'Analytical Engines', 1, datetime('now'), datetime('now'))`,
+        `INSERT INTO users (id, email, normalized_email, first_name, last_name, active, created_at, updated_at)
+           VALUES (?, 'ada.catalog@example.test', 'ada.catalog@example.test', 'Ada', 'Lovelace', 1, datetime('now'), datetime('now'))`,
       ).bind(activeId),
+      env.DB.prepare(
+        `INSERT INTO organizations (id, name, normalized_name, created_at, updated_at)
+           VALUES (?, 'Analytical Engines', 'analytical engines', datetime('now'), datetime('now'))`,
+      ).bind(organizationId),
+      env.DB.prepare(
+        `INSERT INTO identities (id, user_id, organization_id, source, invited_at, started_at, created_at, updated_at)
+           VALUES (?, ?, ?, 'staff', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z',
+                   '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`,
+      ).bind(crypto.randomUUID(), activeId, organizationId),
       env.DB.prepare(
         `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
            VALUES (?, 'inactive.catalog@example.test', 'inactive.catalog@example.test', 0, datetime('now'), datetime('now'))`,

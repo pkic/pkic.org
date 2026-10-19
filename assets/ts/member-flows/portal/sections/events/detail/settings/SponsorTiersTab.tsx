@@ -129,20 +129,18 @@ export function SponsorTiersTab({
                         )
                       }
                     />
+                    {/* Removal only edits the draft; nothing is persisted until Save, so it needs no confirmation. */}
                     <Button
                       variant="danger-quiet"
-                      size="sm"
-                      aria-label={`Remove tier ${index + 1}`}
                       onClick={() => setTiers((current) => current.filter((_, position) => position !== index))}
                     >
-                      Remove
+                      Remove tier {index + 1}
                     </Button>
                   </div>
                 </fieldset>
               ))}
               <div class="pk-cluster">
                 <Button
-                  size="sm"
                   disabled={saving}
                   onClick={() => setTiers((current) => [...current, { tierName: "", hasAttendeeDataAccess: false }])}
                 >

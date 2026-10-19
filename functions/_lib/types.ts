@@ -1,25 +1,10 @@
+import type { LiveStage } from "../../assets/shared/schemas/live-session-room";
+import type { UserSessionTokenClaims } from "./auth/user-session-token";
+import type { LiveProgramSelection, LiveProgramSelectResult } from "../../assets/shared/schemas/live-room-program";
 import type { RateLimitBinding } from "./rate-limit";
 
-export interface D1StatementResult<T = Record<string, unknown>> {
-  success: boolean;
-  results?: T[];
-  meta?: { changes: number };
-}
-
-export interface StatementLike {
-  bind(...values: unknown[]): StatementLike;
-  run<T = Record<string, unknown>>(): Promise<D1StatementResult<T>>;
-  all<T = Record<string, unknown>>(): Promise<{ results: T[] }>;
-  first<T = Record<string, unknown>>(columnName?: string): Promise<T | null>;
-}
-
-export interface DatabaseLike {
-  prepare(query: string): StatementLike;
-  batch(statements: StatementLike[]): Promise<D1StatementResult[]>;
-  exec?(query: string): Promise<unknown>;
-  withSession?(constraintOrBookmark?: string): DatabaseLike & { getBookmark?(): string | null };
-  getBookmark?(): string | null;
-}
+import type { DatabaseLike } from "./db/types";
+export type { D1StatementResult, StatementLike, DatabaseLike } from "./db/types";
 
 export interface R2ObjectLike {
   text(): Promise<string>;
@@ -49,8 +34,43 @@ export interface StaticAssetsBinding {
 
 export type R2BucketLike = R2Bucket;
 
+/** What the Worker may ask of a live session room over RPC; `LiveSessionRoom` implements it. */
+export interface LiveSessionRoomRpc extends Rpc.DurableObjectBranded {
+  /** Removes an anonymized person's questions, votes and ballots from the room and ends their connections. */
+  forgetParticipant(userId: string): Promise<void>;
+  readProgram(eventId: string, roomId: string): Promise<LiveProgramSelection>;
+  /** The composition this session's room has on Program. */
+  programStage(): Promise<LiveStage>;
+  /** Takes over another session's Program as it is, so making a session active never changes the picture. */
+  adoptProgramStage(stage: LiveStage): Promise<void>;
+  selectProgram(
+    eventId: string,
+    roomId: string,
+    input: { occurrenceId: string | null; expectedRevision: number },
+    claims: UserSessionTokenClaims,
+  ): Promise<LiveProgramSelectResult>;
+}
+
 export interface Env {
   DB: DatabaseLike;
+  /** Optional private RealtimeKit discovery configuration; never sent to recording asset hosts. */
+  REALTIMEKIT_ACCOUNT_ID?: string;
+  REALTIMEKIT_APP_ID?: string;
+  REALTIMEKIT_API_TOKEN?: string;
+  /** JSON array of explicitly trusted HTTPS recording download origins. */
+  REALTIMEKIT_RECORDING_DOWNLOAD_ORIGINS?: string;
+  /** Optional browser push configuration. Missing keys keep delivery disabled. */
+  VAPID_PUBLIC_KEY?: string;
+  VAPID_PRIVATE_KEY?: string;
+  VAPID_SUBJECT?: string;
+  /** Server-only at-rest key for owned push subscriptions. */
+  WEB_PUSH_ENCRYPTION_KEY?: string;
+  /** Server-only active and retained keys for opaque badge print recovery. */
+  BADGE_PRINT_ENCRYPTION_KEYS?: string;
+  /** Explicit approved publication ownership; absent keeps automatic release dispatch disabled. */
+  SITE_PUBLICATION_COORDINATOR_CONFIG?: string;
+  /** Server-only provider credential. Never included in request ledger or build artifacts. */
+  SITE_PUBLICATION_PROVIDER_TOKEN?: string;
   /** Browser and CDN lifetimes for public dynamic read responses. */
   PUBLIC_READ_BROWSER_TTL_SECONDS?: string;
   PUBLIC_READ_CDN_TTL_SECONDS?: string;
@@ -81,6 +101,8 @@ export interface Env {
   LOADER?: WorkerLoader;
   /** KV namespace used by the Workers OAuth Provider for MCP auth state and tokens. */
   OAUTH_KV?: KVNamespace;
+  /** One SQLite-backed Durable Object per session's live room (questions, reactions, control desk). */
+  LIVE_SESSION_ROOMS?: DurableObjectNamespace<LiveSessionRoomRpc>;
   /** Cloudflare Rate Limiting binding for low-volume per-email public email triggers. */
   EMAIL_RATE_LIMITER?: RateLimitBinding;
   /** Cloudflare Rate Limiting binding for higher-volume per-IP public email triggers. */
@@ -293,6 +315,8 @@ interface AuthAdminBase {
 /** A staff actor whose canonical id is also a real users(id) value. */
 export interface UserBackedAuthAdmin extends AuthAdminBase {
   identityType: "user";
+  /** Persisted OAuth ceiling; every protected D1 command rechecks it. */
+  oauthAuthorizationId?: string;
   /** Live Member capacity selected by the canonical user session, when one exists. */
   memberId?: string | null;
   sessionId?: string;

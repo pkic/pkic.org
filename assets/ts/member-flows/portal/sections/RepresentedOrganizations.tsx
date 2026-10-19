@@ -22,6 +22,7 @@ export function RepresentedOrganizations() {
       <PageHeader title="Your organizations" />
       <Panel>
         <ApiDataTable
+          urlState="represented-organizations"
           caption="Your organizations"
           endpoint="/api/v1/users/current/organizations"
           responseSchema={userOrganizationsListResponseSchema}

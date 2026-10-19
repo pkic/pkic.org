@@ -44,8 +44,17 @@ export async function verifiedMemberApplicationPayload<T extends Record<string, 
     String(payload.applicantEmail ?? ""),
     isIndividualMembershipCategory(membershipCategory) ? "individual" : "organization",
   );
+  // Supply synthetic descriptions unless a test explicitly exercises missing/blank answers.
+  const answers = (payload.answers ?? {}) as Record<string, unknown>;
+  const defaults = {
+    about_yourself: "I work on PKI interoperability.",
+    ...(!isIndividualMembershipCategory(membershipCategory)
+      ? { job_title: "Representative", about_organization: "We build PKI services." }
+      : {}),
+  };
   return {
     ...payload,
+    answers: { ...defaults, ...answers },
     joinToken: await issueMemberJoinApplicationToken(signingSecret, { ...capability, applicantUserId: null }, 15 * 60),
   };
 }
@@ -212,7 +221,14 @@ export async function createApplicationFormSubmission(
   answers: Record<string, unknown>,
   options: { submittedAt?: string } = {},
 ): Promise<string> {
-  const completeAnswers = { ...requiredMembershipApplicationAnswers, ...answers };
+  // An organization's approval creates its applicant's organization identity, which always has a job title.
+  const completeAnswers = {
+    ...requiredMembershipApplicationAnswers,
+    job_title: "Representative",
+    about_yourself: "I work on PKI interoperability.",
+    about_organization: "We build PKI services.",
+    ...answers,
+  };
   const formId = await seedMembershipApplicationForm();
   const submissionId = crypto.randomUUID();
   await env.DB.prepare(

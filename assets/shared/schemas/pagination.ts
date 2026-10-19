@@ -137,3 +137,20 @@ export function searchableListQuerySchema<SortSchema extends z.ZodTypeAny>(
     sort: sortSchema,
   });
 }
+
+/** Cursor pages keep the same bounded limit while avoiding the offset ceiling. */
+export function cursorPaginationQuerySchema<Cursor extends z.ZodTypeAny>(cursorSchema: Cursor) {
+  return paginationQuerySchema.pick({ limit: true }).extend({ cursor: cursorSchema.optional() });
+}
+
+/** Total describes the current filtered population, not a cross-request snapshot. */
+export function cursorPaginatedResponseSchema<K extends string, T extends z.ZodTypeAny, Cursor extends z.ZodTypeAny>(
+  itemsKey: K,
+  itemSchema: T,
+  cursorSchema: Cursor,
+) {
+  const page = pageInfoSchema.pick({ limit: true, total: true }).extend({ nextCursor: cursorSchema.nullable() });
+  return z.object({ [itemsKey]: z.array(itemSchema), page }) as z.ZodObject<
+    { [P in K]: z.ZodArray<T> } & { page: typeof page }
+  >;
+}

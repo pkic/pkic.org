@@ -2,10 +2,15 @@ import type {
   ConfiguredGoogleServiceAccountEnv,
   GoogleGroupsDirectoryClient,
   GoogleGroupsSyncAction,
+  GoogleGroupsMembershipOperation,
   GoogleServiceAccountEnv,
 } from "./contracts";
 
 const GOOGLE_DIRECTORY_MEMBERS_SCOPE = "https://www.googleapis.com/auth/admin.directory.group.member";
+export const GOOGLE_GROUPS_READONLY_SCOPES = [
+  "https://www.googleapis.com/auth/admin.directory.group.member.readonly",
+  "https://www.googleapis.com/auth/admin.directory.group.readonly",
+] as const;
 const GOOGLE_OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_DIRECTORY_GROUPS_URL = "https://admin.googleapis.com/admin/directory/v1/groups";
 
@@ -50,12 +55,13 @@ export function isGoogleGroupsSyncConfigured(env: GoogleServiceAccountEnv): env 
 async function getServiceAccountAccessToken(
   env: ConfiguredGoogleServiceAccountEnv,
   fetchImpl: typeof fetch,
+  scopes: readonly string[] = [GOOGLE_DIRECTORY_MEMBERS_SCOPE],
 ): Promise<string> {
   const now = Math.floor(Date.now() / 1_000);
   const signingInput = `${base64UrlJson({ alg: "RS256", typ: "JWT" })}.${base64UrlJson({
     iss: env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
     sub: env.GOOGLE_WORKSPACE_ADMIN_EMAIL,
-    scope: GOOGLE_DIRECTORY_MEMBERS_SCOPE,
+    scope: scopes.join(" "),
     aud: GOOGLE_OAUTH_TOKEN_URL,
     iat: now,
     exp: now + 3_600,
@@ -170,5 +176,29 @@ export async function createGoogleGroupsDirectoryClient(
       callDirectoryApi(fetchImpl, accessToken, action, googleGroupEmail, memberEmail),
     listMembers: (googleGroupEmail, maxPages = 25) =>
       listDirectoryMembers(fetchImpl, accessToken, googleGroupEmail, maxPages),
+  };
+}
+
+/** A separate factory ensures a dry-run client never obtains write authority. */
+export async function createGoogleGroupsDryRunDirectoryClient(
+  env: ConfiguredGoogleServiceAccountEnv,
+  operations: GoogleGroupsMembershipOperation[],
+  fetchImpl: typeof fetch = fetch,
+): Promise<GoogleGroupsDirectoryClient> {
+  const accessToken = await getServiceAccountAccessToken(env, fetchImpl, GOOGLE_GROUPS_READONLY_SCOPES);
+  const listings = new Map<string, Promise<{ emails: string[]; complete: boolean }>>();
+  return {
+    listMembers: (group, maxPages = 25) => listDirectoryMembers(fetchImpl, accessToken, group, maxPages),
+    async applyMembership(operation) {
+      let listing = listings.get(operation.googleGroupEmail);
+      if (!listing) {
+        listing = listDirectoryMembers(fetchImpl, accessToken, operation.googleGroupEmail, 25);
+        listings.set(operation.googleGroupEmail, listing);
+      }
+      const members = await listing;
+      if (!members.complete) throw new Error("Incomplete Google Group membership listing; no plan recorded");
+      // Record intent even if already satisfied: the live adapter applies it idempotently.
+      operations.push({ ...operation });
+    },
   };
 }

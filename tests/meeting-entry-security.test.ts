@@ -1,3 +1,5 @@
+// Prepare the real HTTP graph before timed journeys, as the shared API test helper does.
+import "../functions/http-router";
 import { grantAdministrator } from "./helpers/administrator";
 import { configureMeetingOccurrence } from "./helpers/meeting-occurrence";
 import { env } from "cloudflare:workers";
@@ -362,6 +364,15 @@ describe("authenticated meeting entry", () => {
         .bind(occurrence.id, userId)
         .first(),
     ).toMatchObject({ join_count: 2, attendance_verified_at: expect.any(String) });
+    await verifyOccurrenceAttendance(env.DB, admin, GROUP_ID, series.id, occurrence.id, confirmation!.id, {
+      source: "manual",
+    });
+    expect(
+      await env.DB.prepare(`SELECT points FROM user_standing_awards
+      WHERE user_id=? AND reason_key='meeting_attended' AND source_ref=?`)
+        .bind(userId, occurrence.id)
+        .all(),
+    ).toMatchObject({ results: [{ points: 5 }] });
   });
 
   /*

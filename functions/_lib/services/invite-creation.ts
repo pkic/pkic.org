@@ -19,6 +19,7 @@ import {
 } from "../invite-validity";
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../db/authorization-guard";
 import { PROPOSAL_INACTIVE_STATUS_SQL_LIST } from "./proposal-status-policy";
+import { affiliationOrganizationNameSql } from "./identities/affiliation-projection";
 
 export function formatInviterList(inviters: InviteInviterInfo[]): string {
   if (inviters.length === 0) return "";
@@ -330,7 +331,7 @@ export async function getInviteInviterSummary(
     sql: `SELECT ii.inviter_user_id AS userId,
                    u.first_name AS firstName,
                    u.last_name AS lastName,
-                   u.organization_name AS organizationName
+                   ${affiliationOrganizationNameSql("u.id")} AS organizationName
             FROM invite_inviters ii
             JOIN users u ON u.id = ii.inviter_user_id
             WHERE ii.invite_id = ?

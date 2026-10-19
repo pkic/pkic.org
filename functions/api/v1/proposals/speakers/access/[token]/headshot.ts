@@ -53,9 +53,7 @@ export async function onPut(c: AdminContext, token: ParticipantAuthority): Promi
       proposalUpdatedAt: proposal.updated_at,
       currentStatus: speaker.status,
       inviteGeneration: speaker.invite_generation,
-      accountHeadshotKey: user.accountHeadshotR2Key,
-      proposalOverrideSet: user.proposalHeadshotOverrideSet,
-      proposalOverrideKey: user.proposalHeadshotOverrideKey,
+      headshotKey: user.headshot_r2_key,
     },
     image,
   );
@@ -83,9 +81,7 @@ export async function onDelete(c: AdminContext, token: ParticipantAuthority): Pr
     proposalUpdatedAt: proposal.updated_at,
     currentStatus: speaker.status,
     inviteGeneration: speaker.invite_generation,
-    accountHeadshotKey: user.accountHeadshotR2Key,
-    proposalOverrideSet: user.proposalHeadshotOverrideSet,
-    proposalOverrideKey: user.proposalHeadshotOverrideKey,
+    headshotKey: user.headshot_r2_key,
   });
   return json({ success: true });
 }

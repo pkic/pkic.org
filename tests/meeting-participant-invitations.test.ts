@@ -155,7 +155,6 @@ describe("meeting participant invitations", () => {
     for (let index = 0; index < 450; index += 1) {
       const userId = crypto.randomUUID();
       const email = `bulk-${index}@example.test`;
-      const member = buildCreateIndividualMemberStatements(env.DB, userId, "H5", now);
       const identity = await buildCreateIdentityStatement(env.DB, {
         userId,
         organizationId: null,
@@ -163,13 +162,14 @@ describe("meeting participant invitations", () => {
         startImmediately: true,
         now,
       });
+      const member = buildCreateIndividualMemberStatements(env.DB, identity.identityId, "H5", now);
       statements.push(
         env.DB.prepare(
           `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
            VALUES (?, ?, ?, 1, ?, ?)`,
         ).bind(userId, email, email, now, now),
-        ...member.statements,
         identity.statement,
+        ...member.statements,
         env.DB.prepare(
           `INSERT INTO group_memberships (id, group_id, user_id, identity_id, member_id, source, joined_at, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, 'staff', ?, ?, ?)`,

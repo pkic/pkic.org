@@ -1,16 +1,16 @@
 /**
- * The proposal program of one group event: the shared catalogue, drawn as the
+ * The proposal program of one group event: the shared catalog, drawn as the
  * one list panel every collection in the portal is, with each row a link to
  * the proposal's own page under the event.
  *
  * It used to sit inside a titled panel — "Proposal program", with the group
  * and event names restated beside it — which said for a third time what the
  * breadcrumb, the workspace header and the tab already said, and fetched the
- * program catalogue to say it. The event's slug is the only thing the list
- * needs; when a caller cannot supply it, the program catalogue resolves it.
+ * program catalog to say it. The event's slug is the only thing the list
+ * needs; when a caller cannot supply it, the program catalog resolves it.
  */
 import { proposalProgramsListResponseSchema } from "../../../../../shared/schemas/proposal-programs";
-import { EmptyState } from "../../../../ui/RecordEmptyState";
+import { EmptyState } from "../../../../ui/EmptyState";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
 import { EventProposalsTable } from "../../../../components/proposals/EventProposalsTable";
@@ -31,7 +31,7 @@ export function GroupEventProposals({
 }: {
   groupId: string;
   eventId: string;
-  /** The event's slug, when the caller already holds the event; otherwise resolved from the program catalogue. */
+  /** The event's slug, when the caller already holds the event; otherwise resolved from the program catalog. */
   eventSlug?: string;
 }) {
   const programCatalog = useData(

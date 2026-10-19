@@ -1,3 +1,5 @@
+// Compile the real lazy HTTP graph before timed endpoint journeys.
+import "../functions/http-router";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import {

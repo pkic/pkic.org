@@ -9,8 +9,9 @@
  * Counting happens in SQL. Nothing here fetches rows to count them in
  * TypeScript.
  */
-import { standingFor, type StandingLevel } from "../../../assets/shared/member-standing";
+import { STANDING_REASON_POINTS, standingFor, type StandingLevel } from "../../../assets/shared/member-standing";
 import type { MemberAvailability, MemberSkill, MemberStanding } from "../../../assets/shared/schemas/member-profile";
+import { nowIso } from "../utils/time";
 import { batchFirst, batchRows } from "../db/pagination";
 import type { DatabaseLike } from "../types";
 
@@ -35,6 +36,7 @@ interface AvailabilityRow {
 
 interface StandingRow {
   points: number | null;
+  last_active_at: string | null;
 }
 
 interface LevelRow {
@@ -147,14 +149,21 @@ export async function getMemberAvailability(
 /**
  * Standing: the summed ledger, the band it places in, and recognitions held.
  *
- * The sum is taken in SQL over every award including corrections, so a
+ * The sum is taken in SQL over the configured window including corrections, so a
  * reversed award is reflected rather than needing a stored total to be
  * recomputed. Withdrawn recognitions are excluded — they are kept as history,
  * not shown as standing.
  */
-export async function getMemberStanding(db: DatabaseLike, userId: string): Promise<MemberStanding> {
+export async function getMemberStanding(db: DatabaseLike, userId: string, at = nowIso()): Promise<MemberStanding> {
+  const activityReasons = Object.keys(STANDING_REASON_POINTS);
   const [pointsResult, recognitionsResult, levelsResult] = await db.batch([
-    db.prepare(`SELECT COALESCE(SUM(points), 0) AS points FROM user_standing_awards WHERE user_id = ?`).bind(userId),
+    db
+      .prepare(`SELECT COALESCE(SUM(CASE WHEN awarded_at >= strftime('%Y-%m-%dT%H:%M:%fZ', ?, '-' ||
+                  (SELECT window_months FROM standing_settings WHERE id = 'default') || ' months', 'floor')
+                  THEN points ELSE 0 END), 0) AS points,
+                MAX(CASE WHEN reason_key IN (${activityReasons.map(() => "?").join(",")}) AND points > 0 THEN awarded_at END) AS last_active_at
+                FROM user_standing_awards WHERE user_id = ? AND awarded_at <= ?`)
+      .bind(at, ...activityReasons, userId, at),
     db
       .prepare(
         `SELECT recognition_key, label, awarded_at
@@ -177,6 +186,7 @@ export async function getMemberStanding(db: DatabaseLike, userId: string): Promi
 
   return {
     ...position,
+    lastActiveAt: batchFirst<StandingRow>(pointsResult)?.last_active_at ?? null,
     recognitions: batchRows<RecognitionRow>(recognitionsResult).map((row) => ({
       key: row.recognition_key,
       label: row.label,

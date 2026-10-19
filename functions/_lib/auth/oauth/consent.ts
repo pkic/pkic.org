@@ -1,13 +1,16 @@
 import type { Hono } from "hono";
 import type { Env } from "../../types";
 import { MCP_AUTHORIZE_MAX_BYTES, readBoundedFormData, readBoundedJsonBody } from "../../http-body";
+import { requireInternalSecret } from "../../request";
+import { assertSameOriginRequest } from "../../request-origin";
+import { approveOauthAuthorization } from "../../services/oauth-authorizations/approval";
+import { processOauthAuthorizationCompletionBackground } from "../../services/oauth-authorizations/completion";
+import { oauthAuthorizationApprovalResponseSchema } from "../../../../assets/shared/schemas/oauth-authorizations";
+import { jsonNoStore as jsonResponse } from "../../http";
 import { AppError, isAppError } from "../../errors";
 import {
   MCP_OAUTH_AUTHORIZE_PATH,
-  buildMcpOauthProps,
   describeMcpAuthorization,
-  grantedMcpOauthScopes,
-  normalizeMcpOauthScopes,
   parseOauthRequestFromReturnTo,
   redirectToMcpOauthUi,
   redirectAuthorizationDenied,
@@ -30,57 +33,30 @@ interface McpAuthorizeHandlerOptions {
   app: Hono<{ Bindings: Env }>;
 }
 
-function jsonResponse(data: unknown, status = 200): Response {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { "content-type": "application/json;charset=UTF-8" },
-  });
-}
-
-async function parseAuthorizePayload(
-  request: Request,
-): Promise<{ action: "request-link" | "approve" | "deny"; email: string; returnTo: string }> {
+async function parseAuthorizePayload(request: Request) {
   const contentType = request.headers.get("content-type") ?? "";
-  let raw: { action: unknown; email?: unknown; return_to: unknown };
+  let raw: unknown;
   if (contentType.includes("application/json")) {
-    let parsed: unknown;
     try {
-      parsed = await readBoundedJsonBody(request, MCP_AUTHORIZE_MAX_BYTES);
+      raw = await readBoundedJsonBody(request, MCP_AUTHORIZE_MAX_BYTES);
     } catch (error) {
-      if (isAppError(error) && error.code === "REQUEST_BODY_TOO_LARGE") {
-        throw error;
-      }
-      parsed = {};
+      if (isAppError(error) && error.code === "REQUEST_BODY_TOO_LARGE") throw error;
+      raw = {};
     }
-    const body = parsed as {
-      action?: unknown;
-      email?: unknown;
-      return_to?: unknown;
-    };
-
-    raw = {
-      action: String(body.action ?? ""),
-      email: String(body.email ?? "").trim(),
-      return_to: typeof body.return_to === "string" ? body.return_to : "",
-    };
   } else {
-    const formData = await readBoundedFormData(request, MCP_AUTHORIZE_MAX_BYTES);
+    const form = await readBoundedFormData(request, MCP_AUTHORIZE_MAX_BYTES);
     raw = {
-      action: String(formData.get("action") ?? ""),
-      email: String(formData.get("email") ?? "").trim(),
-      return_to: formData.get("return_to")?.toString() ?? "",
+      action: form.get("action"),
+      email: form.get("email"),
+      return_to: form.get("return_to"),
+      scopes: form.getAll("scopes"),
+      actingIdentityId: form.get("actingIdentityId") || null,
     };
   }
-
   const parsed = mcpOauthAuthorizeActionSchema.safeParse(raw);
-  if (!parsed.success) {
+  if (!parsed.success)
     throw new AppError(400, "VALIDATION_ERROR", "Invalid OAuth authorization request", parsed.error.flatten());
-  }
-  return {
-    action: parsed.data.action,
-    email: parsed.data.action === "request-link" ? parsed.data.email : "",
-    returnTo: sanitizeAuthorizeReturnTo(parsed.data.return_to),
-  };
+  return { ...parsed.data, returnTo: sanitizeAuthorizeReturnTo(parsed.data.return_to) };
 }
 
 async function handleAuthorizeGet(request: Request, env: McpOAuthEnv): Promise<Response> {
@@ -106,59 +82,57 @@ async function handleMagicLinkRequest(
 async function handleAuthorizeApproval(
   request: Request,
   env: McpOAuthEnv,
+  ctx: ExecutionContext,
   returnTo: string,
-): Promise<{ redirectTo: string }> {
+  selectedScopes: unknown,
+  expectedActingIdentityId: string | null,
+) {
   const authRequest = await parseOauthRequestFromReturnTo(request, env.OAUTH_PROVIDER, returnTo);
   const session = await resolveMcpOauthSession(request, env);
-  const admin = session?.staff;
-  if (!admin) {
+  if (!session?.staff || !session.staffIdleExpiresAt)
     throw new AppError(401, "AUTH_EXPIRED", "Your authorization session expired. Sign in again.");
-  }
-
-  const requestedScopes = normalizeMcpOauthScopes(authRequest.scope);
-  const grantedScopes = grantedMcpOauthScopes(admin, requestedScopes);
-  if (grantedScopes.length === 0) {
-    throw new AppError(403, "PERMISSION_REQUIRED", "No scopes can be granted for this request.");
-  }
-
-  const { redirectTo } = await env.OAUTH_PROVIDER.completeAuthorization({
+  if (session.actingIdentities.length > 1 && !session.actingIdentityId)
+    throw new AppError(
+      409,
+      "ACTING_IDENTITY_REQUIRED",
+      "Choose the identity you act as before authorizing this client",
+    );
+  const client = await env.OAUTH_PROVIDER.lookupClient(authRequest.clientId);
+  const result = await approveOauthAuthorization(env.DB, {
     request: authRequest,
-    userId: admin.id,
-    metadata: {
-      email: admin.email,
-      label: admin.email,
-    },
-    scope: grantedScopes,
-    props: buildMcpOauthProps(
-      {
-        ...admin,
-        scopes: grantedScopes,
-      },
-      grantedScopes,
-      "oauth",
-      session?.staffIdleExpiresAt,
-    ),
+    actor: session.staff,
+    member: session.member ?? null,
+    staffIdleExpiresAt: session.staffIdleExpiresAt,
+    clientName: client?.clientName ?? authRequest.clientId,
+    selectedScopes,
+    actingIdentityId: session.actingIdentityId,
+    expectedActingIdentityId,
+    signingSecret: requireInternalSecret(env),
   });
-
-  return mcpOauthRedirectResponseSchema.parse({ redirectTo });
+  ctx.waitUntil(processOauthAuthorizationCompletionBackground(env, result.authorizationId, env.OAUTH_PROVIDER));
+  return oauthAuthorizationApprovalResponseSchema.parse(result);
 }
 
 async function handleAuthorizePost(request: Request, env: McpOAuthEnv, ctx: ExecutionContext): Promise<Response> {
-  const { action, email, returnTo } = await parseAuthorizePayload(request);
+  assertSameOriginRequest(request, new URL(request.url).origin, "oauth_authorization");
+  const payload = await parseAuthorizePayload(request);
+  const { action, returnTo } = payload;
 
   if (action === "request-link") {
-    return handleMagicLinkRequest(request, env, ctx, email, returnTo);
+    return handleMagicLinkRequest(request, env, ctx, payload.email, returnTo);
   }
 
-  const authRequest = await parseOauthRequestFromReturnTo(request, env.OAUTH_PROVIDER, returnTo);
-
   if (action === "deny") {
+    const authRequest = await parseOauthRequestFromReturnTo(request, env.OAUTH_PROVIDER, returnTo);
     const response = redirectAuthorizationDenied(authRequest);
     return jsonResponse(mcpOauthRedirectResponseSchema.parse({ redirectTo: response.headers.get("location") }), 200);
   }
 
   if (action === "approve") {
-    return jsonResponse(await handleAuthorizeApproval(request, env, returnTo));
+    return jsonResponse(
+      await handleAuthorizeApproval(request, env, ctx, returnTo, payload.scopes, payload.actingIdentityId),
+      202,
+    );
   }
 
   return new Response("Method not allowed", { status: 405 });

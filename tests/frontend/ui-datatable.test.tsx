@@ -13,6 +13,8 @@ import { render } from "preact";
 import type { ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 
+import { axeViolations } from "./helpers/axe";
+
 import { DataTable, type DataTableColumn } from "../../assets/ts/ui/DataTable";
 
 interface Member {
@@ -74,6 +76,44 @@ describe("DataTable", () => {
       (cell) => cell.textContent,
     );
     expect(names).toEqual(["Marit Halvorsen", "Jelani Okonkwo", "Sofia Beaumont"]);
+  });
+
+  it("uses the declared primary column as the mobile title after a kind column", () => {
+    const recordColumns: DataTableColumn<Member>[] = [
+      { id: "kind", header: "Kind", cell: () => "Individual", width: "fit" },
+      { ...columns[0]!, width: "primary" },
+      columns[1]!,
+    ];
+    const container = mount(<DataTable caption="Members" columns={recordColumns} rows={rows} rowKey={(r) => r.id} />);
+    const cells = container.querySelectorAll("tbody tr:first-child td");
+    expect(cells[0]?.classList.contains("pk-table__cell--meta")).toBe(true);
+    expect(cells[1]?.classList.contains("pk-table__cell--title")).toBe(true);
+    expect(cells[1]?.textContent).toContain("Marit Halvorsen");
+  });
+
+  it("marks each cell's part in a narrow record: title, meta value, empty value, actions", () => {
+    const recordColumns: DataTableColumn<Member>[] = [
+      ...columns,
+      { id: "region", header: "Region", cell: (row) => (row.id === "mh" ? "Nordics" : "—") },
+      { id: "note", header: "Note", cell: () => <span class="pk-muted">—</span> },
+      { id: "actions", header: "Actions", headerHidden: true, cell: () => <button type="button">…</button> },
+    ];
+    const container = mount(<DataTable caption="Members" columns={recordColumns} rows={rows} rowKey={(r) => r.id} />);
+    const roles = (row: Element) =>
+      [...row.querySelectorAll("td")].map((cell) =>
+        [...cell.classList].filter((name) => name.startsWith("pk-table__cell--")).join(" "),
+      );
+    const [first, second] = [...container.querySelectorAll("tbody tr")];
+    expect(roles(first!)).toEqual([
+      "pk-table__cell--title",
+      "pk-table__cell--meta",
+      "pk-table__cell--meta",
+      "pk-table__cell--meta pk-table__cell--empty",
+      "pk-table__cell--actions",
+    ]);
+    expect(roles(second!)[2]).toBe("pk-table__cell--meta pk-table__cell--empty");
+    // The wide table keeps its dash; only the narrow record leaves it out.
+    expect(second!.querySelectorAll("td")[2]?.textContent).toContain("—");
   });
 
   it("truncates plain-text cells visually while retaining the full value", () => {
@@ -189,7 +229,7 @@ describe("DataTable", () => {
         selection={{
           selected: new Set<string>(),
           onChange: vi.fn(),
-          rowLabel: (key) => `Select ${key}`,
+          rowLabel: (key) => key,
         }}
       />,
     );
@@ -389,6 +429,31 @@ describe("DataTable", () => {
       expect(link?.tabIndex).toBe(0);
     });
 
+    it("keeps one keyboard/assistive target per row while cell copies share its destination", async () => {
+      const container = mount(
+        <DataTable
+          caption="Organizations"
+          columns={columns}
+          rows={rows}
+          rowKey={(row) => row.id}
+          rowAction={(row) => ({ label: `Open ${row.name}`, href: `/organizations/${row.id}` })}
+        />,
+      );
+      for (const [index, row] of [...container.querySelectorAll("tbody tr")].entries()) {
+        const links = [...row.querySelectorAll<HTMLAnchorElement>(".pk-table__row-link")];
+        expect(links).toHaveLength(columns.length);
+        expect(links.filter((link) => link.tabIndex === 0)).toHaveLength(1);
+        expect(links.filter((link) => link.getAttribute("aria-hidden") !== "true")).toHaveLength(1);
+        expect(links.map((link) => link.getAttribute("href"))).toEqual(
+          columns.map(() => `/organizations/${rows[index].id}`),
+        );
+        const pointer = new Event("pointerdown", { bubbles: true, cancelable: true });
+        links[1].dispatchEvent(pointer);
+        expect(pointer.defaultPrevented).toBe(true);
+      }
+      expect(await axeViolations(container)).toEqual([]);
+    });
+
     it("uses a button when the row selects rather than navigates", () => {
       const onSelect = vi.fn();
       const container = mount(
@@ -397,7 +462,7 @@ describe("DataTable", () => {
           columns={columns}
           rows={rows}
           rowKey={(row) => row.id}
-          rowAction={(row) => ({ label: `View ${row.name}`, onSelect })}
+          rowAction={(row) => ({ label: `View ${row.name}`, onSelect: () => onSelect(row.id) })}
         />,
       );
 
@@ -406,6 +471,13 @@ describe("DataTable", () => {
       expect(button?.textContent).toBe("View Marit Halvorsen");
       void act(() => button!.click());
       expect(onSelect).toHaveBeenCalledTimes(1);
+      expect(onSelect).toHaveBeenLastCalledWith("mh");
+      const secondRowCell = container
+        .querySelectorAll<HTMLTableRowElement>("tbody tr")[1]
+        .querySelector<HTMLButtonElement>("td:last-child button")!;
+      void act(() => secondRowCell.click());
+      expect(onSelect).toHaveBeenCalledTimes(2);
+      expect(onSelect).toHaveBeenLastCalledWith("jo");
     });
 
     it("puts the control in the first cell, ahead of the row's own actions", () => {
@@ -447,7 +519,7 @@ describe("DataTable", () => {
           columns={columns}
           rows={rows}
           rowKey={(row) => row.id}
-          selection={{ selected: new Set(), onChange: vi.fn(), rowLabel: (key) => `Select ${key}` }}
+          selection={{ selected: new Set(), onChange: vi.fn(), rowLabel: (key) => key }}
           detailRow={(row) => (row.id === "mh" ? <p>Joined in 2019</p> : null)}
         />,
       );

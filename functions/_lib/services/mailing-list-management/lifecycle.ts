@@ -12,6 +12,7 @@ import {
   type MailingListMutationOptions,
 } from "./authorization";
 import { translateMailingListWriteError } from "./configuration";
+import { prepareMailingListPublication } from "./publication";
 import { loadMailingList } from "./read-model";
 
 /**
@@ -91,6 +92,7 @@ export async function archiveMailingList(
   await commitLifecycleChange(
     db,
     [
+      prepareMailingListPublication(db, id, now, { active: false }),
       db
         .prepare("UPDATE mailing_lists SET active = 0, archived_at = ?, updated_at = ? WHERE id = ?")
         .bind(now, now, id),
@@ -129,6 +131,7 @@ export async function restoreMailingList(
   await commitLifecycleChange(
     db,
     [
+      prepareMailingListPublication(db, id, now, { active: true }),
       db.prepare("UPDATE mailing_lists SET active = 1, archived_at = NULL, updated_at = ? WHERE id = ?").bind(now, id),
       prepareReconcileMailingListStatement(db, id, now),
       prepareAuditLog(
@@ -166,6 +169,7 @@ export async function deleteMailingList(
   await commitLifecycleChange(
     db,
     [
+      prepareMailingListPublication(db, id, now),
       db.prepare("DELETE FROM mailing_lists WHERE id = ?").bind(id),
       // The list is gone; the record that it existed and who removed it is not.
       prepareAuditLog(

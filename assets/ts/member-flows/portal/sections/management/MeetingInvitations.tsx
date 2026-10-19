@@ -36,6 +36,7 @@ const RESPONSE_TONES: Record<NonNullable<EventOccurrenceInvitation["response"]>,
 export function MeetingInvitations({ endpoint, occurrence }: { endpoint: string; occurrence: EventOccurrence }) {
   return (
     <ApiDataTable
+      urlState="meeting-invitations"
       caption="Meeting invitations"
       // Keyed on the round so a round sent from the header re-reads the list.
       key={occurrence.invitationsRound}
@@ -49,13 +50,7 @@ export function MeetingInvitations({ endpoint, occurrence }: { endpoint: string;
       columns={[
         {
           header: "Participant",
-          cell: (invitation) => (
-            <PersonCell
-              name={invitation.name}
-              email={invitation.name === invitation.email ? undefined : invitation.email}
-              size="sm"
-            />
-          ),
+          cell: (invitation) => <PersonCell name={invitation.name} size="sm" />,
           width: "primary",
           sort: { asc: "name", desc: "-name" },
         },
@@ -80,7 +75,7 @@ export function MeetingInvitations({ endpoint, occurrence }: { endpoint: string;
           sort: { asc: "response", desc: "-response" },
           filter: {
             param: "response",
-            // The choices are the query contract's, labelled here.
+            // The choices are the query contract's, labeled here.
             options: [
               { value: "", label: "All responses" },
               ...eventOccurrenceInvitationResponseFilterSchema.options.map((value) => ({

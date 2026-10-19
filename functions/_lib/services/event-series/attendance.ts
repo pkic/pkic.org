@@ -1,3 +1,4 @@
+import { prepareStandingAwards } from "../member-standing/awards";
 import type { z } from "zod";
 import {
   EVENT_ATTENDANCE_SORT_COLUMNS,
@@ -104,7 +105,12 @@ export function buildOccurrenceAttendancePageQuery(occurrenceId: string, query: 
       fromSql: `FROM event_occurrence_join_confirmations confirmation WHERE ${conditions.join(" AND ")}`,
       bindings,
     },
-    orderBy: resolveMappedOrderBy(query.sort, SORT_EXPRESSIONS, SORT_EXPRESSIONS.name, "confirmation.id ASC"),
+    orderBy: resolveMappedOrderBy(
+      query.sort,
+      SORT_EXPRESSIONS,
+      `${SORT_EXPRESSIONS.confirmed_at} DESC`,
+      "confirmation.id ASC",
+    ),
     limit: query.limit,
     offset: query.offset,
   };
@@ -165,6 +171,17 @@ export async function verifyOccurrenceAttendance(
         "event_occurrence_join_confirmation",
         confirmationId,
         { occurrenceId, source: input.source, verifiedAt, note: input.note },
+      ),
+      prepareStandingAwards(
+        db,
+        "meeting_attended",
+        "meeting_occurrence",
+        {
+          sql: `SELECT user_id, occurrence_id AS source_ref, attendance_verified_at AS awarded_at
+          FROM event_occurrence_join_confirmations WHERE id=? AND occurrence_id=? AND attendance_verified_at IS NOT NULL`,
+          bindings: [confirmationId, occurrenceId],
+        },
+        nowIso(),
       ),
     ]);
   } catch (error) {

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { agendaRoleMemberSchema } from "./event-agenda";
 import { utcInstantSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import { paginatedResponseSchema, searchableListQuerySchema, sortColumnSchema } from "./pagination";
@@ -7,7 +8,7 @@ export const EVENT_TEAM_ROLES = ["organizer", "program_committee", "moderator", 
 export const eventTeamRoleSchema = z.enum(EVENT_TEAM_ROLES);
 export type EventTeamRole = z.infer<typeof eventTeamRoleSchema>;
 
-/** Canonical API role names map one-to-one to the persisted RBAC catalogue. */
+/** Canonical API role names map one-to-one to the persisted RBAC catalog. */
 export const EVENT_TEAM_ROLE_IDS = {
   organizer: "role-event_organizer",
   program_committee: "role-program_committee",
@@ -57,3 +58,20 @@ export type EventTeamRoleCreate = z.infer<typeof eventTeamRoleCreateSchema>;
 export const eventTeamRoleCreateResponseSchema = z.object({
   role: eventTeamRoleAssignmentSchema,
 });
+
+/** One person per event roster; access grants remain separate from scheduling duties. */
+export const eventTeamPersonSchema = z.object({
+  userId: databaseIdSchema,
+  firstName: z.string().nullable(),
+  lastName: z.string().nullable(),
+  headshotUrl: z.string().nullable(),
+  accessRoles: z.array(eventTeamRoleAssignmentSchema.pick({ id: true, role: true, expiresAt: true, createdAt: true })),
+  staffing: agendaRoleMemberSchema.nullable(),
+  duties: z.array(z.string()),
+});
+export type EventTeamPerson = z.infer<typeof eventTeamPersonSchema>;
+export const eventTeamRosterQuerySchema = searchableListQuerySchema(sortColumnSchema(["person"] as const)).extend({
+  userId: databaseIdSchema.optional(),
+});
+export type EventTeamRosterQuery = z.infer<typeof eventTeamRosterQuerySchema>;
+export const eventTeamRosterResponseSchema = paginatedResponseSchema("people", eventTeamPersonSchema);

@@ -5,7 +5,7 @@ import { decorateOpenApiSpec } from "../functions/_lib/openapi/mcp";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
-import { openapi } from "../functions/router";
+import { openapi } from "../functions/http-router";
 import { seedWorkflowEmailTemplates } from "./helpers/event-workflow";
 import { validJpegBytes } from "./helpers/raster-images";
 

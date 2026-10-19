@@ -1,6 +1,6 @@
 import { useEffect, useState } from "preact/hooks";
 import { youtubeVideoEmbed } from "../../../shared/markdown-media";
-import { successResponseSchema } from "../../../shared/schemas/api-common";
+import { userAuthLogoutResponseSchema } from "../../../shared/schemas/user-auth";
 import {
   meetingEntrySignInUrl,
   meetingSeriesEntrySignInUrl,
@@ -236,7 +236,7 @@ export function App({
     try {
       const forgotten = await fetch(`${occurrenceEndpoint(occurrenceId)}/links/session`, { method: "DELETE" });
       if (!forgotten.ok) throw new Error("The remembered meeting identity could not be cleared.");
-      await postJson("/api/v1/auth/logout", {}, successResponseSchema);
+      await postJson("/api/v1/auth/logout", {}, userAuthLogoutResponseSchema);
       window.location.assign(
         resumePersonalLink && personalToken ? personalMeetingEntrySignInUrl(personalToken) : "/portal/",
       );

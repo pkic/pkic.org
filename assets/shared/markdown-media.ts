@@ -1,18 +1,22 @@
+import { youtubeVideoUrlSegment } from "./youtube-video";
+
+/** Canonical legacy start offsets are nonnegative decimal seconds of at most ten digits. */
+export function youtubeStartOffset(value: string): number | null {
+  if (!/^(?:0|[1-9][0-9]{0,9})$/u.test(value)) return null;
+  const seconds = Number(value);
+  return Number.isSafeInteger(seconds) ? seconds : null;
+}
+
 /** Recognized YouTube destinations; a caller decides when the viewer may receive one. */
 export function youtubeVideoEmbed(value: string): string | null {
   try {
     const url = new URL(value.trim());
-    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
-    const host = url.hostname.toLowerCase().replace(/^www\./, "");
-    const id =
-      host === "youtu.be"
-        ? url.pathname.slice(1)
-        : host === "youtube.com" || host === "youtube-nocookie.com"
-          ? url.pathname === "/watch"
-            ? url.searchParams.get("v")
-            : /^\/(?:live|embed|shorts)\/([\w-]+)$/.exec(url.pathname)?.[1]
-          : null;
-    return id && /^[\w-]+$/.test(id) ? `https://www.youtube.com/embed/${id}` : null;
+    const id = youtubeVideoUrlSegment(url);
+    if (!id) return null;
+    const authoredStart = url.searchParams.get("start");
+    const start = authoredStart === null ? null : youtubeStartOffset(authoredStart);
+    if (authoredStart !== null && start === null) return null;
+    return `https://www.youtube.com/embed/${id}${start === null ? "" : `?start=${start}`}`;
   } catch {
     return null;
   }

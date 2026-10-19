@@ -164,33 +164,40 @@ describe("Avatar", () => {
 
 describe("PersonCell", () => {
   it("renders the avatar with the provided name", () => {
-    const container = mount(<PersonCell name="Sofia Beaumont" email="sofia@example.com" />);
+    const container = mount(<PersonCell name="Sofia Beaumont" />);
     const initials = container.querySelector(".pk-avatar__initials");
     expect(initials?.textContent).toBe("SB");
   });
 
   it("renders the name in a dedicated element", () => {
-    const container = mount(<PersonCell name="Sofia Beaumont" email="sofia@example.com" />);
+    const container = mount(<PersonCell name="Sofia Beaumont" />);
     const name = container.querySelector(".pk-person-cell__name");
     expect(name?.textContent).toBe("Sofia Beaumont");
   });
 
-  it("renders the email when provided", () => {
-    const container = mount(<PersonCell name="Sofia" email="sofia@example.com" />);
+  it("renders a caller's detail as the second line, such as an outbox recipient's address", () => {
+    const container = mount(<PersonCell name="Sofia" detail="sofia@example.com" />);
     const email = container.querySelector(".pk-person-cell__email");
     expect(email?.textContent).toBe("sofia@example.com");
   });
 
-  it("does not render email element when email is not provided", () => {
+  it("reads the identity a person acts as, title first, and leaves the line out without one", () => {
+    const both = mount(<PersonCell name="Jane Doe" title="CTO" organization="Example Org" />);
+    expect(both.querySelector(".pk-person-cell__email")?.textContent).toBe("CTO at Example Org");
+    const orgOnly = mount(<PersonCell name="Jane Doe" organization="Example Org" />);
+    expect(orgOnly.querySelector(".pk-person-cell__email")?.textContent).toBe("Example Org");
+    const neither = mount(<PersonCell name="Jane Doe" title={null} organization={null} />);
+    expect(neither.querySelector(".pk-person-cell__email")).toBeNull();
+  });
+
+  it("leaves the second line out when there is nothing to say", () => {
     const container = mount(<PersonCell name="Sofia" />);
     const email = container.querySelector(".pk-person-cell__email");
     expect(email).toBeNull();
   });
 
   it("passes avatarSrc to the Avatar component", () => {
-    const container = mount(
-      <PersonCell name="Sofia" email="sofia@example.com" avatarSrc="https://example.com/sofia.jpg" />,
-    );
+    const container = mount(<PersonCell name="Sofia" avatarSrc="https://example.com/sofia.jpg" />);
     const img = container.querySelector("img");
     expect(img?.src).toContain("example.com/sofia.jpg");
   });

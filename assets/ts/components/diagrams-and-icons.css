@@ -2,7 +2,7 @@
  * Working-group glyphs, inline diagrams and the icon tiles that carry them.
  *
  * Ported from the published site's diagrams-and-icons stylesheet: the SVGs
- * were already inlined by the components, but nothing sized or coloured them,
+ * were already inlined by the components, but nothing sized or colored them,
  * so every icon tile rendered empty.
  */
 
@@ -16,23 +16,13 @@
     display: contents;
   }
 
-
-  .mermaid-wrap {
-    background: transparent;
-    border: 1px solid rgba(0, 0, 0, 0.08);
-    border-radius: 0.75rem;
-    padding: 2rem 1.5rem;
-    margin: 2rem 0;
-    overflow-x: auto;
-    position: relative;
-  }
   .mermaid-wrap::before {
     content: "";
     position: absolute;
     top: 0;
     left: 0;
     right: 0;
-    height: 3px;
+    height: 0.1875rem;
     background: linear-gradient(90deg, var(--wg-color, #2f5fc7), transparent 80%);
     border-radius: 0.75rem 0.75rem 0 0;
   }
@@ -48,53 +38,55 @@
     max-width: 100%;
     height: auto;
   }
-  .mermaid-wrap {
-    background: #ffffff;
-  }
 
   [data-pagefind-body] .mermaid-wrap {
     --wg-color: var(--pk-palette-blue);
   }
 
-  [data-pagefind-body] h1,
-  [data-pagefind-body] h2,
-  [data-pagefind-body] h3,
-  [data-pagefind-body] h4,
-  [data-pagefind-body] h5,
-  [data-pagefind-body] h6 {
+  [data-pagefind-body] h1:not(:where(.pk *)),
+  [data-pagefind-body] h2:not(:where(.pk *)),
+  [data-pagefind-body] h3:not(:where(.pk *)),
+  [data-pagefind-body] h4:not(:where(.pk *)),
+  [data-pagefind-body] h5:not(:where(.pk *)),
+  [data-pagefind-body] h6:not(:where(.pk *)) {
     font-weight: 700;
     line-height: 1.25;
     scroll-margin-top: 5rem;
   }
-  [data-pagefind-body] h1 {
+  [data-pagefind-body] h1:not(:where(.pk *)) {
     font-size: 2rem;
     margin-top: 0;
     margin-bottom: 1rem;
   }
-  [data-pagefind-body] h2 {
+  [data-pagefind-body] h2:not(:where(.pk *)) {
     font-size: 1.5rem;
     margin-top: 2.5rem;
     margin-bottom: 0.75rem;
     padding-bottom: 0.4rem;
-    border-bottom: 1px solid color-mix(in srgb, var(--page-accent, var(--wg-color, var(--pk-palette-green))) 20%, transparent);
-    background: linear-gradient(120deg, var(--page-accent, var(--wg-color, var(--pk-palette-green))), var(--page-accent-2, rgb(72, 124, 170)));
+    border-bottom: 1px solid
+      color-mix(in srgb, var(--page-accent, var(--wg-color, var(--pk-palette-green))) 20%, transparent);
+    background: linear-gradient(
+      120deg,
+      var(--page-accent, var(--wg-color, var(--pk-palette-green))),
+      var(--page-accent-2, rgb(72, 124, 170))
+    );
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
   @supports not (-webkit-background-clip: text) {
-    [data-pagefind-body] h2 {
+    [data-pagefind-body] h2:not(:where(.pk *)) {
       color: var(--page-accent, var(--wg-color, var(--pk-palette-green)));
       background: none;
     }
   }
-  [data-pagefind-body] h3 {
+  [data-pagefind-body] h3:not(:where(.pk *)) {
     font-size: 1.2rem;
     margin-top: 2rem;
     margin-bottom: 0.5rem;
     color: var(--page-accent-2, var(--page-accent, var(--wg-color, rgb(72, 124, 170))));
   }
-  [data-pagefind-body] h4 {
+  [data-pagefind-body] h4:not(:where(.pk *)) {
     font-size: 1rem;
     margin-top: 1.5rem;
     margin-bottom: 0.4rem;
@@ -195,8 +187,17 @@
   }
 
   .mermaid-wrap {
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 0.75rem;
+    padding: 2rem 1.5rem;
+    margin: 2rem 0;
+    overflow-x: auto;
+    position: relative;
+    background: #ffffff;
     cursor: zoom-in;
-    transition: transform 0.2s, box-shadow 0.2s;
+    transition:
+      transform 0.2s,
+      box-shadow 0.2s;
   }
   .mermaid-wrap:hover {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
@@ -204,7 +205,7 @@
   .diagram-toggle {
     display: block;
     margin: 0 0 0.5rem auto;
-    min-height: 44px;
+    min-height: 2.75rem;
     padding: 0.5rem 1rem;
     border: 1px solid var(--pk-line-soft);
     border-radius: 0.5rem;
@@ -227,8 +228,15 @@
   .diagram-dialog::backdrop {
     background: rgba(15, 23, 42, 0.65);
   }
-  .diagram-hint {
+  .diagram-dialog__head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--pk-3);
     margin: 0 0 0.75rem;
+  }
+  .diagram-hint {
+    margin: 0;
     color: var(--pk-ink-muted);
     font-size: 0.875rem;
   }

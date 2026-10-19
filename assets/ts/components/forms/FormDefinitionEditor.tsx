@@ -1,3 +1,4 @@
+import { useHashQueryParam } from "../../hooks/useHashQueryParam";
 import { useEffect, useRef, useState } from "preact/hooks";
 import {
   FORM_PURPOSES,
@@ -10,12 +11,7 @@ import {
   type FormPurpose,
   type FormStatus,
 } from "../../../shared/schemas/forms";
-import {
-  buildFieldValidation,
-  type FieldDraft,
-  type FieldType,
-  type VisualizationConfig,
-} from "./FormFieldConfigEditor";
+import { emptyFieldDraft, fieldDraftToInput, fieldToDraft, type FieldDraft, type FieldType } from "./form-field-draft";
 import { ClosedQuestion, OpenQuestion } from "./FormQuestionCard";
 import { FormQuestionPalette } from "./FormQuestionPalette";
 import { FormRespondentPreview } from "./FormRespondentPreview";
@@ -30,6 +26,8 @@ import { Select, TextInput } from "../../ui/TextControl";
 import "../../ui/Content.css";
 import "./FormBuilder.css";
 import { slugify } from "../../../shared/slug";
+import { useContractForm } from "../../hooks/useContractForm";
+import { ApiClientError } from "../../shared/api-client";
 
 export interface EditableFormDetail {
   form: {
@@ -69,119 +67,6 @@ const STATUS_LABELS: Record<FormStatus, string> = {
   archived: "Archived",
 };
 
-function emptyField(index: number): FieldDraft {
-  return {
-    key: "",
-    label: "",
-    fieldType: "text",
-    required: false,
-    sortOrder: (index + 1) * 10,
-    optionsText: "",
-    optionSource: undefined,
-    adminVisualization: "auto",
-    placeholder: "",
-    helpText: "",
-    uiWidget: "",
-    format: "",
-    pattern: "",
-    patternMessage: "",
-    minLength: "",
-    maxLength: "",
-    min: "",
-    max: "",
-    step: "",
-    minItems: "",
-    maxItems: "",
-    allowCustom: false,
-    allowedDomainsText: "",
-    advancedValidationText: "{}",
-    rawMode: false,
-    rawValidationText: "{}",
-  };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function stringConfig(config: Record<string, unknown>, key: string): string {
-  const value = config[key];
-  return typeof value === "string" ? value : "";
-}
-
-function numberConfig(config: Record<string, unknown>, key: string): string {
-  const value = config[key];
-  return typeof value === "number" && Number.isFinite(value) ? String(value) : "";
-}
-
-function visualizationConfig(value: unknown): VisualizationConfig {
-  return value === "bar" || value === "pie" || value === "wordcloud" || value === "list" ? value : "auto";
-}
-
-const KNOWN_VALIDATION_KEYS = new Set([
-  "adminVisualization",
-  "visualization",
-  "placeholder",
-  "helpText",
-  "uiWidget",
-  "format",
-  "pattern",
-  "patternMessage",
-  "minLength",
-  "maxLength",
-  "min",
-  "max",
-  "step",
-  "minItems",
-  "maxItems",
-  "allowCustom",
-  "allowedDomains",
-]);
-
-function advancedConfigText(config: Record<string, unknown>): string {
-  const advanced = Object.fromEntries(Object.entries(config).filter(([key]) => !KNOWN_VALIDATION_KEYS.has(key)));
-  return Object.keys(advanced).length ? JSON.stringify(advanced, null, 2) : "{}";
-}
-
-function fieldToDraft(field: FormFieldDefinition): FieldDraft {
-  const validation = isRecord(field.validation) ? field.validation : {};
-  const allowedDomains = validation.allowedDomains;
-  return {
-    key: field.key,
-    label: field.label,
-    fieldType: field.fieldType,
-    required: field.required,
-    sortOrder: field.sortOrder,
-    optionSource: field.optionSource ?? undefined,
-    optionsText: field.optionSource
-      ? ""
-      : Array.isArray(field.options)
-        ? field.options.map((entry) => (typeof entry === "string" ? entry : String(entry.value ?? ""))).join("\n")
-        : "",
-    adminVisualization: visualizationConfig(validation.adminVisualization ?? validation.visualization),
-    placeholder: stringConfig(validation, "placeholder"),
-    helpText: stringConfig(validation, "helpText"),
-    uiWidget: stringConfig(validation, "uiWidget"),
-    format: stringConfig(validation, "format"),
-    pattern: stringConfig(validation, "pattern"),
-    patternMessage: stringConfig(validation, "patternMessage"),
-    minLength: numberConfig(validation, "minLength"),
-    maxLength: numberConfig(validation, "maxLength"),
-    min: numberConfig(validation, "min"),
-    max: numberConfig(validation, "max"),
-    step: numberConfig(validation, "step"),
-    minItems: numberConfig(validation, "minItems"),
-    maxItems: numberConfig(validation, "maxItems"),
-    allowCustom: validation.allowCustom === true,
-    allowedDomainsText: Array.isArray(allowedDomains)
-      ? allowedDomains.filter((entry): entry is string => typeof entry === "string").join("\n")
-      : "",
-    advancedValidationText: advancedConfigText(validation),
-    rawMode: false,
-    rawValidationText: "{}",
-  };
-}
-
 function detailToDraft(detail: EditableFormDetail | null, purposes: readonly FormPurpose[]): FormDraft {
   if (!detail) {
     return {
@@ -190,7 +75,7 @@ function detailToDraft(detail: EditableFormDetail | null, purposes: readonly For
       title: "",
       description: "",
       status: "active",
-      fields: [emptyField(0)],
+      fields: [emptyFieldDraft(0)],
     };
   }
 
@@ -200,31 +85,18 @@ function detailToDraft(detail: EditableFormDetail | null, purposes: readonly For
     title: detail.form.title,
     description: detail.form.description ?? "",
     status: detail.form.status,
-    fields: detail.fields.length ? detail.fields.map(fieldToDraft) : [emptyField(0)],
+    fields: detail.fields.length ? detail.fields.map(fieldToDraft) : [emptyFieldDraft(0)],
   };
 }
 
-function draftToPayload(
-  draft: FormDraft,
-  mode: "create" | "edit",
-): FormDefinitionCreateInput | FormDefinitionUpdateInput {
-  const fields = draft.fields
-    .filter((field) => field.key.trim() || field.label.trim())
-    .map((field, position) => ({
-      key: field.key.trim(),
-      label: field.label.trim(),
-      fieldType: field.fieldType,
-      required: field.required,
-      sortOrder: (position + 1) * 10,
-      options: field.optionsText
-        .split(/\n/)
-        .map((entry) => entry.trim())
-        .filter(Boolean),
-      optionSource: field.optionSource,
-      validation: buildFieldValidation(field),
-    }))
-    .map((field) => ({ ...field, options: field.options.length > 0 ? field.options : undefined }));
-
+/**
+ * The draft as the form contract reads it. A question with neither a key nor
+ * a label is an empty card and is left out, so `positions` maps each question
+ * the contract sees back to the card it came from.
+ */
+function draftBody(draft: FormDraft, mode: "create" | "edit") {
+  const positions = draft.fields.flatMap((field, index) => (field.key.trim() || field.label.trim() ? [index] : []));
+  const fields = positions.map((index, position) => fieldDraftToInput(draft.fields[index], (position + 1) * 10));
   const payload = {
     ...(mode === "create" ? { key: draft.key.trim(), purpose: draft.purpose } : {}),
     title: draft.title.trim(),
@@ -232,7 +104,7 @@ function draftToPayload(
     status: draft.status,
     fields,
   };
-  return mode === "create" ? formDefinitionCreateSchema.parse(payload) : formDefinitionUpdateSchema.parse(payload);
+  return { payload, positions };
 }
 
 export function FormDefinitionEditor({
@@ -253,12 +125,20 @@ export function FormDefinitionEditor({
   onError?: (message: string) => void;
 }) {
   const [draft, setDraft] = useState<FormDraft>(() => detailToDraft(detail, purposes));
+  const body = draftBody(draft, mode);
+  const schema = mode === "create" ? formDefinitionCreateSchema : formDefinitionUpdateSchema;
+  const form = useContractForm<typeof schema>(schema, body.payload);
+  /** A question's parts as the form contract judges them, addressed from the card's own index. */
+  const questionPath = (index: number) => {
+    const position = body.positions.indexOf(index);
+    return position < 0 ? null : `fields.${String(position)}`;
+  };
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   // A new form opens on its first question; an existing one opens closed, so
   // the author sees the whole form before editing any one part of it.
   const [openIndex, setOpenIndex] = useState(mode === "create" ? 0 : -1);
-  const [tab, setTab] = useState<"build" | "preview">("build");
+  const [tab, setTab] = useHashQueryParam("editorView", "build");
   // Until an author opens the key, the title is what names the form.
   const [keyOpen, setKeyOpen] = useState(false);
   const draftSource = `${mode}:${detail?.form.key ?? ""}`;
@@ -292,7 +172,7 @@ export function FormDefinitionEditor({
 
   function addField(fieldType: FieldType) {
     setDraft((current) => {
-      const fields = [...current.fields, { ...emptyField(current.fields.length), fieldType }];
+      const fields = [...current.fields, { ...emptyFieldDraft(current.fields.length), fieldType }];
       setOpenIndex(fields.length - 1);
       return { ...current, fields };
     });
@@ -317,13 +197,25 @@ export function FormDefinitionEditor({
 
   async function save(e: Event) {
     e.preventDefault();
-    setSaving(true);
     setError("");
+    const checked = form.submit();
+    if (!checked.data) {
+      // The first refused question opens, so its refusal is in view.
+      const refused = schema.safeParse(body.payload);
+      const first = refused.success ? undefined : refused.error.issues.find((issue) => issue.path[0] === "fields");
+      if (first) setOpenIndex(body.positions[Number(first.path[1])] ?? -1);
+      const formWide = ["key", "title", "description", "status", "purpose"].flatMap((name) => form.errorsWithin(name));
+      const message = [checked.message, ...formWide].join(" ");
+      setError(message);
+      onError?.(message);
+      return;
+    }
+    setSaving(true);
     try {
-      const key = await onSave(draftToPayload(draft, mode));
+      const key = await onSave(checked.data);
       onSaved(key);
     } catch (err) {
-      const message = (err as Error).message;
+      const message = err instanceof ApiClientError ? form.refuse(err) : (err as Error).message;
       setError(message);
       onError?.(message);
     } finally {
@@ -335,7 +227,7 @@ export function FormDefinitionEditor({
   const preview = tab === "preview";
 
   return (
-    <form class="pk pk-stack" onSubmit={(e) => void save(e)} noValidate>
+    <form class="pk pk-stack" onSubmit={(e) => void save(e)} noValidate {...form.handlers}>
       <div class="pk-tabs-rule">
         <TabList
           label="Form editor"
@@ -356,7 +248,7 @@ export function FormDefinitionEditor({
           <div class="pk-stack">
             {/*
              * The form's own card. Title and description are edited where they
-             * are read rather than in labelled boxes above the questions, which
+             * are read rather than in labeled boxes above the questions, which
              * is what makes the column read as the form it is building.
              */}
             <Panel aria-label="Form details">
@@ -423,6 +315,7 @@ export function FormDefinitionEditor({
 
             {questions.map((field, index) => {
               const position = String(index + 1);
+              const path = questionPath(index);
               return index === openIndex ? (
                 <OpenQuestion
                   key={index}
@@ -436,16 +329,23 @@ export function FormDefinitionEditor({
                   onMove={(direction) => moveField(index, direction)}
                   onDuplicate={() => duplicateField(index)}
                   onRemove={() => removeField(index)}
+                  presentationOf={path ? (part) => form.ofGroup(`${path}.${part}`) : undefined}
                 />
               ) : (
-                <ClosedQuestion key={index} field={field} position={position} onOpen={() => setOpenIndex(index)} />
+                <ClosedQuestion
+                  key={index}
+                  field={field}
+                  position={position}
+                  problem={path ? form.errorsWithin(path)[0] : undefined}
+                  onOpen={() => setOpenIndex(index)}
+                />
               );
             })}
 
             <FormQuestionPalette onAdd={addField} />
           </div>
 
-          <aside class="pk-formbuild__rail pk-stack">
+          <div class="pk-formbuild__rail pk-stack">
             <Panel aria-label="Form settings">
               <PanelHeader title="Form settings" />
               <PanelBody class="pk-stack pk-stack--tight">
@@ -488,7 +388,7 @@ export function FormDefinitionEditor({
                 </Field>
               </PanelBody>
             </Panel>
-          </aside>
+          </div>
         </div>
       )}
 
@@ -497,10 +397,10 @@ export function FormDefinitionEditor({
       {error && <Alert tone="danger">{error}</Alert>}
 
       <div class="pk-cluster">
-        <Button type="submit" variant="primary" size="sm" loading={saving}>
+        <Button type="submit" variant="primary" loading={saving}>
           {saving ? "Saving..." : mode === "create" ? "Create form" : "Save form"}
         </Button>
-        <Button size="sm" onClick={onCancel} disabled={saving}>
+        <Button onClick={onCancel} disabled={saving}>
           Cancel
         </Button>
       </div>

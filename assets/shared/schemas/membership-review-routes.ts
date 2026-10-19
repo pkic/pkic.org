@@ -54,16 +54,20 @@ export const membershipObjectionResolveRouteSchema = {
 };
 
 export const membershipWorkflowReviewResponseSchema = z.object({
-  application: membershipApplicationDetailSchema.pick({
-    id: true,
-    applicantName: true,
-    applicantEmail: true,
-    organizationName: true,
-    membershipCategory: true,
-    answers: true,
-    answerFields: true,
-    requestedWorkingGroups: true,
-  }),
+  application: membershipApplicationDetailSchema
+    .pick({
+      id: true,
+      applicantName: true,
+      organizationName: true,
+      membershipCategory: true,
+      answers: true,
+      answerFields: true,
+      requestedWorkingGroups: true,
+    })
+    .extend({
+      /** Shown to staff and the Executive Council only. */
+      applicantEmail: z.string().nullable(),
+    }),
   workflow: membershipWorkflowProgressSchema,
   capabilities: z.object({
     completeReview: z.boolean(),

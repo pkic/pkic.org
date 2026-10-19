@@ -105,7 +105,7 @@ function button(container: HTMLElement, text: string): HTMLButtonElement {
   const found = Array.from(container.querySelectorAll("button")).find(
     (candidate) => candidate.textContent?.trim() === text,
   );
-  if (!found) throw new Error(`No button labelled "${text}"`);
+  if (!found) throw new Error(`No button labeled "${text}"`);
   return found;
 }
 
@@ -254,7 +254,7 @@ describe("bulk invite composer", () => {
     installApi();
     const container = mount(vi.fn());
 
-    // The pasted-contacts textarea and the deadline input are both labelled
+    // The pasted-contacts textarea and the deadline input are both labeled
     // through a real for/id pair rather than a placeholder.
     const labels = Array.from(container.querySelectorAll("label"));
     const pasteLabel = labels.find((label) => label.textContent?.trim() === "Paste emails and names");

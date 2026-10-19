@@ -38,13 +38,22 @@ describe("group user catalog", () => {
     outsider.memberId = (await grantGroupLeadershipCapacity(env.DB, unrelated.id, outsider.id)).memberId;
 
     const targetId = await insertUser(env.DB, `catalog-primary-${crypto.randomUUID()}@example.test`);
-    await env.DB.prepare(
-      `UPDATE users
-          SET first_name = 'Ada', last_name = 'Lovelace', organization_name = 'Analytical Engines'
-        WHERE id = ?`,
-    )
-      .bind(targetId)
-      .run();
+    // The catalog names the organization of Ada's primary identity.
+    const organizationId = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(
+        "UPDATE users SET first_name = 'Ada', last_name = 'Lovelace', headshot_r2_key = 'headshots/synthetic/portrait.jpg' WHERE id = ?",
+      ).bind(targetId),
+      env.DB.prepare(
+        `INSERT INTO organizations (id, name, normalized_name, created_at, updated_at)
+         VALUES (?, 'Analytical Engines', 'analytical engines', datetime('now'), datetime('now'))`,
+      ).bind(organizationId),
+      env.DB.prepare(
+        `INSERT INTO identities (id, user_id, organization_id, source, invited_at, started_at, created_at, updated_at)
+         VALUES (?, ?, ?, 'staff', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z',
+                 '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`,
+      ).bind(crypto.randomUUID(), targetId, organizationId),
+    ]);
     await env.DB.prepare(
       `INSERT INTO user_emails
          (id, user_id, email, normalized_email, verified_at, verification_method, created_at)
@@ -58,6 +67,9 @@ describe("group user catalog", () => {
      * be offered anyway — the manager picked them, filled in a title and two
      * dates, and only then got `GROUP_CAPACITY_REQUIRED` back (#25).
      */
+    await env.DB.prepare("UPDATE identities SET job_title = 'Chief analyst' WHERE user_id = ? AND organization_id = ?")
+      .bind(targetId, organizationId)
+      .run();
     await ensureGroupMembershipCapacity(env.DB, group.id, targetId);
     const unseatableId = await insertUser(env.DB, `catalog-unseatable-${crypto.randomUUID()}@example.test`);
     await env.DB.prepare("UPDATE users SET first_name = 'Grace', last_name = 'Hopper' WHERE id = ?")
@@ -92,12 +104,16 @@ describe("group user catalog", () => {
         first_name: "Ada",
         last_name: "Lovelace",
         organization_name: "Analytical Engines",
+        job_title: "Chief analyst",
+        headshotUrl: expect.stringContaining(`/users/${targetId}/headshot`),
       },
     ]);
     expect(Object.keys(payload.users[0]).sort()).toEqual([
       "email",
       "first_name",
+      "headshotUrl",
       "id",
+      "job_title",
       "last_name",
       "organization_name",
     ]);

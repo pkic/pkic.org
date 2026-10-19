@@ -19,3 +19,17 @@ export const REGISTRATION_HEADSHOT_MAX_BYTES = 2 * 1024 * 1024;
 
 /** Speaker flows accept a larger source image because those clients do not all crop locally. */
 export const SPEAKER_HEADSHOT_MAX_BYTES = 20 * 1024 * 1024;
+
+/**
+ * A stored image's address may name the version it shows (`?v=`), which
+ * changes with every upload, so caches can keep that address for a year. A
+ * version that is no longer current does not resolve.
+ */
+export const storedImageVersionQuerySchema = z
+  .object({
+    v: z
+      .string()
+      .regex(/^[A-Za-z0-9._-]{1,120}$/)
+      .optional(),
+  })
+  .strict();

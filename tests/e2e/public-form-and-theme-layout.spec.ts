@@ -1,7 +1,10 @@
 /** @covers presentation.13.1 */
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator } from "@playwright/test";
+import { EMAIL_FIRST_COPY } from "../../assets/shared/email-first-copy";
 
 const eventPath = "/events/2026/pqc-conference-amsterdam-nl";
+/** The widest phone layout: below 47.5rem the agenda lists its sessions and hides the expanded view. */
+const PHONE_MAX_WIDTH = 760;
 
 for (const colorScheme of ["light", "dark"] as const) {
   test.describe(`${colorScheme} shared public layouts`, () => {
@@ -34,7 +37,10 @@ for (const colorScheme of ["light", "dark"] as const) {
         await page.goto(path);
         await page.getByRole("button", { name: "Open search", exact: true }).filter({ visible: true }).click();
         await expect(page.locator("#pkicSearchPanel")).toBeVisible();
-        await expect(page.locator("#pkicSearchInput")).toBeFocused();
+        // The navbar field on wide screens, the panel's own field on narrow ones: whichever the reader sees.
+        await expect(
+          page.getByRole("searchbox", { name: "Search", exact: true }).filter({ visible: true }),
+        ).toBeFocused();
         await page.keyboard.press("Escape");
         await expect(page.locator("#pkicSearchPanel")).toBeHidden();
       }
@@ -56,23 +62,44 @@ for (const colorScheme of ["light", "dark"] as const) {
         document.adoptedStyleSheets = document.adoptedStyleSheets.filter((item) => item !== sheet);
         return color;
       });
-      await expect(card).not.toHaveCSS("background-color", surface);
+      /*
+       * A timeline card is sunk below the surface it sits on. The phone list sits on the page itself and its
+       * cards are white surface cards, set off by their border (in the light theme the page is white too).
+       */
+      const expectCardStandsOut = async (session: Locator) => {
+        const listView = await session.evaluate(
+          (element) => element.closest(".pk-content-agenda")?.getAttribute("data-agenda-view") === "list",
+        );
+        if (!listView) {
+          await expect(session).not.toHaveCSS("background-color", surface);
+          return;
+        }
+        await expect(session).toHaveCSS("background-color", surface);
+        await expect(session).not.toHaveCSS("border-top-width", "0px");
+        await expect(session).not.toHaveCSS("border-top-color", surface);
+        await expect(session).not.toHaveCSS("border-top-color", "rgba(0, 0, 0, 0)");
+      };
+      const phone = (page.viewportSize()?.width ?? 0) < PHONE_MAX_WIDTH;
+      await expectCardStandsOut(card);
       await expect(card).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
       await card.getByRole("button", { name: /Open session details/ }).click();
       await expect(page.getByRole("dialog")).toBeVisible();
       await expect(page.getByRole("dialog")).toHaveCSS("background-color", surface);
-      await page.getByRole("dialog").getByRole("button", { name: "Close", exact: true }).last().click();
+      await page.getByRole("dialog").getByRole("button", { name: "Close session details", exact: true }).click();
       await expect(page.getByRole("dialog")).toBeHidden();
-      await page.getByRole("button", { name: "Expand agenda", exact: true }).filter({ visible: true }).click();
-      await expect(page.getByRole("button", { name: "Exit fullscreen", exact: true })).toBeVisible();
-      await expect(page.locator(".pk-agenda-dialog[open]")).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
-      await page.keyboard.press("Escape");
-      await expect(page.locator(".pk-agenda-dialog[open]")).toHaveCount(0);
+      const expand = page.getByRole("button", { name: "Expand agenda", exact: true });
+      if (phone) {
+        // A phone already shows the agenda at full width: it offers no expanded view.
+        await expect(expand).toBeHidden();
+      } else {
+        await expand.filter({ visible: true }).click();
+        await expect(page.getByRole("button", { name: "Exit fullscreen", exact: true })).toBeVisible();
+        await expect(page.locator(".pk-agenda-dialog[open]")).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+        await page.keyboard.press("Escape");
+        await expect(page.locator(".pk-agenda-dialog[open]")).toHaveCount(0);
+      }
       await page.setViewportSize({ width: 390, height: 844 });
-      await expect(page.locator(".pk-content-agenda__session").filter({ visible: true }).first()).not.toHaveCSS(
-        "background-color",
-        surface,
-      );
+      await expectCardStandsOut(page.locator(".pk-content-agenda__session").filter({ visible: true }).first());
       await page.screenshot({ path: test.info().outputPath("agenda-mobile.png"), fullPage: true });
     });
 
@@ -131,10 +158,12 @@ for (const colorScheme of ["light", "dark"] as const) {
       }
 
       await page.goto(`${eventPath}/register/`);
-      await expect(page.getByRole("textbox", { name: "First name (required)", exact: true })).toBeVisible();
+      await expect(
+        page.getByRole("textbox", { name: EMAIL_FIRST_COPY.registration.work.label, exact: true }),
+      ).toBeVisible();
       await expect(page.getByLabel("Event identity")).toHaveCount(0);
       if (colorScheme === "dark") {
-        const input = page.getByRole("textbox", { name: "First name (required)", exact: true });
+        const input = page.getByRole("textbox", { name: EMAIL_FIRST_COPY.registration.work.label, exact: true });
         expect(await input.evaluate((element) => getComputedStyle(element).backgroundColor)).not.toBe(
           await page.locator("body").evaluate((element) => getComputedStyle(element).backgroundColor),
         );

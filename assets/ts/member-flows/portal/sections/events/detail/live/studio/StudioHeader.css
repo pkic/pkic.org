@@ -1,0 +1,113 @@
+@layer components {
+  .pk-studio-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--pk-2) var(--pk-4);
+    padding: var(--pk-2) var(--pk-3);
+    border-block-end: 1px solid var(--pk-line-soft);
+  }
+  /* One line whatever it says: the title and the status line give way, so the panels below never move. */
+  .pk-studio-header__session {
+    display: flex;
+    flex: 1 1 18rem;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: var(--pk-1) var(--pk-3);
+    min-inline-size: 0;
+  }
+  /* Times read in the mono face, like the session dialog's time line; words stay in the text face. */
+  .pk-studio-header__range,
+  .pk-studio-header__clock {
+    font-family: var(--pk-font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+  .pk-studio-header__range {
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-sm);
+  }
+  .pk-studio-header__range,
+  .pk-studio-header__left {
+    flex: none;
+    white-space: nowrap;
+  }
+  .pk-studio-header__title {
+    flex: 0 1 auto;
+    min-inline-size: 4rem;
+    overflow: hidden;
+    font-size: var(--pk-text-md);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .pk-studio-header__left {
+    font-size: var(--pk-text-sm);
+    font-variant-numeric: tabular-nums;
+    color: var(--pk-ink-muted);
+    font-weight: 600;
+  }
+  .pk-studio-header__left[data-timing="running"],
+  .pk-studio-header__left[data-timing="over"] {
+    color: var(--pk-ink);
+  }
+  .pk-studio-header__left[data-tone="warn"] {
+    color: var(--pk-warn-ink);
+  }
+  .pk-studio-header__left[data-tone="danger"] {
+    color: var(--pk-danger-ink);
+  }
+  /* The active session is the expected state: said in words, not a badge. */
+  .pk-studio-header__active {
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-sm);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .pk-studio-header__notice {
+    display: flex;
+    flex: 1 1 0;
+    align-items: center;
+    gap: var(--pk-2);
+    min-inline-size: 0;
+    font-size: var(--pk-text-sm);
+  }
+  .pk-studio-header__notice-text {
+    min-inline-size: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .pk-studio-header__notice[data-tone="warn"] {
+    color: var(--pk-warn-ink);
+  }
+  .pk-studio-header__notice[data-tone="danger"] {
+    color: var(--pk-danger-ink);
+    font-weight: 600;
+  }
+  .pk-studio-header__notice > .pk-btn {
+    flex: none;
+  }
+  .pk-studio-header__clock {
+    font-size: var(--pk-text-lg);
+  }
+  .pk-studio-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--pk-2);
+    padding: var(--pk-1) var(--pk-3);
+  }
+  .pk-studio-toolbar__label {
+    color: var(--pk-ink-muted);
+    font-family: var(--pk-font-mono);
+    font-size: var(--pk-text-2xs);
+    letter-spacing: var(--pk-tracking-label);
+    text-transform: uppercase;
+  }
+  .pk-studio-toolbar__end {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--pk-2);
+    margin-inline-start: auto;
+  }
+}

@@ -48,7 +48,7 @@ function mapGrant<K extends ResourceGrantKind>(row: ResourceGroupGrantRow): Reso
 }
 
 /**
- * SQL identifiers come exclusively from the closed definition catalogue; all
+ * SQL identifiers come exclusively from the closed definition catalog; all
  * request-controlled values remain bound parameters.
  */
 export async function resolveOwnedResource<K extends ResourceGrantKind>(

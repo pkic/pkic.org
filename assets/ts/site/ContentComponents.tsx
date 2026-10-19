@@ -47,7 +47,7 @@ export function ContentColumn({ html, options }: { html: string; options: Record
  * An authored alert, drawn as the design system's own alert.
  *
  * The tone maps onto `--pk-ok`, `--pk-info`, `--pk-warn` and `--pk-danger`
- * rather than a colour pair picked here, and the destructive tones announce
+ * rather than a color pair picked here, and the destructive tones announce
  * themselves while the rest report — which is what `ui/Alert.tsx` does, and
  * what the published `alert` shortcode wrote.
  */
@@ -89,14 +89,8 @@ export function ContentButtonLink({
   target?: string;
   variant?: ButtonVariant;
 }) {
-  const external = target === "_blank" || /^https?:\/\//i.test(href ?? "");
   return (
-    <ButtonLink
-      href={safeHref(href)}
-      target={target}
-      rel={external ? "noopener external" : undefined}
-      variant={variant}
-    >
+    <ButtonLink href={safeHref(href)} external={target === "_blank" ? true : undefined} variant={variant}>
       {label ?? href ?? "Continue"}
     </ButtonLink>
   );
@@ -298,10 +292,10 @@ export function ContentFaq({
         <section key={`${group.title ?? "group"}-${groupIndex}`}>
           {group.title ? <h2>{group.title}</h2> : null}
           {group.questions?.map((item, itemIndex) => (
-            <details open={item.open} key={`${item.question ?? "question"}-${itemIndex}`}>
-              <summary>{item.question}</summary>
+            <article key={`${item.question ?? "question"}-${itemIndex}`}>
+              <h3>{item.question}</h3>
               {item.answerHtml ? <div dangerouslySetInnerHTML={{ __html: item.answerHtml }} /> : null}
-            </details>
+            </article>
           ))}
         </section>
       ))}

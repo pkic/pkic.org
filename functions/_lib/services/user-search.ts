@@ -1,6 +1,6 @@
 import { buildD1TextSearchFilter, type D1TextSearchFilter } from "../db/search";
 
-/** Canonical primary/alias email, name, and active-identity search for user read models. */
+/** Canonical primary/alias email, name, active-identity and individual-title search for user read models. */
 export function buildUserIdentitySearchFilter(query: string): D1TextSearchFilter {
   const primary = buildD1TextSearchFilter(query, [
     "u.email",
@@ -10,6 +10,7 @@ export function buildUserIdentitySearchFilter(query: string): D1TextSearchFilter
   ]);
   const alternate = buildD1TextSearchFilter(query, ["catalog_email.email"]);
   const identity = buildD1TextSearchFilter(query, ["identity_organization.name", "search_identity.job_title"]);
+  const individualTitle = buildD1TextSearchFilter(query, ["search_title.job_title"]);
   return {
     sql: `(${primary.sql} OR EXISTS (
       SELECT 1
@@ -25,7 +26,12 @@ export function buildUserIdentitySearchFilter(query: string): D1TextSearchFilter
          AND search_identity.ended_at IS NULL
          AND search_identity.blocked_at IS NULL
          AND ${identity.sql}
+    ) OR EXISTS (
+      SELECT 1
+        FROM individual_job_titles search_title
+       WHERE search_title.user_id = u.id
+         AND ${individualTitle.sql}
     ))`,
-    bindings: [...primary.bindings, ...alternate.bindings, ...identity.bindings],
+    bindings: [...primary.bindings, ...alternate.bindings, ...identity.bindings, ...individualTitle.bindings],
   };
 }

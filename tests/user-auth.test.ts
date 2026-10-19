@@ -1,3 +1,6 @@
+// Prepare the real HTTP graph before timed journeys, as the shared API test helper does.
+import "../functions/http-router";
+import { userAuthSessionResponseSchema } from "../assets/shared/schemas/user-auth";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import app from "../functions/router";
@@ -90,7 +93,7 @@ describe("canonical user authentication", () => {
       headers: { "cf-connecting-ip": "203.0.113.9", "user-agent": "issuer" },
     });
     expect(verified.status).toBe(200);
-    const body = (await verified.json()) as { identity: { email: string }; staff?: unknown; member?: unknown };
+    const body = userAuthSessionResponseSchema.parse(await verified.json());
     expect(body.identity.email).toBe("admin@pkic.org");
     expect(body.staff).toBeTruthy();
     expect(body.member).toBeTruthy();
@@ -110,6 +113,14 @@ describe("canonical user authentication", () => {
     });
     expect(await queryAll(env.DB, "SELECT id FROM sessions")).toHaveLength(1);
     expect(session.headers.get("set-cookie")).toContain("pkic_session=");
+    expect(
+      await queryAll(
+        env.DB,
+        `SELECT points,source_ref FROM user_standing_awards
+      WHERE user_id=? AND reason_key='active_month'`,
+        body.identity.id,
+      ),
+    ).toEqual([{ points: 2, source_ref: new Date().toISOString().slice(0, 7) }]);
 
     await env.DB.prepare("UPDATE sessions SET created_at = ?")
       .bind(new Date(Date.now() - 9 * 60 * 60 * 1000).toISOString())

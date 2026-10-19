@@ -3,6 +3,9 @@ import { beginRecordEdit } from "./helpers/record-edit";
 import { render, type JSX } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { portalSession } from "../../assets/ts/member-flows/portal/state";
+import { portalSessionFixture } from "../helpers/portal-session";
+import { group as selfGroup } from "./helpers/self-group-fixture";
 import { GroupWorkspace } from "../../assets/ts/member-flows/portal/sections/management/GroupWorkspace";
 import { isCurrentTab, tabNamed, tabNames } from "./helpers/tabs";
 
@@ -122,6 +125,7 @@ beforeEach(() => {
 afterEach(() => {
   void act(() => render(null, container));
   container.remove();
+  portalSession.value = null;
   vi.unstubAllGlobals();
 });
 
@@ -176,7 +180,7 @@ describe("portal selected-group workspace", () => {
     await settle();
 
     expect(container.textContent).toContain("Architecture Committee");
-    expect(container.querySelector(".pk-page-header__title")?.textContent).toBe("Architecture Committee (AC)");
+    expect(container.querySelector(".pk-profile-header__title")?.textContent).toBe("Architecture Committee (AC)");
     expect(container.textContent).toContain("Part of Parent Group");
     expect(container.querySelector('button[aria-label="Group actions"]')).toBeNull();
     // The headline counts live on the overview's about panel now, not in the
@@ -226,6 +230,7 @@ describe("portal selected-group workspace", () => {
   });
 
   it("shows only sections backed by the selected identity's live capabilities", async () => {
+    portalSession.value = portalSessionFixture({ member: true });
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
@@ -236,6 +241,25 @@ describe("portal selected-group workspace", () => {
         if (url.pathname === `/api/v1/groups/${GROUP_ID}`) {
           return json({ group: group(), capabilities: ["view", "participate"] });
         }
+        if (url.pathname === "/api/v1/users/current/groups")
+          return json({
+            groups: [
+              selfGroup({
+                memberships: [
+                  {
+                    id: "20000000-0000-4000-8000-000000000003",
+                    memberId: "20000000-0000-4000-8000-000000000001",
+                    memberType: "organization",
+                    organizationName: "Organization A",
+                    membershipCategory: "A",
+                    source: "self_service",
+                    joinedAt: "2026-08-01T00:00:00.000Z",
+                  },
+                ],
+              }),
+            ],
+            page: { limit: 1, offset: 0, total: 1, hasMore: false },
+          });
         const page = { limit: 3, offset: 0, total: 0, hasMore: false };
         if (url.pathname === `/api/v1/groups/${GROUP_ID}/events`) return json({ events: [], page });
         if (url.pathname === `/api/v1/groups/${GROUP_ID}/votes`) return json({ votes: [], page });
@@ -255,7 +279,10 @@ describe("portal selected-group workspace", () => {
       "Forms",
       "Mailing lists",
     ]);
-    expect(container.textContent).toContain("You participate in this group.");
+    expect(container.textContent).toContain("Participating as");
+    expect(container.textContent).toContain("Organization A");
+    expect(container.querySelector('a[href="#/groups"]')?.textContent).not.toBe("Manage your participation");
+    expect(container.querySelector('button[aria-label="Actions for Organization A"]')).not.toBeNull();
     expect(container.textContent).not.toContain("Save group settings");
   });
 
@@ -277,8 +304,8 @@ describe("portal selected-group workspace", () => {
     await act(() => render(<GroupWorkspace groupId={GROUP_ID} view="overview" />, container));
     await settle();
 
-    // The page header is a labelled region, so the context a reader lands in
-    // can be reached by landmark rather than being one more unlabelled box.
+    // The page header is a labeled region, so the context a reader lands in
+    // can be reached by landmark rather than being one more unlabeled box.
     const context = container.querySelector("header[aria-labelledby]")!;
     expect(context).not.toBeNull();
     expect(context.querySelector("h2")?.textContent).toBe("Architecture Committee");
@@ -287,7 +314,7 @@ describe("portal selected-group workspace", () => {
     expect(trailLink?.getAttribute("href")).toBe("#/groups");
 
     // The strip says which set of sections it is, and the current one is
-    // marked rather than merely coloured.
+    // marked rather than merely colored.
     const strip = container.querySelector('nav[aria-label$=" sections"]')!;
     expect(strip.getAttribute("aria-label")).toBe("Architecture Committee sections");
     expect(isCurrentTab(tabNamed(container, "Overview"))).toBe(true);

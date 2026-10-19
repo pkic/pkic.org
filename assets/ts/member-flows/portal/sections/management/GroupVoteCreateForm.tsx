@@ -323,7 +323,6 @@ export function GroupVoteCreateForm({
                           "Remove" buttons are indistinguishable in a list of
                           controls. */}
                       <Button
-                        size="sm"
                         variant="danger-quiet"
                         disabled={candidates.length <= MINIMUM_CANDIDATES}
                         onClick={() =>
@@ -337,7 +336,6 @@ export function GroupVoteCreateForm({
                 ))}
                 <div class="pk-cluster">
                   <Button
-                    size="sm"
                     disabled={candidates.length >= MAXIMUM_CANDIDATES}
                     onClick={() => setCandidates((current) => [...current, { name: "", bio: "" }])}
                   >

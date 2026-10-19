@@ -52,6 +52,7 @@ let toastArea: HTMLDivElement;
 function memberProfile(headshotUrl: string | null) {
   return myProfileSchema.parse({
     userId,
+    identityId: "00000000-0000-4000-8000-000000000042",
     emailId: null,
     email: "member@example.test",
     emailAddresses: [
@@ -61,6 +62,7 @@ function memberProfile(headshotUrl: string | null) {
         primary: true,
         verifiedAt: "2026-01-01T00:00:00.000Z",
         verificationMethod: "magic_link",
+        identityId: null,
       },
     ],
     firstName: "Member",
@@ -133,7 +135,7 @@ async function settle(): Promise<void> {
 function removeButton(): HTMLButtonElement | null {
   return (
     [...container.querySelectorAll<HTMLButtonElement>("button")].find(
-      (button) => button.getAttribute("aria-label") === "Remove photo",
+      (button) => button.getAttribute("aria-label")?.startsWith("Remove photo of ") ?? false,
     ) ?? null
   );
 }
@@ -243,7 +245,7 @@ describe("removing your own headshot from your own user record", () => {
       image!.dispatchEvent(new Event("error"));
     });
     expect(container.querySelector(".pk-picture-tile img")).toBeNull();
-    expect(container.querySelector(".pk-picture-tile__initials")?.textContent).toBeTruthy();
+    expect(container.querySelector(".pk-picture-tile .pk-avatar__initials")?.textContent).toBeTruthy();
     expect(removeButton()).not.toBeNull();
   });
 
@@ -325,11 +327,63 @@ describe("removing your own headshot from your own user record", () => {
     await settle();
 
     // Somebody else's record: the self-only panel and the photo in the open
-    // are absent, and the photo lives behind account administration instead.
+    // are absent, and so are the person's own account panels.
     expect(container.textContent).not.toContain("Your profile");
-    expect(container.textContent).toContain("Account administration");
+    expect(container.querySelector('.pk-panel[aria-label="Passkeys"]')).toBeNull();
+    expect(container.querySelector('.pk-panel[aria-label="Access"]')).not.toBeNull();
     // Reading is not writing: on a record that is not theirs, a reader
     // without `users:write` gets a read-only photo with no removal at all.
     expect(container.querySelector("[data-headshot-delete]")).toBeNull();
+  });
+});
+
+describe("your own user record, read by you", () => {
+  function stubParticipation(participation: unknown): void {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(typeof input === "string" ? input : String(input), location.origin);
+        if (url.pathname === RECORD_ENDPOINT) return json(userRecord(null));
+        if (url.pathname.endsWith("/participation")) return json({ participation });
+        if (url.pathname.endsWith("/skills")) return json({ skills: [], totalVouches: 0 });
+        throw new Error(`Unexpected request: ${url.pathname}`);
+      }),
+    );
+  }
+
+  function glance(): Record<string, string | null | undefined> {
+    const panel = container.querySelector('[aria-label="At a glance"]')!;
+    return Object.fromEntries(
+      [...panel.querySelectorAll(".pk-stat-card")].map((card) => [
+        card.querySelector(".pk-stat-card__label")?.textContent,
+        card.querySelector(".pk-stat-card__value")?.textContent,
+      ]),
+    );
+  }
+
+  it("omits a self-referencing trail and keeps account administration out of the profile", async () => {
+    profile.value = null;
+    stubParticipation({
+      groups: [],
+      summary: { groupCount: 0, eventCount: 1, meetingsAttended: 0, meetingsHeld: 0 },
+    });
+    renderRecord();
+    await settle();
+
+    expect(container.querySelector('nav[aria-label="Breadcrumb"]')).toBeNull();
+    const terms = [...container.querySelectorAll("dt")].map((term) => term.textContent);
+    expect(terms).not.toContain("Active");
+    expect(terms).not.toContain("Created");
+    expect(container.textContent).not.toMatch(/Created \w/);
+    // The figures are the person's real memberships and registrations.
+    expect(glance()).toMatchObject({ groups: "0", events: "1" });
+  });
+
+  it("shows a dash rather than a guess when participation cannot be read", async () => {
+    profile.value = null;
+    stubParticipation(null);
+    renderRecord();
+    await settle();
+    expect(glance()).toMatchObject({ groups: "—", events: "—" });
   });
 });

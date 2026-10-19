@@ -1,0 +1,200 @@
+/*
+ * Choice cards: a few alternatives, each with what it means, picked as one
+ * radio group. Equal columns where there is room, stacked on a phone.
+ * The chosen card carries a strong border and a ticked mark, so the
+ * selection reads by shape as well as by color. The fill steers: a card whose
+ * points are gains is tinted with the accent whether chosen or not, so the
+ * recommended way stands out; a card whose points are costs stays plain until
+ * it is chosen, then turns to the caution tint so the trade-off stays in view.
+ */
+
+@layer components {
+  .pk-choice-cards {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pk-2);
+    min-inline-size: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .pk-choice-cards__legend {
+    padding: 0;
+    margin-block-end: var(--pk-2);
+    font-size: var(--pk-text-sm);
+    font-weight: 600;
+    color: var(--pk-ink);
+  }
+
+  .pk-choice-cards__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr));
+    gap: var(--pk-3);
+  }
+
+  .pk-choice-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: var(--pk-2);
+    padding: var(--pk-4);
+    border: 1px solid var(--pk-line);
+    border-radius: var(--pk-radius-lg);
+    background: var(--pk-surface);
+    color: var(--pk-ink);
+    cursor: pointer;
+    transition:
+      border-color var(--pk-dur-fast) var(--pk-ease),
+      background-color var(--pk-dur-fast) var(--pk-ease),
+      box-shadow var(--pk-dur-fast) var(--pk-ease);
+  }
+
+  .pk-choice-card:hover {
+    border-color: var(--pk-line-strong);
+  }
+
+  .pk-choice-card--gain {
+    border-color: var(--pk-accent-soft);
+    background: var(--pk-accent-soft);
+  }
+
+  .pk-choice-card:has(.pk-choice-card__input:checked) {
+    border-color: var(--pk-accent-strong);
+    box-shadow: inset 0 0 0 1px var(--pk-accent-strong);
+  }
+
+  .pk-choice-card--cost:has(.pk-choice-card__input:checked) {
+    border-color: var(--pk-warn-ink);
+    background: var(--pk-warn-soft);
+    box-shadow: inset 0 0 0 1px var(--pk-warn-ink);
+  }
+
+  /* The ticked mark follows the card's tone, so a chosen cost never reads as a gain. */
+  .pk-choice-card--cost .pk-choice-card__input.pk-check__input:checked {
+    border-color: var(--pk-warn-ink);
+    background: var(--pk-warn-ink);
+  }
+
+  .pk-choice-card:has(.pk-choice-card__input:focus-visible) {
+    box-shadow:
+      inset 0 0 0 1px var(--pk-accent-strong),
+      var(--pk-focus);
+  }
+
+  /* The radio is the card's mark, in the corner the eye reaches last. */
+  .pk-choice-card__input.pk-check__input {
+    position: absolute;
+    inset-block-start: var(--pk-4);
+    inset-inline-end: var(--pk-4);
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+    margin: 0;
+  }
+
+  /* The focus ring moves to the card, which is what the reader is choosing. */
+  .pk .pk-choice-card__input.pk-check__input:focus-visible {
+    outline: none;
+    box-shadow: none;
+  }
+
+  /* Chosen reads as a tick rather than a dot: this card is the one that applies. */
+  .pk-choice-card__input.pk-check__input[type="radio"]:not([role="switch"]):checked::after {
+    inset: auto;
+    inset-inline-start: 0.42rem;
+    inset-block-start: 0.2rem;
+    inline-size: 0.32rem;
+    block-size: 0.62rem;
+    border: solid var(--pk-on-solid);
+    border-width: 0 2px 2px 0;
+    border-radius: 0;
+    background: none;
+    transform: rotate(45deg);
+  }
+
+  .pk-choice-card__icon {
+    position: relative;
+    display: inline-flex;
+    align-self: flex-start;
+    color: var(--pk-accent-ink);
+  }
+
+  .pk-choice-card--cost .pk-choice-card__icon {
+    color: var(--pk-ink-muted);
+  }
+
+  .pk-choice-card--cost:has(.pk-choice-card__input:checked) .pk-choice-card__icon {
+    color: var(--pk-warn-ink);
+  }
+
+  .pk-choice-card__icon > .pk-icon {
+    inline-size: 1.75rem;
+    block-size: 1.75rem;
+  }
+
+  .pk-choice-card__icon-mark {
+    position: absolute;
+    inset-block-end: -0.2rem;
+    inset-inline-end: -0.45rem;
+    display: inline-flex;
+    padding: 1px;
+    border-radius: var(--pk-radius-pill);
+    background: var(--pk-surface);
+    color: var(--pk-warn-ink);
+  }
+
+  .pk-choice-card--cost:has(.pk-choice-card__input:checked) .pk-choice-card__icon-mark {
+    background: var(--pk-warn-soft);
+  }
+
+  .pk-choice-card__icon-mark > .pk-icon {
+    inline-size: 0.9rem;
+    block-size: 0.9rem;
+  }
+
+  .pk-choice-card__title {
+    padding-inline-end: var(--pk-6);
+    font-size: var(--pk-text-lg);
+    font-weight: 600;
+    line-height: 1.3;
+  }
+
+  .pk-choice-card__detail {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pk-3);
+  }
+
+  .pk-choice-card__description {
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-sm);
+  }
+
+  .pk-choice-card__points {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pk-2);
+    font-size: var(--pk-text-sm);
+  }
+
+  .pk-choice-card__point {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--pk-2);
+  }
+
+  .pk-choice-card__mark {
+    flex: none;
+    inline-size: 1rem;
+    block-size: 1rem;
+    margin-block-start: 0.15em;
+  }
+
+  .pk-choice-card__points--gain .pk-choice-card__mark {
+    color: var(--pk-ok-ink);
+  }
+
+  .pk-choice-card__points--cost .pk-choice-card__mark {
+    color: var(--pk-warn-ink);
+  }
+}

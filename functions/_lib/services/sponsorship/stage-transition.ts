@@ -1,3 +1,7 @@
+import { prepareSponsorshipLogoPeriods } from "./logo-periods";
+import { prepareSponsorshipLogoPublication } from "./logo-publication";
+import { sponsorLogoGraceDeadlineSql, sponsorLogoGraceTiersSql } from "./logo-eligibility";
+import type { SponsorshipEndReason } from "../../../../assets/shared/sponsorship-logo-policy";
 import { uuid } from "../../utils/ids";
 import { adminDatabaseUserId } from "../../auth/admin-identity";
 import { prepareAuditLogAfterOneChange } from "../audit";
@@ -57,10 +61,18 @@ export function prepareSponsorshipStageTransition(
     note: string | null;
     auditAction: string;
     now: string;
+    endReason?: SponsorshipEndReason;
     expectedRenewal?: { renewalDate: string; actionDueAt: string };
   },
 ): PreparedSponsorshipStageTransition {
   const fromStage = subject.pipeline_stage;
+  const endReason =
+    input.toStage === "active"
+      ? null
+      : (input.endReason ??
+        (input.toStage === "lapsed" && subject.renewal_date && subject.renewal_date <= input.now.slice(0, 10)
+          ? "ordinary_expiry"
+          : "termination"));
   const becameActive = input.toStage === "active" && fromStage !== "active";
   const becameLapsed = input.toStage === "lapsed" && fromStage !== "lapsed";
   const renewalActionDueAt = initialRenewalActionDueAt({
@@ -75,12 +87,18 @@ export function prepareSponsorshipStageTransition(
   const auditActorId = input.actor?.id ?? null;
   const databaseActorUserId = input.actor ? adminDatabaseUserId(input.actor) : null;
   const statements: StatementLike[] = [
+    prepareSponsorshipLogoPublication(db, subject.id, input.now, becameActive),
     db
       .prepare(
         `UPDATE sponsorships
          SET pipeline_stage = ?,
              start_date = CASE WHEN ? = 'active' THEN COALESCE(start_date, ?) ELSE start_date END,
              renewal_action_due_at = ?,
+             ended_reason = ?,
+             logo_action_due_at = CASE WHEN ?='ordinary_expiry' AND sponsor_type='consortium'
+               AND tier IN (${sponsorLogoGraceTiersSql}) AND (pipeline_stage='active' OR EXISTS(SELECT 1 FROM sponsorship_periods
+                 WHERE sponsorship_id=sponsorships.id))
+               THEN ${sponsorLogoGraceDeadlineSql("renewal_date")} ELSE NULL END,
              updated_at = ?,
              transition_revision = transition_revision + 1
          WHERE id = ? AND pipeline_stage = ? AND transition_revision = ?${renewalGuardSql}`,
@@ -90,6 +108,8 @@ export function prepareSponsorshipStageTransition(
         input.toStage,
         input.now,
         renewalActionDueAt,
+        endReason,
+        endReason,
         input.now,
         subject.id,
         fromStage,
@@ -103,7 +123,7 @@ export function prepareSponsorshipStageTransition(
       input.auditAction,
       "sponsorship",
       subject.id,
-      { fromStage, toStage: input.toStage },
+      { fromStage, toStage: input.toStage, endReason },
       input.now,
     ),
     db
@@ -113,6 +133,16 @@ export function prepareSponsorshipStageTransition(
       )
       .bind(uuid(), subject.id, fromStage, input.toStage, databaseActorUserId, input.note, input.now),
   ];
+
+  statements.push(
+    ...prepareSponsorshipLogoPeriods(db, {
+      id: subject.id,
+      fromStage,
+      toStage: input.toStage,
+      endReason,
+      at: input.now,
+    }),
+  );
 
   if (subject.sponsor_type === "consortium" && subject.organization_id) {
     statements.push(prepareRefreshOrganizationSponsorshipProjection(db, subject.organization_id));

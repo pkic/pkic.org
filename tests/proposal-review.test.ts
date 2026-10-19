@@ -45,8 +45,8 @@ async function seedProposal(
       VALUES ('${admin2Id}', 'committee2@pkic.org', 'committee2@pkic.org', 1, datetime('now'), datetime('now'))
     `),
     env.DB.prepare(`
-      INSERT INTO users (id, email, normalized_email, first_name, last_name, organization_name, job_title, data_json, created_at, updated_at)
-      VALUES ('${proposerId}', 'speaker@pkic.org', 'speaker@pkic.org', 'Speaker', 'One', 'Org', 'Role', NULL, datetime('now'), datetime('now'))
+      INSERT INTO users (id, email, normalized_email, first_name, last_name, data_json, created_at, updated_at)
+      VALUES ('${proposerId}', 'speaker@pkic.org', 'speaker@pkic.org', 'Speaker', 'One', NULL, datetime('now'), datetime('now'))
     `),
     env.DB.prepare(`
       INSERT INTO session_proposals (

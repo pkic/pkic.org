@@ -26,6 +26,7 @@ import type { ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 
 import { DataTable, type Column } from "../../assets/ts/components/Table";
+import { formatNumber } from "../../assets/shared/format-number";
 
 interface Member {
   id: string;
@@ -62,6 +63,17 @@ function table(columns: Column<Member>[]): HTMLElement {
 const nameColumn: Column<Member> = { header: "Name", cell: (row) => row.name };
 
 describe("the portal's column translation", () => {
+  it("supports explicit numeric alignment and fit width through the shared column contract", () => {
+    const container = table([
+      nameColumn,
+      { header: "Records", align: "end", width: "fit", cell: () => formatNumber(12345) },
+    ]);
+    expect(container.querySelector("tbody td:last-child .pk-table__value")?.textContent).toBe(formatNumber(12345));
+    for (const cell of container.querySelectorAll("th:last-child, tbody td:last-child")) {
+      expect(cell.classList.contains("pk-end")).toBe(true);
+      expect(cell.classList.contains("pk-table__col--fit")).toBe(true);
+    }
+  });
   describe("a column with no header", () => {
     const actions: Column<Member>[] = [nameColumn, { header: "", cell: () => <button type="button">Remove</button> }];
 

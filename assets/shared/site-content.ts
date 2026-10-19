@@ -110,6 +110,8 @@ export interface SiteHero {
 export interface SiteSectionNavigation {
   currentPath: string;
   items: Array<{ href: string; label: string }>;
+  /** The portal event page (attendee app) for an event that has not ended yet. */
+  appHref?: string;
 }
 
 export interface SitePageMeta {

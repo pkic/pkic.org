@@ -172,7 +172,6 @@ export function GroupCategoryRulesEditor({ groupId, onUpdated }: { groupId: stri
               ).map(([label, field, value]) => (
                 <Button
                   key={label}
-                  size="sm"
                   disabled={saving}
                   onClick={() => {
                     for (const category of selected) updateRule(category, field, value);

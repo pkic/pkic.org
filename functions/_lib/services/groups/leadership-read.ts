@@ -18,21 +18,11 @@ import type { DatabaseLike } from "../../types";
 import { publicUserHeadshotPath } from "../user-headshot";
 import { EFFECTIVE_GROUP_LINEAGE_CTE } from "./governance";
 import { getGroup } from "./read-model";
-
-export const LEADERSHIP_ROLE_PREDICATE_SQL = `ur.role_id IN ('role-group_lead', 'role-group_deputy_lead')`;
-const ACTIVE_LEADERSHIP_PREDICATE_SQL = `ur.revoked_at IS NULL
-  AND (ur.expires_at IS NULL OR ur.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))`;
-
-/**
- * The displayed title and term of one assignment. A row written before titles
- * existed falls back to its source group type's title for the role; the term
- * start falls back to the grant instant.
- */
-export const LEADERSHIP_TERM_SELECT_SQL = `
-  COALESCE(ur.title, CASE ur.role_id WHEN 'role-group_lead' THEN gt.lead_title ELSE gt.deputy_lead_title END) AS title,
-  COALESCE(ur.starts_at, ur.created_at) AS starts_at,
-  CASE WHEN ur.revoked_at IS NOT NULL THEN ur.revoked_at ELSE ur.expires_at END AS ends_at,
-  CASE WHEN ${ACTIVE_LEADERSHIP_PREDICATE_SQL} THEN 1 ELSE 0 END AS active`;
+import {
+  ACTIVE_LEADERSHIP_PREDICATE_SQL,
+  LEADERSHIP_ROLE_PREDICATE_SQL,
+  LEADERSHIP_TERM_SELECT_SQL,
+} from "./leadership-sql";
 
 interface LeadershipRow {
   user_role_id: string;

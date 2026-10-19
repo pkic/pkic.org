@@ -54,7 +54,6 @@ export function EditorMediaFields({
       )}
       <div class="pk-cluster">
         <Button
-          size="sm"
           variant="primary"
           onClick={() => {
             const result = form.submit();
@@ -63,7 +62,7 @@ export function EditorMediaFields({
         >
           Insert {kind}
         </Button>
-        <Button size="sm" variant="ghost" onClick={onCancel}>
+        <Button variant="ghost" onClick={onCancel}>
           Cancel insertion
         </Button>
       </div>

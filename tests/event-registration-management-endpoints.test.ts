@@ -6,6 +6,7 @@ import { getEventBySlug } from "../functions/_lib/services/events";
 import { createRegistration } from "../functions/_lib/services/registrations";
 import { eventRegistrationDetailResponseSchema } from "../assets/shared/schemas/event-registration-detail";
 import { eventRegistrationsListResponseSchema } from "../assets/shared/schemas/event-registrations";
+import { eventRegistrationManagementUpdateSchema } from "../assets/shared/schemas/route-contracts-event-registration-management";
 import { createAdminSession } from "./helpers/auth";
 import { seedEventAndAdmin, queryAll } from "./helpers/context";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
@@ -46,13 +47,14 @@ async function scopedToken(eventId: string, permission: "events:read" | "events:
   };
 }
 
-async function registrationFixture() {
+async function registrationFixture(dayAttendance?: Parameters<typeof createRegistration>[1]["dayAttendance"]) {
   const event = await getEventBySlug(env.DB, "pqc-2026");
   const userId = await insertUser(env.DB, `registration-${crypto.randomUUID()}@example.test`);
   const created = await createRegistration(env.DB, {
     event,
     userId,
     attendanceType: "virtual",
+    dayAttendance,
     sourceType: "direct",
     confirmationTtlHours: 48,
     signingSecret: "test-signing-secret",
@@ -94,6 +96,63 @@ describe("canonical event registration management", () => {
     const manager = await scopedToken(event.id, "events:manage");
     const allowed = await callApi(`/api/v1/events/pqc-2026/registrations/${registrationId}`, manager.token);
     expect(allowed.status).toBe(200);
+  });
+
+  it("retains the same day-transition history in the list and dedicated detail without changing evidence on read", async () => {
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    await env.DB.prepare(
+      `INSERT INTO event_days (id,event_id,day_date,label,in_person_capacity,sort_order,created_at,updated_at)
+       VALUES (?,?,'2026-12-01','Conference day',NULL,1,datetime('now'),datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), event.id)
+      .run();
+    const fixture = await registrationFixture([{ dayDate: "2026-12-01", attendanceType: "virtual" }]);
+    const token = await adminToken();
+    const path = `/api/v1/events/pqc-2026/registrations/${fixture.registrationId}`;
+    const update = await callApi(path, token, {
+      method: "PATCH",
+      body: JSON.stringify(
+        eventRegistrationManagementUpdateSchema.parse({
+          action: "update",
+          attendanceType: "on_demand",
+          dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "on_demand" }],
+        }),
+      ),
+    });
+    expect(update.status, await update.clone().text()).toBe(200);
+    const snapshot = async () => ({
+      history: await queryAll(
+        env.DB,
+        "SELECT id,registration_id,event_day_id,from_type,to_type,changed_by,changed_at FROM registration_attendance_history WHERE registration_id=? ORDER BY id",
+        [fixture.registrationId],
+      ),
+      registration: await queryAll(
+        env.DB,
+        "SELECT id,attendance_type,transition_revision,updated_at FROM registrations WHERE id=?",
+        [fixture.registrationId],
+      ),
+      audit: await queryAll(env.DB, "SELECT id FROM audit_log ORDER BY id"),
+      outbox: await queryAll(env.DB, "SELECT id FROM email_outbox ORDER BY id"),
+    });
+    const before = await snapshot();
+    const listResponse = await callApi("/api/v1/events/pqc-2026/registrations?limit=10&offset=0", token);
+    expect(listResponse.status).toBe(200);
+    const list = eventRegistrationsListResponseSchema.parse(await listResponse.json());
+    const detailResponse = await callApi(path, token);
+    expect(detailResponse.status).toBe(200);
+    const detail = eventRegistrationDetailResponseSchema.parse(await detailResponse.json());
+    expect(detail.attendanceChangeHistory).toEqual(
+      list.registrations.find((row) => row.id === fixture.registrationId)?.attendanceChangeHistory,
+    );
+    expect(detail.attendanceChangeHistory).toHaveLength(1);
+    expect(detail.attendanceChangeHistory[0].transitions).toEqual([
+      {
+        fromType: "virtual",
+        toType: "on_demand",
+        days: [{ dayDate: "2026-12-01", label: "Conference day" }],
+      },
+    ]);
+    expect(await snapshot()).toEqual(before);
   });
 
   it("rejects a registration that belongs to another event without exposing it", async () => {

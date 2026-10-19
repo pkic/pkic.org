@@ -3,8 +3,8 @@
  *
  * One definition, consumed everywhere: the portal imports this module, and
  * `scripts/build-design-tokens.mjs` emits the same values as CSS custom
- * properties for Hugo layouts, the Marp deck theme, and anything else that
- * only speaks CSS. Nothing else may declare a colour, a radius, a type size,
+ * properties for the stylesheets the Vite and Astro bundles import, and anything
+ * else that only speaks CSS. Nothing else may declare a color, a radius, a type size,
  * or a duration.
  *
  * Two rules make the rest of the system work:
@@ -69,7 +69,7 @@ const surfacesDark: Record<keyof typeof surfacesLight, string> = {
 
 /**
  * State tones are their own scale, never derived from the accent. On a
- * green-accented product that separation is not cosmetic: an accent-coloured
+ * green-accented product that separation is not cosmetic: an accent-colored
  * "success" makes a primary button and a healthy status indistinguishable.
  */
 const statesLight = {
@@ -146,6 +146,13 @@ const shadowDark: Record<keyof typeof shadowLight, string> = {
   "shadow-3": "0 12px 32px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.4)",
 };
 
+/**
+ * The conference kit's field gradient. The attendee event app paints its key
+ * visual with it and the agenda's session dialog paints its header with it, so
+ * both tokens read this one definition.
+ */
+const conferenceField = "linear-gradient(135deg, #0b2a1c 0%, #125c3c 32%, #20506e 74%, #b0581f 100%)";
+
 /** Values that do not change with the theme. */
 export const constants = {
   // Decorative Handlebars backgrounds keep the editor's ordinary ink readable.
@@ -217,9 +224,22 @@ export const constants = {
   // A skeleton shimmer is slower than a spinner; it should read as waiting,
   // not as urgency.
   "dur-shimmer": "1400ms",
+  // How long a row without room shows each of a speaker's affiliations before the next.
+  "dur-affiliation": "4s",
   // The reduced-motion clamp. Named rather than inlined so the one place that
   // is allowed to shorten motion is visible in the token list.
   "dur-instant": "1ms",
+
+  /*
+   * Icon line weight, in rendered pixels rather than grid units.
+   *
+   * Every UI icon is an outline drawn with `vector-effect: non-scaling-stroke`
+   * (see `.pk-icon` in base.css), so the same weight holds whether the glyph is
+   * drawn at 12px inside a status pill or at 22px in the tab bar, and whatever
+   * grid it was authored on. The strong step marks a selected or open state.
+   */
+  "icon-stroke": "1.25px",
+  "icon-stroke-strong": "1.75px",
 
   focus: "0 0 0 2px var(--pk-surface), 0 0 0 4px var(--pk-accent)",
 
@@ -300,6 +320,42 @@ export const constants = {
   "public-wg-chip-muted-hover": "rgba(0,0,0,0.11)",
   "public-wg-shadow": "0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.07)",
   "public-wg-shadow-hover": "0 4px 8px rgba(0,0,0,0.08), 0 16px 48px rgba(0,0,0,0.14)",
+  // Shared public/portal listing treatments preserve the authored card design.
+  "public-wg-default": "linear-gradient(135deg, #1a3a2a, #0a1f14)",
+  "public-listing-tag-text": "0.62rem",
+  "public-listing-title-text": "1.05rem",
+  "public-listing-meta-text": "0.76rem",
+  "public-listing-author-text": "0.8rem",
+  "public-listing-logo-radius": "0.75rem",
+  "public-listing-image-scrim":
+    "linear-gradient(to top, rgba(0, 0, 0, 0.72) 0%, rgba(0, 0, 0, 0.3) 50%, rgba(0, 0, 0, 0.1) 100%)",
+  "public-listing-blog-ground-1": "linear-gradient(135deg, rgb(15, 81, 50) 0%, rgb(54, 93, 128) 100%)",
+  "public-listing-blog-glow-1": "radial-gradient(ellipse at 110% -10%, rgba(32, 201, 151, 0.25) 0%, transparent 55%)",
+  "public-listing-blog-ground-2": "linear-gradient(135deg, rgb(54, 93, 128) 0%, rgb(67, 40, 116) 100%)",
+  "public-listing-blog-glow-2": "radial-gradient(ellipse at 110% -10%, rgba(90, 155, 213, 0.25) 0%, transparent 55%)",
+  "public-listing-blog-ground-3": "linear-gradient(135deg, rgb(67, 40, 116) 0%, rgb(15, 81, 50) 100%)",
+  "public-listing-blog-glow-3": "radial-gradient(ellipse at 110% -10%, rgba(111, 66, 193, 0.25) 0%, transparent 55%)",
+  "public-listing-blog-ground-4": "linear-gradient(135deg, rgb(189, 100, 39) 0%, rgb(176, 42, 55) 100%)",
+  "public-listing-blog-glow-4": "radial-gradient(ellipse at 110% -10%, rgba(237, 125, 49, 0.3) 0%, transparent 55%)",
+  "public-listing-blog-ground-5": "linear-gradient(135deg, rgb(132, 32, 41) 0%, rgb(67, 40, 116) 100%)",
+  "public-listing-blog-glow-5": "radial-gradient(ellipse at 110% -10%, rgba(220, 53, 69, 0.25) 0%, transparent 55%)",
+  "public-listing-blog-ground-6": "linear-gradient(135deg, rgb(20, 108, 67) 0%, rgb(189, 100, 39) 100%)",
+  "public-listing-blog-glow-6": "radial-gradient(ellipse at 110% -10%, rgba(25, 135, 84, 0.3) 0%, transparent 55%)",
+  "public-listing-event-ground": "linear-gradient(135deg, rgb(54, 93, 128) 0%, var(--pk-wg-teal) 100%)",
+  "public-listing-event-glow": "radial-gradient(ellipse at 110% -10%, rgba(32, 201, 151, 0.28) 0%, transparent 55%)",
+  "public-listing-event-ground-alternate": "linear-gradient(135deg, rgb(67, 40, 116) 0%, rgb(54, 93, 128) 100%)",
+  "public-listing-shadow": "0 2px 12px rgba(0, 0, 0, 0.08)",
+  "public-listing-shadow-hover": "0 10px 28px rgba(0, 0, 0, 0.13)",
+  "public-listing-chip-primary": "#1a7a4a",
+  "public-listing-chip-primary-hover": "#155e3a",
+  "public-listing-logo-ground": "rgba(255, 255, 255, 0.92)",
+  "public-listing-tag-ground": "rgba(255, 255, 255, 0.18)",
+  "public-listing-tag-line": "rgba(255, 255, 255, 0.28)",
+  "public-listing-meta-ink": "rgba(255, 255, 255, 0.75)",
+  "public-listing-upcoming-ground": "rgba(25, 135, 84, 0.8)",
+  "public-listing-chip-duration": "150ms",
+  "public-listing-duration": "200ms",
+  "public-listing-image-duration": "400ms",
   "public-support": "linear-gradient(135deg, #0a1f14 0%, #0d3d24 45%, #0a2f40 100%)",
   "public-support-stripe": `linear-gradient(to right, ${palette.green}, ${palette.teal}, ${palette.blue}, ${palette.yellow}, ${palette.orange}, ${palette.red})`,
   "public-support-stat": palette.teal,
@@ -317,12 +373,96 @@ export const constants = {
   "public-support-shadow": "0 4px 12px rgba(0,0,0,0.08), 0 16px 40px rgba(0,0,0,0.12)",
   "public-member-wall-duration": "30s",
   "public-member-wall-mask": "linear-gradient(to bottom, transparent 0%, #000 8%, #000 92%, transparent 100%)",
-  "agenda-location-1": "#2f8fcb",
-  "agenda-location-2": "#f2782c",
-  "agenda-location-3": "#df3447",
-  "agenda-location-4": "#6c36bd",
-  "agenda-location-5": "#10a884",
-  "agenda-location-6": "#5c76d8",
+  "agenda-location-1": "#5a9bd5",
+  "agenda-location-2": "#ed7d31",
+  "agenda-location-3": "#dc3545",
+  "agenda-location-4": "#7d5bc6",
+  "agenda-location-5": "#2fa58f",
+  "agenda-location-6": "#6577d6",
+  /*
+   * The conference agenda's own presentation. Its design handoff is drawn in
+   * pixels, so its type steps stay in px rather than approximating them on the
+   * shared rem ramp, which would move with the reader's root font size. The
+   * agenda alone loads these, through its feature sheet.
+   */
+  "agenda-type-8": "8px",
+  "agenda-type-9": "9px",
+  "agenda-type-10": "10px",
+  "agenda-type-11": "11px",
+  "agenda-type-11-5": "11.5px",
+  "agenda-type-12": "12px",
+  "agenda-type-12-5": "12.5px",
+  "agenda-type-13": "13px",
+  "agenda-type-14": "14px",
+  "agenda-type-15": "15px",
+  "agenda-type-16": "16px",
+  "agenda-type-16-5": "16.5px",
+  "agenda-type-18": "18px",
+  "agenda-type-20": "20px",
+  "agenda-type-22": "22px",
+  "agenda-type-26": "26px",
+  "agenda-type-44": "44px",
+  /* Corners the shared radius steps do not cover: the track marker square, the
+     phone room band inside a card's border, the Abstracts switch track, the
+     small count and time chips, and the footer's recording and live pills. */
+  "agenda-radius-marker": "2px",
+  "agenda-radius-band": "5px",
+  "agenda-radius-switch": "8px",
+  "agenda-radius-chip": "9px",
+  "agenda-radius-action": "12px",
+  "agenda-dur": "150ms",
+  /* The shade strong agenda ink is darkened against. */
+  "agenda-shade": "#000000",
+  "agenda-favorite": palette.orange,
+  /* The live band, the livestream pill, and the NOW rule with its label. */
+  "agenda-live": palette.red,
+  "agenda-live-progress-fill": "rgba(255, 255, 255, 0.6)",
+  "agenda-now-rule": "rgba(220, 53, 69, 0.18)",
+  /* The dark break bar's secondary ink and its sponsor divider. */
+  "agenda-break-ink-muted": "#ced4da",
+  "agenda-break-rule": "rgba(255, 255, 255, 0.25)",
+  "agenda-card-lift": "0 8px 22px rgba(0, 0, 0, 0.12)",
+  "agenda-placeholder-lift": "0 8px 22px rgba(0, 0, 0, 0.08)",
+  /* The session dialog: its shadow and backdrop, and the header field it
+     paints in both themes with the controls and metadata written on it. */
+  "agenda-dialog-shadow": "0 24px 64px rgba(0, 0, 0, 0.3)",
+  "agenda-dialog-backdrop": "rgba(11, 13, 12, 0.55)",
+  "agenda-dialog-field": conferenceField,
+  "agenda-dialog-scrim": "linear-gradient(135deg, rgba(0, 0, 0, 0.65), rgba(0, 0, 0, 0.35))",
+  "agenda-dialog-dot-ring": "rgba(255, 255, 255, 0.7)",
+  "agenda-dialog-meta-ink": "#b5d2ec",
+  "agenda-dialog-control-line": "rgba(255, 255, 255, 0.3)",
+  "agenda-dialog-control-hover": "rgba(255, 255, 255, 0.12)",
+  /* Mask stops: only their alpha matters, opaque keeps and faded dims. */
+  "agenda-mask-opaque": "#000000",
+  "agenda-mask-faded": "rgba(0, 0, 0, 0.25)",
+  /* Printed agendas are black on white paper whatever the screen theme. */
+  "agenda-print-ink": "#000000",
+  "agenda-print-paper": "#ffffff",
+  /*
+   * The conference kit (PQC Conference design handoff): the field gradient,
+   * its paper/ink, and the badge's role bands. Loaded only by the attendee
+   * event app, which renders the key visual and the badge-shaped ticket. The
+   * field stays dark and the ticket stays paper in both themes, as printed.
+   */
+  "pqc-ink": "#0b0d0c",
+  "pqc-ink-muted": "#4a524f",
+  "pqc-paper": "#ffffff",
+  "pqc-rule": "#e1e5e3",
+  "pqc-forest": "#0b2a1c",
+  "pqc-green-deep": "#125c3c",
+  "pqc-blue-deep": "#20506e",
+  "pqc-copper": "#b0581f",
+  "pqc-green": palette.green,
+  "pqc-blue": palette.blue,
+  "pqc-orange": palette.orange,
+  "pqc-on-field": "#ffffff",
+  "pqc-on-field-muted": "rgba(255,255,255,0.88)",
+  "pqc-field": conferenceField,
+  "pqc-light": "radial-gradient(110% 80% at 8% 0%, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0) 60%)",
+  "pqc-stripe": `linear-gradient(90deg, ${palette.green} 0%, ${palette.blue} 50%, ${palette.orange} 100%)`,
+  "pqc-dots": `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Ccircle cx='16' cy='16' r='1.7' fill='rgba(255,255,255,0.22)'/%3E%3C/svg%3E")`,
+  "pqc-dots-fine": `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14'%3E%3Ccircle cx='7' cy='7' r='1.1' fill='rgba(255,255,255,0.22)'/%3E%3C/svg%3E")`,
   // The dark theme's --pk-danger is a light red meant for ink. Filling a
   // button with it and writing in white gave 2.6:1. A destructive fill gets
   // the same darkening an accent fill does.
@@ -331,6 +471,8 @@ export const constants = {
   "grad-tonal": "linear-gradient(135deg, var(--pk-accent-deep), var(--pk-accent-lift))",
   "grad-duo": "linear-gradient(135deg, var(--pk-accent-deep) 0%, var(--pk-accent) 45%, var(--pk-accent-2) 100%)",
   "grad-brand": `linear-gradient(135deg, ${palette.green} 0%, ${palette.blue} 50%, ${palette.orange} 100%)`,
+  "grad-state-ok": `linear-gradient(135deg, #0b2a1c, color-mix(in oklab, ${palette.green} 85%, #000))`,
+  "grad-state-attention": `linear-gradient(135deg, #5b2c0d, color-mix(in oklab, ${palette.orange} 70%, #000))`,
   stripe: `linear-gradient(90deg, ${palette.green} 0%, ${palette.blue} 50%, ${palette.orange} 100%)`,
 } as const;
 
@@ -349,12 +491,16 @@ export const density = {
   comfortable: {
     "control-y": "0.4rem",
     "control-x": "0.75rem",
+    "control-text": "0.875rem",
+    "control-size": "calc(var(--pk-control-text) * 1.35 + var(--pk-control-y) * 2 + 2px)",
     "row-y": "0.55rem",
     stack: "1rem",
   },
   compact: {
     "control-y": "0.25rem",
     "control-x": "0.6rem",
+    "control-text": "0.8125rem",
+    "control-size": "calc(var(--pk-control-text) * 1.35 + var(--pk-control-y) * 2 + 2px)",
     "row-y": "0.32rem",
     stack: "0.75rem",
   },
@@ -382,3 +528,36 @@ export function tokenNames(): string[] {
 export function cssVar(name: string): string {
   return `--${prefix}-${name}`;
 }
+
+/** Canonical semantic palette for deterministic exported publication artwork. */
+export const publicationBrand = {
+  background: surfacesDark.canvas,
+  ink: surfacesDark.ink,
+  accentStops: [palette.green, palette.teal, palette.blue, palette.yellow, palette.orange, palette.red],
+} as const;
+
+/** Component-only tokens load with their consumers rather than the global entry. */
+export const featureTokenGroups = {
+  agenda: Object.keys(constants).filter((name) => name.startsWith("agenda-")),
+  scanner: ["grad-state-ok", "grad-state-attention"],
+  event: [
+    "pqc-ink",
+    "pqc-ink-muted",
+    "pqc-paper",
+    "pqc-rule",
+    "pqc-forest",
+    "pqc-green-deep",
+    "pqc-blue-deep",
+    "pqc-copper",
+    "pqc-green",
+    "pqc-blue",
+    "pqc-orange",
+    "pqc-on-field",
+    "pqc-on-field-muted",
+    "pqc-field",
+    "pqc-light",
+    "pqc-stripe",
+    "pqc-dots",
+    "pqc-dots-fine",
+  ],
+} as const;

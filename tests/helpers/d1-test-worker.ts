@@ -8,3 +8,6 @@ export default {
     throw new Error("SELF.fetch requires the worker-fetch test project with functions/router.ts as its entry point");
   },
 };
+
+/** Every Durable Object binding in wrangler.jsonc needs its class exported from the test entry point. */
+export { LiveSessionRoom } from "../../functions/_lib/services/live-session/room";

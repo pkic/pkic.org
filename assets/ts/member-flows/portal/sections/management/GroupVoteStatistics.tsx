@@ -1,3 +1,4 @@
+import { formatNumber } from "../../../../../shared/format-number";
 import {
   groupVoteStatisticsResponseSchema,
   type GroupVoteStatisticsResponse,
@@ -22,13 +23,15 @@ interface CandidateRow {
 
 const CANDIDATE_COLUMNS: ReadonlyArray<DataTableColumn<CandidateRow>> = [
   { id: "candidate", header: "Candidate", cell: (row) => row.name },
-  { id: "count", header: "Ballots", align: "end", cell: (row) => row.count },
+  { id: "count", header: "Ballots", align: "end", width: "fit", cell: (row) => formatNumber(row.count) },
 ];
 
 const candidateRowKey = (row: CandidateRow): string => row.candidateId;
 
+/** A choice key as a sentence-case label: "abstain" reads "Abstain". */
 function labelize(value: string): string {
-  return value.replaceAll("_", " ");
+  const words = value.replaceAll("_", " ");
+  return words.charAt(0).toLocaleUpperCase() + words.slice(1);
 }
 
 /** The motion tally, one card per choice the server counted. */
@@ -36,7 +39,7 @@ function CountGrid({ counts }: { counts: Record<string, number> }) {
   return (
     <div class="pk-stat-row">
       {Object.entries(counts).map(([key, value]) => (
-        <StatCard key={key} label={labelize(key)} value={String(value)} />
+        <StatCard key={key} label={labelize(key)} value={formatNumber(value)} />
       ))}
     </div>
   );
@@ -68,7 +71,7 @@ function AggregateSummary({ aggregate }: { aggregate: Aggregate }) {
       columns={CANDIDATE_COLUMNS}
       rows={aggregate.candidates.map((candidate, index) => ({
         candidateId: candidate.candidateId,
-        name: candidate.candidateName || `Candidate ${String(index + 1)}`,
+        name: candidate.candidateName || `Candidate ${formatNumber(index + 1)}`,
         count: candidate.count,
       }))}
       rowKey={candidateRowKey}
@@ -106,12 +109,17 @@ export function GroupVoteStatistics({ groupId, voteId }: { groupId: string; vote
             {labelize(statistics.data.electorateMode)}
           </p>
           <div class="pk-stat-row">
-            <StatCard label="Currently eligible" value={String(participation.currentEligible)} />
-            <StatCard label="Currently eligible and cast" value={String(participation.currentEligibleCast)} />
-            <StatCard label="Currently eligible and not cast" value={String(participation.currentEligibleNotCast)} />
-            <StatCard label="Effective ballots" value={String(participation.effectiveBallots)} />
+            <StatCard label="Currently eligible" value={formatNumber(participation.currentEligible)} />
+            <StatCard label="Currently eligible and cast" value={formatNumber(participation.currentEligibleCast)} />
+            <StatCard
+              label="Currently eligible and not cast"
+              value={formatNumber(participation.currentEligibleNotCast)}
+            />
+            <StatCard label="Effective ballots" value={formatNumber(participation.effectiveBallots)} />
           </div>
-          <p class="pk-small">Ballots without current eligibility: {participation.ballotsWithoutCurrentEligibility}</p>
+          <p class="pk-small">
+            Ballots without current eligibility: {formatNumber(participation.ballotsWithoutCurrentEligibility)}
+          </p>
           <AggregateSummary aggregate={statistics.data.aggregate} />
         </PanelBody>
       </Panel>

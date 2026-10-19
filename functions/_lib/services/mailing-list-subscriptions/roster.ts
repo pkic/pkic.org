@@ -52,7 +52,7 @@ function candidateUsersSql(listId: string, purpose: string): { sql: string; bind
               ON member.status = 'active'
              AND (
                member.organization_id = identity.organization_id
-               OR (identity.organization_id IS NULL AND member.user_id = identity.user_id)
+               OR (identity.organization_id IS NULL AND member.identity_id = identity.id)
              )
            WHERE identity.started_at IS NOT NULL AND identity.ended_at IS NULL AND identity.blocked_at IS NULL`;
   return {
@@ -169,7 +169,8 @@ export async function listMailingListSubscribers(
   ]);
   const { rows, total } = decodeOffsetPageResults<MailingListSubscriberRow>(pageResult, countResult);
   const representation = representationResult.results?.[0] as
-    { people_count: number; organization_count: number } | undefined;
+    | { people_count: number; organization_count: number }
+    | undefined;
 
   const subscribers = rows.map((row) =>
     mailingListSubscriberSchema.parse({

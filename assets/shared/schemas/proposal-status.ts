@@ -9,6 +9,14 @@ export const proposalDecidableStatusSchema = z.enum(PROPOSAL_DECIDABLE_STATUSES)
 
 export const PROPOSAL_SELF_SERVICE_EDITABLE_STATUSES = [...PROPOSAL_DECIDABLE_STATUSES, "needs-work"] as const;
 export const proposalSelfServiceEditableStatusSchema = z.enum(PROPOSAL_SELF_SERVICE_EDITABLE_STATUSES);
+
+/**
+ * A proposer's notes for the program committee stay editable while the
+ * proposal is under review, and lock once it is accepted or declined.
+ */
+export function isProposalCommitteeNotesEditableStatus(status: string): boolean {
+  return proposalSelfServiceEditableStatusSchema.safeParse(status).success;
+}
 export const PROPOSAL_SPEAKER_ROSTER_EDITABLE_STATUSES = [
   ...PROPOSAL_SELF_SERVICE_EDITABLE_STATUSES,
   "accepted",

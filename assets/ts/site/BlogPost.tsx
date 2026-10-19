@@ -1,12 +1,13 @@
-import { SiteImage } from "./SiteImage";
 import { siteContentSlug } from "../../shared/site-content-slug";
 import { siteContentLanguagePrefix } from "../../shared/site-content-language";
 import type { SiteBlogSidebar, SiteAuthor } from "../../shared/site-content";
 import type { ComponentChildren } from "preact";
 import { Avatar } from "../ui/Avatar";
 import { LinkList } from "../ui/LinkList";
+import { IconChevron } from "../ui/MediaIcons";
 import { AuthorStrip } from "./BlogCard";
 import { LocalTime } from "./SiteDate";
+import { ExternalLink } from "../ui/ExternalLink";
 
 /**
  * The line under a post's title: when it was published, how long it takes to
@@ -36,11 +37,9 @@ export function BlogHeroMeta({ date, sidebar }: { date?: string; sidebar: SiteBl
  */
 function AuthorCard({ author }: { author: SiteAuthor }) {
   const organization = author.organization;
-  const mark = organization?.logo ? (
-    <SiteImage src={organization.logo} alt={organization.name} class="blog-author-org-logo" />
-  ) : (
-    organization?.name
-  );
+  const mark = organization?.name ? (
+    <Avatar name={organization.name} src={organization.logo} shape="square" class="blog-author-org-logo" />
+  ) : null;
   return (
     <div class="blog-author-card">
       <Avatar name={author.name} src={author.headshot} />
@@ -59,9 +58,9 @@ function AuthorCard({ author }: { author: SiteAuthor }) {
         {organization?.name ? (
           <div class="blog-author-org">
             {organization.website ? (
-              <a href={organization.website} target="_blank" rel="noopener noreferrer" class="blog-author-org-name">
+              <ExternalLink href={organization.website} external class="blog-author-org-name">
                 {mark}
-              </a>
+              </ExternalLink>
             ) : (
               mark
             )}
@@ -153,29 +152,6 @@ function Sidebar({ sidebar, sponsors }: { sidebar: SiteBlogSidebar; sponsors?: C
   );
 }
 
-function NavArrow({ direction }: { direction: "next" | "previous" }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="14"
-      height="14"
-      fill="currentColor"
-      viewBox="0 0 16 16"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <path
-        fill-rule="evenodd"
-        d={
-          direction === "previous"
-            ? "M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"
-            : "M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"
-        }
-      />
-    </svg>
-  );
-}
-
 /** Articles this old were published under the consortium's former name. */
 const CASC_UNTIL = "2021-02-01";
 
@@ -237,7 +213,7 @@ export function BlogPost({
               {sidebar.previous ? (
                 <a class="blog-post-nav-item blog-post-nav-prev" href={sidebar.previous.href} title="Previous article">
                   <span class="blog-post-nav-label">
-                    <NavArrow direction="previous" />
+                    <IconChevron pointing="left" width="14" height="14" />
                     Previous article
                   </span>
                   <span class="blog-post-nav-title">{sidebar.previous.title}</span>
@@ -249,7 +225,7 @@ export function BlogPost({
                 <a class="blog-post-nav-item blog-post-nav-next" href={sidebar.next.href} title="Next article">
                   <span class="blog-post-nav-label">
                     Next article
-                    <NavArrow direction="next" />
+                    <IconChevron pointing="right" width="14" height="14" />
                   </span>
                   <span class="blog-post-nav-title">{sidebar.next.title}</span>
                 </a>

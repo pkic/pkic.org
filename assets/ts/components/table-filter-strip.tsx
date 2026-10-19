@@ -109,7 +109,7 @@ export function ColumnTextFilterRow({
         )}
         {hint !== undefined && <span class="pk-small pk-muted">{hint}</span>}
       </label>
-      <Button variant="secondary" size="sm" onClick={onClose}>
+      <Button variant="secondary" onClick={onClose}>
         Done
       </Button>
     </div>

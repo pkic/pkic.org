@@ -41,13 +41,6 @@
     color: var(--pk-ink-muted);
   }
 
-  .pk-home-event-heading {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--pk-2);
-  }
-
   .pk-home-meetings-footer {
     border-top: 1px solid var(--pk-line-soft);
     padding: 0.3rem var(--pk-4);

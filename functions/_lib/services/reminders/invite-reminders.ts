@@ -18,6 +18,7 @@ import {
   eventInviteWindowsEvidence,
 } from "../../invite-validity";
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../db/authorization-guard";
+import { affiliationOrganizationNameSql } from "../identities/affiliation-projection";
 
 export async function runInviteReminders(
   db: DatabaseLike,
@@ -116,7 +117,7 @@ export async function runInviteReminders(
     const inviterRows = await all<InviteInviterInfo & { invite_id: string }>(
       db,
       `SELECT ii.invite_id, ii.inviter_user_id AS userId, u.first_name AS firstName,
-              u.last_name AS lastName, u.organization_name AS organizationName
+              u.last_name AS lastName, ${affiliationOrganizationNameSql("u.id")} AS organizationName
        FROM invite_inviters ii
        JOIN users u ON u.id = ii.inviter_user_id
        WHERE ii.invite_id IN (SELECT value FROM json_each(?))

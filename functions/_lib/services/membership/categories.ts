@@ -156,19 +156,16 @@ export function activeVotingMemberCapacitySelect(memberIdExpression = "?", userI
    WHERE active_voting_member.id = ${memberIdExpression}
      AND active_voting_member.status = 'active'
      AND ${votingMembershipCategoryExistsSql("active_voting_category.category_code")}
-     AND (
-       active_voting_member.user_id = active_voting_user.id
-       OR EXISTS (
-         SELECT 1
-           FROM identities active_voting_identity
-           JOIN identity_member_capacities active_voting_capacity
-             ON active_voting_capacity.identity_id = active_voting_identity.id
-          WHERE active_voting_capacity.member_id = active_voting_member.id
-            AND active_voting_identity.user_id = active_voting_user.id
-            AND active_voting_identity.started_at IS NOT NULL
-            AND active_voting_identity.ended_at IS NULL
-            AND active_voting_identity.blocked_at IS NULL
-       )
+     AND EXISTS (
+       SELECT 1
+         FROM identities active_voting_identity
+         JOIN identity_member_capacities active_voting_capacity
+           ON active_voting_capacity.identity_id = active_voting_identity.id
+        WHERE active_voting_capacity.member_id = active_voting_member.id
+          AND active_voting_identity.user_id = active_voting_user.id
+          AND active_voting_identity.started_at IS NOT NULL
+          AND active_voting_identity.ended_at IS NULL
+          AND active_voting_identity.blocked_at IS NULL
      )
    LIMIT 1`;
 }

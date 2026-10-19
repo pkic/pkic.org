@@ -31,11 +31,12 @@ import { completeSyntheticMembershipReview, prepareSyntheticMembershipReview } f
  */
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { runRowAction } from "./helpers/data-table";
+import { eventWorkspacePath } from "./helpers/agenda-workspace";
 import { expect, test } from "@playwright/test";
 import type { CapturedEmail } from "./global-setup";
 import type { Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
+import { roleResponseEnvelopeSchema } from "../../assets/shared/schemas/access-control";
 import { membershipApplicationDetailSchema } from "../../assets/shared/schemas/membership-application-management";
 import { acceptConfirmDialog } from "./helpers/confirm-dialog";
 import { verifyMembershipJoinEmail } from "./helpers/member-join";
@@ -120,6 +121,10 @@ async function provisionApprovedMember(
           joinToken,
           answers: {
             reason: "This E2E member wants to contribute to the PKI community.",
+            // An organization's applicant says what they do there.
+            job_title: "Membership contact",
+            about_yourself: "I work on PKI interoperability.",
+            about_organization: "We build PKI services.",
             agrees_bylaws: true,
             agrees_code_of_conduct: true,
             agrees_ipr_policy: true,
@@ -159,6 +164,51 @@ test.describe("Portal management browser-verification pass", () => {
   });
 
   test.use({ storageState: ADMIN_AUTH_FILE });
+
+  test("system role permission bundles can be edited without changing their identity", async ({ page }, testInfo) => {
+    const roleId = "role-group_deputy_lead";
+    const path = `/api/v1/roles/${roleId}`;
+    const original = roleResponseEnvelopeSchema.parse(await (await page.request.get(path)).json()).role;
+    expect(original.isSystemRole).toBe(true);
+    await page.goto(`/portal/#/settings/access-control/roles/${roleId}`);
+    await expect(page.getByRole("heading", { name: original.name, exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Role actions", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
+    await expect(page.getByRole("textbox", { name: "Name", exact: true })).toHaveCount(0);
+    const permission = page.getByRole("checkbox", { name: "donations:read", exact: true });
+    const wasGranted = original.permissions.includes("donations:read");
+    await permission.setChecked(!wasGranted);
+    for (const width of [1440, 375]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.evaluate(async () => {
+        await document.fonts.ready;
+        window.scrollTo(0, 0);
+      });
+      const screenshot = testInfo.outputPath(`system-role-edit-${width}.png`);
+      await page.screenshot({ path: screenshot, fullPage: true });
+      await testInfo.attach(`System role edit ${width}`, { path: screenshot, contentType: "image/png" });
+    }
+    const saved = page.waitForResponse(
+      (response) => new URL(response.url()).pathname === path && response.request().method() === "PATCH",
+    );
+    await page.getByRole("button", { name: "Save changes", exact: true }).click();
+    expect((await saved).status()).toBe(200);
+    const updated = roleResponseEnvelopeSchema.parse(await (await page.request.get(path)).json()).role;
+    expect(updated.id).toBe(original.id);
+    expect(updated.name).toBe(original.name);
+    expect(updated.isSystemRole).toBe(true);
+    expect(updated.permissions.includes("donations:read")).toBe(!wasGranted);
+    await page.getByRole("button", { name: "Role actions", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
+    await permission.setChecked(wasGranted);
+    const restored = page.waitForResponse(
+      (response) => new URL(response.url()).pathname === path && response.request().method() === "PATCH",
+    );
+    await page.getByRole("button", { name: "Save changes", exact: true }).click();
+    expect((await restored).status()).toBe(200);
+    const final = roleResponseEnvelopeSchema.parse(await (await page.request.get(path)).json()).role;
+    expect([...final.permissions].sort()).toEqual([...original.permissions].sort());
+  });
 
   test("does not retain duplicate admin or sponsor portal shells", async ({ request }) => {
     expect((await request.get("/admin/")).status()).toBe(404);
@@ -206,7 +256,7 @@ test.describe("Portal management browser-verification pass", () => {
     const detail = page.getByRole("region", { name: "Vote management" });
     await expect(detail).toBeVisible();
 
-    // The editor is a named form ("Vote visibility") around a field labelled
+    // The editor is a named form ("Vote visibility") around a field labeled
     // "Visibility", so the control is asked for by its exact label rather
     // than by a substring that also matches the form around it.
     const visibilityForm = detail.getByRole("form", { name: "Vote visibility" });
@@ -304,7 +354,7 @@ test.describe("Portal management browser-verification pass", () => {
     await expect(page.getByRole("row").filter({ hasText: title })).toBeVisible();
   });
 
-  test("sponsorships: create an event sponsorship and advance its pipeline stage", async ({ page }) => {
+  test("sponsorships: create an event sponsorship and advance its pipeline stage", async ({ page }, testInfo) => {
     const contactName = `E2E Sponsor Contact ${Date.now()}`;
     const canonicalRequests: string[] = [];
     const legacyRequests: string[] = [];
@@ -406,6 +456,19 @@ test.describe("Portal management browser-verification pass", () => {
     await expect(page.locator(".my-toast", { hasText: "Stage moved to contacted" })).toBeVisible();
     await expect(corrected.getByLabel("Pipeline").locator("span.pk-badge", { hasText: "contacted" })).toBeVisible();
     await expect(corrected.getByText(/new inquiry\s*→\s*contacted/i)).toBeVisible();
+    await corrected.getByRole("button", { name: "Sponsorship actions" }).click();
+    await page.getByRole("menuitem", { name: "Move stage…" }).click();
+    await moveDialog.getByLabel("Move to stage").selectOption("lapsed");
+    await expect(moveDialog.getByLabel("End reason")).toHaveValue("termination");
+    await moveDialog.getByLabel("End reason").selectOption("withdrawal");
+    await moveDialog.getByLabel("Note (optional)").fill("Synthetic sponsor withdrawal");
+    for (const width of [1440, 375]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.screenshot({ path: testInfo.outputPath(`sponsor-end-reason-${width}.png`) });
+    }
+    await moveDialog.getByRole("button", { name: "Move stage", exact: true }).click();
+    await expect(page.locator(".my-toast", { hasText: "Stage moved to lapsed" })).toBeVisible();
+    await expect(corrected.getByText(/contacted\s*→\s*lapsed/i)).toBeVisible();
     expect(canonicalRequests).toEqual(expect.arrayContaining(["GET /api/v1/sponsors/companies"]));
     expect(canonicalRequests.some((request) => request.startsWith("POST /api/v1/sponsors"))).toBe(true);
     expect(canonicalRequests.some((request) => request.startsWith("PATCH /api/v1/sponsors/"))).toBe(true);
@@ -415,7 +478,7 @@ test.describe("Portal management browser-verification pass", () => {
   test("sponsor tiers: add a tier on the real seeded event and confirm it persists", async ({ page }) => {
     const tierName = `E2E Verify Tier ${Date.now()}`;
 
-    await page.goto(`/portal/#/events/${EVENT_SLUG}/settings/sponsor-tiers`);
+    await page.goto(`/portal/#/events/${EVENT_SLUG}/settings/sponsors`);
     await expect(page.getByText("Choose which sponsor tiers can access attendee data for this event.")).toBeVisible();
     await expect(page.getByRole("textbox", { name: "Tier name" })).toHaveCount(0);
     async function editTiers() {
@@ -529,7 +592,7 @@ test.describe("Portal management browser-verification pass", () => {
     };
     await editFirst();
     const firstAmountField = pricing.getByRole("spinbutton", { name: /amount in cents$/ }).first();
-    const firstSave = pricing.getByRole("button", { name: "Save", exact: true }).first();
+    const firstSave = pricing.getByRole("button", { name: "Save pricing", exact: true });
     await expect(firstAmountField).toBeVisible();
 
     const originalAmount = await firstAmountField.inputValue();
@@ -562,9 +625,10 @@ test.describe("Portal management browser-verification pass", () => {
   });
 
   test("event team: assign and revoke a role through the canonical event resource", async ({ page }) => {
-    // A team member is an existing user, found with the picker (#88): the
-    // journey links the signed-in administrator to the event's team.
-    const email = e2eAdminEmail();
+    // The team is one roster of people with event access or scheduling duties.
+    // Adding someone to it starts from the event's people; granting access to a
+    // user the portal knows is the canonical event resource, which this walk
+    // calls directly before revoking through the person's own page.
     const legacyRequests: string[] = [];
     page.on("request", (request) => {
       const pathname = new URL(request.url()).pathname;
@@ -577,40 +641,41 @@ test.describe("Portal management browser-verification pass", () => {
     await expect(page.getByRole("button", { name: "Add team member" })).toBeVisible({ timeout: 15_000 });
     await page.getByRole("button", { name: "Add team member" }).click();
     // Adding is a page of its own: the list it adds to is not underneath it.
-    await expect(page).toHaveURL(new RegExp(`#/groups/${EVENT_GROUP_ID}/events/[^/]+/team/new$`));
-    await expect(page.getByRole("table", { name: "Event team members" })).toHaveCount(0);
+    await expect(page).toHaveURL(new RegExp(`#/groups/${EVENT_GROUP_ID}/events/[^/]+/settings/team/new$`));
+    await expect(page.getByRole("heading", { name: "Add team member" })).toBeVisible();
+    await expect(page.getByRole("table", { name: "Event team" })).toHaveCount(0);
 
-    const form = page.locator("form").filter({
-      has: page.getByRole("button", { name: "Add team member", exact: true }),
+    const session = await (await page.request.get("/api/v1/auth/session")).json();
+    const userId: string = session.identity.id;
+    const assigned = await page.request.post(`/api/v1/events/${EVENT_SLUG}/roles`, {
+      data: { userId, role: "program_committee" },
     });
-    await form.getByLabel("Person").fill(email);
-    await page.getByRole("group", { name: "Matching users" }).getByRole("button", { name: email }).click();
-    await form.getByLabel("Role").selectOption("program_committee");
-    const assigned = page.waitForResponse(
-      (response) =>
-        new URL(response.url()).pathname === `/api/v1/events/${EVENT_SLUG}/roles` &&
-        response.request().method() === "POST",
-    );
-    await form.getByRole("button", { name: "Add team member", exact: true }).click();
-    expect((await assigned).status()).toBe(201);
-    // And it returns to the list it added to.
-    await expect(page).toHaveURL(new RegExp(`#/groups/${EVENT_GROUP_ID}/events/[^/]+/team$`));
+    expect(assigned.status()).toBe(201);
 
-    const row = page.getByRole("row").filter({ hasText: email });
-    await expect(row).toContainText("Program Committee");
+    await page.goto(`/portal/#/events/${EVENT_SLUG}/settings/team`);
+    const member = page.locator(`a[href$="/settings/team/${userId}"]`).first();
+    await expect(member).toBeVisible({ timeout: 15_000 });
+    await member.click();
+    const access = page
+      .getByRole("region", { name: "Event access" })
+      .or(page.locator("section").filter({ hasText: "Event access" }));
+    await expect(access.first()).toContainText("Program Committee");
     await page.reload();
-    await expect(page.getByRole("row").filter({ hasText: email })).toContainText("Program Committee");
+    await expect(access.first()).toContainText("Program Committee");
 
-    const reloadedRow = page.getByRole("row").filter({ hasText: email });
     const revoked = page.waitForResponse(
       (response) =>
         new URL(response.url()).pathname.startsWith(`/api/v1/events/${EVENT_SLUG}/roles/`) &&
         response.request().method() === "DELETE",
     );
-    await runRowAction(page, reloadedRow, "Revoke");
-    await acceptConfirmDialog(page, "Revoke role");
+    await page.getByRole("button", { name: /^Event access actions for / }).click();
+    await page.getByRole("menuitem", { name: "Revoke Program Committee access" }).click();
+    await acceptConfirmDialog(page, "Revoke access");
     expect((await revoked).status()).toBe(200);
-    await expect(page.getByRole("row").filter({ hasText: email })).toHaveCount(0);
+    // With no access and no duties left, the person leaves the roster.
+    await page.goto(`/portal/#/events/${EVENT_SLUG}/settings/team`);
+    await expect(page.getByRole("table", { name: "Event team" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator(`a[href$="/settings/team/${userId}"]`)).toHaveCount(0);
     expect(legacyRequests).toEqual([]);
   });
 
@@ -677,7 +742,7 @@ test.describe("Portal management browser-verification pass", () => {
     await page.getByRole("button", { name: "Registration actions", exact: true }).click();
     await expect(page.getByRole("menuitem", { name: "Run waitlist promotions" })).toBeVisible();
     await page.keyboard.press("Escape");
-    const download = page.getByRole("link", { name: "Download CSV", exact: true });
+    const download = page.getByRole("link", { name: "Download registrations (CSV)", exact: true });
     await expect(download).toBeVisible();
     await expect(download.locator("svg")).toBeVisible();
     const actions = page.getByRole("button", { name: "Registration actions", exact: true });
@@ -694,10 +759,11 @@ test.describe("Portal management browser-verification pass", () => {
       })
       .toBe(true);
     await page.screenshot({ path: test.info().outputPath("registration-toolbar-dark.png"), animations: "disabled" });
-    await page.goto(`/portal/#/events/${EVENT_SLUG}`);
+    await page.goto(await eventWorkspacePath(page, EVENT_SLUG));
     const schedule = page.getByLabel("Schedule", { exact: true });
     await expect(schedule).toBeVisible();
-    expect(await schedule.evaluate((el) => el.closest("aside") !== null)).toBe(true);
+    // The facts sit in a layout column of the workspace overview, never in a complementary landmark inside main.
+    expect(await schedule.evaluate((el) => el.closest("aside, [role='complementary']") === null)).toBe(true);
     await page.screenshot({ path: test.info().outputPath("event-overview-dark.png"), animations: "disabled" });
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(schedule).toBeVisible();
@@ -847,7 +913,8 @@ test.describe("Portal management browser-verification pass", () => {
     await page.goto("/portal/#/users");
     await page.getByPlaceholder("email or name").fill(primaryEmail);
     await page.getByPlaceholder("email or name").press("Enter");
-    const primaryRow = page.locator("tr").filter({ hasText: primaryEmail });
+    // The list names people; their address is searched for, not shown.
+    const primaryRow = page.locator("tr").filter({ hasText: `Primary User ${stamp}` });
     await expect(primaryRow).toBeVisible({ timeout: 10_000 });
     await primaryRow.click();
     // The record's name appears as the PageHeader title and again as the
@@ -855,17 +922,16 @@ test.describe("Portal management browser-verification pass", () => {
     // assertion names the heading it means.
     await expect(page.getByRole("heading", { name: `Primary User ${stamp}` })).toBeVisible({ timeout: 10_000 });
 
-    // The addresses an account answers to are administration, not something
-    // the record says about the person, so they are disclosed under it.
-    await page.getByRole("button", { name: "Account administration", exact: true }).click();
-
     // Located by role and accessible name rather than by `.card`/`.card-header`:
-    // the panel is a named region now, and a role does not break the next time
-    // the markup around it is restyled.
+    // the panel is a named region, and a role does not break the next time
+    // the markup around it is restyled. Adding an address is a form of its own,
+    // reached from the panel's menu.
     const emailPanel = page.getByRole("region", { name: "Email addresses" });
-    await emailPanel.getByLabel("Add a secondary email").fill(extraEmail);
-    await emailPanel.getByRole("button", { name: "Add email" }).click();
-    await expect(page.locator(".my-toast", { hasText: "Email added" })).toBeVisible();
+    await emailPanel.getByRole("button", { name: "Email addresses actions" }).click();
+    await page.getByRole("menuitem", { name: "Add email address" }).click();
+    await page.getByRole("textbox", { name: /^Email address/ }).fill(extraEmail);
+    await page.getByRole("button", { name: "Add email address", exact: true }).click();
+    await expect(page.locator(".my-toast", { hasText: `${extraEmail} added` })).toBeVisible();
     await expect(emailPanel.getByText(extraEmail)).toBeVisible();
 
     await expect(page.getByText("Merge another account into this one")).toHaveCount(0);
@@ -924,7 +990,7 @@ test.describe("Portal management browser-verification pass", () => {
     // The applicant's name heads the detail view as a real heading, so the
     // header is found by its role rather than by the Bootstrap utility classes
     // that used to be on the wrapper. The stage badge is its sibling.
-    const applicantHeading = page.getByRole("heading", { name, level: 2 });
+    const applicantHeading = page.getByRole("heading", { name, level: 1 });
     await expect(applicantHeading).toBeVisible({ timeout: 10_000 });
     const header = page.locator("div").filter({ has: applicantHeading }).last();
     await expect(header.getByText("Processing", { exact: true })).toBeVisible();

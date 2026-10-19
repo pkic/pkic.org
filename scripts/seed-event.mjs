@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 import YAML from "yaml";
 import { buildWranglerD1ExecuteArgs, parseSeedCliArgs } from "./lib/seed-cli.mjs";
 import { sqlString, toSqlNullableTextPreservingWhitespace as toSqlNullableText } from "./lib/sql.mjs";
+import { individualIdentityFallbackSql } from "./lib/individual-identity-sql.mjs";
 
 const DEFAULT_CONFIG_PATH = path.join(process.cwd(), "scripts", "seed-event.yaml");
 const DEFAULT_BUCKET = process.env.ASSETS_BUCKET_NAME ?? "pkic-assets";
@@ -66,8 +67,19 @@ function frontendRoutes(config) {
   };
 }
 
+/** The event's city and ISO 3166-1 alpha-2 country, as the events table stores them. */
+function eventPlace(config) {
+  const city = config.event.city ? String(config.event.city).trim() : null;
+  const country = config.event.country ? String(config.event.country).trim().toUpperCase() : null;
+  if (country && !/^[A-Z]{2}$/.test(country)) {
+    throw new Error(`event.country must be an ISO 3166-1 alpha-2 code, not '${config.event.country}'`);
+  }
+  return { city: city || null, country };
+}
+
 function buildEventSql(config) {
   const eventId = randomUUID();
+  const place = eventPlace(config);
   const settings = { frontend: { routes: frontendRoutes(config) } };
   if (config.event.venue) {
     settings.venue = String(config.event.venue).trim();
@@ -78,9 +90,6 @@ function buildEventSql(config) {
   if (config.event.virtualUrl) {
     settings.virtualUrl = String(config.event.virtualUrl).trim();
   }
-  if (config.event.location) {
-    settings.location = String(config.event.location).trim();
-  }
   if (config.event.heroImageUrl) {
     settings.heroImageUrl = String(config.event.heroImageUrl).trim();
   }
@@ -89,7 +98,7 @@ function buildEventSql(config) {
   return `
 INSERT INTO events (
   id, slug, name, timezone, starts_at, ends_at, source_path, base_path, capacity_in_person,
-  registration_mode, invite_limit_attendee, settings_json, created_at, updated_at
+  registration_mode, invite_limit_attendee, settings_json, city, country, created_at, updated_at
 ) VALUES (
   ${sqlString(eventId)},
   ${sqlString(config.event.slug)},
@@ -103,6 +112,8 @@ INSERT INTO events (
   ${sqlString(config.event.registrationMode ?? "invite_or_open")},
   ${toSqlInt(config.event.inviteLimitAttendee ?? 5, 5)},
   ${sqlString(settingsJson)},
+  ${toSqlNullableText(place.city)},
+  ${toSqlNullableText(place.country)},
   datetime('now'),
   datetime('now')
 )
@@ -115,6 +126,8 @@ ON CONFLICT(slug) DO UPDATE SET
   registration_mode = excluded.registration_mode,
   invite_limit_attendee = excluded.invite_limit_attendee,
   settings_json = excluded.settings_json,
+  city = excluded.city,
+  country = excluded.country,
   updated_at = datetime('now');
 `;
 }
@@ -171,7 +184,7 @@ function buildOrganizersSql(config) {
 
     statements.push(`
 INSERT INTO users (
-  id, email, normalized_email, first_name, last_name, organization_name, job_title,
+  id, email, normalized_email, first_name, last_name,
   active, created_at, updated_at
 ) VALUES (
   ${sqlString(randomUUID())},
@@ -179,8 +192,6 @@ INSERT INTO users (
   ${sqlString(email)},
   ${toSqlNullableText(organizer.firstName)},
   ${toSqlNullableText(organizer.lastName)},
-  ${toSqlNullableText(organizer.organizationName)},
-  ${toSqlNullableText(organizer.jobTitle)},
   1,
   strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
   strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
@@ -188,11 +199,9 @@ INSERT INTO users (
 ON CONFLICT(email) DO UPDATE SET
   first_name = COALESCE(excluded.first_name, users.first_name),
   last_name = COALESCE(excluded.last_name, users.last_name),
-  organization_name = COALESCE(excluded.organization_name, users.organization_name),
-  job_title = COALESCE(excluded.job_title, users.job_title),
   active = 1,
   updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now');
-
+${individualIdentityFallbackSql(`(SELECT id FROM users WHERE email = ${sqlString(email)})`, "staff")}
 INSERT INTO event_participants (
   id, event_id, user_id, role, subrole, status, source_type, source_ref, created_at, updated_at
 )

@@ -55,9 +55,17 @@ describe("shared seed SQL and Wrangler helpers", () => {
   });
 
   it("builds local and remote D1 execute arguments without dropping environment options", () => {
+    // Workers Previews share the production DB binding's preview database;
+    // --preview is what keeps a preview seed off production.
     expect(
-      buildWranglerD1ExecuteArgs({ database: "preview-db", wranglerEnv: "preview", mode: "remote", persistTo: null }),
-    ).toEqual(["wrangler", "d1", "execute", "preview-db", "--env", "preview", "--remote"]);
+      buildWranglerD1ExecuteArgs({ database: "DB", wranglerEnv: "preview", mode: "remote", persistTo: null }),
+    ).toEqual(["wrangler", "d1", "execute", "DB", "--env", "production", "--preview", "--remote"]);
+    expect(
+      buildWranglerD1ExecuteArgs({ database: "pkic-db", wranglerEnv: "production", mode: "remote", persistTo: null }),
+    ).toEqual(["wrangler", "d1", "execute", "pkic-db", "--env", "production", "--remote"]);
+    expect(() =>
+      buildWranglerD1ExecuteArgs({ database: "x", wranglerEnv: "staging", mode: "remote", persistTo: null }),
+    ).toThrow(/Unsupported Wrangler target/);
     expect(
       buildWranglerD1ExecuteArgs({ database: "pkic-db", wranglerEnv: null, mode: "local", persistTo: "/tmp/d1" }),
     ).toEqual(["wrangler", "d1", "execute", "pkic-db", "--local", "--persist-to=/tmp/d1"]);

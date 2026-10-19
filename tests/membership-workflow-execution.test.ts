@@ -1,5 +1,8 @@
+// Compile the real lazy HTTP graph before timed endpoint journeys.
+import "../functions/http-router";
 import { administratorGrants } from "./helpers/administrator";
 import { insertUser } from "./helpers/membership";
+import { createOrganizationCapacity } from "./helpers/voting";
 import { gateNextBatch } from "./helpers/d1-batch-gate";
 import { recordMembershipObjection } from "../functions/_lib/services/membership/workflows/objections";
 import { beforeEach, expect, it } from "vitest";
@@ -229,4 +232,79 @@ it("requires an authorized staff review, a sent notice and a full window, then r
       })
     ).status,
   ).toBe(409);
+});
+
+it("shows a member consultation the application without the applicant email and ends an objector's access with their capacity", async () => {
+  const now = new Date().toISOString();
+  const versionId = crypto.randomUUID();
+  const workflowId = crypto.randomUUID();
+  const definition = membershipWorkflowDefinitionSchema.parse({
+    name: "Member consultation",
+    policyReference: "Synthetic review policy",
+    steps: [
+      {
+        id: crypto.randomUUID(),
+        kind: "consensus",
+        label: "Member consultation",
+        instructions: "Raise any objection.",
+        audience: { kind: "active_voting_members" },
+        destination: { kind: "external", email: "members@example.test" },
+        durationDays: 1,
+        objectionHandling: "hold_for_resolution",
+      },
+    ],
+  });
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO membership_workflows (id, created_at) VALUES (?, ?)").bind(workflowId, now),
+    env.DB.prepare(
+      `INSERT INTO membership_workflow_versions (id, workflow_id, version, name, status, definition_json, created_at, published_at)
+      VALUES (?, ?, 1, ?, 'published', ?, ?, ?)`,
+    ).bind(versionId, workflowId, definition.name, JSON.stringify(definition), now, now),
+    env.DB.prepare("UPDATE membership_categories SET workflow_version_id = ? WHERE code = 'F'").bind(versionId),
+  ]);
+  const applicationId = await seedMemberApplication({
+    applicantEmail: "applicant@example.test",
+    applicantName: "Example User",
+    membershipCategory: "F",
+    formSubmissionId: await createApplicationFormSubmission({}),
+    stage: "processing",
+  });
+  await env.DB.batch(
+    prepareMembershipWorkflowPin(
+      env.DB,
+      applicationId,
+      await requireMembershipCategory(env.DB, "F"),
+      await getMembershipWorkflowVersion(env.DB, versionId),
+      1,
+      now,
+    ),
+  );
+  const voter = await createOrganizationCapacity(env.DB, { email: "voter@example.test" });
+  const token = await createMemberSession(env.DB, voter.userId, "consultation-voter");
+  const read = (path: string) =>
+    app.fetch(
+      new Request(`https://app.test/api/v1/members/applications/${applicationId}${path}`, {
+        headers: { authorization: `Bearer ${token}` },
+      }),
+      env as any,
+      { waitUntil() {}, passThroughOnException() {} } as any,
+    );
+  const review = await read("/reviews/current");
+  expect(review.status, await review.clone().text()).toBe(200);
+  expect(await review.json()).toMatchObject({
+    application: { applicantName: "Example User", applicantEmail: null },
+    capabilities: { object: true },
+  });
+  await env.DB.prepare(
+    `INSERT INTO membership_application_objections
+       (id, application_id, generation, step_position, author_user_id, body, state, created_at)
+     VALUES (?, ?, 1, 0, ?, 'A concern.', 'unresolved', ?)`,
+  )
+    .bind(crypto.randomUUID(), applicationId, voter.userId, now)
+    .run();
+  // The objector keeps a capacity, but their member no longer holds voting rights.
+  await env.DB.prepare("UPDATE member_category_assignments SET category_code = 'H1' WHERE member_id = ?")
+    .bind(voter.memberId)
+    .run();
+  for (const path of ["/reviews/current", "/objections"]) expect((await read(path)).status, path).toBe(403);
 });

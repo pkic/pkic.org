@@ -44,6 +44,8 @@ export const sponsorAttendeeSchema = z.object({
   lastName: z.string().nullable(),
   email: z.email().nullable(),
   organizationName: z.string().nullable(),
+  /** A consumer mailbox: shown as "Personal email address" in place of an organization. */
+  personalEmail: z.boolean(),
   jobTitle: z.string().nullable(),
   attendanceType: z.string().nullable(),
 });

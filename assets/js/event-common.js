@@ -105,7 +105,8 @@ export async function initializeEventDisplay({ update, onKeyDown, isAutoUpdateEn
 
 /** The display clock follows the conference zone, including date boundaries. */
 export function getEventClock(now = new Date()) {
-  const parts = zonedDateTimeParts(now, eventTimeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone);
+  if (!eventTimeZone) throw new Error("The event data has no time zone");
+  const parts = zonedDateTimeParts(now, eventTimeZone);
   const date = `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`;
   return {
     date,

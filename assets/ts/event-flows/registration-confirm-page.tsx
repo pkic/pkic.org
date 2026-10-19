@@ -12,6 +12,11 @@ import {
   RegistrationDayStatusSummary,
 } from "../components/RegistrationDayStatusSummary";
 import { findSubmitButton } from "../shared/form/helpers";
+import {
+  RegistrationConfirmOrganization,
+  type ConfirmOrganizationController,
+} from "../components/RegistrationConfirmOrganization";
+import { REGISTRATION_ORGANIZATION_COPY } from "../../shared/email-first-copy";
 import { useContractForm } from "../hooks/useContractForm";
 import { Alert } from "../ui/Alert";
 import { Button, ButtonLink } from "../ui/Button";
@@ -25,6 +30,7 @@ import {
   okResponseSchema,
   type RegistrationConfirmResponse,
 } from "../../shared/schemas/registration";
+import { PersonalAddressPrompt } from "../components/events/PersonalAddressPrompt";
 
 /**
  * Design system notes (phase 5):
@@ -88,19 +94,13 @@ function NextSteps({ manageUrl, hasPartialDayWaitlist }: { manageUrl: string; ha
               for a day, or cancel entirely.
             </p>
             <div class="pk-cluster">
-              <ButtonLink href={manageUrl} size="sm">
-                Review or change registration
-              </ButtonLink>
+              <ButtonLink href={manageUrl}>Review or change registration</ButtonLink>
             </div>
           </>
         ) : (
           <div class="pk-cluster">
-            <ButtonLink href={manageUrl} size="sm">
-              Manage registration
-            </ButtonLink>
-            <ButtonLink href={`${manageUrl}#manage-headshot-file`} size="sm">
-              Upload headshot
-            </ButtonLink>
+            <ButtonLink href={manageUrl}>Manage registration</ButtonLink>
+            <ButtonLink href={`${manageUrl}#manage-headshot`}>Add your photo</ButtonLink>
           </div>
         )}
       </PanelBody>
@@ -130,6 +130,10 @@ function showConfirmedPanel(
   eventSlug: string,
 ): void {
   form.hidden = true;
+  const organizationNote =
+    result.organizationOutcome === "review_required" ? (
+      <Alert tone="info">{REGISTRATION_ORGANIZATION_COPY.reviewRequired}</Alert>
+    ) : null;
 
   const successTitle = root.dataset["successTitle"] ?? "{firstName}, you're registered{forEvent}!";
   const successBody =
@@ -172,6 +176,8 @@ function showConfirmedPanel(
   render(
     <SuccessPanel icon={icon} title={title}>
       {bodyContent}
+      {organizationNote}
+      {result.status === "registered" && <PersonalAddressPrompt email={email} waiting={hasPartialDayWaitlist} />}
       <NextSteps manageUrl={manageUrl} hasPartialDayWaitlist={hasPartialDayWaitlist} />
       {shareUrl && <div ref={shareRef} />}
       <div ref={donateRef} />
@@ -186,6 +192,7 @@ function showConfirmedPanel(
       firstName: firstName || undefined,
       manageToken: manageToken ?? null,
       eventSlug: eventSlug || null,
+      waitlisted: hasPartialDayWaitlist,
     });
   }
 
@@ -385,6 +392,7 @@ async function main(): Promise<void> {
   let eventName = "";
   let isExpired = false;
   let isRecoverable = false;
+  let asksOrganization = false;
   try {
     const info = await getJson(
       `${boot.apiBase}/events/${boot.eventSlug}/registrations/confirm-info?token=${encodeURIComponent(token)}${registrationId ? `&id=${encodeURIComponent(registrationId)}` : ""}`,
@@ -397,6 +405,7 @@ async function main(): Promise<void> {
     eventName = info.eventName ?? "";
     isExpired = info.expired ?? false;
     isRecoverable = info.recoverable ?? false;
+    asksOrganization = info.asksOrganization;
   } catch {
     // Non-critical — page degrades to default placeholder text
   }
@@ -431,8 +440,21 @@ async function main(): Promise<void> {
   if (loadingEl) loadingEl.hidden = true;
   revealContent();
 
+  // Opening the link proved the mailbox; a work domain that names no organization is asked for it once.
+  const organizationMount = boot.form.querySelector<HTMLElement>("[data-confirm-organization]");
+  const organization: ConfirmOrganizationController = {};
+  if (asksOrganization && organizationMount) {
+    // The question says what confirming needs; the one-click greeting would contradict it.
+    const intro = boot.root.querySelector<HTMLElement>("[data-confirm-intro]");
+    if (intro) intro.hidden = true;
+    organizationMount.hidden = false;
+    render(<RegistrationConfirmOrganization controller={organization} />, organizationMount);
+  }
+
   boot.form.addEventListener("submit", async (event) => {
     event.preventDefault();
+    const named = organization.read?.();
+    if (named && "refused" in named) return;
 
     await withLoadingButton(findSubmitButton(boot.form), async () => {
       try {
@@ -441,9 +463,12 @@ async function main(): Promise<void> {
           {
             token,
             ...(registrationId ? { id: registrationId } : {}),
+            ...(named ? { organization: named.organization } : {}),
           },
           registrationConfirmResponseSchema,
         );
+        // Once confirmed, the invitation to confirm has done its job; only the outcome stays.
+        if (contentEl) contentEl.hidden = true;
         showConfirmedPanel(
           boot.root,
           boot.form,
@@ -452,7 +477,7 @@ async function main(): Promise<void> {
           lastName,
           eventName,
           email,
-          organizationName,
+          named?.organization.name ?? organizationName,
           result.shareUrl,
           result.manageUrl,
           result.manageToken,

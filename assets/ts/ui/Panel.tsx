@@ -10,6 +10,7 @@ import type { ComponentChildren, JSX } from "preact";
 
 import "./Panel.css";
 import { BreadcrumbBranch } from "./BreadcrumbScope";
+import { useSectionHeading } from "./HeadingOutline";
 
 export interface PanelProps extends JSX.HTMLAttributes<HTMLElement> {
   /**
@@ -36,10 +37,17 @@ export function Panel({ stripe = false, class: className, children, ...rest }: P
 
 export interface PanelHeaderProps extends JSX.HTMLAttributes<HTMLElement> {
   title: string;
-  /** The semantic heading level. Defaults to 3 to support nesting. */
-  headingLevel?: 2 | 3 | 4;
+  /**
+   * The authored heading level: 3 for a section of the screen, 4 for a section
+   * inside one, and deeper for a panel nested further down. The surface shifts
+   * it (see `HeadingOutline`), so in the portal a screen's sections are `<h2>`
+   * below its `<h1>` title.
+   */
+  headingLevel?: 2 | 3 | 4 | 5 | 6;
   /** Use this page/form title as the current breadcrumb in a containing workspace. */
   breadcrumb?: boolean;
+  /** The panel's ellipsis `Menu`. It sits first in the toolbar, left of the buttons. */
+  menu?: ComponentChildren;
   children?: ComponentChildren;
 }
 
@@ -47,19 +55,25 @@ export function PanelHeader({
   title,
   headingLevel = 3,
   breadcrumb = false,
+  menu,
   class: className,
   children,
   ...rest
 }: PanelHeaderProps) {
   const classes = ["pk-panel__header", className].filter(Boolean).join(" ");
 
-  const HeadingTag = `h${headingLevel}` as const as keyof JSX.IntrinsicElements;
+  const HeadingTag = useSectionHeading(headingLevel);
 
   return (
     <header class={classes} {...rest}>
       {breadcrumb && <BreadcrumbBranch items={[{ label: title }]} />}
       <HeadingTag class="pk-panel__title">{title}</HeadingTag>
-      {children && <div class="pk-panel__toolbar">{children}</div>}
+      {(menu || children) && (
+        <div class="pk-panel__toolbar" data-density="compact">
+          {menu}
+          {children}
+        </div>
+      )}
     </header>
   );
 }
@@ -75,11 +89,20 @@ export interface PanelBodyProps extends JSX.HTMLAttributes<HTMLDivElement> {
    * so a reader who cannot see the tint loses nothing.
    */
   tone?: PanelBodyTone;
+  /** Tables share the card edge; forms and ordinary content retain padded bodies. */
+  flush?: boolean;
   children?: ComponentChildren;
 }
 
-export function PanelBody({ tone, class: className, children, ...rest }: PanelBodyProps) {
-  const classes = ["pk-panel__body", tone ? `pk-panel__body--${tone}` : null, className].filter(Boolean).join(" ");
+export function PanelBody({ tone, flush = false, class: className, children, ...rest }: PanelBodyProps) {
+  const classes = [
+    "pk-panel__body",
+    flush ? "pk-panel__body--flush" : null,
+    tone ? `pk-panel__body--${tone}` : null,
+    className,
+  ]
+    .filter(Boolean)
+    .join(" ");
   return (
     <div class={classes} {...rest}>
       {children}

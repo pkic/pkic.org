@@ -9,6 +9,7 @@ import {
   formatDayAndMonth,
   formatEventWhen,
   formatMonthYear,
+  formatTenure,
   formatRelativeDays,
   formatTimeOfDay,
 } from "../../assets/ts/shared/ui";
@@ -22,27 +23,41 @@ describe("friendly date formatting", () => {
     const winter = formatTimeRangeInZone("2026-12-01T08:00:00.000Z", "2026-12-01T08:30:00.000Z", "Europe/Amsterdam");
     expect(winter).toContain("09:00");
     expect(winter).toContain("09:30");
-    expect(winter).toMatch(/CET|GMT\+1/);
+    // The zone is named by its city in both seasons, never by an offset or abbreviation.
+    expect(winter).toMatch(/ Amsterdam time$/);
+    expect(winter).not.toMatch(/CET|GMT|UTC[+-]/);
     const summer = formatTimeRangeInZone("2026-06-01T08:00:00.000Z", "2026-06-01T08:30:00.000Z", "Europe/Amsterdam");
     expect(summer).toContain("10:00");
-    expect(summer).toMatch(/CEST|GMT\+2/);
+    expect(summer).toMatch(/ Amsterdam time$/);
+    expect(summer).not.toMatch(/CEST|GMT|UTC[+-]/);
+    expect(formatTimeRangeInZone("2026-06-01T08:00:00.000Z", undefined, "America/New_York")).toBe(
+      `${new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit", hour12: false, timeZone: "America/New_York" }).format(new Date("2026-06-01T08:00:00.000Z"))} New York time`,
+    );
+    expect(formatTimeRangeInZone("2026-06-01T08:00:00.000Z", undefined, "UTC")).toMatch(/ UTC$/);
     expect(formatTimeRangeInZone("invalid", undefined, "Europe/Amsterdam")).toBe("—");
   });
   it("names the zone when speaking a venue's clock and stays local otherwise", () => {
     const zoned = formatDateTimeInZone("2026-12-01T08:00:00.000Z", "Europe/Amsterdam");
-    // 08:00Z is 09:00 in Amsterdam in December (CET) — the zone must be visible.
-    expect(zoned).toContain("9:00");
-    expect(zoned).toMatch(/CET|GMT\+1/);
+    // 08:00Z is 09:00 in Amsterdam in December — on the agenda's 24-hour
+    // clock, with the zone named by its city rather than "CET" or "GMT+1".
+    expect(zoned).toContain("09:00");
+    expect(zoned).not.toMatch(/AM|PM/);
+    expect(zoned).toMatch(/Amsterdam time$/);
+    expect(zoned).not.toMatch(/CET|GMT/);
+    expect(formatDateTimeInZone("2026-06-01T16:30:00.000Z", "America/New_York")).toMatch(/12:30 New York time$/);
+    expect(formatDateTimeInZone("2026-06-01T16:30:00.000Z", "UTC")).toMatch(/16:30 UTC$/);
     expect(formatDateTimeInZone(null, "Europe/Amsterdam")).toBe("—");
 
     // In-person (has a location): the venue's clock, labeled.
-    expect(formatEventWhen("2026-12-01T08:00:00.000Z", "Europe/Amsterdam", "Amsterdam")).toMatch(/CET|GMT\+1/);
+    expect(formatEventWhen("2026-12-01T08:00:00.000Z", "Europe/Amsterdam", "Amsterdam")).toMatch(/Amsterdam time/);
     // Virtual (no location): the viewer's local time, unlabeled.
-    expect(formatEventWhen("2026-12-01T08:00:00.000Z", "Europe/Amsterdam", null)).not.toMatch(/CET|GMT\+1/);
+    expect(formatEventWhen("2026-12-01T08:00:00.000Z", "Europe/Amsterdam", null)).not.toMatch(/Amsterdam time/);
     // The viewer's own registration outranks the venue heuristic in both directions.
-    expect(formatEventWhen("2026-12-01T08:00:00.000Z", "Europe/Amsterdam", null, "in_person")).toMatch(/CET|GMT\+1/);
+    expect(formatEventWhen("2026-12-01T08:00:00.000Z", "Europe/Amsterdam", null, "in_person")).toMatch(
+      /Amsterdam time/,
+    );
     expect(formatEventWhen("2026-12-01T08:00:00.000Z", "Europe/Amsterdam", "Amsterdam", "virtual")).not.toMatch(
-      /CET|GMT\+1/,
+      /Amsterdam time/,
     );
   });
 
@@ -95,6 +110,24 @@ describe("friendly date formatting", () => {
     expect(formatCalendarDate("nonsense")).toBe("—");
   });
 
+  it("states a tenure as a month range and its length, counting both ends", () => {
+    const now = Date.parse("2026-10-16T12:00:00.000Z");
+    const month = (iso: string) =>
+      new Date(iso).toLocaleString(undefined, { month: "short", year: "numeric", timeZone: "UTC" });
+    const unit = (value: number, name: "year" | "month") =>
+      new Intl.NumberFormat(undefined, { style: "unit", unit: name, unitDisplay: "short" }).format(value);
+    expect(formatTenure("2026-10-01T00:00:00.000Z", null, now)).toBe(
+      `${month("2026-10-01T00:00:00Z")} – Present · ${unit(1, "month")}`,
+    );
+    expect(formatTenure("2023-06-01T00:00:00.000Z", null, now)).toBe(
+      `${month("2023-06-01T00:00:00Z")} – Present · ${unit(3, "year")} ${unit(5, "month")}`,
+    );
+    expect(formatTenure("2021-02-01T00:00:00.000Z", "2022-01-31T00:00:00.000Z", now)).toBe(
+      `${month("2021-02-01T00:00:00Z")} – ${month("2022-01-31T00:00:00Z")} · ${unit(1, "year")}`,
+    );
+    expect(formatTenure(null, null, now)).toBe("—");
+  });
+
   it("renders a month-precise value without a day, pinned to the UTC calendar for date-only input", () => {
     const rendered = formatMonthYear("2026-09-04");
     expect(rendered).toBe(
@@ -110,12 +143,29 @@ describe("friendly date formatting", () => {
   });
 
   it("widens a date-time to seconds for audit trails and can name the viewer's zone", () => {
+    // The month by name and the 24-hour clock, as every other date in the app reads.
     expect(formatDateTime("2026-12-01T08:00:00.000Z")).toBe(
-      new Date("2026-12-01T08:00:00.000Z").toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" }),
+      new Date("2026-12-01T08:00:00.000Z").toLocaleString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
+      }),
     );
+    expect(formatDateTime("2026-12-01T20:00:00.000Z")).not.toMatch(/AM|PM/);
     expect(formatDateTime("2026-12-01T08:00:00.000Z", { seconds: true })).toMatch(/\d{1,2}.\d{2}.\d{2}/);
     expect(formatDateTime("2026-12-01T08:00:00.000Z", { fullDate: true })).toBe(
-      new Date("2026-12-01T08:00:00.000Z").toLocaleString(undefined, { dateStyle: "full", timeStyle: "short" }),
+      new Date("2026-12-01T08:00:00.000Z").toLocaleString(undefined, {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
+      }),
     );
     // The zone-labeled variant tells the reader whose clock is shown.
     expect(formatDateTime("2026-12-01T08:00:00.000Z", { zoneName: true })).not.toBe(

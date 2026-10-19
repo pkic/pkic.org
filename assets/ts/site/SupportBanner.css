@@ -1,0 +1,27 @@
+@layer components {
+  .support-cta--compact {
+    padding: 0;
+  }
+  .support-cta--compact .support-cta-card {
+    max-inline-size: none;
+    padding: 0;
+  }
+  .support-cta--compact .support-cta-inner {
+    padding: var(--pk-5);
+    gap: var(--pk-3);
+    text-align: start;
+    align-items: start;
+  }
+  .support-cta--compact .support-cta-heading {
+    font-size: var(--pk-text-lg);
+    line-height: 1.35;
+  }
+  .support-cta--compact .support-cta-body {
+    font-size: var(--pk-text-sm);
+    line-height: 1.5;
+  }
+  .support-cta--compact .support-cta-actions {
+    justify-content: start;
+    margin-block-start: var(--pk-3);
+  }
+}

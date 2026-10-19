@@ -173,6 +173,8 @@ export async function processIncomingEmail(message: IncomingRsvpEmail, env: Env)
       eventDayDate: rsvpDayDate,
       icsUid,
       recurrenceId: parsedRsvp.recurrenceId,
+      invitationSequence: parsedRsvp.invitationSequence,
+      claimedReplyAt: parsedRsvp.claimedReplyAt,
       attendeeEmail: parsedRsvp.attendeeEmail,
       responseStatus: parsedRsvp.responseStatus,
       provider: "cloudflare_email_routing_ics",

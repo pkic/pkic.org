@@ -333,7 +333,13 @@ export function MarkdownEditor({
   }));
   return (
     <div ref={root} class="pk-markdown-editor" data-variant={variant} onFocusIn={onFocus}>
-      <div ref={toolbar} class="pk-markdown-editor__toolbar" role="group" aria-label="Text formatting">
+      <div
+        ref={toolbar}
+        class="pk-markdown-editor__toolbar"
+        data-density="compact"
+        role="group"
+        aria-label="Text formatting"
+      >
         {groups.map((group, index) => (
           <div
             key={index}
@@ -355,7 +361,6 @@ export function MarkdownEditor({
                   </Menu>
                 ) : (
                   <Button
-                    size="sm"
                     variant="ghost"
                     icon
                     aria-label={command.label}
@@ -405,7 +410,6 @@ export function MarkdownEditor({
             </span>
           )}
           <Button
-            size="sm"
             variant="ghost"
             icon
             data-source
@@ -420,40 +424,20 @@ export function MarkdownEditor({
         </div>
       </div>
       {!source && editor?.isActive("table") && (
-        <div class="pk-markdown-editor__toolbar" role="group" aria-label="Table editing">
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={locked}
-            onClick={() => editor.chain().focus().addRowAfter().run()}
-          >
+        <div class="pk-markdown-editor__toolbar" data-density="compact" role="group" aria-label="Table editing">
+          <Button variant="ghost" disabled={locked} onClick={() => editor.chain().focus().addRowAfter().run()}>
             Add row
           </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={locked}
-            onClick={() => editor.chain().focus().addColumnAfter().run()}
-          >
+          <Button variant="ghost" disabled={locked} onClick={() => editor.chain().focus().addColumnAfter().run()}>
             Add column
           </Button>
-          <Button size="sm" variant="ghost" disabled={locked} onClick={() => editor.chain().focus().deleteRow().run()}>
+          <Button variant="ghost" disabled={locked} onClick={() => editor.chain().focus().deleteRow().run()}>
             Delete row
           </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={locked}
-            onClick={() => editor.chain().focus().deleteColumn().run()}
-          >
+          <Button variant="ghost" disabled={locked} onClick={() => editor.chain().focus().deleteColumn().run()}>
             Delete column
           </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={locked}
-            onClick={() => editor.chain().focus().deleteTable().run()}
-          >
+          <Button variant="ghost" disabled={locked} onClick={() => editor.chain().focus().deleteTable().run()}>
             Remove table
           </Button>
         </div>
@@ -506,10 +490,10 @@ export function MarkdownEditor({
         <span class="pk-small pk-muted">{value.length.toLocaleString()} characters · Saved as Markdown</span>
         {!source && !compact && (
           <div class="pk-cluster" role="group" aria-label="Move selected block">
-            <Button size="sm" variant="ghost" disabled={locked} onClick={() => editor && moveEditorBlock(editor, -1)}>
+            <Button variant="ghost" disabled={locked} onClick={() => editor && moveEditorBlock(editor, -1)}>
               Move up
             </Button>
-            <Button size="sm" variant="ghost" disabled={locked} onClick={() => editor && moveEditorBlock(editor, 1)}>
+            <Button variant="ghost" disabled={locked} onClick={() => editor && moveEditorBlock(editor, 1)}>
               Move down
             </Button>
           </div>

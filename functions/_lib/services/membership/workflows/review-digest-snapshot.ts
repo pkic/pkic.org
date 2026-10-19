@@ -14,6 +14,7 @@ export async function membershipReviewDigestSnapshot(
   application: MemberApplicationRow,
   reviewUrl: string,
   objections: Array<{ body: string; author: string | null }>,
+  showApplicantEmail: boolean,
 ) {
   const keys = ["partial_membership_review_summary", "partial_membership_review_details"];
   const [templates, form, answers, category] = await Promise.all([
@@ -38,7 +39,10 @@ export async function membershipReviewDigestSnapshot(
     {
       applicationName: emailPlainText(application.organization_name ?? application.applicant_name),
       applicantName: emailPlainText(application.applicant_name),
-      applicantEmail: emailPlainText(application.applicant_email),
+      maskedEmail: emailPlainText(
+        `******@${application.applicant_email.slice(application.applicant_email.lastIndexOf("@") + 1)}`,
+      ),
+      applicantEmail: showApplicantEmail ? emailPlainText(application.applicant_email) : null,
       organizationName: application.organization_name ? emailPlainText(application.organization_name) : null,
       categoryCode: emailPlainText(category.code),
       categoryLabel: emailPlainText(category.label),

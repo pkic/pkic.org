@@ -1,29 +1,39 @@
 /**
  * Canonical SQL projection of the Member capacities a user may act through.
- * An active organization representation suppresses individual capacity so
+ * An active organization Member representation suppresses individual capacity so
  * participation always has unambiguous IPR attribution.
  */
+/** Trusted internal user SQL only; a nonmember affiliation grants no Member capacity. */
+export function activeOrganizationMemberRepresentationPredicate(userIdSql: string): string {
+  return `EXISTS (
+    SELECT 1 FROM identities represented
+    JOIN members represented_member
+      ON represented_member.organization_id = represented.organization_id
+     AND represented_member.member_type = 'organization'
+     AND represented_member.status = 'active'
+    JOIN member_category_assignments represented_category ON represented_category.member_id = represented_member.id
+    WHERE represented.user_id = ${userIdSql}
+      AND represented.organization_id IS NOT NULL
+      AND represented.started_at IS NOT NULL
+      AND represented.ended_at IS NULL
+      AND represented.blocked_at IS NULL
+  )`;
+}
+
 const ACTIVE_USER_CAPACITIES_BODY = `
   SELECT input.user_id, identity.id AS identity_id, member.id AS member_id, member.member_type,
          NULL AS organization_name, category.category_code AS membership_category
     FROM eligible_input input
-    JOIN members member ON member.user_id = input.user_id
-     AND member.member_type = 'individual' AND member.status = 'active'
     JOIN identities identity
       ON identity.user_id = input.user_id
      AND identity.organization_id IS NULL
      AND identity.started_at IS NOT NULL
      AND identity.ended_at IS NULL
      AND identity.blocked_at IS NULL
+    JOIN members member ON member.identity_id = identity.id
+     AND member.member_type = 'individual' AND member.status = 'active'
     JOIN member_category_assignments category ON category.member_id = member.id
-   WHERE NOT EXISTS (
-     SELECT 1 FROM identities represented
-      WHERE represented.user_id = input.user_id
-        AND represented.organization_id IS NOT NULL
-        AND represented.started_at IS NOT NULL
-        AND represented.ended_at IS NULL
-        AND represented.blocked_at IS NULL
-   )
+   WHERE NOT ${activeOrganizationMemberRepresentationPredicate("input.user_id")}
   UNION ALL
   SELECT input.user_id, represented.id, member.id, member.member_type, organization.name,
          category.category_code
@@ -38,8 +48,9 @@ const ACTIVE_USER_CAPACITIES_BODY = `
     JOIN organizations organization ON organization.id = member.organization_id
     JOIN member_category_assignments category ON category.member_id = member.id`;
 
-export function activeUserCapacitiesCte(inputSql = "VALUES (?)"): string {
-  return `WITH input(user_id) AS (${inputSql}),
+/** CTE definitions without WITH, for composing capacity queries at the top level. */
+export function activeUserCapacityDefinitions(inputSql = "VALUES (?)"): string {
+  return `input(user_id) AS (${inputSql}),
     eligible_input(user_id) AS (
       SELECT input.user_id
         FROM input
@@ -54,8 +65,16 @@ export function activeUserCapacitiesCte(inputSql = "VALUES (?)"): string {
     )`;
 }
 
-export const ACTIVE_USER_CAPACITIES_CTE = activeUserCapacitiesCte();
-export const ALL_ACTIVE_USER_CAPACITIES_CTE = activeUserCapacitiesCte("SELECT id FROM users WHERE active = 1");
+export function activeUserCapacitiesCte(inputSql = "VALUES (?)"): string {
+  return `WITH ${activeUserCapacityDefinitions(inputSql)}`;
+}
+
+export const ACTIVE_USER_CAPACITY_DEFINITIONS = activeUserCapacityDefinitions();
+export const ALL_ACTIVE_USER_CAPACITY_DEFINITIONS = activeUserCapacityDefinitions(
+  "SELECT id FROM users WHERE active = 1",
+);
+export const ACTIVE_USER_CAPACITIES_CTE = `WITH ${ACTIVE_USER_CAPACITY_DEFINITIONS}`;
+export const ALL_ACTIVE_USER_CAPACITIES_CTE = `WITH ${ALL_ACTIVE_USER_CAPACITY_DEFINITIONS}`;
 
 /**
  * Canonical correlated predicate for group self-service eligibility. The

@@ -11,7 +11,7 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { GroupVoteCreateForm } from "../../assets/ts/member-flows/portal/sections/management/GroupVoteCreateForm";
-import { controlFor as labeledControl, optionValues } from "./helpers/labelled-control";
+import { controlFor as labeledControl, optionValues } from "./helpers/labeled-control";
 
 // `vi.mock` is hoisted above every top-level binding, so the added value is
 // written out inside the factory and named again below for the assertions.

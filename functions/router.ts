@@ -1,128 +1,48 @@
+import { runWithAuditActorScope } from "./_lib/services/audit-actor";
 import { AppError } from "./_lib/errors";
 import { withDependencyHandling } from "./_lib/dependency-bindings";
 import { handleError } from "./_lib/http";
 import { availabilityResponse, getAvailability } from "./_lib/availability";
-import { Hono } from "hono";
-import { fromHono, getReDocUI, getSwaggerUI } from "chanfana";
 import { logError, logInfo } from "./_lib/logging";
 import { getConfig } from "./_lib/config";
-import { dispatchScheduledJobs } from "./_lib/services/scheduled-jobs/dispatcher";
-import { SCHEDULED_JOB_DEFINITIONS } from "./_lib/services/scheduled-jobs/registry";
-import api_Router from "./api/router";
-import donate_Router from "./donate/router";
-import r_Router from "./r/router";
-import newsRouter from "./news/router";
-import members_Router from "./members/router";
-import events_Router from "./events/router";
-import site_Router from "./site/router";
 import type { Env } from "./_lib/types";
-import { processIncomingEmail } from "./_lib/services/calendar-rsvp-email-ingest";
-import { decorateOpenApiSpec, filterOpenApiSpecForMcp } from "./_lib/openapi/mcp";
-import { OPENAPI_INFO, OPENAPI_TAGS, OPENAPI_TAG_GROUPS } from "./_lib/openapi/document";
-import { createMcpWorkerFetch, MCP_OPENAPI_JSON_PATH } from "./_lib/api-tools/mcp-worker";
-import { getStaticAssetsBinding } from "./_lib/static-assets";
 import { primaryFirstDb, requestSessionDb } from "./_lib/db/session";
 import { WorkerEntrypoint } from "cloudflare:workers";
+import {
+  publicSessionRecordingRequest,
+  isSessionRecordingPublicPath,
+} from "./_lib/services/session-recording-public-release";
+import {
+  publicSessionPresentationRequest,
+  isSessionPresentationPublicPath,
+} from "./_lib/services/session-presentation-public-release";
 import {
   conditionalPublicReadResponse,
   isAnonymousReadRequest,
   publicReadCacheResponse,
 } from "./_lib/cache/public-read";
 
-const OPENAPI_JSON_PATH = "/api/v1/openapi.json";
-const DOCS_PATH = "/api/v1/docs";
-const REDOC_PATH = "/api/v1/redocs";
+import { isLiveRoomSocketPath, liveRoomSocketRequest } from "./_lib/routes/live-session-socket";
 
-const app = new Hono<{ Bindings: Env }>();
-app.onError((error) => handleError(error));
-export const openapi = fromHono(app, {
-  openapi_url: null,
-  docs_url: null,
-  redoc_url: null,
-  schema: {
-    info: OPENAPI_INFO,
-    tags: [...OPENAPI_TAGS],
-    "x-tagGroups": OPENAPI_TAG_GROUPS.map((group) => ({ ...group, tags: [...group.tags] })),
-  },
-});
-
-function htmlResponse(html: string): Response {
-  return new Response(html, {
-    headers: { "content-type": "text/html; charset=UTF-8" },
-  });
-}
-
-let cachedOpenApiSpecBody: string | null = null;
-
-function openApiSpecResponse(): Response {
-  if (!cachedOpenApiSpecBody) {
-    cachedOpenApiSpecBody = JSON.stringify(decorateOpenApiSpec(openapi.schema));
-  }
-
-  return new Response(cachedOpenApiSpecBody, {
-    headers: { "content-type": "application/json;charset=UTF-8" },
-  });
-}
-
-let cachedMcpOpenApiSpecBody: string | null = null;
-
-function mcpOpenApiSpecResponse(): Response {
-  if (!cachedMcpOpenApiSpecBody) {
-    cachedMcpOpenApiSpecBody = JSON.stringify(filterOpenApiSpecForMcp(openapi.schema));
-  }
-
-  return new Response(cachedMcpOpenApiSpecBody, {
-    headers: { "content-type": "application/json;charset=UTF-8" },
-  });
-}
-
-async function builtDocumentResponse(
-  request: Request,
-  env: Env,
-  path: string,
-  fallback: () => Response,
-): Promise<Response> {
-  const assets = getStaticAssetsBinding(env);
-  if (assets) {
-    const response = await assets.fetch(new Request(new URL(path, request.url)));
-    if (response.ok) return response;
-  }
-  return fallback();
-}
-
-async function getMcpOpenApiSchema(request: Request, env: Env): Promise<Record<string, unknown>> {
-  const assets = getStaticAssetsBinding(env);
-  if (assets) {
-    const response = await assets.fetch(new Request(new URL(MCP_OPENAPI_JSON_PATH, request.url)));
-    if (response.ok) return (await response.json()) as Record<string, unknown>;
-  }
-  return filterOpenApiSpecForMcp(openapi.schema);
-}
-
-app.get(OPENAPI_JSON_PATH, (c) => builtDocumentResponse(c.req.raw, c.env, OPENAPI_JSON_PATH, openApiSpecResponse));
-app.get(MCP_OPENAPI_JSON_PATH, (c) =>
-  builtDocumentResponse(c.req.raw, c.env, MCP_OPENAPI_JSON_PATH, mcpOpenApiSpecResponse),
-);
-app.get(DOCS_PATH, () => htmlResponse(getSwaggerUI(OPENAPI_JSON_PATH)));
-app.get(REDOC_PATH, () => htmlResponse(getReDocUI(OPENAPI_JSON_PATH)));
-openapi.route("/api", api_Router);
-openapi.route("/donate", donate_Router);
-openapi.route("/r", r_Router);
-openapi.route("/members", members_Router);
-app.route("/news", newsRouter);
-app.route("/events", events_Router);
-app.route("/", site_Router);
-
-// Build the MCP fetch handler after OpenAPI routes are registered.
-const fetchWithMcp = createMcpWorkerFetch({ app, getMcpOpenApiSchema });
+/** Durable Object classes this Worker implements; wrangler.jsonc declares them under `exports`. */
+export { LiveSessionRoom } from "./_lib/services/live-session/room";
 
 function handleHttpRequest(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-  return fetchWithMcp(request, withDependencyHandling({ ...env, DB: requestSessionDb(env.DB, request) }), ctx);
+  // Each request owns the scope that tells its audit records which identity the signed-in person acts as.
+  return runWithAuditActorScope(async () => {
+    const { default: fetchWithMcp } = await import("./http-router");
+    return fetchWithMcp(request, withDependencyHandling({ ...env, DB: requestSessionDb(env.DB, request) }), ctx);
+  });
 }
 
 /** This entrypoint is reached only after the uncached gateway checks the request. */
 export class PublicRead extends WorkerEntrypoint<Env> {
   async fetch(request: Request): Promise<Response> {
+    if (
+      isSessionPresentationPublicPath(new URL(request.url).pathname) ||
+      isSessionRecordingPublicPath(new URL(request.url).pathname)
+    )
+      return new Response(null, { status: 404, headers: { "cache-control": "no-store" } });
     if (!isAnonymousReadRequest(request)) {
       return new Response(null, { status: 404, headers: { "cache-control": "no-store" } });
     }
@@ -137,6 +57,10 @@ export class PublicRead extends WorkerEntrypoint<Env> {
 async function runScheduledJob(controller: ScheduledController, env: Env): Promise<void> {
   logInfo("SCHEDULED_JOB_STARTED", { cron: controller.cron, scheduledTime: controller.scheduledTime });
   try {
+    const [{ dispatchScheduledJobs }, { SCHEDULED_JOB_DEFINITIONS }] = await Promise.all([
+      import("./_lib/services/scheduled-jobs/dispatcher"),
+      import("./_lib/services/scheduled-jobs/registry"),
+    ]);
     const config = getConfig(env);
     const outcome = await dispatchScheduledJobs(env, SCHEDULED_JOB_DEFINITIONS, {
       maxJobsPerPass: config.scheduledJobsPerPass,
@@ -155,8 +79,14 @@ async function runScheduledJob(controller: ScheduledController, env: Env): Promi
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const presentation = await publicSessionPresentationRequest(request, env);
+    if (presentation) return presentation;
+    const recording = await publicSessionRecordingRequest(request, env);
+    if (recording) return recording;
     const paused = await availabilityResponse(request, env);
     if (paused) return paused;
+    if (isLiveRoomSocketPath(request))
+      return liveRoomSocketRequest(request, withDependencyHandling({ ...env, DB: requestSessionDb(env.DB, request) }));
     try {
       if (isAnonymousReadRequest(request)) {
         const cacheContext = ctx as ExecutionContext & {
@@ -186,6 +116,7 @@ export default {
       throw new AppError(503, "SERVICE_UNAVAILABLE", "Online RSVP processing is temporarily paused");
     }
     // Inbound acceptance must wait for processing; waitUntil could acknowledge mail before D1 succeeds.
+    const { processIncomingEmail } = await import("./_lib/services/calendar-rsvp-email-ingest");
     await processIncomingEmail(message, withDependencyHandling({ ...env, DB: primaryFirstDb(env.DB) }));
   },
   scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): void {

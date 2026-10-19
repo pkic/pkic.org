@@ -169,6 +169,11 @@ function SectionNavigation({ navigation }: { navigation?: SiteSectionNavigation 
             </a>
           );
         })}
+        {navigation.appHref ? (
+          <a class="pk-section-navigation__app" href={navigation.appHref}>
+            Event app
+          </a>
+        ) : null}
       </div>
     </nav>
   );
@@ -181,7 +186,7 @@ function SectionNavigation({ navigation }: { navigation?: SiteSectionNavigation 
  * container around a single `#content`, and neither carries `pk`: the body is
  * authored Markdown that the site's own stylesheet dresses, and opting into
  * the design system's base layer would take its 14px application scale, its
- * heading rhythm and its link colours away from it. That is why the reading
+ * heading rhythm and its link colors away from it. That is why the reading
  * scale needed an override before this, and why it no longer does.
  */
 export function ContentPage({

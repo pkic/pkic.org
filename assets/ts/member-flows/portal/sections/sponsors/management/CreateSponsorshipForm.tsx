@@ -7,13 +7,10 @@ import {
   sponsorshipCreateSchema,
   sponsorshipResponseSchema,
 } from "../../../../../../shared/schemas/sponsorship-management";
-import {
-  organizationsListResponseSchema,
-  type OrganizationSummary,
-} from "../../../../../../shared/schemas/organization-management";
 import { eventsListResponseSchema } from "../../../../../../shared/schemas/event-management";
 import { ErrorAlert } from "../../../../../components/ErrorAlert";
 import { ServerSearchSelect } from "../../../../../components/ServerSearchSelect";
+import { adminOrganizationCatalog } from "../../../../../shared/management-catalogs";
 import type { ServerCatalog } from "../../../../../shared/server-catalog";
 import { Alert } from "../../../../../ui/Alert";
 import { Button } from "../../../../../ui/Button";
@@ -45,20 +42,6 @@ interface CreateDraft {
 const SPONSOR_TYPE_LABELS: Record<(typeof SPONSOR_TYPES)[number], string> = {
   consortium: "Consortium sponsor",
   event: "Event sponsor",
-};
-
-/**
- * Member organizations, searched where they already live: the canonical
- * organization directory list, one bounded server page at a time.
- */
-const memberOrganizationCatalog: ServerCatalog<OrganizationSummary, z.infer<typeof organizationsListResponseSchema>> = {
-  endpoint: "/api/v1/organizations",
-  responseSchema: organizationsListResponseSchema,
-  resolveItems: (response) => response.organizations,
-  resolvePage: (response) => response.page,
-  itemKey: (organization) => organization.id,
-  itemLabel: (organization) => organization.name,
-  sort: "name",
 };
 
 /** One row of whichever projection the canonical events list returns for this caller. */
@@ -224,7 +207,7 @@ export function CreateSponsorshipForm({
                         <ServerSearchSelect
                           {...control}
                           searchLabel="Member organization"
-                          catalog={memberOrganizationCatalog}
+                          catalog={adminOrganizationCatalog}
                           value={draft.organizationId || null}
                           selectedLabel={organizationLabel}
                           allowEmpty={false}
@@ -339,11 +322,11 @@ export function CreateSponsorshipForm({
           </fieldset>
 
           <div class="pk-cluster">
-            <Button type="submit" variant="primary" size="sm" loading={saving}>
+            <Button type="submit" variant="primary" loading={saving}>
               Create
             </Button>
             {showCancel && (
-              <Button type="button" size="sm" disabled={saving} onClick={onCancel}>
+              <Button type="button" disabled={saving} onClick={onCancel}>
                 Cancel
               </Button>
             )}

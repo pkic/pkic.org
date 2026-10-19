@@ -13,12 +13,14 @@ import {
   registrationConfirmEmailPostRouteSchema,
 } from "../../../../../../assets/shared/schemas/route-contracts";
 import { requireInternalSecret } from "../../../../../_lib/request";
+import type { RegistrationConfirmOrganization } from "../../../../../../assets/shared/schemas/registration";
 
 async function confirmRegistration(
   c: any,
   eventSlug: string,
   token: string,
   registrationId?: string | null,
+  organization?: RegistrationConfirmOrganization,
 ): Promise<Response> {
   const config = getConfig(c.env, c.req.raw);
   const event = await getEventBySlug(c.env.DB, eventSlug);
@@ -31,6 +33,7 @@ async function confirmRegistration(
     signingSecret: requireInternalSecret(c.env),
     appBaseUrl: resolveAppBaseUrl(c.env, c.req.raw),
     rsvpEmail: c.env.RSVP_EMAIL,
+    organization,
   });
   c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, result.outboxId));
   const [dayAttendance, dayWaitlist] = await Promise.all([
@@ -45,6 +48,7 @@ async function confirmRegistration(
       shareUrl: result.shareUrl,
       manageUrl: result.manageUrl,
       manageToken: result.manageToken,
+      organizationOutcome: result.organizationOutcome,
       dayAttendance,
       dayWaitlist,
     }),
@@ -55,7 +59,7 @@ async function handleConfirmRegistrationPost(
   c: any,
   data: ValidatedData<typeof registrationConfirmEmailPostRouteSchema>,
 ): Promise<Response> {
-  return confirmRegistration(c, data.params.eventSlug, data.body.token, data.body.id);
+  return confirmRegistration(c, data.params.eventSlug, data.body.token, data.body.id, data.body.organization);
 }
 
 async function handleConfirmRegistrationGet(

@@ -20,13 +20,9 @@
  *     writing instead: `markdownContentSchema` refuses it, naming what is
  *     supported, so the shared contract is what teaches the rule.
  *
- * The supported set is deliberately small — it is exactly the set the member
- * corpus uses, and `tests/tools/markdown-shortcode-corpus.test.ts` fails if
+ * The supported set is deliberately small — it is exactly the set the legacy
+ * member corpus used, and `tests/tools/markdown-shortcode-corpus.test.ts` fails if
  * `data/members/*.yaml` ever grows one this list does not cover.
- *
- * Plain-Node-loadable (explicit `.ts` import specifiers, no bundler features)
- * because `scripts/migrate-members/parsers.mjs` imports it: the importer and
- * the runtime must not hold two different opinions about the same braces.
  */
 
 /** Shortcode names stored Markdown may carry, and what each one embeds. */

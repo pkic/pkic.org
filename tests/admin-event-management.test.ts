@@ -15,7 +15,7 @@ import {
 } from "../functions/_lib/services/registrations";
 import { eventRegistrationDetailResponseSchema } from "../assets/shared/schemas/event-registration-detail";
 import { eventRegistrationsListResponseSchema } from "../assets/shared/schemas/event-registrations";
-import { eventManagementDetailResponseSchema } from "../assets/shared/schemas/event-management";
+import { eventManagementDetailResponseSchema, eventsListQuerySchema } from "../assets/shared/schemas/event-management";
 import { eventImportResponseSchema } from "../assets/shared/schemas/event-imports";
 import { buildEventRegistrationsPageQuery } from "../functions/_lib/services/registrations/event-registrations";
 import { grantEventTeamRole, revokeEventTeamRole } from "../functions/_lib/services/events/team";
@@ -66,7 +66,7 @@ async function importEvent(slug: string, name: string, event: Record<string, unk
     method: "POST",
     body: JSON.stringify({
       source: "hugo",
-      event: { slug, name, timezone: "UTC", visibility: "invitation_only", ...event },
+      event: { slug, basePath: `/events/${slug}/`, name, timezone: "UTC", visibility: "invitation_only", ...event },
     }),
   });
 }
@@ -247,10 +247,15 @@ describe("admin event management endpoints", () => {
       ).bind(crypto.randomUUID(), unrelatedEventId, `unrelated-invite-${crypto.randomUUID()}`),
     ]);
 
+    await env.DB.prepare("UPDATE events SET settings_json = ? WHERE id = ?")
+      .bind(JSON.stringify({ heroImageUrl: "/events/test/hero.jpg" }), pageEventId)
+      .run();
+
     const result = await listManagedEvents(env.DB, { userId: admin.id, admin }, { limit: 1, offset: 0, sort: "name" });
     expect(result.events).toHaveLength(1);
     expect(result.events[0]).toMatchObject({
       id: pageEventId,
+      heroImageUrl: "/events/test/hero.jpg",
       totalRegistrations: 1,
       confirmedRegistrations: 1,
       pendingInvites: 1,
@@ -380,7 +385,8 @@ describe("admin event management endpoints", () => {
     expect(
       (
         patchPayload.event.settings.proposal as
-          { sessionTypes?: { label: string; requiresPresentation: boolean }[] } | undefined
+          | { sessionTypes?: { label: string; requiresPresentation: boolean }[] }
+          | undefined
       )?.sessionTypes,
     ).toEqual([
       { label: "talk", requiresPresentation: true },
@@ -388,7 +394,8 @@ describe("admin event management endpoints", () => {
     ]);
     expect(
       patchPayload.event.settings.forms as
-        { event_registration?: string | null; proposal_submission?: string | null } | undefined,
+        | { event_registration?: string | null; proposal_submission?: string | null }
+        | undefined,
     ).toEqual({
       event_registration: "pqc-reg-form",
       proposal_submission: null,
@@ -434,6 +441,45 @@ describe("admin event management endpoints", () => {
     });
   });
 
+  it("selects one current event and the nearest upcoming event through bounded phase queries", async () => {
+    const { admin } = await setupAdmin();
+    const at = Date.now();
+    for (const [slug, start, end] of [
+      ["phase-current", -60_000, 60_000],
+      ["phase-next", 120_000, 180_000],
+      ["phase-later", 240_000, 300_000],
+      ["phase-past", -180_000, -120_000],
+    ] as const) {
+      await env.DB.prepare(`INSERT INTO events
+        (id, slug, name, timezone, starts_at, ends_at, profile_key, registration_mode,
+         visibility, invite_limit_attendee, settings_json, created_at, updated_at)
+        VALUES (?, ?, ?, 'UTC', ?, ?, 'conference', 'no_registration', 'public', 0, '{}', ?, ?)`)
+        .bind(
+          crypto.randomUUID(),
+          slug,
+          `phase-fixture ${slug}`,
+          new Date(at + start).toISOString(),
+          new Date(at + end).toISOString(),
+          new Date(at).toISOString(),
+          new Date(at).toISOString(),
+        )
+        .run();
+    }
+    for (const [phase, slug, total] of [
+      ["now", "phase-current", 1],
+      ["upcoming", "phase-next", 2],
+      ["past", "phase-past", 1],
+    ] as const) {
+      const result = await listManagedEvents(
+        env.DB,
+        { userId: admin.id, admin },
+        eventsListQuerySchema.parse({ phase, q: "phase-fixture", limit: 1, sort: "starts_at" }),
+      );
+      expect(result.events.map((event) => event.slug)).toEqual([slug]);
+      expect(result.total).toBe(total);
+    }
+  }, 15_000);
+
   it("joins the owning group's name into the events management list, with a muted null for ownerless events", async () => {
     await setupAdmin();
     // A fresh id: the 2000...0009 slot now belongs to the seeded Board of Directors group.
@@ -459,7 +505,11 @@ describe("admin event management endpoints", () => {
       events: Array<{ slug: string; ownerGroupId: string | null; ownerGroupName: string | null }>;
     };
     const owned = listPayload.events.find((event) => event.slug === "pqc-2026");
-    expect(owned).toMatchObject({ ownerGroupId: groupId, ownerGroupName: "Post-Quantum Cryptography" });
+    expect(owned).toMatchObject({
+      ownerGroupId: groupId,
+      ownerGroupName: "Post-Quantum Cryptography",
+      ownerGroupTypeLabel: "Working Group",
+    });
 
     const ownerless = await importEvent("pqc-ownerless", "PQC Ownerless");
     expect(ownerless.status).toBe(200);
@@ -469,6 +519,7 @@ describe("admin event management endpoints", () => {
     expect(afterImport.events.find((event) => event.slug === "pqc-ownerless")).toMatchObject({
       ownerGroupId: null,
       ownerGroupName: null,
+      ownerGroupTypeLabel: null,
     });
   });
 

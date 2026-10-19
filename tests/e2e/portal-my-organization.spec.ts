@@ -2,9 +2,9 @@
  * My Organization — the representative's own moderated workspace: content
  * edits and logo changes queue for staff review rather than publishing
  * directly, and the primary contact alone may nominate a secondary contact.
- * None of this had browser coverage: `svg-logo-upload.spec.ts` drives the
- * *staff* organization-detail logo control, a different component from the
- * member-facing `LogoUploader` here, and nothing exercised the content
+ * None of this had browser coverage: the staff organization-detail logo
+ * control is a different component from the member-facing `LogoUploader`
+ * here, and nothing exercised the content
  * review queue, the secondary-contact nomination, or the individual-member
  * fallback at all.
  * @covers organization.10.1
@@ -12,15 +12,16 @@
  * @covers organization.10.3
  */
 import { expect, test } from "@playwright/test";
+import { organizationContactDetailsUpdateSchema } from "../../assets/shared/schemas/organization-contact-details";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
 import { acceptConfirmDialog } from "./helpers/confirm-dialog";
 import { approveMemberThroughReview, uniqueSuffix } from "./helpers/membership";
 import { uploadThroughButton } from "./helpers/file-upload";
 
-// A full-canvas single-colour fill reads to the sanitizer's crop step as
+// A full-canvas single-color fill reads to the sanitizer's crop step as
 // background with nothing to crop to ("The SVG has no visible content."), so
-// this mirrors svg-logo-upload.spec.ts's own working shape: a background
+// this uses the shape the sanitizer accepts: a background
 // rect plus a distinct, smaller rect the sanitizer can crop the logo to.
 const SANITIZED_SVG = Buffer.from(
   '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">' +
@@ -53,14 +54,52 @@ test("an organization contact submits a logo and content changes for review, the
   await page.goto(recordUrl);
   await expect(page.getByRole("heading", { name: organizationName, exact: true })).toBeVisible({ timeout: 15_000 });
 
+  // Private channels save directly and persist independently of public content review.
+  const privateContacts = page.getByRole("region", { name: "Private contact details", exact: true });
+  await privateContacts.getByRole("button", { name: "Add contact details" }).click();
+  const contactEditor = page.getByRole("dialog", { name: "Private contact details", exact: true });
+  const contactEmail = `office-${suffix}@example.test`;
+  await contactEditor.getByLabel("Organization email").fill(contactEmail);
+  await contactEditor.getByLabel("Phone", { exact: true }).fill("+1 202 555 0100");
+  await contactEditor.getByLabel("Street address").fill("123 Example St\nSuite 2");
+  await contactEditor.getByLabel("City", { exact: true }).fill("Example City");
+  await contactEditor.getByLabel("State or region").fill("DC");
+  await contactEditor.getByLabel("Postal code").fill("20001");
+  await contactEditor.getByLabel("Country", { exact: true }).fill("United States");
+  const privateSaved = page.waitForResponse(
+    (response) =>
+      /\/organizations\/[^/]+\/contacts\/details$/.test(new URL(response.url()).pathname) &&
+      response.request().method() === "PUT",
+  );
+  await contactEditor.getByRole("button", { name: "Save contact details" }).click();
+  const privateResponse = await privateSaved;
+  expect(privateResponse.status()).toBe(200);
+  expect(organizationContactDetailsUpdateSchema.parse(privateResponse.request().postDataJSON())).toMatchObject({
+    email: contactEmail,
+    postalAddress: { lines: ["123 Example St", "Suite 2"], city: "Example City", region: "DC", postalCode: "20001" },
+    countryCode: "US",
+    revision: 0,
+  });
+  await expect(contactEditor).not.toBeVisible();
+  await page.reload();
+  await expect(privateContacts.getByText(contactEmail, { exact: true })).toBeVisible();
+  await privateContacts.getByRole("button", { name: "Private contact details actions" }).click();
+  await page.getByRole("menuitem", { name: "Edit contact details…" }).click();
+  await expect(contactEditor.getByLabel("Street address")).toHaveValue("123 Example St\nSuite 2");
+  await expect(contactEditor.getByLabel("City", { exact: true })).toHaveValue("Example City");
+  await expect(contactEditor.getByLabel("State or region")).toHaveValue("DC");
+  await expect(contactEditor.getByLabel("Postal code")).toHaveValue("20001");
+  await contactEditor.getByRole("button", { name: "Cancel", exact: true }).click();
+
   // Logo first: the review record it creates is the same one content changes
   // land in, so submitting content afterward exercises the merge rather than
   // a second, independent review.
   const logoSubmitted = page.waitForResponse((response) =>
     /\/organizations\/[^/]+\/logo$/.test(new URL(response.url()).pathname),
   );
-  // Through the tile, not past it (#28).
-  await uploadThroughButton(page, "Change logo (SVG)", {
+  // Through the tile, not past it (#28). The tile is named for what pressing
+  // it does and whose logo it is: "Upload logo of …" until there is one.
+  await uploadThroughButton(page, `Upload logo of ${organizationName}`, {
     name: "logo.svg",
     mimeType: "image/svg+xml",
     buffer: SANITIZED_SVG,
@@ -125,12 +164,13 @@ test("an organization contact submits a logo and content changes for review, the
   await editorPanel.getByRole("button", { name: "Cancel", exact: true }).click();
 
   // The organization's own public profile never changed: every submission
-  // above was withdrawn before a staff decision.
-  const profilePanel = page.locator("section").filter({ has: page.getByRole("heading", { name: "Public profile" }) });
-  await expect(profilePanel.getByText("No logo", { exact: true })).toBeVisible();
+  // above was withdrawn before a staff decision, so the tile still offers to
+  // upload one rather than to change it.
+  await expect(page.getByRole("button", { name: `Upload logo of ${organizationName}` })).toBeVisible();
 });
 
-test("the primary contact nominates and withdraws a secondary-contact nomination", async ({ page }) => {
+test("the primary contact nominates and withdraws a secondary-contact nomination", async ({ page }, testInfo) => {
+  test.slow();
   const suffix = uniqueSuffix();
   const primaryEmail = `my-org-nominate-${suffix}@my-org-nominate-${suffix}.test`;
   const organizationName = `My Org Nominate ${suffix}`;
@@ -167,6 +207,7 @@ test("the primary contact nominates and withdraws a secondary-contact nomination
           email: repEmail,
           activation: { mode: "immediate", reason: "E2E secondary-contact nomination setup" },
           showOnOrganizationProfile: false,
+          jobTitle: "Engineer",
         }),
       });
       return { status: response.status, body: await response.json(), organizationId };
@@ -180,9 +221,7 @@ test("the primary contact nominates and withdraws a secondary-contact nomination
   await page.goto("/portal/#/organization");
   await expect(page.getByRole("heading", { name: organizationName, exact: true })).toBeVisible({ timeout: 15_000 });
 
-  const governancePanel = page
-    .locator("section")
-    .filter({ has: page.getByRole("heading", { name: "Secondary contact" }) });
+  const governancePanel = page.getByRole("region", { name: "Contacts", exact: true });
   await expect(governancePanel.getByText("None pending", { exact: false })).toHaveCount(0);
   const nominee = governancePanel.getByLabel("Nominee");
   await expect(nominee).toBeVisible();
@@ -193,6 +232,7 @@ test("the primary contact nominates and withdraws a secondary-contact nomination
       response.request().method() === "PUT",
   );
   await nominee.selectOption({ label: repName });
+  await governancePanel.getByRole("button", { name: "Send nomination" }).click();
   expect((await nominated).status()).toBe(200);
   await expect(page.locator(".my-toast", { hasText: "Secondary contact nominated" })).toBeVisible({
     timeout: 15_000,
@@ -201,9 +241,7 @@ test("the primary contact nominates and withdraws a secondary-contact nomination
 
   await page.reload();
   await expect(page.getByRole("heading", { name: organizationName, exact: true })).toBeVisible({ timeout: 15_000 });
-  const reloadedGovernancePanel = page
-    .locator("section")
-    .filter({ has: page.getByRole("heading", { name: "Secondary contact" }) });
+  const reloadedGovernancePanel = page.getByRole("region", { name: "Contacts", exact: true });
   await expect(reloadedGovernancePanel.getByLabel("Nominee")).toHaveValue(/.+/);
 
   const withdrawn = page.waitForResponse(
@@ -212,8 +250,114 @@ test("the primary contact nominates and withdraws a secondary-contact nomination
       response.request().method() === "DELETE",
   );
   await reloadedGovernancePanel.getByLabel("Nominee").selectOption({ label: "None" });
+  await reloadedGovernancePanel.getByRole("button", { name: "Withdraw nomination" }).click();
   expect((await withdrawn).status()).toBe(200);
   await expect(page.locator(".my-toast", { hasText: "Nomination withdrawn" })).toBeVisible({ timeout: 15_000 });
+
+  // Nomination and assignment are separate: staff confirmation makes this person
+  // the secondary contact, while an ordinary coworker gains no contact powers.
+  await reloadedGovernancePanel.getByLabel("Nominee").selectOption({ label: repName });
+  await reloadedGovernancePanel.getByRole("button", { name: "Send nomination" }).click();
+  await expect(reloadedGovernancePanel.getByText(/Pending staff confirmation:/)).toBeVisible();
+  await page.context().clearCookies();
+  await signInToPortal(page, e2eAdminEmail("meeting-guest"));
+  const confirmation = await page.request.post(
+    `/api/v1/organizations/${added.organizationId}/contacts/secondary/confirmation`,
+  );
+  expect(confirmation.status()).toBe(200);
+  const ordinaryEmail = `ordinary-${suffix}@my-org-nominate-${suffix}.test`;
+  const ordinary = await page.request.post(`/api/v1/organizations/${added.organizationId}/identities`, {
+    data: {
+      userReference: "email",
+      name: "Ordinary Representative",
+      email: ordinaryEmail,
+      jobTitle: "Engineer",
+      activation: { mode: "immediate", reason: "E2E ordinary representative setup" },
+      showOnOrganizationProfile: false,
+    },
+  });
+  expect(ordinary.status()).toBe(201);
+
+  for (const [email, role] of [
+    [primaryEmail, "Primary contact"],
+    [repEmail, "Secondary contact"],
+    [ordinaryEmail, "Representative"],
+  ]) {
+    await page.context().clearCookies();
+    await signInToPortal(page, email);
+    await page.goto(`/portal/#/organizations/${added.organizationId}`);
+    const contacts = page.getByRole("region", { name: "Contacts", exact: true });
+    await expect(contacts).toBeVisible();
+    await expect(contacts.locator("dt", { hasText: /^Secondary contact$/ }).locator("+ dd")).toContainText(repName);
+    await expect(contacts.locator("dt", { hasText: /^Primary contact$/ }).locator("+ dd")).toContainText(
+      `Primary Contact ${suffix}`,
+    );
+    const yourRole = contacts.locator("dt", { hasText: "Your role" }).locator("+ dd");
+    await expect(yourRole).toHaveText(role);
+    await expect(contacts.getByLabel(/nominee/i)).toHaveCount(role === "Primary contact" ? 1 : 0);
+    await expect(contacts.getByText(/Pending staff confirmation:/)).toHaveCount(0);
+    const profile = await page.request.get(`/api/v1/organizations/${added.organizationId}/profile`);
+    expect(profile.status()).toBe(200);
+    const data = await profile.json();
+    expect(data.organization.secondaryContact.userName).toBe(repName);
+    expect(data.organization.isSecondaryContact).toBe(role === "Secondary contact");
+    if (role !== "Primary contact") {
+      const refused = await page.request.delete(
+        `/api/v1/organizations/${added.organizationId}/contacts/secondary/nomination`,
+      );
+      expect(refused.status()).toBe(403);
+    }
+    await page.reload();
+    await expect(yourRole).toHaveText(role);
+    await expect(page.getByText("Ordinary Representative", { exact: true }).first()).toBeVisible();
+    if (role !== "Representative") await expect(page.getByText("No submissions found", { exact: true })).toBeVisible();
+    for (const [name, width] of [
+      ["desktop", 1440],
+      ["phone", 375],
+    ] as const) {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.evaluate(async () => {
+        await document.fonts.ready;
+      });
+      await contacts.evaluate((element) => element.scrollIntoView({ block: "center" }));
+      await expect(contacts).toBeInViewport({ ratio: 1 });
+      const screenshot = testInfo.outputPath(`contacts-${role.toLowerCase().replaceAll(" ", "-")}-${name}.png`);
+      await page.screenshot({ path: screenshot });
+      await testInfo.attach(`Contacts: ${role}, ${name}`, { path: screenshot, contentType: "image/png" });
+    }
+    const representatives = page.getByRole("region", { name: "Representatives", exact: true }).first();
+    await expect(representatives.getByRole("columnheader", { name: "Contact role", exact: true })).toHaveCount(0);
+    for (const width of [1440, 375]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await representatives.scrollIntoViewIfNeeded();
+      await page.screenshot({
+        path: testInfo.outputPath(`representatives-${role.replaceAll(" ", "-")}-${width}.png`),
+        fullPage: true,
+      });
+    }
+    if (role !== "Representative") {
+      await representatives.getByRole("button", { name: "Add coworker", exact: true }).click();
+      await expect(page).toHaveURL(/\/representatives\/new$/);
+      await expect(page.getByRole("heading", { name: organizationName, exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Add a coworker", exact: true })).toBeVisible();
+      await expect(page.getByRole("region", { name: "Contacts", exact: true })).toHaveCount(0);
+      await expect(page.getByRole("region", { name: "Representatives", exact: true })).toHaveCount(0);
+      for (const width of [1440, 375]) {
+        await page.setViewportSize({ width, height: 1000 });
+        await page.evaluate(() => window.scrollTo(0, 0));
+        await page.screenshot({
+          path: testInfo.outputPath(`add-representative-${role.replaceAll(" ", "-")}-${width}.png`),
+          fullPage: true,
+        });
+      }
+      await page.reload();
+      await expect(page.getByRole("heading", { name: "Add a coworker", exact: true })).toBeVisible();
+      await page.getByRole("button", { name: "Cancel", exact: true }).click();
+      await expect(page).toHaveURL(new RegExp(`/organizations/${added.organizationId}$`));
+      await expect(page.getByRole("region", { name: "Contacts", exact: true })).toBeVisible();
+    }
+    await page.setViewportSize({ width: 1440, height: 1000 });
+  }
 });
 
 test("a member whose active identity is individual sees the individual-membership fallback", async ({ page }) => {
@@ -241,4 +385,46 @@ test("a member whose active identity is individual sees the individual-membershi
   // No redirect happened this time: an individual identity has no acting
   // organization to be sent to.
   await expect(page).toHaveURL(/\/portal\/#\/organization$/);
+});
+
+test("staff open an organization representative directly from the person's name", async ({ page, browser }) => {
+  const suffix = uniqueSuffix();
+  const personName = `Roster Link ${suffix}`;
+  const organizationName = `Roster Link Organization ${suffix}`;
+  await signInToPortal(page, e2eAdminEmail("portal-join-categories"));
+  const member = await approveMemberThroughReview(page, {
+    email: `roster-link-${suffix}@roster-link-${suffix}.test`,
+    name: personName,
+    organizationName,
+  });
+
+  for (const width of [1280, 375]) {
+    const view = await browser.newPage({
+      storageState: await page.context().storageState(),
+      viewport: { width, height: 900 },
+      hasTouch: width === 375,
+    });
+    try {
+      await view.goto("/portal/#/organizations");
+      const search = view.getByPlaceholder("organization name");
+      await search.fill(organizationName);
+      await search.press("Enter");
+      await view.getByRole("row").filter({ hasText: organizationName }).click();
+      await expect(view.getByRole("heading", { name: organizationName, exact: true })).toBeVisible();
+      const roster = view.getByRole("table", { name: "Representatives", exact: true });
+      const name = roster.getByText(personName, { exact: true }).first();
+      await expect(name).toBeVisible();
+      if (width === 1280) {
+        await name.hover();
+        await expect(view.getByRole("dialog", { name: `About ${personName}` })).toBeVisible();
+        await name.click();
+      } else {
+        await name.tap();
+      }
+      await expect(view).toHaveURL(new RegExp(`/portal/#/users/${member.userId}$`));
+      await expect(view.getByRole("heading", { name: personName, exact: true })).toBeVisible();
+    } finally {
+      await view.close();
+    }
+  }
 });

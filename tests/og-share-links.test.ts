@@ -4,7 +4,7 @@ import { createReferralCode } from "../functions/_lib/services/referrals";
 import { onRequestGet as donationBadgeImage } from "../functions/api/v1/donations/checkouts/[sessionId]/badge";
 import { onRequestGet as donationSharePage } from "../functions/donate/r/[code]";
 import { onRequestGet as eventBadgeImage } from "../functions/api/v1/registrations/referrals/[code]/badge";
-import { onRequestGet as eventSharePage } from "../functions/r/[code]";
+import { callApi } from "./helpers/app";
 import app from "../functions/router";
 import { createContext, seedEventAndAdmin } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
@@ -102,15 +102,9 @@ describe("OG share links", () => {
     const code = await seedEventReferral();
     const envWithImages = { ...baseEnv, IMAGES: {} as Env["IMAGES"] } as Env;
 
-    const response = await eventSharePage(
-      createContext(
-        envWithImages,
-        new Request(`https://app.test/r/${code}`, {
-          headers: { "user-agent": "LinkedInBot/1.0" },
-        }),
-        { code },
-      ),
-    );
+    const response = await callApi(envWithImages, `/r/${code}`, {
+      headers: { "user-agent": "LinkedInBot/1.0" },
+    });
 
     expect(response.status).toBe(200);
     const html = await response.text();

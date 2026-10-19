@@ -1,3 +1,6 @@
+import { formatNumber } from "../../../../../shared/format-number";
+import { useHashQueryParam } from "../../../../hooks/useHashQueryParam";
+import { splitHash, writeHashQuery } from "../../../../ui/url-query";
 import { useState } from "preact/hooks";
 import {
   GROUP_STATS_SCOPES,
@@ -64,9 +67,16 @@ function queryString(query: GroupStatsQuery): string {
 
 export function GroupStatistics({ groupId }: { groupId: string }) {
   const [draft, setDraft] = useState<DateWindow>(DEFAULT_WINDOW);
-  const [query, setQuery] = useState<GroupStatsQuery>(() =>
-    groupStatsQuerySchema.parse({ scope: "current", timezone: "UTC" }),
-  );
+  const [scope] = useHashQueryParam("statistics.scope", "current");
+  const [from] = useHashQueryParam("statistics.from", "");
+  const [to] = useHashQueryParam("statistics.to", "");
+  const requested = groupStatsQuerySchema.safeParse({
+    scope,
+    timezone: "UTC",
+    ...(from ? { from } : {}),
+    ...(to ? { to } : {}),
+  });
+  const query = requested.success ? requested.data : groupStatsQuerySchema.parse({ scope: "current", timezone: "UTC" });
   const [windowError, setWindowError] = useState("");
   const [windowOpen, setWindowOpen] = useState(false);
   const form = useContractForm(groupStatsQuerySchema, windowQuery(draft));
@@ -89,7 +99,16 @@ export function GroupStatistics({ groupId }: { groupId: string }) {
       return;
     }
     setWindowError("");
-    setQuery(checked.data);
+    const { path, params } = splitHash();
+    for (const [key, value] of Object.entries({
+      scope: checked.data.scope === "current" ? "" : checked.data.scope,
+      from: checked.data.from ?? "",
+      to: checked.data.to ?? "",
+    })) {
+      if (value) params.set(`statistics.${key}`, value);
+      else params.delete(`statistics.${key}`);
+    }
+    writeHashQuery(path, params, "push");
     setWindowOpen(false);
   }
 
@@ -114,16 +133,20 @@ export function GroupStatistics({ groupId }: { groupId: string }) {
       {stats.data && (
         <>
           <Panel aria-label="Participation">
-            <PanelHeader title="Participation">
+            <PanelHeader
+              title="Participation"
+              menu={
+                <Menu
+                  label="Participation options"
+                  align="end"
+                  items={[{ id: "reporting-window", label: "Change reporting window", onSelect: editWindow }]}
+                />
+              }
+            >
               <span class="pk-small pk-muted">
                 {SCOPE_LABELS[query.scope]} · {query.from?.slice(0, 10) ?? "Beginning"}–
                 {query.to?.slice(0, 10) ?? "now"}
               </span>
-              <Menu
-                label="Participation options"
-                align="end"
-                items={[{ id: "reporting-window", label: "Change reporting window", onSelect: editWindow }]}
-              />
             </PanelHeader>
             {windowOpen && (
               <PanelBody class="pk-analytics-window-editor">
@@ -188,7 +211,6 @@ export function GroupStatistics({ groupId }: { groupId: string }) {
                   {windowError && <Alert tone="danger">{windowError}</Alert>}
                   <div class="pk-cluster pk-cluster--end">
                     <Button
-                      size="sm"
                       variant="ghost"
                       onClick={() => {
                         form.reset();
@@ -198,7 +220,7 @@ export function GroupStatistics({ groupId }: { groupId: string }) {
                     >
                       Cancel
                     </Button>
-                    <Button size="sm" variant="primary" type="submit">
+                    <Button variant="primary" type="submit">
                       Apply window
                     </Button>
                   </div>
@@ -216,21 +238,21 @@ export function GroupStatistics({ groupId }: { groupId: string }) {
                   role="group"
                   aria-label="People"
                   label="People"
-                  value={String(stats.data.participation.people.count)}
+                  value={formatNumber(stats.data.participation.people.count)}
                   note="Distinct people"
                 />
                 <StatCard
                   role="group"
                   aria-label="Organizations"
                   label="Organizations"
-                  value={String(stats.data.participation.organizations.count)}
+                  value={formatNumber(stats.data.participation.organizations.count)}
                   note="Distinct organizations represented"
                 />
                 <StatCard
                   role="group"
                   aria-label="Memberships"
                   label="Memberships"
-                  value={String(stats.data.participation.capacities.count)}
+                  value={formatNumber(stats.data.participation.capacities.count)}
                   note="One per Member represented"
                 />
               </div>
@@ -246,22 +268,22 @@ export function GroupStatistics({ groupId }: { groupId: string }) {
               <div class="pk-stat-row">
                 <StatCard
                   label="Active people"
-                  value={String(stats.data.activity.people.actorCount)}
+                  value={formatNumber(stats.data.activity.people.actorCount)}
                   note="People with recorded actions"
                 />
                 <StatCard
                   label="Actions"
-                  value={String(stats.data.activity.people.actionCount)}
+                  value={formatNumber(stats.data.activity.people.actionCount)}
                   note="Recorded in the audit log"
                 />
                 <StatCard
                   label="Joined"
-                  value={String(stats.data.activity.capacities.joinedCount)}
+                  value={formatNumber(stats.data.activity.capacities.joinedCount)}
                   note="Memberships started"
                 />
                 <StatCard
                   label="Left"
-                  value={String(stats.data.activity.capacities.leftCount)}
+                  value={formatNumber(stats.data.activity.capacities.leftCount)}
                   note="Memberships ended"
                 />
               </div>

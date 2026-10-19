@@ -6,15 +6,21 @@ import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { resetDb } from "./helpers/reset-db";
 import app from "../functions/router";
-import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
-import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
-import { addRepresentative, insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
+import { callApi } from "./helpers/app";
+import {
+  addRepresentative,
+  insertIndividualMembershipForUser,
+  insertOrganization,
+  seedOrganizationAggregate,
+} from "./helpers/membership";
 import { signCapabilityToken, verifyDatabaseCapability } from "../functions/_lib/services/capability-links";
 import { confirmRegistrationByToken, getRegistrationByManageToken } from "../functions/_lib/services/registrations";
 import { updateUser } from "../functions/_lib/services/user-management-update";
 import { anonymizeUser as anonymizeUserService } from "../functions/_lib/services/user-anonymization";
 import { gateNextBatch } from "./helpers/d1-batch-gate";
 import { seatInExecutiveCouncil } from "./helpers/group-leadership";
+import { getPublicMemberById } from "../functions/_lib/services/membership/directory";
+import { validPngBytes } from "./helpers/raster-images";
 import { userDetailResponseSchema } from "../assets/shared/schemas/user-management";
 
 let adminToken: string;
@@ -106,12 +112,200 @@ async function seedUser(_db: DatabaseLike, email: string): Promise<string> {
   return userId;
 }
 
+async function lifecycleTarget(kind: string) {
+  const userId = await seedUser(env.DB, "lifecycle-publication@example.test");
+  let identityId: string | null = null;
+  let publicKey: string | null = null;
+  if (kind.startsWith("individual")) {
+    const member = await insertIndividualMembershipForUser(env.DB, userId);
+    identityId = member.identityId;
+    publicKey = member.memberId;
+    if (kind === "individual")
+      await env.DB.prepare("UPDATE identities SET biography=?,links_json=? WHERE id=?")
+        .bind("Public biography", JSON.stringify(["https://example.test/profile"]), identityId)
+        .run();
+    if (kind === "individual_ended")
+      await env.DB.prepare("UPDATE identities SET ended_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?")
+        .bind(identityId)
+        .run();
+    if (kind === "individual_blank" || kind === "individual_photo")
+      await env.DB.prepare("UPDATE users SET first_name=NULL,last_name=NULL WHERE id=?").bind(userId).run();
+    if (kind === "individual_photo") {
+      const key = `headshots/${userId}/lifecycle.png`;
+      await env.SPEAKER_UPLOADS_BUCKET!.put(key, validPngBytes().buffer, {
+        httpMetadata: { contentType: "image/png" },
+      });
+      await env.DB.prepare("UPDATE users SET headshot_r2_key=? WHERE id=?").bind(key, userId).run();
+    }
+  } else if (kind !== "nonmember") {
+    const organizationId = await insertOrganization(env.DB, "Lifecycle Publication Organization");
+    const memberId = await seedOrganizationAggregate(env.DB, organizationId);
+    identityId = await addRepresentative(env.DB, memberId, userId, {
+      jobTitle: "Engineer",
+      showOnOrgProfile: kind !== "hidden",
+    });
+    publicKey = organizationId;
+    if (kind === "inactive")
+      await env.DB.prepare("UPDATE members SET status='inactive' WHERE id=?").bind(memberId).run();
+  }
+  return { userId, identityId, publicKey };
+}
+
 // ── Deactivation / reactivation ────────────────────────────────────────────
 
 describe("admin user deactivation", () => {
   beforeEach(async () => {
     await resetDb();
   });
+
+  it.each(
+    ["deactivate", "anonymize"].flatMap((operation) =>
+      [
+        "organization",
+        "individual",
+        "individual_empty",
+        "individual_ended",
+        "individual_blank",
+        "individual_photo",
+        "hidden",
+        "inactive",
+        "nonmember",
+      ].map((kind) => ({ operation, kind })),
+    ),
+  )("publishes only actual member data changes on $operation for $kind", async ({ operation, kind }) => {
+    await setup();
+    const target = await lifecycleTarget(kind);
+    const read = () => (target.publicKey ? getPublicMemberById(env.DB, target.publicKey) : Promise.resolve(null));
+    const before = await read();
+    const attempt = () =>
+      callApi(
+        env,
+        adminRequest(
+          `/api/v1/users/${target.userId}${operation === "anonymize" ? "/anonymize" : ""}`,
+          operation === "anonymize" ? "POST" : "PATCH",
+          operation === "anonymize" ? undefined : { active: false },
+        ),
+      );
+    const response = await attempt();
+    expect(response.status, await response.clone().text()).toBe(200);
+    const after = await read();
+    const changed = JSON.stringify(before) !== JSON.stringify(after);
+    const expected =
+      operation === "anonymize"
+        ? ["organization", "individual", "individual_empty", "individual_ended", "individual_photo"].includes(kind)
+        : ["organization", "individual"].includes(kind);
+    expect(changed).toBe(expected);
+    expect(await queryAll(env.DB, "SELECT resource_id,reason_code FROM site_publication_requests")).toEqual(
+      changed ? [{ resource_id: target.userId, reason_code: "user_profile_changed" }] : [],
+    );
+    const repeated = await attempt();
+    expect(repeated.status).toBe(operation === "anonymize" ? 409 : 200);
+    expect(await queryAll(env.DB, "SELECT id FROM site_publication_requests")).toHaveLength(changed ? 1 : 0);
+  });
+
+  it.each(
+    ["deactivate", "anonymize"].flatMap((operation) => ["request", "audit"].map((failure) => ({ operation, failure }))),
+  )("rolls back $operation on $failure failure and permits retry", async ({ operation, failure }) => {
+    await setup();
+    const target = await lifecycleTarget("organization");
+    const targetToken = await createAdminSession(env.DB, target.userId, "lifecycle-target-session");
+    expect(targetToken).toBeTruthy();
+    const state = async () => ({
+      users: await queryAll(
+        env.DB,
+        "SELECT email,first_name,last_name,active,pii_redacted_at,updated_at FROM users WHERE id=?",
+        target.userId,
+      ),
+      identities: await queryAll(
+        env.DB,
+        "SELECT id,ended_at,job_title,updated_at FROM identities WHERE user_id=?",
+        target.userId,
+      ),
+      sessions: await queryAll(env.DB, "SELECT id,revoked_at FROM sessions WHERE user_id=?", target.userId),
+    });
+    const before = await state();
+    const attempt = () =>
+      callApi(
+        env,
+        adminRequest(
+          `/api/v1/users/${target.userId}${operation === "anonymize" ? "/anonymize" : ""}`,
+          operation === "anonymize" ? "POST" : "PATCH",
+          operation === "anonymize" ? undefined : { active: false },
+        ),
+      );
+    const action = operation === "anonymize" ? "user_anonymized" : "user_updated";
+    await env.DB.prepare(`CREATE TRIGGER fail_user_lifecycle BEFORE INSERT ON ${failure === "request" ? "site_publication_requests" : "audit_log"}
+        ${failure === "audit" ? `WHEN NEW.action='${action}'` : ""}
+        BEGIN SELECT RAISE(ABORT,'SYNTHETIC_USER_LIFECYCLE_FAILURE'); END`).run();
+    try {
+      expect((await attempt()).status).toBe(500);
+      expect(await state()).toEqual(before);
+      expect(await queryAll(env.DB, "SELECT id FROM site_publication_requests")).toEqual([]);
+      expect(
+        await queryAll(env.DB, "SELECT id FROM audit_log WHERE action=? AND entity_id=?", [action, target.userId]),
+      ).toEqual([]);
+      expect(await queryAll(env.DB, "SELECT object_key FROM storage_deletion_outbox")).toEqual([]);
+    } finally {
+      await env.DB.prepare("DROP TRIGGER fail_user_lifecycle").run();
+    }
+    const retried = await attempt();
+    expect(retried.status, await retried.clone().text()).toBe(200);
+    expect(await queryAll(env.DB, "SELECT resource_id FROM site_publication_requests")).toEqual([
+      { resource_id: target.userId },
+    ]);
+  });
+
+  it("leaves no public redaction request when a concurrent email correction wins", async () => {
+    const { adminId } = await setup();
+    const target = await lifecycleTarget("organization");
+    const actor: Parameters<typeof anonymizeUserService>[1] = {
+      identityType: "user",
+      id: adminId,
+      email: "admin@pkic.org",
+      grants: administratorGrants,
+    };
+    const gate = gateNextBatch(env.DB);
+    const mutation = anonymizeUserService(gate.db, actor, target.userId);
+    await gate.reached;
+    await updateUser(env.DB, actor, target.userId, { email: "lifecycle-winner@example.test" });
+    gate.release();
+    await expect(mutation).rejects.toMatchObject({ code: "ANONYMIZATION_CONFLICT" });
+    expect(await env.DB.prepare("SELECT email FROM users WHERE id=?").bind(target.userId).first("email")).toBe(
+      "lifecycle-winner@example.test",
+    );
+    expect(
+      await env.DB.prepare("SELECT ended_at FROM identities WHERE id=?").bind(target.identityId).first("ended_at"),
+    ).toBeNull();
+    expect(await queryAll(env.DB, "SELECT id FROM site_publication_requests")).toEqual([]);
+  });
+
+  it.each(["individual", "organization", "hidden", "inactive", "nonmember"] as const)(
+    "queues staff name edits only for public member profiles: %s",
+    async (visibility) => {
+      await setup();
+      const userId = await seedUser(env.DB, "name-publication@example.test");
+      if (visibility === "individual" || visibility === "inactive") {
+        const member = await insertIndividualMembershipForUser(env.DB, userId);
+        if (visibility === "inactive")
+          await env.DB.prepare("UPDATE members SET status='inactive' WHERE id=?").bind(member.memberId).run();
+      } else if (visibility !== "nonmember") {
+        const memberId = await seedOrganizationAggregate(env.DB, await insertOrganization(env.DB));
+        await addRepresentative(env.DB, memberId, userId, { showOnOrgProfile: visibility !== "hidden" });
+      }
+      const save = () =>
+        callApi(env, adminRequest(`/api/v1/users/${userId}`, "PATCH", { firstName: "Published", lastName: "Name" }));
+      const saved = await save();
+      expect(saved.status, await saved.clone().text()).toBe(200);
+      const expected =
+        visibility === "individual" || visibility === "organization"
+          ? [{ resource_id: userId, reason_code: "user_profile_changed" }]
+          : [];
+      expect(await queryAll(env.DB, "SELECT resource_id,reason_code FROM site_publication_requests")).toEqual(expected);
+      const repeated = await save();
+      expect(repeated.status, await repeated.clone().text()).toBe(200);
+      expect(await queryAll(env.DB, "SELECT resource_id,reason_code FROM site_publication_requests")).toEqual(expected);
+    },
+  );
 
   it("deactivates an active user", async () => {
     await setup();
@@ -368,13 +562,11 @@ describe("admin user deactivation", () => {
 
     expect(response.status).toBe(200);
     const row = (
-      await queryAll<{ preferred_name: string | null; biography: string | null; links_json: string | null }>(
-        env.DB,
-        "SELECT preferred_name, biography, links_json FROM users WHERE id = ?",
-        [userId],
-      )
+      await queryAll<{ preferred_name: string | null }>(env.DB, "SELECT preferred_name FROM users WHERE id = ?", [
+        userId,
+      ])
     )[0];
-    expect(row).toEqual({ preferred_name: "Speaker", biography: null, links_json: null });
+    expect(row).toEqual({ preferred_name: "Speaker" });
   });
 
   it("persists profile edits through the full router pipeline (regression: a stale duplicate PATCH route previously shadowed this handler)", async () => {
@@ -484,26 +676,20 @@ describe("admin user deactivation", () => {
     expect(((await getResponse.json()) as { user: { isEcMember: boolean } }).user.isEcMember).toBe(true);
   });
 
-  it("returns the canonical organization representation profile instead of the stale user-wide profile", async () => {
+  it("returns the organization identity's own profile", async () => {
     await setup();
     const userId = await seedUser(env.DB, "capacity-profile@example.test");
     const organizationId = await insertOrganization(env.DB, "Canonical Capacity Organization");
     const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
     await addRepresentative(env.DB, memberId, userId);
-    await env.DB.batch([
-      env.DB.prepare(
-        `UPDATE users
-              SET organization_name = 'Stale Organization', job_title = 'Stale Title',
-                  biography = 'Stale biography', links_json = '["https://stale.example.test"]'
-            WHERE id = ?`,
-      ).bind(userId),
-      env.DB.prepare(
-        `UPDATE identities
-              SET job_title = 'Capacity Title', biography = 'Capacity biography',
-                  links_json = '["https://capacity.example.test"]'
-            WHERE organization_id = ? AND user_id = ?`,
-      ).bind(organizationId, userId),
-    ]);
+    await env.DB.prepare(
+      `UPDATE identities
+            SET job_title = 'Capacity Title', biography = 'Capacity biography',
+                links_json = '["https://capacity.example.test"]'
+          WHERE organization_id = ? AND user_id = ?`,
+    )
+      .bind(organizationId, userId)
+      .run();
 
     const response = await app.fetch(
       adminRequest(`/api/v1/users/${userId}`, "GET"),
@@ -569,6 +755,35 @@ describe("admin user anonymization", () => {
     expect(row.last_name).toBeNull();
     expect(row.active).toBe(0);
     expect(row.pii_redacted_at).toBeTruthy();
+  });
+
+  it("removes the person's affiliation text: identity titles, an individual title and unreviewed affiliation text", async () => {
+    await setup();
+    const userId = await seedUser(env.DB, "affiliation-pii@example.test");
+    const organizationId = await insertOrganization(env.DB, "Affiliation Redaction Organization");
+    const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
+    const identityId = await addRepresentative(env.DB, memberId, userId, { jobTitle: "Principal Engineer" });
+    await env.DB.batch([
+      env.DB.prepare("UPDATE identities SET biography = 'Identity biography', links_json = '[]' WHERE id = ?").bind(
+        identityId,
+      ),
+      env.DB.prepare(
+        `INSERT INTO individual_job_titles (user_id, job_title, created_at, updated_at)
+         VALUES (?, 'Independent Consultant', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`,
+      ).bind(userId),
+      env.DB.prepare(
+        `INSERT INTO affiliation_reviews (id, user_id, organization_name, normalized_name, job_title, group_key, source_type, source_id, created_at)
+         VALUES (?, ?, 'Unmatched Co', 'unmatched co', 'Unmatched Role', 'unmatched', 'user_profile', ?, '2026-01-01T00:00:00.000Z')`,
+      ).bind(crypto.randomUUID(), userId, userId),
+    ]);
+
+    await anonymizeUser(createContext(env, adminRequest(`/api/v1/users/${userId}/anonymize`, "POST"), { userId }));
+
+    expect(
+      await queryAll(env.DB, "SELECT job_title, biography, links_json FROM identities WHERE id = ?", [identityId]),
+    ).toEqual([{ job_title: null, biography: null, links_json: null }]);
+    expect(await queryAll(env.DB, "SELECT user_id FROM individual_job_titles WHERE user_id = ?", [userId])).toEqual([]);
+    expect(await queryAll(env.DB, "SELECT id FROM affiliation_reviews WHERE user_id = ?", [userId])).toEqual([]);
   });
 
   it("closes active organization relationships so redacted users disappear from rosters and counts", async () => {
@@ -956,14 +1171,13 @@ describe("admin user anonymization", () => {
     expect(acceptance.accepted_at).toBe(at);
 
     // And the person really is gone from the row it points at.
-    const [user] = await queryAll<{ email: string; first_name: string | null; organization_name: string | null }>(
+    const [user] = await queryAll<{ email: string; first_name: string | null }>(
       env.DB,
-      "SELECT email, first_name, organization_name FROM users WHERE id = ?",
+      "SELECT email, first_name FROM users WHERE id = ?",
       [userId],
     );
     expect(user.email).not.toContain("ipr-signer");
     expect(user.first_name).toBeNull();
-    expect(user.organization_name).toBeNull();
   });
 
   it("does not allow an anonymized account to be repopulated or reactivated", async () => {
@@ -987,14 +1201,7 @@ describe("users list — type filter", () => {
 
   async function seedMember(email: string): Promise<string> {
     const userId = await seedUser(env.DB, email);
-    const { statements } = buildCreateIndividualMemberStatements(env.DB, userId, "H5", new Date().toISOString());
-    const { statement: identityStatement } = await buildCreateIdentityStatement(env.DB, {
-      userId,
-      organizationId: null,
-      source: "staff",
-      startImmediately: true,
-    });
-    await env.DB.batch([...statements, identityStatement]);
+    await insertIndividualMembershipForUser(env.DB, userId, "H5");
     return userId;
   }
 
@@ -1159,24 +1366,6 @@ describe("users list — type filter", () => {
 
     const data = await listUsers("type=member&q=type-multi-org@example.test");
     expect(data.users.filter((u) => u.email === "type-multi-org@example.test")).toHaveLength(1);
-  });
-
-  it("does not leak legacy user-wide links into the user list", async () => {
-    await setup();
-    const userId = await seedUser(env.DB, "type-malformed-links@example.test");
-    await env.DB.prepare("UPDATE users SET links_json = ? WHERE id = ?").bind("{not valid json", userId).run();
-
-    const response = await app.fetch(
-      adminRequest("/api/v1/users?q=type-malformed-links@example.test", "GET"),
-      env as any,
-      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
-    );
-
-    expect(response.status).toBe(200);
-    const data = (await response.json()) as { users: Array<{ email: string; links?: string[] }> };
-    const user = data.users.find((u) => u.email === "type-malformed-links@example.test");
-    expect(user).toBeTruthy();
-    expect(user).not.toHaveProperty("links");
   });
 
   it("rejects an unrecognized sort value through the shared list contract", async () => {

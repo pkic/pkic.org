@@ -29,7 +29,6 @@ import {
 import {
   eventProfileKeySchema,
   eventRegistrationPolicySchema,
-  eventSourceModeSchema,
   eventVisibilitySchema,
   standaloneEventProfileKeySchema,
 } from "./event-series";
@@ -64,8 +63,13 @@ export const groupEventsListQuerySchema = listQuerySchema(GROUP_EVENTS_SORT_COLU
   collection: z.enum(["events", "unscheduled_meetings"]).optional(),
   profileKey: eventProfileKeySchema.optional(),
   registrationPolicy: eventRegistrationPolicySchema.optional(),
-  sourceMode: eventSourceModeSchema.optional(),
+  /**
+   * Upcoming: the event, or its series' remaining occurrences, ends at or
+   * after this instant. An event without a schedule yet also counts, since it
+   * has not happened; it sorts after every scheduled one.
+   */
   from: utcInstantSchema.optional(),
+  /** Past: the event, or its next occurrence, starts at or before this instant. */
   to: utcInstantSchema.optional(),
 });
 export type GroupEventsListQuery = z.infer<typeof groupEventsListQuerySchema>;
@@ -74,7 +78,8 @@ export const groupEventSchema = eventResourceCoreSchema.extend({
   ownerGroupId: groupIdSchema,
   seriesId: databaseIdSchema.nullable(),
   basePath: z.string().trim().regex(frontendPathPattern).max(300).nullable(),
-  location: z.string().nullable(),
+  /** A meeting series' room or call, as its members see it; null for an event that is not a series. */
+  meetingLocation: z.string().nullable(),
   links: linksSchema,
   nextOccurrenceAt: z.string().nullable(),
   capabilities: z.array(eventGroupGrantSchemas.capabilitySchema).max(eventGroupGrantSchemas.capabilities.length),
@@ -135,14 +140,12 @@ export const groupEventRegistrationSettingsUpdateSchema = z.object({
 export const groupEventCreateSchema = eventCreateSchema
   .omit({
     registrationMode: true,
-    venue: true,
     virtualUrl: true,
   })
   .extend({
     profileKey: standaloneEventProfileKeySchema,
     registrationPolicy: z.literal("no_registration").default("no_registration"),
     visibility: eventVisibilitySchema.default("group_members"),
-    location: eventSettingsSchema.shape.location,
     links: linksSchema.optional(),
   });
 type ParsedGroupEventCreateInput = z.infer<typeof groupEventCreateSchema>;
@@ -154,7 +157,6 @@ export type GroupEventCreateInput = Omit<ParsedGroupEventCreateInput, "visibilit
 export const groupEventSettingsUpdateSchema = eventSettingsSchema
   .omit({
     registrationPolicy: true,
-    venue: true,
     virtualUrl: true,
   })
   .extend({

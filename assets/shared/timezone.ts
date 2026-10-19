@@ -124,3 +124,78 @@ export function instantToDateTimeLocal(value: string | Date, timeZone: string): 
 export function dateTimeLocalToIso(value: string, timeZone: string): string {
   return zonedDateTimeToDate(parseDateTimeLocal(value), timeZone).toISOString();
 }
+
+/** The calendar date (`YYYY-MM-DD`) an instant falls on in a zone. */
+export function instantToCalendarDate(value: string | Date, timeZone: string): string {
+  return instantToDateTimeLocal(value, timeZone).slice(0, 10);
+}
+
+/**
+ * The calendar dates from the date `startsAt` falls on to the date `endsAt` falls on, both in `timeZone`,
+ * at most `limit` of them. Calendar-date arithmetic only; no instant is widened from a date.
+ */
+export function calendarDatesBetween(startsAt: string, endsAt: string, timeZone: string, limit = 31): string[] {
+  const last = instantToCalendarDate(endsAt, timeZone);
+  const dates: string[] = [];
+  const cursor = new Date(`${instantToCalendarDate(startsAt, timeZone)}T00:00:00.000Z`);
+  while (dates.length < limit) {
+    const date = cursor.toISOString().slice(0, 10);
+    if (date > last) break;
+    dates.push(date);
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return dates;
+}
+
+/** Whether a string is an IANA zone identifier this runtime knows. */
+export function isValidTimeZone(timeZone: string): boolean {
+  try {
+    formatter(timeZone);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** The zone the viewer's device is set to, and UTC when the runtime will not say. */
+export function viewerTimeZone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+}
+
+/** The 24-hour `HH:MM` clock an instant shows in a zone. */
+export function zonedClock(value: string | Date, timeZone: string): string {
+  const parts = zonedDateTimeParts(value, timeZone);
+  return `${pad(parts.hour)}:${pad(parts.minute)}`;
+}
+
+/**
+ * The localized name an instant's zone goes by ("CST", "GMT+1" with `short`, "GMT+1" offset form with `shortOffset`),
+ * or undefined when the locale has none. Throws a RangeError for an unknown zone.
+ */
+export function zoneNameAt(
+  value: Date,
+  timeZone: string,
+  locale: string,
+  style: "short" | "shortOffset",
+): string | undefined {
+  return new Intl.DateTimeFormat(locale, { timeZone, timeZoneName: style })
+    .formatToParts(value)
+    .find((part) => part.type === "timeZoneName")?.value;
+}
+
+/** One calendar component of an instant in a zone, in US English ("October", "7", "2026"). */
+export function zonedDatePart(value: Date, timeZone: string, part: "day" | "month" | "year"): string {
+  const options: Intl.DateTimeFormatOptions =
+    part === "day" ? { day: "numeric" } : part === "month" ? { month: "long" } : { year: "numeric" };
+  return new Intl.DateTimeFormat("en-US", { timeZone, ...options }).format(value);
+}
+
+/**
+ * The locale and zone this runtime formats displayed dates with. A build that
+ * renders dates through `format-date.ts` depends on both, so a cache key for
+ * its output includes them.
+ */
+export function runtimeDatePresentation(): { locale: string; timeZone: string } {
+  const { locale, timeZone } = Intl.DateTimeFormat().resolvedOptions();
+  return { locale, timeZone };
+}

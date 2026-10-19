@@ -1,19 +1,11 @@
 /**
- * The consent screen an MCP client is sent to before it may act as a member of
- * staff. It is the whole page, so it carries its own `.pk` root.
+ * The page an MCP client sends a person to before it may act for them. It is
+ * the whole page, so it carries its own `.pk` root: sign-in first, then the
+ * consent itself, where the person chooses which of the permissions they can
+ * delegate the client receives and as which identity.
  *
- * Three things the Bootstrap version could not say, and this one does:
- *
- *   - "Signed in as … / Client: …" was two bold `div`s inside a tinted box. It
- *     is a name/value pair, so it is a description list, and a reader can now
- *     tell which half is the label.
- *   - The unauthorized case is an `Alert` with the `warn` tone, whose
- *     `role="alert"` announces it. The old version carried its meaning in an
- *     amber background and nothing else.
- *   - The permission lists are headed by real `h3`s beneath the panel's `h2`,
- *     rather than by bold text that no heading navigation could reach. They
- *     take their size from `pk-small pk-strong` so the structure is honest
- *     without a sub-heading printing larger than the panel it sits in.
+ * Approval is accepted, then completed in the background; the page waits for
+ * the completion and follows its redirect back to the client.
  */
 import { browserSupportsWebAuthn } from "@simplewebauthn/browser";
 import { useEffect, useState } from "preact/hooks";
@@ -25,19 +17,29 @@ import {
   mcpOauthMagicLinkResponseSchema,
   mcpOauthRedirectResponseSchema,
 } from "../../../../shared/schemas/mcp-oauth";
-import { userAuthEstablishedResponseSchema } from "../../../../shared/schemas/user-auth";
+import { myProfileSchema } from "../../../../shared/schemas/me";
+import {
+  oauthAuthorizationApprovalResponseSchema,
+  oauthAuthorizationCompletionSchema,
+} from "../../../../shared/schemas/oauth-authorizations";
+import { userAuthEstablishedResponseSchema, userAuthSessionResponseSchema } from "../../../../shared/schemas/user-auth";
+import { sessionActingIdentityChoiceRequired } from "../../../../shared/session-acting-identity";
 import { VerifyingOverlay } from "../../../components/VerifyingOverlay";
 import { useContractForm } from "../../../hooks/useContractForm";
-import { ApiClientError, requestJson } from "../../../shared/api-client";
+import { actingIdentityLabel, PERSONAL_IDENTITY_LABEL } from "../../../shared/acting-identity-catalog";
+import { ApiClientError, getJson, requestJson } from "../../../shared/api-client";
 import { authenticateWithPasskey } from "../../../shared/passkey-authentication";
 import { Alert } from "../../../ui/Alert";
 import { Button } from "../../../ui/Button";
 import { Field } from "../../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
 import { TextInput } from "../../../ui/TextControl";
-// `pk-datalist`, `pk-answer-list`: component CSS ships in lazy chunks, so a
-// module that writes these class names has to pull their stylesheet in itself.
-import "../../../ui/Content.css";
+import { accountDisplayName, saveProfile } from "../state";
+import type { PortalSession } from "../types";
+import { ActingIdentitySwitcher } from "./ActingIdentitySwitcher";
+import { rememberedSelection, rememberSelection } from "./consent-selection";
+import { type ConsentAccount, McpConsent } from "./McpConsent";
+import { SignedInHeaderMenu } from "./SignedInHeaderMenu";
 
 const OAUTH_AUTHORIZE_PATH = "/api/v1/auth/oauth/authorize";
 
@@ -74,14 +76,74 @@ async function verifyUserMagicLink(token: string): Promise<void> {
   });
 }
 
-async function submitOauthDecision(action: "approve" | "deny", returnTo: string): Promise<string> {
+async function submitOauthDenial(returnTo: string): Promise<string> {
   const data = await requestJson(OAUTH_AUTHORIZE_PATH, mcpOauthRedirectResponseSchema, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     credentials: "same-origin",
-    body: JSON.stringify({ action, return_to: returnTo }),
+    body: JSON.stringify(mcpOauthAuthorizeActionSchema.parse({ action: "deny", return_to: returnTo })),
   });
   return data.redirectTo;
+}
+
+const COMPLETION_POLL_MS = 500;
+const COMPLETION_ATTEMPTS = 60;
+const APPROVAL_FAILED = "The authorization could not be completed. Please try again.";
+
+/** Approve, then wait for the background completion and return where it redirects. */
+async function submitOauthApproval(
+  returnTo: string,
+  scopes: readonly string[],
+  actingIdentityId: string | null,
+): Promise<string> {
+  const accepted = await requestJson(OAUTH_AUTHORIZE_PATH, oauthAuthorizationApprovalResponseSchema, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify(
+      mcpOauthAuthorizeActionSchema.parse({ action: "approve", return_to: returnTo, scopes, actingIdentityId }),
+    ),
+  });
+  for (let attempt = 0; attempt < COMPLETION_ATTEMPTS; attempt += 1) {
+    const result = await getJson(
+      `/api/v1/auth/oauth/authorizations/${encodeURIComponent(accepted.authorizationId)}/completion`,
+      oauthAuthorizationCompletionSchema,
+    );
+    if (result.status === "active") return result.redirectTo;
+    if (result.status !== "pending") throw new Error(APPROVAL_FAILED);
+    await new Promise((resolve) => setTimeout(resolve, COMPLETION_POLL_MS));
+  }
+  throw new Error(APPROVAL_FAILED);
+}
+
+/** Who is granting the access, read from the session and the person's own profile. */
+async function loadConsentAccount(): Promise<{ session: PortalSession; account: ConsentAccount }> {
+  const [session, person] = await Promise.all([
+    getJson("/api/v1/auth/session", userAuthSessionResponseSchema),
+    getJson("/api/v1/users/current", myProfileSchema),
+  ]);
+  const acting = session.actingIdentities.find((identity) => identity.id === session.actingIdentityId);
+  // The site header shows the signed-in account from the shared profile, as it does after any sign-in.
+  saveProfile(person);
+  return {
+    session,
+    account: {
+      name: accountDisplayName(person),
+      email: session.identity.email,
+      headshotUrl: person.headshotUrl ?? null,
+      actingAs: acting ? actingIdentityLabel(acting) : PERSONAL_IDENTITY_LABEL,
+    },
+  };
+}
+
+/** Every permission the consent offers, in the catalog's order. */
+function offeredScopes(context: McpOauthContext): string[] {
+  return context.areas.flatMap((area) => area.permissions.map((item) => item.permission));
+}
+
+/** The chosen permissions in the catalog's order, so the request reads the way the screen does. */
+function chosenScopes(context: McpOauthContext, selected: ReadonlySet<string>): string[] {
+  return offeredScopes(context).filter((scope) => selected.has(scope));
 }
 
 function authorizationHash(returnTo: string): string {
@@ -101,7 +163,27 @@ export function McpAuthorization() {
   const [verifying, setVerifying] = useState(Boolean(initialToken));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(initial.get("error"));
+  const [consent, setConsent] = useState<{ session: PortalSession; account: ConsentAccount } | null>(null);
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const passkeysSupported = typeof window !== "undefined" && browserSupportsWebAuthn();
+
+  /* The consent starts from everything the client asked for that this person can delegate. */
+  useEffect(() => {
+    let cancelled = false;
+    setConsent(null);
+    if (!context?.authorized) return;
+    setSelected(rememberedSelection(context.clientName, offeredScopes(context)));
+    loadConsentAccount()
+      .then((loaded) => {
+        if (!cancelled) setConsent(loaded);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setError((err as Error).message);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [context]);
 
   useEffect(() => {
     let cancelled = false;
@@ -202,11 +284,11 @@ export function McpAuthorization() {
     }
   }
 
-  async function handleDecision(action: "approve" | "deny"): Promise<void> {
+  async function handleDecision(decide: () => Promise<string>): Promise<void> {
     if (!returnTo) return;
     setSubmitting(true);
     try {
-      window.location.assign(await submitOauthDecision(action, returnTo));
+      window.location.assign(await decide());
     } catch (err) {
       if (err instanceof ApiClientError && err.status === 401) {
         await refreshContext();
@@ -216,8 +298,37 @@ export function McpAuthorization() {
     }
   }
 
-  if (verifying || loading) {
+  const deny = () => void handleDecision(() => submitOauthDenial(returnTo));
+
+  if (verifying || loading || (context?.authorized && !consent && !error)) {
     return <VerifyingOverlay />;
+  }
+
+  if (context?.authorized && consent) {
+    if (sessionActingIdentityChoiceRequired(consent.session))
+      return <ActingIdentitySwitcher session={consent.session} onChosen={() => refreshContext()} />;
+    return (
+      <>
+        <SignedInHeaderMenu session={consent.session} />
+        <McpConsent
+          clientName={context.clientName}
+          clientHost={context.redirectHost}
+          account={consent.account}
+          areas={context.areas}
+          selected={selected}
+          busy={submitting}
+          onSelect={setSelected}
+          onAuthorize={() =>
+            void handleDecision(() => {
+              rememberSelection(context.clientName, offeredScopes(context), selected);
+              return submitOauthApproval(returnTo, chosenScopes(context, selected), consent.session.actingIdentityId);
+            })
+          }
+          error={error}
+          onCancel={deny}
+        />
+      </>
+    );
   }
 
   return (
@@ -239,7 +350,6 @@ export function McpAuthorization() {
                 {passkeysSupported && (
                   <>
                     <Button
-                      block
                       loading={submitting}
                       disabled={submitting}
                       onClick={() => {
@@ -248,7 +358,7 @@ export function McpAuthorization() {
                     >
                       {submitting ? "Waiting for passkey…" : "Sign in with a passkey"}
                     </Button>
-                    <p class="pk-small pk-center">or</p>
+                    <p class="pk-small pk-muted">or</p>
                   </>
                 )}
                 <form
@@ -271,79 +381,20 @@ export function McpAuthorization() {
                       />
                     )}
                   </Field>
-                  <Button type="submit" variant="primary" block loading={submitting} disabled={submitting || !returnTo}>
+                  <Button type="submit" variant="primary" loading={submitting} disabled={submitting || !returnTo}>
                     {submitting ? "Sending…" : "Send sign-in link"}
                   </Button>
                 </form>
               </>
             )
-          ) : !context.authorized ? (
+          ) : context.authorized ? null : (
             <>
               <Alert tone="warn" title={`Signed in as ${context.userEmail ?? "an unknown account"}`}>
                 This account does not have permission to authorize MCP access.
               </Alert>
-              <Button
-                block
-                disabled={submitting}
-                onClick={() => {
-                  void handleDecision("deny");
-                }}
-              >
-                Deny and return to client
+              <Button disabled={submitting} onClick={deny}>
+                Deny and go back
               </Button>
-            </>
-          ) : (
-            <>
-              <dl class="pk-datalist pk-small">
-                <dt>Signed in as</dt>
-                <dd>{context.staffEmail}</dd>
-                <dt>Client</dt>
-                <dd>{context.clientName}</dd>
-              </dl>
-
-              <div class="pk-stack pk-stack--tight">
-                <h3 class="pk-small pk-strong">Requested permissions</h3>
-                <ul class="pk-answer-list">
-                  {context.requestedScopes.map((scope) => (
-                    <li key={scope}>{scope}</li>
-                  ))}
-                </ul>
-              </div>
-
-              <div class="pk-stack pk-stack--tight">
-                <h3 class="pk-small pk-strong">Granted permissions</h3>
-                {context.grantedScopes.length > 0 ? (
-                  <ul class="pk-answer-list">
-                    {context.grantedScopes.map((scope) => (
-                      <li key={scope}>{scope}</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p class="pk-muted">No requested permissions can be granted by this account.</p>
-                )}
-              </div>
-
-              <div class="pk-stack pk-stack--snug">
-                <Button
-                  variant="primary"
-                  block
-                  disabled={submitting || context.grantedScopes.length === 0}
-                  onClick={() => {
-                    void handleDecision("approve");
-                  }}
-                >
-                  Approve
-                </Button>
-                <Button
-                  block
-                  disabled={submitting}
-                  onClick={() => {
-                    void handleDecision("deny");
-                  }}
-                >
-                  Deny
-                </Button>
-              </div>
             </>
           )}
 

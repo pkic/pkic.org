@@ -1,3 +1,4 @@
+import { formatNumber } from "../../../../../shared/format-number";
 import type { Representation } from "../../../../../shared/schemas/representation";
 import { Spinner } from "../../../../components/Spinner";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
@@ -22,14 +23,14 @@ export function RepresentationSummary({
               role="group"
               aria-label="People"
               label="People"
-              value={String(representation.people.count)}
+              value={formatNumber(representation.people.count)}
               density="compact"
             />
             <StatCard
               role="group"
               aria-label="Organizations"
               label="Organizations"
-              value={String(representation.organizations.count)}
+              value={formatNumber(representation.organizations.count)}
               density="compact"
             />
           </div>

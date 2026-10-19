@@ -72,7 +72,7 @@ body {
 }
 
 .fade {
-  transform-origin: 168px 151px;
+  transform-origin: 217px 217px;
   animation: fadeTrail 5s ease-in-out infinite;
   filter: url(#shadow);
   /* Apply shadow filter */

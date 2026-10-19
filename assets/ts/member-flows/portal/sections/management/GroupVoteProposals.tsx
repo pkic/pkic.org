@@ -12,7 +12,7 @@ import {
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { Badge } from "../../../../components/Badge";
 import { confirmAction } from "../../../../components/ConfirmDialog";
-import { EmptyState } from "../../../../ui/RecordEmptyState";
+import { EmptyState } from "../../../../ui/EmptyState";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
 import { useData } from "../../../../hooks/useData";
@@ -20,7 +20,8 @@ import { deleteJson, getJson, postJson } from "../../../../shared/api-client";
 import { Alert } from "../../../../ui/Alert";
 import { Button } from "../../../../ui/Button";
 import { Field } from "../../../../ui/Field";
-import { PageHeader } from "../../../../ui/PageHeader";
+import { ProfileHeader } from "../../../../ui/ProfileHeader";
+import { BreadcrumbBranch } from "../../../../ui/BreadcrumbScope";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { fmtDate } from "../../ui";
 import { MarkdownEditor } from "../../../../components/markdown-editor/MarkdownInput";
@@ -124,7 +125,6 @@ export function GroupVoteProposalDetail({
         <div class="pk-cluster">
           {current.capabilities.includes("endorse") && (
             <Button
-              size="sm"
               variant="primary"
               disabled={busy}
               onClick={() =>
@@ -142,7 +142,6 @@ export function GroupVoteProposalDetail({
           )}
           {current.capabilities.includes("withdraw_endorsement") && (
             <Button
-              size="sm"
               disabled={busy}
               onClick={() =>
                 void action(() => deleteJson(`${base}/endorsement`, groupVoteProposalMutationResponseSchema))
@@ -152,12 +151,12 @@ export function GroupVoteProposalDetail({
             </Button>
           )}
           {current.capabilities.includes("withdraw") && (
-            <Button size="sm" variant="danger-quiet" disabled={busy} onClick={() => void withdraw()}>
+            <Button variant="danger-quiet" disabled={busy} onClick={() => void withdraw()}>
               Withdraw proposal
             </Button>
           )}
           {current.capabilities.includes("approve") && (
-            <Button size="sm" variant="primary" disabled={busy} onClick={() => void approve()}>
+            <Button variant="primary" disabled={busy} onClick={() => void approve()}>
               Approve and create vote
             </Button>
           )}
@@ -186,7 +185,7 @@ export function GroupVoteProposalDetail({
               </Field>
             </fieldset>
             <div class="pk-cluster">
-              <Button type="submit" variant="danger" size="sm" disabled={busy || !reason.trim()}>
+              <Button type="submit" variant="danger" disabled={busy || !reason.trim()}>
                 Reject proposal
               </Button>
             </div>
@@ -217,27 +216,36 @@ export function GroupVoteProposalRecord({
   const detail = useData(() => getJson(base, groupVoteProposalDetailResponseSchema), [base]);
   const proposal = detail.data?.proposal;
 
+  // Under the group's hero, like every group record: the trail gains the
+  // proposals list and this proposal, and the proposal heads its own content.
   return (
-    <div class="pk pk-stack">
-      <PageHeader
-        trail={[{ label: "Proposals", href: usePortalHashLocation.hrefs(listPath) }]}
-        eyebrow="Vote proposal"
-        title={proposal?.title ?? "Proposal"}
-        context={proposal ? <Badge status={proposal.status} /> : undefined}
-      />
-      {detail.loading && !proposal && <Spinner label="Loading the proposal…" />}
-      {detail.error && <ErrorAlert error={detail.error} />}
-      {proposal && (
-        <GroupVoteProposalDetail
-          groupId={groupId}
-          proposal={proposal}
-          onChanged={async () => {
-            await detail.reload();
-          }}
-          onWithdrawn={() => navigate(listPath)}
+    <BreadcrumbBranch
+      items={[
+        { label: "Proposals", href: usePortalHashLocation.hrefs(listPath) },
+        { label: proposal?.title ?? "Proposal" },
+      ]}
+    >
+      <div class="pk pk-stack">
+        <ProfileHeader
+          headingLevel={3}
+          title={proposal?.title ?? "Proposal"}
+          pill={proposal ? <Badge status={proposal.status} /> : undefined}
+          lede="Vote proposal"
         />
-      )}
-    </div>
+        {detail.loading && !proposal && <Spinner label="Loading the proposal…" />}
+        {detail.error && <ErrorAlert error={detail.error} />}
+        {proposal && (
+          <GroupVoteProposalDetail
+            groupId={groupId}
+            proposal={proposal}
+            onChanged={async () => {
+              await detail.reload();
+            }}
+            onWithdrawn={() => navigate(listPath)}
+          />
+        )}
+      </div>
+    </BreadcrumbBranch>
   );
 }
 
@@ -265,6 +273,7 @@ export function GroupVoteProposals({
         </Alert>
       )}
       <ApiDataTable
+        urlState="vote-proposals"
         caption="Vote proposals"
         actionsRef={actions}
         endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/vote-proposals`}

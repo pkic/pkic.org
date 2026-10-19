@@ -1,6 +1,5 @@
 import { RefreshNotice } from "../../../../components/RefreshNotice";
 import { useData } from "../../../../hooks/useData";
-import { useMembershipCategoryLabels } from "../../../../hooks/useMembershipCategoryLabels";
 /**
  * One organization's record, read like an account page in a CRM.
  *
@@ -27,7 +26,13 @@ import { Alert } from "../../../../ui/Alert";
 import { Button } from "../../../../ui/Button";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { fmtDate, toast } from "../../ui";
-import { draftFromOrganization, payloadFromDraft, type OrganizationDraft } from "./OrganizationDraft";
+import { confirmAction } from "../../../../components/ConfirmDialog";
+import {
+  draftFromOrganization,
+  organizationRenameWarning,
+  payloadFromDraft,
+  type OrganizationDraft,
+} from "./OrganizationDraft";
 import {
   OrganizationAbout,
   OrganizationContacts,
@@ -35,11 +40,13 @@ import {
   OrganizationMembershipCard,
 } from "./OrganizationProfile";
 import { Breadcrumb } from "../../../../ui/Breadcrumb";
-import { ProfileHeader } from "../../../../ui/ProfileHeader";
-import { OrganizationLogo } from "./OrganizationLogo";
+import { Menu, type MenuItem } from "../../../../ui/Menu";
+import { OrganizationRecordHero } from "./OrganizationRecordHero";
 import { OrganizationActivity } from "./OrganizationActivity";
+import { OrganizationPrivateContactDetails } from "../OrganizationPrivateContactDetails";
 import { OrganizationSponsorshipStanding } from "./OrganizationSponsorshipStanding";
 import { IdentityRoster } from "./IdentityRoster";
+import { organizationRecordHref } from "./OrganizationRecordTrail";
 // `pk-mono` on the category code comes from Content.css, which ships in a lazy
 // chunk rather than the entry stylesheet, so this module pulls it in itself.
 import "../../../../ui/Content.css";
@@ -50,13 +57,17 @@ export function OrganizationDetail({
   canWrite,
   canManageIdentities,
   canReadSponsorships,
+  canMerge = false,
 }: {
   organizationId: string;
   canRead: boolean;
   canWrite: boolean;
   canManageIdentities: boolean;
   canReadSponsorships: boolean;
+  /** organizations:write and membership:write: the record's "…" menu offers the merge. */
+  canMerge?: boolean;
 }) {
+  const [, navigate] = usePortalHashLocation();
   const {
     data: organization,
     loading,
@@ -71,7 +82,6 @@ export function OrganizationDetail({
     );
     return response.organization;
   }, [canRead, organizationId]);
-  const categories = useMembershipCategoryLabels(Boolean(organization?.membershipCategory));
   // Editing is the page's mode, not a card's: one draft, one Save, and every
   // card keeps its layout while its values become inputs.
   const [draft, setDraft] = useState<OrganizationDraft | null>(null);
@@ -91,7 +101,6 @@ export function OrganizationDetail({
   if (error && !organization) return <ErrorAlert error={error} />;
   if (!organization) return null;
 
-  const count = organization.activeIdentityCount;
   const editing = draft !== null;
   const hasLinks =
     organization.links.length > 0 ||
@@ -111,6 +120,17 @@ export function OrganizationDetail({
     if (!checked.data) {
       setSaveError(checked.message);
       return;
+    }
+    // The name lives once, on the organization: a rename changes what every
+    // identity there shows, so it is confirmed with how many people that is.
+    if (checked.data.name !== undefined && checked.data.name !== organization.name) {
+      const confirmed = await confirmAction({
+        title: `Rename ${organization.name} to ${checked.data.name}?`,
+        body: organizationRenameWarning(organization),
+        confirmLabel: "Rename",
+        cancelLabel: "Keep editing",
+      });
+      if (!confirmed) return;
     }
     setSaving(true);
     setSaveError("");
@@ -132,6 +152,33 @@ export function OrganizationDetail({
       setSaving(false);
     }
   }
+
+  // Whole-record commands live behind the record's own "…" menu.
+  const recordActions: MenuItem[] = [
+    ...(canWrite
+      ? [
+          {
+            id: "edit",
+            label: "Edit organization…",
+            onSelect: () => setDraft(draftFromOrganization(organization)),
+          },
+        ]
+      : []),
+    {
+      id: "domains",
+      label: "Email domains…",
+      onSelect: () => navigate(organizationRecordHref(organization.id, "/domains")),
+    },
+    ...(canMerge && !organization.mergedInto
+      ? [
+          {
+            id: "merge",
+            label: "Merge into another organization…",
+            onSelect: () => navigate(organizationRecordHref(organization.id, "/merge")),
+          },
+        ]
+      : []),
+  ];
 
   const cardProps = {
     organization,
@@ -159,42 +206,47 @@ export function OrganizationDetail({
           { label: organization.name },
         ]}
       />
-      <ProfileHeader
-        media={<OrganizationLogo size="mark" organization={organization} canWrite={canWrite} onChanged={load} />}
+      <OrganizationRecordHero
+        organization={organization}
         // While editing, the title follows the Name field as it is typed.
         title={draft?.name.trim() ? draft.name : organization.name}
         lede={draft?.slogan.trim() ? draft.slogan : (organization.slogan ?? undefined)}
-        facts={[
-          organization.membershipCategory ? <>{categories.label(organization.membershipCategory)}</> : null,
-          organization.memberSince ? `Member since ${fmtDate(organization.memberSince)}` : null,
-          /* Reads as a sentence rather than as a bare number. */
-          `${String(count)} active ${count === 1 ? "representative" : "representatives"}`,
-        ].filter((fact) => fact !== null)}
+        canWrite={canWrite}
+        onChanged={load}
         actions={
-          canWrite ? (
-            editing ? (
-              /* Save and Cancel stay buttons: they are a form's own controls,
-                 and burying "Save" in a menu would hide the only way out of
-                 edit mode behind a click. */
-              <>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  loading={saving}
-                  onClick={() => {
-                    void save();
-                  }}
-                >
-                  Save
-                </Button>
-                <Button size="sm" disabled={saving} onClick={stopEditing}>
-                  Cancel
-                </Button>
-              </>
-            ) : undefined
-          ) : undefined
+          editing ? (
+            /* Save and Cancel stay buttons: they are a form's own controls,
+               and burying "Save" in a menu would hide the only way out of
+               edit mode behind a click. */
+            <>
+              <Button
+                variant="primary"
+                loading={saving}
+                onClick={() => {
+                  void save();
+                }}
+              >
+                Save
+              </Button>
+              <Button disabled={saving} onClick={stopEditing}>
+                Cancel
+              </Button>
+            </>
+          ) : (
+            <Menu label="Record actions" align="end" items={recordActions}>
+              <span aria-hidden="true">⋯</span>
+            </Menu>
+          )
         }
       />
+      {organization.mergedInto && (
+        <Alert tone="info" title={`Merged into ${organization.mergedInto.name}`}>
+          Since {fmtDate(organization.mergedInto.mergedAt)} this record keeps only its history.{" "}
+          <a href={usePortalHashLocation.hrefs(`/organizations/${encodeURIComponent(organization.mergedInto.id)}`)}>
+            Open {organization.mergedInto.name}
+          </a>
+        </Alert>
+      )}
       {saveError && <Alert tone="danger">{friendlyErrorMessage(saveError)}</Alert>}
 
       {/* The account: what the organization says about itself and who
@@ -204,10 +256,7 @@ export function OrganizationDetail({
           on one edge. In edit mode the same cards carry inputs in place. */}
       <div class="pk-record" {...liveHandlers}>
         <div class="pk-stack">
-          <OrganizationAbout
-            {...cardProps}
-            onEdit={canWrite && !editing ? () => setDraft(draftFromOrganization(organization)) : undefined}
-          />
+          <OrganizationAbout {...cardProps} />
           <IdentityRoster organization={organization} canManageIdentities={canManageIdentities} onChanged={load} />
           {/* What the account has done across the consortium, one bounded
               query per tab, aggregated over its representatives. */}
@@ -219,6 +268,7 @@ export function OrganizationDetail({
             <OrganizationSponsorshipStanding organizationId={organization.id} canWrite={canWrite} />
           )}
           <OrganizationContacts {...cardProps} />
+          <OrganizationPrivateContactDetails organizationId={organization.id} canWrite={canWrite} />
           {/* The mark moved into the header, where the subject is; what is
               left here is where to find the organization.
 

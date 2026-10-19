@@ -15,8 +15,15 @@ import {
   registrationResendManageLinkSchema,
   registrationResendConfirmationSchema,
 } from "./registration";
+import {
+  registrationEmailProofStartResponseSchema,
+  registrationEmailProofStartSchema,
+  registrationEmailProofVerifyResponseSchema,
+  registrationEmailProofVerifySchema,
+} from "./registration-email-proof";
 import { jsonResponse, requiredJsonBody } from "./openapi";
 import { publicOperation } from "./route-contract";
+import { screensWorkEmailDomain } from "./work-email";
 
 export const registrationResendManageLinkRouteSchema = {
   ...protectsPublicAction("registration_access", "email:manage"),
@@ -43,6 +50,7 @@ export const registrationResendManageLinkRouteSchema = {
 export const eventRegistrationCreateRouteSchema = {
   ...protectsPublicAction("event_registration", "events:manage"),
   ...publicOperation(),
+  ...screensWorkEmailDomain(),
   tags: ["Registrations"],
   summary: "Register for an event",
   description:
@@ -56,6 +64,39 @@ export const eventRegistrationCreateRouteSchema = {
     "400": { description: "Invalid registration, form answers, attendance, invite, or consent." },
     "404": { description: "Event not found." },
     "409": { description: "Registration state or capacity changed concurrently." },
+  },
+};
+
+export const registrationEmailProofStartRouteSchema = {
+  ...protectsPublicAction("registration_email_proof", "events:manage"),
+  ...publicOperation(),
+  ...screensWorkEmailDomain(),
+  tags: ["Registrations"],
+  summary: "Verify a registrant's email address",
+  description:
+    "Queues a short-lived verification link to the address. Opening it returns the person to the registration form with the address verified.",
+  request: { params: eventSlugParamsSchema, body: requiredJsonBody(registrationEmailProofStartSchema) },
+  responses: {
+    "200": jsonResponse("Verification link queued.", registrationEmailProofStartResponseSchema),
+    "403": { description: "The event does not take registrations." },
+    "404": { description: "Event not found." },
+    "422": { description: "The address cannot receive email or is not accepted." },
+    "429": { description: "Rate limit exceeded." },
+  },
+};
+
+export const registrationEmailProofVerifyRouteSchema = {
+  ...publicOperation(),
+  tags: ["Registrations"],
+  summary: "Continue a registration with a verified email address",
+  request: { params: eventSlugParamsSchema, body: requiredJsonBody(registrationEmailProofVerifySchema) },
+  responses: {
+    "200": jsonResponse(
+      "The verified address and what the form still asks.",
+      registrationEmailProofVerifyResponseSchema,
+    ),
+    "404": { description: "Invalid verification link." },
+    "410": { description: "Expired verification link." },
   },
 };
 

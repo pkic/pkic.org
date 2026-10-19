@@ -3,6 +3,7 @@ import { useState } from "preact/hooks";
 import type { MemberWallEntry } from "../../shared/schemas/members-directory";
 import type { PublicSponsor, SponsorsDisplayResponse } from "../../shared/schemas/public-sponsors";
 import "./sponsors-wall.css";
+import { ExternalLink } from "../ui/ExternalLink";
 export function sponsorWeightsDescending(sponsors: PublicSponsor[]): number[] {
   return [...new Set(sponsors.map(({ weight }) => weight))].sort((a, b) => b - a);
 }
@@ -37,7 +38,7 @@ function SponsorLogo({
   if (!s.logoUrl || failed) return null;
   const title = titleFor(s, level, eventName);
   return (
-    <a href={s.website ?? "#"} title={title} target="_blank" rel="noopener noreferrer" class="sponsor-link">
+    <ExternalLink href={s.website ?? "#"} title={title} external class="sponsor-link">
       <SiteImage
         src={s.logoUrl}
         alt={title}
@@ -46,7 +47,7 @@ function SponsorLogo({
         loading="lazy"
         onError={() => setFailed(true)}
       />
-    </a>
+    </ExternalLink>
   );
 }
 
@@ -170,16 +171,15 @@ export function SponsorStripView({
           const title = titleFor(s, tier, eventName);
           if (!s.logoUrl) return null;
           return (
-            <a
+            <ExternalLink
               key={s.id}
               href={s.website ?? "#"}
               title={title}
-              target="_blank"
-              rel="noopener noreferrer"
+              external
               class={`${linkClass} ${sponsorWeightClass(weight)}`}
             >
               <SiteImage class={`${logoClass} sponsor-strip-default-logo`} alt={title} src={s.logoUrl} loading="lazy" />
-            </a>
+            </ExternalLink>
           );
         })}
       </div>
@@ -208,10 +208,9 @@ function MemberWallLogo({ entry }: { entry: MemberWallEntry }) {
   const [failed, setFailed] = useState(false);
   if (failed) return null;
   return (
-    <a
+    <ExternalLink
       href={entry.href}
-      target="_blank"
-      rel="noopener"
+      external
       data-sponsor-level={entry.sponsorLevel}
       data-member-name={entry.name}
       data-member-slogan={entry.slogan ?? undefined}
@@ -224,6 +223,6 @@ function MemberWallLogo({ entry }: { entry: MemberWallEntry }) {
         loading="lazy"
         onError={() => setFailed(true)}
       />
-    </a>
+    </ExternalLink>
   );
 }

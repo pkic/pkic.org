@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { PageInfo } from "../../../shared/schemas/pagination";
 import type { ProposalInternalComment } from "../../../shared/schemas/proposal-comments";
-import { EmptyState } from "../../ui/RecordEmptyState";
+import { EmptyState } from "../../ui/EmptyState";
 import { Markdown } from "../../ui/Markdown";
 import { formatDateTime } from "../../shared/ui";
 import { Button } from "../../ui/Button";
@@ -39,14 +39,19 @@ export function ProposalInternalCommentsPanel({
   }, [commentDraft]);
   return (
     <div class="pk">
-      <Panel aria-label="Internal comments">
-        <PanelHeader title="Internal Comments" headingLevel={4} />
+      {/* "Reviewer comments", not "notes": the proposer's own private
+          field is "Notes for the program committee", and the two are
+          different things written by different people. */}
+      <Panel aria-label="Reviewer comments">
+        <PanelHeader title="Reviewer comments" headingLevel={4} />
         <PanelBody class="pk-stack">
           <form class="pk-stack pk-stack--snug" onSubmit={(event) => void onAddComment(event)}>
             {/* The textarea carried only a placeholder before, which is not a
                 name: it disappears the moment anything is typed, and a reader
-                arriving at the control heard "edit text" and nothing else. */}
-            <Field label="Add a comment" help="Private to the program committee">
+                arriving at the control heard "edit text" and nothing else.
+                No help line: the panel's empty state already says who reads
+                these comments. */}
+            <Field label="Add a comment">
               {(control) => (
                 <MarkdownEditor
                   key={draftGeneration}
@@ -67,18 +72,17 @@ export function ProposalInternalCommentsPanel({
               <Button
                 type="submit"
                 variant="primary"
-                size="sm"
                 loading={savingComment}
                 disabled={savingComment || !commentDraft.trim()}
               >
-                {savingComment ? "Adding…" : "Add Comment"}
+                {savingComment ? "Adding…" : "Add comment"}
               </Button>
             </div>
           </form>
           {comments.length === 0 ? (
             <EmptyState
-              title="No internal comments yet"
-              body="Notes recorded here stay private to the program committee."
+              title="No reviewer comments yet"
+              body="Reviewers and organizers see these comments. The proposer never does."
             />
           ) : (
             <div class="pk-stack pk-stack--snug">
@@ -101,7 +105,7 @@ export function ProposalInternalCommentsPanel({
               })}
               {commentsPage?.hasMore && (
                 <div class="pk-cluster">
-                  <Button size="sm" loading={loadingMoreComments} onClick={() => void onLoadMoreComments()}>
+                  <Button loading={loadingMoreComments} onClick={() => void onLoadMoreComments()}>
                     {loadingMoreComments ? "Loading…" : "Load more comments"}
                   </Button>
                 </div>

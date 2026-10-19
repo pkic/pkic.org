@@ -1,3 +1,5 @@
+// Compile the real lazy HTTP graph before timed endpoint journeys.
+import "../functions/http-router";
 import { prepareMembershipWorkflowPin } from "../functions/_lib/services/membership/workflows/pinning";
 import { requireMembershipCategory } from "../functions/_lib/services/membership/categories";
 import { pinReviewedStaffWorkflow } from "./helpers/membership-workflows";

@@ -20,6 +20,7 @@ import {
 import { ProfileLinksInput } from "../../../../components/ProfileLinksInput";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { EventScheduleFields } from "../../../../components/EventScheduleFields";
+import { EventPlaceFields } from "../../../../components/EventPlaceFields";
 import { FormActions } from "../../../../components/FormActions";
 import { useContractForm } from "../../../../hooks/useContractForm";
 import { useData } from "../../../../hooks/useData";
@@ -32,6 +33,7 @@ import { isoDateTimeValue } from "./meeting-form-utils";
 // lazy chunk rather than in the entry stylesheet. A surface that writes the
 // class without importing the sheet renders it unstyled.
 import "../../../../ui/Content.css";
+import { instantToDateTimeLocal, viewerTimeZone } from "../../../../../shared/timezone";
 import { slugify } from "../../../../../shared/slug";
 
 interface EventDraft {
@@ -44,32 +46,22 @@ interface EventDraft {
   registrationPolicy: EventRegistrationPolicy;
   visibility: EventVisibility;
   inviteLimitAttendee: number;
-  location: string;
+  city: string;
+  country: string;
   links: string[];
 }
 
 function localDateTime(value: string | null, timeZone: string): string {
   if (!value) return "";
   try {
-    const date = new Date(value);
-    const parts = new Intl.DateTimeFormat("en-CA", {
-      timeZone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      hourCycle: "h23",
-    }).formatToParts(date);
-    const values = Object.fromEntries(parts.map(({ type, value: part }) => [type, part]));
-    return `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}`;
+    return instantToDateTimeLocal(value, timeZone);
   } catch {
     return "";
   }
 }
 
 function initialDraft(event: GroupEvent | null): EventDraft {
-  const timezone = event?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  const timezone = event?.timezone || viewerTimeZone();
   const profileKey = standaloneEventProfileKeySchema.safeParse(event?.profileKey).data ?? "workshop";
   return {
     name: event?.name ?? "",
@@ -81,7 +73,8 @@ function initialDraft(event: GroupEvent | null): EventDraft {
     registrationPolicy: event?.registrationPolicy ?? "no_registration",
     visibility: event?.visibility ?? "group_members",
     inviteLimitAttendee: event?.inviteLimitAttendee ?? 5,
-    location: event?.location ?? "",
+    city: event?.city ?? "",
+    country: event?.country ?? "",
     links: event?.links ?? [],
   };
 }
@@ -130,7 +123,8 @@ function createPayload(draft: EventDraft, schedule: ScheduleInstants) {
     registrationPolicy: "no_registration",
     visibility: draft.visibility,
     inviteLimitAttendee: draft.inviteLimitAttendee,
-    location: fieldValue(draft.location),
+    city: fieldValue(draft.city),
+    country: fieldValue(draft.country),
     links: draft.links,
   };
 }
@@ -145,7 +139,8 @@ function settingsPayload(draft: EventDraft, schedule: ScheduleInstants, event: G
     endsAt: schedule.endsAt,
     inviteLimitAttendee: draft.inviteLimitAttendee,
     visibility: draft.visibility,
-    location: fieldValue(draft.location),
+    city: fieldValue(draft.city),
+    country: fieldValue(draft.country),
     links: draft.links,
   };
 }
@@ -155,11 +150,13 @@ export function GroupEventEditor({
   event,
   onSaved,
   onCancel,
+  section,
 }: {
   groupId: string;
   event: GroupEvent | null;
   onSaved: (event: GroupEvent) => void | Promise<void>;
   onCancel?: () => void;
+  section?: "general" | "location" | "registration" | "links";
 }) {
   const [draft, setDraft] = useState(() => initialDraft(event));
   const [saving, setSaving] = useState(false);
@@ -171,9 +168,26 @@ export function GroupEventEditor({
   // One basis for validation: the contract the route parses — create or
   // settings — decides what each field shows, live, and what Save may send.
   const schedule = scheduleInstants(draft);
+  const settings = isCreate ? null : settingsPayload(draft, schedule, event);
+  const fields =
+    section === "general"
+      ? ["name"]
+      : section === "location"
+        ? ["timezone", "startsAt", "endsAt", "city", "country"]
+        : section === "registration"
+          ? ["visibility", "inviteLimitAttendee"]
+          : section === "links"
+            ? ["links"]
+            : null;
+  const scopedSettings =
+    settings && fields
+      ? Object.fromEntries(
+          Object.entries(settings).filter(([key]) => key === "expectedUpdatedAt" || fields.includes(key)),
+        )
+      : settings;
   const form = useContractForm(
     isCreate ? groupEventCreateSchema : groupEventSettingsUpdateSchema,
-    isCreate ? createPayload(draft, schedule) : settingsPayload(draft, schedule, event),
+    isCreate ? createPayload(draft, schedule) : scopedSettings,
   );
   const profileCatalog = useData(
     () =>
@@ -278,148 +292,159 @@ export function GroupEventEditor({
           including the link editor's own controls, which take no prop for it.
           The submit and cancel pair stays outside so it keeps focus. */}
       <fieldset class="pk-fieldset pk-stack" disabled={saving}>
-        <div class="pk-grid pk-grid--roomy">
-          <Field label="Event name" required {...form.of("name")}>
-            {(control) => (
-              <TextInput
-                {...control}
-                name="name"
-                value={draft.name}
-                onInput={(inputEvent) => handleName((inputEvent.target as HTMLInputElement).value)}
-              />
-            )}
-          </Field>
+        {(!section || isCreate || section === "general") && (
+          <div class="pk-grid pk-grid--roomy">
+            <Field label="Event name" required {...form.of("name")}>
+              {(control) => (
+                <TextInput
+                  {...control}
+                  name="name"
+                  value={draft.name}
+                  onInput={(inputEvent) => handleName((inputEvent.target as HTMLInputElement).value)}
+                />
+              )}
+            </Field>
 
-          {/* Once the event exists its address is fixed, so the control is
+            {/* Once the event exists its address is fixed, so the control is
               locked and says so in words rather than only looking greyed out —
               and it drops the required marker, which would be asking for
               something the reader cannot give. */}
-          <Field
-            label="Slug"
-            required={isCreate}
-            help={
-              isCreate
-                ? "Used in the event's address. Lower case, words joined by hyphens."
-                : "The address is fixed once the event exists."
-            }
-            {...form.of("slug")}
-          >
-            {(control) => (
-              <TextInput
-                {...control}
-                name="slug"
-                class="pk-mono"
-                value={draft.slug}
-                disabled={!isCreate}
-                onInput={(inputEvent) => update("slug", (inputEvent.target as HTMLInputElement).value)}
-              />
-            )}
-          </Field>
-        </div>
-
-        <EventScheduleFields
-          startsAt={draft.startsAt}
-          endsAt={draft.endsAt}
-          timezone={draft.timezone}
-          onStartsAtChange={(value) => update("startsAt", value)}
-          onEndsAtChange={(value) => update("endsAt", value)}
-          onTimezoneChange={(value) => update("timezone", value)}
-        />
-
-        <div class="pk-grid pk-grid--roomy">
-          <Field label="Event profile" help={profileHelp} {...form.of("profileKey")}>
-            {(control) => (
-              <Select
-                {...control}
-                name="profileKey"
-                value={draft.profileKey}
-                disabled={!isCreate || profileCatalog.loading || availableProfiles.length === 0}
-                onChange={(inputEvent) =>
-                  update(
-                    "profileKey",
-                    standaloneEventProfileKeySchema.parse((inputEvent.target as HTMLSelectElement).value),
-                  )
-                }
-              >
-                {availableProfiles.map((profile) => (
-                  <option key={profile.key} value={profile.key}>
-                    {profile.label}
-                  </option>
-                ))}
-              </Select>
-            )}
-          </Field>
-
-          {!isCreate && (
-            <Field label="Registration" help="Changed from the registration setup, not from here.">
-              {(control) => <TextInput {...control} value={draft.registrationPolicy.replaceAll("_", " ")} readOnly />}
-            </Field>
-          )}
-
-          <Field label="Visibility" {...form.of("visibility")}>
-            {(control) => (
-              <Select
-                {...control}
-                name="visibility"
-                value={draft.visibility}
-                onChange={(inputEvent) =>
-                  update("visibility", (inputEvent.target as HTMLSelectElement).value as EventVisibility)
-                }
-              >
-                {EVENT_VISIBILITIES.map((value) => (
-                  <option key={value} value={value}>
-                    {EVENT_VISIBILITY_LABELS[value]}
-                  </option>
-                ))}
-              </Select>
-            )}
-          </Field>
-
-          <Field label="Location" {...form.of("location")}>
-            {(control) => (
-              <TextInput
-                {...control}
-                name="location"
-                value={draft.location}
-                onInput={(inputEvent) => update("location", (inputEvent.target as HTMLInputElement).value)}
-              />
-            )}
-          </Field>
-        </div>
-
-        <Field
-          label="Peer invitation limit"
-          help="Maximum number of attendee invitations each registered participant may send. Set this to 0 to disable peer invitations. Manager invitations are configured separately."
-          {...form.of("inviteLimitAttendee")}
-        >
-          {(control) => (
-            <TextInput
-              {...control}
-              name="inviteLimitAttendee"
-              type="number"
-              min={0}
-              max={50}
-              value={draft.inviteLimitAttendee}
-              onInput={(inputEvent) =>
-                update("inviteLimitAttendee", Number((inputEvent.target as HTMLInputElement).value))
+            <Field
+              label="Slug"
+              required={isCreate}
+              help={
+                isCreate
+                  ? "Used in the event's address. Lower case, words joined by hyphens."
+                  : "The address is fixed once the event exists."
               }
-            />
-          )}
-        </Field>
+              {...form.of("slug")}
+            >
+              {(control) => (
+                <TextInput
+                  {...control}
+                  name="slug"
+                  class="pk-mono"
+                  value={draft.slug}
+                  disabled={!isCreate}
+                  onInput={(inputEvent) => update("slug", (inputEvent.target as HTMLInputElement).value)}
+                />
+              )}
+            </Field>
+          </div>
+        )}
 
+        {(!section || isCreate || section === "location") && (
+          <>
+            <EventScheduleFields
+              startsAt={draft.startsAt}
+              endsAt={draft.endsAt}
+              timezone={draft.timezone}
+              onStartsAtChange={(value) => update("startsAt", value)}
+              onEndsAtChange={(value) => update("endsAt", value)}
+              onTimezoneChange={(value) => update("timezone", value)}
+            />
+
+            <EventPlaceFields
+              fields={form.of}
+              city={draft.city}
+              country={draft.country}
+              timezone={draft.timezone}
+              onCityChange={(value) => update("city", value)}
+              onCountryChange={(value) => update("country", value)}
+              onTimezoneChange={(value) => update("timezone", value)}
+            />
+          </>
+        )}
+        {(!section || isCreate || section === "registration") && (
+          <>
+            <div class="pk-grid pk-grid--roomy">
+              <Field label="Event profile" help={profileHelp} {...form.of("profileKey")}>
+                {(control) => (
+                  <Select
+                    {...control}
+                    name="profileKey"
+                    value={draft.profileKey}
+                    disabled={!isCreate || profileCatalog.loading || availableProfiles.length === 0}
+                    onChange={(inputEvent) =>
+                      update(
+                        "profileKey",
+                        standaloneEventProfileKeySchema.parse((inputEvent.target as HTMLSelectElement).value),
+                      )
+                    }
+                  >
+                    {availableProfiles.map((profile) => (
+                      <option key={profile.key} value={profile.key}>
+                        {profile.label}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </Field>
+
+              {!isCreate && (
+                <Field label="Registration" help="Changed from the registration setup, not from here.">
+                  {(control) => (
+                    <TextInput {...control} value={draft.registrationPolicy.replaceAll("_", " ")} readOnly />
+                  )}
+                </Field>
+              )}
+
+              <Field label="Visibility" {...form.of("visibility")}>
+                {(control) => (
+                  <Select
+                    {...control}
+                    name="visibility"
+                    value={draft.visibility}
+                    onChange={(inputEvent) =>
+                      update("visibility", (inputEvent.target as HTMLSelectElement).value as EventVisibility)
+                    }
+                  >
+                    {EVENT_VISIBILITIES.map((value) => (
+                      <option key={value} value={value}>
+                        {EVENT_VISIBILITY_LABELS[value]}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </Field>
+            </div>
+
+            <Field
+              label="Peer invitation limit"
+              help="Maximum number of attendee invitations each registered participant may send. Set this to 0 to disable peer invitations. Manager invitations are configured separately."
+              {...form.of("inviteLimitAttendee")}
+            >
+              {(control) => (
+                <TextInput
+                  {...control}
+                  name="inviteLimitAttendee"
+                  type="number"
+                  min={0}
+                  max={50}
+                  value={draft.inviteLimitAttendee}
+                  onInput={(inputEvent) =>
+                    update("inviteLimitAttendee", Number((inputEvent.target as HTMLInputElement).value))
+                  }
+                />
+              )}
+            </Field>
+          </>
+        )}
         {/* The link editor is several controls, not one, so the group is named
             by a legend rather than by a label with nothing to point at. Its own
             input keeps its own accessible name. */}
-        <fieldset class="pk-fieldset pk-field">
-          <legend class="pk-field__label">Links</legend>
-          <ProfileLinksInput
-            fieldName={`group-event-links-${event?.id ?? "new"}`}
-            value={draft.links}
-            onChange={(links) => update("links", links)}
-            helpText="Add the event website, agenda, repository, or other relevant resources."
-            inputAriaLabel="Event resource URL"
-          />
-        </fieldset>
+        {(!section || isCreate || section === "links") && (
+          <fieldset class="pk-fieldset pk-field">
+            <legend class="pk-field__label">Links</legend>
+            <ProfileLinksInput
+              fieldName={`group-event-links-${event?.id ?? "new"}`}
+              value={draft.links}
+              onChange={(links) => update("links", links)}
+              helpText="Add the event website, agenda, repository, or other relevant resources."
+              inputAriaLabel="Event resource URL"
+            />
+          </fieldset>
+        )}
       </fieldset>
 
       <FormActions

@@ -1,4 +1,4 @@
-import { readD1Migrations } from "@cloudflare/vitest-pool-workers";
+import { readD1Migrations } from "@cloudflare/vitest-plugin";
 import { afterEach, describe, expect, it } from "vitest";
 import { DatabaseSync } from "node:sqlite";
 import fs from "node:fs";
@@ -1018,6 +1018,447 @@ describe("consolidated pending migration upgrade", () => {
 
     expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
   });
+});
+
+const AGENDA_PLATFORM_MIGRATION = "0038_event_agenda_platform.sql";
+
+function applyMigrationsBefore0038(db: DatabaseSync): void {
+  for (const fileName of fs
+    .readdirSync(MIGRATIONS_DIR)
+    .filter((name) => /^\d{4}_.+\.sql$/.test(name) && migrationNumber(name) < 38)
+    .sort()) {
+    db.exec(fs.readFileSync(path.join(MIGRATIONS_DIR, fileName), "utf8"));
+  }
+}
+
+/** D1 applies a migration file as one transaction; deferred foreign keys are checked at its commit. */
+function apply0038(db: DatabaseSync): void {
+  db.exec("BEGIN");
+  try {
+    db.exec(fs.readFileSync(path.join(MIGRATIONS_DIR, AGENDA_PLATFORM_MIGRATION), "utf8"));
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+}
+
+/** Every (table, column) whose foreign key names members(id). */
+function tablesReferencingMembers(db: DatabaseSync): Array<{ table: string; column: string }> {
+  return db
+    .prepare(
+      `SELECT m.name AS "table", fk."from" AS "column"
+         FROM sqlite_master m, pragma_foreign_key_list(m.name) fk
+        WHERE m.type = 'table' AND fk."table" = 'members'
+        ORDER BY m.name, fk."from"`,
+    )
+    .all() as Array<{ table: string; column: string }>;
+}
+
+/**
+ * Inserts one row, filling every other required column with a synthetic value.
+ * Foreign keys other than the ones under test may dangle: the fixture runs with
+ * enforcement off, and the comparison below only concerns members(id).
+ */
+function insertSyntheticRow(db: DatabaseSync, table: string, values: Record<string, string | number | null>): void {
+  const columns = db
+    .prepare(`SELECT name, type, "notnull" AS required, dflt_value FROM pragma_table_info(?)`)
+    .all(table) as Array<{ name: string; type: string; required: number; dflt_value: string | null }>;
+  const row: Record<string, string | number | null> = {};
+  for (const column of columns) {
+    if (column.name in values) row[column.name] = values[column.name];
+    else if (column.required && column.dflt_value === null)
+      row[column.name] = /INT/i.test(column.type) ? 1 : `${table}-${column.name}`;
+  }
+  const names = Object.keys(row);
+  db.prepare(
+    `INSERT INTO ${table} (${names.map((name) => `"${name}"`).join(", ")}) VALUES (${names.map(() => "?").join(", ")})`,
+  ).run(...names.map((name) => row[name]));
+}
+
+/**
+ * Production-shaped membership state before the members rebuild: an
+ * organization membership with a representative, an active individual
+ * membership, one whose person's personal identity has ended, and dependent
+ * rows in every table that references members(id).
+ */
+function seedMembershipBeforeRebuild(db: DatabaseSync): void {
+  const at = "2025-01-01T00:00:00.000Z";
+  db.exec(`
+    INSERT INTO users (id, email, normalized_email, created_at, updated_at) VALUES
+      ('person-org', 'rep@org.example', 'rep@org.example', '${at}', '${at}'),
+      ('person-solo', 'solo@example.test', 'solo@example.test', '${at}', '${at}'),
+      ('person-lapsed', 'lapsed@example.test', 'lapsed@example.test', '${at}', '${at}');
+    INSERT INTO organizations (id, name, normalized_name, created_at, updated_at)
+    VALUES ('org-a', 'Alpha', 'alpha', '${at}', '${at}');
+    INSERT INTO members (id, member_type, organization_id, status, created_at, updated_at)
+    VALUES ('member-org', 'organization', 'org-a', 'active', '${at}', '${at}');
+    INSERT INTO members (id, member_type, user_id, status, tier, member_since, created_at, updated_at) VALUES
+      ('member-solo', 'individual', 'person-solo', 'active', 'gold', '2019-05-01', '${at}', '${at}'),
+      ('member-lapsed', 'individual', 'person-lapsed', 'lapsed', NULL, NULL, '${at}', '${at}');
+    INSERT INTO member_category_assignments (member_id, category_code, created_at, updated_at) VALUES
+      ('member-org', 'A', '${at}', '${at}'),
+      ('member-solo', 'H6', '${at}', '${at}'),
+      ('member-lapsed', 'H5', '${at}', '${at}');
+    INSERT INTO identities (id, user_id, organization_id, source, show_on_organization_profile,
+                            invited_at, started_at, ended_at, created_at, updated_at) VALUES
+      ('identity-org', 'person-org', 'org-a', 'staff', 1, '${at}', '${at}', NULL, '${at}', '${at}'),
+      ('identity-solo', 'person-solo', NULL, 'staff', 0, '${at}', '${at}', NULL, '${at}', '${at}'),
+      ('identity-lapsed', 'person-lapsed', NULL, 'staff', 0, '${at}', '${at}', '2025-06-01T00:00:00.000Z',
+       '${at}', '2025-06-01T00:00:00.000Z');
+    INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, identity_id, member_id, created_at)
+    VALUES ('role-contact', 'person-org', 'role-primary_contact', 'organization', 'member-org',
+            'identity-org', 'member-org', '${at}');
+  `);
+  db.exec("PRAGMA foreign_keys = OFF");
+  insertSyntheticRow(db, "groups", { id: "group-1", slug: "group-1", eligibility_mode: "open" });
+  insertSyntheticRow(db, "group_memberships", {
+    id: "seat-solo",
+    group_id: "group-1",
+    user_id: "person-solo",
+    identity_id: "identity-solo",
+    member_id: "member-solo",
+    joined_at: at,
+    left_at: null,
+  });
+  insertSyntheticRow(db, "member_applications", {
+    id: "application-1",
+    member_id: "member-org",
+    membership_category: "A",
+  });
+  insertSyntheticRow(db, "organization_secondary_contact_nominations", {
+    id: "nomination-1",
+    member_id: "member-org",
+    nominated_user_id: "person-org",
+  });
+  for (const table of ["vote_ballots", "vote_consultation_responses", "vote_representative_notification_intents"]) {
+    insertSyntheticRow(db, table, { member_id: "member-solo", identity_id: "identity-solo", round: 1 });
+  }
+  db.exec("PRAGMA foreign_keys = ON");
+}
+
+function memberReferenceCounts(db: DatabaseSync, references: Array<{ table: string; column: string }>) {
+  return references.map(({ table, column }) => ({
+    table,
+    column,
+    rows: (
+      db.prepare(`SELECT COUNT(*) AS total FROM ${table} WHERE "${column}" IN (SELECT id FROM members)`).get() as {
+        total: number;
+      }
+    ).total,
+  }));
+}
+
+describe("members rebuild: membership belongs to an identity", () => {
+  let db: DatabaseSync | undefined;
+
+  afterEach(() => {
+    db?.close();
+    db = undefined;
+  });
+
+  it("moves individual memberships to their personal identity and keeps every dependent row", () => {
+    db = new DatabaseSync(":memory:");
+    applyMigrationsBefore0038(db);
+    seedMembershipBeforeRebuild(db);
+    const references = tablesReferencingMembers(db);
+    // The fixture covers every table that references members(id).
+    expect(references.map((reference) => reference.table)).toEqual(
+      expect.arrayContaining([
+        "group_memberships",
+        "member_applications",
+        "member_category_assignments",
+        "organization_secondary_contact_nominations",
+        "user_roles",
+        "vote_ballots",
+        "vote_consultation_responses",
+        "vote_representative_notification_intents",
+      ]),
+    );
+    const counts = memberReferenceCounts(db, references);
+    expect(counts.filter((count) => count.rows === 0)).toEqual([]);
+    const unrelatedViolations = db.prepare("PRAGMA foreign_key_check").all();
+
+    apply0038(db);
+
+    expect(db.prepare("PRAGMA integrity_check").get()).toEqual({ integrity_check: "ok" });
+    const violations = db.prepare("PRAGMA foreign_key_check").all() as Array<{ parent: string }>;
+    expect(violations.filter((violation) => violation.parent === "members")).toEqual([]);
+    expect(violations).toEqual(unrelatedViolations);
+    expect(tablesReferencingMembers(db)).toEqual(
+      [...references, { table: "oauth_authorizations", column: "member_id" }].sort((a, b) =>
+        a.table.localeCompare(b.table),
+      ),
+    );
+    expect(memberReferenceCounts(db, references)).toEqual(counts);
+
+    const columns = (db.prepare("SELECT name FROM pragma_table_info('members')").all() as Array<{ name: string }>).map(
+      (column) => column.name,
+    );
+    expect(columns).not.toContain("user_id");
+    expect(
+      db
+        .prepare(
+          "SELECT id, member_type, identity_id, organization_id, status, tier, member_since FROM members ORDER BY id",
+        )
+        .all(),
+    ).toEqual([
+      {
+        id: "member-lapsed",
+        member_type: "individual",
+        identity_id: "identity-lapsed",
+        organization_id: null,
+        status: "lapsed",
+        tier: null,
+        member_since: null,
+      },
+      {
+        id: "member-org",
+        member_type: "organization",
+        identity_id: null,
+        organization_id: "org-a",
+        status: "active",
+        tier: null,
+        member_since: null,
+      },
+      {
+        id: "member-solo",
+        member_type: "individual",
+        identity_id: "identity-solo",
+        organization_id: null,
+        status: "active",
+        tier: "gold",
+        member_since: "2019-05-01",
+      },
+    ]);
+    expect(
+      db.prepare("SELECT identity_id, user_id, member_id FROM identity_member_capacities ORDER BY identity_id").all(),
+    ).toEqual([
+      { identity_id: "identity-lapsed", user_id: "person-lapsed", member_id: "member-lapsed" },
+      { identity_id: "identity-org", user_id: "person-org", member_id: "member-org" },
+      { identity_id: "identity-solo", user_id: "person-solo", member_id: "member-solo" },
+    ]);
+
+    // Dependent guards are recreated on the rebuilt table.
+    expect(() => db!.prepare("DELETE FROM members WHERE id = 'member-org'").run()).toThrow(
+      "MEMBERSHIP_HAS_AUTHORIZATION_CONTEXT",
+    );
+    expect(() =>
+      db!.prepare("UPDATE members SET identity_id = 'identity-lapsed' WHERE id = 'member-solo'").run(),
+    ).toThrow("MEMBER_HOLDER_IMMUTABLE");
+    // A personal identity no longer needs a membership to exist.
+    db.exec(`INSERT INTO identities (id, user_id, organization_id, source, show_on_organization_profile,
+                                     invited_at, started_at, created_at, updated_at)
+             VALUES ('identity-new', 'person-org', NULL, 'staff', 0, '2025-07-01T00:00:00.000Z', NULL,
+                     '2025-07-01T00:00:00.000Z', '2025-07-01T00:00:00.000Z')`);
+  });
+
+  it("refuses the whole migration rather than guess an individual membership's identity", () => {
+    db = new DatabaseSync(":memory:");
+    applyMigrationsBefore0038(db);
+    seedMembershipBeforeRebuild(db);
+    // A second personal identity, ended, leaves no live one and two candidates.
+    db.exec(`UPDATE identities SET ended_at = '2025-06-01T00:00:00.000Z' WHERE id = 'identity-solo';
+             INSERT INTO identities (id, user_id, organization_id, source, show_on_organization_profile,
+                                     invited_at, started_at, ended_at, created_at, updated_at)
+             VALUES ('identity-solo-2', 'person-solo', NULL, 'staff', 0, '2025-06-02T00:00:00.000Z',
+                     '2025-06-02T00:00:00.000Z', '2025-07-01T00:00:00.000Z',
+                     '2025-06-02T00:00:00.000Z', '2025-07-01T00:00:00.000Z')`);
+
+    expect(() => apply0038(db!)).toThrow(/members_holder/);
+    const columns = (db.prepare("SELECT name FROM pragma_table_info('members')").all() as Array<{ name: string }>).map(
+      (column) => column.name,
+    );
+    expect(columns).toContain("user_id");
+    expect(db.prepare("SELECT COUNT(*) AS total FROM members").get()).toEqual({ total: 3 });
+  });
+});
+
+it("upgrades pre-0035 profiles through 0038 so identities alone own organization and title", () => {
+  const db = new DatabaseSync(":memory:");
+  try {
+    applyMigrationsBefore0035(db);
+    seedRepresentativePre0035State(db);
+    db.exec(`
+      UPDATE users SET organization_name = 'ACME  corp', job_title = 'Program chair' WHERE id = 'organizer-1';
+      INSERT INTO users (id, email, normalized_email, first_name, organization_name, job_title, role, created_at, updated_at)
+      VALUES
+        ('unmatched-1', 'unmatched@example.test', 'unmatched@example.test', 'Unmatched', 'Unlisted Labs', 'Analyst',
+         'user', '2025-01-01', '2025-01-01'),
+        ('individual-1', 'individual@example.test', 'individual@example.test', 'Individual', NULL, 'Consultant',
+         'user', '2025-01-01', '2025-01-01');
+      INSERT INTO audit_log (id, actor_type, actor_id, action, entity_type, entity_id, details_json, created_at)
+      VALUES
+        ('organizer-as-user', 'user', 'organizer-1', 'profile_updated', 'user', 'organizer-1', NULL, '2024-11-01 10:00:00'),
+        ('organizer-as-admin', 'admin', 'organizer-1', 'event_updated', 'event', 'event-1', NULL, '2025-01-02'),
+        ('unmatched-as-user', 'user', 'unmatched-1', 'profile_updated', 'user', 'unmatched-1', NULL, '2025-01-02');
+    `);
+    for (const fileName of fs
+      .readdirSync(MIGRATIONS_DIR)
+      .filter((name) => /^\d{4}_.+\.sql$/.test(name) && migrationNumber(name) >= 35)
+      .sort()) {
+      if (migrationNumber(fileName) === 38) {
+        // Event attribution may differ from the current profile. Reconcile
+        // owned identities and retain unresolved facts without audit PII.
+        db.exec(`
+          INSERT INTO members (id, member_type, organization_id, status, created_at, updated_at)
+          VALUES ('member-title-fixture', 'organization', 'org-2', 'active', '2025-01-01', '2025-01-01');
+          INSERT INTO identities (id, user_id, organization_id, job_title, source, invited_at, started_at, created_at, updated_at)
+          VALUES ('historical-registration-identity', 'admin-1', 'org-1', 'Current role', 'staff',
+            '2025-01-01', '2025-01-01', '2025-01-01', '2025-01-01'),
+            ('missing-title-identity', 'admin-1', 'org-2', NULL, 'staff',
+             '2025-01-01', '2025-01-01', '2025-01-01', '2025-01-01');
+          INSERT INTO users (id, email, normalized_email, created_at, updated_at, pii_redacted_at)
+          VALUES ('redacted-legacy', 'redacted@example.test', 'redacted@example.test',
+            '2025-01-01', '2025-01-01', '2025-01-01');
+          UPDATE registrations SET registration_organization_name = ' Former  Employer ',
+            registration_job_title = 'Past title' WHERE id = 'registration-upgrade';
+          INSERT INTO registrations (id, event_id, user_id, status, attendance_type, source_type,
+            manage_link_secret, created_at, updated_at, registration_organization_name, registration_job_title)
+          VALUES
+            ('registration-empty', 'event-future', 'admin-1', 'registered', 'virtual', 'test',
+             'empty-secret', '2025-01-01', '2025-01-01', 'Acme Corp', 'Current role'),
+            ('registration-null', 'event-reversed', 'organizer-1', 'registered', 'virtual', 'test',
+             'null-secret', '2025-01-01', '2025-01-01', NULL, NULL),
+            ('registration-redacted', 'event-1', 'redacted-legacy', 'registered', 'virtual', 'test',
+             'redacted-secret', '2025-01-01', '2025-01-01', 'Erased affiliation', 'Erased title'),
+            ('registration-missing-title', 'event-malformed', 'admin-1', 'registered', 'virtual', 'test',
+             'title-secret', '2025-01-01', '2025-01-01', 'Pending Corp', 'Confirmed title'),
+            ('registration-title-only', 'event-future', 'organizer-1', 'registered', 'virtual', 'test',
+             'personal-title-secret', '2025-01-01', '2025-01-01', '', 'Independent researcher');
+          UPDATE registrations SET registration_identity_id = 'historical-registration-identity'
+            WHERE id = 'registration-empty';
+        `);
+      }
+      db.exec(fs.readFileSync(path.join(MIGRATIONS_DIR, fileName), "utf8"));
+    }
+
+    expect(db.prepare("PRAGMA integrity_check").get()).toEqual({ integrity_check: "ok" });
+    expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+    const columns = (table: string) =>
+      (db.prepare(`SELECT name FROM pragma_table_info('${table}')`).all() as Array<{ name: string }>).map(
+        (column) => column.name,
+      );
+    expect(columns("users")).not.toEqual(expect.arrayContaining(["organization_name"]));
+    expect(columns("users")).not.toEqual(expect.arrayContaining(["job_title"]));
+    expect(columns("registrations")).not.toEqual(expect.arrayContaining(["registration_organization_name"]));
+    expect(columns("registrations")).not.toEqual(expect.arrayContaining(["registration_job_title"]));
+    expect(db.prepare("SELECT COUNT(*) AS count FROM registrations").get()).toEqual({ count: 6 });
+
+    expect(db.prepare("SELECT job_title FROM identities WHERE id = 'missing-title-identity'").get()).toEqual({
+      job_title: "Confirmed title",
+    });
+    expect(db.prepare("SELECT job_title FROM identities WHERE id = 'historical-registration-identity'").get()).toEqual({
+      job_title: "Current role",
+    });
+    expect(
+      db.prepare("SELECT registration_identity_id FROM registrations WHERE id = 'registration-missing-title'").get(),
+    ).toEqual({ registration_identity_id: "missing-title-identity" });
+    const review = db
+      .prepare(
+        `SELECT id, source_id, organization_name, job_title FROM affiliation_reviews
+      WHERE source_type = 'registration'`,
+      )
+      .all();
+    expect(review).toEqual([
+      expect.objectContaining({
+        source_id: "registration-upgrade",
+        organization_name: "Former  Employer",
+        job_title: "Past title",
+      }),
+    ]);
+    expect(
+      db
+        .prepare(
+          `SELECT entity_id, scope_type, scope_id, details_json FROM audit_log
+      WHERE action = 'registration_affiliation_review_opened'`,
+        )
+        .all(),
+    ).toEqual([
+      {
+        entity_id: "registration-upgrade",
+        scope_type: "event",
+        scope_id: "event-1",
+        details_json: JSON.stringify({ reviewId: review[0].id, registrationIdentityId: null }),
+      },
+    ]);
+    expect(
+      db
+        .prepare(`SELECT COUNT(*) count FROM audit_log WHERE action = 'registration_affiliation_snapshot_retired'`)
+        .get(),
+    ).toEqual({ count: 0 });
+
+    expect(
+      db
+        .prepare(
+          `SELECT COUNT(*) count FROM audit_log WHERE action IN (
+      'identity_created_from_profile', 'identity_job_title_backfilled', 'individual_job_title_retained',
+      'proposal_speaker_affiliation_override_removed', 'affiliation_review_opened')
+      AND (json_type(details_json, '$.organizationName') IS NOT NULL
+        OR json_type(details_json, '$.jobTitle') IS NOT NULL
+        OR json_type(details_json, '$.profileOrganizationName') IS NOT NULL
+        OR json_type(details_json, '$.domain') IS NOT NULL
+        OR json_type(details_json, '$.emailDomain') IS NOT NULL)`,
+        )
+        .get(),
+    ).toEqual({ count: 0 });
+
+    // A name alone never decides an organization: the text waits for review and the person for their own join.
+    expect(
+      db
+        .prepare(
+          `SELECT identity.organization_id, identity.job_title, identity.source
+             FROM identities identity WHERE identity.user_id = 'organizer-1'`,
+        )
+        .all(),
+    ).toEqual([{ organization_id: null, job_title: null, source: "migration" }]);
+    expect(
+      db
+        .prepare(
+          "SELECT user_id, organization_name, job_title FROM affiliation_reviews WHERE source_type = 'user_profile' ORDER BY user_id",
+        )
+        .all(),
+    ).toEqual([
+      { user_id: "organizer-1", organization_name: "ACME  corp", job_title: "Program chair" },
+      { user_id: "unmatched-1", organization_name: "Unlisted Labs", job_title: "Analyst" },
+    ]);
+    expect(db.prepare("SELECT user_id, job_title FROM individual_job_titles").all()).toEqual([
+      { user_id: "individual-1", job_title: "Consultant" },
+      { user_id: "organizer-1", job_title: "Independent researcher" },
+    ]);
+    expect(
+      db
+        .prepare(
+          `SELECT entry.id, held.user_id, held.organization_id FROM audit_log entry
+             LEFT JOIN identities held ON held.id = entry.actor_identity_id
+            WHERE entry.id IN ('organizer-as-user', 'organizer-as-admin', 'unmatched-as-user') ORDER BY entry.id`,
+        )
+        .all(),
+    ).toEqual([
+      { id: "organizer-as-admin", user_id: "organizer-1", organization_id: null },
+      { id: "organizer-as-user", user_id: "organizer-1", organization_id: null },
+      { id: "unmatched-as-user", user_id: "unmatched-1", organization_id: null },
+    ]);
+  } finally {
+    db.close();
+  }
+});
+
+it("splits the agenda platform migration into bounded statements for D1", async () => {
+  const migrations = await readD1Migrations(MIGRATIONS_DIR);
+  const agendaPlatform = migrations.find((migration) => migration.name === "0038_event_agenda_platform.sql")!;
+  expect(agendaPlatform.queries).toEqual(
+    expect.arrayContaining([
+      expect.stringMatching(/ALTER TABLE users DROP COLUMN organization_name/),
+      expect.stringMatching(/CREATE TABLE standing_agenda_awards/),
+      expect.stringMatching(/CREATE TABLE sponsorship_periods/),
+      expect.stringMatching(/CREATE TABLE oauth_authorizations/),
+      expect.stringMatching(/CREATE TABLE oauth_authorization_completions/),
+    ]),
+  );
+  expect(Math.max(...agendaPlatform.queries.map((query) => new TextEncoder().encode(query).byteLength))).toBeLessThan(
+    100_000,
+  );
 });
 
 it("splits the consolidated migration into bounded statements for D1", async () => {

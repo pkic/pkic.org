@@ -1,13 +1,14 @@
+import { setOwnEmailSignInPermission } from "../functions/_lib/services/own-email-sign-in";
 import { administratorGrants } from "./helpers/administrator";
 /**
  * user-emails.test.ts
  *
  * Secondary email CRUD, global ownership constraints, searchable aliases,
- * and verified-alias sign-in into the same canonical user.
+ * and explicitly enabled verified-alias sign-in into the same canonical user.
  */
 import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
-import app from "../functions/router";
+import { callApi } from "./helpers/app";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { deliveredEmailPayload, queryAll, seedEventAndAdmin } from "./helpers/context";
@@ -28,11 +29,7 @@ function request(token: string, path: string, init: RequestInit = {}): Request {
 }
 
 async function call(token: string, path: string, init: RequestInit = {}): Promise<Response> {
-  return app.fetch(
-    request(token, path, init),
-    env as any,
-    { passThroughOnException: () => {}, waitUntil: () => {} } as any,
-  );
+  return callApi(env, request(token, path, init));
 }
 
 async function insertUser(email: string): Promise<string> {
@@ -210,8 +207,8 @@ describe("secondary user emails", () => {
         identityBId,
       ),
     ]);
-    expect((await findEligibleMemberById(env.DB, userId, memberAId))?.email).toBe("capacity-alias@example.test");
-    expect((await findEligibleMemberById(env.DB, userId, memberBId))?.email).toBe("capacity-alias@example.test");
+    expect((await findEligibleMemberById(env.DB, userId, identityAId))?.email).toBe("capacity-alias@example.test");
+    expect((await findEligibleMemberById(env.DB, userId, identityBId))?.email).toBe("capacity-alias@example.test");
 
     const response = await call(adminToken, `/api/v1/users/${userId}/emails/${emailId}`, { method: "DELETE" });
     expect(response.status).toBe(200);
@@ -222,8 +219,8 @@ describe("secondary user emails", () => {
         userId,
       ),
     ).toEqual([identityAId, identityBId].sort().map((identity_id) => ({ identity_id, email_id: null })));
-    expect((await findEligibleMemberById(env.DB, userId, memberAId))?.email).toBe("capacity-primary@example.test");
-    expect((await findEligibleMemberById(env.DB, userId, memberBId))?.email).toBe("capacity-primary@example.test");
+    expect((await findEligibleMemberById(env.DB, userId, identityAId))?.email).toBe("capacity-primary@example.test");
+    expect((await findEligibleMemberById(env.DB, userId, identityBId))?.email).toBe("capacity-primary@example.test");
     await expect(
       queueUserSignInCapability({
         db: env.DB,
@@ -479,7 +476,7 @@ describe("secondary user emails", () => {
     expect(viaAlias).toBeNull();
   });
 
-  it("signs a verified secondary email into the same canonical user", async () => {
+  it("signs an explicitly enabled verified secondary email into the same canonical user", async () => {
     const userId = await insertUser("canonical-login@example.test");
     const staffRole = (
       await queryAll<{ id: string }>(env.DB, "SELECT id FROM roles WHERE name = 'membership_processor'")
@@ -499,6 +496,7 @@ describe("secondary user emails", () => {
       .bind(emailId, userId, "verified-alias@example.test", "verified-alias@example.test")
       .run();
 
+    await setOwnEmailSignInPermission(env.DB, { userId, emailId, enabled: true });
     const issued = await queueUserSignInCapability({
       db: env.DB,
       email: "verified-alias@example.test",
@@ -549,6 +547,7 @@ describe("secondary user emails", () => {
     )
       .bind(emailId, userId, "removed-alias@example.test", "removed-alias@example.test")
       .run();
+    await setOwnEmailSignInPermission(env.DB, { userId, emailId, enabled: true });
     const issued = await queueUserSignInCapability({
       db: env.DB,
       email: "removed-alias@example.test",
@@ -599,6 +598,7 @@ describe("secondary user emails", () => {
     )
       .bind(emailId, userId, "alias-race-verified@example.test", "alias-race-verified@example.test")
       .run();
+    await setOwnEmailSignInPermission(env.DB, { userId, emailId, enabled: true });
     const issued = await queueUserSignInCapability({
       db: env.DB,
       email: "alias-race-verified@example.test",

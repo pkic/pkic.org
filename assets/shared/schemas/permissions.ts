@@ -1,53 +1,9 @@
 import { z } from "zod";
 
-/** Canonical permission vocabulary shared by the Worker and admin UI. */
-export const PERMISSIONS = [
-  "membership:read",
-  "membership:write",
-  "identities:activate",
-  "membership:approve",
-  "events:read",
-  "events:write",
-  "events:manage",
-  "groups:read",
-  "groups:write",
-  "email-templates:read",
-  "email-templates:write",
-  "email-templates:manage",
-  "forms:read",
-  "forms:write",
-  "email:read",
-  "email:manage",
-  "donations:read",
-  "donations:sync",
-  "users:read",
-  "users:write",
-  "users:anonymize",
-  "audit:read",
-  "analytics:read",
-  "retention:read",
-  "retention:run",
-  "scheduler:read",
-  "scheduler:manage",
-  "access:grant",
-  "access:revoke",
-  "organizations:read",
-  "organizations:write",
-  "organizations:content-review",
-  "sponsorships:read",
-  "sponsorships:write",
-  "votes:create",
-  "votes:manage",
-  "proposals:read",
-  "proposals:score",
-  "proposals:manage",
-  "proposals:edit_accepted_abstract",
-  "proposals:cancel_accepted",
-  "agenda:read",
-  "agenda:write",
-  "admin:read",
-  "admin:write",
-] as const;
+import { PERMISSION_METADATA } from "../permission-metadata";
+
+/** Canonical permission vocabulary derives from the metadata catalog, never a second list. */
+export const PERMISSIONS = Object.freeze(Object.keys(PERMISSION_METADATA) as (keyof typeof PERMISSION_METADATA)[]);
 
 export const permissionSchema = z.enum(PERMISSIONS);
 export type Permission = z.infer<typeof permissionSchema>;

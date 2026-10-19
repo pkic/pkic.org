@@ -74,8 +74,7 @@ export type PortalSectionKey =
   | "forms"
   | "organization"
   | "application"
-  | "settings"
-  | "account";
+  | "settings";
 
 interface PortalSectionDef {
   /** Stable key; equal to the first URL segment the section owns. */
@@ -84,6 +83,8 @@ interface PortalSectionDef {
   path: string;
   label: string;
   sidebar: boolean;
+  /** Navigation grouping only; route access stays with this resource. */
+  sidebarParent?: PortalSectionKey;
   access: (session: PortalSession | null) => boolean;
   /** Narrower sidebar visibility when routes are reachable more broadly than the entry is shown. */
   sidebarAccess?: (session: PortalSession | null) => boolean;
@@ -111,8 +112,8 @@ const PORTAL_SECTIONS: readonly PortalSectionDef[] = [
     path: "/home",
     label: "Home",
     sidebar: true,
-    access: (session) =>
-      Boolean(session?.member || session?.staff || session?.sponsors.length || session?.eventParticipation),
+    // Every signed-in person has a Home; one with no capacity sees only their account and the apply entries.
+    access: (session) => Boolean(session?.identity.id),
   },
   {
     section: "groups",
@@ -131,7 +132,15 @@ const PORTAL_SECTIONS: readonly PortalSectionDef[] = [
     access: (session) =>
       Boolean(session?.eventParticipation) ||
       portalHasPermissionAtAnyScope(session, "events:read") ||
-      portalHasPermissionAtAnyScope(session, "proposals:read"),
+      portalHasPermissionAtAnyScope(session, "proposals:read") ||
+      portalHasPermissionAtAnyScope(session, "agenda:read") ||
+      ["agenda:scan", "agenda:check", "agenda:admit", "agenda:attendance_record"].some((permission) =>
+        portalHasPermissionAtAnyScope(session, permission),
+      ) ||
+      portalHasPermissionAtAnyScope(session, "agenda:attendance_read") ||
+      ["agenda:leads_capture", "agenda:leads_view", "agenda:leads_export"].some((permission) =>
+        portalHasPermissionAtAnyScope(session, permission),
+      ),
     children: [
       {
         path: "/events/analytics",
@@ -185,7 +194,8 @@ const PORTAL_SECTIONS: readonly PortalSectionDef[] = [
     section: "membership",
     path: "/membership/applications",
     label: "Applications",
-    sidebar: true,
+    sidebar: false,
+    sidebarParent: "members",
     access: (session) => portalHasGlobalPermission(session, "membership:read"),
   },
   {
@@ -217,7 +227,8 @@ const PORTAL_SECTIONS: readonly PortalSectionDef[] = [
     section: "donations",
     path: "/donations",
     label: "Donations",
-    sidebar: true,
+    sidebar: false,
+    sidebarParent: "sponsors",
     access: (session) => portalHasAnyGlobalPermission(session, ["donations:read", "donations:sync"]),
     // The share-link leaderboard and the analytics are pages of their own, not
     // tabs above the donation list: each answers a different question, and a
@@ -262,9 +273,9 @@ const PORTAL_SECTIONS: readonly PortalSectionDef[] = [
     // Reached from the dashboard and account menu, not the sidebar.
     section: "application",
     path: "/application",
-    label: "My Application",
+    label: "My applications",
     sidebar: false,
-    access: (session) => Boolean(session?.member),
+    access: (session) => Boolean(session),
   },
   {
     /*
@@ -319,6 +330,12 @@ const PORTAL_SECTIONS: readonly PortalSectionDef[] = [
         access: (session) => portalHasGlobalPermission(session, "organizations:content-review"),
       },
       {
+        path: "/settings/affiliation-reviews",
+        label: "Affiliation reviews",
+        description: "Organization names and titles waiting to be linked to an identity.",
+        access: (session) => portalHasGlobalPermission(session, "users:read"),
+      },
+      {
         path: "/settings/audit-log",
         label: "Audit log",
         description: "What the platform has recorded about who changed what, and when.",
@@ -361,14 +378,6 @@ const PORTAL_SECTIONS: readonly PortalSectionDef[] = [
         access: (session) => portalHasAnyGlobalPermission(session, ["access:grant", "access:revoke"]),
       },
     ],
-  },
-  {
-    section: "account",
-    path: "/account",
-    label: "Account Settings",
-    sidebar: false,
-    access: (session) =>
-      Boolean(session?.member || session?.staff || session?.pendingIdentityCount || session?.eventParticipation),
   },
 ];
 
@@ -448,19 +457,43 @@ export function portalNavigationItems(session: PortalSession | null): PortalNavI
   // Every entry is its own root page, Settings included: a sidebar item that
   // names a section has to open that section, not whichever of its pages the
   // reader's grants happen to put first.
-  return PORTAL_SECTIONS.filter((def) => def.sidebar && (def.sidebarAccess ?? def.access)(session)).map((def) => ({
-    path: def.path,
+  return PORTAL_SECTIONS.filter(
+    (def) =>
+      def.sidebar &&
+      ((def.sidebarAccess ?? def.access)(session) ||
+        PORTAL_SECTIONS.some((child) => child.sidebarParent === def.section && child.access(session))),
+  ).map((def) => ({
+    path: def.access(session)
+      ? def.path
+      : PORTAL_SECTIONS.find((child) => child.sidebarParent === def.section && child.access(session))!.path,
     section: def.section,
     label: def.label,
   }));
+}
+
+/** Whether the session holds any capacity beyond being an active user. */
+export function portalHasCapacity(session: PortalSession | null): boolean {
+  return Boolean(
+    session?.member ||
+    session?.staff ||
+    session?.sponsors.length ||
+    session?.eventParticipation ||
+    session?.pendingIdentityCount ||
+    session?.hasActiveIdentity,
+  );
 }
 
 export function portalDefaultPath(session: PortalSession | null): string {
   if (session?.member || session?.staff) return "/home";
   if (session?.eventParticipation) return "/events";
   if (session?.sponsors.length) return "/sponsors";
-  if (session?.pendingIdentityCount) return "/account";
-  return "/";
+  if (session?.pendingIdentityCount || session?.hasActiveIdentity) return portalOwnUserRecordPath(session) ?? "/";
+  return session?.identity.id ? "/home" : "/";
+}
+
+/** The signed-in person's own user record: where their addresses, passkeys, notifications and access live. */
+export function portalOwnUserRecordPath(session: PortalSession | null): string | null {
+  return session?.identity.id ? `/users/${encodeURIComponent(session.identity.id)}` : null;
 }
 
 /**
@@ -478,7 +511,15 @@ export function portalCapacityFallbackPath(session: PortalSession | null, locati
 /** The pages listed under one section while it is the section being read. */
 export function portalSectionChildren(section: string, session: PortalSession | null): PortalNavItem[] {
   const definition = PORTAL_SECTIONS.find((candidate) => candidate.section === section);
-  return (definition?.children ?? [])
+  const nested = PORTAL_SECTIONS.filter((child) => child.sidebarParent === section && child.access(session));
+  const children: PortalSectionChild[] = [
+    ...(definition?.children ?? []),
+    ...nested.flatMap((child) => [
+      { path: child.path, label: child.label, access: child.access },
+      ...(child.children ?? []).map((page) => ({ ...page, group: child.label })),
+    ]),
+  ];
+  return children
     .filter((child) => child.access(session))
     .map((child) => ({
       path: child.path,
@@ -493,4 +534,10 @@ export function portalActiveSection(location: string): string {
   const owner = portalSectionForLocation(location);
   if (owner) return owner.section;
   return location.replace(/^\//, "").split("/")[0] || "groups";
+}
+
+/** Highlight the sidebar parent without changing route ownership or access checks. */
+export function portalSidebarSection(location: string): string {
+  const owner = portalSectionForLocation(location);
+  return owner?.sidebarParent ?? portalActiveSection(location);
 }

@@ -186,6 +186,8 @@ describe("canonical shared schema composition", () => {
       user_id: SECOND_ID,
       headshot_url: null,
       organization_name: null,
+      personal_email: false,
+      waitlist_handled_last: false,
       job_title: null,
       status: "registered",
       attendance_type: "in_person",

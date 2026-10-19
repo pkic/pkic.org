@@ -32,7 +32,6 @@
 
 // ─── Leader card (generic) ──────────────────────────────────────────────────
 //
-// Used by layouts/partials/leader-card.html.
 // Can be embedded in any context: WG pages, blog author panels, event speakers.
 
 .wg-leader-card {
@@ -41,7 +40,7 @@
   align-items: center;
   text-align: center;
   gap: 0.35rem;
-  min-width: 100px;
+  min-width: 6.25rem;
   flex: 1;
 }
 
@@ -70,7 +69,7 @@
   align-items: flex-start;
   text-align: left;
   gap: 1rem;
-  min-width: 240px;
+  min-width: 15rem;
 
   .wg-leader-name {
     font-size: 1rem;
@@ -88,8 +87,8 @@
 }
 
 .wg-leader-org-logo {
-  max-width: 80px;
-  max-height: 28px;
+  max-width: 5rem;
+  max-height: 1.75rem;
   object-fit: contain;
   filter: var(--pk-member-logo-filter);
   transition: filter 0.15s;
@@ -99,8 +98,8 @@
   }
 
   &--large {
-    max-width: 120px;
-    max-height: 36px;
+    max-width: 7.5rem;
+    max-height: 2.25rem;
   }
 }
 
@@ -172,8 +171,8 @@
 
   position: relative;
   flex-shrink: 0;
-  width: calc(var(--avatar-px, 80px) + 8px); // +8px for 3px ring on each side + 1px gap
-  height: calc(var(--avatar-px, 80px) + 8px);
+  width: calc(var(--avatar-px, 5rem) + 0.5rem); // +8px for 3px ring on each side + 1px gap
+  height: calc(var(--avatar-px, 5rem) + 0.5rem);
   border-radius: 50%;
   // Active ring: solid green
   border: 3px solid $green;
@@ -197,30 +196,6 @@
   }
 }
 
-.person-card-avatar-frame > .person-card-avatar {
-  display: block;
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  object-fit: cover;
-}
-
-.person-card-avatar-frame > .person-card-avatar--initials {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  width: 100%;
-  height: 100%;
-  // The letters track the ring's own size, at the 40% every initials avatar
-  // keeps; the clamp only guards the extremes (#44).
-  font-size: clamp(1rem, calc(var(--avatar-px, 80px) * 0.4), 2.5rem);
-  font-weight: 800;
-  color: #fff;
-  letter-spacing: -0.02em;
-  background: var(--page-accent, var(--wg-color, #{$green}));
-}
-
 // ─── Role arc — the label that hangs from the bottom of the ring ───────────
 // Inspired by LinkedIn's "Open to Work" green half-circle label.
 
@@ -241,7 +216,7 @@
   border: 2px solid #fff;
   line-height: 1.4;
   z-index: 1;
-  max-width: 120px;
+  max-width: 7.5rem;
   text-overflow: ellipsis;
   overflow: hidden;
 
@@ -293,8 +268,8 @@
 .person-card-org-logo-wrap {
   display: flex;
   align-items: center;
-  height: 28px; // fixed container height — applies equally to SVG and raster
-  max-width: 120px;
+  height: 1.75rem; // fixed container height — applies equally to SVG and raster
+  max-width: 7.5rem;
   overflow: hidden;
 }
 
@@ -345,4 +320,8 @@
   letter-spacing: 0.07em;
   color: var(--pk-ink-muted);
   margin: 0 0 0.75rem;
+}
+
+.pk-public-person-avatar {
+  --pk-avatar-size: var(--avatar-px, 5rem);
 }

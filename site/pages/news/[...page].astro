@@ -1,23 +1,38 @@
 ---
 import PublicPage from "../../layouts/PublicPage.astro";
 import { SiteHero } from "../../../assets/ts/site/SitePrimitives";
-import { loadSiteContent } from "../../../functions/_lib/services/site-content";
-import { renderMemberNews } from "../../../functions/_lib/services/member-news/render";
+import { loadSiteContentMetadata } from "../../../functions/_lib/services/site-content";
+import { memberNewsCardInputs, renderMemberNews } from "../../../functions/_lib/services/member-news/render";
 import { publication } from "../../publication";
 import { newsPageHref, publishedNewsPages } from "../../news-pages";
 
-export function getStaticPaths() {
-  return publishedNewsPages(publication.news).map((entry) => ({
-    params: { page: entry.route === "/news/" ? undefined : entry.route.slice("/news/".length, -1) },
-    props: entry,
+import { renderSiteContentHero } from "../../../functions/_lib/services/site-content-resolution";
+import { publicationPageInputs } from "../../publication-page-inputs";
+import { publicationRouteCacheKey } from "../../publication-cache";
+
+export async function getStaticPaths() {
+  const source = await loadSiteContentMetadata("/news/");
+  if (!source) throw new Error("The member news page source is missing");
+  const content = { ...source.metadata, hero: await renderSiteContentHero(source.metadata, source.rawDescription) };
+  return Promise.all(publishedNewsPages(publication.news).map(async (entry) => {
+    const sponsors = !entry.query.q && entry.query.offset === 0 ? publication.sponsorNews.map(memberNewsCardInputs) : [];
+    const page = { articles: entry.page.articles.map(memberNewsCardInputs), page: { hasMore: entry.page.page.hasMore } };
+    const pageInputs = await publicationPageInputs({ route: entry.route, title: content.title, description: content.description, content,
+      imageRefs: content.hero.imageSrc ? [{ source: content.hero.imageSrc, portrait: false }] : [],
+    });
+    return {
+      params: { page: entry.route === "/news/" ? undefined : entry.route.slice("/news/".length, -1) },
+      props: { content, page, sponsors, query: entry.query, pageInputs },
+      ...(pageInputs.imageInputs.cacheable ? { cacheKey: publicationRouteCacheKey(entry.route, {
+        pageInputs, hero: content.hero, page, sponsors, offset: entry.query.offset, limit: entry.query.limit,
+      }) } : {}),
+    };
   }));
 }
-const content = await loadSiteContent("/news/");
-if (!content) throw new Error("The member news page source is missing");
-const { page, query } = Astro.props;
-const articles = await renderMemberNews(page, publication.sponsorNews, query, newsPageHref);
+const { content, page, sponsors, query, pageInputs } = Astro.props;
+const articles = await renderMemberNews(page, sponsors, query, newsPageHref);
 ---
-<PublicPage title={content.title} description={content.description} content={content}>
+<PublicPage pageInputs={pageInputs} title={content.title} description={content.description}>
   <SiteHero hero={content.hero} />
   <section class="pk-section pk-container pk-container--wide" data-pagefind-body>
     <p><a href="/news/feed.xml">Subscribe to member news</a></p>

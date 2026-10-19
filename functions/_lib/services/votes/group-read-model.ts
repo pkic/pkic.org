@@ -211,7 +211,7 @@ export function buildGroupVotesPageQuery(
         closes_at: "vote.closes_at",
         created_at: "vote.created_at",
       } satisfies Record<(typeof VOTES_LIST_SORT_COLUMNS)[number], string>,
-      "vote.closes_at DESC",
+      "vote.created_at DESC",
       "vote.id ASC",
     ),
     limit: query.limit,

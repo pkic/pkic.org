@@ -1,3 +1,4 @@
+import { recordSessionInvitationRsvp } from "./event-participation/session-rsvp";
 import ICAL from "ical.js";
 import { zonedDateTimeToDate } from "../../../assets/shared/timezone";
 import { recordSeriesRsvp } from "./event-series/series-rsvps";
@@ -32,6 +33,9 @@ function eventDayDateFromUid(uid: string, registrationId: string): string | null
 export interface ParsedCalendarRsvp {
   icsUid: string | null;
   recurrenceId?: string;
+  organizerEmail?: string;
+  invitationSequence?: number;
+  claimedReplyAt?: string;
   attendeeEmail: string;
   responseStatus: "accepted" | "declined" | "tentative";
 }
@@ -82,7 +86,33 @@ export function parseCalendarRsvp(calendarIcs: string, fallbackEmail?: string): 
       throw new AppError(400, "INVALID_CALENDAR", "Calendar reply has an invalid recurrence identifier");
     }
   }
+  const sequenceLine = lines.find((line) => /^SEQUENCE:/i.test(line));
+  const sequenceValue = sequenceLine ? Number(sequenceLine.slice(sequenceLine.indexOf(":") + 1)) : undefined;
+  if (sequenceValue !== undefined && (!Number.isSafeInteger(sequenceValue) || sequenceValue < 0))
+    throw new AppError(400, "INVALID_CALENDAR", "Invalid calendar invitation sequence.");
+  const stampLine = lines.find((line) => /^DTSTAMP:/i.test(line));
+  let claimedReplyAt: string | undefined;
+  if (stampLine) {
+    try {
+      const value = stampLine.slice(stampLine.indexOf(":") + 1);
+      if (!/^\d{8}T\d{6}Z$/.test(value)) throw new Error("UTC required");
+      claimedReplyAt = new Date(
+        `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}T${value.slice(9, 11)}:${value.slice(11, 13)}:${value.slice(13, 15)}Z`,
+      ).toISOString();
+      if (claimedReplyAt.replace(/[-:]/g, "").replace(".000", "") !== value) throw new Error("Invalid date");
+    } catch {
+      throw new AppError(400, "INVALID_CALENDAR", "Invalid calendar reply timestamp.");
+    }
+  }
+  const organizerLine = lines.find((line) => /^ORGANIZER(?:;|:)/i.test(line));
+  const organizerEmail = organizerLine
+    ?.slice(organizerLine.indexOf(":") + 1)
+    .replace(/^mailto:/i, "")
+    .trim();
   return {
+    organizerEmail,
+    invitationSequence: sequenceValue,
+    claimedReplyAt,
     icsUid: uidMatch?.[1].trim() || null,
     recurrenceId,
     attendeeEmail: attendeeEmail.toLowerCase(),
@@ -111,6 +141,8 @@ export function normalizeCalendarRsvp(input: CalendarRsvpInput): CalendarRsvpEve
       eventDayDate: eventDayDateFromUid(input.uid, registrationId),
       icsUid: input.uid,
       recurrenceId: input.recurrenceId,
+      invitationSequence: input.invitationSequence,
+      claimedReplyAt: input.claimedReplyAt,
       attendeeEmail: input.attendeeEmail,
       responseStatus: input.partstat.toLowerCase() as "accepted" | "declined" | "tentative",
     };
@@ -128,6 +160,7 @@ export async function recordCalendarRsvpEvent(db: DatabaseLike, input: CalendarR
   const parsed = calendarRsvpEventInputSchema.safeParse(input);
   if (!parsed.success) throw new AppError(400, "INVALID_RSVP_EVENT", "Invalid calendar RSVP event");
   const event = parsed.data;
+  if (await recordSessionInvitationRsvp(db, { ...event, invitationId: event.registrationId })) return;
   if (await recordSeriesRsvp(db, event)) return;
   /*
    * A meeting invitation is signed over its occurrence id the way a

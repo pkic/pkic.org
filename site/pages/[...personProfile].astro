@@ -1,0 +1,48 @@
+---
+import { affiliationLogoSources } from "../../assets/shared/agenda-speaker-affiliations";
+import { publicationRouteCacheKey, PUBLICATION_SITE_ORIGIN } from "../publication-cache";
+import { publicationPageInputs } from "../publication-page-inputs";
+import { personProfileStructuredData } from "../../functions/_lib/services/site-history-structured-data";
+import PublicPage from "../layouts/PublicPage.astro";
+import { publication } from "../publication";
+import { publishedPersonPages } from "../../functions/_lib/services/site-session-history";
+import { publishedPersonProfile } from "../../functions/_lib/services/site-person-profile";
+import { markdownImageSources } from "../publication-markdown-images";
+import { Breadcrumb } from "../../assets/ts/ui/Breadcrumb";
+import { ProfileShowcase } from "../../assets/ts/site/ProfileShowcase";
+export async function getStaticPaths() {
+  return Promise.all(publishedPersonPages(publication).map(async (person) => {
+    const profile = publishedPersonProfile(publication, person);
+    const groups = [...new Set(profile.groups.map((group) => group.groupName))];
+    const contributions = [
+      profile.events.length ? `spoke at ${profile.events.map((event) => event.eventName).join(", ")}` : "",
+      groups.length ? `contributes to ${groups.join(", ")}` : "",
+    ].filter(Boolean).join("; ");
+    const pageInputs = await publicationPageInputs({ route: person.route,
+      title: `${profile.name}${profile.headline ? ` · ${profile.headline}` : ""} · Profile`,
+      description: `${[profile.name, contributions].filter(Boolean).join(" ")}. Experience, sessions and contributions to the PKI community.`.slice(0, 180),
+      structuredData: personProfileStructuredData(publication, person, profile, PUBLICATION_SITE_ORIGIN),
+      imageRefs: [
+        ...markdownImageSources([profile.biographyMarkdown, ...profile.identities.map((identity) => identity.biography)])
+          .map((source) => ({ source, portrait: false })),
+        ...(profile.imageSrc ? [{ source: profile.imageSrc, portrait: true }] : []),
+        ...[...new Set([
+          ...profile.identities.flatMap((identity) => identity.organization?.logoSrc ? [identity.organization.logoSrc] : []),
+          ...profile.events.flatMap((event) => event.sessions.flatMap((session) => affiliationLogoSources(session.affiliations))),
+        ])].map((source) => ({ source, portrait: true })),
+      ],
+    });
+    return {
+      params: { personProfile: person.route.replace(/^\/|\/$/g, "") }, props: { profile, pageInputs },
+      ...(pageInputs.imageInputs.cacheable ? { cacheKey: publicationRouteCacheKey(person.route, { profile, pageInputs }) } : {}),
+    };
+  }));
+}
+const { profile, pageInputs } = Astro.props;
+---
+<PublicPage title={pageInputs.title} pageInputs={pageInputs}>
+  <div class="pk-section pk-container" data-pagefind-body>
+    {profile.events.length ? <Breadcrumb items={[{ label: "Session archive", href: "/sessions/" }, { label: profile.name }]} /> : null}
+    <ProfileShowcase profile={profile} mode="public" />
+  </div>
+</PublicPage>
