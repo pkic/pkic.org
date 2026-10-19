@@ -208,11 +208,17 @@ describe("form-submission read-model population", () => {
     adminToken = await createAdminSession(env.DB, admin.id, "form-read-model-admin");
   });
 
-  it("searches and displays the confirmed event organization before and after form backfill", async () => {
+  it("searches and displays the selected identity's organization before and after form backfill", async () => {
     const formId = await insertForm("identity-population", "event_registration", "food", null, true);
     const userId = await insertUser("identity-population@example.test");
-    await env.DB.prepare("UPDATE users SET organization_name = 'Account organization' WHERE id = ?").bind(userId).run();
-    const organizationId = await insertOrganization(env.DB, "Current organization");
+    const accountOrganization = await insertOrganization(env.DB, "Account organization");
+    const accountIdentity = await addRepresentative(
+      env.DB,
+      await seedOrganizationAggregate(env.DB, accountOrganization, "A"),
+      userId,
+    );
+    await env.DB.prepare("UPDATE identities SET is_default = 1 WHERE id = ?").bind(accountIdentity).run();
+    const organizationId = await insertOrganization(env.DB, "Confirmed organization");
     const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
     const identityId = await addRepresentative(env.DB, memberId, userId);
     const registrationId = await insertRegistration({
@@ -222,9 +228,7 @@ describe("form-submission read-model population", () => {
       attendanceType: "virtual",
       answer: "Vegetarian",
     });
-    await env.DB.prepare(
-      "UPDATE registrations SET registration_identity_id = ?, registration_organization_name = 'Confirmed organization' WHERE id = ?",
-    )
+    await env.DB.prepare("UPDATE registrations SET registration_identity_id = ? WHERE id = ?")
       .bind(identityId, registrationId)
       .run();
     const before = await readPopulation("identity-population", { q: "Confirmed organization" });

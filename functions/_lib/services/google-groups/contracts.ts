@@ -46,11 +46,7 @@ export type ConfiguredGoogleServiceAccountEnv = {
 };
 
 export interface GoogleGroupsDirectoryClient {
-  applyMembership(params: {
-    action: GoogleGroupsSyncAction;
-    googleGroupEmail: string;
-    memberEmail: string;
-  }): Promise<void>;
+  applyMembership(params: GoogleGroupsMembershipOperation): Promise<void>;
   /**
    * The provider's actual membership for one group. `complete` is false when
    * pagination was truncated, in which case absence must not be treated as an
@@ -59,7 +55,15 @@ export interface GoogleGroupsDirectoryClient {
   listMembers(googleGroupEmail: string, maxPages?: number): Promise<{ emails: string[]; complete: boolean }>;
 }
 
+export interface GoogleGroupsMembershipOperation {
+  action: GoogleGroupsSyncAction;
+  googleGroupEmail: string;
+  memberEmail: string;
+}
+
 export interface ProcessGoogleGroupsSyncResult {
+  /** Present only for a read-only dry run. No queue or provider writes have occurred. */
+  plannedOperations?: GoogleGroupsMembershipOperation[];
   /** Queued adds retired because the member had unsubscribed at the provider. */
   suppressed?: number;
   processed: number;

@@ -146,6 +146,7 @@ export const formSubmissionStatSchema = z.object({
   uniqueAnswers: z.number(),
   entries: z.array(formSubmissionStatEntrySchema),
 });
+export type FormSubmissionStat = z.infer<typeof formSubmissionStatSchema>;
 
 const formReferenceSchema = z.object({
   id: z.string(),

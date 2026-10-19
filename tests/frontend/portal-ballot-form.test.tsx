@@ -89,9 +89,9 @@ async function settle(): Promise<void> {
   });
 }
 
-function buttonLabelled(root: ParentNode, label: string): HTMLButtonElement {
+function buttonLabeled(root: ParentNode, label: string): HTMLButtonElement {
   const found = [...root.querySelectorAll("button")].find((candidate) => candidate.textContent?.includes(label));
-  if (!found) throw new Error(`No button labelled ${label}`);
+  if (!found) throw new Error(`No button labeled ${label}`);
   return found;
 }
 
@@ -160,7 +160,7 @@ describe("BallotForm — election", () => {
       />,
     );
 
-    expect(buttonLabelled(root, "Cast ballot").disabled).toBe(true);
+    expect(buttonLabeled(root, "Cast ballot").disabled).toBe(true);
 
     const first = root.querySelector<HTMLInputElement>("input.pk-check__input");
     await act(async () => {
@@ -168,7 +168,7 @@ describe("BallotForm — election", () => {
       await Promise.resolve();
     });
 
-    expect(buttonLabelled(root, "Cast ballot").disabled).toBe(false);
+    expect(buttonLabeled(root, "Cast ballot").disabled).toBe(false);
   });
 
   it("sends a body the shared ballot contract accepts", async () => {
@@ -195,7 +195,7 @@ describe("BallotForm — election", () => {
       await Promise.resolve();
     });
     await act(async () => {
-      buttonLabelled(root, "Cast ballot").click();
+      buttonLabeled(root, "Cast ballot").click();
       await Promise.resolve();
     });
     await settle();
@@ -228,7 +228,7 @@ describe("BallotForm — election", () => {
       await Promise.resolve();
     });
     await act(async () => {
-      buttonLabelled(root, "Cast ballot").click();
+      buttonLabeled(root, "Cast ballot").click();
       await Promise.resolve();
     });
     await settle();
@@ -294,7 +294,7 @@ describe("BallotForm — motion", () => {
     expect(root.querySelector('[role="group"]')?.getAttribute("aria-label")).toBe("Update your ballot");
 
     await act(async () => {
-      buttonLabelled(root, "Opposed").click();
+      buttonLabeled(root, "Opposed").click();
       await Promise.resolve();
     });
 

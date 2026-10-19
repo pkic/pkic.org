@@ -326,12 +326,7 @@ export async function listBallotsForManager(
     bindings.push(...search.bindings);
   }
   const where = `WHERE ${conditions.join(" AND ")}`;
-  const orderBy = resolveMappedOrderBy(
-    query.sort,
-    ADMIN_BALLOT_SORT_COLUMNS,
-    "b.round ASC, b.submitted_at ASC",
-    "b.id ASC",
-  );
+  const orderBy = resolveMappedOrderBy(query.sort, ADMIN_BALLOT_SORT_COLUMNS, "b.submitted_at DESC", "b.id ASC");
   const pageQuery = {
     sql: `SELECT b.id, b.user_id, b.member_id, b.choice, b.round, b.submitted_at, b.updated_at
               FROM vote_ballots b ${where}`,

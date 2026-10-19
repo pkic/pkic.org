@@ -4,7 +4,7 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { formDefinitionCreateSchema } from "../../assets/shared/schemas/forms";
 import { FormDefinitionEditor } from "../../assets/ts/components/forms/FormDefinitionEditor";
-import { buttonNamed, controlFor, submitForm, typeInto } from "./helpers/labelled-control";
+import { buttonNamed, controlFor, submitForm, typeInto } from "./helpers/labeled-control";
 
 /** The per-field row names its controls with aria-label, not a visible label. */
 const FIELD_LABEL_INPUT = 'input[placeholder="What are you asking?"]';
@@ -86,6 +86,24 @@ describe("form definition editor", () => {
     expect(onSaved).toHaveBeenCalledWith("member-survey");
   });
 
+  it("shows the contract's refusal of a question on the question's own controls", async () => {
+    const onSave = vi.fn();
+    const container = mount(
+      <FormDefinitionEditor mode="create" detail={null} onSave={onSave} onSaved={vi.fn()} onCancel={() => undefined} />,
+    );
+    await typeInto(container.querySelector<HTMLElement>(FORM_TITLE_INPUT)!, "Member survey");
+    await typeInto(container.querySelector<HTMLElement>(FIELD_LABEL_INPUT)!, "Priority");
+    await typeInto(fieldKeyInput(container), "Not A Key");
+    await submitForm(container);
+
+    expect(onSave).not.toHaveBeenCalled();
+    // The fold holding the refused key opens, and the key is the field marked.
+    const key = fieldKeyInput(container);
+    expect(key.getAttribute("aria-invalid")).toBe("true");
+    expect(key.closest(".pk-field")?.querySelector(".pk-field__message")?.textContent).toBeTruthy();
+    expect(container.querySelector<HTMLElement>(FIELD_LABEL_INPUT)?.getAttribute("aria-invalid")).toBeNull();
+  });
+
   it("announces a rejected save in place and reports it to its owner", async () => {
     const onSave = vi.fn().mockRejectedValue(new Error("That key is already taken."));
     const onSaved = vi.fn();
@@ -105,7 +123,7 @@ describe("form definition editor", () => {
     await submitForm(container);
 
     // The failure reaches assistive technology as a live region, not as a
-    // colour beside the button.
+    // color beside the button.
     expect(container.querySelector('[role="alert"]')?.textContent).toContain("That key is already taken.");
     expect(onError).toHaveBeenCalledWith("That key is already taken.");
     expect(onSaved).not.toHaveBeenCalled();
@@ -139,7 +157,7 @@ describe("form definition editor", () => {
     expect(container.querySelector(FORM_TITLE_INPUT)).not.toBeNull();
     expect(container.querySelector('textarea[aria-label="Form description"]')).not.toBeNull();
 
-    // The question's own controls are labelled.
+    // The question's own controls are labeled.
     expect(controlFor(container, "Question")).not.toBeNull();
     expect(controlFor(container, "Answer type")).not.toBeNull();
     expect(fieldKeyInput(container)).not.toBeNull();

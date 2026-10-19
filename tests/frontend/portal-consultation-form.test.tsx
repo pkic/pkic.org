@@ -4,7 +4,7 @@
  * `FormSubmissionForm` every other form uses.
  *
  * What is worth asserting here is not the field renderer — that has its own
- * suite — but the two things this wrapper owns: that a question is labelled
+ * suite — but the two things this wrapper owns: that a question is labeled
  * by a real `for`/`id` pair, and that a rejected response is announced *and*
  * keeps what the person typed instead of clearing the form under them.
  */
@@ -13,7 +13,7 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { consultationFormSchema } from "../../assets/shared/schemas/votes";
 import { ConsultationResponseForm } from "../../assets/ts/member-flows/portal/sections/Votes/ConsultationForm";
-import { buttonNamed, controlFor, typeInto } from "./helpers/labelled-control";
+import { buttonNamed, controlFor, typeInto } from "./helpers/labeled-control";
 
 const mounted: HTMLElement[] = [];
 
@@ -84,7 +84,7 @@ describe("consultation response form", () => {
     );
 
     // Resolved through the label's `for` and the control's `id`, so the lookup
-    // fails exactly when the labelling contract is broken.
+    // fails exactly when the labeling contract is broken.
     expect(controlFor(container, "Your comment").tagName).toBe("INPUT");
     expect(container.textContent).toContain("You may change your response until the consultation closes.");
     expect(container.textContent).toContain("Tell the council what you think of the revised charter.");

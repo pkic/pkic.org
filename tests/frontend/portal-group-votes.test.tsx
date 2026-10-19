@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { GroupVotes } from "../../assets/ts/member-flows/portal/sections/management/GroupVotes";
 import { openConfirmation } from "./helpers/confirm-dialog";
-import { typeMarkdown } from "./helpers/labelled-control";
+import { typeMarkdown } from "./helpers/labeled-control";
 
 // The votes surface routes creation through the portal's hash location, so the
 // component needs one even when a test only exercises participation.

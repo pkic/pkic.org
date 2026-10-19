@@ -9,9 +9,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FormPlacement } from "../../assets/shared/schemas/forms";
 import { groupFormPlacementUpdateSchema } from "../../assets/shared/schemas/group-forms";
 import { GroupFormPlacementEditor } from "../../assets/ts/member-flows/portal/sections/management/GroupFormPlacementEditor";
-import { localDateTimeValue } from "../../assets/ts/shared/ui";
+import { browserTimeZone, localDateTimeValue } from "../../assets/ts/shared/ui";
 import { beginRecordEdit } from "./helpers/record-edit";
-import { buttonNamed, controlFor, labelNames, submitForm, typeInto } from "./helpers/labelled-control";
+import { buttonNamed, controlFor, labelNames, submitForm, typeInto } from "./helpers/labeled-control";
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const FORM_ID = "80000000-0000-4000-8000-000000000001";
@@ -179,12 +179,12 @@ describe("group form placement availability editor", () => {
     // The control speaks a wall clock with no zone attached, so the stored
     // instant arrives converted into the reader's own.
     const opens = controlFor(container, "Opens");
-    expect(opens.value).toBe(localDateTimeValue(placement.opensAt!));
+    expect(opens.value).toBe(localDateTimeValue(placement.opensAt!, browserTimeZone()));
     expect(opens.value).not.toContain("Z");
 
     // Whatever the reader types goes back out as UTC with millisecond
     // precision, which is the only shape the contract admits.
-    const closesLocal = localDateTimeValue("2026-12-01T15:30:00.000Z");
+    const closesLocal = localDateTimeValue("2026-12-01T15:30:00.000Z", browserTimeZone());
     await typeInto(controlFor(container, "Closes"), closesLocal);
     await submitForm(container);
 
@@ -208,7 +208,7 @@ describe("group form placement availability editor", () => {
     await beginRecordEdit(container, "Form availability actions");
 
     // An hour before the placement opens.
-    await typeInto(controlFor(container, "Closes"), localDateTimeValue("2026-09-01T08:00:00.000Z"));
+    await typeInto(controlFor(container, "Closes"), localDateTimeValue("2026-09-01T08:00:00.000Z", browserTimeZone()));
     await submitForm(container);
 
     // Nothing left the browser: the same schema the route parses refused it

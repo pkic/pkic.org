@@ -69,6 +69,28 @@ export const formAnswersSchema = z
 
 export type FormAnswers = z.infer<typeof formAnswersSchema>;
 
+/**
+ * Organization and job title come only from a person's identity. A form
+ * neither defines a field under these keys nor accepts an answer for them;
+ * a legacy field still stored under one is never asked.
+ */
+export const IDENTITY_OWNED_FORM_KEYS: readonly string[] = ["organization_name", "job_title"];
+export const IDENTITY_OWNED_FORM_KEY_MESSAGE =
+  "Organization and job title come from the person's identity, not from a form answer";
+
+export function isIdentityOwnedFormKey(key: string): boolean {
+  return IDENTITY_OWNED_FORM_KEYS.includes(key);
+}
+
+/** Answers a person submits: the canonical answer contract without identity-owned keys. */
+export const submittedFormAnswersSchema = formAnswersSchema.superRefine((answers, context) => {
+  for (const key of Object.keys(answers)) {
+    if (isIdentityOwnedFormKey(key)) {
+      context.addIssue({ code: "custom", path: [key], message: IDENTITY_OWNED_FORM_KEY_MESSAGE });
+    }
+  }
+});
+
 export const formAnswerEntrySchema = z.object({
   fieldId: databaseIdSchema,
   value: formAnswerValueSchema,

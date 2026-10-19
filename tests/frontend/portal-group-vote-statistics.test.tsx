@@ -101,7 +101,7 @@ describe("group vote statistics", () => {
     expect(container.textContent).toContain("Currently eligible8");
     expect(container.textContent).toContain("Currently eligible and not cast3");
     expect(container.textContent).toContain("Ballots without current eligibility: 1");
-    expect(container.textContent).toContain("in favor");
+    expect(container.textContent).toContain("In favor");
     expect(container.textContent).toContain("4");
   });
 

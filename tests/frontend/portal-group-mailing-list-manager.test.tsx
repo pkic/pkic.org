@@ -5,7 +5,7 @@
  *
  * What is asserted here is deliberately not "which classes are on which div":
  * it is what the surface promises a reader who cannot see it — the region's
- * name, the table's caption, a status stated in words rather than a colour,
+ * name, the table's caption, a status stated in words rather than a color,
  * the label/control pairs of the revealed form — plus the path where the
  * server refuses the write.
  */
@@ -25,7 +25,7 @@ const navigate = vi.fn();
 vi.mock("wouter/use-hash-location", () => ({
   useHashLocation: () => ["", navigate],
 }));
-import { controlFor, submitForm, typeInto } from "./helpers/labelled-control";
+import { controlFor, submitForm, typeInto } from "./helpers/labeled-control";
 import { rowActionControlNames, rowMenuTrigger } from "./helpers/row-actions";
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
@@ -134,7 +134,7 @@ describe("group mailing-list management surface", () => {
     const form = container.querySelector("form")!;
     expect(form.textContent).toContain("New group mailing list");
     // Resolving each control through its own `for`/`id` pair, so the lookup
-    // fails exactly when the labelling breaks.
+    // fails exactly when the labeling breaks.
     expect(controlFor(form, "Email").type).toBe("email");
     expect(controlFor(form, "Label").required).toBe(true);
     /*

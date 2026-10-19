@@ -1,6 +1,6 @@
 import { createExecutionContext, env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { isAppError } from "../functions/_lib/errors";
 import {
   groupVoteDetailResponseSchema,
@@ -273,6 +273,34 @@ describe("canonical group voting", () => {
     expect(await queryAll(env.DB, "SELECT title FROM votes WHERE id = ?", vote.id)).toEqual([
       { title: "Owner permission boundary" },
     ]);
+  });
+
+  it("lists identifiable ballots newest first by default", async () => {
+    const vote = await createCanonicalVote(env.DB, admin, { title: "Ordered ballot audit" });
+    const earlier = await createOrganizationCapacity(env.DB);
+    const later = await createOrganizationCapacity(env.DB);
+    for (const capacity of [earlier, later]) {
+      await joinVotingGroup(env.DB, TEST_GROUPS.pqc, capacity.userId, [capacity.memberId]);
+      await submitBallot(
+        env.DB,
+        await resolveAuthMember(env.DB, capacity.userId),
+        vote.id,
+        capacity.memberId,
+        "in_favor",
+        null,
+      );
+    }
+    await env.DB.prepare("UPDATE vote_ballots SET submitted_at = ? WHERE vote_id = ? AND member_id = ?")
+      .bind("2026-01-01T00:00:00.000Z", vote.id, earlier.memberId)
+      .run();
+    await env.DB.prepare("UPDATE vote_ballots SET submitted_at = ? WHERE vote_id = ? AND member_id = ?")
+      .bind("2026-01-02T00:00:00.000Z", vote.id, later.memberId)
+      .run();
+
+    const response = await call(adminToken, `/api/v1/groups/${TEST_GROUPS.pqc}/votes/${vote.id}/ballots`);
+    expect(response.status, await response.clone().text()).toBe(200);
+    const { ballots } = groupVoteBallotsAuditResponseSchema.parse(await response.json());
+    expect(ballots.map((ballot) => ballot.memberId)).toEqual([later.memberId, earlier.memberId]);
   });
 
   it("keeps identifiable ballots behind exact selected-group management", async () => {
@@ -1596,6 +1624,8 @@ describe("canonical group voting", () => {
     ]);
     expect(groupVotesPlan.map((row) => row.detail).join("\n")).toMatch(/idx_votes_group_schedule/);
     expect(groupVotesPlan.map((row) => row.detail).join("\n")).toMatch(/idx_vote_group_grants_group/);
+    // The group's votes open newest first.
+    expect(groupVotes.pageSql).toContain("ORDER BY vote.created_at DESC, vote.id ASC");
     const groupProposals = buildOffsetPageSql(
       buildGroupVoteProposalsPageQuery({ userId: admin.id, admin }, TEST_GROUPS.pqc, {
         limit: 20,
@@ -1648,7 +1678,7 @@ describe("canonical group voting", () => {
     expect(votingPolicyDetails).toMatch(/SEARCH active_user USING INDEX sqlite_autoindex_users_1/);
     expect(votingPolicyDetails).toMatch(/SEARCH active_category USING (?:COVERING )?INDEX/);
     expect(votingPolicyDetails).toMatch(
-      /SEARCH voting_membership_category USING INDEX sqlite_autoindex_membership_categories_1/,
+      /SEARCH voting_membership_category (?:EXISTS )?USING INDEX sqlite_autoindex_membership_categories_1/,
     );
     expect(votingPolicyDetails).toMatch(/SEARCH active_identity USING INDEX sqlite_autoindex_identities_1/);
     expect(votingPolicyDetails).toMatch(/SEARCH identity USING INDEX sqlite_autoindex_identities_1/);

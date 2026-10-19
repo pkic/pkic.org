@@ -252,9 +252,6 @@ describe("group mailing-list subscribers", () => {
     expect(first.subscribers.find((row) => row.user.id === representative.userId)?.user.organization_name).toBe(
       "Example Forms Organization, Example Keyfactor Organization",
     );
-    await env.DB.prepare("UPDATE users SET organization_name = 'Stale profile label' WHERE id IN (?, ?)")
-      .bind(representative.userId, individual.userId)
-      .run();
     await env.DB.prepare("UPDATE identities SET blocked_at = ?, ended_at = ? WHERE id = ?")
       .bind(new Date().toISOString(), new Date().toISOString(), secondIdentity)
       .run();

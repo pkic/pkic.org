@@ -1,7 +1,7 @@
 import { createExecutionContext, env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import { groupVoteStatisticsResponseSchema } from "../assets/shared/schemas/group-vote-statistics";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { isAppError } from "../functions/_lib/errors";
 import { getVoteStatisticsForManager, submitBallot } from "../functions/_lib/services/votes";
 import { VOTE_CURRENT_PARTICIPATION_STATISTICS_QUERY } from "../functions/_lib/services/votes/voter-eligibility";

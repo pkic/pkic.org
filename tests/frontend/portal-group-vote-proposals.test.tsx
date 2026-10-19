@@ -17,13 +17,14 @@ import {
   groupVoteProposalRejectSchema,
 } from "../../assets/shared/schemas/group-vote-proposals";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
+import { BreadcrumbScope } from "../../assets/ts/ui/BreadcrumbScope";
 import { GroupVoteProposalForm } from "../../assets/ts/member-flows/portal/sections/management/GroupVoteProposalForm";
 import {
   GroupVoteProposalRecord,
   GroupVoteProposals,
 } from "../../assets/ts/member-flows/portal/sections/management/GroupVoteProposals";
 import { confirmationButton, openConfirmation } from "./helpers/confirm-dialog";
-import { buttonNamed, controlFor as labeledControl, markdownControl, typeMarkdown } from "./helpers/labelled-control";
+import { buttonNamed, controlFor as labeledControl, markdownControl, typeMarkdown } from "./helpers/labeled-control";
 
 const { navigate } = vi.hoisted(() => ({ navigate: vi.fn() }));
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", navigate] }));
@@ -34,9 +35,13 @@ const VOTE_ID = "b0000000-0000-4000-8000-000000000001";
 const LIST_PATH = `/groups/${GROUP_ID}/votes/proposals`;
 const recordPath = (proposalId: string) => `${LIST_PATH}/${proposalId}`;
 
-/** The proposal's own page (#126), mounted the way the votes section mounts it. */
+/** The proposal's own page (#126), mounted the way the votes section mounts it: inside the group's trail. */
 function record() {
-  return <GroupVoteProposalRecord groupId={GROUP_ID} proposalId={PROPOSAL_ID} listPath={LIST_PATH} />;
+  return (
+    <BreadcrumbScope route="proposal" items={[{ label: "Groups", href: "#/groups" }]} label="Group navigation">
+      <GroupVoteProposalRecord groupId={GROUP_ID} proposalId={PROPOSAL_ID} listPath={LIST_PATH} />
+    </BreadcrumbScope>
+  );
 }
 
 /** The vote an approved proposal becomes; only its identity matters here. */
@@ -119,8 +124,18 @@ function confirmDialogButton(label: string): HTMLButtonElement {
   return button;
 }
 
+const mounted: HTMLElement[] = [];
+/** A container the next test unmounts, so no component of this one stays subscribed to shared state. */
+function mountPoint(): HTMLElement {
+  const container = document.createElement("div");
+  document.body.append(container);
+  mounted.push(container);
+  return container;
+}
+
 afterEach(() => {
   navigate.mockReset();
+  for (const container of mounted.splice(0)) render(null, container);
   document.body.replaceChildren();
   vi.unstubAllGlobals();
 });
@@ -143,8 +158,7 @@ describe("selected-group vote proposals", () => {
         headers: { "content-type": "application/json" },
       });
 
-    const container = document.createElement("div");
-    document.body.append(container);
+    const container = mountPoint();
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => empty()),
@@ -193,8 +207,7 @@ describe("selected-group vote proposals", () => {
           : Response.json({ proposals: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } });
       }),
     );
-    const container = document.createElement("div");
-    document.body.append(container);
+    const container = mountPoint();
 
     /*
      * Proposing is a page of its own now, so the list's action navigates
@@ -266,8 +279,7 @@ describe("selected-group vote proposals", () => {
         });
       }),
     );
-    const container = document.createElement("div");
-    document.body.append(container);
+    const container = mountPoint();
     await act(() =>
       render(
         <>
@@ -321,8 +333,7 @@ describe("selected-group vote proposals", () => {
         });
       }),
     );
-    const container = document.createElement("div");
-    document.body.append(container);
+    const container = mountPoint();
     await act(() =>
       render(
         <>
@@ -364,8 +375,7 @@ describe("selected-group vote proposals", () => {
         });
       }),
     );
-    const container = document.createElement("div");
-    document.body.append(container);
+    const container = mountPoint();
     await act(() =>
       render(
         <GroupVoteProposals groupId={GROUP_ID} canParticipate={false} onPropose={() => {}} recordPath={recordPath} />,
@@ -389,8 +399,9 @@ describe("selected-group vote proposals", () => {
     await act(() => render(record(), container));
     await settle();
     await settle();
-    expect(container.querySelector("h2")?.textContent).toBe(managedProposal.title);
-    expect(container.querySelector('nav[aria-label="Breadcrumb"]')?.textContent).toContain("Proposals");
+    // Under the group hero the proposal heads its own content one level down.
+    expect(container.querySelector("h3")?.textContent).toBe(managedProposal.title);
+    expect(container.querySelector('nav[aria-label="Group navigation"]')?.textContent).toContain("Proposals");
     expect(namedRegion(container, managedProposal.title)).toBeTruthy();
     // The rejection reason is a required, described control, not a bare box.
     const reason = await markdownControl(container, "Rejection reason");
@@ -422,8 +433,7 @@ describe("selected-group vote proposals", () => {
         });
       }),
     );
-    const container = document.createElement("div");
-    document.body.append(container);
+    const container = mountPoint();
     await act(() => render(record(), container));
     await settle();
     await settle();

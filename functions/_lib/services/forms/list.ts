@@ -1,4 +1,4 @@
-/** Bounded form-definition catalogue shared by global and event routes. */
+/** Bounded form-definition catalog shared by global and event routes. */
 import { queryPage, type OffsetPageQuery } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
@@ -14,7 +14,7 @@ const FORMS_LIST_FROM = `
   LEFT JOIN events e ON e.id = f.scope_ref AND f.scope_type = 'event'
 `;
 
-/** Build the bounded catalogue page/count pair without joining every field to every submission. */
+/** Build the bounded catalog page/count pair without joining every field to every submission. */
 export function buildFormsPageQuery(
   params: FormsListQuery & {
     eventId?: string;
