@@ -13,11 +13,12 @@
  * rule (a live status badge, like the donation flow's, isn't meaningful
  * here since payment alone never grants anything).
  */
-import { postJson } from "../shared/api-client";
+import { getJson, postJson } from "../shared/api-client";
 import { installLiveValidation, validateBeforeSubmit } from "../shared/form/validation";
 import { withLoadingButton, handleSubmitError } from "../shared/form/submit";
 import { readField, findSubmitButton, setStatus } from "../shared/form/helpers";
-import { sponsorshipCheckoutResponseSchema } from "../../shared/schemas/sponsorship";
+import { sponsorshipCheckoutResponseSchema, sponsorshipCheckoutSchema } from "../../shared/schemas/sponsorship";
+import { publicSponsorTiersResponseSchema } from "../../shared/schemas/sponsors";
 
 const API_BASE_FALLBACK = "/api/v1";
 
@@ -26,15 +27,34 @@ function currentBasePath(): string {
   return path.endsWith("/") ? path : `${path}/`;
 }
 
-async function main(): Promise<void> {
-  const root = document.querySelector<HTMLElement>("[data-event-sponsor-checkout]");
-  if (!root) return;
+export async function initializeEventSponsorCheckout(root: HTMLElement): Promise<void> {
   const form = root.querySelector<HTMLFormElement>("#sponsorCheckoutForm");
   const statusEl = root.querySelector<HTMLElement>("[data-flow-status]");
   if (!form || !statusEl) return;
 
   const apiBase = root.dataset.apiBase ?? API_BASE_FALLBACK;
   const eventSlug = root.dataset.eventSlug ?? "";
+  const tierSelect = form.elements.namedItem("tier");
+  const submitButton = findSubmitButton(form);
+  if (!(tierSelect instanceof HTMLSelectElement)) return;
+  if (!eventSlug) {
+    setStatus(statusEl, "This page is not configured with an event — sponsorship checkout is unavailable.", true);
+    return;
+  }
+  try {
+    const catalog = await getJson(`${apiBase}/sponsors/tiers?sponsorType=event`, publicSponsorTiersResponseSchema);
+    if (catalog.sponsorType !== "event" || !catalog.tiers.length)
+      throw new Error("Event sponsorship options unavailable");
+    const placeholder = new Option("Select a sponsorship tier", "", true, true);
+    placeholder.disabled = true;
+    tierSelect.replaceChildren(placeholder);
+    for (const { tier } of catalog.tiers) tierSelect.append(new Option(tier, tier));
+    tierSelect.disabled = false;
+    if (submitButton) submitButton.disabled = false;
+  } catch {
+    setStatus(statusEl, "Sponsorship options are temporarily unavailable. Please try again later.", true);
+    return;
+  }
   let checkoutAttemptId = crypto.randomUUID();
 
   form.addEventListener("input", () => {
@@ -61,7 +81,7 @@ async function main(): Promise<void> {
 
         const data = await postJson(
           `${apiBase}/sponsors/checkouts`,
-          {
+          sponsorshipCheckoutSchema.parse({
             checkoutAttemptId,
             contactName: [firstName, lastName].filter(Boolean).join(" "),
             contactEmail: readField(form, "email"),
@@ -70,7 +90,7 @@ async function main(): Promise<void> {
             eventId: eventSlug,
             successPath: `${basePath}complete/`,
             cancelPath: basePath,
-          },
+          }),
           sponsorshipCheckoutResponseSchema,
         );
 
@@ -82,4 +102,5 @@ async function main(): Promise<void> {
   });
 }
 
-void main();
+const root = document.querySelector<HTMLElement>("[data-event-sponsor-checkout]");
+if (root) void initializeEventSponsorCheckout(root);

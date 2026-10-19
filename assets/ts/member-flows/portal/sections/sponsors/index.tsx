@@ -1,8 +1,11 @@
-import { useState } from "preact/hooks";
+import { useHashQueryParam } from "../../../../hooks/useHashQueryParam";
 import type { SponsorCapacity } from "../../../../../shared/schemas/sponsor-access";
-import { EmptyState } from "../../../../ui/RecordEmptyState";
+import { EmptyState } from "../../../../ui/EmptyState";
 import { Tabs } from "../../../../components/Tabs";
 import { PageHeader } from "../../../../ui/PageHeader";
+import { ButtonLink } from "../../../../ui/Button";
+import { usePortalHashLocation } from "../../hash-location";
+import { hasEventAgendaPermission } from "../events/event-agenda-access";
 import { Field } from "../../../../ui/Field";
 import { Select } from "../../../../ui/TextControl";
 import { SponsorAttendees } from "./Attendees";
@@ -39,8 +42,16 @@ export function SponsorWorkspace({
 }) {
   const canManage = canRead || canWrite;
   const hasAttendeesCapacity = sponsors.length > 0;
-  const [view, setView] = useState<SponsorWorkspaceView>(() => (canManage ? "management" : "attendees"));
-  const [selectedSponsorId, setSelectedSponsorId] = useState(() => sponsors[0]?.sponsorId ?? "");
+  const [view, setView] = useHashQueryParam<SponsorWorkspaceView>(
+    "sponsorView",
+    canManage ? "management" : "attendees",
+    ["management", "attendees", "settings"],
+  );
+  const [selectedSponsorId, setSelectedSponsorId] = useHashQueryParam(
+    "sponsorship",
+    sponsors[0]?.sponsorId ?? "",
+    sponsors.map((sponsor) => sponsor.sponsorId),
+  );
   const selectedSponsor = sponsors.find((capacity) => capacity.sponsorId === selectedSponsorId) ?? sponsors[0] ?? null;
 
   if (!canManage && sponsors.length === 0) {
@@ -76,7 +87,23 @@ export function SponsorWorkspace({
     <div class="pk pk-stack">
       {/* The section root opens with the anatomy's first region; a selected
           sponsorship replaces the whole surface and brings its own header. */}
-      {!detailId && <PageHeader title="Sponsors" />}
+      {!detailId && (
+        <PageHeader
+          title="Sponsors"
+          actions={
+            selectedSponsor &&
+            hasEventAgendaPermission(selectedSponsor.eventId, "agenda:leads_capture", selectedSponsor.sponsorId) && (
+              <ButtonLink
+                href={usePortalHashLocation.hrefs(
+                  `/events/${encodeURIComponent(selectedSponsor.eventSlug)}/sponsors/${encodeURIComponent(selectedSponsor.sponsorId)}/scanner`,
+                )}
+              >
+                Lead scanner
+              </ButtonLink>
+            )
+          }
+        />
+      )}
       {showTabs && (
         <Tabs
           items={tabs.map((item) => ({ key: item.key, label: item.label, panelId: `${TAB_PREFIX}-${item.key}-panel` }))}

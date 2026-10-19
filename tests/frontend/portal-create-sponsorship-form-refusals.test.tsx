@@ -25,7 +25,7 @@ import {
   signInAsDirectoryReader,
   stubFetch,
 } from "./helpers/create-sponsorship-form";
-import { buttonNamed, chooseComboboxOption, controlFor, submitForm, typeInto } from "./helpers/labelled-control";
+import { buttonNamed, chooseComboboxOption, controlFor, submitForm, typeInto } from "./helpers/labeled-control";
 
 afterEach(cleanupForm);
 

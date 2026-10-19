@@ -138,7 +138,9 @@ export interface SponsorshipDueWorkResult {
 }
 
 const SPONSORSHIP_SELECTION_STATEMENTS = 1;
-const SPONSORSHIP_MAX_ACTION_STATEMENTS = 6;
+// Select no more rows than could fit at the cheapest action size. Each
+// reminder or (larger) lapse batch is checked against its actual statement count.
+const SPONSORSHIP_MIN_ACTION_STATEMENTS = 6;
 
 export async function runSponsorshipDueWork(
   db: DatabaseLike,
@@ -152,7 +154,7 @@ export async function runSponsorshipDueWork(
   const budgetBoundedLimit = d1QueryBudget
     ? Math.floor(
         Math.max(0, d1QueryBudget.remainingQueries() - SPONSORSHIP_SELECTION_STATEMENTS) /
-          SPONSORSHIP_MAX_ACTION_STATEMENTS,
+          SPONSORSHIP_MIN_ACTION_STATEMENTS,
       )
     : requestedLimit;
   const boundedLimit = Math.min(requestedLimit, budgetBoundedLimit);

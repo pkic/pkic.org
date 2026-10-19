@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
-import app from "../functions/router";
+import { callApi } from "./helpers/app";
 import { resetDb } from "./helpers/reset-db";
 import { createContext } from "./helpers/context";
 import { handleError } from "../functions/_lib/http";
@@ -20,7 +20,7 @@ async function callEndpoint(handler: (c: any) => Promise<Response>, ctx: any): P
 // so it must be exercised through the real router — not by calling its
 // onRequestGet handler directly, which would leave data.query unpopulated.
 async function callSponsorsList(url: string): Promise<Response> {
-  return app.fetch(new Request(url), env as any, { passThroughOnException: () => {}, waitUntil: () => {} } as any);
+  return callApi(env, new Request(url));
 }
 
 function getRequest(url: string) {
@@ -377,7 +377,7 @@ describe("GET /api/v1/sponsors (public consortium + event sponsors)", () => {
 
     const response = await callSponsorsList("https://pkic.org/api/v1/sponsors");
     const body = (await response.json()) as { sponsors: Array<{ logoUrl: string | null }> };
-    expect(body.sponsors[0].logoUrl).toBe(`/api/v1/members/${orgId}/logo`);
+    expect(body.sponsors[0].logoUrl).toBe(`/api/v1/members/${orgId}/logo?v=logo.png`);
   });
 });
 

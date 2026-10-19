@@ -1,3 +1,4 @@
+import { formatNumber } from "../../../../../shared/format-number";
 /**
  * Share links — who is promoting the donation page, and what their links
  * brought in.
@@ -9,7 +10,7 @@
  * Seven ranked measures per promoter are tabular data, so this is a DataTable:
  * one caption instead of N unnamed card regions, column headers instead of a
  * `lbl` div, and columns that line up so the numbers can be compared down the
- * list. The rank tiers used to signal with colour alone; the rank number and
+ * list. The rank tiers used to signal with color alone; the rank number and
  * the column header carry it instead.
  */
 import { useState } from "preact/hooks";
@@ -30,6 +31,7 @@ import { formatDonationAmount } from "./model";
 // writes the class name has to import the stylesheet itself, or the share-link
 // code renders in the body face once the page stops loading Bootstrap.
 import "../../../../ui/Content.css";
+import { ExternalLink } from "../../../../ui/ExternalLink";
 
 interface RankedPromoterRow extends PromoterRow {
   rank: number;
@@ -56,13 +58,13 @@ function totalImpact(promoter: PromoterRow): string {
 const PROMOTER_COLUMNS: Array<Column<RankedPromoterRow>> = [
   {
     header: "Rank",
-    className: "pk-end",
+    align: "end",
     width: "fit",
     // The number is the content, so the tone is emphasis rather than the only
     // thing distinguishing the top three from the rest.
     cell: (row) => (
       <Badge tone={row.rank <= 3 ? "accent" : "neutral"} dot={false}>
-        {row.rank}
+        {formatNumber(row.rank)}
       </Badge>
     ),
   },
@@ -76,36 +78,36 @@ const PROMOTER_COLUMNS: Array<Column<RankedPromoterRow>> = [
         <span>{row.name ?? "Anonymous"}</span>
         {/* Root-relative, so the link resolves against the origin without the
             component reaching for `window` while it renders. */}
-        <a class="pk-mono pk-small pk-break" href={`/donate/r/${row.code}`} target="_blank" rel="noopener">
+        <ExternalLink class="pk-mono pk-small pk-break" href={`/donate/r/${row.code}`} external>
           /donate/r/{row.code}
-        </a>
+        </ExternalLink>
       </div>
     ),
   },
-  { header: "Own donation", className: "pk-end", width: "fit", cell: (row) => ownAmount(row) },
-  { header: "Link clicks", className: "pk-end", width: "fit", cell: (row) => row.clicks },
+  { header: "Own donation", align: "end", width: "fit", cell: (row) => ownAmount(row) },
+  { header: "Link clicks", align: "end", width: "fit", cell: (row) => formatNumber(row.clicks) },
   {
     header: "Referred donors",
-    className: "pk-end",
+    align: "end",
     width: "fit",
     cell: (row) =>
       row.attributed_total > row.attributed_completed ? (
         <>
-          {row.attributed_completed} <span class="pk-small">of {row.attributed_total}</span>
+          {formatNumber(row.attributed_completed)} <span class="pk-small">of {formatNumber(row.attributed_total)}</span>
         </>
       ) : (
-        row.attributed_completed
+        formatNumber(row.attributed_completed)
       ),
   },
   {
     header: "Referred amount",
-    className: "pk-end",
+    align: "end",
     width: "fit",
     cell: (row) => referredAmount(row),
   },
   {
     header: "Total impact",
-    className: "pk-end",
+    align: "end",
     width: "fit",
     cell: (row) => <span class="pk-strong">{totalImpact(row)}</span>,
   },
@@ -133,10 +135,10 @@ function ShareLinksView() {
       <PageHeader title="Share links" />
       {summary && summary.promoterCount > 0 && (
         <div class="pk-stat-row">
-          <StatCard label="Share links" value={String(summary.promoterCount)} />
+          <StatCard label="Share links" value={formatNumber(summary.promoterCount)} />
           <StatCard label="Own donations" value={formatDonationAmount(summary.totalOwnGrossUsd, "usd")} />
-          <StatCard label="Link clicks" value={String(summary.totalClicks)} />
-          <StatCard label="Referred donors" value={String(summary.totalAttributedCompleted)} />
+          <StatCard label="Link clicks" value={formatNumber(summary.totalClicks)} />
+          <StatCard label="Referred donors" value={formatNumber(summary.totalAttributedCompleted)} />
           <StatCard label="Referred amount" value={formatDonationAmount(summary.totalAttributedGrossUsd, "usd")} />
         </div>
       )}
@@ -144,6 +146,7 @@ function ShareLinksView() {
       <Panel>
         <PanelHeader title="Promoter leaderboard" headingLevel={2} />
         <ApiDataTable
+          urlState="donation-promoters"
           caption="Promoter share links, ranked by total impact"
           endpoint="/api/v1/donations/promoters"
           responseSchema={donationPromotersListResponseSchema}

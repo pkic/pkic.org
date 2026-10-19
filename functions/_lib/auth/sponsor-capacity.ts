@@ -18,7 +18,7 @@ import {
   type VerifiedEmailAuthCapability,
 } from "./email-auth-capabilities";
 
-interface SponsorshipCapacityRow {
+export interface SponsorshipCapacityRow {
   id: string;
   event_id: string;
   event_slug: string;
@@ -27,9 +27,11 @@ interface SponsorshipCapacityRow {
   contact_email: string;
 }
 
-const ACTIVE_EVENT_SPONSORSHIP_SQL = `
+export const ACTIVE_EVENT_SPONSORSHIP_SQL = `
   s.sponsor_type = 'event'
   AND s.pipeline_stage = 'active'
+  AND s.ended_reason IS NULL
+  AND (s.renewal_date IS NULL OR s.renewal_date > strftime('%Y-%m-%d','now'))
   AND s.event_id IS NOT NULL
   AND s.contact_email IS NOT NULL
 `;
@@ -47,7 +49,7 @@ const USER_SPONSOR_EMAILS_CTE = `
   )
 `;
 
-function toSponsorCapacity(row: SponsorshipCapacityRow): SponsorCapacity {
+export function toSponsorCapacity(row: SponsorshipCapacityRow): SponsorCapacity {
   return {
     sponsorId: row.id,
     eventId: row.event_id,

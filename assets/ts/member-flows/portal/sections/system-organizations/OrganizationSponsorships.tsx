@@ -10,7 +10,7 @@ import { usePortalHashLocation } from "../../hash-location";
 import { sponsorshipsListResponseSchema, type Sponsorship } from "../../../../../shared/schemas/sponsorship-management";
 import { ApiDataTable } from "../../../../components/ApiDataTable";
 import { Badge } from "../../../../components/Badge";
-import { EmptyState } from "../../../../ui/RecordEmptyState";
+import { EmptyState } from "../../../../ui/EmptyState";
 import type { Column } from "../../../../components/Table";
 import { fmtCalendarDate } from "../../ui";
 
@@ -54,6 +54,7 @@ const COLUMNS: Column<Sponsorship>[] = [
 export function OrganizationSponsorships({ organizationId }: { organizationId: string }) {
   return (
     <ApiDataTable
+      urlState="organization-sponsorships"
       caption="Sponsorships"
       endpoint="/api/v1/sponsors"
       params={{ visibility: "all", organizationId }}

@@ -1,3 +1,4 @@
+import { PersonCell } from "../../../../ui/PersonCell";
 /**
  * Donations — the donation list, and the address that decides which of the
  * section's pages a reader is on.
@@ -96,7 +97,6 @@ function DonationSyncActions({
     <div class="pk-cluster">
       {pending !== undefined && pending > 0 && (
         <Button
-          size="sm"
           variant="secondary"
           loading={syncing === "pending"}
           disabled={syncing !== null}
@@ -106,7 +106,6 @@ function DonationSyncActions({
         </Button>
       )}
       <Button
-        size="sm"
         variant="primary"
         loading={syncing === "all"}
         disabled={syncing !== null || (syncable !== undefined && syncable === 0)}
@@ -191,12 +190,7 @@ function DonationList({ canSync }: { canSync: boolean }) {
   const columns: Column<DonationRow>[] = [
     {
       header: "Donor",
-      cell: (d) => (
-        <>
-          {d.name}
-          {d.organization && <span class="pk-small"> — {d.organization}</span>}
-        </>
-      ),
+      cell: (d) => <PersonCell name={d.name ?? d.email ?? "Donor"} organization={d.organization} size="sm" />,
       sort: { asc: "name", desc: "-name" },
     },
     {

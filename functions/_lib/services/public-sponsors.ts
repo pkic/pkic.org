@@ -1,3 +1,5 @@
+import { consortiumLogoCandidatesSql } from "./sponsorship/logo-eligibility";
+import { versionedImagePath } from "./image-cache";
 import { buildPageInfo } from "../../../assets/shared/schemas/pagination";
 import type {
   SponsorsDisplayResponse,
@@ -8,6 +10,7 @@ import { sanitizeLegacyHttpUrl } from "../../../assets/shared/schemas/urls";
 import { buildD1TextSearchFilter } from "../db/search";
 import { resolveMappedOrderBy } from "../db/sort";
 import { AppError } from "../errors";
+import { first } from "../db/queries";
 import type { DatabaseLike } from "../types";
 
 /**
@@ -15,32 +18,32 @@ import type { DatabaseLike } from "../types";
  * filtered, sorted, counted, and paged in D1. Tier display weights come from
  * sponsorship_tier_catalog rather than a frontend constant.
  */
-const PUBLIC_SPONSOR_READ_MODEL_CTE = `
-  WITH selected_event AS (
+function publicSponsorReadModelCte(source: "sponsorships" | "publication_sponsorships" = "sponsorships"): string {
+  return `
+  WITH sponsor_clock AS (SELECT strftime('%Y-%m-%dT%H:%M:%fZ','now') AS at), selected_event AS (
     __SELECTED_EVENT__
+  ), consortium_candidates AS (
+    ${consortiumLogoCandidatesSql(source)}
+  ), ranked_consortium AS (
+    SELECT candidate.sponsorship_id,candidate.organization_id,candidate.tier,candidate.logo_priority,candidate.logo_order,candidate.logo_revision,ROW_NUMBER() OVER (
+      PARTITION BY COALESCE(organization_id,sponsorship_id)
+      ORDER BY logo_priority,logo_order DESC,logo_revision DESC,sponsorship_id) AS logo_rank
+    FROM consortium_candidates candidate
   ), consortium_rows AS (
-    SELECT 'org:' || o.id AS sponsor_key,
-           o.id,
-           o.name,
-           o.website,
-           o.logo_r2_key,
-           NULL AS sponsorship_logo_r2_key,
-           o.sponsor_tier AS tier
-      FROM organizations o
-     WHERE o.sponsor_tier IS NOT NULL
+    SELECT CASE WHEN sp.organization_id IS NOT NULL THEN 'org:'||sp.organization_id
+             ELSE 'sponsorship:'||sp.id END AS sponsor_key,
+           COALESCE(o.id,sp.id) AS id,COALESCE(o.name,sp.non_member_name) AS name,
+           COALESCE(o.website,sp.non_member_website) AS website,o.logo_r2_key,
+           sp.non_member_logo_r2_key AS sponsorship_logo_r2_key,candidate.tier
+    FROM ranked_consortium candidate JOIN ${source} sp ON sp.id=candidate.sponsorship_id
+      LEFT JOIN organizations o ON o.id=sp.organization_id
+    WHERE candidate.logo_rank=1 AND (o.id IS NOT NULL OR sp.non_member_name IS NOT NULL)
     UNION ALL
-    SELECT 'sponsorship:' || sp.id AS sponsor_key,
-           sp.id,
-           sp.non_member_name AS name,
-           sp.non_member_website AS website,
-           NULL AS logo_r2_key,
-           sp.non_member_logo_r2_key AS sponsorship_logo_r2_key,
-           sp.tier
-      FROM sponsorships sp
-     WHERE sp.sponsor_type = 'consortium'
-       AND sp.organization_id IS NULL
-       AND sp.pipeline_stage = 'active'
-       AND sp.non_member_name IS NOT NULL
+    SELECT 'org:'||o.id,o.id,o.name,o.website,o.logo_r2_key,NULL,o.sponsor_tier
+    FROM organizations o
+    WHERE o.sponsor_tier IS NOT NULL
+      AND NOT EXISTS(SELECT 1 FROM ${source} sp WHERE sp.sponsor_type='consortium' AND sp.organization_id=o.id)
+      AND NOT EXISTS(SELECT 1 FROM selected_event,sponsor_clock WHERE ends_at<=sponsor_clock.at)
   ), ranked_event_rows AS (
     SELECT CASE
              WHEN sp.organization_id IS NOT NULL THEN 'org:' || sp.organization_id
@@ -56,11 +59,13 @@ const PUBLIC_SPONSOR_READ_MODEL_CTE = `
              PARTITION BY COALESCE(sp.organization_id, sp.id)
              ORDER BY sp.updated_at DESC, sp.id ASC
            ) AS event_rank
-      FROM sponsorships sp
+      FROM ${source} sp
       JOIN selected_event e ON e.id = sp.event_id
       LEFT JOIN organizations o ON o.id = sp.organization_id
      WHERE sp.sponsor_type = 'event'
-       AND sp.pipeline_stage = 'active'
+       AND (sp.pipeline_stage = 'active' OR (sp.pipeline_stage='lapsed' AND sp.ended_reason='ordinary_expiry'
+         AND EXISTS(SELECT 1 FROM sponsorship_periods period WHERE period.sponsorship_id=sp.id)))
+       AND (sp.ended_reason IS NULL OR sp.ended_reason='ordinary_expiry')
        AND (sp.organization_id IS NOT NULL OR sp.non_member_name IS NOT NULL)
   ), event_rows AS (
     SELECT sponsor_key, id, name, website, logo_r2_key, sponsorship_logo_r2_key, event_tier
@@ -98,8 +103,45 @@ const PUBLIC_SPONSOR_READ_MODEL_CTE = `
        AND event_tier.tier = rows.event_tier
        AND event_tier.active = 1
   )`;
+}
 
-export type PublicSponsorEventIdentity = Pick<SponsorsListQuery, "eventSlug" | "eventName">;
+export type PublicSponsorEventIdentity = Pick<SponsorsListQuery, "eventSlug" | "eventName"> & { eventId?: string };
+
+const PUBLIC_SPONSOR_WEIGHT_SQL = "effective_weight > 0";
+
+function publicSponsorPredicate(sponsorKeySql: string, eventContextsSql: string): string {
+  const perEvent = publicSponsorReadModelCte().replace(
+    "__SELECTED_EVENT__",
+    "SELECT id,starts_at,ends_at FROM events WHERE id=publication_context.event_id",
+  );
+  return `EXISTS(SELECT 1 FROM (
+    SELECT NULL AS event_id UNION ${eventContextsSql}
+    ) publication_context WHERE EXISTS(${perEvent}
+      SELECT 1 FROM enriched_sponsors WHERE sponsor_key=${sponsorKeySql} AND ${PUBLIC_SPONSOR_WEIGHT_SQL}))`;
+}
+
+/** Stable public projection for comparing a non-member patch in its default/event contexts. */
+export function publicSponsorPublicationProjection(source: "sponsorships" | "publication_sponsorships"): string {
+  const model = publicSponsorReadModelCte(source).replace(
+    "__SELECTED_EVENT__",
+    "SELECT id,starts_at,ends_at FROM events WHERE id=publication_context.event_id",
+  );
+  return `${model} SELECT json_group_array(json_array(sponsor_key,id,name,website,logo_r2_key,
+    sponsorship_logo_r2_key,tier,event_tier,effective_tier,effective_weight,max_weight)) FROM (
+      SELECT sponsor_key,id,name,website,logo_r2_key,sponsorship_logo_r2_key,tier,event_tier,
+        effective_tier,effective_weight,max_weight FROM enriched_sponsors
+      WHERE id=COALESCE(publication_subject.organization_id,publication_subject.id) AND ${PUBLIC_SPONSOR_WEIGHT_SQL} ORDER BY sponsor_key)`;
+}
+
+/** Any existing public view: default consortium plus each event this organization can sponsor. */
+export function publicOrganizationSponsorPredicate(alias: "organization"): string {
+  return publicSponsorPredicate(`'org:'||${alias}.id`, "SELECT id AS event_id FROM events");
+}
+
+/** Reuse the public read model without confusing non-member and organization identities. */
+export function publicNonMemberSponsorPredicate(alias: "sponsorship"): string {
+  return publicSponsorPredicate(`'sponsorship:'||${alias}.id`, "SELECT id AS event_id FROM events");
+}
 
 /**
  * Select an event by stable canonical slug whenever available. Name matching is
@@ -111,28 +153,40 @@ export function buildPublicSponsorReadModel(identity: PublicSponsorEventIdentity
   sql: string;
   bindings: unknown[];
 } {
+  if (identity.eventId) {
+    return {
+      sql: publicSponsorReadModelCte().replace(
+        "__SELECTED_EVENT__",
+        "SELECT id,starts_at,ends_at FROM events WHERE id = ? LIMIT 1",
+      ),
+      bindings: [identity.eventId],
+    };
+  }
   if (identity.eventSlug) {
     return {
-      sql: PUBLIC_SPONSOR_READ_MODEL_CTE.replace("__SELECTED_EVENT__", "SELECT id FROM events WHERE slug = ? LIMIT 1"),
+      sql: publicSponsorReadModelCte().replace(
+        "__SELECTED_EVENT__",
+        "SELECT id,starts_at,ends_at FROM events WHERE slug = ? LIMIT 1",
+      ),
       bindings: [identity.eventSlug],
     };
   }
   if (identity.eventName) {
     return {
-      sql: PUBLIC_SPONSOR_READ_MODEL_CTE.replace(
+      sql: publicSponsorReadModelCte().replace(
         "__SELECTED_EVENT__",
-        "SELECT id FROM events WHERE lower(replace(name, ' - ', ' ')) = lower(replace(?, ' - ', ' ')) ORDER BY starts_at DESC, id ASC LIMIT 1",
+        "SELECT id,starts_at,ends_at FROM events WHERE lower(replace(name, ' - ', ' ')) = lower(replace(?, ' - ', ' ')) ORDER BY starts_at DESC, id ASC LIMIT 1",
       ),
       bindings: [identity.eventName],
     };
   }
   return {
-    sql: PUBLIC_SPONSOR_READ_MODEL_CTE.replace("__SELECTED_EVENT__", "SELECT id FROM events WHERE 0"),
+    sql: publicSponsorReadModelCte().replace("__SELECTED_EVENT__", "SELECT id,starts_at,ends_at FROM events WHERE 0"),
     bindings: [],
   };
 }
 
-interface SponsorRow {
+export interface SponsorRow {
   id: string;
   name: string;
   website: string | null;
@@ -146,10 +200,27 @@ interface SponsorRow {
 
 export type PublicSponsorListOptions = SponsorsListQuery;
 
+export function publicSponsorFromRow(row: SponsorRow) {
+  return {
+    id: row.id,
+    name: row.name,
+    website: sanitizeLegacyHttpUrl(row.website),
+    logoUrl: row.logo_r2_key
+      ? versionedImagePath(`/api/v1/members/${row.id}/logo`, row.logo_r2_key)
+      : versionedImagePath(`/api/v1/sponsors/${row.id}/logo`, row.sponsorship_logo_r2_key),
+    tier: row.tier,
+    eventTier: row.event_tier,
+    effectiveTier: row.effective_tier,
+    weight: row.effective_weight,
+  };
+}
+
 async function rejectAmbiguousLegacyEventName(db: DatabaseLike, eventName?: string): Promise<void> {
   if (!eventName) return;
   const matches = await db
-    .prepare("SELECT id FROM events WHERE lower(replace(name, ' - ', ' ')) = lower(replace(?, ' - ', ' ')) LIMIT 2")
+    .prepare(
+      "SELECT id,starts_at,ends_at FROM events WHERE lower(replace(name, ' - ', ' ')) = lower(replace(?, ' - ', ' ')) LIMIT 2",
+    )
     .bind(eventName)
     .all<{ id: string }>();
   if (matches.results.length > 1) {
@@ -162,7 +233,7 @@ async function rejectAmbiguousLegacyEventName(db: DatabaseLike, eventName?: stri
 }
 
 function buildFilter(options: PublicSponsorListOptions): { sql: string; bindings: unknown[] } {
-  const clauses = ["effective_weight > 0"];
+  const clauses = [PUBLIC_SPONSOR_WEIGHT_SQL];
   const bindings: unknown[] = [];
 
   if (options.q) {
@@ -268,20 +339,7 @@ export async function listPublicSponsors(
   );
   const { rows, total } = await querySponsorPage(db, options, filter, orderBy);
 
-  const sponsors = rows.map((row) => ({
-    id: row.id,
-    name: row.name,
-    website: sanitizeLegacyHttpUrl(row.website),
-    logoUrl: row.logo_r2_key
-      ? `/api/v1/members/${row.id}/logo`
-      : row.sponsorship_logo_r2_key
-        ? `/api/v1/sponsors/${row.id}/logo`
-        : null,
-    tier: row.tier,
-    eventTier: row.event_tier,
-    effectiveTier: row.effective_tier,
-    weight: row.effective_weight,
-  }));
+  const sponsors = rows.map(publicSponsorFromRow);
   return { sponsors, page: buildPageInfo(options.limit, options.offset, total, sponsors.length) };
 }
 
@@ -306,8 +364,21 @@ export async function listPublicSponsorDisplay(
   };
 }
 
-/** `id` is a sponsorship id; organization logos use GET /api/v1/members/:id/logo. */
-export async function getNonMemberSponsorLogoR2Key(db: DatabaseLike, id: string): Promise<string | null> {
-  const result = await db.prepare(`SELECT non_member_logo_r2_key FROM sponsorships WHERE id = ?`).bind(id).first();
-  return (result as { non_member_logo_r2_key?: string | null } | null)?.non_member_logo_r2_key ?? null;
+/**
+ * `id` is a sponsorship id; organization logos use GET /api/v1/members/:id/logo.
+ * `listed` says whether the public sponsor read model shows this sponsorship
+ * in any general or event context, including courtesy and historical display.
+ */
+export async function getNonMemberSponsorLogoR2Key(
+  db: DatabaseLike,
+  id: string,
+): Promise<{ key: string; listed: boolean } | null> {
+  const row = await first<{ non_member_logo_r2_key: string | null; listed: number }>(
+    db,
+    `SELECT non_member_logo_r2_key,
+            (${publicNonMemberSponsorPredicate("sponsorship")}) AS listed
+       FROM sponsorships sponsorship WHERE id = ?`,
+    [id],
+  );
+  return row?.non_member_logo_r2_key ? { key: row.non_member_logo_r2_key, listed: row.listed === 1 } : null;
 }

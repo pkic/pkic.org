@@ -7,7 +7,7 @@
  * organization and event are chosen from the canonical server-backed lists
  * rather than typed as raw UUIDs, that one `disabled` takes the whole group
  * out of play while the create is in flight, that a refusal is announced
- * rather than merely coloured, and that what the form finally sends
+ * rather than merely colored, and that what the form finally sends
  * satisfies the canonical request contract rather than a literal copy of
  * itself.
  */
@@ -19,7 +19,7 @@ import { type Sponsorship } from "../../assets/shared/schemas/sponsorship-manage
 import { CreateSponsorshipForm } from "../../assets/ts/member-flows/portal/sections/sponsors/management/CreateSponsorshipForm";
 import { portalSession } from "../../assets/ts/member-flows/portal/state";
 import { portalSessionFixture } from "../helpers/portal-session";
-import { buttonNamed, chooseComboboxOption, controlFor, submitForm, typeInto } from "./helpers/labelled-control";
+import { buttonNamed, chooseComboboxOption, controlFor, submitForm, typeInto } from "./helpers/labeled-control";
 
 const ORGANIZATION_ID = "20000000-0000-4000-8000-000000000001";
 const EVENT_ID = "pqc-conference-2026";

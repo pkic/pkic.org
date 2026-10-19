@@ -2,6 +2,8 @@
 import { useId } from "preact/hooks";
 import { Button } from "../ui/Button";
 import { Field } from "../ui/Field";
+import { InputGroup } from "../ui/InputGroup";
+import "./DonationWidget.css";
 import { Select, TextInput } from "../ui/TextControl";
 
 export interface DonationWidgetOptions {
@@ -79,21 +81,17 @@ function SharedControls() {
           moment a donor picked another currency. */}
       <div class="pk-cluster" data-donation-presets />
 
-      {/*
-        The currency symbol is live: `initDonationForm` rewrites it whenever
-        the donor picks another currency, and `Field` takes its label as a
-        string, so the symbol cannot ride in the label. It sits in the control
-        box in front of the amount instead, and the control describes itself
-        by it, so a reader hears the field's name and then the currency it is
-        in. The inner span is the one the behaviour rewrites; the space that
-        keeps the symbol off the box stays outside it.
-      */}
+      {/* The live currency prefix describes the amount; one shared row keeps its action beside it. */}
       <Field label="Or enter a custom amount">
         {(control) => (
-          <>
-            <span id={prefixId} class="pk-muted">
-              <span data-donation-currency-prefix>$</span>&nbsp;
-            </span>
+          <InputGroup
+            joined
+            prefix={
+              <span id={prefixId} class="pk-donation-currency-prefix" data-donation-currency-prefix>
+                $
+              </span>
+            }
+          >
             <TextInput
               {...control}
               type="number"
@@ -103,13 +101,12 @@ function SharedControls() {
               step={1}
               aria-describedby={prefixId}
             />
-          </>
+            <Button variant="primary" data-donation-submit>
+              Donate
+            </Button>
+          </InputGroup>
         )}
       </Field>
-
-      <Button variant="primary" block data-donation-submit>
-        Donate
-      </Button>
 
       {/* `initDonationForm` writes the outcome here. The role is on the
           element rather than added with the message, so the region exists
@@ -123,7 +120,7 @@ function CheckoutOverlay() {
   return (
     <div class="pk-stack pk-stack--snug" data-donation-checkout hidden>
       <div class="pk-cluster">
-        <Button size="sm" data-donation-back>
+        <Button data-donation-back>
           <span aria-hidden="true">←</span> Back
         </Button>
       </div>

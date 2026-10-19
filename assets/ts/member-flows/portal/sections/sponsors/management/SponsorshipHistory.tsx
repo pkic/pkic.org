@@ -5,7 +5,7 @@ import {
 } from "../../../../../../shared/schemas/sponsorship-management";
 import { ApiDataTable, type ApiTableActions } from "../../../../../components/ApiDataTable";
 import { statusLabel } from "../../../../../components/Badge";
-import { EmptyState } from "../../../../../ui/RecordEmptyState";
+import { EmptyState } from "../../../../../ui/EmptyState";
 import type { Column } from "../../../../../components/Table";
 import { fmt } from "../../../ui";
 
@@ -58,6 +58,7 @@ export function SponsorshipHistory({
 }) {
   return (
     <ApiDataTable
+      urlState="sponsorship-history"
       caption="Pipeline history"
       endpoint={`/api/v1/sponsors/${encodeURIComponent(sponsorshipId)}/events`}
       responseSchema={sponsorshipEventsListResponseSchema}

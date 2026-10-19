@@ -86,6 +86,8 @@ export function eventsPage() {
         registrationPolicy: "optional",
         visibility: "public",
         inviteLimitAttendee: 5,
+        city: "Amsterdam",
+        country: "NL",
         updatedAt: NOW,
         ownerGroupId: null,
         ownerGroupName: null,

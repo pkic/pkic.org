@@ -1,9 +1,8 @@
 /**
  * Public sponsor display. Replaces the
- * build-time `layouts/partials/sponsors/{collect,grid,strip}.html` +
- * `layouts/shortcodes/sponsors{,-level,-strip}.html` — which read
- * `hugo.Data.members`/`hugo.Data.sponsors` (`data/members/*.yaml`,
- * `data/sponsors.yaml`) at Hugo build time — with a Preact component that
+ * build-time sponsor partials and shortcodes — which read the member and
+ * sponsor YAML (`data/members/*.yaml`, `data/sponsors.yaml`) at build time —
+ * with a Preact component that
  * fetches GET /api/v1/sponsors. D1 (organizations.sponsor_tier +
  * sponsorships) is now the source of truth, so an admin sponsorship pipeline
  * change shows up here on next page load, not just after a manual YAML edit
@@ -261,7 +260,7 @@ function WallMode({
    * The published wall's own markup: one anchor per member carrying the
    * sponsor level, the name and the slogan. `members-overview-effects.js`
    * reads those attributes to build the scrolling track, the hover card and
-   * the sponsor zoom overlay, and the stylesheet colours a sponsor's logo by
+   * the sponsor zoom overlay, and the stylesheet colors a sponsor's logo by
    * its `sponsor-lvl-N` class while every other logo stays greyscale.
    */
   return <MemberWallView entries={entries} />;

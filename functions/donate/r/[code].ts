@@ -4,7 +4,7 @@
  * Personalised donation share link.  Each code maps to a row in
  * `donation_promoters` which in turn references a completed donation.
  *
- * Behaviour:
+ * Behavior:
  *  - All visitors receive an HTML page with Open Graph meta tags that embed
  *    the donor's badge image as the preview card.
  *  - A <meta http-equiv="refresh"> in the <head> sends browsers to

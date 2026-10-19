@@ -14,7 +14,7 @@ import { createContext } from "./helpers/context";
 import { onRequestGet as donationSession } from "../functions/api/v1/donations/session";
 import { onRequestPost as stripeWebhook } from "../functions/api/v1/webhooks/stripe";
 import { handleDonationStripeEvent } from "../functions/_lib/services/donations/stripe-webhook";
-import app from "../functions/router";
+import app from "./helpers/app";
 
 const PROVIDER_BODY_SENTINEL = "SECRET_PROVIDER_BODY webhook@example.test";
 

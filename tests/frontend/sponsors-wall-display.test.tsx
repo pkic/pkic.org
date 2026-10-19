@@ -227,7 +227,7 @@ describe("what the wall reports about itself", () => {
     const anchor = root.querySelector("a");
     expect(anchor?.dataset.memberName).toBe("Alpha");
     expect(anchor?.dataset.sponsorLevel).toBe("0");
-    // A member is not a sponsor: the colour treatment stays off its logo.
+    // A member is not a sponsor: the color treatment stays off its logo.
     expect(root.querySelector("img.member-logo")?.classList.contains("member-logo-sponsor")).toBe(false);
   });
 

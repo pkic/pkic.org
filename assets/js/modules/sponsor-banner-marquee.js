@@ -2,6 +2,7 @@
  * Shared helpers for the two logo walls: the strip above the footer and the
  * grid on the members page.
  */
+import { spreadSponsors } from "../../shared/logo-wall-order";
 
 /** Fisher-Yates on a copy, so the caller's array keeps its order. */
 function logoShuffle(list) {
@@ -13,31 +14,6 @@ function logoShuffle(list) {
     copy[j] = swap;
   }
   return copy;
-}
-
-function logoBuildSequence(S, NS) {
-  if (!S.length) return NS.slice();
-  if (!NS.length) return S.slice();
-
-  var ns = NS.slice();
-  while (ns.length < 2 * S.length) {
-    ns = ns.concat(logoShuffle(NS));
-  }
-
-  var perSlot = Math.max(2, Math.floor(ns.length / S.length));
-  var remainder = ns.length - perSlot * S.length;
-  var result = [];
-  var nsIdx = 0;
-
-  for (var i = 0; i < S.length; i++) {
-    var count = Math.max(2, perSlot + (i < remainder ? 1 : 0));
-    for (var j = 0; j < count; j++) {
-      result.push(ns[nsIdx % ns.length]);
-      nsIdx++;
-    }
-    result.push(S[i]);
-  }
-  return result;
 }
 
 function logoBuckets(links) {
@@ -104,7 +80,7 @@ function logoDropOnError(container, tileSelector) {
 
 window.pkicLogoUtils = {
   logoShuffle: logoShuffle,
-  logoBuildSequence: logoBuildSequence,
+  logoSpreadSponsors: spreadSponsors,
   logoBuckets: logoBuckets,
   logoDropOnError: logoDropOnError,
   logoLevels: logoLevels,
@@ -117,54 +93,39 @@ window.pkicLogoUtils = {
  * the tile that leaves on the left is dropped and a freshly drawn one joins
  * on the right, so no two passes are alike and there is no seam to notice.
  *
- * What it draws alternates — a random handful of members in grey, then one
- * sponsor level shown in color, then the next level
- * down. Every level that has a sponsor gets its turn, so the strip stays the
- * same length whether the consortium has twenty sponsors or two hundred.
+ * What it draws is every member in grey, in a fresh order each pass, with the
+ * sponsors shown in color at even intervals among them.
  */
 (function () {
-  var MEMBERS_MIN = 4;
-  var MEMBERS_MAX = 8;
   var SPEED = 42; // px per second
 
   /**
    * The endless order of tiles.
    *
-   * Members are drawn from a pool that is reshuffled once it runs out, so a
-   * member reappears only after the rest have had their turn.
+   * Each pass shows every member once, in a fresh shuffle, with the sponsors
+   * (highest level first) spread among them so no two sponsors sit together.
+   * The spreading keeps its spacing across the seam between two passes, so
+   * the procession never bunches sponsors where one pass hands over to the
+   * next.
    */
   function createStream(members, levels) {
-    var pool = [];
     var queue = [];
-    var levelIndex = 0;
 
-    function drawMembers() {
-      var count = MEMBERS_MIN + Math.floor(Math.random() * (MEMBERS_MAX - MEMBERS_MIN + 1));
-      for (var i = 0; i < count && members.length; i++) {
-        if (!pool.length) pool = logoShuffle(members);
-        queue.push({ kind: "logo", el: pool.pop() });
-      }
-    }
-
-    function drawLevel() {
-      if (!levels.length) return;
-      var level = levels[levelIndex % levels.length];
-      levelIndex += 1;
-      logoShuffle(level.items).forEach(function (el) {
+    function drawPass() {
+      var sponsors = [];
+      levels.forEach(function (level) {
+        logoShuffle(level.items).forEach(function (el) {
+          sponsors.push(el);
+        });
+      });
+      spreadSponsors(logoShuffle(members), sponsors).forEach(function (el) {
         queue.push({ kind: "logo", el: el });
       });
-      // A gap closes the group, so the members that follow are not read as
-      // belonging to the level that was just announced.
-      queue.push({ kind: "gap" });
     }
 
     return function next() {
-      if (!queue.length) {
-        drawMembers();
-        drawLevel();
-        if (!queue.length) return null; // Nothing to show at all.
-      }
-      return queue.shift();
+      if (!queue.length) drawPass();
+      return queue.length ? queue.shift() : null; // Nothing to show at all.
     };
   }
 

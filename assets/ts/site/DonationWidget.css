@@ -1,0 +1,7 @@
+@layer components {
+  .pk-donation-currency-prefix {
+    font-size: var(--pk-text-2xl);
+    line-height: 1;
+    white-space: nowrap;
+  }
+}

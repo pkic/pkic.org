@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
 import { createTestRateLimiter, queryAll, seedEventAndAdmin } from "./helpers/context";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { renderEmail } from "../functions/_lib/email/render";
 
 function makeEnv(overrides: Partial<typeof env> = {}) {
