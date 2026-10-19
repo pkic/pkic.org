@@ -115,7 +115,7 @@ export function GroupMemberAddForm({
             <div class="pk-cluster">
               {/* The end date decides what this button offers to do: a seat
                   with an end is a record of one that closed, not a grant. */}
-              <Button type="submit" size="sm" variant="primary" loading={saving} disabled={!user || !draft.joinedOn}>
+              <Button type="submit" variant="primary" loading={saving} disabled={!user || !draft.joinedOn}>
                 {saving
                   ? draft.leftOn
                     ? "Recording…"
@@ -124,7 +124,7 @@ export function GroupMemberAddForm({
                     ? "Record former seat"
                     : "Add to group"}
               </Button>
-              <Button size="sm" disabled={saving} onClick={onCancel}>
+              <Button disabled={saving} onClick={onCancel}>
                 Cancel
               </Button>
             </div>

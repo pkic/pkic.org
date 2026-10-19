@@ -231,8 +231,11 @@
     border-radius: var(--pk-radius-lg);
   }
 
+  /* No wrap: a wrapping column flexes an inline-size container (a data
+     table's scroller) to an indefinite, runaway height. */
   .pk-preview__shelf--stack {
     flex-direction: column;
+    flex-wrap: nowrap;
     align-items: stretch;
   }
 

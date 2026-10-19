@@ -8,6 +8,8 @@
 import type { ComponentChildren, JSX } from "preact";
 import { useId } from "preact/hooks";
 import { IconSearch } from "../components/icons";
+import { Menu, type MenuItem } from "./Menu";
+import { IconFilter } from "./MediaIcons";
 import { Button } from "./Button";
 
 import "./Toolbar.css";
@@ -15,6 +17,10 @@ import "./Toolbar.css";
 export interface ToolbarProps extends JSX.HTMLAttributes<HTMLDivElement> {
   /** The accessible name for the toolbar. */
   label: string;
+  /** Secondary commands combine into one menu when the collection becomes narrow. */
+  compactActions?: readonly MenuItem[];
+  compactActionsLabel?: string;
+  endActions?: ComponentChildren;
   /** Optional search configuration. */
   search?: {
     value: string;
@@ -33,12 +39,21 @@ export interface ToolbarProps extends JSX.HTMLAttributes<HTMLDivElement> {
   children?: ComponentChildren;
 }
 
-export function Toolbar({ label, search, class: className, children, ...rest }: ToolbarProps) {
+export function Toolbar({
+  label,
+  search,
+  class: className,
+  children,
+  compactActions,
+  compactActionsLabel,
+  endActions,
+  ...rest
+}: ToolbarProps) {
   const searchId = useId();
   const classes = ["pk-toolbar", className].filter(Boolean).join(" ");
 
   return (
-    <div class={classes} role="toolbar" aria-label={label} {...rest}>
+    <div class={classes} role="toolbar" aria-label={label} data-density="compact" {...rest}>
       {search && (
         <div class="pk-toolbar__search">
           <label htmlFor={searchId} class="pk-toolbar__search-label">
@@ -63,7 +78,6 @@ export function Toolbar({ label, search, class: className, children, ...rest }: 
           <Button
             class="pk-toolbar__search-button"
             variant="ghost"
-            size="sm"
             icon
             aria-label={search.label ?? "Search"}
             title={search.label ?? "Search"}
@@ -73,7 +87,19 @@ export function Toolbar({ label, search, class: className, children, ...rest }: 
           </Button>
         </div>
       )}
-      {children && <div class="pk-toolbar__controls">{children}</div>}
+      {(children || compactActions || endActions) && (
+        <div class="pk-toolbar__controls">
+          {children}
+          {compactActions && (
+            <span class="pk-toolbar-compact-actions" title={compactActionsLabel ?? `${label} filters and actions`}>
+              <Menu label={compactActionsLabel ?? `${label} filters and actions`} items={compactActions} align="end">
+                <IconFilter />
+              </Menu>
+            </span>
+          )}
+          {endActions}
+        </div>
+      )}
     </div>
   );
 }

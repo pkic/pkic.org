@@ -31,17 +31,19 @@ export function portalAnalyticsRoutes(
 
   return [
     access.hasMembersRoll && (
-      <Route key="members-analytics" path="/members/analytics" component={() => wrap(<MembershipAnalytics />)} />
+      <Route key="members-analytics" path="/members/analytics">
+        {() => wrap(<MembershipAnalytics />)}
+      </Route>
     ),
     access.hasOrganizationsAccess && (
-      <Route
-        key="organizations-analytics"
-        path="/organizations/analytics"
-        component={() => wrap(<OrganizationAnalytics />)}
-      />
+      <Route key="organizations-analytics" path="/organizations/analytics">
+        {() => wrap(<OrganizationAnalytics />)}
+      </Route>
     ),
     access.hasUserRecords && (
-      <Route key="users-analytics" path="/users/analytics" component={() => wrap(<UserAnalytics />)} />
+      <Route key="users-analytics" path="/users/analytics">
+        {() => wrap(<UserAnalytics />)}
+      </Route>
     ),
   ];
 }

@@ -1,0 +1,268 @@
+@layer components {
+  .pk-speaker-portrait-control-card {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+  .pk-speaker-portrait-control-card > .pk-agenda-speaker-directory__card {
+    border-end-start-radius: 0;
+    border-end-end-radius: 0;
+    border-block-end: 0;
+  }
+  .pk-speaker-portrait-controls {
+    overflow: hidden;
+    background: var(--pk-surface);
+    border: 1.5px solid var(--pk-line);
+    border-block-start: 0;
+    border-end-start-radius: var(--pk-radius-lg);
+    border-end-end-radius: var(--pk-radius-lg);
+  }
+
+  .pk-agenda-speaker-directory__card[data-size="compact"] .pk-agenda-speaker-directory__name > strong,
+  .pk-agenda-speaker-directory__card[data-size="compact"] .pk-agenda-speaker-affiliations__text > span,
+  .pk-agenda-speaker-directory__card[data-size="compact"] .pk-agenda-speaker-affiliations__text > strong {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+  }
+
+  .pk-speaker-portrait-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(14.375rem, 100%), 1fr));
+    /* Every card in a row takes the row's height, as on the public directory. */
+    align-items: stretch;
+    gap: var(--pk-4);
+  }
+  .pk-speaker-portrait-grid > * {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+  /* The empty photo on an organizer's roster: the same square, a quiet
+     ground, and the absence said in words with the way to fill it. */
+  .pk-speaker-portrait-missing {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--pk-2);
+    inline-size: 100%;
+    aspect-ratio: 1;
+    padding: var(--pk-4);
+    background: var(--pk-surface-sunk);
+    border-block-end: 1px solid var(--pk-line);
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-sm);
+    text-align: center;
+  }
+  /* An organizer's roster says where the speaker stands in plain lines under
+     the name — role, then answer and registration — with no pills. */
+  .pk-speaker-portrait-standing {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pk-1);
+    margin: 0;
+    font-size: var(--pk-text-sm);
+    line-height: 1.4;
+  }
+  .pk-speaker-portrait-standing > dd {
+    margin: 0;
+  }
+  .pk-speaker-portrait-standing > dd:first-of-type {
+    color: var(--pk-ink-muted);
+  }
+  .pk-speaker-portrait-actions {
+    position: absolute;
+    inset-block-start: var(--pk-2);
+    inset-inline-end: var(--pk-2);
+  }
+  @media (max-width: 46rem) {
+    .pk-speaker-portrait-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--pk-3);
+    }
+  }
+  article.pk-agenda-speaker-directory__card {
+    position: relative;
+    cursor: default;
+  }
+
+  .pk-content-agenda__speakers.pk-agenda-speaker-directory {
+    grid-template-columns: repeat(auto-fill, minmax(min(14.375rem, 100%), 1fr));
+    /* Every card in a row takes the row's height so the footers line up. */
+    align-items: stretch;
+    gap: var(--pk-4);
+  }
+  .pk-content-agenda__speakers .pk-agenda-speaker-directory__entry {
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+  .pk-agenda-speaker-directory__entry > .pk-agenda-speaker {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+  }
+  .pk-agenda-speaker-directory__entry > .pk-agenda-speaker > .pk-agenda-speaker-directory__card {
+    flex: 1;
+  }
+  .pk-agenda-speaker-directory__card {
+    display: flex;
+    flex-direction: column;
+    inline-size: 100%;
+    block-size: 100%;
+    min-inline-size: 0;
+    padding: 0;
+    overflow: hidden;
+    border: 1.5px solid var(--pk-line);
+    border-radius: var(--pk-radius-lg);
+    background: var(--pk-surface);
+    color: var(--pk-ink);
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+  }
+  .pk-agenda-speaker-directory__card:is(button):hover,
+  .pk-agenda-speaker-directory__card:is(button):focus-visible {
+    border-color: var(--pk-accent);
+    box-shadow:
+      0 0 0 1px var(--pk-accent),
+      var(--pk-shadow-2);
+  }
+  .pk-agenda-speaker-directory__card > .pk-avatar {
+    inline-size: 100%;
+    block-size: auto;
+    max-inline-size: none;
+    aspect-ratio: 1;
+    border-radius: 0;
+    background: var(--pk-accent-soft);
+    font-size: var(--pk-agenda-type-44);
+  }
+  .pk-agenda-speaker-directory__card .pk-avatar__initials {
+    color: var(--pk-accent-ink);
+    font-size: var(--pk-agenda-type-44);
+  }
+  .pk-agenda-speaker-directory__card > .pk-avatar img {
+    object-fit: cover;
+  }
+  .pk-agenda-speaker-directory__caption {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--pk-1);
+    min-inline-size: 0;
+    padding: var(--pk-3) var(--pk-4) var(--pk-4);
+  }
+  .pk-agenda-speaker-directory__name > strong {
+    font-size: var(--pk-text-md);
+    line-height: 1.25;
+  }
+  .pk-agenda-speaker-directory__title {
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-sm);
+    line-height: 1.4;
+  }
+  .pk-agenda-speaker-directory__roles,
+  .pk-agenda-speaker-directory__footer {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--pk-2);
+  }
+  .pk-agenda-speaker-directory__footer {
+    justify-content: space-between;
+    flex-wrap: nowrap;
+    margin-block-start: auto;
+    padding-block-start: var(--pk-3);
+    color: var(--pk-accent-ink);
+    font-size: var(--pk-text-xs);
+  }
+  .pk-agenda-speaker-directory__link {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: var(--pk-2);
+    margin-inline-start: auto;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  @media print {
+    .pk-agenda-speaker-directory__card {
+      flex-direction: row;
+      border-color: var(--pk-line);
+      box-shadow: none;
+    }
+    .pk-agenda-speaker-directory__card > .pk-avatar {
+      flex: 0 0 64px;
+      inline-size: 4rem;
+      block-size: 4rem;
+      font-size: var(--pk-text-lg);
+    }
+    .pk-agenda-speaker-directory__footer {
+      display: none;
+    }
+  }
+
+  .pk-agenda-speaker-directory__name {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--pk-2);
+  }
+  .pk-agenda-speaker-directory__logos {
+    display: flex;
+    flex: 1;
+    min-inline-size: 0;
+    flex-wrap: wrap;
+    gap: var(--pk-2);
+  }
+  .pk-agenda-speaker-directory__logos .pk-agenda-speaker-organization {
+    max-inline-size: min(100%, var(--pk-agenda-mark-inline));
+  }
+  @media (max-width: 46rem) {
+    .pk-content-agenda__speakers.pk-agenda-speaker-directory {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--pk-3);
+    }
+    .pk-agenda-speaker-directory__caption {
+      padding: var(--pk-3);
+    }
+    .pk-agenda-speaker-directory__caption .pk-affiliation-rotation {
+      font-size: var(--pk-text-sm);
+      line-height: 1.4;
+    }
+    .pk-agenda-speaker-directory__footer {
+      padding-block-start: var(--pk-2);
+    }
+  }
+  .pk-agenda-speaker-affiliations--directory {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    margin: 0;
+    padding: 0;
+    gap: var(--pk-2);
+    list-style: none;
+  }
+  .pk-agenda-speaker-affiliations--directory > li {
+    display: flex;
+    align-items: start;
+    gap: var(--pk-2);
+  }
+  .pk-agenda-speaker-affiliations--directory .pk-agenda-speaker-affiliations__text {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+    font-size: var(--pk-text-sm);
+    line-height: 1.4;
+    color: var(--pk-ink-muted);
+    overflow-wrap: anywhere;
+  }
+  .pk-agenda-speaker-affiliations--directory .pk-agenda-speaker-affiliations__text > strong {
+    color: var(--pk-ink);
+    font-weight: 500;
+  }
+}

@@ -1,0 +1,16 @@
+@layer components {
+  .pk-pkic-mark {
+    /*
+     * How much of the logo recedes when one element is highlighted: faint
+     * enough that the highlighted element carries the icon, while the rest
+     * still outlines the whole mark.
+     */
+    --pk-mark-recede: 0.07;
+    flex: none;
+  }
+
+  .pk-pkic-mark[data-highlight="arcs"] :is(.pk-pkic-mark__table, .pk-pkic-mark__keyhole),
+  .pk-pkic-mark[data-highlight="table"] :is(.pk-pkic-mark__arc, .pk-pkic-mark__keyhole) {
+    opacity: var(--pk-mark-recede);
+  }
+}

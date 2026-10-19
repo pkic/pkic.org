@@ -118,13 +118,13 @@ describe("state tones", () => {
   }
 });
 
-describe("the colour maths itself", () => {
+describe("the color maths itself", () => {
   it("agrees with the reference values for black on white", () => {
     expect(ratio("#000000", "#ffffff")).toBeCloseTo(21, 5);
     expect(ratio("#ffffff", "#ffffff")).toBeCloseTo(1, 5);
   });
 
-  it("round-trips a colour through oklab", () => {
+  it("round-trips a color through oklab", () => {
     const mixed = mixOklab("#198754", 100, "#ffffff");
     const original = parseHex("#198754");
     expect(mixed.r).toBeCloseTo(original.r, 2);

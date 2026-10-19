@@ -3,11 +3,45 @@ import type { ComponentChildren } from "preact";
 import { Marked, type Token, type Tokens } from "marked";
 import { resolveMarkdownShortcodes } from "../../shared/markdown-shortcodes";
 import { markdownSafeUrl, markdownVideoEmbed } from "../../shared/markdown-media";
+import { liveChatSafeLink } from "../../shared/live-chat-policy";
+import { NEW_TAB_ATTRIBUTES, NEW_TAB_HINT, isExternalHref } from "./new-tab";
 import "../ui/Content.css";
 import "../components/markdown-editor/markdown-content.scss";
 
 // Keep editor-specific tokenizer registrations out of the public renderer.
 const parser = new Marked();
+
+/**
+ * The one anchor every rendered Markdown link goes through: a destination
+ * outside the portal opens in a new tab and says so to screen readers.
+ * `untrusted` (chat) also tells search engines not to follow it.
+ */
+function MarkdownLink({
+  href,
+  title,
+  untrusted = false,
+  children,
+}: {
+  href: string;
+  title?: string;
+  untrusted?: boolean;
+  children?: ComponentChildren;
+}) {
+  const rel = untrusted ? "noopener nofollow ugc noreferrer" : NEW_TAB_ATTRIBUTES.rel;
+  if (!isExternalHref(href)) {
+    return (
+      <a href={href} title={title} rel={untrusted ? rel : undefined}>
+        {children}
+      </a>
+    );
+  }
+  return (
+    <a href={href} title={title} target={NEW_TAB_ATTRIBUTES.target} rel={rel}>
+      {children}
+      <span class="pk-sr-only"> {NEW_TAB_HINT}</span>
+    </a>
+  );
+}
 
 /** Render tokens as elements, never as HTML from the author. */
 function renderTokens(tokens: Token[]): ComponentChildren {
@@ -58,15 +92,9 @@ function renderTokens(tokens: Token[]): ComponentChildren {
         return <hr key={index} />;
       case "link":
         return markdownSafeUrl(token.href) ? (
-          <a
-            key={index}
-            href={token.href}
-            title={token.title ?? undefined}
-            target={/^https?:/i.test(token.href) ? "_blank" : undefined}
-            rel="noopener noreferrer"
-          >
+          <MarkdownLink key={index} href={token.href} title={token.title ?? undefined}>
             {children}
-          </a>
+          </MarkdownLink>
         ) : (
           children
         );
@@ -118,10 +146,77 @@ function renderTokens(tokens: Token[]): ComponentChildren {
   });
 }
 
-export function Markdown({ markdown = "", className }: { markdown?: string | null; className?: string }) {
+/** Chat is written by any participant, so a single line break counts and only inline marks are read. */
+const chatParser = new Marked({ gfm: true, breaks: true });
+
+/**
+ * The chat profile: bold, italic, inline code, links and line breaks, and
+ * nothing else. Every other construct (headings, lists, images, HTML) is
+ * shown as the characters the author typed. A link is followed only to an
+ * absolute web or mail address, and never passes the reader's standing on.
+ */
+function renderChatTokens(tokens: Token[]): ComponentChildren {
+  return tokens.map((token, index) => {
+    const children = "tokens" in token && token.tokens ? renderChatTokens(token.tokens) : null;
+    switch (token.type) {
+      case "space":
+        return null;
+      case "paragraph":
+        return <p key={index}>{children}</p>;
+      case "text":
+        return children ?? token.text;
+      case "escape":
+        return token.text;
+      case "strong":
+        return <strong key={index}>{children}</strong>;
+      case "em":
+        return <em key={index}>{children}</em>;
+      case "codespan":
+        return <code key={index}>{token.text}</code>;
+      case "br":
+        return <br key={index} />;
+      case "link": {
+        const href = liveChatSafeLink(token.href);
+        return href ? (
+          <MarkdownLink key={index} href={href} untrusted>
+            {children}
+          </MarkdownLink>
+        ) : (
+          token.raw
+        );
+      }
+      default:
+        // Blocks outside the profile keep their own lines as typed text.
+        return token.type === "heading" ||
+          token.type === "list" ||
+          token.type === "code" ||
+          token.type === "blockquote" ||
+          token.type === "hr" ||
+          token.type === "table" ||
+          token.type === "html" ? (
+          <p key={index}>{token.raw.replace(/\n+$/u, "")}</p>
+        ) : (
+          token.raw
+        );
+    }
+  });
+}
+
+export function Markdown({
+  markdown = "",
+  className,
+  profile = "content",
+}: {
+  markdown?: string | null;
+  className?: string;
+  /** `chat` reads the inline subset participants may use in a live chat. */
+  profile?: "content" | "chat";
+}) {
   return (
     <div class={["pk-markdown", className].filter(Boolean).join(" ")}>
-      {renderTokens(parser.lexer(resolveMarkdownShortcodes(markdown ?? "")))}
+      {profile === "chat"
+        ? renderChatTokens(chatParser.lexer(markdown ?? ""))
+        : renderTokens(parser.lexer(resolveMarkdownShortcodes(markdown ?? "")))}
     </div>
   );
 }

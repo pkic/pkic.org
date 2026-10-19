@@ -1,62 +1,99 @@
 import { readConsentValues } from "../../shared/widgets/consents";
-import { useRef, useState } from "preact/hooks";
+import { useCallback, useRef, useState } from "preact/hooks";
 import {
-  speakerProfilePatchSchema,
+  speakerSelfProfilePatchSchema,
   speakerParticipationPatchSchema,
 } from "../../../shared/schemas/proposal-management";
 import {
+  speakerProfileUpdateResponseSchema,
   speakerParticipationResponseSchema,
   speakerPresentationUploadResponseSchema,
   type SpeakerSelfServiceReadResponse,
 } from "../../../shared/schemas/speaker-self-service";
-import { successResponseSchema } from "../../../shared/schemas/api-common";
 import { headshotUploadResponseSchema } from "../../../shared/schemas/registration";
 import { isProposalSpeakerRosterEditableStatus } from "../../../shared/schemas/proposal-status";
 import { proposalSpeakerAccessPath } from "../../../shared/proposal-access-paths";
 import { presentationUploadRequest, DEFAULT_PRESENTATION_TERMS } from "../../../shared/presentation-upload";
-import type { EventFormsResponse } from "../../shared/types";
+import type { RequiredTerm } from "../../../shared/schemas/forms";
 import { useContractForm } from "../../hooks/useContractForm";
 import { patchJson, requestJson } from "../../shared/api-client";
 import { formatDateTime } from "../../shared/ui";
-import { AdminHeadshotManager } from "../../shared/headshot/AdminHeadshotManager";
+import { HeadshotTile } from "../../shared/headshot/HeadshotTile";
+import { headshotFormEndpoint } from "../../shared/headshot/endpoints";
 import { showHeadshotDisclaimer } from "../../shared/headshot/upload";
-import { ProfileLinksInput } from "../ProfileLinksInput";
-import { MarkdownEditor } from "../markdown-editor/MarkdownInput";
+import { IdentityProfileForm } from "../identities/IdentityProfileForm";
 import { ConsentCard } from "../ConsentCard";
 import { Badge } from "../Badge";
+import { confirmAction } from "../ConfirmDialog";
 import { Alert } from "../../ui/Alert";
 import { Button } from "../../ui/Button";
+import { DownloadAction } from "../../ui/DownloadAction";
 import { Field } from "../../ui/Field";
 import { TextInput } from "../../ui/TextControl";
 import { Panel, PanelBody, PanelHeader } from "../../ui/Panel";
+import { DescriptionList } from "../../ui/DescriptionList";
+import { LinkList } from "../../ui/LinkList";
+import { normalizeProfileLinks } from "../../shared/widgets/profile-links";
+import { Markdown } from "../../ui/Markdown";
+import { Menu } from "../../ui/Menu";
+import { SpeakerParticipationIdentity } from "../SpeakerParticipationIdentity";
+import { newAffiliationDetails, type ProposalEntrySelection } from "../useProposalEntryIdentity";
+import {
+  eventProposalProofIdentityPatchSchema,
+  eventProposalProofIdentityPatchResponseSchema,
+} from "../../../shared/schemas/event-proposal-proof";
 
 export function ParticipantSpeaker({
   data,
-  forms,
+  eventSlug,
+  terms,
   reload,
 }: {
   data: SpeakerSelfServiceReadResponse;
-  forms: EventFormsResponse;
+  eventSlug: string;
+  terms: RequiredTerm[];
   reload: () => Promise<void>;
 }) {
   const access = { resourceId: data.proposal.id };
   const path = (...segments: string[]) => proposalSpeakerAccessPath("/api/v1", access, ...segments);
-  const [draft, setDraft] = useState({
-    firstName: data.profile.firstName ?? "",
-    lastName: data.profile.lastName ?? "",
-    organizationName: data.profile.organizationName ?? "",
-    jobTitle: data.profile.jobTitle ?? "",
-    biography: data.profile.biography ?? "",
-    links: data.profile.links,
-  });
   const [consents, setConsents] = useState<Array<{ termKey: string; version: string }>>([]);
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const upload = useRef<HTMLInputElement>(null);
-  const form = useContractForm(speakerProfilePatchSchema, draft);
+  const [entry, setEntry] = useState<ProposalEntrySelection | null>(null);
+  const [identityChanged, setIdentityChanged] = useState(data.profile.actingIdentitySelection === "unrecorded");
+  const onEditing = useCallback(() => setIdentityChanged(true), []);
+  const onIdentityChange = useCallback((value: ProposalEntrySelection | null) => {
+    setEntry(value);
+  }, []);
+  const profileRoot = useRef<HTMLFormElement>(null);
+  const acceptedConsents = () =>
+    // Read during the first render too, before the profile form exists; nothing is checked yet then.
+    data.speaker.status === "invited" ? consents : profileRoot.current ? readConsentValues(profileRoot.current) : [];
+  const termsAccepted = terms.every(
+    (term) =>
+      !term.required || consents.some((value) => value.termKey === term.termKey && value.version === term.version),
+  );
+  // The identity choice is the only proposal-side profile write; the identity's own profile is edited on the identity.
+  const form = useContractForm(speakerSelfProfilePatchSchema, {});
   const participation = useContractForm(speakerParticipationPatchSchema, { status: "confirmed", consents });
   const editable = data.speaker.status !== "declined" && isProposalSpeakerRosterEditableStatus(data.proposal.status);
+  async function decline() {
+    const confirmed = await confirmAction({
+      title: `Decline your participation in ${data.proposal.title}?`,
+      consequences: ["You are no longer listed as a speaker on this proposal"],
+      confirmLabel: "Decline participation",
+      cancelLabel: "Keep participating",
+      tone: "danger",
+    });
+    if (!confirmed) return;
+    await perform(
+      () => patchJson(path("participation"), { status: "declined" }, speakerParticipationResponseSchema),
+      "Participation declined.",
+    );
+  }
   async function perform(action: () => Promise<unknown>, message: string) {
     setBusy(true);
     setError("");
@@ -71,6 +108,11 @@ export function ParticipantSpeaker({
     }
   }
   const photoEndpoint = path("headshot");
+  const representation = data.currentRepresentation;
+  const identityPath = (identityId: string) =>
+    `/api/v1/events/${encodeURIComponent(eventSlug)}/proposals/proof/identities/${encodeURIComponent(identityId)}`;
+  const profileLinks = normalizeProfileLinks(data.profile.links);
+  const speakerName = [data.profile.firstName, data.profile.lastName].filter(Boolean).join(" ") || data.profile.email;
   const deadlinePassed = Boolean(
     data.proposal.presentationDeadline && Date.parse(data.proposal.presentationDeadline) < Date.now(),
   );
@@ -78,8 +120,27 @@ export function ParticipantSpeaker({
     <div class="pk-stack">
       {error && <Alert tone="danger">{error}</Alert>}
       {message && <Alert tone="ok">{message}</Alert>}
-      <Panel>
-        <PanelHeader title="Speaker participation" />
+      <Panel key={`${data.proposal.id}:participation`}>
+        <PanelHeader
+          title="Speaker participation"
+          menu={
+            editable ? (
+              <Menu
+                label="Participation actions"
+                align="end"
+                items={[
+                  {
+                    id: "decline",
+                    label: "Decline participation…",
+                    danger: true,
+                    disabled: busy,
+                    onSelect: () => void decline(),
+                  },
+                ]}
+              />
+            ) : undefined
+          }
+        />
         <PanelBody>
           <div class="pk-stack">
             <div class="pk-cluster">
@@ -111,8 +172,14 @@ export function ParticipantSpeaker({
                 }}
               >
                 <fieldset class="pk-fieldset pk-stack" disabled={busy}>
-                  {forms.requiredTerms.map((term) => (
-                    <ConsentCard term={term} key={term.termKey} />
+                  {terms.map((term) => (
+                    <ConsentCard
+                      term={term}
+                      key={term.termKey}
+                      recorded={consents.some(
+                        (value) => value.termKey === term.termKey && value.version === term.version,
+                      )}
+                    />
                   ))}
                   <Button type="submit" loading={busy}>
                     Confirm participation
@@ -120,131 +187,185 @@ export function ParticipantSpeaker({
                 </fieldset>
               </form>
             )}
-            {editable && (
-              <Button
-                variant="danger-quiet"
-                loading={busy}
-                onClick={() => {
-                  if (confirm("Decline your participation in this proposal?"))
-                    void perform(
-                      () =>
-                        patchJson(path("participation"), { status: "declined" }, speakerParticipationResponseSchema),
-                      "Participation declined.",
-                    );
-                }}
-              >
-                Decline participation
-              </Button>
-            )}
           </div>
         </PanelBody>
       </Panel>
-      <Panel>
-        <PanelHeader title="Speaker profile" />
+      <Panel key={`${data.proposal.id}:profile`} aria-label="Speaker profile">
+        <PanelHeader title="Speaker profile">
+          {editable && representation && !editing && (
+            <Button
+              variant="secondary"
+              disabled={busy}
+              onClick={() => {
+                setMessage("");
+                setError("");
+                setEditing(true);
+              }}
+            >
+              Edit
+            </Button>
+          )}
+        </PanelHeader>
         <PanelBody>
           <div class="pk-stack">
             <p>{data.profile.email}</p>
             {(editable || data.profile.headshotUrl) && (
-              <AdminHeadshotManager
-                readOnly={!editable}
-                initialUrl={data.profile.headshotUrl}
-                alt="Speaker photo"
-                uploadHeadshot={async (file) => {
-                  const body = new FormData();
-                  body.append("file", file, "headshot.jpg");
-                  return requestJson(photoEndpoint, headshotUploadResponseSchema, { method: "PUT", body });
+              <HeadshotTile
+                name={speakerName}
+                canChange={editable}
+                imageUrl={data.profile.headshotUrl}
+                consent="own"
+                self
+                endpoint={headshotFormEndpoint(photoEndpoint, headshotUploadResponseSchema)}
+                onChanged={() => reload()}
+                notify={(text, type) => {
+                  setError(type === "error" ? text : "");
+                  setMessage(type === "success" ? text : "");
                 }}
-                deleteHeadshot={async () => {
-                  await requestJson(photoEndpoint, successResponseSchema, { method: "DELETE" });
-                }}
-                onUploaded={reload}
-                onDeleted={reload}
-                onError={setError}
               />
             )}
             <form
+              ref={profileRoot}
               noValidate
               {...form.handlers}
               onSubmit={(event) => {
                 event.preventDefault();
+                if (identityChanged && !entry) {
+                  setError("Confirm your identity and email before saving your profile.");
+                  return;
+                }
                 const checked = form.submit();
                 if (!checked.data) {
                   setError(checked.message);
                   return;
                 }
-                void perform(
-                  () => patchJson(path("profile"), checked.data, successResponseSchema),
-                  "Speaker profile saved.",
-                );
+                void perform(async () => {
+                  await patchJson(
+                    path("profile"),
+                    speakerSelfProfilePatchSchema.parse({
+                      ...checked.data,
+                      ...(identityChanged && entry
+                        ? {
+                            actingIdentityId: entry.actingIdentityId,
+                            continuationToken: entry.continuationToken,
+                            unaffiliatedAttestation: entry.unaffiliatedAttestation,
+                            independentCapacity: entry.independentCapacity,
+                            consents: acceptedConsents(),
+                            ...newAffiliationDetails(entry),
+                          }
+                        : {}),
+                    }),
+                    speakerProfileUpdateResponseSchema,
+                  );
+                  const fragment = new URL(location.hash.slice(1), location.origin);
+                  if (fragment.searchParams.has("verify")) {
+                    fragment.searchParams.delete("verify");
+                    history.replaceState(
+                      {},
+                      "",
+                      `${location.pathname}${location.search}#${fragment.pathname}${fragment.search}`,
+                    );
+                  }
+                  setIdentityChanged(false);
+                }, "Speaker identity saved.");
               }}
             >
               <fieldset class="pk-fieldset pk-stack" disabled={busy || !editable}>
-                <div class="pk-grid">
-                  {(
-                    [
-                      ["firstName", "First name"],
-                      ["lastName", "Last name"],
-                      ["organizationName", "Organization"],
-                      ["jobTitle", "Job title"],
-                    ] as const
-                  ).map(([name, label]) => (
-                    <Field key={name} label={label} {...form.of(name)}>
-                      {(control) => (
-                        <TextInput
-                          {...control}
-                          name={name}
-                          value={draft[name]}
-                          onInput={(event) => setDraft({ ...draft, [name]: event.currentTarget.value })}
-                        />
-                      )}
-                    </Field>
-                  ))}
-                </div>
-                <Field label="Biography" {...form.of("biography")}>
-                  {(control) => (
-                    <MarkdownEditor
-                      disabled={busy || !editable}
-                      variant="compact"
-                      {...control}
-                      name="biography"
-                      label="Biography"
-                      initialValue={draft.biography}
-                      onChange={(biography) => setDraft({ ...draft, biography })}
-                    />
-                  )}
-                </Field>
-                <ProfileLinksInput
-                  value={draft.links}
-                  onChange={(links) => setDraft({ ...draft, links })}
-                  fieldName="links"
+                <SpeakerParticipationIdentity
+                  key={data.profile.actingIdentitySelectedAt ?? "unrecorded"}
+                  data={data}
+                  eventSlug={eventSlug}
+                  speakerProposalId={data.proposal.id}
+                  terms={terms}
+                  termsAccepted={termsAccepted}
+                  termsReady
+                  consents={acceptedConsents}
+                  onChange={onIdentityChange}
+                  onEditing={onEditing}
+                  onTermsRecorded={setConsents}
+                  savePersonalDetails={async (names) => {
+                    const saved = await patchJson(
+                      path("profile"),
+                      speakerSelfProfilePatchSchema.parse(names),
+                      speakerProfileUpdateResponseSchema,
+                    );
+                    return { ...saved.profile, bio: saved.profile.biography };
+                  }}
                 />
-                {editable && (
-                  <Button type="submit" loading={busy}>
-                    Save speaker profile
-                  </Button>
+                {!editing && (
+                  <DescriptionList
+                    items={[
+                      {
+                        term: "Biography",
+                        value: data.profile.biography ? <Markdown markdown={data.profile.biography} /> : undefined,
+                      },
+                      {
+                        term: "Profile links",
+                        value: profileLinks.length ? (
+                          <LinkList links={profileLinks} ownerName={speakerName} />
+                        ) : undefined,
+                      },
+                    ]}
+                  />
+                )}
+                {editable && identityChanged && (
+                  <div class="pk-cluster">
+                    <Button type="submit" variant="primary" loading={busy}>
+                      Save speaker identity
+                    </Button>
+                  </div>
                 )}
               </fieldset>
             </form>
+            {editable && editing && representation && (
+              <IdentityProfileForm
+                identity={representation}
+                editor="owner"
+                save={(body) =>
+                  patchJson(
+                    identityPath(representation.identityId),
+                    eventProposalProofIdentityPatchSchema.parse({ ...body, speakerProposalId: data.proposal.id }),
+                    eventProposalProofIdentityPatchResponseSchema,
+                  )
+                }
+                onSaved={() => {
+                  setEditing(false);
+                  setMessage("Profile updated.");
+                  void reload();
+                }}
+                cancel={
+                  <Button type="button" onClick={() => setEditing(false)}>
+                    Cancel
+                  </Button>
+                }
+              />
+            )}
           </div>
         </PanelBody>
       </Panel>
       {data.proposal.status === "accepted" && data.speaker.status === "confirmed" && (
-        <Panel>
+        <Panel key={`${data.proposal.id}:presentation`}>
           <PanelHeader title="Presentation" />
           <PanelBody>
             <div class="pk-stack">
               {data.proposal.presentationDeadline && (
                 <p>Upload deadline: {formatDateTime(data.proposal.presentationDeadline)}</p>
               )}
-              {data.proposal.presentationUploaded && <a href={path("presentation")}>Download current presentation</a>}
-              {data.proposal.presentationUploader && (
-                <p>
-                  Uploaded by{" "}
-                  {[data.proposal.presentationUploader.firstName, data.proposal.presentationUploader.lastName]
-                    .filter(Boolean)
-                    .join(" ")}{" "}
-                  on {formatDateTime(data.proposal.presentationUploader.uploadedAt)}.
-                </p>
+              {(data.proposal.presentationUploaded || data.proposal.presentationUploader) && (
+                <div class="pk-cluster">
+                  {data.proposal.presentationUploaded && (
+                    <DownloadAction label="Download current presentation" href={path("presentation")} />
+                  )}
+                  {data.proposal.presentationUploader && (
+                    <span>
+                      Uploaded by{" "}
+                      {[data.proposal.presentationUploader.firstName, data.proposal.presentationUploader.lastName]
+                        .filter(Boolean)
+                        .join(" ")}{" "}
+                      on {formatDateTime(data.proposal.presentationUploader.uploadedAt)}.
+                    </span>
+                  )}
+                </div>
               )}
               {deadlinePassed && <Alert>The presentation upload deadline has passed.</Alert>}
               <Field label="Presentation file">

@@ -10,7 +10,7 @@ import { normalizeValidation } from "../../assets/ts/shared/form/validation-map"
 import { ApiClientError } from "../../assets/ts/shared/api-client";
 import { Field } from "../../assets/ts/ui/Field";
 import { TextInput } from "../../assets/ts/ui/TextControl";
-import { controlFor, typeInto } from "./helpers/labelled-control";
+import { controlFor, typeInto } from "./helpers/labeled-control";
 
 const contract = z.object({ name: z.string().trim().min(1), website: httpUrlSchema.nullable() });
 

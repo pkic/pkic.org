@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * Pager, Meter, and Toast behaviour that visual specimens cannot show:
+ * Pager, Meter, and Toast behavior that visual specimens cannot show:
  * pagination logic, aria attributes, clamping, callback invocation.
  */
 

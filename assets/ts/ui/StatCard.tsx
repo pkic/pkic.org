@@ -7,7 +7,7 @@ export type StatCardTrend = "up" | "down" | "flat";
  * The state a figure reports, when it reports one. A plain count has no tone;
  * a count that is a standing — seated, waiting, unconfirmed, failed — takes
  * the same six tones the Badge speaks, so a row of figures and a column of
- * badges say "waitlisted" in the same colour.
+ * badges say "waitlisted" in the same color.
  */
 export type StatCardTone = "accent" | "ok" | "warn" | "danger" | "info" | "neutral";
 
@@ -27,7 +27,7 @@ export interface StatCardProps extends Omit<JSX.HTMLAttributes<HTMLDivElement>, 
   href?: string;
   /**
    * `compact` is the glance version: the figure leads, the label sits under it
-   * in sentence case, and the whole tile centres — three of them across a
+   * in sentence case, and the whole tile centers — three of them across a
    * sidebar panel rather than one across a dashboard.
    *
    * The DOM order stays label-then-value at both densities so the tile is
@@ -38,7 +38,7 @@ export interface StatCardProps extends Omit<JSX.HTMLAttributes<HTMLDivElement>, 
    * The state the figure reports. Without one the card is a quiet tile —
    * a hairline, a sunk ground, ink. With one it takes the Badge's treatment
    * for that tone: a soft ground, a dot beside the label, the figure in the
-   * tone's ink — so "312 waitlisted" is coloured the way the Waitlisted badge
+   * tone's ink — so "312 waitlisted" is colored the way the Waitlisted badge
    * is, and a card that is merely a count is not (#110).
    */
   tone?: StatCardTone;
@@ -87,7 +87,7 @@ export function StatCard({
       <div class="pk-stat-card__value">{value}</div>
       {note && (
         <div class={noteClasses}>
-          {/* The direction is carried by colour, which not every reader can
+          {/* The direction is carried by color, which not every reader can
               see, so it is also stated in text. The note itself stays
               readable: "6 this quarter" is the substance, not decoration. */}
           {trend && <span class="pk-stat-card__trend-label">{TREND_LABEL[trend]}, </span>}

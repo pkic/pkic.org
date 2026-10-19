@@ -7,19 +7,22 @@
  * the roster to look at it should not be handed a form.
  */
 import { useEffect, useState } from "preact/hooks";
-import { proposalSpeakersResponseSchema, type ProposalSpeaker } from "../../../shared/schemas/proposal-speakers";
+import { proposalSpeakersResponseSchema, type ProposalRosterSpeaker } from "../../../shared/schemas/proposal-speakers";
 import { useData } from "../../hooks/useData";
 import { getJson } from "../../shared/api-client";
 import { formatDateTime, type ToastType } from "../../shared/ui";
-import { EmptyState } from "../../ui/RecordEmptyState";
+import { formatNumber } from "../../../shared/format-number";
+import { EmptyState } from "../../ui/EmptyState";
 import { ErrorAlert } from "../ErrorAlert";
 import { Spinner } from "../Spinner";
 import { ButtonLink } from "../../ui/Button";
-import { Panel, PanelBody, PanelHeader } from "../../ui/Panel";
+import { SectionHeading } from "../../ui/SectionHeading";
 import {
+  NO_PROFILE_ACCESS,
   ProposalSpeakerCard,
   buildReplacementProposerOptions,
   type ProposalSpeakerEndpointConfig,
+  type ProposalSpeakerProfileAccess,
 } from "./ProposalSpeakerCard";
 
 export function ProposalSpeakersPanel({
@@ -33,6 +36,10 @@ export function ProposalSpeakersPanel({
   endpoints,
   invitePath,
   refreshKey,
+  userHref,
+  identityHref,
+  registrationHref,
+  profileAccess = NO_PROFILE_ACCESS,
 }: {
   endpoint: string;
   proposalId: string;
@@ -46,8 +53,16 @@ export function ProposalSpeakersPanel({
   invitePath?: string;
   /** Changes when something outside the panel altered the roster, so it reads again. */
   refreshKey?: string | number;
+  /** Where a speaker's user record opens; undefined when the viewer may not open user records. */
+  userHref?: (userId: string) => string | undefined;
+  /** Where a speaker's identities open; undefined when the viewer may not open them. */
+  identityHref?: (userId: string) => string | undefined;
+  /** What the viewer may change about the people on the roster. */
+  profileAccess?: ProposalSpeakerProfileAccess;
+  /** Where a speaker's registration for this event opens; undefined when the viewer may not manage registrations. */
+  registrationHref?: (registrationId: string) => string | undefined;
 }) {
-  const [speakerOverrides, setSpeakerOverrides] = useState<Record<string, Partial<ProposalSpeaker>>>({});
+  const [speakerOverrides, setSpeakerOverrides] = useState<Record<string, Partial<ProposalRosterSpeaker>>>({});
   const roster = useData(() => getJson(`${endpoint}/speakers`, proposalSpeakersResponseSchema), [endpoint, refreshKey]);
   useEffect(() => setSpeakerOverrides({}), [endpoint, refreshKey]);
   if (roster.loading) return <Spinner />;
@@ -58,57 +73,72 @@ export function ProposalSpeakersPanel({
     sessionTypes?.find((type) => type.label.toLowerCase() === proposal.proposal_type.toLowerCase())
       ?.requiresPresentation ?? false;
 
-  function updateSpeaker(userId: string, patch: Partial<ProposalSpeaker>) {
+  function updateSpeaker(userId: string, patch: Partial<ProposalRosterSpeaker>) {
     setSpeakerOverrides((previous) => ({ ...previous, [userId]: { ...previous[userId], ...patch } }));
   }
 
   return (
     <div class="pk">
-      <Panel aria-label="Proposal speakers">
-        <PanelHeader title="Speakers" headingLevel={4}>
-          <span class="pk-small pk-muted pk-nowrap">
-            {speakers.length} {speakers.length === 1 ? "speaker" : "speakers"}
+      <section aria-label="Proposal speakers" class="pk-stack">
+        <div class="pk-cluster pk-cluster--between">
+          {/* The count belongs to the heading it counts, not halfway to the button. */}
+          <span class="pk-cluster">
+            <SectionHeading level={4}>Speakers</SectionHeading>
+            <span class="pk-small pk-muted pk-nowrap">
+              {formatNumber(speakers.length)} {speakers.length === 1 ? "speaker" : "speakers"}
+            </span>
           </span>
           {access.canFinalize && invitePath && (
-            <ButtonLink size="sm" variant="primary" href={invitePath}>
+            <ButtonLink variant="primary" href={invitePath}>
               Invite co-speaker
             </ButtonLink>
           )}
-        </PanelHeader>
-        <PanelBody class="pk-stack pk-stack--snug">
+        </div>
+        <div class="pk-stack pk-stack--snug">
           {speakers.length === 0 ? (
             <EmptyState
               title="No speakers assigned yet"
               body="Speakers appear here once the proposer adds them or a co-speaker accepts an invitation."
             />
           ) : (
-            speakers.map((speaker) => (
-              <ProposalSpeakerCard
-                key={speaker.userId}
-                speaker={speaker}
-                registrationStatus={speaker.registrationStatus}
-                proposalId={proposalId}
-                canEdit={access.canFinalize}
-                canFinalize={access.canFinalize}
-                decisionStatus={proposal.decision_status}
-                requiresPresentation={requiresPresentation}
-                isCurrentProposer={speaker.userId === proposal.proposer_user_id}
-                replacementSpeakers={buildReplacementProposerOptions(speakers, speaker.userId)}
-                endpoints={endpoints}
-                notify={notify}
-                onSaved={updateSpeaker}
-                onRemoved={() => {
-                  void roster.reload();
-                  void onReload?.();
-                }}
-              />
-            ))
+            <div class="pk-speaker-portrait-grid">
+              {speakers.map((speaker) => (
+                <ProposalSpeakerCard
+                  key={speaker.userId}
+                  speaker={speaker}
+                  identityId={speaker.identityId}
+                  registration={speaker.registration}
+                  userHref={userHref?.(speaker.userId)}
+                  identityHref={speaker.identityId ? identityHref?.(speaker.userId) : undefined}
+                  registrationHref={speaker.registration ? registrationHref?.(speaker.registration.id) : undefined}
+                  independentCapacity={speaker.independentCapacity}
+                  onIndependentCapacityReviewed={(review) =>
+                    updateSpeaker(speaker.userId, { independentCapacity: review })
+                  }
+                  proposalId={proposalId}
+                  profileAccess={profileAccess}
+                  canFinalize={access.canFinalize}
+                  decisionStatus={proposal.decision_status}
+                  requiresPresentation={requiresPresentation}
+                  isCurrentProposer={speaker.userId === proposal.proposer_user_id}
+                  replacementSpeakers={buildReplacementProposerOptions(speakers, speaker.userId)}
+                  endpoints={endpoints}
+                  notify={notify}
+                  onSaved={updateSpeaker}
+                  onProfileChanged={() => void roster.reload()}
+                  onRemoved={() => {
+                    void roster.reload();
+                    void onReload?.();
+                  }}
+                />
+              ))}
+            </div>
           )}
           {roster.data.proposal.presentationDeadline && (
             <p class="pk-small">Presentation deadline: {formatDateTime(roster.data.proposal.presentationDeadline)}</p>
           )}
-        </PanelBody>
-      </Panel>
+        </div>
+      </section>
     </div>
   );
 }

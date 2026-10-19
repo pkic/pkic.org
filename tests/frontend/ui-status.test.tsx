@@ -56,11 +56,44 @@ describe("Badge", () => {
   });
 
   it("applies tone class for each valid tone", () => {
-    const tones = ["ok", "warn", "danger", "info", "accent"] as const;
+    const tones = ["ok", "warn", "risk", "danger", "info", "neutral", "accent"] as const;
     for (const tone of tones) {
       const badge = badgeIn(mount(<Badge tone={tone}>Status</Badge>));
       expect(badge.className).toContain(`pk-badge--${tone}`);
     }
+  });
+
+  it("marks in-flight progress in four steps, fading by default or traveling on request", () => {
+    expect(
+      badgeIn(
+        mount(
+          <Badge tone="info" progress={0.1}>
+            Staff review
+          </Badge>,
+        ),
+      ).className,
+    ).toContain("pk-tone--fade-1");
+    expect(
+      badgeIn(
+        mount(
+          <Badge tone="info" progress={0.5}>
+            Consultation
+          </Badge>,
+        ),
+      ).className,
+    ).toContain("pk-tone--fade-2");
+    const travel = badgeIn(
+      mount(
+        <Badge tone="info" progress={1} progressStyle="travel">
+          Board decision
+        </Badge>,
+      ),
+    );
+    expect(travel.className).toContain("pk-tone--travel-4");
+  });
+
+  it("carries no progress class without progress", () => {
+    expect(badgeIn(mount(<Badge tone="info">Staff review</Badge>)).className).not.toContain("pk-tone--");
   });
 
   it("shows the dot by default", () => {

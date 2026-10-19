@@ -11,8 +11,8 @@
  * component that broke: every module that renders the design system's popup
  * surface for choosing something must declare itself a type-ahead
  * (`aria-autocomplete="list"`, the input telling assistive technology that
- * matches appear as you type) and must render no button of its own — a picker
- * with a button in it is a picker that makes you press something.
+ * matches appear as you type) and must render no search button of its own. Nonsearchable chooser
+ * triggers and paging are allowed only behind an explicit nonsearchable branch.
  *
  * `ui/Menu.tsx` and `ui/MenuLevel.tsx` render the same popup surface for a menu of commands rather
  * than for a search, so it is named here rather than filtered by a pattern
@@ -20,6 +20,7 @@
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
+import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import { REPOSITORY_ROOT } from "./helpers/source-files";
 
@@ -45,7 +46,68 @@ function pickerModules(): Array<{ path: string; source: string }> {
     .filter(({ path, source }) => source.includes(POPUP_SURFACE) && !COMMAND_MENUS.has(path));
 }
 
+function unwrap(node: ts.Expression): ts.Expression {
+  return ts.isParenthesizedExpression(node) ? unwrap(node.expression) : node;
+}
+
+function excludesSearch(node: ts.Expression): boolean {
+  node = unwrap(node);
+  if (ts.isPrefixUnaryExpression(node) && node.operator === ts.SyntaxKind.ExclamationToken) {
+    return ts.isIdentifier(node.operand) && node.operand.text === "searchable";
+  }
+  return (
+    ts.isBinaryExpression(node) &&
+    node.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken &&
+    (excludesSearch(node.left) || excludesSearch(node.right))
+  );
+}
+
+function nonsearchableBranch(node: ts.Node): boolean {
+  for (let child = node, parent = node.parent; parent; child = parent, parent = parent.parent) {
+    if (ts.isConditionalExpression(parent) && child === parent.whenFalse) {
+      const condition = unwrap(parent.condition);
+      if (ts.isIdentifier(condition) && condition.text === "searchable") return true;
+    }
+    if (
+      ts.isBinaryExpression(parent) &&
+      child === parent.right &&
+      parent.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken &&
+      excludesSearch(parent.left)
+    )
+      return true;
+  }
+  return false;
+}
+
+function searchableButtons(source: string): string[] {
+  const file = ts.createSourceFile("picker.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const buttons: string[] = [];
+  function visit(node: ts.Node) {
+    if (
+      (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) &&
+      node.tagName.getText(file) === "Button" &&
+      !nonsearchableBranch(node)
+    ) {
+      buttons.push(node.getText(file));
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(file);
+  return buttons;
+}
+
 describe("pickers", () => {
+  it("permits nonsearchable paging while rejecting buttons reachable during typeahead", () => {
+    expect(searchableButtons("const picker = searchable ? <TextInput /> : <Button>Choose</Button>;")).toEqual([]);
+    expect(
+      searchableButtons("const pager = !searchable && (offset > 0 || hasMore) && <Button>Next options</Button>;"),
+    ).toEqual([]);
+    expect(searchableButtons("const wrong = searchable && <Button>Run</Button>;")).toHaveLength(1);
+    expect(searchableButtons("const wrong = disabled ? <TextInput /> : <Button>Run</Button>;")).toHaveLength(1);
+    expect(searchableButtons("const option = <button onClick={() => pick(user)}>User name</button>;")).toEqual([]);
+    expect("const search = <button>Search</button>;").toMatch(/>\s*Search\s*</);
+    expect(searchableButtons("const wrong = (!searchable || ready) && <Button>Run</Button>;")).toHaveLength(1);
+  });
   it("exist — the discovery would otherwise pass by finding nothing", () => {
     expect(pickerModules().map(({ path }) => path).length).toBeGreaterThan(0);
   });
@@ -57,9 +119,8 @@ describe("pickers", () => {
 
   it.each(pickerModules().map(({ path }) => path))("%s offers no button to run its search", (path) => {
     const source = readFileSync(join(REPOSITORY_ROOT, path), "utf8");
-    // Both the design system's `Button` and a bare element: a picker's matches
-    // follow from typing, so neither has anything to do here.
-    expect(source).not.toMatch(/<Button[\s>]/);
+    // Only structurally gated nonsearchable trigger/paging controls are exempt.
+    expect(searchableButtons(source)).toEqual([]);
     expect(source).not.toMatch(/>\s*Search\s*</);
   });
 });

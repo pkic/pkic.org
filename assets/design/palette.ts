@@ -1,13 +1,13 @@
 /**
  * The PKI Consortium palette.
  *
- * These are the organization's colours as they already exist in the slide
+ * These are the organization's colors as they already exist in the slide
  * theme, the public site's section map, and `_theme-and-bootstrap.scss`. They
  * are raw values with no meaning attached: nothing in a component may read
  * them. Components read the semantic tokens in `tokens.ts`, which are defined
  * in terms of these.
  *
- * The three arc colours are the mark's own: `logo-icon-color.svg` fills its
+ * The three arc colors are the mark's own: `logo-icon-color.svg` fills its
  * segments green, orange and blue, which is why the brand gradient runs in
  * that order — it is the mark unrolled.
  */
@@ -58,7 +58,7 @@ export const markArcs = ["green", "blue", "orange"] as const satisfies readonly 
  * the hue wheel so a duo gradient never crosses the wheel and turns muddy.
  *
  * Red is deliberately absent as an accent: it stays reserved for destructive
- * and error states, so no group's colour can read as a warning.
+ * and error states, so no group's color can read as a warning.
  */
 export const accentNeighbour: Readonly<Record<Exclude<PaletteHue, "red">, PaletteHue>> = {
   green: "teal",

@@ -61,7 +61,10 @@
     --pk-ease: cubic-bezier(0.16, 0.84, 0.28, 1);
     --pk-dur-spin: 700ms;
     --pk-dur-shimmer: 1400ms;
+    --pk-dur-affiliation: 4s;
     --pk-dur-instant: 1ms;
+    --pk-icon-stroke: 1.25px;
+    --pk-icon-stroke-strong: 1.75px;
     --pk-focus: 0 0 0 2px var(--pk-surface), 0 0 0 4px var(--pk-accent);
     --pk-on-solid: #ffffff;
     --pk-chrome: #050505;
@@ -69,12 +72,6 @@
     --pk-chrome-panel: #080808;
     --pk-chrome-raised: #111111;
     --pk-on-solid-ink: #212529;
-    --pk-agenda-location-1: #2f8fcb;
-    --pk-agenda-location-2: #f2782c;
-    --pk-agenda-location-3: #df3447;
-    --pk-agenda-location-4: #6c36bd;
-    --pk-agenda-location-5: #10a884;
-    --pk-agenda-location-6: #5c76d8;
     --pk-danger-strong: color-mix(in oklab, var(--pk-danger) 62%, #000);
     --pk-accent-on: var(--pk-on-solid);
     --pk-grad-tonal: linear-gradient(135deg, var(--pk-accent-deep), var(--pk-accent-lift));
@@ -84,6 +81,8 @@
 
     --pk-control-y: 0.4rem;
     --pk-control-x: 0.75rem;
+    --pk-control-text: 0.875rem;
+    --pk-control-size: calc(var(--pk-control-text) * 1.35 + var(--pk-control-y) * 2 + 2px);
     --pk-row-y: 0.55rem;
     --pk-stack: 1rem;
 
@@ -219,6 +218,8 @@
   [data-density="compact"] {
     --pk-control-y: 0.25rem;
     --pk-control-x: 0.6rem;
+    --pk-control-text: 0.8125rem;
+    --pk-control-size: calc(var(--pk-control-text) * 1.35 + var(--pk-control-y) * 2 + 2px);
     --pk-row-y: 0.32rem;
     --pk-stack: 0.75rem;
   }

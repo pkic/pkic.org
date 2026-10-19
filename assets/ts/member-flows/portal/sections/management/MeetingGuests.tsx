@@ -10,7 +10,7 @@ import type { EventInviteWindow } from "../../../../../shared/schemas/event-invi
 import { successResponseSchema } from "../../../../../shared/schemas/api-common";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { confirmAction } from "../../../../components/ConfirmDialog";
-import { EmptyState } from "../../../../ui/RecordEmptyState";
+import { EmptyState } from "../../../../ui/EmptyState";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Badge } from "../../../../ui/Badge";
 import { PersonCell } from "../../../../ui/PersonCell";
@@ -27,7 +27,7 @@ import { isoDateTimeValue, localDateTimeValue } from "./meeting-form-utils";
 /**
  * The guest's standing, as a word first and a tone second. A revoked guest and
  * an expired one are not the same situation, and neither is legible from a
- * colour alone.
+ * color alone.
  */
 function guestStanding(guest: EventOccurrenceGuest): { label: string; tone: "ok" | "danger" | "neutral" } {
   if (guest.revokedAt) return { label: "Revoked", tone: "danger" };
@@ -116,7 +116,7 @@ export function MeetingGuests({
       {showAddForm && (
         <Panel>
           <PanelHeader title="Add external guest eligibility" headingLevel={4}>
-            <Button size="sm" variant="ghost" onClick={() => setShowAddForm(false)}>
+            <Button variant="ghost" onClick={() => setShowAddForm(false)}>
               Cancel
             </Button>
           </PanelHeader>
@@ -178,7 +178,7 @@ export function MeetingGuests({
               />
               {error && <ErrorAlert error={error} />}
               <div class="pk-cluster">
-                <Button type="submit" variant="primary" size="sm" loading={saving}>
+                <Button type="submit" variant="primary" loading={saving}>
                   {saving ? "Adding…" : "Add guest"}
                 </Button>
               </div>
@@ -187,6 +187,7 @@ export function MeetingGuests({
         </Panel>
       )}
       <ApiDataTable
+        urlState="meeting-guests"
         caption="External guests for this meeting occurrence"
         endpoint={endpoint}
         responseSchema={eventOccurrenceGuestsListResponseSchema}
@@ -200,7 +201,7 @@ export function MeetingGuests({
         columns={[
           {
             header: "Guest",
-            cell: (guest) => <PersonCell name={guest.name} email={guest.email} size="sm" />,
+            cell: (guest) => <PersonCell name={guest.name} size="sm" />,
             width: "primary",
             sort: { asc: "name", desc: "-name" },
           },

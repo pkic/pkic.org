@@ -1,0 +1,67 @@
+/*
+ * Input group: one input and one button, one control tall.
+ *
+ * The row stretches both to the shared control size, so a text or icon button
+ * never sits higher or lower than the input beside it.
+ */
+
+@layer components {
+  .pk-input-group {
+    display: flex;
+    align-items: stretch;
+    gap: var(--pk-2);
+    min-width: 0;
+  }
+
+  .pk-input-group > .pk-input {
+    flex: 1 1 auto;
+  }
+
+  /* Touch buttons may exceed the density height; the input follows the row. */
+  .pk-input-group > .pk-input:not(.pk-input--textarea, [multiple]) {
+    block-size: auto;
+  }
+
+  .pk-input-group > .pk-btn {
+    flex: none;
+    block-size: var(--pk-control-size);
+  }
+
+  .pk-input-group__prefix {
+    display: flex;
+    align-items: center;
+    flex: none;
+    padding-inline: var(--pk-control-x);
+    border: 1px solid var(--pk-line);
+    border-radius: var(--pk-radius);
+    background: var(--pk-surface-sunk);
+    color: var(--pk-ink-muted);
+  }
+
+  .pk-input-group--joined {
+    gap: 0;
+  }
+
+  .pk-input-group--joined > * {
+    border-radius: 0;
+  }
+
+  .pk-input-group--joined > * + * {
+    margin-inline-start: -1px;
+  }
+
+  .pk-input-group--joined > :first-child {
+    border-start-start-radius: var(--pk-radius);
+    border-end-start-radius: var(--pk-radius);
+  }
+
+  .pk-input-group--joined > :last-child {
+    border-start-end-radius: var(--pk-radius);
+    border-end-end-radius: var(--pk-radius);
+  }
+
+  .pk-input-group--joined > :focus-within {
+    position: relative;
+    z-index: 1;
+  }
+}

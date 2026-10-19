@@ -28,15 +28,26 @@ export function measurePopupPosition(
   anchor: DOMRect,
   popup: DOMRect,
   align: "start" | "end" = "start",
-  side: "bottom" | "right" = "bottom",
+  side: "bottom" | "top" | "right" = "bottom",
 ): PopupPosition {
   const gap = side === "right" ? 8 : 4;
   const margin = 8;
 
   const fitsBelow = anchor.bottom + gap + popup.height <= window.innerHeight - margin;
   const fitsAbove = anchor.top - gap - popup.height >= margin;
+  const above = anchor.top - gap - popup.height;
+  const below = anchor.bottom + gap;
+  // A popup that prefers the top opens above its anchor, as a reaction bar does, and drops below only without room.
   const top =
-    side === "right" ? anchor.top : !fitsBelow && fitsAbove ? anchor.top - gap - popup.height : anchor.bottom + gap;
+    side === "right"
+      ? anchor.top
+      : side === "top"
+        ? fitsAbove || !fitsBelow
+          ? above
+          : below
+        : !fitsBelow && fitsAbove
+          ? above
+          : below;
 
   const preferred =
     side === "right"
@@ -101,14 +112,22 @@ export function usePopupPlacement({
   align = "start",
   revision,
   side = "bottom",
+  topLayer = false,
 }: {
   open: boolean;
   anchorRef: RefObject<HTMLElement>;
   popupRef: RefObject<HTMLElement>;
   align?: "start" | "end";
-  side?: "bottom" | "right";
+  side?: "bottom" | "top" | "right";
   /** Changes whenever the popup's measured size can have changed. */
   revision?: string | number;
+  /**
+   * Shows the popup in the browser's top layer, as a manual popover, before it is measured. A fixed popup is
+   * still painted inside its ancestors' stacking contexts: a menu in an agenda card opened under the pinned room
+   * headers and, on a phone, under the workspace tabs. The top layer is above every page context, and the popup
+   * stays where it is in the document, so focus, keyboard handling and outside clicks are unchanged.
+   */
+  topLayer?: boolean;
 }): void {
   const place = useCallback((): void => {
     const anchor = anchorRef.current;
@@ -121,6 +140,11 @@ export function usePopupPlacement({
 
   useLayoutEffect(() => {
     if (!open) return;
+    const popup = popupRef.current;
+    if (topLayer && popup && typeof popup.showPopover === "function" && !popup.hasAttribute("popover")) {
+      popup.setAttribute("popover", "manual");
+      popup.showPopover();
+    }
     place();
 
     /*
@@ -154,7 +178,7 @@ export function usePopupPlacement({
       cancelAnimationFrame(frame);
       observer?.disconnect();
     };
-  }, [open, place, revision, anchorRef, popupRef]);
+  }, [open, place, revision, anchorRef, popupRef, topLayer]);
 
   // A fixed popup does not move with its anchor, so it is re-placed as the
   // page moves. Closing instead would mean any scroll momentum — unavoidable

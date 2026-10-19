@@ -10,7 +10,7 @@
  * a row we draw. That is deliberate rather than clever: the element stays in
  * the tab order, keeps its `accept` filtering, keeps its role and its value,
  * and still opens the picker on Space or Enter. Nothing here re-implements a
- * behaviour the platform already has — the picture is ours, the control is
+ * behavior the platform already has — the picture is ours, the control is
  * still the browser's. A `hidden` input driven by a separate button, which two
  * portal surfaces do today, gives up all of that.
  *
@@ -19,7 +19,7 @@
  * describedby that carries the help text, the invalid flag — onto the real
  * input, so the accessible name and the guidance come from the one place that
  * should own them. A control that renders its own help text is a second
- * labelling path, and two labelling paths is how forms end up with orphaned
+ * labeling path, and two labeling paths is how forms end up with orphaned
  * `for` attributes.
  */
 
@@ -118,13 +118,7 @@ export function FileInput({
           // The name is in the accessible label rather than only in the muted
           // text above, which is hidden: this is where a screen reader user
           // finds out which file they are about to drop.
-          <Button
-            variant="ghost"
-            size="sm"
-            class="pk-file__clear"
-            aria-label={`${clearLabel} ${fileName}`}
-            onClick={clear}
-          >
+          <Button variant="ghost" class="pk-file__clear" aria-label={`${clearLabel} ${fileName}`} onClick={clear}>
             {clearLabel}
           </Button>
         )}

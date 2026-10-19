@@ -28,18 +28,23 @@ import "./FormSection.css";
 export function FormSection({
   title,
   description,
+  layout = "fields",
   children,
 }: {
   title: string;
   /** One line on what the group is for, where the fields cannot say it alone. */
   description?: ComponentChildren;
+  /** Stack metadata and actions instead of arranging editable fields in columns. */
+  layout?: "fields" | "stack";
   children: ComponentChildren;
 }) {
   return (
     <fieldset class="pk-form-section">
       <legend class="pk-form-section__title">{title}</legend>
       {description && <p class="pk-form-section__description">{description}</p>}
-      <div class="pk-form-section__fields">{children}</div>
+      <div class={`pk-form-section__fields${layout === "stack" ? " pk-form-section__fields--stack" : ""}`}>
+        {children}
+      </div>
     </fieldset>
   );
 }

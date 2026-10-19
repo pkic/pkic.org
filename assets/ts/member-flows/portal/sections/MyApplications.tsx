@@ -1,8 +1,6 @@
 /**
- * My Application — View original application, status history,
- * and timeline. Most members have exactly one application, but the backend
- * (GET /api/v1/users/current/applications) returns every application matching the
- * caller's email, so the list links to one addressable detail view per application.
+ * Own application history and addressable details, available without membership.
+ * The server checks applicant ownership and the selected organization context.
  */
 import type { ComponentChildren } from "preact";
 import { useEffect, useState } from "preact/hooks";
@@ -143,7 +141,7 @@ function applicationColumns(categoryLabel: (code: string) => string): Array<Colu
       cell: (app) => categoryLabel(app.membershipCategory),
     },
     // The badge carries the status as words as well as a tone, so the column is
-    // readable without relying on colour.
+    // readable without relying on color.
     { header: "Status", cell: (app) => <Badge status={app.stage} /> },
     {
       header: "Submitted",
@@ -163,6 +161,7 @@ function MyApplicationsList() {
       <PageHeader title="My application" />
       <Panel>
         <ApiDataTable
+          urlState="membership-applications"
           caption="Your membership applications"
           columns={applicationColumns(categories.label)}
           endpoint="/api/v1/users/current/applications"

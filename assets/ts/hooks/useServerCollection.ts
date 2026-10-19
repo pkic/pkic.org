@@ -10,6 +10,10 @@ export interface ServerCollectionOptions<T> {
   params?: Record<string, string>;
   responseSchema: z.ZodType<T>;
   load: CollectionLoader;
+  /** Sensitive live views clear their previous data while revalidating. */
+  clearDataOnReload?: boolean;
+  /** Sensitive live views must not retain contacts after any failed request. */
+  retainDataOnError?: boolean;
 }
 
 interface ServerCollectionState<T> {
@@ -89,6 +93,8 @@ export function useServerCollection<T>({
   params = {},
   responseSchema,
   load,
+  clearDataOnReload = false,
+  retainDataOnError = true,
 }: ServerCollectionOptions<T>): ServerCollectionState<T> & { reload: () => Promise<void>; updatedAt: string | null } {
   const requestGate = useRef<ReturnType<typeof createLatestRequestGate> | null>(null);
   requestGate.current ??= createLatestRequestGate();
@@ -117,7 +123,11 @@ export function useServerCollection<T>({
     const sameResource = dataUrl.current === url;
     if (!sameResource) updatedAt.current = null;
     dataUrl.current = url;
-    setState((current) => ({ data: sameResource ? current.data : null, loading: true, error: null }));
+    setState((current) => ({
+      data: sameResource && !clearDataOnReload ? current.data : null,
+      loading: true,
+      error: null,
+    }));
 
     void load(url, request.signal, responseSchema)
       .then((data) => {
@@ -130,7 +140,7 @@ export function useServerCollection<T>({
       .catch((cause: unknown) => {
         if (!request.isCurrent()) return;
         setState((current) => ({
-          data: canRetainData(cause) ? current.data : null,
+          data: retainDataOnError && canRetainData(cause) ? current.data : null,
           loading: false,
           error: cause instanceof Error ? cause : new Error("Request failed"),
         }));
@@ -140,7 +150,7 @@ export function useServerCollection<T>({
     return () => {
       requestGate.current?.cancel();
     };
-  }, [url, responseSchema, load, reloadSequence, settleReloads]);
+  }, [url, responseSchema, load, reloadSequence, settleReloads, clearDataOnReload, retainDataOnError]);
 
   useEffect(
     () => () => {

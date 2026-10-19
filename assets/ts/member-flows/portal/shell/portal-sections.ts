@@ -16,9 +16,6 @@ export const Home = lazy(() => import("../sections/Home").then((module) => ({ de
 export const MyApplications = lazy(() =>
   import("../sections/MyApplications").then((module) => ({ default: module.MyApplications })),
 );
-export const AccountSettings = lazy(() =>
-  import("../sections/AccountSettings").then((module) => ({ default: module.AccountSettings })),
-);
 export const Forms = lazy(() => import("../sections/Forms").then((module) => ({ default: module.Forms })));
 export const DonationAnalytics = lazy(() =>
   import("../sections/system-donations/DonationAnalytics").then((module) => ({ default: module.DonationAnalytics })),
@@ -63,6 +60,21 @@ export const Organizations = lazy(() =>
 export const OrganizationDetail = lazy(() =>
   import("../sections/system-organizations/OrganizationDetail").then((module) => ({
     default: module.OrganizationDetail,
+  })),
+);
+export const OrganizationMergeForm = lazy(() =>
+  import("../sections/system-organizations/OrganizationMergeForm").then((module) => ({
+    default: module.OrganizationMergeForm,
+  })),
+);
+export const OrganizationDomains = lazy(() =>
+  import("../sections/system-organizations/OrganizationDomains").then((module) => ({
+    default: module.OrganizationDomains,
+  })),
+);
+export const OrganizationDomainClaimForm = lazy(() =>
+  import("../sections/system-organizations/OrganizationDomainClaimForm").then((module) => ({
+    default: module.OrganizationDomainClaimForm,
   })),
 );
 export const MembershipApplications = lazy(() =>

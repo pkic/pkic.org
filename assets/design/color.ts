@@ -1,5 +1,5 @@
 /**
- * Colour maths for verifying the tokens.
+ * Color maths for verifying the tokens.
  *
  * The token module expresses several values as `color-mix(in oklab, …)`, which
  * a browser resolves but a test cannot read. Reproducing the mix here lets the
@@ -26,7 +26,7 @@ export function parseHex(hex: string): Rgb {
           .map((char) => char + char)
           .join("")
       : value;
-  if (!/^[0-9a-fA-F]{6}$/.test(full)) throw new Error(`not a hex colour: ${hex}`);
+  if (!/^[0-9a-fA-F]{6}$/.test(full)) throw new Error(`not a hex color: ${hex}`);
   return {
     r: Number.parseInt(full.slice(0, 2), 16) / 255,
     g: Number.parseInt(full.slice(2, 4), 16) / 255,
@@ -79,7 +79,7 @@ export function oklabToRgb({ L, a, b }: Oklab): Rgb {
 
 /**
  * `color-mix(in oklab, first <weight>%, second)` — the weight is how much of
- * the FIRST colour survives, matching the CSS argument order.
+ * the FIRST color survives, matching the CSS argument order.
  */
 export function mixOklab(first: string, weight: number, second: string): Rgb {
   const one = rgbToOklab(parseHex(first));

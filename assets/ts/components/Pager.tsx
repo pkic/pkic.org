@@ -5,7 +5,7 @@
  * the design system thinks in page numbers, because that is what a reader
  * clicks. This translates between them in one place.
  *
- * Two behaviours are kept from the version this replaces, because they are
+ * Two behaviors are kept from the version this replaces, because they are
  * about what to show rather than how it looks:
  *
  *   - A list with nothing in it and nothing after it renders no pager. There
@@ -37,7 +37,7 @@ export function Pager({ page, hasMore, pageSize, offset, rowCount, total, onJump
   if (page <= 1 && !hasMore && total <= Math.min(...PAGE_SIZE_OPTIONS)) {
     // The count keeps the pager's own frame and its left edge — the article's
     // list panel puts the count at the start of the footer row, and a lone
-    // centred line under a left-aligned table read as a caption for nothing.
+    // centered line under a left-aligned table read as a caption for nothing.
     return (
       <div class="pk pk-pager">
         <span class="pk-pager__summary">{total === 1 ? "1 item" : `${total} items`}</span>

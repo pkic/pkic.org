@@ -1,6 +1,10 @@
+import { eventClock } from "../../../../../shared/event-clock";
+import { scannerPermission, availableScannerActions } from "../../../../../shared/event-scanner-permissions";
 import { lazy, Suspense } from "preact/compat";
-import { useEffect } from "preact/hooks";
-import { EventAudienceView } from "./EventAudienceView";
+import { useEffect, useMemo } from "preact/hooks";
+import { Field } from "../../../../ui/Field";
+import { Select } from "../../../../ui/TextControl";
+import { hasEventAgendaPermission } from "./event-agenda-access";
 import { eventDetailResponseSchema } from "../../../../../shared/schemas/event-management";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
@@ -10,8 +14,22 @@ import { getJson } from "../../../../shared/api-client";
 import { usePortalHashLocation } from "../../hash-location";
 import { portalSession } from "../../state";
 import { portalHasPermissionAtAnyScope } from "../../shell/portal-navigation";
+import { canOpenGroupWorkspace } from "./event-destination";
 import type { PortalSession } from "../../types";
+import { createScannerEventBootstrap } from "./detail/scanner/scanner-event-bootstrap";
+import { databaseIdSchema } from "../../../../../shared/schemas/identifiers";
+import { readHashQueryParam } from "../../../../ui/url-query";
+import { ScannerEventNavigation } from "./ParticipantEventNavigation";
+import { eventAgendaRoute } from "../../../../../shared/event-participation-link";
 
+const scannerEventBootstrap = createScannerEventBootstrap(() => portalSession.value);
+
+const EventScanner = lazy(() =>
+  import("./detail/scanner/EventScanner").then((module) => ({ default: module.EventScanner })),
+);
+const SponsorLeads = lazy(() =>
+  import("./detail/agenda/SponsorLeads").then((module) => ({ default: module.SponsorLeads })),
+);
 const ParticipantEvent = lazy(() =>
   import("./ParticipantEvent").then((module) => ({ default: module.ParticipantEvent })),
 );
@@ -30,10 +48,142 @@ type EventWorkspaceProps =
   | { view: "proposal"; slug: string; resourceId: string; tab?: string; segment?: string }
   | { view: "registration"; slug: string; resourceId: string };
 
+function ScopedSponsorLeadsRoute({ slug }: { slug: string }) {
+  const event = useData(() => getJson(`/api/v1/events/${encodeURIComponent(slug)}`, eventDetailResponseSchema), [slug]);
+  if (event.loading) return <Spinner label="Loading sponsor leads…" />;
+  if (event.error || !event.data) return <ErrorAlert error={event.error ?? "Event unavailable"} />;
+  const detail = event.data.event;
+  if (!("sponsorLeadAccess" in detail) || !detail.sponsorLeadAccess) {
+    return (
+      <ErrorAlert error="Your current identity does not have permission to view or export sponsor leads for this event." />
+    );
+  }
+  return (
+    <div class="pk pk-stack portal-section">
+      <PageHeader
+        title={detail.name}
+        trail={[{ label: "Events", href: usePortalHashLocation.hrefs("/events") }, { label: "Sponsor leads" }]}
+      />
+      <Suspense fallback={<Spinner label="Loading sponsor leads…" />}>
+        <SponsorLeads slug={slug} timeZone={eventClock(detail)} />
+      </Suspense>
+    </div>
+  );
+}
+
+function ScopedScannerRoute({ slug, sponsorId }: { slug: string; sponsorId?: string }) {
+  const [, navigate] = usePortalHashLocation();
+  const session = portalSession.value;
+  const request = useMemo(() => new AbortController(), [slug, sponsorId, session?.sessionId, session?.identity.id]);
+  useEffect(() => () => request.abort(), [request]);
+  const event = useData(() => scannerEventBootstrap.load(slug, sponsorId, request.signal), [request]);
+  if (event.loading) return <Spinner label="Loading event scanner…" />;
+  if (event.error || !event.data) return <ErrorAlert error={event.error ?? "Event unavailable"} />;
+  const scannerAccess = "scannerAccess" in event.data.event ? event.data.event.scannerAccess : undefined;
+  const permission = sponsorId ? "agenda:leads_capture" : "agenda:scan";
+  const can = (value: import("../../../../../shared/schemas/permissions").Permission) =>
+    hasEventAgendaPermission(event.data!.event.id, value, sponsorId);
+  const allowedActions = availableScannerActions(can);
+  if (
+    sponsorId
+      ? !can(permission as "agenda:leads_capture") ||
+        !scannerAccess?.sponsors.some((sponsor) => sponsor.id === sponsorId)
+      : !allowedActions.length || !scannerAccess?.canScan
+  )
+    return <ErrorAlert error="Your current identity does not have permission to scan for this event." />;
+  const selectedSession = sponsorId ? null : readHashQueryParam("session");
+  const target = selectedSession === null ? null : databaseIdSchema.safeParse(selectedSession);
+  if (target && !target.success) return <ErrorAlert error="This session is not available for check-in." />;
+  return (
+    <div class="pk pk-stack portal-section">
+      <PageHeader
+        title={event.data.event.name}
+        trail={[
+          { label: "Events", href: usePortalHashLocation.hrefs("/events") },
+          { label: sponsorId ? "Lead scanner" : "Scanner" },
+        ]}
+      />
+      <ScannerEventNavigation
+        event={{ ...event.data.event, slug }}
+        activeId={sponsorId ? "lead-scanner" : "scanner"}
+        items={[
+          {
+            id: "overview",
+            label: "Overview",
+            href: usePortalHashLocation.hrefs(`/events/${encodeURIComponent(slug)}`),
+          },
+          { id: "program", label: "Agenda", href: usePortalHashLocation.hrefs(eventAgendaRoute(slug)) },
+          {
+            id: "agenda",
+            label: "My agenda",
+            href: usePortalHashLocation.hrefs(eventAgendaRoute(slug, { mine: true })),
+          },
+        ]}
+      />
+      {scannerAccess && scannerAccess.sponsors.length + Number(scannerAccess.canScan) > 1 && (
+        <Field label="Scanning context">
+          {(control) => (
+            <Select
+              {...control}
+              value={sponsorId ?? "event"}
+              onChange={(change) =>
+                navigate(
+                  change.currentTarget.value === "event"
+                    ? `/events/${encodeURIComponent(slug)}/scanner`
+                    : `/events/${encodeURIComponent(slug)}/sponsors/${encodeURIComponent(change.currentTarget.value)}/scanner`,
+                )
+              }
+            >
+              {scannerAccess.canScan && <option value="event">Event admission and attendance</option>}
+              {scannerAccess.sponsors.map((sponsor) => (
+                <option value={sponsor.id}>Lead capture · {sponsor.name}</option>
+              ))}
+            </Select>
+          )}
+        </Field>
+      )}
+      <Suspense fallback={<Spinner />}>
+        <EventScanner
+          key={`${slug}:${sponsorId ?? "event"}:${target?.success ? target.data : "entrance"}:${portalSession.value?.identity.id ?? ""}`}
+          slug={slug}
+          occurrenceId={target?.success ? target.data : null}
+          allowedActions={
+            sponsorId
+              ? ["lead"]
+              : [
+                  ...allowedActions,
+                  ...(can("agenda:admit_exceptions") && scannerPermission(can, "agenda:admit")
+                    ? ["exception" as const]
+                    : []),
+                ]
+          }
+          sponsorId={sponsorId}
+          sponsorName={scannerAccess?.sponsors.find((sponsor) => sponsor.id === sponsorId)?.name}
+          canExportLeads={Boolean(
+            sponsorId &&
+            portalSession.value?.staff?.grants.some(
+              (grant) =>
+                grant.permission === "agenda:leads_export" &&
+                grant.contextType === "event_sponsor" &&
+                grant.contextId === sponsorId,
+            ),
+          )}
+          operatorUserId={portalSession.value?.identity.id ?? ""}
+          canAdmitExceptions={
+            !sponsorId && can("agenda:admit_exceptions") && Boolean(scannerPermission(can, "agenda:admit"))
+          }
+        />
+      </Suspense>
+    </div>
+  );
+}
+
 /**
- * Canonical event management lives in groups. These legacy routes only
- * resolve an event to its owning group; they never provide an independent
- * system-level management workspace.
+ * Canonical event management lives in groups. These legacy routes resolve an
+ * event to its owning group only for a caller who can open that group's
+ * workspace; they never provide an independent system-level management
+ * workspace. Everyone else — and every attendee-facing tab — gets the
+ * group-independent event page, never a redirect into a refusal.
  */
 function LegacyEventRoute({
   slug,
@@ -54,29 +204,23 @@ function LegacyEventRoute({
   const event = detail.data?.event;
   const ownerGroupId = event && "ownerGroupId" in event ? event.ownerGroupId : null;
   const eventId = detail.data?.event.id ?? null;
-  const personal =
-    audienceFallback &&
-    Boolean(
-      event?.participation?.registrationId || event?.participation?.proposals || event?.participation?.speakerProposals,
-    );
   const target =
-    !personal && ownerGroupId && eventId
+    !audienceFallback && ownerGroupId && eventId && canOpenGroupWorkspace(portalSession.value, ownerGroupId)
       ? mapPath(`/groups/${encodeURIComponent(ownerGroupId)}/events/${encodeURIComponent(eventId)}`)
       : null;
 
-  const fallbackTarget = !detail.loading && !detail.error && event && !target && !audienceFallback ? "/events" : null;
-
   useEffect(() => {
-    const destination = target ?? fallbackTarget;
-    if (destination) navigate(destination, { replace: true });
-  }, [target, fallbackTarget, navigate]);
+    if (target) navigate(target, { replace: true });
+  }, [target, navigate]);
 
   if (detail.loading) return <Spinner label="Loading event…" />;
   if (detail.error) return <ErrorAlert error={detail.error} />;
-  if (target || fallbackTarget) return null;
-  if (personal && event) return <ParticipantEvent event={event} tab={audienceTab} />;
-  if (audienceFallback && event && "viewer" in event) return <EventAudienceView event={event} />;
-  return null;
+  if (target || !event) return null;
+  // Every reader lands on the event app: the caller's own registration,
+  // proposals, agenda, ticket and scanner tabs come from the caller-scoped
+  // projection, and a reader who has none of them yet sees the event home
+  // with its registration offer rather than a separate plain detail page.
+  return <ParticipantEvent event={event} tab={audienceFallback ? audienceTab : undefined} />;
 }
 
 /**
@@ -92,6 +236,31 @@ export function eventListShowsProposalPrograms(session: PortalSession | null): b
 }
 
 export function EventWorkspace(props: EventWorkspaceProps) {
+  const session = portalSession.value;
+  useEffect(() => scannerEventBootstrap.sessionChanged(), [session?.sessionId, session?.identity.id]);
+  if (props.view === "detail" && props.tab === "lead-scanner")
+    return (
+      <div class="pk pk-stack portal-section">
+        <Suspense fallback={<Spinner />}>
+          <ParticipantEventPage slug={props.slug} tab="lead-scanner" />
+        </Suspense>
+      </div>
+    );
+  if (props.view === "detail" && props.tab === "leads") return <ScopedSponsorLeadsRoute slug={props.slug} />;
+  // A check-in link (`/events/:slug/check-in/:code`) opens the attendee's own check-in, never the workspace.
+  if (props.view === "detail" && props.tab === "check-in")
+    return (
+      <div class="pk pk-stack portal-section">
+        <Suspense fallback={<Spinner />}>
+          <ParticipantEventPage slug={props.slug} tab="check-in" pointToken={props.subTab} />
+        </Suspense>
+      </div>
+    );
+  if (
+    props.view === "detail" &&
+    (props.tab === "scanner" || (props.tab === "sponsors" && props.subTab && props.detailSegment === "scanner"))
+  )
+    return <ScopedScannerRoute slug={props.slug} sponsorId={props.tab === "sponsors" ? props.subTab : undefined} />;
   if (props.view === "participant")
     return (
       <div class="pk pk-stack portal-section">
@@ -105,7 +274,7 @@ export function EventWorkspace(props: EventWorkspaceProps) {
     // region rather than the workspace's legacy heading.
     return (
       <div class="pk pk-stack portal-section">
-        <PageHeader title="Events" />
+        <PageHeader title="Events" hideOnMobile />
         <Suspense fallback={<Spinner />}>
           <div class="pk-stack">
             <EventList />
@@ -141,20 +310,29 @@ export function EventWorkspace(props: EventWorkspaceProps) {
     content = (
       <LegacyEventRoute
         slug={props.slug}
-        audienceFallback={!tab || tab === "overview" || tab === "submissions"}
+        audienceFallback={
+          !tab ||
+          tab === "overview" ||
+          tab === "submissions" ||
+          tab === "agenda" ||
+          tab === "promotion" ||
+          tab === "session-management" ||
+          tab === "ticket" ||
+          tab === "virtual" ||
+          tab === "more"
+        }
         audienceTab={props.tab}
         mapPath={(base) => {
           if (!tab || tab === "overview") return base;
-          // The group workspace flattened Team out of Settings, while the
-          // other event sections kept their second URL segment. Preserve the
-          // complete destination so bookmarked legacy URLs still open the
-          // exact workflow they name instead of silently landing one level
-          // too high.
-          if (tab === "settings" && subTab === "team") {
-            return `${base}/team${props.detailSegment ? `/${encodeURIComponent(props.detailSegment)}` : ""}`;
-          }
-          if (tab === "settings") return `${base}/settings`;
-          return `${base}/${encodeURIComponent(tab)}${subTab ? `/${encodeURIComponent(subTab)}` : ""}`;
+          const section =
+            tab === "team"
+              ? "settings/team"
+              : tab === "promoters"
+                ? "stats/promoters"
+                : tab === "badges"
+                  ? "registrations/badges"
+                  : encodeURIComponent(tab);
+          return `${base}/${section}${subTab ? `/${encodeURIComponent(subTab)}` : ""}${props.detailSegment ? `/${props.detailSegment.split("/").map(encodeURIComponent).join("/")}` : ""}`;
         }}
       />
     );

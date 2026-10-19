@@ -100,7 +100,7 @@ describe("Field", () => {
     expect(container.querySelector(".pk-field__message")?.getAttribute("role")).toBe("status");
   });
 
-  it("renders a mark for every state, so the status never depends on colour alone", () => {
+  it("renders a mark for every state, so the status never depends on color alone", () => {
     for (const state of ["ok", "advisory", "invalid"] as const) {
       const container = mount(
         <Field label="Contact" state={state} message="Message">
@@ -150,5 +150,16 @@ describe("Field", () => {
     const select = withSelect.querySelector("select");
     expect(select?.className).toContain("pk-input--select");
     expect(select?.getAttribute("aria-invalid")).toBe("true");
+  });
+  it("keeps a toolbar's hidden label associated with its search control", () => {
+    const container = mount(
+      <Field label="Search sessions" labelHidden>
+        {(control) => <TextInput {...control} type="search" />}
+      </Field>,
+    );
+    const label = container.querySelector("label")!;
+    expect(label.classList.contains("pk-sr-only")).toBe(true);
+    expect(label.getAttribute("for")).toBe(input(container).id);
+    expect(label.textContent).toBe("Search sessions");
   });
 });

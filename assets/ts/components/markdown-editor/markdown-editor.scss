@@ -1,5 +1,8 @@
 @layer components {
   .pk-markdown-editor { min-width: 0; border: 1px solid var(--pk-line); border-radius: var(--pk-radius); background: var(--pk-surface); overflow: hidden; }
+  /* A field's state draws on the editor's frame, as it does on any control's border; the message carries the mark. */
+  .pk-field:is(.pk-field--ok, .pk-field--advisory, .pk-field--invalid) .pk-markdown-editor { border-color: var(--state); }
+  .pk-field__control:has(> .pk-markdown-editor) > .pk-field__state { display: none; }
   .pk-markdown-editor__toolbar, .pk-markdown-editor__footer { display: flex; align-items: center; flex-wrap: wrap; gap: var(--pk-1); padding: var(--pk-2); }
   .pk-markdown-editor__toolbar { border-bottom: 1px solid var(--pk-line); gap: var(--pk-2); }
   .pk-markdown-editor__toolbar [aria-pressed="true"] { background: var(--pk-surface-sunk); color: var(--pk-ink); }
@@ -8,7 +11,7 @@
      separator a row of glyphs needs. */
   .pk-markdown-editor [hidden] { display: none !important; }
   .pk-markdown-editor__toolbar [data-command] { display: inline-flex; }
-  .pk-markdown-editor__group { display: flex; align-items: center; gap: 2px; }
+  .pk-markdown-editor__group { display: flex; align-items: center; gap: var(--pk-1); }
   .pk-markdown-editor__group + .pk-markdown-editor__group { padding-left: var(--pk-2); border-left: 1px solid var(--pk-line-soft); }
   .pk-markdown-editor__group--end { margin-left: auto; }
   .pk-markdown-editor__canvas { min-height: 18rem; white-space: pre-wrap; padding: var(--pk-5); outline-offset: -3px; }

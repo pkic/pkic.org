@@ -1,3 +1,4 @@
+import { useHashQueryParam } from "../../../../hooks/useHashQueryParam";
 /**
  * The Leadership tab: who leads this group now, under which title and since
  * when, and the closed terms that came before. Inherited rows are shown but
@@ -54,7 +55,7 @@ function leadershipColumns(
       // The design system's table gives slack to no column on its own; the
       // person is the row's subject, so a wide screen's slack lands here.
       width: "primary",
-      cell: (assignment) => <PersonCell name={assignment.userName} email={assignment.email} size="sm" />,
+      cell: (assignment) => <PersonCell name={assignment.userName} size="sm" />,
     },
     {
       // The title is what this person is called here; the role underneath is
@@ -132,7 +133,8 @@ export function GroupLeadership({
     [groupId, assignmentSegment],
   );
   const currentTable = useRef<ApiTableActions | null>(null);
-  const [view, setView] = useState("current");
+  const [term] = useHashQueryParam("group-leadership.f.term", "current", ["current", "past"]);
+  const view = term === "past" ? "past" : "current";
   const [, navigate] = usePortalHashLocation();
   const leadershipPath = `/groups/${encodeURIComponent(groupId)}/leadership`;
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -248,10 +250,10 @@ export function GroupLeadership({
           )}
         </PanelHeader>
         <ApiDataTable
+          urlState="group-leadership"
           key={view}
           params={{ term: view }}
-          initialFilters={view === "past" ? { term: "past" } : undefined}
-          onFiltersChange={(filters) => setView(filters.term === "past" ? "past" : "current")}
+          initialFilters={{ term: "current" }}
           caption={view === "past" ? "Closed leadership terms of this group" : "Current leadership of this group"}
           endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/leadership`}
           responseSchema={groupLeadershipListResponseSchema}

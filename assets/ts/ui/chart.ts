@@ -15,9 +15,9 @@
  * caption naming the chart, and every builder REQUIRES that caption — an
  * unnamed chart was the bug.
  *
- * THE COLOUR PROBLEM. Every grey, grid line and default series colour was a
+ * THE COLOR PROBLEM. Every grey, grid line and default series color was a
  * Bootstrap hex. In dark mode the grid drew light grey on a dark ground and
- * the value labels were near-black on it. Colours are tokens now, resolved by
+ * the value labels were near-black on it. Colors are tokens now, resolved by
  * the browser through `var()` in the SVG presentation attributes, so a chart
  * follows the theme and the accent like everything else.
  */
@@ -27,7 +27,7 @@ import { EVENT_REGISTRATION_STATUSES, type EventRegistrationStatus } from "../..
 
 import "./Chart.css";
 
-/** Series colours default to the state scale, which is theme-aware. */
+/** Series colors default to the state scale, which is theme-aware. */
 export const CHART_SERIES_TOKENS = ["var(--pk-ok)", "var(--pk-warn)", "var(--pk-info)", "var(--pk-accent)"] as const;
 
 const GRID = "var(--pk-line)";
@@ -101,7 +101,7 @@ export function fmtMoney(cents: number, currency: string): string {
 }
 
 /**
- * A labelled progress bar per status. These use a real <progress>, so unlike
+ * A labeled progress bar per status. These use a real <progress>, so unlike
  * the SVG charts they were already readable; they keep their own semantics
  * and gain only the tokens.
  */
@@ -129,7 +129,7 @@ export function statusBars(byStatus: Record<string, number>, total: number): str
  * The list is the contract's, not a copy of it: a status added to
  * `EVENT_REGISTRATION_STATUSES` gets a segment and a legend entry here without
  * anybody remembering to add one, and the two `Record`s below are total, so it
- * cannot get one without a colour and a word. A status the chart does not know
+ * cannot get one without a color and a word. A status the chart does not know
  * still draws — `svgStatusSegmentBar` appends whatever the data carries — but
  * it would draw grey and unnamed, which is the drift issue #24 reported in a
  * different surface.

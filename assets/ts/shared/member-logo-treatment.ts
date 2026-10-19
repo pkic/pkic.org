@@ -46,7 +46,7 @@ export function prepareMemberLogo(image: HTMLImageElement): void {
   }
 }
 
-const logoSelector = "img.member-logo, img.member-profile-logo";
+const logoSelector = "img.member-logo";
 let listening = false;
 
 /** Treat published and interactive artwork, including subsequently loaded wall clones. */

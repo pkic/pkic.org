@@ -1,10 +1,12 @@
+import { EventCollectionCard, eventWhen } from "./EventCollectionCard";
+import { CollectionStatusLine } from "../../../../ui/CollectionCard";
+import { DiscoveryViewToggle, useDiscoveryView } from "../DiscoveryView";
+import { formatEventPlace } from "../../../../../shared/event-place";
 import { eventParticipantRecordPath } from "./event-participant-paths";
-import { Badge } from "../../../../components/Badge";
-import { useRef, useState } from "preact/hooks";
+import { useRef } from "preact/hooks";
 import type { z } from "zod";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
-import { EmptyState } from "../../../../ui/RecordEmptyState";
-import { Chip } from "../../../../ui/Chip";
+import { EmptyState } from "../../../../ui/EmptyState";
 import { RowActions } from "../../../../ui/RowActions";
 import type { MenuItem } from "../../../../ui/Menu";
 import {
@@ -13,17 +15,19 @@ import {
   eventsListResponseSchema,
 } from "../../../../../shared/schemas/event-management";
 import { usePortalHashLocation } from "../../hash-location";
-import { formatEventWhen, formatRelativeDays } from "../../ui";
-import { eventDestination } from "./event-destination";
-import { ViewerEventState } from "./ViewerEventState";
+import { formatRelativeDays } from "../../ui";
+import { canOpenGroupWorkspace, eventDestination } from "./event-destination";
+import { portalSession } from "../../state";
+import { eventViewerStatus } from "./event-viewer-status";
+import { EventScopeToggle, eventScopeActions, useEventScope } from "./EventScopeToggle";
 
 // ────────────────────────────────────────────────────────
 // Root events overview
 //
-// This is a projection, not the canonical home for events: an event's real
-// home is its owning group's workspace (`/groups/:g/events/:e`). This screen
-// exists so a member can see what is upcoming and where they stand — not to
-// manage events, which happens inside the owning group.
+// Each row opens the group-independent event page (`/events/:slug`), where a
+// reader sees where they stand. Managing an event happens inside its owning
+// group's workspace (`/groups/:g/events/:e`), offered as a row action to
+// those who can open it.
 // ────────────────────────────────────────────────────────
 
 type ManagementEventRow = z.infer<typeof eventManagementSummarySchema>;
@@ -42,53 +46,70 @@ function isAudienceEvent(event: EventRow): event is AudienceEventRow {
   return "viewer" in event;
 }
 
-function eventWhen(event: EventRow): string {
-  const location = null;
-  const attendanceType = isAudienceEvent(event) ? (event.viewer?.attendanceType ?? null) : null;
-  return formatEventWhen(event.startsAt, event.timezone, location, attendanceType);
-}
-
 /**
- * Only a management-shaped row carries an owning group, and only when one
- * is set. Everyone else — every audience row, and a management row with no
- * owning group — gets no menu at all.
+ * Audience actions use server-granted scanner/contact access; a management
+ * row also offers its owning workspace when this session can open it.
  */
 function workspaceActions(event: EventRow, navigate: (path: string) => void): MenuItem[] {
-  if (isAudienceEvent(event) || !event.ownerGroupId) return [];
+  const registrationId = event.participation?.registrationId;
+  const audienceActions: MenuItem[] = isAudienceEvent(event)
+    ? [
+        // The status row says where the viewer stands; the registration it
+        // summarizes opens from here.
+        ...(registrationId
+          ? [
+              {
+                id: "registration",
+                label: "Open your registration",
+                onSelect: () => navigate(eventParticipantRecordPath(event.slug, "registration", registrationId)),
+              },
+            ]
+          : []),
+        ...(event.sponsorLeadAccess
+          ? [
+              {
+                id: "sponsor-leads",
+                label: "Open sponsor leads",
+                onSelect: () => navigate(`/events/${encodeURIComponent(event.slug)}/leads`),
+              },
+            ]
+          : []),
+        ...(event.scannerAccess?.canScan
+          ? [
+              {
+                id: "event-scanner",
+                label: "Open event scanner",
+                onSelect: () => navigate(`/events/${encodeURIComponent(event.slug)}/scanner`),
+              },
+            ]
+          : []),
+        ...(event.scannerAccess?.sponsors.map((sponsor) => ({
+          id: `sponsor-scanner-${sponsor.id}`,
+          label: `Scan leads for ${sponsor.name}`,
+          onSelect: () =>
+            navigate(`/events/${encodeURIComponent(event.slug)}/sponsors/${encodeURIComponent(sponsor.id)}/scanner`),
+        })) ?? []),
+      ]
+    : [];
+  if (isAudienceEvent(event) || !event.ownerGroupId || !canOpenGroupWorkspace(portalSession.value, event.ownerGroupId))
+    return audienceActions;
   const groupId = event.ownerGroupId;
-  const groupLabel = event.ownerGroupName ?? "group";
+  const groupLabel = event.ownerGroupTypeLabel ?? "group";
   return [
+    ...audienceActions,
     {
       id: "open-workspace",
-      label: `Open in ${groupLabel} workspace`,
+      label: `Open in ${groupLabel}`,
       onSelect: () => navigate(`/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(event.id)}`),
     },
   ];
 }
 
-type Scope = "upcoming" | "past";
-
-function ScopeToggle({ scope, onChange }: { scope: Scope; onChange: (scope: Scope) => void }) {
-  return (
-    // Two applied-filter toggles, which is what `Chip` is: each is a real
-    // button carrying `aria-pressed`, and the pressed state is drawn rather
-    // than announced only by an `active` class the design system never had.
-    <div class="pk-cluster" role="group" aria-label="Events scope">
-      <Chip pressed={scope === "upcoming"} onToggle={() => onChange("upcoming")}>
-        Upcoming
-      </Chip>
-      <Chip pressed={scope === "past"} onToggle={() => onChange("past")}>
-        Past
-      </Chip>
-    </div>
-  );
-}
-
 export function EventList() {
   const [, navigate] = usePortalHashLocation();
-  const [scope, setScope] = useState<Scope>("upcoming");
+  const { view, setView } = useDiscoveryView();
+  const { scope, setScope, params } = useEventScope();
   const tableRef = useRef<ApiTableActions | null>(null);
-  const now = new Date().toISOString();
 
   return (
     <div>
@@ -102,12 +123,38 @@ export function EventList() {
         responseSchema={eventsListResponseSchema}
         resolve={(data) => data.events}
         resolvePage={(data) => data.page}
-        params={scope === "upcoming" ? { from: now } : { to: now }}
+        params={params}
         initialSort={scope === "past" ? "-starts_at" : ""}
         paginate
         actionsRef={tableRef}
         searchPlaceholder="Search events…"
-        toolbar={() => <ScopeToggle scope={scope} onChange={setScope} />}
+        toolbar={() => (
+          <>
+            <EventScopeToggle scope={scope} onChange={setScope} />
+            <DiscoveryViewToggle view={view} onChange={setView} />
+          </>
+        )}
+        toolbarClass="pk-discovery-toolbar pk-toolbar-row"
+        compactToolbarLabel={`${scope === "upcoming" ? "Upcoming" : "Past"} events: filters and actions`}
+        compactToolbarActions={eventScopeActions(scope, setScope)}
+        framed={false}
+        renderItems={
+          view === "grid"
+            ? (events) => (
+                <>
+                  <div class="pk-discovery-grid">
+                    {events.map((event) => (
+                      <EventCollectionCard
+                        key={event.id}
+                        event={event}
+                        actions={<RowActions subject={event.name} actions={workspaceActions(event, navigate)} />}
+                      />
+                    ))}
+                  </div>
+                </>
+              )
+            : undefined
+        }
         columns={[
           {
             header: "Event",
@@ -132,52 +179,22 @@ export function EventList() {
           },
           {
             header: "Location",
-            cell: (e) => e.location ?? "—",
+            cell: (e) => formatEventPlace(e) ?? "—",
           },
           {
             header: "Group",
             cell: (e) =>
-              !isAudienceEvent(e) && e.ownerGroupId ? (
+              isAudienceEvent(e) || !e.ownerGroupId ? (
+                <span class="pk-muted">—</span>
+              ) : canOpenGroupWorkspace(portalSession.value, e.ownerGroupId) ? (
                 <a href={`#/groups/${encodeURIComponent(e.ownerGroupId)}`}>{e.ownerGroupName ?? e.ownerGroupId}</a>
               ) : (
-                <span class="pk-muted">—</span>
+                (e.ownerGroupName ?? e.ownerGroupId)
               ),
           },
           {
             header: "Your status",
-            cell: (e) => (
-              <div class="pk-stack pk-stack--snug">
-                {isAudienceEvent(e) && e.viewer ? (
-                  <ViewerEventState
-                    viewer={e.viewer}
-                    href={
-                      e.participation?.registrationId
-                        ? eventParticipantRecordPath(e.slug, "registration", e.participation.registrationId)
-                        : undefined
-                    }
-                  />
-                ) : e.participation?.registrationStatus ? (
-                  <Badge status={e.participation.registrationStatus} />
-                ) : null}
-                {Boolean(e.participation?.proposals) && (
-                  <span>
-                    {e.participation?.proposals} {e.participation?.proposals === 1 ? "proposal" : "proposals"}
-                  </span>
-                )}
-                {Boolean(e.participation?.speakerProposals) && (
-                  <span>
-                    Speaker in {e.participation?.speakerProposals}{" "}
-                    {e.participation?.speakerProposals === 1 ? "proposal" : "proposals"}
-                  </span>
-                )}
-                {e.participation?.proposalStates.map((status) => (
-                  <Badge key={status} status={status} label={`Proposal: ${status.replaceAll("_", " ")}`} />
-                ))}
-                {e.participation?.speakerStates.map((status) => (
-                  <Badge key={status} status={status} label={`Speaker: ${status}`} />
-                ))}
-              </div>
-            ),
+            cell: (e) => <CollectionStatusLine items={eventViewerStatus(e)} />,
             // A badge has a bounded length; the slack belongs to the event
             // name, not spread between it and a column of short states.
             width: "fit",
@@ -187,10 +204,7 @@ export function EventList() {
             cell: (e) => <RowActions subject={e.name} actions={workspaceActions(e, navigate)} />,
           },
         ]}
-        rowAction={(e) => {
-          const href = eventDestination(e);
-          return href ? { label: `Open ${e.name}`, href } : undefined;
-        }}
+        rowAction={(e) => ({ label: `Open ${e.name}`, href: eventDestination(e) })}
         empty={
           <EmptyState
             title={scope === "past" ? "No past events" : "No upcoming events"}

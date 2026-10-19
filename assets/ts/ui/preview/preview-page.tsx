@@ -11,12 +11,18 @@ import { render } from "preact";
 import { PreviewShell } from "./PreviewShell";
 import { basicSections } from "./sections-basics";
 import { dataSections } from "./sections-data";
+import { densitySections } from "./sections-density";
 import { overlaySections } from "./sections-overlays";
+import { patternSections } from "./sections-patterns";
 
 function main(): void {
   const mount = document.getElementById("pk-preview");
   if (!mount) return;
-  render(<PreviewShell sections={[...basicSections, ...dataSections, ...overlaySections]} />, mount);
+  const sections = [...basicSections, ...dataSections, ...densitySections, ...overlaySections, ...patternSections];
+  // `?only=<id>` renders one section alone, for a tight screenshot of one control.
+  const only = new URLSearchParams(window.location.search).get("only");
+  const shown = only ? sections.filter((section) => section.id === only) : sections;
+  render(<PreviewShell sections={shown} />, mount);
 }
 
 main();

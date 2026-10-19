@@ -84,8 +84,23 @@ export const normalizedEmailSchema = z
 export const emailRecoveryRequestSchema = z.object({ email: normalizedEmailSchema });
 export const firstNameSchema = trimmedString(1, 80).regex(namePattern, "Contains unsupported characters");
 export const lastNameSchema = trimmedString(1, 120).regex(namePattern, "Contains unsupported characters");
-export const organizationNameSchema = trimmedString(2, 160);
-export const jobTitleSchema = trimmedString(2, 120);
+/** Said wherever an organization name is asked for and left empty. */
+export const ORGANIZATION_NAME_REQUIRED = "Enter your organization.";
+export const organizationNameSchema = z
+  .string({ error: ORGANIZATION_NAME_REQUIRED })
+  .trim()
+  .min(1, ORGANIZATION_NAME_REQUIRED)
+  .min(2, "Enter at least 2 characters.")
+  .max(160);
+/** Said wherever someone takes part on behalf of an organization without a job title. */
+export const JOB_TITLE_REQUIRED = "Enter your job title at this organization.";
+/** Required wherever it is asked: someone taking part on behalf of an organization says what they do there. */
+export const jobTitleSchema = z
+  .string({ error: JOB_TITLE_REQUIRED })
+  .trim()
+  .min(1, JOB_TITLE_REQUIRED)
+  .min(2, "Enter at least 2 characters.")
+  .max(120);
 export const tokenSchema = z.string().trim().min(16).max(512).regex(tokenCharactersPattern, "Invalid token format");
 export const emailAuthTokenSchema = z
   .string()

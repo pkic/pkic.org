@@ -7,6 +7,8 @@
  * request tells the reader the group has nothing coming up, which is a
  * different — and wrong — statement.
  */
+import { eventClock } from "../../../../../shared/event-clock";
+import { groupEventPlace } from "./group-event-place";
 import { Link } from "wouter";
 import { groupEventsListResponseSchema, type GroupEvent } from "../../../../../shared/schemas/group-events";
 import { groupVotesListResponseSchema, type GroupVote } from "../../../../../shared/schemas/group-votes";
@@ -24,7 +26,7 @@ import { Markdown } from "../../../../ui/Markdown";
 function eventWhen(event: GroupEvent): string {
   const at = event.startsAt ?? event.nextOccurrenceAt;
   const relative = formatRelativeDays(at);
-  const when = formatEventWhen(at, event.timezone, event.location);
+  const when = formatEventWhen(at, eventClock(event), groupEventPlace(event));
   return relative ? `${when} (${relative})` : when;
 }
 

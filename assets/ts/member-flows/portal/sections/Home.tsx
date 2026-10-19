@@ -1,8 +1,11 @@
-import { eventDestination } from "./events/event-destination";
+import { JoinPrompt } from "./JoinPrompt";
+import { useBoundaryClock } from "../../../hooks/useBoundaryClock";
+import { SectionHeading } from "../../../ui/SectionHeading";
+import { EventCollectionCard } from "./events/EventCollectionCard";
 import "./Home.css";
 /** A personal landing with actionable work, upcoming dates, and useful paths. */
 import type { ComponentChildren } from "preact";
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { Link } from "wouter";
 import type { z } from "zod";
 import { currentUserFormsListResponseSchema } from "../../../../shared/schemas/member-forms";
@@ -15,6 +18,7 @@ import { userOrganizationsListResponseSchema } from "../../../../shared/schemas/
 import { currentUserVotesListResponseSchema } from "../../../../shared/schemas/votes";
 import { formatDateTime, formatWeekdayTimeInZone } from "../../../../shared/format-date";
 import { meetingEntryUrl } from "../../../../shared/meeting-entry-navigation";
+import { meetingSeriesCalendarPath, registrationCalendarPath } from "../../../../shared/calendar-subscription-links";
 import { MEETING_JOIN_ACTION_LEAD_MINUTES } from "../../../../shared/schemas/meeting-entry-policy";
 import { matchRecurrenceShape, describeRecurrenceShape } from "../../../components/RecurrenceEditor";
 import { Badge } from "../../../components/Badge";
@@ -26,12 +30,13 @@ import { PageHeader } from "../../../ui/PageHeader";
 import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
 import { ButtonLink } from "../../../ui/Button";
 import { useData } from "../../../hooks/useData";
+import { takeReturningVisit } from "../returning-visit";
 import { getJson } from "../../../shared/api-client";
 import { portalSession, profile } from "../state";
-import { fmt, formatDateRange, formatRelativeDays } from "../ui";
-import { ViewerEventState } from "./events/ViewerEventState";
-import { eventParticipantRecordPath } from "./events/event-participant-paths";
-import { portalSectionEnabled } from "../shell/portal-navigation";
+import { fmt, formatRelativeDays } from "../ui";
+import { portalHasCapacity, portalSectionEnabled } from "../shell/portal-navigation";
+import { AccountOnlyHome } from "./AccountOnlyHome";
+import { AffiliationOfferCard } from "./AffiliationOfferCard";
 
 type MemberVote = z.infer<typeof currentUserVotesListResponseSchema>["votes"][number];
 type MemberForm = z.infer<typeof currentUserFormsListResponseSchema>["forms"][number];
@@ -186,12 +191,11 @@ function MeetingsPanel() {
                 </Link>
                 <ButtonLink
                   variant="ghost"
-                  size="sm"
                   icon
                   class="pk-push"
                   aria-label="Download the full series calendar (.ics)"
                   title="Download the full series calendar (.ics)"
-                  href={`/api/v1/groups/${encodeURIComponent(meeting.groupId)}/meetings/series/${encodeURIComponent(meeting.seriesId)}/calendar.ics?personal=true`}
+                  href={meetingSeriesCalendarPath(meeting.groupId, meeting.seriesId, { personal: true })}
                 >
                   <IconCalendarDownload />
                 </ButtonLink>
@@ -208,11 +212,13 @@ function MeetingsPanel() {
                 )}
                 <ButtonLink
                   variant="ghost"
-                  size="sm"
                   icon
                   aria-label="Download only the next meeting (.ics)"
                   title="Download only the next meeting (.ics)"
-                  href={`/api/v1/groups/${encodeURIComponent(meeting.groupId)}/meetings/series/${encodeURIComponent(meeting.seriesId)}/calendar.ics?personal=true&occurrenceId=${encodeURIComponent(meeting.nextOccurrenceId)}`}
+                  href={meetingSeriesCalendarPath(meeting.groupId, meeting.seriesId, {
+                    personal: true,
+                    occurrenceId: meeting.nextOccurrenceId,
+                  })}
                 >
                   <IconCalendarDownload />
                 </ButtonLink>
@@ -220,9 +226,7 @@ function MeetingsPanel() {
               {meeting.canJoin &&
                 now >= Date.parse(meeting.nextStartsAt) - MEETING_JOIN_ACTION_LEAD_MINUTES * 60_000 &&
                 now < Date.parse(meeting.nextEndsAt) && (
-                  <ButtonLink href={meetingEntryUrl(meeting.nextOccurrenceId)} size="sm">
-                    Join meeting
-                  </ButtonLink>
+                  <ButtonLink href={meetingEntryUrl(meeting.nextOccurrenceId)}>Join meeting</ButtonLink>
                 )}
             </li>
           ))}
@@ -233,73 +237,69 @@ function MeetingsPanel() {
 }
 
 function EventsPanel() {
-  const events = useData(() => {
-    const from = encodeURIComponent(new Date().toISOString());
-    return getJson(`/api/v1/events?kind=standalone&from=${from}&limit=5`, eventsListResponseSchema);
+  const events = useData(async () => {
+    const [current, next] = await Promise.all([
+      getJson("/api/v1/events?kind=standalone&phase=now&sort=starts_at&limit=1", eventsListResponseSchema),
+      getJson("/api/v1/events?kind=standalone&phase=upcoming&sort=starts_at&limit=1", eventsListResponseSchema),
+    ]);
+    return { events: [...current.events, ...next.events] };
   }, []);
   const rows = events.data?.events ?? [];
+  const now = useBoundaryClock((at) => {
+    const future = rows
+      .flatMap((event) => [event.startsAt, event.endsAt])
+      .filter((stamp): stamp is string => stamp !== null)
+      .map((stamp) => Date.parse(stamp))
+      .filter((instant) => instant > at);
+    return future.length > 0 ? Math.min(...future) : null;
+  });
+  const previous = useRef(now);
+  useEffect(() => {
+    if (previous.current === now) return;
+    previous.current = now;
+    void events.reload();
+  }, [now]);
 
   return (
-    <PanelCard title="Upcoming events">
+    <section class="pk-stack" aria-label="Events">
+      <div class="pk-cluster pk-cluster--between">
+        <SectionHeading level={3}>Events</SectionHeading>
+        <ButtonLink href="#/events" variant="ghost">
+          More events
+        </ButtonLink>
+      </div>
       <PanelState
         loading={events.loading}
         error={events.error}
-        empty="No upcoming events right now."
+        empty="No current or upcoming events right now."
         count={rows.length}
       />
       {rows.length > 0 && (
-        <ul class="pk-plain-list pk-stack pk-stack--snug" aria-label="Upcoming events">
-          {rows.map((event) => {
-            const relative = formatRelativeDays(event.startsAt);
-            const viewer = "viewer" in event ? event.viewer : null;
-            const basePath = eventDestination(event);
-            return (
-              <li key={event.id} class="pk-stack pk-stack--tight">
-                <div class="pk-home-event-heading">
-                  {basePath ? (
-                    // No utility class: `.pk-strong` painted the anchor in
-                    // body ink, so the one clickable thing in the row was the
-                    // only line not dressed as a link.
-                    <a href={basePath}>{event.name}</a>
-                  ) : (
-                    <span class="pk-strong">{event.name}</span>
-                  )}
-                  {event.participation?.registrationId && event.participation.registrationStatus === "registered" && (
+        <ul class="pk-plain-list pk-stack pk-stack--snug" aria-label="Now and next events">
+          {rows.map((event) => (
+            <li key={event.id}>
+              <EventCollectionCard
+                headingLevel={4}
+                event={event}
+                actions={
+                  event.participation?.registrationId && event.participation.registrationStatus === "registered" ? (
                     <ButtonLink
                       variant="ghost"
-                      size="sm"
                       icon
                       aria-label={`Download your personal calendar for ${event.name} (.ics)`}
                       title="Download your personal event calendar (.ics)"
-                      href={`/api/v1/events/${encodeURIComponent(event.slug)}/registrations/${encodeURIComponent(event.participation.registrationId)}/calendar.ics`}
+                      href={registrationCalendarPath(event.slug, event.participation.registrationId)}
                     >
                       <IconCalendarDownload />
                     </ButtonLink>
-                  )}
-                </div>
-                {event.startsAt && (
-                  <span class="pk-small">
-                    {formatDateRange(event.startsAt, event.endsAt, event.timezone)}
-                    {relative ? ` (${relative})` : ""}
-                  </span>
-                )}
-                {"location" in event && event.location && <span class="pk-small">{event.location}</span>}
-                {viewer && (
-                  <ViewerEventState
-                    viewer={viewer}
-                    href={
-                      event.participation?.registrationId
-                        ? eventParticipantRecordPath(event.slug, "registration", event.participation.registrationId)
-                        : undefined
-                    }
-                  />
-                )}
-              </li>
-            );
-          })}
+                  ) : undefined
+                }
+              />
+            </li>
+          ))}
         </ul>
       )}
-    </PanelCard>
+    </section>
   );
 }
 
@@ -367,18 +367,25 @@ function HomeShortcuts() {
 
 export function Home() {
   const session = portalSession.value;
+  if (!portalHasCapacity(session)) return <AccountOnlyHome />;
   const isMember = Boolean(session?.member);
   const firstName = profile.value?.preferredName || profile.value?.firstName || "";
+  // Settled once per mount: the visit that records itself must not then greet as returning.
+  const userId = session?.identity.id;
+  const [returning] = useState(() => (userId ? takeReturningVisit(userId) : false));
+  const greeting = `${returning ? "Welcome back" : "Welcome"}${firstName ? `, ${firstName}` : ""}.`;
 
   return (
     <div class="pk pk-stack">
       <Panel stripe class="pk-home-intro">
         <PanelBody>
-          <PageHeader title="Home" description={firstName ? `Welcome back, ${firstName}.` : "Welcome back."} />
+          <PageHeader title="Home" description={greeting} />
           {isMember && <OrganizationAffiliation />}
           <HomeShortcuts />
         </PanelBody>
       </Panel>
+      <AffiliationOfferCard />
+      <JoinPrompt />
       {isMember && <AttentionPanel />}
       <div class="pk-home-grid">
         {isMember && <MeetingsPanel />}

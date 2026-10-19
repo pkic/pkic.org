@@ -1,3 +1,5 @@
+@use "sass:list";
+
 // ── Maturity Staircase ─────────────────────────────────────────────────────────
 // Reusable ascending bar-chart staircase for any maturity model.
 // Used by the {{< maturity-staircase >}} shortcode.
@@ -32,7 +34,7 @@ $ms-colors: (
 
   .maturity-step {
     flex: 1;
-    min-width: 80px;
+    min-width: 5rem;
     display: flex;
     flex-direction: column;
     align-items: stretch;
@@ -48,7 +50,7 @@ $ms-colors: (
     &:nth-child(6) .maturity-step-bar { height: 13.5rem; }
   }
 
-  // ── Bar (the coloured pillar) ─────────────────────────────────────────────
+  // ── Bar (the colored pillar) ─────────────────────────────────────────────
   .maturity-step-bar {
     display: flex;
     flex-direction: column;
@@ -129,9 +131,9 @@ $ms-colors: (
 
   // ── Color variants ────────────────────────────────────────────────────────
   @each $name, $vals in $ms-colors {
-    $bg:    nth($vals, 1);
-    $fg:    nth($vals, 2);
-    $label: nth($vals, 3);
+    $bg:    list.nth($vals, 1);
+    $fg:    list.nth($vals, 2);
+    $label: list.nth($vals, 3);
 
     .maturity-step--#{$name} {
       .maturity-step-bar {
@@ -158,7 +160,7 @@ $ms-colors: (
     gap: 0.25rem;
 
     .maturity-step {
-      min-width: 52px;
+      min-width: 3.25rem;
 
       &:nth-child(1) .maturity-step-bar { height: 2.5rem; }
       &:nth-child(2) .maturity-step-bar { height: 3.75rem; }
@@ -178,7 +180,7 @@ $ms-colors: (
 // ── Criteria Box ────────────────────────────────────────────────────────────
 // Used by the {{< criteria >}} shortcode on PQCMM level pages.
 // Gives the normative requirements a clear, visually distinct treatment so
-// readers immediately recognise them as THE requirements for a level.
+// readers immediately recognize them as THE requirements for a level.
 
 .criteria-box {
   border: 1px solid rgba($blue-dark, 0.25);

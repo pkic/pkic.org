@@ -17,7 +17,7 @@
     padding: var(--pk-control-y) var(--pk-control-x);
     border: 1px solid transparent;
     border-radius: var(--pk-radius);
-    font-size: var(--pk-text-md);
+    font-size: var(--pk-control-text);
     font-weight: 500;
     line-height: 1.35;
     white-space: nowrap;
@@ -29,7 +29,7 @@
       color var(--pk-dur-fast);
   }
 
-  /* Disabled and busy are visually the same and behaviourally different: a
+  /* Disabled and busy are visually the same and behaviorally different: a
      busy button still owns focus so the screen reader stays where the user
      put it, while a disabled one does not. */
   .pk-btn:disabled,
@@ -127,10 +127,6 @@
     filter: brightness(0.94);
   }
 
-  .pk-btn--sm {
-    font-size: var(--pk-text-sm);
-    padding: calc(var(--pk-control-y) * 0.7) calc(var(--pk-control-x) * 0.8);
-  }
   .pk-btn--lg {
     font-size: var(--pk-text-xl);
     padding: calc(var(--pk-control-y) * 1.5) calc(var(--pk-control-x) * 1.4);
@@ -143,14 +139,14 @@
     text-align: center;
   }
 
+  /* Square, and exactly as tall as a text button beside it: `control-size` is
+     the line height, vertical padding and border a text button adds up to, so
+     the two line up at either density. */
   .pk-btn--icon {
-    padding: var(--pk-control-y);
+    padding: 0;
+    block-size: var(--pk-control-size);
     aspect-ratio: 1;
   }
-  .pk-btn--block {
-    width: 100%;
-  }
-
   .pk-btn__spinner {
     width: 0.85em;
     height: 0.85em;
@@ -164,6 +160,21 @@
   @keyframes pk-btn-spin {
     to {
       transform: rotate(360deg);
+    }
+  }
+}
+
+/* Touch sizing overrides compact component layouts, including table tools.
+   The existing spacing scale gives a 44px minimum without changing desktop density. */
+@layer utilities {
+  @media (any-pointer: coarse) {
+    .pk-btn {
+      min-block-size: calc(var(--pk-6) + var(--pk-3));
+      min-inline-size: calc(var(--pk-6) + var(--pk-3));
+      max-inline-size: 100%;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      text-align: center;
     }
   }
 }

@@ -1,4 +1,5 @@
 import type { ComponentChildren } from "preact";
+import { SectionHeading } from "../ui/SectionHeading";
 
 interface SuccessPanelProps {
   icon: string;
@@ -30,10 +31,10 @@ interface SuccessPanelProps {
 export function SuccessPanel({ icon, title, children }: SuccessPanelProps) {
   return (
     <div class="pk pk-stack pk-center" role="status">
-      <h2 class="pk-stack pk-stack--tight">
+      <SectionHeading level={2} class="pk-stack pk-stack--tight">
         <span aria-hidden="true">{icon}</span>
         <span>{title}</span>
-      </h2>
+      </SectionHeading>
       {children}
     </div>
   );

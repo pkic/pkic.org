@@ -31,7 +31,7 @@ function parse(markup: string): HTMLElement {
   return host;
 }
 
-/** Every colour a chart paints with, from fill/stroke attributes. */
+/** Every color a chart paints with, from fill/stroke attributes. */
 function paints(markup: string): string[] {
   return [...markup.matchAll(/(?:fill|stroke)="([^"]*)"/g)]
     .map((match) => match[1])

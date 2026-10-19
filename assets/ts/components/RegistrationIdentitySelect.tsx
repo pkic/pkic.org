@@ -1,131 +1,54 @@
-import { Button } from "../ui/Button";
-import { useEffect, useRef, useState } from "preact/hooks";
-import type { z } from "zod";
+import { useEffect, useState } from "preact/hooks";
 import { identitiesListResponseSchema, type ActingIdentity } from "../../shared/schemas/identity";
-import { userDetailResponseSchema } from "../../shared/schemas/user-management";
-import { userAuthSessionResponseSchema } from "../../shared/schemas/user-auth";
-import { ApiClientError, getJson } from "../shared/api-client";
+import { REGISTRATION_IDENTITY_COPY as copy } from "../../shared/email-first-copy";
+import { getJson } from "../shared/api-client";
 import { buildServerCollectionUrl } from "../hooks/useServerCollection";
-import { Field } from "../ui/Field";
+import { actingIdentityCatalog } from "../shared/acting-identity-catalog";
 import { Alert } from "../ui/Alert";
+import { Button } from "../ui/Button";
+import { Field } from "../ui/Field";
 import { ServerSearchSelect } from "./ServerSearchSelect";
 
 const identityLabel = (identity: ActingIdentity) => identity.organizationName ?? "My individual membership";
-const catalog = {
-  endpoint: "/api/v1/users/current/identities",
-  responseSchema: identitiesListResponseSchema,
-  resolveItems: (response: z.infer<typeof identitiesListResponseSchema>) => response.identities,
-  resolvePage: (response: z.infer<typeof identitiesListResponseSchema>) => response.page,
-  itemKey: (identity: ActingIdentity) => identity.id,
-  itemLabel: identityLabel,
-  params: { active: "true" },
-  sort: "organization_name",
-};
+const catalog = actingIdentityCatalog("/api/v1/users/current/identities", identityLabel);
 
-function fillEmptyField(form: HTMLFormElement | undefined, name: string, value: string | null | undefined): void {
-  const field = form?.elements.namedItem(name);
-  if (!(field instanceof HTMLInputElement) || field.value || !value) return;
-  field.value = value;
-  field.dispatchEvent(new Event("input", { bubbles: true }));
+/** The signed-in person's identities, filtered on the server; one row is enough to decide what to offer. */
+export function currentIdentitiesUrl(params: Record<string, string> = {}): string {
+  return buildServerCollectionUrl(catalog.endpoint, {
+    ...catalog.params,
+    ...params,
+    limit: "1",
+    offset: "0",
+    sort: catalog.sort,
+  });
 }
 
-/** Optional attribution. Merely opening a form never selects or activates an identity. */
-export function RegistrationIdentitySelect({
-  form,
-  deferUntilRequested = false,
-}: {
-  form?: HTMLFormElement;
-  deferUntilRequested?: boolean;
-}) {
-  const [requested, setRequested] = useState(!deferUntilRequested);
-  const [attempt, setAttempt] = useState(0);
-  const [loading, setLoading] = useState(!deferUntilRequested);
-  const [error, setError] = useState<string | null>(null);
-  const [signedOut, setSignedOut] = useState(false);
-  const [session, setSession] = useState<z.infer<typeof userAuthSessionResponseSchema> | null>(null);
-  const [profile, setProfile] = useState<z.infer<typeof userDetailResponseSchema>["user"] | null>(null);
-  const [hasSelectableIdentity, setHasSelectableIdentity] = useState(false);
-  const identityField = useRef<HTMLInputElement>(null);
-  const [selected, setSelected] = useState<ActingIdentity | null>(null);
-  useEffect(() => {
-    if (!requested) return;
-    let active = true;
-    setLoading(true);
-    setError(null);
-    setSignedOut(false);
-    async function loadProfile(): Promise<void> {
-      try {
-        const response = await getJson("/api/v1/auth/session", userAuthSessionResponseSchema);
-        if (!active) return;
-        setSession(response);
-        fillEmptyField(form, "email", response.identity.email);
-        const url = buildServerCollectionUrl(catalog.endpoint, {
-          ...catalog.params,
-          limit: "1",
-          offset: "0",
-          sort: catalog.sort,
-        });
-        await Promise.all([
-          getJson(`/api/v1/users/${encodeURIComponent(response.identity.id)}`, userDetailResponseSchema).then(
-            (detail) => {
-              if (!active) return;
-              setProfile(detail.user);
-              fillEmptyField(form, "firstName", detail.user.first_name);
-              fillEmptyField(form, "lastName", detail.user.last_name);
-            },
-          ),
-          getJson(url, identitiesListResponseSchema).then((available) => {
-            if (!active) return;
-            setHasSelectableIdentity(
-              available.page.total > 1 ||
-                (available.identities[0] !== undefined && available.identities[0].organizationId !== null),
-            );
-          }),
-        ]);
-      } catch (caught) {
-        if (!active) return;
-        if (caught instanceof ApiClientError && caught.status === 401) {
-          setSignedOut(true);
-          setError(
-            "You are not signed in. You can continue filling in this form, or sign in through the member portal to use your saved profile.",
-          );
-        } else {
-          setError("We could not load your saved profile. You can try again or continue filling in this form.");
-        }
-      } finally {
-        if (active) setLoading(false);
-      }
-    }
-    void loadProfile();
-    return () => {
-      active = false;
-    };
-  }, [form, requested, attempt]);
-  if (!requested || loading || error)
+/**
+ * The identity a registration is made as. An identity under the address the
+ * person continued with is shown read-only — its organization comes from the
+ * identity, never from a typed answer — with a way to choose another one they
+ * already hold; without one, the registration shows their current affiliation.
+ */
+export function RegistrationIdentityField({ preferred }: { preferred?: ActingIdentity | null }) {
+  const [selected, setSelected] = useState<ActingIdentity | null>(preferred ?? null);
+  const [choosing, setChoosing] = useState(!preferred);
+  const hidden = <input type="hidden" name="identityId" value={selected?.id ?? ""} />;
+  if (!choosing && selected?.organizationName)
     return (
-      <>
-        {error && <Alert tone={signedOut ? "info" : "warn"}>{error}</Alert>}
-        <Button
-          type="button"
-          variant="secondary"
-          loading={loading}
-          onClick={() => {
-            setRequested(true);
-            setAttempt((current) => current + 1);
-          }}
-        >
-          {loading ? "Loading saved profile…" : error ? "Try saved profile again" : "Use saved profile"}
-        </Button>
-      </>
+      <div class="pk-stack pk-stack--snug">
+        <p>{copy.representing(selected.organizationName)}</p>
+        <div>
+          <Button type="button" variant="link" onClick={() => setChoosing(true)}>
+            {copy.chooseOther}
+          </Button>
+        </div>
+        {hidden}
+      </div>
     );
-  if (!session || !hasSelectableIdentity)
-    return deferUntilRequested && session ? (
-      <p role="status">Your saved profile is ready. Details you already entered have been kept.</p>
-    ) : null;
   return (
     <Field
       label="Event identity"
-      help="Optional. Use an existing identity. You can fill in any missing details for this event."
+      help="Optional. Your registration shows the organization and job title of the identity you choose; without one it shows your current affiliation."
     >
       {(control) => (
         <>
@@ -135,38 +58,55 @@ export function RegistrationIdentitySelect({
             searchLabel="Your identities"
             value={selected?.id ?? null}
             selectedLabel={selected ? identityLabel(selected) : undefined}
-            placeholder="Use the event form details"
-            onChange={(identity) => {
-              setSelected(identity);
-              const containingForm = form ?? identityField.current?.form;
-              const values = {
-                "custom.organization_name": identity?.organizationName,
-                "custom.job_title": identity?.jobTitle,
-              };
-              for (const [name, value] of Object.entries(values)) {
-                const field = containingForm?.elements.namedItem(name);
-                if (field instanceof HTMLInputElement) {
-                  field.readOnly = Boolean(identity && value);
-                  if (identity) {
-                    field.value = value ?? "";
-                    field.dispatchEvent(new Event("input", { bubbles: true }));
-                  }
-                }
-              }
-              if (identity) {
-                for (const [name, value] of Object.entries({
-                  firstName: profile?.first_name,
-                  lastName: profile?.last_name,
-                  email: session.identity.email,
-                })) {
-                  fillEmptyField(containingForm ?? undefined, name, value);
-                }
-              }
-            }}
+            placeholder="Use my current affiliation"
+            onChange={setSelected}
           />
-          <input ref={identityField} type="hidden" name="identityId" value={selected?.id ?? ""} />
+          {hidden}
         </>
       )}
     </Field>
   );
+}
+
+/** Optional attribution for a signed-in registration. Opening the form never selects or activates an identity. */
+export function RegistrationIdentitySelect() {
+  const [attempt, setAttempt] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
+  const [selectable, setSelectable] = useState(false);
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setFailed(false);
+    getJson(currentIdentitiesUrl(), identitiesListResponseSchema)
+      .then((available) => {
+        if (!active) return;
+        setSelectable(
+          available.page.total > 1 ||
+            (available.identities[0] !== undefined && available.identities[0].organizationId !== null),
+        );
+      })
+      .catch(() => {
+        if (active) setFailed(true);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [attempt]);
+  if (loading) return <p role="status">Loading your identities…</p>;
+  if (failed)
+    return (
+      <>
+        <Alert tone="warn">
+          We could not load your identities. You can try again or register with your current affiliation.
+        </Alert>
+        <Button type="button" variant="secondary" onClick={() => setAttempt((current) => current + 1)}>
+          Try again
+        </Button>
+      </>
+    );
+  return selectable ? <RegistrationIdentityField /> : null;
 }

@@ -12,6 +12,7 @@ export function LazyGroupEventConfiguration(props: {
   event: GroupEvent;
   groupId: string;
   onUpdated?: () => void | Promise<void>;
+  section?: "terms" | "registration" | "proposals" | "attendance-days";
 }) {
   return (
     <Suspense fallback={<Spinner label="Loading event configuration…" />}>

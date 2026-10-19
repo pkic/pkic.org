@@ -44,6 +44,10 @@ export const auditLogEntrySchema = z.object({
   actor_type: z.string(),
   actor_id: z.string().nullable(),
   actor_display: z.string().nullable(),
+  /** The identity the actor's session acted as; null when unknown or not a person. */
+  actor_identity_id: z.string().nullable(),
+  /** That identity's organization; null for the individual capacity or an unknown identity. */
+  actor_organization_name: z.string().nullable(),
   action: z.string(),
   entity_type: z.string(),
   entity_id: z.string().nullable(),

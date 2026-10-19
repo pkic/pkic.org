@@ -34,7 +34,15 @@ export function MenuLevel({
   const [child, setChild] = useState<string | null>(null);
   const childItem = items.find((item) => item.id === child && !item.disabled);
   const revision = items.map((item) => `${item.id}:${Boolean(item.disabled)}`).join("|");
-  usePopupPlacement({ open: true, anchorRef, popupRef, align, side: back ? "right" : "bottom", revision });
+  usePopupPlacement({
+    open: true,
+    anchorRef,
+    popupRef,
+    align,
+    side: back ? "right" : "bottom",
+    revision,
+    topLayer: true,
+  });
   useLayoutEffect(() => {
     if (childItem) return;
     if (!reachable.includes(active)) {
@@ -110,7 +118,10 @@ export function MenuLevel({
           ref: (element: HTMLButtonElement | HTMLAnchorElement | null) => {
             itemRefs.current[index] = element;
           },
-          role: (item.checked === undefined ? "menuitem" : "menuitemradio") as "menuitem" | "menuitemradio",
+          role: (item.checked === undefined ? "menuitem" : item.multiple ? "menuitemcheckbox" : "menuitemradio") as
+            | "menuitem"
+            | "menuitemcheckbox"
+            | "menuitemradio",
           "aria-haspopup": item.children ? ("menu" as const) : undefined,
           "aria-expanded": item.children ? child === item.id : undefined,
           "aria-controls": item.children && child === item.id ? childId : undefined,

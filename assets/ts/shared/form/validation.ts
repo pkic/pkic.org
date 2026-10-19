@@ -2,28 +2,6 @@ import { clearFieldErrors, findControlFieldError, findFieldErrorTarget, setField
 import { applyFieldState, type FieldState } from "../../ui/field-state";
 import { normalizedEmailSchema } from "../../../shared/schemas/api-common";
 import { httpUrlSchema } from "../../../shared/schemas/urls";
-import { isPersonalEmailAddress } from "../../../shared/constants/email-domains";
-
-/**
- * Shows or hides the [data-email-warning] hint element based on whether
- * the typed email address uses a common personal-email domain.
- * Never blocks submission — this is purely advisory.
- */
-function applyEmailWarning(field: HTMLInputElement, form: HTMLFormElement): void {
-  const warningEl = form.querySelector<HTMLElement>("[data-email-warning]");
-  const isPersonal = isPersonalEmailAddress(field.value);
-
-  if (isPersonal) {
-    // The advisory state reads this back: a personal domain is worth flagging
-    // but never blocks a submission, so it must not become `invalid`.
-    field.dataset.personalEmail = "true";
-  } else {
-    delete field.dataset.personalEmail;
-  }
-
-  if (!warningEl) return;
-  warningEl.hidden = !isPersonal;
-}
 
 function applyEmailValidity(field: HTMLInputElement): void {
   if (field.type !== "email") {
@@ -76,6 +54,20 @@ function applyUrlValidity(field: HTMLInputElement): void {
 
 export type FormControl = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
 
+/** Marks a field whose state its request contract owns (`useContractForm`); the DOM validator leaves it alone. */
+export const CONTRACT_VALIDATION_ATTRIBUTE = "data-contract-validation";
+
+/**
+ * Whether this DOM validator speaks for the control. A control barred from
+ * constraint validation (the hidden input a rich editor posts its value
+ * through) has no validity to report, and a field its contract owns says what
+ * the contract says; reporting either here would paint a second, contrary
+ * state over it.
+ */
+export function isNativelyValidated(control: FormControl): boolean {
+  return control.willValidate && !control.closest(`[${CONTRACT_VALIDATION_ATTRIBUTE}]`);
+}
+
 /** The shared-contract checks a control carries beyond its own constraints. */
 export function applyControlValidity(control: FormControl): void {
   if (!(control instanceof HTMLInputElement)) return;
@@ -94,10 +86,7 @@ export function applyControlValidity(control: FormControl): void {
  */
 export function fieldStateFor(control: FormControl): FieldState | null {
   if (!control.checkValidity()) return "invalid";
-  if (control instanceof HTMLInputElement) {
-    if (control.dataset.personalEmail === "true") return "advisory";
-    if (control.type === "radio" || control.type === "checkbox") return null;
-  }
+  if (control instanceof HTMLInputElement && (control.type === "radio" || control.type === "checkbox")) return null;
   return control.value.trim().length > 0 ? "ok" : null;
 }
 
@@ -105,7 +94,7 @@ export function fieldStateFor(control: FormControl): FieldState | null {
  * Reports a control's validity through its field.
  *
  * The message and the state move together — the field group is what carries
- * the colour and the mark, so writing the text alone leaves the control looking
+ * the color and the mark, so writing the text alone leaves the control looking
  * exactly as it did when it was correct.
  */
 function reportField(form: HTMLFormElement, control: FormControl, message: string): void {
@@ -128,7 +117,7 @@ function validateNativeFields(form: HTMLFormElement): boolean {
   let allValid = true;
 
   for (const field of Array.from(fields)) {
-    if (field.disabled) {
+    if (field.disabled || !isNativelyValidated(field)) {
       continue;
     }
 
@@ -148,21 +137,20 @@ function validateNativeFields(form: HTMLFormElement): boolean {
 export function installLiveValidation(form: HTMLFormElement, _statusEl: HTMLElement): void {
   const handler = (event: Event) => {
     const target = event.target;
-    if (!(
-      target instanceof HTMLInputElement ||
-      target instanceof HTMLSelectElement ||
-      target instanceof HTMLTextAreaElement
-    )) {
+    if (
+      !(
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLSelectElement ||
+        target instanceof HTMLTextAreaElement
+      )
+    ) {
       return;
     }
-    if (!target.name) {
+    if (!target.name || !isNativelyValidated(target)) {
       return;
     }
 
     applyControlValidity(target);
-    if (target instanceof HTMLInputElement && target.type === "email") {
-      applyEmailWarning(target, form);
-    }
 
     if (target.checkValidity()) {
       reportField(form, target, "");

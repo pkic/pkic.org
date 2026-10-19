@@ -222,12 +222,8 @@ export function BulkInviteComposer({
           )}
         </Field>
         <div class="pk-cluster">
-          <Button size="sm" onClick={parsePastedRows}>
-            Parse
-          </Button>
-          <Button size="sm" onClick={() => fileRef.current?.click()}>
-            Upload CSV
-          </Button>
+          <Button onClick={parsePastedRows}>Parse</Button>
+          <Button onClick={() => fileRef.current?.click()}>Upload CSV</Button>
           {/* The button above is the control a reader reaches; the input
               itself is taken out of the page rather than merely made
               invisible, so nothing tabs into an unlabeled file picker. */}
@@ -284,7 +280,6 @@ export function BulkInviteComposer({
                 gives a reader no way to tell which one they are on. */}
             <div class="pk-cluster pk-cluster--end">
               <Button
-                size="sm"
                 variant="danger-quiet"
                 icon
                 aria-label={`Remove ${label} ${index + 1}`}
@@ -300,7 +295,6 @@ export function BulkInviteComposer({
         ))}
         <div class="pk-cluster">
           <Button
-            size="sm"
             onClick={() => {
               setRows((current) => [...current, { key: nextKey, email: "" }]);
               setNextKey((key) => key + 1);
@@ -333,16 +327,8 @@ export function BulkInviteComposer({
       </Field>
 
       <div class="pk-cluster">
-        <Button size="sm" onClick={() => void renderPreview()}>
-          Preview email
-        </Button>
-        <Button
-          size="sm"
-          variant="primary"
-          disabled={!preview || !confirmed}
-          loading={sending}
-          onClick={() => void send()}
-        >
+        <Button onClick={() => void renderPreview()}>Preview email</Button>
+        <Button variant="primary" disabled={!preview || !confirmed} loading={sending} onClick={() => void send()}>
           Send {label} invites
         </Button>
         <span class="pk-small">
@@ -354,7 +340,7 @@ export function BulkInviteComposer({
        * These two lines are the only account of what preview and send did, so
        * they are live regions: a reader who has tabbed past the buttons is
        * told the result instead of having to go looking for it. Each says what
-       * happened in words, so nothing here is carried by colour alone.
+       * happened in words, so nothing here is carried by color alone.
        */}
       {previewStatus && (
         <p class="pk-small" role="status">

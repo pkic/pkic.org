@@ -71,6 +71,7 @@ export function RowActions({ status, actions, subject }: RowActionsProps) {
   return (
     <div
       class="pk-row-actions"
+      data-density="compact"
       onClick={(event) => event.stopPropagation()}
       onKeyDown={(event) => event.stopPropagation()}
     >

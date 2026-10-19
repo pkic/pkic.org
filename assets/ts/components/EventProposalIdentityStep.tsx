@@ -1,0 +1,401 @@
+import type { ComponentChildren } from "preact";
+import type { z } from "zod";
+import { useEffect, useMemo, useState } from "preact/hooks";
+import type { RequiredTerm } from "../../shared/schemas/forms";
+import type { ProposalEntryContext } from "../../shared/schemas/proposal-entry";
+import type { ConsentItem } from "../../shared/schemas/registration";
+import {
+  eventProposalProofStartSchema,
+  eventProposalPersonNamePatchSchema,
+  eventProposalProofStartResponseSchema,
+  eventProposalProofIdentitiesSchema,
+} from "../../shared/schemas/event-proposal-proof";
+import type { CollectionLoader } from "../hooks/useServerCollection";
+import { actingIdentityCatalog, actingIdentityLabel } from "../shared/acting-identity-catalog";
+import { postJson, requestJson } from "../shared/api-client";
+import { Alert } from "../ui/Alert";
+import { Button, ButtonLink } from "../ui/Button";
+import { Field } from "../ui/Field";
+import { TextInput } from "../ui/TextControl";
+import { FormSection } from "../ui/FormSection";
+import { EmailFirstStep } from "./EmailFirstStep";
+import { ADDRESS_IN_USE_COPY, EMAIL_FIRST_COPY, ORGANIZATION_JOB_TITLE_COPY } from "../../shared/email-first-copy";
+import { ParticipationRepresentation } from "./ParticipationRepresentation";
+import { ParticipationPersonalDetails } from "./ParticipationPersonalDetails";
+import { ParticipationIdentitySummary } from "./ParticipationIdentitySummary";
+import { ServerSearchSelect } from "./ServerSearchSelect";
+import {
+  IndependentCapacityDisclosure,
+  completedIndependentCapacity,
+  type IndependentCapacityDraft,
+} from "./IndependentCapacityDisclosure";
+import {
+  useProposalEntryIdentity,
+  type ProposalEntrySelection,
+  type ParticipationPerson,
+  type VerifiedProposalEntry,
+} from "./useProposalEntryIdentity";
+
+export function EventProposalIdentityStep({
+  enabled,
+  eventSlug,
+  consents,
+  onChange,
+  onTermsRecorded,
+  speakerManagementToken,
+  speakerProposalId,
+  expectedSpeakerUserId,
+  entryContext,
+  onSavePersonalDetails,
+  personalDetails,
+  startWithEmailProof,
+  initialProof,
+}: {
+  enabled: boolean;
+  personalDetails?: ComponentChildren;
+  startWithEmailProof?: boolean;
+  initialProof?: VerifiedProposalEntry;
+  eventSlug: string;
+  consents: () => { termKey: RequiredTerm["termKey"]; version: RequiredTerm["version"] }[];
+  onChange: (selection: ProposalEntrySelection | null) => void;
+  /** The terms a confirmed email recorded before its link was sent; the flow does not ask for them again. */
+  onTermsRecorded?: (consents: ConsentItem[]) => void;
+  speakerManagementToken?: string;
+  speakerProposalId?: string;
+  expectedSpeakerUserId?: string | null;
+  entryContext?: ProposalEntryContext;
+  onSavePersonalDetails?: (names: z.infer<typeof eventProposalPersonNamePatchSchema>) => Promise<ParticipationPerson>;
+}) {
+  const endpoint = `/api/v1/events/${encodeURIComponent(eventSlug)}/proposals/proof`;
+  const identity = useProposalEntryIdentity(
+    enabled,
+    endpoint,
+    speakerManagementToken,
+    expectedSpeakerUserId,
+    onSavePersonalDetails,
+    startWithEmailProof,
+    speakerProposalId,
+    initialProof,
+  );
+  const [sent, setSent] = useState(false);
+  const [changing, setChanging] = useState(false);
+  const flow = speakerManagementToken || speakerProposalId ? "speaker" : "proposal";
+  const proofBody = {
+    consents: consents(),
+    speakerManagementToken: identity.proofOwnerToken ? undefined : speakerManagementToken,
+    continuationToken: identity.proofOwnerToken,
+    speakerProposalId,
+    entryContext:
+      identity.proofOwnerToken || speakerManagementToken || speakerProposalId
+        ? undefined
+        : (identity.entryContext ?? entryContext),
+  };
+  const [disclosure, setDisclosure] = useState<IndependentCapacityDraft>({});
+  // Taking part as an individual is complete only with the independence disclosure the contract accepts.
+  const entry = useMemo<ProposalEntrySelection | null>(() => {
+    // On behalf of an organization, a chosen representation needs its job title before the person continues.
+    if (identity.selection && identity.kind === "organization" && identity.selected && !identity.selected.jobTitle)
+      return null;
+    if (!identity.selection || identity.kind !== "individual") return identity.selection;
+    const independentCapacity = completedIndependentCapacity(disclosure);
+    return independentCapacity ? { ...identity.selection, independentCapacity } : null;
+  }, [identity.selection, identity.kind, identity.selected, disclosure]);
+  useEffect(() => {
+    onChange(entry);
+  }, [entry, onChange]);
+  useEffect(() => {
+    if (identity.recordedConsents) onTermsRecorded?.(identity.recordedConsents);
+  }, [identity.recordedConsents, onTermsRecorded]);
+  const load = useMemo<CollectionLoader | undefined>(
+    () =>
+      identity.continuationToken
+        ? (url, signal, schema) =>
+            requestJson(url, schema, {
+              method: "POST",
+              signal,
+              body: JSON.stringify(
+                eventProposalProofIdentitiesSchema.parse({
+                  continuationToken: identity.continuationToken,
+                  speakerManagementToken,
+                  speakerProposalId,
+                }),
+              ),
+            })
+        : undefined,
+    [identity.continuationToken, speakerManagementToken, speakerProposalId],
+  );
+  if (!enabled) return null;
+  async function sendProof(proof: z.output<typeof eventProposalProofStartSchema>): Promise<void> {
+    identity.setError(undefined);
+    await postJson(endpoint, proof, eventProposalProofStartResponseSchema);
+    setSent(true);
+  }
+  const person = identity.person;
+  const knownPerson = identity.knownPerson;
+  const summaryPerson = knownPerson
+    ? {
+        ...knownPerson,
+        email: knownPerson.email,
+        organizationName: identity.selected?.organizationName ?? null,
+        jobTitle: identity.selected?.jobTitle ?? null,
+      }
+    : null;
+  const resolved = Boolean(identity.selection);
+  const needsFirstName = person && !identity.knownPerson?.firstName;
+  const needsLastName = person && !identity.knownPerson?.lastName;
+  const needsOrganization =
+    person &&
+    identity.kind === "organization" &&
+    !identity.knownPerson?.organizationName &&
+    !identity.selected?.organizationName;
+  // A new affiliation on behalf of an organization says what the person does there; a chosen representation carries its own.
+  const needsJobTitle =
+    person && identity.kind === "organization" && !identity.selected && !identity.knownPerson?.jobTitle;
+  const catalogEndpoint = identity.continuationToken ? `${endpoint}/identities` : "/api/v1/users/current/identities";
+  const selector = (
+    <Field
+      label="Your organization representation"
+      help="Choose an identity you already own, or verify an email to set up another organization affiliation."
+    >
+      {(control) => (
+        <ServerSearchSelect
+          {...control}
+          catalog={actingIdentityCatalog(catalogEndpoint, actingIdentityLabel, {
+            active: "true",
+            organizationOnly: "true",
+          })}
+          load={load}
+          allowEmpty={false}
+          searchLabel="Your organization identities"
+          value={identity.selected?.id ?? null}
+          selectedLabel={identity.selected ? actingIdentityLabel(identity.selected) : undefined}
+          placeholder="Choose an existing representation"
+          onChange={(value) => {
+            if (value && identity.kind !== "organization") identity.setKind("organization");
+            identity.choose(value);
+            if (value) setChanging(false);
+          }}
+        />
+      )}
+    </Field>
+  );
+  const representationActions = identity.storedPerson && (
+    <div class="pk-cluster">
+      <Button type="button" variant="secondary" onClick={() => setChanging(!changing)}>
+        Choose another representation
+      </Button>
+      <Button
+        type="button"
+        variant="secondary"
+        onClick={() => {
+          identity.useDifferentEmail();
+          setSent(false);
+          setChanging(false);
+        }}
+      >
+        Add representation
+      </Button>
+    </div>
+  );
+  return (
+    <div class="pk-stack pk-stack--loose">
+      {identity.loading ? (
+        <p role="status">Loading your details…</p>
+      ) : (
+        <>
+          {personalDetails}
+          {(!resolved || changing) && (
+            <>
+              {identity.authenticated || (identity.continuationToken && identity.storedPerson) ? (
+                <>
+                  {/* A confirmed mailbox proved one capacity; only a signed-in person switches without a new proof. */}
+                  {(identity.authenticated || identity.kind === "organization") && selector}
+                  <div class="pk-cluster">
+                    <Button type="button" variant="link" onClick={() => identity.setKind("individual")}>
+                      {EMAIL_FIRST_COPY[flow].individualSwitch}
+                    </Button>
+                    {identity.authenticated && identity.kind === "organization" && (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => {
+                          identity.useDifferentEmail();
+                          setSent(false);
+                        }}
+                      >
+                        Add representation
+                      </Button>
+                    )}
+                  </div>
+                </>
+              ) : (
+                !identity.continuationToken && (
+                  <EmailFirstStep
+                    flow={flow}
+                    schema={eventProposalProofStartSchema}
+                    body={proofBody}
+                    email={identity.email}
+                    onEmailChange={(value) => {
+                      identity.setEmail(value);
+                      setSent(false);
+                    }}
+                    individual={identity.kind === "individual"}
+                    onIndividualChange={(value) => {
+                      identity.setKind(value ? "individual" : "organization");
+                      setSent(false);
+                    }}
+                    onContinue={sendProof}
+                    sentTo={sent ? identity.email : null}
+                    onChangeEmail={() => {
+                      identity.setEmail("");
+                      setSent(false);
+                    }}
+                  />
+                )
+              )}
+            </>
+          )}
+          {person && resolved && (
+            <>
+              {!personalDetails && (
+                <ParticipationPersonalDetails
+                  person={knownPerson ?? { ...person, firstName: null, lastName: null }}
+                  description={
+                    needsFirstName || needsLastName
+                      ? "These new details are not saved yet. They will be saved when you submit your proposal or save your speaker profile."
+                      : undefined
+                  }
+                  save={
+                    identity.storedPerson &&
+                    (!speakerManagementToken || onSavePersonalDetails) &&
+                    !needsFirstName &&
+                    !needsLastName
+                      ? identity.savePersonalDetails
+                      : undefined
+                  }
+                >
+                  {needsFirstName && (
+                    <Field label="First name" errorSlot="proposer.firstName">
+                      {(control) => (
+                        <TextInput
+                          {...control}
+                          name="firstName"
+                          required
+                          value={person.firstName ?? ""}
+                          onInput={(event) => identity.complete("firstName", event.currentTarget.value)}
+                        />
+                      )}
+                    </Field>
+                  )}
+                  {needsLastName && (
+                    <Field label="Last name" errorSlot="proposer.lastName">
+                      {(control) => (
+                        <TextInput
+                          {...control}
+                          name="lastName"
+                          required
+                          value={person.lastName ?? ""}
+                          onInput={(event) => identity.complete("lastName", event.currentTarget.value)}
+                        />
+                      )}
+                    </Field>
+                  )}
+                </ParticipationPersonalDetails>
+              )}
+              {identity.selected && summaryPerson ? (
+                <ParticipationRepresentation
+                  key={identity.selected.id}
+                  requireJobTitle
+                  person={{ ...summaryPerson, email: identity.selected.email }}
+                  save={identity.saveRepresentation}
+                  savedMessage="Your current representation is updated."
+                >
+                  {representationActions}
+                </ParticipationRepresentation>
+              ) : (
+                <FormSection
+                  title="Your representation for this proposal"
+                  description={
+                    identity.storedPerson && identity.kind === "organization" && !needsOrganization
+                      ? "No existing representation is selected. Choose one to reuse its saved details, or add a representation with a verified organization email."
+                      : needsOrganization || needsJobTitle
+                        ? "Any details entered below are unsaved until you submit your proposal or save your speaker profile."
+                        : undefined
+                  }
+                >
+                  {knownPerson && (
+                    <ParticipationIdentitySummary
+                      person={knownPerson}
+                      applicantKind={identity.kind}
+                      knownOnly
+                      scope="representation"
+                    />
+                  )}
+                  {needsOrganization && (
+                    <Field label="Organization name" errorSlot="proposer.organizationName">
+                      {(control) => (
+                        <TextInput
+                          {...control}
+                          name="organizationName"
+                          required
+                          value={person.organizationName ?? ""}
+                          onInput={(event) => identity.complete("organizationName", event.currentTarget.value)}
+                        />
+                      )}
+                    </Field>
+                  )}
+                  {needsJobTitle && (
+                    <Field
+                      label={ORGANIZATION_JOB_TITLE_COPY.label}
+                      help={ORGANIZATION_JOB_TITLE_COPY.help}
+                      errorSlot="proposer.jobTitle"
+                      required
+                    >
+                      {(control) => (
+                        <TextInput
+                          {...control}
+                          name="jobTitle"
+                          autoComplete="organization-title"
+                          value={person.jobTitle ?? ""}
+                          onInput={(event) => identity.complete("jobTitle", event.currentTarget.value)}
+                        />
+                      )}
+                    </Field>
+                  )}
+                  {representationActions}
+                </FormSection>
+              )}
+              {identity.kind === "individual" && (
+                <IndependentCapacityDisclosure
+                  draft={disclosure}
+                  onChange={setDisclosure}
+                  onUseWorkEmail={() => {
+                    setDisclosure({});
+                    identity.setKind("organization");
+                    identity.useDifferentEmail();
+                    setSent(false);
+                    setChanging(false);
+                  }}
+                />
+              )}
+              {Object.keys(identity.selection?.missingDetails ?? {}).length > 0 && (
+                <Button type="button" variant="secondary" onClick={identity.clearUnsaved}>
+                  Clear unsaved changes
+                </Button>
+              )}
+            </>
+          )}
+        </>
+      )}
+      {identity.signInEmail && (
+        <Alert tone="warn" title={ADDRESS_IN_USE_COPY.title}>
+          <p>{ADDRESS_IN_USE_COPY.body(identity.signInEmail)}</p>
+          <ButtonLink href="/portal/" variant="secondary">
+            {ADDRESS_IN_USE_COPY.action}
+          </ButtonLink>
+        </Alert>
+      )}
+      {identity.error && <Alert tone="danger">{identity.error}</Alert>}
+    </div>
+  );
+}

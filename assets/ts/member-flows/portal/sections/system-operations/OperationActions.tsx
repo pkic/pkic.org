@@ -131,7 +131,6 @@ export function OperationActions({
                 // out of the bar they were in.
                 <Button
                   key={command.key}
-                  size="sm"
                   variant={command.variant}
                   loading={busy === command.key}
                   disabled={busy !== null}

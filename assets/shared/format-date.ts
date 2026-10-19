@@ -22,6 +22,9 @@
  * not here).
  */
 
+import { formatNumber } from "./format-number";
+import { clockTimeZone, type ClockZone } from "./event-clock";
+
 /** What every formatter here writes when there is no date, or none it can read. */
 export const EMPTY_DATE = "—";
 const EMPTY = EMPTY_DATE;
@@ -71,6 +74,53 @@ export function formatDayAndMonth(value: string | null | undefined): string {
 }
 
 /**
+ * A `YYYY-MM-DD` calendar date split for a calendar tile: short weekday, day
+ * number and short month, in the viewer's locale. Day-precise like
+ * `formatDayAndMonth`; an unreadable value yields empty markers.
+ */
+export function calendarDateParts(value: string): { weekday: string; day: string; month: string } {
+  const date = toDate(DATE_ONLY.test(value) ? `${value}T00:00:00Z` : value);
+  if (!date) return { weekday: EMPTY, day: EMPTY, month: EMPTY };
+  const part = (options: Intl.DateTimeFormatOptions) => date.toLocaleString(undefined, { ...options, timeZone: "UTC" });
+  return { weekday: part({ weekday: "short" }), day: part({ day: "numeric" }), month: part({ month: "short" }) };
+}
+
+/**
+ * A short list of `YYYY-MM-DD` days as one phrase in the viewer's locale:
+ * "Tue 1 Dec and Wed 2 Dec". For the days of one event, so no year.
+ */
+export function formatDayList(values: readonly string[]): string {
+  const days = values.map((value) => {
+    const parts = calendarDateParts(value);
+    return `${parts.weekday} ${formatDayAndMonth(value)}`;
+  });
+  return new Intl.ListFormat(undefined, { style: "long", type: "conjunction" }).format(days);
+}
+
+/**
+ * A short list of `YYYY-MM-DD` days of one event with consecutive days
+ * joined into one span: "Dec 1 – 2, Dec 4" in the viewer's locale. Day-precise,
+ * so it renders on the UTC calendar; unreadable values are left out.
+ */
+export function formatDaySpans(values: readonly string[]): string {
+  const days = [...new Set(values.filter((value) => DATE_ONLY.test(value) && toDate(`${value}T00:00:00Z`)))].sort();
+  const spans: Array<[string, string]> = [];
+  for (const day of days) {
+    const last = spans.at(-1);
+    if (last && Date.parse(`${day}T00:00:00Z`) - Date.parse(`${last[1]}T00:00:00Z`) === 86_400_000) last[1] = day;
+    else spans.push([day, day]);
+  }
+  const format = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", timeZone: "UTC" });
+  return spans
+    .map(([first, last]) =>
+      first === last
+        ? format.format(new Date(`${first}T00:00:00Z`))
+        : format.formatRange(new Date(`${first}T00:00:00Z`), new Date(`${last}T00:00:00Z`)),
+    )
+    .join(", ");
+}
+
+/**
  * An instant that stands for a calendar day — a seat's start, a leadership
  * term's end. A manager picks "1 June 2022" and it is stored as that day's
  * midnight UTC, so the UTC calendar is the value's meaning; rendering it in
@@ -112,6 +162,36 @@ export function formatMonthYear(value: string | null | undefined): string {
 }
 
 /**
+ * How long something was held, the way a résumé states it: "Jun 2023 – Present
+ * · 3 yrs 5 mos". The ends are service dates, which stand for calendar days,
+ * so months are read on the UTC calendar. Both ends count, so a seat taken and
+ * left in the same month is "1 mo", never nothing.
+ */
+export function formatTenure(
+  startedAt: string | null | undefined,
+  endedAt: string | null | undefined,
+  now: number = Date.now(),
+): string {
+  const start = startedAt ? toDate(DATE_ONLY.test(startedAt) ? `${startedAt}T00:00:00Z` : startedAt) : null;
+  const end = endedAt ? toDate(DATE_ONLY.test(endedAt) ? `${endedAt}T00:00:00Z` : endedAt) : new Date(now);
+  if (!start || !end) return EMPTY;
+  const month = (date: Date) => date.toLocaleString(undefined, { month: "short", year: "numeric", timeZone: "UTC" });
+  const months = Math.max(
+    1,
+    (end.getUTCFullYear() - start.getUTCFullYear()) * 12 + end.getUTCMonth() - start.getUTCMonth() + 1,
+  );
+  const unit = (value: number, name: "year" | "month") =>
+    new Intl.NumberFormat(undefined, { style: "unit", unit: name, unitDisplay: "short" }).format(value);
+  const span = [
+    months >= 12 ? unit(Math.floor(months / 12), "year") : null,
+    months % 12 ? unit(months % 12, "month") : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  return `${month(start)} – ${endedAt ? month(end) : "Present"} · ${span}`;
+}
+
+/**
  * An instant in the viewer's own locale and zone, or an em dash.
  * `seconds` widens the time for audit trails; `zoneName` names the viewer's
  * zone (used where a page shows a converted-to-local time next to UTC
@@ -137,9 +217,22 @@ export function formatDateTime(
       timeZoneName: "short",
     });
   }
+  /*
+   * The month by name and the 24-hour clock, the way every other date in the
+   * app reads ("Oct 7, 2026, 10:27" in an en-US browser). The short date style
+   * wrote "10/7/26, 10:27 AM" in management lists beside "Oct 11, 2026" and an
+   * agenda on the 24-hour clock, and a numeric date reads month-first or
+   * day-first depending on who is looking.
+   */
   return date.toLocaleString(undefined, {
-    dateStyle: options.fullDate ? "full" : "short",
-    timeStyle: options.seconds ? "medium" : "short",
+    ...(options.fullDate ? { weekday: "long" as const } : {}),
+    year: "numeric",
+    month: options.fullDate ? "long" : "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    ...(options.seconds ? { second: "2-digit" as const } : {}),
+    hourCycle: "h23",
   });
 }
 
@@ -157,27 +250,88 @@ export function formatTimeOfDay(value: string | null | undefined): string {
     .replace(",", "");
 }
 
-/** An event's clock range in its configured zone, independent of the viewer's clock. */
-export function formatTimeRangeInZone(startsAt: string, endsAt: string | undefined, timeZone: string): string {
-  const start = toDate(startsAt);
-  if (!start) return EMPTY;
-  const end = endsAt ? toDate(endsAt) : null;
-  const formatter = new Intl.DateTimeFormat(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: false,
-    timeZone,
-    timeZoneName: "short",
-  });
-  return end && end >= start ? formatter.formatRange(start, end) : formatter.format(start);
+const EVENT_CLOCK_OPTIONS = { hour: "numeric", minute: "2-digit", hour12: false } as const;
+
+/** A clock with its zone named by the surrounding agenda label. */
+export function formatClockInZone(value: string, zone: ClockZone): string {
+  const date = toDate(value);
+  if (!date) return EMPTY;
+  return new Intl.DateTimeFormat(undefined, { ...EVENT_CLOCK_OPTIONS, timeZone: clockTimeZone(zone) }).format(date);
 }
 
 /**
- * An instant on the wall clock of a specific IANA zone, with the zone named
- * so the reader cannot mistake it for their own — "Dec 1, 2026, 9:00 AM CET"
- * in an en-US browser.
+ * An event's clock range in its configured zone, independent of the viewer's
+ * clock, with the clock named by its city — "09:00 – 09:30 Austin time" for an
+ * event in Austin on `America/Chicago`. The locale's short zone name would say
+ * "CST" or "GMT-6", which changes with daylight saving and names no place.
  */
-export function formatDateTimeInZone(value: string | null | undefined, timeZone: string): string {
+export function formatTimeRangeInZone(startsAt: string, endsAt: string | undefined, zone: ClockZone): string {
+  const clock = formatClockRangeInZone(startsAt, endsAt, zone);
+  return clock === EMPTY ? EMPTY : `${clock} ${formatClockName(zone)}`;
+}
+
+/**
+ * An event's clock range in its configured zone without the clock's name —
+ * "09:00 – 09:30" — for a list that names its clock once in its heading.
+ */
+export function formatClockRangeInZone(startsAt: string, endsAt: string | undefined, zone: ClockZone): string {
+  const start = toDate(startsAt);
+  if (!start) return EMPTY;
+  const end = endsAt ? toDate(endsAt) : null;
+  const formatter = new Intl.DateTimeFormat(undefined, { ...EVENT_CLOCK_OPTIONS, timeZone: clockTimeZone(zone) });
+  return end && end >= start ? formatter.formatRange(start, end) : formatter.format(start);
+}
+
+/** An instant's day on an event's clock as a short weekday and date — "Tue, Dec 1" — without the year. */
+export function formatEventDayInZone(value: string, zone: ClockZone): string {
+  const date = toDate(value);
+  if (!date) return EMPTY;
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    timeZone: clockTimeZone(zone),
+  }).format(date);
+}
+
+/**
+ * An IANA zone by the city that names it — "Amsterdam", "New York" — the way
+ * the agenda's time-zone picker labels the viewer's and the common zones. A
+ * city survives daylight saving where "GMT+1" and "CET" do not, and reads as a
+ * place rather than a code.
+ */
+export function formatZoneCity(timeZone: string): string {
+  return timeZone === "UTC" ? "UTC" : (timeZone.split("/").pop() ?? timeZone).replaceAll("_", " ");
+}
+
+/**
+ * The city a clock is named by: an event's own city when it has one, so Austin
+ * on `America/Chicago` reads "Austin", otherwise the zone's city. UTC is
+ * already the name of a clock.
+ */
+export function formatClockCity(zone: ClockZone): string {
+  const timeZone = clockTimeZone(zone);
+  if (timeZone === "UTC") return "UTC";
+  return (typeof zone === "string" ? null : zone.city) ?? formatZoneCity(timeZone);
+}
+
+/** "Austin time" for an event's clock, "Amsterdam time" for a bare zone; UTC is already the name of a clock. */
+export function formatClockName(zone: ClockZone): string {
+  return clockTimeZone(zone) === "UTC" ? "UTC" : `${formatClockCity(zone)} time`;
+}
+
+/**
+ * An instant on the wall clock of a specific IANA zone, on the 24-hour clock
+ * the agenda uses, with the clock named by its city so the reader cannot
+ * mistake it for their own — "Dec 1, 2026, 09:00 Amsterdam time" in an en-US
+ * browser.
+ */
+export function formatDateTimeInZone(value: string | null | undefined, zone: ClockZone): string {
+  const clock = wallClock(value, zone);
+  return clock === EMPTY ? EMPTY : `${clock} ${formatClockName(zone)}`;
+}
+
+function wallClock(value: string | null | undefined, zone: ClockZone): string {
   if (!value) return EMPTY;
   const date = toDate(value);
   if (!date) return EMPTY;
@@ -185,21 +339,40 @@ export function formatDateTimeInZone(value: string | null | undefined, timeZone:
     year: "numeric",
     month: "short",
     day: "numeric",
-    hour: "numeric",
+    hour: "2-digit",
     minute: "2-digit",
-    timeZone,
-    timeZoneName: "short",
+    hourCycle: "h23",
+    timeZone: clockTimeZone(zone),
   });
 }
 
+/**
+ * An event's instant beside the place it happens. The place says whose clock
+ * the time is on, so the city is said once — "Dec 1, 2026, 09:00 · Amsterdam,
+ * Netherlands" — rather than "09:00 Amsterdam time · Amsterdam, …". Without a
+ * place the clock keeps its name (`formatDateTimeInZone`). `place` must be
+ * the event's own place on `zone`'s clock, never a room or a call.
+ */
+export function formatDateTimeAtPlace(
+  value: string | null | undefined,
+  zone: ClockZone,
+  place: string | null | undefined,
+): string {
+  if (!place) return formatDateTimeInZone(value, zone);
+  const clock = wallClock(value, zone);
+  return clock === EMPTY ? place : `${clock} · ${place}`;
+}
+
 /** The agreed weekday and wall-clock time of a recurring meeting in its IANA zone. */
-export function formatWeekdayTimeInZone(value: string, timeZone: string): { weekday: string; time: string } {
+export function formatWeekdayTimeInZone(value: string, zone: ClockZone): { weekday: string; time: string } {
   const date = toDate(value);
   if (!date) return { weekday: EMPTY, time: EMPTY };
+  const timeZone = clockTimeZone(zone);
   const weekday = new Intl.DateTimeFormat(undefined, { weekday: "long", timeZone }).format(date);
   const time = new Intl.DateTimeFormat(undefined, {
-    hour: "numeric",
+    hour: "2-digit",
     minute: "2-digit",
+    hourCycle: "h23",
     timeZone,
   }).format(date);
   return { weekday, time };
@@ -269,27 +442,36 @@ export function formatLocalTime(value: string, format: LocalTimeFormat, until?: 
  * Display policy for event times. The viewer's own registration is the
  * authoritative signal: attending in person shows the venue's clock with its
  * zone named, attending virtually or on demand shows the viewer's local
- * time. Without a registration, a physical venue implies the venue's clock;
+ * time. Without a registration, a physical venue implies the venue's clock,
+ * named by the event's city (`eventClock`);
  * everything else (and deadlines) stays local.
  */
 export function formatEventWhen(
   startsAt: string | null | undefined,
-  timeZone: string | null | undefined,
+  clock: ClockZone | null | undefined,
   location: string | null | undefined,
   attendanceType?: "in_person" | "virtual" | "on_demand" | null,
 ): string {
-  if (attendanceType === "in_person" && timeZone) return formatDateTimeInZone(startsAt, timeZone);
+  if (attendanceType === "in_person" && clock) return formatDateTimeInZone(startsAt, clock);
   if (attendanceType) return formatDateTime(startsAt);
-  if (location && timeZone) return formatDateTimeInZone(startsAt, timeZone);
+  if (location && clock) return formatDateTimeInZone(startsAt, clock);
   return formatDateTime(startsAt);
 }
 
 /** "today", "tomorrow", "in 95 days" — null when the instant is past or unknown. */
-export function formatRelativeDays(instant: string | null | undefined): string | null {
+export function formatRelativeDays(instant: string | null | undefined, now = Date.now()): string | null {
   if (!instant) return null;
-  const millis = new Date(instant).getTime() - Date.now();
+  const millis = new Date(instant).getTime() - now;
   if (!Number.isFinite(millis)) return null;
   const days = Math.round(millis / 86_400_000);
   if (days < 0) return null;
   return new Intl.RelativeTimeFormat(undefined, { numeric: "auto" }).format(days, "day");
+}
+
+/** "4 min", "1 h 5 min": a span of time to the nearest minute. */
+export function formatDuration(milliseconds: number): string {
+  const minutes = Math.round(milliseconds / 60_000);
+  if (minutes < 60) return `${formatNumber(minutes)} min`;
+  const rest = minutes % 60;
+  return `${formatNumber(Math.floor(minutes / 60))} h${rest ? ` ${formatNumber(rest)} min` : ""}`;
 }

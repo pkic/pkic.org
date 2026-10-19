@@ -1,16 +1,12 @@
 /*
- * Theme toggle.
- *
- * Which icon shows is decided by the stylesheet, not by script: the root
- * carries `data-theme` (or carries nothing, meaning "follow the system"), and
- * each icon is shown for exactly one of those states. So the control is
- * correct on the first paint, before any JavaScript has run, and the module
- * that handles the click never has to write markup or class names to keep it
- * in step.
+ * First paint of the server-rendered theme control, shipped in the entry
+ * sheet. The menu itself hydrates from its own chunk (see `ThemeMenu.css`).
  */
-
 @layer components {
-  .pk-theme-toggle {
+  .pk-theme-control {
+    display: inline-flex;
+  }
+  .pk-theme-control .pk-menu__trigger {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -21,32 +17,22 @@
     border-radius: var(--pk-radius-sm);
     background: none;
     color: inherit;
-    cursor: pointer;
   }
-
-  /*
-   * The hover wash is mixed from the control's own ink, so it works on any
-   * ground without knowing which one it is on: light on the dark navbar,
-   * dark on a light page. A fixed colour here would need a second rule per
-   * surface, and a rule in the legacy layer could not supply one — this layer
-   * wins over that one.
-   */
-  .pk-theme-toggle:hover,
-  .pk-theme-toggle:focus-visible {
-    background: color-mix(in srgb, currentColor 12%, transparent);
+  /* The shared menu's touch target, held before its chunk arrives. */
+  @media (any-pointer: coarse) {
+    .pk-theme-control .pk-menu__trigger {
+      min-block-size: calc(var(--pk-6) + var(--pk-3));
+      min-inline-size: calc(var(--pk-6) + var(--pk-3));
+    }
   }
-
-  .pk-theme-toggle svg {
+  .pk-theme-control [data-theme-icon] {
     width: 1rem;
     height: 1rem;
     display: none;
   }
-
-  /* No attribute is the third state, not a missing one: the reader has not
-     chosen, so the operating system decides and the control says so. */
-  :root:not([data-theme]) .pk-theme-toggle [data-theme-icon="system"],
-  :root[data-theme="light"] .pk-theme-toggle [data-theme-icon="light"],
-  :root[data-theme="dark"] .pk-theme-toggle [data-theme-icon="dark"] {
+  :root:not([data-theme]) .pk-theme-control [data-theme-icon="system"],
+  :root[data-theme="light"] .pk-theme-control [data-theme-icon="light"],
+  :root[data-theme="dark"] .pk-theme-control [data-theme-icon="dark"] {
     display: block;
   }
 }

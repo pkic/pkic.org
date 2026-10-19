@@ -102,8 +102,8 @@
 .person-card-compact-org-logo-wrap {
   display: flex;
   align-items: center;
-  height: 20px;
-  max-width: 80px;
+  height: 1.25rem;
+  max-width: 5rem;
   overflow: hidden;
 }
 
@@ -153,11 +153,11 @@ $toggle-width: 1.4rem;
 // no negative margin tricks needed.
 .wg-sidebar-wrap {
   position: sticky;
-  top: calc(56px + 44px + 1.5rem);
+  top: calc(3.5rem + 2.75rem + 1.5rem);
   align-self: flex-start;
   flex-shrink: 0;
   width: $sidebar-width;
-  max-height: calc(100vh - 180px);
+  max-height: calc(100vh - 11.25rem);
   overflow-x: hidden; // clips .wg-sidebar during collapse
   overflow-y: auto; // allows sidebar content to scroll
   transition: width 0.25s ease;
@@ -301,8 +301,8 @@ $toggle-width: 1.4rem;
 .wg-nav-tree-panel {
   position: fixed;
   z-index: 1035; // above embedded widgets (self-assessment sticky header z1000), below the site navbar (z1040)
-  min-width: 260px;
-  max-width: 320px;
+  min-width: 16.25rem;
+  max-width: 20rem;
   max-height: 70vh;
   overflow-y: auto;
   background: #16161e;
@@ -412,8 +412,8 @@ $toggle-width: 1.4rem;
 
 .wg-sidebar-chevron {
   flex-shrink: 0;
-  width: 20px;
-  height: 20px;
+  width: 1.25rem;
+  height: 1.25rem;
   display: flex;
   align-items: center;
   justify-content: center;

@@ -3,7 +3,9 @@ import type { FormField } from "../types";
 import { optionsFor, readRules, type FieldRules } from "./custom-field-rules";
 import { COUNTRIES } from "../countries";
 import { isAllowedProfileUrl } from "../../../shared/schemas/form-field-rules";
+import { ratingScale } from "../../../shared/form-answer-rules";
 import { Button } from "../../ui/Button";
+import { IconRemove } from "../../ui/MediaIcons";
 // The control classes — `pk-input`, `pk-input--select`, and the three-part
 // check block — are written here as class names rather than reached through
 // `ui/Field`, because this module renders the bare control that somebody
@@ -156,8 +158,29 @@ function MultiSelectCheckboxes({ field }: { field: FormField }) {
   );
 }
 
+/** A single choice as one visible list: every answer can be read without opening a dropdown. */
+function RadioChoices({ field }: { field: FormField }) {
+  return (
+    <div class="pk-stack pk-stack--snug" role="radiogroup" aria-label={field.label}>
+      {optionsFor(field).map((option, index) => (
+        <label key={option.value} class="pk-check" for={`custom-${field.key}-${index}`}>
+          <input
+            type="radio"
+            class="pk-check__input"
+            name={`custom.${field.key}`}
+            value={option.value}
+            id={`custom-${field.key}-${index}`}
+            required={field.required}
+          />
+          <span class="pk-check__label">{option.label}</span>
+        </label>
+      ))}
+    </div>
+  );
+}
+
 function TagPicker({ field, rules, initialValue }: { field: FormField; rules: FieldRules; initialValue?: unknown }) {
-  const options = optionsFor(field);
+  const options = useMemo(() => optionsFor(field), [field.options]);
   const shuffledOptions = useMemo(() => shuffled(options), [options]);
 
   const initial = useMemo(() => {
@@ -242,16 +265,7 @@ function TagPicker({ field, rules, initialValue }: { field: FormField; rules: Fi
               aria-label={`Remove ${value}`}
               onClick={() => removeValue(value)}
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="10"
-                height="10"
-                viewBox="0 0 16 16"
-                fill="currentColor"
-                aria-hidden="true"
-              >
-                <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8z" />
-              </svg>
+              <IconRemove width="14" height="14" />
             </button>
           </span>
         ))}
@@ -281,7 +295,7 @@ function TagPicker({ field, rules, initialValue }: { field: FormField; rules: Fi
             }
           }}
         />
-        <Button variant="secondary" size="sm" onClick={() => addValue(inputValue)}>
+        <Button variant="secondary" onClick={() => addValue(inputValue)}>
           Add
         </Button>
       </div>
@@ -354,7 +368,7 @@ function RatingButtons({
           <button
             key={v}
             type="button"
-            class="pk-btn pk-btn--sm pk-btn--secondary"
+            class="pk-btn pk-btn--secondary"
             data-value={String(v)}
             aria-pressed="false"
             onClick={() => select(v)}
@@ -487,6 +501,7 @@ export function CustomFieldInput({ field, geoHint, initialValue }: CustomFieldIn
   }
 
   if (field.fieldType === "select") {
+    if (rules.uiWidget === "radios") return <RadioChoices field={field} />;
     return <SelectInput field={field} rules={rules} />;
   }
 
@@ -497,14 +512,9 @@ export function CustomFieldInput({ field, geoHint, initialValue }: CustomFieldIn
     return <TagPicker field={field} rules={rules} initialValue={initialValue} />;
   }
 
-  if (rules.uiWidget === "rating_stars") {
-    const min = Number.isFinite(rules.min) ? Number(rules.min) : 1;
-    const max = Number.isFinite(rules.max) ? Number(rules.max) : 5;
-    return <RatingButtons field={field} min={min} max={max} initialValue={initialValue} />;
-  }
-
-  if (rules.uiWidget === "nps") {
-    return <RatingButtons field={field} min={0} max={10} initialValue={initialValue} />;
+  const scale = ratingScale(rules);
+  if (scale) {
+    return <RatingButtons field={field} min={scale.min} max={scale.max} initialValue={initialValue} />;
   }
 
   if (rules.format === "date_range") {

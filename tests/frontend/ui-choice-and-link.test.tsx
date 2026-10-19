@@ -48,13 +48,13 @@ describe("choice controls", () => {
 describe("ButtonLink", () => {
   it("is a link that draws like the button beside it", () => {
     const root = mount(
-      <ButtonLink href="#/events" variant="primary" size="sm">
+      <ButtonLink href="#/events" variant="primary" size="lg">
         Open
       </ButtonLink>,
     );
     const link = root.querySelector("a");
     expect(link?.getAttribute("href")).toBe("#/events");
-    expect(link?.className).toBe("pk-btn pk-btn--primary pk-btn--sm");
+    expect(link?.className).toBe("pk-btn pk-btn--primary pk-btn--lg");
     expect(link?.textContent).toBe("Open");
   });
 });

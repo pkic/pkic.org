@@ -44,7 +44,7 @@
     color: var(--pk-ink-muted);
   }
 
-  /* ── Labelled progress bars ─────────────────────────────────────────── */
+  /* ── Labeled progress bars ─────────────────────────────────────────── */
 
   .pk-chart__bars {
     display: flex;
@@ -66,7 +66,7 @@
 
   .pk-chart__bar {
     flex: 1;
-    height: 6px;
+    height: 0.375rem;
     appearance: none;
     border: 0;
     border-radius: var(--pk-radius-sm);
@@ -87,11 +87,220 @@
     background: var(--pk-info);
   }
 
+  /* The shared meter as a chart bar: it takes the row's remaining width. */
+  .pk-chart__meter {
+    flex: 1;
+    min-width: 0;
+  }
+
   .pk-chart__bar-count {
-    flex: 0 0 2rem;
+    flex: 0 0 auto;
+    min-width: 2rem;
     font-size: var(--pk-text-xs);
     color: var(--pk-ink-muted);
     text-align: right;
     font-variant-numeric: tabular-nums;
+  }
+
+  /* ── Presentation: a chart read from across a room or on a broadcast ── */
+
+  .pk-chart--presentation .pk-chart__bars {
+    gap: var(--pk-3);
+  }
+
+  .pk-chart--presentation .pk-chart__bar-label,
+  .pk-chart--presentation .pk-chart__bar-count {
+    font-size: inherit;
+    color: inherit;
+  }
+
+  .pk-chart--presentation .pk-chart__bar-label {
+    flex-basis: 40%;
+  }
+
+  .pk-chart--presentation .pk-meter__track {
+    height: 0.75em;
+  }
+
+  .pk-chart--presentation .pk-meter__fill {
+    transition-duration: var(--pk-dur-slow);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pk-chart__meter .pk-meter__fill {
+      transition: none;
+    }
+  }
+}
+
+@layer components {
+  .adm-form-pie-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--pk-4);
+  }
+  .adm-form-pie {
+    width: 100%;
+    max-width: calc(var(--pk-8) * 3);
+    height: auto;
+    aspect-ratio: 1;
+    flex-shrink: 0;
+    transform: rotate(-90deg);
+  }
+  .adm-form-pie-bg {
+    fill: none;
+    stroke: var(--pk-line-soft);
+    stroke-width: 6;
+  }
+  .adm-form-pie-segment {
+    fill: none;
+    stroke-width: 6;
+  }
+  .adm-form-pie-sector {
+    stroke: none;
+  }
+  .adm-form-pie-dot {
+    display: inline-block;
+  }
+  .adm-form-pie-legend {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--pk-1) var(--pk-3);
+    width: 100%;
+  }
+  .adm-form-pie-legend-item > .adm-form-pie-dot {
+    width: var(--pk-3);
+    height: var(--pk-3);
+    border-radius: var(--pk-radius-pill);
+    flex-shrink: 0;
+  }
+  .adm-form-pie-label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .adm-form-pie-count {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+  .adm-form-pie-legend-item {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-2);
+    font-size: var(--pk-text-sm);
+    color: var(--pk-ink-muted);
+    min-width: 0;
+  }
+  .adm-form-wordcloud {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--pk-1) var(--pk-3);
+    align-items: center;
+    justify-content: center;
+    padding: var(--pk-2) var(--pk-1);
+  }
+  .adm-form-wordcloud > span {
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+  .adm-word-weight-1 {
+    font-size: var(--pk-text-sm);
+    font-weight: 400;
+    color: var(--pk-ink-muted);
+  }
+  .adm-word-weight-2 {
+    font-size: var(--pk-text-md);
+    font-weight: 500;
+    color: var(--pk-accent-lift);
+  }
+  .adm-word-weight-3 {
+    font-size: var(--pk-text-lg);
+    font-weight: 600;
+    color: var(--pk-accent);
+  }
+  .adm-word-weight-4 {
+    font-size: var(--pk-text-xl);
+    font-weight: 700;
+    color: var(--pk-accent-strong);
+  }
+  .adm-word-weight-5 {
+    font-size: var(--pk-text-2xl);
+    font-weight: 800;
+    color: var(--pk-accent-ink);
+  }
+  .adm-form-pie-segment-0 {
+    stroke: var(--pk-accent);
+  }
+  .adm-form-pie-dot-0 {
+    background: var(--pk-accent);
+  }
+  .adm-form-pie-sector-0 {
+    fill: var(--pk-accent);
+  }
+  .adm-form-pie-segment-1 {
+    stroke: var(--pk-info);
+  }
+  .adm-form-pie-dot-1 {
+    background: var(--pk-info);
+  }
+  .adm-form-pie-sector-1 {
+    fill: var(--pk-info);
+  }
+  .adm-form-pie-segment-2 {
+    stroke: var(--pk-warn);
+  }
+  .adm-form-pie-dot-2 {
+    background: var(--pk-warn);
+  }
+  .adm-form-pie-sector-2 {
+    fill: var(--pk-warn);
+  }
+  .adm-form-pie-segment-3 {
+    stroke: var(--pk-accent-strong);
+  }
+  .adm-form-pie-dot-3 {
+    background: var(--pk-accent-strong);
+  }
+  .adm-form-pie-sector-3 {
+    fill: var(--pk-accent-strong);
+  }
+  .adm-form-pie-segment-4 {
+    stroke: var(--pk-accent-2);
+  }
+  .adm-form-pie-dot-4 {
+    background: var(--pk-accent-2);
+  }
+  .adm-form-pie-sector-4 {
+    fill: var(--pk-accent-2);
+  }
+  .adm-form-pie-segment-5 {
+    stroke: var(--pk-danger);
+  }
+  .adm-form-pie-dot-5 {
+    background: var(--pk-danger);
+  }
+  .adm-form-pie-sector-5 {
+    fill: var(--pk-danger);
+  }
+  .adm-form-pie-segment-6 {
+    stroke: var(--pk-ink-muted);
+  }
+  .adm-form-pie-dot-6 {
+    background: var(--pk-ink-muted);
+  }
+  .adm-form-pie-sector-6 {
+    fill: var(--pk-ink-muted);
+  }
+}
+
+@layer components {
+  .adm-stat-modal .adm-form-pie {
+    max-width: calc(var(--pk-8) * 5);
+  }
+  .adm-stat-modal .adm-form-pie-legend-item {
+    font-size: var(--pk-text-md);
   }
 }

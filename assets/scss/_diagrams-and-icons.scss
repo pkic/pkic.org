@@ -15,7 +15,7 @@
     top: 0;
     left: 0;
     right: 0;
-    height: 3px;
+    height: 0.1875rem;
     background: linear-gradient(
       90deg,
       var(--wg-color, #2f5fc7),
@@ -209,7 +209,7 @@
 
   // Tables are the design system's: the Markdown table render hook draws
   // `pk-table`, dressed by `assets/ts/ui/Table.css`. A card treatment with
-  // hard-coded slate colours used to sit here and win on specificity, so a
+  // hard-coded slate colors used to sit here and win on specificity, so a
   // row could be painted a token surface while its text stayed a fixed
   // `#374151` — dark grey on near-black once the tokens flipped.
 

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * Toolbar and BulkBar behaviour that visual specs cannot show: accessible names,
+ * Toolbar and BulkBar behavior that visual specs cannot show: accessible names,
  * event handlers, state transitions, and structural constraints.
  */
 

@@ -28,7 +28,6 @@ const emailField = `
     </div>
     <p data-field-error="email" class="pk-field__message" aria-live="polite" hidden></p>
   </div>
-  <p data-email-warning hidden>That looks like a personal address.</p>
 `;
 
 function field(form: HTMLFormElement): HTMLElement {
@@ -53,7 +52,7 @@ describe("validation state on server-rendered fields", () => {
     expect(field(form).classList.contains("pk-field--invalid")).toBe(true);
     expect(message(form).hidden).toBe(false);
     expect(message(form).textContent).not.toBe("");
-    // Colour is not a status on its own: the mark has to be there too.
+    // Color is not a status on its own: the mark has to be there too.
     expect(field(form).querySelector(".pk-field__control .pk-field__state")).not.toBeNull();
     expect(message(form).querySelector(".pk-field__message-icon")).not.toBeNull();
   });
@@ -75,22 +74,6 @@ describe("validation state on server-rendered fields", () => {
     expect(field(form).classList.contains("pk-field--ok")).toBe(true);
     expect(message(form).hidden).toBe(true);
     expect(message(form).textContent).toBe("");
-  });
-
-  it("reports a personal address as advisory, which does not block the form", () => {
-    const form = buildForm(emailField);
-    const status = document.createElement("div");
-    const email = form.querySelector<HTMLInputElement>("#email")!;
-    installLiveValidation(form, status);
-
-    email.value = "ada@gmail.com";
-    email.dispatchEvent(new Event("input", { bubbles: true }));
-
-    expect(field(form).classList.contains("pk-field--advisory")).toBe(true);
-    expect(field(form).classList.contains("pk-field--invalid")).toBe(false);
-    expect(form.querySelector<HTMLElement>("[data-email-warning]")!.hidden).toBe(false);
-    // An advisory is not an error, so the form still submits.
-    expect(validateBeforeSubmit(form, status)).toBe(true);
   });
 
   it("leaves an untouched optional control with no state at all", () => {

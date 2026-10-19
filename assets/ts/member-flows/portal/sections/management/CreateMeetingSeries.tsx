@@ -10,6 +10,7 @@ import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { getJson, postJson } from "../../../../shared/api-client";
 import { MeetingSeriesFields, type MeetingSeriesDraft } from "./MeetingSeriesFields";
 import { instantFromLocal } from "../../../../components/forms/SubmissionWindowFields";
+import { viewerTimeZone } from "../../../../../shared/timezone";
 import { localDateTimeValue } from "./meeting-form-utils";
 import { slugify } from "../../../../../shared/slug";
 import { DEFAULT_MEETING_ENTRY_POLICY } from "../../../../../shared/schemas/meeting-entry-policy";
@@ -35,20 +36,21 @@ export function CreateMeetingSeries(props: {
   return <MeetingSeriesForm key={props.existingEventId ?? "new"} {...props} existingEvent={existing.data?.event} />;
 }
 
-function defaultStart(): string {
+function defaultStart(timeZone: string): string {
   const start = new Date();
   start.setDate(start.getDate() + ((8 - start.getDay()) % 7 || 7));
   start.setHours(15, 0, 0, 0);
-  return localDateTimeValue(start);
+  return localDateTimeValue(start, timeZone);
 }
 
 function initialDraft(): MeetingSeriesDraft {
+  const timezone = viewerTimeZone();
   return {
     name: "",
     profileKey: "meeting",
-    startsAt: defaultStart(),
+    startsAt: defaultStart(timezone),
     recurrenceRule: "FREQ=WEEKLY;INTERVAL=1",
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+    timezone,
     durationMinutes: 60,
     location: "",
     providerJoinUrl: "",
@@ -128,7 +130,7 @@ function MeetingSeriesForm({
   return (
     <Panel aria-label="Schedule a meeting">
       <PanelHeader title="Schedule a meeting" headingLevel={2} breadcrumb>
-        <Button size="sm" disabled={saving} onClick={onCancel}>
+        <Button disabled={saving} onClick={onCancel}>
           Cancel
         </Button>
       </PanelHeader>

@@ -4,6 +4,9 @@ import { IconPlus } from "./icons";
 import { Button } from "../ui/Button";
 import { Chip } from "../ui/Chip";
 import { Field, StateIcon } from "../ui/Field";
+import { InputGroup } from "../ui/InputGroup";
+import { LinkMark } from "../ui/LinkMark";
+import "./ProfileLinksInput.css";
 import { TextInput } from "../ui/TextControl";
 import { getLinkLabel, hasDuplicateLink, MAX_LINKS, parseLinkUrl } from "../../shared/schemas/links";
 
@@ -17,8 +20,8 @@ interface ProfileLinksInputProps {
   /**
    * The widget's own name, shown the way a field label is shown.
    *
-   * Without one it rendered as a paragraph of help above an unlabelled box,
-   * so among labelled neighbours it read as prose that had lost its field
+   * Without one it rendered as a paragraph of help above an unlabeled box,
+   * so among labeled neighbours it read as prose that had lost its field
    * (#53). It is a group rather than a single control, so the name is a
    * `<legend>`-shaped heading pointing at the group, not a `<label>` pointing
    * at whichever input happens to be last.
@@ -126,7 +129,10 @@ export const ProfileLinksInput = forwardRef(function ProfileLinksInput(
             const label = getLinkLabel(url);
             return (
               <Chip key={url} removeLabel={label} onRemove={() => remove(i)}>
-                <span title={url}>{label}</span>
+                <span class="pk-profile-links__chip" title={url}>
+                  <LinkMark url={url} class="pk-profile-links__mark" />
+                  {label}
+                </span>
               </Chip>
             );
           })}
@@ -138,11 +144,9 @@ export const ProfileLinksInput = forwardRef(function ProfileLinksInput(
       {(!atMax || Boolean(error)) && (
         <div class={["pk-field", error ? "pk-field--invalid" : null].filter(Boolean).join(" ")}>
           {!atMax && (
-            // `pk-field__control` is the design system's control box: one flex
-            // row, and `pk-input`'s `min-width: 0` lets the URL field absorb the
-            // shrinking so the square add button keeps its size. This is what
-            // the Bootstrap `input-group` was doing.
-            <div class="pk-field__control">
+            // The shared input group: the URL field absorbs the shrinking so
+            // the square add button keeps its size and the input's height.
+            <InputGroup>
               <TextInput
                 type="url"
                 placeholder="https://"
@@ -156,13 +160,13 @@ export const ProfileLinksInput = forwardRef(function ProfileLinksInput(
               <Button icon aria-label="Add profile link" onClick={tryAdd}>
                 <IconPlus />
               </Button>
-            </div>
+            </InputGroup>
           )}
 
           {error && (
             // A rejected URL blocks the add, so it interrupts rather than
             // waiting politely — and it carries the state mark as well as the
-            // colour, because a colour on its own is not a status.
+            // color, because a color on its own is not a status.
             <p class="pk-field__message" id={errorId} role="alert">
               <StateIcon state="invalid" class="pk-field__message-icon" />
               {error}

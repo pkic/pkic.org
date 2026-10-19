@@ -8,9 +8,8 @@
  * Returns a JPEG Blob if the user confirmed, or null if they cancelled.
  */
 
+import "../../site/headshot-dialogs.css";
 import { dismissModalDialog, mountModalTemplate, openModalDialog } from "../modal-template";
-
-const CROP_OUTPUT_SIZE = 1024; // px — square output
 
 /**
  * Opens the image in a modal crop dialog.
@@ -39,34 +38,33 @@ function showCropModal(img: HTMLImageElement, done: (blob: Blob | null) => void,
   }
 
   const viewport = dialog.querySelector(".crop-headshot-viewport") as HTMLElement | null;
-  const imgEl = viewport?.querySelector("img") as HTMLImageElement | null;
+  const canvas = viewport?.querySelector("canvas") ?? null;
+  const ctx = canvas?.getContext("2d");
   const slider = dialog.querySelector(".crop-headshot-slider") as HTMLInputElement | null;
   const cancelBtn = dialog.querySelector(".crop-headshot-cancel") as HTMLButtonElement | null;
   const confirmBtn = dialog.querySelector(".crop-headshot-confirm") as HTMLButtonElement | null;
 
-  if (!viewport || !imgEl || !slider || !cancelBtn || !confirmBtn) {
-    console.error("Crop headshot template is incomplete", { viewport, imgEl, slider, cancelBtn, confirmBtn });
+  if (!viewport || !canvas || !ctx || !slider || !cancelBtn || !confirmBtn) {
+    console.error("Crop headshot template is incomplete", { viewport, canvas, slider, cancelBtn, confirmBtn });
     dialog.remove();
     fail(new Error("Crop modal is missing required elements. Please reload the page and try again."));
     return;
   }
 
   const dialogEl = dialog;
-  const imageEl = imgEl;
+  const preview = canvas;
+  const context = ctx;
 
-  imgEl.src = img.src;
-  // Opened before anything is measured: a `<dialog>` is `display: none` until
-  // it is, and a viewport measured while it is hidden is zero wide, which puts
-  // the initial scale — and therefore the whole crop — at infinity.
   openModalDialog(dialog);
 
   // ── Initial scale (cover) ─────────────────────────────────────────────────
-  const viewportSize = Math.round(viewport.getBoundingClientRect().width);
+  // Coordinates are fractions of the square, independent of borders and resizing.
+  const viewportSize = 1;
   const naturalW = img.naturalWidth;
   const naturalH = img.naturalHeight;
   const minDim = Math.min(naturalW, naturalH);
   const fitScale = viewportSize / minDim;
-  const minScale = fitScale * 0.5;
+  const minScale = fitScale;
   const maxScale = fitScale * 4;
 
   let scale = fitScale;
@@ -80,15 +78,22 @@ function showCropModal(img: HTMLImageElement, done: (blob: Blob | null) => void,
     panY = Math.min(0, Math.max(viewportSize - imgH, panY));
   }
 
-  function applyTransform(): void {
-    imageEl.style.width = `${naturalW * scale}px`;
-    imageEl.style.height = `${naturalH * scale}px`;
-    imageEl.style.left = `${panX}px`;
-    imageEl.style.top = `${panY}px`;
+  function renderCrop(): void {
+    context.drawImage(
+      img,
+      -panX / scale,
+      -panY / scale,
+      viewportSize / scale,
+      viewportSize / scale,
+      0,
+      0,
+      preview.width,
+      preview.height,
+    );
   }
 
   clampPan();
-  applyTransform();
+  renderCrop();
 
   // ── Drag to pan ───────────────────────────────────────────────────────────
   let dragging = false;
@@ -98,24 +103,53 @@ function showCropModal(img: HTMLImageElement, done: (blob: Blob | null) => void,
     panStartY = 0;
 
   viewport.addEventListener("pointerdown", (e) => {
+    if (!e.isPrimary || e.button !== 0) return;
+    e.preventDefault();
+    viewport.focus();
     dragging = true;
     dragStartX = e.clientX;
     dragStartY = e.clientY;
     panStartX = panX;
     panStartY = panY;
     viewport.classList.add("dragging");
-    viewport.setPointerCapture((e as PointerEvent).pointerId);
+    viewport.setPointerCapture(e.pointerId);
   });
   viewport.addEventListener("pointermove", (e) => {
     if (!dragging) return;
-    panX = panStartX + (e.clientX - dragStartX);
-    panY = panStartY + (e.clientY - dragStartY);
+    panX = panStartX + (e.clientX - dragStartX) / viewport.clientWidth;
+    panY = panStartY + (e.clientY - dragStartY) / viewport.clientHeight;
     clampPan();
-    applyTransform();
+    renderCrop();
   });
-  viewport.addEventListener("pointerup", () => {
+  function stopDragging(): void {
     dragging = false;
-    viewport.classList.remove("dragging");
+    viewport!.classList.remove("dragging");
+  }
+  viewport.addEventListener("pointerup", stopDragging);
+  viewport.addEventListener("pointercancel", stopDragging);
+  viewport.addEventListener("lostpointercapture", stopDragging);
+
+  viewport.addEventListener("keydown", (e) => {
+    const step = e.shiftKey ? 0.1 : 0.01;
+    switch (e.key) {
+      case "ArrowLeft":
+        panX -= step;
+        break;
+      case "ArrowRight":
+        panX += step;
+        break;
+      case "ArrowUp":
+        panY -= step;
+        break;
+      case "ArrowDown":
+        panY += step;
+        break;
+      default:
+        return;
+    }
+    e.preventDefault();
+    clampPan();
+    renderCrop();
   });
 
   // ── Zoom slider ───────────────────────────────────────────────────────────
@@ -129,7 +163,7 @@ function showCropModal(img: HTMLImageElement, done: (blob: Blob | null) => void,
     panY = cy - ((cy - panY) / scale) * newScale;
     scale = newScale;
     clampPan();
-    applyTransform();
+    renderCrop();
   });
 
   // ── Mouse-wheel zoom ──────────────────────────────────────────────────────
@@ -140,13 +174,13 @@ function showCropModal(img: HTMLImageElement, done: (blob: Blob | null) => void,
       const delta = e.deltaY > 0 ? -0.05 : 0.05;
       const newScale = Math.min(maxScale, Math.max(minScale, scale * (1 + delta)));
       const rect = viewport.getBoundingClientRect();
-      const cx = e.clientX - rect.left;
-      const cy = e.clientY - rect.top;
+      const cx = (e.clientX - rect.left - viewport.clientLeft) / viewport.clientWidth;
+      const cy = (e.clientY - rect.top - viewport.clientTop) / viewport.clientHeight;
       panX = cx - ((cx - panX) / scale) * newScale;
       panY = cy - ((cy - panY) / scale) * newScale;
       scale = newScale;
       clampPan();
-      applyTransform();
+      renderCrop();
       slider.value = String(((scale - minScale) / (maxScale - minScale)) * 100);
     },
     { passive: false },
@@ -175,17 +209,6 @@ function showCropModal(img: HTMLImageElement, done: (blob: Blob | null) => void,
     () => {
       confirmBtn.disabled = true;
       confirmBtn.textContent = "Processing…";
-
-      const canvas = document.createElement("canvas");
-      canvas.width = CROP_OUTPUT_SIZE;
-      canvas.height = CROP_OUTPUT_SIZE;
-      const ctx = canvas.getContext("2d")!;
-
-      const srcX = -panX / scale;
-      const srcY = -panY / scale;
-      const srcSize = viewportSize / scale;
-
-      ctx.drawImage(img, srcX, srcY, srcSize, srcSize, 0, 0, CROP_OUTPUT_SIZE, CROP_OUTPUT_SIZE);
 
       canvas.toBlob(
         (blob) => {

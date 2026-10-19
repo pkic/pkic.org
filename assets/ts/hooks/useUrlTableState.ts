@@ -1,23 +1,7 @@
-/**
- * URL-addressed list state for the hash-routed portal, carried INSIDE the
- * hash as a normal-looking URL: `#/users?users.q=…`. The fragment never
- * reaches the server (no log leakage, no CDN cache-key pollution for the
- * static-first future) and parses with an ordinary URL parser. The
- * magic-link verify flow (`#/verify?token=…`) established this shape;
- * routing sees only the path because the portal's location hook strips the
- * query segment.
- *
- * The component's own state stays the source of truth: this hook reads the
- * hash query once on mount and mirrors changes back with `replaceState`
- * (which does not fire hashchange, so the router is undisturbed). Params
- * are namespaced so several lists can coexist; wouter's navigate rebuilds
- * the hash on route changes, so state naturally drops when leaving the
- * page, while earlier history entries keep theirs — which is what makes the
- * back button restore a list exactly. An unmount cleanup still removes the
- * namespace's own keys for non-router hash changes.
- */
-import { useEffect, useMemo, useRef } from "preact/hooks";
-import { splitHash } from "../shared/hash-query";
+/** Namespaced table state follows the URL and preserves bookmarks when its view unmounts. */
+import { useCallback, useMemo, useRef } from "preact/hooks";
+import { useSyncExternalStore } from "preact/compat";
+import { hashQuerySnapshot, splitHash, subscribeHashQuery, writeHashQuery } from "../ui/url-query";
 
 export interface UrlTableState {
   q: string;
@@ -30,8 +14,8 @@ export interface UrlTableState {
 
 const KEYS = ["q", "sort", "offset", "size"] as const;
 
-function readParams(namespace: string): Partial<UrlTableState> {
-  const { params } = splitHash();
+function readParams(namespace: string, hash: string, defaultFilters: Record<string, string>): Partial<UrlTableState> {
+  const { params } = splitHash(hash);
   const raw = (key: string) => params.get(`${namespace}.${key}`);
   const numeric = (value: string | null) => {
     const parsed = Number(value);
@@ -39,61 +23,77 @@ function readParams(namespace: string): Partial<UrlTableState> {
   };
   // A filter travels as `<namespace>.f.<param>`, so a link to a narrowed list
   // reopens narrowed the same way, and a page can carry filters for two lists.
-  const filters: Record<string, string> = {};
+  const filters: Record<string, string> = { ...defaultFilters };
+  let explicitFilters = false;
   const prefix = `${namespace}.f.`;
   for (const [key, value] of params) {
-    if (key.startsWith(prefix) && value) filters[key.slice(prefix.length)] = value;
+    if (!key.startsWith(prefix)) continue;
+    explicitFilters = true;
+    if (value) filters[key.slice(prefix.length)] = value;
+    else delete filters[key.slice(prefix.length)];
   }
   return {
     ...(raw("q") !== null ? { q: raw("q")! } : {}),
     ...(raw("sort") !== null ? { sort: raw("sort")! } : {}),
     ...(numeric(raw("offset")) !== undefined ? { offset: numeric(raw("offset")) } : {}),
-    ...(numeric(raw("size")) !== undefined ? { pageSize: numeric(raw("size")) } : {}),
-    ...(Object.keys(filters).length > 0 ? { filters } : {}),
+    ...(numeric(raw("size")) !== undefined && numeric(raw("size"))! > 0 ? { pageSize: numeric(raw("size")) } : {}),
+    ...(explicitFilters ? { filters } : {}),
   };
 }
 
-function writeParams(namespace: string, state: UrlTableState | null, defaults: UrlTableState): void {
+function writeParams(
+  namespace: string,
+  state: UrlTableState,
+  defaults: UrlTableState | undefined,
+  ownerPath: string,
+): void {
   const { path, params } = splitHash();
+  if (path !== ownerPath) return;
   for (const key of KEYS) params.delete(`${namespace}.${key}`);
   for (const key of [...params.keys()]) {
     if (key.startsWith(`${namespace}.f.`)) params.delete(key);
   }
   if (state) {
     for (const [param, value] of Object.entries(state.filters)) {
-      if (value) params.set(`${namespace}.f.${param}`, value);
+      if (value && value !== defaults?.filters[param]) params.set(`${namespace}.f.${param}`, value);
+    }
+    for (const param of Object.keys(defaults?.filters ?? {})) {
+      if (!state.filters[param]) params.set(`${namespace}.f.${param}`, "");
     }
     if (state.q) params.set(`${namespace}.q`, state.q);
-    if (state.sort && state.sort !== defaults.sort) params.set(`${namespace}.sort`, state.sort);
+    if (state.sort && state.sort !== defaults?.sort) params.set(`${namespace}.sort`, state.sort);
     if (state.offset > 0) params.set(`${namespace}.offset`, String(state.offset));
-    if (state.pageSize !== defaults.pageSize) params.set(`${namespace}.size`, String(state.pageSize));
+    if (state.pageSize !== defaults?.pageSize) params.set(`${namespace}.size`, String(state.pageSize));
   }
-  const query = params.toString();
-  const url = new URL(window.location.href);
-  url.hash = query ? `${path}?${query}` : path;
-  history.replaceState(history.state, "", url);
+  writeHashQuery(path, params);
 }
 
+/** Namespace-only owners need no requests or destructive URL cleanup. */
+export function useUrlTableState(namespace: string | undefined): void;
 export function useUrlTableState(
   namespace: string | undefined,
   defaults: UrlTableState,
-): { initial: UrlTableState; mirror: (state: UrlTableState) => void } {
-  const initial = useMemo<UrlTableState>(
-    () => (namespace ? { ...defaults, ...readParams(namespace) } : defaults),
-    // The URL is only a mount-time input; defaults are stable per surface.
-    [namespace],
-  );
+  retainOnUnmount?: boolean,
+): { initial: UrlTableState; mirror: (state: UrlTableState) => void };
+export function useUrlTableState(namespace: string | undefined, defaults?: UrlTableState, _retainOnUnmount = false) {
+  const hash = useSyncExternalStore(subscribeHashQuery, hashQuerySnapshot);
+  const { path } = splitHash(hash);
   const defaultsRef = useRef(defaults);
-
-  useEffect(() => {
-    if (!namespace) return;
-    return () => writeParams(namespace, null, defaultsRef.current);
-  }, [namespace]);
-
-  return {
-    initial,
-    mirror: (state: UrlTableState) => {
-      if (namespace) writeParams(namespace, state, defaultsRef.current);
+  const initial = useMemo(
+    () =>
+      defaultsRef.current
+        ? namespace
+          ? { ...defaultsRef.current, ...readParams(namespace, hash, defaultsRef.current.filters) }
+          : defaultsRef.current
+        : undefined,
+    [namespace, hash],
+  );
+  const mirror = useCallback(
+    (state: UrlTableState) => {
+      if (namespace) writeParams(namespace, state, defaultsRef.current, path);
     },
-  };
+    [namespace, path],
+  );
+  if (!initial) return;
+  return { initial, mirror };
 }

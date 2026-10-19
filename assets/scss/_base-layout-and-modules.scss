@@ -1,7 +1,7 @@
 // ── Event countdown timer ─────────────────────────────────────────────────
 // The block owns its own outer margin (it used to ask Bootstrap for `my-5`)
 // and feeds the page accent into `--pk-accent`, so the design-system primary
-// button inside it derives the same colour `.btn-page-accent` used to paint.
+// button inside it derives the same color `.btn-page-accent` used to paint.
 .event-countdown {
   --pk-accent: var(--page-accent, #{$green});
 
@@ -90,7 +90,7 @@
     bottom: 0;
     left: 0;
     right: 0;
-    height: 4px;
+    height: 0.25rem;
     background: linear-gradient(to right, $green, $teal, $blue, $yellow, $orange, $red);
   }
 }
@@ -315,12 +315,12 @@
   backdrop-filter: blur(4px);
   border-radius: 1rem;
   padding: 1rem 1.75rem;
-  max-width: 280px;
+  max-width: 17.5rem;
 }
 
 .hero-logo-img {
-  max-width: 200px;
-  max-height: 60px;
+  max-width: 12.5rem;
+  max-height: 3.75rem;
   object-fit: contain;
   display: block;
 }
@@ -438,7 +438,7 @@ blockquote::after {
   bottom: 0;
   left: 0;
   right: 0;
-  height: 4px;
+  height: 0.25rem;
   background: linear-gradient(to right, $green, $teal, $blue, $yellow, $orange, $red);
   border-radius: 0 0 1.25rem 1.25rem;
 }
@@ -455,14 +455,15 @@ blockquote::after {
 .callout-warning {
   display: block;
   // Reset all the dark-card blockquote styles
-  background: var(--pk-danger-soft);
-  color: var(--pk-danger-ink);
+  // Warn, not danger: a warning callout informs and steers; nothing has gone wrong.
+  background: var(--pk-warn-soft);
+  color: var(--pk-warn-ink);
   font-size: 0.95rem;
   font-style: normal;
   font-weight: 400;
   padding: 1rem 1.25rem;
   border-radius: 0.625rem;
-  border: 1px solid color-mix(in srgb, var(--pk-danger) 35%, var(--pk-line));
+  border: 1px solid color-mix(in srgb, var(--pk-warn) 35%, var(--pk-line));
   box-shadow: none;
   overflow: visible;
   transition: none;
@@ -476,10 +477,11 @@ blockquote::after {
   // Reset the decorative " from blockquote::before
   &::before {
     content: "" !important;
-    width: 20px;
-    height: 20px;
+    width: 1.25rem;
+    height: 1.25rem;
     background: currentColor !important;
-    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M7.938 2.016A.13.13 0 0 1 8.002 2a.13.13 0 0 1 .063.016.146.146 0 0 1 .054.057l6.857 11.667c.036.06.035.124.002.183a.163.163 0 0 1-.054.06.116.116 0 0 1-.066.017H1.146a.115.115 0 0 1-.066-.017.163.163 0 0 1-.054-.06.176.176 0 0 1 .002-.183L7.884 2.073a.147.147 0 0 1 .054-.057zm1.044-.45a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566z'/%3E%3Cpath d='M7.002 12a1 1 0 1 1 2 0 1 1 0 0 1-2 0zM7.1 5.995a.905.905 0 1 1 1.8 0l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995z'/%3E%3C/svg%3E") center / contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M7.938 2.016A.13.13 0 0 1 8.002 2a.13.13 0 0 1 .063.016.146.146 0 0 1 .054.057l6.857 11.667c.036.06.035.124.002.183a.163.163 0 0 1-.054.06.116.116 0 0 1-.066.017H1.146a.115.115 0 0 1-.066-.017.163.163 0 0 1-.054-.06.176.176 0 0 1 .002-.183L7.884 2.073a.147.147 0 0 1 .054-.057zm1.044-.45a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566z'/%3E%3Cpath d='M7.002 12a1 1 0 1 1 2 0 1 1 0 0 1-2 0zM7.1 5.995a.905.905 0 1 1 1.8 0l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995z'/%3E%3C/svg%3E")
+      center / contain no-repeat;
     position: static !important;
     top: unset !important;
     left: unset !important;
@@ -572,7 +574,7 @@ p.callout-warning {
     bottom: 0;
     left: 0;
     right: 0;
-    height: 4px;
+    height: 0.25rem;
     background: linear-gradient(to right, $yellow-dark, $yellow, $orange);
     border-radius: 0 0 1.25rem 1.25rem;
     display: block;
@@ -687,7 +689,7 @@ main :is(h2, h3, h4):hover .header-link {
   // links measured 3.02:1.
   color: color-mix(in srgb, var(--page-accent) 55%, var(--pk-ink));
   text-decoration: none;
-  padding-bottom: 4px;
+  padding-bottom: 0.25rem;
   background-image: linear-gradient(
     103deg,
     color-mix(in srgb, var(--page-accent) 18%, transparent) 0%,
@@ -742,7 +744,7 @@ main :is(h2, h3, h4):hover .header-link {
   position: relative;
   color: rgba(255, 255, 255, 0.85);
   text-decoration: none;
-  padding-bottom: 4px;
+  padding-bottom: 0.25rem;
   background-image: linear-gradient(
     103deg,
     rgba(255, 255, 255, 0.25) 0%,
@@ -804,6 +806,7 @@ main :is(h2, h3, h4):hover .header-link {
 
 // Marquee outer wrapper — overflow is already clipped by the parent .members
 .banner {
+  position: relative;
   overflow: hidden;
   white-space: nowrap;
 }
@@ -827,28 +830,28 @@ main :is(h2, h3, h4):hover .header-link {
 
 @media (min-width: 0) {
   .agenda-time {
-    width: 90px;
-    min-width: 90px;
-    max-width: 90px;
+    width: 5.625rem;
+    min-width: 5.625rem;
+    max-width: 5.625rem;
   }
 
   .agenda-content {
     width: auto;
-    min-width: 260px;
+    min-width: 16.25rem;
     flex: 1;
   }
 }
 
 @media (min-width: 992px) {
   .agenda-time {
-    width: 100px;
-    min-width: 100px;
-    max-width: 100px;
+    width: 6.25rem;
+    min-width: 6.25rem;
+    max-width: 6.25rem;
   }
 
   .agenda-content {
     width: auto;
-    min-width: 280px;
+    min-width: 17.5rem;
     flex: 1;
   }
 }
@@ -914,11 +917,11 @@ self-assessment {
   // What `sticky-lg-top` did: the player stays put while the chat scrolls.
   .livestream-player {
     position: sticky;
-    top: var(--pkic-navbar-height, 57px);
+    top: var(--pkic-navbar-height, 3.5625rem);
   }
 
   .livestream-chat {
-    height: calc(100vh - var(--pkic-navbar-height, 57px) - 2rem);
+    height: calc(100vh - var(--pkic-navbar-height, 3.5625rem) - 2rem);
   }
 }
 

@@ -18,17 +18,18 @@
   .pk-site-header {
     position: sticky;
     z-index: 40;
-    top: 0;
+    /* On the visible area's top edge even when the browser leaves it offset (see visual-viewport-shift.ts). */
+    top: var(--pk-viewport-shift-top, 0px);
     border-bottom: 1px solid color-mix(in srgb, var(--pk-on-solid) 8%, transparent);
     background: var(--pk-chrome);
     color: var(--pk-on-solid);
   }
 
   /*
-   * Brand, then a search field that centres itself in the space between the
+   * Brand, then a search field that centers itself in the space between the
    * brand and the links, then the links, then the site controls pinned right.
    * A fixed grid could not give the search `margin-inline: auto`, which is
-   * what centres it without measuring anything.
+   * what centers it without measuring anything.
    */
   .pk-site-header__inner {
     position: relative;

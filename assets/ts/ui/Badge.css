@@ -1,9 +1,9 @@
 /*
  * Badge.
  *
- * One layout rule plus six tone rules. Each tone sets the same three local
- * properties, so the pill, its border and its dot move together and a retuned
- * tone is a one-line change.
+ * The pill takes its tone from the shared rainbow family (tone.css): the dot
+ * and border are the stop, the fill is the stop at low opacity, and the words
+ * stay in body ink so every stop reads.
  */
 
 @layer components {
@@ -12,44 +12,22 @@
     align-items: center;
     gap: 0.4rem;
     padding: calc(var(--pk-control-y) * 0.5) var(--pk-control-x);
-    background: var(--tone-soft);
-    color: var(--tone-ink);
-    border: 1px solid color-mix(in srgb, var(--tone) 25%, transparent);
+    background: color-mix(in srgb, var(--tone) 16%, transparent);
+    color: var(--pk-ink);
+    border: 1px solid color-mix(in srgb, var(--tone) 45%, transparent);
     border-radius: var(--pk-radius-pill);
     font-size: var(--pk-text-xs);
     line-height: 1.35;
     white-space: nowrap;
   }
 
-  .pk-badge--ok {
-    --tone: var(--pk-ok);
-    --tone-ink: var(--pk-ok-ink);
-    --tone-soft: var(--pk-ok-soft);
-  }
+  /* Yellow is the lightest stop; a slightly fuller fill keeps the pill from
+     reading as empty. Grey is a surface color, so it needs more to show. */
   .pk-badge--warn {
-    --tone: var(--pk-warn);
-    --tone-ink: var(--pk-warn-ink);
-    --tone-soft: var(--pk-warn-soft);
-  }
-  .pk-badge--danger {
-    --tone: var(--pk-danger);
-    --tone-ink: var(--pk-danger-ink);
-    --tone-soft: var(--pk-danger-soft);
-  }
-  .pk-badge--info {
-    --tone: var(--pk-info);
-    --tone-ink: var(--pk-info-ink);
-    --tone-soft: var(--pk-info-soft);
+    background: color-mix(in srgb, var(--tone) 22%, transparent);
   }
   .pk-badge--neutral {
-    --tone: var(--pk-ink-muted);
-    --tone-ink: var(--pk-ink);
-    --tone-soft: var(--pk-surface-sunk);
-  }
-  .pk-badge--accent {
-    --tone: var(--pk-accent);
-    --tone-ink: var(--pk-accent-ink);
-    --tone-soft: var(--pk-accent-soft);
+    background: color-mix(in srgb, var(--tone) 18%, transparent);
   }
 
   .pk-badge--dot::before {

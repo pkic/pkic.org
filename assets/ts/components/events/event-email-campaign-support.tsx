@@ -128,6 +128,7 @@ export function availableHelperLabelsForAudience(audience: EventEmailCampaignAud
     return new Set([
       "eventName",
       "eventUrl",
+      "virtualRoomUrl",
       "eventTimezone",
       "firstName",
       "lastName",
@@ -143,6 +144,7 @@ export function availableHelperLabelsForAudience(audience: EventEmailCampaignAud
     return new Set([
       "eventName",
       "eventUrl",
+      "virtualRoomUrl",
       "eventTimezone",
       "firstName",
       "lastName",
@@ -173,6 +175,7 @@ export function availableHelperLabelsForAudience(audience: EventEmailCampaignAud
   return new Set([
     "eventName",
     "eventUrl",
+    "virtualRoomUrl",
     "eventTimezone",
     "firstName",
     "lastName",

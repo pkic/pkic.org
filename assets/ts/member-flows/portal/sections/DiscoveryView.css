@@ -1,0 +1,31 @@
+@layer components {
+  .pk-discovery-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(20rem, 100%), 1fr));
+    gap: var(--pk-5);
+  }
+
+  /*
+   * The generated covers' grounds. An event takes the published event
+   * ground; a group with published colors keeps them, as its public
+   * working-group card does; every other group takes the card's default.
+   */
+  .pk-discovery-cover--event {
+    --pk-collection-cover: var(--pk-public-listing-event-ground, var(--pk-accent-strong));
+  }
+  .pk-discovery-cover--pqc {
+    --pk-collection-cover: var(--pk-public-wg-pqc);
+  }
+  .pk-discovery-cover--pkimm {
+    --pk-collection-cover: var(--pk-public-wg-pkimm);
+  }
+  .pk-discovery-cover--cm {
+    --pk-collection-cover: var(--pk-public-wg-cm);
+  }
+  .pk-discovery-cover--cbom {
+    --pk-collection-cover: var(--pk-public-wg-cbom);
+  }
+  .pk-discovery-cover--tcwg {
+    --pk-collection-cover: var(--pk-public-wg-tc);
+  }
+}

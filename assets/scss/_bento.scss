@@ -1,3 +1,5 @@
+@use "sass:color";
+
 // =============================================================================
 // PKIC Bento Grid & Colorful Card System
 // Inspired by bold, block-based layouts (bunq aesthetic)
@@ -71,7 +73,7 @@
   overflow: hidden;
   position: relative;
   transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-  min-height: 160px;
+  min-height: 10rem;
   display: flex;
   flex-direction: column;
   z-index: 1;
@@ -99,7 +101,7 @@
 
     .bento-hero-image {
       width: 100%;
-      height: 240px;
+      height: 15rem;
       object-fit: cover;
       display: block;
       transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
@@ -194,20 +196,20 @@
     font-weight: 600;
   }
 
-  // Link card behaviour
+  // Link card behavior
   &.bento-card-link {
-  // Was an inline style on the working-group template; belongs with the card.
-  min-height: 120px;
+    // Was an inline style on the working-group template; belongs with the card.
+    min-height: 7.5rem;
     text-decoration: none;
     color: inherit;
     cursor: pointer;
   }
 }
 
-// --- Colour Variants (solid fill — bunq style) ---
+// --- Color Variants (solid fill — bunq style) ---
 
 @mixin bento-solid($bg, $text: #fff) {
-  background: linear-gradient(135deg, lighten($bg, 8%), darken($bg, 6%));
+  background: linear-gradient(135deg, color.adjust($bg, $lightness: 8%), color.adjust($bg, $lightness: -6%));
   color: $text;
   border: 1px solid rgba(255, 255, 255, 0.15);
   box-shadow:
@@ -252,16 +254,16 @@
 
   .bento-badge {
     background: rgba($bg, 0.1);
-    color: darken($bg, 15%);
+    color: color.adjust($bg, $lightness: -15%);
     border: 1px solid rgba($bg, 0.1);
   }
 
   .bento-text {
-    color: mix(#fff, $ink, 20%);
+    color: color.mix(#fff, $ink, 20%);
   }
 
   .bento-icon {
-    color: darken($bg, 10%);
+    color: color.adjust($bg, $lightness: -10%);
   }
 
   &:hover {
@@ -298,7 +300,7 @@
     position: absolute;
     inset-block: 0;
     inset-inline-start: 0;
-    width: 3px;
+    width: 0.1875rem;
     background: color-mix(in srgb, #{$bg} 68%, var(--pk-ink));
   }
 
@@ -388,7 +390,7 @@
   @include bento-solid($gray-900);
 }
 
-// --- Section colour banner ---
+// --- Section color banner ---
 
 .pkic-section-banner {
   border-radius: 1.25rem;
@@ -429,7 +431,7 @@
   } // Sponsor
 }
 
-// --- WG colour map (matches logo colours for each WG) ---
+// --- WG color map (matches logo colors for each WG) ---
 
 $wg-colors: (
   "pqc": $blue,
@@ -467,14 +469,13 @@ $wg-colors: (
     border-right: none;
     background: #fff;
   }
-
 }
 
 // A–Z quick filter
 .members-az-nav {
   display: flex;
   flex-wrap: wrap;
-  gap: 3px;
+  gap: 0.1875rem;
 }
 
 .az-btn {
@@ -568,7 +569,6 @@ $wg-colors: (
     &.is-active {
       color: #fff;
       border-bottom-color: #6f42c1;
-
     }
   }
 }
@@ -608,7 +608,7 @@ $wg-colors: (
     box-shadow 0.2s ease;
   text-decoration: none;
   color: inherit;
-  min-height: 140px; // ensures consistent row heights even without slogan/description
+  min-height: 8.75rem; // ensures consistent row heights even without slogan/description
   cursor: pointer;
 
   &:hover {
@@ -619,66 +619,13 @@ $wg-colors: (
   }
 
   .member-card-logo-wrap {
-    width: 140px;
-    height: 56px;
+    width: 8.75rem;
+    height: 3.5rem;
     flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: center;
     margin: 0 auto 0.75rem;
-  }
-
-  .member-card-logo {
-    // fill the wrapper so small logos don't appear tiny
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-    filter: var(--pk-member-logo-hover-filter);
-    mix-blend-mode: var(--pk-member-logo-blend);
-    transition: filter 0.2s ease;
-  }
-
-  .member-card-logo--placeholder,
-  .member-card-initials {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 0.75rem;
-    width: 64px;
-    height: 64px;
-    flex-shrink: 0;
-    // Two letters at 40% of the tile, the proportion every initials avatar
-    // on the site now keeps, so the mark reads as a mark and not as a
-    // caption floating in an empty square (#44).
-    font-size: 1.6rem;
-    font-weight: 800;
-    letter-spacing: 0.04em;
-    color: #fff;
-    user-select: none;
-  }
-
-  // Deterministic palette — assigned via mod(len(name), 6) in template
-  .initial-color-0 {
-    background: linear-gradient(135deg, #2a7a4f, #1a5c3a);
-  }
-  .initial-color-1 {
-    background: linear-gradient(135deg, #1d4ed8, #1e40af);
-  }
-  .initial-color-2 {
-    background: linear-gradient(135deg, #d97706, #b45309);
-  }
-  .initial-color-3 {
-    background: linear-gradient(135deg, #7c3aed, #5b21b6);
-  }
-  .initial-color-4 {
-    background: linear-gradient(135deg, #dc2626, #991b1b);
-  }
-  .initial-color-5 {
-    background: linear-gradient(135deg, #0891b2, #0e7490);
-  }
-
-  &:hover .member-card-logo {
-    filter: var(--pk-member-logo-hover-filter);
   }
 
   .member-card-name {
@@ -750,7 +697,7 @@ $wg-colors: (
   &:focus-within .member-card-social {
     opacity: 1;
     transform: translateY(0);
-    max-height: 48px;
+    max-height: 3rem;
     pointer-events: auto;
   }
 
@@ -760,7 +707,7 @@ $wg-colors: (
     align-self: stretch;
     // Break out of the card's padding to sit flush with the card edges
     margin: auto -1.25rem -1.25rem;
-    padding: 5px 14px 6px;
+    padding: 0.3125rem 0.875rem 0.375rem;
     font-size: 0.68rem;
     font-weight: 700;
     letter-spacing: 0.09em;
@@ -771,58 +718,8 @@ $wg-colors: (
   }
 }
 
-// Standalone initials avatar — same palette as .member-card-initials above, but
 // usable outside a .member-card wrapper (member profile hero/representative
 // avatars, which aren't grid cards).
-.standalone-initials {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  color: #fff;
-  user-select: none;
-
-  // Each size keeps the letters at 40% of the circle. The two big rounds on a
-  // member's profile were the worst case of #44: a 120px hero wearing 32px
-  // letters read as a mostly empty disc.
-  &.standalone-initials--representative {
-    width: 100px;
-    height: 100px;
-    font-size: 2.5rem;
-  }
-
-  &.standalone-initials--hero {
-    width: 120px;
-    height: 120px;
-    font-size: 3rem;
-  }
-
-  &.initial-color-0 {
-    background: linear-gradient(135deg, #2a7a4f, #1a5c3a);
-  }
-  &.initial-color-1 {
-    background: linear-gradient(135deg, #1d4ed8, #1e40af);
-  }
-  &.initial-color-2 {
-    background: linear-gradient(135deg, #d97706, #b45309);
-  }
-  &.initial-color-3 {
-    background: linear-gradient(135deg, #7c3aed, #5b21b6);
-  }
-  &.initial-color-4 {
-    background: linear-gradient(135deg, #dc2626, #991b1b);
-  }
-  &.initial-color-5 {
-    background: linear-gradient(135deg, #0891b2, #0e7490);
-  }
-}
-
-.member-profile-logo {
-  height: 150px;
-  max-width: 60%;
-}
 
 // --- Color highlight sections ---
 
@@ -831,10 +728,10 @@ $wg-colors: (
   padding-left: 1rem;
 }
 
-// --- Section dividers with colour ---
+// --- Section dividers with color ---
 
 .section-divider {
-  height: 4px;
+  height: 0.25rem;
   border: none;
   border-radius: 2px;
   background: linear-gradient(90deg, $green, $blue, $orange);
@@ -863,7 +760,7 @@ $wg-colors: (
     font-size: 1.05rem;
     opacity: 0.9;
     margin-bottom: 1.5rem;
-    max-width: 540px;
+    max-width: 33.75rem;
     margin-left: auto;
     margin-right: auto;
   }
@@ -900,7 +797,7 @@ $wg-colors: (
 // --- WG Hero gradient strips ---
 
 .wg-hero-strip {
-  height: 6px;
+  height: 0.375rem;
   border-radius: 0 0 3px 3px;
   background: var(--wg-color, #{$green});
 }

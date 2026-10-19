@@ -9,8 +9,13 @@ export interface DayAttendanceValue {
   attendanceType: DayAttendanceType;
 }
 
+const mountedPickers = new WeakSet<HTMLElement>();
+
 export function renderDayAttendance(container: HTMLElement, days: EventFormsResponse["eventDays"]): void {
   const lowCapacityThreshold = Number(container.dataset.lowCapacityThreshold ?? 0);
+  // The server-rendered "Loading event days…" is not Preact's to diff away; clear it before the first render.
+  if (!mountedPickers.has(container)) container.textContent = "";
+  mountedPickers.add(container);
   render(<DayAttendancePicker days={days} lowCapacityThreshold={lowCapacityThreshold} />, container);
 }
 

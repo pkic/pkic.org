@@ -112,6 +112,65 @@ test.describe("design system rendering", () => {
     expect(errors).toEqual([]);
   });
 
+  for (const width of [1280, 375]) {
+    test(`keeps each table row's pointer and keyboard destination at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto("/design/?only=data");
+      const table = page.getByRole("table", { name: "Members and what can be done to them", exact: true });
+      await expect(table).toBeVisible();
+      const rows = table.locator("tbody tr");
+      await expect(rows).toHaveCount(4);
+      for (const row of await rows.all()) {
+        await row.scrollIntoViewIfNeeded();
+        const primary = row.getByRole("link", { name: /^Open / });
+        await expect(primary).toHaveCount(1);
+        const destination = await primary.getAttribute("href");
+        const bounds = await row.evaluate((element) => {
+          const row = element.getBoundingClientRect();
+          return [...element.querySelectorAll(".pk-table__row-link")].map((link) => {
+            const rect = link.getBoundingClientRect();
+            return (
+              !rect.width ||
+              !rect.height ||
+              (rect.top >= row.top - 1 &&
+                rect.bottom <= row.bottom + 1 &&
+                rect.left >= row.left - 1 &&
+                rect.right <= row.right + 1)
+            );
+          });
+        });
+        expect(bounds.every(Boolean), "row targets must not cover other rows").toBe(true);
+        const date = await row.locator("td").nth(2).boundingBox();
+        expect(date).not.toBeNull();
+        // A real coordinate click exposes overlapping links that locator.click can avoid.
+        await page.mouse.click(date!.x + date!.width / 2, date!.y + date!.height / 2);
+        await expect.poll(() => new URL(page.url()).hash).toBe(destination);
+        await primary.focus();
+        await page.keyboard.press("Enter");
+        await expect.poll(() => new URL(page.url()).hash).toBe(destination);
+      }
+      if (width === 1280) {
+        const target = rows.first().locator("td").nth(2).locator(".pk-table__row-link");
+        for (const options of [{ modifiers: ["ControlOrMeta"] as const }, { button: "middle" as const }]) {
+          const opened = page.context().waitForEvent("page");
+          await target.click({ ...options, modifiers: options.modifiers ? [...options.modifiers] : undefined });
+          const tab = await opened;
+          await tab.waitForLoadState();
+          expect(new URL(tab.url()).hash).toBe("#m1");
+          await tab.close();
+        }
+      }
+      const bob = rows.filter({ hasText: "Bob Martinez" });
+      await bob.getByRole("link", { name: "CryptoKey Labs" }).click();
+      await expect.poll(() => new URL(page.url()).hash).toBe("#organization-m2");
+      await bob.getByRole("button", { name: "Actions for Bob Martinez" }).click();
+      await expect(page.getByRole("menuitem", { name: "Send message", exact: true })).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(bob.getByRole("button", { name: "Actions for Bob Martinez" })).toBeFocused();
+      await page.screenshot({ path: `test-results/table-row-navigation-${width}.png` });
+    });
+  }
+
   for (const viewport of WIDTHS) {
     test(`fits the viewport at ${viewport.name} (${String(viewport.width)}px)`, async ({ page }) => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });

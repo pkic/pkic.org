@@ -1,0 +1,14 @@
+@layer components {
+  .pk-donation-prompt {
+    min-inline-size: 0;
+  }
+  .pk-donation-prompt[data-variation="1"] .support-cta-inner::after {
+    inset-inline-end: 20%;
+    inset-block-start: -5rem;
+  }
+  .pk-donation-prompt[data-variation="2"] .support-cta-inner::after {
+    inset-inline-end: -2rem;
+    inset-block-start: auto;
+    inset-block-end: -5rem;
+  }
+}

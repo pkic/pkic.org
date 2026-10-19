@@ -19,10 +19,6 @@
 // they are small. Component CSS rides its own lazy chunk instead.
 import "./design-system";
 
-// Site chrome rather than a page module: the toggle is in every navbar, and a
-// lazy chunk would mean a request on every page for forty lines — and a window
-// in which the control is rendered but does not respond.
-import { installThemeToggles } from "./theme";
 import { installDeferredAvailabilityNotice } from "./shared/availability-notice-loader";
 
 // Each value is a function returning a dynamic import — esbuild turns each
@@ -49,6 +45,7 @@ const modules: Record<string, () => Promise<unknown>> = {
   "member-flows/wg-chairs-widget": () => import("./member-flows/wg-chairs-widget"),
   "member-flows/group-members-widget": () => import("./member-flows/group-members-widget"),
   "member-flows/member-logo-wall": () => import("./member-flows/member-logo-wall"),
+  "member-flows/public-person-previews": () => import("./member-flows/public-person-previews"),
   "member-flows/member-person-card": () => import("./member-flows/member-person-card"),
   "member-flows/leadership-widget": () => import("./member-flows/leadership-widget"),
   "member-flows/sponsors-wall": () => import("./member-flows/sponsors-wall"),
@@ -74,8 +71,19 @@ async function loadModule(name: string): Promise<void> {
   await loader();
 }
 
+// The theme control is server-rendered in every navbar and dressed for first
+// paint by `ui/ThemeToggle.css` in the entry sheet. Its menu (script and popup
+// styles) hydrates from its own chunk so the shared menu stays out of the
+// entry stylesheet that every page links.
+function installThemeMenus(): void {
+  if (!document.querySelector("[data-theme-menu]")) return;
+  void import("./ui/ThemeToggle")
+    .then(({ installThemeToggles }) => installThemeToggles())
+    .catch((error: unknown) => console.error("Unable to load the theme menu", error));
+}
+
 function init(): void {
-  installThemeToggles();
+  installThemeMenus();
   installDeferredAvailabilityNotice();
   const moduleElements = [...document.querySelectorAll<HTMLElement>("[data-module]")];
   moduleElements.forEach((el) => {

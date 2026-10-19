@@ -26,7 +26,7 @@
   .blog-card-header {
     position: relative;
     width: 100%;
-    height: 200px;
+    height: 12.5rem;
     flex-shrink: 0;
     overflow: hidden;
     display: flex;
@@ -54,15 +54,10 @@
   .blog-card-header-overlay {
     position: absolute;
     inset: 0;
-    background: linear-gradient(
-      to top,
-      rgba(0, 0, 0, 0.72) 0%,
-      rgba(0, 0, 0, 0.3) 50%,
-      rgba(0, 0, 0, 0.1) 100%
-    );
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.72) 0%, rgba(0, 0, 0, 0.3) 50%, rgba(0, 0, 0, 0.1) 100%);
   }
 
-  // Gradient-only (no photo) palettes — 6 theme-colour combinations, cycling by grid position
+  // Gradient-only (no photo) palettes — 6 theme-color combinations, cycling by grid position
   // Base shimmer pseudo-element shared by all gradient variants
   .blog-card-header--gradient {
     background: linear-gradient(135deg, $green-deep 0%, $blue-deep 100%);
@@ -71,78 +66,51 @@
       position: absolute;
       inset: 0;
       pointer-events: none;
-      background: radial-gradient(
-        ellipse at 110% -10%,
-        rgba(32, 201, 151, 0.25) 0%,
-        transparent 55%
-      );
+      background: radial-gradient(ellipse at 110% -10%, rgba(32, 201, 151, 0.25) 0%, transparent 55%);
     }
   }
   // 2 — blue-deep → purple-deep
   &:nth-child(6n + 2) .blog-card-header--gradient {
     background: linear-gradient(135deg, $blue-deep 0%, $purple-deep 100%);
     &::before {
-      background: radial-gradient(
-        ellipse at 110% -10%,
-        rgba(90, 155, 213, 0.25) 0%,
-        transparent 55%
-      );
+      background: radial-gradient(ellipse at 110% -10%, rgba(90, 155, 213, 0.25) 0%, transparent 55%);
     }
   }
   // 3 — purple-deep → green-deep
   &:nth-child(6n + 3) .blog-card-header--gradient {
     background: linear-gradient(135deg, $purple-deep 0%, $green-deep 100%);
     &::before {
-      background: radial-gradient(
-        ellipse at 110% -10%,
-        rgba(111, 66, 193, 0.25) 0%,
-        transparent 55%
-      );
+      background: radial-gradient(ellipse at 110% -10%, rgba(111, 66, 193, 0.25) 0%, transparent 55%);
     }
   }
   // 4 — orange-dark → red-dark
   &:nth-child(6n + 4) .blog-card-header--gradient {
     background: linear-gradient(135deg, $orange-dark 0%, $red-dark 100%);
     &::before {
-      background: radial-gradient(
-        ellipse at 110% -10%,
-        rgba(237, 125, 49, 0.3) 0%,
-        transparent 55%
-      );
+      background: radial-gradient(ellipse at 110% -10%, rgba(237, 125, 49, 0.3) 0%, transparent 55%);
     }
   }
   // 5 — red-deep → purple-deep
   &:nth-child(6n + 5) .blog-card-header--gradient {
     background: linear-gradient(135deg, $red-deep 0%, $purple-deep 100%);
     &::before {
-      background: radial-gradient(
-        ellipse at 110% -10%,
-        rgba(220, 53, 69, 0.25) 0%,
-        transparent 55%
-      );
+      background: radial-gradient(ellipse at 110% -10%, rgba(220, 53, 69, 0.25) 0%, transparent 55%);
     }
   }
   // 6 — green-dark → orange-dark
   &:nth-child(6n) .blog-card-header--gradient {
     background: linear-gradient(135deg, $green-dark 0%, $orange-dark 100%);
     &::before {
-      background: radial-gradient(
-        ellipse at 110% -10%,
-        rgba(25, 135, 84, 0.3) 0%,
-        transparent 55%
-      );
+      background: radial-gradient(ellipse at 110% -10%, rgba(25, 135, 84, 0.3) 0%, transparent 55%);
     }
   }
 
-  // Logo overlay — for SVG/logo heroImages centred on gradient header
+  // Logo overlay — for SVG/logo heroImages centered on gradient header
   .blog-card-logo {
     position: absolute;
     top: 50%;
     left: 50%;
-    transform: translate(
-      -50%,
-      calc(-50% - 14px)
-    ); // nudge up to leave room for title
+    transform: translate(-50%, calc(-50% - 14px)); // nudge up to leave room for title
     z-index: 1;
     background: rgba(255, 255, 255, 0.92);
     backdrop-filter: blur(4px);
@@ -153,8 +121,8 @@
     justify-content: center;
 
     img {
-      max-width: 120px;
-      max-height: 48px;
+      max-width: 7.5rem;
+      max-height: 3rem;
       object-fit: contain;
       display: block;
     }
@@ -401,27 +369,6 @@
   }
 }
 
-.blog-author-avatar {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 2px solid var(--pk-line-soft);
-  flex-shrink: 0;
-}
-
-.blog-author-initials {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, $green 0%, $blue 100%);
-  color: #fff;
-  // 40% of the 48px avatar above, the proportion the initials avatars share.
-  font-size: 1.2rem;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-}
-
 .blog-author-info {
   flex: 1;
   min-width: 0; // allow text truncation if needed
@@ -461,8 +408,8 @@
 }
 
 .blog-author-org-logo {
-  max-width: 100px;
-  max-height: 26px;
+  max-width: 6.25rem;
+  max-height: 1.625rem;
   object-fit: contain;
   filter: var(--pk-member-logo-filter);
   transition: filter 0.18s;
@@ -589,7 +536,7 @@
 
   // Overlapping stacked bubbles
   > * {
-    margin-left: -6px;
+    margin-left: -0.375rem;
     &:first-child {
       margin-left: 0;
     }
@@ -597,29 +544,14 @@
 }
 
 // Shared avatar bubble base
-.blog-card-avatar-img,
-.blog-card-avatar-initials,
 .blog-card-avatar-more {
-  width: 26px;
-  height: 26px;
+  width: 1.625rem;
+  height: 1.625rem;
   border-radius: 50%;
   border: 2px solid var(--pk-surface);
   flex-shrink: 0;
   font-size: 0.6rem;
   font-weight: 800;
-}
-
-.blog-card-avatar-img {
-  object-fit: cover;
-}
-
-.blog-card-avatar-initials {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, $green 0%, $blue 100%);
-  color: #fff;
-  text-transform: uppercase;
 }
 
 .blog-card-avatar-more {
@@ -654,8 +586,6 @@
     justify-content: center;
   }
 
-  .blog-card-avatar-img,
-  .blog-card-avatar-initials,
   .blog-card-avatar-more {
     border-color: rgba(255, 255, 255, 0.5);
   }
@@ -686,7 +616,7 @@
   // strict CSP and the no-style-attribute rule both forbid.
   @media (min-width: 992px) {
     position: sticky;
-    top: 76px; // clears the fixed navbar
+    top: 4.75rem; // clears the fixed navbar
   }
 }
 
@@ -741,7 +671,7 @@
 // Logo images — tier-specific max-dimensions so Diamond trumps Bronze
 .blog-sidebar-sponsor-logo {
   display: block;
-  height: clamp(18px, calc(8px * var(--sponsor-weight, 1)), 44px);
+  height: clamp(1.125rem, calc(0.5rem * var(--sponsor-weight, 1)), 2.75rem);
   width: auto;
   object-fit: contain;
   filter: var(--pk-member-logo-hover-filter);
@@ -753,28 +683,28 @@
 }
 
 .blog-sidebar-sponsor-logo-diamond {
-  height: 44px;
-  max-width: 140px;
+  height: 2.75rem;
+  max-width: 8.75rem;
 }
 .blog-sidebar-sponsor-logo-titanium {
-  height: 36px;
-  max-width: 120px;
+  height: 2.25rem;
+  max-width: 7.5rem;
 }
 .blog-sidebar-sponsor-logo-platinum {
-  height: 30px;
-  max-width: 110px;
+  height: 1.875rem;
+  max-width: 6.875rem;
 }
 .blog-sidebar-sponsor-logo-gold {
-  height: 24px;
-  max-width: 90px;
+  height: 1.5rem;
+  max-width: 5.625rem;
 }
 .blog-sidebar-sponsor-logo-silver {
-  height: 20px;
-  max-width: 80px;
+  height: 1.25rem;
+  max-width: 5rem;
 }
 .blog-sidebar-sponsor-logo-bronze {
-  height: 18px;
-  max-width: 70px;
+  height: 1.125rem;
+  max-width: 4.375rem;
 }
 
 .blog-sidebar-sponsors-footer {
@@ -800,7 +730,7 @@
 // ============================================================
 
 // ── Sponsor highlight ─────────────────────────────────────────
-// A subtle gold left-border to mark sponsor cards without changing colours.
+// A subtle gold left-border to mark sponsor cards without changing colors.
 .news-card--sponsor {
   border-left: 3px solid rgba($amber, 0.75);
 

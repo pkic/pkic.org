@@ -4,7 +4,7 @@
 //
 // The container itself no longer styles its controls: labels, inputs and the
 // validation states come from the design system's Field and Button, so the
-// only rule `.event-flow` still owns is its narrow-viewport padding, below.
+// surrounding public page owns the responsive content gutter.
 
 // ── Multi-step wizard ────────────────────────────────────────────────────────
 
@@ -17,11 +17,15 @@
 }
 
 // The track + fill are now drawn per-item via ::before so they always connect
-// exactly at each bubble centre, regardless of container width or step count.
+// exactly at each bubble center, regardless of container width or step count.
 // The .event-flow-stepper-track / -fill elements are kept in the HTML for the
 // JS fill animation but are hidden; the visual line comes from CSS only.
-.event-flow-stepper-track { display: none; }
-.event-flow-stepper-fill  { display: none; }
+.event-flow-stepper-track {
+  display: none;
+}
+.event-flow-stepper-fill {
+  display: none;
+}
 
 .event-flow-stepper-list {
   display: flex;
@@ -40,12 +44,12 @@
   flex: 1;
   position: relative;
 
-  // Left half of the connector (from item left-edge to bubble centre).
+  // Left half of the connector (from item left-edge to bubble center).
   // Hidden on the first item so the line starts at the first bubble.
   &::before {
-    content: '';
+    content: "";
     position: absolute;
-    top: 1rem; // vertically centred on the 2rem bubble
+    top: 1rem; // vertically centered on the 2rem bubble
     left: 0;
     width: 50%;
     height: 2px;
@@ -53,10 +57,10 @@
     transition: background-color var(--pk-dur) ease;
   }
 
-  // Right half of the connector (from bubble centre to item right-edge).
+  // Right half of the connector (from bubble center to item right-edge).
   // Hidden on the last item so the line ends at the last bubble.
   &::after {
-    content: '';
+    content: "";
     position: absolute;
     top: 1rem;
     left: 50%;
@@ -66,10 +70,14 @@
     transition: background-color var(--pk-dur) ease;
   }
 
-  &:first-child::before { display: none; }
-  &:last-child::after   { display: none; }
+  &:first-child::before {
+    display: none;
+  }
+  &:last-child::after {
+    display: none;
+  }
 
-  // Colour the incoming connector for done steps and the active step.
+  // Color the incoming connector for done steps and the active step.
   &.is-done::before,
   &.is-done::after,
   &.is-active::before {
@@ -83,7 +91,9 @@
       text-decoration: underline;
       text-decoration-color: transparent;
       text-underline-offset: 0.18em;
-      transition: color var(--pk-dur-fast) ease, text-decoration-color var(--pk-dur-fast) ease;
+      transition:
+        color var(--pk-dur-fast) ease,
+        text-decoration-color var(--pk-dur-fast) ease;
     }
 
     &:hover,
@@ -135,8 +145,12 @@
   border-color: var(--page-accent, var(--pk-accent));
   color: var(--pk-on-solid);
 
-  .event-flow-stepper-num { display: none; }
-  .event-flow-stepper-check { display: inline; }
+  .event-flow-stepper-num {
+    display: none;
+  }
+  .event-flow-stepper-check {
+    display: inline;
+  }
 }
 
 .event-flow-stepper-item.is-active .event-flow-stepper-bubble {
@@ -169,8 +183,14 @@
 }
 
 @keyframes step-fade-in {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 // One-line context/intro text at the top of each step.
@@ -205,46 +225,6 @@
     color: var(--pk-ink);
   }
 }
-
-.pkic-headshot-preview,
-.pkic-speaker-headshot-preview,
-[data-headshot-section] [data-headshot-preview] {
-  width: 112px;
-  height: 112px;
-  border-radius: var(--pk-radius-pill);
-  overflow: hidden;
-  border: 1px solid var(--pk-line);
-  background: var(--pk-surface-sunk);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-}
-
-.pkic-headshot-preview__image,
-.pkic-speaker-headshot-preview__image,
-[data-headshot-section] [data-headshot-preview] > img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-.pkic-headshot-preview__placeholder,
-.pkic-speaker-headshot-preview__placeholder,
-[data-headshot-section] [data-headshot-preview] > div {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.75rem;
-  text-align: center;
-  font-size: 0.75rem;
-  color: var(--pk-ink-muted);
-}
-
-
 
 .event-flow-fields {
   margin-bottom: 1.5rem;
@@ -320,113 +300,21 @@
   box-shadow: var(--pk-shadow-2);
 }
 
-.event-flow-review-header {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(18rem, 0.7fr);
-  gap: 1.25rem;
-  align-items: center;
-  padding: 1.1rem 1.25rem;
-  background: var(--pk-warn-soft);
-  border-bottom: 1px solid color-mix(in srgb, var(--pk-warn) 35%, transparent);
-}
-
-.event-flow-review-eyebrow,
-.event-flow-review-section-title,
-.event-flow-submission-review-label {
+.event-flow-review-section-title {
   margin-bottom: 0.25rem;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--pk-ink-muted);
-}
-
-.event-flow-review-title {
-  margin: 0 0 0.2rem;
-  font-size: 1rem;
-  font-weight: 750;
-}
-
-.event-flow-review-email,
-.event-flow-review-email-inline,
-.event-flow-submission-review-value,
-.event-flow-address {
-  overflow-wrap: anywhere;
-  word-break: break-word;
-}
-
-.event-flow-review-email {
-  margin: 0;
-  font-size: clamp(1.1rem, 1.6vw, 1.35rem);
-  font-weight: 750;
+  font-size: var(--pk-text-sm);
+  font-weight: 600;
   color: var(--pk-ink);
 }
 
-.event-flow-review-email,
+.event-flow-review-email-inline,
+.event-flow-address {
+  overflow-wrap: anywhere;
+}
+
 .event-flow-review-email-inline {
   font-family: var(--pk-font-mono);
   letter-spacing: 0.01em;
-}
-
-.event-flow-review-critical {
-  display: grid;
-  gap: 0.45rem;
-  justify-items: end;
-  text-align: right;
-}
-
-.event-flow-review-status {
-  display: inline-flex;
-  align-items: center;
-  width: fit-content;
-  padding: 0.16rem 0.45rem;
-  border: 1px solid color-mix(in srgb, var(--pk-warn) 35%, transparent);
-  border-radius: var(--pk-radius-pill);
-  background: var(--pk-surface);
-  color: var(--pk-warn-ink);
-  font-size: 0.76rem;
-  font-weight: 700;
-  text-align: left;
-}
-
-.event-flow-review-help {
-  margin: 0;
-  font-size: 0.88rem;
-  line-height: 1.45;
-  color: var(--pk-warn-ink);
-}
-
-.event-flow-review-warning {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 0.7rem;
-  align-items: flex-start;
-  padding: 0.72rem 0.8rem;
-  border: 1px solid color-mix(in srgb, var(--pk-warn) 35%, transparent);
-  border-radius: var(--pk-radius);
-  background: color-mix(in srgb, var(--pk-warn-soft) 70%, var(--pk-surface));
-  text-align: left;
-
-  .event-flow-review-help {
-    font-size: 0.98rem;
-    line-height: 1.5;
-  }
-}
-
-.event-flow-review-warning-marker {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.55rem;
-  height: 1.55rem;
-  margin-top: 0.1rem;
-  border-radius: 50%;
-  background: var(--pk-warn);
-  color: var(--pk-ink-inverse);
-  font-size: 1rem;
-  font-weight: 850;
-  line-height: 1;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--pk-warn) 20%, transparent);
 }
 
 .event-flow-review-section {
@@ -525,86 +413,11 @@
   }
 }
 
-.event-flow-terms-heading {
-  margin: 1.35rem 0 0.65rem;
-  padding-top: 1rem;
-  border-top: 1px solid var(--pk-line);
-}
-
-.event-flow-terms-title {
-  margin: 0 0 0.2rem;
-  font-size: 1rem;
-  font-weight: 750;
-}
-
-.event-flow-terms-help {
-  margin: 0;
-  color: var(--pk-ink-muted);
-  font-size: 0.9rem;
-  line-height: 1.45;
-}
-
-.event-flow-pending-alert {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 0.8rem;
-  align-items: flex-start;
-  margin-bottom: 1rem;
-  padding: 1rem 1.05rem;
-  border: 1px solid color-mix(in srgb, var(--pk-warn) 35%, transparent);
-  border-radius: var(--pk-radius-lg);
-  background: var(--pk-warn-soft);
-  color: var(--pk-warn-ink);
-  font-size: 1rem;
-  line-height: 1.55;
-}
-
-.event-flow-pending-alert-title {
-  margin: 0 0 0.55rem;
-  font-size: 1.12rem;
-  font-weight: 800;
-  color: var(--pk-ink);
-}
-
-.event-flow-pending-steps {
-  display: grid;
-  gap: 0.25rem;
-  margin: 0;
-  padding-left: 1.2rem;
-}
-
-.event-flow-submission-review {
-  padding: 0.95rem 1rem;
-  margin-bottom: 1rem;
-  border: 1px solid var(--pk-line);
-  border-radius: var(--pk-radius);
-  background: var(--pk-surface-sunk);
-}
-
-.event-flow-submission-review-value {
-  margin-bottom: 0.75rem;
-  font-family: var(--pk-font-mono);
-  font-size: 1.08rem;
-  font-weight: 750;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-}
-
-.event-flow-submission-action {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.65rem;
-  align-items: center;
-  justify-content: space-between;
-}
-
 @media (max-width: 575.98px) {
-  .event-flow-review-header,
   .event-flow-review-row {
     grid-template-columns: 1fr;
   }
 
-  .event-flow-review-header,
   .event-flow-review-section-heading,
   .event-flow-review-row {
     padding-right: 0.9rem;
@@ -618,40 +431,34 @@
   .event-flow-review-row {
     gap: 0.2rem;
   }
-
-  .event-flow-pending-alert {
-    grid-template-columns: 1fr;
-  }
-
-  // Stacking the row is what makes the action fill the width. The button no
-  // longer sets its own, so the column stretches every child instead.
-  .event-flow-submission-action {
-    flex-direction: column;
-    align-items: stretch;
-  }
 }
 
 // ── Per-day attendance picker ────────────────────────────────────────────────
-// Side-by-side cards, one per option. Each card: icon pill on top, centred
-// title + description, radio indicator pinned to top-right corner.
-// Per-type colour driven by --option-color CSS var set inline by JS.
+// One row per day: the day, then a compact segmented choice of its options.
+// Tokens only, consistent with the ChoiceCard primitive: the chosen option
+// takes the accent tint, a full (waitlisted) option the caution tint, and the
+// chosen state also reads by its stronger border, not by color alone.
 
 .event-flow-day {
+  display: grid;
+  grid-template-columns: minmax(10rem, 14rem) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--pk-2) var(--pk-4);
+
   .event-flow-day-label {
-    font-weight: 700;
-    margin-bottom: 0.7rem;
-    font-size: 0.7rem;
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
-    color: var(--pk-ink-muted);
+    // A legend does not take a grid cell unless it floats out of the border.
+    float: left;
+    padding: 0;
+    font-size: var(--pk-text-sm);
+    font-weight: 600;
+    color: var(--pk-ink);
   }
 }
 
-// Row of equal-width cards.
 .event-flow-attendance-options {
   display: flex;
-  flex-direction: row;
-  gap: 0.75rem;
+  flex-wrap: wrap;
+  gap: var(--pk-2);
 }
 
 // Visually hidden — stays in DOM so :checked + sibling selector works.
@@ -664,127 +471,93 @@
 }
 
 .event-flow-attendance-card {
-  --option-color: var(--page-accent, var(--pk-accent));
-
-  position: relative;        // anchor for the radio dot
-  flex: 1 1 0;               // equal-width columns
-  display: flex;
-  flex-direction: column;
+  display: inline-flex;
   align-items: center;
-  text-align: center;
-  gap: 0.6rem;
-  padding: 1.2rem 1rem 1rem;
-  border: 1.5px solid var(--pk-line);
-  border-radius: var(--pk-radius-lg);
+  gap: var(--pk-2);
+  min-block-size: 2.75rem;
+  padding: var(--pk-2) var(--pk-3);
+  border: 1px solid var(--pk-line);
+  border-radius: var(--pk-radius);
+  background: var(--pk-surface);
+  color: var(--pk-ink);
+  font-size: var(--pk-text-sm);
   cursor: pointer;
   user-select: none;
   transition:
-    border-color var(--pk-dur) ease,
-    background-color var(--pk-dur) ease,
-    box-shadow var(--pk-dur) ease;
+    border-color var(--pk-dur-fast) var(--pk-ease),
+    background-color var(--pk-dur-fast) var(--pk-ease),
+    box-shadow var(--pk-dur-fast) var(--pk-ease);
 
   &:hover {
-    border-color: color-mix(in srgb, var(--option-color) 55%, transparent);
-    background-color: color-mix(in srgb, var(--option-color) 4%, var(--pk-surface));
-    box-shadow: 0 4px 14px color-mix(in srgb, var(--option-color) 14%, transparent);
+    border-color: var(--pk-line-strong);
   }
 }
 
-.event-flow-attendance-card--in-person { --option-color: #e05c3b; }
-.event-flow-attendance-card--virtual { --option-color: #2b7de8; }
-.event-flow-attendance-card--on-demand { --option-color: #7b2be8; }
-.event-flow-attendance-card--default { --option-color: var(--pk-accent); }
-
-// Coloured rounded-square icon pill.
 .event-flow-attendance-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 3rem;
-  height: 3rem;
-  border-radius: var(--pk-radius-lg);
-  background-color: var(--option-color);
-  color: var(--pk-on-solid);
-  transition: transform var(--pk-dur) ease;
-}
-
-// Title + description centred beneath the icon.
-.event-flow-attendance-text {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.2rem;
+  flex-shrink: 0;
+  color: var(--pk-ink-muted);
 }
 
 .event-flow-attendance-title {
-  font-size: 0.9rem;
   font-weight: 600;
-  color: var(--pk-ink);
-  line-height: 1.3;
-  transition: color var(--pk-dur) ease;
 }
 
-.event-flow-attendance-desc {
-  font-size: 0.75rem;
-  color: var(--pk-ink-muted);
-  line-height: 1.3;
-}
-
-// Low-capacity badge.
 .event-flow-attendance-badge {
-  display: inline-block;
-  margin-top: 0.2rem;
-  font-size: 0.65rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--pk-warn-ink);
-  background-color: var(--pk-warn-soft);
-  border: 1px solid color-mix(in srgb, var(--pk-warn) 35%, transparent);
+  padding: 0 var(--pk-2);
   border-radius: var(--pk-radius-sm);
-  padding: 0.1rem 0.4rem;
+  background: var(--pk-warn-soft);
+  color: var(--pk-warn-ink);
+  font-size: var(--pk-text-xs);
+  font-weight: 600;
 }
 
-// Radio dot — absolute top-right corner of the card.
-.event-flow-attendance-radio {
-  position: absolute;
-  top: 0.6rem;
-  right: 0.7rem;
-  width: 1.05rem;
-  height: 1.05rem;
-  border-radius: 50%;
-  border: 2px solid var(--pk-line);
-  background-color: var(--pk-surface);
-  transition: border-color var(--pk-dur-fast), box-shadow var(--pk-dur-fast);
-}
-
-// Checked state.
 .event-flow-attendance-input:checked + .event-flow-attendance-card {
-  border-color: var(--option-color);
-  background-color: color-mix(in srgb, var(--option-color) 7%, var(--pk-surface));
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--option-color) 15%, transparent);
+  border-color: var(--pk-accent-strong);
+  background: var(--pk-accent-soft);
+  box-shadow: inset 0 0 0 1px var(--pk-accent-strong);
 
   .event-flow-attendance-icon {
-    transform: scale(1.1);
-  }
-
-  .event-flow-attendance-title {
-    color: color-mix(in srgb, var(--option-color) 80%, var(--pk-ink));
-  }
-
-  .event-flow-attendance-radio {
-    border-color: var(--option-color);
-    // White ring + colour fill via nested inset shadows.
-    box-shadow:
-      inset 0 0 0 3px var(--pk-surface),
-      inset 0 0 0 10px var(--option-color);
+    color: var(--pk-accent-ink);
   }
 }
 
-// Keyboard focus ring uses the per-option colour.
+.event-flow-attendance-input:checked + .event-flow-attendance-card--waitlist {
+  border-color: var(--pk-warn-ink);
+  background: var(--pk-warn-soft);
+  box-shadow: inset 0 0 0 1px var(--pk-warn-ink);
+
+  .event-flow-attendance-icon {
+    color: var(--pk-warn-ink);
+  }
+}
+
 .event-flow-attendance-input:focus-visible + .event-flow-attendance-card {
-  outline: 2.5px solid var(--option-color);
-  outline-offset: 2px;
+  box-shadow:
+    inset 0 0 0 1px var(--pk-accent-strong),
+    var(--pk-focus);
+}
+
+// What a waitlisted choice means, once it is the day's choice.
+.event-flow-attendance-waitlist {
+  display: none;
+  grid-column: 2;
+  margin: 0;
+  color: var(--pk-warn-ink);
+  font-size: var(--pk-text-sm);
+}
+
+.event-flow-day:has(.event-flow-attendance-input[data-waitlist]:checked) .event-flow-attendance-waitlist {
+  display: block;
+}
+
+@media (max-width: 40rem) {
+  .event-flow-day {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .event-flow-attendance-waitlist {
+    grid-column: 1;
+  }
 }
 
 .event-flow-day-waitlist {
@@ -837,8 +610,14 @@
 }
 
 @keyframes tag-pop {
-  from { transform: scale(0.8); opacity: 0; }
-  to   { transform: scale(1);   opacity: 1; }
+  from {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 .event-flow-tag-remove {
@@ -934,7 +713,7 @@
 .event-flow-success-title {
   font-size: 1.45rem;
   font-weight: 700;
-  // Cancel the main h2 gradient clip-text so the success colour actually renders
+  // Cancel the main h2 gradient clip-text so the success color actually renders
   background: none;
   background-clip: unset;
   -webkit-text-fill-color: var(--pk-ok-ink);
@@ -995,7 +774,7 @@
 
 .event-flow-share-primary-btn {
   flex: 1 1 0;
-  min-width: 140px;
+  min-width: 8.75rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1029,7 +808,7 @@
 }
 
 // ── Social sharing row ──────────────────────────────────────────────────────────
-// Labelled "Share on:" row with X, Bluesky, Reddit icon+text buttons.
+// Labeled "Share on:" row with X, Bluesky, Reddit icon+text buttons.
 
 .event-flow-share-socials {
   display: flex;
@@ -1175,7 +954,9 @@
   padding: 0 0.25rem;
   cursor: pointer;
   border-radius: var(--pk-radius-sm);
-  transition: color var(--pk-dur-fast), background-color var(--pk-dur-fast);
+  transition:
+    color var(--pk-dur-fast),
+    background-color var(--pk-dur-fast);
 
   &:hover {
     color: var(--pk-danger-ink);
@@ -1196,8 +977,12 @@
   .event-flow-invite-thead {
     grid-template-columns: 1fr 1.6rem;
     > span:nth-child(1),
-    > span:nth-child(2) { display: none; }
-    > span:nth-child(3) { display: block; }
+    > span:nth-child(2) {
+      display: none;
+    }
+    > span:nth-child(3) {
+      display: block;
+    }
   }
 
   .event-flow-invite-row {
@@ -1205,15 +990,27 @@
     grid-template-rows: auto auto;
 
     // First and last name inputs on row 1 (cols 1-2), spans 2 cols each
-    [data-invite-first] { grid-column: 1; grid-row: 1; }
-    [data-invite-last]  { grid-column: 2; grid-row: 1; }
+    [data-invite-first] {
+      grid-column: 1;
+      grid-row: 1;
+    }
+    [data-invite-last] {
+      grid-column: 2;
+      grid-row: 1;
+    }
     // Email full-width on row 2
-    [data-invite-email] { grid-column: 1 / 3; grid-row: 2; }
+    [data-invite-email] {
+      grid-column: 1 / 3;
+      grid-row: 2;
+    }
     // Remove button top-right
-    [data-invite-remove] { grid-column: 3; grid-row: 1 / 3; align-self: center; }
+    [data-invite-remove] {
+      grid-column: 3;
+      grid-row: 1 / 3;
+      align-self: center;
+    }
   }
 }
-
 
 // ── Proposal form — "Are you presenting?" checkbox ──────────────────────────
 
@@ -1227,7 +1024,9 @@
   background: var(--pk-surface-sunk);
   cursor: pointer;
   user-select: none;
-  transition: border-color var(--pk-dur) ease, background var(--pk-dur) ease;
+  transition:
+    border-color var(--pk-dur) ease,
+    background var(--pk-dur) ease;
 
   &:has(input:checked) {
     border-color: var(--pk-accent);
@@ -1330,10 +1129,6 @@
 // ── Responsive adjustments ───────────────────────────────────────────────────
 
 @media (max-width: 767px) {
-  .event-flow {
-    padding: 0.95rem;
-  }
-
   .event-flow-success-title {
     font-size: 1.25rem;
   }
@@ -1344,29 +1139,6 @@
     .event-flow-share-copy-btn {
       align-self: flex-start;
     }
-  }
-
-  // Stack attendance cards vertically on small screens.
-  .event-flow-attendance-options {
-    flex-direction: column;
-  }
-
-  .event-flow-attendance-card {
-    flex-direction: row;
-    text-align: left;
-    align-items: center;
-    padding: 0.75rem 1rem 0.75rem 0.85rem;
-    gap: 1rem;
-
-    .event-flow-attendance-text {
-      align-items: flex-start;
-    }
-  }
-
-  .event-flow-attendance-radio {
-    position: static;
-    flex-shrink: 0;
-    margin-left: auto;
   }
 }
 

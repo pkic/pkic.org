@@ -275,7 +275,7 @@ export function MailingListForm({
                   {/*
           Two checkboxes with nothing over them read as two stray options at
           the foot of a form. They are one answer — what this list is to the
-          group right now — so they are one labelled group, and the legend is
+          group right now — so they are one labeled group, and the legend is
           a field label rather than a section heading because the words name
           the answer rather than opening a set of questions.
         */}

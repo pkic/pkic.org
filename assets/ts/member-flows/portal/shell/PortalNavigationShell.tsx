@@ -1,25 +1,27 @@
+import { createPortal } from "preact/compat";
+import { AccountMenu } from "../../../ui/AccountMenu";
 import type { ComponentChildren } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import { Link } from "wouter";
 import { usePortalHashLocation } from "../hash-location";
-import { successResponseSchema } from "../../../../shared/schemas/api-common";
-import { userOrganizationsListResponseSchema } from "../../../../shared/schemas/user-organizations";
 import { Alert } from "../../../ui/Alert";
+import { HeadingOutline } from "../../../ui/HeadingOutline";
 import { ButtonLink } from "../../../ui/Button";
-import { Menu } from "../../../ui/Menu";
-import { MenuIcon } from "../../../components/MenuIcon";
-import { useData } from "../../../hooks/useData";
-import { getJson, postJson } from "../../../shared/api-client";
-import { clearAuth } from "../state";
+import { IconMenu } from "../../../ui/MediaIcons";
 import type { PortalSession } from "../types";
 import {
-  portalActiveSection,
+  portalSidebarSection,
   portalNavigationItems,
+  portalOwnUserRecordPath,
   portalSectionChildren,
-  portalSectionEnabled,
   type PortalNavItem,
 } from "./portal-navigation";
+import { PortalNavigationIcon } from "./PortalNavigationIcon";
 import { SidebarGroups } from "./SidebarGroups";
+import { AppTabBar } from "./AppTabBar";
+import { trackVisualViewportShift } from "../../../ui/visual-viewport-shift";
+import "./PortalAppChrome.css";
+import { portalAppTabForLocation, portalAppTabs } from "./portal-app-tabs";
 
 function SettingsNavigation({
   items,
@@ -76,25 +78,25 @@ interface PortalNavigationShellProps {
   session: PortalSession | null;
 }
 
-/** First letters of the first two name words; falls back to the first character. */
-import { personInitials } from "../../../components/PersonCell";
-
-/** Kept as the shell-local name; the shared implementation lives in PersonCell. */
-export const portalAvatarInitials = personInitials;
-
 export function PortalNavigationShell({ children, displayName, headshotUrl, session }: PortalNavigationShellProps) {
   const [location, navigate] = usePortalHashLocation();
   const [navigationOpen, setNavigationOpen] = useState(false);
-  // The identity's organizations live in the account menu, not the sidebar:
-  // each one deep-links into its organization workspace.
-  const organizations = useData(
-    () =>
-      session?.member
-        ? getJson("/api/v1/users/current/organizations?limit=12", userOrganizationsListResponseSchema)
-        : Promise.resolve(null),
-    [Boolean(session?.member)],
-  );
-  const [signOutError, setSignOutError] = useState<string | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem("portal-sidebar-collapsed") === "true";
+    } catch {
+      return false;
+    }
+  });
+  function toggleSidebar() {
+    const next = !sidebarCollapsed;
+    setSidebarCollapsed(next);
+    try {
+      localStorage.setItem("portal-sidebar-collapsed", String(next));
+    } catch {
+      /* The current view still works without preference storage. */
+    }
+  }
   const closeNavigation = () => setNavigationOpen(false);
 
   // Attach once and test the state inside, rather than attaching only while
@@ -117,22 +119,29 @@ export function PortalNavigationShell({ children, displayName, headshotUrl, sess
     return () => document.removeEventListener("keydown", closeWithEscape);
   }, []);
 
-  async function signOut(): Promise<void> {
-    setSignOutError(null);
-    try {
-      if (session) await postJson("/api/v1/auth/logout", {}, successResponseSchema);
-      clearAuth();
-      window.location.assign("/portal/");
-    } catch {
-      setSignOutError("Sign out failed. Your session is still active; please try again.");
-    }
-  }
+  // The sticky top bar and the fixed bottom bar follow the area the reader can see (see visual-viewport-shift).
+  useEffect(() => trackVisualViewportShift(), []);
 
-  const activeSection = portalActiveSection(location);
+  const activeSection = portalSidebarSection(location);
   const pendingIdentityCount = session?.pendingIdentityCount ?? 0;
+  const ownRecordPath = portalOwnUserRecordPath(session);
 
   return (
-    <div id="portal-root">
+    <div id="portal-root" class={sidebarCollapsed ? "portal-sidebar-collapsed" : undefined}>
+      {session &&
+        document.getElementById("pkic-account-menu") &&
+        createPortal(
+          <AccountMenu
+            session={session}
+            displayName={displayName}
+            headshotUrl={headshotUrl}
+            navigate={(path) => {
+              closeNavigation();
+              navigate(path);
+            }}
+          />,
+          document.getElementById("pkic-account-menu")!,
+        )}
       <div id="portal-topbar">
         <button
           id="portal-sidebar-toggle"
@@ -142,7 +151,7 @@ export function PortalNavigationShell({ children, displayName, headshotUrl, sess
           aria-controls="portal-sidebar"
           onClick={() => setNavigationOpen((open) => !open)}
         >
-          <MenuIcon />
+          <IconMenu width="20" height="20" />
         </button>
         <span class="portal-brand">PKI Consortium Portal</span>
       </div>
@@ -153,9 +162,29 @@ export function PortalNavigationShell({ children, displayName, headshotUrl, sess
         aria-label="Close navigation"
         onClick={closeNavigation}
       />
-      <aside id="portal-sidebar" class={navigationOpen ? "open" : undefined} aria-label="Portal navigation">
-        <div class="portal-sidebar-brand">
-          <div class="portal-brand">PKI Consortium Portal</div>
+      {/*
+        The portal renders inside the site document's one top-level <main>,
+        so its own regions are not landmarks that compete with it: the sidebar
+        is the portal's navigation, and the content column below is a plain
+        container. A <main> or <aside> here would nest a landmark inside
+        <main> (WCAG 1.3.1).
+      */}
+      <nav id="portal-sidebar" class={navigationOpen ? "open" : undefined} aria-label="Portal navigation">
+        <div class="portal-sidebar-heading">
+          <button
+            class="portal-sidebar-collapse"
+            type="button"
+            aria-label={sidebarCollapsed ? "Expand main menu" : "Collapse main menu"}
+            title={sidebarCollapsed ? "Expand main menu" : "Collapse main menu"}
+            aria-expanded={!sidebarCollapsed}
+            aria-controls="portal-sidebar"
+            onClick={toggleSidebar}
+          >
+            <IconMenu width="20" height="20" />
+          </button>
+          <div class="portal-sidebar-brand">
+            <div class="portal-brand">PKI Consortium Portal</div>
+          </div>
         </div>
         {portalNavigationItems(session).map((item) => {
           /*
@@ -179,10 +208,15 @@ export function PortalNavigationShell({ children, displayName, headshotUrl, sess
               <Link
                 href={item.path}
                 class={`portal-sidebar-link${open ? " active" : ""}`}
+                aria-label={item.label}
+                title={item.label}
                 aria-current={location === item.path ? "page" : undefined}
                 onClick={closeNavigation}
               >
-                {item.label}
+                <span class="portal-sidebar-icon">
+                  <PortalNavigationIcon section={item.section} />
+                </span>
+                <span class="portal-sidebar-label">{item.label}</span>
               </Link>
               {open && item.section === "groups" && <SidebarGroups session={session} onNavigate={closeNavigation} />}
               {children.length > 0 && (
@@ -193,70 +227,9 @@ export function PortalNavigationShell({ children, displayName, headshotUrl, sess
             </div>
           );
         })}
-        <div class="portal-sidebar-footer">
-          {signOutError && (
-            <div class="pk">
-              <Alert tone="danger">{signOutError}</Alert>
-            </div>
-          )}
-          {/* The trigger is a person, not an icon, so the menu renders it
-              plain and the sidebar's own class styles the content inside. */}
-          <Menu
-            label="Account menu"
-            variant="plain"
-            items={[
-              /*
-               * "My profile" is the reader's own user record, at the same
-               * address anybody else's record has. There is no separate self
-               * page to keep in step with it, and the record it opens gains
-               * the self-only affordances rather than duplicating them.
-               */
-              ...(session
-                ? [
-                    {
-                      id: "profile",
-                      label: "My profile",
-                      onSelect: () => {
-                        closeNavigation();
-                        navigate(`/users/${encodeURIComponent(session.identity.id)}`);
-                      },
-                    },
-                  ]
-                : []),
-              ...(organizations.data?.organizations ?? []).map((organization) => ({
-                id: `organization-${organization.organizationId}`,
-                label: organization.name,
-                onSelect: () => {
-                  closeNavigation();
-                  navigate(`/organizations/${encodeURIComponent(organization.organizationId)}`);
-                },
-              })),
-              ...(portalSectionEnabled(session, "account")
-                ? [
-                    {
-                      id: "account",
-                      label: "Account settings",
-                      onSelect: () => {
-                        closeNavigation();
-                        navigate("/account");
-                      },
-                    },
-                  ]
-                : []),
-              { id: "sign-out", label: "Sign out", onSelect: () => void signOut() },
-            ]}
-          >
-            <span class="portal-sidebar-user">
-              <span class="portal-user-avatar" aria-hidden="true">
-                {headshotUrl ? <img src={headshotUrl} alt="" /> : portalAvatarInitials(displayName)}
-              </span>
-              <span class="portal-user-name">{displayName || "Account"}</span>
-            </span>
-          </Menu>
-        </div>
-      </aside>
-      <main id="portal-main">
-        {pendingIdentityCount > 0 && location !== "/account" && (
+      </nav>
+      <div id="portal-main">
+        {pendingIdentityCount > 0 && ownRecordPath !== null && location !== ownRecordPath && (
           <div class="pk portal-identity-invitation">
             <Alert tone="info" title="Identity invitation">
               <p>
@@ -264,14 +237,21 @@ export function PortalNavigationShell({ children, displayName, headshotUrl, sess
                 {pendingIdentityCount === 1 ? "an identity invitation" : `${pendingIdentityCount} identity invitations`}{" "}
                 waiting for review.
               </p>
-              <ButtonLink href="#/account" variant="primary" size="sm">
+              <ButtonLink href={usePortalHashLocation.hrefs(ownRecordPath)} variant="primary">
                 Review {pendingIdentityCount === 1 ? "invitation" : "invitations"}
               </ButtonLink>
             </Alert>
           </div>
         )}
-        {children}
-      </main>
+        {/* Each screen's title is the document's one <h1>; its sections step down from there. */}
+        <HeadingOutline titleLevel={1}>{children}</HeadingOutline>
+      </div>
+      <AppTabBar
+        scope="portal"
+        label="App"
+        items={portalAppTabs(session)}
+        activeId={portalAppTabForLocation(session, location)}
+      />
     </div>
   );
 }

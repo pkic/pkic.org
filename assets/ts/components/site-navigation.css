@@ -11,8 +11,11 @@
     --pkic-navbar-logo-height: 2rem;
     --pkic-navbar-padding: 0.5rem;
     --pkic-navbar-brand-padding: 0.3125rem;
+    /* Where sticky content below the bar starts: the bar's height, plus any shift of
+       the visible area inside the layout viewport (see visual-viewport-shift.ts). */
     --pkic-navbar-height: calc(
-      var(--pkic-navbar-logo-height) + 2 * var(--pkic-navbar-padding) + 2 * var(--pkic-navbar-brand-padding) + 1px
+      var(--pkic-navbar-logo-height) + 2 * var(--pkic-navbar-padding) + 2 * var(--pkic-navbar-brand-padding) + 1px +
+        var(--pk-viewport-shift-top, 0px)
     );
   }
 
@@ -26,14 +29,14 @@
     background: #000 !important;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     position: sticky;
-    top: 0;
+    top: var(--pk-viewport-shift-top, 0px);
     z-index: 1020;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     padding: var(--pkic-navbar-padding) 0;
   }
-  @media (min-width: 992px) {
+  @media (min-width: 1200px) {
     .pkic-navbar {
       flex-wrap: nowrap;
       justify-content: flex-start;
@@ -76,6 +79,26 @@
     background: rgba(255, 255, 255, 0.05);
   }
 
+  /* Sign in is an action, not a section: a quiet outlined button keeps it
+     apart from the menu items without competing with the page's own CTAs. */
+  .pkic-nav-link.pkic-nav-signin {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2rem;
+    padding: 0.3rem 0.9rem;
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: var(--pk-radius);
+  }
+  .pkic-nav-link.pkic-nav-signin:hover {
+    border-color: rgba(255, 255, 255, 0.72);
+    background: rgba(255, 255, 255, 0.08);
+  }
+  .pkic-nav-link.pkic-nav-signin:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 2px;
+  }
+
   .pkic-navbar-toggler {
     display: inline-flex;
     align-items: center;
@@ -91,7 +114,7 @@
   .pkic-navbar-toggler:hover {
     color: #fff;
   }
-  @media (min-width: 992px) {
+  @media (min-width: 1200px) {
     .pkic-navbar-toggler {
       display: none;
     }
@@ -107,7 +130,7 @@
     flex-direction: column;
     gap: 0.5rem;
   }
-  @media (min-width: 992px) {
+  @media (min-width: 1200px) {
     .pkic-navbar-collapse,
     .pkic-navbar-collapse.is-open {
       display: flex;
@@ -123,7 +146,7 @@
     display: flex;
     flex-direction: column;
   }
-  @media (min-width: 992px) {
+  @media (min-width: 1200px) {
     .pkic-navbar-nav {
       flex-direction: row;
       align-items: center;
@@ -150,7 +173,7 @@
   .pkic-navbar-mobile-search {
     display: block;
   }
-  @media (min-width: 992px) {
+  @media (min-width: 1200px) {
     .pkic-navbar-mobile-search {
       display: none;
     }
@@ -172,7 +195,7 @@
     order: 3;
     margin-left: auto;
   }
-  @media (min-width: 992px) {
+  @media (min-width: 1200px) {
     .pkic-navbar-utilities {
       margin-left: 0.35rem;
       padding-left: 0.5rem;
@@ -183,7 +206,7 @@
   .pkic-navbar-quick-search {
     display: none;
   }
-  @media (max-width: 991px) {
+  @media (max-width: 1199px) {
     .pkic-navbar-utilities {
       order: 1;
     }
@@ -209,11 +232,11 @@
   .pkic-navbar-search {
     display: none;
   }
-  @media (min-width: 992px) {
+  @media (min-width: 1200px) {
     .pkic-navbar-search {
       display: flex;
       flex: 0 1 240px;
-      min-width: 120px;
+      min-width: 7.5rem;
       margin: 0 auto;
       z-index: 10;
     }
@@ -338,7 +361,7 @@
   #pkicMainNav.pkic-search-active .pkic-search-input-wrap {
     display: flex;
   }
-  @media (min-width: 992px) {
+  @media (min-width: 1200px) {
     #pkicMainNav.pkic-search-active .pkic-navbar-search {
       flex: 1 1 auto !important;
       margin: 0 0.5rem;
@@ -378,41 +401,10 @@
   .pkic-search-panel-mobile-input {
     padding: 1rem 0 0.25rem;
   }
-  @media (min-width: 992px) {
+  @media (min-width: 1200px) {
     .pkic-search-panel-mobile-input {
       display: none;
     }
-  }
-
-  .pkic-search-panel-close {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    background: none;
-    border: 1px solid var(--pk-line-strong);
-    border-radius: 0.45rem;
-    padding: 0.35rem 0.85rem;
-    font-size: 0.85rem;
-    color: var(--pk-ink-muted);
-    cursor: pointer;
-    transition:
-      border-color 0.15s ease,
-      color 0.15s ease,
-      background 0.15s ease;
-  }
-  .pkic-search-panel-close kbd {
-    font-size: 0.65rem;
-    background: var(--pk-surface-sunk);
-    border: 1px solid var(--pk-line);
-    border-radius: 0.25rem;
-    padding: 0.05rem 0.3rem;
-    color: var(--pk-ink-muted);
-    font-family: inherit;
-  }
-  .pkic-search-panel-close:hover {
-    border-color: var(--pk-line-strong);
-    color: var(--pk-ink);
-    background: var(--pk-surface-sunk);
   }
 
   .pkic-search-filters {
@@ -466,7 +458,7 @@
 
   .pkic-search-sidebar {
     flex: 0 0 220px;
-    width: 220px;
+    width: 13.75rem;
     position: sticky;
     top: 3.5rem;
     align-self: flex-start;
@@ -548,8 +540,8 @@
   .pkic-facet-item.is-active .pkic-facet-check::after {
     content: "";
     display: block;
-    width: 4px;
-    height: 7px;
+    width: 0.25rem;
+    height: 0.4375rem;
     border: 1.5px solid #fff;
     border-top: 0;
     border-left: 0;
@@ -558,8 +550,8 @@
 
   .pkic-facet-check {
     flex-shrink: 0;
-    width: 14px;
-    height: 14px;
+    width: 0.875rem;
+    height: 0.875rem;
     border: 1.5px solid var(--pk-line-strong);
     border-radius: 3px;
     display: flex;
@@ -598,8 +590,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 24px;
-    height: 24px;
+    width: 1.5rem;
+    height: 1.5rem;
     padding: 0;
     border: none;
     background: transparent;
@@ -718,8 +710,8 @@
     font-size: 1.3rem;
     line-height: 1;
     flex-shrink: 0;
-    width: 42px;
-    height: 42px;
+    width: 2.625rem;
+    height: 2.625rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -807,7 +799,7 @@
     background: rgba(25, 135, 84, 0.05);
     text-decoration: none;
     color: inherit;
-    min-width: 90px;
+    min-width: 5.625rem;
     transition:
       background 0.15s ease,
       border-color 0.15s ease,
@@ -879,8 +871,8 @@
   .pkic-members-action-icon {
     font-size: 1.3rem;
     flex-shrink: 0;
-    width: 38px;
-    height: 38px;
+    width: 2.375rem;
+    height: 2.375rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -923,8 +915,8 @@
   }
 
   .pkic-sr-thumb {
-    width: 100px;
-    height: 66px;
+    width: 6.25rem;
+    height: 4.125rem;
     border-radius: 0.35rem;
     object-fit: cover;
     flex-shrink: 0;
@@ -936,8 +928,8 @@
   }
 
   .pkic-sr-thumb-placeholder {
-    width: 100px;
-    height: 66px;
+    width: 6.25rem;
+    height: 4.125rem;
     border-radius: 0.35rem;
     flex-shrink: 0;
     display: flex;
@@ -1029,7 +1021,7 @@
     margin-bottom: 0.5rem;
   }
 
-  @media (max-width: 991.98px) {
+  @media (max-width: 1199.98px) {
     .pkic-mega-chevron {
       display: none !important;
     }
@@ -1046,6 +1038,21 @@
     }
     #pkicNavSearchMobile .pkic-search-trigger {
       width: 100%;
+    }
+  }
+}
+
+@layer utilities {
+  /* Portal chrome follows its full-width workspace; public pages retain their content container. */
+  body:has(#portal-app) .pkic-navbar-container {
+    max-inline-size: none;
+    inline-size: 100%;
+    padding-inline: var(--pk-6);
+  }
+
+  @media (max-width: 1199px) {
+    body:has(#portal-app) .pkic-navbar-container {
+      padding-inline: var(--pk-4);
     }
   }
 }

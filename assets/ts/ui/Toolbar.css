@@ -20,12 +20,6 @@
     position: relative;
   }
 
-  .pk-toolbar .pk-btn,
-  .pk-toolbar .pk-menu__trigger:not(.pk-menu__trigger--plain) {
-    font-size: var(--pk-text-md);
-    min-block-size: calc(1.35em + 2 * var(--pk-control-y) + 2px);
-  }
-
   .pk-toolbar__search-label {
     position: absolute;
     width: 1px;
@@ -44,8 +38,9 @@
     padding-inline-start: var(--pk-control-x);
     border: 1px solid var(--pk-line);
     border-radius: var(--pk-radius);
-    font-size: var(--pk-text-md);
+    font-size: var(--pk-control-text);
     line-height: 1.35;
+    block-size: var(--pk-control-size);
     background: var(--pk-control-surface);
     color: var(--pk-ink);
     transition:
@@ -81,6 +76,12 @@
     flex-wrap: wrap;
   }
 
+  /* Collection menus occupy one control slot, rather than a full table row. */
+  .pk-toolbar__controls > .pk-row-actions {
+    width: auto;
+    flex: 0 0 auto;
+  }
+
   .pk-toolbar--single-row,
   .pk-toolbar--single-row .pk-toolbar__controls {
     flex-wrap: nowrap;
@@ -106,6 +107,117 @@
     .pk-toolbar__controls {
       width: 100%;
       justify-content: flex-end;
+    }
+  }
+}
+
+/* Reading/filter bars share one scrollable row on public agendas and portal catalogs. */
+@layer utilities {
+  .pk-toolbar-row:not([hidden]) {
+    --pk-toolbar-height: var(--pk-control-size);
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: start;
+    min-inline-size: 0;
+  }
+  .pk-toolbar-row
+    :is(.pk-toolbar__controls, .pk-content-agenda__filter-controls, .pk-content-agenda__toolbar-actions):not([hidden]) {
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    align-items: center;
+    width: auto;
+  }
+  .pk-toolbar-row .pk-toolbar__search {
+    flex: 1 1 12rem;
+    min-inline-size: 6rem;
+    width: auto;
+  }
+  .pk-toolbar-row :is(.pk-btn, .pk-menu__trigger, .pk-toolbar__search-input, .pk-input, select) {
+    min-block-size: var(--pk-toolbar-height);
+    font-weight: 500;
+  }
+  .pk-toolbar-row .pk-segmented > .pk-btn,
+  .pk-toolbar-row .pk-split-button .pk-menu__trigger {
+    min-block-size: calc(var(--pk-toolbar-height) - 2px);
+  }
+  .pk-toolbar-row .pk-content-agenda__filter-controls .pk-field {
+    flex: 0 0 auto;
+    inline-size: auto;
+  }
+  @media (any-pointer: coarse) {
+    .pk-toolbar-row:not([hidden]) {
+      --pk-toolbar-height: calc(var(--pk-6) + var(--pk-3));
+    }
+    .pk-toolbar-row .pk-segmented > .pk-btn,
+    .pk-toolbar-row .pk-split-button .pk-menu__trigger {
+      min-block-size: calc(var(--pk-toolbar-height) - 2px);
+    }
+  }
+}
+
+@layer utilities {
+  .pk-toolbar-compact-icon {
+    display: none;
+  }
+  @container (max-width: 63.9375rem) {
+    .pk-toolbar-row:not([hidden]),
+    .pk-toolbar-row .pk-toolbar__controls {
+      gap: var(--pk-1);
+    }
+    /* Every list's sort-and-filter menu is an icon at this width, like the
+       refresh beside it, wherever its toolbar sits. */
+    .pk-toolbar-row .pk-toolbar-compact-icon,
+    .pk-table-list__card-menu .pk-toolbar-compact-icon {
+      display: inline-block;
+    }
+    .pk-toolbar-row .pk-toolbar-control-label,
+    .pk-table-list__card-menu .pk-toolbar-control-label {
+      position: absolute;
+      inline-size: 1px;
+      block-size: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+    .pk-toolbar-row .pk-split-button__caret,
+    .pk-table-list__card-menu .pk-split-button__caret {
+      display: none;
+    }
+    .pk-toolbar-row .pk-segmented > .pk-btn,
+    .pk-table-list__card-menu .pk-menu__trigger {
+      padding-inline: var(--pk-2);
+      min-inline-size: calc(var(--pk-toolbar-height) - 2px);
+    }
+  }
+}
+
+@layer utilities {
+  .pk-table-list,
+  .pk-content-agenda {
+    container-type: inline-size;
+  }
+  .pk-toolbar-compact-actions {
+    display: none;
+  }
+  .pk-toolbar-row .pk-menu__trigger:not(.pk-menu__trigger--plain) {
+    border-radius: var(--pk-radius);
+    border: 1px solid var(--pk-line);
+    background: var(--pk-control-surface);
+  }
+  @container (max-width: 63.9375rem) {
+    .pk-toolbar-row .pk-toolbar-secondary {
+      display: none;
+    }
+    .pk-toolbar-row .pk-toolbar-compact-actions {
+      display: inline-flex;
+    }
+    .pk-toolbar-row .pk-menu__trigger:not(.pk-menu__trigger--plain) {
+      border-radius: var(--pk-radius);
+      border: 1px solid var(--pk-line);
+      background: var(--pk-control-surface);
     }
   }
 }

@@ -4,7 +4,7 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { registrationInviteCreateSchema } from "../../assets/shared/schemas/registration";
 import { renderSharePanel, refreshSharePanelBadge } from "../../assets/ts/shared/widgets/share-panel";
-import { controlFor } from "./helpers/labelled-control";
+import { controlFor } from "./helpers/labeled-control";
 
 const SHARE_URL = "https://pkic.test/r/AbC123";
 const INVITES_PATH = "/api/v1/events/pki-summit/invites";
@@ -57,6 +57,18 @@ function installApi(options: { rejects?: boolean } = {}): Captured[] {
   return requests;
 }
 
+describe("share panel urgency", () => {
+  it("does not tell a waitlisted attendee that seats are limited", () => {
+    const waiting = mount({ waitlisted: true });
+    expect(waiting.querySelector("h3")?.textContent).toBe("Invite a colleague");
+    expect(waiting.textContent).not.toContain("seats are limited");
+    expect(waiting.textContent).not.toContain("fill fast");
+
+    const seated = mount();
+    expect(seated.textContent).toContain("seats are limited");
+  });
+});
+
 function mount(options: Partial<Parameters<typeof renderSharePanel>[1]> = {}): HTMLElement {
   const container = document.createElement("div");
   document.body.append(container);
@@ -89,7 +101,7 @@ function button(container: HTMLElement, text: string): HTMLButtonElement {
   return found;
 }
 
-function labelledInput(container: HTMLElement, ariaLabel: string): HTMLInputElement {
+function labeledInput(container: HTMLElement, ariaLabel: string): HTMLInputElement {
   const input = container.querySelector<HTMLInputElement>(`[aria-label="${ariaLabel}"]`);
   if (!input) throw new Error(`No control named "${ariaLabel}"`);
   return input;
@@ -126,7 +138,7 @@ describe("share panel", () => {
     const container = mount();
 
     // Resolved through the `for`/`id` pair itself, so the lookup fails exactly
-    // when the labelling contract is broken.
+    // when the labeling contract is broken.
     const link = controlFor(container, "Your unique sharing link");
     expect(link.value).toBe(SHARE_URL);
     expect(link.readOnly).toBe(true);
@@ -137,8 +149,8 @@ describe("share panel", () => {
     expect(fields).not.toBeNull();
     expect(fields?.hidden).toBe(true);
 
-    expect(labelledInput(container, "Invite 1 email address")).toBeTruthy();
-    expect(labelledInput(container, "Invite 1 first name (optional)")).toBeTruthy();
+    expect(labeledInput(container, "Invite 1 email address")).toBeTruthy();
+    expect(labeledInput(container, "Invite 1 first name (optional)")).toBeTruthy();
 
     // The badge is decorative-looking but carries the registrant's name, so it
     // is described rather than hidden.
@@ -151,8 +163,8 @@ describe("share panel", () => {
     const container = mount();
 
     await click(button(container, "Invite by email"));
-    await typeInto(labelledInput(container, "Invite 1 first name (optional)"), "Alice");
-    await typeInto(labelledInput(container, "Invite 1 email address"), "alice@example.com");
+    await typeInto(labeledInput(container, "Invite 1 first name (optional)"), "Alice");
+    await typeInto(labeledInput(container, "Invite 1 email address"), "alice@example.com");
     await click(button(container, "Send invites"));
 
     const sent = requests.find((request) => request.path === INVITES_PATH);
@@ -174,13 +186,13 @@ describe("share panel", () => {
     const container = mount();
 
     await click(button(container, "Invite by email"));
-    await typeInto(labelledInput(container, "Invite 1 email address"), "alice@example.com");
+    await typeInto(labeledInput(container, "Invite 1 email address"), "alice@example.com");
     await click(button(container, "Send invites"));
 
     const alert = container.querySelector('[role="alert"]');
     expect(alert?.textContent).toBe("You have used this event's invite quota.");
     // A failed send must not clear what the reader typed.
-    expect(labelledInput(container, "Invite 1 email address").value).toBe("alice@example.com");
+    expect(labeledInput(container, "Invite 1 email address").value).toBe("alice@example.com");
   });
 
   it("refuses to send when no row holds an address, and never reaches the network", async () => {
@@ -226,7 +238,7 @@ describe("share panel", () => {
 
     expect(loader!.hidden).toBe(false);
     expect(image!.src).toContain("?t=");
-    // The indicator is a status region, not a coloured shape.
+    // The indicator is a status region, not a colored shape.
     expect(loader!.querySelector('[role="status"]')?.textContent).toContain("Generating your badge…");
 
     image!.dispatchEvent(new Event("error"));

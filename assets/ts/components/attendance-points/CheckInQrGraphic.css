@@ -1,0 +1,55 @@
+/*
+ * A check-in code that scales with its container: the QR fills the width and
+ * the spacing and the name under it are sized in the graphic's own container
+ * units, so one graphic serves the organizer page, a session screen and a
+ * broadcast output at any size. The outer box is the container and the
+ * plate inside holds the spacing: container units on the container itself
+ * would resolve against an outer one, such as a broadcast frame many times wider.
+ */
+@layer components {
+  .pk-check-in-qr {
+    container-type: inline-size;
+    margin: 0;
+    color: var(--pk-on-solid-ink);
+    background: var(--pk-on-solid);
+    border-radius: var(--pk-radius);
+  }
+  .pk-check-in-qr__plate {
+    display: grid;
+    margin: 0;
+    gap: 4cqi;
+    padding: 6cqi;
+  }
+
+  .pk-check-in-qr__code {
+    display: block;
+    inline-size: 100%;
+    block-size: auto;
+  }
+
+  .pk-check-in-qr__ground {
+    fill: var(--pk-on-solid);
+  }
+
+  .pk-check-in-qr__modules {
+    fill: var(--pk-on-solid-ink);
+  }
+
+  .pk-check-in-qr__caption {
+    display: grid;
+    gap: 1.5cqi;
+    text-align: start;
+  }
+
+  .pk-check-in-qr__label {
+    font-size: max(var(--pk-text-md), 7cqi);
+    font-weight: 700;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
+
+  .pk-check-in-qr__note {
+    font-size: max(var(--pk-text-sm), 4.5cqi);
+    line-height: 1.3;
+  }
+}

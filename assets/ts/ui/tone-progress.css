@@ -1,0 +1,36 @@
+/*
+ * Progress steps for an in-flight tone (see tone.ts). Only components set
+ * them, so they ride the component chunks rather than a page-wide stylesheet.
+ */
+
+@layer components {
+  /* Fade: the blue strengthens over four steps. The first keeps 65% so its
+     dot still stands out from the surface. */
+  .pk-tone--fade-1 {
+    --tone: color-mix(in srgb, var(--pk-palette-blue) 65%, transparent);
+  }
+  .pk-tone--fade-2 {
+    --tone: color-mix(in srgb, var(--pk-palette-blue) 77%, transparent);
+  }
+  .pk-tone--fade-3 {
+    --tone: color-mix(in srgb, var(--pk-palette-blue) 89%, transparent);
+  }
+  .pk-tone--fade-4 {
+    --tone: var(--pk-palette-blue);
+  }
+
+  /* Travel: full strength, moving along the rainbow from blue toward teal as
+     the flow nears green. */
+  .pk-tone--travel-1 {
+    --tone: var(--pk-palette-blue);
+  }
+  .pk-tone--travel-2 {
+    --tone: color-mix(in oklab, var(--pk-palette-blue) 67%, var(--pk-palette-teal));
+  }
+  .pk-tone--travel-3 {
+    --tone: color-mix(in oklab, var(--pk-palette-blue) 33%, var(--pk-palette-teal));
+  }
+  .pk-tone--travel-4 {
+    --tone: var(--pk-palette-teal);
+  }
+}

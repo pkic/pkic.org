@@ -103,7 +103,7 @@ describe("column menus", () => {
       />,
     );
     const stageHead = [...container.querySelectorAll("th")].find((th) => th.textContent!.includes("Stage"));
-    expect(stageHead?.querySelector(".pk-table__head-filter")?.textContent).toBe("Contacted");
+    expect(stageHead?.querySelector("[data-column-filter]")?.textContent).toBe("Contacted");
   });
 
   it("hides a column from its own menu and brings it back from the columns menu", () => {

@@ -1,0 +1,78 @@
+/*
+ * Action tiles: an icon over a label, optionally a hint, in a grid of equal
+ * tiles with the shared gap between them — never a full-width list.
+ */
+
+@layer components {
+  .pk-action-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(7rem, 100%), 1fr));
+    gap: var(--pk-3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .pk-action-tiles > li {
+    display: flex;
+  }
+
+  .pk-action-tile {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--pk-1);
+    min-block-size: 5.5rem;
+    padding: var(--pk-3) var(--pk-2);
+    border: 1px solid var(--pk-line-soft);
+    border-radius: var(--pk-radius);
+    background: var(--pk-surface);
+    color: var(--pk-ink);
+    font: inherit;
+    font-size: var(--pk-text-sm);
+    line-height: 1.25;
+    text-align: center;
+    text-decoration: none;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+    transition:
+      border-color var(--pk-dur-fast) var(--pk-ease),
+      background-color var(--pk-dur-fast) var(--pk-ease);
+  }
+
+  .pk-action-tile:hover {
+    border-color: var(--pk-line);
+    background: var(--pk-surface-sunk);
+  }
+
+  .pk-action-tile:focus-visible {
+    outline: none;
+    box-shadow: var(--pk-focus);
+  }
+
+  .pk-action-tile:disabled {
+    cursor: default;
+    opacity: 0.6;
+  }
+
+  .pk-action-tile[aria-busy="true"] {
+    cursor: progress;
+  }
+
+  .pk-action-tile__icon {
+    display: inline-flex;
+    margin-block-end: var(--pk-1);
+    color: var(--pk-accent-ink);
+  }
+
+  .pk-action-tile__label {
+    font-weight: 600;
+  }
+
+  .pk-action-tile__hint {
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-xs);
+  }
+}

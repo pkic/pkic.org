@@ -17,7 +17,7 @@
  * platform gives all three away for free, correctly, and takes the focus
  * trap with it.
  *
- * One behaviour is deliberately gone: clicking the backdrop no longer
+ * One behavior is deliberately gone: clicking the backdrop no longer
  * dismisses. For a dialog that exists to confirm something irreversible, a
  * stray click outside it should not be a way to answer.
  */
@@ -67,6 +67,12 @@ export interface ConfirmChoice {
 interface ActiveConfirm extends ConfirmActionRequest {
   /** The chosen ids, or `null` for cancelled. A choiceless dialog answers `[]`. */
   resolve: (chosen: string[] | null) => void;
+  /**
+   * The host showing this decision. A page may assemble widgets that each
+   * mount a host so they also work alone; the first host to render a request
+   * claims it, so a confirmation never opens as two dialogs.
+   */
+  host?: symbol;
 }
 
 const activeConfirm = signal<ActiveConfirm | null>(null);
@@ -136,11 +142,14 @@ function ConfirmChoices({
 }
 
 export function ConfirmDialogHost() {
+  const [host] = useState(() => Symbol("confirm-dialog-host"));
   const request = activeConfirm.value;
 
   // Rendered only while a decision is pending, so a closed host leaves nothing
   // in the accessibility tree for a test — or a screen reader — to find.
   if (!request) return null;
+  request.host ??= host;
+  if (request.host !== host) return null;
 
   return <ConfirmDialogBody request={request} />;
 }

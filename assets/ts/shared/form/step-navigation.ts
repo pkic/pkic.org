@@ -6,7 +6,7 @@
  * Validation runs only on fields within the currently visible step before
  * allowing the user to advance — so the form never becomes a wall of red.
  */
-import { clearStatus } from "./validation";
+import { clearStatus, isNativelyValidated } from "./validation";
 import { findFieldErrorTarget } from "./validation-map";
 
 /**
@@ -17,13 +17,17 @@ import { findFieldErrorTarget } from "./validation-map";
  * @param statusEl The `[data-flow-status]` element used to show/clear errors.
  * @param onBeforeNext Optional callback called with the current step number
  *                     *before* advancing. Returning false cancels navigation.
+ * @returns `continueFrom(step)`: continues past `step` exactly as the Continue
+ *          button would, when the person is still on it — for a step the flow
+ *          learns is already complete, such as terms a confirmed email recorded.
  */
 export function installStepNavigation(
   root: HTMLElement,
   form: HTMLFormElement,
   statusEl: HTMLElement,
   onBeforeNext?: (currentStep: number) => boolean | void,
-): void {
+  onStepChange?: (currentStep: number) => void,
+): { continueFrom: (step: number) => void } {
   const stepEls = Array.from(root.querySelectorAll<HTMLElement>("[data-step]")).sort(
     (a, b) => Number(a.dataset.step) - Number(b.dataset.step),
   );
@@ -32,7 +36,7 @@ export function installStepNavigation(
   const nextBtn = root.querySelector<HTMLButtonElement>("[data-step-next]");
   const submitBtn = form.querySelector<HTMLButtonElement>("button[type='submit']");
 
-  if (stepEls.length < 2) return;
+  if (stepEls.length < 2) return { continueFrom: () => {} };
 
   const total = stepEls.length;
   let current = 1;
@@ -68,6 +72,7 @@ export function installStepNavigation(
     if (backBtn) backBtn.hidden = current === 1;
     if (nextBtn) nextBtn.hidden = current === total;
     if (submitBtn) submitBtn.hidden = current !== total;
+    onStepChange?.(current);
   }
 
   function validateCurrentStep(): boolean {
@@ -79,7 +84,7 @@ export function installStepNavigation(
       stepEl.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(
         "input:not([type='hidden']), select, textarea",
       ),
-    ).filter((f) => !f.disabled && f.closest('[aria-hidden="true"]') === null);
+    ).filter((f) => !f.disabled && isNativelyValidated(f) && f.closest('[aria-hidden="true"]') === null);
 
     let firstInvalid: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | null = null;
     let hasErrors = false;
@@ -170,4 +175,9 @@ export function installStepNavigation(
   });
 
   applyState();
+  return {
+    continueFrom: (step) => {
+      if (step === current) goNext();
+    },
+  };
 }

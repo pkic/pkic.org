@@ -4,6 +4,7 @@ import {
   formatDate,
   formatDateRange,
   formatDateTime,
+  formatDateTimeInZone,
   formatEventWhen,
   formatRelativeDays,
   fromCalendarDateInput,
@@ -37,6 +38,7 @@ export function fmtCalendarDate(value: string | null | undefined): string {
 export {
   browserTimeZone,
   formatDateRange,
+  formatDateTimeInZone,
   formatEventWhen,
   formatRelativeDays,
   fromCalendarDateInput,

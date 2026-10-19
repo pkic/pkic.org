@@ -55,11 +55,13 @@ body {
   color: #000;
   font-weight: 700;
 }
+/* The emblem keeps its size and place inside a square box padded by 360/314 around it. */
 #logo-element {
+  --logo-element-emblem: min(45vw, 60vh);
   position: fixed;
-  right: 3vw;
-  bottom: 12vh;
-  width: min(45vw, 60vh);
+  right: calc(3vw - var(--logo-element-emblem) * 0.0732);
+  bottom: calc(12vh - var(--logo-element-emblem) * 0.0067);
+  width: calc(var(--logo-element-emblem) * 360 / 314);
   height: auto;
   opacity: 0.12;
   pointer-events: none;

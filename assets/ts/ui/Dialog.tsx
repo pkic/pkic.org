@@ -24,12 +24,22 @@ import type { ComponentChildren } from "preact";
 import { useCallback, useEffect, useId, useRef, useState } from "preact/hooks";
 
 import { Button } from "./Button";
+import { CloseButton, type CloseLabel } from "./CloseButton";
+import { HeadingOutline } from "./HeadingOutline";
 
 import "./Dialog.css";
 
 export interface DialogProps {
   open: boolean;
   title: string;
+  /** A short line naming where the subject sits, set above the title. */
+  kicker?: ComponentChildren;
+  /** One line of facts about the subject, set below the title. */
+  meta?: ComponentChildren;
+  /** Adds the shared close control to the header, named for what it closes. It cancels. */
+  closeLabel?: CloseLabel;
+  /** A modifier class for a dialog whose header carries its subject's own look. */
+  class?: string;
   /** Explains what will happen. One sentence. */
   description?: string;
   /** The specific, irreversible effects. Rendered as a list. */
@@ -39,7 +49,11 @@ export interface DialogProps {
   /** Label above the confirmation input. Ignored without `confirmPhrase`. */
   confirmPrompt?: string;
   confirmLabel: string;
-  cancelLabel?: string;
+  /**
+   * The backing-out action's label; null drops it where the confirm already
+   * closes and there is nothing to discard, such as a view with one Close.
+   */
+  cancelLabel?: string | null;
   /**
    * Holds the confirm button closed for a reason the dialog's own content
    * carries — a scoped decision with nothing left in scope, say. The typed
@@ -49,12 +63,35 @@ export interface DialogProps {
   destructive?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
+  /**
+   * A viewer — an enlarged picture, a monitor — has nothing to confirm. It
+   * drops the footer and closes through its header control and Escape,
+   * so it needs `closeLabel`.
+   */
+  viewer?: boolean;
+  /**
+   * `wide` is an editor for a list of things — a sequence of messages, a set
+   * of polls — with room for a list beside its detail. It keeps one height
+   * whatever its content, so switching items or tabs never moves its header
+   * and actions; its body scrolls inside.
+   */
+  size?: "default" | "wide";
   children?: ComponentChildren;
+}
+
+/** Closes the native modal, with the same fallback as opening it for environments without `close`. */
+function closeDialog(dialog: HTMLDialogElement): void {
+  if (typeof dialog.close === "function") dialog.close();
+  else dialog.removeAttribute("open");
 }
 
 export function Dialog({
   open,
   title,
+  kicker,
+  meta,
+  closeLabel,
+  class: className,
   description,
   consequences,
   confirmPhrase,
@@ -65,6 +102,8 @@ export function Dialog({
   destructive = false,
   onConfirm,
   onCancel,
+  viewer = false,
+  size = "default",
   children,
 }: DialogProps) {
   const id = useId();
@@ -99,9 +138,23 @@ export function Dialog({
       if (typeof dialog.showModal === "function") dialog.showModal();
       else dialog.setAttribute("open", "");
     } else if (!open && dialog.open) {
-      dialog.close();
+      // Close first: while the modal is open the rest of the page is inert,
+      // and the browser refuses to move focus to the opener inside it.
+      closeDialog(dialog);
+      restoreFocus();
     }
-  }, [open]);
+  }, [open, restoreFocus]);
+
+  // A caller may unmount the dialog instead of closing it. Close it on the way
+  // out for the same reason, so focus still returns to what opened it.
+  useEffect(
+    () => () => {
+      const dialog = ref.current;
+      if (dialog?.open) closeDialog(dialog);
+      restoreFocus();
+    },
+    [restoreFocus],
+  );
 
   // The platform fires `cancel` for Escape and the close request. Routing it
   // through onCancel gives callers a single "the operator backed out" path.
@@ -111,28 +164,34 @@ export function Dialog({
 
     const onNativeCancel = (event: Event) => {
       event.preventDefault();
-      restoreFocus();
       onCancel();
     };
     dialog.addEventListener("cancel", onNativeCancel);
     return () => dialog.removeEventListener("cancel", onNativeCancel);
-  }, [onCancel, restoreFocus]);
+  }, [onCancel]);
 
+  // Focus returns when the dialog actually closes, not here: a confirm that
+  // saves first keeps the dialog open, and the page behind it is still inert.
   function cancel() {
-    restoreFocus();
     onCancel();
   }
 
   function confirm() {
     if (!confirmable) return;
-    restoreFocus();
     onConfirm();
   }
 
   return (
     <dialog
       ref={ref}
-      class={["pk-dialog", destructive ? "pk-dialog--destructive" : null].filter(Boolean).join(" ")}
+      class={[
+        "pk-dialog",
+        destructive ? "pk-dialog--destructive" : null,
+        size === "wide" ? "pk-dialog--wide" : null,
+        className,
+      ]
+        .filter(Boolean)
+        .join(" ")}
       /*
        * A destructive dialog is an alertdialog: it interrupts to report a
        * consequence, and screen readers announce its description immediately
@@ -144,9 +203,14 @@ export function Dialog({
       aria-describedby={description ? descriptionId : undefined}
     >
       <div class="pk-dialog__head">
-        <h2 class="pk-dialog__title" id={titleId}>
-          {title}
-        </h2>
+        <div class="pk-dialog__heading">
+          {kicker && <p class="pk-dialog__kicker">{kicker}</p>}
+          <h2 class="pk-dialog__title" id={titleId}>
+            {title}
+          </h2>
+          {meta && <p class="pk-dialog__meta">{meta}</p>}
+        </div>
+        {closeLabel && <CloseButton label={closeLabel} onClick={cancel} />}
       </div>
 
       <div class="pk-dialog__body">
@@ -164,7 +228,7 @@ export function Dialog({
           </ul>
         )}
 
-        {children}
+        <HeadingOutline titleLevel={2}>{children}</HeadingOutline>
 
         {confirmPhrase && (
           <div class="pk-dialog__confirm">
@@ -184,14 +248,18 @@ export function Dialog({
         )}
       </div>
 
-      <div class="pk-dialog__foot">
-        <Button variant="ghost" onClick={cancel}>
-          {cancelLabel}
-        </Button>
-        <Button variant={destructive ? "danger" : "primary"} disabled={!confirmable} onClick={confirm}>
-          {confirmLabel}
-        </Button>
-      </div>
+      {viewer ? null : (
+        <div class="pk-dialog__foot">
+          {cancelLabel === null ? null : (
+            <Button variant="ghost" onClick={cancel}>
+              {cancelLabel}
+            </Button>
+          )}
+          <Button variant={destructive ? "danger" : "primary"} disabled={!confirmable} onClick={confirm}>
+            {confirmLabel}
+          </Button>
+        </div>
+      )}
     </dialog>
   );
 }

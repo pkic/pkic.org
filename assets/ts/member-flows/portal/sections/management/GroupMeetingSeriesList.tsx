@@ -7,7 +7,7 @@ import { usePortalHashLocation } from "../../hash-location";
 import { useMeetingCancellation } from "./useMeetingCancellation";
 import { downloadMeetingCalendar } from "./meeting-calendar-actions";
 import { Badge } from "../../../../components/Badge";
-import { EmptyState } from "../../../../ui/RecordEmptyState";
+import { EmptyState } from "../../../../ui/EmptyState";
 import { RowActions } from "../../../../ui/RowActions";
 import { fmt } from "../../ui";
 
@@ -36,6 +36,7 @@ export function GroupMeetingSeriesList({
 
   return (
     <ApiDataTable
+      urlState="meeting-series"
       caption="Meetings"
       endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/meetings/series`}
       responseSchema={eventSeriesListResponseSchema}
@@ -75,7 +76,7 @@ export function GroupMeetingSeriesList({
         {
           // An active series used to be a grey em dash and an inactive one a
           // pill, so the difference between the two was a shape nobody could
-          // name and a colour nobody could hear. Both states say their word.
+          // name and a color nobody could hear. Both states say their word.
           header: "Status",
           cell: (series) => <Badge status={series.active ? "active" : "inactive"} />,
           width: "fit",

@@ -11,8 +11,9 @@
  * state that is announced rather than mimed by grey rectangles.
  */
 
-import { Fragment, type ComponentChildren } from "preact";
+import { Fragment, isValidElement, type ComponentChildren } from "preact";
 import { Menu, type MenuItem } from "./Menu";
+import { type ToneProps, toneClasses } from "./tone";
 
 // The skin is shared with the Markdown table render hook and ships in the
 // entry stylesheet; importing it here states the dependency rather than
@@ -53,6 +54,8 @@ export type DataTableColumnWidth = "content" | "fit" | "compact" | "primary";
 export interface DataTableColumn<Row> {
   id: string;
   header: string;
+  /** Optional visible symbol with the unchanged text name retained for assistive technology. */
+  headerIcon?: ComponentChildren;
   /** Omit to render nothing for this column. */
   cell: (row: Row) => ComponentChildren;
   sortable?: boolean;
@@ -117,9 +120,11 @@ export interface DataTableRowAction {
 }
 
 export interface DataTableSelection {
+  /** Freeze row choices while a guarded bulk command is in progress. */
+  disabled?: boolean;
   selected: ReadonlySet<string>;
   onChange: (next: ReadonlySet<string>) => void;
-  /** Names the row in the checkbox's accessible label. */
+  /** Names the row — its subject, "Ada Lovelace" — for the checkbox, which the table labels "Select Ada Lovelace". */
   rowLabel: (rowKey: string) => string;
 }
 
@@ -135,6 +140,8 @@ export interface DataTableProps<Row> {
   selection?: DataTableSelection;
   loading?: boolean;
   loadingRows?: number;
+  /** Keep a compact comparison in columns on narrow screens instead of labeled record cards. */
+  narrowLayout?: "records" | "columns";
   /** Shown instead of the body when there are no rows and nothing is loading. */
   empty?: ComponentChildren;
   /** Makes the whole row activate one thing. See DataTableRowAction. */
@@ -144,6 +151,18 @@ export interface DataTableProps<Row> {
    * Return nothing for rows that have none.
    */
   detailRow?: (row: Row) => ComponentChildren;
+  /**
+   * The state or workflow stage a row is in, from the shared tone family. Use
+   * it on queues, where scanning for the rows that need attention is the job;
+   * a regular list states the stage in its badge alone.
+   */
+  rowTone?: (row: Row) => ToneProps | undefined;
+  /**
+   * How a toned row shows it: a marker on its leading edge (the default,
+   * which leaves hover and selection free), or a light tint across the row
+   * for a short queue where the state is the whole point.
+   */
+  rowToneStyle?: "edge" | "tint";
   /**
    * A control that belongs to the table as a whole rather than to one column
    * — the menu that brings hidden columns back — drawn at the end of the
@@ -174,10 +193,17 @@ function updateRowActionTooltip(event: MouseEvent) {
 }
 
 /** The row's activation remains a real keyboard-accessible control. */
-function RowActionControl({ action }: { action: DataTableRowAction }) {
+function RowActionControl({ action, primary }: { action: DataTableRowAction; primary: boolean }) {
+  const target = {
+    class: classList("pk-table__row-link", primary ? "pk-table__row-link--primary" : undefined),
+    tabIndex: primary ? undefined : -1,
+    "aria-hidden": primary ? undefined : true,
+    // Pointer-only cell targets must not move focus into an aria-hidden control.
+    onPointerDown: primary ? undefined : (event: PointerEvent) => event.preventDefault(),
+  };
   if (action.href) {
     return (
-      <a class="pk-table__row-link" href={action.href} aria-label={action.label} onMouseMove={updateRowActionTooltip}>
+      <a {...target} href={action.href} aria-label={action.label} onMouseMove={updateRowActionTooltip}>
         <span class="pk-table__sr">{action.label}</span>
       </a>
     );
@@ -185,7 +211,7 @@ function RowActionControl({ action }: { action: DataTableRowAction }) {
   return (
     <button
       type="button"
-      class="pk-table__row-link"
+      {...target}
       aria-label={action.label}
       onClick={action.onSelect}
       onMouseMove={updateRowActionTooltip}
@@ -238,6 +264,40 @@ function cellValue(value: ComponentChildren): ComponentChildren {
   );
 }
 
+/** What a cell shows for "nothing here": the narrow record leaves these out. */
+const EMPTY_MARKS = new Set(["", "—", "–", "-"]);
+
+/**
+ * Whether a cell holds no value — nothing, or only the dash a column shows
+ * for nothing, bare or in one muted span. On a wide table the dash keeps the
+ * column's rhythm; in a narrow record it is a line that says nothing.
+ */
+function isEmptyCell(value: ComponentChildren): boolean {
+  if (value === null || value === undefined || value === false) return true;
+  if (typeof value === "string") return EMPTY_MARKS.has(value.trim());
+  if (isValidElement(value)) {
+    const children = (value.props as { children?: unknown }).children;
+    return typeof children === "string" && EMPTY_MARKS.has(children.trim());
+  }
+  return false;
+}
+
+/**
+ * The cell's part in a narrow record: the primary column (or first) is the record's
+ * title, the row's actions sit in its corner, and every other value joins
+ * one meta line.
+ */
+function recordRole<Row>(
+  column: DataTableColumn<Row>,
+  index: number,
+  value: ComponentChildren,
+  titleIndex: number,
+): string {
+  if (column.headerHidden) return "pk-table__cell--actions";
+  if (index === titleIndex) return "pk-table__cell--title";
+  return isEmptyCell(value) ? "pk-table__cell--meta pk-table__cell--empty" : "pk-table__cell--meta";
+}
+
 function nextDirection(sort: DataTableProps<unknown>["sort"], columnId: string): SortDirection {
   if (!sort || sort.columnId !== columnId) return "asc";
   return sort.direction === "asc" ? "desc" : "asc";
@@ -254,9 +314,12 @@ export function DataTable<Row>({
   selection,
   loading = false,
   loadingRows = 3,
+  narrowLayout = "records",
   empty,
   rowAction,
   detailRow,
+  rowTone,
+  rowToneStyle = "edge",
   headerEnd,
 }: DataTableProps<Row>) {
   const keys = rows.map(rowKey);
@@ -264,6 +327,8 @@ export function DataTable<Row>({
   const someSelected = Boolean(selection) && keys.some((key) => selection?.selected.has(key));
   const isEmpty = !loading && rows.length === 0;
   const columnCount = columns.length + (selection ? 1 : 0);
+  const primaryIndex = columns.findIndex((column) => column.width === "primary" && !column.headerHidden);
+  const titleIndex = primaryIndex < 0 ? 0 : primaryIndex;
 
   function toggleAll() {
     if (!selection) return;
@@ -279,8 +344,11 @@ export function DataTable<Row>({
   }
 
   return (
-    <div class="pk-table__scroll">
-      <table class="pk-table pk-table--data" aria-busy={loading ? "true" : undefined}>
+    <div class="pk-table__scroll" data-density="compact">
+      <table
+        class={`pk-table pk-table--data ${narrowLayout === "columns" ? "pk-table--keep-columns" : "pk-table--records"}`}
+        aria-busy={loading ? "true" : undefined}
+      >
         <caption class={showCaption ? "pk-table__caption" : "pk-table__caption pk-table__caption--hidden"}>
           {caption}
         </caption>
@@ -292,6 +360,7 @@ export function DataTable<Row>({
                   type="checkbox"
                   class="pk-table__checkbox"
                   checked={allSelected}
+                  disabled={selection.disabled}
                   // Some-but-not-all is a third state; without it the header
                   // box reads as "nothing selected" while rows are selected.
                   indeterminate={someSelected && !allSelected}
@@ -303,6 +372,18 @@ export function DataTable<Row>({
             {columns.map((column, index) => {
               const sorted = sort?.columnId === column.id;
               const last = index === columns.length - 1;
+              const label = (
+                <>
+                  {column.headerIcon && (
+                    <span class="pk-table__icon" title={column.header} aria-hidden="true">
+                      {column.headerIcon}
+                    </span>
+                  )}
+                  <span class={column.headerHidden || column.headerIcon ? "pk-table__sr" : undefined}>
+                    {column.header}
+                  </span>
+                </>
+              );
               const name =
                 column.sortable && onSort ? (
                   <button
@@ -310,7 +391,7 @@ export function DataTable<Row>({
                     class="pk-table__sort"
                     onClick={() => onSort(column.id, nextDirection(sort, column.id))}
                   >
-                    <span class={column.headerHidden ? "pk-table__sr" : undefined}>{column.header}</span>
+                    {label}
                     {/* Only the direction in force is drawn: the column's `…`
                         menu is where sorting is offered, so an idle ↕ beside
                         it would be a second control saying the same thing. */}
@@ -321,7 +402,7 @@ export function DataTable<Row>({
                     )}
                   </button>
                 ) : (
-                  <span class={column.headerHidden ? "pk-table__sr" : undefined}>{column.header}</span>
+                  label
                 );
               return (
                 <th
@@ -330,11 +411,14 @@ export function DataTable<Row>({
                   class={classList(alignClass(column.align), widthClass(column.width))}
                   aria-sort={sorted ? (sort.direction === "asc" ? "ascending" : "descending") : undefined}
                 >
-                  {/* The name first and on its own, then its commands and —
-                      while it is narrowed — what it is narrowed to. The
+                  {/* The name first and on its own, then its commands. The
                       trigger is the `…` a row carries, so the head reads as
                       the row's grammar applied to columns; its glyph is drawn
-                      by the stylesheet so the cell's text stays the name. */}
+                      by the stylesheet so the cell's text stays the name.
+                      A narrowed column marks its trigger and names the value
+                      in its tooltip and to assistive tech, never on a second
+                      line: the head keeps one height, and the applied-filter
+                      chips above the rows state the whole query in words. */}
                   <div class="pk-table__head-content">
                     {name}
                     {column.menu && column.menu.length > 0 && (
@@ -344,6 +428,7 @@ export function DataTable<Row>({
                             "pk-table__head-menu",
                             column.filterSummary ? "pk-table__head-menu--active" : undefined,
                           )}
+                          title={column.filterSummary ? `Filtered: ${column.filterSummary}` : undefined}
                         >
                           <Menu label={`${column.header} column options`} items={column.menu} heading={column.header}>
                             <span class="pk-table__head-glyph" aria-hidden="true" />
@@ -353,7 +438,11 @@ export function DataTable<Row>({
                     )}
                     {headerEnd && last && <span class="pk-table__head-end">{headerEnd}</span>}
                   </div>
-                  {column.filterSummary && <span class="pk-table__head-filter">{column.filterSummary}</span>}
+                  {column.filterSummary && (
+                    <span class="pk-sr-only" data-column-filter>
+                      {column.filterSummary}
+                    </span>
+                  )}
                 </th>
               );
             })}
@@ -366,11 +455,15 @@ export function DataTable<Row>({
             const selected = Boolean(selection?.selected.has(key));
             const action = rowAction?.(row);
             const detail = detailRow?.(row);
+            const tone = rowTone?.(row);
             return (
               <Fragment key={key}>
                 <tr
                   aria-selected={selection ? selected : undefined}
-                  class={action ? "pk-table__row--action" : undefined}
+                  class={classList(
+                    action ? "pk-table__row--action" : undefined,
+                    tone ? `${toneClasses(tone)} pk-table__row--${rowToneStyle}` : undefined,
+                  )}
                 >
                   {selection && (
                     <td class="pk-table__select">
@@ -378,31 +471,41 @@ export function DataTable<Row>({
                         type="checkbox"
                         class="pk-table__checkbox"
                         checked={selected}
-                        aria-label={selection.rowLabel(key)}
+                        disabled={selection.disabled}
+                        aria-label={`Select ${selection.rowLabel(key)}`}
                         onChange={() => toggleRow(key)}
                       />
                     </td>
                   )}
-                  {columns.map((column, index) => (
-                    <td
-                      key={column.id}
-                      class={classList(alignClass(column.align), widthClass(column.width), column.cellClass)}
-                    >
-                      {/* The stretched control goes in the first cell so it
-                          precedes the row's content in the tab order, and so a
-                          cell that already holds its own buttons - the actions
-                          column - is not covered by it. */}
-                      {index === 0 && action && <RowActionControl action={action} />}
-                      <span class="pk-table__mobile-label" aria-hidden="true">
-                        {column.header}
-                      </span>
-                      <div class="pk-table__value">{cellValue(column.cell(row))}</div>
-                    </td>
-                  ))}
+                  {columns.map((column, index) => {
+                    const value = column.cell(row);
+                    return (
+                      <td
+                        key={column.id}
+                        class={classList(
+                          alignClass(column.align),
+                          widthClass(column.width),
+                          column.cellClass,
+                          recordRole(column, index, value, titleIndex),
+                        )}
+                      >
+                        {/* Each cell owns its hit target: older Safari cannot
+                            contain an absolute link against a table row. Only
+                            the first target participates in keyboard/AT navigation. */}
+                        {action && <RowActionControl action={action} primary={index === 0} />}
+                        <span class="pk-table__mobile-label" aria-hidden="true">
+                          {column.header}
+                        </span>
+                        <div class="pk-table__value">{cellValue(value)}</div>
+                      </td>
+                    );
+                  })}
                 </tr>
                 {detail !== undefined && detail !== null && detail !== false && (
                   <tr class="pk-table__detail">
-                    <td colSpan={columnCount}>{detail}</td>
+                    <td colSpan={columnCount}>
+                      <div class="pk-table__detail-content">{detail}</div>
+                    </td>
                   </tr>
                 )}
               </Fragment>
@@ -422,8 +525,11 @@ export function DataTable<Row>({
                 )}
                 {/* The width hints ride the placeholders too, so the columns
                     do not jump the moment the real rows land. */}
-                {columns.map((column) => (
-                  <td key={column.id} class={widthClass(column.width)}>
+                {columns.map((column, index) => (
+                  <td
+                    key={column.id}
+                    class={classList(widthClass(column.width), recordRole(column, index, true, titleIndex))}
+                  >
                     <span class="pk-table__skeleton" />
                   </td>
                 ))}
