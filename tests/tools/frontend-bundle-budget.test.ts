@@ -26,6 +26,14 @@ describe("frontend bundle budget", () => {
     expect(measurements.every(({ rawBytes, gzipBytes }) => rawBytes > 0 && gzipBytes > 0)).toBe(true);
   });
 
+  it("rejects a chunk that carries the Worker's email-domain lists", () => {
+    expect(() =>
+      assertFrontendBundleBudget([
+        { fileName: "chunks/join.js", isEntry: false, code: `const l="kpnmail.nl\\nziggo.nl"` },
+      ]),
+    ).toThrow(/chunks\/join\.js: carries server-only email-domain list data \(kpnmail\.nl\)/);
+  });
+
   it("rejects an oversized eager entry", () => {
     const oversized = "x".repeat(FRONTEND_BUNDLE_BUDGETS.entry.rawBytes + 1);
     expect(() => assertFrontendBundleBudget([{ fileName: "loader.js", isEntry: true, code: oversized }])).toThrow(

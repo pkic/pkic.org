@@ -82,11 +82,13 @@ const SEAT_JOINED_AT = "strftime('%Y-%m-%dT%H:%M:%fZ','now','-2 years')";
 export function seatSql(email, identityId, memberId, groupSlug, title) {
   return `INSERT INTO group_memberships
   (id, group_id, user_id, identity_id, member_id, source, title, joined_at, created_at, updated_at)
-SELECT ${RANDOM_ID}, g.id, u.id, ${sqlString(identityId)}, ${sqlString(memberId)}, 'staff', ${sqlString(title)},
+SELECT ${RANDOM_ID}, g.id, u.id, seat_identity.id, ${sqlString(memberId)}, 'staff', ${sqlString(title)},
        ${SEAT_JOINED_AT}, ${SEAT_JOINED_AT}, ${NOW}
   FROM groups g JOIN users u ON u.email = ${sqlString(email)}
+  -- An individual membership names the personal identity that holds it; an organization seat uses the given one.
+  JOIN identities seat_identity
+    ON seat_identity.id = COALESCE((SELECT m.identity_id FROM members m WHERE m.id = ${sqlString(memberId)}), ${sqlString(identityId)})
  WHERE g.slug = ${sqlString(groupSlug)}
-   AND EXISTS (SELECT 1 FROM identities WHERE id = ${sqlString(identityId)})
    AND NOT EXISTS (
      SELECT 1 FROM group_memberships existing
       WHERE existing.group_id = g.id AND existing.user_id = u.id AND existing.left_at IS NULL
@@ -103,12 +105,19 @@ export function meetingsSql(groupSlug, index, held, attended, attendeeEmail) {
   const eventId = stableId(`event-${groupSlug}`);
   const seriesId = stableId(`series-${groupSlug}`);
   const statements = [
-    `INSERT INTO events (id, slug, name, timezone, registration_mode, invite_limit_attendee, settings_json,
+    `INSERT INTO events (id, slug, name, timezone, profile_key, registration_mode, invite_limit_attendee, settings_json,
                      owner_group_id, visibility, created_at, updated_at)
 SELECT ${sqlString(eventId)}, ${sqlString(`${groupSlug}-meetings`)}, g.name || ' meetings', 'UTC',
-       'invite_or_open', 5, '{}', g.id, 'invitation_only', ${NOW}, ${NOW}
+       CASE WHEN g.type_key = 'board' THEN 'board_meeting' ELSE 'meeting' END,
+       'no_registration', 5, '{}', g.id, 'invitation_only', ${NOW}, ${NOW}
   FROM groups g WHERE g.slug = ${sqlString(groupSlug)}
    AND NOT EXISTS (SELECT 1 FROM events WHERE id = ${sqlString(eventId)});`,
+
+    // Repair only this seed's obsolete policy, preserving any manually edited valid event.
+    `UPDATE events SET profile_key = CASE WHEN owner_group_id IN
+      (SELECT id FROM groups WHERE type_key = 'board') THEN 'board_meeting' ELSE 'meeting' END,
+      registration_mode = 'no_registration', updated_at = ${NOW}
+      WHERE id = ${sqlString(eventId)} AND profile_key IS NULL AND registration_mode = 'invite_or_open';`,
 
     `INSERT INTO event_series (id, event_id, starts_at, recurrence_rule, timezone, duration_minutes, active, created_at, updated_at)
 SELECT ${sqlString(seriesId)}, ${sqlString(eventId)}, ${NOW}, 'FREQ=WEEKLY', 'UTC', 60, 1, ${NOW}, ${NOW}
@@ -146,4 +155,3 @@ SELECT ${sqlString(joinId)}, ${sqlString(occurrenceId)}, u.id,
   }
   return statements;
 }
-

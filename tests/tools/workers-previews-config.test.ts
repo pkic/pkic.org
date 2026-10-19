@@ -1,9 +1,9 @@
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { experimental_readRawConfig as readRawConfig, unstable_readConfig as readConfig } from "wrangler";
 import { describe, expect, it } from "vitest";
 import { PREVIEW_DATABASE_NAME, wranglerTargetArgs } from "../../scripts/lib/wrangler-target.mjs";
 import { previewOriginVars, workersPreviewBaseUrl } from "../../scripts/lib/workers-preview-url.mjs";
+import { backupExportArgs } from "../../scripts/backup-d1.mjs";
 
 const root = resolve(import.meta.dirname, "../..");
 const production = readConfig({ config: resolve(root, "wrangler.jsonc"), env: "production" });
@@ -14,7 +14,7 @@ const previews = configuredPreviews;
 type Identified = Record<string, unknown>;
 type BindingSet = Pick<
   typeof previews,
-  "d1_databases" | "r2_buckets" | "kv_namespaces" | "ratelimits" | "worker_loaders" | "images"
+  "d1_databases" | "r2_buckets" | "kv_namespaces" | "ratelimits" | "worker_loaders" | "images" | "durable_objects"
 >;
 
 function identifiers(resources: Identified[] | undefined, keys: string[]): string[] {
@@ -31,6 +31,7 @@ function bindingNames(config: BindingSet): string[] {
     ...identifiers(config.ratelimits, ["name"]),
     ...identifiers(config.worker_loaders, ["binding"]),
     ...identifiers(config.images ? [config.images] : [], ["binding"]),
+    ...identifiers(config.durable_objects?.bindings, ["name"]),
   ];
 }
 
@@ -55,6 +56,30 @@ describe("Workers Previews configuration", () => {
 
   it("declares every production binding for Previews", () => {
     expect(new Set(bindingNames(previews))).toEqual(new Set(bindingNames(production)));
+  });
+
+  it("gives every Preview its own Durable Object storage, never production rooms", () => {
+    const productionObjects = production.durable_objects.bindings;
+    const previewObjects = previews.durable_objects?.bindings ?? [];
+    expect(productionObjects.length).toBeGreaterThan(0);
+    const classes = (bindings: typeof productionObjects) =>
+      bindings.map((binding: { name: string; class_name: string }) => ({
+        name: binding.name,
+        class_name: binding.class_name,
+      }));
+    expect(classes(previewObjects)).toEqual(classes(productionObjects));
+    // A class implemented by this Worker gets a per-Preview namespace; naming another
+    // script would bind that Worker's (production) namespace instead.
+    for (const binding of [...productionObjects, ...previewObjects]) {
+      expect(binding.script_name).toBeUndefined();
+      expect(binding.environment).toBeUndefined();
+    }
+    // Class lifecycle is declarative and SQLite-backed; `exports` excludes legacy migrations.
+    for (const { class_name } of productionObjects)
+      expect(production.exports?.[class_name]).toEqual({ type: "durable-object", storage: "sqlite" });
+    expect(production.migrations).toEqual([]);
+    const { rawConfig } = readRawConfig({ config: resolve(root, "wrangler.jsonc") });
+    expect(rawConfig.env?.local?.durable_objects?.bindings).toEqual(productionObjects);
   });
 
   it("keeps production identities, fixed hosts, and live payment keys out of Preview variables", () => {
@@ -102,14 +127,15 @@ describe("Workers Previews configuration", () => {
     expect(wranglerTargetArgs("preview")).toEqual(["--env", "production", "--preview"]);
     expect(wranglerTargetArgs("production")).toEqual(["--env", "production"]);
     // d1 export has no --preview option, so the backup names the preview database.
-    const scripts = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8")).scripts as Record<string, string>;
-    expect(scripts["backup:preview"]).toContain(`d1 export ${PREVIEW_DATABASE_NAME} --env production --remote`);
-    expect(scripts["migrate:preview"]).toBe("node scripts/apply-d1-migrations.mjs preview");
+    expect(backupExportArgs("preview", "out.sql").join(" ")).toContain(
+      `d1 export ${PREVIEW_DATABASE_NAME} --env production --remote`,
+    );
+    expect(() => backupExportArgs("local", "out.sql")).toThrow("pnpm backup <preview|production>");
   });
 
   it("derives a branch Preview URL only for non-production branches", () => {
-    expect(workersPreviewBaseUrl("feature/Workers_Previews")).toBe(
-      "https://feature-workers-previews-pkic-org.pkic.workers.dev",
+    expect(workersPreviewBaseUrl("codex/Workers_Previews")).toBe(
+      "https://codex-workers-previews-pkic-org.pkic.workers.dev",
     );
     expect(workersPreviewBaseUrl("main")).toBeNull();
     expect(workersPreviewBaseUrl(undefined)).toBeNull();

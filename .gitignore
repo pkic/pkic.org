@@ -43,9 +43,8 @@ node_modules/
 .jscpd-report/
 .ds-sync/
 ds-bundle/
-# Google Groups roster exports feeding scripts/migrate-members. Populated they
-# hold member names and addresses, which is personal data and does not belong
-# in the repository; the scripts read whatever the operator puts here.
+# Legacy Google Groups roster exports. They hold member names and addresses,
+# which is personal data and does not belong in the repository.
 csv/
 prod-csv/
 
@@ -63,3 +62,13 @@ types/
 
 # Cloudflare publication cache transport
 /.next/cache/
+# Project skills are installed from skills-lock.json (pnpm run skills:install), not committed.
+# The repository's own skills are committed.
+/.agents/skills/*
+!/.agents/skills/pkic-ui/
+
+# Synthetic local test environment created by `pnpm dev:test`
+/.local-test/
+
+# Component gallery screenshots (`pnpm gallery:shot`)
+/.gallery-shots/

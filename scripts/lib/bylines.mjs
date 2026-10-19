@@ -10,7 +10,7 @@ import { normalizedContentPath, parseFrontMatter, slugify } from "../../function
  * written, snapshotted into the post's own `authorProfiles` front matter. It is
  * not a lookup in today's member directory, whose representatives change.
  *
- * This is `layouts/partials/blog/author-data.html` resolved once at build
+ * This is the author data resolved once at build
  * time: a profile's `assetdirectory` holds the author's headshot, filed under
  * their urlized name, and the organization's mark, filed under the directory's
  * own name; an explicit `image` or `logo` names a file instead.

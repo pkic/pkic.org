@@ -7,7 +7,8 @@ import { diagramTheme } from "../../assets/shared/diagram-theme";
 import { publicDiagramPublisher } from "../../scripts/publication/publish-diagrams.mjs";
 import { linuxDiagramBrowserOptions } from "../../scripts/publication/diagram-browser.mjs";
 import { JSDOM } from "jsdom";
-import { expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
+import { renderSiteMarkdown } from "../../site/markdown-processor";
 import { externalizeDiagramStyles } from "../../scripts/publication/diagram-styles.mjs";
 
 it("keeps diagram styling and references while removing all inline CSS and separating IDs", () => {
@@ -92,3 +93,42 @@ it("extracts a complete rootless Linux renderer and reuses its versioned runtime
     await rm(root, { recursive: true, force: true });
   }
 });
+
+afterEach(() => vi.unstubAllEnvs());
+
+it.each([undefined, "1"])(
+  "renders both reported pages with fast mode %s",
+  async (fast) => {
+    vi.stubEnv("CLOUDFLARE_ENV", "local");
+    vi.stubEnv("PKIC_PUBLICATION_FAST", fast);
+    const root = await mkdtemp(join(tmpdir(), "pkic-reported-diagrams-"));
+    const publisher = await publicDiagramPublisher(root, join(root, "cache"));
+    try {
+      for (const [source, label] of [
+        ["content/application-process.md", "Complete application form"],
+        ["content/blog/2026/2026-09-29-pki-maturity-model-2-0-0/index.md", "Maturity"],
+      ]) {
+        const html = await renderSiteMarkdown(await readFile(source, "utf8"));
+        const { window } = new JSDOM(`<html><head></head><body>${html}</body></html>`);
+        try {
+          expect(window.document.querySelectorAll("pre.mermaid")).toHaveLength(1);
+          await publisher.publish(window.document);
+          expect(window.document.querySelector("pre.mermaid")).toBeNull();
+          const svg = window.document.querySelector('[data-rendered-diagram="true"] svg');
+          expect(svg?.textContent).toContain(label);
+          expect(svg?.querySelector("style, [style]")).toBeNull();
+          const stylesheet = window.document.querySelector('link[rel="stylesheet"]')?.getAttribute("href");
+          expect(stylesheet).toMatch(/^\/_published\/diagrams\/[a-f0-9]+\.css$/);
+          expect(await readFile(join(root, stylesheet!.slice(1)), "utf8")).not.toBe("");
+        } finally {
+          window.close();
+        }
+      }
+      expect(await publisher.finish()).toHaveLength(2);
+    } finally {
+      await publisher.finish();
+      await rm(root, { recursive: true, force: true });
+    }
+  },
+  30000,
+);

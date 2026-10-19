@@ -1,0 +1,28 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "printWidth": 120,
+  "tabWidth": 2,
+  "useTabs": false,
+  "semi": true,
+  "singleQuote": false,
+  "trailingComma": "all",
+  "bracketSpacing": true,
+  "arrowParens": "always",
+  "sortPackageJson": false,
+  "ignorePatterns": [
+    "public/",
+    "resources/",
+    "static/",
+    "node_modules/",
+    "dist/",
+    ".wrangler/",
+    ".local-test/",
+    "pnpm-lock.yaml",
+    "assets/design/tokens.generated.css",
+    ".design-sync/",
+    ".ds-sync/",
+    "ds-bundle/",
+    "types/",
+    "assets/**/*.d.ts"
+  ]
+}

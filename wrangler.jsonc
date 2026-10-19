@@ -4,9 +4,13 @@
   "account_id": "dd9c5d7f73f7d170f3e2c1108fc84bb3",
   "compatibility_date": "2026-03-17",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
-  "main": "functions/worker.ts",
+  "main": "functions/router.ts",
+  // Declarative class lifecycle (mutually exclusive with `migrations`). Named
+  // environments inherit it, and each Workers Preview provisions its own
+  // namespace and storage for every Durable Object class declared here.
   "exports": {
     "PublicRead": { "type": "worker", "cache": { "enabled": true } },
+    "LiveSessionRoom": { "type": "durable-object", "storage": "sqlite" },
   },
   "observability": {
     "enabled": true,
@@ -15,6 +19,9 @@
     "production": {
       "name": "pkic-org",
       "worker_loaders": [{ "binding": "LOADER" }],
+      "durable_objects": {
+        "bindings": [{ "name": "LIVE_SESSION_ROOMS", "class_name": "LiveSessionRoom" }],
+      },
       "kv_namespaces": [
         {
           "binding": "OAUTH_KV",
@@ -144,6 +151,11 @@
       // resource; never bind a production database, bucket, or namespace.
       "previews": {
         "worker_loaders": [{ "binding": "LOADER" }],
+        // The class is this Worker's own, so each Preview binds a namespace and
+        // storage provisioned for that Preview, never production rooms.
+        "durable_objects": {
+          "bindings": [{ "name": "LIVE_SESSION_ROOMS", "class_name": "LiveSessionRoom" }],
+        },
         "kv_namespaces": [
           {
             "binding": "OAUTH_KV",
@@ -243,6 +255,9 @@
     "local": {
       "name": "pkic-org-local",
       "worker_loaders": [{ "binding": "LOADER" }],
+      "durable_objects": {
+        "bindings": [{ "name": "LIVE_SESSION_ROOMS", "class_name": "LiveSessionRoom" }],
+      },
       "kv_namespaces": [
         {
           "binding": "OAUTH_KV",
