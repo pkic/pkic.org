@@ -1,0 +1,168 @@
+/*
+ * The lower third's motion. Each phase is one orchestrated sequence of
+ * transforms and opacity only, so it composites smoothly at broadcast frame
+ * rates; the graphic's own phase animation spans the whole sequence, and its
+ * end tells the lower third to move on. In: the emblem rolls in, turning about
+ * its exact center as far as it travels; the white name bar then extends from
+ * the orange seat, its curved end held in the seat while it is revealed to the
+ * right; the grey title bar follows from under it. Out is the
+ * reverse. Replacing a speaker retracts and extends the bars only.
+ */
+@layer components {
+  .pk-live-overlay__lower-third-graphic {
+    --lt-roll: calc(var(--pk-dur-slow) * 0.8);
+    --lt-bar: calc(var(--pk-dur) * 1.6);
+    --lt-title: calc(var(--pk-dur) * 1.4);
+    --lt-bar-delay: calc(var(--lt-roll) * 0.7);
+    --lt-title-delay: calc(var(--lt-bar-delay) + var(--lt-bar) * 0.6);
+    position: relative;
+  }
+  /* SVG groups turn and travel in the drawing's own units, about their own boxes. */
+  .pk-live-overlay__lower-third-emblem-roll,
+  .pk-live-overlay__lower-third-title-bar {
+    transform-box: view-box;
+  }
+  /* The reveal grows from its left edge, at the seat. */
+  .pk-live-overlay__lower-third-name-reveal {
+    transform-box: fill-box;
+    transform-origin: 0 50%;
+  }
+  /* The emblem's square box is centered on its rotation center, so the spin never wobbles. */
+  .pk-live-overlay__lower-third-emblem-spin {
+    transform-box: view-box;
+    transform-origin: 50% 50%;
+  }
+  .pk-live-overlay__lower-third-emblem .pk-live-overlay__emblem-ink {
+    fill: var(--pk-pqc-paper);
+  }
+
+  /* In. */
+  .pk-live-overlay__lower-third-graphic[data-phase="entering"] {
+    animation: pk-live-lower-third-phase-entering calc(var(--lt-title-delay) + var(--lt-title)) linear both;
+  }
+  .pk-live-overlay__lower-third-graphic[data-phase="entering"] .pk-live-overlay__lower-third-emblem-roll {
+    animation: pk-live-lower-third-roll-in var(--lt-roll) var(--pk-ease) both;
+  }
+  .pk-live-overlay__lower-third-graphic[data-phase="entering"] .pk-live-overlay__lower-third-emblem-spin {
+    animation: pk-live-lower-third-spin-in var(--lt-roll) var(--pk-ease) both;
+  }
+  .pk-live-overlay__lower-third-graphic:is([data-phase="entering"], [data-phase="extending"])
+    .pk-live-overlay__lower-third-name-reveal {
+    animation: pk-live-lower-third-name-in var(--lt-bar) var(--pk-ease) var(--lt-bar-delay) both;
+  }
+  .pk-live-overlay__lower-third-graphic:is([data-phase="entering"], [data-phase="extending"])
+    :is(.pk-live-overlay__lower-third-title-bar, .pk-live-overlay__title) {
+    animation: pk-live-lower-third-title-in var(--lt-title) var(--pk-ease) var(--lt-title-delay) both;
+  }
+  /* A new speaker: the bars only, from the seat, without waiting for the emblem. */
+  .pk-live-overlay__lower-third-graphic[data-phase="extending"] {
+    --lt-bar-delay: 0ms;
+    animation: pk-live-lower-third-phase-extending calc(var(--lt-title-delay) + var(--lt-title)) linear both;
+  }
+
+  /* Out, and the bars' half of a replacement: the same motion played back, title first. */
+  .pk-live-overlay__lower-third-graphic:is([data-phase="exiting"], [data-phase="retracting"]) {
+    --lt-bar-delay: calc(var(--lt-title) * 0.5);
+  }
+  .pk-live-overlay__lower-third-graphic[data-phase="exiting"] {
+    animation: pk-live-lower-third-phase-exiting calc(var(--lt-bar-delay) + var(--lt-bar) * 0.6 + var(--lt-roll)) linear
+      both;
+  }
+  .pk-live-overlay__lower-third-graphic[data-phase="retracting"] {
+    animation: pk-live-lower-third-phase-retracting calc(var(--lt-bar-delay) + var(--lt-bar)) linear both;
+  }
+  .pk-live-overlay__lower-third-graphic:is([data-phase="exiting"], [data-phase="retracting"])
+    :is(.pk-live-overlay__lower-third-title-bar, .pk-live-overlay__title) {
+    animation: pk-live-lower-third-title-out var(--lt-title) var(--pk-ease) both;
+  }
+  .pk-live-overlay__lower-third-graphic:is([data-phase="exiting"], [data-phase="retracting"])
+    .pk-live-overlay__lower-third-name-reveal {
+    animation: pk-live-lower-third-name-out var(--lt-bar) var(--pk-ease) var(--lt-bar-delay) both;
+  }
+  .pk-live-overlay__lower-third-graphic[data-phase="exiting"] .pk-live-overlay__lower-third-emblem-roll {
+    animation: pk-live-lower-third-roll-out var(--lt-roll) var(--pk-ease)
+      calc(var(--lt-bar-delay) + var(--lt-bar) * 0.6) both;
+  }
+  .pk-live-overlay__lower-third-graphic[data-phase="exiting"] .pk-live-overlay__lower-third-emblem-spin {
+    animation: pk-live-lower-third-spin-out var(--lt-roll) var(--pk-ease)
+      calc(var(--lt-bar-delay) + var(--lt-bar) * 0.6) both;
+  }
+
+  /*
+   * Each phase spans one animation that changes nothing: its end is the signal
+   * to move on. Every animation has its own name, in and out, because a
+   * browser restarts an animation only when its name changes.
+   */
+  @keyframes pk-live-lower-third-phase-entering {
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes pk-live-lower-third-phase-exiting {
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes pk-live-lower-third-phase-retracting {
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes pk-live-lower-third-phase-extending {
+    to {
+      opacity: 1;
+    }
+  }
+  /* The emblem rolls without slipping: 640 units of travel is 195 degrees of a 188-unit seat radius. */
+  @keyframes pk-live-lower-third-roll-in {
+    from {
+      opacity: 0;
+      transform: translateX(-640px);
+    }
+    35% {
+      opacity: 1;
+    }
+  }
+  @keyframes pk-live-lower-third-roll-out {
+    65% {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+      transform: translateX(-640px);
+    }
+  }
+  @keyframes pk-live-lower-third-spin-in {
+    from {
+      transform: rotate(-195deg);
+    }
+  }
+  @keyframes pk-live-lower-third-spin-out {
+    to {
+      transform: rotate(-195deg);
+    }
+  }
+  /* The reveal opens from the seat, so the bar extends out of it and retracts into it. */
+  @keyframes pk-live-lower-third-name-in {
+    from {
+      transform: scaleX(0);
+    }
+  }
+  @keyframes pk-live-lower-third-name-out {
+    to {
+      transform: scaleX(0);
+    }
+  }
+  @keyframes pk-live-lower-third-title-in {
+    from {
+      opacity: 0;
+      transform: translateY(-44%);
+    }
+  }
+  @keyframes pk-live-lower-third-title-out {
+    to {
+      opacity: 0;
+      transform: translateY(-44%);
+    }
+  }
+}

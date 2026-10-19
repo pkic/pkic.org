@@ -1,0 +1,94 @@
+/* A session's live questions, in the event app and the control room. */
+
+@layer components {
+  .pk-live-questions__list {
+    display: grid;
+    gap: var(--pk-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .pk-live-question {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: var(--pk-3);
+    padding: var(--pk-3);
+    border: 1px solid var(--pk-line-soft);
+    border-radius: var(--pk-radius-card);
+    background: var(--pk-surface);
+  }
+  .pk-live-question__vote {
+    align-self: start;
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-inline-size: 2.75rem;
+    min-block-size: 2.75rem;
+    border: 1px solid var(--pk-line);
+    border-radius: var(--pk-radius);
+    background: var(--pk-surface-sunk);
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-xs);
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .pk-live-question__vote[aria-pressed="true"] {
+    border-color: var(--pk-accent);
+    background: var(--pk-accent-soft);
+    color: var(--pk-accent-ink);
+  }
+  .pk-live-question__vote:disabled {
+    cursor: default;
+  }
+  .pk-live-question__body {
+    display: grid;
+    gap: var(--pk-1);
+    min-inline-size: 0;
+  }
+  .pk-live-question__body p {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+  .pk-live-question__meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--pk-2);
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-xs);
+  }
+  .pk-live-question__body .pk-live-question__original {
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-xs);
+  }
+  .pk-live-question__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--pk-2);
+  }
+  .pk-live-questions__empty,
+  .pk-live-questions__notice {
+    margin: 0;
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-sm);
+  }
+  .pk-live-questions__notice:empty {
+    display: none;
+  }
+}
+
+@layer components {
+  .pk-live-question__excerpt {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .pk-live-question__author {
+    max-inline-size: 12rem;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+}

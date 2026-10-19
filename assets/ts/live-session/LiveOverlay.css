@@ -1,0 +1,496 @@
+/*
+ * Broadcast overlays: a 1920 × 1080 transparent browser source. The lower
+ * third keeps the existing stream overlay's layout (emblem, white name bar,
+ * translucent title bar) in the design system's type and the event kit's
+ * colors; the question card follows the session details' header.
+ */
+
+@layer components {
+  html:has([data-live-broadcast-source]),
+  body:has([data-live-broadcast-source]) {
+    margin: 0;
+    background: transparent;
+  }
+  main[data-live-broadcast-source] {
+    inline-size: 100vw;
+    block-size: 100vh;
+  }
+  /*
+   * The frame is whatever box shows the output: the browser source's whole
+   * window, a monitor tile, the layout editor's canvas. It is a size
+   * container, and the 1920 × 1080 composition inside it scales from the
+   * container's own units to fit it whole, centered. Everything is drawn in
+   * plain HTML at broadcast size and scaled as one picture, so no browser
+   * minimum font size or SVG text rendering can break it at a small size, and
+   * nothing reaches outside the frame. A browser source at exactly 1920 × 1080
+   * draws unscaled.
+   */
+  .pk-live-overlay__frame {
+    container: live-frame / size;
+    position: relative;
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+    overflow: clip;
+  }
+  .pk-live-overlay {
+    /* Broadcast type reads the system's sizes, scaled for a 1080p frame seen across a room. */
+    --pk-live-overlay-scale: 2.75;
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline-start: 50%;
+    inline-size: 1920px;
+    block-size: 1080px;
+    margin-block-start: -540px;
+    margin-inline-start: -960px;
+    overflow: hidden;
+    color: var(--pk-pqc-ink);
+    font-family: var(--pk-font);
+    transform-origin: 50% 50%;
+  }
+  @container live-frame not ((width: 1920px) and (height: 1080px)) {
+    .pk-live-overlay {
+      /* The container's size over the frame's, as a plain number: tan(atan2(a, b)) is a / b. */
+      transform: scale(min(tan(atan2(100cqi, 1920px)), tan(atan2(100cqb, 1080px))));
+    }
+  }
+  .pk-live-overlay__layer {
+    position: absolute;
+    inset: 0;
+    inline-size: 1920px;
+    block-size: 1080px;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  .pk-live-overlay__layer[data-dimmed] {
+    opacity: 0.12;
+    filter: grayscale(1);
+  }
+  .pk-live-overlay__surface {
+    position: relative;
+    inline-size: 1920px;
+    block-size: 1080px;
+  }
+  /* Moved and scaled into its layout box by the measured amounts the layer sets. */
+  .pk-live-overlay__surface[data-placed] {
+    transform: translate(var(--overlay-dx, 0), var(--overlay-dy, 0)) scale(var(--overlay-scale, 1));
+    transform-origin: 0 0;
+  }
+  /* The emblem's square box pads it by 360/314, so each size scales by that to keep the emblem's size. */
+  .pk-live-overlay__emblem {
+    flex: 0 0 auto;
+    inline-size: calc(132px * 360 / 314);
+    block-size: auto;
+  }
+  .pk-live-overlay__emblem-blue {
+    fill: var(--pk-pqc-blue);
+  }
+  .pk-live-overlay__emblem-orange {
+    fill: var(--pk-pqc-orange);
+  }
+  .pk-live-overlay__emblem-green {
+    fill: var(--pk-pqc-green);
+  }
+  .pk-live-overlay__emblem-ink {
+    fill: var(--pk-pqc-forest);
+  }
+
+  /* Question on air: a card centered above the lower-third band. */
+  .pk-live-overlay__question {
+    position: absolute;
+    inset-inline: 160px;
+    inset-block-end: 96px;
+    display: flex;
+    justify-content: center;
+  }
+  .pk-live-overlay__card {
+    display: flex;
+    align-items: center;
+    gap: 40px;
+    max-inline-size: 1600px;
+    margin: 0;
+    padding: 40px 56px;
+    border-block-start: 10px solid transparent;
+    border-image: var(--pk-pqc-stripe) 1;
+    border-radius: var(--pk-radius-card);
+    background: var(--pk-pqc-paper);
+    box-shadow: var(--pk-shadow-3);
+    animation: pk-live-overlay-rise var(--pk-dur-slow) var(--pk-ease) both;
+  }
+  .pk-live-overlay__card .pk-live-overlay__emblem {
+    inline-size: 96px;
+  }
+  /* The asker's photo, or their initials, where the emblem would be, when they asked by name. */
+  .pk-live-overlay__asker {
+    --pk-avatar-size: 120px;
+    flex: none;
+    box-shadow:
+      0 0 0 4px var(--pk-pqc-paper),
+      0 0 0 7px var(--pk-pqc-blue);
+  }
+  /*
+   * The question card is one fixed size, the default slot, in every view, so
+   * a layout box scales every question alike and it never moves or grows with
+   * its text. The text steps down with its length, from the stage display's
+   * fit, and never below 36px on the 1080p frame, where it is clamped.
+   */
+  .pk-live-overlay__question > .pk-live-overlay__card {
+    box-sizing: border-box;
+    align-items: start;
+    gap: 32px;
+    inline-size: 840px;
+    block-size: 568px;
+    max-inline-size: none;
+    padding: 32px;
+  }
+  .pk-live-overlay__question .pk-live-overlay__asker {
+    --pk-avatar-size: 96px;
+  }
+  .pk-live-overlay__question .pk-live-overlay__emblem {
+    inline-size: calc(96px * 360 / 314);
+  }
+  .pk-live-overlay__question-text {
+    --question-lines: 5;
+    display: -webkit-box;
+    margin: 0;
+    overflow: hidden;
+    font-size: var(--pk-live-question-type);
+    font-weight: 700;
+    line-height: 1.2;
+    text-align: start;
+    overflow-wrap: anywhere;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: var(--question-lines);
+    line-clamp: var(--question-lines);
+  }
+  .pk-live-overlay__question-text[data-fit="long"] {
+    --question-lines: 7;
+    font-size: var(--pk-live-question-type-long);
+  }
+  .pk-live-overlay__question-text[data-fit="longer"] {
+    --question-lines: 8;
+    font-size: var(--pk-live-question-type-longer);
+  }
+  .pk-live-overlay__question-text[data-fit="longest"] {
+    --question-lines: 10;
+    font-size: var(--pk-live-question-type-longest);
+  }
+  /* Paragraphs, not blockquote and figcaption: the site's own rules for those sit outside the layers and would win. */
+  .pk-live-overlay__question-asker {
+    margin: 16px 0 0;
+    color: var(--pk-pqc-ink-muted);
+    font-size: var(--pk-live-question-byline-type);
+    font-weight: 500;
+    text-align: start;
+  }
+
+  /* Poll results: the question card's frame around the forms results chart, scaled for the frame. */
+  .pk-live-overlay__poll {
+    position: absolute;
+    inset-inline: 160px;
+    inset-block-end: 96px;
+    display: flex;
+    justify-content: center;
+  }
+  .pk-live-overlay__poll .pk-live-overlay__card {
+    align-items: start;
+    min-inline-size: 1200px;
+  }
+  .pk-live-overlay__poll-body {
+    min-inline-size: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    flex: 1;
+    gap: 24px;
+  }
+  .pk-live-overlay__poll-question {
+    margin: 0;
+    font-size: calc(var(--pk-text-xl) * 1.8);
+    font-weight: 700;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
+  .pk-live-overlay__poll-results {
+    font-size: calc(var(--pk-text-lg) * 2);
+    font-weight: 600;
+    line-height: 1.25;
+  }
+  .pk-live-overlay__poll-results .pk-chart__bars {
+    gap: var(--pk-1);
+  }
+  .pk-live-overlay__poll-results .pk-chart__bar-label {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* The forms chart's presentation variant takes this size; the bars wear the event kit's blue. */
+  .pk-live-overlay__poll-results .pk-meter {
+    --tone: var(--pk-pqc-blue);
+    --tone-track: color-mix(in srgb, var(--pk-pqc-blue) 14%, transparent);
+  }
+  .pk-live-overlay__poll-results .pk-chart__bar-count {
+    color: var(--pk-pqc-ink-muted);
+  }
+
+  /* Preserve the original Hugo lower-third SVG's geometry and typographic hierarchy. */
+  .pk-live-overlay__lower-third {
+    position: absolute;
+    inset-inline-start: 96px;
+    inline-size: 65%;
+    inset-block-end: 64px;
+  }
+  .pk-live-overlay__lower-third-bars {
+    display: block;
+    inline-size: 100%;
+    block-size: auto;
+  }
+  .pk-live-overlay__name-background {
+    fill: var(--pk-pqc-paper);
+  }
+  .pk-live-overlay__title-background {
+    fill: var(--pk-pqc-paper);
+    opacity: 0.8;
+  }
+  /*
+   * Name and role are SVG text scaled down with the whole frame; without
+   * geometric precision a browser rounds their size to whole pixels first,
+   * which on a small monitor rounds them away.
+   */
+  .pk-live-overlay__lower-third-bars text {
+    text-rendering: geometricPrecision;
+  }
+  .pk-live-overlay__name {
+    fill: var(--pk-pqc-ink);
+    font-weight: 900;
+    font-family: var(--pk-font);
+  }
+  /* A host's or moderator's role, small above the name in the event's green. */
+  .pk-live-overlay__role {
+    fill: var(--pk-pqc-green-deep);
+    font-weight: 700;
+    font-family: var(--pk-font);
+  }
+  /*
+   * The title line sits in the grey bar at the brand drawing's place (x 625,
+   * y 250, 1800 x 150 of the 2500 x 417 drawing): set off to the right of the
+   * name like its bar, left-aligned, its type at the drawing's scale.
+   */
+  .pk-live-overlay__title {
+    position: absolute;
+    inset-block-start: calc(250 / 417 * 100%);
+    inset-inline-start: calc(625 / 2500 * 100%);
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    inline-size: calc(1800 / 2500 * 100%);
+    block-size: calc(150 / 417 * 100%);
+    text-align: start;
+    overflow: hidden;
+    color: var(--pk-pqc-ink-muted);
+    font-size: calc(var(--pk-text-xl) * 3 * 1248 / 2500);
+    font-weight: 500;
+    line-height: 1.25;
+  }
+  .pk-live-overlay[data-view="program"] .pk-live-overlay__question,
+  .pk-live-overlay[data-view="program"] .pk-live-overlay__poll {
+    inset-block-start: 256px;
+    inset-block-end: auto;
+    inline-size: 840px;
+    --pk-live-overlay-scale: 1;
+  }
+  .pk-live-overlay[data-view="program"] .pk-live-overlay__question {
+    inset-inline-start: 96px;
+    inset-inline-end: auto;
+  }
+  .pk-live-overlay[data-view="program"] .pk-live-overlay__poll {
+    inset-inline-start: auto;
+    inset-inline-end: 96px;
+  }
+  .pk-live-overlay[data-view="program"] .pk-live-overlay__poll > .pk-live-overlay__card {
+    gap: 24px;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    padding: 24px;
+  }
+  .pk-live-overlay[data-view="program"] .pk-live-overlay__poll-question {
+    font-size: var(--pk-text-xl);
+  }
+  .pk-live-overlay[data-view="program"] .pk-live-overlay__poll-results {
+    font-size: var(--pk-text-md);
+  }
+  .pk-live-overlay[data-view="program"] .pk-live-overlay__poll .pk-live-overlay__emblem {
+    inline-size: calc(64px * 360 / 314);
+  }
+
+  .pk-live-overlay__countdown-logo {
+    inline-size: 168px;
+    block-size: 168px;
+  }
+  .pk-live-overlay__countdown-logo text {
+    fill: var(--pk-pqc-paper);
+    font-family: var(--pk-font-mono);
+    font-weight: 700;
+  }
+  .pk-live-overlay__countdown-green {
+    stop-color: var(--pk-pqc-green);
+  }
+  .pk-live-overlay__countdown-blue {
+    stop-color: var(--pk-pqc-blue);
+  }
+  .pk-live-overlay__countdown-orange {
+    stop-color: var(--pk-pqc-orange);
+  }
+  .pk-live-overlay__countdown-ring {
+    transform-origin: 217px 217px;
+  }
+  .pk-live-overlay__countdown-logo[data-running] .pk-live-overlay__countdown-ring {
+    animation: pk-spinner-spin calc(var(--pk-dur-shimmer) * 2) linear infinite;
+  }
+  .pk-live-overlay__countdown-logo[data-over] text {
+    fill: var(--pk-danger);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pk-live-overlay__countdown-logo[data-running] .pk-live-overlay__countdown-ring {
+      animation: none;
+    }
+  }
+  /* Timer: a countdown in the top-right safe area. */
+  .pk-live-overlay__timer {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    position: absolute;
+    inset-block-start: 64px;
+    inset-inline-end: 96px;
+    padding: 0;
+    background: transparent;
+    color: var(--pk-pqc-paper);
+    text-shadow: 0 1px 3px var(--pk-pqc-ink);
+    font-family: var(--pk-font-mono);
+    font-size: calc(var(--pk-text-3xl) * 2);
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+  }
+  .pk-live-overlay__timer-emblem .pk-live-overlay__emblem {
+    inline-size: calc(96px * 360 / 314);
+  }
+  .pk-live-overlay__timer-emblem .pk-live-overlay__emblem-ink {
+    fill: var(--pk-pqc-on-field);
+  }
+  /* A flex box hugs the square emblem, so the spin turns about its exact center. */
+  .pk-live-overlay__timer-emblem {
+    display: flex;
+  }
+  .pk-live-overlay__timer-emblem[data-running] {
+    animation: pk-spinner-spin calc(var(--pk-dur-shimmer) * 2) linear infinite;
+  }
+  .pk-live-overlay__timer-value {
+    font-variant-numeric: tabular-nums;
+  }
+  .pk-live-overlay__timer-label {
+    margin: 0;
+    font-family: var(--pk-font);
+    font-size: var(--pk-text-3xl);
+    font-weight: 500;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pk-live-overlay__timer-emblem[data-running] {
+      animation: none;
+    }
+  }
+  /* Warning and overtime tint the digits red and briefly pulse the element. */
+  .pk-live-overlay__timer[data-tone="warn"] {
+    color: var(--pk-danger);
+    animation: pk-timer-warning var(--pk-dur-timer-warning) ease-in-out 3;
+  }
+  .pk-live-overlay__timer[data-tone="over"] {
+    color: var(--pk-danger);
+    animation: pk-timer-warning var(--pk-dur-timer-warning) ease-in-out 3;
+  }
+  @keyframes pk-timer-warning {
+    50% {
+      opacity: 0.55;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pk-live-overlay__timer[data-tone="warn"],
+    .pk-live-overlay__timer[data-tone="over"] {
+      animation: none;
+    }
+  }
+  .pk-live-overlay__timer[data-tone="warn"] .pk-live-overlay__countdown-logo text {
+    fill: var(--pk-danger);
+  }
+
+  /* The operators' message to the speaker: a bar across the top of the stage display, over its session line. */
+  .pk-live-overlay__stage-message {
+    position: absolute;
+    inset-inline: 96px;
+    inset-block-start: 24px;
+    font-family: var(--pk-font);
+  }
+
+  /* Reactions: each burst floats up the right edge in six lanes. */
+  .pk-live-overlay__reactions {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-end: 64px;
+    inline-size: 420px;
+  }
+  .pk-live-overlay__reaction {
+    position: absolute;
+    inset-block-end: -96px;
+    font-size: calc(var(--pk-text-3xl) * var(--pk-live-overlay-scale));
+    animation: pk-live-overlay-float calc(var(--pk-dur-shimmer) * 2) var(--pk-ease) forwards;
+  }
+  .pk-live-overlay__reaction--lane-0 {
+    inset-inline-start: 0;
+  }
+  .pk-live-overlay__reaction--lane-1 {
+    inset-inline-start: 64px;
+    animation-delay: 120ms;
+  }
+  .pk-live-overlay__reaction--lane-2 {
+    inset-inline-start: 128px;
+    animation-delay: 240ms;
+  }
+  .pk-live-overlay__reaction--lane-3 {
+    inset-inline-start: 192px;
+    animation-delay: 60ms;
+  }
+  .pk-live-overlay__reaction--lane-4 {
+    inset-inline-start: 256px;
+    animation-delay: 180ms;
+  }
+  .pk-live-overlay__reaction--lane-5 {
+    inset-inline-start: 320px;
+    animation-delay: 300ms;
+  }
+  @keyframes pk-live-overlay-rise {
+    from {
+      opacity: 0;
+      transform: translateY(40px);
+    }
+  }
+  @keyframes pk-live-overlay-float {
+    0% {
+      opacity: 0;
+      transform: translateY(0) scale(0.6);
+    }
+    15% {
+      opacity: 1;
+      transform: translateY(-160px) scale(1);
+    }
+    100% {
+      opacity: 0;
+      transform: translateY(-900px) scale(1.1);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pk-live-overlay__card,
+    .pk-live-overlay__reaction {
+      animation: none;
+    }
+  }
+}

@@ -1,0 +1,235 @@
+@layer components {
+  /* The feed, its jump-to-latest and the composer, stacked in whatever height the parent gives. */
+  .pk-live-chat-workspace {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: var(--pk-2);
+    flex: 1;
+    min-block-size: 0;
+    inline-size: 100%;
+  }
+  .pk-live-chat {
+    max-block-size: 32rem;
+    min-block-size: 8rem;
+    overflow: auto;
+    overscroll-behavior: contain;
+    /* The feed keeps the reader's place itself; the browser's own anchoring would move it twice. */
+    overflow-anchor: none;
+    border-radius: var(--pk-radius-sm);
+  }
+  .pk-live-chat-workspace--compact .pk-live-chat {
+    flex: 1;
+    max-block-size: none;
+    min-block-size: 0;
+  }
+  .pk-live-chat:focus-visible {
+    outline: 2px solid var(--pk-focus);
+    outline-offset: 2px;
+  }
+  .pk-live-chat__list {
+    display: block;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .pk-live-chat__spacer {
+    display: block;
+  }
+  .pk-live-chat__earlier,
+  .pk-live-chat__empty {
+    display: flex;
+    justify-content: center;
+    padding-block: var(--pk-2);
+    margin: 0;
+  }
+
+  /* One message: a small portrait beside the byline, the words and the reactions. */
+  .pk-live-chat__row {
+    --pk-avatar-size: 1.5rem;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: var(--pk-2);
+    align-items: start;
+    padding: var(--pk-1) var(--pk-2);
+    border-radius: var(--pk-radius-sm);
+    font-size: var(--pk-text-sm);
+    line-height: 1.35;
+  }
+  .pk-live-chat__row .pk-avatar--sm {
+    --pk-avatar-size: 1.5rem;
+    margin-block-start: 0.1rem;
+  }
+  .pk-live-chat__row:hover,
+  .pk-live-chat__row:focus-within {
+    background: var(--pk-surface-sunk);
+  }
+  .pk-live-chat__row[data-hidden] .pk-live-chat__text {
+    color: var(--pk-ink-muted);
+    text-decoration: line-through;
+    text-decoration-color: var(--pk-line-strong);
+  }
+  .pk-live-chat__body {
+    min-inline-size: 0;
+  }
+  .pk-live-chat__byline {
+    display: flex;
+    align-items: baseline;
+    gap: var(--pk-2);
+    min-inline-size: 0;
+    min-block-size: 1.5rem;
+  }
+  .pk-live-chat__author {
+    min-inline-size: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-weight: 600;
+  }
+  .pk-live-chat__byline time {
+    flex: none;
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-xs);
+    font-variant-numeric: tabular-nums;
+  }
+  .pk-live-chat__notes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--pk-1) var(--pk-2);
+    font-size: var(--pk-text-xs);
+  }
+  .pk-live-chat__note[data-tone="warn"] {
+    color: var(--pk-warn-ink);
+    font-weight: 600;
+  }
+  .pk-live-chat__note[data-tone="muted"] {
+    color: var(--pk-ink-muted);
+  }
+  /* The menu keeps its own column, so a touch-sized trigger never pushes the words down. */
+  /* React and the message's other actions: always in the row and reachable by Tab, brighter on hover or focus. */
+  .pk-live-chat__menu {
+    display: flex;
+    grid-column: 3;
+    align-self: start;
+    gap: var(--pk-1);
+    opacity: 0.4;
+  }
+  .pk-live-chat__row:hover .pk-live-chat__menu,
+  .pk-live-chat__row:focus-within .pk-live-chat__menu {
+    opacity: 1;
+  }
+  @media (hover: none) {
+    .pk-live-chat__menu {
+      opacity: 1;
+    }
+  }
+  .pk-live-chat__menu .pk-menu__trigger {
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+  }
+  .pk-live-chat__react {
+    display: inline-grid;
+    place-items: center;
+    border-radius: var(--pk-radius-sm);
+    color: var(--pk-ink-muted);
+  }
+  .pk-live-chat__react:hover {
+    color: var(--pk-ink);
+    background: var(--pk-surface);
+  }
+  .pk-live-chat__text {
+    overflow-wrap: anywhere;
+  }
+  .pk-live-chat__text p {
+    margin: 0;
+    white-space: pre-wrap;
+  }
+  .pk-live-chat__text p + p {
+    margin-block-start: var(--pk-1);
+  }
+  .pk-live-chat__text code {
+    font-family: var(--pk-font-mono);
+    font-size: 0.9em;
+    padding-inline: 0.2em;
+    border-radius: var(--pk-radius-sm);
+    background: var(--pk-surface-sunk);
+  }
+  .pk-live-chat__reactions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--pk-1);
+    margin-block-start: var(--pk-1);
+  }
+  .pk-live-chat__reaction {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25em;
+    padding: 0 var(--pk-2);
+    min-block-size: 1.5rem;
+    border: 1px solid var(--pk-line);
+    border-radius: var(--pk-radius-pill);
+    background: var(--pk-surface);
+    color: var(--pk-ink);
+    font: inherit;
+    font-size: var(--pk-text-xs);
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+  }
+  .pk-live-chat__reaction[aria-pressed="true"] {
+    border-color: var(--pk-accent);
+    background: var(--pk-accent-soft);
+    color: var(--pk-accent-ink);
+  }
+  .pk-live-chat__reaction:disabled {
+    cursor: default;
+  }
+  .pk-live-chat__reaction:focus-visible {
+    outline: 2px solid var(--pk-focus);
+    outline-offset: 1px;
+  }
+
+  .pk-live-chat__jump {
+    position: absolute;
+    inset-inline: 0;
+    inset-block-end: 4.5rem;
+    display: flex;
+    justify-content: center;
+    pointer-events: none;
+  }
+  .pk-live-chat__jump .pk-btn {
+    pointer-events: auto;
+    box-shadow: var(--pk-shadow-2);
+  }
+
+  /* The composer: a status line that keeps its space, then the field with Send attached. */
+  .pk-live-chat__composer {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pk-1);
+  }
+  .pk-live-chat__input {
+    display: flex;
+    align-items: flex-end;
+  }
+  .pk-live-chat__input .pk-field {
+    flex: 1;
+    min-inline-size: 0;
+  }
+  /* One line to start, a few as the message grows, then it scrolls. */
+  .pk-live-chat__input .pk-input--textarea {
+    field-sizing: content;
+    min-block-size: 2.5rem;
+    max-block-size: 8rem;
+    overflow-y: auto;
+    resize: none;
+    border-start-end-radius: 0;
+    border-end-end-radius: 0;
+  }
+  .pk-live-chat__input > .pk-btn {
+    flex: none;
+    min-block-size: 2.5rem;
+    margin-inline-start: -1px;
+    border-start-start-radius: 0;
+    border-end-start-radius: 0;
+  }
+}

@@ -1,0 +1,114 @@
+/*
+ * The virtual room: the player large with the running session under it, and the room's panels beside it on a
+ * wide screen. On a phone the player stays in view at the top while the panels scroll beneath it.
+ */
+
+@layer components {
+  /* Phones and tablets: one column whose player stays in view while the rest scrolls beneath it. */
+  .pk-virtual-room {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pk-3);
+  }
+
+  .pk-virtual-room__stage {
+    display: contents;
+  }
+
+  .pk-virtual-room__player {
+    position: sticky;
+    z-index: 10;
+    top: var(--pk-viewport-shift-top, 0px);
+    overflow: hidden;
+    border: 1px solid var(--pk-line-soft);
+    border-radius: var(--pk-radius);
+    background: var(--pk-surface-sunk);
+  }
+
+  .pk-virtual-room__player .pk-embed {
+    border: 0;
+  }
+
+  .pk-virtual-room__player--idle {
+    position: static;
+    display: grid;
+    align-items: center;
+    aspect-ratio: 16 / 9;
+    padding: var(--pk-4);
+  }
+
+  .pk-virtual-room__title {
+    margin: 0;
+    font-size: var(--pk-text-xl);
+    font-weight: 700;
+    line-height: 1.25;
+  }
+
+  .pk-virtual-room__now p {
+    margin: 0;
+  }
+
+  .pk-virtual-room__panels {
+    align-content: start;
+  }
+
+  .pk-virtual-room__item {
+    display: grid;
+    gap: var(--pk-1);
+    padding-inline-start: var(--pk-3);
+    border-inline-start: var(--pk-1) solid var(--pk-line-soft);
+  }
+
+  .pk-virtual-room__item--live {
+    border-inline-start-color: var(--pk-accent);
+  }
+
+  /* Wide screens: the player large on the left, the room's panels beside it. */
+  @media (min-width: 64rem) {
+    .pk-virtual-room {
+      display: grid;
+      gap: var(--pk-4);
+      grid-template-areas:
+        "locations locations"
+        "stage panels";
+      grid-template-columns: minmax(0, 2fr) minmax(18rem, 1fr);
+    }
+
+    .pk-virtual-room__locations {
+      grid-area: locations;
+    }
+
+    .pk-virtual-room__stage {
+      display: grid;
+      gap: var(--pk-3);
+      grid-area: stage;
+      align-content: start;
+    }
+
+    .pk-virtual-room__player {
+      position: static;
+    }
+
+    .pk-virtual-room__panels {
+      grid-area: panels;
+    }
+  }
+}
+
+@layer components {
+  .pk-virtual-room__player--monitor {
+    position: static;
+    display: grid;
+    place-items: center;
+    aspect-ratio: 16 / 9;
+    background: var(--pk-pqc-ink);
+    color: var(--pk-on-solid);
+    border: 1px solid var(--pk-line);
+    border-radius: var(--pk-radius-card);
+    font-size: var(--pk-text-xs);
+  }
+  .pk-virtual-room__player--monitor .pk-embed {
+    inline-size: 100%;
+    block-size: 100%;
+  }
+}

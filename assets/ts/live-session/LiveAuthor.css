@@ -1,0 +1,48 @@
+@layer components {
+  /* A name, its capacity in muted type and its role marks, on one line that truncates the capacity first. */
+  .pk-live-author {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--pk-1) var(--pk-2);
+    min-inline-size: 0;
+    max-inline-size: 100%;
+  }
+  .pk-live-author__name {
+    flex: none;
+    max-inline-size: 14rem;
+    overflow: hidden;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-weight: 600;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  button.pk-live-author__name {
+    cursor: pointer;
+    text-decoration: underline dotted var(--pk-line-strong);
+    text-underline-offset: 0.2em;
+  }
+  button.pk-live-author__name:hover {
+    text-decoration-color: currentColor;
+  }
+  button.pk-live-author__name:focus-visible {
+    outline: 2px solid var(--pk-focus);
+    outline-offset: 2px;
+    border-radius: var(--pk-radius-sm);
+  }
+  /* "Name · Organization": the dot keeps the two apart without a second line. */
+  .pk-live-author__capacity::before {
+    content: "·" / "";
+    margin-inline-end: var(--pk-2);
+  }
+  .pk-live-author__capacity {
+    min-inline-size: 0;
+    overflow: hidden;
+    color: var(--pk-ink-muted);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+}
