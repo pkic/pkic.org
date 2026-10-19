@@ -133,7 +133,7 @@ describe("Independent scanner capabilities and badge expiry", () => {
     await env.DB.prepare("UPDATE permission_grants SET revoked_at=? WHERE user_id=?")
       .bind(new Date().toISOString(), operatorId)
       .run();
-    expect((await scan(scanBody({ action: "check" }))).status).toBe(401);
+    expect((await scan(scanBody({ action: "check" }))).status).toBe(403);
   });
   it("does not allow admission-only operators to opt into exception attendance", async () => {
     await env.DB.prepare(

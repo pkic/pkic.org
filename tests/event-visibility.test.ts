@@ -486,8 +486,8 @@ describe("scoped scanner event discovery", () => {
       await env.DB.prepare("UPDATE permission_grants SET revoked_at=? WHERE id=?")
         .bind(new Date().toISOString(), id)
         .run();
-      expect((await request("/api/v1/events", token)).status).toBe(401);
-      expect((await request("/api/v1/events/scanner-private", token)).status).toBe(401);
+      expect((await requestAudienceList("/api/v1/events", token)).events).toEqual([]);
+      expect((await request("/api/v1/events/scanner-private", token)).status).toBe(404);
     },
   );
   it("discovers only its canonical active sponsor target and hides it when sponsorship lapses", async () => {
@@ -517,7 +517,7 @@ describe("scoped scanner event discovery", () => {
     expect((await requestAudienceList("/api/v1/events", token)).events).toHaveLength(0);
     await env.DB.prepare("UPDATE sponsorships SET pipeline_stage='active' WHERE id=?").bind(sponsorId).run();
     await env.DB.prepare("UPDATE permission_grants SET revoked_at=? WHERE id=?").bind(now, id).run();
-    expect((await request("/api/v1/events", token)).status).toBe(401);
+    expect((await requestAudienceList("/api/v1/events", token)).events).toEqual([]);
   });
   it.each(["agenda:leads_view", "agenda:leads_export", "agenda:leads_capture"])(
     "discovers contacts only for an exact active view/export scope, independent of %s capture access",

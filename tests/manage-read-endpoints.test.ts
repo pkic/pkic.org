@@ -4,6 +4,7 @@ import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
+import { insertUser } from "./helpers/membership";
 import { sha256Hex } from "../functions/_lib/utils/crypto";
 import { getEventBySlug } from "../functions/_lib/services/events";
 import { createRegistration, confirmRegistrationByToken } from "../functions/_lib/services/registrations";
@@ -271,17 +272,12 @@ describe("manage read endpoints", () => {
     const admin = (await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0];
     const adminToken = await createAdminSession(env.DB, admin.id, "admin-manage-token");
 
-    await env.DB.prepare(
-      `
-      INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
-      VALUES ('jwt-user', 'jwt-user@example.test', 'jwt-user@example.test', 'Jwt', 'User', datetime('now'), datetime('now'))
-    `,
-    ).run();
+    const registrantId = await insertUser(env.DB, "jwt-user@example.test");
 
     const event = await getEventBySlug(env.DB, "pqc-2026");
     const created = await createRegistration(env.DB, {
       event,
-      userId: "jwt-user",
+      userId: registrantId,
       attendanceType: "virtual",
       sourceType: "direct",
       confirmationTtlHours: 48,

@@ -322,8 +322,8 @@ describe("durable owned recording acquisitions", () => {
     await f.enqueue();
     await revoke(f.admin.id);
     const refused = await f.call();
-    expect(refused.status).toBe(401);
-    expect(await refused.json()).toMatchObject({ error: { code: "AUTH_INVALID" } });
+    expect(refused.status).toBe(403);
+    expect(await refused.json()).toMatchObject({ error: { code: "PERMISSION_REQUIRED" } });
     expect(await acquisitionRows()).toHaveLength(1);
     expect(await audits()).toHaveLength(1);
     expect(await queryAll(env.DB, "SELECT id FROM event_recording_versions")).toEqual([]);

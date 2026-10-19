@@ -8,7 +8,11 @@ import { callApi } from "./helpers/app";
 import { createTestRateLimiter, deliveredEmailPayload, queryAll } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
 import { addRepresentative, insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
-import { requiredMembershipApplicationAnswers, seedMembershipApplicationForm } from "./helpers/member-applications";
+import {
+  membershipApplicationDescriptionAnswers,
+  requiredMembershipApplicationAnswers,
+  seedMembershipApplicationForm,
+} from "./helpers/member-applications";
 import { materializeQueuedCapabilityLinks } from "../functions/_lib/auth/capability-links";
 import {
   newMemberJoinCapabilityPayload,
@@ -347,7 +351,7 @@ describe("verified-email-first membership join", () => {
       answers: {
         reason: "Apply through a verified alias.",
         ...requiredMembershipApplicationAnswers,
-        job_title: "Representative",
+        ...membershipApplicationDescriptionAnswers("F"),
       },
     });
 
@@ -373,7 +377,11 @@ describe("verified-email-first membership join", () => {
       applicantName: "Independent Person",
       membershipCategory: "H6",
       joinToken: verification.joinToken,
-      answers: { reason: "I want to contribute to the PKI community.", ...requiredMembershipApplicationAnswers },
+      answers: {
+        reason: "I want to contribute to the PKI community.",
+        ...requiredMembershipApplicationAnswers,
+        ...membershipApplicationDescriptionAnswers("H6"),
+      },
     };
     const first = await postJson(testEnv, "/api/v1/members/applications", payload);
     expect(first.status).toBe(201);
@@ -403,7 +411,7 @@ describe("verified-email-first membership join", () => {
       answers: {
         reason: "Apply through the verified canonical identity.",
         ...requiredMembershipApplicationAnswers,
-        job_title: "Representative",
+        ...membershipApplicationDescriptionAnswers("F"),
       },
     });
     expect(response.status).toBe(201);
@@ -438,7 +446,7 @@ describe("verified-email-first membership join", () => {
         answers: {
           reason: "Race the verified account binding.",
           ...requiredMembershipApplicationAnswers,
-          job_title: "Representative",
+          ...membershipApplicationDescriptionAnswers("F"),
         },
         appBaseUrl: "https://app.test",
         joinCapabilityId: crypto.randomUUID(),

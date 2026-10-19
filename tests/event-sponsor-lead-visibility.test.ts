@@ -102,8 +102,8 @@ describe("sponsor-only lead viewer event discovery", () => {
         await env.DB.prepare(`UPDATE permission_grants SET ${invalidation}=? WHERE id=?`)
           .bind("2000-01-01T00:00:00.000Z", grantId)
           .run();
-        expect((await request("", token)).status).toBe(401);
-        expect((await request("/pqc-2026", token)).status).toBe(401);
+        expect(await slugs(token)).toEqual([]);
+        expect((await request("/pqc-2026", token)).status).toBe(404);
       });
     }
 

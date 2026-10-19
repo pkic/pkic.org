@@ -100,6 +100,6 @@ describe("mounted event team roster", () => {
     )
       .bind(now, eventId)
       .run();
-    expect((await roster(reader)).status).toBe(401);
+    expect((await roster(reader)).status).toBe(403);
   });
 });

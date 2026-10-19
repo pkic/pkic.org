@@ -148,6 +148,6 @@ describe("GET /api/v1/events/:eventSlug/promoters", () => {
     expect((await call("/api/v1/admin/events/pqc-2026/promoters")).status).toBe(404);
 
     await env.DB.prepare("UPDATE permission_grants SET revoked_at = datetime('now') WHERE id = ?").bind(grantId).run();
-    expect((await call("/api/v1/events/pqc-2026/promoters")).status).toBe(401);
+    expect((await call("/api/v1/events/pqc-2026/promoters")).status).toBe(403);
   });
 });

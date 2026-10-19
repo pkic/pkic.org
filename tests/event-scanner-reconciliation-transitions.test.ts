@@ -337,9 +337,9 @@ describe("Known offline scans reconciled after server state changes", () => {
     await env.DB.prepare("UPDATE permission_grants SET revoked_at=? WHERE id=?")
       .bind(new Date().toISOString(), grantId)
       .run();
-    expect((await prepare()).status).toBe(401);
+    expect((await prepare()).status).toBe(403);
     const allocation = await allocationSnapshot();
-    expect((await fixture.scan(captured.record.scan)).status).toBe(401);
+    expect((await fixture.scan(captured.record.scan)).status).toBe(403);
     expect(await allocationSnapshot()).toEqual(allocation);
     expect(JSON.stringify(captured.record)).toBe(captured.serialized);
     expect(await env.DB.prepare("SELECT COUNT(*) AS total FROM event_scan_attempts").first()).toEqual({ total: 0 });

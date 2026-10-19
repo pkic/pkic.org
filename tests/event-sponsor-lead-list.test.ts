@@ -355,12 +355,12 @@ describe("sponsor live lead viewing through the mounted API", () => {
   });
   it("rejects revoked, expired, capture-only and global administrative scopes", async () => {
     await env.DB.prepare("UPDATE permission_grants SET revoked_at='2026-10-04T10:00:00.000Z'").run();
-    expect((await request()).status).toBe(401);
+    expect((await request()).status).toBe(403);
     await expect(
       listSponsorLeads(env.DB, eventId, sponsorId, operator, sponsorLeadQuerySchema.parse({})),
     ).rejects.toMatchObject({ status: 403 });
     await env.DB.prepare("UPDATE permission_grants SET revoked_at=NULL,expires_at='2000-01-01T00:00:00.000Z'").run();
-    expect((await request()).status).toBe(401);
+    expect((await request()).status).toBe(403);
     await expect(
       listSponsorLeads(env.DB, eventId, sponsorId, operator, sponsorLeadQuerySchema.parse({})),
     ).rejects.toMatchObject({ status: 403 });

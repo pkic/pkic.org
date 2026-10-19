@@ -340,8 +340,8 @@ describe("Published session favorites and capacity demand report", () => {
     expect((await request("", false, "")).status).toBe(401);
     await revokeAdministrator();
     const inactive = await request();
-    expect(inactive.status).toBe(401);
-    expect(await inactive.json()).toMatchObject({ error: { code: "AUTH_INVALID" } });
+    expect(inactive.status).toBe(403);
+    expect(await inactive.json()).toMatchObject({ error: { code: "PERMISSION_REQUIRED" } });
     expect(await exportedAuditCount()).toBe(0);
     const foreignEvent = crypto.randomUUID();
     await env.DB.prepare(
@@ -380,9 +380,9 @@ describe("Published session favorites and capacity demand report", () => {
     });
     expect(await exportedAuditCount()).toBe(0);
     const inactive = await request("", true);
-    expect(inactive.status).toBe(401);
+    expect(inactive.status).toBe(403);
     expect(inactive.headers.get("content-type")).not.toContain("text/csv");
-    expect(await inactive.json()).toMatchObject({ error: { code: "AUTH_INVALID" } });
+    expect(await inactive.json()).toMatchObject({ error: { code: "PERMISSION_REQUIRED" } });
   });
 
   it("refuses an expired session at the mounted report and CSV boundaries", async () => {
