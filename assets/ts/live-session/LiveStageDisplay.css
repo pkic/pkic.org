@@ -86,7 +86,7 @@
     color: var(--pk-danger);
   }
   .pk-live-stage-display__countdown[data-tone] {
-    animation: pk-stage-timer-warning 1s ease-in-out 3;
+    animation: pk-stage-timer-warning var(--pk-dur-timer-warning) ease-in-out 3;
   }
   @keyframes pk-stage-timer-warning {
     50% {

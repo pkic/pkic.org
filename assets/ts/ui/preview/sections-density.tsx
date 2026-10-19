@@ -9,6 +9,7 @@ import "../../member-flows/portal/sections/events/detail/live/studio/TimePanel.c
 import { Button } from "../Button";
 import { DataTable } from "../DataTable";
 import { useState } from "preact/hooks";
+import { useHashQueryParam } from "../../hooks/useHashQueryParam";
 import { MarkdownEditor } from "../../components/markdown-editor/MarkdownInput";
 import { Field } from "../Field";
 import { FormSection } from "../FormSection";
@@ -94,7 +95,7 @@ function StudioTimerSpecimen() {
 /** A toolbar is compact by itself; the comfortable row opts out to show both heights. */
 function ControlRow({ density }: { density: "compact" | "comfortable" }) {
   const [query, setQuery] = useState("");
-  const [view, setView] = useState<"grid" | "list">("list");
+  const [view, setView] = useHashQueryParam("galleryDensityView", "list", ["grid", "list"] as const);
   return (
     <CollectionToolbar
       label={`Control row, ${density}`}

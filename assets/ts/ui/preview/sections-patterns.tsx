@@ -9,6 +9,7 @@
  */
 
 import { useState } from "preact/hooks";
+import { useHashQueryParam } from "../../hooks/useHashQueryParam";
 
 import { LIVE_CHAT_REACTIONS } from "../../../shared/live-chat-policy";
 import { IconPlus } from "../../components/icons";
@@ -139,7 +140,11 @@ function ReactionPickerSpecimen() {
 }
 
 function TabsSpecimen() {
-  const [active, setActive] = useState("overview");
+  const [active, setActive] = useHashQueryParam<string>("gallerySessionSection", "overview", [
+    "overview",
+    "speakers",
+    "questions",
+  ] as const);
   return (
     <TabList
       label="Session sections"

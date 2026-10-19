@@ -123,7 +123,7 @@
   .pk-studio-phone__thumb-tools .pk-btn {
     min-block-size: 2rem;
     min-inline-size: 2rem;
-    background: rgb(0 0 0 / 0.6);
+    background: var(--pk-live-control-scrim);
     color: var(--pk-on-solid);
   }
   /* Preview's thumbnail carries the Transition on its edge, as the desk's Preview monitor does. */

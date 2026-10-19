@@ -2,6 +2,13 @@
 @layer legacy, tokens, base, components, utilities;
 @layer tokens {
   :root {
+    --pk-live-question-type: 64px;
+    --pk-live-question-type-long: 52px;
+    --pk-live-question-type-longer: 44px;
+    --pk-live-question-type-longest: 36px;
+    --pk-live-question-byline-type: 32px;
+    --pk-live-control-scrim: rgba(0, 0, 0, 0.6);
+    --pk-dur-timer-warning: 1s;
     --pk-pqc-ink: #0b0d0c;
     --pk-pqc-ink-muted: #4a524f;
     --pk-pqc-paper: #ffffff;

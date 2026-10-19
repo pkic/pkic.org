@@ -154,7 +154,7 @@
     display: -webkit-box;
     margin: 0;
     overflow: hidden;
-    font-size: 64px;
+    font-size: var(--pk-live-question-type);
     font-weight: 700;
     line-height: 1.2;
     text-align: start;
@@ -165,21 +165,21 @@
   }
   .pk-live-overlay__question-text[data-fit="long"] {
     --question-lines: 7;
-    font-size: 52px;
+    font-size: var(--pk-live-question-type-long);
   }
   .pk-live-overlay__question-text[data-fit="longer"] {
     --question-lines: 8;
-    font-size: 44px;
+    font-size: var(--pk-live-question-type-longer);
   }
   .pk-live-overlay__question-text[data-fit="longest"] {
     --question-lines: 10;
-    font-size: 36px;
+    font-size: var(--pk-live-question-type-longest);
   }
   /* Paragraphs, not blockquote and figcaption: the site's own rules for those sit outside the layers and would win. */
   .pk-live-overlay__question-asker {
     margin: 16px 0 0;
     color: var(--pk-pqc-ink-muted);
-    font-size: 32px;
+    font-size: var(--pk-live-question-byline-type);
     font-weight: 500;
     text-align: start;
   }
@@ -402,11 +402,11 @@
   /* Warning and overtime tint the digits red and briefly pulse the element. */
   .pk-live-overlay__timer[data-tone="warn"] {
     color: var(--pk-danger);
-    animation: pk-timer-warning 1s ease-in-out 3;
+    animation: pk-timer-warning var(--pk-dur-timer-warning) ease-in-out 3;
   }
   .pk-live-overlay__timer[data-tone="over"] {
     color: var(--pk-danger);
-    animation: pk-timer-warning 1s ease-in-out 3;
+    animation: pk-timer-warning var(--pk-dur-timer-warning) ease-in-out 3;
   }
   @keyframes pk-timer-warning {
     50% {

@@ -3,17 +3,18 @@ import { liveQuestionAsker, liveQuestionFit } from "../../shared/live-stage-disp
 import type { LiveRoomState } from "./live-room-state";
 import type { LiveStageQuestion, LiveTimerGraphic } from "../../shared/schemas/live-session-room";
 import { useLiveTimerReading } from "./useLiveCountdown";
+import { useNumericCssProperties } from "../hooks/useNumericCssProperties";
 import "./LiveStageDisplay.css";
 
 /** The timer the stage display shows, in its graphic's format and label; it steps aside for a question. */
 function StageCountdown({ graphic, state }: { graphic: LiveTimerGraphic; state: LiveRoomState }) {
   const reading = useLiveTimerReading(graphic, state.timers, state.session);
+  const geometry = useNumericCssProperties({
+    "--timer-text-scale": Math.min(1, 10 / Math.max(reading?.text.length ?? 0, 1)),
+  });
   if (!reading) return null;
   return (
-    <div
-      class="pk-live-stage-display__timer"
-      style={{ "--timer-text-scale": Math.min(1, 10 / Math.max(reading.text.length, 1)) }}
-    >
+    <div class="pk-live-stage-display__timer" data-numeric-css-properties={geometry}>
       {reading.label ? <p class="pk-live-stage-display__label">{reading.label}</p> : null}
       <p class="pk-live-stage-display__countdown" data-tone={reading.tone}>
         {reading.text}
@@ -44,6 +45,9 @@ function StageQuestion({ question, label, next }: { question: LiveStageQuestion;
  */
 export function LiveStageDisplay({ state, roomId }: { state: LiveRoomState; roomId?: string }) {
   const { session, stage, stageDisplayNext: next } = state;
+  const geometry = useNumericCssProperties({
+    "--timer-columns": Math.max(1, Math.ceil(Math.sqrt(stage.timerGraphics.length))),
+  });
   const zone = session.timeZone;
   const rooms = stage.schedule?.available ? stage.schedule.rooms : [];
   const upcoming = rooms.find((room) => room.roomId === roomId) ?? rooms[0];
@@ -57,10 +61,7 @@ export function LiveStageDisplay({ state, roomId }: { state: LiveRoomState; room
       </div>
       <div class="pk-live-stage-display__main">
         {current ? <StageQuestion question={current} label="Question" /> : null}
-        <div
-          class="pk-live-stage-display__timers"
-          style={{ "--timer-columns": Math.max(1, Math.ceil(Math.sqrt(stage.timerGraphics.length))) }}
-        >
+        <div class="pk-live-stage-display__timers" data-numeric-css-properties={geometry}>
           {stage.timerGraphics.map((graphic) => (
             <StageCountdown key={graphic.timerId} graphic={graphic} state={state} />
           ))}

@@ -111,7 +111,7 @@ export function PublicPersonCard({
       <div class="person-card-main">
         <div class={frameClasses}>
           {/* The name is the next thing in the card, so the portrait is decorative. */}
-          <Avatar name={person.name} src={person.photoUrl ?? undefined} class="pk-public-person-avatar" />
+          <Avatar name={person.name} src={person.photoUrl ?? undefined} />
           <span class={`person-card-role-arc${past ? " person-card-role-arc--past" : ""}`}>{role}</span>
         </div>
         <div class="person-card-body">
