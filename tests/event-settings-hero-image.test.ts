@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { env as workerEnv } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { normalizeHttpOrSameOriginUrl } from "../assets/shared/schemas/urls";
 import type { Env } from "../functions/_lib/types";
 import { eventSettingsSchema } from "../assets/shared/schemas/event-management";

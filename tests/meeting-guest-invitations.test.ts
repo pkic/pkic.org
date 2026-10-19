@@ -2,7 +2,7 @@ import { grantAdministrator } from "./helpers/administrator";
 import { configureMeetingOccurrence } from "./helpers/meeting-occurrence";
 import { env } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { materializeQueuedCapabilityLinks } from "../functions/_lib/auth/capability-links";
 import {
   prepareMeetingGuestBrowserChallenge,

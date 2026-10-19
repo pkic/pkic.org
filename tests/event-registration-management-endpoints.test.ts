@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import app from "../functions/router";
+import app from "./helpers/app";
 import type { DatabaseLike, Env } from "../functions/_lib/types";
 import { getEventBySlug } from "../functions/_lib/services/events";
 import { createRegistration } from "../functions/_lib/services/registrations";

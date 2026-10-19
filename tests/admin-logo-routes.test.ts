@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { handleError } from "../functions/_lib/http";
-import app from "../functions/router";
+import app from "./helpers/app";
 import "./helpers/app";
 import { insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
 import { onRequest as organizationLogoRequest } from "../functions/api/v1/organizations/[organizationId]/logo";

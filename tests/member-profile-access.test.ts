@@ -14,7 +14,7 @@ import { grantAdministrator } from "./helpers/administrator";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 
-import app from "../functions/router";
+import app from "./helpers/app";
 import { userDetailResponseSchema } from "../assets/shared/schemas/user-management";
 import { createMcpSession, createMemberSession } from "./helpers/auth";
 import { insertIndividualMember, insertUser } from "./helpers/membership";

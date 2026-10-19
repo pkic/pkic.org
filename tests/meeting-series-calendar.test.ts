@@ -3,7 +3,7 @@ import { env } from "cloudflare:workers";
 import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import ICAL from "ical.js";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { meetingCalendarThrough, outboundMeetingLocation } from "../assets/shared/meeting-calendar-policy";
 import { eventSeriesCreateSchema, eventSeriesResponseSchema } from "../assets/shared/schemas/event-series";
 import {

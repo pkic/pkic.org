@@ -1,4 +1,4 @@
-import app from "../functions/router";
+import app from "./helpers/app";
 import { callApi } from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
 import { JOB_TITLE_REQUIRED } from "../assets/shared/schemas/identity-job-title";

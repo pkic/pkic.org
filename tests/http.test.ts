@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { env } from "cloudflare:workers";
 import { HTTPException } from "hono/http-exception";
 import { dispatchRequestMethod, handleError, methodNotAllowed } from "../functions/_lib/http";
-import worker from "../functions/router";
+import worker from "./helpers/app";
 import { onRequest as registrationHeadshotDispatch } from "../functions/api/v1/registrations/access/[token]/headshot";
 
 function context(method: string) {

@@ -27,7 +27,7 @@ import {
 } from "../assets/shared/schemas/proposal-management";
 import { proposalDecisionPreviewResponseSchema } from "../assets/shared/schemas/proposal-decisions";
 import { proposalSpeakersResponseSchema } from "../assets/shared/schemas/proposal-speakers";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { createAdminSession, createMcpSession } from "./helpers/auth";
 import type { AuthScope } from "../functions/_lib/auth/scopes";
 import { insertOrgRepresentative, insertUser } from "./helpers/membership";

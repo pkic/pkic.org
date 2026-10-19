@@ -3,7 +3,7 @@ import { selectIndividualSpeakerRepresentation } from "./helpers/proposal-proof"
 import { ADMINISTRATOR_FIXTURE_USER_SQL, administratorGrants } from "./helpers/administrator";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
-import app from "../functions/router";
+import app from "./helpers/app";
 import type { DatabaseLike } from "../functions/_lib/types";
 import {
   addProposalSpeaker,

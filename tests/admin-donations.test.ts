@@ -9,7 +9,7 @@ import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./helpers/administrator";
  */
 import { afterEach, describe, expect, it, beforeEach, vi } from "vitest";
 import { env } from "cloudflare:workers";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import {

@@ -9,7 +9,7 @@ import "../functions/http-router";
  */
 import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { resetDb } from "./helpers/reset-db";
 import { insertUser, insertOrganization, seedOrganizationAggregate, addRepresentative } from "./helpers/membership";
 import { findEligibleMemberById } from "../functions/_lib/auth/member";

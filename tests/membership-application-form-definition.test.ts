@@ -13,7 +13,7 @@ import {
   updateMembershipApplicationFormDefinition,
 } from "../functions/_lib/services/membership/application-form";
 import { getGlobalFormByKey } from "../functions/_lib/services/forms";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";

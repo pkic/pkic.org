@@ -5,7 +5,7 @@ import { INTERNAL_CALENDAR_RSVP_MAX_BYTES } from "../functions/_lib/http-body";
 import { queryAll } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
 import { seedRsvpRegistration } from "./helpers/rsvp";
-import app from "../functions/router";
+import app from "./helpers/app";
 import type { Env } from "../functions/_lib/types";
 
 interface RsvpRow {

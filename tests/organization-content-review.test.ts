@@ -13,7 +13,7 @@
  */
 import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
-import app from "../functions/router";
+import app from "./helpers/app";
 import "./helpers/app";
 import { claimPublicationDispatch } from "../functions/_lib/services/site-publication-coordinator";
 import { config as publicationConfig } from "./helpers/site-publication-coordinator";

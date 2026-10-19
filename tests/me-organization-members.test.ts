@@ -8,7 +8,7 @@
  */
 import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { addCoworker } from "../functions/_lib/services/member-organization";
 import type { AuthMember } from "../functions/_lib/types";
 import { resetDb } from "./helpers/reset-db";

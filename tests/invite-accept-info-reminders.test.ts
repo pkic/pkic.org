@@ -16,7 +16,7 @@ import { seedWorkflowEmailTemplates } from "./helpers/event-workflow";
 import { run } from "../functions/_lib/db/queries";
 import { createInvite, declineInvite, acceptInvite } from "../functions/_lib/services/invites";
 import { onRequestGet as inviteInfo } from "../functions/api/v1/invites/[token]/info";
-import app from "../functions/router";
+import app from "./helpers/app";
 
 function mounted(c: any): Promise<Response> {
   return app.fetch(c.req.raw, c.env, { passThroughOnException: () => {}, waitUntil: () => {} } as any);

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
-import app from "../functions/router";
+import app from "./helpers/app";
 import "./helpers/app";
 import { createUserBackedAuthAdmin } from "../functions/_lib/auth/admin-identity";
 import { buildOffsetPageSql } from "../functions/_lib/db/pagination";

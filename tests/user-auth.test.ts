@@ -3,7 +3,7 @@ import "../functions/http-router";
 import { userAuthSessionResponseSchema } from "../assets/shared/schemas/user-auth";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { createTestRateLimiter, deliveredEmailPayload, queryAll, seedEventAndAdmin } from "./helpers/context";
 import {
   addRepresentative,

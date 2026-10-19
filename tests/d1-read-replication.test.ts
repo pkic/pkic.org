@@ -4,7 +4,7 @@ import { cacheAdminForRequest, requireAdminFromRequest } from "../functions/_lib
 import { signUserSessionToken, verifyUserSessionToken } from "../functions/_lib/auth/user-session";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../functions/_lib/types";
 import { createUserBackedAuthAdmin } from "../functions/_lib/auth/admin-identity";
-import worker from "../functions/router";
+import worker from "./helpers/app";
 import { requestD1SessionConstraint } from "../functions/_lib/db/session";
 import { resilientDatabase } from "../functions/_lib/dependency-bindings";
 

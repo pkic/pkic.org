@@ -5,7 +5,7 @@ import { onRequestGet as donationBadgeImage } from "../functions/api/v1/donation
 import { onRequestGet as donationSharePage } from "../functions/donate/r/[code]";
 import { onRequestGet as eventBadgeImage } from "../functions/api/v1/registrations/referrals/[code]/badge";
 import { callApi } from "./helpers/app";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { createContext, seedEventAndAdmin } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
 import type { Env } from "../functions/_lib/types";

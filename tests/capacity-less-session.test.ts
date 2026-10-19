@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { userAuthSessionResponseSchema } from "../assets/shared/schemas/user-auth";
 import { createTestRateLimiter, deliveredEmailPayload, queryAll } from "./helpers/context";
 import { requireMembershipCategory } from "../functions/_lib/services/membership/categories";

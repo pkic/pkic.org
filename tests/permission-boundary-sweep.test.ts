@@ -1,6 +1,6 @@
 import { createExecutionContext, env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { openapi } from "../functions/http-router";
 import { resetDb } from "./helpers/reset-db";
 import { AUTH_EXTENSION } from "../functions/_lib/openapi/mcp";

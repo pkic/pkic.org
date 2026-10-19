@@ -3,7 +3,7 @@ import { env as workerEnv } from "cloudflare:workers";
 import "../functions/http-router";
 const env = { ...workerEnv, INTERNAL_SIGNING_SECRET: "synthetic-oauth-test-signing-secret-32-plus" };
 import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { MCP_PATH } from "../functions/_lib/api-tools/mcp-worker";
 import {
   MCP_OAUTH_AUTHORIZE_PATH,

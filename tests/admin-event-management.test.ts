@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { resetDb } from "./helpers/reset-db";
 import { seedPersona } from "./personas/seed";
 import { createAdminSession } from "./helpers/auth";
@@ -692,14 +692,14 @@ describe("admin event management endpoints", () => {
       .bind(manager.roleAssignmentId)
       .run();
 
-    expect((await callAdmin("/api/v1/events/pqc-2026/roles")).status).toBe(401);
+    expect((await callAdmin("/api/v1/events/pqc-2026/roles")).status).toBe(403);
     expect(
       (
         await callAdmin(`/api/v1/events/pqc-2026/roles/${assignment.role.id}`, {
           method: "DELETE",
         })
       ).status,
-    ).toBe(401);
+    ).toBe(403);
     expect(
       await queryAll<{ revoked_at: string | null }>(env.DB, "SELECT revoked_at FROM user_roles WHERE id = ?", [
         assignment.role.id,

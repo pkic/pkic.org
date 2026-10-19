@@ -5,7 +5,7 @@ import { resetDb } from "./helpers/reset-db";
 import { createContext, queryAll, seedEventAndAdmin } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { validJpegBytes, validPngBytes } from "./helpers/raster-images";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { callApi } from "./helpers/app";
 import {
   insertIndividualMembershipForUser,

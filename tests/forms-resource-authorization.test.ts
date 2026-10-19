@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";

@@ -1,6 +1,6 @@
 import { createExecutionContext, env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { isAppError } from "../functions/_lib/errors";
 import {
   groupVoteDetailResponseSchema,

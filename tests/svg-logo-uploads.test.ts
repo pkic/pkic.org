@@ -14,7 +14,7 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { handleError } from "../functions/_lib/http";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { onRequest as organizationLogoRequest } from "../functions/api/v1/organizations/[organizationId]/logo";
 import { sanitizeSvgLogo, SVG_LOGO_LIVE_TEXT_MESSAGE } from "../functions/_lib/utils/svg-logo";
 import { createAdminSession } from "./helpers/auth";

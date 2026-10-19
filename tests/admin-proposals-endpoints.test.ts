@@ -7,7 +7,7 @@ import {
   proposalSpeakerPatchResponseSchema,
   proposalSpeakersResponseSchema,
 } from "../assets/shared/schemas/proposal-speakers";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { onRequestGet as getProposalDetail } from "../functions/api/v1/proposals/[proposalId]";
 import { onRequestPost as openProposalManage } from "../functions/api/v1/proposals/[proposalId]/open-manage";
 import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";

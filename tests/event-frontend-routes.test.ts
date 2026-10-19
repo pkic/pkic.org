@@ -6,7 +6,7 @@ import { seedEventAndAdmin } from "./helpers/context";
 import { callApi } from "./helpers/app";
 import { createReferralCode } from "../functions/_lib/services/referrals";
 import { resolveEventFrontendRoutes } from "../functions/_lib/services/events";
-import app from "../functions/router";
+import app from "./helpers/app";
 
 describe("event frontend routes and hydration contracts", () => {
   beforeEach(async () => {

@@ -5,7 +5,7 @@ import { env } from "cloudflare:workers";
 import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { resetDb } from "./helpers/reset-db";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { callApi } from "./helpers/app";
 import {
   addRepresentative,

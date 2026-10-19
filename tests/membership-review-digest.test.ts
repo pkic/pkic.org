@@ -4,7 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { seedMembershipReviewDigestTemplates } from "./helpers/membership-review-email-templates";
 import { env } from "cloudflare:workers";
 import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
 import { membershipWorkflowMigrationPreviewResponseSchema } from "../assets/shared/schemas/membership-workflow-migration";
 import { applicationStageTransitionSchema } from "../assets/shared/schemas/membership-application-management";

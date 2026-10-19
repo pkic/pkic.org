@@ -1,4 +1,4 @@
-import app from "../functions/router";
+import app from "./helpers/app";
 import { hmacSha256Hex } from "../functions/_lib/utils/crypto";
 import { agendaOccurrenceCalendarUid } from "../assets/shared/event-agenda-calendar-identity";
 import { processIncomingEmail } from "../functions/_lib/services/calendar-rsvp-email-ingest";

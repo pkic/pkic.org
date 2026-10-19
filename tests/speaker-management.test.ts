@@ -25,7 +25,7 @@ import { inviteProposalSpeaker } from "../functions/_lib/services/proposal-speak
 import { createPeerInvitations } from "../functions/_lib/services/peer-invitations";
 import { getEventBySlug } from "../functions/_lib/services/events";
 import { findOrCreateUser } from "../functions/_lib/services/users";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { issueDatabaseCapability } from "../functions/_lib/services/capability-links";
 import {
   remindProposalSpeakerByProposer,

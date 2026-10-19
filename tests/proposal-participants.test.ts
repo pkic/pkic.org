@@ -11,7 +11,7 @@ import {
   finalizeProposalDecision,
   getProposalByManageToken,
 } from "../functions/_lib/services/proposals";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { renderEmail } from "../functions/_lib/email/render";
 
 function mountedAppFetch(request: Request): Promise<Response> {

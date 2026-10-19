@@ -9,7 +9,7 @@ import { getEventBySlug } from "../functions/_lib/services/events";
 import { createRegistration, confirmRegistrationByToken } from "../functions/_lib/services/registrations";
 import { issueDatabaseCapability } from "../functions/_lib/services/capability-links";
 import { signAdminManageJwt } from "../functions/_lib/utils/jwt";
-import app from "../functions/router";
+import app from "./helpers/app";
 import {
   registrationManageReadResponseSchema,
   registrationManageUpdateResponseSchema,

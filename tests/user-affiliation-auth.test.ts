@@ -2,7 +2,7 @@ import { setOwnEmailSignInPermission } from "../functions/_lib/services/own-emai
 import { grantAdministrator } from "./helpers/administrator";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
-import app from "../functions/router";
+import app from "./helpers/app";
 import "./helpers/app";
 import { userAuthSessionResponseSchema } from "../assets/shared/schemas/user-auth";
 import { queueUserSignInCapability, redeemUserSignInCapability } from "../functions/_lib/auth/user-session";

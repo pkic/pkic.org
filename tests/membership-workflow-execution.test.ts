@@ -7,7 +7,7 @@ import { gateNextBatch } from "./helpers/d1-batch-gate";
 import { recordMembershipObjection } from "../functions/_lib/services/membership/workflows/objections";
 import { beforeEach, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { resetDb } from "./helpers/reset-db";
 import { seedMembershipReviewDigestTemplates } from "./helpers/membership-review-email-templates";
 import { createAdminSession, createMemberSession } from "./helpers/auth";

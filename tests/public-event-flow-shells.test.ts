@@ -4,7 +4,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { parseEventFlowPath } from "../assets/shared/event-flow-paths";
 import { createGroupManagedEvent } from "../functions/_lib/services/events/group-management";
 import type { DatabaseLike, Env, StaticAssetsBinding } from "../functions/_lib/types";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { insertUser } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 import { seedEventAndAdmin } from "./helpers/context";

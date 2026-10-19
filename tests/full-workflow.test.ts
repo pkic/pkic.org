@@ -8,7 +8,7 @@ import { createTemplateVersion, activateTemplateVersion } from "../functions/_li
 import { callApi } from "./helpers/app";
 import { queueEmail } from "../functions/_lib/email/outbox";
 import { issueDatabaseCapability } from "../functions/_lib/services/capability-links";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { createGroup } from "../functions/_lib/services/groups";
 
 interface VerifyUserPayload {

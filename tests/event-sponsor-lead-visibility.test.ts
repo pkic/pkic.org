@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { eventAudienceDetailSchema, eventsAudienceListResponseSchema } from "../assets/shared/schemas/event-management";
 import { createAdminSession } from "./helpers/auth";
 import { seedEventAndAdmin } from "./helpers/context";

@@ -1,7 +1,7 @@
 import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./helpers/administrator";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
-import app from "../functions/router";
+import app from "./helpers/app";
 import "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";

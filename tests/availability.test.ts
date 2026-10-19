@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
 import { createExecutionContext } from "cloudflare:test";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { callApi } from "./helpers/app";
 import { getAvailability } from "../functions/_lib/availability";
 import { apiStatusSchema } from "../assets/shared/schemas/availability";

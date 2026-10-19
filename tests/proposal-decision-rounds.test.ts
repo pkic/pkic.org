@@ -1,7 +1,7 @@
 import { grantAdministrator, administratorGrants } from "./helpers/administrator";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
-import app from "../functions/router";
+import app from "./helpers/app";
 import type { DatabaseLike } from "../functions/_lib/types";
 import {
   createProposal,

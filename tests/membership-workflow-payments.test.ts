@@ -3,7 +3,7 @@ import { prepareMembershipCategoryRename } from "../functions/_lib/services/memb
 import { membershipWorkflowProgress } from "../functions/_lib/services/membership/workflows/progress";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { resetDb } from "./helpers/reset-db";
 import { createApplicationFormSubmission, seedMemberApplication } from "./helpers/member-applications";
 import { getMembershipExecution } from "../functions/_lib/services/membership/workflows/execution";

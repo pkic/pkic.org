@@ -18,7 +18,7 @@ import { resetDb } from "./helpers/reset-db";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { activateTemplateVersion, createTemplateVersion } from "../functions/_lib/email/templates";
-import app from "../functions/router";
+import app from "./helpers/app";
 import type { DatabaseLike, StatementLike } from "../functions/_lib/types";
 import { insertUser } from "./helpers/membership";
 import { createGroup } from "../functions/_lib/services/groups";

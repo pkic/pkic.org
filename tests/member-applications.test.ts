@@ -6,7 +6,7 @@ import { createContext, createTestRateLimiter, queryAll } from "./helpers/contex
 import { handleError } from "../functions/_lib/http";
 import { onRequestPost as createApplication } from "../functions/api/v1/members/applications";
 import { onRequestGet as getApplicationForm } from "../functions/api/v1/members/applications/form";
-import app from "../functions/router";
+import app from "./helpers/app";
 
 function getApplicationStatus(context: ReturnType<typeof createContext>) {
   return app.fetch(context.req.raw, context.env, { waitUntil() {}, passThroughOnException() {} } as any);

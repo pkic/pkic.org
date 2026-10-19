@@ -7,7 +7,7 @@ import { env } from "cloudflare:workers";
 import { updateProposalReview, upsertProposalReview } from "../functions/_lib/services/proposal-reviews";
 import { seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
-import app from "../functions/router";
+import app from "./helpers/app";
 
 async function callProposalReview(
   token: string,

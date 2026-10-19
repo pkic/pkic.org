@@ -17,7 +17,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
 import { queryAll } from "./helpers/context";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { handleError } from "../functions/_lib/http";
 import { bulkCreateAttendeeInvites, bulkCreateInvites } from "../functions/_lib/services/invite-bulk";
 import { createD1QueryBudgetedDatabase } from "../functions/_lib/db/query-budget";

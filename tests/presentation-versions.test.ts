@@ -32,7 +32,7 @@ import {
   reviewPresentationVersion,
 } from "../functions/_lib/services/presentation-versions";
 import { getPresentationUploader } from "../functions/_lib/services/proposals-speaker-profile";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { processPendingStorageDeletions } from "../functions/_lib/services/storage-deletion-outbox";
 import {
   MAX_PRESENTATION_BYTES,

@@ -4,7 +4,7 @@ import { createExecutionContext } from "cloudflare:test";
 import { createRegistration } from "../functions/_lib/services/registrations/create";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { resetDb } from "./helpers/reset-db";
 import { queryAll } from "./helpers/context";
 import {

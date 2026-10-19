@@ -16,7 +16,7 @@ import {
   recordingProviderMeetingsRoute,
   EventRecordingMeetingsGet,
 } from "../functions/api/v1/events/[eventSlug]/recording-discovery";
-import workerApp from "../functions/router";
+import workerApp from "./helpers/app";
 import { handleError } from "../functions/_lib/http";
 import type { RealtimeKitRecordingConfiguration } from "../functions/_lib/services/event-series/realtimekit-recording-contracts";
 import type { DatabaseLike, Env } from "../functions/_lib/types";
