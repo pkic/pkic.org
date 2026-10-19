@@ -14,6 +14,7 @@ import { UserDetail } from "../../assets/ts/member-flows/portal/sections/system-
 import type { UserPermissions } from "../../assets/ts/member-flows/portal/sections/system-users/UserDetail";
 import { portalSession } from "../../assets/ts/member-flows/portal/state";
 import { portalSessionFixture } from "../helpers/portal-session";
+import { ownEmailAddressesListResponseSchema } from "../../assets/shared/schemas/own-email-addresses";
 
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["/users/self", vi.fn()] }));
 vi.mock("wouter", () => ({
@@ -127,20 +128,23 @@ function stubApi(options: { invitations?: unknown[] } = {}): string[] {
         return json(record(url.pathname.endsWith(SELF_ID) ? SELF_ID : OTHER_ID));
       }
       if (url.pathname === "/api/v1/users/current/emails") {
-        return json({
-          emails: [
-            {
-              id: null,
-              email: "person@example.test",
-              primary: true,
-              verifiedAt: "2026-08-01T00:00:00.000Z",
-              verificationMethod: "magic_link",
-              identityId: null,
-              createdAt: "2026-08-01T00:00:00.000Z",
-            },
-          ],
-          page: page(1),
-        });
+        return json(
+          ownEmailAddressesListResponseSchema.parse({
+            emails: [
+              {
+                id: null,
+                email: "person@example.test",
+                primary: true,
+                signInEnabled: true,
+                verifiedAt: "2026-08-01T00:00:00.000Z",
+                verificationMethod: "magic_link",
+                identityId: null,
+                createdAt: "2026-08-01T00:00:00.000Z",
+              },
+            ],
+            page: page(1),
+          }),
+        );
       }
       if (url.pathname === `/api/v1/users/${OTHER_ID}/emails`) return json({ emails: [], page: page(0) });
       if (url.pathname === "/api/v1/users/current/notifications/preferences") {
@@ -193,7 +197,7 @@ afterEach(() => {
 });
 
 describe("account panels on the user record", () => {
-  it("shows the record's subject all four panels, with the address rows in the shared row list", async () => {
+  it("shows the record's subject all four panels, with a named list of email addresses", async () => {
     portalSession.value = portalSessionFixture({ staff: true, member: true });
     stubApi();
     await mount(SELF_ID, NO_PERMISSIONS);
@@ -201,7 +205,7 @@ describe("account panels on the user record", () => {
     expect(panelNames()).toEqual(["Email addresses", "Email notifications", "Passkeys", "Access"]);
 
     const emails = panel("Email addresses")!;
-    expect(emails.querySelector(".pk-row-list")).not.toBeNull();
+    expect(emails.querySelector('ul[aria-label="Email addresses"]')).not.toBeNull();
     expect(emails.textContent).toContain("person@example.test");
     expect(emails.querySelector('[aria-label="Verified"]')).not.toBeNull();
     expect(emails.querySelector(".pk-badge")).toBeNull();
