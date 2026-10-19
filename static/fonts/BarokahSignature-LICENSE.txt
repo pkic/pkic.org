@@ -1,0 +1,15 @@
+Barokah Signature, version 0.1, by Alifinart Studio (February 2021)
+Copyright (c) 2021 Alifinart Studio
+
+Barokah Signature is a free font project by Alifinart Studio. The author states
+"Free For Commercial Use" and welcomes use of the font for commercial purposes
+(as published on dafont).
+
+Required attribution for any redistribution of this font: credit the foundry,
+Alifinart Studio, and link to https://www.behance.net/alifinart
+
+Author contact: alifinart@gmail.com
+
+The font's own name table carries the same notice ("Free For Commercial Use",
+"Copyright (c) 2021 Alifinart Studio", www.behance.net/alifinart/) and is retained
+in the bundled WOFF2.

@@ -43,7 +43,8 @@ data:
   name: Post-Quantum Cryptography Conference
   timezone: Europe/Amsterdam
   draft: true
-  location: Amsterdam, The Netherlands
+  city: Amsterdam
+  country: NL
   attendanceMode: https://schema.org/MixedEventAttendanceMode
   registrationUrl: register/
   participationUrl: propose/

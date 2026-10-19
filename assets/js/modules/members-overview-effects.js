@@ -20,7 +20,7 @@
 
       var b = utils.logoBuckets(links);
       var nonSponsors = b.nonSponsors.slice(0, Math.max(WALL_NS_LIMIT, b.sponsors.length * 2));
-      var sequence = utils.logoBuildSequence(b.sponsors, nonSponsors);
+      var sequence = utils.logoSpreadSponsors(nonSponsors, b.sponsors);
 
       function makeCopy(items, hidden) {
         var div = document.createElement("div");

@@ -3,6 +3,4 @@ title: Confirm your Registration for the Post-Quantum Cryptography Conference 20
 robots: noindex
 ---
 
-## Confirm your registration
-
 {{< event-registration-confirm slug="pqc-conference-amsterdam-nl" >}}
