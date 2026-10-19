@@ -1,3 +1,4 @@
+import "./helpers/app";
 import { SELF } from "cloudflare:test";
 import { publicPageImages } from "./helpers/public-page-images";
 import { describe, expect, it } from "vitest";
