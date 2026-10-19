@@ -1,3 +1,9 @@
+import { eventAttendanceRegistrationsListResponseSchema } from "../assets/shared/schemas/event-registrations";
+import { eventRegistrationAttendanceDetailResponseSchema } from "../assets/shared/schemas/event-registration-detail";
+import {
+  attendeeRegistrationParticipationSchema,
+  registrationSubmissionResponseSchema,
+} from "../assets/shared/schemas/registration";
 import { grantAdministrator } from "./helpers/administrator";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
@@ -7,7 +13,7 @@ import { createAdminSession } from "./helpers/auth";
 import { callApi } from "./helpers/app";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { grantGroupLeadershipCapacity } from "./helpers/group-leadership";
-import { insertUser } from "./helpers/membership";
+import { insertOrganization, insertUser } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 import type { UserBackedAuthAdmin } from "../functions/_lib/types";
 import {
@@ -136,6 +142,86 @@ async function seedAttendees(eventId: string): Promise<{ registrationId: string;
 
 describe("group event attendee management", () => {
   beforeEach(resetDb);
+
+  it("opens the attendance details of a registration created from an accepted proposal", async () => {
+    const fixture = await createFixture();
+    const event = await createEvent(fixture);
+    const { registrationId } = await seedAttendees(event.id);
+    await env.DB.prepare("UPDATE registrations SET source_type = 'proposal' WHERE id = ?").bind(registrationId).run();
+
+    const response = await request(
+      fixture.ownerLeaderToken,
+      `/api/v1/groups/${fixture.ownerGroupId}/events/${event.id}/registrations/${registrationId}`,
+    );
+    expect(response.status, await response.clone().text()).toBe(200);
+    const detail = eventRegistrationAttendanceDetailResponseSchema.parse(await response.json());
+    expect(detail.registration).toMatchObject({ id: registrationId, source_type: "proposal" });
+    expect(detail.dayAttendance).toEqual([expect.objectContaining({ dayDate: "2027-04-12" })]);
+  });
+
+  it("shows an explicitly selected individual identity instead of the member's organization identity", async () => {
+    const fixture = await createFixture();
+    const event = await createEvent(fixture);
+    await env.DB.prepare("UPDATE events SET registration_mode='optional' WHERE id=?").bind(event.id).run();
+    await env.DB.prepare(
+      "INSERT INTO event_terms(id,event_id,audience_type,term_key,version,required,active,created_at) VALUES(?,?,'attendee','privacy-policy','v1',1,1,?)",
+    )
+      .bind(crypto.randomUUID(), event.id, new Date().toISOString())
+      .run();
+    await env.DB.prepare("UPDATE users SET first_name='Individual',last_name='Attendee' WHERE id=?")
+      .bind(fixture.ownerLeader.id)
+      .run();
+    // An affiliation with an employer that is not a consortium member: no membership capacity follows.
+    const employer = await insertOrganization(env.DB, "Unrelated employer");
+    const employerIdentity = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO identities (id, user_id, organization_id, job_title, source, invited_at, started_at, created_at, updated_at)
+       VALUES (?1, ?2, ?3, 'Unrelated role', 'staff', ?4, ?4, ?4, ?4)`,
+    )
+      .bind(employerIdentity, fixture.ownerLeader.id, employer, new Date().toISOString())
+      .run();
+    await env.DB.prepare("UPDATE identities SET is_default = 1 WHERE id = ?").bind(employerIdentity).run();
+    const identity = await env.DB.prepare(
+      "SELECT id FROM identities WHERE user_id=? AND organization_id IS NULL AND started_at IS NOT NULL AND ended_at IS NULL",
+    )
+      .bind(fixture.ownerLeader.id)
+      .first<{ id: string }>();
+    expect(identity).not.toBeNull();
+    const response = await request(
+      fixture.ownerLeaderToken,
+      `/api/v1/groups/${fixture.ownerGroupId}/events/${event.id}/registrations`,
+      {
+        method: "POST",
+        body: JSON.stringify(
+          attendeeRegistrationParticipationSchema.parse({
+            identityId: identity!.id,
+            attendanceType: "virtual",
+            consents: [{ termKey: "privacy-policy", version: "v1" }],
+          }),
+        ),
+      },
+    );
+    expect(response.status, await response.clone().text()).toBe(200);
+    const created = registrationSubmissionResponseSchema.parse(await response.json());
+    expect(
+      await env.DB.prepare("SELECT registration_identity_id FROM registrations WHERE id=?")
+        .bind(created.registrationId)
+        .first(),
+    ).toEqual({ registration_identity_id: identity!.id });
+    // Holding two identities, the leader manages the group acting as the individual one.
+    const actingToken = await createAdminSession(
+      env.DB,
+      fixture.ownerLeader.id,
+      `owner-individual-${crypto.randomUUID()}`,
+      undefined,
+      identity!.id,
+    );
+    const list = await request(actingToken, `/api/v1/groups/${fixture.ownerGroupId}/events/${event.id}/registrations`);
+    expect(list.status, await list.clone().text()).toBe(200);
+    expect(eventAttendanceRegistrationsListResponseSchema.parse(await list.json()).registrations).toEqual([
+      expect.objectContaining({ organization_name: null, job_title: null }),
+    ]);
+  });
 
   it("lets the event manager resend registration email and refuses other groups", async () => {
     const fixture = await createFixture();

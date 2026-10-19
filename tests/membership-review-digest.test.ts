@@ -1,13 +1,16 @@
+// Compile the real lazy HTTP graph before timed endpoint journeys.
+import "../functions/http-router";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { seedMembershipReviewDigestTemplates } from "./helpers/membership-review-email-templates";
 import { env } from "cloudflare:workers";
 import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
 import { membershipWorkflowMigrationPreviewResponseSchema } from "../assets/shared/schemas/membership-workflow-migration";
 import { applicationStageTransitionSchema } from "../assets/shared/schemas/membership-application-management";
 import { emailOutboxIdSchema } from "../assets/shared/schemas/email-outbox";
-import { membershipReviewDigestSendAt } from "../assets/shared/membership-review-notifications";
+import { renderEmail } from "../functions/_lib/email/render";
+import { reviewDigestSendAt } from "../assets/shared/review-notifications";
 import { processPendingOutbox, processOutboxById } from "../functions/_lib/email/outbox";
 import type { Env } from "../functions/_lib/types";
 import { requireMembershipCategory } from "../functions/_lib/services/membership/categories";
@@ -122,7 +125,9 @@ async function prepareStageChange(id: string) {
         body: JSON.stringify(
           applicationStageTransitionSchema.parse({
             toStage,
-            ...(toStage === "on_hold" ? { onHoldSubtype: "request_information" } : {}),
+            ...(toStage === "on_hold"
+              ? { onHoldSubtype: "request_information", requestDetails: "Please clarify your application." }
+              : {}),
             note: "Update the example organization's application after reviewing its form.",
           }),
         ),
@@ -164,7 +169,7 @@ it("combines concurrent organization reviews and starts both full windows only a
     recipient_email: "consultation@lists.pkic.org",
     status: "queued",
     created_at: today,
-    send_after: membershipReviewDigestSendAt(today),
+    send_after: reviewDigestSendAt(today),
   });
   expect(emailOutboxIdSchema.safeParse(digest.id).success).toBe(true);
   expect(digest.subject).toContain(today.slice(0, 10));
@@ -257,7 +262,7 @@ it("keeps council notices separate, combines them, and uses a new digest for the
   expect(council.payload_json).toContain("Council Organization One");
   expect(council.payload_json).toContain("Council Organization Two");
   expect(council.payload_json).not.toContain("Member Organization");
-  vi.setSystemTime(new Date(membershipReviewDigestSendAt(today)));
+  vi.setSystemTime(new Date(reviewDigestSendAt(today)));
   const next = await reviewedApplication("Next Day Organization");
   await evaluateMembershipApplication(env.DB, next, "https://app.test");
   expect(await digests()).toHaveLength(3);
@@ -659,4 +664,52 @@ it("renders three complete application forms with current labels and literal app
   expect(html).not.toContain("<script>");
   expect(html).not.toContain('href="https://hostile.test/"');
   expect(html).toContain("{{instructions}}");
+});
+
+it("gives the applicant email to the Executive Council digest only", async () => {
+  await evaluateMembershipApplication(env.DB, await reviewedApplication("Consulted Organization"), "https://app.test");
+  await evaluateMembershipApplication(
+    env.DB,
+    await reviewedApplication("Council Organization", true),
+    "https://app.test",
+  );
+  const payloads = (await digests()).map((digest) => JSON.parse(digest.payload_json));
+  const member = payloads.find((payload) => payload.isMemberConsultation).applicationDetails;
+  const council = payloads.find((payload) => payload.isExecutiveCouncil).applicationDetails;
+  expect(member).toContain("Consulted Organization");
+  expect(member).not.toContain("Email:");
+  expect(member).not.toContain("example\\.test");
+  // Markdown escapes the address, so match the escaped domain.
+  expect(council).toMatch(/Email: \S+@example\\\.test/);
+});
+
+it("supplies a masked applicant email to custom review fragments for every audience", async () => {
+  const template = await createTemplateVersion(env.DB, {
+    templateKey: "partial_membership_review_details",
+    contentType: "markdown",
+    content: "{{applicationName}}: {{maskedEmail}}",
+    subjectTemplate: null,
+    createdByUserId: null,
+  });
+  await activateTemplateVersion(env.DB, {
+    templateKey: "partial_membership_review_details",
+    version: template.version,
+  });
+  for (const council of [false, true]) {
+    await evaluateMembershipApplication(
+      env.DB,
+      await reviewedApplication(council ? "Council mask" : "Member mask", council),
+      "https://app.test",
+    );
+  }
+  const rows = await digests();
+  expect(rows).toHaveLength(2);
+  for (const row of rows) {
+    const details = JSON.parse(row.payload_json).applicationDetails;
+    const { html, text } = await renderEmail(details, {}, "");
+    expect(text).toContain("******@example.test");
+    expect(html).toContain("******@example.test");
+    expect(html).not.toContain("{{maskedEmail}}");
+    expect(html).not.toMatch(/[a-z0-9-]+@example\.test/);
+  }
 });

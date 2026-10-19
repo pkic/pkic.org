@@ -51,7 +51,7 @@ export async function createMember(
   options: { individual?: boolean } = {},
 ): Promise<{ email: string; userId: string; memberId: string; identityId: string }> {
   const identity = crypto.randomUUID();
-  const email = `e2e-persona-${identity}@persona-${identity}.example.test`;
+  const email = `e2e-persona-${identity}@persona-${identity}.test`;
   const startSince = await capturedEmailCount();
   const start = await jsonResponse(page.request, "POST", "/api/v1/members/join/start", {
     email,
@@ -76,6 +76,9 @@ export async function createMember(
     joinToken: stringProperty(verified, "joinToken"),
     answers: {
       reason: "Real Worker/D1 portal persona coverage",
+      about_yourself: "I work on PKI interoperability.",
+      // An organization's applicant says what they do there.
+      ...(options.individual ? {} : { job_title: "Membership contact", about_organization: "We build PKI services." }),
       agrees_bylaws: true,
       agrees_code_of_conduct: true,
       agrees_ipr_policy: true,
@@ -149,11 +152,13 @@ export async function completeSyntheticMembershipReview(request: APIRequestConte
     },
   );
   expect(completion.approved).toBe(true);
+  const email = review.application.applicantEmail;
+  if (!email) throw new Error("Staff read the applicant email in a review");
   const users = arrayProperty(
-    await jsonResponse(request, "GET", `/api/v1/users?q=${encodeURIComponent(review.application.applicantEmail)}`),
+    await jsonResponse(request, "GET", `/api/v1/users?q=${encodeURIComponent(email)}`),
     "users",
   ) as JsonRecord[];
-  const user = users.find((item) => item.email === review.application.applicantEmail)!;
+  const user = users.find((item) => item.email === email)!;
   expect(user).toBeTruthy();
   const userId = stringProperty(user, "id");
   const detail = recordProperty(await jsonResponse(request, "GET", `/api/v1/users/${userId}`), "user");

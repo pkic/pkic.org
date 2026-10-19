@@ -10,18 +10,26 @@ import { prepareAutomaticGroupEnrollmentForUserStatements } from "../groups/auto
 import { authorizedMembershipMutationDb } from "../membership-authorization";
 import { buildCreateIdentityStatement } from "./identities";
 import { assertCategoryCompatible, prepareMembershipCategoryGuard } from "./categories";
-import { buildCreateIndividualMemberStatements } from "./memberships";
+import { INDIVIDUAL_MEMBERSHIP_OF_USER_SQL, buildCreateIndividualMemberStatements } from "./memberships";
 import { buildMembershipAccessOffboardingStatements } from "./offboarding";
 import { REPRESENTATIVE_ROLE_IDS, buildRevokeRepresentativeRoleStatement } from "./representative-roles";
+import { activeOrganizationMemberRepresentationPredicate } from "./capacity-query";
+import { identityLifecyclePublicationCondition } from "../identities/lifecycle-publication";
+import { prepareSitePublicationRequest } from "../site-publication-requests";
+import {
+  identityProfileChanges,
+  identityProfilePublicationCondition,
+  type IdentityProfileSnapshot,
+  prepareIdentityProfileUpdateStatement,
+} from "../identities/profile-statement";
 
-interface IdentityCapacityRow {
+interface IdentityCapacityRow extends IdentityProfileSnapshot {
   id: string;
   user_id: string;
   member_id: string;
   organization_id: string | null;
   status: string;
   category_code: string;
-  show_on_organization_profile: number;
   identity_updated_at: string;
   member_updated_at: string;
 }
@@ -30,7 +38,8 @@ async function requireActiveIdentityCapacity(db: DatabaseLike, identityId: strin
   const identity = await first<IdentityCapacityRow>(
     db,
     `SELECT identity.id, identity.user_id, capacity.member_id, identity.organization_id,
-            member.status, category.category_code, identity.show_on_organization_profile,
+            member.status, category.category_code, identity.show_on_organization_profile, identity.job_title,
+            identity.email_id, identity.biography, identity.links_json,
             identity.updated_at AS identity_updated_at, member.updated_at AS member_updated_at
        FROM identities identity
        JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
@@ -60,6 +69,51 @@ function capacityResponse(identity: IdentityCapacityRow, input: MemberCapacityUp
     showOnOrgProfile:
       input.showOnOrgProfile ?? (identity.organization_id !== null && identity.show_on_organization_profile === 1),
   };
+}
+
+/** Prepared after the guarded sentinel/audit pair and before any profile or membership change. */
+function prepareCapacityUpdatePublication(
+  db: DatabaseLike,
+  identity: IdentityCapacityRow,
+  input: MemberCapacityUpdateInput,
+  at: string,
+): StatementLike {
+  const profileInput = { ...input.profile, showOnOrganizationProfile: input.showOnOrgProfile };
+  const changes = identityProfileChanges(identity, profileInput);
+  const profileChanged = Object.keys(changes).length > 0;
+  const publicProfile = identityProfilePublicationCondition(
+    { id: identity.id, organization_id: identity.organization_id, updated_at: identity.identity_updated_at },
+    profileInput,
+    changes,
+  );
+  return prepareSitePublicationRequest(
+    db,
+    {
+      resourceType: "membership",
+      resourceId: identity.member_id,
+      revision: Date.parse(at),
+      reasonCode: "membership_changed",
+      deduplicationKey: `membership:${identity.member_id}:${crypto.randomUUID()}`,
+    },
+    {
+      sql: `EXISTS(SELECT 1 FROM members member
+      JOIN member_category_assignments assignment ON assignment.member_id=member.id
+      WHERE member.id=? AND (
+        (member.status='active') <> (COALESCE(?,member.status)='active')
+        OR (member.status='active' AND COALESCE(?,member.status)='active' AND (
+          (? IS NOT NULL AND assignment.category_code IS NOT ?) OR ?=1))))
+        OR (${publicProfile?.sql ?? "0"})`,
+      bindings: [
+        identity.member_id,
+        input.status ?? null,
+        input.status ?? null,
+        input.membershipCategory ?? null,
+        input.membershipCategory ?? null,
+        profileChanged ? 1 : 0,
+        ...(publicProfile?.bindings ?? []),
+      ],
+    },
+  );
 }
 
 export async function updateMembershipCapacity(
@@ -135,13 +189,17 @@ export async function updateMembershipCapacity(
       input,
       at,
     ),
+    prepareCapacityUpdatePublication(authorizedDb, identity, input, at),
   ];
 
   if (input.showOnOrgProfile !== undefined) {
     statements.push(
-      authorizedDb
-        .prepare("UPDATE identities SET show_on_organization_profile = ?, updated_at = ? WHERE id = ?")
-        .bind(input.showOnOrgProfile ? 1 : 0, at, identity.id),
+      prepareIdentityProfileUpdateStatement(
+        authorizedDb,
+        { ...identity, updated_at: identity.identity_updated_at },
+        { showOnOrganizationProfile: input.showOnOrgProfile },
+        at,
+      ),
     );
   }
 
@@ -206,6 +264,14 @@ export async function updateMembershipCapacity(
   return capacityResponse(identity, input);
 }
 
+function individualMembershipIdentityConflictPredicate(userIdSql: string): string {
+  return `(${activeOrganizationMemberRepresentationPredicate(userIdSql)} OR EXISTS (
+    SELECT 1 FROM identities individual
+     WHERE individual.user_id = ${userIdSql} AND individual.organization_id IS NULL
+       AND individual.started_at IS NOT NULL AND individual.ended_at IS NULL AND individual.blocked_at IS NULL
+  ))`;
+}
+
 /** Grants one active identity in a configured individual category to an existing user. */
 export async function grantIndividualMembership(
   db: DatabaseLike,
@@ -220,18 +286,18 @@ export async function grantIndividualMembership(
     [input.userId],
   );
   if (!user) throw new AppError(404, "USER_NOT_FOUND", "User not found");
-  if (await first<{ id: string }>(db, "SELECT id FROM members WHERE user_id = ?", [input.userId])) {
+  if (await first<{ id: string }>(db, INDIVIDUAL_MEMBERSHIP_OF_USER_SQL, [input.userId])) {
     throw new AppError(409, "MEMBERSHIP_CONFLICT", "This user already holds an individual membership");
   }
   if (
     await first<{ id: string }>(
       db,
-      `SELECT id FROM identities
-        WHERE user_id = ? AND started_at IS NOT NULL AND ended_at IS NULL AND blocked_at IS NULL`,
+      `SELECT target.id FROM users target
+        WHERE target.id = ? AND ${individualMembershipIdentityConflictPredicate("target.id")}`,
       [input.userId],
     )
   ) {
-    throw new AppError(409, "IDENTITY_CONFLICT", "This user already has an active acting identity");
+    throw new AppError(409, "IDENTITY_CONFLICT", "This user already has an active Member identity");
   }
 
   const at = nowIso();
@@ -241,48 +307,31 @@ export async function grantIndividualMembership(
            WHERE target.id = ? AND target.active = 1
              AND target.pii_redacted_at IS NULL AND target.merged_into_user_id IS NULL
              AND target.updated_at = ?
-             AND NOT EXISTS (SELECT 1 FROM members WHERE user_id = target.id)
              AND NOT EXISTS (
-               SELECT 1 FROM identities identity
-                WHERE identity.user_id = target.id
-                  AND identity.started_at IS NOT NULL
-                  AND identity.ended_at IS NULL
-                  AND identity.blocked_at IS NULL
-             )`,
+               SELECT 1 FROM identities personal
+                 JOIN members held ON held.identity_id = personal.id
+                WHERE personal.user_id = target.id AND personal.organization_id IS NULL
+             )
+             AND NOT ${individualMembershipIdentityConflictPredicate("target.id")}`,
     bindings: [input.userId, user.updated_at],
   };
-  const {
-    memberId,
-    statements: [categoryGuard, memberInsert, categoryAssignment],
-  } = buildCreateIndividualMemberStatements(
-    authorizedDb,
-    input.userId,
-    input.membershipCategory,
-    at,
-    targetEligibility,
-  );
+  // The personal identity is created first, only while the target is still
+  // eligible; the membership it holds follows in the same batch.
   const identity = await buildCreateIdentityStatement(authorizedDb, {
     userId: input.userId,
     organizationId: null,
     source: "staff",
     startImmediately: true,
     now: at,
-    condition: {
-      sql: `SELECT 1
-              FROM members member
-              JOIN users target ON target.id = member.user_id
-             WHERE member.id = ? AND member.user_id = ?
-               AND member.organization_id IS NULL AND member.status = 'active'
-               AND target.active = 1 AND target.pii_redacted_at IS NULL
-               AND target.merged_into_user_id IS NULL`,
-      bindings: [memberId, input.userId],
-    },
+    condition: targetEligibility,
   });
+  const {
+    memberId,
+    statements: [categoryGuard, ...membershipStatements],
+  } = buildCreateIndividualMemberStatements(authorizedDb, identity.identityId, input.membershipCategory, at);
   try {
     await authorizedDb.batch([
       categoryGuard,
-      memberInsert,
-      categoryAssignment,
       identity.statement,
       prepareAuditLogAfterOneChange(
         authorizedDb,
@@ -298,6 +347,21 @@ export async function grantIndividualMembership(
           activationReason: input.activationReason,
         },
         at,
+      ),
+      ...membershipStatements,
+      prepareSitePublicationRequest(
+        authorizedDb,
+        {
+          resourceType: "membership",
+          resourceId: memberId,
+          revision: Date.parse(at),
+          reasonCode: "membership_changed",
+          deduplicationKey: `membership:${memberId}:${crypto.randomUUID()}`,
+        },
+        {
+          sql: "EXISTS(SELECT 1 FROM members WHERE id=? AND identity_id=? AND status='active')",
+          bindings: [memberId, identity.identityId],
+        },
       ),
       ...prepareAutomaticGroupEnrollmentForUserStatements(authorizedDb, input.userId, at),
     ]);
@@ -326,7 +390,28 @@ export async function removeMembershipCapacity(
   const identity = await requireActiveIdentityCapacity(db, identityId);
   const at = nowIso();
   const authorizedDb = authorizedMembershipMutationDb(db, actor, ["membership:write"]);
+  const publicLifecycle = identityLifecyclePublicationCondition(identity.id);
   const statements: StatementLike[] = [
+    prepareSitePublicationRequest(
+      authorizedDb,
+      {
+        resourceType: "membership",
+        resourceId: identity.member_id,
+        revision: Date.parse(at),
+        reasonCode: "membership_changed",
+        deduplicationKey: `membership:${identity.member_id}:${crypto.randomUUID()}`,
+      },
+      {
+        sql: `EXISTS(SELECT 1 FROM members member
+        JOIN member_category_assignments assignment ON assignment.member_id=member.id
+        JOIN identities identity ON identity.id=? AND identity.updated_at=?
+        WHERE member.id=? AND member.status='active'
+          AND identity.started_at IS NOT NULL AND identity.ended_at IS NULL AND identity.blocked_at IS NULL
+          AND (identity.organization_id IS NULL OR identity.show_on_organization_profile=1))
+          OR (${publicLifecycle.sql})`,
+        bindings: [identity.id, identity.identity_updated_at, identity.member_id, ...publicLifecycle.bindings],
+      },
+    ),
     authorizedDb
       .prepare(
         `UPDATE identities SET ended_at = ?, updated_at = ?

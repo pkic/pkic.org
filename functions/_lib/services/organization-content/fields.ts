@@ -1,3 +1,4 @@
+import { versionedImagePath } from "../image-cache";
 import { parseLinksJson, serializeLinks } from "../../../../assets/shared/schemas/links";
 import type { OrganizationEditableContent } from "../../../../assets/shared/schemas/organization-profile";
 
@@ -45,8 +46,9 @@ export interface OrganizationContentRow {
 export const ORGANIZATION_CONTENT_SELECT_COLUMNS = `id, website, description, slogan, logo_r2_key,
   content_markdown, blog_url, blog_feed_url, press_url, press_feed_url, careers_url, links_json`;
 
+/** The organization's logo at its current version, which caches may keep; null when it has none. */
 export function organizationLogoUrl(id: string, logoR2Key: string | null): string | null {
-  return logoR2Key ? `/api/v1/members/${id}/logo` : null;
+  return versionedImagePath(`/api/v1/members/${id}/logo`, logoR2Key);
 }
 
 type OrganizationSummaryContentRow = Pick<

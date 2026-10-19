@@ -15,8 +15,8 @@ import {
   labelNames,
   submitForm,
   typeInto,
-} from "./helpers/labelled-control";
-import { typeMarkdown } from "./helpers/labelled-control";
+} from "./helpers/labeled-control";
+import { typeMarkdown } from "./helpers/labeled-control";
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 
@@ -51,6 +51,8 @@ function mountGroupsAt(groupSegment?: string): HTMLElement {
   document.body.append(container);
   mounted.push(container);
   void act(() => render(<Groups groupSegment={groupSegment} />, container));
+  const list = [...container.querySelectorAll("button")].find((button) => button.textContent === "List");
+  void act(() => list?.click());
   return container;
 }
 
@@ -64,35 +66,36 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+const CREATED_GROUP = {
+  abbreviatedName: null,
+  id: GROUP_ID,
+  slug: "security-working-group",
+  name: "Security Working Group",
+  type: { key: "working_group", singularLabel: "Working Group", pluralLabel: "Working Groups" },
+  parentGroup: null,
+  description: "Coordinates security work.",
+  links: ["https://example.test/security"],
+  visibility: "participants",
+  governanceInheritanceMode: "inherited",
+  eligibilityMode: "category",
+  automaticEnrollmentMode: "none",
+  allowAutomaticOptOut: false,
+  publicLeadership: true,
+  publicRoster: false,
+  minEndorsersForBallot: 2,
+  active: true,
+  revision: 0,
+  membershipCapacityCount: 0,
+  representedMemberCount: 0,
+  participantCount: 0,
+  childCount: 0,
+  createdAt: "2026-08-01T00:00:00.000Z",
+  updatedAt: "2026-08-01T00:00:00.000Z",
+} as const;
+
 describe("portal group creation and category policy", () => {
   it("loads group types and posts the complete canonical group-create contract", async () => {
     const requests: Array<{ url: URL; method: string; body?: unknown }> = [];
-    const created = {
-      abbreviatedName: null,
-      id: GROUP_ID,
-      slug: "security-working-group",
-      name: "Security Working Group",
-      type: { key: "working_group", singularLabel: "Working Group", pluralLabel: "Working Groups" },
-      parentGroup: null,
-      description: "Coordinates security work.",
-      links: ["https://example.test/security"],
-      visibility: "participants",
-      governanceInheritanceMode: "inherited",
-      eligibilityMode: "category",
-      automaticEnrollmentMode: "none",
-      allowAutomaticOptOut: false,
-      publicLeadership: true,
-      publicRoster: false,
-      minEndorsersForBallot: 2,
-      active: true,
-      revision: 0,
-      membershipCapacityCount: 0,
-      representedMemberCount: 0,
-      participantCount: 0,
-      childCount: 0,
-      createdAt: "2026-08-01T00:00:00.000Z",
-      updatedAt: "2026-08-01T00:00:00.000Z",
-    } as const;
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
@@ -128,7 +131,7 @@ describe("portal group creation and category policy", () => {
         if (url.pathname === "/api/v1/groups" && method === "GET") {
           return json({ groups: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } });
         }
-        if (url.pathname === "/api/v1/groups" && method === "POST") return json({ group: created });
+        if (url.pathname === "/api/v1/groups" && method === "POST") return json({ group: CREATED_GROUP });
         throw new Error(`Unexpected request: ${method} ${url.pathname}`);
       }),
     );
@@ -172,7 +175,7 @@ describe("portal group creation and category policy", () => {
       automaticEnrollmentMode: "none",
     });
     expect(request?.body).not.toHaveProperty("groupId");
-    expect(onCreated).toHaveBeenCalledWith(created);
+    expect(onCreated).toHaveBeenCalledWith(CREATED_GROUP);
     await act(() => render(null, container));
     container.remove();
   });
@@ -343,8 +346,8 @@ describe("portal group creation and category policy", () => {
     await settle();
     expect(container.textContent).toContain("Organization member");
     expect(container.textContent).toContain("Student");
-    expect(container.querySelector('input[aria-label="Student"]')).not.toBeNull();
-    await act(() => container.querySelector<HTMLInputElement>('input[aria-label="Student"]')!.click());
+    expect(container.querySelector('input[aria-label="Select Student"]')).not.toBeNull();
+    await act(() => container.querySelector<HTMLInputElement>('input[aria-label="Select Student"]')!.click());
     await act(() => buttonNamed(container, "Allow joining")!.click());
     const save = [...container.querySelectorAll("button")].find(
       (button) => button.textContent === "Save category rules",
@@ -361,7 +364,7 @@ describe("portal group creation and category policy", () => {
     });
     expect(onUpdated).toHaveBeenCalled();
 
-    expect(container.querySelector('input[aria-label="Student"]')).not.toBeNull();
+    expect(container.querySelector('input[aria-label="Select Student"]')).not.toBeNull();
     expect(container.querySelector("table caption")?.textContent).toBe("Membership category eligibility");
     expect(container.querySelectorAll('input[type="checkbox"]')).toHaveLength(3);
     expect(container.querySelector('button[aria-label="Actions for Student"]')).not.toBeNull();
@@ -371,6 +374,67 @@ describe("portal group creation and category policy", () => {
 
     await act(() => render(null, container));
     container.remove();
+  });
+
+  it("puts a canceled rule change back and sends nothing", async () => {
+    const requests: Array<{ method: string }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        requests.push({ method: init.method ?? "GET" });
+        if (url.pathname.endsWith("/category-rules")) {
+          return json({
+            groupId: GROUP_ID,
+            revision: 7,
+            rules: [{ membershipCategory: "A", permitsJoin: true, automaticEnrollment: false }],
+          });
+        }
+        return json({
+          categories: [
+            {
+              code: "A",
+              label: "Organization member",
+              description: null,
+              fee: null,
+              eligibleWorkingGroupIds: [],
+              displayOrder: 1,
+              isIndividual: false,
+              isVoting: true,
+              revision: 0,
+              updatedAt: "2026-08-01T00:00:00.000Z",
+            },
+          ],
+          form: null,
+        });
+      }),
+    );
+    const container = document.createElement("div");
+    document.body.append(container);
+    mounted.push(container);
+    await act(() =>
+      render(<GroupCategoryRulesEditor groupId={GROUP_ID} onUpdated={async () => undefined} />, container),
+    );
+    await settle();
+
+    const row = () =>
+      [...container.querySelectorAll("tbody tr")].find((candidate) =>
+        candidate.textContent?.includes("Organization member"),
+      )!;
+    expect(row().textContent).toContain("Allowed");
+    await act(() =>
+      container.querySelector<HTMLInputElement>('input[aria-label="Select Organization member"]')!.click(),
+    );
+    await act(() => buttonNamed(container, "Disallow joining")!.click());
+    expect(row().textContent).toContain("Not allowed");
+
+    await act(() => buttonNamed(container, "Cancel")!.click());
+    expect(row().textContent).toContain("Allowed");
+    expect(row().textContent).not.toContain("Not allowed");
+    expect(requests.some(({ method }) => method !== "GET")).toBe(false);
   });
 
   it("announces a failed category-rules load as an alert and shows no matrix to edit", async () => {
@@ -464,6 +528,51 @@ describe("group creation is a page, not a layer over the catalog", () => {
       cancel?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     expect(navigate).toHaveBeenCalledWith("/groups");
+  });
+
+  it("opens the new group's settings once it is created", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+        const url = new URL(String(input), location.origin);
+        if (url.pathname === "/api/v1/groups/creation-capabilities") return json({ canCreate: true });
+        if (url.pathname === "/api/v1/groups/types") {
+          return json({
+            groupTypes: [
+              {
+                key: "working_group",
+                singularLabel: "Working Group",
+                pluralLabel: "Working Groups",
+                description: "A focused group",
+                defaultGovernanceInheritanceMode: "inherited",
+                defaultEligibilityMode: "managed",
+                defaultAutomaticEnrollmentMode: "none",
+                defaultAllowAutomaticOptOut: false,
+                defaultVisibility: "participants",
+                leadershipTitles: { lead: "Chair", deputyLead: "Vice Chair" },
+                active: true,
+                sortOrder: 1,
+              },
+            ],
+            page: { limit: 25, offset: 0, total: 1, hasMore: false },
+          });
+        }
+        if (url.pathname === "/api/v1/groups" && init.method === "POST") return json({ group: CREATED_GROUP });
+        return json({ groups: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } });
+      }),
+    );
+    portalSession.value = portalSessionFixture({ member: true, staff: true });
+    const container = mountGroupsAt("new");
+    await settle();
+    await settle();
+
+    await chooseComboboxOption(container, "Group type", "working_group");
+    await settle();
+    await typeInto(controlFor(container, "Name"), "Security Working Group");
+    await act(async () => buttonNamed(container, "Create group").click());
+    await settle();
+
+    expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/settings`);
   });
 
   it("returns an identity without groups:write from the create page to the catalog", async () => {

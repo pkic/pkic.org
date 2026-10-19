@@ -11,6 +11,7 @@
  * shown only while the page is that membership's organization; another
  * represented organization's roster is not in the profile response this reads.
  */
+import { ORGANIZATION_JOB_TITLE_COPY } from "../../../../shared/email-first-copy";
 import { useRef, useState } from "preact/hooks";
 import { usePortalHashLocation } from "../hash-location";
 import { getJson, postJson } from "../../../shared/api-client";
@@ -80,6 +81,8 @@ export function OrganizationRepresentatives({
       <PanelHeader title="Representatives" />
       <PanelBody class="pk-stack pk-stack--snug">
         <ActingIdentityDirectory
+          caption="Representatives"
+          showCaption={false}
           organizationId={organizationId}
           activeIdentities={profile.organizationIdentities}
           canManage={profile.isOrgContact}
@@ -120,11 +123,12 @@ function AddRepresentativeForm({
    * !email) return` — a hand-written rule that silently did nothing, so a
    * reader who left a field blank got no field marked and no message.
    */
-  const [draft, setDraft] = useState({ name: "", email: "" });
+  const [draft, setDraft] = useState({ name: "", email: "", jobTitle: "" });
   const form = useContractForm(identityCreateSchema, {
     userReference: "email",
     name: draft.name.trim(),
     email: draft.email.trim(),
+    jobTitle: draft.jobTitle,
     activation: { mode: "invitation" },
     showOnOrganizationProfile: true,
   });
@@ -148,7 +152,7 @@ function AddRepresentativeForm({
       setSuccess(
         `${draft.name.trim()} (${draft.email.trim()}) was invited to accept an identity for your organization.`,
       );
-      setDraft({ name: "", email: "" });
+      setDraft({ name: "", email: "", jobTitle: "" });
       await onAdded();
     } catch (cause) {
       // A server refusal names its fields the way the contract does.
@@ -163,7 +167,7 @@ function AddRepresentativeForm({
       {/* The page's way back: adding has its own address, so leaving it is
           navigation rather than the disappearance of a layer. */}
       <div class="pk-cluster">
-        <Button size="sm" onClick={onCancel} disabled={submitting}>
+        <Button onClick={onCancel} disabled={submitting}>
           ← Representatives
         </Button>
       </div>
@@ -201,12 +205,27 @@ function AddRepresentativeForm({
                   />
                 )}
               </Field>
+              <Field
+                label={ORGANIZATION_JOB_TITLE_COPY.label}
+                help="Their role at your organization, shown with their name."
+                required
+                {...form.of("jobTitle")}
+              >
+                {(control) => (
+                  <TextInput
+                    {...control}
+                    name="jobTitle"
+                    value={draft.jobTitle}
+                    onInput={(event) => setDraft((current) => ({ ...current, jobTitle: event.currentTarget.value }))}
+                  />
+                )}
+              </Field>
             </div>
             <div class="pk-cluster">
-              <Button type="submit" variant="primary" size="sm" loading={submitting}>
+              <Button type="submit" variant="primary" loading={submitting}>
                 {submitting ? "Adding…" : "Add coworker"}
               </Button>
-              <Button size="sm" onClick={onCancel} disabled={submitting}>
+              <Button onClick={onCancel} disabled={submitting}>
                 Cancel
               </Button>
             </div>

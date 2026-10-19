@@ -255,19 +255,14 @@ export function WorkflowVersionEditor({
               )}
               {!published && canWrite && (
                 <div class="pk-cluster">
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={() => setEditingStep(editingStep === position ? null : position)}
-                  >
+                  <Button type="button" onClick={() => setEditingStep(editingStep === position ? null : position)}>
                     {editingStep === position ? "Done editing" : "Edit step"}
                   </Button>
-                  <Button type="button" size="sm" disabled={position === 0} onClick={() => move(position, -1)}>
+                  <Button type="button" disabled={position === 0} onClick={() => move(position, -1)}>
                     Move up
                   </Button>
                   <Button
                     type="button"
-                    size="sm"
                     disabled={position === definition.steps.length - 1}
                     onClick={() => move(position, 1)}
                   >
@@ -275,7 +270,6 @@ export function WorkflowVersionEditor({
                   </Button>
                   <Button
                     type="button"
-                    size="sm"
                     variant="danger-quiet"
                     onClick={() =>
                       setDefinition({ ...definition, steps: definition.steps.filter((_, index) => index !== position) })

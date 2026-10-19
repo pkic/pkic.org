@@ -120,12 +120,12 @@ export const membershipApplicationDetailRouteSchema = {
   },
 };
 
-export const applicationStageTransitionSchema = z
+/** Shared refusal for applicant-facing information requests, including internal use-case callers. */
+export const applicationHoldRequestSchema = z
   .object({
-    // Submission and approval belong to their evidence-owning use cases.
-    toStage: applicationStageSchema.extract(["processing", "on_hold", "declined", "withdrawn"]),
-    onHoldSubtype: onHoldSubtypeSchema.optional(),
-    note: z.string().trim().max(2000).optional(),
+    toStage: z.string(),
+    onHoldSubtype: z.string().optional(),
+    requestDetails: z.string().trim().max(2000).optional(),
   })
   .superRefine((input, context) => {
     if (input.toStage === "on_hold" && !input.onHoldSubtype)
@@ -134,7 +134,21 @@ export const applicationStageTransitionSchema = z
         path: ["onHoldSubtype"],
         message: "Choose the information needed from the applicant.",
       });
+    if (input.toStage === "on_hold" && input.onHoldSubtype === "request_information" && !input.requestDetails)
+      context.addIssue({
+        code: "custom",
+        path: ["requestDetails"],
+        message: "Describe the information the applicant must provide.",
+      });
   });
+
+export const applicationStageTransitionSchema = applicationHoldRequestSchema.safeExtend({
+  // Submission and approval belong to their evidence-owning use cases.
+  toStage: applicationStageSchema.extract(["processing", "on_hold", "declined", "withdrawn"]),
+  onHoldSubtype: onHoldSubtypeSchema.optional(),
+  note: z.string().trim().max(2000).optional(),
+});
+export type ApplicationStageTransition = z.infer<typeof applicationStageTransitionSchema>;
 
 export const applicationStageTransitionRouteSchema = {
   ...requiresPermissions("membership:write"),
@@ -151,7 +165,9 @@ export const applicationStageTransitionRouteSchema = {
     },
     "404": { description: "Application not found." },
     "409": { description: "Invalid transition for the application's current stage." },
-    "422": { description: "on_hold requires a valid onHoldSubtype." },
+    "422": {
+      description: "on_hold requires a valid reason and request_information requires applicant-facing details.",
+    },
   },
 };
 

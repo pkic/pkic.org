@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { formatDateTime } from "../../assets/shared/format-date";
 import { GroupStatistics } from "../../assets/ts/member-flows/portal/sections/management/GroupStatistics";
 import { GROUP_STATS_SCOPES, groupStatsQuerySchema } from "../../assets/shared/schemas/group-statistics";
-import { chooseOption, controlFor, optionValues, submitForm, typeInto } from "./helpers/labelled-control";
+import { chooseOption, controlFor, optionValues, submitForm, typeInto } from "./helpers/labeled-control";
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const mounted: HTMLElement[] = [];
@@ -67,7 +67,7 @@ function statValue(root: ParentNode, label: string): string {
   const card = [...root.querySelectorAll(".pk-stat-card")].find(
     (candidate) => candidate.querySelector(".pk-stat-card__label")?.textContent?.trim() === label,
   );
-  if (!card) throw new Error(`no stat card is labelled "${label}"`);
+  if (!card) throw new Error(`no stat card is labeled "${label}"`);
   return card.querySelector(".pk-stat-card__value")?.textContent?.trim() ?? "";
 }
 
@@ -83,6 +83,7 @@ afterEach(() => {
     container.remove();
   }
   vi.unstubAllGlobals();
+  history.replaceState(null, "", "/portal/#/");
 });
 
 describe("portal group statistics", () => {
@@ -252,5 +253,37 @@ describe("portal group statistics", () => {
     const empty = zeroContainer.querySelector(".pk-empty-state");
     expect(empty?.getAttribute("role")).toBe("status");
     expect(empty?.textContent).toContain("No activity recorded in this window.");
+  });
+});
+
+describe("statistics bookmarks", () => {
+  it("restores a validated applied window and follows browser history without publishing drafts", async () => {
+    history.replaceState(
+      null,
+      "",
+      `/portal/#/groups/${GROUP_ID}/statistics?statistics.scope=historical&statistics.from=2026-01-01T00%3A00%3A00.000Z`,
+    );
+    const urls: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        urls.push(new URL(String(input), "https://example.test"));
+        return json(baseStats);
+      }),
+    );
+    const container = mount();
+    await settle();
+    expect(urls.at(-1)!.searchParams.get("scope")).toBe("historical");
+    expect(urls.at(-1)!.searchParams.get("from")).toBe("2026-01-01T00:00:00.000Z");
+    await openReportingWindow(container);
+    await typeInto(controlFor(container, "From"), "2026-02-01");
+    expect(location.hash).toContain("statistics.from=2026-01-01");
+    await act(() => {
+      history.replaceState(null, "", `/portal/#/groups/${GROUP_ID}/statistics`);
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    await settle();
+    expect(urls.at(-1)!.searchParams.get("scope")).toBe("current");
+    expect(urls.at(-1)!.searchParams.has("from")).toBe(false);
   });
 });

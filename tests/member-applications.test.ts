@@ -1,3 +1,4 @@
+import { membershipApplicationFields } from "../assets/shared/schemas/membership-application-form";
 import { describe, it, expect, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
@@ -5,7 +6,7 @@ import { createContext, createTestRateLimiter, queryAll } from "./helpers/contex
 import { handleError } from "../functions/_lib/http";
 import { onRequestPost as createApplication } from "../functions/api/v1/members/applications";
 import { onRequestGet as getApplicationForm } from "../functions/api/v1/members/applications/form";
-import app from "../functions/router";
+import app from "./helpers/app";
 
 function getApplicationStatus(context: ReturnType<typeof createContext>) {
   return app.fetch(context.req.raw, context.env, { waitUntil() {}, passThroughOnException() {} } as any);
@@ -93,6 +94,90 @@ describe("POST /api/v1/members/applications", () => {
       "SELECT organization_name FROM member_applications",
     );
     expect(rows).toEqual([{ organization_name: null }]);
+  });
+
+  it("requires the job title of someone applying on behalf of an organization, and asks no individual for one", async () => {
+    // The stored question is optional; the shared projection still requires it of an organization's applicant.
+    await env.DB.prepare("UPDATE form_fields SET required = 0 WHERE key = 'job_title'").run();
+    const refused = await callApi(makeEnv(), "/api/v1/members/applications", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(
+        await verifiedMemberApplicationPayload({
+          ...validPayload,
+          answers: { ...validPayload.answers, job_title: "" },
+        }),
+      ),
+    });
+    expect(refused.status).toBe(422);
+    expect(await refused.json()).toMatchObject({
+      error: { details: { fieldErrors: { job_title: [expect.any(String)] } } },
+    });
+    expect(await queryAll(env.DB, "SELECT id FROM member_applications")).toHaveLength(0);
+
+    const formResponse = await callApi(makeEnv(), "/api/v1/members/applications/form");
+    const definition = memberApplicationFormResponseSchema.parse(await formResponse.json());
+    const organization = definition.categories.find((category) => !category.isIndividual)!;
+    const individual = definition.categories.find((category) => category.isIndividual)!;
+    const asked = (category: typeof organization) =>
+      membershipApplicationFields(definition.form!.fields, category).find((field) => field.key === "job_title");
+    expect(asked(organization)?.required).toBe(true);
+    expect(asked(individual)).toBeUndefined();
+  });
+
+  it.each([
+    ["A", "about_yourself", ""],
+    ["A", "about_yourself", " \n "],
+    ["A", "about_organization", ""],
+    ["A", "about_organization", " \t "],
+    ["H6", "about_yourself", ""],
+    ["H6", "about_yourself", " \n "],
+  ])("refuses %s applications with a blank %s description (%j)", async (category, field, value) => {
+    const response = await callApi(makeEnv(), "/api/v1/members/applications", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(
+        await verifiedMemberApplicationPayload({
+          ...validPayload,
+          membershipCategory: category,
+          applicantEmail: category === "H6" ? "individual@gmail.com" : validPayload.applicantEmail,
+          organizationName: category === "H6" ? undefined : validPayload.organizationName,
+          answers: { ...validPayload.answers, [field]: value },
+        }),
+      ),
+    });
+    expect(response.status).toBe(422);
+    expect(await response.json()).toMatchObject({
+      error: { details: { fieldErrors: { [field]: [expect.any(String)] } } },
+    });
+    expect(await queryAll(env.DB, "SELECT id FROM member_applications")).toHaveLength(0);
+    expect(await queryAll(env.DB, "SELECT id FROM form_submissions")).toHaveLength(0);
+  });
+
+  it.each(["A", "H6"])("refuses a direct %s submission with omitted descriptions", async (membershipCategory) => {
+    const verified = await verifiedMemberApplicationPayload({
+      ...validPayload,
+      membershipCategory,
+      applicantEmail: membershipCategory === "H6" ? "individual@gmail.com" : validPayload.applicantEmail,
+      organizationName: membershipCategory === "H6" ? undefined : validPayload.organizationName,
+    });
+    const response = await callApi(makeEnv(), "/api/v1/members/applications", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ...verified, answers: { ...validPayload.answers, job_title: "Representative" } }),
+    });
+    expect(response.status).toBe(422);
+    expect(await response.json()).toMatchObject({
+      error: {
+        details: {
+          fieldErrors: {
+            about_yourself: [expect.any(String)],
+            ...(membershipCategory === "A" ? { about_organization: [expect.any(String)] } : {}),
+          },
+        },
+      },
+    });
+    expect(await queryAll(env.DB, "SELECT id FROM member_applications")).toHaveLength(0);
   });
 
   it("excludes managed groups from public application choices and refuses forged selections", async () => {

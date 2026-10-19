@@ -1,16 +1,75 @@
 import { useRef, useState } from "preact/hooks";
 import type { OrganizationDetail } from "../../../../../shared/schemas/organization-management";
 import { identityCreateSchema, identityMutationResponseSchema } from "../../../../../shared/schemas/identity";
-import { EmptyState } from "../../../../ui/RecordEmptyState";
+import { EmptyState } from "../../../../ui/EmptyState";
 import { FormActions } from "../../../../components/FormActions";
 import type { ApiTableActions } from "../../../../components/ApiDataTable";
 import { ProfileLinksInput } from "../../../../components/ProfileLinksInput";
 import { UserPicker, type PickedUser } from "../../../../components/UserPicker";
-import { postValidated } from "../../../../shared/api-client";
+import { postJson } from "../../../../shared/api-client";
+import { useContractForm, type ContractForm, type FieldPresentation } from "../../../../hooks/useContractForm";
+import { ORGANIZATION_JOB_TITLE_COPY } from "../../../../../shared/email-first-copy";
+import type { z } from "zod";
 import { Field } from "../../../../ui/Field";
 import { TextInput } from "../../../../ui/TextControl";
 import { ActingIdentityDirectory } from "../OrganizationIdentityDirectory";
 import { toast } from "../../ui";
+
+/** The job title every organization identity is created with: the contract's own field, required. */
+function JobTitleField({
+  value,
+  onChange,
+  presentation,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  presentation: FieldPresentation;
+}) {
+  return (
+    <Field
+      label={ORGANIZATION_JOB_TITLE_COPY.label}
+      help="Their role at this organization, shown with their name."
+      required
+      {...presentation}
+    >
+      {(control) => (
+        <TextInput
+          {...control}
+          name="jobTitle"
+          value={value}
+          onInput={(event) => onChange(event.currentTarget.value)}
+        />
+      )}
+    </Field>
+  );
+}
+
+/** Creates the identity through the route's contract; a refusal lands on the fields it names. */
+async function createIdentity(
+  organizationId: string,
+  form: ContractForm<z.output<typeof identityCreateSchema>>,
+  setError: (message: string) => void,
+): Promise<boolean> {
+  const checked = form.submit();
+  if (!checked.data) {
+    setError(checked.message);
+    return false;
+  }
+  try {
+    await postJson(
+      `/api/v1/organizations/${encodeURIComponent(organizationId)}/identities`,
+      checked.data,
+      identityMutationResponseSchema,
+    );
+    toast("Identity invitation sent", "success");
+    return true;
+  } catch (caught) {
+    const message = form.refuse(caught);
+    setError(message);
+    toast(message, "error");
+    return false;
+  }
+}
 
 /** Associate a user the system already knows without re-entering their identity. */
 function LinkExistingUserForm({
@@ -23,39 +82,29 @@ function LinkExistingUserForm({
   onCancel: () => void;
 }) {
   const [user, setUser] = useState<PickedUser | null>(null);
+  const [jobTitle, setJobTitle] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const form = useContractForm(identityCreateSchema, {
+    userReference: "existing_user",
+    userId: user?.id,
+    jobTitle,
+    activation: { mode: "invitation" },
+    showOnOrganizationProfile: true,
+  });
 
   async function submit(event: Event) {
     event.preventDefault();
     if (!user) return;
     setBusy(true);
     setError("");
-    try {
-      await postValidated(
-        `/api/v1/organizations/${encodeURIComponent(organizationId)}/identities`,
-        identityCreateSchema,
-        {
-          userReference: "existing_user",
-          userId: user.id,
-          activation: { mode: "invitation" },
-          showOnOrganizationProfile: true,
-        },
-        identityMutationResponseSchema,
-      );
-      toast("Identity invitation sent", "success");
-      await onAdded();
-    } catch (caught) {
-      const message = (caught as Error).message;
-      setError(message);
-      toast(message, "error");
-    } finally {
-      setBusy(false);
-    }
+    const added = await createIdentity(organizationId, form, setError);
+    setBusy(false);
+    if (added) await onAdded();
   }
 
   return (
-    <form class="pk-stack pk-stack--snug" onSubmit={submit}>
+    <form noValidate class="pk-stack pk-stack--snug" {...form.handlers} onSubmit={submit}>
       {/*
        * `UserPicker` names its own search box, so the heading beside it used to
        * be a `<label>` pointing at nothing. A `<legend>` names the group the
@@ -65,6 +114,7 @@ function LinkExistingUserForm({
         <legend class="pk-field__label">Existing user</legend>
         <UserPicker value={user} onChange={setUser} disabled={busy} />
       </fieldset>
+      <JobTitleField value={jobTitle} onChange={setJobTitle} presentation={form.of("jobTitle")} />
       {/*
        * `busy` used to double as "nothing is picked yet", which labeled an
        * idle button "Linking…". The two are separate now: `disabled` blocks the
@@ -99,38 +149,26 @@ function AddIdentityForm({
   const [links, setLinks] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const form = useContractForm(identityCreateSchema, {
+    userReference: "email",
+    name: name.trim(),
+    email: email.trim(),
+    jobTitle,
+    ...(links.length > 0 ? { links } : {}),
+    showOnOrganizationProfile: true,
+  });
 
   async function submit(event: Event) {
     event.preventDefault();
     setBusy(true);
     setError("");
-    try {
-      await postValidated(
-        `/api/v1/organizations/${encodeURIComponent(organizationId)}/identities`,
-        identityCreateSchema,
-        {
-          userReference: "email",
-          name: name.trim(),
-          email: email.trim(),
-          ...(jobTitle.trim() ? { jobTitle: jobTitle.trim() } : {}),
-          ...(links.length > 0 ? { links } : {}),
-          showOnOrganizationProfile: true,
-        },
-        identityMutationResponseSchema,
-      );
-      toast("Identity invitation sent", "success");
-      await onAdded();
-    } catch (caught) {
-      const message = (caught as Error).message;
-      setError(message);
-      toast(message, "error");
-    } finally {
-      setBusy(false);
-    }
+    const added = await createIdentity(organizationId, form, setError);
+    setBusy(false);
+    if (added) await onAdded();
   }
 
   return (
-    <form class="pk-stack pk-stack--snug" onSubmit={submit}>
+    <form noValidate class="pk-stack pk-stack--snug" {...form.handlers} onSubmit={submit}>
       {/*
        * One `disabled` fieldset instead of a `disabled` prop repeated on every
        * control — including `ProfileLinksInput`, which has no such prop to
@@ -141,34 +179,28 @@ function AddIdentityForm({
         <legend class="pk-field__label">New person</legend>
         <div class="pk-stack pk-stack--snug">
           <div class="pk-grid pk-grid--tight">
-            <Field label="Name" required>
+            <Field label="Name" required {...form.of("name")}>
               {(control) => (
                 <TextInput
                   {...control}
+                  name="name"
                   value={name}
-                  onInput={(event) => setName((event.target as HTMLInputElement).value)}
+                  onInput={(event) => setName(event.currentTarget.value)}
                 />
               )}
             </Field>
-            <Field label="Email" required>
+            <Field label="Email" required {...form.of("email")}>
               {(control) => (
                 <TextInput
                   {...control}
                   type="email"
+                  name="email"
                   value={email}
-                  onInput={(event) => setEmail((event.target as HTMLInputElement).value)}
+                  onInput={(event) => setEmail(event.currentTarget.value)}
                 />
               )}
             </Field>
-            <Field label="Job title">
-              {(control) => (
-                <TextInput
-                  {...control}
-                  value={jobTitle}
-                  onInput={(event) => setJobTitle((event.target as HTMLInputElement).value)}
-                />
-              )}
-            </Field>
+            <JobTitleField value={jobTitle} onChange={setJobTitle} presentation={form.of("jobTitle")} />
           </div>
           {/* The widget names itself now, so it needs no fieldset around it to
               borrow a label from. */}

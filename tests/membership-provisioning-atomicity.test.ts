@@ -14,8 +14,17 @@ import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
 import { queryAll } from "./helpers/context";
-import { provisionOrganizationMembership } from "../functions/_lib/services/membership/provisioning";
+import {
+  buildProvisionOrganizationMembership,
+  provisionOrganizationMembership,
+} from "../functions/_lib/services/membership/provisioning";
 import { insertOrganization, seedOrganizationAggregate, addRepresentative, insertUser } from "./helpers/membership";
+
+async function publicationCount() {
+  return env.DB.prepare(
+    "SELECT COUNT(*) AS count FROM site_publication_requests WHERE resource_type='membership'",
+  ).first<number>("count");
+}
 
 describe("provisionOrganizationMembership atomicity", () => {
   beforeEach(async () => {
@@ -122,5 +131,196 @@ describe("provisionOrganizationMembership atomicity", () => {
 
     const identities = await queryAll(env.DB, "SELECT id FROM identities WHERE organization_id = ?", orgId);
     expect(identities).toHaveLength(1); // still just the one seeded above, no duplicate
+  });
+  it("queues one request for new public data and reuses unchanged affiliations without another publication", async () => {
+    const input = {
+      organizationName: "Public provisioning publisher",
+      membershipCategory: "F",
+      memberSince: "2026-01-15",
+      identities: [{ name: "Alice Author", email: "alice-provision@example.test", jobTitle: "Engineer" }],
+      identitySource: "staff" as const,
+      activateIdentities: true,
+      workingGroupSlugs: [],
+      rejectExistingMembership: false,
+    };
+    const first = await provisionOrganizationMembership(env.DB, input);
+    expect(await publicationCount()).toBe(1);
+    const replay = await provisionOrganizationMembership(env.DB, input);
+    expect(replay.identities[0].identityId).toBe(first.identities[0].identityId);
+    expect(await publicationCount()).toBe(1);
+    await provisionOrganizationMembership(env.DB, {
+      ...input,
+      identities: [{ name: "Bob Builder", email: "bob-provision@example.test", jobTitle: "Architect" }],
+    });
+    expect(await publicationCount()).toBe(2);
+    await provisionOrganizationMembership(env.DB, {
+      ...input,
+      activateIdentities: false,
+      identities: [{ name: "Private invite", email: "private-provision@example.test", jobTitle: "Engineer" }],
+    });
+    expect(await publicationCount()).toBe(2);
+    await env.DB.prepare("UPDATE members SET member_since=NULL WHERE id=?")
+      .bind(first.identities[0].membershipId)
+      .run();
+    await provisionOrganizationMembership(env.DB, { ...input, identities: [] });
+    expect(await publicationCount()).toBe(3);
+    await provisionOrganizationMembership(env.DB, { ...input, identities: [] });
+    expect(await publicationCount()).toBe(3);
+  });
+
+  it("rolls back provisioning and publication together when a request insert fails", async () => {
+    await env.DB.prepare(`CREATE TRIGGER fail_provision_publication BEFORE INSERT ON site_publication_requests
+      WHEN NEW.resource_type='membership' BEGIN SELECT RAISE(ABORT,'forced provisioning publication failure'); END`).run();
+    try {
+      await expect(
+        provisionOrganizationMembership(env.DB, {
+          organizationName: "Rollback publisher",
+          membershipCategory: "F",
+          identities: [{ name: "Rollback person", email: "rollback-provision@example.test", jobTitle: "Engineer" }],
+          identitySource: "staff",
+          activateIdentities: true,
+          workingGroupSlugs: [],
+        }),
+      ).rejects.toThrow("forced provisioning publication failure");
+      expect(await publicationCount()).toBe(0);
+      expect(await queryAll(env.DB, "SELECT id FROM organizations")).toEqual([]);
+      expect(await queryAll(env.DB, "SELECT id FROM members")).toEqual([]);
+      expect(await queryAll(env.DB, "SELECT id FROM identities")).toEqual([]);
+      expect(await queryAll(env.DB, "SELECT id FROM users")).toEqual([]);
+    } finally {
+      await env.DB.prepare("DROP TRIGGER fail_provision_publication").run();
+    }
+  });
+});
+
+/** The individual path must use the same known-address discovery as its preparation. */
+describe("individual membership alias preflight", () => {
+  beforeEach(resetDb);
+
+  function input(email: string, rejectExistingMembership = true) {
+    return {
+      membershipCategory: "H5",
+      identities: [{ name: "Alias Member", email }],
+      identitySource: "staff" as const,
+      activateIdentities: true,
+      workingGroupSlugs: [],
+      rejectExistingMembership,
+    };
+  }
+
+  async function addAlias(userId: string, verified: boolean) {
+    const email = "known-alias@example.test";
+    await env.DB.prepare(`INSERT INTO user_emails (id,user_id,email,normalized_email,verified_at,created_at)
+      VALUES (?,?,?,?,?,?)`)
+      .bind(
+        crypto.randomUUID(),
+        userId,
+        email,
+        email,
+        verified ? "2026-10-17T00:00:00.000Z" : null,
+        "2026-10-17T00:00:00.000Z",
+      )
+      .run();
+    return email;
+  }
+
+  async function effectCounts() {
+    return queryAll(
+      env.DB,
+      `SELECT
+      (SELECT COUNT(*) FROM users) AS users,
+      (SELECT COUNT(*) FROM members) AS members,
+      (SELECT COUNT(*) FROM identities) AS identities,
+      (SELECT COUNT(*) FROM user_roles) AS roles,
+      (SELECT COUNT(*) FROM group_memberships) AS groups,
+      (SELECT COUNT(*) FROM audit_log) AS audits,
+      (SELECT COUNT(*) FROM email_outbox) AS notifications,
+      (SELECT COUNT(*) FROM site_publication_requests) AS publications`,
+    );
+  }
+
+  it.each(["primary", "case-normalized primary", "verified alias", "unverified alias"])(
+    "refuses an existing individual member via %s before writing",
+    async (variant) => {
+      const primary = "individual@example.test";
+      const member = await provisionOrganizationMembership(env.DB, input(primary));
+      const alias = await addAlias(member.identities[0].userId, variant === "verified alias");
+      const before = await effectCounts();
+      const email =
+        variant === "primary" ? primary : variant === "case-normalized primary" ? primary.toUpperCase() : alias;
+      await expect(provisionOrganizationMembership(env.DB, input(email))).rejects.toMatchObject({
+        status: 409,
+        code: "ALREADY_MEMBER",
+      });
+      expect(await effectCounts()).toEqual(before);
+    },
+  );
+
+  it.each([true, false])("reuses the canonical nonmember through a known alias (verified=%s)", async (verified) => {
+    const userId = await insertUser(env.DB);
+    const alias = await addAlias(userId, verified);
+    const result = await provisionOrganizationMembership(env.DB, input(alias));
+    expect(result.identities[0].userId).toBe(userId);
+    expect(await queryAll(env.DB, "SELECT id FROM users")).toEqual([{ id: userId }]);
+    expect(
+      await queryAll(env.DB, "SELECT user_id FROM identities WHERE id=?", result.identities[0].identityId),
+    ).toEqual([{ user_id: userId }]);
+  });
+
+  it("preserves rejection-disabled reuse and the existing active-identity refusal", async () => {
+    const userId = await insertUser(env.DB);
+    const alias = await addAlias(userId, false);
+    const created = await provisionOrganizationMembership(env.DB, input(alias, false));
+    expect(created.identities[0].userId).toBe(userId);
+    const before = await effectCounts();
+    // Disabling the membership preflight preserves the existing active-identity refusal.
+    await expect(provisionOrganizationMembership(env.DB, input(alias, false))).rejects.toMatchObject({
+      status: 409,
+      code: "IDENTITY_ALREADY_ACTIVE",
+    });
+    expect(await effectCounts()).toEqual(before);
+  });
+
+  it("cannot steal a pending address reservation, including a reservation made after preparation", async () => {
+    const ownerId = await insertUser(env.DB);
+    const eventId = crypto.randomUUID(),
+      registrationId = crypto.randomUUID();
+    await env.DB.prepare(
+      "INSERT INTO events (id,slug,name,timezone,created_at,updated_at) VALUES (?,'pending-alias','Pending alias','UTC',?,?)",
+    )
+      .bind(eventId, "2026-10-17T00:00:00.000Z", "2026-10-17T00:00:00.000Z")
+      .run();
+    await env.DB.prepare(`INSERT INTO registrations (id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,confirmation_link_secret,created_at,updated_at)
+      VALUES (?,?,?,'pending_email_confirmation','virtual','test',?,?,?,?)`)
+      .bind(
+        registrationId,
+        eventId,
+        ownerId,
+        crypto.randomUUID(),
+        crypto.randomUUID(),
+        "2026-10-17T00:00:00.000Z",
+        "2026-10-17T00:00:00.000Z",
+      )
+      .run();
+    const email = "reserved@example.test";
+    const prepared = await buildProvisionOrganizationMembership(env.DB, input(email));
+    await env.DB.prepare("UPDATE users SET pending_email=?,pending_email_change_registration_id=? WHERE id=?")
+      .bind(email, registrationId, ownerId)
+      .run();
+    const before = await effectCounts();
+    await expect(env.DB.batch(prepared.statements)).rejects.toThrow("EMAIL_TAKEN");
+    expect(await effectCounts()).toEqual(before);
+    await expect(provisionOrganizationMembership(env.DB, input(email))).rejects.toThrow("EMAIL_TAKEN");
+    expect(await effectCounts()).toEqual(before);
+  });
+
+  it("rolls back a prepared alias command if another command creates the membership first", async () => {
+    const userId = await insertUser(env.DB);
+    const alias = await addAlias(userId, true);
+    const stale = await buildProvisionOrganizationMembership(env.DB, input(alias));
+    await provisionOrganizationMembership(env.DB, input(alias));
+    const before = await effectCounts();
+    await expect(env.DB.batch(stale.statements)).rejects.toThrow();
+    expect(await effectCounts()).toEqual(before);
   });
 });

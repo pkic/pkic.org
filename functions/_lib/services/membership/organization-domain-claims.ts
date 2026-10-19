@@ -5,7 +5,12 @@
  * applications own it through application_id; approval transfers the row to
  * organization_id. Keeping both states in one table makes duplicate-domain
  * rejection a database invariant instead of a race-prone pair of reads.
+ *
+ * A claim normally holds a registrable domain (`ibm.com`) and covers every
+ * address on its subdomains; a subdomain claimed explicitly
+ * (`research.ibm.com`) is more specific and wins for the addresses below it.
  */
+import { organizationDomainCandidates, workEmailDomain } from "../../email-domains/classification";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import { uuid } from "../../utils/ids";
@@ -46,6 +51,34 @@ export async function getOrganizationDomainClaim(
     [domain],
   );
   return row ? toClaim(row) : null;
+}
+
+/** The most specific claim covering a work address, or null; free and disposable mail never match one. */
+export async function getOrganizationDomainClaimForEmail(
+  db: DatabaseLike,
+  email: string,
+): Promise<OrganizationDomainClaim | null> {
+  const candidates = organizationDomainCandidates(email);
+  if (candidates.length === 0) return null;
+  const row = await first<OrganizationDomainClaimRow>(
+    db,
+    `SELECT id, domain, application_id, organization_id
+     FROM organization_domain_claims
+     WHERE domain IN (${candidates.map(() => "?").join(", ")})
+     ORDER BY length(domain) DESC
+     LIMIT 1`,
+    candidates,
+  );
+  return row ? toClaim(row) : null;
+}
+
+/**
+ * The domain a work address links through: the most specific claimed domain
+ * covering it, else its registrable domain. Null for free and disposable mail.
+ */
+export async function organizationLinkDomain(db: DatabaseLike, email: string): Promise<string | null> {
+  const claim = await getOrganizationDomainClaimForEmail(db, email);
+  return claim?.domain ?? workEmailDomain(email);
 }
 
 export function prepareClaimDomainForApplication(

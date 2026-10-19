@@ -10,7 +10,8 @@ import { pinReviewedStaffWorkflow } from "./helpers/membership-workflows";
  */
 import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
-import app from "../functions/router";
+import app from "./helpers/app";
+import "./helpers/app";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
@@ -105,12 +106,25 @@ describe("Post-approval onboarding", () => {
     await seedWorkingGroup("ca", "ca@lists.pkic.org");
   });
 
+  it("refuses approving an organization's application until its applicant's job title is recorded", async () => {
+    const { id } = await createReviewedApplication({}, { working_groups: ["pqc"], job_title: null });
+    const response = await call(adminToken, `/api/v1/members/applications/${id}/approve`, { method: "POST" });
+    expect(response.status).toBe(422);
+    expect(await response.json()).toMatchObject({
+      error: { details: { fieldErrors: { "answers.job_title": ["Enter your job title at this organization."] } } },
+    });
+    expect(await queryAll(env.DB, "SELECT id FROM organizations WHERE name = 'Acme Corp'")).toEqual([]);
+  });
+
   it("approves an org-tied application: creates org/user/member, sets primary contact, writes the domain", async () => {
     const { id } = await createReviewedApplication();
     const response = await call(adminToken, `/api/v1/members/applications/${id}/approve`, { method: "POST" });
     expect(response.status).toBe(200);
     const body = (await response.json()) as { organizationId: string; memberId: string; userId: string };
     expect(body.organizationId).toBeTruthy();
+    expect(
+      await queryAll(env.DB, "SELECT resource_id FROM site_publication_requests WHERE resource_type='membership'"),
+    ).toEqual([{ resource_id: body.memberId }]);
 
     const orgRows = await queryAll<{ name: string }>(
       env.DB,
@@ -210,12 +224,6 @@ describe("Post-approval onboarding", () => {
     expect(response.status).toBe(200);
     const body = (await response.json()) as { userId: string };
 
-    const userRows = await queryAll<{ job_title: string | null; links_json: string | null }>(
-      env.DB,
-      "SELECT job_title, links_json FROM users WHERE id = ?",
-      body.userId,
-    );
-    expect(userRows).toEqual([{ job_title: null, links_json: null }]);
     const identities = await queryAll<{ job_title: string | null; links_json: string | null }>(
       env.DB,
       `SELECT job_title, links_json
@@ -509,6 +517,9 @@ describe("Post-approval onboarding", () => {
       id,
     );
     expect(auditRows).toHaveLength(1);
+    expect(
+      await queryAll(env.DB, "SELECT resource_id FROM site_publication_requests WHERE resource_type='membership'"),
+    ).toEqual([{ resource_id: body.memberId }]);
 
     const claimEmails = await queryAll(
       env.DB,
@@ -587,6 +598,7 @@ describe("Post-approval onboarding", () => {
       await queryAll(env.DB, "SELECT id FROM email_outbox WHERE recipient_email = 'newmember@acme.test'"),
     ).toHaveLength(0);
     expect(await queryAll(env.DB, "SELECT id FROM google_groups_sync_queue")).toHaveLength(0);
+    expect(await queryAll(env.DB, "SELECT id FROM site_publication_requests")).toEqual([]);
   });
 
   it("atomicity (PR #1 review blocker 4): a provisioning failure leaves the application processing, with no partial event/queue rows", async () => {

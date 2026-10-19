@@ -34,11 +34,11 @@ export const ApplicationStagePatch = openApiRoute(
       actor: staff,
       onHoldSubtype: body.onHoldSubtype ?? null,
       note: body.note ?? null,
+      requestDetails: body.requestDetails,
       notification: {
         appBaseUrl: config.appBaseUrl,
         deadlineDays: settings.on_hold_response_deadline_days,
-        requestDetails: body.note ?? "",
-        reason: body.note ?? "",
+        reason: body.requestDetails ?? "",
       },
     });
 

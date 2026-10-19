@@ -1,0 +1,14 @@
+@layer components {
+  /* One person in the list of drafts. The frame keeps their fields from
+     reading as fields of the organization, and the legend names the card. */
+  .pk-organization-person {
+    border: 1px solid var(--pk-line);
+    border-radius: var(--pk-radius-lg);
+    padding: var(--pk-4);
+    background: var(--pk-surface);
+  }
+
+  .pk-organization-person > legend {
+    padding-inline: var(--pk-1);
+  }
+}

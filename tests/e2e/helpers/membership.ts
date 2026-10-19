@@ -62,6 +62,11 @@ export async function submitMembershipApplication(
           joinToken,
           answers: {
             reason: "This browser journey exercises the membership review workflow.",
+            about_yourself: "I work on PKI interoperability.",
+            // An organization's applicant says what they do there.
+            ...(organizationName
+              ? { job_title: "Membership contact", about_organization: "We build PKI services." }
+              : {}),
             agrees_bylaws: true,
             agrees_code_of_conduct: true,
             agrees_ipr_policy: true,
@@ -109,7 +114,7 @@ export async function openApplicationDetail(page: Page, email: string, stage: st
 /**
  * The stage badge rendered beside the applicant name in the detail header.
  *
- * The header is found through the applicant's `<h2>`, which is a role and a
+ * The header is found through the applicant's `<h1>`, which is a role and a
  * name rather than the four Bootstrap utility classes that used to be on the
  * wrapper — those went when the detail view adopted the design system, and a
  * selector written that way breaks again at the next migration.
@@ -117,7 +122,7 @@ export async function openApplicationDetail(page: Page, email: string, stage: st
 export function stageBadge(page: Page, applicantName: string) {
   return page
     .locator("div")
-    .filter({ has: page.getByRole("heading", { name: applicantName, level: 2 }) })
+    .filter({ has: page.getByRole("heading", { name: applicantName, level: 1 }) })
     .last()
     .locator("span.pk-badge");
 }
@@ -134,7 +139,10 @@ export function transitionCard(page: Page) {
 export async function transitionStageInUi(
   page: Page,
   toStage: string,
-  options: { onHoldSubtype?: string; note?: string } = {},
+  options: Pick<
+    import("../../../assets/shared/schemas/membership-application-management").ApplicationStageTransition,
+    "onHoldSubtype" | "note" | "requestDetails"
+  > = {},
 ): Promise<void> {
   const card = transitionCard(page);
   await expect(card).toBeVisible();
@@ -145,7 +153,11 @@ export async function transitionStageInUi(
   }
   // Located by the name the field announces rather than by a control class:
   // the note has a real `for`/`id` pair now, so the spec can use it.
-  if (options.note) await card.getByLabel("Note").fill(options.note);
+  if (options.note) await card.getByLabel("Internal note").fill(options.note);
+  if (options.requestDetails)
+    await card
+      .getByLabel(toStage === "declined" ? "Reason for declining" : "Information requested")
+      .fill(options.requestDetails);
 
   const response = page.waitForResponse(
     (r) =>

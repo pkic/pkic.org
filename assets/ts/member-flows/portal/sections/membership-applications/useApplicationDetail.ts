@@ -3,6 +3,7 @@ import { getJson, patchJson, postJson } from "../../../../shared/api-client";
 import { toast } from "../../ui";
 import type {
   ApplicationCommunicationCreate,
+  ApplicationStageTransition,
   ApplicationUpdate,
   MembershipApplicationDetail,
 } from "../../../../../shared/schemas/membership-application-management";
@@ -41,15 +42,11 @@ export function useApplicationDetail(applicationId: string) {
     void reload();
   }, [reload]);
 
-  async function transition(params: { toStage: string; onHoldSubtype?: string; note?: string }) {
+  async function transition(params: ApplicationStageTransition) {
     try {
       await patchJson(
         `/api/v1/members/applications/${applicationId}/stage`,
-        {
-          toStage: params.toStage,
-          onHoldSubtype: params.toStage === "on_hold" ? params.onHoldSubtype : undefined,
-          note: params.note || undefined,
-        },
+        params,
         applicationStageTransitionResponseSchema,
       );
       toast(`Application moved to '${params.toStage}'`, "success");

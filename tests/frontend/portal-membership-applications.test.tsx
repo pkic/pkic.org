@@ -117,7 +117,7 @@ describe("portal membership-application management", () => {
     await settle();
 
     expect(page.textContent).toContain("General Member");
-    expect(page.textContent).toContain("(F)");
+    expect(page.querySelector('[title="General Member"]')?.textContent).toContain("F");
     const rowLink = page.querySelector<HTMLAnchorElement>("tbody .pk-table__row-link");
     expect(rowLink?.getAttribute("href")).toBe(`#/membership/applications/${detail.id}`);
 
@@ -131,6 +131,37 @@ describe("portal membership-application management", () => {
     expect(list?.searchParams.get("sort")).toBe("-created_at");
     expect(requests.every((url) => !url.pathname.startsWith("/api/v1/admin/"))).toBe(true);
   });
+
+  it.each(["Staff review", "Member consultation", "Executive Council review"])(
+    "shows the configured %s instead of Processing on the list and record",
+    async (currentRequirement) => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: RequestInfo | URL) => {
+          const path = new URL(
+            typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+            location.origin,
+          ).pathname;
+          const application = { ...detail, currentRequirement };
+          return json(
+            path.endsWith(APPLICATION_ID)
+              ? application
+              : { applications: [application], page: { limit: 50, offset: 0, total: 1, hasMore: false } },
+          );
+        }),
+      );
+      const list = mount(<ApplicationsList />);
+      await settle();
+      expect(list.querySelector("tbody")?.textContent).toContain(currentRequirement);
+      expect(list.querySelector("tbody")?.textContent).not.toContain("Processing");
+      // Every review step is in flight: the same blue, whatever its name.
+      expect(list.querySelector("tbody .pk-badge")?.classList.contains("pk-badge--info")).toBe(true);
+      const record = mountDetail({ canWrite: false, canApprove: false });
+      await settle();
+      expect(record.querySelector(".pk-profile-header")?.textContent).toContain(currentRequirement);
+      expect(record.querySelector(".pk-profile-header")?.textContent).not.toContain("Processing");
+    },
+  );
 
   it("narrows by stage from the Stage column, sends it to the collection query, without a separate consultation queue", async () => {
     const requests: URL[] = [];

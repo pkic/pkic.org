@@ -1,6 +1,4 @@
 // @vitest-environment jsdom
-import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
 
 afterEach(() => {
@@ -14,9 +12,8 @@ it("keeps the original member links keyboard-accessible and excludes decorative 
     <a href="/members/first/" data-sponsor-level="0" data-member-name="First">First</a>
     <a href="/members/second/" data-sponsor-level="5" data-member-name="Second">Second</a>
   </div></section>`;
-  for (const file of ["sponsor-banner-marquee.js", "members-overview-effects.js"]) {
-    window.eval(await readFile(resolve("assets/js/modules", file), "utf8"));
-  }
+  await import("../../assets/js/modules/sponsor-banner-marquee.js");
+  await import("../../assets/js/modules/members-overview-effects.js");
   const original = document.querySelectorAll<HTMLAnchorElement>(".logo-wall-copy:not([aria-hidden]) a");
   const duplicates = document.querySelectorAll<HTMLAnchorElement>('.logo-wall-copy[aria-hidden="true"] a');
   expect(original.length).toBeGreaterThanOrEqual(2);

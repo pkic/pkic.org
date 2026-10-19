@@ -116,6 +116,14 @@ describe("group event registration configuration", () => {
     expect(config.textContent).toContain("days editor");
   });
 
+  it("renders only the settings topic selected by the route owner", () => {
+    const config = mount(<GroupEventConfiguration event={event()} groupId="g1" section="attendance-days" />);
+    expect(panelNames(config)).toEqual(["Attendance days"]);
+    expect(terms).toHaveLength(0);
+    expect(settings).toHaveLength(0);
+    expect(days).toHaveLength(1);
+  });
+
   it("hides the proposal-questions panel for an event the portal does not own", () => {
     // Form placements are configurable only for a portal-sourced event, so for
     // one that came from Hugo the disclosure is absent rather than present and

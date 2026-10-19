@@ -1,31 +1,38 @@
 /**
  * Member profile, applications, and notification self-service. All
- * functions here operate on the caller's own AuthMember identity — current-user
+ * functions here operate on the caller's own user or selected membership — current-user
  * resource routes never accept a target user/member id, by design.
  */
+import { prepareUserProfileStatements } from "./users";
 import { all, first } from "../db/queries";
 import { queryPage } from "../db/pagination";
 import { buildD1TextSearchFilter } from "../db/search";
 import { resolveMappedOrderBy } from "../db/sort";
 import { nowIso } from "../utils/time";
 import { stringifyJson, parseJsonSafe } from "../utils/json";
-import { parseLinksJson, serializeLinks } from "../../../assets/shared/schemas/links";
+import { parseLinksJson } from "../../../assets/shared/schemas/links";
+import { identityJobTitleSql } from "./identities/affiliation-projection";
+import { updateOwnIdentityProfile, type OwnIdentityProfileUpdateInput } from "./identities/own-identity-profile";
 import { AppError } from "../errors";
 import { getMemberApplicationById } from "./membership/applications/queries";
+import { ownApplicationFilter } from "./membership/applications/ownership";
 import { resolveRepresentativeRoleHolders } from "./membership/representative-roles";
 import type { AuthMember, DatabaseLike, EligibleIdentity } from "../types";
+import type { OwnAccount } from "../auth/member";
+import { resolveEligibleMembershipRows, toEligibleIdentity } from "../auth/identity-capacities";
 import type { MyApplicationsListQuery } from "../../../assets/shared/schemas/me";
 import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "./audit";
 import { publicUserHeadshotPath } from "./user-headshot";
-import { memberSessionAuthorizationEvidence } from "../auth/identity-capacities";
-import { prepareAuthorizationGuard, isAuthorizationGuardFailure } from "../db/authorization-guard";
 import type { EmailVerificationMethod } from "./email-verification";
+import { readVerifiedOwnEmailAddresses } from "./own-email-address-read";
 
 export interface MyActingIdentity {
   identityId: string;
   userId: string;
   name: string | null;
   email: string;
+  jobTitle: string | null;
+  headshotUrl: string | null;
   showOnOrgProfile: boolean;
   isPrimaryContact: boolean;
   isSecondaryContact: boolean;
@@ -33,6 +40,7 @@ export interface MyActingIdentity {
 
 export interface MyProfile {
   userId: string;
+  identityId: string | null;
   emailId: string | null;
   email: string;
   emailAddresses: Array<{
@@ -41,6 +49,7 @@ export interface MyProfile {
     primary: boolean;
     verifiedAt: string | null;
     verificationMethod: EmailVerificationMethod | null;
+    identityId: string | null;
   }>;
   firstName: string | null;
   lastName: string | null;
@@ -48,10 +57,10 @@ export interface MyProfile {
   jobTitle: string | null;
   biography: string | null;
   links: string[];
-  membershipCategory: string;
+  membershipCategory: string | null;
   organizationId: string | null;
   organizationName: string | null;
-  memberSince: string;
+  memberSince: string | null;
   showOnOrgProfile: boolean;
   headshotUrl: string | null;
   /** True when this member is their organization's primary or secondary contact. */
@@ -86,6 +95,8 @@ interface MyProfileRow {
 }
 
 interface ActingIdentityRow {
+  job_title: string | null;
+  headshot_r2_key: string | null;
   identity_id: string;
   user_id: string;
   first_name: string | null;
@@ -110,6 +121,7 @@ function toProfile(
 ): MyProfile {
   return {
     userId: member.userId,
+    identityId: member.identityId,
     emailId: row.email_id,
     email: row.email,
     emailAddresses,
@@ -137,7 +149,7 @@ export async function getMyProfile(db: DatabaseLike, member: AuthMember): Promis
     `SELECT identity.email_id,
             COALESCE(selected_email.email, u.email) AS email,
             u.first_name, u.last_name, u.preferred_name,
-            identity.job_title, identity.biography, identity.links_json,
+            ${identityJobTitleSql("identity.id")} AS job_title, identity.biography, identity.links_json,
             u.headshot_r2_key, mca.category_code, m.organization_id,
             identity.show_on_organization_profile AS show_on_org_profile,
             m.member_since, m.created_at AS member_created_at, o.name AS org_name
@@ -161,31 +173,9 @@ export async function getMyProfile(db: DatabaseLike, member: AuthMember): Promis
     throw new AppError(404, "NOT_FOUND", "Profile not found");
   }
 
-  const emailAddresses = await all<{
-    id: string | null;
-    email: string;
-    is_primary: number;
-    verified_at: string | null;
-    verification_method: EmailVerificationMethod | null;
-  }>(
-    db,
-    `SELECT NULL AS id, email, 1 AS is_primary, email_verified_at AS verified_at,
-            email_verification_method AS verification_method
-       FROM users WHERE id = ?
-     UNION ALL
-     SELECT id, email, 0 AS is_primary, verified_at, verification_method
-       FROM user_emails
-      WHERE user_id = ? AND verified_at IS NOT NULL
-      ORDER BY 3 DESC, email ASC`,
-    [member.userId, member.userId],
-  ).then((addresses) =>
-    addresses.map((address) => ({
-      id: address.id,
-      email: address.email,
-      primary: address.is_primary === 1,
-      verifiedAt: address.verified_at,
-      verificationMethod: address.verification_method,
-    })),
+  // The addresses an identity may follow: the primary one and every verified one.
+  const emailAddresses = (await readVerifiedOwnEmailAddresses(db, member.userId)).map(
+    ({ createdAt: _createdAt, ...address }) => address,
   );
 
   let organizationIdentities: MyActingIdentity[] | null = null;
@@ -196,6 +186,7 @@ export async function getMyProfile(db: DatabaseLike, member: AuthMember): Promis
         db,
         `SELECT identity.id AS identity_id, u.id AS user_id, u.first_name, u.last_name, u.preferred_name,
                 COALESCE(selected_email.email, u.email) AS email,
+                ${identityJobTitleSql("identity.id")} AS job_title, u.headshot_r2_key,
                 identity.show_on_organization_profile AS show_on_org_profile
          FROM identities identity
          JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
@@ -215,6 +206,8 @@ export async function getMyProfile(db: DatabaseLike, member: AuthMember): Promis
       userId: r.user_id,
       name: identityDisplayName(r),
       email: r.email,
+      jobTitle: r.job_title,
+      headshotUrl: publicUserHeadshotPath(r.user_id, r.headshot_r2_key),
       showOnOrgProfile: r.show_on_org_profile === 1,
       isPrimaryContact: r.user_id === holders.primaryContactUserId,
       isSecondaryContact: r.user_id === holders.secondaryContactUserId,
@@ -225,125 +218,105 @@ export async function getMyProfile(db: DatabaseLike, member: AuthMember): Promis
   return toProfile(row, member, emailAddresses, organizationIdentities, isOrgContact);
 }
 
-export interface MyProfileUpdateInput {
-  firstName?: string;
-  lastName?: string;
-  preferredName?: string;
-  emailId?: string | null;
-  jobTitle?: string;
-  biography?: string;
-  links?: string[];
-  showOnOrgProfile?: boolean;
+/** Account fields without a selected membership; the eligible membership roster still covers every identity. */
+export async function getAccountProfile(db: DatabaseLike, userId: string): Promise<MyProfile> {
+  const row = await first<{
+    email: string;
+    first_name: string | null;
+    last_name: string | null;
+    preferred_name: string | null;
+    headshot_r2_key: string | null;
+  }>(db, "SELECT email, first_name, last_name, preferred_name, headshot_r2_key FROM users WHERE id = ?", [userId]);
+  if (!row) throw new AppError(404, "NOT_FOUND", "Profile not found");
+  const emailAddresses = (await readVerifiedOwnEmailAddresses(db, userId)).map(
+    ({ createdAt: _createdAt, ...address }) => address,
+  );
+  return {
+    userId,
+    identityId: null,
+    emailId: null,
+    email: row.email,
+    emailAddresses,
+    firstName: row.first_name,
+    lastName: row.last_name,
+    preferredName: row.preferred_name,
+    jobTitle: null,
+    biography: null,
+    links: [],
+    membershipCategory: null,
+    organizationId: null,
+    organizationName: null,
+    memberSince: null,
+    showOnOrgProfile: false,
+    headshotUrl: publicUserHeadshotPath(userId, row.headshot_r2_key),
+    isOrgContact: false,
+    organizationIdentities: null,
+    activeIdentities: (await resolveEligibleMembershipRows(db, userId)).map(toEligibleIdentity),
+  };
 }
 
+/** Names are the only profile a user without a membership can edit; identity fields need an identity to belong to. */
+export async function updateAccountProfile(
+  db: DatabaseLike,
+  account: OwnAccount,
+  input: MyProfileUpdateInput,
+): Promise<MyProfile> {
+  const { firstName, lastName, preferredName, ...identityFields } = input;
+  if (Object.values(identityFields).some((value) => value !== undefined)) {
+    throw new AppError(422, "NO_IDENTITY", "Only your names can be edited without a membership");
+  }
+  const at = nowIso();
+  await db.batch([
+    ...prepareUserProfileStatements(db, account.userId, { firstName, lastName, preferredName }, at),
+    prepareAuditLogAfterOneChange(
+      db,
+      "user",
+      account.userId,
+      "profile_names_updated",
+      "user",
+      account.userId,
+      { fields: ["firstName", "lastName", "preferredName"].filter((key) => key in input) },
+      at,
+    ),
+  ]);
+  return getAccountProfile(db, account.userId);
+}
+
+export type MyProfileUpdateInput = OwnIdentityProfileUpdateInput;
+
+/** The person's names and the profile of the identity the session acts as. */
 export async function updateMyProfile(
   db: DatabaseLike,
   member: AuthMember,
   input: MyProfileUpdateInput,
 ): Promise<MyProfile> {
-  const now = nowIso();
-  if (input.showOnOrgProfile !== undefined && !member.organizationId) {
-    throw new AppError(422, "NO_ORGANIZATION", "This preference only applies to organization identities");
-  }
-
-  if (input.emailId !== undefined && !member.organizationId) {
-    throw new AppError(422, "NO_ORGANIZATION", "An individual identity uses the account's primary email");
-  }
-  if (input.jobTitle !== undefined && !member.organizationId) {
-    throw new AppError(
-      422,
-      "INDIVIDUAL_JOB_TITLE_FORBIDDEN",
-      "Individual identity roles derive from membership category",
-    );
-  }
-
-  const statements = [
-    prepareAuthorizationGuard(db, memberSessionAuthorizationEvidence(member)),
-    db
-      .prepare(
-        `UPDATE users
-         SET first_name = COALESCE(?, first_name),
-             last_name = COALESCE(?, last_name),
-             preferred_name = COALESCE(?, preferred_name),
-             updated_at = ?
-         WHERE id = ?`,
-      )
-      .bind(input.firstName ?? null, input.lastName ?? null, input.preferredName ?? null, now, member.userId),
-  ];
-  statements.push(
-    db
-      .prepare(
-        `UPDATE identities
-            SET email_id = CASE WHEN ? = 1 THEN ? ELSE email_id END,
-                job_title = CASE WHEN ? = 1 THEN ? ELSE job_title END,
-                biography = CASE WHEN ? = 1 THEN ? ELSE biography END,
-                links_json = CASE WHEN ? = 1 THEN ? ELSE links_json END,
-                show_on_organization_profile = CASE WHEN ? = 1 THEN ? ELSE show_on_organization_profile END,
-                updated_at = ?
-          WHERE id = ? AND user_id = ?
-            AND started_at IS NOT NULL AND ended_at IS NULL AND blocked_at IS NULL`,
-      )
-      .bind(
-        input.emailId !== undefined ? 1 : 0,
-        input.emailId ?? null,
-        member.organizationId && input.jobTitle !== undefined ? 1 : 0,
-        input.jobTitle ?? null,
-        input.biography !== undefined ? 1 : 0,
-        input.biography ?? null,
-        input.links !== undefined ? 1 : 0,
-        input.links !== undefined ? serializeLinks(input.links) : null,
-        member.organizationId && input.showOnOrgProfile !== undefined ? 1 : 0,
-        input.showOnOrgProfile ? 1 : 0,
-        now,
-        member.identityId,
-        member.userId,
-      ),
+  await updateOwnIdentityProfile(
+    db,
+    { userId: member.userId, sessionId: member.sessionId ?? "", member },
+    member.identityId,
+    input,
   );
-  statements.push(
-    prepareAuditLogAfterOneChange(db, "member", member.userId, "user_profile_updated", "user", member.userId, {
-      fields: Object.keys(input).sort(),
-      memberId: member.memberId,
-    }),
-  );
-  try {
-    await db.batch(statements);
-  } catch (error) {
-    if (isAuthorizationGuardFailure(error)) {
-      throw new AppError(
-        409,
-        "MEMBERSHIP_CONTEXT_CHANGED",
-        "The active membership changed before the profile was saved",
-      );
-    }
-    if (error instanceof Error && error.message.includes("IDENTITY_EMAIL_INVALID")) {
-      throw new AppError(422, "IDENTITY_EMAIL_INVALID", "Select a verified email address owned by this account");
-    }
-    if (isAuditChangeGuardFailure(error)) {
-      throw new AppError(409, "PROFILE_CHANGED", "The profile changed before it was saved");
-    }
-    throw error;
-  }
-
   return getMyProfile(db, member);
 }
 
 export interface MyApplicationSummary {
   id: string;
   stage: string;
-  membershipCategory: string;
+  membershipCategory: string | null;
   createdAt: string;
 }
 
 export async function listMyApplications(
   db: DatabaseLike,
-  member: AuthMember,
+  account: OwnAccount,
   params: MyApplicationsListQuery,
 ): Promise<{ applications: MyApplicationSummary[]; total: number }> {
   const search = params.q
     ? buildD1TextSearchFilter(params.q, ["membership_category", "stage", "organization_name"])
     : null;
   const where = search ? ` AND ${search.sql}` : "";
-  const bindings = [member.memberId, member.userId, ...(search?.bindings ?? [])];
+  const ownership = ownApplicationFilter(account);
+  const bindings = [...ownership.bindings, ...(search?.bindings ?? [])];
   const orderBy = resolveMappedOrderBy(
     params.sort,
     { createdAt: "created_at", stage: "stage" },
@@ -358,7 +331,7 @@ export async function listMyApplications(
   }>(db, {
     sql: `SELECT id, stage, membership_category, created_at
             FROM member_applications
-            WHERE (member_id = ? OR (member_id IS NULL AND applicant_user_id = ?))${where}`,
+            WHERE ${ownership.sql}${where}`,
     bindings,
     orderBy,
     limit: params.limit,
@@ -393,7 +366,7 @@ export interface MyApplicationDetail {
   applicantName: string;
   applicantEmail: string;
   organizationName: string | null;
-  membershipCategory: string;
+  membershipCategory: string | null;
   stage: string;
   stageEnteredAt: string;
   createdAt: string;
@@ -404,22 +377,24 @@ export interface MyApplicationDetail {
 /**
  * "My Application" tab: original application, status history, and
  * timeline. Scoped to the caller's own application(s) by matching
- * `member_id` against the selected Member capacity — current-user routes
+ * applicant ownership or the selected organization membership — current-user routes
  * never accept a target id that isn't independently ownership-checked
  * (see this file's header comment).
  */
 export async function getMyApplicationDetail(
   db: DatabaseLike,
-  member: AuthMember,
+  account: OwnAccount,
   applicationId: string,
 ): Promise<MyApplicationDetail> {
+  const ownership = ownApplicationFilter(account);
+  const owned = await first<{ id: string }>(
+    db,
+    `SELECT id FROM member_applications WHERE id = ? AND ${ownership.sql}`,
+    [applicationId, ...ownership.bindings],
+  );
+  if (!owned) throw new AppError(404, "NOT_FOUND", "Application not found");
   const application = await getMemberApplicationById(db, applicationId);
-  const ownedBySelectedCapacity = application?.member_id === member.memberId;
-  const ownedByIdentityBeforeCapacityExists =
-    application?.member_id === null && application.applicant_user_id === member.userId;
-  if (!application || (!ownedBySelectedCapacity && !ownedByIdentityBeforeCapacityExists)) {
-    throw new AppError(404, "NOT_FOUND", "Application not found");
-  }
+  if (!application) throw new AppError(404, "NOT_FOUND", "Application not found");
 
   const [events, communications] = await Promise.all([
     all<{ from_stage: string | null; to_stage: string; note: string | null; created_at: string }>(
@@ -496,20 +471,20 @@ export async function getUserNotificationPreferences(
 
 export async function getMyNotificationPreferences(
   db: DatabaseLike,
-  member: AuthMember,
+  account: OwnAccount,
 ): Promise<MyNotificationPreferences> {
-  return getUserNotificationPreferences(db, member.userId);
+  return getUserNotificationPreferences(db, account.userId);
 }
 
 export async function updateMyNotificationPreferences(
   db: DatabaseLike,
-  member: AuthMember,
+  account: OwnAccount,
   input: Partial<MyNotificationPreferences>,
 ): Promise<MyNotificationPreferences> {
   const row = await first<{ notification_preferences_json: string | null }>(
     db,
     "SELECT notification_preferences_json FROM users WHERE id = ?",
-    [member.userId],
+    [account.userId],
   );
   const current = {
     ...DEFAULT_NOTIFICATION_PREFERENCES,
@@ -525,15 +500,15 @@ export async function updateMyNotificationPreferences(
               SET notification_preferences_json = ?, updated_at = ?
             WHERE id = ? AND notification_preferences_json IS ?`,
         )
-        .bind(stringifyJson(next), at, member.userId, row?.notification_preferences_json ?? null),
+        .bind(stringifyJson(next), at, account.userId, row?.notification_preferences_json ?? null),
       prepareAuditLogAfterOneChange(
         db,
         "member",
-        member.userId,
+        account.userId,
         "notification_preferences_updated",
         "user",
-        member.userId,
-        { fields: Object.keys(input).sort(), memberId: member.memberId },
+        account.userId,
+        { fields: Object.keys(input).sort(), memberId: account.member?.memberId ?? null },
         at,
       ),
     ]);

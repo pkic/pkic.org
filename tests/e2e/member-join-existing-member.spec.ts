@@ -11,10 +11,9 @@ test("existing members get sign-in instructions and old join links remain helpfu
   const email = `returning-${suffix}@returning-${suffix}.test`;
   const requestJoin = async () => {
     await page.goto("/join/");
-    await page.getByLabel("Yes — I am employed by or own an organization").check();
     await page.getByLabel("Your official work or organization email address").fill(email);
     await page.getByRole("button", { name: "Continue", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible();
+    await expect(page.getByText("Check your email", { exact: true })).toBeVisible();
   };
   const beforeVerification = await capturedEmailCount();
   await requestJoin();

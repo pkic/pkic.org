@@ -2,7 +2,7 @@ import { useEffect } from "preact/hooks";
 import { PageHeader } from "../../../../ui/PageHeader";
 import { usePortalHashLocation } from "../../hash-location";
 import { ApiDataTable } from "../../../../components/ApiDataTable";
-import { EmptyState } from "../../../../ui/RecordEmptyState";
+import { EmptyState } from "../../../../ui/EmptyState";
 import type { Column } from "../../../../components/Table";
 import { PersonCell } from "../../../../ui/PersonCell";
 import {
@@ -14,6 +14,7 @@ import { OrganizationCreateForm } from "./OrganizationCreateForm";
 // `pk-mono` is defined in Content.css, which rides a lazy chunk: a surface
 // that writes the class name has to pull the stylesheet in itself.
 import "../../../../ui/Content.css";
+import { ExternalLink } from "../../../../ui/ExternalLink";
 
 /** Reserved organization-id segment that routes to the creation page instead of a record's detail. */
 const NEW_ORGANIZATION_SEGMENT = "new";
@@ -79,7 +80,7 @@ export function Organizations({
     {
       // The row leads with the organization's mark, as a person's row leads
       // with their portrait: the logo is what a reader scanning the directory
-      // recognises before the name. Initials stand in while there is none.
+      // recognizes before the name. Initials stand in while there is none.
       header: "Organization",
       cell: (organization) => (
         <PersonCell
@@ -124,9 +125,9 @@ export function Organizations({
       header: "Website",
       cell: (organization) =>
         organization.website ? (
-          <a href={organization.website} target="_blank" rel="noreferrer" title={organization.website}>
+          <ExternalLink href={organization.website} external title={organization.website}>
             {organization.website.replace(/^https?:\/\//, "")}
-          </a>
+          </ExternalLink>
         ) : (
           "—"
         ),

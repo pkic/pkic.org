@@ -32,7 +32,7 @@ async function requireConfigurableGroupEvent(
 ): Promise<{ event: ConfigurableEvent; context: EventResourceManagementContext; guardedDb: DatabaseLike }> {
   const event = await first<ConfigurableEvent>(
     db,
-    `SELECT event.id, event.timezone, event.updated_at AS updatedAt,
+    `SELECT event.id, event.timezone, strftime('%Y-%m-%dT%H:%M:%fZ', event.updated_at) AS updatedAt,
             event.registration_mode AS registrationPolicy
        FROM events event
        LEFT JOIN event_series series ON series.event_id = event.id

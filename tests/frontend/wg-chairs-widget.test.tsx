@@ -134,7 +134,8 @@ describe("WgChairsWidget", () => {
     // (issue #19).
     expect(container.textContent).toContain("Principal Cryptographer");
     expect(container.textContent).not.toContain("Principal Cryptographer at Example Consortium");
-    expect(container.querySelector(".person-card-org")?.textContent).toContain("Example Consortium");
+    expect(container.querySelector(".person-card-org a")?.getAttribute("title")).toBe("Example Consortium");
+    expect(container.querySelector(".person-card-org .pk-avatar__initials")?.textContent).toBe("EC");
     // Each profile link is a marked badge in the shared list, named after the
     // person rather than after the site: three links all carrying the same
     // site label are nothing to choose between when read out on their own.

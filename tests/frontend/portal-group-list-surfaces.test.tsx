@@ -6,7 +6,7 @@
  *
  * These had no tests at all. What is asserted is the part a visual review
  * cannot see — that each table names itself, that a row's controls say which
- * row they belong to, that a status is a word and not only a colour, and that
+ * row they belong to, that a status is a word and not only a color, and that
  * a refused load replaces the list rather than letting an empty state claim
  * something the surface does not know.
  */
@@ -21,7 +21,7 @@ import { GroupMeetingSeriesList } from "../../assets/ts/member-flows/portal/sect
 import { GroupMembersRoster } from "../../assets/ts/member-flows/portal/sections/management/GroupMembersRoster";
 import { GroupVotes } from "../../assets/ts/member-flows/portal/sections/management/GroupVotes";
 import { ProposalPrograms } from "../../assets/ts/member-flows/portal/sections/management/ProposalPrograms";
-import { controlFor } from "./helpers/labelled-control";
+import { controlFor } from "./helpers/labeled-control";
 
 import { isCurrentTab, tabNamed, tabNames } from "./helpers/tabs";
 
@@ -93,7 +93,7 @@ describe("the participant roster", () => {
     expect(page.querySelector("section")?.getAttribute("aria-label")).toBe("Members");
 
     // The roster is the shared list panel now: its search is the toolbar's,
-    // labelled for the collection it filters.
+    // labeled for the collection it filters.
     const search = controlFor(page, "Search members");
     expect(search.type).toBe("search");
 

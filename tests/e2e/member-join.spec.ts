@@ -3,84 +3,44 @@
  * @covers join.1.0.a
  * @covers join.1.0.b
  */
+import { EMAIL_FIRST_ADVISORY_COPY, EMAIL_FIRST_COPY, WORK_EMAIL_STEER } from "../../assets/shared/email-first-copy";
 import { openMembershipVerificationLink } from "./helpers/member-join";
 import { expect, test } from "@playwright/test";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
 
-test("requires a factual organization answer and updates the email path", async ({ page }) => {
+test("starts from the work email and steers a personal address to the explicit individual path", async ({ page }) => {
   await page.goto("/join/");
 
   await expect(page.getByRole("heading", { name: "Join the PKI Consortium", exact: true })).toHaveCount(1);
   await expect(page.getByRole("heading", { name: "Membership Application", exact: true })).toHaveCount(1);
 
-  const applicantQuestion = page.locator("legend", {
-    hasText: "Are you employed by, or do you own, an organization?",
-  });
-  // The question names the radio group, so it is a field label — `pk-strong`
-  // is what lifts it above the answers it introduces. The class assertions
-  // pin the contract; the computed assertions below are what the classes are
-  // for, and hold whatever the class names become.
-  //
-  // The size check used to compare the legend with its own radio labels,
-  // which only matched because Bootstrap's `fs-6` and `form-check-label` were
-  // both 1rem. The design system separates the two scales on purpose: a label
-  // is `--pk-text-sm` and a control — including a `pk-check` — is
-  // `--pk-text-md`. The invariant that survives is that a `<legend>` renders
-  // at the same label scale as every other field label in this form, rather
-  // than falling back to the browser's oversized default legend size.
-  await expect(applicantQuestion).toHaveClass(/\bpk-field__label\b/);
-  const questionFontSize = await applicantQuestion.evaluate((element) => getComputedStyle(element).fontSize);
-  const questionFontWeight = await applicantQuestion.evaluate((element) => getComputedStyle(element).fontWeight);
-  const answerFontWeight = await page
-    .getByLabel("Yes — I am employed by or own an organization")
-    .evaluate((element) => getComputedStyle(element.closest("label")!).fontWeight);
-  expect(Number(questionFontWeight)).toBeGreaterThan(Number(answerFontWeight));
-
-  const organizationChoice = page.getByLabel("Yes — I am employed by or own an organization");
-  const individualChoice = page.getByLabel("No — I am not employed by and do not own an organization");
-  await expect(organizationChoice).toBeVisible();
-  await expect(individualChoice).toBeVisible();
-  await expect(page.getByLabel("Your official work or organization email address")).toBeHidden();
-
-  await organizationChoice.check();
-  const organizationEmail = page.getByLabel("Your official work or organization email address");
+  await expect(page.getByRole("radio", { name: EMAIL_FIRST_COPY.join.work.title, exact: true })).toBeChecked();
+  const organizationEmail = page.getByLabel(EMAIL_FIRST_COPY.join.work.label);
   await expect(organizationEmail).toBeVisible();
-  // The email step is the first ordinary field label to become visible, so it
-  // is the peer that proves the legend above sits on the same label scale.
-  const emailLabelFontSize = await page
-    .locator('label[for="joinEmail"]')
-    .evaluate((element) => getComputedStyle(element).fontSize);
-  expect(questionFontSize).toBe(emailLabelFontSize);
-  await expect(organizationEmail).toHaveAttribute("placeholder", "you@organization.example");
-  await expect(page.getByText(/You must participate on behalf of that organization/)).toBeVisible();
+  await expect(
+    page.getByText(/so we can verify the relationship and keep organizational and IPR attribution/),
+  ).toBeVisible();
+  await expect(page.locator('input[name="applicantKind"]')).toHaveCount(0);
 
   await organizationEmail.fill("person@gmail.com");
-  await expect(organizationEmail).toHaveAttribute("aria-invalid", "true");
-  await expect(
-    page.getByText(/Personal or free email addresses such as Gmail are not accepted for organization participation/),
-  ).toBeVisible();
+  // The steer holds the step: nothing is sent for a personal address on behalf of an organization.
+  await page.getByRole("button", { name: EMAIL_FIRST_COPY.join.work.action, exact: true }).click();
+  await expect(page.getByText(WORK_EMAIL_STEER)).toBeVisible();
+  await expect(page.getByText(EMAIL_FIRST_COPY.join.sentTitle, { exact: true })).toHaveCount(0);
 
-  // Moving away from the field must not let generic email-format validation
-  // clear the organization-domain policy error before submission.
-  await page.getByRole("button", { name: "Continue" }).focus();
-  await expect(organizationEmail).toHaveAttribute("aria-invalid", "true");
-  await expect(
-    page.getByText(/Personal or free email addresses such as Gmail are not accepted for organization participation/),
-  ).toBeVisible();
-
-  await organizationEmail.fill("person@example.test");
-  await expect(organizationEmail).not.toHaveAttribute("aria-invalid", "true");
-
-  await individualChoice.check();
-  const personalEmail = page.getByLabel("Your personal or university email address");
-  await expect(personalEmail).toBeVisible();
-  await expect(personalEmail).toHaveValue("");
-  await expect(page.getByText(/Individual participation is limited to eligible categories/)).toBeVisible();
+  await page.getByRole("button", { name: EMAIL_FIRST_ADVISORY_COPY.usePersonal, exact: true }).click();
+  await expect(page.getByRole("radio", { name: EMAIL_FIRST_COPY.join.personal.title, exact: true })).toBeChecked();
+  const personalEmail = page.getByLabel(EMAIL_FIRST_COPY.join.personal.label);
+  await expect(personalEmail).toHaveValue("person@gmail.com");
+  await expect(page.getByText(WORK_EMAIL_STEER)).toHaveCount(0);
   await expect(page.getByText(/H5 — PhD students researching PKI or cryptography/)).toBeVisible();
   await expect(page.getByText(/H6 — Unaffiliated independent PKI or cryptography consultants/)).toBeVisible();
   await expect(page.getByText(/H7 — Unaffiliated independent PKI or cryptography researchers/)).toBeVisible();
   await expect(page.getByText(/A — Certification Authorities and Trust Service Providers/)).toHaveCount(0);
-  await expect(page.getByText(/You must participate on behalf of that organization/)).toBeHidden();
+
+  await page.getByRole("radio", { name: EMAIL_FIRST_COPY.join.work.title, exact: true }).check();
+  await expect(page.getByLabel(EMAIL_FIRST_COPY.join.work.label)).toBeVisible();
+  await expect(page.getByText(/H5 — PhD students researching PKI or cryptography/)).toBeHidden();
 });
 
 test("verifies an organization email before submitting the D1-backed membership form", async ({ page }) => {
@@ -89,10 +49,9 @@ test("verifies an organization email before submitting the D1-backed membership 
   const sinceVerification = await capturedEmailCount();
 
   await page.goto("/join/");
-  await page.getByLabel("Yes — I am employed by or own an organization").check();
-  await page.getByLabel("Your official work or organization email address").fill(email);
-  await page.getByRole("button", { name: "Continue" }).click();
-  await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible();
+  await page.getByLabel(EMAIL_FIRST_COPY.join.work.label).fill(email);
+  await page.getByRole("button", { name: EMAIL_FIRST_COPY.join.work.action, exact: true }).click();
+  await expect(page.getByText(EMAIL_FIRST_COPY.join.sentTitle, { exact: true })).toBeVisible();
 
   const verification = await waitForCapturedEmail(email, "Verify your email address", {
     since: sinceVerification,
@@ -115,7 +74,21 @@ test("verifies an organization email before submitting the D1-backed membership 
   const firstLegalCard = legalFields.first();
   const firstDocument = firstLegalCard.locator(".membership-legal-card-scroll");
   const firstAgreement = firstLegalCard.locator("[data-membership-legal-input]");
-  expect(await firstAgreement.evaluate((input) => input.closest(".membership-legal-card-scroll") === null)).toBe(true);
+  await expect(page.getByLabel("How do you expect to participate?", { exact: true })).toHaveValue("active");
+  expect(await firstDocument.evaluate((container) => container.scrollHeight > container.clientHeight)).toBe(true);
+  expect(await firstAgreement.evaluate((input) => Boolean(input.closest(".membership-legal-card-scroll")))).toBe(true);
+  const headerStatus = firstLegalCard.getByRole("status");
+  await expect(headerStatus).toHaveText("Agreement required");
+  await page.getByRole("button", { name: "Submit membership application", exact: true }).click();
+  await expect(headerStatus).toHaveText("Agree to continue");
+  await firstLegalCard.scrollIntoViewIfNeeded();
+  await expect(headerStatus).toBeInViewport();
+  await expect(firstAgreement).not.toBeInViewport();
+  expect(await firstLegalCard.evaluate((card) => getComputedStyle(card).borderTopColor)).toBe(
+    await page
+      .getByLabel("About yourself", { exact: false })
+      .evaluate((input) => getComputedStyle(input).borderTopColor),
+  );
   await firstDocument.evaluate((container) => {
     container.scrollTop = container.scrollHeight;
   });
@@ -125,7 +98,29 @@ test("verifies an organization email before submitting the D1-backed membership 
     await agreement.check();
   }
 
+  await expect(headerStatus).toHaveText("Agreed");
+  expect(await firstLegalCard.evaluate((card) => getComputedStyle(card).borderTopColor)).toBe(
+    await page.getByLabel("First name").evaluate((input) => getComputedStyle(input).borderTopColor),
+  );
+  for (const width of [1280, 375]) {
+    await page.setViewportSize({ width, height: 900 });
+    await firstDocument.evaluate((container) => {
+      container.scrollTop = container.scrollHeight;
+    });
+    const scrollBox = await firstDocument.evaluate((container) => ({
+      x: container.getBoundingClientRect().x,
+      width: container.clientWidth,
+    }));
+    const footerBox = await firstLegalCard.locator(".membership-legal-acceptance").boundingBox();
+    expect(footerBox!.x).toBeCloseTo(scrollBox.x, 0);
+    expect(footerBox!.width).toBeCloseTo(scrollBox.width, 0);
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
+
   const sinceConfirmation = await capturedEmailCount();
+  await page.locator('[name="custom.job_title"]').fill("Membership contact");
+  await page.getByLabel("About yourself", { exact: false }).fill("I work on PKI interoperability.");
+  await page.getByLabel("About your organization", { exact: false }).fill("We build PKI services.");
   const submission = page.waitForResponse(
     (response) => response.url().endsWith("/api/v1/members/applications") && response.request().method() === "POST",
   );
@@ -143,9 +138,9 @@ test("keeps the individual path an explicit policy exception for an institutiona
   const since = await capturedEmailCount();
 
   await page.goto("/join/");
-  await page.getByLabel("No — I am not employed by and do not own an organization").check();
-  await page.getByLabel("Your personal or university email address").fill(email);
-  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("radio", { name: EMAIL_FIRST_COPY.join.personal.title, exact: true }).check();
+  await page.getByLabel(EMAIL_FIRST_COPY.join.personal.label).fill(email);
+  await page.getByRole("button", { name: EMAIL_FIRST_COPY.join.personal.action, exact: true }).click();
 
   const verification = await waitForCapturedEmail(email, "Verify your email address", { since });
   await openMembershipVerificationLink(page, extractEmailUrl(verification, "#verify="));

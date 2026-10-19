@@ -9,8 +9,8 @@
  *   - PATCH org membershipCategory updates the aggregate's single category
  *     assignment (no "cascade to every identity" — there's only ever
  *     one category per aggregate now).
- *   - POST .../organizations/:organizationId/identities inherits the
- *     org's category and rejects when the org has none set yet.
+ *   - POST .../organizations/:organizationId/identities derives category
+ *     from an actual Member aggregate; nonmember affiliations have none.
  *   - PATCH .../members/:id rejects membershipCategory/status for a
  *     organization identity id (those live on the aggregate now) but still allows
  *     showOnOrgProfile, and still allows membershipCategory for an org-less
@@ -21,12 +21,14 @@
  */
 import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
-import app from "../functions/router";
+import app from "./helpers/app";
+import "./helpers/app";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { organizationsListResponseSchema } from "../assets/shared/schemas/organization-management";
 import { userDetailResponseSchema, usersListResponseSchema } from "../assets/shared/schemas/user-management";
+import { identitiesListResponseSchema } from "../assets/shared/schemas/identity";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -45,12 +47,20 @@ async function call(token: string, path: string, init: RequestInit = {}): Promis
   );
 }
 
+async function publicationCount(organizationId: string) {
+  return env.DB.prepare(
+    "SELECT COUNT(*) AS count FROM site_publication_requests WHERE resource_id=? AND reason_code='organization_content_changed'",
+  )
+    .bind(organizationId)
+    .first<number>("count");
+}
+
 function orgMemberBody(overrides: Record<string, unknown> = {}) {
   return {
     name: "Acme Corp",
     membershipCategory: "F",
     memberSince: "2026-01-15",
-    identities: [{ name: "Jane Doe", email: "jane@acme.test" }],
+    identities: [{ name: "Jane Doe", email: "jane@acme.test", jobTitle: "Representative" }],
     workingGroupSlugs: [],
     activationReason: "Verified staff provisioning fixture",
     ...overrides,
@@ -96,6 +106,7 @@ describe("Organization management — membership category on the aggregate (Phas
       method: "POST",
       body: JSON.stringify({
         userReference: "email",
+        jobTitle: "Representative",
         ...input,
         showOnOrganizationProfile: true,
         activation: { mode: "immediate", reason: "Verified staff test fixture" },
@@ -250,7 +261,7 @@ describe("Organization management — membership category on the aggregate (Phas
     const beta = await createOrg({
       name: "Beta Inc",
       membershipCategory: "A",
-      identities: [{ name: "Bob Beta", email: "bob@beta.test" }],
+      identities: [{ name: "Bob Beta", email: "bob@beta.test", jobTitle: "Representative" }],
     });
 
     const listResponse = await call(adminToken, "/api/v1/organizations");
@@ -315,6 +326,96 @@ describe("Organization management — membership category on the aggregate (Phas
     });
   });
 
+  it("names the email domains its people reach it through and audits a rename with the name it replaced", async () => {
+    const { organizationId, revision } = await createOrg();
+    await env.DB.prepare(
+      `INSERT INTO organization_domain_claims (id, domain, organization_id, application_id, created_at, updated_at)
+       VALUES (?, 'acme.test', ?, NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
+    )
+      .bind(crypto.randomUUID(), organizationId)
+      .run();
+
+    const detail = await call(adminToken, `/api/v1/organizations/${organizationId}`);
+    expect(((await detail.json()) as { organization: { emailDomains: unknown } }).organization.emailDomains).toEqual([
+      { domain: "acme.test", people: 1 },
+    ]);
+
+    const renamed = await call(adminToken, `/api/v1/organizations/${organizationId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ name: "Acme Corporation", revision }),
+    });
+    expect(renamed.status).toBe(200);
+    expect(
+      await queryAll(
+        env.DB,
+        `SELECT json_extract(details_json, '$.name.from') AS "from", json_extract(details_json, '$.name.to') AS "to"
+           FROM audit_log WHERE action = 'organization_updated' AND entity_id = ?`,
+        organizationId,
+      ),
+    ).toEqual([{ from: "Acme Corp", to: "Acme Corporation" }]);
+  });
+
+  it("queues changed public staff edits once and suppresses unchanged or private contact edits", async () => {
+    const { organizationId, revision, userId } = await createOrg();
+    const changes = {
+      membershipCategory: "F",
+      memberSince: "2026-01-15",
+      name: "Renamed publisher",
+      description: "New public description",
+      links: ["https://example.test/about"],
+    };
+    const update = await call(adminToken, `/api/v1/organizations/${organizationId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ ...changes, revision }),
+    });
+    expect(update.status, await update.clone().text()).toBe(200);
+    expect(await publicationCount(organizationId)).toBe(1);
+    const first = (await update.json()) as { organization: { updatedAt: string } };
+    const unchanged = await call(adminToken, `/api/v1/organizations/${organizationId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ ...changes, revision: first.organization.updatedAt }),
+    });
+    expect(unchanged.status).toBe(200);
+    expect(await publicationCount(organizationId)).toBe(1);
+    const second = (await unchanged.json()) as { organization: { updatedAt: string } };
+    const contact = await call(adminToken, `/api/v1/organizations/${organizationId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ primaryContactUserId: userId, revision: second.organization.updatedAt }),
+    });
+    expect(contact.status).toBe(200);
+    expect(await publicationCount(organizationId)).toBe(1);
+  });
+
+  it("does not queue public changes for inactive member organizations", async () => {
+    const { organizationId, revision } = await createOrg();
+    await env.DB.prepare("UPDATE members SET status='inactive' WHERE organization_id=?").bind(organizationId).run();
+    const response = await call(adminToken, `/api/v1/organizations/${organizationId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ description: "Private until reactivated", revision }),
+    });
+    expect(response.status).toBe(200);
+    expect(await publicationCount(organizationId)).toBe(0);
+  });
+
+  it("rolls back public profile intent and content when staff audit fails", async () => {
+    const { organizationId, revision } = await createOrg();
+    await env.DB.prepare(`CREATE TRIGGER fail_profile_audit BEFORE INSERT ON audit_log
+      WHEN NEW.action='organization_updated' BEGIN SELECT RAISE(ABORT,'forced profile audit failure'); END`).run();
+    try {
+      const response = await call(adminToken, `/api/v1/organizations/${organizationId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ name: "Must roll back", revision }),
+      });
+      expect(response.status).toBe(500);
+      expect(await publicationCount(organizationId)).toBe(0);
+      expect(await env.DB.prepare("SELECT name FROM organizations WHERE id=?").bind(organizationId).first("name")).toBe(
+        "Acme Corp",
+      );
+    } finally {
+      await env.DB.prepare("DROP TRIGGER fail_profile_audit").run();
+    }
+  });
+
   it("PATCH org memberSince updates the aggregate's stored value", async () => {
     const { organizationId, revision } = await createOrg();
     const aggregateId = await aggregateIdFor(organizationId);
@@ -333,6 +434,7 @@ describe("Organization management — membership category on the aggregate (Phas
       aggregateId,
     );
     expect(memberRows[0].member_since).toBe("2020-03-01");
+    expect(await publicationCount(organizationId)).toBe(1);
   });
 
   it("PATCH org membershipCategory updates the aggregate's single category assignment", async () => {
@@ -351,6 +453,7 @@ describe("Organization management — membership category on the aggregate (Phas
     expect(patched.organization.membershipCategory).toBe("G");
 
     expect(await categoryFor(await aggregateIdFor(organizationId))).toBe("G");
+    expect(await publicationCount(organizationId)).toBe(1);
 
     const identityCount = await queryAll<{ total: number }>(
       env.DB,
@@ -387,9 +490,8 @@ describe("Organization management — membership category on the aggregate (Phas
     );
   });
 
-  it("rejects adding an identity when the organization has no category set yet", async () => {
-    // A bare organization row created outside the membership provisioning flow —
-    // no members aggregate, and therefore no category, exists for it yet.
+  it("allows authorized staff to add a nonmember organization identity without granting membership", async () => {
+    // Canonical affiliation exists independently of a Member aggregate/category.
     const organizationId = crypto.randomUUID();
     await env.DB.prepare(
       "INSERT INTO organizations (id, name, normalized_name, created_at, updated_at) VALUES (?, ?, ?, datetime('now'), datetime('now'))",
@@ -401,15 +503,45 @@ describe("Organization management — membership category on the aggregate (Phas
       method: "POST",
       body: JSON.stringify({
         userReference: "email",
+        jobTitle: "Representative",
         name: "No Category Rep",
         email: "nocategory@acme.test",
         showOnOrganizationProfile: true,
         activation: { mode: "immediate", reason: "Verified staff test fixture" },
       }),
     });
-    expect(response.status).toBe(422);
-    const body = (await response.json()) as { error: { code: string } };
-    expect(body.error.code).toBe("ORG_CATEGORY_NOT_SET");
+    expect(response.status, await response.clone().text()).toBe(201);
+    const body = (await response.json()) as { identityId: string; state: string };
+    expect(body.state).toBe("active");
+    const [identity] = await queryAll<{ user_id: string; organization_id: string }>(
+      env.DB,
+      "SELECT user_id,organization_id FROM identities WHERE id=?",
+      [body.identityId],
+    );
+    expect(identity.organization_id).toBe(organizationId);
+    const [person] = await queryAll<{ normalized_email: string }>(
+      env.DB,
+      "SELECT normalized_email FROM users WHERE id=?",
+      [identity.user_id],
+    );
+    expect(person.normalized_email).toBe("nocategory@acme.test");
+    const listed = await call(adminToken, `/api/v1/organizations/${organizationId}/identities`);
+    expect(listed.status).toBe(200);
+    expect(identitiesListResponseSchema.parse(await listed.json()).identities).toEqual([
+      expect.objectContaining({
+        id: body.identityId,
+        userId: identity.user_id,
+        memberId: null,
+        membershipCategory: null,
+      }),
+    ]);
+    expect(await queryAll(env.DB, "SELECT id FROM members WHERE organization_id=?", [organizationId])).toEqual([]);
+    expect(
+      await queryAll(env.DB, "SELECT member_id FROM identity_member_capacities WHERE identity_id=?", [body.identityId]),
+    ).toEqual([]);
+    expect(await queryAll(env.DB, "SELECT id FROM user_roles WHERE user_id=?", [identity.user_id])).toEqual([]);
+    expect(await queryAll(env.DB, "SELECT id FROM permission_grants WHERE user_id=?", [identity.user_id])).toEqual([]);
+    expect(await queryAll(env.DB, "SELECT id FROM group_memberships WHERE user_id=?", [identity.user_id])).toEqual([]);
   });
 
   it("rejects membershipCategory and status on an organization identity — those live on the aggregate", async () => {
@@ -432,6 +564,49 @@ describe("Organization management — membership category on the aggregate (Phas
     expect(((await statusResponse.json()) as { error: { code: string } }).error.code).toBe(
       "IDENTITY_AGGREGATE_FIELD_NOT_EDITABLE",
     );
+  });
+
+  it("never saves an organization identity without a job title, on create or on edit", async () => {
+    const { organizationId } = await createOrg();
+    const refused = await call(adminToken, `/api/v1/organizations/${organizationId}/identities`, {
+      method: "POST",
+      body: JSON.stringify({
+        userReference: "email",
+        name: "Untitled Rep",
+        email: "untitled@acme.test",
+        showOnOrganizationProfile: true,
+        activation: { mode: "immediate", reason: "Verified staff test fixture" },
+      }),
+    });
+    expect(refused.status).toBe(400);
+    expect(JSON.stringify(await refused.json())).toContain("Enter your job title at this organization.");
+    expect(await queryAll(env.DB, "SELECT id FROM users WHERE email = 'untitled@acme.test'")).toEqual([]);
+
+    const identityId = await addIdentity(organizationId, { name: "Titled Rep", email: "titled@acme.test" });
+    const cleared = await call(adminToken, `/api/v1/organizations/${organizationId}/identities/${identityId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ profile: { jobTitle: null } }),
+    });
+    expect(cleared.status).toBe(400);
+    expect(await cleared.json()).toMatchObject({
+      error: { details: { fieldErrors: { jobTitle: ["Enter your job title at this organization."] } } },
+    });
+    expect(await queryAll(env.DB, "SELECT job_title FROM identities WHERE id = ?", identityId)).toEqual([
+      { job_title: "Representative" },
+    ]);
+
+    // A row saved before the rule stays readable; its next edit must supply the title.
+    await env.DB.prepare("UPDATE identities SET job_title = NULL WHERE id = ?").bind(identityId).run();
+    const biographyOnly = await call(adminToken, `/api/v1/organizations/${organizationId}/identities/${identityId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ profile: { biography: "Leads the standards work." } }),
+    });
+    expect(biographyOnly.status).toBe(400);
+    const titled = await call(adminToken, `/api/v1/organizations/${organizationId}/identities/${identityId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ profile: { biography: "Leads the standards work.", jobTitle: "Standards lead" } }),
+    });
+    expect(titled.status, await titled.clone().text()).toBe(200);
   });
 
   it("still allows showOnOrgProfile to be edited on an organization identity", async () => {
@@ -457,7 +632,7 @@ describe("Organization management — membership category on the aggregate (Phas
       body: JSON.stringify({
         membershipCategory: "H6",
         memberSince: "2026-01-15",
-        identities: [{ name: "Solo Consultant", email: "solo-cat@example.test" }],
+        identities: [{ name: "Solo Consultant", email: "solo-cat@example.test", jobTitle: "Representative" }],
         workingGroupSlugs: [],
         activationReason: "Verified staff provisioning fixture",
       }),
@@ -494,7 +669,7 @@ describe("Organization management — membership category on the aggregate (Phas
       body: JSON.stringify(
         orgMemberBody({
           membershipCategory: "D",
-          identities: [{ name: "Later Rep", email: "later@acme.test" }],
+          identities: [{ name: "Later Rep", email: "later@acme.test", jobTitle: "Representative" }],
         }),
       ),
     });
@@ -513,7 +688,7 @@ describe("Organization management — membership category on the aggregate (Phas
       body: JSON.stringify(
         orgMemberBody({
           membershipCategory: "C",
-          identities: [{ name: "Later Rep", email: "later@acme.test" }],
+          identities: [{ name: "Later Rep", email: "later@acme.test", jobTitle: "Representative" }],
         }),
       ),
     });

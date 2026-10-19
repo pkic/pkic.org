@@ -1,3 +1,4 @@
+import { identityJobTitleSql } from "../identities/affiliation-projection";
 import { seatLeadershipJoinSql } from "./seat-leadership";
 import type {
   Group,
@@ -350,6 +351,7 @@ interface MembershipRow {
   email: string;
   headshot_r2_key: string | null;
   organization_name: string | null;
+  job_title: string | null;
   membership_category: string | null;
   source: GroupMembership["source"];
   created_by_user_id: string | null;
@@ -370,6 +372,7 @@ function mapMembership(row: MembershipRow): GroupMembership {
     email: row.email,
     headshotUrl: publicUserHeadshotPath(row.user_id, row.headshot_r2_key),
     organizationName: row.organization_name,
+    jobTitle: row.job_title,
     membershipCategory: row.membership_category as GroupMembership["membershipCategory"],
     source: row.source,
     createdByUserId: row.created_by_user_id,
@@ -380,7 +383,7 @@ function mapMembership(row: MembershipRow): GroupMembership {
 }
 
 const MEMBERSHIP_SELECT = `SELECT gm.id, gm.group_id, gm.user_id, gm.identity_id, gm.member_id, m.member_type,
-  u.first_name, u.last_name, u.email, u.headshot_r2_key, o.name AS organization_name,
+  u.first_name, u.last_name, u.email, u.headshot_r2_key, o.name AS organization_name, ${identityJobTitleSql("gm.identity_id")} AS job_title,
   mca.category_code AS membership_category, gm.source, gm.created_by_user_id,
   CASE WHEN gm.left_at IS NULL THEN leadership.title ELSE gm.title END AS title, gm.joined_at, gm.left_at`;
 
@@ -470,6 +473,7 @@ interface ParticipantRow {
   email: string;
   headshot_r2_key: string | null;
   organization_name: string | null;
+  job_title: string | null;
 }
 
 function mapParticipant(row: ParticipantRow): GroupParticipant {
@@ -482,6 +486,7 @@ function mapParticipant(row: ParticipantRow): GroupParticipant {
     name: [row.first_name, row.last_name].filter(Boolean).join(" ") || row.email,
     headshotUrl: publicUserHeadshotPath(row.user_id, row.headshot_r2_key),
     organizationName: row.organization_name,
+    jobTitle: row.job_title,
   };
 }
 
@@ -514,7 +519,7 @@ export function buildGroupParticipantsPageQuery(groupId: string, query: GroupMem
    WHERE ${conditions.join(" AND ")}`;
   return {
     source: {
-      selectSql: `SELECT gm.user_id, u.first_name, u.last_name, u.email, u.headshot_r2_key, o.name AS organization_name`,
+      selectSql: `SELECT gm.user_id, u.first_name, u.last_name, u.email, u.headshot_r2_key, o.name AS organization_name, ${identityJobTitleSql("gm.identity_id")} AS job_title`,
       fromSql,
       bindings,
     },

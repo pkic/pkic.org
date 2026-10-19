@@ -28,6 +28,7 @@ import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { TextInput } from "../../../../ui/TextControl";
 import { getJson, patchJson } from "../../../../shared/api-client";
 import { toast } from "../../ui";
+import { SectionHeading } from "../../../../ui/SectionHeading";
 
 const SETTINGS_API = "/api/v1/membership/settings";
 
@@ -110,7 +111,7 @@ function WorkflowForm({ initial, canWrite }: { initial: MembershipSettings; canW
         <PanelBody class="pk-stack">
           {editing ? (
             <>
-              <h3>Review deadlines</h3>
+              <SectionHeading level={4}>Review deadlines</SectionHeading>
               <div class="pk-grid pk-grid--tight">
                 {WINDOW_FIELDS.map(({ key, label }) => {
                   const limit = MEMBERSHIP_WINDOW_DAY_LIMITS[key];
@@ -139,7 +140,7 @@ function WorkflowForm({ initial, canWrite }: { initial: MembershipSettings; canW
                   );
                 })}
               </div>
-              <h3>Notifications</h3>
+              <SectionHeading level={4}>Notifications</SectionHeading>
               {RECIPIENT_FIELDS.map(({ key, label }) => (
                 <Field
                   key={key}
@@ -174,11 +175,11 @@ function WorkflowForm({ initial, canWrite }: { initial: MembershipSettings; canW
           ) : (
             <div class="pk-split">
               <section class="pk-stack pk-stack--snug">
-                <h3>Review deadlines</h3>
+                <SectionHeading level={4}>Review deadlines</SectionHeading>
                 <DescriptionList items={WINDOW_FIELDS.map(({ key, label }) => ({ term: label, value: saved[key] }))} />
               </section>
               <section class="pk-stack pk-stack--snug">
-                <h3>Notifications</h3>
+                <SectionHeading level={4}>Notifications</SectionHeading>
                 <DescriptionList
                   items={[
                     ...RECIPIENT_FIELDS.map(({ key, label }) => ({ term: label, value: saved[key] })),

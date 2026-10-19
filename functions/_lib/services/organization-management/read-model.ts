@@ -23,6 +23,7 @@ import { toOrganizationExtendedContent, toOrganizationSummaryContent } from "../
 import { nowIso } from "../../utils/time";
 import { publicUserHeadshotPath } from "../user-headshot";
 import type { DatabaseLike } from "../../types";
+import { identityOrganizationEmailDomainSql } from "../identities/affiliation-projection";
 
 export async function getOrgAggregate(
   db: DatabaseLike,
@@ -104,7 +105,8 @@ function toOrgSummary(row: OrgSummaryRow) {
 
 export function buildOrganizationsPageQuery(params: OrganizationsListQuery) {
   const search = params.q ? buildD1TextSearchFilter(params.q, ["o.name"]) : null;
-  const where = search ? `WHERE ${search.sql}` : "";
+  // A merged organization lives on only as the record of its merge; the directory lists the one it joined.
+  const where = `WHERE o.merged_into_organization_id IS NULL${search ? ` AND ${search.sql}` : ""}`;
   const whereArgs = search?.bindings ?? [];
   const orderBy = resolveMappedOrderBy(
     params.sort,
@@ -153,11 +155,13 @@ export interface OrgDetailRow extends OrgSummaryRow {
   press_feed_url: string | null;
   careers_url: string | null;
   links_json: string | null;
+  merged_at: string | null;
+  merged_into_id: string | null;
+  merged_into_name: string | null;
 }
 
 interface IdentityRow {
   identity_id: string;
-  member_id: string;
   user_id: string;
   first_name: string | null;
   last_name: string | null;
@@ -178,7 +182,8 @@ export async function fetchOrgDetailRow(db: DatabaseLike, id: string): Promise<O
             o.created_at, o.updated_at,
             mca.category_code AS membership_category,
             o.content_markdown, o.blog_url, o.blog_feed_url, o.press_url, o.press_feed_url, o.careers_url,
-            o.links_json,
+            o.links_json, o.merged_at,
+            merged_into.id AS merged_into_id, merged_into.name AS merged_into_name,
             (SELECT COUNT(*) FROM identities identity
               WHERE identity.organization_id = o.id
                 AND identity.started_at IS NOT NULL
@@ -193,6 +198,7 @@ export async function fetchOrgDetailRow(db: DatabaseLike, id: string): Promise<O
      LEFT JOIN member_category_assignments mca ON mca.member_id = m.id
      LEFT JOIN ${primaryContactProjection()}
        ON primary_contact.member_id = m.id
+     LEFT JOIN organizations merged_into ON merged_into.id = o.merged_into_organization_id
      WHERE o.id = ?`,
     [nowIso(), id],
   );
@@ -201,14 +207,16 @@ export async function fetchOrgDetailRow(db: DatabaseLike, id: string): Promise<O
 async function fetchIdentities(db: DatabaseLike, organizationId: string): Promise<IdentityRow[]> {
   return all<IdentityRow>(
     db,
-    `SELECT identity.id AS identity_id, capacity.member_id, identity.user_id, u.first_name, u.last_name,
+    `SELECT identity.id AS identity_id, identity.user_id, u.first_name, u.last_name,
             COALESCE(selected_email.email, u.email) AS email, identity.email_id,
             u.headshot_r2_key, identity.job_title, identity.biography, identity.links_json,
             identity.show_on_organization_profile AS show_on_org_profile, identity.created_at
      FROM identities identity
-     JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
      JOIN users u ON u.id = identity.user_id
-     LEFT JOIN user_emails selected_email ON selected_email.id = identity.email_id
+     LEFT JOIN user_emails selected_email
+       ON selected_email.id = identity.email_id
+      AND selected_email.user_id = identity.user_id
+      AND selected_email.verified_at IS NOT NULL
      WHERE identity.organization_id = ?
        AND identity.started_at IS NOT NULL
        AND identity.ended_at IS NULL
@@ -218,7 +226,49 @@ async function fetchIdentities(db: DatabaseLike, organizationId: string): Promis
   );
 }
 
-async function toOrgDetail(db: DatabaseLike, row: OrgDetailRow, identities: IdentityRow[], memberId: string | null) {
+/** At most this many domains are named; an organization with more still counts its people. */
+const EMAIL_DOMAIN_LIMIT = 10;
+
+/**
+ * The email domains the organization's active identities follow, with how
+ * many people each one shows the organization to: a rename changes what all
+ * of them see.
+ */
+async function fetchEmailDomains(db: DatabaseLike, organizationId: string) {
+  return all<{ domain: string; people: number }>(
+    db,
+    `SELECT linked.domain, COUNT(DISTINCT linked.user_id) AS people
+       FROM (SELECT identity.user_id, ${identityOrganizationEmailDomainSql("identity.id")} AS domain
+               FROM identities identity
+              WHERE identity.organization_id = ?
+                AND identity.started_at IS NOT NULL AND identity.ended_at IS NULL AND identity.blocked_at IS NULL) linked
+      WHERE linked.domain IS NOT NULL
+      GROUP BY linked.domain
+      ORDER BY people DESC, linked.domain
+      LIMIT ${EMAIL_DOMAIN_LIMIT}`,
+    [organizationId],
+  );
+}
+
+/** The domains the organization owns through an approved claim. */
+async function fetchClaimedDomains(db: DatabaseLike, organizationId: string): Promise<string[]> {
+  const rows = await all<{ domain: string }>(
+    db,
+    `SELECT domain FROM organization_domain_claims
+      WHERE organization_id = ? AND application_id IS NULL ORDER BY domain LIMIT ${EMAIL_DOMAIN_LIMIT}`,
+    [organizationId],
+  );
+  return rows.map((row) => row.domain);
+}
+
+async function toOrgDetail(
+  db: DatabaseLike,
+  row: OrgDetailRow,
+  identities: IdentityRow[],
+  memberId: string | null,
+  emailDomains: Array<{ domain: string; people: number }>,
+  claimedDomains: string[],
+) {
   const holders = memberId
     ? await resolveRepresentativeRoleHolders(db, memberId)
     : { primaryContactUserId: null, secondaryContactUserId: null };
@@ -228,6 +278,12 @@ async function toOrgDetail(db: DatabaseLike, row: OrgDetailRow, identities: Iden
     ...toOrganizationExtendedContent(row),
     primaryContactUserId,
     secondaryContactUserId: holders.secondaryContactUserId,
+    emailDomains: emailDomains.map((entry) => ({ domain: entry.domain, people: Number(entry.people) })),
+    claimedDomains,
+    mergedInto:
+      row.merged_into_id && row.merged_into_name && row.merged_at
+        ? { id: row.merged_into_id, name: row.merged_into_name, mergedAt: row.merged_at }
+        : null,
     identities: identities.map((r) => ({
       // identityId is identities.id for this exact acting capacity, never the
       // shared members.id aggregate exposed separately as membershipId.
@@ -253,6 +309,11 @@ async function toOrgDetail(db: DatabaseLike, row: OrgDetailRow, identities: Iden
 export async function getOrganization(db: DatabaseLike, id: string) {
   const row = await fetchOrgDetailRow(db, id);
   if (!row) throw new AppError(404, "NOT_FOUND", "Organization not found");
-  const [identities, aggregate] = await Promise.all([fetchIdentities(db, id), getOrgAggregate(db, id)]);
-  return toOrgDetail(db, row, identities, aggregate?.id ?? null);
+  const [identities, aggregate, emailDomains, claimedDomains] = await Promise.all([
+    fetchIdentities(db, id),
+    getOrgAggregate(db, id),
+    fetchEmailDomains(db, id),
+    fetchClaimedDomains(db, id),
+  ]);
+  return toOrgDetail(db, row, identities, aggregate?.id ?? null, emailDomains, claimedDomains);
 }

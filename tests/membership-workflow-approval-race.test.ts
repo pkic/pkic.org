@@ -38,6 +38,7 @@ it("rolls back provisioning when an objection appears after the approval snapsho
     .run();
   gate.release();
   expect(await outcome).toMatchObject({ status: 409 });
+  expect(await queryAll(env.DB, "SELECT id FROM site_publication_requests")).toEqual([]);
   expect(await queryAll(env.DB, "SELECT stage, member_id FROM member_applications WHERE id = ?", id)).toEqual([
     { stage: "processing", member_id: null },
   ]);

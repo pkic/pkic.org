@@ -25,10 +25,11 @@ import { Alert } from "../../../ui/Alert";
 import { Button } from "../../../ui/Button";
 import { Field } from "../../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
-import { TextInput, Textarea } from "../../../ui/TextControl";
+import { TextInput } from "../../../ui/TextControl";
 import { toast, fmt } from "../ui";
 import type { MyOrganizationProfile, MyOrganizationReview } from "../types";
-import { linksToText, textToLinks } from "../../../shared/links-text";
+import { ProfileLinksInput } from "../../../components/ProfileLinksInput";
+import { ProposedChanges } from "./OrganizationProposedChanges";
 import {
   ORGANIZATION_CONTENT_FIELD_LABELS,
   ORGANIZATION_CONTENT_MARKDOWN_HELP,
@@ -51,7 +52,6 @@ function PendingReviewBanner({
   onWithdrawn: () => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
-  const fields = Object.entries(review.proposedChanges);
 
   async function withdraw(): Promise<void> {
     const confirmed = await confirmAction({
@@ -80,27 +80,9 @@ function PendingReviewBanner({
   return (
     <Alert tone="info" title={`A content change is pending staff review — submitted ${fmt(review.submittedAt)}.`}>
       <div class="pk-stack pk-stack--snug">
-        {review.hasLogoChange && <p class="pk-small">Includes a new logo.</p>}
-        {fields.length > 0 && (
-          <ul class="pk-stack pk-stack--tight pk-small">
-            {fields.map(([field, value]) => (
-              <li key={field}>
-                <strong>{ORGANIZATION_CONTENT_FIELD_LABELS[field] ?? field}:</strong>{" "}
-                {value === null || value === "" || (Array.isArray(value) && value.length === 0) ? (
-                  <em>(cleared)</em>
-                ) : field === "contentMarkdown" ? (
-                  <Markdown markdown={String(value)} />
-                ) : Array.isArray(value) ? (
-                  value.join(", ")
-                ) : (
-                  String(value)
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
+        <ProposedChanges review={review} />
         <div class="pk-cluster">
-          <Button variant="secondary" size="sm" loading={busy} onClick={() => void withdraw()}>
+          <Button variant="secondary" loading={busy} onClick={() => void withdraw()}>
             {busy ? "Withdrawing…" : "Withdraw submission"}
           </Button>
         </div>
@@ -136,9 +118,9 @@ function ContentEditForm({
     }),
     [org],
   );
-  const initialLinksText = useMemo(() => linksToText(org.links), [org]);
+  const initialLinks = useMemo(() => [...org.links], [org]);
   const [form, setForm] = useState(initial);
-  const [linksText, setLinksText] = useState(initialLinksText);
+  const [links, setLinks] = useState<string[]>(initialLinks);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -152,8 +134,8 @@ function ContentEditForm({
     const prev = initial[key].trim();
     if (next !== prev) changes[key] = next === "" ? null : next;
   }
-  if (linksText.trim() !== initialLinksText.trim()) {
-    changes.links = textToLinks(linksText);
+  if (links.join("\n") !== initialLinks.join("\n")) {
+    changes.links = links;
   }
   const validation = useContractForm(organizationContentReviewCreateSchema, changes);
 
@@ -245,23 +227,13 @@ function ContentEditForm({
           </Field>
         ))}
       </div>
-      <Field
-        label="Profile links (one URL per line)"
-        help="Each is labeled automatically by the site it points at."
-        {...validation.of("links")}
-      >
-        {(control) => (
-          <Textarea
-            {...control}
-            rows={4}
-            placeholder="https://…"
-            name="links"
-            value={linksText}
-            onInput={(e) => setLinksText((e.target as HTMLTextAreaElement).value)}
-            disabled={saving}
-          />
-        )}
-      </Field>
+      <ProfileLinksInput
+        fieldName="links"
+        label="Profile links"
+        value={links}
+        inputAriaLabel="Organization profile link URL"
+        onChange={setLinks}
+      />
 
       {error && <ErrorAlert error={error} />}
 

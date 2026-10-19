@@ -29,6 +29,7 @@ import {
   requireGroupManagement,
 } from "./governance";
 import { listMembershipCategories } from "../membership/categories";
+import { prepareGroupContentPublication } from "./content-publication";
 import { getGroup } from "./read-model";
 import { firstFreeSlug, slugifyOr } from "../../../../assets/shared/slug";
 
@@ -178,6 +179,7 @@ export async function createGroup(db: DatabaseLike, actor: AuthAdmin, input: Gro
   const id = uuid();
   const at = nowIso();
   const slug = input.slug ?? (await availableSlug(db, input.name));
+  const publication = prepareGroupContentPublication(db, id, at);
   try {
     await db.batch([
       prepareGroupManagementAuthorizationGuard(
@@ -220,6 +222,7 @@ export async function createGroup(db: DatabaseLike, actor: AuthAdmin, input: Gro
         typeKey: input.typeKey,
         parentGroupId: input.parentGroupId ?? null,
       }),
+      ...(publication ? [publication] : []),
     ]);
   } catch (error) {
     translateGroupWriteError(error);
@@ -319,6 +322,7 @@ export async function updateGroup(
   const at = nowIso();
   add("updated_at", at);
   setters.push("revision = revision + 1");
+  const publication = prepareGroupContentPublication(db, existing.id, at, changes);
   try {
     const statements: StatementLike[] = [
       prepareGroupManagementAuthorizationGuard(db, actor, [existing.id]),
@@ -338,6 +342,7 @@ export async function updateGroup(
             prepareAuthorizationGuard(db, activeLocalLeadershipEvidence(existing.id)),
           ]
         : []),
+      ...(publication ? [publication] : []),
       db
         .prepare(`UPDATE groups SET ${setters.join(", ")} WHERE id = ? AND revision = ?`)
         .bind(...bindings, existing.id, expectedRevision),

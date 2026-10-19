@@ -256,6 +256,40 @@ describe("group event sharing", () => {
     },
   );
 
+  it("selects calendar overlaps with exclusive boundaries and preserves earlier starts", async () => {
+    const fixture = await createFixture();
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "register",
+    });
+    const query = (from: string, to: string) =>
+      buildSeriesOccurrencesPageQuery(
+        fixture.granteeId,
+        liveGroupResourceContextAccess({ userId: fixture.memberId }, fixture.granteeId),
+        fixture.seriesId,
+        eventOccurrencesListQuerySchema.parse({ overlapsFrom: from, overlapsTo: to, limit: 20 }),
+      );
+    async function rows(from: string, to: string) {
+      const page = query(from, to),
+        sql = buildOffsetPageSql(page);
+      return (
+        await env.DB.prepare(sql.pageSql)
+          .bind(...sql.bindings, page.limit, page.offset)
+          .all()
+      ).results;
+    }
+    expect(await rows("2027-01-10T10:30:00.000Z", "2027-01-10T10:45:00.000Z")).toHaveLength(1);
+    expect(await rows("2027-01-10T11:00:00.000Z", "2027-01-10T12:00:00.000Z")).toHaveLength(0);
+    expect(await rows("2027-01-10T09:00:00.000Z", "2027-01-10T10:00:00.000Z")).toHaveLength(0);
+    expect(eventOccurrencesListQuerySchema.safeParse({ overlapsFrom: "2027-01-10T09:00:00.000Z" }).success).toBe(false);
+    expect(
+      eventOccurrencesListQuerySchema.safeParse({
+        overlapsFrom: "2027-01-10T10:00:00.000Z",
+        overlapsTo: "2027-01-10T09:00:00.000Z",
+      }).success,
+    ).toBe(false);
+  });
+
   it("discovers and reads an event only through the selected member grant context", async () => {
     const fixture = await createFixture();
     const occurrenceId = crypto.randomUUID();
@@ -342,7 +376,9 @@ describe("group event sharing", () => {
           id: fixture.eventId,
           ownerGroupId: fixture.ownerId,
           registrationPolicy: "optional",
-          location: "Online",
+          city: null,
+          country: null,
+          meetingLocation: "Online",
           links: ["https://example.test/workshop"],
           capabilities: ["view", "register"],
         },
@@ -573,6 +609,8 @@ describe("group event sharing", () => {
       occurrenceId,
       eventAttendanceListQuerySchema.parse({ q: "example", verified: "false", limit: 20 }),
     );
+    // Newest confirmation first, matching the attendance table's opening order.
+    expect(attendanceQuery.orderBy).toBe("ORDER BY confirmation.confirmed_at DESC, confirmation.id ASC");
     const attendanceSql = buildOffsetPageSql(attendanceQuery);
     const attendancePlan = await env.DB.prepare(`EXPLAIN QUERY PLAN ${attendanceSql.pageSql}`)
       .bind(...attendanceSql.bindings, attendanceQuery.limit, attendanceQuery.offset)

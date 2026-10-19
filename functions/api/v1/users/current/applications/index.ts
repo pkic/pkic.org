@@ -1,5 +1,5 @@
 import { json } from "../../../../../_lib/http";
-import { requireMemberFromRequest } from "../../../../../_lib/auth/member";
+import { requireOwnAccountFromRequest } from "../../../../../_lib/auth/member";
 import { listMyApplications } from "../../../../../_lib/services/member-self-service";
 import {
   myApplicationsListResponseSchema,
@@ -11,8 +11,8 @@ import { buildPageInfo } from "../../../../../../assets/shared/schemas/paginatio
 
 export const CurrentUserApplicationsGet = openApiRoute(myApplicationsListRouteSchema, async (c: AdminContext, data) => {
   const db = requestDb(c);
-  const member = await requireMemberFromRequest(db, c.req.raw, c.env);
-  const result = await listMyApplications(db, member, data.query);
+  const account = await requireOwnAccountFromRequest(db, c.req.raw, c.env);
+  const result = await listMyApplications(db, account, data.query);
   return json(
     myApplicationsListResponseSchema.parse({
       applications: result.applications,

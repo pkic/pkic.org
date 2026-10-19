@@ -1,5 +1,6 @@
 /** Canonical staff organization-management transport contracts. */
 import { z } from "zod";
+import { organizationIdentityJobTitleSchema } from "./identity-job-title";
 import { databaseIdSchema } from "./identifiers";
 import { normalizedEmailSchema, successResponseSchema, trimmedString } from "./api-common";
 import { linksSchema } from "./links";
@@ -73,6 +74,16 @@ export const organizationDetailSchema = organizationSummarySchema
   .extend({
     primaryContactUserId: databaseIdSchema.nullable(),
     secondaryContactUserId: databaseIdSchema.nullable(),
+    /**
+     * The email domains active identities reach the organization through,
+     * with how many people each shows it to. The organization's name and
+     * logo live once, here, so a rename changes what all of them see.
+     */
+    emailDomains: z.array(z.object({ domain: z.string().min(1), people: z.number().int().nonnegative() })),
+    /** The domains the organization owns through an approved claim; a verified address there joins it. */
+    claimedDomains: z.array(z.string().min(1)),
+    /** Set once staff merged this organization into another; the record stays for its history. */
+    mergedInto: z.object({ id: databaseIdSchema, name: z.string(), mergedAt: z.string() }).nullable(),
     identities: z.array(organizationIdentityManagementSchema),
   });
 export const organizationDetailResponseSchema = z.object({ organization: organizationDetailSchema });
@@ -110,7 +121,7 @@ export const organizationManagementParamsSchema = z.object({ organizationId: dat
 export const organizationIdentityProvisionSchema = z.object({
   name: trimmedString(1, 200),
   email: normalizedEmailSchema,
-  jobTitle: trimmedString(0, 200).optional(),
+  jobTitle: organizationIdentityJobTitleSchema,
   biography: trimmedString(0, 5000).optional(),
   links: linksSchema.optional(),
 });

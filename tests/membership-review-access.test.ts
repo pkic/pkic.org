@@ -1,7 +1,9 @@
+// Compile the real lazy HTTP graph before timed endpoint journeys.
+import "../functions/http-router";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { createExecutionContext } from "cloudflare:test";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
@@ -38,6 +40,7 @@ async function stageEmail(id: string) {
     body: JSON.stringify({
       toStage: "on_hold",
       onHoldSubtype: "request_information",
+      requestDetails: "Please clarify your application.",
       note: "Please clarify your application.",
     }),
   });

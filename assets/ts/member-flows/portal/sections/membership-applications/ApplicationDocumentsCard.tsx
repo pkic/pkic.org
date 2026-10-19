@@ -18,6 +18,7 @@ export function ApplicationDocumentsCard({ applicationId }: { applicationId: str
       <Panel aria-label="Documents">
         <PanelHeader title="Documents" />
         <ApiDataTable
+          urlState="application-documents"
           caption="Application documents"
           endpoint={`/api/v1/members/applications/${applicationId}/documents`}
           responseSchema={staffApplicationDocumentsListResponseSchema}

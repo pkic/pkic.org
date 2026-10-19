@@ -85,7 +85,7 @@ export function GrantIndividualMembershipForm({
       {/* The page's way back: the grant has its own address, so leaving it is
           navigation rather than the disappearance of a layer. */}
       <div class="pk-cluster">
-        <Button size="sm" onClick={onCancel} disabled={busy}>
+        <Button onClick={onCancel} disabled={busy}>
           ← All members
         </Button>
       </div>

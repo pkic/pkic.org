@@ -25,19 +25,19 @@ export async function ensureGroupMembershipCapacity(
         AND identity.started_at IS NOT NULL
         AND identity.ended_at IS NULL
         AND identity.blocked_at IS NULL
-      ORDER BY CASE WHEN member.user_id = ? THEN 0 ELSE 1 END, member.created_at, member.id
+      ORDER BY CASE WHEN member.member_type = 'individual' THEN 0 ELSE 1 END, member.created_at, member.id
       LIMIT 1`,
-    [userId, userId],
+    [userId],
   );
   if (!row) {
-    const created = buildCreateIndividualMemberStatements(db, userId, "H5", new Date().toISOString());
     const identity = await buildCreateIdentityStatement(db, {
       userId,
       organizationId: null,
       source: "staff",
       startImmediately: true,
     });
-    await db.batch([...created.statements, identity.statement]);
+    const created = buildCreateIndividualMemberStatements(db, identity.identityId, "H5", new Date().toISOString());
+    await db.batch([identity.statement, ...created.statements]);
     row = { member_id: created.memberId, identity_id: identity.identityId };
   }
 

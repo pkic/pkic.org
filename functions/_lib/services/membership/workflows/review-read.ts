@@ -12,7 +12,6 @@ import {
 import { buildPageInfo } from "../../../../../assets/shared/schemas/pagination";
 import { hasPermission } from "../../../auth/permissions";
 import { queryPage } from "../../../db/pagination";
-import { first } from "../../../db/queries";
 import { buildD1TextSearchFilter } from "../../../db/search";
 import { resolveMappedOrderBy } from "../../../db/sort";
 import { AppError } from "../../../errors";
@@ -20,8 +19,13 @@ import type { DatabaseLike } from "../../../types";
 import { getApplicationAnswers, getRequestedApplicationGroups } from "../applications/queries";
 import { getMembershipExecution } from "./execution";
 import { membershipWorkflowProgress } from "./progress";
-import { requireWorkflowReviewer, type MembershipReviewer } from "./reviewer-eligibility";
+import { audienceSeesApplicantEmail, requireWorkflowReviewer, type MembershipReviewer } from "./reviewer-eligibility";
 
+/**
+ * A review is read by staff with membership access or by someone eligible for
+ * the current step. Writing an objection grants no lasting access: an author
+ * who leaves the audience no longer reads the application.
+ */
 async function authorizedReview(db: DatabaseLike, applicationId: string, actor: MembershipReviewer) {
   const execution = await getMembershipExecution(db, applicationId);
   const step = execution.version.definition.steps[execution.currentPosition];
@@ -37,20 +41,12 @@ async function authorizedReview(db: DatabaseLike, applicationId: string, actor: 
   const staffRead = Boolean(
     actor.staff && (hasPermission(actor.staff, "membership:read") || hasPermission(actor.staff, "membership:approve")),
   );
-  if (
-    !staffRead &&
-    !eligible &&
-    !(await first(
-      db,
-      "SELECT id FROM membership_application_objections WHERE application_id = ? AND author_user_id = ? LIMIT 1",
-      [applicationId, actor.userId],
-    ))
-  )
+  if (!staffRead && !eligible)
     throw new AppError(403, "MEMBERSHIP_REVIEW_FORBIDDEN", "This application review is not available to your account.");
-  return { execution, eligible, step };
+  return { execution, eligible, staffRead, step };
 }
 export async function getMembershipReview(db: DatabaseLike, applicationId: string, actor: MembershipReviewer) {
-  const { execution, eligible, step } = await authorizedReview(db, applicationId, actor);
+  const { execution, eligible, staffRead, step } = await authorizedReview(db, applicationId, actor);
   const application = execution.application;
   const open = !["approved", "declined", "withdrawn"].includes(application.stage);
   const answers = await getApplicationAnswers(db, application.form_submission_id);
@@ -58,7 +54,10 @@ export async function getMembershipReview(db: DatabaseLike, applicationId: strin
     application: {
       id: application.id,
       applicantName: application.applicant_name,
-      applicantEmail: application.applicant_email,
+      applicantEmail:
+        staffRead || (step?.kind === "consensus" && audienceSeesApplicantEmail(step.audience))
+          ? application.applicant_email
+          : null,
       organizationName: application.organization_name,
       membershipCategory: application.membership_category,
       answers,

@@ -51,8 +51,6 @@ export async function submitGroupEventRegistration(
       firstName: user.first_name,
       lastName: user.last_name,
       email: user.email,
-      organizationName: user.organization_name ?? undefined,
-      jobTitle: user.job_title ?? undefined,
       attendanceType: input.attendanceType,
       dayAttendance: input.dayAttendance,
       customAnswers: input.customAnswers,

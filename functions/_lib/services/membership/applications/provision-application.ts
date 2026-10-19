@@ -1,6 +1,7 @@
 import { nowIso } from "../../../utils/time";
 import { uuid } from "../../../utils/ids";
 import { AppError } from "../../../errors";
+import { JOB_TITLE_REQUIRED } from "../../../../../assets/shared/schemas/identity-job-title";
 import { getApplicationAnswers, type MemberApplicationRow } from "./queries";
 import { requireMembershipCategory } from "../categories";
 import { buildProvisionOrganizationMembership } from "../provisioning";
@@ -75,6 +76,13 @@ export async function buildApplicationApproval(
   const requestedWorkingGroupSlugs = applicationWorkingGroupSlugs(answers);
   const jobTitle = typeof answers.job_title === "string" && answers.job_title.trim() ? answers.job_title.trim() : null;
   const links = typeof answers.linkedin === "string" && answers.linkedin.trim() ? [answers.linkedin.trim()] : [];
+  // Approving an organization's application creates its applicant's organization identity, which always has a job
+  // title: staff add it to the application's answers before approving.
+  if (!isIndividual && !jobTitle)
+    throw new AppError(422, "VALIDATION_ERROR", JOB_TITLE_REQUIRED, {
+      formErrors: [],
+      fieldErrors: { "answers.job_title": [JOB_TITLE_REQUIRED] },
+    });
   const databaseActorUserId = params.actor ? adminDatabaseUserId(params.actor) : null;
 
   // Everything below is built (not executed) and committed exactly once

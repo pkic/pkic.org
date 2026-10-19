@@ -12,11 +12,12 @@
  * administrators could vouch, which empties the gesture of its meaning.
  *
  * Nothing here is public. Both paths demand an authenticated session, and the
- * read models still apply their own rules on top — availability honours its
- * audience setting, and a ballot's choice honours the vote's.
+ * read models still apply their own rules on top — availability honors its
+ * audience setting, and a ballot's choice honors the vote's.
  */
 import { requireUserBackedAdminFromRequest } from "../../../../_lib/auth/admin";
 import { requireMemberFromRequest } from "../../../../_lib/auth/member";
+import { requireIdentityFromRequest } from "../../../../_lib/auth/user-session";
 import { hasPermission } from "../../../../_lib/auth/permissions";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
 import { AppError } from "../../../../_lib/errors";
@@ -58,6 +59,26 @@ export async function requireProfileReader(c: AdminContext): Promise<ProfileRead
     throw new AppError(403, "AUTH_FORBIDDEN", "Membership or users:read is required to view a member profile.");
   }
   return { db, viewerUserId: staff.identityType === "user" ? staff.id : null, isStaff: true };
+}
+
+/**
+ * A community-profile reader, or the person the record is about.
+ *
+ * Someone who has registered for an event but holds no membership is not a
+ * profile reader, yet their own record is the page "My profile" opens. Its
+ * figures were refused to them, and the record fell back to counting their
+ * identities as groups. The subject's own session answers first; everybody
+ * else is resolved exactly as `requireProfileReader` resolves them.
+ */
+export async function requireProfileReaderOrSubject(c: AdminContext, subjectUserId: string): Promise<ProfileReader> {
+  const db = requestDb(c);
+  try {
+    const identity = await requireIdentityFromRequest(db, c.req.raw, c.env);
+    if (identity.userId === subjectUserId) return { db, viewerUserId: identity.userId, isStaff: false };
+  } catch {
+    // Not a live human session; the reader paths below produce the refusal.
+  }
+  return requireProfileReader(c);
 }
 
 /**

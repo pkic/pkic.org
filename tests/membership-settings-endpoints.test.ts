@@ -7,7 +7,7 @@ import { insertOrganization, insertUser, seedOrganizationAggregate } from "./hel
  */
 import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { grantGroupLeadershipCapacity } from "./helpers/group-leadership";
@@ -194,9 +194,13 @@ describe("Membership workflow settings", () => {
       });
     expect((await grant("H1")).status).toBe(422);
     expect((await grant("COMMUNITY")).status).toBe(201);
-    expect(await queryAll(env.DB, "SELECT member_type FROM members WHERE user_id = ?", [userId])).toEqual([
-      { member_type: "individual" },
-    ]);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT member.member_type FROM members member JOIN identities personal ON personal.id = member.identity_id WHERE personal.user_id = ?",
+        [userId],
+      ),
+    ).toEqual([{ member_type: "individual" }]);
   });
 
   it("keeps an assigned category and its group rules when deletion is refused", async () => {

@@ -11,7 +11,7 @@ import { MeetingGuests } from "../../assets/ts/member-flows/portal/sections/mana
 import { MeetingOccurrenceEditor } from "../../assets/ts/member-flows/portal/sections/management/MeetingOccurrenceEditor";
 import { MeetingSeriesSettings } from "../../assets/ts/member-flows/portal/sections/management/MeetingSeriesSettings";
 import { beginRecordEdit } from "./helpers/record-edit";
-import { buttonNamed, controlFor, labelNames, typeInto } from "./helpers/labelled-control";
+import { buttonNamed, controlFor, labelNames, typeInto } from "./helpers/labeled-control";
 import { groupEventSeriesFixture } from "./helpers/meeting-series-fixture";
 
 const navigate = vi.fn();
@@ -143,7 +143,7 @@ describe("portal group meeting management", () => {
     expect(container.textContent).toContain("recurring schedule is locked");
     // Every control is inside a `Field`, which pairs label and control by
     // generated id, so each is resolved through that pair — the lookup then
-    // fails exactly when the labelling contract is broken rather than when an
+    // fails exactly when the labeling contract is broken rather than when an
     // id is renamed.
     for (const label of ["Repeats", "Time zone", "First occurrence", "Duration (minutes)"]) {
       expect(controlFor(container, label).disabled).toBe(true);

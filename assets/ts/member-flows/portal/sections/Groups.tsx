@@ -1,3 +1,8 @@
+import { GroupCard, groupHref } from "./GroupCard";
+import { groupViewerStatus } from "./group-viewer-status";
+import { CollectionStatusLine } from "../../../ui/CollectionCard";
+import { useSectionHeading } from "../../../ui/HeadingOutline";
+import { DiscoveryViewToggle, useDiscoveryView } from "./DiscoveryView";
 /** Generic self-service participation view shared by every configured group type. */
 import { useEffect, useRef } from "preact/hooks";
 import type { z } from "zod";
@@ -7,8 +12,8 @@ import { selfGroupsListResponseSchema, type SelfGroup } from "../../../../shared
 import { ApiDataTable, type ApiTableActions } from "../../../components/ApiDataTable";
 import { RowActions } from "../../../ui/RowActions";
 import type { MenuItem } from "../../../ui/Menu";
-import { Badge } from "../../../components/Badge";
-import { EmptyState } from "../../../ui/RecordEmptyState";
+import { Badge, statusLabel } from "../../../components/Badge";
+import { EmptyState } from "../../../ui/EmptyState";
 import { PageHeader } from "../../../ui/PageHeader";
 import { portalHasGlobalPermission } from "../shell/portal-navigation";
 import { portalSession } from "../state";
@@ -21,7 +26,6 @@ import {
   leaveGroupAsCapacity,
   leaveGroupEntirely,
 } from "./group-participation-commands";
-import { fmtDate } from "../ui";
 import { TableCodedLabel } from "../../../ui/TableCodedLabel";
 
 type SelfGroupsPage = z.infer<typeof selfGroupsListResponseSchema>;
@@ -38,21 +42,15 @@ function GroupsRedirect({ navigate }: { navigate: (path: string) => void }) {
   return null;
 }
 
-/**
- * The groups a member can join, as a table (#51).
- *
- * It was a column of cards, one per group, each carrying the group's name and
- * description, a checkbox for every affiliation the reader represents and a
- * "Join selected" button. Ten groups meant ten open forms stacked down a page
- * that could not be sorted, searched or paged like every other list in the
- * portal — and the decision each of them offered is one a reader makes rarely
- * and takes whole.
- *
- * So it is the same `ApiDataTable` the rest of the portal uses, and joining is
- * a command on the row. What the card asked with checkboxes standing open, the
- * command asks in its confirmation: on whose behalf.
- */
+/** The viewer's standing in a list row: the card's badges, or a dash where there is none. */
+function GroupStatusCell({ group }: { group: SelfGroup }) {
+  const status = groupViewerStatus(group);
+  return status.length > 0 ? <CollectionStatusLine items={status} /> : <span class="pk-muted">—</span>;
+}
+
 function MemberGroupCatalog({ onCreate }: { onCreate?: () => void }) {
+  const { view, setView } = useDiscoveryView();
+  const Heading = useSectionHeading(3);
   const tableRef = useRef<ApiTableActions | null>(null);
   const [, navigate] = usePortalHashLocation();
 
@@ -116,7 +114,30 @@ function MemberGroupCatalog({ onCreate }: { onCreate?: () => void }) {
 
   return (
     <ApiDataTable
-      caption="Groups you can join"
+      caption="Groups"
+      toolbar={() => <DiscoveryViewToggle view={view} onChange={setView} />}
+      toolbarClass="pk-discovery-toolbar pk-toolbar-row"
+      compactToolbarActions={[]}
+      framed={false}
+      renderItems={
+        view === "grid"
+          ? (groups) => (
+              <>
+                <div class="pk-discovery-grid">
+                  {groups.map((group) => (
+                    <GroupCard
+                      key={group.id}
+                      group={group}
+                      heading={Heading}
+                      status={groupViewerStatus(group)}
+                      actions={<RowActions subject={group.name} actions={participationActions(group)} />}
+                    />
+                  ))}
+                </div>
+              </>
+            )
+          : undefined
+      }
       createAction={onCreate ? { label: "New group", onSelect: onCreate } : undefined}
       urlState="catalog"
       endpoint="/api/v1/users/current/groups"
@@ -145,30 +166,10 @@ function MemberGroupCatalog({ onCreate }: { onCreate?: () => void }) {
           width: "primary",
         },
         {
-          /*
-           * Membership is per affiliation, so the column says which — an
-           * em dash where none participate, rather than an empty cell that
-           * reads as missing data.
-           */
-          header: "Participating as",
-          cell: (group: SelfGroup) =>
-            group.memberships.length === 0 ? (
-              <span class="pk-muted">—</span>
-            ) : (
-              <ul class="pk-stack pk-stack--tight">
-                {group.memberships.map((membership) => (
-                  <li key={membership.id}>
-                    {affiliationLabel({
-                      memberId: membership.memberId,
-                      memberType: membership.memberType,
-                      organizationName: membership.organizationName,
-                      membershipCategory: membership.membershipCategory,
-                    })}{" "}
-                    <span class="pk-small pk-muted">since {fmtDate(membership.joinedAt)}</span>
-                  </li>
-                ))}
-              </ul>
-            ),
+          // The badges the group's card shows, so the list and the grid say
+          // the viewer's standing in the same words.
+          header: "Your status",
+          cell: (group: SelfGroup) => <GroupStatusCell group={group} />,
         },
         {
           // The row's own commands, where every other table in the portal
@@ -181,16 +182,41 @@ function MemberGroupCatalog({ onCreate }: { onCreate?: () => void }) {
       empty={<EmptyState title="No groups are available right now." />}
       rowAction={(group: SelfGroup) => ({
         label: `Open ${group.name}`,
-        href: `#/groups/${encodeURIComponent(group.id)}/overview`,
+        href: groupHref(group),
       })}
     />
   );
 }
 
 function AllGroups({ canCreate, onCreate }: { canCreate: boolean; onCreate?: () => void }) {
+  const { view, setView } = useDiscoveryView();
+  const Heading = useSectionHeading(3);
   return (
     <ApiDataTable
       caption="All groups"
+      toolbar={() => <DiscoveryViewToggle view={view} onChange={setView} />}
+      toolbarClass="pk-discovery-toolbar pk-toolbar-row"
+      compactToolbarActions={[]}
+      framed={false}
+      renderItems={
+        view === "grid"
+          ? (groups) => (
+              <>
+                <div class="pk-discovery-grid">
+                  {groups.map((group) => (
+                    <GroupCard
+                      key={group.id}
+                      group={group}
+                      heading={Heading}
+                      status={group.active ? [] : [{ label: statusLabel("inactive"), tone: "neutral" }]}
+                      statusLabel="Group status"
+                    />
+                  ))}
+                </div>
+              </>
+            )
+          : undefined
+      }
       createAction={onCreate ? { label: "New group", onSelect: onCreate } : undefined}
       urlState="groups"
       endpoint="/api/v1/groups"
@@ -254,7 +280,7 @@ function AllGroups({ canCreate, onCreate }: { canCreate: boolean; onCreate?: () 
       rowKey={(group: Group) => group.id}
       rowAction={(group: Group) => ({
         label: `Open ${group.name}`,
-        href: `#/groups/${encodeURIComponent(group.id)}/overview`,
+        href: groupHref(group),
       })}
     />
   );
@@ -305,7 +331,7 @@ export function Groups({
     // No width cap: a list page fills the measure it is given, and the slack
     // lands in the table's primary column rather than in page margins.
     <div class="pk pk-stack">
-      <PageHeader title="Groups" />
+      <PageHeader title="Groups" hideOnMobile />
       {session?.member && <MemberGroupCatalog onCreate={canCreateGroups ? openCreatePage : undefined} />}
       {session?.staff && !session.member && (
         <AllGroups canCreate={canCreateGroups} onCreate={canCreateGroups ? openCreatePage : undefined} />

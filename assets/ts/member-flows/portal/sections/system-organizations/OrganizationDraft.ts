@@ -4,6 +4,7 @@
  * record's revision. Every card reads the same draft, so editing keeps the
  * page's own layout instead of collapsing into a form.
  */
+import { formatNumber } from "../../../../../shared/format-number";
 import type {
   OrganizationDetail,
   OrganizationManagementUpdateInput,
@@ -66,4 +67,29 @@ export function payloadFromDraft(draft: OrganizationDraft, revision: string): Or
     secondaryContactUserId: draft.secondaryContactUserId || null,
     revision,
   } as OrganizationManagementUpdateInput;
+}
+
+function domainList(domains: readonly string[]): string {
+  const named = domains.map((domain) => `@${domain}`);
+  return named.length <= 1 ? (named[0] ?? "") : `${named.slice(0, -1).join(", ")} and ${named.at(-1)}`;
+}
+
+function peopleCount(count: number): string {
+  return `${formatNumber(count)} ${count === 1 ? "person" : "people"}`;
+}
+
+/**
+ * What a rename changes. The name lives once, on the organization, and every
+ * identity there shows it live — including everyone whose organization
+ * follows their work email domain.
+ */
+export function organizationRenameWarning(organization: OrganizationDetail): string {
+  const people = organization.activeIdentityCount;
+  const domains = organization.emailDomains;
+  const onDomains = domains.reduce((total, entry) => total + entry.people, 0);
+  const list = domainList(domains.map((entry) => entry.domain));
+  if (domains.length === 0) return `This changes the organization shown for ${peopleCount(people)}.`;
+  if (onDomains >= people)
+    return `This changes the organization shown for ${peopleCount(people)} with ${list} addresses.`;
+  return `This changes the organization shown for ${peopleCount(people)}, including ${formatNumber(onDomains)} with ${list} addresses.`;
 }

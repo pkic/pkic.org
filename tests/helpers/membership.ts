@@ -106,15 +106,34 @@ export async function insertIndividualMember(
   email?: string,
 ): Promise<{ userId: string; memberId: string; identityId: string }> {
   const userId = await insertUser(db, email);
-  const { memberId, statements } = buildCreateIndividualMemberStatements(db, userId, category, nowIso());
+  const { identityId, memberId } = await insertIndividualMembershipForUser(db, userId, category);
+  return { userId, memberId, identityId };
+}
+
+/** Every individual membership held by one of the user's personal identities, as `id` rows. */
+export const INDIVIDUAL_MEMBERSHIPS_OF_USER_SQL = `SELECT member.id
+   FROM identities personal
+   JOIN members member ON member.identity_id = personal.id
+  WHERE personal.user_id = ? AND personal.organization_id IS NULL
+  ORDER BY member.id`;
+
+/** Gives an existing user a personal identity that holds an individual membership. */
+export async function insertIndividualMembershipForUser(
+  db: DatabaseLike,
+  userId: string,
+  category = "H6",
+  now = nowIso(),
+): Promise<{ memberId: string; identityId: string }> {
   const { identityId, statement: identityStatement } = await buildCreateIdentityStatement(db, {
     userId,
     organizationId: null,
     source: "staff",
     startImmediately: true,
+    now,
   });
-  await db.batch([...statements, identityStatement]);
-  return { userId, memberId, identityId };
+  const { memberId, statements } = buildCreateIndividualMemberStatements(db, identityId, category, now);
+  await db.batch([identityStatement, ...statements]);
+  return { memberId, identityId };
 }
 
 /** Grants a primary or secondary organization-contact role, revoking any prior holder. */

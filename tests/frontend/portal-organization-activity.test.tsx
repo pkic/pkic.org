@@ -161,6 +161,7 @@ function lastQueryFor(collection: string): URLSearchParams {
 }
 
 beforeEach(() => {
+  history.replaceState(null, "", `/portal/#/organizations/${organizationId}`);
   requests = [];
   stubFetch();
 });
@@ -331,5 +332,21 @@ describe("organization activity tabs", () => {
     expect(container.textContent).toContain(
       "No group participation yet — representatives join groups from their group pages.",
     );
+  });
+});
+
+describe("organization activity bookmarks", () => {
+  it("restores a named activity view and follows browser history", async () => {
+    const path = `/portal/#/organizations/${organizationId}`;
+    history.replaceState(null, "", `${path}/events`);
+    const container = mount(<OrganizationActivity organizationId={organizationId} canReadSponsorships />);
+    await settle();
+    expect(container.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("Events");
+    await act(() => {
+      history.replaceState(null, "", path);
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    await settle();
+    expect(container.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("Groups");
   });
 });

@@ -2,12 +2,41 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
 import { queryAll } from "./helpers/context";
-import { insertUser, insertOrganization, seedOrganizationAggregate, addRepresentative } from "./helpers/membership";
+import {
+  insertUser,
+  insertOrganization,
+  seedOrganizationAggregate,
+  addRepresentative,
+  insertIndividualMember,
+} from "./helpers/membership";
+import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
 import { MEMBER_STATUSES } from "../assets/shared/schemas/membership-categories";
 
 beforeEach(async () => {
   await resetDb();
 });
+
+/** A started personal identity that holds no membership yet. */
+async function insertPersonalIdentity(): Promise<string> {
+  const userId = await insertUser(env.DB);
+  const identity = await buildCreateIdentityStatement(env.DB, {
+    userId,
+    organizationId: null,
+    source: "staff",
+    startImmediately: true,
+  });
+  await identity.statement.run();
+  return identity.identityId;
+}
+
+function insertIndividualRow(identityId: string | null, status = "active") {
+  return env.DB.prepare(
+    `INSERT INTO members (id, member_type, identity_id, status, created_at, updated_at)
+     VALUES (?, 'individual', ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
+  )
+    .bind(crypto.randomUUID(), identityId, status)
+    .run();
+}
 
 describe("members model", () => {
   it("keeps one aggregate row per organization with multiple active identities", async () => {
@@ -19,8 +48,6 @@ describe("members model", () => {
     await addRepresentative(env.DB, memberId, primaryUserId);
     await addRepresentative(env.DB, memberId, secondaryUserId);
 
-    // Exactly one aggregate row per organization — migration 0000's
-    // UNIQUE(organization_id) is untouched by this PR.
     const aggregateCount = (
       await queryAll<{ total: number }>(
         env.DB,
@@ -44,58 +71,71 @@ describe("members model", () => {
     expect(Number(repCount.total)).toBe(2);
   });
 
-  it("individual category (org-less): user_id set, no organization_id", async () => {
-    const individualUserId = await insertUser(env.DB, "individual@example.test");
-    await env.DB.prepare(
-      `INSERT INTO members (id, member_type, user_id, status, created_at, updated_at)
-         VALUES (?, 'individual', ?, 'active', datetime('now'), datetime('now'))`,
-    )
-      .bind(crypto.randomUUID(), individualUserId)
-      .run();
-
+  it("an individual membership is held by a personal identity and has no user column", async () => {
+    const member = await insertIndividualMember(env.DB);
     const row = (
-      await queryAll<{ organization_id: string | null; user_id: string }>(
+      await queryAll<{ organization_id: string | null; identity_id: string }>(
         env.DB,
-        "SELECT organization_id, user_id FROM members WHERE user_id = ?",
-        individualUserId,
+        "SELECT organization_id, identity_id FROM members WHERE id = ?",
+        member.memberId,
       )
     )[0];
-    expect(row.organization_id).toBeNull();
-    expect(row.user_id).toBe(individualUserId);
+    expect(row).toEqual({ organization_id: null, identity_id: member.identityId });
+    const columns = await queryAll<{ name: string }>(env.DB, "SELECT name FROM pragma_table_info('members')");
+    expect(columns.map((column) => column.name)).not.toContain("user_id");
+    const capacity = await queryAll<{ identity_id: string; user_id: string }>(
+      env.DB,
+      "SELECT identity_id, user_id FROM identity_member_capacities WHERE member_id = ?",
+      member.memberId,
+    );
+    expect(capacity).toEqual([{ identity_id: member.identityId, user_id: member.userId }]);
   });
 
   it("member_type is a plain individual/organization discriminator, not a category — the CHECK constraint rejects anything else", async () => {
-    const userId = await insertUser(env.DB);
+    const identityId = await insertPersonalIdentity();
     await expect(
       env.DB.prepare(
-        `INSERT INTO members (id, member_type, user_id, status, created_at, updated_at)
+        `INSERT INTO members (id, member_type, identity_id, status, created_at, updated_at)
            VALUES (?, 'A', ?, 'active', datetime('now'), datetime('now'))`,
       )
-        .bind(crypto.randomUUID(), userId)
+        .bind(crypto.randomUUID(), identityId)
         .run(),
     ).rejects.toThrow();
   });
 
-  it("organization-type rows must have organization_id set and user_id NULL (mutual exclusivity CHECK)", async () => {
+  it("an individual row needs a holding identity and an organization row needs an organization", async () => {
+    await expect(insertIndividualRow(null)).rejects.toThrow("members_holder");
     const organizationId = await insertOrganization(env.DB);
     await expect(
       env.DB.prepare(
-        `INSERT INTO members (id, member_type, user_id, organization_id, status, created_at, updated_at)
-           VALUES (?, 'organization', NULL, NULL, 'active', datetime('now'), datetime('now'))`,
+        `INSERT INTO members (id, member_type, organization_id, status, created_at, updated_at)
+           VALUES (?, 'organization', NULL, 'active', datetime('now'), datetime('now'))`,
       )
         .bind(crypto.randomUUID())
         .run(),
-    ).rejects.toThrow();
-
-    // Sanity: the valid form succeeds.
+    ).rejects.toThrow("members_holder");
     await expect(
       env.DB.prepare(
-        `INSERT INTO members (id, member_type, user_id, organization_id, status, created_at, updated_at)
-           VALUES (?, 'organization', NULL, ?, 'active', datetime('now'), datetime('now'))`,
+        `INSERT INTO members (id, member_type, organization_id, status, created_at, updated_at)
+           VALUES (?, 'organization', ?, 'active', datetime('now'), datetime('now'))`,
       )
         .bind(crypto.randomUUID(), organizationId)
         .run(),
     ).resolves.toBeDefined();
+  });
+
+  it("only a personal identity can hold an individual membership", async () => {
+    const userId = await insertUser(env.DB);
+    const organizationId = await insertOrganization(env.DB);
+    await seedOrganizationAggregate(env.DB, organizationId, "A");
+    const affiliation = await buildCreateIdentityStatement(env.DB, {
+      userId,
+      organizationId,
+      source: "staff",
+      startImmediately: true,
+    });
+    await affiliation.statement.run();
+    await expect(insertIndividualRow(affiliation.identityId)).rejects.toThrow("MEMBER_IDENTITY_INVALID");
   });
 
   it("UNIQUE(organization_id) is still enforced: an organization has at most one aggregate row", async () => {
@@ -104,61 +144,29 @@ describe("members model", () => {
 
     await expect(
       env.DB.prepare(
-        `INSERT INTO members (id, member_type, user_id, organization_id, status, created_at, updated_at)
-           VALUES (?, 'organization', NULL, ?, 'active', datetime('now'), datetime('now'))`,
+        `INSERT INTO members (id, member_type, organization_id, status, created_at, updated_at)
+           VALUES (?, 'organization', ?, 'active', datetime('now'), datetime('now'))`,
       )
         .bind(crypto.randomUUID(), organizationId)
         .run(),
     ).rejects.toThrow();
   });
 
-  it("UNIQUE(user_id) is still enforced: a person has at most one individual aggregate row", async () => {
-    const userId = await insertUser(env.DB);
-    await env.DB.prepare(
-      `INSERT INTO members (id, member_type, user_id, status, created_at, updated_at)
-         VALUES (?, 'individual', ?, 'active', datetime('now'), datetime('now'))`,
-    )
-      .bind(crypto.randomUUID(), userId)
-      .run();
-
+  it("an identity holds at most one membership, and a membership never moves to another holder", async () => {
+    const member = await insertIndividualMember(env.DB);
+    await expect(insertIndividualRow(member.identityId)).rejects.toThrow();
+    const other = await insertPersonalIdentity();
     await expect(
-      env.DB.prepare(
-        `INSERT INTO members (id, member_type, user_id, status, created_at, updated_at)
-           VALUES (?, 'individual', ?, 'active', datetime('now'), datetime('now'))`,
-      )
-        .bind(crypto.randomUUID(), userId)
-        .run(),
-    ).rejects.toThrow();
+      env.DB.prepare("UPDATE members SET identity_id = ? WHERE id = ?").bind(other, member.memberId).run(),
+    ).rejects.toThrow("MEMBER_HOLDER_IMMUTABLE");
   });
 
-  // Parity test (PR #1 review, phase1-2-review-20260817.md blocker 9):
-  // members.status has a DB-level CHECK constraint (migration 0000,
-  // deployed/immutable) mirroring the canonical MEMBER_STATUSES shared
-  // constant. Nothing previously proved these two stay in sync — this
-  // asserts the DB accepts every value the constant claims is valid and
-  // rejects one that isn't, so a future edit to MEMBER_STATUSES without a
-  // matching migration fails this test instead of silently drifting.
+  // members.status has a DB-level CHECK constraint mirroring the canonical
+  // MEMBER_STATUSES shared constant; this keeps the two in sync.
   it("members.status CHECK constraint accepts exactly the canonical MEMBER_STATUSES values", async () => {
     for (const status of MEMBER_STATUSES) {
-      const userId = await insertUser(env.DB);
-      await expect(
-        env.DB.prepare(
-          `INSERT INTO members (id, member_type, user_id, status, created_at, updated_at)
-           VALUES (?, 'individual', ?, ?, datetime('now'), datetime('now'))`,
-        )
-          .bind(crypto.randomUUID(), userId, status)
-          .run(),
-      ).resolves.toBeDefined();
+      await expect(insertIndividualRow(await insertPersonalIdentity(), status)).resolves.toBeDefined();
     }
-
-    const userId = await insertUser(env.DB);
-    await expect(
-      env.DB.prepare(
-        `INSERT INTO members (id, member_type, user_id, status, created_at, updated_at)
-         VALUES (?, 'individual', ?, 'not_a_real_status', datetime('now'), datetime('now'))`,
-      )
-        .bind(crypto.randomUUID(), userId)
-        .run(),
-    ).rejects.toThrow();
+    await expect(insertIndividualRow(await insertPersonalIdentity(), "not_a_real_status")).rejects.toThrow();
   });
 });

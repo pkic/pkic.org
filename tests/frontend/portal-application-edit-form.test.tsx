@@ -5,7 +5,7 @@
  * What is asserted here is what a visual review cannot see: that every control
  * is reachable through its own label's `for`/`id` pair, that one `disabled`
  * takes the whole group out of play, that a failed save is announced rather
- * than merely coloured, and that what the surface finally sends satisfies the
+ * than merely colored, and that what the surface finally sends satisfies the
  * canonical request contract rather than a literal copy of itself.
  */
 import { render, type ComponentChild, type ComponentChildren } from "preact";
@@ -29,14 +29,7 @@ import {
   type ApplicationEditFormValue,
 } from "../../assets/ts/member-flows/portal/sections/membership-applications/ApplicationEditForm";
 import { ApplicationDetailView } from "../../assets/ts/member-flows/portal/sections/membership-applications/ApplicationDetailView";
-import {
-  buttonNamed,
-  buttonNames,
-  controlFor,
-  labelNames,
-  markdownControl,
-  typeInto,
-} from "./helpers/labelled-control";
+import { buttonNamed, buttonNames, controlFor, labelNames, markdownControl, typeInto } from "./helpers/labeled-control";
 import { menuItemNamed } from "./helpers/row-actions";
 
 const APPLICATION_ID = "00000000-0000-4000-8000-000000000301";
@@ -157,7 +150,7 @@ describe("membership-application edit form", () => {
     ]);
 
     // Resolved through the `for`/`id` pair itself, so the lookup fails exactly
-    // when the labelling contract is broken.
+    // when the labeling contract is broken.
     expect(controlFor(page, "Applicant name").value).toBe("Example Applicant");
     expect(controlFor(page, "Email").type).toBe("email");
     expect(controlFor<HTMLSelectElement>(page, "Category").value).toBe("F");

@@ -16,7 +16,7 @@
  */
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import { env as workerEnv } from "cloudflare:workers";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";

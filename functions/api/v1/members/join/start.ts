@@ -16,8 +16,6 @@ export const MembersJoinStartPost = openApiRoute(memberJoinStartRouteSchema, asy
     ttlMinutes: http.magicLinkTtlMinutes,
     appBaseUrl: http.appBaseUrl,
   });
-  if (result.outboxId) {
-    c.executionCtx.waitUntil(processOutboxByIdBackground(http.db, c.env, result.outboxId));
-  }
+  c.executionCtx.waitUntil(processOutboxByIdBackground(http.db, c.env, result.outboxId));
   return jsonNoStore({ status: result.status });
 });

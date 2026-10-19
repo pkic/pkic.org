@@ -1,6 +1,6 @@
+import { ApplicationStageBadge } from "./ApplicationStageBadge";
 import type { ApplicationUpdate } from "../../../../../shared/schemas/membership-application-management";
 import { useEffect, useState } from "preact/hooks";
-import { Badge } from "../../../../components/Badge";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { fmt } from "../../ui";
 import { type MembershipCategoryCatalogEntry } from "../../../../../shared/schemas/membership-categories";
@@ -114,7 +114,7 @@ export function ApplicationOverviewCard({
 
               <dt>Stage</dt>
               <dd>
-                <Badge status={detail.stage} />
+                <ApplicationStageBadge application={detail} />
               </dd>
 
               {detail.onHoldSubtype && (
@@ -134,8 +134,8 @@ export function ApplicationOverviewCard({
             editForm && (
               <>
                 <p class="pk-small">
-                  Corrections cannot reuse completed reviews or existing payment checkouts. If review evidence exists,
-                  first preview a restart under “Restart or change workflow.” The application category remains fixed.
+                  For corrections within the current category, first restart any completed review through “Restart or
+                  change workflow.”
                 </p>
                 <ApplicationEditForm
                   form={editForm}
