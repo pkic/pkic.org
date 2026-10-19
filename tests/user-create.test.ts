@@ -40,7 +40,14 @@ describe("staff user creation", () => {
       userId,
     );
     expect(users).toEqual([{ normalized_email: "new.person@example.test", email_verified_at: null }]);
-    expect(await queryAll(env.DB, "SELECT id FROM identities WHERE user_id = ?", userId)).toHaveLength(0);
+    // Every person holds an identity: a new account starts with an individual one.
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT organization_id, source FROM identities WHERE user_id = ? AND started_at IS NOT NULL",
+        userId,
+      ),
+    ).toEqual([{ organization_id: null, source: "account" }]);
     expect(
       await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'user_created' AND entity_id = ?", userId),
     ).toHaveLength(1);

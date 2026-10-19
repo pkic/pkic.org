@@ -1,8 +1,10 @@
 import { executiveCouncilSeatSql } from "../auth/executive-council";
+import { identityJobTitleSql, identityOrganizationEmailDomainSql } from "./identities/affiliation-projection";
 import { parseLinksJson } from "../../../assets/shared/schemas/links";
 import { publicUserHeadshotPath } from "./user-headshot";
 import { batchFirst, batchRows } from "../db/pagination";
 import { AppError } from "../errors";
+import { organizationAddressEvidence } from "./identities/reinstatement-link";
 import type { DatabaseLike } from "../types";
 
 interface UserDetailRow {
@@ -22,13 +24,14 @@ interface UserDetailRow {
 
 interface MembershipRow {
   id: string;
-  capacity_member_id: string;
-  category_code: string;
-  status: string;
+  capacity_member_id: string | null;
+  category_code: string | null;
+  status: string | null;
   show_on_org_profile: number;
   is_default: number;
   organization_id: string | null;
   organization_name: string | null;
+  organization_email_domain: string | null;
   email_id: string | null;
   capacity_email: string;
   job_title: string | null;
@@ -44,6 +47,10 @@ interface FormerIdentityRow {
   job_title: string | null;
   started_at: string | null;
   ended_at: string;
+  email_address: string;
+  normalized_email_address: string;
+  email_verified: 0 | 1;
+  reinstatable: 0 | 1;
 }
 
 interface MembershipGroupRow {
@@ -72,22 +79,24 @@ export async function getUserDetail(db: DatabaseLike, userId: string) {
         `SELECT identity.id, m.id AS capacity_member_id, mca.category_code, m.status,
                 identity.show_on_organization_profile AS show_on_org_profile,
                 identity.is_default,
-                m.organization_id, o.name AS organization_name,
+                identity.organization_id, o.name AS organization_name,
+                ${identityOrganizationEmailDomainSql("identity.id")} AS organization_email_domain,
                 identity.email_id, COALESCE(selected_email.email, u.email) AS capacity_email,
-                CASE WHEN identity.organization_id IS NULL THEN category.label ELSE identity.job_title END AS job_title,
+                COALESCE(${identityJobTitleSql("identity.id")},
+                         CASE WHEN identity.organization_id IS NULL THEN category.label END) AS job_title,
                 identity.biography, identity.links_json, identity.created_at,
-                CASE WHEN m.organization_id IS NULL THEN '0_' ELSE '1_' END || identity.started_at AS sort_key
+                CASE WHEN identity.organization_id IS NULL THEN '0_' ELSE '1_' END || identity.started_at AS sort_key
          FROM identities identity
-         JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
-         JOIN members m ON m.id = capacity.member_id
-         LEFT JOIN organizations o ON o.id = m.organization_id
+         LEFT JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
+         LEFT JOIN members m ON m.id = capacity.member_id
+         LEFT JOIN organizations o ON o.id = identity.organization_id
          JOIN users u ON u.id = identity.user_id
          LEFT JOIN user_emails selected_email
            ON selected_email.id = identity.email_id
           AND selected_email.user_id = identity.user_id
           AND selected_email.verified_at IS NOT NULL
-         JOIN member_category_assignments mca ON mca.member_id = m.id
-         JOIN membership_categories category ON category.code = mca.category_code
+         LEFT JOIN member_category_assignments mca ON mca.member_id = m.id
+         LEFT JOIN membership_categories category ON category.code = mca.category_code
          WHERE identity.user_id = ?
            AND identity.started_at IS NOT NULL
            AND identity.ended_at IS NULL
@@ -104,8 +113,28 @@ export async function getUserDetail(db: DatabaseLike, userId: string) {
          * Most recently ended first: a history reads backwards from now.
          */
         `SELECT identity.id, identity.organization_id, o.name AS organization_name,
-                identity.job_title, identity.started_at, identity.ended_at
+                identity.job_title, identity.started_at, identity.ended_at,
+                COALESCE(address.email, holder.email) AS email_address,
+                COALESCE(address.normalized_email, holder.normalized_email) AS normalized_email_address,
+                identity.email_id IS NULL OR address.verified_at IS NOT NULL AS email_verified,
+                -- An end made by mistake can be undone while nothing has taken
+                -- the identity's place: not blocked, no successor, and no other
+                -- open identity for the same organization.
+                CASE WHEN identity.organization_id IS NOT NULL
+                       AND identity.started_at IS NOT NULL
+                       AND identity.blocked_at IS NULL
+                       AND NOT EXISTS (SELECT 1 FROM identities successor
+                                        WHERE successor.predecessor_identity_id = identity.id)
+                       AND NOT EXISTS (SELECT 1 FROM identities other
+                                        WHERE other.user_id = identity.user_id
+                                          AND other.organization_id = identity.organization_id
+                                          AND other.id <> identity.id
+                                          AND other.ended_at IS NULL
+                                          AND other.blocked_at IS NULL)
+                     THEN 1 ELSE 0 END AS reinstatable
            FROM identities identity
+           JOIN users holder ON holder.id = identity.user_id
+           LEFT JOIN user_emails address ON address.id = identity.email_id
            LEFT JOIN organizations o ON o.id = identity.organization_id
           WHERE identity.user_id = ?
             AND identity.ended_at IS NOT NULL
@@ -142,6 +171,7 @@ export async function getUserDetail(db: DatabaseLike, userId: string) {
     isDefault: identity.is_default === 1,
     organizationId: identity.organization_id,
     organizationName: identity.organization_name,
+    organizationEmailDomain: identity.organization_email_domain,
     emailId: identity.email_id,
     email: identity.capacity_email,
     jobTitle: identity.job_title,
@@ -169,14 +199,24 @@ export async function getUserDetail(db: DatabaseLike, userId: string) {
    */
   const headshotUrl = publicUserHeadshotPath(user.id, user.headshot_r2_key);
   const { headshot_r2_key: _headshotR2Key, headshot_updated_at: _headshotUpdatedAt, ...publicUser } = user;
-  const formerIdentities = batchRows<FormerIdentityRow>(formerResult).map((identity) => ({
-    identityId: identity.id,
-    organizationId: identity.organization_id,
-    organizationName: identity.organization_name,
-    jobTitle: identity.job_title,
-    startedAt: identity.started_at,
-    endedAt: identity.ended_at,
-  }));
+  const formerIdentities = await Promise.all(
+    batchRows<FormerIdentityRow>(formerResult).map(async (identity) => ({
+      identityId: identity.id,
+      organizationId: identity.organization_id,
+      organizationName: identity.organization_name,
+      jobTitle: identity.job_title,
+      startedAt: identity.started_at,
+      endedAt: identity.ended_at,
+      emailAddress: identity.email_address,
+      reinstatable: identity.reinstatable === 1,
+      // The owner's emailed path needs an address that still resolves to the organization.
+      selfReinstatable:
+        identity.reinstatable === 1 &&
+        identity.email_verified === 1 &&
+        identity.organization_id !== null &&
+        (await organizationAddressEvidence(db, identity.normalized_email_address, identity.organization_id)) !== null,
+    })),
+  );
 
   return {
     ...publicUser,

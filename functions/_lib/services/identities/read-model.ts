@@ -1,6 +1,7 @@
 import { persistedUtcInstant } from "../../utils/time";
 import {
   actingIdentitySchema,
+  identitiesListQuerySchema,
   type ActingIdentity,
   type IdentitiesListQuery,
   IDENTITY_SORT_COLUMNS,
@@ -12,13 +13,14 @@ import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import type { DatabaseLike } from "../../types";
 import { publicUserHeadshotPath } from "../user-headshot";
+import { identityJobTitleSql } from "./affiliation-projection";
 
 interface IdentityReadRow {
   id: string;
-  member_id: string;
+  member_id: string | null;
   organization_id: string | null;
   organization_name: string | null;
-  membership_category: string;
+  membership_category: string | null;
   user_id: string;
   first_name: string | null;
   last_name: string | null;
@@ -84,16 +86,22 @@ function mapIdentity(row: IdentityReadRow): ActingIdentity {
   });
 }
 
+type OrganizationContactUserIds = readonly [string | null, string | null, string | null];
+
 async function queryIdentities(
   db: DatabaseLike,
   query: IdentitiesListQuery,
-  scope: { organizationId?: string; userId?: string },
+  scope: { organizationId?: string; userId?: string; contactUserIds?: OrganizationContactUserIds },
 ): Promise<{ identities: ActingIdentity[]; page: PageInfo }> {
   const conditions: string[] = [];
   const bindings: unknown[] = [];
   if (scope.organizationId) {
     conditions.push("identity.organization_id = ?");
     bindings.push(scope.organizationId);
+  }
+  if (scope.contactUserIds) {
+    conditions.push("user.active = 1", "identity.user_id IN (?, ?, ?)");
+    bindings.push(...scope.contactUserIds);
   }
   if (scope.userId) {
     conditions.push("identity.user_id = ?");
@@ -105,7 +113,7 @@ async function queryIdentities(
         "user.first_name",
         "user.last_name",
         "COALESCE(organization.name, '')",
-        "COALESCE(identity.job_title, '')",
+        `COALESCE(${identityJobTitleSql("identity.id")}, '')`,
       ])
     : null;
   if (search) {
@@ -120,6 +128,7 @@ async function queryIdentities(
     conditions.push("identity.organization_id = ?");
     bindings.push(query.organizationId);
   }
+  if (query.organizationOnly) conditions.push("identity.organization_id IS NOT NULL");
   if (query.userId) {
     conditions.push("identity.user_id = ?");
     bindings.push(query.userId);
@@ -138,8 +147,14 @@ async function queryIdentities(
     conditions.push("identity.source = ?");
     bindings.push(query.source);
   }
+  if (query.emailDomain) {
+    conditions.push(
+      "substr(COALESCE(selected_email.normalized_email, user.normalized_email), instr(COALESCE(selected_email.normalized_email, user.normalized_email), '@') + 1) = ?",
+    );
+    bindings.push(query.emailDomain);
+  }
   const fromSql = `FROM identities identity
-    JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
+    LEFT JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
     JOIN users user ON user.id = identity.user_id
     LEFT JOIN organizations organization ON organization.id = identity.organization_id
     LEFT JOIN user_emails selected_email
@@ -153,7 +168,7 @@ async function queryIdentities(
         identity.organization_id, organization.name AS organization_name,
         capacity.membership_category, identity.user_id, user.first_name, user.last_name,
         COALESCE(selected_email.email, user.email) AS email,
-        identity.email_id, identity.job_title, identity.biography, identity.links_json,
+        identity.email_id, ${identityJobTitleSql("identity.id")} AS job_title, identity.biography, identity.links_json,
         user.headshot_r2_key, identity.source, identity.show_on_organization_profile,
         identity.invited_at, identity.started_at, identity.ended_at, identity.blocked_at,
         identity.blocked_by_user_id, identity.predecessor_identity_id,
@@ -183,4 +198,16 @@ export function listUserIdentities(
   query: IdentitiesListQuery,
 ): Promise<{ identities: ActingIdentity[]; page: PageInfo }> {
   return queryIdentities(db, query, { userId });
+}
+
+/** Resolve only the two contact holders and pending nominee through the canonical identity projection. */
+export async function readOrganizationContactIdentities(
+  db: DatabaseLike,
+  memberId: string,
+  contactUserIds: OrganizationContactUserIds,
+): Promise<ActingIdentity[]> {
+  const result = await queryIdentities(db, identitiesListQuerySchema.parse({ memberId, active: true, limit: 3 }), {
+    contactUserIds,
+  });
+  return result.identities;
 }

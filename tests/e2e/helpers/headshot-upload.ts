@@ -1,8 +1,8 @@
 /**
  * Driving a headshot upload the way a reader does.
  *
- * `AdminHeadshotManager` renders a visible button and a hidden file input, and
- * the button is what opens the picker. A spec that reaches past the button and
+ * The headshot tile is a visible button over a hidden file input, and the
+ * button is what opens the picker. A spec that reaches past the button and
  * calls `setInputFiles` on the input it finds in the DOM proves only that the
  * input has a listener — not that the button reaches it. Issue #28 was exactly
  * that gap: the wiring swapped the input for a clone, leaving the button
@@ -19,7 +19,7 @@ import { expect, type Locator, type Page } from "@playwright/test";
  * A one-pixel JPEG, small enough to inline and real enough for the browser's
  * own `Image` decoder and `canvas.drawImage` to accept without complaint.
  */
-export const TINY_JPEG = Buffer.from(
+const TINY_JPEG = Buffer.from(
   "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAj/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCdABmX/9k=",
   "base64",
 );
@@ -30,20 +30,21 @@ export const TINY_JPEG = Buffer.from(
  * The portrait is the control (#28): a reader changes a photograph by
  * clicking the face at the top of the record, the way every network they
  * already use works — not through an upload button behind a disclosure named
- * "Account administration". The tile names itself for what pressing it does,
- * so it is "Upload photo" until there is one and "Change photo" after.
+ * "Account administration". The tile names itself for what pressing it does
+ * and whose photo it is, so it is "Upload photo of …" until there is one and
+ * "Change photo of …" after.
  */
-export async function chooseHeadshotThroughUploadButton(page: Page): Promise<void> {
+export async function chooseHeadshotThroughUploadButton(page: Page, buffer: Buffer = TINY_JPEG): Promise<void> {
   const chooser = page.waitForEvent("filechooser");
-  await page.getByRole("button", { name: /^(Upload|Change) photo$/ }).click();
-  await (await chooser).setFiles({ name: "headshot.jpg", mimeType: "image/jpeg", buffer: TINY_JPEG });
+  await page.getByRole("button", { name: /^(Upload|Change) photo of / }).click();
+  await (await chooser).setFiles({ name: "headshot.jpg", mimeType: "image/jpeg", buffer });
 }
 
 /**
  * Agrees to the publication terms, and hands back the crop dialog that follows.
  *
  * Both dialogs are mounted from `<template>` elements in
- * `layouts/partials/headshot-modals.html` and opened with `showModal()`, so
+ * `HeadshotDialogTemplates` and opened with `showModal()`, so
  * each is reachable by role — which also proves the roots no longer carry the
  * static `aria-hidden="true"` that once put every control inside them outside
  * the accessibility tree. The `hsd-*`/`crop-headshot-*` classes are the

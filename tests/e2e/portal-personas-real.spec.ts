@@ -1,5 +1,8 @@
 /**
  * @covers authority.9.1
+ * @covers authority.9.4
+ * @covers authority.9.5
+ * @covers authority.9.7
  */
 import { expect, test, type APIRequestContext, type Browser, type Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
@@ -16,11 +19,13 @@ import { signInToPortal } from "./helpers/portal-auth";
 /**
  * Real Worker/D1 persona coverage for the selected-group portal boundary.
  *
- * The synthetic companion (`portal-personas.spec.ts`) remains the fast shell
- * contract. This file deliberately uses only the public HTTP APIs and the
- * normal mailbox capability flow: no route interception, no D1 files, and no
- * shared interceptor clearing. It creates disposable groups and an approved
- * member in the fresh D1 started by the Playwright webServer.
+ * The section lists each capability set produces (group-context-navigation,
+ * portal-group-workspace) and the sidebar entries each kind of identity gets
+ * (portal-capability-navigation) are covered by component tests. This file
+ * deliberately uses only the public HTTP APIs and the normal mailbox
+ * capability flow: no route interception, no D1 files, and no shared
+ * interceptor clearing. It creates disposable groups and an approved member
+ * in the fresh D1 started by the Playwright webServer.
  */
 test.describe.configure({ mode: "serial" });
 

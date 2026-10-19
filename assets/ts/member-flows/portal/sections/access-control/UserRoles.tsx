@@ -123,7 +123,7 @@ export function UserRoles({ canGrant = true, canRevoke = true }: { canGrant?: bo
                   {formError && <Alert tone="danger">{formError}</Alert>}
 
                   <div class="pk-cluster">
-                    <Button type="submit" variant="primary" size="sm" loading={submitting} disabled={!roleId}>
+                    <Button type="submit" variant="primary" loading={submitting} disabled={!roleId}>
                       {submitting ? "Assigning…" : "Assign"}
                     </Button>
                   </div>
@@ -134,6 +134,7 @@ export function UserRoles({ canGrant = true, canRevoke = true }: { canGrant?: bo
         </PanelBody>
         {user && (
           <ApiDataTable
+            urlState="user-roles"
             caption={`Roles assigned to ${user.email}`}
             endpoint={`/api/v1/users/${user.id}/roles`}
             responseSchema={userRolesListResponseSchema}

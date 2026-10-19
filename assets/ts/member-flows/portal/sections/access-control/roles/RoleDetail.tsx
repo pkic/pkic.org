@@ -8,7 +8,6 @@ import { ErrorAlert } from "../../../../../components/ErrorAlert";
 import { Spinner } from "../../../../../components/Spinner";
 import { Alert } from "../../../../../ui/Alert";
 import { Badge } from "../../../../../ui/Badge";
-import { Chip } from "../../../../../ui/Chip";
 import { Panel, PanelBody, PanelHeader } from "../../../../../ui/Panel";
 import { PersonCell } from "../../../../../ui/PersonCell";
 import { RowActions } from "../../../../../ui/RowActions";
@@ -24,7 +23,8 @@ import {
 } from "../../../../../../shared/schemas/access-control";
 import { RoleAssignForm } from "./RoleAssignForm";
 import { RoleEditForm } from "./RoleEditForm";
-// A permission name is an identifier, so it is set in `pk-mono`. That class
+import { RolePermissions } from "./RolePermissions";
+// A context and a date are identifiers, so they are set in `pk-mono`. That class
 // lives in the content stylesheet, and component CSS ships in lazy chunks —
 // a surface that writes the class name has to import the sheet itself.
 import "../../../../../ui/Content.css";
@@ -92,7 +92,6 @@ export function RoleDetail({ roleId, canGrant, canRevoke }: { roleId: string; ca
             }
             actions={
               canGrant &&
-              !role.isSystemRole &&
               !editing && (
                 <Menu
                   label="Role actions"
@@ -104,6 +103,12 @@ export function RoleDetail({ roleId, canGrant, canRevoke }: { roleId: string; ca
           />
           <Panel>
             <PanelBody class="pk-stack pk-stack--snug">
+              {role.isSystemRole && (
+                <p class="pk-muted pk-small">
+                  Permission changes apply to everyone holding this role within their assignment's scope. Other roles
+                  and direct grants still apply. Responsibilities such as group leadership remain in effect.
+                </p>
+              )}
               {!editing && role.description && <p class="pk-muted pk-small">{role.description}</p>}
               {editing ? (
                 <RoleEditForm
@@ -114,18 +119,10 @@ export function RoleDetail({ roleId, canGrant, canRevoke }: { roleId: string; ca
                   }}
                   onCancel={() => setEditing(false)}
                 />
+              ) : role.permissions.length === 0 ? (
+                <span class="pk-muted pk-small">No permissions</span>
               ) : (
-                <div class="pk-cluster">
-                  {role.permissions.length === 0 ? (
-                    <span class="pk-muted pk-small">No permissions</span>
-                  ) : (
-                    role.permissions.map((permission) => (
-                      <Chip key={permission}>
-                        <span class="pk-mono">{permission}</span>
-                      </Chip>
-                    ))
-                  )}
-                </div>
+                <RolePermissions selected={new Set(role.permissions)} />
               )}
             </PanelBody>
           </Panel>
@@ -143,6 +140,7 @@ export function RoleDetail({ roleId, canGrant, canRevoke }: { roleId: string; ca
               ) : null}
             </PanelBody>
             <ApiDataTable
+              urlState="role-assignees"
               caption={`${role.name} assignees`}
               endpoint={`/api/v1/roles/${encodeURIComponent(role.id)}/assignments`}
               responseSchema={roleAssignmentsListResponseSchema}
@@ -158,7 +156,7 @@ export function RoleDetail({ roleId, canGrant, canRevoke }: { roleId: string; ca
               columns={[
                 {
                   header: "Person",
-                  cell: (assignment) => <PersonCell size="sm" name={assignment.name} email={assignment.email} />,
+                  cell: (assignment) => <PersonCell size="sm" name={assignment.name} />,
                   sort: { asc: "name", desc: "-name" },
                 },
                 {

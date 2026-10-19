@@ -1,5 +1,6 @@
 import { ApiDataTable } from "../../../../components/ApiDataTable";
-import { PersonCell, personDisplayName } from "../../../../components/PersonCell";
+import { personDisplayName } from "../../../../../shared/person-display";
+import { PersonCell } from "../../../../ui/PersonCell";
 import { ButtonLink } from "../../../../ui/Button";
 import { fmtDate } from "../../ui";
 import {
@@ -57,7 +58,7 @@ export function UsersList({ canWrite, canGrantAccess }: { canWrite: boolean; can
       toolbar={
         canGrantAccess
           ? () => (
-              <ButtonLink href={usePortalHashLocation.hrefs("/settings/access-control/people")} size="sm">
+              <ButtonLink href={usePortalHashLocation.hrefs("/settings/access-control/people")}>
                 Manage access
               </ButtonLink>
             )
@@ -68,10 +69,9 @@ export function UsersList({ canWrite, canGrantAccess }: { canWrite: boolean; can
           header: "Person",
           cell: (user) => (
             <PersonCell
-              firstName={user.first_name}
-              lastName={user.last_name}
-              email={user.email}
-              headshotUrl={user.headshotUrl}
+              name={personDisplayName(user.first_name, user.last_name, user.email)}
+              avatarSrc={user.headshotUrl}
+              size="sm"
             />
           ),
           sort: { asc: "last_name", desc: "-last_name" },

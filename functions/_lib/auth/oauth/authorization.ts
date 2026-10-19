@@ -5,14 +5,14 @@ import {
   type ResolveExternalTokenInput,
 } from "@cloudflare/workers-oauth-provider";
 import { z } from "zod";
-import { permissionSchema } from "../../../../assets/shared/schemas/permissions";
-import { utcInstantSchema } from "../../../../assets/shared/schemas/api-common";
 import { mcpOauthContextSchema } from "../../../../assets/shared/schemas/mcp-oauth";
 import { getCachedAdminAuthTransport, requireAdminFromRequest } from "../admin";
 import { resolveUserSessionFromRequest, type UserSessionResult } from "../user-session";
-import { AUTH_SCOPES, grantableScopesForActor, type AuthScope } from "../scopes";
+import { normalizeMcpOauthScopes, type AuthScope } from "../scopes";
 import { getConfig, resolveAppBaseUrl } from "../../config";
 import { processOutboxByIdBackground } from "../../email/outbox";
+import { handleError } from "../../http";
+import { oauthClientDisplayName } from "../../../../assets/shared/oauth-authorization-policy";
 import { AppError } from "../../errors";
 import { getClientIp, getUserAgent, hashOptional, requireInternalSecret } from "../../request";
 import { enforceRateLimit } from "../../rate-limit";
@@ -20,114 +20,27 @@ import { buildManagementLink } from "../../services/management-links";
 import { requestUserSignInLink } from "../../services/user-auth-flow";
 import type { AuthAdmin, Env } from "../../types";
 
-export const MCP_OAUTH_AUTHORIZE_PATH = "/api/v1/auth/oauth/authorize";
-export const MCP_OAUTH_TOKEN_PATH = "/api/v1/auth/oauth/token";
-export const MCP_OAUTH_REGISTER_PATH = "/api/v1/auth/oauth/register";
+import { permissionAreas } from "../../../../assets/shared/permission-metadata";
+import { delegablePermissionContexts } from "./grantable-permissions";
+import { MCP_OAUTH_AUTHORIZE_PATH } from "./policy";
+export { isAuthScope, normalizeMcpOauthScopes } from "../scopes";
+export { MCP_OAUTH_AUTHORIZE_PATH, MCP_OAUTH_TOKEN_PATH, MCP_OAUTH_REGISTER_PATH } from "./policy";
 const MCP_OAUTH_MAX_RETURN_TO_LENGTH = 2048;
 
-const AUTH_SCOPE_SET = new Set<string>(AUTH_SCOPES);
-
-const mcpOAuthPropsBaseSchema = {
-  id: z.string().min(1),
-  email: z.string().min(1),
-  scopes: z.array(permissionSchema),
-};
-
-export const mcpOAuthPropsSchema = z.discriminatedUnion("identityType", [
-  z
-    .object({
-      identityType: z.literal("user"),
-      ...mcpOAuthPropsBaseSchema,
-      sessionId: z.string().min(1),
-      sessionExpiresAt: utcInstantSchema,
-      sessionIdleExpiresAt: utcInstantSchema,
-      state: z.string().nullable(),
-      authTransport: z.enum(["oauth", "bearer", "cookie"]),
-    })
-    .strict(),
-  z
-    .object({
-      identityType: z.literal("service"),
-      role: z.string().min(1),
-      ...mcpOAuthPropsBaseSchema,
-      authTransport: z.literal("api-key"),
-    })
-    .strict(),
-]);
-
-export type McpOAuthProps = z.infer<typeof mcpOAuthPropsSchema>;
-export type McpUserOAuthProps = Extract<McpOAuthProps, { identityType: "user" }>;
-export type McpServiceOAuthProps = Extract<McpOAuthProps, { identityType: "service" }>;
-export type UserMcpOAuthTransport = McpUserOAuthProps["authTransport"];
-export type McpOAuthTransport = McpOAuthProps["authTransport"];
-
-export function parseMcpOauthProps(value: unknown): McpOAuthProps | undefined {
-  if (value === undefined) return undefined;
-  const parsed = mcpOAuthPropsSchema.safeParse(value);
-  if (!parsed.success) {
-    throw new AppError(401, "MCP_AUTH_PROPS_INVALID", "Authorize the MCP client again");
-  }
-  return parsed.data;
-}
+import { buildMcpOauthProps, type McpOAuthProps } from "./props";
+export {
+  buildMcpOauthProps,
+  parseMcpOauthProps,
+  type McpOAuthProps,
+  type McpUserOAuthProps,
+  type McpServiceOAuthProps,
+  type UserMcpOAuthTransport,
+  type McpOAuthTransport,
+} from "./props";
 
 export type McpOAuthEnv = Env & {
   OAUTH_PROVIDER: OAuthHelpers;
 };
-
-function jsonResponse(data: unknown, status = 200): Response {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { "content-type": "application/json;charset=UTF-8" },
-  });
-}
-
-export function isAuthScope(scope: string): scope is AuthScope {
-  return AUTH_SCOPE_SET.has(scope);
-}
-
-export function normalizeMcpOauthScopes(
-  scopes: readonly string[],
-  fallback: readonly AuthScope[] = AUTH_SCOPES,
-): AuthScope[] {
-  const normalized = scopes.filter(isAuthScope);
-  // An omitted scope list receives the documented default. A supplied but
-  // wholly invalid list must not be promoted to every supported permission.
-  return [...new Set(scopes.length === 0 ? fallback : normalized)];
-}
-
-export function buildMcpOauthProps(
-  admin: AuthAdmin,
-  scopes: readonly AuthScope[],
-  authTransport: McpOAuthTransport,
-  staffIdleExpiresAt?: string,
-): McpOAuthProps {
-  const shared = { id: admin.id, email: admin.email, scopes: [...scopes] };
-
-  if (admin.identityType === "service") {
-    if (authTransport !== "api-key") {
-      throw new AppError(500, "MCP_AUTH_TRANSPORT_INVALID", "A service actor must use the API-key transport");
-    }
-    return { identityType: "service", role: admin.role, ...shared, authTransport };
-  }
-
-  if (authTransport === "api-key" || !admin.sessionId || !admin.expiresAt || !staffIdleExpiresAt) {
-    throw new AppError(
-      500,
-      "MCP_AUTH_TRANSPORT_INVALID",
-      "A user-backed MCP actor requires a session-backed transport",
-    );
-  }
-
-  return {
-    identityType: "user",
-    ...shared,
-    sessionId: admin.sessionId,
-    sessionExpiresAt: admin.expiresAt,
-    sessionIdleExpiresAt: staffIdleExpiresAt,
-    state: admin.state ?? null,
-    authTransport,
-  };
-}
 
 export function currentAuthorizeReturnTo(request: Request): string {
   const url = new URL(request.url);
@@ -214,12 +127,28 @@ export async function describeMcpAuthorization(
     authorized: admin !== null,
     returnTo,
     clientId: authRequest.clientId,
-    clientName: clientInfo?.clientName ?? clientInfo?.clientId ?? authRequest.clientId,
+    clientName: oauthClientDisplayName(clientInfo?.clientName, authRequest.clientId),
     requestedScopes,
     grantedScopes,
-    grantableGrants: admin?.grants?.filter((grant) => grantedScopes.includes(grant.permission as AuthScope)) ?? [],
     userEmail: session?.identity.email ?? null,
     staffEmail: admin?.email ?? null,
+    actingIdentityId: session?.actingIdentityId ?? null,
+    redirectHost: new URL(authRequest.redirectUri).host,
+    areas: permissionAreas(grantedScopes).map((area) => ({
+      ...area,
+      permissions: area.permissions.map((item) => {
+        const limits = admin?.identityType === "user" ? delegablePermissionContexts(admin, [item.permission]) : [];
+        return {
+          ...item,
+          allResources: limits.some((limit) => limit.contextType === null),
+          resourceCount: new Set(
+            limits
+              .filter((limit) => limit.contextType !== null)
+              .map((limit) => JSON.stringify([limit.contextType, limit.contextId])),
+          ).size,
+        };
+      }),
+    })),
   };
 }
 
@@ -305,21 +234,23 @@ export async function sendMcpAuthorizeMagicLink(options: {
 }
 
 export function grantedMcpOauthScopes(admin: AuthAdmin, requestedScopes: readonly AuthScope[]): AuthScope[] {
-  return grantableScopesForActor(admin, requestedScopes);
+  if (admin.identityType !== "user") return [];
+  const contexts = delegablePermissionContexts(admin, requestedScopes);
+  return requestedScopes.filter((scope) => contexts.some((context) => context.permission === scope));
 }
 
 export function toOAuthErrorResponse(error: unknown): Response {
   if (error instanceof OAuthError) {
-    return jsonResponse({ error: { code: error.code, message: error.description } }, error.statusCode);
+    return handleError(new AppError(error.statusCode, error.code, error.description));
   }
 
   if (error instanceof AppError) {
-    return jsonResponse({ error: { code: error.code, message: error.message, details: error.details } }, error.status);
+    return handleError(error);
   }
 
   if (error instanceof z.ZodError) {
-    return jsonResponse({ error: { code: "VALIDATION_ERROR", message: "Invalid OAuth request" } }, 400);
+    return handleError(new AppError(400, "VALIDATION_ERROR", "Invalid OAuth request", error.flatten()));
   }
 
-  return jsonResponse({ error: { code: "OAUTH_ERROR", message: "Unexpected OAuth authorization error." } }, 500);
+  return handleError(new AppError(500, "OAUTH_ERROR", "Unexpected OAuth authorization error."));
 }

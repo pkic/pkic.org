@@ -1,10 +1,9 @@
 import type { IdentityDomainAssessment } from "../../../../assets/shared/schemas/identity";
-import {
-  emailDomainOf,
-  isDisposableEmailDomain,
-  isPersonalEmailDomain,
-} from "../../../../assets/shared/constants/email-domains";
+import { emailDomainOf } from "../../../../assets/shared/schemas/email-domains";
+import { mailboxKind, organizationDomainCandidates } from "../../email-domains/classification";
+import { hostWithinDomainSql } from "../../email-domains/sql";
 import { all, first } from "../../db/queries";
+import { organizationLinkDomain } from "../membership/organization-domain-claims";
 import { normalizeEmail } from "../../validation";
 import type { DatabaseLike } from "../../types";
 
@@ -41,8 +40,10 @@ export async function assessIdentityDomain(
   emailInput: string,
 ): Promise<IdentityDomainAssessment> {
   const email = normalizeEmail(emailInput);
-  const domain = emailDomainOf(email);
-  if (isPersonalEmailDomain(domain)) {
+  const kind = mailboxKind(email);
+  // The claim lookup below uses the domain the address links through.
+  const domain = (await organizationLinkDomain(db, email)) ?? emailDomainOf(email);
+  if (kind === "free") {
     return result(
       email,
       domain,
@@ -50,7 +51,7 @@ export async function assessIdentityDomain(
       "Personal or free email domains cannot establish an organization identity; an organization contact may invite you explicitly.",
     );
   }
-  if (isDisposableEmailDomain(domain)) {
+  if (kind === "disposable") {
     return result(
       email,
       domain,
@@ -62,10 +63,11 @@ export async function assessIdentityDomain(
   const evidence = await first<EmailEvidenceRow>(
     db,
     `SELECT normalized_email, email_verified_at AS verified_at
-       FROM users WHERE id = ? AND normalized_email = ?
+       FROM users WHERE id = ? AND normalized_email = ? AND active = 1
       UNION ALL
      SELECT normalized_email, verified_at
        FROM user_emails WHERE user_id = ? AND normalized_email = ?
+       AND EXISTS (SELECT 1 FROM users person WHERE person.id = user_emails.user_id AND person.active = 1)
       LIMIT 1`,
     [userId, email, userId, email],
   );
@@ -82,10 +84,8 @@ export async function assessIdentityDomain(
     db,
     `SELECT claim.organization_id
        FROM organization_domain_claims claim
-       JOIN members member
-         ON member.organization_id = claim.organization_id
-        AND member.status = 'active'
-      WHERE claim.domain = ? AND claim.organization_id IS NOT NULL
+       JOIN organizations organization ON organization.id = claim.organization_id
+      WHERE claim.domain = ? AND claim.organization_id IS NOT NULL AND claim.application_id IS NULL
       ORDER BY claim.organization_id
       LIMIT 2`,
     [domain],
@@ -95,7 +95,7 @@ export async function assessIdentityDomain(
       email,
       domain,
       "unclaimed_domain",
-      "No active Member organization has claimed this domain; an organization contact may invite you explicitly.",
+      "No organization has claimed this domain; an organization contact may invite you explicitly.",
     );
   }
   if (organizations.length > 1) {
@@ -131,29 +131,40 @@ export async function listVerifiedIdentityDomainMatches(
   db: DatabaseLike,
   userId: string,
 ): Promise<Array<{ email: string; domain: string; organizationId: string }>> {
-  const rows = await all<{ email: string; domain: string; organization_id: string }>(
+  const rows = await all<{
+    email: string;
+    domain: string;
+    organization_id: string | null;
+    application_id: string | null;
+  }>(
     db,
     `WITH verified_emails(email, domain) AS (
        SELECT normalized_email,
               substr(normalized_email, instr(normalized_email, '@') + 1)
          FROM users
-        WHERE id = ? AND email_verified_at IS NOT NULL
+        WHERE id = ? AND active = 1 AND email_verified_at IS NOT NULL
        UNION
        SELECT normalized_email,
               substr(normalized_email, instr(normalized_email, '@') + 1)
          FROM user_emails
         WHERE user_id = ? AND verified_at IS NOT NULL
+          AND EXISTS (SELECT 1 FROM users person WHERE person.id = user_emails.user_id AND person.active = 1)
      )
-     SELECT verified.email, verified.domain, claim.organization_id
+     SELECT verified.email, claim.domain, claim.organization_id, claim.application_id
        FROM verified_emails verified
-       JOIN organization_domain_claims claim
-         ON claim.domain = verified.domain AND claim.organization_id IS NOT NULL
-       JOIN members member
-         ON member.organization_id = claim.organization_id AND member.status = 'active'
-      ORDER BY verified.domain, claim.organization_id`,
+       JOIN organization_domain_claims claim ON ${hostWithinDomainSql("verified.domain", "claim.domain")}
+      ORDER BY verified.email, length(claim.domain) DESC`,
     [userId, userId],
   );
-  return rows
-    .filter((row) => !isPersonalEmailDomain(row.domain) && !isDisposableEmailDomain(row.domain))
-    .map((row) => ({ email: row.email, domain: row.domain, organizationId: row.organization_id }));
+  // Each address follows the most specific claim covering it, and only an organization's approved one.
+  const governing = new Map<string, (typeof rows)[number]>();
+  for (const row of rows) if (!governing.has(row.email)) governing.set(row.email, row);
+  return [...governing.values()]
+    .filter((row) => row.organization_id !== null && row.application_id === null)
+    .filter((row) => organizationDomainCandidates(row.email).includes(row.domain))
+    .sort(
+      (left, right) =>
+        left.domain.localeCompare(right.domain) || left.organization_id!.localeCompare(right.organization_id!),
+    )
+    .map((row) => ({ email: row.email, domain: row.domain, organizationId: row.organization_id! }));
 }

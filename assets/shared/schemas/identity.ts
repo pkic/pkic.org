@@ -1,5 +1,6 @@
-/** Approved Member acting identities, proof evidence, and lifecycle contracts. */
+/** Canonical acting affiliations, proof evidence, and lifecycle contracts. */
 import { z } from "zod";
+import { organizationIdentityJobTitleSchema } from "./identity-job-title";
 import {
   booleanQueryFlagSchema,
   normalizedEmailSchema,
@@ -16,9 +17,12 @@ import { httpOrSameOriginUrlSchema } from "./urls";
 export const IDENTITY_SOURCES = [
   "membership_approval",
   "verified_domain",
+  "verified_email",
   "organization_contact",
   "staff",
   "migration",
+  // The individual identity every new account starts with.
+  "account",
 ] as const;
 export const identitySourceSchema = z.enum(IDENTITY_SOURCES);
 
@@ -40,6 +44,8 @@ export const verifiedEmailIdentitySchema = z.object({
   primary: z.boolean(),
   verifiedAt: utcInstantSchema.nullable(),
   verificationMethod: emailVerificationMethodSchema.nullable(),
+  /** The identity a work address belongs to; null for the primary address and unowned ones. */
+  identityId: databaseIdSchema.nullable(),
 });
 
 export const IDENTITY_DOMAIN_OUTCOMES = [
@@ -65,10 +71,10 @@ export type IdentityDomainAssessment = z.infer<typeof identityDomainAssessmentSc
 
 export const actingIdentitySchema = z.object({
   id: databaseIdSchema,
-  memberId: databaseIdSchema,
+  memberId: databaseIdSchema.nullable(),
   organizationId: databaseIdSchema.nullable(),
   organizationName: z.string().nullable(),
-  membershipCategory: z.string().min(1),
+  membershipCategory: z.string().min(1).nullable(),
   userId: databaseIdSchema,
   userName: z.string(),
   emailId: databaseIdSchema.nullable(),
@@ -114,13 +120,14 @@ export const identityCreateSchema = z.discriminatedUnion("userReference", [
     userId: databaseIdSchema,
     activation: identityActivationSchema.default({ mode: "invitation" }),
     ...identityProfileFields,
+    jobTitle: organizationIdentityJobTitleSchema,
   }),
   z.object({
     userReference: z.literal("email"),
     email: normalizedEmailSchema,
     name: trimmedString(1, 200),
     activation: identityActivationSchema.default({ mode: "invitation" }),
-    jobTitle: trimmedString(0, 200).optional(),
+    jobTitle: organizationIdentityJobTitleSchema,
     biography: trimmedString(0, 5000).optional(),
     links: linksSchema.optional(),
     showOnOrganizationProfile: z.boolean().default(true),
@@ -131,11 +138,29 @@ export const identityCreateSchema = z.discriminatedUnion("userReference", [
 export const currentUserIdentityCreateSchema = z.object({
   emailId: databaseIdSchema.nullable(),
   organizationId: databaseIdSchema,
+  jobTitle: organizationIdentityJobTitleSchema,
 });
 
-/** The signed-in user accepts one pending identity invitation addressed to them. */
-export const currentUserIdentityAcceptSchema = z.object({
-  transition: z.object({ state: z.literal("active") }),
+/**
+ * When a representation ended: an instant no later than now. The portal
+ * offers a calendar date and turns it into the end of that day in the
+ * viewer's zone at the presentation boundary; "today" sends no instant and
+ * the server records the moment it saves. Omitted means now.
+ */
+export const identityEndedAtSchema = z.iso
+  .datetime({ precision: 3, error: "Choose the date the representation ended" })
+  .refine((value) => Date.parse(value) <= Date.now(), "The end date can't be in the future");
+
+/**
+ * The signed-in user changes one of their own identities: accepts a pending
+ * invitation addressed to them, or ends an identity they hold. Ending needs
+ * no reason; it is their own representation.
+ */
+export const currentUserIdentityUpdateSchema = z.object({
+  transition: z.discriminatedUnion("state", [
+    z.object({ state: z.literal("active") }),
+    z.object({ state: z.literal("ended"), endedAt: identityEndedAtSchema.optional() }),
+  ]),
 });
 
 /** Bearer proof sent to the invited user's verified primary email. */
@@ -148,13 +173,34 @@ export const identityInvitationPreviewResponseSchema = successResponseSchema.ext
   recipientEmail: normalizedEmailSchema,
 });
 
+/**
+ * Reinstating an ended identity: the owner asks for a link to the identity's
+ * own address and confirms it, signed in, with the emailed token.
+ */
+export const identityReinstatementRequestResponseSchema = successResponseSchema.extend({
+  /** Where the link was sent: the identity's own address. */
+  recipientEmail: normalizedEmailSchema,
+});
+
+/** Bearer proof sent to the identity's own address. */
+export const identityReinstatementLinkRequestSchema = identityInvitationLinkRequestSchema;
+
+export const identityReinstatementPreviewResponseSchema = identityInvitationPreviewResponseSchema.extend({
+  identityId: databaseIdSchema,
+});
+
 export const identityProfileUpdateSchema = z
   .object(identityProfileFields)
   .refine((value) => Object.keys(value).length > 0, "At least one identity profile field is required");
 
+/**
+ * One lifecycle transition by an organization's authorized representative.
+ * `active` activates a pending identity, reinstates an ended one (the same
+ * identity, its end removed), or, for staff, starts a successor to a blocked one.
+ */
 export const identityTransitionSchema = z.discriminatedUnion("state", [
   z.object({ state: z.literal("active"), reason: trimmedString(1, 500) }),
-  z.object({ state: z.literal("ended"), reason: trimmedString(1, 500) }),
+  z.object({ state: z.literal("ended"), reason: trimmedString(1, 500), endedAt: identityEndedAtSchema.optional() }),
   z.object({ state: z.literal("blocked"), reason: trimmedString(1, 500) }),
 ]);
 export type IdentityTransition = z.infer<typeof identityTransitionSchema>;
@@ -177,10 +223,20 @@ export const IDENTITY_SORT_COLUMNS = ["user_name", "email", "organization_name",
 export const identitiesListQuerySchema = listQuerySchema(IDENTITY_SORT_COLUMNS).extend({
   memberId: databaseIdSchema.optional(),
   organizationId: databaseIdSchema.optional(),
+  organizationOnly: booleanQueryFlagSchema.optional(),
   userId: databaseIdSchema.optional(),
   active: booleanQueryFlagSchema.optional(),
   blocked: booleanQueryFlagSchema.optional(),
   source: identitySourceSchema.optional(),
+  /** Identities whose address is under this mail domain: the organization an email-first entry connects to. */
+  emailDomain: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .min(3)
+    .max(253)
+    .regex(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/, "Must be a mail domain")
+    .optional(),
 });
 export type IdentitiesListQuery = z.infer<typeof identitiesListQuerySchema>;
 export const identitiesListResponseSchema = paginatedResponseSchema("identities", actingIdentitySchema);

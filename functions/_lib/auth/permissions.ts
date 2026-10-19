@@ -1,3 +1,5 @@
+import { activeOauthAuthorizationSql, oauthPermissionCeilingSql } from "./oauth/authorization-ceiling-query";
+import { scannerCapabilities } from "../../../assets/shared/event-scanner-permissions";
 /**
  * Context-aware permission checking.
  *
@@ -41,6 +43,43 @@ interface GrantRow {
   permission: string;
   context_type: string | null;
   context_id: string | null;
+}
+
+/** Setwise grant resolution uses one bound JSON input; no caller-controlled SQL expressions. */
+export async function computeGrantsForContexts(
+  db: DatabaseLike,
+  contexts: readonly { userId: string; memberId: string | null }[],
+): Promise<PermissionGrant[][]> {
+  const rows = await all<GrantRow & { request_index: number }>(
+    db,
+    `WITH requested AS (
+       SELECT CAST(key AS INTEGER) AS request_index,
+              json_extract(value,'$.userId') AS user_id,
+              json_extract(value,'$.memberId') AS member_id FROM json_each(?)
+     )
+     SELECT requested.request_index,rp.permission,ur.context_type,ur.context_id
+     FROM requested JOIN user_roles ur ON ur.user_id=requested.user_id
+     JOIN role_permissions rp ON rp.role_id=ur.role_id
+     WHERE ur.revoked_at IS NULL
+       AND (ur.expires_at IS NULL OR ur.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+       AND (ur.member_id IS NULL OR (ur.member_id=requested.member_id AND ur.context_type='group'
+         AND EXISTS(SELECT 1 FROM group_memberships gm WHERE gm.group_id=ur.context_id
+           AND gm.user_id=ur.user_id AND gm.member_id=ur.member_id AND gm.left_at IS NULL)))
+     UNION ALL
+     SELECT requested.request_index,pg.permission,pg.context_type,pg.context_id
+     FROM requested JOIN permission_grants pg ON pg.user_id=requested.user_id
+     WHERE pg.revoked_at IS NULL
+       AND (pg.expires_at IS NULL OR pg.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
+    [JSON.stringify(contexts)],
+  );
+  const results = contexts.map(() => [] as PermissionGrant[]);
+  for (const row of rows)
+    results[row.request_index].push({
+      permission: row.permission,
+      contextType: row.context_type,
+      contextId: row.context_id,
+    });
+  return results;
 }
 
 /**
@@ -110,25 +149,41 @@ export async function computeGrantsForUser(
  * request for events:write with no event context, and must not authorize a
  * request scoped to a different event B).
  */
+function scannerLegacyCompatible(permission: string): boolean {
+  return (scannerCapabilities as readonly string[]).includes(permission);
+}
+function tokenAllowsPermission(actor: AuthAdmin, permission: string): boolean {
+  return (
+    !actor.scopeRestricted ||
+    actor.scopes?.includes(permission) === true ||
+    (scannerLegacyCompatible(permission) && actor.scopes?.includes("agenda:scan") === true)
+  );
+}
 export function hasPermission(actor: AuthAdmin, permission: string, context?: PermissionContext): boolean {
-  if (actor.scopeRestricted && actor.scopes?.includes(permission) !== true) {
+  if (!tokenAllowsPermission(actor, permission)) {
     return false;
   }
   if (!isUserBackedAuthAdmin(actor) && actor.role === "admin") {
     return true;
   }
 
-  const grants = actor.grants ?? [];
-  return grants.some((grant) => {
-    if (grant.permission !== permission) return false;
-    if (grant.contextType === null && grant.contextId === null) return true;
-    if (!context) return false;
-    return grant.contextType === context.type && grant.contextId === context.id;
-  });
+  return (actor.grants ?? []).some((grant) => permissionGrantAllows(grant, permission, context));
+}
+
+/** Canonical grant/context matching, shared by live checks and frozen OAuth ceilings. */
+export function permissionGrantAllows(
+  grant: PermissionGrant,
+  permission: string,
+  context?: PermissionContext,
+): boolean {
+  if (grant.permission !== permission && !(scannerLegacyCompatible(permission) && grant.permission === "agenda:scan"))
+    return false;
+  if (grant.contextType === null && grant.contextId === null) return true;
+  return Boolean(context && grant.contextType === context.type && grant.contextId === context.id);
 }
 
 export function requirePermission(actor: AuthAdmin, permission: string, context?: PermissionContext): void {
-  if (actor.scopeRestricted && actor.scopes?.includes(permission) !== true) {
+  if (!tokenAllowsPermission(actor, permission)) {
     throw new AppError(403, "SCOPE_REQUIRED", PERMISSION_DENIED_MESSAGE);
   }
   if (!hasPermission(actor, permission, context)) {
@@ -145,7 +200,7 @@ export function requireAnyPermission(
 ): void {
   if (permissions.some((permission) => hasPermission(actor, permission, context))) return;
 
-  if (actor.scopeRestricted && !permissions.some((permission) => actor.scopes?.includes(permission) === true)) {
+  if (!permissions.some((permission) => tokenAllowsPermission(actor, permission))) {
     throw new AppError(403, "SCOPE_REQUIRED", PERMISSION_DENIED_MESSAGE);
   }
   const scope = context ? ` (context: ${context.type}:${context.id})` : "";
@@ -203,13 +258,37 @@ export function permissionAuthorizationEvidenceForResource(
   });
 }
 
+/** Live alternatives for a trusted resource column, with delegated scopes still limiting each alternative. */
+export function anyPermissionAuthorizationEvidenceForResource(
+  actor: AuthAdmin,
+  permissions: readonly string[],
+  context: { type: string; idSql: string },
+): AuthorizationEvidence {
+  const allowed = [...new Set(permissions)].filter((permission) => tokenAllowsPermission(actor, permission));
+  if (!allowed.length) return { sql: "SELECT 1 WHERE 0", bindings: [] };
+  if (!isUserBackedAuthAdmin(actor))
+    return allowed.some((permission) => hasPermission(actor, permission))
+      ? { sql: "SELECT 1", bindings: [] }
+      : { sql: "SELECT 1 WHERE 0", bindings: [] };
+  return buildPermissionsAuthorizationEvidence(
+    actor,
+    allowed.map((permission) => ({ permission })),
+    {
+      sql: `SELECT value AS permission, ? AS context_type, ${context.idSql} AS context_id FROM json_each(?)`,
+      bindings: [context.type, JSON.stringify(allowed)],
+    },
+    "any",
+  );
+}
+
 function buildPermissionsAuthorizationEvidence(
   actor: AuthAdmin,
   unique: readonly PermissionRequirement[],
   required: AuthorizationEvidence,
+  match: "all" | "any" = "all",
 ): AuthorizationEvidence {
   if (unique.length === 0) return { sql: "SELECT 1", bindings: [] };
-  if (unique.some(({ permission }) => actor.scopeRestricted && actor.scopes?.includes(permission) !== true)) {
+  if (unique.some(({ permission }) => !tokenAllowsPermission(actor, permission))) {
     return { sql: "SELECT 1 WHERE 0", bindings: [] };
   }
   if (!isUserBackedAuthAdmin(actor)) {
@@ -218,21 +297,32 @@ function buildPermissionsAuthorizationEvidence(
       : { sql: "SELECT 1 WHERE 0", bindings: [] };
   }
 
+  const delegatedCeiling = actor.oauthAuthorizationId
+    ? `EXISTS(SELECT 1 FROM oauth_authorizations authorization
+    WHERE authorization.id=? AND authorization.user_id=actor.id AND authorization.session_id=?
+      AND ${activeOauthAuthorizationSql("authorization")} AND ${oauthPermissionCeilingSql("authorization", "requirement")}) AND (`
+    : "";
   return {
-    sql: `WITH required(permission, context_type, context_id) AS (${required.sql})
+    sql: `WITH required(permission, context_type, context_id, scanner_legacy_compatible) AS (
+            SELECT permission, context_type, context_id,
+                   permission IN (SELECT value FROM json_each(?))
+              FROM (${required.sql})
+          )
           SELECT 1
             FROM users actor
            WHERE actor.id = ? AND actor.active = 1
-             AND NOT EXISTS (
+             ${actor.sessionId ? "AND EXISTS(SELECT 1 FROM sessions active_session WHERE active_session.id=? AND active_session.user_id=actor.id AND active_session.revoked_at IS NULL AND active_session.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now'))" : ""}
+             AND ${match === "any" ? "EXISTS" : "NOT EXISTS"} (
                SELECT 1
                  FROM required requirement
-                WHERE NOT (
+                WHERE ${match === "any" ? "" : "NOT"} (
+                  ${delegatedCeiling}
                   EXISTS (
                     SELECT 1
                       FROM user_roles role
                       JOIN role_permissions role_permission ON role_permission.role_id = role.role_id
                      WHERE role.user_id = actor.id
-                       AND role_permission.permission = requirement.permission
+                       AND (role_permission.permission = requirement.permission OR (requirement.scanner_legacy_compatible=1 AND role_permission.permission='agenda:scan'))
                        AND role.revoked_at IS NULL
                        AND (role.expires_at IS NULL OR role.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
                        AND (
@@ -260,7 +350,7 @@ function buildPermissionsAuthorizationEvidence(
                     SELECT 1
                       FROM permission_grants grant_row
                      WHERE grant_row.user_id = actor.id
-                       AND grant_row.permission = requirement.permission
+                       AND (grant_row.permission = requirement.permission OR (requirement.scanner_legacy_compatible=1 AND grant_row.permission='agenda:scan'))
                        AND grant_row.revoked_at IS NULL
                        AND (grant_row.expires_at IS NULL OR grant_row.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
                        AND (
@@ -270,10 +360,18 @@ function buildPermissionsAuthorizationEvidence(
                              AND grant_row.context_id = requirement.context_id)
                        )
                   )
+                  ${actor.oauthAuthorizationId ? ")" : ""}
                 )
              )
            LIMIT 1`,
-    bindings: [...required.bindings, actor.id, actor.memberId ?? null],
+    bindings: [
+      JSON.stringify(scannerCapabilities),
+      ...required.bindings,
+      actor.id,
+      ...(actor.sessionId ? [actor.sessionId] : []),
+      ...(actor.oauthAuthorizationId ? [actor.oauthAuthorizationId, actor.sessionId ?? null] : []),
+      actor.memberId ?? null,
+    ],
   };
 }
 
@@ -335,7 +433,7 @@ interface PermissionRecipientRow {
  * Inactive identities cannot authenticate as staff and are therefore not
  * intended notification recipients.
  */
-export function staffPermissionPredicate(userAlias = "u"): string {
+export function staffPermissionPredicate(userAlias = "u", globalOnly = false): string {
   return `(
     EXISTS (
       SELECT 1
@@ -343,6 +441,7 @@ export function staffPermissionPredicate(userAlias = "u"): string {
       JOIN role_permissions rp ON rp.role_id = ur.role_id
       WHERE ur.user_id = ${userAlias}.id
         AND rp.permission = ?
+        ${globalOnly ? "AND ur.context_type IS NULL AND ur.context_id IS NULL AND ur.member_id IS NULL" : ""}
         AND ur.revoked_at IS NULL
         AND (ur.expires_at IS NULL OR ur.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
     )
@@ -351,6 +450,7 @@ export function staffPermissionPredicate(userAlias = "u"): string {
       FROM permission_grants pg
       WHERE pg.user_id = ${userAlias}.id
         AND pg.permission = ?
+        ${globalOnly ? "AND pg.context_type IS NULL AND pg.context_id IS NULL" : ""}
         AND pg.revoked_at IS NULL
         AND (pg.expires_at IS NULL OR pg.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
     )

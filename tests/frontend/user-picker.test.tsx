@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { UserPicker, type PickedUser } from "../../assets/ts/components/UserPicker";
 import { getJson } from "../../assets/ts/shared/api-client";
 import type { UserCatalogItem } from "../../assets/shared/schemas/user-catalog";
+import { usersListResponseSchema } from "../../assets/shared/schemas/user-management";
 
 vi.mock("../../assets/ts/shared/api-client", () => ({ getJson: vi.fn() }));
 
@@ -35,6 +36,8 @@ function user(id: string, email: string): UserCatalogItem {
     first_name: null,
     last_name: null,
     organization_name: null,
+    job_title: null,
+    headshotUrl: null,
   };
 }
 
@@ -153,6 +156,35 @@ describe("UserPicker request ordering", () => {
     expect(container.textContent).toContain("new@example.test");
   });
 
+  it("distinguishes namesakes by the acting identity and shows a portrait or shared initials", async () => {
+    vi.useFakeTimers();
+    vi.mocked(getJson).mockResolvedValue({
+      users: [
+        {
+          ...user("analyst", "analyst@example.test"),
+          first_name: "Ada",
+          last_name: "Lovelace",
+          job_title: "Chief analyst",
+          organization_name: "Analytical Engines",
+          headshotUrl: "/api/v1/users/analyst/headshot",
+        },
+        { ...user("individual", "individual@example.test"), first_name: "Ada", last_name: "Lovelace" },
+      ],
+    });
+    const { container, input } = await mountPicker();
+    await search(input, "Ada");
+    await act(async () => {
+      await flush();
+    });
+    const rows = container.querySelectorAll(".pk-person-cell");
+    expect(rows).toHaveLength(2);
+    expect(rows[0]?.textContent).toContain("Chief analyst at Analytical Engines");
+    expect(rows[0]?.querySelector("img")?.getAttribute("src")).toContain("/api/v1/users/analyst/headshot");
+    expect(rows[1]?.textContent).toContain("Appears as themselves");
+    expect(rows[1]?.querySelector(".pk-avatar__initials")?.textContent).toBe("AL");
+    expect(container.textContent).not.toContain("individual@example.test");
+  });
+
   it("reports a current search failure", async () => {
     vi.useFakeTimers();
     vi.mocked(getJson).mockRejectedValueOnce(new Error("search unavailable"));
@@ -232,12 +264,32 @@ describe("UserPicker response contract", () => {
     // refused every reply and reported "Could not search users."
     const [url, schema] = vi.mocked(getJson).mock.calls[0];
     expect(url).toContain("/api/v1/users?");
-    const usersListReply = {
+    // Built through the list's own response contract, so the picker is held to
+    // what the endpoint can actually answer with rather than to a literal.
+    const usersListReply = usersListResponseSchema.parse({
       users: [
-        { id: "00000000-0000-4000-8000-000000000001", email: "admin@pkic.org", first_name: "PKIC", last_name: "Admin" },
+        {
+          id: "00000000-0000-4000-8000-000000000001",
+          email: "admin@pkic.org",
+          first_name: "PKIC",
+          last_name: "Admin",
+          active: 1,
+          created_at: "2026-01-01T00:00:00.000Z",
+          headshotUrl: null,
+          member_id: null,
+          member_category: null,
+          member_status: null,
+          member_organization_id: null,
+          member_organization_name: null,
+          links: [],
+          membership: null,
+          type: "contact_only",
+          organizationNames: [],
+          organizationCount: 0,
+        },
       ],
       page: { limit: 8, offset: 0, total: 1, hasMore: false },
-    };
+    });
     expect(schema.safeParse(usersListReply).success).toBe(true);
     const catalogReply = {
       users: [{ ...usersListReply.users[0], organization_name: "PKI Consortium" }],

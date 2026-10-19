@@ -16,15 +16,15 @@ import { useState } from "preact/hooks";
 import { confirmAction } from "../../../../components/ConfirmDialog";
 import { postJson } from "../../../../shared/api-client";
 import { userAnonymizeResponseSchema } from "../../../../../shared/schemas/user-management";
-import { userGravatarImportResponseSchema } from "../../../../../shared/schemas/route-contracts-headshots";
-import { confirmHeadshotUsage } from "../../../../shared/headshot/controller";
-import { ADMIN_HEADSHOT_DISCLAIMER } from "../../../../shared/headshot/AdminHeadshotManager";
+import { IMPORT_GRAVATAR_LABEL, importUserGravatar } from "../../../../shared/headshot/user-headshot";
 import type { MenuItem } from "../../../../ui/Menu";
 import { toast } from "../../ui";
+import { copyText } from "../../../../shared/clipboard";
 import type { UserDetail as UserRecord } from "./model";
 
 export interface UserRecordCommandOptions {
-  user: UserRecord;
+  /** The loaded record; while it loads there is nothing to command. */
+  user: UserRecord | null;
   /** Whether this reader may change the record at all. */
   editable: boolean;
   /** Whether the record's own subject is reading it and may change their own fields. */
@@ -34,46 +34,42 @@ export interface UserRecordCommandOptions {
   /** Whether the fields are open right now, so the command that opens them is not offered twice. */
   editing: boolean;
   onEdit: () => void;
+  /** Opens the person's professional profile, the page their public profile is rendered from. */
+  onOpenProfile: () => void;
   /** Re-reads the record after a command changes it. */
   reload: () => Promise<void>;
 }
 
 export function useUserRecordCommands(options: UserRecordCommandOptions): MenuItem[] {
-  const { user, editable, selfEditable, canWrite, canAnonymize, editing, onEdit, reload } = options;
+  const {
+    user: loaded,
+    editable,
+    selfEditable,
+    canWrite,
+    canAnonymize,
+    editing,
+    onEdit,
+    onOpenProfile,
+    reload,
+  } = options;
   const [anonymizing, setAnonymizing] = useState(false);
   const [importingGravatar, setImportingGravatar] = useState(false);
 
+  if (!loaded) return [];
+  const user = loaded;
+
   async function copyRecordLink() {
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      toast("Record link copied", "success");
-    } catch {
-      // Clipboard access is refused in some browsers and every insecure
-      // context; say so rather than leaving the reader wondering.
-      toast("Your browser would not let the page copy the link", "error");
-    }
+    await copyText(window.location.href, {
+      copied: "Record link copied",
+      failed: "Your browser would not let the page copy the link",
+      notify: toast,
+    });
   }
 
-  /**
-   * Fetches the address's public Gravatar and stores it as the portrait.
-   *
-   * The same confirmation an upload asks for: whichever way the picture
-   * arrives, somebody is asserting the consortium may publish it.
-   */
   async function importGravatar() {
-    const accepted = await confirmHeadshotUsage({
-      title: "Before importing a photo",
-      texts: ADMIN_HEADSHOT_DISCLAIMER,
-      confirmText: "Proceed",
-    });
-    if (!accepted) return;
     setImportingGravatar(true);
     try {
-      await postJson(`/api/v1/users/${encodeURIComponent(user.id)}/gravatar`, {}, userGravatarImportResponseSchema);
-      toast("Photo imported from Gravatar", "success");
-      await reload();
-    } catch (cause) {
-      toast((cause as Error).message, "error");
+      if (await importUserGravatar(user.id, toast)) await reload();
     } finally {
       setImportingGravatar(false);
     }
@@ -115,6 +111,7 @@ export function useUserRecordCommands(options: UserRecordCommandOptions): MenuIt
     commands.push({ id: "edit", label: "Edit profile", onSelect: onEdit });
   }
 
+  commands.push({ id: "profile", label: "View public profile", onSelect: onOpenProfile });
   commands.push({ id: "copy", label: "Copy record link", onSelect: () => void copyRecordLink() });
 
   /*
@@ -127,7 +124,7 @@ export function useUserRecordCommands(options: UserRecordCommandOptions): MenuIt
   if (editable && canWrite) {
     commands.push({
       id: "gravatar",
-      label: importingGravatar ? "Importing photo…" : "Import photo from Gravatar…",
+      label: importingGravatar ? "Importing photo…" : IMPORT_GRAVATAR_LABEL,
       disabled: importingGravatar,
       onSelect: () => void importGravatar(),
     });

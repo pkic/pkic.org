@@ -52,19 +52,72 @@ for (const viewport of [
 test("an expired administrator elevation keeps member access and offers a fresh sign-in", async ({ page }) => {
   const { signInToPortal } = await import("./helpers/portal-auth");
   const { e2eAdminEmail } = await import("../helpers/e2e-admin");
-  const { userAuthSessionResponseSchema } = await import("../../assets/shared/schemas/user-auth");
+  const { userAuthSessionResponseSchema, userAuthRequestSchema } =
+    await import("../../assets/shared/schemas/user-auth");
+  const { organizationCreateSchema, organizationCreateResponseSchema } =
+    await import("../../assets/shared/schemas/organization-management");
   await page.clock.install();
-  await signInToPortal(page, e2eAdminEmail());
+  const email = e2eAdminEmail("portal-login-layout-expiry");
+  await signInToPortal(page, email);
+  // Administrator grants alone convey no membership. Establish the independent
+  // member capacity this expiry scenario promises through the real staff command.
+  const memberInput = organizationCreateSchema.parse({
+    name: `Elevation expiry member ${Date.now()}`,
+    membershipCategory: "F",
+    memberSince: "2026-01-15",
+    identities: [{ name: "Elevation expiry representative", email, jobTitle: "Delegate" }],
+    activationReason: "Synthetic member and administrator capacity expiry coverage",
+  });
+  const created = await page.evaluate(async (body) => {
+    const response = await fetch("/api/v1/organizations", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    return { status: response.status, body: await response.json() };
+  }, memberInput);
+  expect(created.status, JSON.stringify(created.body)).toBe(201);
+  const organization = organizationCreateResponseSchema.parse(created.body).organization;
+  expect(organization.identities).toEqual(
+    expect.arrayContaining([expect.objectContaining({ email, state: "active" })]),
+  );
+  await page.context().clearCookies();
+  await page.reload();
+  await signInToPortal(page, email);
   await page.goto("/portal/#/organizations");
   await expect(page.getByRole("heading", { name: "Organizations", exact: true })).toBeVisible();
   const response = await page.request.get("/api/v1/auth/session");
+  expect(response.status()).toBe(200);
   const session = userAuthSessionResponseSchema.parse(await response.json());
-  const deadline = Math.min(Date.parse(session.expiresAt), Date.parse(session.staff?.expiresAt ?? session.expiresAt));
-  await page.clock.fastForward(Math.max(0, deadline - Date.now()) + 2000);
+  expect(session.member).toBeDefined();
+  expect(session.staff).toBeDefined();
+  const staff = session.staff;
+  if (!staff?.expiresAt || !staff.idleExpiresAt) throw new Error("Expected a staff elevation with both deadlines");
+  const deadline = Math.min(Date.parse(staff.expiresAt), Date.parse(staff.idleExpiresAt));
+  const memberDeadline = Math.min(Date.parse(session.expiresAt), Date.parse(session.idleExpiresAt));
+  expect(deadline + 2000).toBeLessThan(memberDeadline);
+  const browserNow = await page.evaluate(() => Date.now());
+  await page.clock.fastForward(Math.max(0, deadline - browserNow) + 2000);
   await expect(page.getByRole("alert")).toContainText("Administrator access expired");
   await expect(page.getByText("You are still signed in with your other portal access.")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Organizations", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Sign out and sign in again" }).click();
   await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toBeVisible();
-  expect(await page.evaluate(() => sessionStorage.getItem("pkic_portal_return_path"))).toBe("#/organizations");
+  // Intentional sign-out clears the old recovery key; the current hash is the
+  // canonical destination carried by the next sign-in request.
+  await expect(page).toHaveURL(/\/portal\/#\/organizations$/);
+  await openEmailSignIn(page);
+  await page.getByLabel("Work email").fill(email);
+  const nextSignIn = page.waitForResponse(
+    (result) => new URL(result.url()).pathname === "/api/v1/auth/request-link" && result.request().method() === "POST",
+  );
+  await page.getByRole("button", { name: "Send sign-in link" }).click();
+  const requested = await nextSignIn;
+  expect(requested.status()).toBe(200);
+  expect(userAuthRequestSchema.parse(requested.request().postDataJSON())).toMatchObject({
+    email,
+    returnPath: "/organizations",
+  });
+  await expect(page.getByText("you'll receive a sign-in link shortly", { exact: false })).toBeVisible();
 });

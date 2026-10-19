@@ -1,3 +1,4 @@
+import { prepareUserLifecyclePublication } from "./user-lifecycle-publication";
 import { first } from "../db/queries";
 import { AppError } from "../errors";
 import type { DatabaseLike, StatementLike, UserBackedAuthAdmin } from "../types";
@@ -9,6 +10,8 @@ import { buildUserAccessOffboardingStatements } from "./membership/offboarding";
 import { prepareBadgeRenderJobsForUser } from "./badge-render-job-statements";
 import { prepareRotateUserProposalSpeakerManageSecrets } from "./registrations/manage-capability-revocation";
 import { authorizedUserMutationDb } from "./user-management-authorization";
+import { prepareAffiliationRedaction } from "./identities/affiliation-redaction";
+import { prepareLiveSessionAnonymization } from "./live-session/room-erasure";
 
 interface AnonymizeUserRow {
   id: string;
@@ -32,13 +35,14 @@ export async function anonymizeUser(db: DatabaseLike, actor: UserBackedAuthAdmin
   const redactedEmail = `redacted-${user.id}@anonymized.invalid`;
   const authorizedDb = authorizedUserMutationDb(db, actor, ["users:anonymize"]);
   const statements: StatementLike[] = [
+    prepareUserLifecyclePublication(authorizedDb, user.id, at, "anonymize"),
     authorizedDb
       .prepare(
         `UPDATE users
          SET email = ?, normalized_email = ?, pending_email = NULL, pending_email_expires_at = NULL,
              pending_email_change_registration_id = NULL,
-             first_name = NULL, last_name = NULL, preferred_name = NULL, organization_name = NULL,
-             job_title = NULL, biography = NULL, links_json = NULL, data_json = NULL,
+             first_name = NULL, last_name = NULL, preferred_name = NULL,
+             data_json = NULL,
              headshot_r2_key = NULL, headshot_updated_at = NULL,
              active = 0, is_ec_member = 0, pii_redacted_at = ?, updated_at = ?
          WHERE id = ? AND pii_redacted_at IS NULL AND updated_at = ?`,
@@ -55,7 +59,6 @@ export async function anonymizeUser(db: DatabaseLike, actor: UserBackedAuthAdmin
       .prepare(
         `UPDATE registrations
             SET confirmation_link_secret = NULL,
-                registration_organization_name = NULL, registration_job_title = NULL,
                 pending_confirmation_deadline_at = NULL,
                 confirmation_reminder_sent_at = NULL,
                 manage_link_secret = lower(hex(randomblob(32))),
@@ -64,6 +67,8 @@ export async function anonymizeUser(db: DatabaseLike, actor: UserBackedAuthAdmin
       )
       .bind(at, user.id),
     prepareRotateUserProposalSpeakerManageSecrets(authorizedDb, user.id),
+    ...prepareAffiliationRedaction(authorizedDb, user.id, at),
+    ...prepareLiveSessionAnonymization(authorizedDb, user.id, at),
     authorizedDb
       .prepare("UPDATE user_roles SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL")
       .bind(at, user.id),
@@ -72,6 +77,10 @@ export async function anonymizeUser(db: DatabaseLike, actor: UserBackedAuthAdmin
       .bind(at, user.id),
     authorizedDb.prepare("DELETE FROM passkey_credentials WHERE user_id = ?").bind(user.id),
     authorizedDb.prepare("DELETE FROM user_emails WHERE user_id = ?").bind(user.id),
+    // Independence disclosures keep their version and review trail; the free-text answers go.
+    authorizedDb
+      .prepare("UPDATE proposal_speaker_independent_disclosures SET answers_json = '{}' WHERE user_id = ?")
+      .bind(user.id),
     ...(await buildUserAccessOffboardingStatements(authorizedDb, {
       userId: user.id,
       causeKey: `user:${user.id}:anonymize:${user.updated_at}`,

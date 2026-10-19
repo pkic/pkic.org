@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { confirmAction } from "../../../../components/ConfirmDialog";
-import { EmptyState } from "../../../../ui/RecordEmptyState";
+import { EmptyState } from "../../../../ui/EmptyState";
 import { Alert } from "../../../../ui/Alert";
 import { Badge } from "../../../../ui/Badge";
 import { Button } from "../../../../ui/Button";
@@ -211,10 +211,10 @@ export function Grants({
               {formError && <Alert tone="danger">{formError}</Alert>}
 
               <div class="pk-cluster">
-                <Button type="submit" variant="primary" size="sm" loading={submitting}>
+                <Button type="submit" variant="primary" loading={submitting}>
                   {submitting ? "Granting…" : "Grant permission"}
                 </Button>
-                <Button variant="secondary" size="sm" disabled={submitting} onClick={closeForm}>
+                <Button variant="secondary" disabled={submitting} onClick={closeForm}>
                   Cancel
                 </Button>
               </div>

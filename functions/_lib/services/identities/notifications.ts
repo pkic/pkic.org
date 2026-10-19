@@ -14,7 +14,7 @@ export const IDENTITY_INVITATION_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 export async function loadIdentityNotificationContext(
   db: DatabaseLike,
-  memberId: string,
+  organizationId: string,
   userId: string,
   requireActiveUser: boolean,
 ): Promise<IdentityNotificationContext> {
@@ -24,10 +24,9 @@ export async function loadIdentityNotificationContext(
             trim(COALESCE(user.first_name, '') || ' ' || COALESCE(user.last_name, '')) AS recipient_name,
             organization.name AS organization_name
        FROM users user
-       JOIN members member ON member.id = ? AND member.organization_id IS NOT NULL
-       JOIN organizations organization ON organization.id = member.organization_id
+       JOIN organizations organization ON organization.id = ?
       WHERE user.id = ? AND (? = 0 OR user.active = 1)`,
-    [memberId, userId, requireActiveUser ? 1 : 0],
+    [organizationId, userId, requireActiveUser ? 1 : 0],
   );
   if (!context) throw new AppError(404, "USER_NOT_FOUND", "Active user not found");
   return context;
@@ -39,7 +38,9 @@ export function prepareIdentityNotification(
     identityId: string;
     userId: string;
     context: IdentityNotificationContext;
-    action: "invited" | "activated" | "blocked" | "ended";
+    action: "invited" | "activated" | "reinstated" | "linked" | "blocked" | "ended";
+    /** The email domain an automatic link followed. */
+    domain?: string;
     invitationToken?: string;
     outboxId?: string;
     at: string;
@@ -51,12 +52,16 @@ export function prepareIdentityNotification(
   const messages = {
     invited: `An authorized contact invited you to act for ${input.context.organization_name}. Use the link below to review and accept this identity. If the link is unavailable, sign in to the portal and open Account Settings.`,
     activated: `Your acting identity for ${input.context.organization_name} is now active.`,
+    reinstated: `Your acting identity for ${input.context.organization_name} is active again. Its end was removed, and the group seats and roles that ended with it are restored where they are still available.`,
+    linked: `You're now linked to ${input.context.organization_name} (from your @${input.domain ?? ""} email). If this is not your organization, sign in to the portal and choose "Not my organization".`,
     blocked: `An authorized contact blocked your acting identity for ${input.context.organization_name}.`,
     ended: `Your acting identity for ${input.context.organization_name} has ended.`,
   } as const;
   const subjects = {
     invited: `Invitation to act for ${input.context.organization_name}`,
     activated: `Your identity for ${input.context.organization_name} is active`,
+    reinstated: `Your identity for ${input.context.organization_name} is active again`,
+    linked: `You're now linked to ${input.context.organization_name}`,
     blocked: `Your identity for ${input.context.organization_name} was blocked`,
     ended: `Your identity for ${input.context.organization_name} ended`,
   } as const;

@@ -17,26 +17,23 @@ import { Grants } from "../../assets/ts/member-flows/portal/sections/access-cont
 import { RoleAssignForm } from "../../assets/ts/member-flows/portal/sections/access-control/roles/RoleAssignForm";
 import { RoleDetail } from "../../assets/ts/member-flows/portal/sections/access-control/roles/RoleDetail";
 import { RoleList } from "../../assets/ts/member-flows/portal/sections/access-control/roles/RoleList";
-import { PermissionCheckboxes } from "../../assets/ts/member-flows/portal/sections/access-control/roles/RolePermissions";
-import { PERMISSIONS, type Permission } from "../../assets/shared/schemas/permissions";
+import { RolePermissions } from "../../assets/ts/member-flows/portal/sections/access-control/roles/RolePermissions";
+import type { Permission } from "../../assets/shared/schemas/permissions";
 import { accessGrantCreateSchema, userRoleAssignSchema } from "../../assets/shared/schemas/access-control";
+import {
+  apiError,
+  ASSIGNMENT,
+  CANDIDATE,
+  GRANT,
+  json,
+  pathOf,
+  pickCandidate,
+  ROLE,
+  settle,
+} from "./helpers/access-control-fixtures";
 import { rowActionControlNames } from "./helpers/row-actions";
 
 const mounted: HTMLElement[] = [];
-
-function json(value: unknown, status = 200): Response {
-  return new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
-}
-
-function apiError(code: string, message: string, status: number): Response {
-  return json({ error: { code, message } }, status);
-}
-
-async function settle(): Promise<void> {
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  });
-}
 
 function mount(node: preact.ComponentChildren): HTMLElement {
   const container = document.createElement("div");
@@ -44,11 +41,6 @@ function mount(node: preact.ComponentChildren): HTMLElement {
   mounted.push(container);
   void act(() => render(node, container));
   return container;
-}
-
-function pathOf(input: RequestInfo | URL): string {
-  const href = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-  return new URL(href, location.origin).pathname;
 }
 
 /** The control a `<label>` points at, resolved through the `for`/`id` pair. */
@@ -70,46 +62,6 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });
-
-const GRANT = {
-  id: "00000000-0000-4000-8000-000000000001",
-  userId: "00000000-0000-4000-8000-000000000002",
-  userEmail: "staff@example.test",
-  permission: "access:grant",
-  contextType: null,
-  contextId: null,
-  expiresAt: null,
-  createdAt: "2026-01-01T00:00:00.000Z",
-};
-
-const CANDIDATE = {
-  id: "30000000-0000-4000-8000-000000000001",
-  email: "grace@example.test",
-  first_name: "Grace",
-  last_name: "Hopper",
-  organization_name: null,
-};
-
-const ROLE = {
-  id: "role-custom-1",
-  name: "custom_reviewer",
-  description: "Reviews things",
-  isSystemRole: false,
-  permissions: ["events:read", "events:write"],
-  createdAt: "2026-01-01T00:00:00.000Z",
-  updatedAt: "2026-01-01T00:00:00.000Z",
-};
-
-const ASSIGNMENT = {
-  userRoleId: "10000000-0000-4000-8000-000000000001",
-  userId: "20000000-0000-4000-8000-000000000001",
-  name: "Ada Lovelace",
-  email: "ada@example.test",
-  contextType: null,
-  contextId: null,
-  expiresAt: null,
-  createdAt: "2026-01-02T00:00:00.000Z",
-};
 
 /**
  * Stubs the grants list plus whatever the caller adds, and records every
@@ -142,26 +94,6 @@ function stubGrantsApi(extra?: (path: string, init?: RequestInit) => Response | 
   return requests;
 }
 
-/** Drives the debounced UserPicker to a selection, as a reader would. */
-async function pickCandidate(container: HTMLElement): Promise<void> {
-  vi.useFakeTimers();
-  const search = container.querySelector<HTMLInputElement>('input[placeholder="Search by email or name…"]')!;
-  void act(() => {
-    search.value = "grace";
-    search.dispatchEvent(new Event("input", { bubbles: true }));
-  });
-  await act(async () => {
-    await vi.advanceTimersByTimeAsync(250);
-  });
-  vi.useRealTimers();
-  await settle();
-  const option = [...container.querySelectorAll("button")].find((button) =>
-    button.textContent?.includes(CANDIDATE.email),
-  );
-  if (!option) throw new Error("UserPicker offered no match");
-  void act(() => option.click());
-}
-
 function submitGrantForm(container: HTMLElement): Promise<void> {
   const form = container.querySelector<HTMLFormElement>('form[aria-label="Grant a permission"]')!;
   return act(async () => {
@@ -191,7 +123,7 @@ describe("Grants on the design system", () => {
     container = mount(<Grants canGrant canRevoke grantSegment="new" onNavigate={() => {}} />);
     await settle();
 
-    // Single-control fields are labelled by a real for/id pair …
+    // Single-control fields are labeled by a real for/id pair …
     expect(controlFor(container, "Permission").tagName).toBe("SELECT");
     const expires = controlFor(container, "Expires (optional)");
     expect(expires.getAttribute("type")).toBe("datetime-local");
@@ -203,7 +135,7 @@ describe("Grants on the design system", () => {
       "Leave empty for a grant that never expires.",
     );
 
-    // The user picker is a group; the target type has one labelled control.
+    // The user picker is a group; the target type has one labeled control.
     const legends = [...container.querySelectorAll("legend")].map((legend) => legend.textContent);
     expect(legends).toEqual(["User"]);
     expect(controlFor(container, "Target").tagName).toBe("SELECT");
@@ -314,12 +246,11 @@ describe("RoleDetail on the design system", () => {
     expect(container.querySelector("caption")?.textContent).toBe(`${ROLE.name} assignees`);
     expect(rowActionControlNames(container)).toEqual([`Actions for ${ASSIGNMENT.name}`]);
     expect(container.textContent).toContain(ASSIGNMENT.name);
-    expect(container.textContent).toContain(ASSIGNMENT.email);
+    expect(container.textContent).not.toContain(ASSIGNMENT.email);
 
-    // Permissions are listed as identifiers, in the monospace face.
-    expect([...container.querySelectorAll(".pk-mono")].map((node) => node.textContent)).toEqual(
-      expect.arrayContaining(ROLE.permissions),
-    );
+    // Permissions read by area in the shared matrix, read only.
+    expect(container.querySelector(".pk-permission-matrix__header")).not.toBeNull();
+    expect(container.querySelector(".pk-permission-matrix__header input")).toBeNull();
   });
 
   it("says a system role is a system role in words, and offers no Edit", async () => {
@@ -394,7 +325,7 @@ describe("the role assign form", () => {
     stubAssignApi();
     const container = mount(<RoleAssignForm roleId={ROLE.id} onAssigned={vi.fn()} />);
 
-    // The user picker is grouped; the target and expiry are labelled controls.
+    // The user picker is grouped; the target and expiry are labeled controls.
     expect([...container.querySelectorAll("legend")].map((legend) => legend.textContent)).toEqual(["User"]);
     expect(controlFor(container, "Target").tagName).toBe("SELECT");
     const expires = controlFor(container, "Expires (optional)");
@@ -451,37 +382,50 @@ describe("the role assign form", () => {
   });
 });
 
-describe("the permission bundle grid", () => {
-  it("renders every permission as a real check block, not a bare label", () => {
-    const container = mount(
-      <PermissionCheckboxes selected={new Set<Permission>([PERMISSIONS[0]])} onToggle={vi.fn()} />,
-    );
+describe("the permission bundle matrix", () => {
+  it("sets a whole area by its Read and Write columns and lists an area's permissions only when a column holds several", () => {
+    const onSelect = vi.fn();
+    const container = mount(<RolePermissions selected={new Set<Permission>(["events:read"])} onSelect={onSelect} />);
+    const toggle = (name: string) =>
+      [...container.querySelectorAll("label")]
+        .find((label) => label.textContent === name)!
+        .querySelector<HTMLInputElement>("input")!;
 
-    const blocks = [...container.querySelectorAll("label.pk-check")];
-    expect(blocks).toHaveLength(PERMISSIONS.length);
-    // All three parts, every time: a label carrying only `pk-check` renders
-    // the operating system's own checkbox and no gate catches it.
-    for (const block of blocks) {
-      expect(block.querySelector("input.pk-check__input")).not.toBeNull();
-      expect(block.querySelector("span.pk-check__label")).not.toBeNull();
-    }
-    // The label wraps its control, so there is no `for` left to point nowhere.
-    expect(container.querySelector("label[for]")).toBeNull();
-    const first = blocks[0].querySelector<HTMLInputElement>("input");
-    expect(first?.checked).toBe(true);
-    expect(blocks[0].textContent).toBe(PERMISSIONS[0]);
+    // Every area of the catalog is a row, named in words rather than codes.
+    expect(container.textContent).toContain("Agenda and attendance");
+    expect(toggle("Read: Events").checked).toBe(true);
+    expect(toggle("Write: Events").checked).toBe(false);
+    // Identities has nothing to read: the column stays, disabled.
+    expect(toggle("Read: Identities").disabled).toBe(true);
+
+    void act(() => toggle("Write: Events").click());
+    expect(onSelect).toHaveBeenCalledWith(new Set(["events:read", "events:write", "events:manage"]));
+
+    // Groups has one read and one write, so the columns say it all; Events opens to its permissions and codes.
+    expect(container.querySelector('[aria-label="Groups permissions"]')).toBeNull();
+    expect(container.querySelector('[aria-label="Events permissions"]')).not.toBeNull();
+    expect(container.textContent).toContain("events:manage");
   });
 
-  it("reports a toggle once and takes every control out of play while a save is in flight", () => {
-    const onToggle = vi.fn();
-    const container = mount(<PermissionCheckboxes selected={new Set<Permission>()} onToggle={onToggle} disabled />);
+  it("takes every control out of play while a save is in flight", () => {
+    const onSelect = vi.fn();
+    const container = mount(<RolePermissions selected={new Set<Permission>()} onSelect={onSelect} disabled />);
 
     const inputs = [...container.querySelectorAll<HTMLInputElement>("input.pk-check__input")];
+    expect(inputs.length).toBeGreaterThan(0);
     expect(inputs.every((input) => input.disabled)).toBe(true);
-    // A disabled control reports nothing, so the in-flight save cannot be
-    // raced by a second toggle.
     void act(() => inputs[0].click());
-    expect(onToggle).not.toHaveBeenCalled();
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("shows only the held areas, without controls, when read only", () => {
+    const container = mount(<RolePermissions selected={new Set<Permission>(["events:read", "groups:read"])} />);
+
+    expect(container.querySelector("input")).toBeNull();
+    expect(container.textContent).toContain("Events");
+    expect(container.textContent).toContain("Groups");
+    expect(container.textContent).not.toContain("Membership");
+    expect(container.textContent).toContain("Read: yes");
   });
 });
 

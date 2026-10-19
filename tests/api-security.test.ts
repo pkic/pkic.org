@@ -1,3 +1,4 @@
+import "./helpers/app";
 import { ADMINISTRATOR_FIXTURE_USER_SQL, grantAdministrator } from "./helpers/administrator";
 /**
  * api-security.test.ts
@@ -8,8 +9,8 @@ import { ADMINISTRATOR_FIXTURE_USER_SQL, grantAdministrator } from "./helpers/ad
  *     rejects unauthenticated requests with AUTH_REQUIRED.
  *
  *  2. The session-token validation logic handles all invalid-credential
- *     scenarios (garbage token, expired session, revoked session, non-admin
- *     user, inactive admin user) and also accepts the ADMIN_API_KEY shortcut.
+ *     scenarios (garbage token, expired session, revoked session, inactive
+ *     user), refuses valid sessions without staff authority, and accepts the ADMIN_API_KEY shortcut.
  *
  *  3. Endpoints reject unsupported HTTP methods with 405.
  *
@@ -467,7 +468,7 @@ describe("session-token validation", () => {
     expect(((await response.json()) as { error?: { code?: string } }).error?.code).toBe("AUTH_REVOKED");
   });
 
-  it("rejects a token belonging to a non-admin user (role='user') → AUTH_INVALID", async () => {
+  it("refuses a valid user session without staff authority", async () => {
     const regularUserId = crypto.randomUUID();
     await env.DB.prepare(
       `
@@ -476,10 +477,10 @@ describe("session-token validation", () => {
     `,
     ).run();
     const token = await insertSession(env.DB, regularUserId, "user-token");
-    // A regular user's session must not grant admin access
+    // A valid human session does not grant staff authority.
     const response = await callUsers(token);
-    expect(response.status).toBe(401);
-    expect(((await response.json()) as { error?: { code?: string } }).error?.code).toBe("AUTH_INVALID");
+    expect(response.status).toBe(403);
+    expect(((await response.json()) as { error?: { code?: string } }).error?.code).toBe("PERMISSION_REQUIRED");
   });
 
   it("rejects a token belonging to an inactive admin (active=0) → AUTH_INVALID", async () => {

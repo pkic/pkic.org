@@ -3,11 +3,13 @@
  * The create-role view on its own: what it sends, what it says when the server
  * refuses, and what it exposes to a reader who never sees the layout.
  */
+import { controlFor } from "./helpers/labeled-control";
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { roleCreateSchema } from "../../assets/shared/schemas/access-control";
+import { roleCreateSchema, roleResponseSchema, roleUpdateSchema } from "../../assets/shared/schemas/access-control";
 import { ApiClientError } from "../../assets/ts/shared/api-client";
+import { RoleEditForm } from "../../assets/ts/member-flows/portal/sections/access-control/roles/RoleEditForm";
 import { RoleCreate } from "../../assets/ts/member-flows/portal/sections/access-control/roles/RoleCreate";
 
 const mounted: HTMLElement[] = [];
@@ -145,7 +147,7 @@ describe("RoleCreate", () => {
     // pattern written here, so the field says what the server would say.
     expect(fieldOf(name).classList.contains("pk-field--invalid")).toBe(true);
     expect(name.getAttribute("aria-invalid")).toBe("true");
-    // The reason is announced with the control rather than only coloured.
+    // The reason is announced with the control rather than only colored.
     const message = fieldOf(name).querySelector('[role="alert"]');
     expect(message?.id).toBe(name.getAttribute("aria-describedby"));
     expect(message?.textContent).toContain("Use lowercase letters, numbers, and underscores only");
@@ -227,5 +229,49 @@ describe("RoleCreate", () => {
     const cancel = [...container.querySelectorAll("button")].find((b) => b.textContent === "Cancel")!;
     void act(() => cancel.click());
     expect(onCancel).toHaveBeenCalled();
+  });
+});
+
+describe("RoleEditForm", () => {
+  it("saves a system permission bundle through the shared contract without sending a name", async () => {
+    let captured: unknown;
+    const systemRole = roleResponseSchema.parse(role({ isSystemRole: true, permissions: ["events:read"] }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        captured = JSON.parse(init?.body as string);
+        return new Response(JSON.stringify({ role: { ...systemRole, permissions: [] } }), {
+          headers: { "content-type": "application/json" },
+        });
+      }),
+    );
+    const onSaved = vi.fn();
+    const container = mount(<RoleEditForm role={systemRole} onSaved={onSaved} onCancel={vi.fn()} />);
+    expect(container.querySelector('[name="name"]')).toBeNull();
+    expect(container.querySelector("form")?.noValidate).toBe(true);
+    const permission = controlFor<HTMLInputElement>(container, "Read: Events");
+    void act(() => permission.click());
+    await submit(container);
+    const parsed = roleUpdateSchema.parse(captured);
+    expect(parsed.name).toBeUndefined();
+    expect(parsed.permissions).toEqual([]);
+    expect(parsed.revision).toBe(systemRole.updatedAt);
+    expect(onSaved).toHaveBeenCalledOnce();
+  });
+
+  it("validates custom-role names through the shared contract before sending", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const container = mount(
+      <RoleEditForm role={roleResponseSchema.parse(role())} onSaved={vi.fn()} onCancel={vi.fn()} />,
+    );
+    const name = labeledControl<HTMLInputElement>(container, "Name");
+    type(name, "Invalid name");
+    await submit(container);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(name.getAttribute("aria-invalid")).toBe("true");
+    expect(fieldOf(name).textContent).toContain(
+      roleUpdateSchema.safeParse({ name: "Invalid name", revision: "current" }).error?.issues[0].message,
+    );
   });
 });

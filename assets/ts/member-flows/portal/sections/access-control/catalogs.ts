@@ -8,7 +8,7 @@ import {
 } from "../../../../../shared/schemas/access-control";
 import type { ServerCatalog } from "../../../../shared/server-catalog";
 
-/** Bounded, schema-validated catalogues used by the global access-control forms. */
+/** Bounded, schema-validated catalogs used by the global access-control forms. */
 export const roleCatalog: ServerCatalog<Role, z.infer<typeof rolesListResponseSchema>> = {
   endpoint: "/api/v1/roles",
   responseSchema: rolesListResponseSchema,

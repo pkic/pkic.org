@@ -6,20 +6,26 @@ import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { getJson } from "../../../../shared/api-client";
 import { userDetailResponseSchema } from "../../../../../shared/schemas/user-management";
 import { fmt } from "../../ui";
-import { UserEmailAddressesPanel } from "./UserAccountPanels";
+import { EmailAddressesPanel } from "./EmailAddressesPanel";
+import { IdentityInvitationsPanel } from "./IdentityInvitationsPanel";
+import { UserAccessPanel } from "./UserAccessPanel";
+import { PasskeySettings } from "../../../../components/passkey-settings";
+import { NotificationPreferencesCard } from "../NotificationPreferencesCard";
 import {
   MemberAvailabilityPanel,
   MemberPrivacyPanel,
   MemberSkillsPanel,
   MemberStandingPanel,
 } from "./UserMemberProfilePanels";
-import { UserAdministrationSection } from "./UserAdministrationSection";
 import { UserAffiliationsPanel } from "./UserAffiliationsPanel";
-import { UserIdentityGrantForm } from "./UserIdentityGrantForm";
 import { UserParticipationHistory } from "./UserParticipationHistory";
 import { UserProfileEditor } from "./UserProfileEditor";
-import { CURRENT_USER_API, SelfProfilePanel } from "./SelfProfilePanel";
-import { profile as profileSignal, saveProfile } from "../../state";
+import { CURRENT_USER_API } from "./current-user-api";
+import { ActingIdentityPanel } from "./ActingIdentityPanel";
+import { GroupAttendanceBar } from "./GroupAttendanceBar";
+import { identityEntryName } from "./UserAffiliationRow";
+import { SelfAccountNamesEditor } from "./SelfAccountNamesEditor";
+import { portalSession, saveProfile } from "../../state";
 import { myProfileSchema } from "../../../../../shared/schemas/me";
 import { Badge } from "../../../../components/Badge";
 import { usePortalHashLocation } from "../../hash-location";
@@ -29,19 +35,14 @@ import { Breadcrumb } from "../../../../ui/Breadcrumb";
 import { ProfileHeader } from "../../../../ui/ProfileHeader";
 import {
   userParticipationResponseSchema,
-  type UserGroupParticipation,
   type UserParticipation,
 } from "../../../../../shared/schemas/user-participation";
-import { Button } from "../../../../ui/Button";
-import { IconPencil } from "../../../../components/icons";
 import { UserPortrait } from "./UserPortrait";
 import { useUserRecordCommands } from "./use-user-record-commands";
 import { Menu } from "../../../../ui/Menu";
-import { DataTable, type DataTableColumn } from "../../../../ui/DataTable";
 import { DescriptionList } from "../../../../ui/DescriptionList";
 import { userRecordFacts } from "./user-record-facts";
 import { LinkList } from "../../../../ui/LinkList";
-import { Meter } from "../../../../ui/Meter";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { StatCard } from "../../../../ui/StatCard";
 // `pk-datalist`, `pk-break` and `pk-nowrap`'s neighbours ship in a component
@@ -49,18 +50,6 @@ import { StatCard } from "../../../../ui/StatCard";
 // class names is the one that has to pull the sheet in.
 import "../../../../ui/Content.css";
 import "./UserDetail.css";
-/*
- * Attendance tone thresholds. Product policy, not a system decision: the
- * design system's Meter takes a tone and says nothing about what counts as
- * good attendance for this consortium.
- */
-function attendanceTone(attended: number, held: number): "ok" | "warn" | "danger" {
-  const rate = held === 0 ? 0 : attended / held;
-  if (rate >= 0.75) return "ok";
-  if (rate >= 0.5) return "warn";
-  return "danger";
-}
-
 /** The headline rate, or an em dash while no meeting has been held. */
 function attendanceHeadline(participation: UserParticipation | null): string {
   if (!participation || participation.summary.meetingsHeld === 0) return "—";
@@ -79,21 +68,20 @@ export interface UserPermissions {
 export function UserDetail({
   userId,
   section,
-  segment,
   permissions,
   viewerUserId,
 }: {
   userId: string;
-  /** A page under the record: `affiliations` with segment `new` is the identity grant (#107). */
+  /**
+   * A page under the record: `edit` opens the record with its profile fields open.
+   */
   section?: string;
-  segment?: string;
   permissions: UserPermissions;
   /** Who is reading, so the record knows when its subject is them. */
   viewerUserId?: string;
 }) {
   const [, navigate] = usePortalHashLocation();
   const recordPath = `/users/${encodeURIComponent(userId)}`;
-  const grantingIdentity = section === "affiliations" && segment === "new" && permissions.canManageMembership;
   // Participation is its own resource: it is the expensive half of the record
   // and answers a different question from the detail, so it loads separately
   // and the rest of the page does not wait on it.
@@ -110,6 +98,7 @@ export function UserDetail({
    * `users:read`, and their own record is the one page they can still open.
    */
   const isSelf = viewerUserId !== undefined && viewerUserId === userId;
+  const session = portalSession.value;
   const canRead = permissions.canRead || isSelf;
   const {
     data: user,
@@ -122,7 +111,13 @@ export function UserDetail({
     const response = await getJson(`/api/v1/users/${encodeURIComponent(userId)}`, userDetailResponseSchema);
     return response.user;
   }, [canRead, userId]);
-  const selfProfile = isSelf ? profileSignal.value : null;
+
+  const [participationVersion, setParticipationVersion] = useState(0);
+  /** Reloads the record and the participation drawn beside it. */
+  async function reload(): Promise<void> {
+    await load();
+    setParticipationVersion((version) => version + 1);
+  }
 
   useEffect(() => {
     if (!canRead) return;
@@ -139,7 +134,9 @@ export function UserDetail({
     return () => {
       cancelled = true;
     };
-  }, [canRead, userId]);
+    // Each reload of the record re-reads it too: ending or reinstating an
+    // identity closes or reopens the seats it lists.
+  }, [canRead, userId, participationVersion]);
 
   /**
    * Re-reads the signed-in member's own profile after they change it.
@@ -150,8 +147,33 @@ export function UserDetail({
    */
   async function refreshSelfProfile(): Promise<void> {
     saveProfile(await getJson(CURRENT_USER_API, myProfileSchema));
-    await load();
+    await reload();
   }
+
+  // `/users/:id/edit` opens the record with its profile fields open: the edit view other pages link to.
+  const [editingProfile, setEditingProfile] = useState(section === "edit");
+  const editable = Boolean(user) && permissions.canWrite && !user?.pii_redacted_at;
+  /*
+   * The subject's own hold over their photo. It is not `editable`: a member
+   * administers nobody, including themselves, yet their portrait has always
+   * been theirs to set — it just used to be set on a page of its own.
+   */
+  const selfEditable = Boolean(user) && isSelf && !user?.pii_redacted_at;
+  /*
+   * The record's own commands. Hooks run on every render, before the record
+   * may return early while it loads or is refused.
+   */
+  const recordActions = useUserRecordCommands({
+    user,
+    editable,
+    selfEditable,
+    canWrite: permissions.canWrite,
+    canAnonymize: permissions.canAnonymize,
+    editing: editingProfile,
+    onEdit: () => setEditingProfile(true),
+    onOpenProfile: () => navigate(`${recordPath}/profile`),
+    reload: load,
+  });
 
   if (!canRead) {
     return <ErrorAlert error="You need Users read permission to open a user record." />;
@@ -161,14 +183,6 @@ export function UserDetail({
   if (!user) return null;
 
   const displayName = [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email;
-  const [editingProfile, setEditingProfile] = useState(false);
-  const editable = permissions.canWrite && !user.pii_redacted_at;
-  /*
-   * The subject's own hold over their photo. It is not `editable`: a member
-   * administers nobody, including themselves, yet their portrait has always
-   * been theirs to set — it just used to be set on a page of its own.
-   */
-  const selfEditable = isSelf && !user.pii_redacted_at;
   /*
    * Who may change the photograph. The same reach the photo panel has
    * always had — staff who may write the record, and the record's own
@@ -188,73 +202,12 @@ export function UserDetail({
     user.identities.find((entry) => entry.isDefault) ??
     user.identities.find((entry) => entry.organizationId !== null) ??
     user.identities[0];
-  const identityCount = user.identities.length;
+
+  const actingEntry = isSelf
+    ? user.identities.find((entry) => entry.identityId === session?.actingIdentityId)
+    : undefined;
 
   const lede = [identity?.jobTitle, identity?.organizationName].filter(Boolean).join(" at ") || undefined;
-
-  const participationGroups = participation?.groups ?? [];
-
-  /*
-   * This table is now the record's whole statement of which groups the person
-   * sits in: a chip shelf above it said the same names with none of the
-   * standing, the role, or the attendance beside them.
-   *
-   * The attendance column is a Meter, not a hand-built bar: it is the same
-   * proportion the design system already draws, at the in-cell size. A group
-   * with no meetings yet shows a dash — there is no rate to report, and 0%
-   * would accuse someone of missing meetings that were never held.
-   */
-  const groupColumns: DataTableColumn<UserGroupParticipation>[] = [
-    {
-      id: "group",
-      header: "Group",
-      width: "primary",
-      cell: (row) => <span class="pk-strong">{row.group.name}</span>,
-    },
-    { id: "type", header: "Type", width: "fit", cell: (row) => row.group.type.singularLabel },
-    {
-      id: "title",
-      header: "Role",
-      width: "fit",
-      cell: (row) => (row.title ? <Badge status={row.title} /> : <span class="pk-muted">Member</span>),
-    },
-    {
-      id: "attendance",
-      header: "Attendance",
-      width: "fit",
-      cell: (row) =>
-        row.held === 0 ? (
-          <span class="pk-muted">—</span>
-        ) : (
-          <Meter
-            size="sm"
-            showValue
-            label={`${String(row.attended)} of ${String(row.held)} meetings attended`}
-            value={row.attended}
-            max={row.held}
-            tone={attendanceTone(row.attended, row.held)}
-          />
-        ),
-    },
-    {
-      id: "lastAttended",
-      header: "Last attended",
-      width: "fit",
-      cell: (row) => (row.lastAttendedAt ? <span class="pk-nowrap">{fmt(row.lastAttendedAt)}</span> : "—"),
-    },
-  ];
-
-  /** Copying the link is the one share affordance that needs no new feature. */
-  const recordActions = useUserRecordCommands({
-    user,
-    editable,
-    selfEditable,
-    canWrite: permissions.canWrite,
-    canAnonymize: permissions.canAnonymize,
-    editing: editingProfile,
-    onEdit: () => setEditingProfile(true),
-    reload: load,
-  });
 
   /*
    * Two lists, two questions. Contact answers "how do I reach this person",
@@ -265,8 +218,11 @@ export function UserDetail({
    */
   const { contactEmail, contactFacts, accountFacts } = userRecordFacts(user, identity, {
     // The subject's own card states and edits them instead.
-    namesStatedElsewhere: isSelf && Boolean(selfProfile),
+    readerIsSubject: isSelf,
   });
+  /* The figures read from participation alone. Until it loads — or when it is
+     refused — there is nothing to count, which is a dash, not a guess. */
+  const glanceFigure = (value: number | undefined) => (value === undefined ? "—" : String(value));
 
   return (
     <div class="pk pk-stack">
@@ -282,14 +238,9 @@ export function UserDetail({
         person is, and keeping it out of the header is what lets the same
         header carry an organization on the organization record.
       */}
-      <Breadcrumb
-        items={[
-          { label: "Users", href: usePortalHashLocation.hrefs("/users") },
-          ...(grantingIdentity
-            ? [{ label: displayName, href: usePortalHashLocation.hrefs(recordPath) }, { label: "Add identity" }]
-            : [{ label: displayName }]),
-        ]}
-      />
+      {!isSelf && (
+        <Breadcrumb items={[{ label: "Users", href: usePortalHashLocation.hrefs("/users") }, { label: displayName }]} />
+      )}
       <ProfileHeader
         media={
           /*
@@ -299,13 +250,11 @@ export function UserDetail({
             face itself, the way every network the reader already uses does
             it. A reader who may not change it sees the portrait alone.
 
-            Either way it wears the same standing: the role on the ring, and
-            `neutral` desaturating it for a deactivated account so the
-            standing reads as held-before without a second badge saying so.
+            The portrait carries no account status: an inactive account is the
+            exception, and the badge beside the name says so.
           */
           portraitEditable ? (
             <UserPortrait
-              status={{ label: user.active ? "Active" : "Inactive", tone: user.active ? "accent" : "neutral" }}
               userId={user.id}
               displayName={displayName}
               headshotUrl={user.headshotUrl ?? null}
@@ -314,15 +263,10 @@ export function UserDetail({
               /* The subject's own portrait is read by the rest of the portal
                    from the stored profile, so their change re-reads that as
                    well as the record; everybody else's is only the record. */
-              onChanged={isSelf ? refreshSelfProfile : load}
+              onChanged={isSelf ? refreshSelfProfile : reload}
             />
           ) : (
-            <Avatar
-              name={displayName}
-              src={user.headshotUrl ?? undefined}
-              size="xl"
-              status={{ label: user.active ? "Active" : "Inactive", tone: user.active ? "accent" : "neutral" }}
-            />
+            <Avatar name={displayName} src={user.headshotUrl ?? undefined} size="xl" />
           )
         }
         title={displayName}
@@ -336,54 +280,19 @@ export function UserDetail({
          */
         facts={[
           displayName === user.email ? null : user.email,
-          `Created ${fmt(user.created_at)}`,
+          isSelf ? null : `Created ${fmt(user.created_at)}`,
           user.pii_redacted_at ? "Anonymized" : null,
         ].filter((fact): fact is string => Boolean(fact))}
-        /*
-         * Message and Follow are on the record because this is a community
-         * profile and they are part of what it will offer — but they are
-         * disabled, with the reason on the control itself, because neither has
-         * a domain behind it yet: there is no messaging schema and no follow
-         * relation. A disabled control states an intention; an enabled one
-         * that quietly does nothing states a lie.
-         *
-         * `title` carries the reason to a pointer, `aria-describedby` would
-         * need an id per button, so the accessible name carries it too.
-         */
         actions={
-          <>
-            {!isSelf && (
-              <>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  disabled
-                  title="Messaging is not available yet"
-                  aria-label="Message — not available yet"
-                >
-                  Message
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled
-                  title="Following members is not available yet"
-                  aria-label="Follow — not available yet"
-                >
-                  Follow
-                </Button>
-              </>
-            )}
-            <Menu label="Record actions" align="end" items={recordActions}>
-              <span aria-hidden="true">⋯</span>
-            </Menu>
-          </>
+          <Menu label="Record actions" align="end" items={recordActions}>
+            <span aria-hidden="true">⋯</span>
+          </Menu>
         }
       />
 
       {user.pii_redacted_at && (
         /* The redaction used to be a red date in the table, which is a state
-           told by colour alone. The words carry it now and the tone only
+           told by color alone. The words carry it now and the tone only
            reinforces them. */
         <Alert tone="danger" title="This account has been anonymized">
           Personal details were erased on {fmt(user.pii_redacted_at)} and cannot be restored. The membership and event
@@ -397,20 +306,11 @@ export function UserDetail({
         this page is arranged the same way every other subject record is —
         one column under 60rem, main plus a measured aside above it.
       */}
-      {grantingIdentity ? (
-        <UserIdentityGrantForm
-          user={user}
-          canActivate={permissions.canActivateIdentity}
-          onGranted={() => {
-            void load();
-            navigate(recordPath);
-          }}
-          cancelHref={recordPath}
-        />
-      ) : (
-        <div class="pk-record pk-user-record">
-          <div class="pk-stack">
-            {/*
+      <div class="pk-record pk-user-record">
+        <div class="pk-stack pk-user-record__main">
+          {isSelf && session?.pendingIdentityCount ? <IdentityInvitationsPanel /> : null}
+
+          {/*
             About speaks from the identity marked as default.
 
             The only prose this system stores is `identity.biography`, which
@@ -421,161 +321,122 @@ export function UserDetail({
             page. With nothing marked the record falls back to the first
             affiliation, which is what it did before the flag existed.
           */}
-            {identity?.biography && (
-              <Panel aria-label="About">
-                <PanelHeader title="About" />
-                <PanelBody>
-                  <p class="pk-affiliation__summary">{identity.biography}</p>
-                </PanelBody>
-              </Panel>
-            )}
-
-            <MemberSkillsPanel userId={user.id} canRead={canRead} canVouch={!isSelf} />
-
-            {participationGroups.length > 0 && (
-              <div class="pk-table-list">
-                <DataTable
-                  caption="Group participation"
-                  showCaption
-                  columns={groupColumns}
-                  rows={participationGroups}
-                  rowKey={(row) => row.group.id}
-                  /*
-                   * A row here names another record, so it goes to that record
-                   * (#45). An href rather than a handler, because it is a
-                   * navigation: it opens in a new tab if the reader asks it to.
-                   */
-                  rowAction={(row) => ({
-                    label: `Open ${row.group.name}`,
-                    href: usePortalHashLocation.hrefs(`/groups/${encodeURIComponent(row.group.id)}`),
-                  })}
-                />
-              </div>
-            )}
-
-            {/* One panel for the ties themselves: it states each affiliation and
-              carries the controls that manage it, rather than stating them
-              here and restating them as management cards below. */}
-            <UserAffiliationsPanel
-              user={user}
-              onChanged={load}
-              canManage={permissions.canManageMembership}
-              summarizedIdentityId={identity?.identityId}
-            />
-
-            {permissions.canRead && <UserParticipationHistory userId={user.id} canRead={permissions.canRead} />}
-
-            {/*
-            Who edits this record, and as what. Its subject edits it as
-            themselves, through the member contract — nobody administers
-            themselves, and a role or a deactivation is somebody else's
-            decision to record. Everybody else edits it as staff.
-
-            The name stays with the record rather than behind the disclosure
-            below. It is the record's own title: a person whose name came
-            across a migration wrong is exactly who somebody opens this page to
-            fix, and they should not have to find "account administration".
-          */}
-            {isSelf && selfProfile ? (
-              <SelfProfilePanel
-                profile={selfProfile}
-                editing={editingProfile}
-                onEdit={() => setEditingProfile(true)}
-                onClose={() => setEditingProfile(false)}
-                onSaved={refreshSelfProfile}
-              />
-            ) : null}
-
-            {/* Operations on the account rather than statements about the
-              person, so they are disclosed under the record instead of
-              reading as three more things it says. */}
-            {permissions.canRead && (
-              <UserAdministrationSection>
-                <UserEmailAddressesPanel userId={user.id} primaryEmail={user.email} canWrite={permissions.canWrite} />
-              </UserAdministrationSection>
-            )}
-          </div>
-
-          <aside class="pk-stack">
-            <MemberAvailabilityPanel
-              userId={user.id}
-              canRead={canRead}
-              canWrite={editable}
-              contactEmail={contactEmail}
-            />
-            <MemberStandingPanel userId={user.id} canRead={canRead} />
-
-            <Panel aria-label="At a glance">
-              <PanelHeader title="At a glance" />
-              <PanelBody class="pk-stack pk-stack--snug">
-                {/* `pk-figure-row`, not `pk-grid`: three figures in an 18rem
-                  aside fall under any sensible track minimum, and a grid that
-                  folds turns a glance into a column three tiles tall. */}
-                <div class="pk-figure-row">
-                  <StatCard
-                    density="compact"
-                    label="groups"
-                    value={String(participation?.summary.groupCount ?? identityCount)}
-                  />
-                  <StatCard density="compact" label="events" value={String(participation?.summary.eventCount ?? 0)} />
-                  <StatCard density="compact" label="attendance" value={attendanceHeadline(participation)} />
-                </div>
-                {participation && participation.summary.meetingsHeld > 0 && (
-                  <p class="pk-small pk-muted pk-footnote">
-                    {participation.summary.meetingsAttended} of {participation.summary.meetingsHeld} meetings attended
-                  </p>
-                )}
+          {identity?.biography && (
+            <Panel aria-label="About">
+              <PanelHeader title="About" />
+              <PanelBody>
+                <p class="pk-affiliation__summary">{identity.biography}</p>
               </PanelBody>
             </Panel>
+          )}
 
-            {/*
-            The record's account fields, read and written in the one place.
+          <MemberSkillsPanel userId={user.id} canRead={canRead} canVouch={!isSelf} />
 
-            Editing used to open a whole second panel further down the page
-            carrying the same fields the card beside it was already stating,
-            so a reader changing a name looked at it twice and the two could
-            disagree while the draft was open. #46 asked for the fields to be
-            edited where they are shown, and this is that: the same card, the
-            same fields, in the same order — a list while nobody is editing,
-            the fields themselves once somebody is.
+          {/* One panel for the ties themselves: it states each affiliation and
+              carries the controls that manage it, rather than stating them
+              here and restating them as management cards below. */}
+          <UserAffiliationsPanel
+            user={user}
+            onChanged={isSelf ? refreshSelfProfile : reload}
+            canManage={permissions.canManageMembership}
+            canActivateIdentity={permissions.canActivateIdentity}
+            summarizedIdentityId={identity?.identityId}
+            viewerIsSubject={isSelf}
+            seats={participation?.groups ?? []}
+            actingIdentityId={isSelf ? (session?.actingIdentityId ?? null) : null}
+          />
+
+          {permissions.canRead && <UserParticipationHistory userId={user.id} canRead={permissions.canRead} />}
+
+          {/* The addresses the account answers to: the person manages their own,
+              and staff with Users write permission manage a secondary address. */}
+          {(isSelf || permissions.canWrite) && (
+            <EmailAddressesPanel userId={user.id} isSelf={isSelf} primaryEmail={user.email} />
+          )}
+
+          {/* Email notifications are the person's own choice, made by nobody else. */}
+          {isSelf && session?.member && <NotificationPreferencesCard />}
+        </div>
+
+        {/* Your own record says who you are acting as, with the switch beside it:
+            at the head of the aside on a wide screen, and first of all on a
+            narrow one, where the aside would otherwise put it below everything. */}
+        {isSelf && session && (
+          <div class="pk-user-record__acting">
+            <ActingIdentityPanel
+              session={session}
+              personName={displayName}
+              identityName={actingEntry ? identityEntryName(actingEntry) : undefined}
+            />
+          </div>
+        )}
+
+        <div class="pk-stack pk-user-record__aside">
+          <MemberAvailabilityPanel userId={user.id} canRead={canRead} canWrite={editable} contactEmail={contactEmail} />
+          <MemberStandingPanel userId={user.id} canRead={canRead} />
+
+          <Panel aria-label="At a glance">
+            <PanelHeader title="At a glance" />
+            <PanelBody class="pk-stack pk-stack--snug">
+              {/* Not `pk-grid`: a grid that folds turns a glance into a
+                  column three tiles tall. */}
+              <div class="pk-user-glance-figures">
+                <StatCard density="compact" label="groups" value={glanceFigure(participation?.summary.groupCount)} />
+                <StatCard density="compact" label="events" value={glanceFigure(participation?.summary.eventCount)} />
+                <StatCard density="compact" label="attendance" value={attendanceHeadline(participation)} />
+              </div>
+              {participation && <GroupAttendanceBar seats={participation.groups} />}
+            </PanelBody>
+          </Panel>
+
+          {/*
+            The record's account fields. A quick edit opens in a dialog from
+            the panel's "…" menu (never inline); the panel always shows the facts.
           */}
+          {(editable || selfEditable || accountFacts.length > 0) && (
             <Panel aria-label="Account">
               <PanelHeader title="Account">
-                {/* The quiet second way in that #46 asked for, beside the facts
-                  it edits. The record's actions menu still carries the same
-                  command in words; this is the shortcut, not the only door,
-                  so it is an icon and it disappears while the fields are
-                  open. */}
-                {editable && !editingProfile && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    icon
-                    aria-label="Edit profile"
-                    title="Edit profile"
-                    onClick={() => setEditingProfile(true)}
-                  >
-                    <IconPencil />
-                  </Button>
+                {(editable || selfEditable) && (
+                  <Menu
+                    label="Account actions"
+                    align="end"
+                    items={[
+                      {
+                        id: "edit",
+                        label: isSelf && selfEditable ? "Edit names…" : "Edit account…",
+                        onSelect: () => setEditingProfile(true),
+                      },
+                    ]}
+                  />
                 )}
               </PanelHeader>
               <PanelBody>
-                {editable && editingProfile ? (
-                  <UserProfileEditor
-                    user={user}
-                    canGrantAccess={permissions.canGrantAccess}
-                    editing={editingProfile}
-                    onClose={() => setEditingProfile(false)}
-                    onSaved={load}
-                  />
-                ) : (
-                  /* One record's fields as a description list rather than an
-                   unnamed table, on a page that already has several tables. */
-                  <DescriptionList density="compact" items={accountFacts} />
-                )}
+                {/* One record's fields as a description list rather than an
+                   unnamed table, on a page that already has several tables. */}
+                <DescriptionList density="compact" items={accountFacts} />
               </PanelBody>
+              {isSelf && selfEditable && editingProfile ? (
+                /* The person's names, through the member contract: nobody administers themselves. */
+                <SelfAccountNamesEditor
+                  user={user}
+                  onClose={() => setEditingProfile(false)}
+                  onSaved={refreshSelfProfile}
+                />
+              ) : editable && editingProfile ? (
+                <UserProfileEditor
+                  user={user}
+                  canGrantAccess={permissions.canGrantAccess}
+                  editing={editingProfile}
+                  onClose={() => setEditingProfile(false)}
+                  onSaved={load}
+                />
+              ) : null}
             </Panel>
+          )}
 
+          {/* Your own address already sits in Email addresses, and your links
+                belong to each identity under Identity and experience. */}
+          {!isSelf && (
             <Panel aria-label="Contact">
               <PanelHeader title="Contact" />
               <PanelBody class="pk-stack pk-stack--snug">
@@ -589,11 +450,15 @@ export function UserDetail({
                 <LinkList links={identity?.links ?? []} />
               </PanelBody>
             </Panel>
+          )}
 
-            <MemberPrivacyPanel identities={user.identities} availability={null} canWrite={editable} />
-          </aside>
+          <MemberPrivacyPanel identities={user.identities} availability={null} canWrite={editable} />
+
+          {isSelf && (session?.member || session?.staff) && <PasskeySettings toastTargetId="portal-toast-area" />}
+
+          {(isSelf || permissions.canRead) && <UserAccessPanel user={user} session={isSelf ? session : null} />}
         </div>
-      )}
+      </div>
     </div>
   );
 }

@@ -1,0 +1,19 @@
+@layer components {
+  /* The acting identity's mark beside its name and title. */
+  .pk-acting-identity {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: var(--pk-3);
+    align-items: center;
+  }
+
+  .pk-acting-identity__name {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .pk-acting-identity + p {
+    margin: 0;
+  }
+}

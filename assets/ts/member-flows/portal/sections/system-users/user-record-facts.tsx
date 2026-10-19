@@ -19,18 +19,14 @@ import type { UserDetail as UserRecord, UserMembership } from "./model";
 export function userRecordFacts(
   user: UserRecord,
   identity: UserMembership | undefined,
-  /**
-   * Whether the names are stated elsewhere on this record.
-   *
-   * They are, for the one reader who owns them: their own record carries a
-   * "Your profile" card that both states and edits the names, the job title
-   * and the biography together, because those are the fields a member holds
-   * themselves. Repeating them here would put the same name in two cards on
-   * one page, which is a fact the reader then has to check for agreement.
-   * Everybody else reads and edits them here, where Account is the only card
-   * that states them.
-   */
-  options: { namesStatedElsewhere?: boolean } = {},
+  options: {
+    /**
+     * Whether the reader is the person the record is about. Whether the
+     * account is active and when it was created are administration: the
+     * owner of a live session knows the first, and neither is theirs to act on.
+     */
+    readerIsSubject?: boolean;
+  } = {},
 ): { contactEmail: string; contactFacts: DescriptionListItem[]; accountFacts: DescriptionListItem[] } {
   const contactEmail = identity?.email ?? user.email;
   const contactFacts: DescriptionListItem[] = [{ term: "Email", value: <span class="pk-break">{contactEmail}</span> }];
@@ -41,15 +37,15 @@ export function userRecordFacts(
     ...(contactEmail === user.email
       ? []
       : [{ term: "Sign-in email", value: <span class="pk-break">{user.email}</span> }]),
-    ...(options.namesStatedElsewhere
+    { term: "First name", value: user.first_name },
+    { term: "Last name", value: user.last_name },
+    { term: "Preferred name", value: user.preferred_name },
+    ...(options.readerIsSubject
       ? []
       : [
-          { term: "First name", value: user.first_name },
-          { term: "Last name", value: user.last_name },
-          { term: "Preferred name", value: user.preferred_name },
+          { term: "Active", value: user.active ? "Yes" : "No" },
+          { term: "Created", value: <span class="pk-nowrap">{fmt(user.created_at)}</span> },
         ]),
-    { term: "Active", value: user.active ? "Yes" : "No" },
-    { term: "Created", value: <span class="pk-nowrap">{fmt(user.created_at)}</span> },
   ];
 
   return { contactEmail, contactFacts, accountFacts };

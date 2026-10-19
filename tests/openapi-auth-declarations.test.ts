@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AUTH_EXTENSION, decorateOpenApiSpec } from "../functions/_lib/openapi/mcp";
-import { openapi } from "../functions/router";
+import { openapi } from "../functions/http-router";
 
 /**
  * Authorization metadata in the published spec used to be inferred from the

@@ -1,0 +1,125 @@
+/**
+ * Turns the downloaded free-mail, disposable-mail and Public Suffix lists into
+ * the compact data the Worker vendors in `functions/_lib/email-domains/generated`.
+ *
+ * Pure: the refresh script downloads and writes; this module validates,
+ * normalizes and renders, so the tools tests can exercise it offline.
+ */
+import { domainToASCII } from "node:url";
+import {
+  asciiHost,
+  parsePublicSuffixRules,
+  ruleAncestors,
+  spansRegistrants,
+} from "../../functions/_lib/email-domains/public-suffix.ts";
+
+/** @typedef {{ free: number, disposable: number, publicSuffixRules: number }} ListMinimums */
+
+/**
+ * A refreshed list smaller than this means the source changed shape, not that the world got smaller.
+ * @type {Readonly<ListMinimums>}
+ */
+export const MINIMUM_ENTRIES = Object.freeze({ free: 2000, disposable: 2000, publicSuffixRules: 5000 });
+
+function asciiRule(rule) {
+  const prefix = rule.startsWith("!") ? "!" : rule.startsWith("*.") ? "*." : "";
+  const name = domainToASCII(rule.slice(prefix.length));
+  if (!name || asciiHost(name) !== name) throw new Error(`Public Suffix List rule "${rule}" is not a valid name.`);
+  return `${prefix}${name}`;
+}
+
+/**
+ * The rules of `public_suffix_list.dat`, both sections, in punycode.
+ * A rule is the first whitespace-separated token of a non-comment line.
+ */
+export function parsePublicSuffixList(text) {
+  const counts = { icann: 0, private: 0 };
+  let section = null;
+  const rules = new Set();
+  for (const line of text.split(/\r?\n/)) {
+    if (line.includes("===BEGIN ICANN DOMAINS===")) section = "icann";
+    else if (line.includes("===BEGIN PRIVATE DOMAINS===")) section = "private";
+    const token = line.trim().split(/\s/, 1)[0];
+    if (!token || token.startsWith("//")) continue;
+    if (!section) throw new Error(`Public Suffix List rule "${token}" appears outside a section.`);
+    counts[section] += 1;
+    rules.add(asciiRule(token.toLowerCase()));
+  }
+  if (counts.icann === 0 || counts.private === 0) throw new Error("The Public Suffix List lost a section.");
+  return { rules: [...rules].sort(), counts };
+}
+
+/** Lower-case ASCII, unique and sorted; anything that is not a host name is reported, not kept. */
+export function normalizeDomainList(entries) {
+  const domains = new Set();
+  const invalid = [];
+  for (const entry of entries) {
+    const host = typeof entry === "string" ? asciiHost(entry) : null;
+    // A host name with a dot; a bare label is never a mail domain.
+    if (host && host.includes(".")) domains.add(host);
+    else invalid.push(String(entry));
+  }
+  return { domains: [...domains].sort(), invalid };
+}
+
+/** The `disposable_email_blocklist.conf` format: one domain per line, `#` comments. */
+export function parseDomainLines(text) {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.replace(/#.*/, "").trim())
+    .filter(Boolean);
+}
+
+/**
+ * The lists as the Worker reads them. Disposable mail wins over free mail
+ * (the free-mail source also carries the disposable domains), and an entry
+ * that spans registrants — a public suffix such as `za.com`, or a parent of
+ * one — is dropped, so a listed parent never covers someone else's domain.
+ */
+export function buildEmailDomainLists({ freeEntries, disposableEntries, publicSuffixText, minimums = MINIMUM_ENTRIES }) {
+  const publicSuffix = parsePublicSuffixList(publicSuffixText);
+  const rules = parsePublicSuffixRules(publicSuffix.rules);
+  const ancestors = ruleAncestors(rules);
+  const split = (domains) => ({
+    kept: domains.filter((domain) => !spansRegistrants(domain, rules, ancestors)),
+    dropped: domains.filter((domain) => spansRegistrants(domain, rules, ancestors)),
+  });
+
+  const disposableInput = normalizeDomainList(disposableEntries);
+  const disposable = split(disposableInput.domains);
+  const disposableSet = new Set(disposableInput.domains);
+  const freeInput = normalizeDomainList(freeEntries);
+  const free = split(freeInput.domains.filter((domain) => !disposableSet.has(domain)));
+
+  const result = {
+    free: { domains: free.kept, dropped: free.dropped, invalid: freeInput.invalid, upstream: freeInput.domains.length },
+    disposable: {
+      domains: disposable.kept,
+      dropped: disposable.dropped,
+      invalid: disposableInput.invalid,
+      upstream: disposableInput.domains.length,
+    },
+    publicSuffix: { rules: publicSuffix.rules, counts: publicSuffix.counts },
+  };
+  for (const [name, count] of [
+    ["free", result.free.domains.length],
+    ["disposable", result.disposable.domains.length],
+    ["publicSuffixRules", result.publicSuffix.rules.length],
+  ])
+    if (count < minimums[name]) throw new Error(`Only ${count} ${name} entries; expected at least ${minimums[name]}.`);
+  return result;
+}
+
+/** One generated module: a single newline-joined string, split lazily by the Worker on first use. */
+export function renderDomainDataModule({ constName, summary, entries, source }) {
+  return [
+    `// Generated by \`pnpm run refresh:email-domains\` from ${source.repository} at ${source.commit}.`,
+    `// License: ${source.license}. Upstream data, normalized and filtered as provenance.json records.`,
+    "// Do not edit by hand: add local corrections to ../overrides.ts. Provenance and license: provenance.json.",
+    "",
+    `/** ${summary} One ASCII entry per line. */`,
+    `export const ${constName} =`,
+    `  ${JSON.stringify(entries.join("\n"))};`,
+    "",
+  ].join("\n");
+}

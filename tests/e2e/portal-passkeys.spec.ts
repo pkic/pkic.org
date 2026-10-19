@@ -41,23 +41,31 @@ async function attachVirtualAuthenticator(page: Page, transport: "internal" | "u
   });
 }
 
-async function openAccountSettings(page: Page): Promise<void> {
-  await page.goto("/portal/#/account");
-  await expect(page.getByRole("heading", { name: "Passkeys" })).toBeVisible({ timeout: 15_000 });
+async function openOwnUserRecord(page: Page): Promise<void> {
+  await page.goto("/portal/#/users/current");
+  await expect(page.getByRole("heading", { name: "Passkeys", exact: true })).toBeVisible({ timeout: 15_000 });
+}
+
+/** Opens the add form: the panel's menu leads to a dialog holding the device name and its button. */
+async function openAddPasskey(page: Page): Promise<void> {
+  await page.getByRole("button", { name: "Passkeys actions" }).click();
+  await page.getByRole("menuitem", { name: "Add a passkey" }).click();
+  await expect(page.getByRole("dialog", { name: "Add a passkey" })).toBeVisible();
 }
 
 async function enrollPasskey(page: Page, deviceName: string): Promise<void> {
-  await page.getByLabel("Device name (optional)").fill(deviceName);
-  await page.getByRole("button", { name: "Add a passkey" }).click();
+  const dialog = page.getByRole("dialog", { name: "Add a passkey" });
+  await dialog.getByLabel("Device name (optional)").fill(deviceName);
+  await dialog.getByRole("button", { name: "Add a passkey", exact: true }).click();
   await expect(page.getByText("Passkey added")).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByRole("cell", { name: deviceName, exact: true })).toBeVisible();
+  await expect(page.getByRole("listitem").filter({ hasText: deviceName })).toBeVisible();
 }
 
 for (const transport of ["internal", "usb"] as const) {
   test(`a ${transport} passkey can be registered, used to sign in, and removed`, async ({ page }, testInfo) => {
     await attachVirtualAuthenticator(page, transport);
     await signInToPortal(page, PASSKEY_EMAIL);
-    await openAccountSettings(page);
+    await openOwnUserRecord(page);
 
     // A failed attempt stays beside the form and leaves the account usable.
     await page.route("**/api/v1/auth/passkeys/register/begin", (route) =>
@@ -69,10 +77,15 @@ for (const transport of ["internal", "usb"] as const) {
         }),
       }),
     );
-    await page.getByRole("button", { name: "Add a passkey" }).click();
+    await openAddPasskey(page);
+    await page
+      .getByRole("dialog", { name: "Add a passkey" })
+      .getByRole("button", { name: "Add a passkey", exact: true })
+      .click();
     await expect(page.getByRole("alert").filter({ hasText: "Passkey provider unavailable" })).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath("enrollment-error.png"), fullPage: true });
     await page.unroute("**/api/v1/auth/passkeys/register/begin");
+    // The dialog stays open after a failed attempt, ready for the retry.
 
     const registration = page.waitForResponse((response) => response.url().endsWith("/passkeys/register/begin"));
     await enrollPasskey(page, DEVICE_NAME);
@@ -82,7 +95,7 @@ for (const transport of ["internal", "usb"] as const) {
     await expect(page.getByRole("alert").filter({ hasText: "Passkey provider unavailable" })).toHaveCount(0);
     await page.screenshot({ path: testInfo.outputPath("passkey-added.png"), fullPage: true });
     // A freshly registered credential has never been asserted.
-    await expect(page.getByText("Never")).toBeVisible();
+    await expect(page.getByText("Never used")).toBeVisible();
 
     // ── Sign in with the passkey alone ───────────────────────────────────────
     // Dropping the cookies leaves the authenticator holding the credential but
@@ -96,16 +109,16 @@ for (const transport of ["internal", "usb"] as const) {
     await expect(page.locator("#portal-root")).toBeVisible({ timeout: 15_000 });
 
     // The session is a real one, not just a dismissed login screen.
-    await openAccountSettings(page);
-    await expect(page.getByRole("cell", { name: DEVICE_NAME, exact: true })).toBeVisible();
+    await openOwnUserRecord(page);
+    await expect(page.getByRole("listitem").filter({ hasText: DEVICE_NAME })).toBeVisible();
     // The assertion that just signed the user in is recorded against the credential.
-    await expect(page.getByText("Never")).toHaveCount(0);
+    await expect(page.getByText("Never used")).toHaveCount(0);
 
     // ── Removal ──────────────────────────────────────────────────────────────
-    const row = page.getByRole("row").filter({ hasText: DEVICE_NAME });
+    const row = page.getByRole("listitem").filter({ hasText: DEVICE_NAME });
     await runRowAction(page, row, "Remove");
     await acceptConfirmDialog(page, "Remove passkey");
     await expect(page.getByText("Passkey removed")).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByRole("cell", { name: DEVICE_NAME, exact: true })).toHaveCount(0);
+    await expect(page.getByRole("listitem").filter({ hasText: DEVICE_NAME })).toHaveCount(0);
   });
 }

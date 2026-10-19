@@ -7,7 +7,7 @@ import { ALL_PERSONAS, ALL_PERSONA_KEYS, PERSONAS, PERSONA_KEYS } from "./person
 import { personaRequest, seedPersona } from "./personas/seed";
 import { TEST_GROUPS } from "./helpers/voting";
 import { seedEventAndAdmin } from "./helpers/context";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { createExecutionContext } from "cloudflare:test";
 
 /**

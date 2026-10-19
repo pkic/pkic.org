@@ -1,24 +1,27 @@
+import type { z } from "zod";
+import { authorizationContextTypeSchema } from "../../../../../shared/schemas/access-control";
 import { ServerSearchSelect } from "../../../../components/ServerSearchSelect";
 import { Field } from "../../../../ui/Field";
 import { Select } from "../../../../ui/TextControl";
 import { permissionTargetCatalog } from "./catalogs";
 
 export interface PickedTarget {
-  targetType: "event" | "group" | "organization" | null;
+  targetType: z.infer<typeof authorizationContextTypeSchema> | null;
   targetId: string | null;
 }
 
 type TargetType = NonNullable<PickedTarget["targetType"]>;
 
 /**
- * The three resource kinds a grant can be scoped to. One record drives both the
+ * The resource kinds a grant can be scoped to. One record drives both the
  * type menu and the search selector's label, so the two cannot drift apart the
- * way three copied branches could.
+ * way copied branches could.
  */
 const TARGET_LABELS: Record<TargetType, string> = {
   event: "Event",
   group: "Group",
   organization: "Organization",
+  event_sponsor: "Event sponsor",
 };
 
 /** Resource-target picker for permission grants and user-role assignments. */

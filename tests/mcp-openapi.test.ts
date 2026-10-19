@@ -1,6 +1,6 @@
 import { administratorGrants } from "./helpers/administrator";
 import { describe, expect, it } from "vitest";
-import { grantableScopesForActor, type AuthScope } from "../functions/_lib/auth/scopes";
+import { type AuthScope } from "../functions/_lib/auth/scopes";
 import {
   AUTH_EXTENSION,
   decorateOpenApiSpec,
@@ -10,6 +10,7 @@ import {
 import type { AuthAdmin } from "../functions/_lib/types";
 import {
   buildMcpOauthProps,
+  grantedMcpOauthScopes,
   normalizeMcpOauthScopes,
   parseMcpOauthProps,
 } from "../functions/_lib/auth/oauth/authorization";
@@ -222,6 +223,7 @@ describe("MCP scope delegation", () => {
       email: "user@example.test",
       grants: administratorGrants,
       sessionId: "session-1",
+      oauthAuthorizationId: crypto.randomUUID(),
       expiresAt: "2099-01-01T00:00:00.000Z",
     };
     expect(buildMcpOauthProps(userActor, ["admin:read"], "oauth", "2098-12-31T23:00:00.000Z")).toMatchObject({
@@ -232,6 +234,19 @@ describe("MCP scope delegation", () => {
       sessionIdleExpiresAt: "2098-12-31T23:00:00.000Z",
     });
     const userProps = buildMcpOauthProps(userActor, ["admin:read"], "oauth", "2098-12-31T23:00:00.000Z");
+    expect(() =>
+      buildMcpOauthProps(
+        { ...userActor, oauthAuthorizationId: undefined },
+        ["admin:read"],
+        "oauth",
+        "2098-12-31T23:00:00.000Z",
+      ),
+    ).toThrowError(expect.objectContaining({ code: "MCP_AUTHORIZATION_REQUIRED" }));
+    if (userProps.authTransport !== "oauth") throw new Error("Expected an OAuth grant");
+    const { authorizationId: _ceiling, ...legacyProps } = userProps;
+    expect(() => parseMcpOauthProps(legacyProps)).toThrowError(
+      expect.objectContaining({ code: "MCP_AUTH_PROPS_INVALID" }),
+    );
     expect(userProps).not.toHaveProperty("role");
     expect(() => buildMcpOauthProps(userActor, ["admin:read"], "oauth")).toThrowError(
       expect.objectContaining({ code: "MCP_AUTH_TRANSPORT_INVALID" }),
@@ -263,10 +278,19 @@ describe("MCP scope delegation", () => {
     };
     const requested: AuthScope[] = ["proposals:read", "proposals:score", "proposals:manage"];
 
-    expect(grantableScopesForActor(actor, requested)).toEqual(["proposals:read"]);
+    expect(grantedMcpOauthScopes(actor, requested)).toEqual(["proposals:read"]);
   });
 
-  it("treats current unscoped admins as fully delegable until admin sessions are scoped", () => {
+  it("offers a permission held only within a resource without treating it as global", () => {
+    const actor: AuthAdmin = {
+      identityType: "user",
+      id: "user-1",
+      email: "reviewer@example.test",
+      grants: [{ permission: "proposals:read", contextType: "event", contextId: crypto.randomUUID() }],
+    };
+    expect(grantedMcpOauthScopes(actor, ["proposals:read", "proposals:score"])).toEqual(["proposals:read"]);
+  });
+  it("delegates only the requested subset of current administrator grants", () => {
     const actor: AuthAdmin = {
       identityType: "user",
       id: "admin-1",
@@ -275,6 +299,6 @@ describe("MCP scope delegation", () => {
     };
     const requested: AuthScope[] = ["proposals:read", "proposals:score"];
 
-    expect(grantableScopesForActor(actor, requested)).toEqual(requested);
+    expect(grantedMcpOauthScopes(actor, requested)).toEqual(requested);
   });
 });

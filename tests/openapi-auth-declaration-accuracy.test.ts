@@ -42,7 +42,6 @@ describe("OpenAPI authorization declarations match runtime behavior", () => {
     "/api/v1/invites/no-such-token/info",
     "/api/v1/registrations/access/no-such-token",
     "/api/v1/proposals/access/no-such-token",
-    `/api/v1/proposals/access/no-such-token/speakers/${ABSENT_ID}/headshot`,
     "/api/v1/proposals/speakers/access/no-such-token",
     "/api/v1/proposals/speakers/access/no-such-token/headshot",
     "/api/v1/proposals/speakers/access/no-such-token/presentation",
@@ -106,20 +105,6 @@ describe("OpenAPI authorization declarations match runtime behavior", () => {
       label: "proposal speaker reminder",
       path: `/api/v1/proposals/access/no-such-token/speakers/${ABSENT_ID}/reminders`,
       init: () => ({ method: "POST" }),
-    },
-    {
-      label: "proposal speaker headshot upload",
-      path: `/api/v1/proposals/access/no-such-token/speakers/${ABSENT_ID}/headshot`,
-      init: () => ({
-        method: "PUT",
-        headers: { "content-type": "image/png" },
-        body: new Uint8Array([0x89, 0x50, 0x4e, 0x47]),
-      }),
-    },
-    {
-      label: "proposal speaker headshot removal",
-      path: `/api/v1/proposals/access/no-such-token/speakers/${ABSENT_ID}/headshot`,
-      init: () => ({ method: "DELETE" }),
     },
     {
       label: "speaker participation update",

@@ -9,7 +9,7 @@ import { TextInput } from "../../../../../ui/TextControl";
 import { toast } from "../../../ui";
 import { roleCreateSchema, roleResponseEnvelopeSchema } from "../../../../../../shared/schemas/access-control";
 import type { Permission } from "../../../../../../shared/schemas/permissions";
-import { PermissionCheckboxes } from "./RolePermissions";
+import { RolePermissions } from "./RolePermissions";
 
 /** What the create contract accepts as an identifier, said before the reader finds out the hard way. */
 const ROLE_NAME_HELP = "Lowercase letters, numbers, and underscores only, starting with a letter.";
@@ -34,15 +34,6 @@ export function RoleCreate({ onCreated, onCancel }: { onCreated: (roleId: string
     description: description || undefined,
     permissions: Array.from(selected),
   });
-
-  function toggle(permission: Permission) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(permission)) next.delete(permission);
-      else next.add(permission);
-      return next;
-    });
-  }
 
   async function handleCreate(e: Event) {
     e.preventDefault();
@@ -111,17 +102,17 @@ export function RoleCreate({ onCreated, onCancel }: { onCreated: (roleId: string
                   than by a label with no single control to point its `for` at. */}
               <fieldset class="pk-fieldset pk-field">
                 <legend class="pk-field__label">Permissions</legend>
-                <PermissionCheckboxes selected={selected} onToggle={toggle} disabled={submitting} />
+                <RolePermissions selected={selected} onSelect={setSelected} disabled={submitting} />
               </fieldset>
             </fieldset>
 
             {formError && <Alert tone="danger">{formError}</Alert>}
 
             <div class="pk-cluster">
-              <Button type="submit" variant="primary" size="sm" loading={submitting}>
+              <Button type="submit" variant="primary" loading={submitting}>
                 {submitting ? "Creating…" : "Create role"}
               </Button>
-              <Button variant="secondary" size="sm" disabled={submitting} onClick={onCancel}>
+              <Button variant="secondary" disabled={submitting} onClick={onCancel}>
                 Cancel
               </Button>
             </div>

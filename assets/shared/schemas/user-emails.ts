@@ -1,7 +1,7 @@
 /**
  * Secondary email addresses (`user_emails`).
- * Backs `GET/POST /api/v1/users/:userId/emails`,
- * and `DELETE .../:emailId`.
+ * Staff manage them through `/api/v1/users/:userId/emails`; the signed-in
+ * person manages their own through `/api/v1/users/current/emails`.
  */
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
@@ -17,6 +17,8 @@ export const userEmailResponseSchema = z.object({
   id: databaseIdSchema,
   userId: databaseIdSchema,
   email: z.string(),
+  /** The identity this work address belongs to; null while no identity has selected it. */
+  identityId: databaseIdSchema.nullable(),
   createdAt: z.string(),
 });
 export const userEmailAddResponseSchema = z.object({ email: userEmailResponseSchema });
@@ -31,7 +33,7 @@ export const userEmailsListRouteSchema = {
   tags: ["Users"],
   summary: "List a user's secondary email addresses",
   description:
-    "Staff-managed aliases. A verified alias can authenticate the same canonical user and can be selected by an organization representation.",
+    "Staff-managed aliases. Verification allows selection by an organization representation. Account sign-in also requires the owner's explicit permission.",
   "x-pkic-auth": { required: true, scopes: ["users:read"] },
   request: { params: userIdEmailsParamsSchema, query: userEmailsListQuerySchema },
   responses: {

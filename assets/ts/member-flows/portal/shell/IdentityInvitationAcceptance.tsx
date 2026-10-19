@@ -9,6 +9,7 @@ import { ApiClientError, postJson } from "../../../shared/api-client";
 import { Alert } from "../../../ui/Alert";
 import { Button, ButtonLink } from "../../../ui/Button";
 import { portalIdentityInvitationToken } from "../hash-route";
+import { setAuthChecking } from "../state";
 import { LoginBackdrop } from "./LoginBackdrop";
 import "./Login.css";
 
@@ -30,7 +31,6 @@ export function IdentityInvitationAcceptance() {
   const [error, setError] = useState<string | null>(token ? null : "This invitation link is incomplete.");
   const [loading, setLoading] = useState(Boolean(token));
   const [accepting, setAccepting] = useState(false);
-  const [accepted, setAccepted] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -66,8 +66,8 @@ export function IdentityInvitationAcceptance() {
         identityInvitationLinkRequestSchema.parse({ token }),
         identityMutationResponseSchema,
       );
-      history.replaceState({}, "", "/portal/#/identity-invitations");
-      setAccepted(true);
+      setAuthChecking();
+      window.location.replace("/portal/#/users/current");
     } catch (reason) {
       setError(invitationError(reason));
     } finally {
@@ -78,7 +78,7 @@ export function IdentityInvitationAcceptance() {
   return (
     <div class="pk pk-login">
       <LoginBackdrop />
-      <main class="pk-login__panel">
+      <section class="pk-login__panel" aria-label="Identity invitation">
         <div class="pk-login__card-wrap">
           <div class="pk-login__card">
             <div class="pk-login__card-rule" aria-hidden="true" />
@@ -90,7 +90,7 @@ export function IdentityInvitationAcceptance() {
                   {error}
                 </Alert>
               )}
-              {preview && !accepted && (
+              {preview && (
                 <div class="pk-stack pk-stack--snug">
                   <p>
                     Accept the invitation to act for <strong>{preview.organizationName}</strong> as{" "}
@@ -100,31 +100,20 @@ export function IdentityInvitationAcceptance() {
                     Actions taken in this capacity will be attributed to the organization. Opening the email link did
                     not activate it.
                   </p>
-                  <Button
-                    variant="primary"
-                    block
-                    loading={accepting}
-                    disabled={accepting}
-                    onClick={() => void accept()}
-                  >
+                  <Button variant="primary" loading={accepting} disabled={accepting} onClick={() => void accept()}>
                     {accepting ? "Accepting…" : "Accept identity"}
                   </Button>
                 </div>
               )}
-              {accepted && (
-                <Alert tone="ok" title="Identity accepted">
-                  You can now act for {preview?.organizationName}. Sign in to the portal to use this capacity.
-                </Alert>
-              )}
-              {!loading && (error || accepted) && (
-                <ButtonLink href="/portal/#/account" variant="secondary" block>
-                  Open portal
+              {!loading && error && (
+                <ButtonLink href="/portal/#/users/current" variant="secondary">
+                  Sign in
                 </ButtonLink>
               )}
             </div>
           </div>
         </div>
-      </main>
+      </section>
     </div>
   );
 }

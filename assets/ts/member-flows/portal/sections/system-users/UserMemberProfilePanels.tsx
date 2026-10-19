@@ -33,6 +33,7 @@ import { Menu } from "../../../../ui/Menu";
 import { Meter } from "../../../../ui/Meter";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { UserAvailabilityEditor } from "./UserAvailabilityEditor";
+import "./UserMemberProfilePanels.css";
 
 /**
  * Loads one record-scoped resource, treating a failure as "nothing to show".
@@ -143,7 +144,7 @@ export function MemberSkillsPanel({
             </Chip>
           ))}
         </div>
-        <p class="pk-small pk-muted pk-footnote">
+        <p class="pk-small pk-muted pk-user-footnote">
           {canVouch
             ? "Fill shows how many members vouched; only members who share a group can vouch."
             : "Fill shows how many members vouched. Nobody vouches for their own skills."}
@@ -199,23 +200,19 @@ export function MemberAvailabilityPanel({
   // to them an empty one is an invitation rather than a leak.
   if (!stated && !canWrite) return null;
 
-  if (editing) {
-    return (
-      <Panel aria-label="Availability">
-        <PanelHeader title="Availability" />
-        <PanelBody>
-          <UserAvailabilityEditor
-            userId={userId}
-            availability={availability}
-            onSaved={(next) => {
-              setSaved(next);
-              setEditing(false);
-            }}
-          />
-        </PanelBody>
-      </Panel>
-    );
-  }
+  const editor = editing && (
+    <UserAvailabilityEditor
+      userId={userId}
+      availability={availability}
+      onClose={() => {
+        setEditing(false);
+      }}
+      onSaved={(next) => {
+        setSaved(next);
+        setEditing(false);
+      }}
+    />
+  );
 
   const settingsMenu = (
     <Menu
@@ -243,6 +240,7 @@ export function MemberAvailabilityPanel({
         <PanelBody>
           <p class="pk-small pk-muted">Nothing stated. Members cannot see anything here until it is set.</p>
         </PanelBody>
+        {editor}
       </Panel>
     );
   }
@@ -255,13 +253,18 @@ export function MemberAvailabilityPanel({
    */
   const offers = [
     availability.openToEmployment
-      ? { key: "employment", title: "Open to employment", tone: "pk-ok-note", items: listOf(availability.rolesSought) }
+      ? {
+          key: "employment",
+          title: "Open to employment",
+          tone: "pk-availability-offer--employment",
+          items: listOf(availability.rolesSought),
+        }
       : null,
     availability.openToContract
       ? {
           key: "contract",
           title: "Available for contract work",
-          tone: "pk-info-note",
+          tone: "pk-availability-offer--contract",
           items: listOf(availability.servicesOffered),
         }
       : null,
@@ -280,6 +283,7 @@ export function MemberAvailabilityPanel({
   return (
     <Panel aria-label="Availability">
       <PanelHeader title="Availability">{canWrite && settingsMenu}</PanelHeader>
+      {editor}
       {/*
         Tinted, because this is a standing rather than a list: it is the one
         thing on the record a reader may have come to act on. The words carry
@@ -291,7 +295,7 @@ export function MemberAvailabilityPanel({
              design does — the two are distinct claims, not one paragraph. */
           <div
             key={offer.key}
-            class={index === 0 ? "pk-stack pk-stack--tight" : "pk-stack pk-stack--tight pk-footnote"}
+            class={index === 0 ? "pk-stack pk-stack--tight" : "pk-stack pk-stack--tight pk-user-footnote"}
           >
             <span class={`pk-strong ${offer.tone}`}>{offer.title}</span>
             {offer.items.length > 0 && (
@@ -315,8 +319,6 @@ export function MemberAvailabilityPanel({
         {contactEmail && (
           <ButtonLink
             variant="primary"
-            size="sm"
-            block
             href={`mailto:${contactEmail}?subject=${encodeURIComponent(
               availability.openToEmployment ? "About a role" : "About an engagement",
             )}`}
@@ -381,7 +383,7 @@ export function MemberStandingPanel({ userId, canRead }: { userId: string; canRe
           )}
 
           {standing.recognitions.length > 0 && (
-            <div class="pk-cluster pk-footnote">
+            <div class="pk-cluster pk-user-footnote">
               {standing.recognitions.map((recognition) => (
                 <Badge key={recognition.key} tone="accent">
                   {recognition.label}
@@ -446,7 +448,7 @@ export function MemberPrivacyPanel({
       <PanelHeader title="Visibility" />
       <PanelBody>
         <DescriptionList density="compact" items={items} />
-        <p class="pk-small pk-muted pk-footnote">
+        <p class="pk-small pk-muted pk-user-footnote">
           Group rosters always show a member&rsquo;s name to that group, whatever is set here.
         </p>
       </PanelBody>

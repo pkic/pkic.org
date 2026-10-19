@@ -1,9 +1,66 @@
 @layer components {
+  /* Three glance figures in an 18rem aside fall under any sensible track
+     minimum, so these tracks are equal fractions that stay a row. */
+  .pk-user-glance-figures {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--pk-gap, var(--pk-3));
+  }
+
+  /* A closing note in a user panel, set off from what it explains by a
+     hairline rather than the page's section rhythm. */
+  .pk-user-footnote {
+    padding-block-start: var(--pk-3);
+    border-block-start: 1px solid var(--pk-line-soft);
+  }
+
   /* The portal sidebar still occupies width at tablet sizes. A two-column
      record there leaves the participation table too narrow to read. */
   @media (min-width: 64rem) and (max-width: 80rem) {
     .pk-record.pk-user-record {
       grid-template-columns: minmax(0, 1fr);
     }
+  }
+
+  /* The acting identity leads a single column, and heads the aside beside the
+     record when there are two. */
+  .pk-user-record__acting {
+    order: -1;
+  }
+
+  @media (min-width: 80.0625rem) {
+    .pk-record.pk-user-record {
+      grid-template-areas:
+        "main acting"
+        "main aside";
+      grid-template-rows: auto 1fr;
+    }
+
+    .pk-user-record__main {
+      grid-area: main;
+    }
+
+    .pk-user-record__acting {
+      grid-area: acting;
+    }
+
+    .pk-user-record__aside {
+      grid-area: aside;
+    }
+  }
+
+  /* A seat's acting marker: the one current state this list calls out. */
+  .pk-experience__acting {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--pk-1);
+    font-size: var(--pk-text-sm);
+    font-weight: 600;
+    color: var(--pk-ok-ink);
+  }
+
+  .pk-experience__acting svg {
+    width: 1rem;
+    height: 1rem;
   }
 }
