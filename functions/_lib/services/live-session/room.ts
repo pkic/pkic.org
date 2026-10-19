@@ -1,3 +1,4 @@
+import { LiveRoomEngagement } from "./room-engagement";
 import { LiveRoomAnswers } from "./room-answers";
 import { LiveRoomAnswerStore } from "./room-answer-store";
 import { advanceLiveStage } from "./room-stage-next";
@@ -20,14 +21,7 @@ import { LiveRoomPeople } from "./room-people";
 import { LiveRoomAuthors } from "./room-authors";
 import { LiveRoomQuestions } from "./room-questions";
 import { DurableObject } from "cloudflare:workers";
-import {
-  LIVE_POLL_POLICY,
-  LIVE_ROOM_POLICY,
-  liveRoomOpen,
-  liveRoomPurgeAt,
-  takeLiveAllowance,
-  type LiveReactionId,
-} from "../../../../assets/shared/live-session-policy";
+import { LIVE_ROOM_POLICY, liveRoomOpen, liveRoomPurgeAt } from "../../../../assets/shared/live-session-policy";
 import {
   LIVE_ROOM_PROTOCOL,
   type LiveRoomClientMessage,
@@ -69,7 +63,6 @@ const REFUSALS = {
   closed: { code: "LIVE_ROOM_CLOSED", message: "Questions and reactions open shortly before the session starts." },
   readOnly: { code: "LIVE_ROOM_READ_ONLY", message: "This connection can only watch the room." },
   operatorOnly: { code: "LIVE_ROOM_OPERATOR_REQUIRED", message: "Only the session's operators can do that." },
-  tooFast: { code: "LIVE_ROOM_RATE_LIMITED", message: "Please wait a moment before trying again." },
   invalid: { code: "LIVE_ROOM_INVALID_MESSAGE", message: "The room could not read that request." },
 } satisfies Record<string, LiveRefusal>;
 
@@ -103,12 +96,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
   private readonly outputs: LiveRoomOutputs;
   private readonly presence: LiveRoomPresence;
   private readonly addedCredits: LiveRoomAddedCredits;
-  /** Per-person sliding windows; a room woken from hibernation starts them afresh. */
-  private readonly allowances = new Map<string, number[]>();
-  private burst: Partial<Record<LiveReactionId, number>> = {};
-  private burstTimer: ReturnType<typeof setTimeout> | null = null;
-  private readonly talliesDue = new Set<string>();
-  private tallyTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly engagement: LiveRoomEngagement;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -172,6 +160,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
     );
     this.presence = new LiveRoomPresence(ctx);
     this.addedCredits = new LiveRoomAddedCredits(env.DB, this.store);
+    this.engagement = new LiveRoomEngagement(ctx, this.store, this.polls, this.broadcast, () => this.scheduleCopy());
     // Keep-alive pings are answered without waking the room.
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
   }
@@ -386,8 +375,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
         // Already closed.
       }
     }
-    this.allowances.clear();
-    this.talliesDue.clear();
+    this.engagement.clear();
     await this.ctx.storage.deleteAll();
     this.sql.erased();
   }
@@ -483,9 +471,9 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       case "question.vote":
         return open ? this.questions.vote(actor.userId, message.questionId, message.voted) : REFUSALS.closed;
       case "reaction.send":
-        return open ? this.react(actor.userId, message.reaction) : REFUSALS.closed;
+        return open ? this.engagement.react(actor.userId, message.reaction) : REFUSALS.closed;
       case "poll.vote":
-        return open ? this.votePoll(actor.userId, message.pollId, message.answer, socket) : REFUSALS.closed;
+        return open ? this.engagement.votePoll(actor.userId, message.pollId, message.answer, socket) : REFUSALS.closed;
       case "question.moderate": {
         const refusal = await this.questions.moderate(
           viewer,
@@ -599,49 +587,5 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
     for (const message of outcome.messages) await this.broadcast.all(message);
     for (const pollId of new Set(outcome.polls ?? [])) await this.broadcast.poll(pollId);
     await this.scheduleCopy();
-  }
-
-  private allowedReaction(userId: string): boolean {
-    const history = this.allowances.get(userId) ?? [];
-    this.allowances.set(userId, history);
-    return takeLiveAllowance(history, Date.now(), LIVE_ROOM_POLICY.reactionsPerPerson);
-  }
-
-  /** The voter sees their ballot at once; everyone's tallies follow on the room's tally cadence. */
-  private async votePoll(userId: string, pollId: string, answer: unknown, socket: WebSocket): Promise<Handled> {
-    const refusal = this.polls.vote(userId, pollId, answer);
-    if (refusal) return refusal;
-    await this.broadcast.poll(pollId, socket);
-    this.talliesDue.add(pollId);
-    this.tallyTimer ??= setTimeout(
-      () => this.ctx.waitUntil(this.flushTallies()),
-      LIVE_POLL_POLICY.tallyBroadcastMilliseconds,
-    );
-    await this.scheduleCopy();
-  }
-
-  private async flushTallies(): Promise<void> {
-    const due = [...this.talliesDue];
-    this.talliesDue.clear();
-    this.tallyTimer = null;
-    for (const pollId of due) await this.broadcast.poll(pollId);
-  }
-
-  private react(userId: string, reaction: LiveReactionId): Handled {
-    if (!this.allowedReaction(userId)) return REFUSALS.tooFast;
-    this.store.addReaction(reaction);
-    this.burst[reaction] = (this.burst[reaction] ?? 0) + 1;
-    this.burstTimer ??= setTimeout(
-      () => this.ctx.waitUntil(this.flushBurst()),
-      LIVE_ROOM_POLICY.reactionBurstMilliseconds,
-    );
-    void this.scheduleCopy();
-  }
-
-  private async flushBurst(): Promise<void> {
-    const counts = this.burst;
-    this.burst = {};
-    this.burstTimer = null;
-    if (Object.keys(counts).length) await this.broadcast.all({ type: "reaction.burst", counts, at: nowIso() });
   }
 }

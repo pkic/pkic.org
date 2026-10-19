@@ -1,4 +1,13 @@
 // @vitest-environment jsdom
+import {
+  organizationId,
+  userId,
+  memberId,
+  identityId,
+  pendingReview,
+  organizationWithPendingReview,
+  organizationProfile,
+} from "./helpers/organization-self-service";
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -13,11 +22,6 @@ import { controlFor, markdownControl } from "./helpers/labeled-control";
 // The page carries the representatives roster, whose "Add coworker" leads to
 // an address of its own; the location hook needs a router in this environment.
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["/organizations/example", vi.fn()] }));
-
-const organizationId = "00000000-0000-4000-8000-000000000210";
-const userId = "00000000-0000-4000-8000-000000000211";
-const memberId = "00000000-0000-4000-8000-000000000212";
-const identityId = "00000000-0000-4000-8000-000000000213";
 
 let container: HTMLDivElement;
 
@@ -157,47 +161,6 @@ describe("portal organization self-service", () => {
     return button;
   }
 
-  function pendingReview() {
-    return {
-      id: "00000000-0000-4000-8000-000000000220",
-      organizationId,
-      submittedByUserId: userId,
-      proposedChanges: { slogan: "New slogan" },
-      hasLogoChange: false,
-      status: "pending" as const,
-      reviewerUserId: null,
-      reviewerNote: null,
-      submittedAt: "2026-08-20T00:00:00.000Z",
-      reviewedAt: null,
-    };
-  }
-
-  function organizationWithPendingReview() {
-    return {
-      id: organizationId,
-      name: "Example Organization",
-      website: "https://example.test",
-      description: "Example profile",
-      slogan: null,
-      logoUrl: null,
-      contentMarkdown: null,
-      blogUrl: null,
-      blogFeedUrl: null,
-      pressUrl: null,
-      pressFeedUrl: null,
-      careersUrl: null,
-      links: [],
-      isOrgContact: true,
-      isPrimaryContact: true,
-      isSecondaryContact: false,
-      primaryContact: null,
-      secondaryContact: null,
-      pendingSecondaryContact: null,
-      pendingSecondaryContactUserId: null,
-      pendingReview: pendingReview(),
-    };
-  }
-
   it("withdraws the pending submission only after the named confirmation is accepted", async () => {
     const requests: { method: string; pathname: string }[] = [];
     let reloaded = false;
@@ -256,10 +219,6 @@ describe("portal organization self-service", () => {
 
     expect(requests.some((request) => request.method === "DELETE")).toBe(true);
   });
-
-  function organizationProfile(overrides: Record<string, unknown> = {}) {
-    return { ...organizationWithPendingReview(), pendingReview: null, ...overrides };
-  }
 
   /** The control a visible label is bound to, resolved the way a reader's
    *  assistive technology resolves it: through `for` and `id`, not proximity. */

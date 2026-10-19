@@ -1,4 +1,21 @@
 import {
+  liveQuestionSchema,
+  liveQuestionStatusSchema,
+  liveQuestionAskSchema,
+  liveQuestionRewriteSchema,
+  liveQuestionEditSchema,
+  liveQuestionWithdrawSchema,
+} from "./live-session-question";
+export {
+  liveQuestionSchema,
+  liveQuestionStatusSchema,
+  liveQuestionAskSchema,
+  liveQuestionRewriteSchema,
+  liveQuestionEditSchema,
+  liveQuestionWithdrawSchema,
+  type LiveQuestion,
+} from "./live-session-question";
+import {
   liveQuestionAnswerSendSchema,
   liveQuestionAnswerAcceptSchema,
   liveQuestionAnswersWatchSchema,
@@ -30,7 +47,6 @@ import { publicSessionPortraitUrlSchema } from "./event-session-history";
 import {
   liveAuthorAffiliationSchema,
   liveAuthorClientMessageSchemas,
-  liveAuthorFields,
   liveAuthorServerMessageSchemas,
 } from "./live-session-author";
 import {
@@ -42,7 +58,7 @@ import {
 import { databaseIdSchema } from "./identifiers";
 import { eventSlugParamsSchema, utcInstantSchema } from "./api-common";
 import { authErrors, created, requiresPermissions } from "./route-contract";
-import { LIVE_QUESTION_STATUSES, LIVE_REACTION_IDS, LIVE_ROOM_POLICY, LIVE_STAGE_VIEWS } from "../live-session-policy";
+import { LIVE_REACTION_IDS, LIVE_ROOM_POLICY, LIVE_STAGE_VIEWS } from "../live-session-policy";
 import { liveChangeSchema, livePersonNameSchema } from "./live-session-change";
 import { LIVE_AUX_OUTPUTS, LIVE_SPEAKER_MESSAGE_MAX_LENGTH, LIVE_SPEAKER_MESSAGE_TONES } from "../live-room-outputs";
 import { livePollClientMessageSchemas, livePollSchema, livePollServerMessageSchemas } from "./live-session-poll";
@@ -102,7 +118,6 @@ export function liveRoomRefusalFromClose(code: number, reason: string): string |
 export const liveRoomParamsSchema = eventSlugParamsSchema.extend({ occurrenceId: databaseIdSchema });
 
 export const liveRoomRoleSchema = z.enum(["attendee", "speaker", "operator", "overlay"]);
-export const liveQuestionStatusSchema = z.enum(LIVE_QUESTION_STATUSES);
 export const liveReactionSchema = z.enum(LIVE_REACTION_IDS);
 /** The outputs a browser source can show; which of an output's elements it draws, and where, is its layout's. */
 export const liveOverlayViewSchema = z.enum(["program", ...LIVE_AUX_OUTPUTS]);
@@ -114,39 +129,6 @@ export type LiveOverlayView = z.infer<typeof liveOverlayViewSchema>;
 export const liveRoomSocketQuerySchema = z.object({ output: liveOverlayViewSchema.optional() }).strict();
 /** The parts of the broadcast an operator lines up and puts on air. */
 export const liveStageViewSchema = z.enum(LIVE_STAGE_VIEWS);
-
-const questionTextSchema = z.string().min(1).max(LIVE_ROOM_POLICY.questionMaxLength);
-
-export const liveQuestionSchema = z
-  .object({
-    id: databaseIdSchema,
-    /** The text the room shows: an operator's rewrite when there is one, else the author's own words. */
-    text: questionTextSchema,
-    status: liveQuestionStatusSchema,
-    votes: z.number().int().nonnegative(),
-    /** The author chose to stay anonymous to other attendees; moderators always see the name. */
-    anonymous: z.boolean(),
-    /** Null when the question is anonymous to this viewer. */
-    authorName: livePersonNameSchema.nullable(),
-    /** The author's profile photo; null when they asked anonymously or have none. */
-    authorPhotoUrl: publicSessionPortraitUrlSchema.nullable().default(null),
-    /** The author's room handle, capacity and roles, under the same anonymity as the name. */
-    ...liveAuthorFields,
-    mine: z.boolean(),
-    revision: z.number().int().nonnegative().default(0),
-    withdrawn: z.boolean().default(false),
-    canEdit: z.boolean().default(false),
-    votedByMe: z.boolean(),
-    askedAt: utcInstantSchema,
-    answeredAt: utcInstantSchema.nullable(),
-    moderated: liveChangeSchema.nullable(),
-    /** Moderators only: the author's own words once an operator rewrote the question. */
-    originalText: questionTextSchema.nullable(),
-    /** Moderators only: who last rewrote the question. */
-    rewritten: liveChangeSchema.nullable(),
-  })
-  .strict();
-export type LiveQuestion = z.infer<typeof liveQuestionSchema>;
 
 /** Whether the room's graphics go straight to the stream, or through the production switcher's own scenes. */
 export const liveOverlayModeSchema = z.enum(["direct", "switcher"]);
@@ -464,41 +446,6 @@ export const liveRoomServerMessageSchema = z.discriminatedUnion("type", [
 export type LiveRoomServerMessage = z.infer<typeof liveRoomServerMessageSchema>;
 
 // ── Client → room ───────────────────────────────────────────────────────────
-
-const questionBodySchema = z
-  .string()
-  .trim()
-  .min(LIVE_ROOM_POLICY.questionMinLength, "Write a question of at least a few characters.")
-  .max(
-    LIVE_ROOM_POLICY.questionMaxLength,
-    `Keep your question under ${LIVE_ROOM_POLICY.questionMaxLength} characters.`,
-  );
-
-/** The ask form's contract: the socket message carries exactly these fields. */
-export const liveQuestionAskSchema = z.object({ text: questionBodySchema, anonymous: z.boolean() }).strict();
-
-/**
- * The rewrite editor's contract. The operator submits the text the room will
- * show; the author's own words stay on the question for the record. A later
- * writing assistant only proposes this text: the operator still sends it.
- */
-export const liveQuestionRewriteSchema = z.object({ text: questionBodySchema }).strict();
-
-const questionAuthorRequestFields = {
-  questionId: databaseIdSchema,
-  operationId: z.uuid(),
-  expectedRevision: z.number().int().nonnegative(),
-};
-export const liveQuestionEditSchema = liveQuestionRewriteSchema.extend({
-  type: z.literal("question.edit"),
-  ...questionAuthorRequestFields,
-});
-export const liveQuestionWithdrawSchema = z
-  .object({
-    type: z.literal("question.withdraw"),
-    ...questionAuthorRequestFields,
-  })
-  .strict();
 
 /** A question id, a poll id or a credit key, depending on the lineup it belongs to. */
 const queueItemSchema = z.string().min(1).max(80);
