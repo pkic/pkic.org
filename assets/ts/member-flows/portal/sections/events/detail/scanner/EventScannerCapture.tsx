@@ -422,7 +422,7 @@ export function EventScannerCapture({
           <Tabs
             label="Badge scanner views"
             idPrefix="scanner-view"
-            active={collectorContext ? "scan" : scannerTab}
+            active={scannerTab}
             onChange={(view) => {
               if (view === "recent") showRecentScans();
               else {

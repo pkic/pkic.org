@@ -90,7 +90,6 @@ async function illegibleButtons(page: Page): Promise<string[]> {
     const parse = (value: string) => {
       if (!value || value === "transparent") return null;
       context.clearRect(0, 0, 1, 1);
-      context.fillStyle = "#000";
       context.fillStyle = value;
       context.fillRect(0, 0, 1, 1);
       const [r, g, b, alpha] = context.getImageData(0, 0, 1, 1).data;

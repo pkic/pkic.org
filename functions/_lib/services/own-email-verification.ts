@@ -8,7 +8,7 @@
  * an explicit click; the capability is redeemed once through the shared
  * one-time audit key. A verified work address then joins the
  * organization its domain belongs to through the one shared rule
- * (`linkVerifiedAddressToDomainOrganization`): automatically for a non-member
+ * (`prepareVerifiedAddressDomainOrganizationLink`): automatically for a non-member
  * organization, and as the offer for a member organization.
  */
 import { EMAIL_ADDRESS_VERIFICATION_TTL_HOURS } from "../../../assets/shared/schemas/own-email-addresses";
@@ -24,7 +24,7 @@ import { AppError } from "../errors";
 import type { DatabaseLike, StatementLike } from "../types";
 import { nowIso } from "../utils/time";
 import { prepareAuditLog } from "./audit";
-import { linkVerifiedAddressToDomainOrganization } from "./identities/email-domain-link";
+import { prepareVerifiedAddressDomainOrganizationLink } from "./identities/email-domain-link";
 import { readAffiliationOffer } from "./identities/affiliation-offer";
 import { capabilityLinkUrl } from "./user-auth-flow";
 
@@ -182,6 +182,12 @@ export async function verifyOwnEmailAddress(
   const { address, capabilityId } = await resolveVerificationLink(db, input);
   const userId = address.user_id;
   const at = nowIso();
+  const joined = await prepareVerifiedAddressDomainOrganizationLink(db, {
+    userId,
+    normalizedEmail: address.normalized_email,
+    emailId: address.id,
+    at,
+  });
   await commitEmailAuthRedemption(db, {
     purpose: PURPOSE,
     capabilityId,
@@ -205,11 +211,8 @@ export async function verifyOwnEmailAddress(
           "UPDATE user_emails SET verified_at = ?, verification_method = 'magic_link' WHERE id = ? AND user_id = ?",
         )
         .bind(at, address.id, userId),
+      ...(joined?.statements ?? []),
     ],
-  });
-  const joined = await linkVerifiedAddressToDomainOrganization(db, {
-    userId,
-    normalizedEmail: address.normalized_email,
   });
   const [joinedOrganization, offer] = await Promise.all([
     joined

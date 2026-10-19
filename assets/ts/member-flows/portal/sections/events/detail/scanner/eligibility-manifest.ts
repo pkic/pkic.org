@@ -311,7 +311,7 @@ export async function prepareEligibilityManifest(
         visited.add(cursor);
       }
     } while (cursor);
-    if (!snapshot || !snapshotCurrent(snapshot)) throw new Error("Eligibility snapshot expired during preparation");
+    if (!snapshotCurrent(snapshot)) throw new Error("Eligibility snapshot expired during preparation");
     snapshot.complete = true;
     if (await scannerUploadSuspended(operatorUserId, sessionId)) throw new Error("SCANNER_SIGNED_OUT");
     await cached(key, snapshot);

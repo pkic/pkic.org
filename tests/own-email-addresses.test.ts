@@ -152,6 +152,68 @@ describe("a person's own email addresses", () => {
     ]);
   });
 
+  it.each(["identity", "notification"])(
+    "rolls back verification when the %s write fails and lets the same link retry",
+    async (failure) => {
+      const organizationId = await insertOrganization(env.DB, "Retry Claimed Co");
+      await claimDomain(organizationId, "retry-claimed.example");
+      const { userId, token } = await signedIn("retry@gmail.com");
+      const added = await add(token, "retry@retry-claimed.example");
+      const link = await verificationToken(added.email);
+      const target =
+        failure === "identity"
+          ? "identities WHEN NEW.organization_id IS NOT NULL"
+          : "email_outbox WHEN NEW.template_key = 'organization-identity-changed'";
+      await env.DB.prepare(`CREATE TRIGGER fail_verification_link BEFORE INSERT ON ${target}
+        BEGIN SELECT RAISE(ABORT, 'SYNTHETIC_VERIFICATION_LINK_FAILURE'); END`).run();
+      try {
+        expect((await verify(link)).status).toBe(500);
+        expect(
+          await queryAll(env.DB, "SELECT verified_at, verification_method, identity_id FROM user_emails WHERE id = ?", [
+            added.id,
+          ]),
+        ).toEqual([{ verified_at: null, verification_method: null, identity_id: null }]);
+        expect(
+          await queryAll(env.DB, "SELECT id FROM identities WHERE user_id = ? AND organization_id = ?", [
+            userId,
+            organizationId,
+          ]),
+        ).toEqual([]);
+        expect(
+          await queryAll(
+            env.DB,
+            "SELECT action FROM audit_log WHERE actor_id = ? AND action IN ('user_email_verified', 'organization_identity_activated')",
+            [userId],
+          ),
+        ).toEqual([]);
+        expect(
+          await queryAll(
+            env.DB,
+            "SELECT id FROM email_outbox WHERE recipient_user_id = ? AND template_key = 'organization-identity-changed'",
+            [userId],
+          ),
+        ).toEqual([]);
+        expect((await publicLinkCall("/preview", link)).status).toBe(200);
+      } finally {
+        await env.DB.prepare("DROP TRIGGER fail_verification_link").run();
+      }
+      const retried = await verify(link);
+      expect(retried.status, await retried.clone().text()).toBe(200);
+      expect(ownEmailAddressVerificationResponseSchema.parse(await retried.json()).joinedOrganization).toEqual({
+        id: organizationId,
+        name: "Retry Claimed Co",
+      });
+      expect(
+        await queryAll(
+          env.DB,
+          "SELECT id FROM email_outbox WHERE recipient_user_id = ? AND template_key = 'organization-identity-changed'",
+          [userId],
+        ),
+      ).toHaveLength(1);
+      expect((await verify(link)).status).toBe(409);
+    },
+  );
+
   it("offers a member organization, which the person signs in to join, and refuses a forged link", async () => {
     const organizationId = await insertOrganization(env.DB, "Member Co");
     await seedOrganizationAggregate(env.DB, organizationId);

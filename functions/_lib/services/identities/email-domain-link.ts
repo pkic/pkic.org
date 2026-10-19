@@ -1,8 +1,8 @@
 /**
  * A verified work address joins the organization its domain belongs to.
  *
- * Runs after the sign-in or registration confirmation that verified the
- * address has committed, as its own atomic command through the existing
+ * Prepares writes for the command that verifies the address, or runs after
+ * sign-in or registration confirmation through the existing
  * affiliation join (prepareVerifiedOrganizationAffiliation), so the same
  * proof, claim and blocking rules apply as when the person joins themselves.
  * Only organizations the shared rule links automatically are joined here; a
@@ -13,7 +13,7 @@ import { domainLinkMode } from "../../../../assets/shared/organization-domain";
 import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
-import type { DatabaseLike } from "../../types";
+import type { DatabaseLike, StatementLike } from "../../types";
 import { nowIso } from "../../utils/time";
 import { normalizeEmail } from "../../validation";
 import { isAuditChangeGuardFailure, prepareAuditLog } from "../audit";
@@ -41,55 +41,69 @@ async function ownedAddressId(
   return owner ? { emailId: owner.id } : null;
 }
 
-/**
- * Joins the organization `normalizedEmail`'s domain belongs to when the
- * shared rule links it automatically. Returns the joined organization, or
- * null when nothing is joined: free mail, an unowned or disputed domain, a
- * member organization, an existing or blocked relationship, or a refusal by
- * the join's own rules.
- */
+interface DomainOrganizationLinkInput {
+  userId: string;
+  normalizedEmail: string;
+  /** A platform-initiated link is audited in the same command. */
+  systemDecision?: { action: string; details: Record<string, unknown> };
+  /** A claim's backfill never links a person somewhere else. */
+  onlyOrganizationId?: string;
+}
+
+/** Joins an already verified address through the canonical automatic affiliation rule. */
 export async function linkVerifiedAddressToDomainOrganization(
   db: DatabaseLike,
-  input: {
-    userId: string;
-    normalizedEmail: string;
-    /**
-     * When the platform links the person on its own initiative (a domain
-     * claim reaching people who verified earlier), the decision is audited
-     * as the system's in the same command as the link.
-     */
-    systemDecision?: { action: string; details: Record<string, unknown> };
-    /** Join only this organization: a claim's backfill never links a person somewhere else. */
-    onlyOrganizationId?: string;
-  },
+  input: DomainOrganizationLinkInput,
 ): Promise<{ identityId: string; organizationId: string } | null> {
+  const address = await ownedAddressId(db, input.userId, normalizeEmail(input.normalizedEmail));
+  if (!address) return null;
+  const prepared = await prepareVerifiedAddressDomainOrganizationLink(db, { ...input, ...address, at: nowIso() });
+  if (!prepared) return null;
+  try {
+    await db.batch(prepared.statements);
+    return { identityId: prepared.identityId, organizationId: prepared.organizationId };
+  } catch (error) {
+    if (isAuthorizationGuardFailure(error) || isConcurrentIdentityConflict(error) || isAuditChangeGuardFailure(error))
+      return null;
+    throw error;
+  }
+}
+
+/**
+ * Prepares an automatic affiliation for the caller's atomic command. The selected
+ * address must be verified before these statements execute; the join guards
+ * recheck its ownership and proof, including when verification precedes it in the batch.
+ */
+export async function prepareVerifiedAddressDomainOrganizationLink(
+  db: DatabaseLike,
+  input: DomainOrganizationLinkInput & { emailId: string | null; at: string },
+): Promise<{ identityId: string; organizationId: string; statements: StatementLike[] } | null> {
   const normalizedEmail = normalizeEmail(input.normalizedEmail);
   // `domain` is the domain the address links through: the most specific claim covering it, else its registrable domain.
   const { domain, resolution } = await resolveEmailDomainOrganization(db, normalizedEmail);
   if (!domain || resolution.kind !== "organization" || domainLinkMode(resolution) !== "automatic") return null;
   const organizationId = resolution.organizationId;
   if (input.onlyOrganizationId && input.onlyOrganizationId !== organizationId) return null;
-  const [address, related, dismissed] = await Promise.all([
-    ownedAddressId(db, input.userId, normalizedEmail),
+  const [related, dismissed] = await Promise.all([
     first<{ id: string }>(db, "SELECT id FROM identities WHERE user_id = ? AND organization_id = ? LIMIT 1", [
       input.userId,
       organizationId,
     ]),
     hasDismissedOrganization(db, input.userId, organizationId),
   ]);
-  if (!address || related || dismissed) return null;
-  const at = nowIso();
+  if (related || dismissed) return null;
+  const at = input.at;
   try {
     const context = await loadIdentityNotificationContext(db, organizationId, input.userId, true);
     const prepared = await prepareVerifiedOrganizationAffiliation(db, {
       userId: input.userId,
       normalizedEmail,
-      emailId: address.emailId,
+      emailId: input.emailId,
       organizationId,
       at,
       proofEvidence: { sql: "SELECT 1 FROM users WHERE id = ? AND active = 1", bindings: [input.userId] },
     });
-    await db.batch([
+    const statements = [
       ...prepared.statements,
       prepareOwnAffiliationReviewResolution(db, { userId: input.userId, identityId: prepared.identityId, at }),
       // The person is told once, in the portal and by the identity email the platform already sends.
@@ -120,17 +134,11 @@ export async function linkVerifiedAddressToDomainOrganization(
             ),
           ]
         : []),
-    ]);
-    return { identityId: prepared.identityId, organizationId };
+    ];
+    return { identityId: prepared.identityId, organizationId, statements };
   } catch (error) {
-    // The join's own rules refused, or the facts changed before commit: the verification stands without a link.
-    if (
-      error instanceof AppError ||
-      isAuthorizationGuardFailure(error) ||
-      isConcurrentIdentityConflict(error) ||
-      isAuditChangeGuardFailure(error)
-    )
-      return null;
+    // A domain-policy refusal skips automatic linking before any writes execute.
+    if (error instanceof AppError && error.status < 500) return null;
     throw error;
   }
 }

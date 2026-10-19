@@ -273,7 +273,7 @@ export class LiveRoomProgram {
       const purgeAt = liveProgramPointerPurgeAt(publishedRoom.lastScheduledEndAt, program.createdAt);
       if (Date.now() >= purgeAt) return this.closeScope("LIVE_PROGRAM_ENDED", 1000);
       if (program.selection.occurrenceId) {
-        let valid = true;
+        let valid: boolean;
         try {
           const session = await readLiveRoomSession(this.env.DB, program.eventId, program.selection.occurrenceId);
           valid = session.roomIds.includes(program.roomId);
