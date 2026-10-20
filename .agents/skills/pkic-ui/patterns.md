@@ -86,5 +86,5 @@ Each entry is the full anatomy of a control. The gallery id renders it (`pnpm ga
 ## Profile biographies (`profile-biographies`)
 
 - Use `IdentityProfileFields` inside the existing identity profile form. General introduction: **About you**. Organization profile: **Your bio at {organization}**. Speaker onboarding: **Your speaker bio at {organization}**.
-- Explain the scope beside the field: About you spans roles; an organization bio is reused only when participating as that organization. Neither edit copies into the other.
+- Shared `Field` guidance appears above its control by default; validation feedback stays below. Explain the bio scope there: About you spans roles; an organization bio is reused only when participating as that organization. Neither edit copies into the other.
 - The About panel names an organization when using its bio as a fallback. Its menu edits the displayed source and separately offers adding a general introduction.

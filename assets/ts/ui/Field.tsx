@@ -30,7 +30,7 @@ export interface FieldProps {
   labelHidden?: boolean;
   /** Marks the control required and annotates the label. */
   required?: boolean;
-  /** Persistent guidance. Replaced by the message when a state is set. */
+  /** Guidance above the control. Replaced by the message below when a state is set. */
   help?: ComponentChildren;
   state?: FieldState;
   /** The message for `state`. Required whenever a state is set. */
@@ -150,6 +150,12 @@ export function Field({
         </label>
       )}
 
+      {!showMessage && help && (
+        <p class="pk-field__help" id={helpId}>
+          {help}
+        </p>
+      )}
+
       <div class="pk-field__control">
         {children({
           id: controlId,
@@ -171,12 +177,6 @@ export function Field({
         >
           {state && <StateIcon state={state} class="pk-field__message-icon" />}
           {message}
-        </p>
-      )}
-
-      {!showMessage && help && (
-        <p class="pk-field__help" id={helpId}>
-          {help}
         </p>
       )}
 
