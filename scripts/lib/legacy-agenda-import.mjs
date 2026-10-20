@@ -6,9 +6,16 @@ import { legacyAgendaPeople } from "./legacy-agenda-history.mjs";
 import { validateLegacyAgendaDocument, legacyAgendaSourcePath } from "./legacy-agenda-preparation.mjs";
 import { createHash } from "node:crypto";
 import { contentAgendaSlotTiming } from "../../assets/shared/content-agenda-timing.ts";
+import {
+  agendaTransferModeSchema,
+  transferResolutionSchema,
+} from "../../assets/shared/schemas/event-agenda-transfer.ts";
 
 /** Explicit canonical mappings only: names never silently create or match people. */
 export function prepareLegacyAgendaImport(source, mappings) {
+  const mode = agendaTransferModeSchema.parse(mappings.mode ?? "archive");
+  if (mode === "current")
+    mappings = { ...mappings, mode, people: transferResolutionSchema.shape.people.parse(mappings.people ?? {}) };
   const {
     roomIds = {},
     speakerUserIds = {},
