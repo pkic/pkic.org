@@ -88,6 +88,16 @@ describe("website contribution handoff", () => {
     expect(document.querySelectorAll("a")).toHaveLength(2);
     expect(document.querySelector("[data-content-feedback-link]")?.textContent).toContain("Suggest a change");
   });
+  it("captures a later authored region without confusing it with the first region or site chrome", () => {
+    document.body.innerHTML = `${render(<ContentContributionLinks context={context} page="https://pkic.org/about/" />)}<section data-pagefind-body><h2 id="first">First</h2><p>First region</p></section><section data-pagefind-body><h2 id="second">Second</h2><p>Selected second region</p></section>`;
+    const selection = window.getSelection()!;
+    const range = document.createRange();
+    range.selectNodeContents(document.querySelectorAll("section[data-pagefind-body] p")[1]!);
+    selection.addRange(range);
+    const url = new URL(selectedContentFeedbackUrl(document, selection, "https://pkic.org/about/")!);
+    expect(url.searchParams.get("selected-text")).toBe("Selected second region");
+    expect(url.searchParams.get("source-page")).toContain("#second");
+  });
   it("captures the selected wording and nearest item without including site chrome", () => {
     document.body.innerHTML = `${render(<ContentContributionLinks context={context} page="https://pkic.org/wg/pqc/pqcmm/" />)}<main data-pagefind-body><h3 id="criterion-1-2-3">Criterion 1.2.3</h3><p data-content-item-id="1.2.3">Original wording</p></main><footer>Footer</footer>`;
     const selection = window.getSelection()!;

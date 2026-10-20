@@ -12,10 +12,10 @@ export function selectedContentFeedbackUrl(document: Document, selection: Select
   }
   const parsed = contentContributionSchema.safeParse(raw);
   if (!parsed.success || !selection.anchorNode || !selection.focusNode) return undefined;
-  const body = document.querySelector("[data-pagefind-body]");
-  if (!body?.contains(selection.anchorNode) || !body.contains(selection.focusNode)) return undefined;
   const anchor = selection.getRangeAt(0).startContainer;
   const element = anchor instanceof Element ? anchor : anchor.parentElement;
+  const body = element?.closest("[data-pagefind-body]");
+  if (!body?.contains(selection.anchorNode) || !body.contains(selection.focusNode)) return undefined;
   const identified = element?.closest<HTMLElement>("[data-content-item-id]");
   const headings = [...body.querySelectorAll<HTMLElement>("h2[id], h3[id], h4[id], h5[id]")];
   const heading =
