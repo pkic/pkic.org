@@ -88,6 +88,35 @@ function setup(source = days) {
     panel.hidden = panel.dataset.agendaPanel !== source[0]!.date;
   dispose = initializeAgendaFilters(root.querySelector<HTMLElement>(".pk-content-agenda")!);
 }
+
+it.each([false, true])("keeps empty day locations only in the planner (editing: %s)", (editing) => {
+  const source = structuredClone(days);
+  for (const day of source) day.locations = [...days[0]!.locations, { id: "unused", label: "Unused room" }];
+  // A multi-room session keeps both rooms; a global break must not create extra room columns.
+  source[0]!.slots[0]!.sessions[0]!.locations = ["blue", "green"];
+  source[1]!.slots.push({
+    startsAt: "2026-12-02T10:00:00.000Z",
+    time: "11:00",
+    sessions: [{ id: "break", title: "Coffee", kind: "break", locations: [], speakers: [], descriptionHtml: "" }],
+  });
+  const before = structuredClone(source);
+  root.innerHTML = render(
+    <ContentAgenda
+      days={source}
+      speakers={[]}
+      timeZone="Europe/Amsterdam"
+      editor={editing ? { session: () => ({ controls: null }), dropTarget: () => null } : undefined}
+    />,
+  );
+  const columns = (date: string) =>
+    [...root.querySelectorAll<HTMLElement>(`[data-agenda-panel="${date}"] col[data-agenda-column-room]`)].map(
+      (column) => column.dataset.agendaColumnRoom,
+    );
+  expect(columns(source[0]!.date)).toEqual(editing ? ["blue", "green", "unused"] : ["blue", "green"]);
+  expect(columns(source[1]!.date)).toEqual(editing ? ["blue", "green", "unused"] : ["blue"]);
+  expect(root.textContent).toContain("Coffee");
+  expect(source).toEqual(before);
+});
 function input(selector: string, value: string) {
   const control = root.querySelector<HTMLInputElement | HTMLSelectElement>(selector)!;
   control.value = value;

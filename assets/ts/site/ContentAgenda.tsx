@@ -35,7 +35,7 @@ import "./AgendaDesign.css";
 import "./AgendaTimeline.css";
 
 export function ContentAgenda({
-  days,
+  days: suppliedDays,
   speakers,
   timeZone: clock,
   editor,
@@ -75,6 +75,12 @@ export function ContentAgenda({
     dropTarget: (startsAt: string, roomId: string) => ComponentChildren;
   };
 }) {
+  const days = editor
+    ? suppliedDays
+    : suppliedDays.map((day) => {
+        const occupied = new Set(day.slots.flatMap((slot) => slot.sessions.flatMap((session) => session.locations)));
+        return { ...day, locations: day.locations.filter((location) => occupied.has(location.id)) };
+      });
   const timeZone = clockTimeZone(clock);
   const root = useRef<HTMLElement>(null);
   useEffect(() => {
