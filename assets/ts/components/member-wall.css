@@ -15,7 +15,9 @@
     width: 13.125rem;
     background: #fff;
     border-radius: 10px;
-    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.14), 0 1px 5px rgba(0, 0, 0, 0.08);
+    box-shadow:
+      0 6px 24px rgba(0, 0, 0, 0.14),
+      0 1px 5px rgba(0, 0, 0, 0.08);
     overflow: hidden;
     pointer-events: none;
     opacity: 0;
@@ -105,9 +107,10 @@
   }
 
   .member-zoom-logo {
-    max-height: 4.5rem;
+    max-height: calc(var(--pk-8) + var(--pk-6));
     max-width: 55%;
-    width: auto;
+    width: min(55%, calc(var(--pk-8) * 4));
+    height: calc(var(--pk-8) + var(--pk-6));
     object-fit: contain;
   }
 
@@ -153,7 +156,7 @@
       display: block;
     }
   }
-  .pkic-section-label:has(+ .members-overview [data-sponsors-wall][data-state=empty]) {
+  .pkic-section-label:has(+ .members-overview [data-sponsors-wall][data-state="empty"]) {
     display: none;
   }
 
@@ -162,10 +165,10 @@
     padding-block: var(--pk-5);
     padding-inline: var(--pk-3);
   }
-  .members-overview:has([data-sponsors-wall][data-state=empty]) {
+  .members-overview:has([data-sponsors-wall][data-state="empty"]) {
     display: none;
   }
-  .members-overview:has([data-sponsors-wall][data-state=error]) .members {
+  .members-overview:has([data-sponsors-wall][data-state="error"]) .members {
     height: auto;
   }
   .members-overview .members {
@@ -215,5 +218,11 @@
     -webkit-user-select: none;
     -moz-user-select: none;
     user-select: none;
+  }
+}
+
+@layer components {
+  .members-overview .member-logo {
+    margin: var(--pk-3) var(--pk-6);
   }
 }
