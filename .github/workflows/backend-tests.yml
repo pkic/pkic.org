@@ -169,7 +169,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-e2e-artifacts
+          name: playwright-e2e-artifacts-attempt-${{ github.run_attempt }}
           path: |
             playwright-report/
             test-results/
@@ -208,7 +208,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: worker-profile-${{ matrix.artifact }}
+          name: worker-profile-${{ matrix.artifact }}-attempt-${{ github.run_attempt }}
           path: |
             ${{ runner.temp }}/worker-profile.json
             ${{ runner.temp }}/worker-resources.txt
