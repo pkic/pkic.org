@@ -1,4 +1,5 @@
 import { declineSpeakerParticipation } from "../functions/_lib/services/proposal-speaker-decline";
+import { createAdminSession } from "./helpers/auth";
 import { selectIndividualSpeakerRepresentation } from "./helpers/proposal-proof";
 import { ADMINISTRATOR_FIXTURE_USER_SQL, administratorGrants } from "./helpers/administrator";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -11,7 +12,11 @@ import {
   finalizeProposalDecision,
   getProposalByManageToken,
 } from "../functions/_lib/services/proposals";
-import { confirmSpeakerParticipation } from "../functions/_lib/services/proposals-speaker-profile";
+import { persistConsents } from "../functions/_lib/services/consent";
+import {
+  acceptSpeakerParticipationByManager,
+  confirmSpeakerParticipation,
+} from "../functions/_lib/services/proposal-speaker-confirmation";
 import {
   getProposerManagedSpeakerContext,
   updateProposalSpeakerRoleByProposer,
@@ -45,14 +50,158 @@ function raceBeforeFirstBatch(action: () => Promise<void>): DatabaseLike {
 describe("proposal speaker capacity conflicts", () => {
   let adminSessionToken: string;
   let eventId: string;
+  let adminUserId: string;
 
   beforeEach(async () => {
     await resetDb();
-    ({ adminSessionToken, eventId } = await setupProposalSpeakerCapacityWorkflow());
+    ({ adminSessionToken, eventId, adminUserId } = await setupProposalSpeakerCapacityWorkflow());
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 202 })));
   });
 
   afterEach(() => vi.unstubAllGlobals());
+
+  async function acceptanceFixture() {
+    const speaker = await inviteSpeakerAndSubmitCapacityProposal(adminSessionToken);
+    await selectIndividualSpeakerRepresentation({
+      environment: env,
+      eventSlug: "pqc-2026",
+      email: "cospeaker@example.test",
+      consents: [{ termKey: "speaker-terms", version: "v1" }],
+      speakerManagementToken: speaker.speakerManageToken,
+    });
+    return speaker;
+  }
+  function acceptRequest(proposalId: string, userId: string, token: string | null = adminSessionToken, body = {}) {
+    return app.fetch(
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/speakers/${userId}/acceptance`, {
+        method: "POST",
+        headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify(body),
+      }),
+      env,
+      requestOptions,
+    );
+  }
+  async function recordSpeakerConsent(proposalId: string, userId: string) {
+    await persistConsents(env.DB, {
+      eventId,
+      proposalId,
+      userId,
+      audienceType: "speaker",
+      accepted: [{ termKey: "speaker-terms", version: "v1" }],
+      ip: null,
+      userAgent: null,
+      secret: env.INTERNAL_SIGNING_SECRET!,
+    });
+  }
+
+  it("accepts for a speaker with existing identity and terms without creating personal consent", async () => {
+    const { proposalId, coSpeakerUserId } = await acceptanceFixture();
+    await recordSpeakerConsent(proposalId, coSpeakerUserId);
+    const before = await queryAll(env.DB, "SELECT id, accepted_at FROM consent_acceptances WHERE proposal_id=?", [
+      proposalId,
+    ]);
+    expect((await acceptRequest(proposalId, coSpeakerUserId)).status).toBe(200);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT status, terms_accepted_at FROM proposal_speakers WHERE proposal_id=? AND user_id=?",
+        [proposalId, coSpeakerUserId],
+      ),
+    ).toEqual([{ status: "confirmed", terms_accepted_at: null }]);
+    expect(
+      await queryAll(env.DB, "SELECT id, accepted_at FROM consent_acceptances WHERE proposal_id=?", [proposalId]),
+    ).toEqual(before);
+    expect(
+      await queryAll(env.DB, "SELECT actor_id FROM audit_log WHERE action='speaker_confirmed_by_organizer'"),
+    ).toEqual([{ actor_id: adminUserId }]);
+    expect((await acceptRequest(proposalId, coSpeakerUserId)).status).toBe(200);
+    expect(
+      await queryAll(env.DB, "SELECT actor_id FROM audit_log WHERE action='speaker_confirmed_by_organizer'"),
+    ).toHaveLength(1);
+  });
+
+  it("requires the speaker's existing identity and current terms, plus an authenticated organizer", async () => {
+    const { proposalId, coSpeakerUserId, speakerManageToken } =
+      await inviteSpeakerAndSubmitCapacityProposal(adminSessionToken);
+    expect((await acceptRequest(proposalId, coSpeakerUserId, null)).status).toBe(401);
+    expect((await acceptRequest(proposalId, coSpeakerUserId, adminSessionToken, { consents: [] })).status).toBe(400);
+    const noIdentity = await acceptRequest(proposalId, coSpeakerUserId);
+    expect(noIdentity.status).toBe(409);
+    expect(await noIdentity.json()).toMatchObject({ error: { code: "SPEAKER_REPRESENTATION_REQUIRED" } });
+    await selectIndividualSpeakerRepresentation({
+      environment: env,
+      eventSlug: "pqc-2026",
+      email: "cospeaker@example.test",
+      consents: [{ termKey: "speaker-terms", version: "v1" }],
+      speakerManagementToken: speakerManageToken,
+    });
+    const noConsent = await acceptRequest(proposalId, coSpeakerUserId);
+    expect(noConsent.status).toBe(409);
+    expect(await noConsent.json()).toMatchObject({ error: { code: "SPEAKER_CONSENT_REQUIRED" } });
+    expect(
+      await queryAll(env.DB, "SELECT status FROM proposal_speakers WHERE proposal_id=? AND user_id=?", [
+        proposalId,
+        coSpeakerUserId,
+      ]),
+    ).toEqual([{ status: "invited" }]);
+  });
+
+  it("authorizes event-scoped management but refuses reviewers and declined or closed participation", async () => {
+    const { proposalId, coSpeakerUserId } = await acceptanceFixture();
+    await recordSpeakerConsent(proposalId, coSpeakerUserId);
+    const reviewer = await findOrCreateUser(env.DB, {
+      email: "acceptance-reviewer@example.test",
+      firstName: "Review",
+      lastName: "Only",
+    });
+    await env.DB.prepare(`INSERT INTO permission_grants (id,user_id,permission,context_type,context_id,created_at)
+      VALUES (?,?,'proposals:score','event',?,?)`)
+      .bind(crypto.randomUUID(), reviewer.id, eventId, new Date().toISOString())
+      .run();
+    const reviewerToken = await createAdminSession(env.DB, reviewer.id, "acceptance-reviewer");
+    expect((await acceptRequest(proposalId, coSpeakerUserId, reviewerToken)).status).toBe(403);
+    await env.DB.prepare("UPDATE permission_grants SET permission='proposals:manage' WHERE user_id=?")
+      .bind(reviewer.id)
+      .run();
+    expect((await acceptRequest(proposalId, coSpeakerUserId, reviewerToken)).status).toBe(200);
+    await env.DB.prepare("UPDATE proposal_speakers SET status='declined' WHERE proposal_id=? AND user_id=?")
+      .bind(proposalId, coSpeakerUserId)
+      .run();
+    expect((await acceptRequest(proposalId, coSpeakerUserId)).status).toBe(409);
+    await env.DB.prepare("UPDATE proposal_speakers SET status='invited' WHERE proposal_id=? AND user_id=?")
+      .bind(proposalId, coSpeakerUserId)
+      .run();
+    await env.DB.prepare("UPDATE session_proposals SET status='withdrawn' WHERE id=?").bind(proposalId).run();
+    expect((await acceptRequest(proposalId, coSpeakerUserId)).status).toBe(409);
+  });
+
+  it("rolls back organizer acceptance if the speaker consent disappears before the batch", async () => {
+    const { proposalId, coSpeakerUserId } = await acceptanceFixture();
+    await recordSpeakerConsent(proposalId, coSpeakerUserId);
+    const db = raceBeforeFirstBatch(async () => {
+      await env.DB.prepare("DELETE FROM consent_acceptances WHERE proposal_id=? AND user_id=?")
+        .bind(proposalId, coSpeakerUserId)
+        .run();
+    });
+    await expect(
+      acceptSpeakerParticipationByManager(
+        db,
+        { identityType: "user", id: adminUserId, email: "admin@pkic.org", grants: administratorGrants },
+        proposalId,
+        coSpeakerUserId,
+      ),
+    ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_SPEAKER_CONFLICT" });
+    expect(
+      await queryAll(env.DB, "SELECT status FROM proposal_speakers WHERE proposal_id=? AND user_id=?", [
+        proposalId,
+        coSpeakerUserId,
+      ]),
+    ).toEqual([{ status: "invited" }]);
+    expect(await queryAll(env.DB, "SELECT id FROM audit_log WHERE action='speaker_confirmed_by_organizer'")).toEqual(
+      [],
+    );
+  });
 
   it("blocks self-service decline of the final non-declined speaker", async () => {
     const { proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitCapacityProposal(adminSessionToken);

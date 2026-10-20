@@ -26,6 +26,10 @@
  */
 import { useEffect, useState } from "preact/hooks";
 import { isEligibleReplacementProposerStatus } from "../../../shared/schemas/proposal-status";
+import {
+  proposalSpeakerAcceptanceRequestSchema,
+  proposalSpeakerAcceptanceResponseSchema,
+} from "../../../shared/schemas/proposal-speakers";
 import type { ProposalSpeaker, ProposalRosterSpeaker } from "../../../shared/schemas/proposal-speakers";
 import { proposalSpeakerRemovalResponseSchema } from "../../../shared/schemas/proposal-management";
 import { successResponseSchema } from "../../../shared/schemas/api-common";
@@ -76,6 +80,7 @@ export function buildReplacementProposerOptions(speakers: ProposalSpeaker[], rem
 
 export interface ProposalSpeakerEndpointConfig {
   speakerPath: (proposalId: string, userId: string, suffix?: string) => string;
+  acceptancePath?: (proposalId: string, userId: string) => string;
   reminderPath?: (proposalId: string, userId: string, kind: "profile" | "presentation") => string;
   reminderBody?: (kind: "profile" | "presentation") => unknown;
 }
@@ -184,6 +189,7 @@ export function ProposalSpeakerCard({
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [changingRole, setChangingRole] = useState(false);
   const [importingGravatar, setImportingGravatar] = useState(false);
+  const [accepting, setAccepting] = useState(false);
   const [removing, setRemoving] = useState(false);
   // The proposer cannot simply be removed: the proposal has to pass to
   // another speaker first, and that choice is asked for in a dialog of its
@@ -282,6 +288,41 @@ export function ProposalSpeakerCard({
       label: importingGravatar ? "Importing photo…" : IMPORT_GRAVATAR_LABEL,
       disabled: importingGravatar,
       onSelect: () => void importGravatar(),
+    });
+  }
+  if (canFinalize && endpoints.acceptancePath && (speaker.status === "invited" || speaker.status === "pending")) {
+    actions.push({
+      id: "accept-invitation",
+      label: accepting ? "Accepting invitation…" : "Accept on behalf of speaker",
+      disabled: accepting,
+      onSelect: async () => {
+        if (
+          !(await confirmAction({
+            title: `Accept the invitation for ${name}?`,
+            body: "Confirm that the speaker has agreed to participate. Their identity and required terms must already be complete.",
+            confirmLabel: "Accept invitation",
+            tone: "primary",
+          }))
+        )
+          return;
+        try {
+          setAccepting(true);
+          await requestJson(
+            endpoints.acceptancePath!(proposalId, speaker.userId),
+            proposalSpeakerAcceptanceResponseSchema,
+            {
+              method: "POST",
+              body: JSON.stringify(proposalSpeakerAcceptanceRequestSchema.parse({})),
+            },
+          );
+          notify("Speaker invitation accepted", "success");
+          onProfileChanged?.();
+        } catch (error) {
+          notify((error as Error).message, "error");
+        } finally {
+          setAccepting(false);
+        }
+      },
     });
   }
   if (canFinalize && !isCurrentProposer) {

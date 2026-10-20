@@ -29,11 +29,11 @@ import {
   type SpeakerWithContext,
 } from "../../../../../_lib/services/proposals-speaker-capability";
 import {
-  confirmSpeakerParticipation,
   updateSpeakerProfile,
   getProposalCoSpeakers,
   getPresentationUploader,
 } from "../../../../../_lib/services/proposals-speaker-profile";
+import { confirmSpeakerParticipation } from "../../../../../_lib/services/proposal-speaker-confirmation";
 import { getRequiredTerms } from "../../../../../_lib/services/events";
 import { speakerPresentationPageUrl } from "../../../../../_lib/services/frontend-links";
 import { requireInternalSecret } from "../../../../../_lib/request";

@@ -17,10 +17,8 @@ import { buildCreateIdentityStatement } from "../functions/_lib/services/members
 import { getSpeakerByManageToken } from "../functions/_lib/services/proposals";
 import { getEventParticipantSourceRevision } from "../functions/_lib/services/event-participant-source-revision";
 import { getProposalSpeakerRosterRevision } from "../functions/_lib/services/proposal-speaker-roster-revision";
-import {
-  updateSpeakerProfile,
-  confirmSpeakerParticipation,
-} from "../functions/_lib/services/proposals-speaker-profile";
+import { updateSpeakerProfile } from "../functions/_lib/services/proposals-speaker-profile";
+import { confirmSpeakerParticipation } from "../functions/_lib/services/proposal-speaker-confirmation";
 import { parseCapabilityToken } from "../functions/_lib/auth/capability-token";
 import { sha256Hex } from "../functions/_lib/utils/crypto";
 import { callApi } from "./helpers/app";

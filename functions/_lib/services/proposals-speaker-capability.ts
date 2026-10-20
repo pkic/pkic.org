@@ -37,13 +37,7 @@ export async function getSpeakerByManageToken(
   signingSecret: string,
 ): Promise<SpeakerWithContext> {
   if (typeof manageToken !== "string") {
-    const owned = await first<{ id: string }>(
-      db,
-      "SELECT id FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
-      [manageToken.resourceId, manageToken.userId],
-    );
-    if (!owned) throw new AppError(404, "SPEAKER_NOT_FOUND", "Speaker participation not found");
-    return getSpeakerById(db, owned.id, manageToken.userId);
+    return getSpeakerByProposalUser(db, manageToken.resourceId, manageToken.userId);
   }
   const verified = await verifyDatabaseCapability({ db, signingSecret, purpose: "speaker_manage", token: manageToken });
   if (!verified.ok) {
@@ -55,6 +49,21 @@ export async function getSpeakerByManageToken(
   }
 
   return getSpeakerById(db, verified.resourceId);
+}
+
+/** Reads one speaker's context; the caller supplies either self authority or organizer permission. */
+export async function getSpeakerByProposalUser(
+  db: DatabaseLike,
+  proposalId: string,
+  userId: string,
+): Promise<SpeakerWithContext> {
+  const row = await first<{ id: string }>(
+    db,
+    "SELECT id FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
+    [proposalId, userId],
+  );
+  if (!row) throw new AppError(404, "SPEAKER_NOT_FOUND", "Speaker participation not found");
+  return getSpeakerById(db, row.id, userId);
 }
 
 async function getSpeakerById(db: DatabaseLike, speakerId: string, userId?: string): Promise<SpeakerWithContext> {
