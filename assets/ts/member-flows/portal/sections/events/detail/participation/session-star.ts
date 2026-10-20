@@ -9,7 +9,7 @@ import { putJson } from "../../../../../../shared/api-client";
 export function setSessionStar(slug: string, occurrenceId: string, starred: boolean) {
   const body: z.input<typeof sessionParticipationRequestSchema> = { action: starred ? "save" : "unsave" };
   return putJson(
-    `/api/v1/events/${encodeURIComponent(slug)}/agenda/${encodeURIComponent(occurrenceId)}/participation`,
+    `/api/v1/events/${encodeURIComponent(slug)}/agenda/occurrences/${encodeURIComponent(occurrenceId)}/participation`,
     body,
     sessionParticipationResponseSchema,
   );

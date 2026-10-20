@@ -217,7 +217,7 @@ it("interleaves two prepared last-seat claims with online and delayed attendance
   const bodies = originals.map((entry) => JSON.stringify(entry));
   const gates = [bookingGate(), bookingGate()];
   const pending = [attendeeToken, rivalToken].map((token, index) =>
-    callApi({ ...env, DB: gates[index]!.db }, `${base}/agenda/${fixture.occurrenceId}/participation`, {
+    callApi({ ...env, DB: gates[index]!.db }, `${base}/agenda/occurrences/${fixture.occurrenceId}/participation`, {
       method: "PUT",
       headers: headers(token),
       body: JSON.stringify(

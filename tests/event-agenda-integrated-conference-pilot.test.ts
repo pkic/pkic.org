@@ -284,7 +284,7 @@ it("joins portable parallel/multi-day import, edit, pinned staffing, publication
     [workshop, "reserve", "reserved"],
   ] as const) {
     const result = await pilot.api(
-      `${base}/agenda/${session.id}/participation`,
+      `${base}/agenda/occurrences/${session.id}/participation`,
       sessionParticipationResponseSchema,
       sessionParticipationRequestSchema.parse({
         action,

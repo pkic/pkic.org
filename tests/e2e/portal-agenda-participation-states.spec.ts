@@ -1,3 +1,4 @@
+import { instantToCalendarDate } from "../../assets/shared/timezone";
 import { writeFile } from "node:fs/promises";
 import { expect, test, type Locator, type Page, type TestInfo } from "@playwright/test";
 import type { z } from "zod";
@@ -91,7 +92,7 @@ async function submit(
   await expect(update).toBeFocused();
   const received = page.waitForResponse(
     (response) =>
-      new URL(response.url()).pathname === `${fixture.base}/${occurrence.id}/participation` &&
+      new URL(response.url()).pathname === `${fixture.base}/occurrences/${occurrence.id}/participation` &&
       response.request().method() === "PUT",
   );
   await page.keyboard.press("Enter");
@@ -107,7 +108,7 @@ async function cancelRegistration(page: Page, fixture: Fixture, occurrence: Occu
   const detail = participation(page);
   const received = page.waitForResponse(
     (response) =>
-      new URL(response.url()).pathname === `${fixture.base}/${occurrence.id}/participation` &&
+      new URL(response.url()).pathname === `${fixture.base}/occurrences/${occurrence.id}/participation` &&
       response.request().method() === "PUT",
   );
   await press(page, detail.getByRole("button", { name: "Cancel reservation…", exact: true }));
@@ -125,7 +126,7 @@ async function cancelRegistration(page: Page, fixture: Fixture, occurrence: Occu
 async function capture(page: Page, info: TestInfo, name: string, panel: Locator) {
   for (const [device, width, height] of [
     ["desktop", 1280, 900],
-    ["phone", 390, 844],
+    ["phone", 375, 844],
   ] as const) {
     await page.setViewportSize({ width, height });
     await page.evaluate(() => window.scrollTo(0, 0));
@@ -158,6 +159,8 @@ async function inspectState(
   info: TestInfo,
   { stateInHeader = false, rowLabel = label }: { stateInHeader?: boolean; rowLabel?: string } = {},
 ) {
+  if (!occurrence.startAt) throw new Error("The participation fixture requires a scheduled occurrence");
+  const agendaDayPath = `/portal/#/events/${fixture.slug}/agenda/${instantToCalendarDate(occurrence.startAt, fixture.agenda.timeZone)}`;
   const before = await readSession(page, fixture, occurrence);
   expect(before.status).toBe(status);
   const panel = stateInHeader ? page.getByRole("dialog") : participation(page);
@@ -179,7 +182,7 @@ async function inspectState(
   // Phones reach My agenda through the event app's bottom tabs.
   const tabs = page.getByRole("navigation", { name: "Event app", exact: true });
   await press(page, tabs.getByRole("link", { name: "My agenda", exact: true }));
-  await expect(page).toHaveURL(new URL(`/portal/#/events/${fixture.slug}/agenda?mine=1`, page.url()).href);
+  await expect(page).toHaveURL(new URL(`${agendaDayPath}?mine=1`, page.url()).href);
   const sessionLink = page
     .getByRole("link", { name: occurrence.title, exact: true })
     .and(page.locator(`a[href="#/events/${fixture.slug}/agenda?mine=1&session=${occurrence.id}"]`));
@@ -193,7 +196,7 @@ async function inspectState(
     // Only starred and booked sessions are on My agenda; the whole program still lists this one.
     await expect(row).toBeHidden();
     await press(page, tabs.getByRole("link", { name: "Agenda", exact: true }));
-    await expect(page).toHaveURL(new URL(`/portal/#/events/${fixture.slug}/agenda`, page.url()).href);
+    await expect(page).toHaveURL(new URL(agendaDayPath, page.url()).href);
     const card = page.locator(`article[data-agenda-occurrence="${occurrence.id}"]`);
     await expect(card).toBeVisible();
     await press(page, card.getByLabel(`Open session details: ${occurrence.title}`, { exact: true }));

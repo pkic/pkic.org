@@ -6,7 +6,15 @@ import { setSessionDelegation } from "../functions/_lib/services/event-participa
 import { setSessionParticipation } from "../functions/_lib/services/event-participation/session-booking";
 import type { DatabaseLike } from "../functions/_lib/types";
 import { nowIso } from "../functions/_lib/utils/time";
-import { sessionInvitationRequestSchema } from "../assets/shared/schemas/event-session-management";
+import {
+  sessionHoldRequestSchema,
+  sessionHoldResponseSchema,
+  sessionHoldRevokeSchema,
+} from "../assets/shared/schemas/event-session-holds";
+import {
+  sessionDelegationRequestSchema,
+  sessionInvitationRequestSchema,
+} from "../assets/shared/schemas/event-session-management";
 import { sessionReviewRequestSchema } from "../assets/shared/schemas/route-contracts-session-participation";
 import { callApi } from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
@@ -35,7 +43,7 @@ async function command(
   const review = action === "approve" || action === "reject";
   return callApi(
     { ...env, DB: db },
-    `/api/v1/events/${slug}/agenda/${id}/${review ? `participation/${targetId}` : "invitations"}`,
+    `/api/v1/events/${slug}/agenda/occurrences/${id}/${review ? `participation/${targetId}` : "invitations"}`,
     {
       method: "PUT",
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
@@ -151,6 +159,96 @@ beforeEach(async () => {
   adminToken = await createAdminSession(env.DB, adminId, crypto.randomUUID());
   speakerToken = await createAdminSession(env.DB, speakerId, crypto.randomUUID());
   otherToken = await createAdminSession(env.DB, otherPersonId, crypto.randomUUID());
+});
+
+describe("Canonical occurrence action routes", () => {
+  const actions = [
+    ["GET", "holds"],
+    ["POST", "holds"],
+    ["DELETE", `holds/${crypto.randomUUID()}`],
+    ["GET", "participation"],
+    ["PUT", "participation"],
+    ["PUT", `participation/${attendeeId}`],
+    ["GET", "attendance"],
+    ["PUT", "invitations"],
+    ["PUT", "delegation"],
+    ["GET", "invitees"],
+    ["GET", "management"],
+  ] as const;
+
+  it("serves authorized collection reads and rejects nonmanagers", async () => {
+    for (const action of ["holds", "participation", "attendance", "invitees", "management"]) {
+      const path = `/api/v1/events/${slug}/agenda/occurrences/${occurrenceId}/${action}${action === "invitees" ? "?q=attendee" : ""}`;
+      const response = await callApi(env, path, { headers: { authorization: `Bearer ${adminToken}` } });
+      expect(response.status, `${path}: ${await response.text()}`).toBe(200);
+      const denied = await callApi(env, path, { headers: { authorization: `Bearer ${otherToken}` } });
+      expect(denied.status, path).toBe(403);
+    }
+  });
+
+  it("creates and releases a hold and changes delegation through the canonical paths", async () => {
+    const base = `/api/v1/events/${slug}/agenda/occurrences/${occurrenceId}`;
+    const headers = { authorization: `Bearer ${adminToken}`, "content-type": "application/json" };
+    const created = await callApi(env, `${base}/holds`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(
+        sessionHoldRequestSchema.parse({
+          userId: attendeeId,
+          attendanceMode: "physical",
+          reasonCode: "staff",
+          expiresAt: new Date(Date.now() + 3600000).toISOString(),
+        }),
+      ),
+    });
+    expect(created.status, await created.clone().text()).toBe(200);
+    const hold = sessionHoldResponseSchema.parse(await created.json());
+    const released = await callApi(env, `${base}/holds/${hold.id}`, { method: "DELETE", headers });
+    expect(released.status).toBe(200);
+    expect(sessionHoldRevokeSchema.parse(await released.json()).revoked).toBe(true);
+    const delegated = await callApi(env, `${base}/delegation`, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify(sessionDelegationRequestSchema.parse({ userId: speakerId, enabled: false })),
+    });
+    expect(delegated.status).toBe(200);
+    expect(await delegated.json()).toMatchObject({ enabled: false });
+    expect((await command("invite", speakerToken)).status).toBe(403);
+  });
+
+  it("validates canonical mutation payloads before dispatching domain commands", async () => {
+    const before = await effects();
+    for (const [method, action] of actions) {
+      if (method !== "PUT" && method !== "POST") continue;
+      const response = await callApi(env, `/api/v1/events/${slug}/agenda/occurrences/${occurrenceId}/${action}`, {
+        method,
+        headers: { authorization: `Bearer ${adminToken}`, "content-type": "application/json" },
+        body: JSON.stringify({ unexpected: true }),
+      });
+      expect(response.status, action).toBe(400);
+    }
+    expect(await effects()).toEqual(before);
+  });
+
+  it("requires authentication and removes every superseded action mount", async () => {
+    for (const [method, action] of actions) {
+      const root = `/api/v1/events/${slug}/agenda`;
+      const init = {
+        method,
+        headers: { authorization: `Bearer ${adminToken}`, "content-type": "application/json" },
+        ...(method === "PUT" || method === "POST" ? { body: "{}" } : {}),
+      };
+      const removed = await callApi(env, `${root}/${occurrenceId}/${action}`, init);
+      expect(removed.status, `${method} ${action}`).toBe(404);
+      if (method === "GET") {
+        const denied = await callApi(
+          env,
+          `${root}/occurrences/${occurrenceId}/${action}${action === "invitees" ? "?q=attendee" : ""}`,
+        );
+        expect(denied.status, action).toBe(401);
+      }
+    }
+  });
 });
 
 describe("Audited participant management for assigned sessions", () => {

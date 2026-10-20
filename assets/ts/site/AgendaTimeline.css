@@ -273,6 +273,8 @@
       > .pk-content-agenda__session {
       position: relative;
       inset: auto;
+      block-size: auto;
+      max-block-size: none;
     }
     .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__time {
       display: block;
@@ -339,7 +341,9 @@
 
   /* With every physical room filtered out, an isolated clock must not fill the whole canvas. */
   @media screen {
-    .pk-content-agenda__timeline:has(col[data-agenda-column-room]):not(:has(col[data-agenda-column-room]:not([hidden]))) {
+    .pk-content-agenda__timeline:has(col[data-agenda-column-room]):not(
+        :has(col[data-agenda-column-room]:not([hidden]))
+      ) {
       width: var(--agenda-time-width);
     }
   }

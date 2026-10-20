@@ -127,7 +127,13 @@ export async function runOwnedPublicationBuild(env: MachineEnvironment = process
   const bindingsPath = resolve(output, "bindings.json");
   const configuration = readConfig({ config: resolve("wrangler.jsonc"), env: machine.config.environment });
   await writeFile(bindingsPath, JSON.stringify(publicationBindingConfig(configuration, machine.config.environment)));
-  const platform = await getPlatformProxy<Pick<Env, "DB">>({ configPath: bindingsPath, persist: false, envFiles: [] });
+  const platform = await getPlatformProxy<Pick<Env, "DB">>({
+    configPath: bindingsPath,
+    // Bindings are already selected; bypass the inherited CLOUDFLARE_ENV.
+    environment: "",
+    persist: false,
+    envFiles: [],
+  });
   try {
     const row = await first<{ id: string }>(
       platform.env.DB,

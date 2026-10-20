@@ -370,3 +370,47 @@ test("footer sponsors retain colored artwork and show tier details on hover and 
   await expect(card.locator(".member-hovercard-footer")).toHaveText("Titanium Sponsor");
   await page.screenshot({ path: test.info().outputPath("footer-sponsor-focus.png") });
 });
+
+/** Small source artwork must scale up without making ordinary wall logos compete with sponsors. */
+test("member wall balances featured artwork, muted members, and spacing", async ({ page }) => {
+  for (const width of [1440, 375]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto("/design/?only=member-wall");
+    const wall = page.locator("#member-wall");
+    const featured = wall.locator(".member-zoom-logo");
+    await expect(featured).toBeVisible();
+    const geometry = await featured.evaluate((image: HTMLImageElement) => {
+      const box = image.getBoundingClientRect();
+      const parent = image.parentElement!.getBoundingClientRect();
+      return {
+        width: box.width,
+        height: box.height,
+        intrinsic: image.naturalWidth,
+        contained: box.left >= parent.left && box.right <= parent.right,
+        fit: getComputedStyle(image).objectFit,
+      };
+    });
+    expect(geometry.width).toBeGreaterThan(geometry.intrinsic * 3);
+    expect(geometry.height).toBeGreaterThanOrEqual(72);
+    expect(geometry.contained).toBe(true);
+    expect(geometry.fit).toBe("contain");
+    const member = wall.locator(".member-logo:not(.member-logo-sponsor)").first();
+    const sponsor = wall.locator(".member-logo-sponsor").first();
+    for (const theme of ["light", "dark"]) {
+      await page.evaluate((theme) => {
+        document.documentElement.dataset.theme = theme;
+      }, theme);
+      expect(Number(await member.evaluate((image) => getComputedStyle(image).opacity))).toBeLessThanOrEqual(0.35);
+      expect(await sponsor.evaluate((image) => getComputedStyle(image).opacity)).toBe("1");
+      const margins = await member.evaluate((image) => ({
+        horizontal: parseFloat(getComputedStyle(image).marginInlineStart),
+        vertical: parseFloat(getComputedStyle(image).marginBlockStart),
+      }));
+      expect(margins.horizontal).toBeGreaterThan(20);
+      expect(margins.vertical).toBeGreaterThan(5);
+    }
+    await member.locator("..").focus();
+    await expect.poll(() => member.evaluate((image) => getComputedStyle(image).opacity)).toBe("1");
+    expect(await wall.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  }
+});

@@ -9,6 +9,8 @@
  */
 
 import { useState } from "preact/hooks";
+import "../../components/member-wall.css";
+import "../../components/site-footer.css";
 import { useHashQueryParam } from "../../hooks/useHashQueryParam";
 
 import { LIVE_CHAT_REACTIONS } from "../../../shared/live-chat-policy";
@@ -66,12 +68,47 @@ const agendaDays: ContentAgendaDay[] = ["2025-12-01", "2025-12-02"].map((date, i
           title: "Preparing for post-quantum migration",
           kind: "session",
           locations: index ? ["main", "workshop"] : ["main"],
-          speakers: [{ name: "Alex Example" }],
+          speakers: ["Alex Example", "Sam Example", "Taylor Example"].map((name) => ({
+            name,
+            affiliations: [{ title: "Migration program lead", organization: { name: "Example Organization" } }],
+          })),
           descriptionHtml: "<p>A practical discussion of migration planning.</p>",
           endsAt: `${date}T09:30:00.000Z`,
           durationMinutes: 30,
+          track: "Migration",
           youtube: "M7lc1UVf-VE",
           recordingApproved: true,
+        },
+      ],
+    },
+    {
+      startsAt: `${date}T09:15:00.000Z`,
+      time: "10:15",
+      sessions: [
+        {
+          id: `parallel-${index}`,
+          title: "An overlapping workshop with a longer title that must wrap without covering the next session",
+          kind: "session",
+          locations: ["workshop"],
+          speakers: [{ name: "Jordan Example" }],
+          descriptionHtml: "<p>Practical exercises for migration teams.</p>",
+          endsAt: `${date}T10:00:00.000Z`,
+          track: "Workshops",
+        },
+      ],
+    },
+    {
+      startsAt: `${date}T10:00:00.000Z`,
+      time: "11:00",
+      sessions: [
+        {
+          id: `break-${index}`,
+          title: "Coffee break",
+          kind: "break",
+          locations: [],
+          speakers: [],
+          descriptionHtml: "",
+          endsAt: `${date}T10:15:00.000Z`,
         },
       ],
     },
@@ -271,7 +308,35 @@ function RowListSpecimen() {
   );
 }
 
+const wallLogo = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="16" viewBox="0 0 100 40"><path fill="currentColor" d="M0 0h28v40H0zm36 0h28v40H36zm36 0h28v40H72z"/></svg>')}`;
+
 export const patternSections: PreviewSection[] = [
+  {
+    id: "member-wall",
+    title: "Member wall",
+    render: () => (
+      <div class="members-overview">
+        <div class="members">
+          <div class="logo-wall-copy">
+            {Array.from({ length: 18 }, (_, index) => (
+              <a href="#member-wall" key={index} aria-label={`Example organization ${index + 1}`}>
+                <img src={wallLogo} alt="" class={`member-logo${index % 6 === 0 ? " member-logo-sponsor" : ""}`} />
+              </a>
+            ))}
+          </div>
+        </div>
+        <div class="members members--zooming">
+          <div class="member-zoom-overlay member-zoom-overlay--visible">
+            <img src={wallLogo} alt="Example sponsor" class="member-zoom-logo" />
+            <div class="member-zoom-info">
+              <strong class="member-zoom-name">Example sponsor</strong>
+            </div>
+            <div class="member-zoom-badge sponsor-tier-6">Diamond sponsor</div>
+          </div>
+        </div>
+      </div>
+    ),
+  },
   {
     id: "agenda",
     title: "Agenda",

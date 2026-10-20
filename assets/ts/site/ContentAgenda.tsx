@@ -1,14 +1,13 @@
 import { isPersonalAgendaSession } from "./AgendaParticipationControls";
 import { agendaSpeakerSessions } from "./agenda-speaker-sessions";
 import "../ui/ButtonToggle.css";
-import { useEffect, useRef } from "preact/hooks";
+import { useEffect, useMemo, useRef } from "preact/hooks";
 import "../../design/tokens.agenda.generated.css";
 import { formatClockCity, formatTimeRangeInZone } from "../../shared/format-date";
 import { clockTimeZone, type ClockZone } from "../../shared/event-clock";
 import { agendaZoneAbbreviation } from "../../shared/agenda-time-display";
 import type { ComponentChildren } from "preact";
 import "./ContentAgenda.css";
-import "./AgendaPrint.css";
 import { LocalTime } from "./SiteDate";
 import { Button } from "../ui/Button";
 import { AgendaDayLabel } from "./AgendaDayLabel";
@@ -33,6 +32,8 @@ import type {
 // After every agenda part so the v4 presentation layer wins equal-specificity rules.
 import "./AgendaDesign.css";
 import "./AgendaTimeline.css";
+// Print geometry and typography override the screen presentation.
+import "./AgendaPrint.css";
 
 /** Render the shared agenda, hiding unused room columns outside the planner while retaining shift details. */
 export function ContentAgenda({
@@ -76,12 +77,18 @@ export function ContentAgenda({
     dropTarget: (startsAt: string, roomId: string) => ComponentChildren;
   };
 }) {
-  const days = editor
-    ? suppliedDays
-    : suppliedDays.map((day) => {
-        const occupied = new Set(day.slots.flatMap((slot) => slot.sessions.flatMap((session) => session.locations)));
-        return { ...day, locations: day.locations.filter((location) => occupied.has(location.id)) };
-      });
+  const days = useMemo(
+    () =>
+      editor
+        ? suppliedDays
+        : suppliedDays.map((day) => {
+            const occupied = new Set(
+              day.slots.flatMap((slot) => slot.sessions.flatMap((session) => session.locations)),
+            );
+            return { ...day, locations: day.locations.filter((location) => occupied.has(location.id)) };
+          }),
+    [suppliedDays, editor],
+  );
   const timeZone = clockTimeZone(clock);
   const root = useRef<HTMLElement>(null);
   useEffect(() => {

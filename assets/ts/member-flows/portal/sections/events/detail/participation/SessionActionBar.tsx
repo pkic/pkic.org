@@ -154,7 +154,7 @@ export function SessionActionBar({
     setError("");
     try {
       await putJson(
-        `/api/v1/events/${encodeURIComponent(slug)}/agenda/${encodeURIComponent(session.id)}/participation`,
+        `/api/v1/events/${encodeURIComponent(slug)}/agenda/occurrences/${encodeURIComponent(session.id)}/participation`,
         checked.data,
         sessionParticipationResponseSchema,
       );

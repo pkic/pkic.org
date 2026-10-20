@@ -92,6 +92,8 @@ export async function readPublicationSource() {
   await writeFile(configPath, JSON.stringify(publicationBindingConfig(config, environment)));
   const platform = await getPlatformProxy<Pick<Env, "DB" | "ASSETS_BUCKET" | "SPEAKER_UPLOADS_BUCKET">>({
     configPath,
+    // Bindings are already selected; bypass the inherited CLOUDFLARE_ENV.
+    environment: "",
     persist:
       environment === "local"
         ? { path: resolve(process.env.PKIC_PUBLICATION_LOCAL_STATE ?? ".wrangler/state/v3") }

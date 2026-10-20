@@ -38,7 +38,7 @@ export function SessionManagementTools({
   occurrenceId: string;
   onChanged: () => void;
 }) {
-  const endpoint = `/api/v1/events/${encodeURIComponent(slug)}/agenda/${occurrenceId}`;
+  const endpoint = `/api/v1/events/${encodeURIComponent(slug)}/agenda/occurrences/${occurrenceId}`;
   const [info, setInfo] = useState<z.infer<typeof sessionManagementInfoSchema> | null>(null),
     [user, setUser] = useState<PickedUser | null>(null);
   const [mode, setMode] = useState<"physical" | "remote">("physical"),

@@ -122,7 +122,7 @@ test("organizers preserve exact track filters and inspect canonical demand outsi
     expect(personalAgenda.sessions).toHaveLength(1);
     const displayedSession = personalAgenda.sessions[0]!;
     expect(displayedSession.id).toBe(occurrence.id);
-    const reservation = await attendee.request.put(`${base}/${occurrence.id}/participation`, {
+    const reservation = await attendee.request.put(`${base}/occurrences/${occurrence.id}/participation`, {
       data: sessionParticipationRequestSchema.parse({
         action: "reserve",
         expectedPublishedRevision: displayedSession.publishedRevision,
