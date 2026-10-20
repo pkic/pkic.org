@@ -208,3 +208,14 @@ export async function listRegistrationAuditLog(
     bindings: [registrationId],
   });
 }
+
+/** The record's changes, never unrelated actions performed by its subject. */
+export async function listUserAuditLog(db: DatabaseLike, userId: string, query: ScopedAuditLogListQuery) {
+  if (!(await first<{ id: string }>(db, "SELECT id FROM users WHERE id = ?", [userId]))) {
+    throw new AppError(404, "USER_NOT_FOUND", "User not found");
+  }
+  return listAuditLogForScope(db, query, {
+    where: "al.entity_type = 'user' AND al.entity_id = ?",
+    bindings: [userId],
+  });
+}

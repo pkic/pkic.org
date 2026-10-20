@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { fromHono } from "chanfana";
 import type { RequestDbContext } from "../../../../_lib/db/context";
+import { UserAuditLogGet } from "./audit-log";
 import { UserAnonymizePost } from "./anonymize";
 import { UserGravatarPost } from "./gravatar";
 import { UserHeadshotDelete, UserHeadshotGet, UserHeadshotPut } from "./headshot";
@@ -13,6 +14,7 @@ import rolesRouter from "./roles-router";
 const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
 
+openapi.get("/audit-log", UserAuditLogGet);
 openapi.get("/headshot", UserHeadshotGet);
 openapi.put("/headshot", UserHeadshotPut);
 openapi.delete("/headshot", UserHeadshotDelete);

@@ -18,6 +18,7 @@ import {
   MemberStandingPanel,
 } from "./UserMemberProfilePanels";
 import { UserAffiliationsPanel } from "./UserAffiliationsPanel";
+import { UserAuditLog } from "./UserAuditLog";
 import { UserParticipationHistory } from "./UserParticipationHistory";
 import { UserProfileEditor } from "./UserProfileEditor";
 import { CURRENT_USER_API } from "./current-user-api";
@@ -347,6 +348,7 @@ export function UserDetail({
           />
 
           {permissions.canRead && <UserParticipationHistory userId={user.id} canRead={permissions.canRead} />}
+          {permissions.canRead && <UserAuditLog userId={user.id} />}
 
           {/* The addresses the account answers to: the person manages their own,
               and staff with Users write permission manage a secondary address. */}

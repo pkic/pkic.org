@@ -83,6 +83,9 @@ describe("portal System Users detail record", () => {
       if (url.startsWith(`/api/v1/users/${record.id}/emails`)) {
         return { emails: [], page: { limit: 10, offset: 0, total: 0, hasMore: false } };
       }
+      if (url.startsWith(`/api/v1/users/${record.id}/audit-log`)) {
+        return { auditLog: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } };
+      }
       if (url === `/api/v1/users/${record.id}/participation`) {
         if (!participation) throw new Error("no participation stubbed");
         return { participation };
@@ -110,6 +113,20 @@ describe("portal System Users detail record", () => {
   function terms(list: Element): string[] {
     return [...list.querySelectorAll(":scope > dt")].map((term) => term.textContent ?? "");
   }
+
+  it("shows account history only to staff with user read permission", async () => {
+    stubDetail(user);
+    const staff = await mountDetail(READ_ONLY);
+    expect(cardNamed(staff, "Account history")).not.toBeNull();
+    expect(
+      apiClient.getJson.mock.calls.some(([url]) => String(url).startsWith(`/api/v1/users/${user.id}/audit-log`)),
+    ).toBe(true);
+
+    stubDetail(user);
+    const self = await mountDetail({ ...READ_ONLY, canRead: false }, user.id);
+    expect(cardNamed(self, "Account history")).toBeNull();
+    expect(apiClient.getJson.mock.calls.some(([url]) => String(url).includes("/audit-log"))).toBe(false);
+  });
 
   it("heads the record with a real heading and pairs every field with its value", async () => {
     stubDetail(user);
