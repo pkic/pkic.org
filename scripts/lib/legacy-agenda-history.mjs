@@ -1,5 +1,6 @@
 /** Historical credits use explicit canonical mappings; employer text is never inferred from a title. */
 export function legacyAgendaPeople(source, names, mappings, context) {
+  const current = mappings.mode === "current";
   const people = [],
     appearances = [],
     archivalCredits = [],
@@ -8,8 +9,8 @@ export function legacyAgendaPeople(source, names, mappings, context) {
   for (const name of names) {
     const authoredMatches = (source.speakers ?? []).filter((speaker) => speaker.name === name);
     const authored = authoredMatches.length === 1 ? authoredMatches[0] : null;
-    const selected = mappings.historicalPeople?.[name];
-    const userId = selected?.userId ?? mappings.speakerUserIds?.[name] ?? null;
+    const selected = current ? mappings.people?.[name] : mappings.historicalPeople?.[name];
+    const userId = selected?.userId ?? (current ? null : mappings.speakerUserIds?.[name]) ?? null;
     const actingIdentityId = selected?.actingIdentityId ?? null;
     people.push({
       ref: name,
@@ -18,6 +19,11 @@ export function legacyAgendaPeople(source, names, mappings, context) {
       actingIdentityId,
       role: selected?.role ?? mappings.sourceRoles?.[name] ?? "speaker",
     });
+    // Current imports reference live identities; the authored profile grants no appearance approval.
+    if (current) {
+      if (!userId) unresolved.push({ ...context, kind: "speaker", value: name });
+      continue;
+    }
     const reviewedSourceCredit = mappings.sourceCreditDecisions?.[name]?.decision === "retain_source_credit";
     const preserveSource =
       !userId &&
