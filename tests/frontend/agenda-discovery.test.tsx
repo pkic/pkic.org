@@ -226,6 +226,9 @@ it("uses a phone list default, keeps stable cards across view changes, prints on
   expect(print).not.toHaveBeenCalled();
   root.querySelector<HTMLButtonElement>("[data-agenda-print]")!.click();
   expect(print).toHaveBeenCalledTimes(1);
+  expect(grid.getAttribute("aria-pressed")).toBe("true");
+  root.querySelector<HTMLButtonElement>("[data-agenda-compact]")!.click();
+  expect(grid.getAttribute("aria-pressed")).toBe("true");
   dispose!();
   input("[data-agenda-search]", "no matching session");
   expect(card("one").hidden).toBe(false);
@@ -379,7 +382,7 @@ it("compresses real room columns while preserving multiroom cards, row spans and
   expect(lunch.hidden).toBe(false);
 });
 
-it("prints original columns and all cards then restores screen filters without changing their choices", () => {
+it("prints every day and card then restores the selected day and screen filters", () => {
   setup();
   const group = root.querySelector('[data-agenda-location-day="2026-12-01"]')!;
   const blue = group.querySelector<HTMLInputElement>('[data-agenda-location="blue"]')!;
@@ -390,7 +393,10 @@ it("prints original columns and all cards then restores screen filters without c
   expect(cell.hidden).toBe(true);
   expect(column.hidden).toBe(true);
   expect(card("one").hidden).toBe(true);
+  const panels = [...root.querySelectorAll<HTMLElement>(".pk-content-agenda__day")];
+  expect(panels.map((panel) => panel.hidden)).toEqual([false, true]);
   window.dispatchEvent(new Event("beforeprint"));
+  expect(panels.every((panel) => !panel.hidden)).toBe(true);
   expect(cell.hidden).toBe(false);
   expect(column.hidden).toBe(false);
   expect(card("one").hidden).toBe(false);
@@ -399,6 +405,7 @@ it("prints original columns and all cards then restores screen filters without c
   expect(blue.checked).toBe(false);
   expect(root.querySelector<HTMLInputElement>("[data-agenda-search]")!.value).toBe("no matches");
   window.dispatchEvent(new Event("afterprint"));
+  expect(panels.map((panel) => panel.hidden)).toEqual([false, true]);
   expect(cell.hidden).toBe(true);
   expect(column.hidden).toBe(true);
   expect(card("one").hidden).toBe(true);

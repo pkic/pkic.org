@@ -105,10 +105,13 @@ export function refreshAgendaFilters(root: HTMLElement): number {
 export function initializeAgendaFilters(root: HTMLElement): () => void {
   const events = new AbortController();
   let printedCards: Map<HTMLElement, boolean> | undefined;
+  let printedDays: Map<HTMLElement, boolean> | undefined;
   const restoreScreen = () => {
     if (!printedCards) return;
     for (const [card, hidden] of printedCards) card.hidden = hidden;
     printedCards = undefined;
+    for (const [day, hidden] of printedDays ?? []) day.hidden = hidden;
+    printedDays = undefined;
     // Reapply each day's location choices, including inactive printed panels.
     for (const panel of root.querySelectorAll<HTMLElement>("[data-agenda-panel]")) {
       const group = [...root.querySelectorAll<HTMLElement>("[data-agenda-location-day]")].find(
@@ -130,6 +133,10 @@ export function initializeAgendaFilters(root: HTMLElement): () => void {
       printedCards = new Map(
         [...root.querySelectorAll<HTMLElement>("[data-agenda-session]")].map((card) => [card, card.hidden]),
       );
+      printedDays = new Map(
+        [...root.querySelectorAll<HTMLElement>(".pk-content-agenda__day")].map((day) => [day, day.hidden]),
+      );
+      for (const day of printedDays.keys()) day.hidden = false;
       for (const card of printedCards.keys()) card.hidden = false;
       restoreAgendaLocationColumns(root);
     },
@@ -217,7 +224,7 @@ export function initializeAgendaFilters(root: HTMLElement): () => void {
       if (filtersToggle && event.target.closest("[data-agenda-filters-toggle]"))
         setAgendaFiltersExpanded(root, filtersToggle, root.dataset.agendaFilters === "collapsed");
       if (event.target.closest("[data-agenda-print]")) window.print();
-      const view = event.target.closest<HTMLButtonElement>("[data-agenda-view]");
+      const view = event.target.closest<HTMLButtonElement>("button[data-agenda-view]");
       if (view) {
         root.dataset.agendaView = view.dataset.agendaView;
         for (const button of root.querySelectorAll<HTMLButtonElement>("[data-agenda-view]"))

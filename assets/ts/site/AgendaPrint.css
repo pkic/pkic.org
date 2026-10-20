@@ -1,45 +1,73 @@
-/* Print the canonical agenda DOM; screen layout and publication eligibility stay unchanged. */
-
+/* Print the canonical agenda as a chronological list, independent of the selected screen view. */
 @layer components {
   @media print {
+    /* Keep the agenda and its ancestors; omit navigation, banners, and unrelated page content. */
+    body:has(.pk-content-agenda) :not(.pk-content-agenda, .pk-content-agenda *):not(:has(.pk-content-agenda)) {
+      display: none !important;
+    }
+    body:has(.pk-content-agenda),
+    body :has(.pk-content-agenda) {
+      display: block !important;
+      position: static !important;
+      overflow: visible !important;
+      block-size: auto !important;
+      min-block-size: 0 !important;
+      max-block-size: none !important;
+      inline-size: auto !important;
+      max-inline-size: none !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      background: none !important;
+    }
     .pk-content-agenda {
       color: var(--pk-agenda-print-ink);
       background: var(--pk-agenda-print-paper);
       overflow: visible !important;
       print-color-adjust: exact;
+      font-size: var(--pk-agenda-type-12);
+      line-height: 1.3;
     }
-
     .pk-content-agenda .pk-content-agenda__controls,
     .pk-content-agenda .pk-content-agenda__tabs,
     .pk-content-agenda .pk-content-agenda__actions,
     .pk-content-agenda .pk-content-agenda__card-footer,
+    .pk-content-agenda .pk-content-agenda__speakers,
+    .pk-content-agenda .pk-content-agenda__zone-key,
+    .pk-content-agenda .pk-content-agenda__now,
+    .pk-content-agenda .pk-content-agenda__earlier,
     .pk-content-agenda dialog,
+    .pk-content-agenda .pk-live-person-card,
+    .pk-content-agenda [popover],
+    .pk-content-agenda colgroup,
+    .pk-content-agenda thead,
     .pk-content-agenda [data-agenda-card-control],
     .pk-content-agenda [data-agenda-drop-target],
     .pk-content-agenda .pk-agenda-editor__add-room,
     .pk-content-agenda .pk-agenda-editor__add-column,
-    .pk-content-agenda .pk-agenda-editor__canvas > :not(.pk-content-agenda__day) {
+    .pk-content-agenda .pk-agenda-editor__canvas > :not(.pk-content-agenda__day),
+    .pk-content-agenda .pk-content-agenda__cell:empty,
+    .pk-content-agenda .pk-content-agenda__slot:not(:has([data-agenda-session], .pk-content-agenda__break)) {
       display: none !important;
     }
-
     .pk-content-agenda .pk-content-agenda__day,
-    .pk-content-agenda .pk-content-agenda__speakers {
+    .pk-content-agenda .pk-content-agenda__timeline,
+    .pk-content-agenda .pk-content-agenda__timeline tbody {
       display: block !important;
       overflow: visible !important;
-      width: 100% !important;
-      break-before: page;
+      inline-size: auto !important;
+      box-sizing: border-box;
+      min-inline-size: 0 !important;
     }
-
     .pk-content-agenda .pk-content-agenda__timeline {
-      display: table !important;
-      table-layout: fixed;
-      width: 100% !important;
-      min-width: 0 !important;
+      border-collapse: separate;
+      border-spacing: 0;
+      padding-inline: 0.125rem;
     }
-
-    /* Printed, the caption names the day; !important lifts the screen-reader-only utility's later layer. */
+    .pk-content-agenda .pk-content-agenda__day ~ .pk-content-agenda__day {
+      margin-block-start: 0.75rem;
+    }
     .pk-content-agenda .pk-content-agenda__timeline caption {
-      display: table-caption !important;
+      display: block !important;
       position: static !important;
       width: auto !important;
       height: auto !important;
@@ -47,57 +75,121 @@
       overflow: visible !important;
       white-space: normal !important;
       padding-block: 0.5rem !important;
+      text-align: start;
       font-weight: 700;
+      break-after: avoid;
     }
-
-    .pk-content-agenda .pk-content-agenda__timeline thead {
-      display: table-header-group !important;
-      position: static !important;
-      top: auto !important;
-    }
-
-    .pk-content-agenda .pk-content-agenda__timeline tbody {
-      display: table-row-group !important;
-    }
-
     .pk-content-agenda .pk-content-agenda__slot {
-      display: table-row !important;
-      height: auto !important;
+      display: grid !important;
+      grid-template-columns: 3.5rem minmax(0, 1fr);
+      align-items: start;
+      gap: 0.25rem 0.5rem;
+      block-size: auto !important;
+      padding-block: 0.25rem;
+      border-block-end: 1px solid var(--pk-line);
     }
-
     .pk-content-agenda .pk-content-agenda__timeline th,
     .pk-content-agenda .pk-content-agenda__timeline td {
-      display: table-cell !important;
+      display: block !important;
       position: static !important;
-      top: auto !important;
+      inset: auto !important;
       min-width: 0 !important;
       width: auto !important;
+      max-width: none !important;
       height: auto !important;
-      vertical-align: top;
-      overflow-wrap: anywhere;
+      padding: 0;
+      border: 0;
+      box-sizing: border-box;
     }
-
-    .pk-content-agenda .pk-content-agenda__cell > .pk-content-agenda__session {
+    .pk-content-agenda .pk-content-agenda__slot > th {
+      grid-column: 1;
+      grid-row: 1;
+    }
+    .pk-content-agenda .pk-content-agenda__slot > td {
+      grid-column: 2;
+      min-inline-size: 0;
+    }
+    .pk-content-agenda .pk-content-agenda__clocks {
+      position: static !important;
+      align-items: flex-start !important;
+      text-align: start;
+    }
+    .pk-content-agenda .pk-content-agenda__cell > .pk-content-agenda__session,
+    .pk-content-agenda .pk-content-agenda__break {
       position: static !important;
       display: block !important;
       height: auto !important;
+      min-height: 0 !important;
       max-height: none !important;
+      margin: 0;
+      padding: 0.375rem;
+      box-sizing: border-box;
+      inline-size: auto;
+      min-inline-size: 0;
+      border-width: 1px;
       overflow: visible !important;
       opacity: 1 !important;
+      transform: none !important;
+      box-shadow: none !important;
       break-inside: avoid;
     }
-
+    .pk-content-agenda .pk-content-agenda__room {
+      display: flex !important;
+      margin: 0 0 0.25rem;
+      padding: 0.25rem 0.375rem;
+      font-size: var(--pk-agenda-type-12);
+    }
+    .pk-content-agenda .pk-content-agenda__session-body {
+      overflow: visible;
+      gap: 0.25rem;
+    }
+    .pk-content-agenda .pk-content-agenda__speaker strong {
+      text-decoration: none !important;
+    }
+    .pk-content-agenda .pk-content-agenda__session-body > h3 {
+      font-size: var(--pk-agenda-type-13);
+      line-height: 1.3;
+      padding: 0;
+    }
+    .pk-content-agenda .pk-content-agenda__session-body .pk-content-agenda__speaker {
+      gap: 0.375rem;
+    }
+    .pk-content-agenda .pk-content-agenda__session-body .pk-content-agenda__speaker .pk-avatar {
+      --pk-avatar-size: 1.5rem;
+    }
+    .pk-content-agenda .pk-content-agenda__session-body .pk-content-agenda__speaker strong {
+      font-size: var(--pk-agenda-type-12);
+    }
+    .pk-content-agenda .pk-content-agenda__session-body .pk-content-agenda__speaker small {
+      font-size: var(--pk-agenda-type-11);
+      white-space: normal;
+      overflow: visible;
+    }
+    .pk-content-agenda .pk-content-agenda__clock > time {
+      font-size: var(--pk-agenda-type-12);
+    }
+    .pk-content-agenda .pk-content-agenda__staffing {
+      padding: 0;
+      margin-block-end: 0.25rem;
+    }
+    .pk-content-agenda .pk-content-agenda__staffing-shift {
+      padding: 0.375rem;
+      font-size: var(--pk-agenda-type-11);
+    }
+    .pk-content-agenda .pk-content-agenda__staffing-shift ul {
+      margin: 0.25rem 0 0;
+    }
     .pk-content-agenda .pk-content-agenda__description {
       display: block !important;
       max-height: none;
       overflow: visible;
       mask-image: none;
+      font-size: var(--pk-agenda-type-11);
+      line-height: 1.35;
     }
-
-    .pk-content-agenda .pk-content-agenda__speakers article {
-      break-inside: avoid;
+    .pk-content-agenda.is-compact .pk-content-agenda__description {
+      display: none !important;
     }
-
     .pk-agenda-dialog:has(.pk-content-agenda) {
       position: static;
       width: auto;
