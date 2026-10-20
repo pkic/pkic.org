@@ -1,0 +1,52 @@
+name: Set up validation dependencies
+description: Install the repository's pinned Node and pnpm dependencies
+inputs:
+  publication-cache:
+    description: Restore content-addressed publication compiler derivatives
+    default: "false"
+outputs:
+  publication-cache-hit:
+    description: Whether the exact compiler cache key was restored
+    value: ${{ steps.publication-cache.outputs.cache-hit }}
+  publication-cache-key:
+    description: Primary key for saving completed compiler work
+    value: ${{ steps.publication-cache.outputs.cache-primary-key }}
+runs:
+  using: composite
+  steps:
+    - uses: pnpm/action-setup@v6
+      with:
+        run_install: false
+    - uses: actions/setup-node@v6
+      with:
+        node-version: "24"
+        cache: "pnpm"
+    - shell: bash
+      run: pnpm install --frozen-lockfile
+    - name: Record runner hardware
+      shell: bash
+      run: |
+        node --input-type=module -e '
+          import os from "node:os";
+          import { writeFileSync } from "node:fs";
+          import { join } from "node:path";
+          writeFileSync(join(process.env.RUNNER_TEMP, "validation-host.json"), JSON.stringify({
+            node: process.version, architecture: os.arch(), release: os.release(),
+            cpu: os.cpus()[0]?.model, parallelism: os.availableParallelism(), memory: os.totalmem()
+          }, null, 2));
+        '
+    # Never restore a database, snapshot, HTML, or release manifest.
+    - name: Restore publication compiler cache
+      if: inputs.publication-cache == 'true'
+      id: publication-cache
+      uses: actions/cache/restore@v5
+      with:
+        path: |
+          node_modules/.astro/publication/local/assets
+          node_modules/.astro/publication/local/publication-transform-cache.json
+          node_modules/.astro/publication/local/publication-social
+          node_modules/.astro/publication/local/publication-diagrams
+          node_modules/.astro/publication/local/publication-browser
+        key: publication-v2-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+        restore-keys: |
+          publication-v2-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml') }}-
