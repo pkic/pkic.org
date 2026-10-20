@@ -41,7 +41,7 @@ export function SessionBookings({
     setError("");
     try {
       await putJson(
-        `/api/v1/events/${encodeURIComponent(slug)}/agenda/${occurrenceId}/participation/${userId}`,
+        `/api/v1/events/${encodeURIComponent(slug)}/agenda/occurrences/${occurrenceId}/participation/${userId}`,
         sessionReviewRequestSchema.parse({ decision }),
         sessionParticipationResponseSchema,
       );
@@ -115,7 +115,7 @@ export function SessionBookings({
       <ApiDataTable<Participant, z.infer<typeof sessionBookingsResponseSchema>>
         urlState="session-bookings"
         caption="Session participation and approvals"
-        endpoint={`/api/v1/events/${encodeURIComponent(slug)}/agenda/${occurrenceId}/participation`}
+        endpoint={`/api/v1/events/${encodeURIComponent(slug)}/agenda/occurrences/${occurrenceId}/participation`}
         responseSchema={sessionBookingsResponseSchema}
         resolve={(response) => response.participants}
         resolvePage={(response) => response.page}

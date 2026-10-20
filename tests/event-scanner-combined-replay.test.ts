@@ -151,7 +151,7 @@ describe("Combined enrolled attendance and sponsor lead reconciliation", () => {
     const attendeeToken = await createAdminSession(env.DB, fixture.userId, crypto.randomUUID());
     const rivalToken = await createAdminSession(env.DB, rival, crypto.randomUUID());
     const book = (token: string) =>
-      callApi(env, `${base}/agenda/${fixture.occurrenceId}/participation`, {
+      callApi(env, `${base}/agenda/occurrences/${fixture.occurrenceId}/participation`, {
         method: "PUT",
         headers: headers(token),
         body: JSON.stringify(

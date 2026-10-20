@@ -160,7 +160,7 @@ test("a stale My agenda reservation refreshes the approved session and requires 
     await expect(dialog.getByRole("heading", { name: title, exact: true })).toBeVisible();
     await expect(attendee.getByRole("heading", { name: revisedTitle, exact: true })).toHaveCount(0);
     const writes: ReturnType<typeof sessionParticipationRequestSchema.parse>[] = [];
-    const participationPath = `${agendaApi}/${occurrence.id}/participation`;
+    const participationPath = `${agendaApi}/occurrences/${occurrence.id}/participation`;
     attendee.on("request", (request) => {
       if (new URL(request.url()).pathname === participationPath && request.method() === "PUT") {
         writes.push(sessionParticipationRequestSchema.parse(request.postDataJSON()));

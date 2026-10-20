@@ -60,7 +60,7 @@ async function fixture(policy: "reservation" | "approval" = "reservation") {
     });
   const reserve = (body: unknown, occurrenceId = firstId, environment: Env = env) =>
     api(
-      `/${occurrenceId}/participation`,
+      `/occurrences/${occurrenceId}/participation`,
       {
         method: "PUT",
         headers: { "content-type": "application/json" },

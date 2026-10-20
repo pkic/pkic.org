@@ -6,6 +6,27 @@ import { AUTH_EXTENSION, decorateOpenApiSpec } from "../functions/_lib/openapi/m
 import { openapi } from "../functions/http-router";
 
 describe("OpenAPI schema generation", () => {
+  it("documents occurrence actions only under the canonical occurrence collection", () => {
+    const spec = decorateOpenApiSpec(openapi.schema);
+    const agenda = "/api/v1/events/{eventSlug}/agenda";
+    for (const [action, methods] of [
+      ["holds", ["get", "post"]],
+      ["holds/{holdId}", ["delete"]],
+      ["participation", ["get", "put"]],
+      ["participation/{userId}", ["put"]],
+      ["attendance", ["get"]],
+      ["invitations", ["put"]],
+      ["delegation", ["put"]],
+      ["invitees", ["get"]],
+      ["management", ["get"]],
+    ] as const) {
+      const path = `${agenda}/occurrences/{occurrenceId}/${action}`;
+      for (const method of methods) expect(spec.paths[path]?.[method], `${method} ${path}`).toBeDefined();
+      expect(spec.paths[`${agenda}/{occurrenceId}/${action}`]).toBeUndefined();
+    }
+    expect(spec.paths[`${agenda}/participation`]?.get).toBeDefined();
+  });
+
   it("generates the full API document", () => {
     expect(() => openapi.schema).not.toThrow();
   });

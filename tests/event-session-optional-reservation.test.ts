@@ -66,7 +66,7 @@ async function participate(
   token = attendeeToken,
   expectedPublishedRevision = revision,
 ) {
-  return api(`/agenda/${f.occurrenceId}/participation`, token, {
+  return api(`/agenda/occurrences/${f.occurrenceId}/participation`, token, {
     method: "PUT",
     body: JSON.stringify(
       sessionParticipationRequestSchema.parse({
@@ -216,7 +216,7 @@ describe("optional capacity-backed session registration", () => {
       waitlisted: 1,
       preferences: 2,
     });
-    const places = await api(`/agenda/${f.occurrenceId}/participation`, f.token);
+    const places = await api(`/agenda/occurrences/${f.occurrenceId}/participation`, f.token);
     expect(places.status, await places.clone().text()).toBe(200);
     expect(
       sessionBookingsResponseSchema.parse(await places.json()).participants.map(({ userId, status }) => ({

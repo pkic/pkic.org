@@ -90,7 +90,7 @@ async function fixture(additionalRoomCount: number) {
     [unrelatedOccurrence, unrelatedToken],
   ] as const) {
     await pilot.api(
-      `${base}/${id}/participation`,
+      `${base}/occurrences/${id}/participation`,
       sessionParticipationResponseSchema,
       sessionParticipationRequestSchema.parse({ action: "save" }),
       "PUT",

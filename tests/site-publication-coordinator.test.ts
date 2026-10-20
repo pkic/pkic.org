@@ -415,7 +415,7 @@ describe("approved agenda constraint guards at provider activation", () => {
     const [shown] = personalAgendaResponseSchema.parse(await displayed.json()).sessions;
     expect(shown?.id).toBe(fixture.firstId);
     expect(shown?.publishedRevision).toBe(fixture.approved.publishedRevision);
-    const reserved = await callApi(env, `/api/v1/events/pqc-2026/agenda/${fixture.firstId}/participation`, {
+    const reserved = await callApi(env, `/api/v1/events/pqc-2026/agenda/occurrences/${fixture.firstId}/participation`, {
       method: "PUT",
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
       body: JSON.stringify(

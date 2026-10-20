@@ -325,7 +325,7 @@ describe("Live organizer session demand projection", () => {
       const [shown] = personalAgendaResponseSchema.parse(await displayed.json()).sessions;
       expect(shown?.id).toBe(beta);
       const changed = await request(
-        `/agenda/${beta}/participation`,
+        `/agenda/occurrences/${beta}/participation`,
         "PUT",
         sessionParticipationRequestSchema.parse({
           action,

@@ -192,7 +192,7 @@ async function fixture(policy: "reservation" | "approval" = "reservation", capac
     );
     const session = shown.sessions.find((row) => row.id === occurrences[occurrenceIndex])!;
     return request(
-      `/${session.id}/participation`,
+      `/occurrences/${session.id}/participation`,
       sessionParticipationRequestSchema.parse({
         action,
         expectedPublishedRevision: session.publishedRevision,
@@ -203,7 +203,7 @@ async function fixture(policy: "reservation" | "approval" = "reservation", capac
   }
   async function review(db: DatabaseLike = env.DB) {
     return request(
-      `/${occurrences[0]}/participation/${people[0]!.userId}`,
+      `/occurrences/${occurrences[0]}/participation/${people[0]!.userId}`,
       sessionReviewRequestSchema.parse({ decision: "approve" }),
       adminToken,
       db,
@@ -297,7 +297,7 @@ describe("Prepared allocation transitions retain live capacity invariants", () =
   it("promotes FIFO once when two workers prepared the same candidate after hold expiry", async () => {
     const f = await fixture();
     const hold = await f.pilot.api(
-      `${f.base}/${f.occurrences[0]}/holds`,
+      `${f.base}/occurrences/${f.occurrences[0]}/holds`,
       sessionHoldResponseSchema,
       sessionHoldRequestSchema.parse({
         userId: f.people[2]!.userId,

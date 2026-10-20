@@ -15,7 +15,7 @@ import { chooseOption, controlFor, optionValues, submitForm, typeInto } from "./
 
 const USER_ID = "10000000-0000-4000-8000-000000000002";
 const OCCURRENCE_ID = "10000000-0000-4000-8000-000000000003";
-const endpoint = `/api/v1/events/workshop/agenda/${OCCURRENCE_ID}`;
+const endpoint = `/api/v1/events/workshop/agenda/occurrences/${OCCURRENCE_ID}`;
 
 vi.mock("../../assets/ts/components/ConfirmDialog", async (original) => ({
   ...(await original<typeof import("../../assets/ts/components/ConfirmDialog")>()),

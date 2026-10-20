@@ -1205,18 +1205,26 @@ describe("Participation capacity and private calendar lifecycle", () => {
     const headers = { authorization: `Bearer ${token}`, "content-type": "application/json" };
     const response = await callApi(
       env,
-      `/api/v1/events/calendar-test/agenda/${occurrenceId}/participation/${secondUser}`,
+      `/api/v1/events/calendar-test/agenda/occurrences/${occurrenceId}/participation/${secondUser}`,
       { method: "PUT", headers, body: JSON.stringify({ decision: "approve" }) },
     );
     expect(response.status).toBe(200);
-    const foreign = await callApi(env, `/api/v1/events/calendar-test/agenda/${crypto.randomUUID()}/participation`, {
-      headers,
-    });
+    const foreign = await callApi(
+      env,
+      `/api/v1/events/calendar-test/agenda/occurrences/${crypto.randomUUID()}/participation`,
+      {
+        headers,
+      },
+    );
     expect(foreign.status).toBe(403);
     await setSessionDelegation(env.DB, eventId, occurrenceId, admin, { userId: firstUser, enabled: false });
-    const revoked = await callApi(env, `/api/v1/events/calendar-test/agenda/${occurrenceId}/participation`, {
-      headers,
-    });
+    const revoked = await callApi(
+      env,
+      `/api/v1/events/calendar-test/agenda/occurrences/${occurrenceId}/participation`,
+      {
+        headers,
+      },
+    );
     expect(revoked.status).toBe(403);
   });
 });
