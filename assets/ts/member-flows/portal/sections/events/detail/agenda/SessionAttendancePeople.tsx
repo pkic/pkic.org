@@ -17,7 +17,7 @@ export function SessionAttendancePeople({
       urlState="session-attendees"
       clearDataOnReload
       retainDataOnError={false}
-      endpoint={`/api/v1/events/${encodeURIComponent(slug)}/agenda/${encodeURIComponent(occurrenceId)}/attendance`}
+      endpoint={`/api/v1/events/${encodeURIComponent(slug)}/agenda/occurrences/${encodeURIComponent(occurrenceId)}/attendance`}
       responseSchema={attendancePeopleResponseSchema}
       resolve={(value) => value.attendees}
       resolvePage={(value) => value.page}

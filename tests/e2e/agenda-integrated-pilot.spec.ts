@@ -272,7 +272,7 @@ test("one recurring meeting and conference retain the same actors through organi
       await expect(participation.locator("select")).toHaveCount(0);
       const changing = attendee.waitForResponse(
         (response) =>
-          new URL(response.url()).pathname === `${pilotAgendaApi}/${occurrence.id}/participation` &&
+          new URL(response.url()).pathname === `${pilotAgendaApi}/occurrences/${occurrence.id}/participation` &&
           response.request().method() === "PUT",
       );
       // Saving interest is the star in the details' header; taking a seat is the action bar's one seat action.
