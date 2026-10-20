@@ -1,7 +1,7 @@
 /** Staff approval uses live mailbox proof, never the name or domain stored in a review. */
 import type { AffiliationReviewApprove } from "../../../../assets/shared/schemas/affiliation-reviews";
 import { hostWithinDomainSql } from "../../email-domains/sql";
-import { all, first } from "../../db/queries";
+import { all } from "../../db/queries";
 import type { DatabaseLike, UserBackedAuthAdmin } from "../../types";
 import { guardPermissionMutationDatabase } from "../../auth/permissions";
 import { AppError } from "../../errors";
@@ -33,6 +33,7 @@ export async function approveAffiliationReviewGroup(
     [groupKey, input.afterUserId ?? "", input.userId ?? null, input.userId ?? null],
   );
   const decisionId = uuid();
+  let decided = 0;
   for (const person of people.slice(0, PEOPLE_PER_PASS)) {
     const addresses = await all<{ normalized_email: string; organization_id: string }>(
       db,
@@ -48,7 +49,9 @@ export async function approveAffiliationReviewGroup(
            WHERE length(closer.domain) > length(claim.domain)
              AND ${hostWithinDomainSql("substr(address.normalized_email, instr(address.normalized_email, '@') + 1)", "closer.domain")})
            AND EXISTS (SELECT 1 FROM affiliation_reviews review WHERE review.user_id = ? AND review.group_key = ?
-           AND review.resolved_at IS NULL AND (review.email_domain = claim.domain OR review.normalized_name = organization.normalized_name))
+           AND review.resolved_at IS NULL AND ((review.email_domain = claim.domain
+             AND (review.normalized_name IS NULL OR review.normalized_name = organization.normalized_name))
+             OR review.normalized_name = organization.normalized_name))
          GROUP BY claim.organization_id ORDER BY claim.organization_id LIMIT 2`,
       [person.user_id, person.user_id, person.user_id, groupKey],
     );
@@ -61,18 +64,15 @@ export async function approveAffiliationReviewGroup(
         onlyOrganizationId: address.organization_id,
         reviewDecision: { groupKey, staffId: staff.id, decisionId },
       });
-      if (linked) break;
+      if (linked) {
+        decided += linked.resolvedReviews;
+        break;
+      }
     }
   }
-  const count = await first<{ decided: number }>(
-    db,
-    `SELECT COUNT(*) AS decided FROM audit_log WHERE action = 'affiliation_review_resolved'
-      AND json_extract(details_json, '$.decisionId.to') = ?`,
-    [decisionId],
-  );
   return {
     group: await getAffiliationReviewGroup(db, groupKey),
-    decided: Number(count?.decided ?? 0),
+    decided,
     nextUserId: people.length > PEOPLE_PER_PASS ? people[PEOPLE_PER_PASS - 1].user_id : null,
   };
 }

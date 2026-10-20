@@ -160,6 +160,38 @@ describe("affiliation reviews by group", () => {
     ).toHaveLength(1);
   });
 
+  it("does not approve a different named employer through the person's matching work domain", async () => {
+    await approvedOrganization();
+    const person = await verifiedPerson("conflicting@ibm.example");
+    const id = await insertReview(person, "Other Employer", null, "ibm.example");
+    const response = await call(adminToken, `${groupPath("Other Employer")}/approve`, { method: "POST", body: "{}" });
+    expect(affiliationReviewApproveResponseSchema.parse(await response.json()).decided).toBe(0);
+    expect(await queryAll(env.DB, "SELECT resolved_at FROM affiliation_reviews WHERE id = ?", [id])).toEqual([
+      { resolved_at: null },
+    ]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM identities WHERE user_id = ? AND organization_id IS NOT NULL", [person]),
+    ).toEqual([]);
+  });
+
+  it("counts only matching reviews closed by overlapping approval passes", async () => {
+    await approvedOrganization();
+    const person = await verifiedPerson("concurrent@ibm.example");
+    await insertReview(person, "IBM", null, "ibm.example");
+    await insertReview(person, "IBM", null, null);
+    const conflict = await insertReview(person, "Other Employer", null, "ibm.example");
+    // A domain-grouped historical import can contain different written names.
+    await env.DB.prepare("UPDATE affiliation_reviews SET group_key = 'ibm' WHERE id = ?").bind(conflict).run();
+    const results = await Promise.all([approve({ userId: person }), approve({ userId: person })]);
+    expect(results.reduce((sum, result) => sum + result.decided, 0)).toBe(2);
+    expect(
+      await queryAll(env.DB, "SELECT COUNT(*) AS total FROM audit_log WHERE action = 'affiliation_review_resolved'"),
+    ).toEqual([{ total: 2 }]);
+    expect(await queryAll(env.DB, "SELECT resolved_at FROM affiliation_reviews WHERE id = ?", [conflict])).toEqual([
+      { resolved_at: null },
+    ]);
+  });
+
   it("repairs stale reviews for an active identity without duplicating it", async () => {
     const organizationId = await approvedOrganization();
     const person = await verifiedPerson("existing@ibm.example");

@@ -55,14 +55,18 @@ interface DomainOrganizationLinkInput {
 export async function linkVerifiedAddressToDomainOrganization(
   db: DatabaseLike,
   input: DomainOrganizationLinkInput,
-): Promise<{ identityId: string; organizationId: string } | null> {
+): Promise<{ identityId: string; organizationId: string; resolvedReviews: number } | null> {
   const address = await ownedAddressId(db, input.userId, normalizeEmail(input.normalizedEmail));
   if (!address) return null;
   const prepared = await prepareVerifiedAddressDomainOrganizationLink(db, { ...input, ...address, at: nowIso() });
   if (!prepared) return null;
   try {
-    await db.batch(prepared.statements);
-    return { identityId: prepared.identityId, organizationId: prepared.organizationId };
+    const results = await db.batch(prepared.statements);
+    return {
+      identityId: prepared.identityId,
+      organizationId: prepared.organizationId,
+      resolvedReviews: results[prepared.reviewResolutionIndex]?.meta?.changes ?? 0,
+    };
   } catch (error) {
     if (isAuthorizationGuardFailure(error) || isConcurrentIdentityConflict(error) || isAuditChangeGuardFailure(error))
       return null;
@@ -78,7 +82,12 @@ export async function linkVerifiedAddressToDomainOrganization(
 export async function prepareVerifiedAddressDomainOrganizationLink(
   db: DatabaseLike,
   input: DomainOrganizationLinkInput & { emailId: string | null; at: string },
-): Promise<{ identityId: string; organizationId: string; statements: StatementLike[] } | null> {
+): Promise<{
+  identityId: string;
+  organizationId: string;
+  statements: StatementLike[];
+  reviewResolutionIndex: number;
+} | null> {
   const normalizedEmail = normalizeEmail(input.normalizedEmail);
   // `domain` is the domain the address links through: the most specific claim covering it, else its registrable domain.
   const { domain, resolution } = await resolveEmailDomainOrganization(db, normalizedEmail);
@@ -116,6 +125,17 @@ export async function prepareVerifiedAddressDomainOrganizationLink(
       proofEvidence: { sql: "SELECT 1 FROM users WHERE id = ? AND active = 1", bindings: [input.userId] },
     });
     const decision = input.reviewDecision;
+    const reviewMatch = `group_key = ? AND user_id = ? AND resolved_at IS NULL
+      AND ((email_domain = ? AND (normalized_name IS NULL OR normalized_name =
+        (SELECT normalized_name FROM organizations WHERE id = ?)))
+        OR normalized_name = (SELECT normalized_name FROM organizations WHERE id = ?))`;
+    const reviewBindings = decision ? [decision.groupKey, input.userId, domain, organizationId, organizationId] : [];
+    const reviewResolution = decision
+      ? db
+          .prepare(`UPDATE affiliation_reviews SET resolved_identity_id = ?, resolved_by_user_id = ?, resolved_at = ?
+          WHERE ${reviewMatch}`)
+          .bind(prepared.identityId, decision.staffId, at, ...reviewBindings)
+      : prepareOwnAffiliationReviewResolution(db, { userId: input.userId, identityId: prepared.identityId, at });
     const statements = [
       prepareAuthorizationGuard(db, {
         sql: `SELECT 1 FROM users WHERE id = ? AND active = 1
@@ -128,39 +148,27 @@ export async function prepareVerifiedAddressDomainOrganizationLink(
         db,
         verifiedEmailDomainResolutionEvidence(domain, organizationId, resolution.via === "claim"),
       ),
-      ...(decision
-        ? [
-            prepareAuthorizationGuard(db, {
-              sql: "SELECT 1 FROM affiliation_reviews WHERE group_key = ? AND user_id = ? AND resolved_at IS NULL",
-              bindings: [decision.groupKey, input.userId],
-            }),
-          ]
-        : []),
       ...prepared.statements,
+      // Audit the matching open rows before closing them in this same atomic batch.
       ...(decision
         ? [
-            db
-              .prepare(`UPDATE affiliation_reviews SET resolved_identity_id = ?, resolved_by_user_id = ?, resolved_at = ?
-          WHERE group_key = ? AND user_id = ? AND resolved_at IS NULL`)
-              .bind(prepared.identityId, decision.staffId, at, decision.groupKey, input.userId),
             db
               .prepare(`INSERT INTO audit_log (id, actor_type, actor_id, actor_identity_id, action, entity_type, entity_id, details_json, created_at)
           SELECT lower(hex(randomblob(16))), 'admin', ?, ?, 'affiliation_review_resolved', 'affiliation_review', id,
             json_object('decisionId', json_object('from', NULL, 'to', ?),
-              'identityId', json_object('from', NULL, 'to', resolved_identity_id)), ?
-          FROM affiliation_reviews WHERE group_key = ? AND user_id = ? AND resolved_at = ? AND resolved_by_user_id = ?`)
+              'identityId', json_object('from', NULL, 'to', ?)), ?
+          FROM affiliation_reviews WHERE ${reviewMatch}`)
               .bind(
                 decision.staffId,
                 auditActorIdentityId("admin", decision.staffId),
                 decision.decisionId,
+                prepared.identityId,
                 at,
-                decision.groupKey,
-                input.userId,
-                at,
-                decision.staffId,
+                ...reviewBindings,
               ),
+            reviewResolution,
           ]
-        : [prepareOwnAffiliationReviewResolution(db, { userId: input.userId, identityId: prepared.identityId, at })]),
+        : [reviewResolution]),
       // The person is told once, in the portal and by the identity email the platform already sends.
       ...(!related
         ? [
@@ -200,7 +208,12 @@ export async function prepareVerifiedAddressDomainOrganizationLink(
           ]
         : []),
     ];
-    return { identityId: prepared.identityId, organizationId, statements };
+    return {
+      identityId: prepared.identityId,
+      organizationId,
+      statements,
+      reviewResolutionIndex: statements.indexOf(reviewResolution),
+    };
   } catch (error) {
     // A domain-policy refusal skips automatic linking before any writes execute.
     if (error instanceof AppError && error.status < 500) return null;

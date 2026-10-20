@@ -121,6 +121,14 @@ describe("a verified work address and the organization that owns its domain", ()
         .run();
     }
     await openReview(userId, "Past Employer");
+    await env.DB.prepare("UPDATE affiliation_reviews SET email_domain = 'ibm.example' WHERE user_id = ?")
+      .bind(userId)
+      .run();
+    await env.DB.prepare(
+      "UPDATE affiliation_reviews SET normalized_name = NULL WHERE user_id = ? AND organization_name = 'IBM' AND source_type = 'user_profile'",
+    )
+      .bind(userId)
+      .run();
     await linkVerifiedAddressToDomainOrganization(env.DB, { userId, normalizedEmail: "history@ibm.example" });
     expect(
       await queryAll(

@@ -51,11 +51,14 @@ export function prepareOwnAffiliationReviewResolution(
       `UPDATE affiliation_reviews
           SET resolved_identity_id = ?, resolved_by_user_id = ?, resolved_at = ?
         WHERE user_id = ? AND resolved_at IS NULL
-          AND EXISTS (SELECT 1 FROM identities WHERE id = ? AND user_id = ? AND organization_id IS NOT NULL
-                       AND started_at IS NOT NULL AND ended_at IS NULL AND blocked_at IS NULL
-                       AND (affiliation_reviews.email_domain = identities.verified_email_domain
-                         OR affiliation_reviews.email_domain IN (SELECT domain FROM organization_domain_claims WHERE organization_id = identities.organization_id AND application_id IS NULL)
-                         OR affiliation_reviews.normalized_name = (SELECT normalized_name FROM organizations WHERE id = identities.organization_id)))`,
+          AND EXISTS (SELECT 1 FROM identities
+                       JOIN organizations organization ON organization.id = identities.organization_id
+                       WHERE identities.id = ? AND identities.user_id = ?
+                       AND identities.started_at IS NOT NULL AND identities.ended_at IS NULL AND identities.blocked_at IS NULL
+                       AND (((affiliation_reviews.email_domain = identities.verified_email_domain
+                         OR affiliation_reviews.email_domain IN (SELECT domain FROM organization_domain_claims WHERE organization_id = identities.organization_id AND application_id IS NULL))
+                         AND (affiliation_reviews.normalized_name IS NULL OR affiliation_reviews.normalized_name = organization.normalized_name))
+                         OR affiliation_reviews.normalized_name = organization.normalized_name))`,
     )
     .bind(input.identityId, input.userId, input.at, input.userId, input.identityId, input.userId);
 }
