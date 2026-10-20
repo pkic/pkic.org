@@ -215,7 +215,11 @@ export async function listUserAuditLog(db: DatabaseLike, userId: string, query: 
     throw new AppError(404, "USER_NOT_FOUND", "User not found");
   }
   return listAuditLogForScope(db, query, {
-    where: "al.entity_type = 'user' AND al.entity_id = ?",
-    bindings: [userId],
+    // Access audit details retain ownership even after the role or grant is removed.
+    // Older rows store userId directly; current writers normalize it as a delta.
+    where: `((al.entity_type = 'user' AND al.entity_id = ?)
+      OR (al.entity_type IN ('user_roles', 'permission_grant')
+        AND COALESCE(json_extract(al.details_json, '$.userId.to'), json_extract(al.details_json, '$.userId')) = ?))`,
+    bindings: [userId, userId],
   });
 }
