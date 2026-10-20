@@ -13,6 +13,8 @@ export function prepareVerifyPrimaryEmailStatement(
     normalizedEmail: string;
     method: EmailVerificationMethod;
     verifiedAt?: string;
+    /** The historical proof instant can precede the current repair command. */
+    recordedAt?: string;
   },
 ): StatementLike {
   const verifiedAt = input.verifiedAt ?? nowIso();
@@ -22,7 +24,7 @@ export function prepareVerifyPrimaryEmailStatement(
           SET email_verified_at = ?, email_verification_method = ?, updated_at = ?
         WHERE id = ? AND normalized_email = ?`,
     )
-    .bind(verifiedAt, input.method, verifiedAt, input.userId, input.normalizedEmail);
+    .bind(verifiedAt, input.method, input.recordedAt ?? verifiedAt, input.userId, input.normalizedEmail);
 }
 
 /**

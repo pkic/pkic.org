@@ -1,10 +1,13 @@
-/** Staff approval uses live mailbox proof, never the name or domain stored in a review. */
+/** Verified approval is the default; staff overrides are explicit, separately authorized decisions. */
 import type { AffiliationReviewApprove } from "../../../../assets/shared/schemas/affiliation-reviews";
 import { hostWithinDomainSql } from "../../email-domains/sql";
 import { all } from "../../db/queries";
 import type { DatabaseLike, UserBackedAuthAdmin } from "../../types";
 import { guardPermissionMutationDatabase } from "../../auth/permissions";
 import { AppError } from "../../errors";
+import { findHistoricalPrimaryEmailProof } from "./historical-email-verification";
+import { overrideAffiliationReviewVerification } from "./affiliation-review-override";
+import type { IdentityManagerActor } from "./types";
 import { uuid } from "../../utils/ids";
 import { getAffiliationReviewGroup } from "./affiliation-reviews";
 import { linkVerifiedAddressToDomainOrganization } from "./email-domain-link";
@@ -17,11 +20,22 @@ export async function approveAffiliationReviewGroup(
   groupKey: string,
   input: AffiliationReviewApprove,
   staff: UserBackedAuthAdmin,
+  overrideActor?: IdentityManagerActor,
 ) {
+  if (input.activation && (!overrideActor?.immediateActivationAuthorized || !overrideActor.staffAuthorized))
+    throw new AppError(
+      403,
+      "PERMISSION_REQUIRED",
+      "Verification overrides require membership write and identity activation permissions",
+    );
   const protectedDb = guardPermissionMutationDatabase(
     db,
     staff,
-    [{ permission: "users:write" }, { permission: "identities:activate" }],
+    [
+      { permission: "users:write" },
+      { permission: "identities:activate" },
+      ...(input.activation ? [{ permission: "membership:write" as const }] : []),
+    ],
     () => new AppError(403, "PERMISSION_REQUIRED", "Affiliation approval permission changed; refresh and try again"),
   );
   await getAffiliationReviewGroup(protectedDb, groupKey);
@@ -35,10 +49,24 @@ export async function approveAffiliationReviewGroup(
   const decisionId = uuid();
   let decided = 0;
   for (const person of people.slice(0, PEOPLE_PER_PASS)) {
+    if (input.activation && overrideActor) {
+      decided += await overrideAffiliationReviewVerification(
+        protectedDb,
+        {
+          userId: person.user_id,
+          groupKey,
+          decisionId,
+          activation: input.activation,
+        },
+        overrideActor,
+      );
+      continue;
+    }
+    const historicalProof = await findHistoricalPrimaryEmailProof(db, person.user_id);
     const addresses = await all<{ normalized_email: string; organization_id: string }>(
       db,
       `WITH addresses AS (
-         SELECT normalized_email FROM users WHERE id = ? AND active = 1 AND email_verified_at IS NOT NULL
+         SELECT normalized_email FROM users WHERE id = ? AND active = 1 AND (email_verified_at IS NOT NULL OR normalized_email = ?)
          UNION ALL SELECT address.normalized_email FROM user_emails address JOIN users person ON person.id = address.user_id
            WHERE address.user_id = ? AND address.verified_at IS NOT NULL AND person.active = 1
        ) SELECT MIN(address.normalized_email) AS normalized_email, claim.organization_id FROM addresses address
@@ -53,7 +81,7 @@ export async function approveAffiliationReviewGroup(
              AND (review.normalized_name IS NULL OR review.normalized_name = organization.normalized_name))
              OR review.normalized_name = organization.normalized_name))
          GROUP BY claim.organization_id ORDER BY claim.organization_id LIMIT 2`,
-      [person.user_id, person.user_id, person.user_id, groupKey],
+      [person.user_id, historicalProof?.normalizedEmail ?? null, person.user_id, person.user_id, groupKey],
     );
     // Multiple possible employers need an explicit identity invitation, not a guess.
     if (addresses.length !== 1) continue;
@@ -63,6 +91,7 @@ export async function approveAffiliationReviewGroup(
         normalizedEmail: address.normalized_email,
         onlyOrganizationId: address.organization_id,
         reviewDecision: { groupKey, staffId: staff.id, decisionId },
+        historicalProof: historicalProof?.normalizedEmail === address.normalized_email ? historicalProof : undefined,
       });
       if (linked) {
         decided += linked.resolvedReviews;

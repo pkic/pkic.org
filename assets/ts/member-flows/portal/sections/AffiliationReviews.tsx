@@ -1,3 +1,4 @@
+import { AffiliationReviewOverrideDialog } from "./AffiliationReviewOverrideDialog";
 import { useRef, useState } from "preact/hooks";
 import {
   AFFILIATION_REVIEW_STATUSES,
@@ -7,12 +8,13 @@ import {
   affiliationReviewGroupResponseSchema,
   affiliationReviewGroupsListResponseSchema,
   affiliationReviewsListResponseSchema,
+  type AffiliationReviewApprove,
   type AffiliationReview,
   type AffiliationReviewGroup,
   type AffiliationReviewStatus,
 } from "../../../../shared/schemas/affiliation-reviews";
 import { formatNumber } from "../../../../shared/format-number";
-import { Menu } from "../../../ui/Menu";
+import { Menu, type MenuItem } from "../../../ui/Menu";
 import { RowActions } from "../../../ui/RowActions";
 import { ApiDataTable, type ApiTableActions } from "../../../components/ApiDataTable";
 import { Badge } from "../../../components/Badge";
@@ -55,9 +57,20 @@ function domainsLabel(domains: readonly string[]): string | null {
   return domains.length > 0 ? domains.map((domain) => `@${domain}`).join(", ") : null;
 }
 
-function GroupDetail({ groupKey, canWrite, canApprove }: { groupKey: string; canWrite: boolean; canApprove: boolean }) {
+function GroupDetail({
+  groupKey,
+  canWrite,
+  canApprove,
+  canOverride,
+}: {
+  groupKey: string;
+  canWrite: boolean;
+  canApprove: boolean;
+  canOverride: boolean;
+}) {
   const actions = useRef<ApiTableActions | null>(null);
   const [busy, setBusy] = useState(false);
+  const [override, setOverride] = useState<{ review?: AffiliationReview } | null>(null);
   const [error, setError] = useState("");
   const loaded = useData(
     () => getJson(`${GROUPS_API}/${encodeURIComponent(groupKey)}`, affiliationReviewGroupResponseSchema),
@@ -66,26 +79,32 @@ function GroupDetail({ groupKey, canWrite, canApprove }: { groupKey: string; can
   async function changed(): Promise<void> {
     await Promise.all([loaded.reload(), actions.current?.reload()]);
   }
-  async function approve(review?: AffiliationReview): Promise<void> {
+  async function approve(
+    review?: AffiliationReview,
+    activation?: AffiliationReviewApprove["activation"],
+  ): Promise<void> {
     if (
+      !activation &&
       !(await confirmAction({
         title: review ? `Approve ${review.personName}'s affiliation?` : "Approve all eligible affiliations?",
         tone: "primary",
-        body: "Only verified email addresses on approved organization domains qualify. Ambiguous or blocked affiliations stay open for review.",
+        body: "Current and recoverable historical email verification qualify on approved organization domains. Ambiguous or blocked affiliations stay open for review.",
         confirmLabel: review ? "Approve affiliation" : "Approve all eligible",
         cancelLabel: "Keep open",
       }))
     )
       return;
+    setOverride(null);
     setBusy(true);
     setError("");
     let decided = 0;
     try {
       let nextUserId: string | null = null;
       do {
-        const body = affiliationReviewApproveSchema.parse(
-          review ? { userId: review.userId } : nextUserId ? { afterUserId: nextUserId } : {},
-        );
+        const body = affiliationReviewApproveSchema.parse({
+          ...(review ? { userId: review.userId } : nextUserId ? { afterUserId: nextUserId } : {}),
+          activation,
+        });
         const result = await postJson(
           `${GROUPS_API}/${encodeURIComponent(groupKey)}/approve`,
           body,
@@ -94,10 +113,10 @@ function GroupDetail({ groupKey, canWrite, canApprove }: { groupKey: string; can
         decided += result.decided;
         nextUserId = result.nextUserId;
       } while (nextUserId);
-      toast(`${formatNumber(decided)} ${decided === 1 ? "review" : "reviews"} approved`, "success");
-      if (decided === 0)
+      if (decided > 0) toast(`${formatNumber(decided)} ${decided === 1 ? "review" : "reviews"} approved`, "success");
+      else
         setError(
-          "No eligible affiliation found. Check the person's verified work address and the organization's approved domains, or open the person to send an identity invitation.",
+          "No affiliations were approved. No affiliations qualified. Check approved work domains, verification evidence, and existing identity restrictions. Review unresolved records individually.",
         );
     } catch (caught) {
       setError(
@@ -134,6 +153,23 @@ function GroupDetail({ groupKey, canWrite, canApprove }: { groupKey: string; can
   }
   const group = loaded.data?.group;
   const title = group ? groupTitle(group) : "Affiliation review";
+  const approvalActions: MenuItem[] = group?.openReviews
+    ? [
+        ...(canOverride
+          ? [
+              {
+                id: "override",
+                label: "Override missing verification",
+                disabled: busy,
+                onSelect: () => setOverride({}),
+              },
+            ]
+          : []),
+        ...(canApprove
+          ? [{ id: "approve", label: "Approve verified affiliations", disabled: busy, onSelect: () => void approve() }]
+          : []),
+      ]
+    : [];
   return (
     <div class="pk pk-stack">
       <PageHeader
@@ -144,6 +180,14 @@ function GroupDetail({ groupKey, canWrite, canApprove }: { groupKey: string; can
           { label: title },
         ]}
       />
+      {override && (
+        <AffiliationReviewOverrideDialog
+          personName={override.review?.personName}
+          userId={override.review?.userId}
+          onCancel={() => setOverride(null)}
+          onConfirm={(activation) => void approve(override.review, activation)}
+        />
+      )}
       <ErrorAlert error={loaded.error} />
       {!group ? (
         !loaded.error && <Spinner label="Loading this review…" />
@@ -176,27 +220,39 @@ function GroupDetail({ groupKey, canWrite, canApprove }: { groupKey: string; can
                   { term: "Written by", value: peopleLabel(group.people) },
                   { term: "Work email domains", value: domainsLabel(group.emailDomains) },
                   { term: "Open reviews", value: formatNumber(group.openReviews) },
+                  { term: "People without recorded verification", value: formatNumber(group.unverifiedPeople) },
                   { term: "Status", value: <Badge status={group.status} /> },
                   { term: "First recorded", value: fmt(group.firstRecordedAt) },
                 ]}
               />
+              {group.unverifiedPeople > 0 && (
+                <p class="pk-small pk-muted">
+                  Approval checks historical email confirmations and accepted invitations before creating an
+                  organization identity. Previously verified people do not need to verify again. Records without
+                  recoverable proof stay open for individual review.
+                </p>
+              )}
             </PanelBody>
           </Panel>
           <ErrorAlert error={error} />
           <ApiDataTable
             actionsRef={actions}
             toolbarClass="pk-toolbar-row"
-            compactToolbarActions={[]}
+            compactToolbarLabel="Affiliation review actions"
+            compactToolbarActions={approvalActions}
             toolbar={() =>
-              group.openReviews > 0 && (
-                <>
-                  {canApprove && (
-                    <Button variant="primary" loading={busy} onClick={() => void approve()}>
-                      Approve all eligible
-                    </Button>
-                  )}
-                </>
-              )
+              approvalActions.map((action) => (
+                <Button
+                  key={action.id}
+                  class="pk-toolbar-secondary"
+                  variant={action.id === "approve" ? "primary" : "secondary"}
+                  disabled={action.disabled}
+                  loading={busy && action.id === "approve"}
+                  onClick={() => action.onSelect?.()}
+                >
+                  {action.label}
+                </Button>
+              ))
             }
             urlState={`affiliation-review-people.${group.groupKey}`}
             caption={`People who wrote ${title}`}
@@ -217,6 +273,9 @@ function GroupDetail({ groupKey, canWrite, canApprove }: { groupKey: string; can
                       <a href={`#/users/${encodeURIComponent(review.userId)}`}>{review.personName}</a>
                     </div>
                     <div class="pk-small pk-muted">{review.personEmail}</div>
+                    <div class="pk-small pk-muted">
+                      {review.hasVerifiedEmail ? "Verified address on file" : "No recorded verification"}
+                    </div>
                   </>
                 ),
                 sort: { asc: "personName", desc: "-personName" },
@@ -250,6 +309,16 @@ function GroupDetail({ groupKey, canWrite, canApprove }: { groupKey: string; can
                                     disabled: busy,
                                     onSelect: () => void approve(review),
                                   },
+                                  ...(canOverride
+                                    ? [
+                                        {
+                                          id: "override",
+                                          label: "Override missing verification",
+                                          disabled: busy,
+                                          onSelect: () => setOverride({ review }),
+                                        },
+                                      ]
+                                    : []),
                                 ]
                               : []
                           }
@@ -277,12 +346,22 @@ export function AffiliationReviews({
   groupKey,
   canWrite,
   canApprove,
+  canOverride = false,
 }: {
   groupKey?: string;
   canWrite: boolean;
   canApprove: boolean;
+  canOverride?: boolean;
 }) {
-  if (groupKey) return <GroupDetail groupKey={groupKey} canWrite={canWrite} canApprove={canApprove} />;
+  if (groupKey)
+    return (
+      <GroupDetail
+        groupKey={groupKey}
+        canWrite={canWrite}
+        canApprove={canApprove}
+        canOverride={canOverride && canApprove}
+      />
+    );
   return (
     <div class="pk pk-stack">
       <PageHeader title="Affiliation reviews" />

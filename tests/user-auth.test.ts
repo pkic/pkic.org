@@ -9,6 +9,7 @@ import {
   addRepresentative,
   insertIndividualMember,
   insertOrganization,
+  insertUser,
   seedOrganizationAggregate,
 } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
@@ -63,6 +64,65 @@ function cookiePair(response: Response): string {
 
 describe("canonical user authentication", () => {
   beforeEach(resetDb);
+
+  it("records first mailbox proof before creating a new attendee's organization identity", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const email = "imported@uk.ibm.example";
+    const userId = await insertUser(env.DB, email);
+    const organizationId = await insertOrganization(env.DB, "IBM");
+    const at = "2026-10-01T00:00:00.000Z";
+    await env.DB.batch([
+      env.DB.prepare(`INSERT INTO identities(id,user_id,source,show_on_organization_profile,invited_at,started_at,created_at,updated_at)
+        VALUES (?,?,'account',0,?,?,?,?)`).bind(crypto.randomUUID(), userId, at, at, at, at),
+      env.DB.prepare(`INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at)
+        VALUES (?,'ibm.example',?,?,?)`).bind(crypto.randomUUID(), organizationId, at, at),
+      env.DB.prepare(`INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at)
+        VALUES (?,?,?,'registered','in_person','test',?,?,?)`).bind(
+        crypto.randomUUID(),
+        eventId,
+        userId,
+        crypto.randomUUID(),
+        at,
+        at,
+      ),
+      env.DB.prepare(`INSERT INTO affiliation_reviews(id,user_id,organization_name,normalized_name,job_title,email_domain,group_key,source_type,source_id,created_at)
+        VALUES (?,?,'IBM','ibm','Architect','uk.ibm.example','ibm','user_profile',?,?)`).bind(
+        crypto.randomUUID(),
+        userId,
+        userId,
+        at,
+      ),
+    ]);
+    const token = await requestUserToken(email);
+    expect(token).not.toBeNull();
+    // Issuing an email is not proof: the account remains unverified and unaffiliated until redemption.
+    expect(await queryAll(env.DB, "SELECT email_verified_at FROM users WHERE id = ?", [userId])).toEqual([
+      { email_verified_at: null },
+    ]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM identities WHERE user_id = ? AND organization_id IS NOT NULL", [userId]),
+    ).toEqual([]);
+    const response = await call("/api/v1/auth/verify-link", { method: "POST", body: JSON.stringify({ token }) });
+    expect(response.status, await response.clone().text()).toBe(200);
+    userAuthSessionResponseSchema.parse(await response.json());
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT email_verification_method FROM users WHERE id = ? AND email_verified_at IS NOT NULL",
+        [userId],
+      ),
+    ).toEqual([{ email_verification_method: "magic_link" }]);
+    const identities = await queryAll<{ id: string; source: string }>(
+      env.DB,
+      "SELECT id,source FROM identities WHERE user_id = ? AND organization_id = ? AND started_at IS NOT NULL",
+      [userId, organizationId],
+    );
+    expect(identities).toHaveLength(1);
+    expect(identities[0].source).toBe("verified_domain");
+    expect(
+      await queryAll(env.DB, "SELECT resolved_identity_id FROM affiliation_reviews WHERE user_id = ?", [userId]),
+    ).toEqual([{ resolved_identity_id: identities[0].id }]);
+  });
 
   it("materializes and renders a user_sign_in capability into one user session with live staff and member capacities", async () => {
     await seedDualCapacityUser();

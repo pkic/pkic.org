@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { immediateIdentityActivationSchema } from "./identity";
 import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 
@@ -27,9 +28,11 @@ export const affiliationReviewSchema = z.object({
   userId: databaseIdSchema,
   personName: z.string(),
   personEmail: z.string(),
+  /** Any currently verified primary or alternate address; domain eligibility is checked separately. */
+  hasVerifiedEmail: z.boolean(),
   organizationName: z.string().nullable(),
   jobTitle: z.string().nullable(),
-  /** The person's verified work domain, when they had one. */
+  /** Historical domain recorded by the source; not proof of current mailbox control. */
   emailDomain: z.string().nullable(),
   sourceType: affiliationReviewSourceTypeSchema,
   status: affiliationReviewStatusSchema,
@@ -49,6 +52,8 @@ export const affiliationReviewGroupSchema = z.object({
   emailDomains: z.array(z.string()),
   people: z.number().int().nonnegative(),
   openReviews: z.number().int().nonnegative(),
+  /** Distinct people with open reviews and no verified primary or alternate address. */
+  unverifiedPeople: z.number().int().nonnegative(),
   status: affiliationReviewStatusSchema,
   firstRecordedAt: z.string(),
 });
@@ -157,6 +162,8 @@ export const affiliationReviewApproveSchema = z
   .object({
     userId: databaseIdSchema.optional(),
     afterUserId: databaseIdSchema.optional(),
+    /** Explicit staff exception; never changes email verification. Requires membership:write too. */
+    activation: immediateIdentityActivationSchema.optional(),
   })
   .refine((value) => !(value.userId && value.afterUserId), { message: "Choose one person or a batch cursor" });
 export type AffiliationReviewApprove = z.infer<typeof affiliationReviewApproveSchema>;
@@ -167,7 +174,9 @@ export const affiliationReviewApproveResponseSchema = z.object({
 });
 export const affiliationReviewGroupApproveRouteSchema = {
   tags: ["Identities"],
-  summary: "Approve verified-domain affiliations in a bounded group pass",
+  summary: "Approve affiliations in a bounded group pass",
+  description:
+    "Uses verified mailbox evidence by default. An explicit immediate activation records a staff override with a required reason and additionally requires membership:write. Both modes require a matching approved organization domain.",
   "x-pkic-auth": { required: true, scopes: ["users:write", "identities:activate"] },
   request: {
     params: affiliationReviewGroupParamsSchema,

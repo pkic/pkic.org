@@ -1,3 +1,4 @@
+import { historicalRegistration, approvedOrganization, verifiedPerson } from "./helpers/affiliation-history";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { normalizeOrgName } from "../assets/shared/organization-name";
@@ -5,7 +6,7 @@ import { callApi } from "./helpers/app";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
-import { addRepresentative, seedOrganizationAggregate, insertOrganization, insertUser } from "./helpers/membership";
+import { addRepresentative, insertOrganization, insertUser } from "./helpers/membership";
 import {
   affiliationReviewApproveResponseSchema,
   affiliationReviewGroupDecisionResponseSchema,
@@ -77,6 +78,38 @@ describe("affiliation reviews by group", () => {
     expect(members.reviews).toHaveLength(2);
   });
 
+  it("reports live mailbox verification separately from historical domain text and review counts", async () => {
+    await approvedOrganization();
+    const unverified = await insertUser(env.DB, "imported@uk.ibm.example");
+    const verified = await verifiedPerson("proved@ibm.example");
+    const aliasOwner = await insertUser(env.DB, "alternate@example.test");
+    await insertReview(unverified, "IBM", "Architect", "ibm.example");
+    await insertReview(unverified, "IBM", null, "ibm.example");
+    await insertReview(verified, "IBM", null);
+    await insertReview(aliasOwner, "IBM", null);
+    await env.DB.prepare(`INSERT INTO user_emails (id,user_id,email,normalized_email,verified_at,created_at)
+      VALUES (?,?,'alias@ibm.example','alias@ibm.example',?,?)`)
+      .bind(crypto.randomUUID(), aliasOwner, "2026-10-01T00:00:00.000Z", "2026-10-01T00:00:00.000Z")
+      .run();
+    const listed = affiliationReviewGroupsListResponseSchema.parse(
+      await (await call(adminToken, `${BASE}/groups`)).json(),
+    );
+    expect(listed.groups[0]).toMatchObject({ people: 3, openReviews: 4, unverifiedPeople: 1 });
+    const detail = affiliationReviewsListResponseSchema.parse(
+      await (await call(adminToken, `${BASE}?groupKey=ibm`)).json(),
+    );
+    expect(
+      detail.reviews.filter((review) => review.userId === unverified).every((review) => !review.hasVerifiedEmail),
+    ).toBe(true);
+    expect(
+      detail.reviews.filter((review) => review.userId !== unverified).every((review) => review.hasVerifiedEmail),
+    ).toBe(true);
+    expect(await approve({ userId: unverified })).toMatchObject({ decided: 0, group: { unverifiedPeople: 1 } });
+    expect(await queryAll(env.DB, "SELECT email_verified_at FROM users WHERE id = ?", [unverified])).toEqual([
+      { email_verified_at: null },
+    ]);
+  });
+
   it("never links people to an organization by the name they wrote", async () => {
     const organizationId = await insertOrganization(env.DB, "Solo Consulting");
     const person = await insertUser(env.DB, "fresh@example.test");
@@ -110,27 +143,170 @@ describe("affiliation reviews by group", () => {
     expect((await call(adminToken, `${groupPath("Unknown group")}/dismiss`, { method: "POST" })).status).toBe(404);
   });
 
-  async function approvedOrganization(): Promise<string> {
-    const organizationId = await insertOrganization(env.DB, "IBM");
-    await seedOrganizationAggregate(env.DB, organizationId);
-    await env.DB.prepare(`INSERT INTO organization_domain_claims (id, domain, organization_id, created_at, updated_at)
-      VALUES (?, 'ibm.example', ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))`)
-      .bind(crypto.randomUUID(), organizationId)
-      .run();
-    return organizationId;
-  }
-  async function verifiedPerson(email: string): Promise<string> {
-    const userId = await insertUser(env.DB, email);
-    await env.DB.prepare("UPDATE users SET email_verified_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?")
-      .bind(userId)
-      .run();
-    return userId;
-  }
   async function approve(body: unknown = {}, token = adminToken) {
     const response = await call(token, `${groupPath("IBM")}/approve`, { method: "POST", body: JSON.stringify(body) });
     expect(response.status, await response.clone().text()).toBe(200);
     return affiliationReviewApproveResponseSchema.parse(await response.json());
   }
+
+  it.each(["invite", "confirmation"] as const)(
+    "restores historical %s proof and affiliation atomically without re-verification",
+    async (kind) => {
+      const organizationId = await approvedOrganization();
+      const email = `legacy-${kind}@uk.ibm.example`;
+      const person = await insertUser(env.DB, email);
+      const at = await historicalRegistration(person, email, kind);
+      await insertReview(person, "IBM", "Architect", "uk.ibm.example");
+      expect(await approve({ userId: person })).toMatchObject({
+        decided: 1,
+        group: { openReviews: 0, unverifiedPeople: 0 },
+      });
+      expect(
+        await queryAll(env.DB, "SELECT email_verified_at,email_verification_method FROM users WHERE id = ?", [person]),
+      ).toEqual([{ email_verified_at: at, email_verification_method: "migration_evidence" }]);
+      expect(
+        await queryAll(env.DB, "SELECT organization_id,source FROM identities WHERE user_id = ?", [person]),
+      ).toEqual([{ organization_id: organizationId, source: "verified_domain" }]);
+      expect(
+        await queryAll(
+          env.DB,
+          "SELECT id FROM audit_log WHERE action = 'primary_email_verification_restored' AND entity_id = ?",
+          [person],
+        ),
+      ).toHaveLength(1);
+      expect(await approve({ userId: person })).toMatchObject({ decided: 0 });
+      expect(await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key = 'user_magic_link'")).toEqual([]);
+    },
+  );
+
+  it.each(["invite", "confirmation", "status"] as const)(
+    "does not infer mailbox proof from %s status or another address",
+    async (kind) => {
+      await approvedOrganization();
+      const person = await insertUser(env.DB, `mismatch-${kind}@ibm.example`);
+      await historicalRegistration(person, `mismatch-${kind}@ibm.example`, kind, "other@ibm.example");
+      await insertReview(person, "IBM", null);
+      expect(await approve({ userId: person })).toMatchObject({ decided: 0 });
+      expect(await queryAll(env.DB, "SELECT email_verified_at FROM users WHERE id = ?", [person])).toEqual([
+        { email_verified_at: null },
+      ]);
+    },
+  );
+
+  it("rolls back restored historical proof together with identity and reviews on audit failure", async () => {
+    await approvedOrganization();
+    const person = await insertUser(env.DB, "legacy-rollback@ibm.example");
+    await historicalRegistration(person, "legacy-rollback@ibm.example", "invite");
+    await insertReview(person, "IBM", null);
+    await env.DB.prepare(`CREATE TRIGGER reject_restored_approval BEFORE INSERT ON audit_log
+      WHEN NEW.action = 'affiliation_review_resolved' BEGIN SELECT RAISE(ABORT, 'test rollback'); END`).run();
+    try {
+      expect(
+        (
+          await call(adminToken, `${groupPath("IBM")}/approve`, {
+            method: "POST",
+            body: JSON.stringify({ userId: person }),
+          })
+        ).status,
+      ).toBe(500);
+      expect(await queryAll(env.DB, "SELECT email_verified_at FROM users WHERE id = ?", [person])).toEqual([
+        { email_verified_at: null },
+      ]);
+      expect(await queryAll(env.DB, "SELECT id FROM identities WHERE user_id = ?", [person])).toEqual([]);
+      expect(
+        await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'primary_email_verification_restored'"),
+      ).toEqual([]);
+    } finally {
+      await env.DB.prepare("DROP TRIGGER reject_restored_approval").run();
+    }
+  });
+
+  it("records a reasoned staff override without asserting mailbox verification", async () => {
+    const organizationId = await approvedOrganization();
+    const person = await insertUser(env.DB, "override@uk.ibm.example");
+    await insertReview(person, "IBM", "Architect", "uk.ibm.example");
+    const activation = { mode: "immediate", reason: "Affiliation confirmed with the organization contact" };
+    expect(await approve({ userId: person, activation })).toMatchObject({ decided: 1, group: { openReviews: 0 } });
+    expect(await queryAll(env.DB, "SELECT email_verified_at FROM users WHERE id = ?", [person])).toEqual([
+      { email_verified_at: null },
+    ]);
+    expect(
+      await queryAll(env.DB, "SELECT organization_id,source,job_title FROM identities WHERE user_id = ?", [person]),
+    ).toEqual([{ organization_id: organizationId, source: "staff", job_title: "Architect" }]);
+    expect(
+      await queryAll(env.DB, "SELECT resolved_by_user_id FROM affiliation_reviews WHERE user_id = ?", [person]),
+    ).toEqual([{ resolved_by_user_id: adminId }]);
+    const audit = await queryAll<{ details_json: string }>(
+      env.DB,
+      "SELECT details_json FROM audit_log WHERE action = 'organization_identity_activated' AND actor_id = ?",
+      [adminId],
+    );
+    expect(audit).toHaveLength(1);
+    expect(audit[0].details_json).toContain(activation.reason);
+    expect(await approve({ userId: person, activation })).toMatchObject({ decided: 0 });
+  });
+
+  it("bounds override batches and leaves personal-address and existing-identity cases open", async () => {
+    const organizationId = await approvedOrganization();
+    for (let index = 0; index < 7; index += 1) {
+      const person = await insertUser(env.DB, `override-batch-${index}@ibm.example`);
+      await insertReview(person, "IBM", null);
+    }
+    const personal = await insertUser(env.DB, "personal@example.test");
+    await insertReview(personal, "IBM", null);
+    const existing = await insertUser(env.DB, "existing-unverified@ibm.example");
+    const member = (
+      await queryAll<{ id: string }>(env.DB, "SELECT id FROM members WHERE organization_id = ?", [organizationId])
+    )[0].id;
+    const identityId = await addRepresentative(env.DB, member, existing);
+    await env.DB.prepare("UPDATE identities SET ended_at = started_at WHERE id = ?").bind(identityId).run();
+    await insertReview(existing, "IBM", null);
+    const activation = { mode: "immediate", reason: "Reviewed work affiliations with organization contact" };
+    let afterUserId: string | null = null;
+    let decided = 0;
+    do {
+      const result = await approve({ activation, ...(afterUserId ? { afterUserId } : {}) });
+      decided += result.decided;
+      afterUserId = result.nextUserId;
+    } while (afterUserId);
+    expect(decided).toBe(7);
+    expect(
+      await queryAll(env.DB, "SELECT COUNT(*) AS total FROM affiliation_reviews WHERE resolved_at IS NULL"),
+    ).toEqual([{ total: 2 }]);
+  });
+
+  it("requires a reason and separate staff grant authority for overrides", async () => {
+    await approvedOrganization();
+    const person = await insertUser(env.DB, "limited-override@ibm.example");
+    await insertReview(person, "IBM", null);
+    await env.DB.batch(
+      ["users:write", "identities:activate"].map((permission) =>
+        env.DB.prepare("INSERT INTO permission_grants(id,user_id,permission,created_at) VALUES(?,?,?,?)").bind(
+          crypto.randomUUID(),
+          person,
+          permission,
+          "2026-10-01T00:00:00.000Z",
+        ),
+      ),
+    );
+    const token = await createMemberSession(env.DB, person, "limited-override-token");
+    expect(
+      (
+        await call(token, `${groupPath("IBM")}/approve`, {
+          method: "POST",
+          body: JSON.stringify({ activation: { mode: "immediate", reason: "Reviewed" } }),
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await call(adminToken, `${groupPath("IBM")}/approve`, {
+          method: "POST",
+          body: JSON.stringify({ activation: { mode: "immediate", reason: " " } }),
+        })
+      ).status,
+    ).toBe(400);
+  });
 
   it("approves one verified person across review sources and safely retries", async () => {
     const organizationId = await approvedOrganization();
@@ -241,7 +417,7 @@ describe("affiliation reviews by group", () => {
         await env.DB.prepare(
           state === "blocked"
             ? "UPDATE identities SET blocked_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), ended_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?"
-            : "UPDATE identities SET ended_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?",
+            : "UPDATE identities SET ended_at = started_at WHERE id = ?",
         )
           .bind(identity)
           .run();
