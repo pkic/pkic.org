@@ -226,6 +226,9 @@ it("uses a phone list default, keeps stable cards across view changes, prints on
   expect(print).not.toHaveBeenCalled();
   root.querySelector<HTMLButtonElement>("[data-agenda-print]")!.click();
   expect(print).toHaveBeenCalledTimes(1);
+  expect(grid.getAttribute("aria-pressed")).toBe("true");
+  root.querySelector<HTMLButtonElement>("[data-agenda-compact]")!.click();
+  expect(grid.getAttribute("aria-pressed")).toBe("true");
   dispose!();
   input("[data-agenda-search]", "no matching session");
   expect(card("one").hidden).toBe(false);

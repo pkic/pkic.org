@@ -8,7 +8,6 @@ import { clockTimeZone, type ClockZone } from "../../shared/event-clock";
 import { agendaZoneAbbreviation } from "../../shared/agenda-time-display";
 import type { ComponentChildren } from "preact";
 import "./ContentAgenda.css";
-import "./AgendaPrint.css";
 import { LocalTime } from "./SiteDate";
 import { Button } from "../ui/Button";
 import { AgendaDayLabel } from "./AgendaDayLabel";
@@ -33,6 +32,8 @@ import type {
 // After every agenda part so the v4 presentation layer wins equal-specificity rules.
 import "./AgendaDesign.css";
 import "./AgendaTimeline.css";
+// Print geometry and typography override the screen presentation.
+import "./AgendaPrint.css";
 
 /** Render the shared agenda, hiding unused room columns outside the planner while retaining shift details. */
 export function ContentAgenda({

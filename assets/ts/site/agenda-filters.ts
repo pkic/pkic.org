@@ -224,7 +224,7 @@ export function initializeAgendaFilters(root: HTMLElement): () => void {
       if (filtersToggle && event.target.closest("[data-agenda-filters-toggle]"))
         setAgendaFiltersExpanded(root, filtersToggle, root.dataset.agendaFilters === "collapsed");
       if (event.target.closest("[data-agenda-print]")) window.print();
-      const view = event.target.closest<HTMLButtonElement>("[data-agenda-view]");
+      const view = event.target.closest<HTMLButtonElement>("button[data-agenda-view]");
       if (view) {
         root.dataset.agendaView = view.dataset.agendaView;
         for (const button of root.querySelectorAll<HTMLButtonElement>("[data-agenda-view]"))

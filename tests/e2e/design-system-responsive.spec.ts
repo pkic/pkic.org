@@ -316,28 +316,32 @@ test("agenda list cards expand without overlap and print every day as a readable
         ]
           .map((control) => control.getBoundingClientRect().height)
           .filter(Boolean);
-        const alignment = cards
+        const orderedContent = cards
           .filter((card) => !card.classList.contains("pk-content-agenda__session--break"))
-          .map((card) =>
-            Math.abs(
-              card.querySelector(".pk-content-agenda__room")!.getBoundingClientRect().top -
-                card.querySelector(".pk-content-agenda__session-body")!.getBoundingClientRect().top,
-            ),
-          );
+          .every((card) => {
+            const room = card.querySelector(".pk-content-agenda__room")!.getBoundingClientRect();
+            const body = card.querySelector(".pk-content-agenda__session-body")!.getBoundingClientRect();
+            const footer = card.querySelector(".pk-content-agenda__card-footer")!.getBoundingClientRect();
+            return (
+              body.top >= room.bottom &&
+              (footer.height === 0 || footer.top >= body.bottom - 1) &&
+              Math.abs(room.width - card.clientWidth) <= 2
+            );
+          });
         return {
           overlaps: overlaps.length,
           heights: boxes.map((box) => box.height),
           controls,
-          alignment,
+          orderedContent,
           overflow: document.documentElement.scrollWidth - innerWidth,
         };
       });
       expect(geometry.overlaps).toBe(0);
       expect(geometry.heights.every((height) => height > 0)).toBe(true);
       expect(geometry.overflow).toBeLessThanOrEqual(1);
+      expect(geometry.orderedContent).toBe(true);
       if (width === 1440) {
         expect(Math.max(...geometry.controls) - Math.min(...geometry.controls)).toBeLessThanOrEqual(1);
-        expect(geometry.alignment.every((offset) => offset <= 4)).toBe(true);
       }
     }
   }
@@ -346,24 +350,47 @@ test("agenda list cards expand without overlap and print every day as a readable
   const selectedDays = await agenda
     .locator(".pk-content-agenda__day")
     .evaluateAll((days) => days.map((day) => day.hasAttribute("hidden")));
-  await page.evaluate(() => window.dispatchEvent(new Event("beforeprint")));
-  await page.emulateMedia({ media: "print" });
-  await expect(page.locator(".pk-preview__bar")).toBeHidden();
-  await expect(agenda.locator("[data-agenda-controls]")).toBeHidden();
-  for (const day of await agenda.locator(".pk-content-agenda__day").all()) {
-    await expect(day).toBeVisible();
-    await expect(day.locator("caption")).toBeVisible();
-    const widths = await day
-      .locator("[data-agenda-session]")
-      .evaluateAll((cards) => cards.map((card) => card.getBoundingClientRect().width));
-    expect(widths.every((width) => width > 500)).toBe(true);
+  const printedHeights: number[] = [];
+  for (const abstracts of [false, true]) {
+    const toggle = agenda.locator("[data-agenda-compact]");
+    if ((await toggle.getAttribute("aria-pressed")) !== String(abstracts)) await toggle.click();
+    await page.evaluate(() => window.dispatchEvent(new Event("beforeprint")));
+    await page.emulateMedia({ media: "print" });
+    await expect(page.locator(".pk-preview__bar")).toBeHidden();
+    await expect(agenda.locator("[data-agenda-controls]")).toBeHidden();
+    for (const day of await agenda.locator(".pk-content-agenda__day").all()) {
+      await expect(day).toBeVisible();
+      await expect(day.locator("caption")).toBeVisible();
+    }
+    const printed = await agenda.evaluate((root) => {
+      const bounds = root.getBoundingClientRect();
+      const cards = [...root.querySelectorAll<HTMLElement>("[data-agenda-session]")];
+      return cards.map((card) => {
+        const box = card.getBoundingClientRect();
+        return {
+          width: box.width,
+          height: box.height,
+          contained: box.left >= bounds.left && box.right <= bounds.right,
+          border: getComputedStyle(card).borderRightWidth,
+        };
+      });
+    });
+    expect(printed.every((card) => card.width > 500 && card.contained)).toBe(true);
+    expect(printed.filter((card) => card.border !== "0px").length).toBeGreaterThan(0);
+    printedHeights.push(printed.reduce((total, card) => total + card.height, 0));
+    const descriptions = agenda.locator(".pk-content-agenda__description");
+    for (const description of await descriptions.all()) {
+      if (abstracts) await expect(description).toBeVisible();
+      else await expect(description).toBeHidden();
+    }
+    await page.emulateMedia({ media: "screen" });
+    await page.evaluate(() => window.dispatchEvent(new Event("afterprint")));
+    expect(
+      await agenda
+        .locator(".pk-content-agenda__day")
+        .evaluateAll((days) => days.map((day) => day.hasAttribute("hidden"))),
+    ).toEqual(selectedDays);
   }
-  await page.emulateMedia({ media: "screen" });
-  await page.evaluate(() => window.dispatchEvent(new Event("afterprint")));
-  expect(
-    await agenda
-      .locator(".pk-content-agenda__day")
-      .evaluateAll((days) => days.map((day) => day.hasAttribute("hidden"))),
-  ).toEqual(selectedDays);
+  expect(printedHeights[0]!).toBeLessThan(printedHeights[1]!);
   await expect(agenda.getByRole("button", { name: "Grid", exact: true })).toHaveAttribute("aria-pressed", "true");
 });

@@ -527,7 +527,7 @@
     filter: brightness(0) invert(1);
   }
 
-  /* List view: time track, then room / session / actions per row. */
+  /* List view: time track beside the shared session card. */
   @media screen {
     .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__day {
       border-block-start: 1px solid var(--pk-line);
@@ -607,91 +607,6 @@
       display: none;
     }
   }
-  @media screen and (min-width: 47.5rem) {
-    .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__session:not(.pk-content-agenda__session--break) {
-      display: grid;
-      grid-template-columns: 9.375rem minmax(0, 1fr) auto;
-      align-items: start;
-      gap: 0.5rem 1.25rem;
-      min-block-size: 0;
-      padding: 0.75rem 0.5rem 0.75rem 0.875rem;
-    }
-    .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__session > .pk-content-agenda__room {
-      grid-column: 1;
-      grid-row: 1;
-    }
-    .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__session > .pk-content-agenda__status:not([hidden]) {
-      grid-column: 2;
-      grid-row: 1;
-      justify-self: start;
-      margin: 0;
-      padding: 2px 0.5625rem;
-      border-radius: var(--pk-radius-lg);
-      letter-spacing: 0.06em;
-    }
-    .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__session > .pk-content-agenda__session-body {
-      grid-column: 2;
-      grid-row: 1;
-      gap: 0.5rem;
-    }
-    .pk-content-agenda[data-agenda-view="list"]
-      .pk-content-agenda__session:has(> .pk-content-agenda__status:not([hidden]))
-      > .pk-content-agenda__session-body {
-      grid-row: 2;
-    }
-    .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__session > .pk-content-agenda__card-footer {
-      grid-column: 3;
-      grid-row: 1;
-      justify-self: end;
-      flex-wrap: nowrap;
-      min-block-size: 1.75rem;
-      margin: 0;
-      padding: 0;
-      border: 0;
-    }
-    .pk-content-agenda[data-agenda-view="list"]
-      .pk-content-agenda__session
-      > :is(.pk-content-agenda__unknown-end, .pk-agenda-break-sponsors) {
-      grid-column: 2;
-    }
-  }
-  @media screen {
-    .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__session > .pk-content-agenda__room {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      justify-content: flex-start;
-      gap: 0.1875rem;
-      margin: 0;
-      padding: 2px 0 0;
-      border-radius: 0;
-      background: transparent;
-      font-weight: 400;
-    }
-    .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__room > span:first-child {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.4375rem;
-      color: var(--pk-ink);
-      font-size: var(--pk-agenda-type-13);
-      font-weight: 700;
-    }
-    .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__room > span:first-child::before {
-      content: "";
-      flex: none;
-      inline-size: 0.5625rem;
-      block-size: 0.5625rem;
-      border-radius: 50%;
-      background: var(--agenda-color);
-    }
-    .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__room > .pk-content-agenda__track {
-      padding: 0 0 0 1rem;
-      border: 0;
-      color: var(--pk-ink-muted);
-      font-size: var(--pk-agenda-type-12);
-      font-weight: 400;
-    }
-  }
   @media screen and (max-width: 47.499rem) {
     .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__timeline .pk-content-agenda__slot {
       grid-template-columns: minmax(0, 1fr);
@@ -707,15 +622,6 @@
       flex-direction: row;
       align-items: baseline;
       gap: 0.625rem;
-    }
-    .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__session > .pk-content-agenda__room {
-      flex-direction: row;
-      align-items: baseline;
-      gap: 0.5rem;
-      margin-block-end: 0.5rem;
-    }
-    .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__room > .pk-content-agenda__track {
-      padding: 0;
     }
   }
 
@@ -1018,8 +924,12 @@
       font-size: var(--pk-agenda-type-12);
     }
   }
-  /* List rows already name the track beside the room. */
-  @media screen and (min-width: 47.5rem) {
+  /* List cards name the track once, in their shared room band. */
+  @media screen {
+    .pk-content-agenda[data-agenda-view="list"]
+      .pk-content-agenda__card-footer:not(:has(> :not(.pk-content-agenda__footer-track, [hidden]))) {
+      display: none;
+    }
     .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__card-footer > .pk-content-agenda__footer-track {
       display: none;
     }
@@ -1639,11 +1549,16 @@
   }
 
   /*
-   * Phone list cards follow the published agenda's card: the room is a tinted
-   * band across the top of the card, and abstracts show while Abstracts is on.
+   * One list card at every width: room band, session content, then footer actions.
+   * Only the surrounding time column changes on narrow screens.
    */
-  @media screen and (max-width: 47.499rem) {
+  @media screen {
     .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__session > .pk-content-agenda__room {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      justify-content: flex-start;
+      gap: 0.5rem;
       align-self: stretch;
       margin: -0.625rem -0.75rem 0.625rem;
       padding: 0.625rem 0.75rem;
@@ -1653,13 +1568,19 @@
     .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__room > span:first-child {
       font-size: var(--pk-agenda-type-15);
     }
-    .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__room > span:first-child::before {
-      display: none;
+    .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__room > .pk-content-agenda__track {
+      padding: 0;
+      border: 0;
+      color: var(--pk-ink-muted);
+      font-size: var(--pk-agenda-type-12);
+      font-weight: 400;
     }
     .pk-content-agenda[data-agenda-view="list"]:not(.is-compact) .pk-content-agenda__description {
       display: block;
     }
-    /* The row is a plain block here, so the time keeps its own distance from the card. */
+  }
+  @media screen and (max-width: 47.499rem) {
+    /* The time keeps its own distance from the card when it moves above it. */
     .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__slot > th.pk-content-agenda__time {
       padding-block-end: 0.625rem;
     }
