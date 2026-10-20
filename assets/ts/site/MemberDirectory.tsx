@@ -1,12 +1,28 @@
 import { useMemo } from "preact/hooks";
 import type { PublicMemberSummary } from "../../shared/schemas/members-directory";
 import { memberProfileHref } from "../../shared/member-profile-url";
+import { Tabs } from "../ui/Tabs";
+import { MEMBER_GROUP_LABELS } from "../../shared/schemas/members-directory";
 import { Avatar } from "../ui/Avatar";
 import { EmptyState } from "../ui/EmptyState";
 import "./member-directory.css";
 const DIGITS = new Set("0123456789".split(""));
 
 export type DirectoryMember = PublicMemberSummary;
+
+/** The two public directories share the same link-based navigation. */
+export function MemberDirectoryTabs({ active }: { active: "organization" | "independent" }) {
+  return (
+    <Tabs
+      label="Member directories"
+      activeId={active}
+      items={[
+        { id: "organization", label: MEMBER_GROUP_LABELS.organization, href: "/members/" },
+        { id: "independent", label: MEMBER_GROUP_LABELS.independent, href: "/members/independent/" },
+      ]}
+    />
+  );
+}
 
 function letterBucket(name: string): string {
   const c = name.trim().charAt(0).toUpperCase();
