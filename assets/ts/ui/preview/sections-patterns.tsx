@@ -41,6 +41,16 @@ import type { ContentAgendaDay } from "../../../shared/site-agenda";
 
 const agendaDays: ContentAgendaDay[] = ["2025-12-01", "2025-12-02"].map((date, index) => ({
   date,
+  staffing: [
+    {
+      id: `preparation-${index}`,
+      name: "Room preparation",
+      startAt: `${date}T08:00:00.000Z`,
+      endAt: `${date}T09:00:00.000Z`,
+      locationId: "unused",
+      duties: [{ role: "mc", displayName: "Alex Example" }],
+    },
+  ],
   locations: [
     { id: "main", label: "Main hall" },
     { id: "workshop", label: "Workshop room" },

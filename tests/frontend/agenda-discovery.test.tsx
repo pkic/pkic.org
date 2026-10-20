@@ -99,6 +99,16 @@ it.each([false, true])("keeps empty day locations only in the planner (editing: 
     time: "11:00",
     sessions: [{ id: "break", title: "Coffee", kind: "break", locations: [], speakers: [], descriptionHtml: "" }],
   });
+  source[0]!.staffing = [
+    {
+      id: "empty-room-shift",
+      name: "Room preparation",
+      startAt: "2026-12-01T08:00:00.000Z",
+      endAt: "2026-12-01T09:00:00.000Z",
+      locationId: "unused",
+      duties: [{ role: "mc", displayName: "Alex Example" }],
+    },
+  ];
   const before = structuredClone(source);
   root.innerHTML = render(
     <ContentAgenda
@@ -114,6 +124,7 @@ it.each([false, true])("keeps empty day locations only in the planner (editing: 
     );
   expect(columns(source[0]!.date)).toEqual(editing ? ["blue", "green", "unused"] : ["blue", "green"]);
   expect(columns(source[1]!.date)).toEqual(editing ? ["blue", "green", "unused"] : ["blue"]);
+  expect(root.querySelector(".pk-content-agenda__staffing-shift")?.textContent).toContain("Unused room");
   expect(root.textContent).toContain("Coffee");
   expect(source).toEqual(before);
 });

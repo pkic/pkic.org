@@ -34,6 +34,7 @@ import type {
 import "./AgendaDesign.css";
 import "./AgendaTimeline.css";
 
+/** Render the shared agenda, hiding unused room columns outside the planner while retaining shift details. */
 export function ContentAgenda({
   days: suppliedDays,
   speakers,
@@ -220,7 +221,7 @@ export function ContentAgenda({
           personal={personal && { toolbarControls: personal.toolbarControls, mineOnly: personal.mineOnly, mineCount }}
         />
         <AgendaCalendarBody editor={Boolean(editor)} sidebar={editor?.sidebar}>
-          {days.map((day) => (
+          {days.map((day, dayIndex) => (
             <section
               class="pk-content-agenda__day"
               id={`agenda-day-${day.date}`}
@@ -245,7 +246,7 @@ export function ContentAgenda({
                       <small>
                         {formatTimeRangeInZone(shift.startAt, shift.endAt, clock)}
                         {shift.locationId
-                          ? ` · ${day.locations.find((room) => room.id === shift.locationId)?.label ?? ""}`
+                          ? ` · ${suppliedDays[dayIndex]?.locations.find((room) => room.id === shift.locationId)?.label ?? ""}`
                           : ""}
                         {shift.track ? ` · Track: ${shift.track}` : ""}
                       </small>

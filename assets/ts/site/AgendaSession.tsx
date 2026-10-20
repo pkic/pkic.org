@@ -113,6 +113,7 @@ function AgendaSessionDuration({
   );
 }
 
+/** Render an agenda occurrence and its details, with origin-only referrers for embedded recordings. */
 export function AgendaSession({
   session,
   slot,
