@@ -1,7 +1,7 @@
 import { isPersonalAgendaSession } from "./AgendaParticipationControls";
 import { agendaSpeakerSessions } from "./agenda-speaker-sessions";
 import "../ui/ButtonToggle.css";
-import { useEffect, useRef } from "preact/hooks";
+import { useEffect, useMemo, useRef } from "preact/hooks";
 import "../../design/tokens.agenda.generated.css";
 import { formatClockCity, formatTimeRangeInZone } from "../../shared/format-date";
 import { clockTimeZone, type ClockZone } from "../../shared/event-clock";
@@ -77,12 +77,18 @@ export function ContentAgenda({
     dropTarget: (startsAt: string, roomId: string) => ComponentChildren;
   };
 }) {
-  const days = editor
-    ? suppliedDays
-    : suppliedDays.map((day) => {
-        const occupied = new Set(day.slots.flatMap((slot) => slot.sessions.flatMap((session) => session.locations)));
-        return { ...day, locations: day.locations.filter((location) => occupied.has(location.id)) };
-      });
+  const days = useMemo(
+    () =>
+      editor
+        ? suppliedDays
+        : suppliedDays.map((day) => {
+            const occupied = new Set(
+              day.slots.flatMap((slot) => slot.sessions.flatMap((session) => session.locations)),
+            );
+            return { ...day, locations: day.locations.filter((location) => occupied.has(location.id)) };
+          }),
+    [suppliedDays, editor],
+  );
   const timeZone = clockTimeZone(clock);
   const root = useRef<HTMLElement>(null);
   useEffect(() => {
