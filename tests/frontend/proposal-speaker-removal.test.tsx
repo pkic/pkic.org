@@ -314,12 +314,12 @@ describe("proposal speaker removal UI", () => {
 
     const form = root.querySelector("form")!;
     expect(form.noValidate).toBe(true);
-    expect(labelNames(form)).toEqual(["Job title", "Biography"]);
+    expect(labelNames(form)).toEqual(["Job title", "About you"]);
     // The links are a group of one-URL inputs, named as a group rather than by a single label.
     expect(form.querySelector('input[aria-label="Profile link URL"]')).not.toBeNull();
     expect(form.textContent).toContain("Social and profile links");
-    expect((await markdownControl(form, "Biography")).getAttribute("role")).toBe("textbox");
-    expect(await markdownValue(root, "Biography")).toBe("The identity biography.");
+    expect((await markdownControl(form, "About you")).getAttribute("role")).toBe("textbox");
+    expect(await markdownValue(root, "About you")).toBe("The identity biography.");
     expect(form.textContent).toContain("This changes the identity itself.");
     // The headshot is the person's own, changed with the shared picture tile.
     expect(root.querySelector('button[aria-label$="photo of Casey Speaker"]')).not.toBeNull();
@@ -452,7 +452,7 @@ describe("proposal speaker removal UI", () => {
 
     await runCardAction(root, "Casey Speaker", "Edit identity");
     await settle();
-    await typeMarkdown(root, "Biography", "A biography the server will refuse.");
+    await typeMarkdown(root, "About you", "A biography the server will refuse.");
     await submitForm(root);
     await settle();
 
@@ -467,6 +467,6 @@ describe("proposal speaker removal UI", () => {
     });
     expect(root.querySelector("form")?.textContent).toContain("Another editor saved first");
     // The form stays open, so the refused edit is still there to correct.
-    expect(await markdownValue(root, "Biography")).toBe("A biography the server will refuse.");
+    expect(await markdownValue(root, "About you")).toBe("A biography the server will refuse.");
   });
 });

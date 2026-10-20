@@ -9,6 +9,7 @@
  */
 
 import { useState } from "preact/hooks";
+import { IdentityProfileFields, type IdentityProfileDraft } from "../../components/identities/IdentityProfileFields";
 import "../../components/member-wall.css";
 import "../../components/site-footer.css";
 import { useHashQueryParam } from "../../hooks/useHashQueryParam";
@@ -310,7 +311,43 @@ function RowListSpecimen() {
 
 const wallLogo = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="16" viewBox="0 0 100 40"><path fill="currentColor" d="M0 0h28v40H0zm36 0h28v40H36zm36 0h28v40H72z"/></svg>')}`;
 
+function BiographyFieldsExample({ organization }: { organization: boolean }) {
+  const [draft, setDraft] = useState<IdentityProfileDraft>({
+    jobTitle: organization ? "Security researcher" : "",
+    biography: "",
+    links: [],
+  });
+  return (
+    <Panel>
+      <PanelHeader title={organization ? "Speaker profile: Example Trust" : "About you"} />
+      <PanelBody>
+        <div class="pk-stack">
+          <IdentityProfileFields
+            draft={draft}
+            onChange={(patch) => setDraft((current) => ({ ...current, ...patch }))}
+            of={() => ({})}
+            organizationId={organization ? "00000000-0000-4000-8000-000000000099" : null}
+            organizationName={organization ? "Example Trust" : null}
+            purpose={organization ? "speaker" : "profile"}
+          />
+        </div>
+      </PanelBody>
+    </Panel>
+  );
+}
+
 export const patternSections: PreviewSection[] = [
+  {
+    id: "profile-biographies",
+    title: "General introduction and organization bio",
+    note: "About you spans roles. A speaker bio belongs to the selected organization profile; editing one never copies into the other.",
+    render: () => (
+      <div class="pk-preview__shelf pk-preview__shelf--stack">
+        <BiographyFieldsExample organization={false} />
+        <BiographyFieldsExample organization />
+      </div>
+    ),
+  },
   {
     id: "member-wall",
     title: "Member wall",

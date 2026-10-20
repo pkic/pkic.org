@@ -76,6 +76,8 @@ it("saves the named identity through its own contract and returns to the profile
   await settle();
 
   expect(container.querySelector("h2")?.textContent).toBe("Edit Example Trust");
+  expect(container.textContent).toContain("Your bio at Example Trust");
+  expect(container.textContent).toContain("It does not replace About you");
   const jobTitle = controlFor<HTMLInputElement>("Job title for this organization");
   expect(jobTitle.value).toBe("Advisor");
   jobTitle.value = "Chair";

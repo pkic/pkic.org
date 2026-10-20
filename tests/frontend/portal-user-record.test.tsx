@@ -111,6 +111,62 @@ describe("portal System Users detail record", () => {
     return [...list.querySelectorAll(":scope > dt")].map((term) => term.textContent ?? "");
   }
 
+  it.each(["owner", "staff", "reader"] as const)(
+    "attributes a general introduction and its edit action for %s",
+    async (viewer) => {
+      const personal = membership({
+        identityId: "00000000-0000-4000-8000-000000000099",
+        organizationId: null,
+        organizationName: null,
+        memberId: null,
+        membershipCategory: null,
+        groups: [],
+        biography: "General introduction across my roles.",
+      });
+      const organization = membership({ biography: "Role-specific organization biography." });
+      stubDetail({ ...user, identities: [personal, organization] });
+      const container = await mountDetail(
+        { ...READ_ONLY, canManageMembership: viewer === "staff" },
+        viewer === "owner" ? user.id : undefined,
+      );
+      const about = cardNamed(container, "About")!;
+      expect(about.textContent).toContain(personal.biography);
+      expect(about.textContent).not.toContain(organization.biography);
+      expect(container.textContent).toContain(organization.biography);
+      const trigger = about.querySelector<HTMLButtonElement>('button[aria-label="About actions"]');
+      if (viewer === "reader") {
+        expect(trigger).toBeNull();
+        return;
+      }
+      expect(trigger).not.toBeNull();
+      void act(() => trigger!.click());
+      expect(menuItemNamed(container, "Edit About you…")?.getAttribute("href")).toContain(personal.identityId);
+    },
+  );
+
+  it("attributes the fallback organization bio and offers separate general and organization edits", async () => {
+    const personal = membership({
+      identityId: "00000000-0000-4000-8000-000000000099",
+      organizationId: null,
+      organizationName: null,
+      memberId: null,
+      membershipCategory: null,
+      groups: [],
+      biography: null,
+    });
+    const organization = membership({ biography: "Role-specific organization biography." });
+    stubDetail({ ...user, identities: [personal, organization] });
+    const container = await mountDetail({ ...READ_ONLY, canManageMembership: true });
+    const about = cardNamed(container, "About")!;
+    expect(about.textContent).toContain(organization.biography);
+    expect(about.textContent).toContain(`From the ${organization.organizationName} profile.`);
+    void act(() => about.querySelector<HTMLButtonElement>('button[aria-label="About actions"]')!.click());
+    expect(menuItemNamed(container, "Add About you…")?.getAttribute("href")).toContain(personal.identityId);
+    expect(menuItemNamed(container, `Edit bio at ${organization.organizationName}…`)?.getAttribute("href")).toContain(
+      organization.identityId,
+    );
+  });
+
   it("heads the record with a real heading and pairs every field with its value", async () => {
     stubDetail(user);
     const container = await mountDetail(READ_ONLY);

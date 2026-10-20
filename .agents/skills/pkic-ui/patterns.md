@@ -82,3 +82,9 @@ Each entry is the full anatomy of a control. The gallery id renders it (`pnpm ga
 - Use: `Badge` with `tone` and, for in-flight steps, `progress` and `progressStyle`; `DataTable`/`ApiDataTable` `rowTone` and `rowToneStyle` for rows. The stage list (label, tone, progress) lives in the workflow's shared domain module.
 - Shape: pill with dot, label in body ink, fill a light mix of the rainbow stop. Rows: label only by default; edge marker (a 0.25rem inset bar on the leading edge, on the record card on phones) for queues; tint (20%, deeper on hover) for short state-led queues. Selection wins over tint.
 - Never color by position, never invent a stop outside the rainbow, never let color carry the stage without its label.
+
+## Profile biographies (`profile-biographies`)
+
+- Use `IdentityProfileFields` inside the existing identity profile form. General introduction: **About you**. Organization profile: **Your bio at {organization}**. Speaker onboarding: **Your speaker bio at {organization}**.
+- Explain the scope beside the field: About you spans roles; an organization bio is reused only when participating as that organization. Neither edit copies into the other.
+- The About panel names an organization when using its bio as a fallback. Its menu edits the displayed source and separately offers adding a general introduction.

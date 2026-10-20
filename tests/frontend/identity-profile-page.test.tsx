@@ -111,5 +111,5 @@ it("lets the person edit through their own resource on the current record", asyn
   });
   await settle();
   expect(paths[0]).toBe(`/api/v1/users/current/identities/${identityId}/profile`);
-  expect(container.textContent).toContain("Edit profile: Individual identity");
+  expect(container.textContent).toContain("Edit profile: About you");
 });
