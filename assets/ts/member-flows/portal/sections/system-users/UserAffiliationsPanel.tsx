@@ -84,6 +84,20 @@ export function UserAffiliationsPanel({
   const hasIndividualMembership = user.identities.some(
     (identity) => identity.organizationId === null && identity.memberId !== null,
   );
+  // An account identity keeps sign-in and existing references valid; it is not
+  // professional experience. Show it only when it is the person's sole identity
+  // or carries membership, participation, or their current/default choice.
+  const hasOrganizationIdentity = user.identities.some((identity) => identity.organizationId !== null);
+  const profileIdentities = user.identities.filter(
+    (identity) =>
+      !hasOrganizationIdentity ||
+      identity.organizationId !== null ||
+      identity.memberId !== null ||
+      identity.isDefault ||
+      identity.identityId === actingIdentityId ||
+      identity.groups.length > 0 ||
+      seats.some((seat) => seat.identityId === identity.identityId),
+  );
   const formerIdentities = user.formerIdentities;
   const seatsOf = (identityId: string) => seats.filter((seat) => seat.identityId === identityId);
   const subjectName = [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email;
@@ -138,7 +152,7 @@ export function UserAffiliationsPanel({
           />
         )}
 
-        {user.identities.map((membership) => (
+        {profileIdentities.map((membership) => (
           <UserAffiliationRow
             key={membership.identityId}
             userId={user.id}

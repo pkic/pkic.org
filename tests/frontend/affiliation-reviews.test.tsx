@@ -116,7 +116,6 @@ it("shows missing verification and does not announce zero approvals as success",
     const host = mount();
     await settle();
     expect(host.textContent).toContain("People without recorded verification");
-    expect(host.textContent).toContain("do not need to verify again");
     const button = Array.from(host.querySelectorAll("button")).find(
       (node) => node.textContent === "Approve verified affiliations",
     );
@@ -160,6 +159,15 @@ it("requires a recorded reason before sending an explicit staff override", async
   )!;
   expect(confirm.disabled).toBe(true);
   const reason = dialog!.querySelector("textarea")!;
+  await act(async () => {
+    reason.value = " ";
+    reason.dispatchEvent(new Event("input", { bubbles: true }));
+    reason.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+  });
+  expect(confirm.disabled).toBe(true);
+  const description = reason.getAttribute("aria-describedby");
+  expect(description).toBeTruthy();
+  expect(description?.split(" ").some((id) => document.getElementById(id)?.textContent?.trim())).toBe(true);
   await act(async () => {
     reason.value = "Organization contact confirmed the affiliation";
     reason.dispatchEvent(new Event("input", { bubbles: true }));

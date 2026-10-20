@@ -8,7 +8,7 @@ import { Dialog } from "../../../ui/Dialog";
 import { Field } from "../../../ui/Field";
 import { Textarea } from "../../../ui/TextControl";
 
-/** A deliberate staff exception, separate from recovering genuine historical mailbox proof. */
+/** A deliberate staff exception, separate from verified domain approval. */
 export function AffiliationReviewOverrideDialog({
   personName,
   userId,
@@ -49,11 +49,11 @@ export function AffiliationReviewOverrideDialog({
           submit();
         }}
       >
-        <Field label="Reason for override" required {...form.of("activation")}>
+        <Field label="Reason for override" required {...form.of("activation.reason")}>
           {(control) => (
             <Textarea
               {...control}
-              name="activation"
+              name="activation.reason"
               value={reason}
               onInput={(event) => setReason(event.currentTarget.value)}
             />

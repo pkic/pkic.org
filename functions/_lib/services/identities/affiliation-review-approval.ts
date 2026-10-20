@@ -5,7 +5,6 @@ import { all } from "../../db/queries";
 import type { DatabaseLike, UserBackedAuthAdmin } from "../../types";
 import { guardPermissionMutationDatabase } from "../../auth/permissions";
 import { AppError } from "../../errors";
-import { findHistoricalPrimaryEmailProof } from "./historical-email-verification";
 import { overrideAffiliationReviewVerification } from "./affiliation-review-override";
 import type { IdentityManagerActor } from "./types";
 import { uuid } from "../../utils/ids";
@@ -62,11 +61,10 @@ export async function approveAffiliationReviewGroup(
       );
       continue;
     }
-    const historicalProof = await findHistoricalPrimaryEmailProof(db, person.user_id);
     const addresses = await all<{ normalized_email: string; organization_id: string }>(
       db,
       `WITH addresses AS (
-         SELECT normalized_email FROM users WHERE id = ? AND active = 1 AND (email_verified_at IS NOT NULL OR normalized_email = ?)
+         SELECT normalized_email FROM users WHERE id = ? AND active = 1 AND email_verified_at IS NOT NULL
          UNION ALL SELECT address.normalized_email FROM user_emails address JOIN users person ON person.id = address.user_id
            WHERE address.user_id = ? AND address.verified_at IS NOT NULL AND person.active = 1
        ) SELECT MIN(address.normalized_email) AS normalized_email, claim.organization_id FROM addresses address
@@ -81,7 +79,7 @@ export async function approveAffiliationReviewGroup(
              AND (review.normalized_name IS NULL OR review.normalized_name = organization.normalized_name))
              OR review.normalized_name = organization.normalized_name))
          GROUP BY claim.organization_id ORDER BY claim.organization_id LIMIT 2`,
-      [person.user_id, historicalProof?.normalizedEmail ?? null, person.user_id, person.user_id, groupKey],
+      [person.user_id, person.user_id, person.user_id, groupKey],
     );
     // Multiple possible employers need an explicit identity invitation, not a guess.
     if (addresses.length !== 1) continue;
@@ -91,7 +89,6 @@ export async function approveAffiliationReviewGroup(
         normalizedEmail: address.normalized_email,
         onlyOrganizationId: address.organization_id,
         reviewDecision: { groupKey, staffId: staff.id, decisionId },
-        historicalProof: historicalProof?.normalizedEmail === address.normalized_email ? historicalProof : undefined,
       });
       if (linked) {
         decided += linked.resolvedReviews;

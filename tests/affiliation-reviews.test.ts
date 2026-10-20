@@ -1,4 +1,4 @@
-import { historicalRegistration, approvedOrganization, verifiedPerson } from "./helpers/affiliation-history";
+import { approvedOrganization, verifiedPerson } from "./helpers/affiliation-review-fixtures";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { normalizeOrgName } from "../assets/shared/organization-name";
@@ -149,76 +149,15 @@ describe("affiliation reviews by group", () => {
     return affiliationReviewApproveResponseSchema.parse(await response.json());
   }
 
-  it.each(["invite", "confirmation"] as const)(
-    "restores historical %s proof and affiliation atomically without re-verification",
-    async (kind) => {
-      const organizationId = await approvedOrganization();
-      const email = `legacy-${kind}@uk.ibm.example`;
-      const person = await insertUser(env.DB, email);
-      const at = await historicalRegistration(person, email, kind);
-      await insertReview(person, "IBM", "Architect", "uk.ibm.example");
-      expect(await approve({ userId: person })).toMatchObject({
-        decided: 1,
-        group: { openReviews: 0, unverifiedPeople: 0 },
-      });
-      expect(
-        await queryAll(env.DB, "SELECT email_verified_at,email_verification_method FROM users WHERE id = ?", [person]),
-      ).toEqual([{ email_verified_at: at, email_verification_method: "migration_evidence" }]);
-      expect(
-        await queryAll(env.DB, "SELECT organization_id,source FROM identities WHERE user_id = ?", [person]),
-      ).toEqual([{ organization_id: organizationId, source: "verified_domain" }]);
-      expect(
-        await queryAll(
-          env.DB,
-          "SELECT id FROM audit_log WHERE action = 'primary_email_verification_restored' AND entity_id = ?",
-          [person],
-        ),
-      ).toHaveLength(1);
-      expect(await approve({ userId: person })).toMatchObject({ decided: 0 });
-      expect(await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key = 'user_magic_link'")).toEqual([]);
-    },
-  );
-
-  it.each(["invite", "confirmation", "status"] as const)(
-    "does not infer mailbox proof from %s status or another address",
-    async (kind) => {
-      await approvedOrganization();
-      const person = await insertUser(env.DB, `mismatch-${kind}@ibm.example`);
-      await historicalRegistration(person, `mismatch-${kind}@ibm.example`, kind, "other@ibm.example");
-      await insertReview(person, "IBM", null);
-      expect(await approve({ userId: person })).toMatchObject({ decided: 0 });
-      expect(await queryAll(env.DB, "SELECT email_verified_at FROM users WHERE id = ?", [person])).toEqual([
-        { email_verified_at: null },
-      ]);
-    },
-  );
-
-  it("rolls back restored historical proof together with identity and reviews on audit failure", async () => {
+  it("leaves an unverified affiliation open without changing mailbox proof", async () => {
     await approvedOrganization();
-    const person = await insertUser(env.DB, "legacy-rollback@ibm.example");
-    await historicalRegistration(person, "legacy-rollback@ibm.example", "invite");
+    const person = await insertUser(env.DB, "unverified@ibm.example");
     await insertReview(person, "IBM", null);
-    await env.DB.prepare(`CREATE TRIGGER reject_restored_approval BEFORE INSERT ON audit_log
-      WHEN NEW.action = 'affiliation_review_resolved' BEGIN SELECT RAISE(ABORT, 'test rollback'); END`).run();
-    try {
-      expect(
-        (
-          await call(adminToken, `${groupPath("IBM")}/approve`, {
-            method: "POST",
-            body: JSON.stringify({ userId: person }),
-          })
-        ).status,
-      ).toBe(500);
-      expect(await queryAll(env.DB, "SELECT email_verified_at FROM users WHERE id = ?", [person])).toEqual([
-        { email_verified_at: null },
-      ]);
-      expect(await queryAll(env.DB, "SELECT id FROM identities WHERE user_id = ?", [person])).toEqual([]);
-      expect(
-        await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'primary_email_verification_restored'"),
-      ).toEqual([]);
-    } finally {
-      await env.DB.prepare("DROP TRIGGER reject_restored_approval").run();
-    }
+    expect(await approve({ userId: person })).toMatchObject({ decided: 0 });
+    expect(await queryAll(env.DB, "SELECT email_verified_at FROM users WHERE id = ?", [person])).toEqual([
+      { email_verified_at: null },
+    ]);
+    expect(await queryAll(env.DB, "SELECT id FROM identities WHERE user_id = ?", [person])).toEqual([]);
   });
 
   it("records a reasoned staff override without asserting mailbox verification", async () => {
@@ -230,9 +169,9 @@ describe("affiliation reviews by group", () => {
     expect(await queryAll(env.DB, "SELECT email_verified_at FROM users WHERE id = ?", [person])).toEqual([
       { email_verified_at: null },
     ]);
-    expect(
-      await queryAll(env.DB, "SELECT organization_id,source,job_title FROM identities WHERE user_id = ?", [person]),
-    ).toEqual([{ organization_id: organizationId, source: "staff", job_title: "Architect" }]);
+    expect(await queryAll(env.DB, "SELECT organization_id,source FROM identities WHERE user_id = ?", [person])).toEqual(
+      [{ organization_id: organizationId, source: "staff" }],
+    );
     expect(
       await queryAll(env.DB, "SELECT resolved_by_user_id FROM affiliation_reviews WHERE user_id = ?", [person]),
     ).toEqual([{ resolved_by_user_id: adminId }]);

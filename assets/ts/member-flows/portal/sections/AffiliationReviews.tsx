@@ -88,7 +88,7 @@ function GroupDetail({
       !(await confirmAction({
         title: review ? `Approve ${review.personName}'s affiliation?` : "Approve all eligible affiliations?",
         tone: "primary",
-        body: "Current and recoverable historical email verification qualify on approved organization domains. Ambiguous or blocked affiliations stay open for review.",
+        body: "Verified work addresses qualify on approved organization domains. Ambiguous or blocked affiliations stay open for review.",
         confirmLabel: review ? "Approve affiliation" : "Approve all eligible",
         cancelLabel: "Keep open",
       }))
@@ -116,7 +116,7 @@ function GroupDetail({
       if (decided > 0) toast(`${formatNumber(decided)} ${decided === 1 ? "review" : "reviews"} approved`, "success");
       else
         setError(
-          "No affiliations were approved. No affiliations qualified. Check approved work domains, verification evidence, and existing identity restrictions. Review unresolved records individually.",
+          "No affiliations were approved. Check approved work domains, verification evidence, and existing identity restrictions. Review unresolved records individually.",
         );
     } catch (caught) {
       setError(
@@ -227,9 +227,8 @@ function GroupDetail({
               />
               {group.unverifiedPeople > 0 && (
                 <p class="pk-small pk-muted">
-                  Approval checks historical email confirmations and accepted invitations before creating an
-                  organization identity. Previously verified people do not need to verify again. Records without
-                  recoverable proof stay open for individual review.
+                  Automatic approval requires a verified work address on an approved organization domain. Review
+                  unverified affiliations individually or record a staff override.
                 </p>
               )}
             </PanelBody>

@@ -1,4 +1,3 @@
-import { prepareAffiliationReviewProfileRecovery } from "./affiliation-review-profile";
 import { prepareOwnAffiliationReviewResolution } from "./affiliation-offer";
 import { prepareClosedReviewAudit } from "./affiliation-review-decisions";
 import { prepareOrganizationIdentityPublication } from "./lifecycle-publication";
@@ -182,15 +181,6 @@ async function commitIdentityCreation(
         groupKey: input.reviewApproval.groupKey,
       })
     : null;
-  if (input.reviewApproval)
-    statements.push(
-      ...prepareAffiliationReviewProfileRecovery(db, {
-        userId: input.userId,
-        organizationId: input.organizationId,
-        identityId: prepared.identityId,
-        at,
-      }),
-    );
   const reviewResolutionIndex = statements.length;
   if (reviewResolution && input.reviewApproval && permissionActor)
     statements.push(

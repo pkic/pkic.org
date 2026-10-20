@@ -1,5 +1,3 @@
-import { prepareAffiliationReviewProfileRecovery } from "./affiliation-review-profile";
-import { prepareHistoricalEmailVerification, type HistoricalPrimaryEmailProof } from "./historical-email-verification";
 /**
  * A verified work address joins the organization its domain belongs to.
  *
@@ -55,8 +53,6 @@ interface DomainOrganizationLinkInput {
   onlyOrganizationId?: string;
   /** Staff approves this person's reviews in one selected group using current mailbox proof. */
   reviewDecision?: { groupKey: string; staffId: string; decisionId: string };
-  /** Exact legacy proof restored within this affiliation command, never inferred from registration status. */
-  historicalProof?: HistoricalPrimaryEmailProof;
 }
 
 /** Joins an already verified address through the canonical automatic affiliation rule. */
@@ -64,25 +60,16 @@ export async function linkVerifiedAddressToDomainOrganization(
   db: DatabaseLike,
   input: DomainOrganizationLinkInput,
 ): Promise<{ identityId: string; organizationId: string; resolvedReviews: number } | null> {
-  const provedAddress = await ownedAddressId(db, input.userId, normalizeEmail(input.normalizedEmail));
-  const history =
-    !provedAddress &&
-    input.historicalProof?.userId === input.userId &&
-    input.historicalProof.normalizedEmail === normalizeEmail(input.normalizedEmail)
-      ? input.historicalProof
-      : undefined;
-  const address = provedAddress ?? (history ? { emailId: null } : null);
+  const address = await ownedAddressId(db, input.userId, normalizeEmail(input.normalizedEmail));
   if (!address) return null;
-  const at = nowIso();
-  const prepared = await prepareVerifiedAddressDomainOrganizationLink(db, { ...input, ...address, at });
+  const prepared = await prepareVerifiedAddressDomainOrganizationLink(db, { ...input, ...address, at: nowIso() });
   if (!prepared) return null;
   try {
-    const restoration = history ? prepareHistoricalEmailVerification(db, history, at) : [];
-    const results = await db.batch([...restoration, ...prepared.statements]);
+    const results = await db.batch(prepared.statements);
     return {
       identityId: prepared.identityId,
       organizationId: prepared.organizationId,
-      resolvedReviews: results[restoration.length + prepared.reviewResolutionIndex]?.meta?.changes ?? 0,
+      resolvedReviews: results[prepared.reviewResolutionIndex]?.meta?.changes ?? 0,
     };
   } catch (error) {
     if (isAuthorizationGuardFailure(error) || isConcurrentIdentityConflict(error) || isAuditChangeGuardFailure(error))
@@ -158,12 +145,6 @@ export async function prepareVerifiedAddressDomainOrganizationLink(
         verifiedEmailDomainResolutionEvidence(domain, organizationId, resolution.via === "claim"),
       ),
       ...prepared.statements,
-      ...prepareAffiliationReviewProfileRecovery(db, {
-        userId: input.userId,
-        organizationId,
-        identityId: prepared.identityId,
-        at,
-      }),
       // Audit the matching open rows before closing them in this same atomic batch.
       ...(decision
         ? [

@@ -20,6 +20,7 @@ import { organizationIdentityCreateRequestSchema } from "../../assets/shared/sch
 import { normalizeValidation } from "../../assets/ts/shared/form/validation-map";
 import { buttonNamed, chooseComboboxOption, chooseOption, controlFor, typeInto } from "./helpers/labeled-control";
 import {
+  membership,
   MEMBER_ID,
   PICKED_ORGANIZATION_ID,
   USER_ID,
@@ -54,6 +55,57 @@ describe("UserAffiliationsPanel", () => {
     void act(() => render(<UserAffiliationsPanel user={userWith([])} onChanged={vi.fn()} canManage />, container));
 
     expect(container.querySelector('[role="status"]')?.textContent).toContain("No active identities.");
+  });
+
+  it("shows organization experience without an unused personal account profile", () => {
+    const personal = membership({
+      identityId: "00000000-0000-4000-8000-000000000099",
+      organizationId: null,
+      organizationName: null,
+      memberId: null,
+      membershipCategory: null,
+      jobTitle: null,
+      biography: "Retained account biography",
+      isDefault: false,
+      groups: [],
+    });
+    const container = mount();
+    void act(() =>
+      render(
+        <UserAffiliationsPanel user={userWith([personal, membership()])} onChanged={vi.fn()} canManage />,
+        container,
+      ),
+    );
+    expect(container.textContent).not.toContain("Retained account biography");
+    expect(container.textContent).not.toContain("Personal");
+    expect(container.textContent).toContain("Organization A");
+  });
+
+  it.each(["sole", "member", "default", "acting"] as const)("preserves a meaningful personal identity: %s", (kind) => {
+    const personal = membership({
+      identityId: "00000000-0000-4000-8000-000000000099",
+      organizationId: null,
+      organizationName: null,
+      memberId: kind === "member" ? MEMBER_ID : null,
+      membershipCategory: kind === "member" ? "H6" : null,
+      jobTitle: null,
+      biography: "Personal profile content",
+      groups: [],
+      isDefault: kind === "default",
+    });
+    const container = mount();
+    void act(() =>
+      render(
+        <UserAffiliationsPanel
+          user={userWith(kind === "sole" ? [personal] : [personal, membership()])}
+          onChanged={vi.fn()}
+          canManage
+          actingIdentityId={kind === "acting" ? personal.identityId : null}
+        />,
+        container,
+      ),
+    );
+    expect(container.textContent).toContain("Personal profile content");
   });
 
   // The grant form is the body of the dialog the panel's header button opens.
