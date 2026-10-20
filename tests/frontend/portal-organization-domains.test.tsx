@@ -71,7 +71,7 @@ function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 }
 
-const preview = { preview: { domain: "acme.example", peopleToLink: 3, linkMode: "automatic" } };
+const preview = { preview: { domain: "acme.example", peopleToLink: 3 } };
 
 function stub(previewResponse: Response = json(preview), claimResponse: Response = json({}, 500)): void {
   vi.stubGlobal(

@@ -70,94 +70,107 @@ describe("registration workflows", () => {
 
   afterEach(() => vi.unstubAllGlobals());
 
-  /**
-   * Issue #23: registering for an event is not joining the consortium.
-   *
-   * An event registration form asks for a name, an address and consent to a
-   * privacy policy. It does not ask whether the person wants to represent
-   * their employer, sit in its working groups, or receive its mailing lists —
-   * so confirming one must not decide any of that, however recognizable the
-   * address is. The address here is the strongest case for the coupling: it
-   * is under a domain a member organization has claimed, which is exactly
-   * what the join flow uses to place somebody inside an organization when
-   * they have asked to be there.
-   */
-  it("confirms a registration from a member organization's claimed domain without joining anyone to anything", async () => {
-    await seedEventAndAdmin(env.DB);
+  /** Registration creates no membership; verified approved domains establish affiliation. */
+  it.each([true, false])(
+    "confirms registration with automatic affiliation only for an approved domain (approved: %s)",
+    async (approved) => {
+      await seedEventAndAdmin(env.DB);
 
-    const organizationId = await insertOrganization(env.DB, "Claimed Domain Corp");
-    await seedOrganizationAggregate(env.DB, organizationId, "A");
-    await env.DB.prepare(
-      `INSERT INTO organization_domain_claims (id, domain, application_id, organization_id, created_at, updated_at)
+      const organizationId = await insertOrganization(env.DB, "Claimed Domain Corp");
+      await seedOrganizationAggregate(env.DB, organizationId, "A");
+      if (approved)
+        await env.DB.prepare(
+          `INSERT INTO organization_domain_claims (id, domain, application_id, organization_id, created_at, updated_at)
        VALUES (?, 'claimed-domain.test', NULL, ?, datetime('now'), datetime('now'))`,
-    )
-      .bind(crypto.randomUUID(), organizationId)
-      .run();
+        )
+          .bind(crypto.randomUUID(), organizationId)
+          .run();
 
-    const attendeeEmail = "newcomer@claimed-domain.test";
-    const createResponse = await postRegistration({
-      firstName: "New",
-      lastName: "Comer",
-      email: attendeeEmail,
-      attendanceType: "virtual",
-      sourceType: "direct",
-      consents: [
-        { termKey: "privacy-policy", version: "v1" },
-        { termKey: "code-of-conduct", version: "v1" },
-      ],
-    });
-    expect(createResponse.status).toBe(200);
-    const created = (await createResponse.json()) as { registrationId: string };
+      const attendeeEmail = "newcomer@claimed-domain.test";
+      const createResponse = await postRegistration({
+        firstName: "New",
+        lastName: "Comer",
+        email: attendeeEmail,
+        attendanceType: "virtual",
+        sourceType: "direct",
+        consents: [
+          { termKey: "privacy-policy", version: "v1" },
+          { termKey: "code-of-conduct", version: "v1" },
+        ],
+      });
+      expect(createResponse.status).toBe(200);
+      const created = (await createResponse.json()) as { registrationId: string };
 
-    const [confirmationEmail] = await queryAll<{ payload_json: string }>(
-      env.DB,
-      "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirm_email' ORDER BY created_at DESC LIMIT 1",
-    );
-    const confirmResponse = await postConfirmation({
-      token: await extractConfirmationToken(confirmationEmail.payload_json),
-    });
+      expect(
+        await queryAll(
+          env.DB,
+          `SELECT identity.id FROM identities identity JOIN users person ON person.id = identity.user_id
+       WHERE person.normalized_email = ? AND identity.organization_id IS NOT NULL`,
+          attendeeEmail,
+        ),
+      ).toEqual([]);
 
-    // The registration itself goes through: nothing here is about refusing
-    // the attendee, only about what confirming does not decide for them.
-    expect(confirmResponse.status).toBe(200);
-    expect((await confirmResponse.json()) as { status: string }).toMatchObject({ status: "registered" });
-
-    const [attendee] = await queryAll<{ id: string }>(
-      env.DB,
-      "SELECT id FROM users WHERE normalized_email = ?",
-      attendeeEmail,
-    );
-    expect(attendee).toBeDefined();
-    // No capacity to act for the organization, whether pending or active.
-    expect(
-      await queryAll(
+      const [confirmationEmail] = await queryAll<{ payload_json: string }>(
         env.DB,
-        "SELECT id FROM identities WHERE user_id = ? AND organization_id IS NOT NULL",
-        attendee.id,
-      ),
-    ).toEqual([]);
-    // No membership of their own either.
-    expect(
-      await queryAll(
+        "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirm_email' ORDER BY created_at DESC LIMIT 1",
+      );
+      const confirmResponse = await postConfirmation({
+        token: await extractConfirmationToken(confirmationEmail.payload_json),
+        ...(approved ? {} : { organization: { name: "Claimed Domain Corp", jobTitle: "Engineer" } }),
+      });
+
+      // Both people can attend; only approved mailbox proof establishes affiliation.
+      expect(confirmResponse.status).toBe(200);
+      expect((await confirmResponse.json()) as { status: string }).toMatchObject({ status: "registered" });
+
+      const [attendee] = await queryAll<{ id: string }>(
         env.DB,
-        "SELECT member.id FROM members member JOIN identities identity ON identity.id = member.identity_id WHERE identity.user_id = ?",
+        "SELECT id FROM users WHERE normalized_email = ?",
+        attendeeEmail,
+      );
+      expect(attendee).toBeDefined();
+      // An approved work domain creates one active organization identity.
+      expect(
+        await queryAll(
+          env.DB,
+          "SELECT organization_id, started_at IS NOT NULL AND ended_at IS NULL AND blocked_at IS NULL AS active FROM identities WHERE user_id = ? AND organization_id IS NOT NULL",
+          attendee.id,
+        ),
+      ).toEqual(approved ? [{ organization_id: organizationId, active: 1 }] : []);
+      // Affiliation reuses the organization’s membership rather than creating a personal one.
+      expect(
+        await queryAll(
+          env.DB,
+          "SELECT member.id FROM members member JOIN identities identity ON identity.id = member.identity_id WHERE identity.user_id = ?",
+          attendee.id,
+        ),
+      ).toEqual([]);
+      // Automatic group enrollment follows the approved affiliation only.
+      const seats = await queryAll(
+        env.DB,
+        "SELECT group_id FROM group_memberships WHERE user_id = ? AND left_at IS NULL",
         attendee.id,
-      ),
-    ).toEqual([]);
-    // Nothing that follows from membership: no group seat, no mailing list.
-    expect(await queryAll(env.DB, "SELECT group_id FROM group_memberships WHERE user_id = ?", attendee.id)).toEqual([]);
-    expect(
-      await queryAll(env.DB, "SELECT mailing_list_id FROM mailing_list_subscription_preferences WHERE user_id = ?", [
-        attendee.id,
-      ]),
-    ).toEqual([]);
-    // And the registration is still attributed to the person who made it.
-    expect(
-      await queryAll<{ user_id: string }>(env.DB, "SELECT user_id FROM registrations WHERE id = ?", [
-        created.registrationId,
-      ]),
-    ).toEqual([{ user_id: attendee.id }]);
-  }, 15_000);
+      );
+      if (approved) expect(seats).toEqual([{ group_id: "20000000-0000-4000-8000-000000000001" }]);
+      else expect(seats).toEqual([]);
+      if (!approved)
+        expect(
+          await queryAll(env.DB, "SELECT resolved_at FROM affiliation_reviews WHERE user_id = ?", attendee.id),
+        ).toEqual([{ resolved_at: null }]);
+      expect(
+        await queryAll(env.DB, "SELECT mailing_list_id FROM mailing_list_subscription_preferences WHERE user_id = ?", [
+          attendee.id,
+        ]),
+      ).toEqual([]);
+      // And the registration is still attributed to the person who made it.
+      expect(
+        await queryAll<{ user_id: string }>(env.DB, "SELECT user_id FROM registrations WHERE id = ?", [
+          created.registrationId,
+        ]),
+      ).toEqual([{ user_id: attendee.id }]);
+    },
+    15_000,
+  );
 
   it("enforces consent and supports double opt-in", async () => {
     await seedEventAndAdmin(env.DB);

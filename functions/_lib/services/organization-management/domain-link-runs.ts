@@ -4,14 +4,12 @@
  * Claiming a domain opens one link run. Each pass walks the people with a
  * verified address on the domain in user-id order, after the run's cursor,
  * and hands each one to the same rule a fresh verification uses
- * (`linkVerifiedAddressToDomainOrganization`): a non-member organization is
- * joined, audited as a system decision; a member organization is only
- * offered, which the person's organization question already shows. The claim
+ * (`linkVerifiedAddressToDomainOrganization`): the organization is
+ * joined, audited as a system decision. The claim
  * runs the first pass at once; the `organization_domain_linking` scheduled
  * job finishes larger domains in bounded chunks and can resume after any
  * failure. A run whose claim was released or moved simply ends.
  */
-import { domainLinkMode } from "../../../../assets/shared/organization-domain";
 import { all, first } from "../../db/queries";
 import { hasD1QueryCapacity, type D1QueryBudget } from "../../db/query-budget";
 import type { DatabaseLike, StatementLike } from "../../types";
@@ -24,9 +22,9 @@ import { hostWithinDomainSql } from "../../email-domains/sql";
 import { requestJobWake } from "../scheduled-jobs/dispatcher";
 
 /** People examined per pass of one run. */
-export const DOMAIN_LINK_CHUNK = 25;
-/** A link attempt reads and writes a handful of statements; keep a margin per person. */
-const QUERIES_PER_PERSON = 12;
+export const DOMAIN_LINK_CHUNK = 10;
+/** Reserve canonical activation, permission guards, group reconciliation, audit, and outbox statements. */
+const QUERIES_PER_PERSON = 60;
 const RUNS_PER_JOB_PASS = 4;
 
 /**
@@ -58,23 +56,20 @@ const CANDIDATES_SQL = `WITH addresses AS (
      GROUP BY user_id
   )`;
 
-/** How many people a claim on `domain` would reach now, and whether they join or are offered. */
+/** How many verified people a claim would automatically affiliate. */
 export async function previewDomainLinking(
   db: DatabaseLike,
   organizationId: string,
   domain: string,
-): Promise<{ peopleToLink: number; linkMode: "automatic" | "confirm" }> {
-  const [count, member] = await Promise.all([
-    first<{ count: number }>(db, `${CANDIDATES_SQL} SELECT COUNT(*) AS count FROM candidates`, [
-      domain,
-      domain,
-      organizationId,
-      organizationId,
-      domain,
-    ]),
-    first<{ id: string }>(db, "SELECT id FROM members WHERE organization_id = ? LIMIT 1", [organizationId]),
+): Promise<{ peopleToLink: number }> {
+  const count = await first<{ count: number }>(db, `${CANDIDATES_SQL} SELECT COUNT(*) AS count FROM candidates`, [
+    domain,
+    domain,
+    organizationId,
+    organizationId,
+    domain,
   ]);
-  return { peopleToLink: Number(count?.count ?? 0), linkMode: domainLinkMode({ isMember: Boolean(member) }) };
+  return { peopleToLink: Number(count?.count ?? 0) };
 }
 
 /** Opens the link run in the claim's own command. */

@@ -105,7 +105,14 @@ export function SettingsSection({
       ) : requested === "/settings/organization-content-reviews" ? (
         <OrganizationContentReviews reviewId={resourceId} />
       ) : requested === "/settings/affiliation-reviews" ? (
-        <AffiliationReviews groupKey={resourceId} canWrite={portalHasGlobalPermission(session, "users:write")} />
+        <AffiliationReviews
+          groupKey={resourceId}
+          canWrite={portalHasGlobalPermission(session, "users:write")}
+          canApprove={
+            portalHasGlobalPermission(session, "users:write") &&
+            portalHasGlobalPermission(session, "identities:activate")
+          }
+        />
       ) : requested === "/settings/audit-log" ? (
         resourceId ? (
           <SystemAuditLogDetail id={resourceId} />

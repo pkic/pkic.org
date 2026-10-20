@@ -1,4 +1,6 @@
 import {
+  affiliationReviewApproveResponseSchema,
+  affiliationReviewGroupApproveRouteSchema,
   affiliationReviewGroupDecisionResponseSchema,
   affiliationReviewGroupDismissRouteSchema,
   affiliationReviewGroupGetRouteSchema,
@@ -9,6 +11,8 @@ import {
   affiliationReviewsListRouteSchema,
 } from "../../../../assets/shared/schemas/affiliation-reviews";
 import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
+import { requirePermission } from "../../../_lib/auth/permissions";
+import { approveAffiliationReviewGroup } from "../../../_lib/services/identities/affiliation-review-approval";
 import { requireStaffPermission } from "../../../_lib/auth/staff-permissions";
 import type { AdminContext } from "../../../_lib/db/context";
 import { json } from "../../../_lib/http";
@@ -61,5 +65,18 @@ export const AffiliationReviewGroupDismiss = openApiRoute(
     const { db, staff } = await requireStaffPermission(c, "users:write");
     const decision = await dismissAffiliationReviewGroup(db, data.params.groupKey, staff);
     return json(affiliationReviewGroupDecisionResponseSchema.parse(decision));
+  },
+);
+
+export const AffiliationReviewGroupApprove = openApiRoute(
+  affiliationReviewGroupApproveRouteSchema,
+  async (c: AdminContext, data) => {
+    const { db, staff } = await requireStaffPermission(c, "users:write");
+    requirePermission(staff, "identities:activate");
+    return json(
+      affiliationReviewApproveResponseSchema.parse(
+        await approveAffiliationReviewGroup(db, data.params.groupKey, data.body, staff),
+      ),
+    );
   },
 );

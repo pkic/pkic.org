@@ -60,14 +60,12 @@ export const organizationDomainsListResponseSchema = paginatedResponseSchema("do
 
 /**
  * What a claim does to the people who verified an address on the domain
- * earlier: a non-member organization joins them (`automatic`); a member
- * organization offers itself to them (`confirm`).
+ * earlier: both member and non-member organizations affiliate them automatically.
  */
 export const organizationDomainClaimPreviewSchema = z.object({
   domain: z.string(),
   /** People with a verified address on the domain and no relationship with the organization yet. */
   peopleToLink: z.number().int().nonnegative(),
-  linkMode: z.enum(["automatic", "confirm"]),
 });
 export type OrganizationDomainClaimPreview = z.infer<typeof organizationDomainClaimPreviewSchema>;
 export const organizationDomainClaimPreviewResponseSchema = z.object({ preview: organizationDomainClaimPreviewSchema });
@@ -130,7 +128,7 @@ export const organizationDomainClaimPreviewRouteSchema = {
   ...requiresPermissions("organizations:write"),
   summary: "Preview claiming an email domain for an organization",
   description:
-    "Refused exactly as the claim would be. Otherwise says how many people with a verified address on the domain the claim would link, and whether they join or are offered the organization.",
+    "Refused exactly as the claim would be. Otherwise says how many people with a verified address on the domain the claim would automatically link to the organization.",
   request: { params: organizationDomainParamsSchema },
   responses: {
     ...ok("What the claim would do.", organizationDomainClaimPreviewResponseSchema),

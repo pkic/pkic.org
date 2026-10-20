@@ -1,9 +1,7 @@
 /**
  * The organization question a signed-in person is asked, and their answer.
  *
- * Linking itself is the existing join: a non-member organization a verified
- * work address belongs to is joined on verification (email-domain-link.ts),
- * and a member organization through the explicit join the offer leads to.
+ * A verified work address automatically affiliates the person with its organization.
  * This module only reads what is left to ask (an automatic link to confirm
  * first) and records "not my organization" or "I am independent"; "not my
  * organization" on an automatic link also ends the identity it created.
@@ -39,8 +37,32 @@ async function verifiedAddresses(db: DatabaseLike, userId: string): Promise<Veri
   );
 }
 
+const OWN_REVIEW_IDENTITY_MATCH_SQL = `EXISTS (SELECT 1 FROM identities
+                       JOIN organizations organization ON organization.id = identities.organization_id
+                       WHERE identities.id = ? AND identities.user_id = ?
+                       AND identities.started_at IS NOT NULL AND identities.ended_at IS NULL AND identities.blocked_at IS NULL
+                       AND (((affiliation_reviews.email_domain = identities.verified_email_domain
+                         OR affiliation_reviews.email_domain IN (SELECT domain FROM organization_domain_claims WHERE organization_id = identities.organization_id AND application_id IS NULL))
+                         AND (affiliation_reviews.normalized_name IS NULL OR affiliation_reviews.normalized_name = organization.normalized_name))
+                         OR affiliation_reviews.normalized_name = organization.normalized_name))`;
+
+/** Whether this identity can answer any of the person’s open historical reviews. */
+export async function hasOwnAffiliationReviewToResolve(
+  db: DatabaseLike,
+  userId: string,
+  identityId: string,
+): Promise<boolean> {
+  return Boolean(
+    await first<{ id: string }>(
+      db,
+      `SELECT id FROM affiliation_reviews WHERE user_id = ? AND resolved_at IS NULL AND ${OWN_REVIEW_IDENTITY_MATCH_SQL} LIMIT 1`,
+      [userId, identityId, userId],
+    ),
+  );
+}
+
 /**
- * Closes the person's own open profile review once they hold an
+ * Closes matching historical reviews from every source once the person holds an
  * organization identity they chose or verified: their written text has been
  * answered by the person it describes.
  */
@@ -52,9 +74,8 @@ export function prepareOwnAffiliationReviewResolution(
     .prepare(
       `UPDATE affiliation_reviews
           SET resolved_identity_id = ?, resolved_by_user_id = ?, resolved_at = ?
-        WHERE user_id = ? AND source_type = 'user_profile' AND resolved_at IS NULL
-          AND EXISTS (SELECT 1 FROM identities WHERE id = ? AND user_id = ? AND organization_id IS NOT NULL
-                       AND started_at IS NOT NULL AND ended_at IS NULL AND blocked_at IS NULL)`,
+        WHERE user_id = ? AND resolved_at IS NULL
+          AND ${OWN_REVIEW_IDENTITY_MATCH_SQL}`,
     )
     .bind(input.identityId, input.userId, input.at, input.userId, input.identityId, input.userId);
 }

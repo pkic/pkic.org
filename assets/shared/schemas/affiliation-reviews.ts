@@ -151,3 +151,35 @@ export const affiliationReviewGroupDismissRouteSchema = {
   request: { params: affiliationReviewGroupParamsSchema },
   responses: GROUP_DECISION_RESPONSES,
 };
+
+/** A bounded pass, or one person's reviews. Cursors advance over skipped people too. */
+export const affiliationReviewApproveSchema = z
+  .object({
+    userId: databaseIdSchema.optional(),
+    afterUserId: databaseIdSchema.optional(),
+  })
+  .refine((value) => !(value.userId && value.afterUserId), { message: "Choose one person or a batch cursor" });
+export type AffiliationReviewApprove = z.infer<typeof affiliationReviewApproveSchema>;
+export const affiliationReviewApproveResponseSchema = z.object({
+  group: affiliationReviewGroupSchema,
+  decided: z.number().int().nonnegative(),
+  nextUserId: databaseIdSchema.nullable(),
+});
+export const affiliationReviewGroupApproveRouteSchema = {
+  tags: ["Identities"],
+  summary: "Approve verified-domain affiliations in a bounded group pass",
+  "x-pkic-auth": { required: true, scopes: ["users:write", "identities:activate"] },
+  request: {
+    params: affiliationReviewGroupParamsSchema,
+    body: { required: true, content: { "application/json": { schema: affiliationReviewApproveSchema } } },
+  },
+  responses: {
+    "200": {
+      description: "Approved reviews and the next batch cursor; ineligible reviews stay open.",
+      content: { "application/json": { schema: affiliationReviewApproveResponseSchema } },
+    },
+    "401": { description: "Portal authentication required." },
+    "403": { description: "Users write and identity activation permissions required." },
+    "404": { description: "Group not found." },
+  },
+};
