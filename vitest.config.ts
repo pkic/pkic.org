@@ -1,5 +1,5 @@
 import { astroMarkdownWorkerPlugin } from "./scripts/lib/astro-markdown-worker-plugin.mjs";
-import { prepareStaticPublicationFixture } from "./tests/helpers/prepare-static-publication.mjs";
+import { prepareD1AssetsDirectory } from "./tests/helpers/prepare-d1-assets.mjs";
 import path from "node:path";
 import { builtinModules } from "node:module";
 import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-plugin";
@@ -10,7 +10,6 @@ import { trustListPlugin } from "./scripts/lib/trust-list-plugin.mjs";
 import { NODE_UNIT_TEST_FILES } from "./vitest.config.unit";
 
 export default defineConfig(async () => {
-  const fixture = await prepareStaticPublicationFixture(import.meta.dirname);
   const migrationsPath = path.join(import.meta.dirname, "migrations");
   const migrations = (await readD1Migrations(migrationsPath)).filter(
     (migration) => !path.basename(migration.name).startsWith("._"),
@@ -19,8 +18,6 @@ export default defineConfig(async () => {
   const workerOptions = {
     wrangler: { configPath: "./wrangler.jsonc", environment: "local" },
     miniflare: {
-      // This run's own built site; wrangler.jsonc still supplies the binding and routing.
-      assets: { directory: fixture.publicDirectory },
       // Test-only bindings: secrets not in wrangler.jsonc, plus
       // the pre-read migrations array for the apply-migrations setup file.
       bindings: {
@@ -48,6 +45,13 @@ export default defineConfig(async () => {
       },
     },
   };
+  // The pool resolves callbacks only for projects with selected test files.
+  // D1 tests get an empty asset directory, never a stale local publication.
+  const d1Options = () => ({
+    ...workerOptions,
+    main: "./tests/helpers/d1-test-worker.ts",
+    miniflare: { ...workerOptions.miniflare, assets: { directory: prepareD1AssetsDirectory() } },
+  });
   const testOptions = {
     deps: {
       optimizer: {
@@ -105,7 +109,7 @@ export default defineConfig(async () => {
       projects: [
         {
           ...siteOptions,
-          plugins: [...sitePlugins(), cloudflareTest({ ...workerOptions, main: "./tests/helpers/d1-test-worker.ts" })],
+          plugins: [...sitePlugins(), cloudflareTest(d1Options)],
           test: {
             ...testOptions,
             name: "d1",
@@ -125,10 +129,7 @@ export default defineConfig(async () => {
           ? [
               {
                 ...siteOptions,
-                plugins: [
-                  ...sitePlugins(),
-                  cloudflareTest({ ...workerOptions, main: "./tests/helpers/d1-test-worker.ts" }),
-                ],
+                plugins: [...sitePlugins(), cloudflareTest(d1Options)],
                 test: {
                   ...testOptions,
                   name: "scanner-load",
@@ -142,10 +143,32 @@ export default defineConfig(async () => {
           : []),
         {
           ...siteOptions,
-          plugins: [...sitePlugins(), cloudflareTest({ ...workerOptions, main: "./functions/router.ts" })],
-          test: { ...testOptions, name: "worker-fetch", include: workerFetchFiles, exclude: ["**/._*"] },
+          plugins: [
+            ...sitePlugins(),
+            cloudflareTest(({ inject }) => ({
+              ...workerOptions,
+              main: "./functions/router.ts",
+              miniflare: {
+                ...workerOptions.miniflare,
+                assets: { directory: inject<string>("staticPublicationDirectory") },
+              },
+            })),
+          ],
+          test: {
+            ...testOptions,
+            name: "worker-fetch",
+            globalSetup: ["./tests/helpers/prepare-worker-publication.mjs"],
+            include: workerFetchFiles,
+            exclude: ["**/._*"],
+          },
         },
       ],
     },
   };
 });
+
+declare module "vitest" {
+  export interface ProvidedContext {
+    staticPublicationDirectory: string;
+  }
+}

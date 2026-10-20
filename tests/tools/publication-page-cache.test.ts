@@ -1,6 +1,8 @@
+import { existsSync, readFileSync } from "node:fs";
+import { isMap, isSeq, parseDocument } from "yaml";
 import { localSnapshotReceiptPath } from "../../scripts/publication/local-snapshot-receipt.mjs";
-import { mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { mkdir, readFile, rm, symlink, writeFile, cp } from "node:fs/promises";
+import { dirname, resolve, relative, basename } from "node:path";
 import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 import { tmpdir } from "node:os";
@@ -360,6 +362,66 @@ it("discards independently sealed transforms when their bytes change after nativ
     await writeFile(resolve(directory, "assets/synthetic.webp"), "tampered transform");
     await validatePublicationPageCache(directory, directory);
     await expect(readFile(resolve(directory, "assets/synthetic.webp"))).rejects.toMatchObject({ code: "ENOENT" });
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+function compilerCachePaths(file: string, stepsPath: string[], operation: "save" | "restore") {
+  const document = parseDocument(readFileSync(new URL(file, import.meta.url), "utf8"));
+  const steps = document.getIn(stepsPath);
+  if (!isSeq(steps)) throw new Error("Expected publication compiler cache steps");
+  const step = steps.items
+    .filter(isMap)
+    .find((entry) => String(entry.get("uses")).startsWith(`actions/cache/${operation}@`));
+  if (!step) throw new Error("Expected a publication compiler cache action");
+  return String(step.getIn(["with", "path"]))
+    .trim()
+    .split("\n")
+    .map((path) => {
+      const entry = relative("node_modules/.astro/publication/local", path.trim());
+      if (!entry || basename(entry) !== entry) throw new Error("Expected an immediate compiler cache entry");
+      return entry;
+    });
+}
+
+it("retains verified transforms through the CI save/restore allowlists while rendering pages fresh", async () => {
+  const directory = await createTemporaryDirectory("publication-ci-transform-cache-");
+  try {
+    const source = resolve(directory, "source");
+    const saved = resolve(directory, "saved");
+    const restored = resolve(directory, "restored");
+    await nativeCacheFixture(source);
+    await sealPublicationTransformCache(source, source);
+    await sealPublicationPageCache(source, source);
+    const savePaths = compilerCachePaths(
+      "../../.github/workflows/backend-tests.yml",
+      ["jobs", "browser", "steps"],
+      "save",
+    );
+    const restorePaths = compilerCachePaths(
+      "../../.github/actions/setup-validation/action.yml",
+      ["runs", "steps"],
+      "restore",
+    );
+    for (const [from, to, paths] of [
+      [source, saved, savePaths],
+      [saved, restored, restorePaths],
+    ] as const) {
+      await mkdir(to, { recursive: true });
+      for (const entry of paths) {
+        if (existsSync(resolve(from, entry))) await cp(resolve(from, entry), resolve(to, entry), { recursive: true });
+      }
+    }
+    await expect(validatePublicationPageCache(restored, restored)).resolves.toEqual({ verified: false, paths: 0 });
+    await expect(readFile(resolve(restored, "assets/synthetic.webp"), "utf8")).resolves.toBe("synthetic image bytes");
+    for (const excluded of [
+      "dist/events/synthetic/agenda/index.html",
+      "incremental-build.json",
+      "publication-page-cache.json",
+    ]) {
+      await expect(readFile(resolve(restored, excluded))).rejects.toMatchObject({ code: "ENOENT" });
+    }
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
