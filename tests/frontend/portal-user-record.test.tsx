@@ -1,13 +1,7 @@
 // @vitest-environment jsdom
-/**
- * The user record page: what it shows, what it offers, and to whom.
- *
- * Split out of portal-system-users.test.tsx, which had grown to cover both
- * the record and the profile form inside it. They are two subjects, and the
- * file was over its line budget carrying both.
- */
+/** The user record's profile, participation, actions and staff-only account history. */
 import { render } from "preact";
-import { IDENTITY_ID, membership } from "./helpers/affiliation-fixtures";
+import { IDENTITY_ID, membership, userWith } from "./helpers/affiliation-fixtures";
 import { act } from "preact/test-utils";
 import { menuItemNamed } from "./helpers/row-actions";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -38,19 +32,11 @@ vi.mock("../../assets/ts/shared/api-client", async (importOriginal) => ({
 const mounted: HTMLElement[] = [];
 
 const user: UserDetail = {
-  id: "00000000-0000-4000-8000-000000000001",
-  email: "member@example.test",
+  ...userWith([]),
   first_name: "Ada",
   last_name: "Lovelace",
-  preferred_name: null,
-  active: true,
-  isEcMember: false,
-  headshotUrl: null,
   created_at: "2026-01-01T00:00:00.000Z",
   updated_at: "2026-01-01T00:00:00.000Z",
-  pii_redacted_at: null,
-  identities: [],
-  formerIdentities: [],
 };
 
 afterEach(() => {
@@ -83,6 +69,9 @@ describe("portal System Users detail record", () => {
       if (url.startsWith(`/api/v1/users/${record.id}/emails`)) {
         return { emails: [], page: { limit: 10, offset: 0, total: 0, hasMore: false } };
       }
+      if (url.startsWith(`/api/v1/users/${record.id}/audit-log`)) {
+        return { auditLog: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } };
+      }
       if (url === `/api/v1/users/${record.id}/participation`) {
         if (!participation) throw new Error("no participation stubbed");
         return { participation };
@@ -111,18 +100,22 @@ describe("portal System Users detail record", () => {
     return [...list.querySelectorAll(":scope > dt")].map((term) => term.textContent ?? "");
   }
 
+  function personalProfile(biography: string | null) {
+    return membership({
+      identityId: "00000000-0000-4000-8000-000000000099",
+      organizationId: null,
+      organizationName: null,
+      memberId: null,
+      membershipCategory: null,
+      groups: [],
+      biography,
+    });
+  }
+
   it.each(["owner", "staff", "reader"] as const)(
     "attributes a general introduction and its edit action for %s",
     async (viewer) => {
-      const personal = membership({
-        identityId: "00000000-0000-4000-8000-000000000099",
-        organizationId: null,
-        organizationName: null,
-        memberId: null,
-        membershipCategory: null,
-        groups: [],
-        biography: "General introduction across my roles.",
-      });
+      const personal = personalProfile("General introduction across my roles.");
       const organization = membership({ biography: "Role-specific organization biography." });
       stubDetail({ ...user, identities: [personal, organization] });
       const container = await mountDetail(
@@ -145,15 +138,7 @@ describe("portal System Users detail record", () => {
   );
 
   it("attributes the fallback organization bio and offers separate general and organization edits", async () => {
-    const personal = membership({
-      identityId: "00000000-0000-4000-8000-000000000099",
-      organizationId: null,
-      organizationName: null,
-      memberId: null,
-      membershipCategory: null,
-      groups: [],
-      biography: null,
-    });
+    const personal = personalProfile(null);
     const organization = membership({ biography: "Role-specific organization biography." });
     stubDetail({ ...user, identities: [personal, organization] });
     const container = await mountDetail({ ...READ_ONLY, canManageMembership: true });
@@ -165,6 +150,20 @@ describe("portal System Users detail record", () => {
     expect(menuItemNamed(container, `Edit bio at ${organization.organizationName}…`)?.getAttribute("href")).toContain(
       organization.identityId,
     );
+  });
+
+  it("shows account history only to staff with user read permission", async () => {
+    stubDetail(user);
+    const staff = await mountDetail(READ_ONLY);
+    expect(cardNamed(staff, "Account history")).not.toBeNull();
+    expect(
+      apiClient.getJson.mock.calls.some(([url]) => String(url).startsWith(`/api/v1/users/${user.id}/audit-log`)),
+    ).toBe(true);
+
+    stubDetail(user);
+    const self = await mountDetail({ ...READ_ONLY, canRead: false }, user.id);
+    expect(cardNamed(self, "Account history")).toBeNull();
+    expect(apiClient.getJson.mock.calls.some(([url]) => String(url).includes("/audit-log"))).toBe(false);
   });
 
   it("heads the record with a real heading and pairs every field with its value", async () => {
