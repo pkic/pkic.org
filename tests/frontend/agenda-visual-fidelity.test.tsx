@@ -151,6 +151,8 @@ it("puts actual media actions before the abstract with no duplicate bottom actio
   expect(dialog.querySelector(".session-modal__footer a")).toBeNull();
   expect(dialog.querySelector("iframe")?.hasAttribute("src")).toBe(false);
   expect(dialog.querySelector("iframe")?.getAttribute("data-video-src")).not.toContain("autoplay");
+  expect(dialog.querySelector("iframe")?.getAttribute("data-video-src")).toContain("https://www.youtube-nocookie.com/");
+  expect(dialog.querySelector("iframe")?.getAttribute("referrerpolicy")).toBe("strict-origin-when-cross-origin");
   expect(dialog.querySelector(".session-modal__speaker .pk-content-agenda__speaker-bio")?.textContent).toContain(
     "Frozen biography A",
   );

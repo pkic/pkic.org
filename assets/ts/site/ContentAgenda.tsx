@@ -34,8 +34,9 @@ import type {
 import "./AgendaDesign.css";
 import "./AgendaTimeline.css";
 
+/** Render the shared agenda, hiding unused room columns outside the planner while retaining shift details. */
 export function ContentAgenda({
-  days,
+  days: suppliedDays,
   speakers,
   timeZone: clock,
   editor,
@@ -75,6 +76,12 @@ export function ContentAgenda({
     dropTarget: (startsAt: string, roomId: string) => ComponentChildren;
   };
 }) {
+  const days = editor
+    ? suppliedDays
+    : suppliedDays.map((day) => {
+        const occupied = new Set(day.slots.flatMap((slot) => slot.sessions.flatMap((session) => session.locations)));
+        return { ...day, locations: day.locations.filter((location) => occupied.has(location.id)) };
+      });
   const timeZone = clockTimeZone(clock);
   const root = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -214,7 +221,7 @@ export function ContentAgenda({
           personal={personal && { toolbarControls: personal.toolbarControls, mineOnly: personal.mineOnly, mineCount }}
         />
         <AgendaCalendarBody editor={Boolean(editor)} sidebar={editor?.sidebar}>
-          {days.map((day) => (
+          {days.map((day, dayIndex) => (
             <section
               class="pk-content-agenda__day"
               id={`agenda-day-${day.date}`}
@@ -239,7 +246,7 @@ export function ContentAgenda({
                       <small>
                         {formatTimeRangeInZone(shift.startAt, shift.endAt, clock)}
                         {shift.locationId
-                          ? ` · ${day.locations.find((room) => room.id === shift.locationId)?.label ?? ""}`
+                          ? ` · ${suppliedDays[dayIndex]?.locations.find((room) => room.id === shift.locationId)?.label ?? ""}`
                           : ""}
                         {shift.track ? ` · Track: ${shift.track}` : ""}
                       </small>
