@@ -214,30 +214,30 @@ describe("a person's own email addresses", () => {
     },
   );
 
-  it("offers a member organization, which the person signs in to join, and refuses a forged link", async () => {
+  it("automatically joins an approved member domain and refuses a forged verification link", async () => {
     const organizationId = await insertOrganization(env.DB, "Member Co");
     await seedOrganizationAggregate(env.DB, organizationId);
     await claimDomain(organizationId, "member.example");
     const { token } = await signedIn("bo@gmail.com");
 
-    const added = await add(token, "bo@member.example");
+    await add(token, "bo@member.example");
     const link = await verificationToken("bo@member.example");
     expect((await verify(`${link.slice(0, -4)}AAAA`)).status).toBe(404);
 
     const verified = await verify(link);
     expect(verified.status, await verified.clone().text()).toBe(200);
     expect(ownEmailAddressVerificationResponseSchema.parse(await verified.json())).toMatchObject({
-      joinedOrganization: null,
-      offeredOrganization: { id: organizationId, name: "Member Co" },
+      joinedOrganization: { id: organizationId, name: "Member Co" },
+      offeredOrganization: null,
     });
 
     const offer = await callApi(environment, "/api/v1/users/current/identities/offer", {
       headers: { authorization: `Bearer ${token}` },
     });
     expect(affiliationOfferResponseSchema.parse(await offer.json()).offer).toMatchObject({
-      kind: "organization",
+      kind: "linked",
       organization: { id: organizationId },
-      emailId: added.id,
+      domain: "member.example",
     });
   });
 

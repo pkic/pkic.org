@@ -1,8 +1,8 @@
 /**
  * Claiming a domain reaches the people who verified an address on it
  * earlier, through the same rule as a fresh verification: staff see how many
- * before confirming, a non-member organization joins them as a system
- * decision, a member organization is only offered, and a large domain is
+ * before confirming, approved member and non-member domains affiliate them as a
+ * system decision, and a large domain is
  * finished by the scheduler in bounded, resumable passes.
  */
 import { env } from "cloudflare:workers";

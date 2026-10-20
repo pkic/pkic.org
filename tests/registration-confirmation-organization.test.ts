@@ -113,13 +113,15 @@ describe("organization named on registration confirmation", () => {
       .run();
     const claimed = await register("person@claimed-domain.test");
     expect((await info(claimed)).asksOrganization).toBe(false);
-    // A stated name cannot override what the domain already decides, nor join a member organization.
+    // The approved domain establishes affiliation; a supplied name and title cannot override it.
     const confirmed = await confirm({
       token: claimed,
       organization: { name: "Someone Else Ltd", jobTitle: "Engineer" },
     });
     expect(confirmed.organizationOutcome).toBeNull();
-    expect(await affiliations("person@claimed-domain.test")).toEqual([]);
+    expect(await affiliations("person@claimed-domain.test")).toEqual([
+      { name: "Claimed Domain Corp", job_title: null },
+    ]);
   });
 
   it("joins a non-member organization that owns the confirmed address's domain without asking", async () => {
