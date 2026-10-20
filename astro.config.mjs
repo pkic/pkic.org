@@ -39,6 +39,7 @@ const root = fileURLToPath(new URL(".", import.meta.url));
 const publicAssets = resolve(publicationStagingDirectory(), "public");
 const forcedBuild = publicationForceRebuild();
 const incrementalBuild = publicationSupportsPageCache(resolve(root, "site"));
+let resolvedRouteComponents = new Set();
 
 export default defineConfig({
   site: PUBLICATION_SITE_ORIGIN,
@@ -61,9 +62,13 @@ export default defineConfig({
     {
       name: "pkic-publication-post-processing",
       hooks: {
+        "astro:routes:resolved": ({ routes }) => {
+          resolvedRouteComponents = new Set(routes.map((route) => route.entrypoint));
+        },
         "astro:build:start": async () => {
           if (forcedBuild) await discardPublicationPageCache(publicationCacheDirectory());
-          else if (incrementalBuild) await validatePublicationPageCache(publicationCacheDirectory());
+          else if (incrementalBuild)
+            await validatePublicationPageCache(publicationCacheDirectory(), undefined, resolvedRouteComponents);
           if (forcedBuild || !incrementalBuild)
             console.log("[publication] forced repair or middleware requires a complete page render");
           await logPublicationBuildCache("before Astro generation");

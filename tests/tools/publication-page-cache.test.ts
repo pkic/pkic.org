@@ -1,6 +1,8 @@
 import { localSnapshotReceiptPath } from "../../scripts/publication/local-snapshot-receipt.mjs";
 import { mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { createRequire } from "node:module";
+import { pathToFileURL } from "node:url";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
 import { afterEach, expect, it, vi } from "vitest";
@@ -149,6 +151,59 @@ it("verifies completed native cache bytes and falls back cold after a raw-page c
     await expect(readFile(resolve(directory, "incremental-build.json"))).rejects.toMatchObject({ code: "ENOENT" });
     await expect(readFile(resolve(directory, "publication-social/unrelated.jpg"), "utf8")).resolves.toBe(
       "independently keyed OG cache",
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+it("starts page reuse cold when a renamed native route takes over the same output, retaining verified transforms", async () => {
+  const directory = await createTemporaryDirectory("publication-page-cache-rename-");
+  try {
+    await nativeCacheFixture(directory);
+    await sealPublicationTransformCache(directory, directory);
+    await sealPublicationPageCache(directory, directory);
+    const oldRoute = "site/pages/[...eventAgenda].astro";
+    const replacement = "site/pages/[...renamedAgenda].astro";
+    const original = JSON.parse(await readFile(resolve(directory, "incremental-build.json"), "utf8"));
+    const entry = original.routes[oldRoute].paths["/events/synthetic/agenda/"];
+    await expect(validatePublicationPageCache(directory, directory, new Set([oldRoute, replacement]))).resolves.toEqual(
+      { verified: true, paths: 1 },
+    );
+    await expect(validatePublicationPageCache(directory, directory, new Set([replacement]))).resolves.toEqual({
+      verified: false,
+      paths: 0,
+    });
+    await expect(readFile(resolve(directory, "incremental-build.json"))).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(readFile(resolve(directory, "assets/synthetic.webp"), "utf8")).resolves.toBe("synthetic image bytes");
+
+    // Exercise the installed Astro cache's record/write/prune sequence. Without
+    // invalidation its orphan cleanup removes this newly written shared output.
+    const astroRoot = dirname(createRequire(import.meta.url).resolve("astro/package.json"));
+    const { IncrementalBuildCache } = await import(
+      pathToFileURL(resolve(astroRoot, "dist/core/build/incremental.js")).href
+    );
+    const settings = { config: { cacheDir: pathToFileURL(`${directory}/`) } };
+    const cache = IncrementalBuildCache.load(settings, original.configHash, original.lockfileHash, null);
+    cache.record(
+      replacement,
+      "replacement-dependencies",
+      "/events/synthetic/agenda/",
+      entry.cacheKey,
+      entry.outputFile,
+      undefined,
+      entry.staticImages,
+    );
+    await cache.writeOutputFile(settings, entry.outputFile, "<h1>Fresh renamed route</h1>");
+    for (const orphan of cache.findOrphanedFiles()) await cache.deleteOutputFile(settings, orphan);
+    cache.writeManifest(settings);
+    await sealPublicationPageCache(directory, directory);
+    await expect(validatePublicationPageCache(directory, directory, new Set([replacement]))).resolves.toEqual({
+      verified: true,
+      paths: 1,
+    });
+    await expect(readFile(resolve(directory, "dist", entry.outputFile), "utf8")).resolves.toBe(
+      "<h1>Fresh renamed route</h1>",
     );
   } finally {
     await rm(directory, { recursive: true, force: true });
