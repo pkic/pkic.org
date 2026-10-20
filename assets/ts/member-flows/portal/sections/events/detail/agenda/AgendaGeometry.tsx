@@ -6,7 +6,7 @@ export function AgendaGeometry({ day }: { day: ContentAgendaDay }) {
   const marker = useRef<HTMLSpanElement | null>(null);
   const css = agendaLayoutCss(agendaRows(day, 0, true).map((row) => row.height))
     .replaceAll(".pk-content-agenda:not(.is-compact)", ".pk-agenda-editor .pk-content-agenda")
-    .replace("@media(min-width:46.001rem)", "@media(min-width:0rem)");
+    .replace("@media screen and (min-width:46.001rem)", "@media screen and (min-width:0rem)");
   useEffect(() => {
     const sheet = new CSSStyleSheet();
     if (typeof sheet.replaceSync !== "function") {
