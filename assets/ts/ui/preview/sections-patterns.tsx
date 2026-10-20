@@ -36,6 +36,47 @@ import { Toast } from "../Toast";
 import { Toolbar } from "../Toolbar";
 import type { ToneProps } from "../tone";
 import type { PreviewSection } from "./PreviewShell";
+import { ContentAgenda } from "../../site/ContentAgenda";
+import type { ContentAgendaDay } from "../../../shared/site-agenda";
+
+const agendaDays: ContentAgendaDay[] = ["2025-12-01", "2025-12-02"].map((date, index) => ({
+  date,
+  staffing: [
+    {
+      id: `preparation-${index}`,
+      name: "Room preparation",
+      startAt: `${date}T08:00:00.000Z`,
+      endAt: `${date}T09:00:00.000Z`,
+      locationId: "unused",
+      duties: [{ role: "mc", displayName: "Alex Example" }],
+    },
+  ],
+  locations: [
+    { id: "main", label: "Main hall" },
+    { id: "workshop", label: "Workshop room" },
+    { id: "unused", label: "Unused room" },
+  ],
+  slots: [
+    {
+      startsAt: `${date}T09:00:00.000Z`,
+      time: "10:00",
+      sessions: [
+        {
+          id: `session-${index}`,
+          title: "Preparing for post-quantum migration",
+          kind: "session",
+          locations: index ? ["main", "workshop"] : ["main"],
+          speakers: [{ name: "Alex Example" }],
+          descriptionHtml: "<p>A practical discussion of migration planning.</p>",
+          endsAt: `${date}T09:30:00.000Z`,
+          durationMinutes: 30,
+          youtube: "M7lc1UVf-VE",
+          recordingApproved: true,
+        },
+      ],
+    },
+  ],
+}));
 
 /** One membership workflow, as its domain module would declare it: a tone, and a place in the flow while in flight. */
 const applicationStages: (ToneProps & { label: string })[] = [
@@ -231,6 +272,11 @@ function RowListSpecimen() {
 }
 
 export const patternSections: PreviewSection[] = [
+  {
+    id: "agenda",
+    title: "Agenda",
+    render: () => <ContentAgenda days={agendaDays} speakers={[]} timeZone="Europe/Amsterdam" />,
+  },
   {
     id: "row-list",
     title: "Row list",

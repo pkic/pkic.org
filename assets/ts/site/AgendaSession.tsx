@@ -113,6 +113,7 @@ function AgendaSessionDuration({
   );
 }
 
+/** Render an agenda occurrence and its details, with origin-only referrers for embedded recordings. */
 export function AgendaSession({
   session,
   slot,
@@ -486,7 +487,13 @@ export function AgendaSession({
                     </div>
                   ) : recordingEmbed ? (
                     <div class="session-modal__video" data-agenda-media-recording>
-                      <iframe loading="lazy" data-video-src={recordingEmbed} title={session.title} allowFullScreen />
+                      <iframe
+                        loading="lazy"
+                        data-video-src={recordingEmbed}
+                        title={session.title}
+                        referrerPolicy="strict-origin-when-cross-origin"
+                        allowFullScreen
+                      />
                     </div>
                   ) : null}
                   <AgendaSessionActions
