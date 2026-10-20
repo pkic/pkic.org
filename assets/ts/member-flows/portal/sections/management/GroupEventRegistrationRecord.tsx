@@ -39,6 +39,7 @@ import { ProfileHeader } from "../../../../ui/ProfileHeader";
 import { attendanceTypeLabel } from "../../../../shared/attendance";
 import { usePortalHashLocation } from "../../hash-location";
 import { fmt } from "../../ui";
+import { RegistrationAuditLogSection } from "../events/detail/registration-detail/RegistrationPanels";
 import { AttendeeParticipationSections } from "../events/detail/registration-detail/AttendeeParticipationSections";
 import { ButtonLink } from "../../../../ui/Button";
 import { portalSession } from "../../state";
@@ -255,6 +256,7 @@ export function GroupEventRegistrationRecord({
           userId={registration.user_id}
           canManage={canVip}
           badgesPath={badgesPath}
+          history={eventSlug && <RegistrationAuditLogSection slug={eventSlug} regId={registrationId} />}
           registration={
             <div class="pk-record">
               {/* The list sits flush under the panel's header, the way every

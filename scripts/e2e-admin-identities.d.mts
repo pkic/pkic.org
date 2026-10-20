@@ -41,6 +41,7 @@ export const E2E_ADMIN_SCOPES: readonly [
   "portal-user-create",
   "portal-users-role-management",
   "portal-user-headshot",
+  "portal-account-audit",
   "meeting-participant-links",
   // Never signed in as: a pool identity is a bare `users` row with no
   // membership, which is exactly the starting state a grant needs.

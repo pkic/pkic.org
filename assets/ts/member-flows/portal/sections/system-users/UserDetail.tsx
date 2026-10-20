@@ -18,6 +18,7 @@ import {
   MemberStandingPanel,
 } from "./UserMemberProfilePanels";
 import { UserAffiliationsPanel } from "./UserAffiliationsPanel";
+import { UserAuditLog } from "./UserAuditLog";
 import { UserParticipationHistory } from "./UserParticipationHistory";
 import { UserProfileEditor } from "./UserProfileEditor";
 import { CURRENT_USER_API } from "./current-user-api";
@@ -353,6 +354,8 @@ export function UserDetail({
           {(isSelf || permissions.canWrite) && (
             <EmailAddressesPanel userId={user.id} isSelf={isSelf} primaryEmail={user.email} />
           )}
+
+          {permissions.canRead && <UserAuditLog userId={user.id} />}
 
           {/* Email notifications are the person's own choice, made by nobody else. */}
           {isSelf && session?.member && <NotificationPreferencesCard />}

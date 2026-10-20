@@ -5,6 +5,8 @@
  * shared `openApiRoute`/`paginationQuerySchema` pattern used by every
  * canonical listing endpoint.
  */
+import { scopedAuditLogListQuerySchema, scopedAuditLogResponseSchema } from "./audit-log";
+import { requiresPermissions } from "./route-contract";
 import { userSelectionProfileSchema } from "./user-selection-profile";
 import { z } from "zod";
 import { userIdParamsSchema, successResponseSchema } from "./api-common";
@@ -216,5 +218,22 @@ export const userAnonymizeRouteSchema = {
     "403": { description: "The calling staff user cannot anonymize this account." },
     "404": { description: "User not found." },
     "409": { description: "The user is already anonymized or changed concurrently." },
+  },
+};
+
+/** User-account history is staff-only, including when staff view their own record. */
+export const userAuditLogRouteSchema = {
+  ...requiresPermissions("users:read"),
+  tags: ["Users"],
+  summary: "List a user's account audit history",
+  request: { params: userIdParamsSchema, query: scopedAuditLogListQuerySchema },
+  responses: {
+    "200": {
+      description: "User audit entries.",
+      content: { "application/json": { schema: scopedAuditLogResponseSchema } },
+    },
+    "401": { description: "Staff authentication required." },
+    "403": { description: "User read permission required." },
+    "404": { description: "User not found." },
   },
 };
