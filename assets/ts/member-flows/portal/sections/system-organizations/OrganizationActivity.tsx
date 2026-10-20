@@ -13,6 +13,7 @@
  * through its columns' menus rather than a row of selects above the table,
  * and every row opens the record it refers to wherever the portal routes one.
  */
+import { useEffect } from "preact/hooks";
 import { useRouteView } from "../../../../hooks/useRouteView";
 import type { ComponentChildren } from "preact";
 
@@ -311,7 +312,14 @@ export function OrganizationActivity({
     "proposals",
     ...(canReadSponsorships ? (["sponsorships"] as const) : []),
   ];
-  const [tab, setTab] = useRouteView(`/organizations/${encodeURIComponent(organizationId)}`, tabs, "groups");
+  const basePath = `/organizations/${encodeURIComponent(organizationId)}`;
+  const [path, navigate] = usePortalHashLocation();
+  const ownedPath = path.replace(/\/$/u, "");
+  const available = ownedPath === basePath || tabs.some((view) => ownedPath === `${basePath}/${view}`);
+  useEffect(() => {
+    if (!available) navigate(basePath, { replace: true });
+  }, [available, basePath, navigate]);
+  const [tab, setTab] = useRouteView(basePath, tabs, "groups");
   // A viewer who loses sponsorship access mid-session must not be left on a
   // tab that is no longer in the set.
   const activeTab = tabs.includes(tab) ? tab : "groups";

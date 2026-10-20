@@ -11,10 +11,12 @@ vi.mock("../../assets/ts/member-flows/portal/shell/portal-sections", async (impo
   ...(await importOriginal<object>()),
   OrganizationDetail: ({ organizationId }: { organizationId: string }) => (
     <section aria-label={`Organization ${organizationId}`}>
-      <OrganizationActivity organizationId={organizationId} canReadSponsorships />
+      <OrganizationActivity organizationId={organizationId} canReadSponsorships={sponsorshipAccess.value} />
     </section>
   ),
 }));
+
+const sponsorshipAccess = vi.hoisted(() => ({ value: true }));
 
 let container: HTMLDivElement;
 
@@ -30,6 +32,7 @@ async function open(hash: string): Promise<string> {
 }
 
 beforeEach(() => {
+  sponsorshipAccess.value = true;
   container = document.createElement("div");
   document.body.append(container);
   // jsdom lays nothing out, so the shell's scroll reset has nothing to scroll.
@@ -67,6 +70,25 @@ afterEach(() => {
 });
 
 describe("organization activity routes", () => {
+  it.each(["typo", "sponsorships"])("recovers navigation from an unavailable %s activity", async (view) => {
+    sponsorshipAccess.value = false;
+    await open(`#/organizations/organization-id/${view}`);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(location.hash).toBe("#/organizations/organization-id");
+    expect(container.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("Groups");
+    const events = [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(
+      (button) => button.textContent === "Events",
+    );
+    await act(async () => {
+      events!.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(location.hash).toBe("#/organizations/organization-id/events");
+    expect(container.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("Events");
+  });
+
   it.each(["Events", "Proposals", "Sponsorships"])("keeps the organization mounted when opening %s", async (tab) => {
     await open("#/organizations/organization-id");
     const trigger = [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(
