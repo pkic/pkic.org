@@ -21,13 +21,48 @@ geometry checks to every CI run. The catalog-wide contrast audit
 (`pnpm run test:e2e:contrast`) is also opt-in. Wait for the rendered state or
 resource being tested; do not add fixed sleeps.
 
-Each Worker test run (`pnpm run test:worker`) builds the static site into its
-own temporary directory under `PKIC_BUILD_TMPDIR` (else `TMPDIR`) and serves its
-assets from there, with a copy-on-write clone of the shared Astro cache. Runs in
-one checkout or across checkouts that share `node_modules` therefore never
-replace each other's `public/` or `dist/`. The directory is removed when the run
-ends, fails, or is stopped; the next run removes any directory left by a killed
-one.
+Worker integration tests use two disjoint projects. `d1` imports real services
+and mounted routers, applies real migrations per file, and uses an empty asset
+directory. It never builds or serves a static publication. Run it independently
+with `pnpm run test:worker --project d1` (optionally `--shard=1/3`).
+`worker-fetch` retains the real Worker entry point and synthetic publication;
+its pool builds that publication only when matching tests are selected. The
+scanner benchmark also uses the D1 setup. Runtime and database isolation remain
+per file; shards never share mutable storage.
+
+The publication fixture uses its own temporary directory under
+`PKIC_BUILD_TMPDIR` (else `TMPDIR`), with a copy-on-write clone of the shared
+Astro derivative cache. Only completed publications with identical fixture
+inputs are reused by the existing local cache. Browser fixtures have different
+inputs and are prepared separately; neither their database nor their HTML is
+substituted for the Worker fixture.
+
+Application CI runs static, Node, frontend, and tooling checks first. Once they
+pass, critical browser journeys, three D1 shards, and the real-publication
+Worker project run on independent runners. The existing required application
+check aggregates all results and fails on failed, canceled, or skipped required
+jobs. Each Worker runner uploads `worker-profile-*` timing diagnostics. Compare
+successful runs at the same revision, runner size, inventory, and cold/warm
+cache conditions before claiming a speedup; include runner minutes and shard
+imbalance, not just elapsed time. The initial three-shard trial preserves every
+test and uses Vitest's built-in sharding; profile evidence should guide any
+subsequent duration balancing.
+
+| Behavior                          | Owning validation layer  | Unique protection retained                           |
+| --------------------------------- | ------------------------ | ---------------------------------------------------- |
+| Pure schemas and policy           | Node                     | Contract and policy permutations                     |
+| UI state and request/error wiring | Frontend components      | Rendered states and transport contracts              |
+| Tooling and publication lifecycle | Node tooling             | Build failure, cleanup, cache and compiler behavior  |
+| SQL, authorization and atomicity  | D1 integration           | Real migrations, mounted routes and isolated storage |
+| Public assets and Worker fetch    | Worker-fetch integration | Real publication and Worker routing                  |
+| Critical user journeys            | Browser                  | Authentication, navigation and browser behavior      |
+
+No assertions are removed or moved between layers by this CI split. Complete
+validation remains required; changed-test selection is advisory. Cloudflare
+Workers Builds commands are account configuration, not established by these
+scripts. Inspect actual build/deploy logs before removing duplicated validation.
+A passing PR merge check does not validate a different production SHA; preserve
+existing deployment gates until the exact deployed candidate is verified.
 
 Use focused tests while iterating. `pnpm test:changed` runs the tests related
 to uncommitted changes in every suite (`--since <ref>` compares with a branch

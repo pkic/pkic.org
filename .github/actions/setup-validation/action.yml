@@ -1,0 +1,14 @@
+name: Set up validation dependencies
+description: Install the repository's pinned Node and pnpm dependencies
+runs:
+  using: composite
+  steps:
+    - uses: pnpm/action-setup@v6
+      with:
+        run_install: false
+    - uses: actions/setup-node@v6
+      with:
+        node-version: "24"
+        cache: "pnpm"
+    - shell: bash
+      run: pnpm install --frozen-lockfile

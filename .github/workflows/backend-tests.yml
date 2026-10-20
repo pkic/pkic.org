@@ -26,6 +26,7 @@ on:
       - "vitest.config*.ts"
       - "wrangler.jsonc"
       - ".github/workflows/backend-tests.yml"
+      - ".github/actions/setup-validation/**"
   push:
     branches: [main]
     paths:
@@ -51,6 +52,7 @@ on:
       - "vitest.config*.ts"
       - "wrangler.jsonc"
       - ".github/workflows/backend-tests.yml"
+      - ".github/actions/setup-validation/**"
 
 permissions:
   contents: read
@@ -60,16 +62,8 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  validation:
-    name: ${{ matrix.name }}
-    strategy:
-      fail-fast: true
-      matrix:
-        include:
-          - { suite: site, name: Site and browser checks }
-          - { suite: worker, name: Worker and D1 (1/3), shard: 1/3 }
-          - { suite: worker, name: Worker and D1 (2/3), shard: 2/3 }
-          - { suite: worker, name: Worker and D1 (3/3), shard: 3/3 }
+  preflight:
+    name: Static, Node, frontend, and tooling checks
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -79,48 +73,41 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          run_install: false
-
-      - name: Setup Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: "24"
-          cache: "pnpm"
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup-validation
 
       - name: Run static checks
-        if: matrix.suite == 'site'
         env:
           NODE_OPTIONS: --max-old-space-size=4096
         run: pnpm run check:static
 
       - name: Run schema and policy unit tests (Node)
-        if: matrix.suite == 'site'
         timeout-minutes: 2
         run: pnpm run test:unit --bail=1
 
       - name: Run frontend component tests
-        if: matrix.suite == 'site'
         timeout-minutes: 5
         run: pnpm run test:frontend --bail=1
 
       - name: Run tooling tests
-        if: matrix.suite == 'site'
         timeout-minutes: 5
         run: pnpm run test:tools --bail=1
 
+  browser:
+    name: Critical browser journeys
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - uses: ./.github/actions/setup-validation
+
       - name: Generate the public site
-        if: matrix.suite == 'site'
         timeout-minutes: 5
         run: pnpm run generate:public
 
       - name: Check the CSS budget
-        if: matrix.suite == 'site'
         timeout-minutes: 2
         run: pnpm run check:css-budget
 
@@ -151,7 +138,6 @@ jobs:
       # startup deadline measures serving readiness rather than image encoding.
       # Cold publication plus isolated fixture setup and release assembly can exceed ten minutes.
       - name: Prepare browser test publication
-        if: matrix.suite == 'site'
         timeout-minutes: 15
         run: |
           state_dir=$(mktemp -d "$RUNNER_TEMP/pkic-e2e.XXXXXX")
@@ -163,7 +149,7 @@ jobs:
 
       # Preserve completed compiler work even if a later browser test fails.
       - name: Save publication compiler cache
-        if: matrix.suite == 'site' && steps.publication-cache.outputs.cache-hit != 'true'
+        if: steps.publication-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v5
         with:
           path: |
@@ -176,12 +162,11 @@ jobs:
       # One Playwright invocation reuses the synthetic release and database.
       # maxFailures still stops after the first persistent journey failure.
       - name: Run critical browser user journeys
-        if: matrix.suite == 'site'
         timeout-minutes: 5
         run: pnpm run test:e2e:ci
 
       - name: Upload Playwright failure artifacts
-        if: failure() && matrix.suite == 'site'
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-e2e-artifacts
@@ -191,32 +176,55 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+  worker:
+    name: Worker integration (${{ matrix.project }} ${{ matrix.shard }})
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { project: d1, shard: "1/3", artifact: d1-1 }
+          - { project: d1, shard: "2/3", artifact: d1-2 }
+          - { project: d1, shard: "3/3", artifact: d1-3 }
+          - { project: worker-fetch, shard: "1/1", artifact: worker-fetch }
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - uses: ./.github/actions/setup-validation
       - name: Run Worker and D1 integration tests
-        if: matrix.suite == 'worker'
-        # Include cold optimized publication setup and the complete integration suite.
-        timeout-minutes: 60
         env:
           NODE_OPTIONS: --max-old-space-size=4096
-          PKIC_TEST_PROFILE_PATH: ${{ runner.temp }}/worker-profile-${{ strategy.job-index }}.json
-        run: pnpm run test:worker --bail=1 --shard=${{ matrix.shard }}
-
+          PKIC_TEST_PROFILE_PATH: ${{ runner.temp }}/worker-profile.json
+        run: |
+          /usr/bin/time -v -o "$RUNNER_TEMP/worker-resources.txt" \
+            pnpm run test:worker --project ${{ matrix.project }} --shard=${{ matrix.shard }} --bail=1
       - name: Upload Worker timing profile
-        if: always() && matrix.suite == 'worker'
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: worker-profile-${{ strategy.job-index }}
-          path: ${{ runner.temp }}/worker-profile-${{ strategy.job-index }}.json
-          if-no-files-found: ignore
+          name: worker-profile-${{ matrix.artifact }}
+          path: |
+            ${{ runner.temp }}/worker-profile.json
+            ${{ runner.temp }}/worker-resources.txt
+          if-no-files-found: warn
           retention-days: 7
 
   application:
+    # Preserve the existing required-check name during the job split.
     name: Application checks (fail-fast sequence)
-    needs: validation
+    needs: [preflight, browser, worker]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 1
     steps:
-      - name: Require every validation job to pass
+      - name: Require every validation job to succeed
         env:
-          VALIDATION_RESULT: ${{ needs.validation.result }}
-        run: test "$VALIDATION_RESULT" = success
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          node --input-type=module -e '
+            const jobs = Object.values(JSON.parse(process.env.RESULTS));
+            if (jobs.some(job => job.result !== "success")) process.exit(1);
+          '
