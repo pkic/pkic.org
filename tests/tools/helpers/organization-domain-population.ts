@@ -7,7 +7,7 @@
  * earlier relationship) leaves the profile's text for review.
  */
 import { DatabaseSync } from "node:sqlite";
-import { domainLinkMode, resolveDomainOrganization } from "../../../assets/shared/organization-domain";
+import { resolveDomainOrganization } from "../../../assets/shared/organization-domain";
 import { organizationDomainCandidates } from "../../../functions/_lib/email-domains/classification";
 import { normalizeOrgName } from "../../../assets/shared/organization-name";
 import type {
@@ -65,9 +65,10 @@ export function decidePopulation(fixture: OrganizationDomainFixture): Record<str
       heldByApplication: false,
       derived: [],
     });
+    // Migration 0038 retains its historical non-member-only population policy.
     const joined =
       resolution.kind === "organization" &&
-      domainLinkMode(resolution) === "automatic" &&
+      !resolution.isMember &&
       !(person.identities ?? []).some((identity) => identity.organizationId === resolution.organizationId);
     if (joined)
       outcomes[person.id] = {

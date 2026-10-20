@@ -5,24 +5,23 @@
  * sign-in or registration confirmation through the existing
  * affiliation join (prepareVerifiedOrganizationAffiliation), so the same
  * proof, claim and blocking rules apply as when the person joins themselves.
- * Only organizations the shared rule links automatically are joined here; a
- * member organization waits for the person's confirmation (the offer), and an
- * organization the person said is not theirs is never joined again.
+ * Approved domains establish affiliation for member and non-member organizations.
+ * An organization the person said is not theirs is never joined again.
  */
-import { domainLinkMode } from "../../../../assets/shared/organization-domain";
-import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
+import { prepareAuthorizationGuard, isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { nowIso } from "../../utils/time";
 import { normalizeEmail } from "../../validation";
 import { isAuditChangeGuardFailure, prepareAuditLog } from "../audit";
+import { auditActorIdentityId } from "../audit-actor";
 import { hasDismissedOrganization, prepareOwnAffiliationReviewResolution } from "./affiliation-offer";
 import { isConcurrentIdentityConflict } from "./conflicts";
 import { loadIdentityNotificationContext, prepareIdentityNotification } from "./notifications";
 import { prepareLinkNotice } from "./organization-link-notices";
 import { prepareVerifiedOrganizationAffiliation } from "./reconciliation";
-import { resolveEmailDomainOrganization } from "./verified-email-domain";
+import { verifiedEmailDomainResolutionEvidence, resolveEmailDomainOrganization } from "./verified-email-domain";
 
 /** The selected address: null for the person's primary address, else their verified alias. */
 async function ownedAddressId(
@@ -48,6 +47,8 @@ interface DomainOrganizationLinkInput {
   systemDecision?: { action: string; details: Record<string, unknown> };
   /** A claim's backfill never links a person somewhere else. */
   onlyOrganizationId?: string;
+  /** Staff approves this person's reviews in one selected group using current mailbox proof. */
+  reviewDecision?: { groupKey: string; staffId: string; decisionId: string };
 }
 
 /** Joins an already verified address through the canonical automatic affiliation rule. */
@@ -81,17 +82,28 @@ export async function prepareVerifiedAddressDomainOrganizationLink(
   const normalizedEmail = normalizeEmail(input.normalizedEmail);
   // `domain` is the domain the address links through: the most specific claim covering it, else its registrable domain.
   const { domain, resolution } = await resolveEmailDomainOrganization(db, normalizedEmail);
-  if (!domain || resolution.kind !== "organization" || domainLinkMode(resolution) !== "automatic") return null;
+  if (!domain || resolution.kind !== "organization") return null;
   const organizationId = resolution.organizationId;
   if (input.onlyOrganizationId && input.onlyOrganizationId !== organizationId) return null;
   const [related, dismissed] = await Promise.all([
-    first<{ id: string }>(db, "SELECT id FROM identities WHERE user_id = ? AND organization_id = ? LIMIT 1", [
-      input.userId,
-      organizationId,
-    ]),
+    first<{ id: string; eligible: number }>(
+      db,
+      `SELECT id, started_at IS NOT NULL AND ended_at IS NULL AND blocked_at IS NULL AS eligible FROM identities WHERE user_id = ? AND organization_id = ? ORDER BY ended_at IS NULL DESC, id LIMIT 1`,
+      [input.userId, organizationId],
+    ),
     hasDismissedOrganization(db, input.userId, organizationId),
   ]);
-  if (related || dismissed) return null;
+  if ((related && !related.eligible) || dismissed) return null;
+  if (
+    related &&
+    !input.reviewDecision &&
+    !(await first<{ id: string }>(
+      db,
+      "SELECT id FROM affiliation_reviews WHERE user_id = ? AND resolved_at IS NULL LIMIT 1",
+      [input.userId],
+    ))
+  )
+    return null;
   const at = input.at;
   try {
     const context = await loadIdentityNotificationContext(db, organizationId, input.userId, true);
@@ -103,19 +115,72 @@ export async function prepareVerifiedAddressDomainOrganizationLink(
       at,
       proofEvidence: { sql: "SELECT 1 FROM users WHERE id = ? AND active = 1", bindings: [input.userId] },
     });
+    const decision = input.reviewDecision;
     const statements = [
-      ...prepared.statements,
-      prepareOwnAffiliationReviewResolution(db, { userId: input.userId, identityId: prepared.identityId, at }),
-      // The person is told once, in the portal and by the identity email the platform already sends.
-      prepareLinkNotice(db, { identityId: prepared.identityId, userId: input.userId, organizationId, domain, at }),
-      prepareIdentityNotification(db, {
-        identityId: prepared.identityId,
-        userId: input.userId,
-        context,
-        action: "linked",
-        domain,
-        at,
+      prepareAuthorizationGuard(db, {
+        sql: `SELECT 1 FROM users WHERE id = ? AND active = 1
+          AND NOT EXISTS (SELECT 1 FROM affiliation_offer_dismissals WHERE user_id = ? AND organization_id = ?)
+          AND NOT EXISTS (SELECT 1 FROM identities WHERE user_id = ? AND organization_id = ?
+            AND (blocked_at IS NOT NULL OR ended_at IS NOT NULL OR started_at IS NULL))`,
+        bindings: [input.userId, input.userId, organizationId, input.userId, organizationId],
       }),
+      prepareAuthorizationGuard(
+        db,
+        verifiedEmailDomainResolutionEvidence(domain, organizationId, resolution.via === "claim"),
+      ),
+      ...(decision
+        ? [
+            prepareAuthorizationGuard(db, {
+              sql: "SELECT 1 FROM affiliation_reviews WHERE group_key = ? AND user_id = ? AND resolved_at IS NULL",
+              bindings: [decision.groupKey, input.userId],
+            }),
+          ]
+        : []),
+      ...prepared.statements,
+      ...(decision
+        ? [
+            db
+              .prepare(`UPDATE affiliation_reviews SET resolved_identity_id = ?, resolved_by_user_id = ?, resolved_at = ?
+          WHERE group_key = ? AND user_id = ? AND resolved_at IS NULL`)
+              .bind(prepared.identityId, decision.staffId, at, decision.groupKey, input.userId),
+            db
+              .prepare(`INSERT INTO audit_log (id, actor_type, actor_id, actor_identity_id, action, entity_type, entity_id, details_json, created_at)
+          SELECT lower(hex(randomblob(16))), 'admin', ?, ?, 'affiliation_review_resolved', 'affiliation_review', id,
+            json_object('decisionId', json_object('from', NULL, 'to', ?),
+              'identityId', json_object('from', NULL, 'to', resolved_identity_id)), ?
+          FROM affiliation_reviews WHERE group_key = ? AND user_id = ? AND resolved_at = ? AND resolved_by_user_id = ?`)
+              .bind(
+                decision.staffId,
+                auditActorIdentityId("admin", decision.staffId),
+                decision.decisionId,
+                at,
+                decision.groupKey,
+                input.userId,
+                at,
+                decision.staffId,
+              ),
+          ]
+        : [prepareOwnAffiliationReviewResolution(db, { userId: input.userId, identityId: prepared.identityId, at })]),
+      // The person is told once, in the portal and by the identity email the platform already sends.
+      ...(!related
+        ? [
+            prepareLinkNotice(db, {
+              identityId: prepared.identityId,
+              userId: input.userId,
+              organizationId,
+              domain,
+              at,
+            }),
+            prepareIdentityNotification(db, {
+              identityId: prepared.identityId,
+              userId: input.userId,
+              context,
+              action: "linked",
+              domain,
+              at,
+            }),
+          ]
+        : []),
       ...(input.systemDecision
         ? [
             prepareAuditLog(

@@ -32,12 +32,10 @@ import { toast } from "../../ui";
 import { OrganizationRecordHero } from "./OrganizationRecordHero";
 import { OrganizationRecordTrail, organizationRecordHref, useOrganizationRecord } from "./OrganizationRecordTrail";
 
-/** Who the claim reaches: people already verified on the domain join, or are offered a member organization. */
+/** Who the claim reaches: people already verified on the domain join. */
 export function domainClaimReach(preview: OrganizationDomainClaimPreview, organizationName: string): string {
   const people = `${formatNumber(preview.peopleToLink)} ${preview.peopleToLink === 1 ? "person" : "people"}`;
-  return preview.linkMode === "automatic"
-    ? `${people} with a verified address on @${preview.domain} will be linked to ${organizationName}`
-    : `${people} with a verified address on @${preview.domain} will be offered to join ${organizationName}`;
+  return `${people} with a verified address on @${preview.domain} will be linked to ${organizationName}`;
 }
 
 /** The organization a refused claim names, when the domain is claimed elsewhere. */

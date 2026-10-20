@@ -60,14 +60,12 @@ export const organizationDomainsListResponseSchema = paginatedResponseSchema("do
 
 /**
  * What a claim does to the people who verified an address on the domain
- * earlier: a non-member organization joins them (`automatic`); a member
- * organization offers itself to them (`confirm`).
+ * earlier: both member and non-member organizations affiliate them automatically.
  */
 export const organizationDomainClaimPreviewSchema = z.object({
   domain: z.string(),
   /** People with a verified address on the domain and no relationship with the organization yet. */
   peopleToLink: z.number().int().nonnegative(),
-  linkMode: z.enum(["automatic", "confirm"]),
 });
 export type OrganizationDomainClaimPreview = z.infer<typeof organizationDomainClaimPreviewSchema>;
 export const organizationDomainClaimPreviewResponseSchema = z.object({ preview: organizationDomainClaimPreviewSchema });

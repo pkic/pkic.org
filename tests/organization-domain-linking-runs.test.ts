@@ -99,7 +99,6 @@ describe("a domain claim links the people who verified an address on it", () => 
     expect(organizationDomainClaimPreviewResponseSchema.parse(await preview.json()).preview).toEqual({
       domain: "acme.example",
       peopleToLink: 2,
-      linkMode: "automatic",
     });
 
     const claimed = await call(
@@ -153,7 +152,7 @@ describe("a domain claim links the people who verified an address on it", () => 
     expect(await organizationsOf(lab)).toEqual([]);
   });
 
-  it("only offers a member organization, which the person confirms themselves", async () => {
+  it("automatically affiliates verified people when a member organization claims its domain", async () => {
     const member = await insertOrganization(env.DB, "Member Co");
     await seedOrganizationAggregate(env.DB, member);
     const eva = await person("eva@member.example");
@@ -161,19 +160,18 @@ describe("a domain claim links the people who verified an address on it", () => 
     const preview = await call(`/api/v1/organizations/${member}/domains/member.example`);
     expect(organizationDomainClaimPreviewResponseSchema.parse(await preview.json()).preview).toMatchObject({
       peopleToLink: 1,
-      linkMode: "confirm",
     });
     const claimed = await call(`/api/v1/organizations/${member}/domains`, {
       domain: "member.example",
       reason: "Membership application",
     });
-    expect(organizationDomainClaimResponseSchema.parse(await claimed.json()).linking.peopleLinked).toBe(0);
-    expect(await organizationsOf(eva)).toEqual([]);
+    expect(organizationDomainClaimResponseSchema.parse(await claimed.json()).linking.peopleLinked).toBe(1);
+    expect(await organizationsOf(eva)).toEqual([{ organization_id: member }]);
 
-    const evaToken = await createMemberSession(env.DB, eva, "domain-linking-eva-token");
+    const evaToken = await createMemberSession(env.DB, eva, "domain-linking-eva-token", undefined, null);
     const offer = await call("/api/v1/users/current/identities/offer", undefined, evaToken);
     expect(affiliationOfferResponseSchema.parse(await offer.json()).offer).toMatchObject({
-      kind: "organization",
+      kind: "linked",
       organization: { id: member },
     });
   });

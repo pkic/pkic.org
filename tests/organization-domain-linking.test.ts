@@ -4,7 +4,6 @@ import {
   affiliationOfferDismissalSchema,
   affiliationOfferResponseSchema,
 } from "../assets/shared/schemas/affiliation-offer";
-import { currentUserIdentityCreateSchema } from "../assets/shared/schemas/identity";
 import { linkVerifiedAddressToDomainOrganization } from "../functions/_lib/services/identities/email-domain-link";
 import { getUserDetail } from "../functions/_lib/services/user-management-detail";
 import { nowIso } from "../functions/_lib/utils/time";
@@ -88,7 +87,7 @@ describe("a verified work address and the organization that owns its domain", ()
     const organizationId = await insertOrganization(env.DB, "Open Claimed Co");
     await claimDomain(organizationId, "open-claimed.example");
     const { userId, token } = await signedIn("ana@open-claimed.example");
-    await openReview(userId, "Open Claimed Corporation");
+    await openReview(userId, "Open Claimed Co");
 
     expect(
       await linkVerifiedAddressToDomainOrganization(env.DB, { userId, normalizedEmail: "ana@open-claimed.example" }),
@@ -108,6 +107,35 @@ describe("a verified work address and the organization that owns its domain", ()
     ).toEqual([{ actor_type: "user" }]);
     // Nothing is left to ask except telling them about the link once.
     expect(await offerOf(token)).toMatchObject({ kind: "linked", organization: { id: organizationId } });
+  });
+
+  it("resolves matching registration and proposal reviews without erasing another employer", async () => {
+    const organizationId = await insertOrganization(env.DB, "IBM");
+    await claimDomain(organizationId, "ibm.example");
+    const { userId } = await signedIn("history@ibm.example");
+    for (const source of ["user_profile", "registration", "proposal_speaker"]) {
+      const id = crypto.randomUUID();
+      await env.DB.prepare(`INSERT INTO affiliation_reviews(id,user_id,organization_name,normalized_name,group_key,source_type,source_id,created_at)
+        VALUES (?,?,'IBM','ibm','ibm',?,?,?)`)
+        .bind(id, userId, source, id, nowIso())
+        .run();
+    }
+    await openReview(userId, "Past Employer");
+    await linkVerifiedAddressToDomainOrganization(env.DB, { userId, normalizedEmail: "history@ibm.example" });
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT source_type FROM affiliation_reviews WHERE user_id = ? AND resolved_identity_id IS NOT NULL ORDER BY source_type",
+        [userId],
+      ),
+    ).toEqual([{ source_type: "proposal_speaker" }, { source_type: "registration" }, { source_type: "user_profile" }]);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT organization_name FROM affiliation_reviews WHERE user_id = ? AND resolved_at IS NULL",
+        [userId],
+      ),
+    ).toEqual([{ organization_name: "Past Employer" }]);
   });
 
   it("joins through the registrable domain from a subdomain address, and through an explicitly claimed subdomain", async () => {
@@ -160,36 +188,19 @@ describe("a verified work address and the organization that owns its domain", ()
     expect(await organizationsOf(userId)).toEqual([]);
   });
 
-  it("offers a member organization instead of joining it, and the offer's join is the explicit join", async () => {
+  it("automatically affiliates a verified member-organization address", async () => {
     const organizationId = await insertOrganization(env.DB, "Member Claimed Corp");
     await seedOrganizationAggregate(env.DB, organizationId, "A");
     await claimDomain(organizationId, "member.example");
     const { userId, token } = await signedIn("cy@member.example");
-    await openReview(userId, "Member Claimed");
-
+    await openReview(userId, "Member Claimed Corp");
     expect(
       await linkVerifiedAddressToDomainOrganization(env.DB, { userId, normalizedEmail: "cy@member.example" }),
-    ).toBeNull();
-    expect(await organizationsOf(userId)).toEqual([]);
-    const offer = await offerOf(token);
-    expect(offer).toEqual({
-      kind: "organization",
-      organization: { id: organizationId, name: "Member Claimed Corp" },
-      emailId: null,
-      domain: "member.example",
-      writtenOrganizationName: "Member Claimed",
-    });
-
-    const joined = await call(
-      token,
-      "/api/v1/users/current/identities",
-      currentUserIdentityCreateSchema.parse({ emailId: null, organizationId, jobTitle: "Security engineer" }),
-    );
-    expect(joined.status, await joined.clone().text()).toBe(201);
+    ).toMatchObject({ organizationId });
     expect(await organizationsOf(userId)).toEqual([
       { name: "Member Claimed Corp", source: "verified_domain", verified_email_domain: null },
     ]);
-    expect(await offerOf(token)).toBeNull();
+    expect(await offerOf(token)).toMatchObject({ kind: "linked", organization: { id: organizationId } });
   });
 
   it("never offers or joins an organization the person said is not theirs", async () => {

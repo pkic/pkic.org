@@ -1,6 +1,8 @@
-import { useState } from "preact/hooks";
+import { useRef, useState } from "preact/hooks";
 import {
   AFFILIATION_REVIEW_STATUSES,
+  affiliationReviewApproveSchema,
+  affiliationReviewApproveResponseSchema,
   affiliationReviewGroupDecisionResponseSchema,
   affiliationReviewGroupResponseSchema,
   affiliationReviewGroupsListResponseSchema,
@@ -10,7 +12,9 @@ import {
   type AffiliationReviewStatus,
 } from "../../../../shared/schemas/affiliation-reviews";
 import { formatNumber } from "../../../../shared/format-number";
-import { ApiDataTable } from "../../../components/ApiDataTable";
+import { Menu } from "../../../ui/Menu";
+import { RowActions } from "../../../ui/RowActions";
+import { ApiDataTable, type ApiTableActions } from "../../../components/ApiDataTable";
 import { Badge } from "../../../components/Badge";
 import { confirmAction } from "../../../components/ConfirmDialog";
 import { ErrorAlert } from "../../../components/ErrorAlert";
@@ -51,59 +55,83 @@ function domainsLabel(domains: readonly string[]): string | null {
   return domains.length > 0 ? domains.map((domain) => `@${domain}`).join(", ") : null;
 }
 
-/**
- * One decision for everyone in the group: dismiss. Nobody is linked to an
- * organization by what they wrote; each person joins through their verified
- * work address, or staff invite them from their record.
- */
-function GroupDecision({ group, canWrite }: { group: AffiliationReviewGroup; canWrite: boolean }) {
+function GroupDetail({ groupKey, canWrite, canApprove }: { groupKey: string; canWrite: boolean; canApprove: boolean }) {
+  const actions = useRef<ApiTableActions | null>(null);
   const [busy, setBusy] = useState(false);
-
+  const [error, setError] = useState("");
+  const loaded = useData(
+    () => getJson(`${GROUPS_API}/${encodeURIComponent(groupKey)}`, affiliationReviewGroupResponseSchema),
+    [groupKey],
+  );
+  async function changed(): Promise<void> {
+    await Promise.all([loaded.reload(), actions.current?.reload()]);
+  }
+  async function approve(review?: AffiliationReview): Promise<void> {
+    if (
+      !(await confirmAction({
+        title: review ? `Approve ${review.personName}'s affiliation?` : "Approve all eligible affiliations?",
+        tone: "primary",
+        body: "Only verified email addresses on approved organization domains qualify. Ambiguous or blocked affiliations stay open for review.",
+        confirmLabel: review ? "Approve affiliation" : "Approve all eligible",
+        cancelLabel: "Keep open",
+      }))
+    )
+      return;
+    setBusy(true);
+    setError("");
+    let decided = 0;
+    try {
+      let nextUserId: string | null = null;
+      do {
+        const body = affiliationReviewApproveSchema.parse(
+          review ? { userId: review.userId } : nextUserId ? { afterUserId: nextUserId } : {},
+        );
+        const result = await postJson(
+          `${GROUPS_API}/${encodeURIComponent(groupKey)}/approve`,
+          body,
+          affiliationReviewApproveResponseSchema,
+        );
+        decided += result.decided;
+        nextUserId = result.nextUserId;
+      } while (nextUserId);
+      toast(`${formatNumber(decided)} ${decided === 1 ? "review" : "reviews"} approved`, "success");
+      if (decided === 0)
+        setError(
+          "No eligible affiliation found. Check the person's verified work address and the organization's approved domains, or open the person to send an identity invitation.",
+        );
+    } catch (caught) {
+      setError(
+        `${(caught as Error).message} ${formatNumber(decided)} ${decided === 1 ? "review" : "reviews"} approved before this stopped. You can retry safely.`,
+      );
+    } finally {
+      setBusy(false);
+      await changed();
+    }
+  }
   async function dismiss(): Promise<void> {
     const confirmed = await confirmAction({
-      title: `Dismiss the reviews of ${peopleLabel(group.people)}?`,
+      title: "Dismiss all open reviews in this group?",
       body: "The text stays on record, but no identity is created from it.",
       confirmLabel: "Dismiss all",
       cancelLabel: "Keep open",
     });
     if (!confirmed) return;
     setBusy(true);
+    setError("");
     try {
       const result = await postJson(
-        `${GROUPS_API}/${encodeURIComponent(group.groupKey)}/dismiss`,
+        `${GROUPS_API}/${encodeURIComponent(groupKey)}/dismiss`,
         {},
         affiliationReviewGroupDecisionResponseSchema,
       );
       toast(`${formatNumber(result.decided)} ${result.decided === 1 ? "review" : "reviews"} dismissed`, "success");
-      window.location.hash = PAGE_HREF;
     } catch (caught) {
-      toast((caught as Error).message, "error");
+      setError((caught as Error).message);
     } finally {
       setBusy(false);
+      await changed();
     }
   }
-
-  if (group.openReviews === 0 || !canWrite) return null;
-  return (
-    <PanelBody>
-      <p class="pk-small pk-muted">
-        People join their organization through their verified work email address, and their review closes when they do.
-        Open a person to invite them to an organization.
-      </p>
-      <div class="pk-cluster">
-        <Button variant="danger-quiet" loading={busy} onClick={() => void dismiss()}>
-          Dismiss all
-        </Button>
-      </div>
-    </PanelBody>
-  );
-}
-
-function GroupDetail({ groupKey, canWrite }: { groupKey: string; canWrite: boolean }) {
-  const loaded = useData(
-    () => getJson(`${GROUPS_API}/${encodeURIComponent(groupKey)}`, affiliationReviewGroupResponseSchema),
-    [groupKey],
-  );
   const group = loaded.data?.group;
   const title = group ? groupTitle(group) : "Affiliation review";
   return (
@@ -122,7 +150,26 @@ function GroupDetail({ groupKey, canWrite }: { groupKey: string; canWrite: boole
       ) : (
         <>
           <Panel aria-label={title}>
-            <PanelHeader title={title} />
+            <PanelHeader
+              title={title}
+              menu={
+                canWrite && group.openReviews > 0 ? (
+                  <Menu
+                    label={`Actions for ${title}`}
+                    align="end"
+                    items={[
+                      {
+                        id: "dismiss",
+                        label: "Dismiss all",
+                        danger: true,
+                        disabled: busy,
+                        onSelect: () => void dismiss(),
+                      },
+                    ]}
+                  />
+                ) : undefined
+              }
+            />
             <PanelBody>
               <DescriptionList
                 items={[
@@ -134,9 +181,23 @@ function GroupDetail({ groupKey, canWrite }: { groupKey: string; canWrite: boole
                 ]}
               />
             </PanelBody>
-            <GroupDecision group={group} canWrite={canWrite} />
           </Panel>
+          <ErrorAlert error={error} />
           <ApiDataTable
+            actionsRef={actions}
+            toolbarClass="pk-toolbar-row"
+            compactToolbarActions={[]}
+            toolbar={() =>
+              group.openReviews > 0 && (
+                <>
+                  {canApprove && (
+                    <Button variant="primary" loading={busy} onClick={() => void approve()}>
+                      Approve all eligible
+                    </Button>
+                  )}
+                </>
+              )
+            }
             urlState={`affiliation-review-people.${group.groupKey}`}
             caption={`People who wrote ${title}`}
             endpoint={API_BASE}
@@ -172,6 +233,31 @@ function GroupDetail({ groupKey, canWrite }: { groupKey: string; canWrite: boole
                   options: AFFILIATION_REVIEW_STATUSES.map((value) => ({ value, label: statusLabel(value) })),
                 },
               },
+              ...(canApprove
+                ? [
+                    {
+                      header: "Actions",
+                      width: "fit" as const,
+                      cell: (review: AffiliationReview) => (
+                        <RowActions
+                          subject={review.personName}
+                          actions={
+                            review.status === "open"
+                              ? [
+                                  {
+                                    id: "approve",
+                                    label: "Approve affiliation",
+                                    disabled: busy,
+                                    onSelect: () => void approve(review),
+                                  },
+                                ]
+                              : []
+                          }
+                        />
+                      ),
+                    },
+                  ]
+                : []),
             ]}
             empty="No reviews in this group match the current filters."
             rowKey={(review) => review.id}
@@ -187,8 +273,16 @@ function GroupDetail({ groupKey, canWrite }: { groupKey: string; canWrite: boole
  * became their only home, one row per name as written. A review closes when
  * its person joins an organization; staff may dismiss a group at once.
  */
-export function AffiliationReviews({ groupKey, canWrite }: { groupKey?: string; canWrite: boolean }) {
-  if (groupKey) return <GroupDetail groupKey={groupKey} canWrite={canWrite} />;
+export function AffiliationReviews({
+  groupKey,
+  canWrite,
+  canApprove,
+}: {
+  groupKey?: string;
+  canWrite: boolean;
+  canApprove: boolean;
+}) {
+  if (groupKey) return <GroupDetail groupKey={groupKey} canWrite={canWrite} canApprove={canApprove} />;
   return (
     <div class="pk pk-stack">
       <PageHeader title="Affiliation reviews" />

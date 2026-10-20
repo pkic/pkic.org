@@ -1,9 +1,7 @@
 /**
  * The organization question a signed-in person is asked, and their answer.
  *
- * Linking itself is the existing join: a non-member organization a verified
- * work address belongs to is joined on verification (email-domain-link.ts),
- * and a member organization through the explicit join the offer leads to.
+ * A verified work address automatically affiliates the person with its organization.
  * This module only reads what is left to ask (an automatic link to confirm
  * first) and records "not my organization" or "I am independent"; "not my
  * organization" on an automatic link also ends the identity it created.
@@ -40,7 +38,7 @@ async function verifiedAddresses(db: DatabaseLike, userId: string): Promise<Veri
 }
 
 /**
- * Closes the person's own open profile review once they hold an
+ * Closes matching historical reviews from every source once the person holds an
  * organization identity they chose or verified: their written text has been
  * answered by the person it describes.
  */
@@ -52,9 +50,12 @@ export function prepareOwnAffiliationReviewResolution(
     .prepare(
       `UPDATE affiliation_reviews
           SET resolved_identity_id = ?, resolved_by_user_id = ?, resolved_at = ?
-        WHERE user_id = ? AND source_type = 'user_profile' AND resolved_at IS NULL
+        WHERE user_id = ? AND resolved_at IS NULL
           AND EXISTS (SELECT 1 FROM identities WHERE id = ? AND user_id = ? AND organization_id IS NOT NULL
-                       AND started_at IS NOT NULL AND ended_at IS NULL AND blocked_at IS NULL)`,
+                       AND started_at IS NOT NULL AND ended_at IS NULL AND blocked_at IS NULL
+                       AND (affiliation_reviews.email_domain = identities.verified_email_domain
+                         OR affiliation_reviews.email_domain IN (SELECT domain FROM organization_domain_claims WHERE organization_id = identities.organization_id AND application_id IS NULL)
+                         OR affiliation_reviews.normalized_name = (SELECT normalized_name FROM organizations WHERE id = identities.organization_id)))`,
     )
     .bind(input.identityId, input.userId, input.at, input.userId, input.identityId, input.userId);
 }

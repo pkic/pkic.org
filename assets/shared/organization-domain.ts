@@ -69,16 +69,3 @@ export function resolveDomainOrganization(facts: DomainOwnershipFacts): DomainOr
     return { kind: "ambiguous" };
   return { kind: "organization", organizationId: only!.organizationId, isMember: false, via: "derived" };
 }
-
-/**
- * How a person joins the organization their verified domain belongs to.
- * Registering or signing in is not joining the consortium (issue #23): a
- * member organization's representation, with its group seats and mailing
- * lists, starts only when the person confirms it through the explicit join.
- * Any other organization is joined automatically.
- */
-export type DomainLinkMode = "automatic" | "confirm";
-
-export function domainLinkMode(organization: { isMember: boolean }): DomainLinkMode {
-  return organization.isMember ? "confirm" : "automatic";
-}
