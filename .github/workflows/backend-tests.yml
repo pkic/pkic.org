@@ -153,6 +153,7 @@ jobs:
         with:
           path: |
             node_modules/.astro/publication/local/assets
+            node_modules/.astro/publication/local/publication-transform-cache.json
             node_modules/.astro/publication/local/publication-social
             node_modules/.astro/publication/local/publication-diagrams
             node_modules/.astro/publication/local/publication-browser

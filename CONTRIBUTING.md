@@ -34,7 +34,8 @@ The publication fixture uses its own temporary directory under
 `PKIC_BUILD_TMPDIR` (else `TMPDIR`), with a copy-on-write clone of the shared
 Astro derivative cache. Only completed publications with identical fixture
 inputs are reused by the existing local cache. Browser and Worker-fetch runners restore the same content-addressed compiler
-derivatives; D1 runners restore none. Browser fixtures have different
+derivatives, including the integrity seal required to retain native image
+transforms; D1 runners restore none. Browser fixtures have different
 inputs and are prepared separately; neither their database nor their HTML is
 substituted for the Worker fixture.
 
