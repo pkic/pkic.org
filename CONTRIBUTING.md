@@ -5,8 +5,8 @@ guide covers backend development, validation, builds, and deployment.
 
 ## Validation
 
-Run the complete validation gate before handing off a code or configuration
-change:
+Run focused tests, typechecks, and targeted lint/format checks locally. The
+complete validation gate runs in CI for code and configuration changes:
 
 ```bash
 pnpm run check
@@ -38,8 +38,8 @@ derivatives; D1 runners restore none. Browser fixtures have different
 inputs and are prepared separately; neither their database nor their HTML is
 substituted for the Worker fixture.
 
-Application CI runs static, Node, frontend, and tooling checks first. Once they
-pass, critical browser journeys, four D1 shards, and the real-publication
+Application CI runs static and Node checks first. Once they pass, frontend/tooling
+checks, critical browser journeys, four D1 shards, and the real-publication
 Worker project run on independent runners. The existing required application
 check aggregates all results and fails on failed, canceled, or skipped required
 jobs. Each Worker runner uploads `worker-profile-*` timing diagnostics. Compare

@@ -63,7 +63,7 @@ concurrency:
 
 jobs:
   preflight:
-    name: Static, Node, frontend, and tooling checks
+    name: Static and Node checks
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -83,6 +83,18 @@ jobs:
       - name: Run schema and policy unit tests (Node)
         timeout-minutes: 2
         run: pnpm run test:unit --bail=1
+
+  frontend-tools:
+    name: Frontend and tooling checks
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: ./.github/actions/setup-validation
 
       - name: Run frontend component tests
         timeout-minutes: 5
@@ -169,7 +181,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         include:
           - { project: d1, shard: "1/4", artifact: d1-1 }
@@ -206,7 +218,7 @@ jobs:
   application:
     # Preserve the existing required-check name during the job split.
     name: Application checks (fail-fast sequence)
-    needs: [preflight, browser, worker]
+    needs: [preflight, frontend-tools, browser, worker]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 1
