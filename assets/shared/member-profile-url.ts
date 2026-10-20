@@ -1,29 +1,33 @@
-/**
- * Where a member's public page lives — decided once, for every surface.
- *
- * Issue #15: `/members/profile/?id=efeb58e2-1b8f-43fa-9464-e84f6d536305` is
- * not an address anybody can read, remember, or link to on purpose. The
- * answer is the address these pages already had while they were Hugo pages:
- * `/members/keyfactor/`. That shape is not a preference — members link to
- * their profile from their own sites, and search engines have indexed it, so
- * keeping it means nothing outside this repository has to change and nothing
- * has to be redirected. `functions/members/[slug].ts` serves it.
- *
- * Independent members have no organization slug. Their immutable id gives
- * them a static path too, so every published profile has a file address.
- */
+import { INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "./schemas/membership-categories";
+import { publicPageSlugBase } from "./schemas/public-page-slug";
 
-/** The shell page that resolves `?id=`; also `/members/<slug>`'s own source. */
+/** The legacy query-based profile resolver. */
 export const MEMBER_PROFILE_SHELL_PATH = "/members/profile/";
 
 export interface MemberProfileIdentifiers {
   id: string;
-  /** `organizations.slug`; null for an individual with no organization row. */
   slug?: string | null;
+  name?: string;
+  memberType?: string;
 }
 
-/** The public page for one member of the consortium. */
+/** A stable, compact identifier keeps namesakes distinct regardless of directory order. */
+function independentMemberSuffix(id: string): string {
+  let hash = 14695981039346656037n;
+  for (const character of id) {
+    hash ^= BigInt(character.charCodeAt(0));
+    hash = BigInt.asUintN(64, hash * 1099511628211n);
+  }
+  return hash.toString(36);
+}
+
+/** One canonical public address for directory cards, publication, and legacy redirects. */
 export function memberProfileHref(member: MemberProfileIdentifiers): string {
-  if (member.slug) return `/members/${encodeURIComponent(member.slug)}/`;
-  return `/members/${encodeURIComponent(member.id)}/`;
+  if (member.memberType && INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(member.memberType)) {
+    const name = publicPageSlugBase(member.name ?? "", "member")
+      .slice(0, 60)
+      .replace(/-+$/u, "");
+    return `/members/independent/${name}-${independentMemberSuffix(member.id)}/`;
+  }
+  return `/members/${encodeURIComponent(member.slug || member.id)}/`;
 }

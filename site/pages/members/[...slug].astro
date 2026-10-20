@@ -9,6 +9,8 @@ import { memberNewsCardInputs, renderMemberNewsArticles } from "../../../functio
 import { publicationPageInputs } from "../../publication-page-inputs";
 import { publicationRouteCacheKey } from "../../publication-cache";
 export async function getStaticPaths() {
+  const routes = publication.members.map(memberProfileHref);
+  if (new Set(routes).size !== routes.length) throw new Error("Member profile addresses collide");
   return Promise.all(publication.members.map(async (member) => {
     const publishedRoutes = new Set(publishedSiteRoutes());
     const workingGroups = Object.entries(publication.groupMembers)
@@ -40,7 +42,7 @@ export async function getStaticPaths() {
     const unknownMarkdownImages = [member.content, ...member.identities.map((identity) => identity.bio)]
       .some((markdown) => markdown?.includes("!["));
     return {
-      params: { slug: route.split("/")[2] }, props: { member, workingGroups, news, hasNews: news.length > 0, pageInputs },
+      params: { slug: route.slice("/members/".length).replace(/\/$/u, "") }, props: { member, workingGroups, news, hasNews: news.length > 0, pageInputs },
       ...(unknownMarkdownImages || !pageInputs.imageInputs.cacheable ? {} : { cacheKey: publicationRouteCacheKey(route, { view, pageInputs }) }),
     };
   }));

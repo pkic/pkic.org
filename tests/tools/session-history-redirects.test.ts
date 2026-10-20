@@ -1,3 +1,4 @@
+import { memberProfileHref } from "../../assets/shared/member-profile-url";
 import { describe, it, expect } from "vitest";
 import { agendaSnapshotSchema } from "../../assets/shared/schemas/event-agenda";
 import { sessionHistoryMetadataSchema } from "../../assets/shared/schemas/event-session-history";
@@ -99,4 +100,18 @@ describe("archive release redirects", () => {
     occurrence.visibility = "private";
     expect(collectSessionRedirects(release(initial), generatedFiles)).toEqual([]);
   });
+});
+
+it("redirects old individual member addresses only to an actually published readable profile", () => {
+  const member = { id: "00000000-0000-4000-8000-000000000051", name: "Taylor Example", memberType: "H6", slug: null };
+  const to = memberProfileHref(member);
+  const publication = { members: [member] };
+  expect(collectSessionRedirects(publication, [])).toEqual([]);
+  expect(collectSessionRedirects(publication, [`${to.slice(1)}index.html`])).toEqual([
+    { from: `/members/${member.id}`, to, status: 301 },
+    { from: `/members/${member.id}/`, to, status: 301 },
+  ]);
+  expect(() =>
+    collectSessionRedirects(publication, [`${to.slice(1)}index.html`, `members/${member.id}/index.html`]),
+  ).toThrow(/collides/);
 });
