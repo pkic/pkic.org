@@ -137,6 +137,7 @@
         "SCHEDULED_VOTE_NOTIFICATION_LIMIT": "100",
         "SENDGRID_API_BASE": "https://api.sendgrid.com/v3/mail/send",
         "SPEAKER_UPLOAD_DEADLINE_DAYS": "21",
+        "SPONSORSHIP_NOTIFICATION_EMAIL": "contact@pkic.org",
         "FROM_EMAIL": "noreply@pkic.org",
         "RSVP_EMAIL": "rsvp@mail.pkic.org",
         "RSVP_INBOUND_EMAIL_MAX_BYTES": "5242880",
