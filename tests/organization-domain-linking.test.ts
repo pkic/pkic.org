@@ -129,7 +129,9 @@ describe("a verified work address and the organization that owns its domain", ()
     )
       .bind(userId)
       .run();
-    await linkVerifiedAddressToDomainOrganization(env.DB, { userId, normalizedEmail: "history@ibm.example" });
+    expect(
+      await linkVerifiedAddressToDomainOrganization(env.DB, { userId, normalizedEmail: "history@ibm.example" }),
+    ).toMatchObject({ organizationId, resolvedReviews: 3 });
     expect(
       await queryAll(
         env.DB,

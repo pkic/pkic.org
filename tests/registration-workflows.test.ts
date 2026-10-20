@@ -151,7 +151,7 @@ describe("registration workflows", () => {
         "SELECT group_id FROM group_memberships WHERE user_id = ? AND left_at IS NULL",
         attendee.id,
       );
-      if (approved) expect(seats.length).toBeGreaterThan(0);
+      if (approved) expect(seats).toEqual([{ group_id: "20000000-0000-4000-8000-000000000001" }]);
       else expect(seats).toEqual([]);
       if (!approved)
         expect(

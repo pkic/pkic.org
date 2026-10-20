@@ -128,7 +128,7 @@ export const organizationDomainClaimPreviewRouteSchema = {
   ...requiresPermissions("organizations:write"),
   summary: "Preview claiming an email domain for an organization",
   description:
-    "Refused exactly as the claim would be. Otherwise says how many people with a verified address on the domain the claim would link, and whether they join or are offered the organization.",
+    "Refused exactly as the claim would be. Otherwise says how many people with a verified address on the domain the claim would automatically link to the organization.",
   request: { params: organizationDomainParamsSchema },
   responses: {
     ...ok("What the claim would do.", organizationDomainClaimPreviewResponseSchema),
