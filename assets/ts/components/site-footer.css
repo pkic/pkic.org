@@ -294,7 +294,7 @@
    * it up to full strength.
    */
   .members {
-    --member-logo-muted-opacity: 0.55;
+    --member-logo-muted-opacity: 0.3;
   }
 
   /* Intrinsic image dimensions reserve space without stretching the artwork. */

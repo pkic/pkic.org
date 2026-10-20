@@ -9,6 +9,8 @@
  */
 
 import { useState } from "preact/hooks";
+import "../../components/member-wall.css";
+import "../../components/site-footer.css";
 import { useHashQueryParam } from "../../hooks/useHashQueryParam";
 
 import { LIVE_CHAT_REACTIONS } from "../../../shared/live-chat-policy";
@@ -271,7 +273,35 @@ function RowListSpecimen() {
   );
 }
 
+const wallLogo = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="16" viewBox="0 0 100 40"><path fill="currentColor" d="M0 0h28v40H0zm36 0h28v40H36zm36 0h28v40H72z"/></svg>')}`;
+
 export const patternSections: PreviewSection[] = [
+  {
+    id: "member-wall",
+    title: "Member wall",
+    render: () => (
+      <div class="members-overview">
+        <div class="members">
+          <div class="logo-wall-copy">
+            {Array.from({ length: 18 }, (_, index) => (
+              <a href="#member-wall" key={index} aria-label={`Example organization ${index + 1}`}>
+                <img src={wallLogo} alt="" class={`member-logo${index % 6 === 0 ? " member-logo-sponsor" : ""}`} />
+              </a>
+            ))}
+          </div>
+        </div>
+        <div class="members members--zooming">
+          <div class="member-zoom-overlay member-zoom-overlay--visible">
+            <img src={wallLogo} alt="Example sponsor" class="member-zoom-logo" />
+            <div class="member-zoom-info">
+              <strong class="member-zoom-name">Example sponsor</strong>
+            </div>
+            <div class="member-zoom-badge sponsor-tier-6">Diamond sponsor</div>
+          </div>
+        </div>
+      </div>
+    ),
+  },
   {
     id: "agenda",
     title: "Agenda",
