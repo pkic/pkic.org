@@ -1,0 +1,58 @@
+---
+import PublicPage from "../../../../layouts/PublicPage.astro";
+import { SitePageBody } from "../../../../../assets/ts/site/SitePageBody";
+import { Alert } from "../../../../../assets/ts/ui/Alert";
+import { ExternalLink } from "../../../../../assets/ts/ui/ExternalLink";
+import { loadSiteContent } from "../../../../../functions/_lib/services/site-content";
+import { modelContributionEntries } from "../../../../model-versions";
+import { loadModelVersion } from "../../../../model-version-source";
+import { modelLevelSlug, modelVersionMarkdown } from "../../../../model-version-markdown";
+import { renderSiteMarkdown } from "../../../../markdown-processor";
+import { publicationPageInputs } from "../../../../publication-page-inputs";
+import { publication, memberCounts } from "../../../../publication";
+
+export async function getStaticPaths() {
+  const pages = [];
+  for (const entry of modelContributionEntries) for (const version of entry.versions) {
+    const model = await loadModelVersion(entry.repository, version.sourcePath ?? entry.sourcePath, version);
+    const overview = { slug: "", levelNumber: undefined, title: `PQCMM ${version.version} — ${version.status === "draft" ? "Draft" : "Released"}` };
+    const levels = model.levels.map((l) => ({ slug: `levels/${modelLevelSlug(l)}/`, levelNumber: l.number, title: `${l.title} — ${version.version} ${version.status}` }));
+    for (const page of [overview, ...levels]) pages.push({
+      params: { modelVersion: `${version.root.replace("/wg/pqc/pqcmm/", "")}${page.slug}`.replace(/\/$/, "") },
+      props: { entry, version, model, page },
+    });
+    for (const alias of version.aliases) for (const page of [overview, ...levels]) pages.push({
+      params: { modelVersion: `${alias}${page.slug}`.replace("/wg/pqc/pqcmm/", "").replace(/\/$/, "") },
+      props: { redirect: `${version.root}${page.slug}` },
+    });
+  }
+  return pages;
+}
+const props = Astro.props;
+if ("redirect" in props) {
+  if (!props.redirect) throw new Error("Missing draft redirect target");
+  return Astro.redirect(props.redirect, 301);
+}
+const { entry, version, model, page } = props;
+const base = await loadSiteContent(entry.root, { publication });
+if (!base) throw new Error("Missing model overview template");
+const route = `${version.root}${page.slug}`;
+const content = {
+  ...base, route, title: page.title, draft: false, robots: "noindex, follow", meta: undefined, lastModified: undefined, listing: undefined,
+  description: version.status === "draft" ? "An unreleased proposal for review. Its content and expected version may change." : `Published PQCMM ${version.version}, preserved for reference.`,
+  hero: { ...base.hero, title: page.title },
+  workingGroup: base.workingGroup ? { ...base.workingGroup, pageTitle: page.title, route, sidebar: undefined } : undefined,
+  html: await renderSiteMarkdown(modelVersionMarkdown(model, version.root, page.levelNumber)),
+};
+const pageInputs = await publicationPageInputs({ route, title: content.title, description: content.description, robots: content.robots, content });
+---
+<PublicPage pageInputs={pageInputs} title={content.title} description={content.description} robots={content.robots} content={content}>
+  <Fragment slot="head"><meta name="pqcmm-source-revision" content={version.commit} /><meta name="pqcmm-source-sha256" content={version.sha256} /></Fragment>
+  <section class="pk pk-container pk-section">
+    {version.status === "draft" ? <Alert tone="info" title={`${version.version} — Draft for feedback`}>
+      This is an unreleased proposal. Its expected version and scope remain subject to review.
+      <ExternalLink href={`https://github.com/${entry.repository}/blob/${version.commit}/${version.sourcePath ?? entry.sourcePath}`}>View the exact source revision</ExternalLink>
+    </Alert> : <p>Released model {version.version}. <ExternalLink href={`https://github.com/${entry.repository}/releases/tag/${version.status === "released" ? version.tag : ""}`}>Release files and history</ExternalLink></p>}
+  </section>
+  <SitePageBody content={content} publication={publication} memberCount={memberCounts.organization} modelVersions={pageInputs.modelVersions} />
+</PublicPage>

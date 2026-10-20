@@ -85,7 +85,9 @@ document.querySelectorAll("time[datetime]").forEach(function ($e) {
     };
 
     var scheduleClose = function () {
+      clearTimeout(closeTimer);
       closeTimer = setTimeout(function () {
+        if (trigger.contains(document.activeElement) || panel.contains(document.activeElement)) return;
         panel.setAttribute("hidden", "");
         btn.setAttribute("aria-expanded", "false");
       }, 150);
@@ -107,7 +109,10 @@ document.querySelectorAll("time[datetime]").forEach(function ($e) {
       clearTimeout(closeTimer);
     });
     panel.addEventListener("mouseleave", scheduleClose);
+    trigger.addEventListener("focusout", scheduleClose);
+    panel.addEventListener("focusout", scheduleClose);
 
+    btn.disabled = false;
     btn.addEventListener("click", function () {
       if (panel.hasAttribute("hidden")) {
         lockedClosed = false;

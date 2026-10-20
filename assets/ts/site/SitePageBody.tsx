@@ -1,3 +1,4 @@
+import type { ModelVersionNavigationData } from "../../shared/model-versions";
 import { SiteImage } from "./SiteImage";
 import { sponsorPublicationKey } from "../../shared/sponsor-publication-query";
 import { SponsorGridView } from "./SponsorDisplays";
@@ -15,10 +16,12 @@ export function SitePageBody({
   content,
   publication,
   memberCount,
+  modelVersions,
 }: {
   content: SiteContentPage;
   publication?: SitePublicationSnapshot;
   memberCount?: number;
+  modelVersions?: ModelVersionNavigationData;
 }) {
   if (content.home) return <HomePage hero={content.hero} home={{ ...content.home, memberCount }} html={content.html} />;
   if (content.workingGroup?.section === "about")
@@ -60,8 +63,29 @@ export function SitePageBody({
         />
       </>
     );
-  if (content.workingGroup?.section === "content")
-    return <WorkingGroupContentPage html={content.html} section={content.workingGroup} />;
+  if (content.workingGroup?.section === "content") {
+    const section = modelVersions
+      ? {
+          ...content.workingGroup,
+          treePanels: content.workingGroup.treePanels?.map((panel) =>
+            panel.tree.root.href === modelVersions.root
+              ? {
+                  ...panel,
+                  versionsLabel: modelVersions.label,
+                  versionsReleasesUrl: modelVersions.releasesUrl,
+                  versions: modelVersions.items.map((item) => ({
+                    ...item,
+                    current: item.id === modelVersions.activeId,
+                    latest: item.id === modelVersions.latestId,
+                    fallback: item.fallback,
+                  })),
+                }
+              : panel,
+          ),
+        }
+      : content.workingGroup;
+    return <WorkingGroupContentPage html={content.html} section={section} />;
+  }
   if (content.workingGroup)
     return (
       <WorkingGroupSectionPage

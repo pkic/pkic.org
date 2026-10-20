@@ -465,7 +465,9 @@ test("working-group sections scroll in one row and retain dropdowns", async ({ p
   }
   const disclosure = rail.getByRole("button", { name: "Show contents" }).first();
   await disclosure.scrollIntoViewIfNeeded();
+  await expect(disclosure).toBeEnabled();
   await disclosure.focus();
+  await disclosure.press("Escape");
   await disclosure.press("Enter");
   await expect(disclosure).toHaveAttribute("aria-expanded", "true");
   await expect(page.locator(".wg-nav-tree-panel:visible")).toBeVisible();
@@ -1594,4 +1596,104 @@ test("website contribution links work without JavaScript", async ({ browser }) =
   } finally {
     await context.close();
   }
+});
+
+test("reclassified model draft preserves feedback and redirects its former version URL", async ({ page }, testInfo) => {
+  if (testInfo.project.name === "mobile") await page.setViewportSize({ width: 375, height: 812 });
+  const browserGithubRequests: string[] = [];
+  page.on("request", (request) => {
+    if (/github(?:usercontent)?\.com/.test(new URL(request.url()).hostname)) browserGithubRequests.push(request.url());
+  });
+  await page.goto("/wg/pqc/pqcmm/drafts/1.1.0/levels/3-advanced/");
+  await expect(page.getByRole("status").filter({ hasText: "1.1.0 — Draft for feedback" })).toBeVisible();
+  await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/);
+  const disclosure = page
+    .locator("#wgSectionNav .wg-nav-link-wrap")
+    .filter({ has: page.getByRole("link", { name: "Maturity Model", exact: true }) })
+    .getByRole("button", { name: "Show contents" });
+  await disclosure.scrollIntoViewIfNeeded();
+  await expect(disclosure).toBeEnabled();
+  await disclosure.focus();
+  await disclosure.press("Escape");
+  await disclosure.press("Enter");
+  const versions = page.getByRole("group", { name: "Switch PQCMM model version" });
+  await expect(versions).toBeVisible();
+  await expect(versions.getByRole("link", { name: "1.0.1 Latest release" })).toHaveAttribute(
+    "href",
+    "/wg/pqc/pqcmm/versions/1.0.1/levels/3-advanced/",
+  );
+  await expect(versions.getByRole("link", { name: "1.1.0 — Draft", exact: true })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  await expect(page.locator('meta[name="pqcmm-source-revision"]')).toHaveAttribute("content", /^[a-f0-9]{40}$/);
+  await expect(page.locator('meta[name="pqcmm-source-sha256"]')).toHaveAttribute("content", /^[a-f0-9]{64}$/);
+  await expect(versions.getByRole("link", { name: "2.0.0 — Draft", exact: true })).toHaveCount(0);
+  await expect(page.getByText("A documented long-lived exposure register", { exact: false }).first()).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("draft-1.1.0.png") });
+  await expect(page.getByRole("link", { name: "Suggest a change on GitHub", includeHidden: true })).toHaveCount(1);
+  await page.getByRole("heading", { name: "Criterion 3.1.5", exact: true }).evaluate((element) => {
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+    document.dispatchEvent(new Event("selectionchange"));
+  });
+  const feedback = page.getByRole("link", { name: "Suggest a change", exact: false }).first();
+  await expect
+    .poll(async () => new URL((await feedback.getAttribute("href"))!).searchParams.get("item-id"))
+    .toBe("3.1.5");
+  const context = new URL((await feedback.getAttribute("href"))!);
+  expect(context.searchParams.get("source-version")).toBe("1.1.0");
+  expect(context.searchParams.get("source-revision")).toMatch(/^[a-f0-9]{40}$/);
+  await page.goto("/wg/pqc/pqcmm/drafts/2.0.0/levels/3-advanced/");
+  await expect(page).toHaveURL(/\/drafts\/1\.1\.0\/levels\/3-advanced\/$/);
+  await expect(page.getByRole("status").filter({ hasText: "1.1.0 — Draft for feedback" })).toBeVisible();
+  await page.goto("/wg/pqc/pqcmm/drafts/2.0.0/");
+  await expect(page).toHaveURL(/\/drafts\/1\.1\.0\/$/);
+  expect(browserGithubRequests).toEqual([]);
+});
+
+test("released model history stays readable while the default overview remains unchanged", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/wg/pqc/pqcmm/versions/1.0.1/levels/3-advanced/");
+  await expect(page.getByRole("heading", { name: "Criterion 3.1.5", exact: true })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "Draft for feedback" })).toHaveCount(0);
+  const feedback = page.getByRole("link", { name: "Suggest a change", exact: false }).first();
+  const context = new URL((await feedback.getAttribute("href"))!);
+  expect(context.searchParams.get("source-version")).toBe("1.0.1");
+  expect(context.searchParams.get("source-revision")).toMatch(/^[a-f0-9]{40}$/);
+  await expect(
+    page.getByRole("link", { name: "All releases and downloads", exact: false, includeHidden: true }),
+  ).toHaveAttribute("href", "https://github.com/pkic/pqcmm/releases");
+  await expect(page.getByText("A documented HNDL exposure register", { exact: false }).first()).toBeVisible();
+  await expect(page.getByText("A documented long-lived exposure register", { exact: false })).toHaveCount(0);
+  await page.goto("/wg/pqc/pqcmm/levels/3-advanced/");
+  await expect(page.getByText("A documented HNDL exposure register", { exact: false }).first()).toBeVisible();
+  await expect(page.getByText("A documented long-lived exposure register", { exact: false })).toHaveCount(0);
+  await page.goto("/wg/pqc/pqcmm/");
+  await expect(page).toHaveURL(/\/wg\/pqc\/pqcmm\/$/);
+  await expect(
+    page
+      .getByRole("group", { name: "Switch PQCMM model version", includeHidden: true })
+      .getByRole("link", { name: "1.0.1 Latest release", exact: true, includeHidden: true }),
+  ).toHaveAttribute("aria-current", "page");
+  const disclosure = page
+    .locator("#wgSectionNav .wg-nav-link-wrap")
+    .filter({ has: page.getByRole("link", { name: "Maturity Model", exact: true }) })
+    .getByRole("button", { name: "Show contents" });
+  await disclosure.scrollIntoViewIfNeeded();
+  await expect(disclosure).toBeEnabled();
+  await disclosure.focus();
+  await disclosure.press("Escape");
+  await disclosure.press("Enter");
+  const switcher = page.getByRole("group", { name: "Switch PQCMM model version" });
+  await expect(switcher).toBeInViewport();
+  await expect(switcher.getByRole("link", { name: "1.1.0 — Draft", exact: true })).toHaveAttribute(
+    "href",
+    "/wg/pqc/pqcmm/drafts/1.1.0/",
+  );
+  await page.screenshot({ path: testInfo.outputPath("model-version-selector.png") });
 });

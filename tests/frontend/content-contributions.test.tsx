@@ -1,3 +1,4 @@
+import { modelVersionContributionForRoute } from "../../site/model-versions";
 import {
   contentContributionForRoute,
   contributionForSource,
@@ -57,6 +58,18 @@ describe("website contribution handoff", () => {
     document.body.innerHTML = render(<ContentContributionLinks context={source} page="https://pkic.org/search/" />);
     expect(document.querySelectorAll("a")).toHaveLength(1);
     expect(document.querySelector("a")?.textContent).toContain("Suggest a change");
+  });
+  it("keeps registered draft provenance separate from its editable branch", () => {
+    const draft = modelVersionContributionForRoute("/wg/pqc/pqcmm/drafts/1.1.0/levels/1-initial/");
+    expect(draft?.sourceVersion).toBe("1.1.0");
+    expect(draft?.sourceRevision).toMatch(/^[a-f0-9]{40}$/);
+    expect(draft?.contributionBranch).toBe("agent/pqcmm-1.1.0-draft");
+  });
+  it("preserves the archive source while editing the released model's working representation", () => {
+    const released = modelVersionContributionForRoute("/wg/pqc/pqcmm/versions/1.0.1/levels/3-advanced/");
+    expect(released?.sourceVersion).toBe("1.0.1");
+    expect(released?.sourceRevision).toMatch(/^[a-f0-9]{40}$/);
+    expect(contentEditUrl(released!)).toBe("https://github.com/pkic/pqcmm/edit/main/model/pqcmm-model.yaml");
   });
   it("keeps the older version being read separate from the editable maintenance branch", () => {
     const url = new URL(

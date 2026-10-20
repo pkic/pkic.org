@@ -237,6 +237,8 @@ export interface SiteWorkingGroupSection {
     id: string;
     tree: SiteSidebarTree;
     versions?: Array<{ id: string; label: string; href: string; current: boolean; latest: boolean; fallback: boolean }>;
+    versionsLabel?: string;
+    versionsReleasesUrl?: string;
   }>;
   wgId: string;
 }

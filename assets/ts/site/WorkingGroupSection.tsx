@@ -91,6 +91,7 @@ function SectionNav({ section }: { section: SiteWorkingGroupSection }) {
                 class="wg-nav-more-btn"
                 type="button"
                 data-wg-tree-btn
+                disabled
                 aria-expanded="false"
                 aria-label="Show contents"
               >
@@ -117,7 +118,7 @@ function TreePanels({ section }: { section: SiteWorkingGroupSection }) {
           {panel.versions ? (
             <div class="wg-version-switcher">
               <p class="wg-version-eyebrow">Switch version</p>
-              <div class="wg-version-list" role="group" aria-label="Switch PKIMM model version">
+              <div class="wg-version-list" role="group" aria-label={panel.versionsLabel}>
                 {panel.versions.map((version) => (
                   <a
                     key={version.id}
@@ -138,6 +139,13 @@ function TreePanels({ section }: { section: SiteWorkingGroupSection }) {
                   </a>
                 ))}
               </div>
+              {panel.versionsReleasesUrl ? (
+                <p>
+                  <ExternalLink class="wg-version-item" href={panel.versionsReleasesUrl}>
+                    All releases and downloads
+                  </ExternalLink>
+                </p>
+              ) : null}
             </div>
           ) : null}
         </div>

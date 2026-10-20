@@ -1,0 +1,27 @@
+# Explicit model publication registry; contribution controls use the shared website mechanism.
+# Source version/revision are optional until the page has verified model provenance.
+models:
+  - root: /wg/pqc/pqcmm/
+    sections: [levels/]
+    repository: pkic/pqcmm
+    contributionBranch: main
+    sourcePath: model/pqcmm-model.yaml
+    feedbackTemplate: model-feedback.yml
+    defaultVersion: release-1-0-1
+    versions:
+      - id: release-1-0-1
+        version: 1.0.1
+        status: released
+        root: /wg/pqc/pqcmm/versions/1.0.1/
+        sourcePath: model/pqcmm-model-1.0.1.yaml
+        commit: eacd58a06fe6da838f1b201910a466b6a22c0ccb
+        sha256: 24405aaeffb5e1a0ced67690ed3c2f2016d3971d38616c846b9fe3582a68f8b9
+        tag: v1.0.1
+      - id: assessment-methods
+        version: 1.1.0
+        status: draft
+        root: /wg/pqc/pqcmm/drafts/1.1.0/
+        aliases: [/wg/pqc/pqcmm/drafts/2.0.0/]
+        branch: agent/pqcmm-1.1.0-draft
+        commit: d0037717273772460424cf338192ddd1dac01d80
+        sha256: 36b3f7760f75d1cc2d0c5d845fc301fcf01cdf9bc9ce0923c462ed4016f2da4a

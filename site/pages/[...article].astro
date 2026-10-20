@@ -41,7 +41,8 @@ const { route, sourceRoute, agendaRoute, pageInputs, hero } = Astro.props;
 const loadedContent = await loadSiteContent(sourceRoute, { publication, agendaRoute });
 if (!loadedContent) throw new Error(`The published page source is missing: ${route}`);
 const content = hero ? { ...loadedContent, hero } : loadedContent;
+const resolvedPageInputs = pageInputs ?? await publicationPageInputs({ route, title: content.title, description: content.description, accent: content.pageAccent, robots: content.robots, content });
 ---
-<PublicPage pageInputs={pageInputs} title={content.title} description={content.description} accent={content.pageAccent} robots={content.robots} content={content}>
-  <SitePageBody content={content} publication={publication} memberCount={memberCounts.organization} />
+<PublicPage pageInputs={resolvedPageInputs} title={content.title} description={content.description} accent={content.pageAccent} robots={content.robots} content={content}>
+  <SitePageBody content={content} publication={publication} memberCount={memberCounts.organization} modelVersions={resolvedPageInputs.modelVersions} />
 </PublicPage>
