@@ -143,7 +143,7 @@ test("staff read registration and account changes through the shared audit table
     const historyLoaded = page.waitForResponse((response) =>
       new URL(response.url()).pathname.endsWith(`/registrations/${record!.id}/audit`),
     );
-    await page.getByRole("tab", { name: "History", exact: true }).click();
+    await page.getByRole("tab", { name: "Audit log", exact: true }).click();
     const historyResponse = await historyLoaded;
     expect(historyResponse.status()).toBe(200);
     const history = scopedAuditLogResponseSchema.parse(await historyResponse.json());
@@ -156,13 +156,23 @@ test("staff read registration and account changes through the shared audit table
       await page.screenshot({ path: info.outputPath(`registration-history-${width}.png`), fullPage: true });
     }
     await page.reload();
-    await expect(page.getByRole("tab", { name: "History", exact: true })).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("tab", { name: "Audit log", exact: true })).toHaveAttribute("aria-selected", "true");
     await expect(registrationHistory).toBeVisible();
 
     await page.goto(`/portal/#/users/${record!.user_id}`);
     const accountHistory = page.getByRole("region", { name: "Account history", exact: true });
     await expect(accountHistory.getByRole("table", { name: "Account history", exact: true })).toBeVisible();
     await expect(accountHistory.getByText("user updated", { exact: true })).toBeVisible();
+    const emailAddresses = page.getByRole("region", { name: "Email addresses", exact: true });
+    await expect(emailAddresses).toBeVisible();
+    expect(
+      await emailAddresses.evaluate((panel) =>
+        Boolean(
+          panel.compareDocumentPosition(document.querySelector('[aria-label="Account history"]')!) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+        ),
+      ),
+    ).toBe(true);
     for (const width of [1280, 375]) {
       await page.setViewportSize({ width, height: 900 });
       await page.evaluate(() => window.scrollTo(0, 0));

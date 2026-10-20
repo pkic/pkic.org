@@ -348,13 +348,14 @@ export function UserDetail({
           />
 
           {permissions.canRead && <UserParticipationHistory userId={user.id} canRead={permissions.canRead} />}
-          {permissions.canRead && <UserAuditLog userId={user.id} />}
 
           {/* The addresses the account answers to: the person manages their own,
               and staff with Users write permission manage a secondary address. */}
           {(isSelf || permissions.canWrite) && (
             <EmailAddressesPanel userId={user.id} isSelf={isSelf} primaryEmail={user.email} />
           )}
+
+          {permissions.canRead && <UserAuditLog userId={user.id} />}
 
           {/* Email notifications are the person's own choice, made by nobody else. */}
           {isSelf && session?.member && <NotificationPreferencesCard />}

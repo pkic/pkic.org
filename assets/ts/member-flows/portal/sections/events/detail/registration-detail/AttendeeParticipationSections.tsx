@@ -73,7 +73,7 @@ function AttendeeSections({
         ]
       : []),
     ...(canReadAttendance ? [{ key: "checkins", label: "Check-ins" }] : []),
-    ...(manage && history ? [{ key: "history", label: "History" }] : []),
+    ...(manage && history ? [{ key: "history", label: "Audit log" }] : []),
   ];
   const selected = items.some((item) => item.key === section) ? section : "registration";
   return (
