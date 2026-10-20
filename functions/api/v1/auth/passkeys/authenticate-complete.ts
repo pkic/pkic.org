@@ -30,7 +30,7 @@ export const PasskeyAuthenticateComplete = openApiRoute(
     const response = createSessionEstablishedResponse(
       passkeyAuthenticateCompleteResponseSchema.parse({
         success: true,
-        ...publicUserSession(verified.session),
+        ...(await publicUserSession(db, verified.session)),
       }),
       serializeUserSessionCookie(verified.token, c.req.raw),
     );

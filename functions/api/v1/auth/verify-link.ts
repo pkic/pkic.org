@@ -28,7 +28,7 @@ export const UserAuthVerifyLink = openApiRoute(userAuthVerifyRouteSchema, async 
   const response = createSessionEstablishedResponse(
     userAuthEstablishedResponseSchema.parse({
       success: true,
-      ...publicUserSession(result.session),
+      ...(await publicUserSession(http.db, result.session)),
     }),
     serializeUserSessionCookie(result.token, c.req.raw),
   );

@@ -15,6 +15,7 @@ import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { signUserSessionToken, verifyUserSessionToken } from "../functions/_lib/auth/user-session";
 
+import { createGroupEventInvitationFixture } from "./helpers/group-event-invitations";
 import { signJwt } from "../functions/_lib/utils/jwt";
 
 const TEST_SIGNING_SECRET = "test-signing-secret";
@@ -63,6 +64,38 @@ function cookiePair(response: Response): string {
 
 describe("canonical user authentication", () => {
   beforeEach(resetDb);
+
+  it("returns current group names with scoped grants on sign-in and session refresh", async () => {
+    const fixture = await createGroupEventInvitationFixture(env.DB, "scope-label");
+    const now = new Date().toISOString();
+    await env.DB.prepare(`INSERT INTO permission_grants
+      (id, user_id, permission, context_type, context_id, granted_by_user_id, created_at)
+      VALUES (?, ?, 'groups:read', 'group', ?, ?, ?)`)
+      .bind(crypto.randomUUID(), fixture.actor.id, fixture.groupId, fixture.actor.id, now)
+      .run();
+    const token = await requestUserToken(fixture.actor.email);
+    expect(token).toBeTruthy();
+    const verified = await call("/api/v1/auth/verify-link", {
+      method: "POST",
+      body: JSON.stringify({ token }),
+    });
+    expect(verified.status).toBe(200);
+    const signedIn = userAuthSessionResponseSchema.parse(await verified.json());
+    const groupGrant = () =>
+      expect.objectContaining({
+        permission: "groups:read",
+        contextType: "group",
+        contextId: fixture.groupId,
+        contextName: "Renamed working group",
+      });
+    expect(signedIn.staff?.grants.find((grant) => grant.contextId === fixture.groupId)?.contextName).toBeTruthy();
+    await env.DB.prepare("UPDATE groups SET name=? WHERE id=?").bind("Renamed working group", fixture.groupId).run();
+    const response = await call("/api/v1/auth/session", { headers: { cookie: cookiePair(verified) } });
+    expect(response.status).toBe(200);
+    const refreshed = userAuthSessionResponseSchema.parse(await response.json());
+    expect(refreshed.staff?.grants).toContainEqual(groupGrant());
+    expect(refreshed.staff?.grants.find((grant) => grant.contextType === null)?.contextName).toBeUndefined();
+  });
 
   it("materializes and renders a user_sign_in capability into one user session with live staff and member capacities", async () => {
     await seedDualCapacityUser();
