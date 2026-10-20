@@ -5,7 +5,7 @@ import { ExternalLink } from "../ui/ExternalLink";
 export function ModelContributionLinks({ context, page }: { context: ModelContribution; page: string }) {
   return (
     <section
-      class="pk-container pk-section"
+      class="pk pk-container pk-section"
       aria-label="Contribute to the model"
       data-model-contribution={JSON.stringify(context)}
     >
