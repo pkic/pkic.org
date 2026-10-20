@@ -119,9 +119,9 @@ async function confirmParticipation(
       SELECT 1 FROM event_terms et
       WHERE et.event_id=? AND et.audience_type='speaker' AND et.active=1 AND et.required=1
         AND NOT EXISTS (SELECT 1 FROM consent_acceptances ca
-          WHERE ca.event_id=et.event_id AND ca.proposal_id=? AND ca.user_id=?
+          WHERE ca.event_id=et.event_id AND ca.user_id=?
             AND ca.audience_type='speaker' AND ca.term_key=et.term_key AND ca.term_version=et.version))`,
-    bindings: [proposal.event_id, proposal.id, speaker.user_id],
+    bindings: [proposal.event_id, speaker.user_id],
   };
   if (manager) {
     if (!(await first(db, consentEvidence.sql, consentEvidence.bindings)))

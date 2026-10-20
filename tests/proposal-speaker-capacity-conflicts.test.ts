@@ -121,6 +121,56 @@ describe("proposal speaker capacity conflicts", () => {
     ).toHaveLength(1);
   });
 
+  it("reuses event speaker consent originally accepted on another proposal", async () => {
+    const original = await acceptanceFixture();
+    await recordSpeakerConsent(original.proposalId, original.coSpeakerUserId);
+    const { proposal } = await createProposal(env.DB, {
+      eventId,
+      proposerUserId: adminUserId,
+      proposalType: "talk",
+      title: "Another talk at the same event",
+      abstract: "A second proposal sharing the same speaker and event terms.",
+    });
+    const { manageToken } = await addProposalSpeaker(env.DB, {
+      proposalId: proposal.id,
+      userId: original.coSpeakerUserId,
+      role: "co_speaker",
+      signingSecret: env.INTERNAL_SIGNING_SECRET!,
+    });
+    await selectIndividualSpeakerRepresentation({
+      environment: env,
+      eventSlug: "pqc-2026",
+      email: "cospeaker@example.test",
+      consents: [{ termKey: "speaker-terms", version: "v1" }],
+      speakerManagementToken: manageToken,
+    });
+    const later = { proposalId: proposal.id, coSpeakerUserId: original.coSpeakerUserId };
+    expect(later.proposalId).not.toBe(original.proposalId);
+    expect(later.coSpeakerUserId).toBe(original.coSpeakerUserId);
+    await recordSpeakerConsent(later.proposalId, later.coSpeakerUserId);
+    const before = await queryAll(
+      env.DB,
+      "SELECT id, proposal_id, accepted_at FROM consent_acceptances WHERE user_id=? AND audience_type='speaker'",
+      [later.coSpeakerUserId],
+    );
+    expect(before).toHaveLength(1);
+    expect(before[0]).toMatchObject({ proposal_id: original.proposalId });
+    expect((await acceptRequest(later.proposalId, later.coSpeakerUserId)).status).toBe(200);
+    expect(
+      await queryAll(env.DB, "SELECT status FROM proposal_speakers WHERE proposal_id=? AND user_id=?", [
+        later.proposalId,
+        later.coSpeakerUserId,
+      ]),
+    ).toEqual([{ status: "confirmed" }]);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT id, proposal_id, accepted_at FROM consent_acceptances WHERE user_id=? AND audience_type='speaker'",
+        [later.coSpeakerUserId],
+      ),
+    ).toEqual(before);
+  });
+
   it("requires the speaker's existing identity and current terms, plus an authenticated organizer", async () => {
     const { proposalId, coSpeakerUserId, speakerManageToken } =
       await inviteSpeakerAndSubmitCapacityProposal(adminSessionToken);
