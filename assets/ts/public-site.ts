@@ -35,7 +35,7 @@ async function start(): Promise<void> {
     import("../js/modules/global-ui.js"),
     import("../js/modules/sponsor-banner-marquee.js"),
     whenPresent(
-      "[data-model-feedback-link], .edit-on-github",
+      "[data-content-feedback-link], .edit-on-github",
       () => import("../js/modules/text-selection-edit-tooltip.js"),
     ),
   ]);

@@ -1,4 +1,4 @@
-import { modelContributionForRoute } from "./model-contribution";
+import { contentContributionForRoute } from "../functions/_lib/services/site-content-contributions";
 import { runtimeDatePresentation } from "../assets/shared/timezone";
 import { publishedFormResourcesForPath } from "../assets/shared/published-resource-url";
 import { siteContentLanguageForPath } from "../assets/shared/site-content-language";
@@ -13,7 +13,7 @@ import { socialCardDescriptor } from "./social-card";
 
 type SocialContent = Pick<
   SiteContentPage,
-  "workingGroup" | "hero" | "taxonomy" | "blog" | "socialCard" | "pageAccent" | "meta"
+  "workingGroup" | "hero" | "taxonomy" | "blog" | "socialCard" | "pageAccent" | "meta" | "contribution"
 >;
 
 /** The public layout consumes this same projection that participates in route keys. */
@@ -58,7 +58,7 @@ export async function publicationPageInputs({
   const renderedImageRefs = [...memberWall.map((entry) => ({ source: entry.logoUrl, portrait: false })), ...imageRefs];
   const imagesPrepared = await preparePublicationImages(renderedImageRefs);
   return {
-    modelContribution: privatePage ? undefined : modelContributionForRoute(route),
+    contentContribution: privatePage ? undefined : contentContributionForRoute(route, content?.contribution),
     presentation: runtimeDatePresentation(),
     copyrightYear: new Date().getUTCFullYear(),
     route,

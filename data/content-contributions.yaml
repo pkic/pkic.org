@@ -1,0 +1,30 @@
+# Contribution destinations are explicit; content ownership is independent of its website URL.
+website:
+  repository: pkic/pkic.org
+  contributionBranch: main
+repositories:
+  - sourceRoot: content/wg/pkimm/model/
+    repository: pkic/pkimm
+    contributionBranch: main
+  - sourceRoot: content/wg/pkimm/1.0.0/
+    repository: pkic/pkimm
+    contributionBranch: main
+  - sourceRoot: content/wg/pkimm/extensions/
+    repository: pkic/pkimm-extensions
+    contributionBranch: main
+  - sourceRoot: content/wg/pkimm/integrations/
+    repository: pkic/pkimm-integrations
+    contributionBranch: main
+  - sourceRoot: content/wg/pqc/pqccm/
+    repository: pkic/pqccm
+    contributionBranch: main
+  - sourceRoot: content/wg/cm/remote-key-attestation/
+    repository: pkic/remote-key-attestation
+    contributionBranch: main
+pages:
+  - root: /wg/pqc/pqcmm/
+    sections: [levels/]
+    repository: pkic/pqcmm
+    contributionBranch: main
+    sourcePath: model/pqcmm-model.yaml
+    feedbackTemplate: model-feedback.yml

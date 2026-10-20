@@ -4,6 +4,7 @@ import { siteContentLanguagePrefix, type SiteContentLanguage } from "../../../as
 
 export interface ContentDocument {
   body: string;
+  generated?: true;
   data: FrontMatter;
   isSection: boolean;
   language: SiteContentLanguage;
@@ -68,6 +69,7 @@ export function generatedSectionDocuments(pages: readonly ContentDocument[]): Co
         );
       return {
         body: name ? "" : (template?.body ?? ""),
+        generated: true as const,
         data,
         isSection: true,
         language,
@@ -103,6 +105,7 @@ export function workingGroupSectionDocuments(pages: readonly ContentDocument[]):
       if (existing.has(route)) continue;
       generated.push({
         body: "",
+        generated: true,
         data: {
           linkTitle: section.title,
           params: { sectionNav: true, wgSection: section.key },

@@ -1,3 +1,4 @@
+import type { ContentContribution } from "./content-contribution";
 import type { PortalLoginCopy } from "./schemas/portal-login-copy";
 import type { PublicSponsor } from "./schemas/public-sponsors";
 import type { SiteContentLanguage } from "./site-content-language";
@@ -289,6 +290,7 @@ export interface SiteTaxonomy {
 }
 
 export interface SiteContentPage {
+  contribution?: ContentContribution;
   webinarSponsor?: { name: string; logoSrc?: string };
   /** An authored social visual, resolved through the same page asset reader. */
   socialCard?: { variant?: "webinar"; imageSrc?: string; imageRound?: boolean; sponsorSlug?: string };

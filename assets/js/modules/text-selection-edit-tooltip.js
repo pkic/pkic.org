@@ -1,15 +1,15 @@
-import { selectedModelFeedbackUrl } from "../../ts/site/model-selection-feedback";
+import { selectedContentFeedbackUrl } from "../../ts/site/content-selection-feedback";
 
 (function () {
-  var editLink = document.querySelector('[data-model-feedback-link], .edit-on-github');
+  var editLink = document.querySelector('[data-content-feedback-link], .edit-on-github');
   if (!editLink) return;
-  var isModel = Boolean(document.querySelector('[data-model-contribution]'));
+  var hasContext = Boolean(document.querySelector('[data-content-contribution]'));
 
   // If the page body has a data-edit-url (for dynamically-generated pages),
   // use that as the default edit URL instead of the page's file path.
   var pageBody = document.querySelector('[data-pagefind-body]');
   var defaultEditUrl = editLink.href;
-  if (!isModel && pageBody && pageBody.dataset.editUrl) {
+  if (!hasContext && pageBody && pageBody.dataset.editUrl) {
     defaultEditUrl = pageBody.dataset.editUrl;
     editLink.href = defaultEditUrl;
   }
@@ -20,11 +20,11 @@ import { selectedModelFeedbackUrl } from "../../ts/site/model-selection-feedback
   tooltip.target = '_blank';
   tooltip.rel = 'noopener';
   tooltip.tabIndex = -1;
-  tooltip.setAttribute('aria-label', isModel ? 'Suggest a model change on GitHub' : 'Edit this page on GitHub');
+  tooltip.setAttribute('aria-label', hasContext ? 'Suggest a change on GitHub' : 'Edit this page on GitHub');
   tooltip.innerHTML =
     '<svg xmlns="http://www.w3.org/2000/svg" class="pk-icon" width="12" height="12" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 16 16" aria-hidden="true">'
     + '<path d="m3 11 8-8 2 2-8 8-3 1 1-3ZM10 4l2 2"/>'
-    + '</svg><span>' + (isModel ? 'Suggest a change' : 'Edit on GitHub') + '</span>';
+    + '</svg><span>' + (hasContext ? 'Suggest a change' : 'Edit on GitHub') + '</span>';
   document.body.appendChild(tooltip);
 
   var hideTimer = null;
@@ -46,8 +46,8 @@ import { selectedModelFeedbackUrl } from "../../ts/site/model-selection-feedback
       }
       node = node.parentNode;
     }
-    var feedbackUrl = selectedModelFeedbackUrl(document, sel, window.location.href);
-    if (isModel && !feedbackUrl) { tooltip.classList.remove('is-visible'); return; }
+    var feedbackUrl = selectedContentFeedbackUrl(document, sel, window.location.href);
+    if (hasContext && !feedbackUrl) { tooltip.classList.remove('is-visible'); return; }
     tooltip.href = feedbackUrl || dataEditUrl || defaultEditUrl;
     if (feedbackUrl) editLink.href = feedbackUrl;
 
@@ -86,4 +86,5 @@ import { selectedModelFeedbackUrl } from "../../ts/site/model-selection-feedback
   document.addEventListener('scroll', function () { hide(true); }, true);
 
   tooltip.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+  requestAnimationFrame(positionAndShow);
 })();

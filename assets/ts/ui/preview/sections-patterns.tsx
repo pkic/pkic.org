@@ -1,4 +1,4 @@
-import { ModelContributionLinks } from "../../site/ModelContributionLinks";
+import { ContentContributionLinks } from "../../site/ContentContributionLinks";
 /**
  * Pattern catalog specimens.
  *
@@ -575,19 +575,17 @@ export const patternSections: PreviewSection[] = [
     ),
   },
   {
-    id: "model-contribution",
-    title: "Suggest a model change",
-    note: "Feedback preserves the displayed version; maintainers choose the release. Browser editing remains an alternative.",
+    id: "content-contribution",
+    title: "Suggest a website change",
+    note: "One contribution pattern for website pages and content maintained in other repositories.",
     render: () => (
-      <ModelContributionLinks
+      <ContentContributionLinks
         context={{
-          repository: "pkic/pqcmm",
+          repository: "pkic/pkic.org",
           contributionBranch: "main",
-          sourcePath: "model/pqcmm-model.yaml",
-          sourceVersion: "1.1.1",
-          sourceRevision: "v1.1.1",
+          sourcePath: "content/about/_index.md",
         }}
-        page="https://pkic.org/wg/pqc/pqcmm/1.1.1/"
+        page="https://pkic.org/about/"
       />
     ),
   },

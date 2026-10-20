@@ -1,8 +1,0 @@
-# Register contribution destinations explicitly; never publish arbitrary branches.
-# Source version/revision are optional until the page has verified model provenance.
-models:
-  - root: /wg/pqc/pqcmm/
-    sections: [levels/]
-    repository: pkic/pqcmm
-    contributionBranch: main
-    sourcePath: model/pqcmm-model.yaml

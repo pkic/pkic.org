@@ -119,13 +119,13 @@ git submodule update --remote
 
 The update command can be run to update your local copy when the remote branch changes. Submodules are managed in the file .gitmodules.
 
-## Model contributions
+## Website contributions
 
-`data/model-contributions.yaml` explicitly registers the model pages that offer contextual feedback, their canonical repository, editable working file, and contribution branch. A branch name alone never enables publication or feedback routing. Configure a separate entry for an older release or draft root when it has a different contribution destination.
+Every public page can offer contextual feedback through the same contribution component. `data/content-contributions.yaml` defines the website repository, contribution destinations for externally maintained source trees, and page-specific overrides. Ordinary authored pages edit their actual Markdown source in `pkic/pkic.org`; PKIMM, PQCCM, and other submodule content routes to its owning repository. Custom public URLs do not change the source filename. Generated pages offer feedback without inventing an editable file. Private portal pages omit contribution controls.
 
-The website preserves selected wording, the nearest item identifier or heading, and the page link in the GitHub feedback form. `sourceVersion` and `sourceRevision` can identify the model being displayed independently of the editable branch. Set them only from verified page provenance; the current authored PQCMM pages have no reliable revision metadata, so the handoff asks the contributor rather than claiming a release or commit. Generated model pages should supply this metadata as part of their publication integration.
+The persistent links work without JavaScript. Selecting text adds the wording, nearest section or item, and page link to the feedback. Generic GitHub issues use a prefilled title/body; a configured `feedbackTemplate` can opt a particular source into an existing issue form. PQCMM's YAML feedback form is one such configuration, not the website's default. Known source versions/revisions can be supplied independently of the editing branch; absent provenance is left unspecified.
 
-The feedback form must exist on the canonical repository's default branch before enabling the website links. Contributors can describe an improvement without choosing a version, or edit the working model through GitHub. Maintainers classify changes, group them into release milestones, and decide maintenance-line backports and forward ports. Existing release files and tags are never editing targets.
+A branch name never enables publication or contribution routing by itself. Model draft/release publication is separate from this website-wide contribution layer. Contributors describe the change without deciding its release classification. Existing release files and tags are not editing targets; maintainers decide the appropriate draft, maintenance branch, and release milestone.
 
 ## Astro static publication audit
 
