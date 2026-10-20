@@ -16,7 +16,11 @@ import { nowIso } from "../../utils/time";
 import { normalizeEmail } from "../../validation";
 import { isAuditChangeGuardFailure, prepareAuditLog } from "../audit";
 import { auditActorIdentityId } from "../audit-actor";
-import { hasDismissedOrganization, prepareOwnAffiliationReviewResolution } from "./affiliation-offer";
+import {
+  hasDismissedOrganization,
+  hasOwnAffiliationReviewToResolve,
+  prepareOwnAffiliationReviewResolution,
+} from "./affiliation-offer";
 import { isConcurrentIdentityConflict } from "./conflicts";
 import { loadIdentityNotificationContext, prepareIdentityNotification } from "./notifications";
 import { prepareLinkNotice } from "./organization-link-notices";
@@ -103,15 +107,7 @@ export async function prepareVerifiedAddressDomainOrganizationLink(
     hasDismissedOrganization(db, input.userId, organizationId),
   ]);
   if ((related && !related.eligible) || dismissed) return null;
-  if (
-    related &&
-    !input.reviewDecision &&
-    !(await first<{ id: string }>(
-      db,
-      "SELECT id FROM affiliation_reviews WHERE user_id = ? AND resolved_at IS NULL LIMIT 1",
-      [input.userId],
-    ))
-  )
+  if (related && !input.reviewDecision && !(await hasOwnAffiliationReviewToResolve(db, input.userId, related.id)))
     return null;
   const at = input.at;
   try {

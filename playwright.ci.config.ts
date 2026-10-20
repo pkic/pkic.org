@@ -5,7 +5,7 @@ import base from "./playwright.config";
 const criticalJourneys = [
   "covers unified user sign-in via magic link",
   "covers proposal submission, speaker invitation, confirmation, and profile updates",
-  "event confirmation joins nobody; explicit organization consent joins once and an identity can then be selected for the event",
+  "verified approved-domain registration affiliates once and an organization identity can be selected for the event",
   "a member uploads a headshot through the disclaimer and crop flow",
   "public search accepts focus and closes with Escape",
   "mobile navigation opens and closes with Escape",

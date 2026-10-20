@@ -144,6 +144,14 @@ describe("a verified work address and the organization that owns its domain", ()
         [userId],
       ),
     ).toEqual([{ organization_name: "Past Employer" }]);
+    expect(
+      await linkVerifiedAddressToDomainOrganization(env.DB, {
+        userId,
+        normalizedEmail: "history@ibm.example",
+        systemDecision: { action: "test_domain_repair", details: {} },
+      }),
+    ).toBeNull();
+    expect(await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'test_domain_repair'")).toEqual([]);
   });
 
   it("joins through the registrable domain from a subdomain address, and through an explicitly claimed subdomain", async () => {

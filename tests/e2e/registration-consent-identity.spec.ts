@@ -16,7 +16,7 @@ import { createMember } from "./helpers/member-provisioning";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
 import { acceptConfirmDialog } from "./helpers/confirm-dialog";
 
-test("event confirmation joins nobody; explicit organization consent joins once and an identity can then be selected for the event", async ({
+test("verified approved-domain registration affiliates once and an organization identity can be selected for the event", async ({
   page,
   browser,
 }, testInfo) => {
@@ -63,30 +63,36 @@ test("event confirmation joins nobody; explicit organization consent joins once 
     );
     const userId = users.users.find((user) => user.email === email)!.id;
     const detail = userDetailResponseSchema.parse(await (await page.request.get(`/api/v1/users/${userId}`)).json());
-    // Confirming joins no organization: the account holds only the individual identity it started with.
+    // The approved work domain adds one organization identity alongside the personal identity.
     expect(detail.user.identities).toEqual([
       expect.objectContaining({ organizationId: null, organizationName: null, memberId: null }),
+      expect.objectContaining({ organizationName, status: "active" }),
     ]);
     const participation = userParticipationResponseSchema.parse(
       await (await page.request.get(`/api/v1/users/${userId}/participation`)).json(),
     );
-    expect(participation.participation.summary.groupCount).toBe(0);
-    expect((await subscribers()).subscribers.filter((subscriber) => subscriber.subscribed)).toEqual([]);
-    await attendee.screenshot({ path: testInfo.outputPath("event-confirmed-without-membership.png"), fullPage: true });
+    expect(participation.participation.summary.groupCount).toBeGreaterThan(0);
+    expect((await subscribers()).subscribers).toMatchObject([{ subscribed: true }]);
+    await attendee.screenshot({
+      path: testInfo.outputPath("event-confirmed-with-domain-affiliation.png"),
+      fullPage: true,
+    });
 
-    const sinceJoin = await capturedEmailCount();
-    await attendee.goto("/join/");
-    await attendee.getByLabel(EMAIL_FIRST_COPY.join.work.label).fill(email);
-    await attendee.getByRole("button", { name: EMAIL_FIRST_COPY.join.work.action, exact: true }).click();
-    await expect(attendee.getByText("Check your email", { exact: true })).toBeVisible();
-    const joinEmail = await waitForCapturedEmail(email, "Verify your email address", { since: sinceJoin });
-    const joinUrl = extractEmailUrl(joinEmail, "/join/");
-    const joinToken = new URLSearchParams(new URL(joinUrl).hash.slice(1)).get("verify")!;
-    await attendee.goto(joinUrl);
-    await expect(attendee.getByRole("heading", { name: "Organization access is ready", exact: true })).toBeVisible();
-    await attendee.getByRole("link", { name: "Continue to the portal", exact: true }).click();
+    // An affiliated member receives sign-in guidance, not a new join capability.
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const sinceJoin = await capturedEmailCount();
+      await attendee.goto("/join/");
+      await attendee.getByLabel(EMAIL_FIRST_COPY.join.work.label).fill(email);
+      await attendee.getByRole("button", { name: EMAIL_FIRST_COPY.join.work.action, exact: true }).click();
+      await expect(attendee.getByText("Check your email", { exact: true })).toBeVisible();
+      const joinEmail = await waitForCapturedEmail(email, "already have PKI Consortium member access", {
+        since: sinceJoin,
+      });
+      expect(new URL(extractEmailUrl(joinEmail, "/portal/")).pathname).toBe("/portal/");
+    }
+    await signInToPortal(attendee, email, { continueAs: organizationName });
     await expect(attendee.getByRole("navigation", { name: "Portal navigation" })).toBeVisible();
-    // Joining adds the organization identity beside the individual one the account started with.
+    // Joining again reuses the automatically created organization identity.
     const activeIdentities = async () =>
       identitiesListResponseSchema.parse(
         await (await attendee.request.get("/api/v1/users/current/identities?active=true")).json(),
@@ -96,13 +102,10 @@ test("event confirmation joins nobody; explicit organization consent joins once 
     const organizationIdentities = joined.filter((entry) => entry.organizationId !== null);
     expect(organizationIdentities).toHaveLength(1);
     expect(organizationIdentities[0]!.organizationName).toBe(organizationName);
+    expect(organizationIdentities[0]!.id).toBe(
+      detail.user.identities.find((identity) => identity.organizationId !== null)!.identityId,
+    );
     expect((await subscribers()).subscribers).toMatchObject([{ subscribed: true }]);
-    const replay = await attendee.request.post("/api/v1/members/join/verify", { data: { token: joinToken } });
-    expect(replay.status()).toBe(200);
-    expect(await replay.json()).toEqual({ status: "already_member" });
-    expect(replay.headers()["set-cookie"]).toBeUndefined();
-    expect(await activeIdentities()).toEqual(joined);
-
     await attendee.goto(manageUrl);
     await attendee.getByRole("button", { name: "Cancel my registration…", exact: true }).click();
     await acceptConfirmDialog(attendee, "Cancel registration");
