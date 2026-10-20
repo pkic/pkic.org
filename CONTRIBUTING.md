@@ -24,7 +24,7 @@ resource being tested; do not add fixed sleeps.
 Worker integration tests use two disjoint projects. `d1` imports real services
 and mounted routers, applies real migrations per file, and uses an empty asset
 directory. It never builds or serves a static publication. Run it independently
-with `pnpm run test:worker --project d1` (optionally `--shard=1/3`).
+with `pnpm run test:worker --project d1` (optionally `--shard=1/4`).
 `worker-fetch` retains the real Worker entry point and synthetic publication;
 its pool builds that publication only when matching tests are selected. The
 scanner benchmark also uses the D1 setup. Runtime and database isolation remain
@@ -33,18 +33,19 @@ per file; shards never share mutable storage.
 The publication fixture uses its own temporary directory under
 `PKIC_BUILD_TMPDIR` (else `TMPDIR`), with a copy-on-write clone of the shared
 Astro derivative cache. Only completed publications with identical fixture
-inputs are reused by the existing local cache. Browser fixtures have different
+inputs are reused by the existing local cache. Browser and Worker-fetch runners restore the same content-addressed compiler
+derivatives; D1 runners restore none. Browser fixtures have different
 inputs and are prepared separately; neither their database nor their HTML is
 substituted for the Worker fixture.
 
 Application CI runs static, Node, frontend, and tooling checks first. Once they
-pass, critical browser journeys, three D1 shards, and the real-publication
+pass, critical browser journeys, four D1 shards, and the real-publication
 Worker project run on independent runners. The existing required application
 check aggregates all results and fails on failed, canceled, or skipped required
 jobs. Each Worker runner uploads `worker-profile-*` timing diagnostics. Compare
 successful runs at the same revision, runner size, inventory, and cold/warm
 cache conditions before claiming a speedup; include runner minutes and shard
-imbalance, not just elapsed time. The initial three-shard trial preserves every
+imbalance, not just elapsed time. The four-shard trial preserves every
 test and uses Vitest's built-in sharding; profile evidence should guide any
 subsequent duration balancing.
 
