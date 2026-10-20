@@ -102,7 +102,11 @@ async function finishRelease(output, pages, timings) {
     await mkdir(memberData, { recursive: true });
     await writeFile(
       resolve(memberData, "paths.json"),
-      JSON.stringify(Object.fromEntries(snapshot.members.map(({ id, slug }) => [id, { id, slug }]))),
+      JSON.stringify(
+        Object.fromEntries(
+          snapshot.members.map(({ id, slug, name, memberType }) => [id, { id, slug, name, memberType }]),
+        ),
+      ),
     );
     const newsData = resolve(output, "_published", "news");
     await mkdir(newsData, { recursive: true });

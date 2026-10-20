@@ -108,7 +108,8 @@ async function inspectCache(directory) {
   let paths = 0;
   for (const entry of Object.values(manifest.routes)) {
     for (const path of Object.values(entry.paths)) {
-      if (!files.has(`dist/${path.outputFile}`)) throw new Error("Missing native page cache output");
+      if (!files.has(`dist/${path.outputFile}`))
+        throw new Error(`Missing native page cache output: ${path.outputFile}`);
       for (const image of path.staticImages ?? []) {
         sitePublicationIntegrityPathSchema.parse(image.finalPath.replace(/^\//, ""));
         if (!files.has(`assets/${basename(image.finalPath)}`))
@@ -117,7 +118,11 @@ async function inspectCache(directory) {
       if (++paths > 100_000) throw new Error("Native page cache exceeds its route bound");
     }
   }
-  return { paths, integrity: await createReleaseIntegrity(directory, [...files]) };
+  return {
+    paths,
+    routeComponents: Object.keys(manifest.routes),
+    integrity: await createReleaseIntegrity(directory, [...files]),
+  };
 }
 
 /** Discard only native optimization bytes before a forced full repair. */
@@ -128,8 +133,14 @@ export async function discardPublicationPageCache(directory, anchorDirectory = p
 }
 
 /** Existing Astro caches are an optimization, never an approval or serving source.
- * Corrupt, missing or unfinished caches fall back to complete native rendering. */
-export async function validatePublicationPageCache(directory, anchorDirectory = publicationCacheAnchor()) {
+ * Corrupt, missing or unfinished caches fall back to complete native rendering.
+ * @param {ReadonlySet<string>} [currentRouteComponents] Resolved Astro entrypoints for this build.
+ */
+export async function validatePublicationPageCache(
+  directory,
+  anchorDirectory = publicationCacheAnchor(),
+  currentRouteComponents,
+) {
   ({ directory } = await ensureCacheRoot(directory, anchorDirectory));
   try {
     const info = await lstat(resolve(directory, sealPath));
@@ -139,6 +150,10 @@ export async function validatePublicationPageCache(directory, anchorDirectory = 
       JSON.parse(await readFile(resolve(directory, sealPath), "utf8")),
     );
     const actual = await inspectCache(directory);
+    // Astro 7.3.5 prunes a retired route's files even when its replacement
+    // just wrote the same output path. A removed/renamed source must start cold.
+    if (currentRouteComponents && actual.routeComponents.some((component) => !currentRouteComponents.has(component)))
+      throw new Error("Native page cache route sources changed");
     if (
       expected.digest !== actual.integrity.digest ||
       publicationIntegrityHashInput(expected.files) !== publicationIntegrityHashInput(actual.integrity.files)

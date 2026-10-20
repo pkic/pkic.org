@@ -199,18 +199,18 @@ describe("public member directory", () => {
     expect(link?.getAttribute("href")).toBe("/members/example-corp/");
   });
 
-  it("keeps the id-keyed address for a member with no organization row to hold a slug", async () => {
+  it("links individual cards to readable independent-member addresses", async () => {
     // Independent members have a static path even without an organization slug.
     stubFetch(
       listingResponse([
-        member({ id: "49e927b2-1163-4efb-b1b3-c5bd7971b685", slug: null, name: "Ada Lovelace", memberType: "person" }),
+        member({ id: "49e927b2-1163-4efb-b1b3-c5bd7971b685", slug: null, name: "Ada Lovelace", memberType: "H6" }),
       ]),
     );
 
     const container = await mountDirectory();
 
-    expect(container.querySelector<HTMLAnchorElement>(".member-card a.pk-stretched")?.getAttribute("href")).toBe(
-      "/members/49e927b2-1163-4efb-b1b3-c5bd7971b685/",
+    expect(container.querySelector<HTMLAnchorElement>(".member-card a.pk-stretched")?.getAttribute("href")).toMatch(
+      /^\/members\/independent\/ada-lovelace-[a-z0-9]+\/$/u,
     );
   });
 });

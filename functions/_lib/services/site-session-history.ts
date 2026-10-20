@@ -1,3 +1,5 @@
+import { memberProfileHref } from "../../../assets/shared/member-profile-url";
+import { INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "../../../assets/shared/schemas/membership-categories";
 import { publicSessionCredits } from "../../../assets/shared/session-public-credits";
 import {
   publishedSessionRoute,
@@ -125,13 +127,21 @@ export function personProfileRedirects(publication: SitePublicationSnapshot) {
     }));
 }
 
-/** A merged organization's member page leads to the page of the organization it was merged into. */
+/** Merged organization pages and old individual UUID paths lead to their current public profile. */
 export function memberPageRedirects(publication: SitePublicationSnapshot) {
-  return (publication.memberPageRedirects ?? []).map((redirect) => ({
-    from: `/members/${encodeURIComponent(redirect.fromSlug)}/`,
-    to: `/members/${encodeURIComponent(redirect.toSlug)}/`,
-    status: 301 as const,
-  }));
+  return [
+    ...(publication.memberPageRedirects ?? []).map((redirect) => ({
+      from: `/members/${encodeURIComponent(redirect.fromSlug)}/`,
+      to: `/members/${encodeURIComponent(redirect.toSlug)}/`,
+      status: 301 as const,
+    })),
+    ...(publication.members ?? [])
+      .filter((member) => INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(member.memberType))
+      .flatMap((member) => [
+        { from: `/members/${encodeURIComponent(member.id)}/`, to: memberProfileHref(member), status: 301 as const },
+        { from: `/members/${encodeURIComponent(member.id)}`, to: memberProfileHref(member), status: 301 as const },
+      ]),
+  ];
 }
 
 /** A session's ID address and its former readable addresses lead to the page this build renders for it. */
