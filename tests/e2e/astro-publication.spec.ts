@@ -1514,3 +1514,84 @@ test("homepage information callout has breathing room below the hero statistics"
   const notice = await callout.boundingBox();
   expect(notice!.y - strip!.y - strip!.height).toBeGreaterThanOrEqual(24);
 });
+
+test("model feedback carries selected wording without asking for a release version", async ({ page }, testInfo) => {
+  await page.goto("/wg/pqc/pqcmm/");
+  const feedback = page.getByRole("link", { name: "Suggest a change", exact: false }).first();
+  await expect(feedback).toBeVisible();
+  const edit = page.getByRole("link", { name: "Edit this page on GitHub", exact: false });
+  await expect(edit).toHaveAttribute("href", "https://github.com/pkic/pqcmm/edit/main/model/pqcmm-model.yaml");
+  await expect(page.getByRole("link", { name: "Suggest a change on GitHub", includeHidden: true })).toHaveCount(1);
+  const paragraph = page.locator("[data-pagefind-body] p").first();
+  const wording = await paragraph.textContent();
+  await paragraph.evaluate((element) => {
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+    document.dispatchEvent(new Event("selectionchange"));
+  });
+  await expect
+    .poll(async () => new URL((await feedback.getAttribute("href"))!).searchParams.get("selected-text"))
+    .toBe(wording!.trim().slice(0, 300));
+  const url = new URL((await feedback.getAttribute("href"))!);
+  expect(url.pathname).toBe("/pkic/pqcmm/issues/new");
+  expect(url.searchParams.get("source-page")).toContain("/wg/pqc/pqcmm/");
+  expect(url.searchParams.has("milestone")).toBe(false);
+  await feedback.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath("content-contribution.png") });
+});
+
+for (const source of [
+  { route: "/about/", repository: "pkic/pkic.org", file: "content/about/_index.md" },
+  { route: "/wg/pkimm/model/", repository: "pkic/pkimm", file: "_index.md" },
+]) {
+  test(`website contributions follow the source of ${source.route}`, async ({ page }) => {
+    await page.goto(source.route);
+    const controls = page.getByRole("region", { name: "Contribute to this page" });
+    const edit = controls.getByRole("link", { name: "Edit this page on GitHub", exact: false });
+    await expect(edit).toHaveAttribute("href", `https://github.com/${source.repository}/edit/main/${source.file}`);
+    const feedback = controls.getByRole("link", { name: "Suggest a change", exact: false });
+    const initial = new URL((await feedback.getAttribute("href"))!);
+    expect(initial.pathname).toBe(`/${source.repository}/issues/new`);
+    expect(initial.searchParams.has("template")).toBe(false);
+    await expect(page.getByRole("link", { name: "Suggest a change on GitHub", includeHidden: true })).toHaveCount(1);
+    const paragraph = page.locator("[data-pagefind-body] p").first();
+    const wording = await paragraph.textContent();
+    await paragraph.evaluate((element) => {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      const selection = window.getSelection()!;
+      selection.removeAllRanges();
+      selection.addRange(range);
+      document.dispatchEvent(new Event("selectionchange"));
+    });
+    await expect
+      .poll(async () => new URL((await feedback.getAttribute("href"))!).searchParams.get("body"))
+      .toContain(wording!.trim().slice(0, 100));
+  });
+}
+
+test("generated public pages offer feedback without a fictional edit target", async ({ page }) => {
+  await page.goto("/search/");
+  const controls = page.getByRole("region", { name: "Contribute to this page" });
+  await expect(controls.getByRole("link", { name: "Suggest a change", exact: false })).toBeVisible();
+  await expect(controls.getByRole("link", { name: "Edit this page on GitHub", exact: false })).toHaveCount(0);
+});
+
+test("website contribution links work without JavaScript", async ({ browser }) => {
+  const context = await browser.newContext({ javaScriptEnabled: false });
+  try {
+    const page = await context.newPage();
+    await page.goto("/about/");
+    const controls = page.getByRole("region", { name: "Contribute to this page" });
+    await expect(controls.getByRole("link", { name: "Suggest a change", exact: false })).toBeVisible();
+    await expect(controls.getByRole("link", { name: "Edit this page on GitHub", exact: false })).toHaveAttribute(
+      "href",
+      "https://github.com/pkic/pkic.org/edit/main/content/about/_index.md",
+    );
+  } finally {
+    await context.close();
+  }
+});

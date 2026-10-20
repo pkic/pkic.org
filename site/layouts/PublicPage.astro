@@ -4,6 +4,7 @@ import "../../assets/ts/design-system";
 import { SiteDocumentHead } from "../../assets/ts/site/SiteDocument";
 import { SiteHeader, SiteFooter, SiteMain } from "../../assets/ts/ui/SiteChrome";
 import "../../assets/ts/site/public-styles";
+import { ContentContributionLinks } from "../../assets/ts/site/ContentContributionLinks";
 import { publicationPageInputs, type PublicationPageInputs } from "../publication-page-inputs";
 import type { SiteContentPage } from "../../assets/shared/site-content";
 import type { PublicMemberDetail } from "../../assets/shared/schemas/members-directory";
@@ -21,6 +22,7 @@ interface Props {
 }
 const page = Astro.props.pageInputs ?? await publicationPageInputs({ ...Astro.props, route: Astro.url.pathname });
 const { title, description, privatePage, accent, robots, structuredData, clientAssets } = page;
+const contribution = page.contentContribution;
 const excludeFromSearch = privatePage || robots?.includes("noindex");
 ---
 <html lang={page.language}>
@@ -42,6 +44,7 @@ const excludeFromSearch = privatePage || robots?.includes("noindex");
     <SiteHeader currentPath={page.route} navigation={page.navigation} memberCounts={page.memberCounts} />
     <SiteMain privatePage={excludeFromSearch}><slot /></SiteMain>
     {page.route !== "/portal/" && <template id="pkic-public-form-resources">{JSON.stringify(page.publicResources)}</template>}
+    {contribution && <ContentContributionLinks context={contribution} page={page.canonicalUrl} />}
     <SiteFooter navigation={page.navigation} privatePage={privatePage} memberWall={page.memberWall} copyrightYear={page.copyrightYear} />
     <script is:inline type="module" src={clientAssets.loader.url} integrity={clientAssets.loader.integrity} crossorigin="anonymous"></script>
     {clientAssets.publicSite && <script is:inline type="module" src={clientAssets.publicSite.url} integrity={clientAssets.publicSite.integrity} crossorigin="anonymous"></script>}

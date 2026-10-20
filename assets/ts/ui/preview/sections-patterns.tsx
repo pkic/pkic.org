@@ -1,3 +1,4 @@
+import { ContentContributionLinks } from "../../site/ContentContributionLinks";
 /**
  * Pattern catalog specimens.
  *
@@ -571,6 +572,21 @@ export const patternSections: PreviewSection[] = [
         <p class="pk-small pk-strong">Tint</p>
         <StageQueue caption="Applications with a tint" toneStyle="tint" />
       </div>
+    ),
+  },
+  {
+    id: "content-contribution",
+    title: "Suggest a website change",
+    note: "One contribution pattern for website pages and content maintained in other repositories.",
+    render: () => (
+      <ContentContributionLinks
+        context={{
+          repository: "pkic/pkic.org",
+          contributionBranch: "main",
+          sourcePath: "content/about/_index.md",
+        }}
+        page="https://pkic.org/about/"
+      />
     ),
   },
 ];

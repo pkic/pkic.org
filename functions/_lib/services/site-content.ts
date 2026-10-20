@@ -474,7 +474,7 @@ export async function loadSiteContent(
     route,
     sourcePath: document.sourcePath,
   });
-  const page = documentMetadata(document, route, pageNumber);
+  const page = contentResolution.documentMetadata(document, route, pageNumber);
   const hero = await renderSiteContentHero(page.metadata, page.rawDescription);
   if (hero.sponsor && options.publication) {
     const groups =

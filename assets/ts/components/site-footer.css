@@ -166,6 +166,7 @@
   }
 
   .selection-edit-tooltip {
+    visibility: hidden;
     position: fixed;
     z-index: 1100;
     display: inline-flex;
@@ -192,6 +193,7 @@
       transform 0.15s ease;
   }
   .selection-edit-tooltip.is-visible {
+    visibility: visible;
     opacity: 1;
     transform: translateY(0);
   }

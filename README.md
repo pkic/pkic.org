@@ -119,6 +119,14 @@ git submodule update --remote
 
 The update command can be run to update your local copy when the remote branch changes. Submodules are managed in the file .gitmodules.
 
+## Website contributions
+
+Every public page can offer contextual feedback through the same contribution component. `data/content-contributions.yaml` defines the website repository, contribution destinations for externally maintained source trees, and page-specific overrides. Ordinary authored pages edit their actual Markdown source in `pkic/pkic.org`; PKIMM, PQCCM, and other submodule content routes to its owning repository. Custom public URLs do not change the source filename. Generated pages offer feedback without inventing an editable file. Private portal pages omit contribution controls.
+
+The persistent links work without JavaScript. Selecting text adds the wording, nearest section or item, and page link to the feedback. Generic GitHub issues use a prefilled title/body; a configured `feedbackTemplate` can opt a particular source into an existing issue form. PQCMM's YAML feedback form is one such configuration, not the website's default. Known source versions/revisions can be supplied independently of the editing branch; absent provenance is left unspecified.
+
+A branch name never enables publication or contribution routing by itself. Model draft/release publication is separate from this website-wide contribution layer. Contributors describe the change without deciding its release classification. Existing release files and tags are not editing targets; maintainers decide the appropriate draft, maintenance branch, and release milestone.
+
 ## Astro static publication audit
 
 The opt-in Astro audit builds the public catalog with a synthetic snapshot and exercises the shared Preact presentation components, static content, discovery, and browser-side Pagefind search. The normal deployment build assembles the Vite Worker and Astro output into one release.
