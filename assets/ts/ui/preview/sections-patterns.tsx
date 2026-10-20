@@ -1,3 +1,4 @@
+import { ModelContributionLinks } from "../../site/ModelContributionLinks";
 /**
  * Pattern catalog specimens.
  *
@@ -571,6 +572,23 @@ export const patternSections: PreviewSection[] = [
         <p class="pk-small pk-strong">Tint</p>
         <StageQueue caption="Applications with a tint" toneStyle="tint" />
       </div>
+    ),
+  },
+  {
+    id: "model-contribution",
+    title: "Suggest a model change",
+    note: "Feedback preserves the displayed version; maintainers choose the release. Browser editing remains an alternative.",
+    render: () => (
+      <ModelContributionLinks
+        context={{
+          repository: "pkic/pqcmm",
+          contributionBranch: "main",
+          sourcePath: "model/pqcmm-model.yaml",
+          sourceVersion: "1.1.1",
+          sourceRevision: "v1.1.1",
+        }}
+        page="https://pkic.org/wg/pqc/pqcmm/1.1.1/"
+      />
     ),
   },
 ];

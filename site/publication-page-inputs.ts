@@ -1,3 +1,4 @@
+import { modelContributionForRoute } from "./model-contribution";
 import { runtimeDatePresentation } from "../assets/shared/timezone";
 import { publishedFormResourcesForPath } from "../assets/shared/published-resource-url";
 import { siteContentLanguageForPath } from "../assets/shared/site-content-language";
@@ -57,6 +58,7 @@ export async function publicationPageInputs({
   const renderedImageRefs = [...memberWall.map((entry) => ({ source: entry.logoUrl, portrait: false })), ...imageRefs];
   const imagesPrepared = await preparePublicationImages(renderedImageRefs);
   return {
+    modelContribution: privatePage ? undefined : modelContributionForRoute(route),
     presentation: runtimeDatePresentation(),
     copyrightYear: new Date().getUTCFullYear(),
     route,

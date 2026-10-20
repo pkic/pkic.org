@@ -34,7 +34,10 @@ async function start(): Promise<void> {
   await Promise.all([
     import("../js/modules/global-ui.js"),
     import("../js/modules/sponsor-banner-marquee.js"),
-    import("../js/modules/text-selection-edit-tooltip.js"),
+    whenPresent(
+      "[data-model-feedback-link], .edit-on-github",
+      () => import("../js/modules/text-selection-edit-tooltip.js"),
+    ),
   ]);
   const { initLocalTime } = await import("../js/modules/local-time.js");
   initLocalTime();

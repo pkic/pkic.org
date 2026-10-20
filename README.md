@@ -119,6 +119,14 @@ git submodule update --remote
 
 The update command can be run to update your local copy when the remote branch changes. Submodules are managed in the file .gitmodules.
 
+## Model contributions
+
+`data/model-contributions.yaml` explicitly registers the model pages that offer contextual feedback, their canonical repository, editable working file, and contribution branch. A branch name alone never enables publication or feedback routing. Configure a separate entry for an older release or draft root when it has a different contribution destination.
+
+The website preserves selected wording, the nearest item identifier or heading, and the page link in the GitHub feedback form. `sourceVersion` and `sourceRevision` can identify the model being displayed independently of the editable branch. Set them only from verified page provenance; the current authored PQCMM pages have no reliable revision metadata, so the handoff asks the contributor rather than claiming a release or commit. Generated model pages should supply this metadata as part of their publication integration.
+
+The feedback form must exist on the canonical repository's default branch before enabling the website links. Contributors can describe an improvement without choosing a version, or edit the working model through GitHub. Maintainers classify changes, group them into release milestones, and decide maintenance-line backports and forward ports. Existing release files and tags are never editing targets.
+
 ## Astro static publication audit
 
 The opt-in Astro audit builds the public catalog with a synthetic snapshot and exercises the shared Preact presentation components, static content, discovery, and browser-side Pagefind search. The normal deployment build assembles the Vite Worker and Astro output into one release.
