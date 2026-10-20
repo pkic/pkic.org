@@ -169,6 +169,7 @@ async function main() {
   // Formats are checked against the target event's configured session types, read live.
   await save("mappings.resolved.json", {
     ...mappings,
+    mode: plan.mode,
     event: {
       ...mappings.event,
       ...(eventId ? { eventId } : {}),
