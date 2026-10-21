@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   dateTimeLocalToIso,
   instantToDateTimeLocal,
@@ -10,6 +10,7 @@ import {
   zonedClock,
   zonedDatePart,
   zonedDateTimeToDate,
+  zonedDateTimeParts,
 } from "../assets/shared/timezone";
 import { localDateTimeInTimeZoneToIso } from "../functions/_lib/utils/timezone";
 
@@ -69,4 +70,17 @@ describe("shared zone helpers", () => {
     expect(zonedDatePart(new Date("2026-12-31T23:30:00.000Z"), "Asia/Tokyo", "month")).toBe("January");
     expect(zonedDatePart(new Date("2026-12-31T23:30:00.000Z"), "Asia/Tokyo", "day")).toBe("1");
   });
+});
+
+it("reuses a zone formatter across agenda redraws without freezing its DST offset", () => {
+  const constructor = vi.spyOn(Intl, "DateTimeFormat");
+  try {
+    for (let index = 0; index < 1000; index++) {
+      expect(zonedDateTimeParts("2026-01-01T00:00:00.000Z", "Pacific/Chatham").hour).toBe(13);
+      expect(zonedDateTimeParts("2026-06-01T00:00:00.000Z", "Pacific/Chatham").hour).toBe(12);
+    }
+    expect(constructor.mock.calls.length).toBeLessThanOrEqual(1);
+  } finally {
+    constructor.mockRestore();
+  }
 });

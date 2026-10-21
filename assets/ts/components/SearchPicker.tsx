@@ -89,7 +89,7 @@ export function SearchPicker<Data, Row>({
    * in the viewport: below the field, flipped above it when there is no room
    * below, and clamped either way. A picker low on a page stays usable.
    */
-  usePopupPlacement({ open: showResults, anchorRef, popupRef, revision: results.length });
+  usePopupPlacement({ open: showResults, anchorRef, popupRef, revision: results.length, topLayer: true });
 
   function cancelPendingSearch(): void {
     if (timerRef.current !== null) {

@@ -76,6 +76,7 @@ Each entry is the full anatomy of a control. The gallery id renders it (`pnpm ga
 
 - Use: `Avatar` (`shape="round"` for people, `"square"` for organizations), `PersonCell` in tables, `Badge` for exceptions.
 - Shape: photo, or initials when there is none or it fails to load. Badges have a dot and a tone; expected states are plain text.
+- Speaker details: keep personal links beside the name, wrapping as a group on narrow screens, with title and organization text beneath. Organization logos form a separate group on the right on desktop, below the title and links on phones. Never insert a logo into the title or affiliation text. Compact agenda rows show no organization logos; their affiliation text can rotate.
 
 ## Workflow stage (`workflow-stage`)
 

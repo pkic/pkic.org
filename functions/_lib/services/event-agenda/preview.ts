@@ -6,6 +6,7 @@ import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import { projectLiveAgendaMaterials } from "../site-agenda-material-eligibility";
 import { getAgenda } from "./read";
+import { prepareReviewedSpeakerProfiles } from "./speaker-profile-reviews";
 import { preparePublicAgendaSnapshot } from "./public-snapshot";
 import { publicAgendaProjection } from "./public-projection";
 import { withSpeakerProfileSlugs } from "../people/profile-addresses";
@@ -41,7 +42,11 @@ export async function previewAgenda(
     snapshot = storedAgendaSnapshotSchema.parse(JSON.parse(frozen.snapshot_json));
   } else {
     const draft = await getAgenda(db, eventId, eventSlug);
-    snapshot = { ...preparePublicAgendaSnapshot(draft, draft.revision), publishedRevision: draft.publishedRevision };
+    const reviewed = await prepareReviewedSpeakerProfiles(db, eventId, draft, false);
+    snapshot = {
+      ...preparePublicAgendaSnapshot(reviewed.snapshot, draft.revision),
+      publishedRevision: draft.publishedRevision,
+    };
   }
   return agendaSnapshotSchema.parse(
     await withSessionPageSlugs(

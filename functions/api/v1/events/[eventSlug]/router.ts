@@ -1,4 +1,5 @@
 import { registerRecordingRoutes } from "./register-recording-routes";
+import { SpeakerProfileReviewsGet, SpeakerProfileApprovalPost } from "./agenda/speaker-profiles";
 import { registerScanningRoutes } from "./register-scanning-routes";
 import { registerEventManagementAuthentication } from "./register-event-management-authentication";
 import { AgendaRoomsOrderPost } from "./agenda/rooms";
@@ -194,6 +195,8 @@ openapi.get("/agenda/transfers/exports", AgendaTransferExportGet);
 openapi.post("/agenda/transfers/reviews", AgendaTransferReviewPost);
 openapi.post("/agenda/transfers", AgendaTransferApplyPost);
 openapi.get("/agenda/transfers/identities", AgendaTransferIdentitiesGet);
+openapi.get("/speakers/profiles", SpeakerProfileReviewsGet);
+openapi.post("/speakers/profiles/reviews", SpeakerProfileApprovalPost);
 registerScanningRoutes(openapi);
 openapi.get("/calendar/settings", AgendaCalendarSettingsGet);
 openapi.put("/calendar/settings", AgendaCalendarSettingsPut);
