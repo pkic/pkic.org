@@ -79,6 +79,15 @@ export async function prepareOrganizerSpeakerIdentity(db: DatabaseLike, context:
   return { ...selected, guards, email: identity.email, organizationName: identity.organization_name };
 }
 
+function resolveTermContentUrl(contentRef: string | null, baseUrl: string): string {
+  if (!contentRef) return "";
+  try {
+    return new URL(contentRef, baseUrl).href;
+  } catch {
+    return "";
+  }
+}
+
 /** Supplies the accepted terms snapshot to the editable organizer-confirmation template. */
 export async function prepareOrganizerSpeakerNotification(
   db: DatabaseLike,
@@ -114,7 +123,7 @@ export async function prepareOrganizerSpeakerNotification(
             label: emailPlainText(term.display_text || term.term_key),
             version: emailPlainText(term.version),
             helpText: emailPlainText(term.help_text ?? ""),
-            contentRef: emailPlainText(term.content_ref ? new URL(term.content_ref, appBaseUrl).href : ""),
+            contentRef: emailPlainText(resolveTermContentUrl(term.content_ref, appBaseUrl)),
           })),
       },
     },

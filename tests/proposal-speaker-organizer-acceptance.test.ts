@@ -203,6 +203,35 @@ describe("organizer speaker acceptance", () => {
     ).toHaveLength(1);
   });
 
+  it.each([
+    { reference: null, resolved: "" },
+    { reference: "", resolved: "" },
+    { reference: "https://[invalid", resolved: "" },
+    { reference: "/speaker-terms/", resolved: "https://app.test/speaker-terms/" },
+    { reference: "https://example.test/terms", resolved: "https://example.test/terms" },
+  ])("confirms participation with term content reference $reference", async ({ reference, resolved }) => {
+    const { proposalId, coSpeakerUserId } = await acceptanceFixture();
+    await env.DB.prepare("UPDATE event_terms SET content_ref=? WHERE event_id=? AND audience_type='speaker'")
+      .bind(reference, eventId)
+      .run();
+    expect((await acceptRequest(proposalId, coSpeakerUserId)).status).toBe(200);
+    expect(
+      await queryAll(env.DB, "SELECT status FROM proposal_speakers WHERE proposal_id=? AND user_id=?", [
+        proposalId,
+        coSpeakerUserId,
+      ]),
+    ).toEqual([{ status: "confirmed" }]);
+    const notification = vi
+      .mocked(fetch)
+      .mock.calls.map(([, init]) => JSON.parse(String(init?.body ?? "{}")))
+      .find((message) => message.subject?.startsWith("Configured speaker notice"));
+    expect(notification).toBeDefined();
+    const text = notification.content.find((part: { type: string }) => part.type === "text/plain").value;
+    expect(text).toContain("speaker-terms");
+    if (resolved) expect(text).toContain(resolved);
+    else if (reference) expect(text).not.toContain(reference);
+  });
+
   it.each([false, true])(
     "confirms the displayed organization identity and its address (selection recorded: %s)",
     async (selected) => {
