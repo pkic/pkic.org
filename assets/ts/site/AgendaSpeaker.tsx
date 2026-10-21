@@ -161,6 +161,7 @@ export function AgendaSpeakerCredit({
             affiliations={speaker.affiliations}
             layout="rotating"
             size={detail ? "preview" : "card"}
+            showLogos={detail}
           />
         </div>
         {detail && (speaker.bioMarkdown || speaker.bioHtml) ? (

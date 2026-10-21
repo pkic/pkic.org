@@ -474,15 +474,20 @@ export async function listAgendaPeople(
   eventId: string,
   query: z.infer<typeof import("../../../../assets/shared/schemas/event-agenda").agendaPeopleQuerySchema>,
 ) {
-  const membership =
-    "(EXISTS(SELECT 1 FROM proposal_speakers speaker JOIN session_proposals proposal ON proposal.id=speaker.proposal_id WHERE speaker.user_id=user.id AND proposal.event_id=?) OR EXISTS(SELECT 1 FROM user_roles role WHERE role.user_id=user.id AND role.context_type='event' AND role.context_id=? AND role.revoked_at IS NULL AND (role.expires_at IS NULL OR role.expires_at > ?)))";
+  // Imported and manually credited speakers may have no proposal or event role.
+  const membership = `(EXISTS(SELECT 1 FROM proposal_speakers speaker JOIN session_proposals proposal ON proposal.id=speaker.proposal_id WHERE speaker.user_id=user.id AND proposal.event_id=?)
+    OR EXISTS(SELECT 1 FROM user_roles role WHERE role.user_id=user.id AND role.context_type='event' AND role.context_id=? AND role.revoked_at IS NULL AND (role.expires_at IS NULL OR role.expires_at > ?))
+    OR user.id IN (
+      SELECT speaker.user_id FROM event_agenda_occurrence_speakers speaker JOIN event_agenda_occurrences occurrence ON occurrence.id=speaker.occurrence_id WHERE occurrence.event_id=?
+    ))`;
+  const eligible = `user.active=1 AND user.pii_redacted_at IS NULL AND user.merged_into_user_id IS NULL AND ${membership}`;
   const search = query.q
     ? "AND INSTR(LOWER(COALESCE(user.first_name,'') || ' ' || COALESCE(user.last_name,'') || ' ' || COALESCE(user.preferred_name,'')),LOWER(?)) > 0"
     : "";
-  const values: unknown[] = [eventId, eventId, nowIso(), ...(query.q ? [query.q] : [])];
+  const values: unknown[] = [eventId, eventId, nowIso(), eventId, ...(query.q ? [query.q] : [])];
   const count = await first<{ total: number }>(
     db,
-    `SELECT COUNT(*) AS total FROM users user WHERE user.active=1 AND ${membership} ${search}`,
+    `SELECT COUNT(*) AS total FROM users user WHERE ${eligible} ${search}`,
     values,
   );
   const users = await all<{
@@ -494,7 +499,7 @@ export async function listAgendaPeople(
     headshot_r2_key: string | null;
   }>(
     db,
-    `SELECT user.id,user.first_name,user.last_name,user.headshot_r2_key, ${affiliationOrganizationNameSql("user.id")} AS organization_name, ${affiliationJobTitleSql("user.id")} AS job_title FROM users user WHERE user.active=1 AND ${membership} ${search} ORDER BY user.first_name,user.last_name,user.id LIMIT ? OFFSET ?`,
+    `SELECT user.id,user.first_name,user.last_name,user.headshot_r2_key, ${affiliationOrganizationNameSql("user.id")} AS organization_name, ${affiliationJobTitleSql("user.id")} AS job_title FROM users user WHERE ${eligible} ${search} ORDER BY user.first_name,user.last_name,user.id LIMIT ? OFFSET ?`,
     [...values, query.limit, query.offset],
   );
   return {

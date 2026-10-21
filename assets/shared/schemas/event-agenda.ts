@@ -11,7 +11,11 @@ import {
   agendaStaffingPositionPlanSchema,
 } from "./event-agenda-staffing-positions";
 import { promotionCopySchema } from "./event-promotion-kit";
-import { sessionHistoryMetadataSchema, publicSessionPortraitUrlSchema } from "./event-session-history";
+import {
+  sessionHistoryMetadataSchema,
+  publicSessionPortraitUrlSchema,
+  MAX_SESSION_AFFILIATIONS,
+} from "./event-session-history";
 import { sessionDemandSchema } from "./event-session-demand";
 import { httpOrSameOriginUrlSchema, httpUrlSchema, sameOriginPathSchema } from "./urls";
 import { z } from "zod";
@@ -75,6 +79,7 @@ export const agendaSpeakerPlacementSchema = z.object({
  * chosen on the proposal, else the person's primary) and the person's photo.
  */
 export const agendaSpeakerProfileCandidateSchema = z.object({
+  organizationId: id.nullable().optional(),
   identityId: id.nullable().default(null),
   organizationName: z.string().nullable().default(null),
   jobTitle: z.string().nullable().default(null),
@@ -89,6 +94,7 @@ export const agendaSpeakerSchema = z.object({
   attendanceMode: z.enum(["physical", "remote"]).optional(),
   roomId: id.nullable().optional(),
   profileCandidate: agendaSpeakerProfileCandidateSchema.optional(),
+  profileCandidates: z.array(agendaSpeakerProfileCandidateSchema).max(MAX_SESSION_AFFILIATIONS).optional(),
 });
 export const agendaOccurrenceFieldsSchema = z.object({
   title: z.string().trim().min(1).max(300),
@@ -303,6 +309,16 @@ export const agendaPublicationSchema = agendaRevisionSchema.extend({
 export const agendaRoomCreateSchema = agendaRoomSchema.omit({ id: true }).extend(agendaRevisionSchema.shape);
 export const agendaOccurrenceCreateSchema = agendaOccurrenceFieldsSchema.extend({
   ...agendaRevisionSchema.shape,
+  speakerIdentityIds: z
+    .record(
+      id,
+      z
+        .array(id)
+        .min(1)
+        .max(MAX_SESSION_AFFILIATIONS)
+        .refine((values) => new Set(values).size === values.length, "Choose each identity once"),
+    )
+    .optional(),
   speakerRoles: z.record(id, agendaCreditRoleSchema).optional(),
   speakerPlacements: z.record(id, agendaSpeakerPlacementSchema).optional(),
   speakerUserIds: z
@@ -320,6 +336,16 @@ export const agendaOccurrencePatchSchema = agendaOccurrenceFieldsSchema.partial(
   remoteCapacity: agendaOccurrenceFieldsSchema.shape.remoteCapacity.unwrap().optional(),
   visibility: agendaOccurrenceFieldsSchema.shape.visibility.unwrap().optional(),
   kind: agendaOccurrenceFieldsSchema.shape.kind.unwrap().optional(),
+  speakerIdentityIds: z
+    .record(
+      id,
+      z
+        .array(id)
+        .min(1)
+        .max(MAX_SESSION_AFFILIATIONS)
+        .refine((values) => new Set(values).size === values.length, "Choose each identity once"),
+    )
+    .optional(),
   speakerRoles: z.record(id, agendaCreditRoleSchema).optional(),
   speakerPlacements: z.record(id, agendaSpeakerPlacementSchema).optional(),
   speakerUserIds: z

@@ -17,11 +17,13 @@ export async function readAgendaSpeakers(db: DatabaseLike, eventId: string, occu
     ? await all<{
         occurrence_id: string;
         user_id: string;
+        identity_order: number;
         display_name: string;
         role: string;
         attendance_mode: "physical" | "remote";
         room_id: string | null;
         identity_id: string | null;
+        organization_id: string | null;
         organization_name: string | null;
         job_title: string | null;
         biography: string | null;
@@ -29,9 +31,10 @@ export async function readAgendaSpeakers(db: DatabaseLike, eventId: string, occu
         headshot_r2_key: string | null;
       }>(
         db,
-        `SELECT credited.occurrence_id,credited.user_id,credited.role,credited.attendance_mode,credited.room_id,
+        `SELECT credited.occurrence_id,credited.user_id,CAST(selected.key AS INTEGER) AS identity_order,credited.role,credited.attendance_mode,credited.room_id,
           credited.display_name,
           CASE WHEN credited.available=1 THEN spoken_as.id END AS identity_id,
+          CASE WHEN credited.available=1 THEN spoken_as.organization_id END AS organization_id,
           CASE WHEN credited.available=1 THEN spoken_as_organization.name END AS organization_name,
           CASE WHEN credited.available=1 THEN ${identityJobTitleSql("spoken_as.id")} END AS job_title,
           CASE WHEN credited.available=1 THEN spoken_as.biography END AS biography,
@@ -40,38 +43,52 @@ export async function readAgendaSpeakers(db: DatabaseLike, eventId: string, occu
         FROM (
           SELECT speaker.occurrence_id,speaker.user_id,speaker.role,speaker.attendance_mode,speaker.room_id,
             ${agendaSpeakerDisplayNameSql} AS display_name, user.headshot_r2_key,
+            COALESCE((SELECT CAST(ordered.key AS INTEGER) FROM json_each(COALESCE(
+              json_extract((SELECT settings_json FROM events WHERE id=occurrence.event_id),'$.agenda.sessionSpeakerOrder.'||json_quote(occurrence.id)),
+              content.speaker_user_ids_json,'[]')) ordered WHERE ordered.value=speaker.user_id),60000) AS speaker_order,
             (user.active=1 AND user.pii_redacted_at IS NULL AND user.merged_into_user_id IS NULL) AS available,
-            ${creditedIdentityIdSql("speaker.occurrence_id", "speaker.user_id")} AS identity_id
+            COALESCE(json_extract((SELECT settings_json FROM events WHERE id=occurrence.event_id),
+              '$.agenda.sessionSpeakerIdentities.'||json_quote(occurrence.id)||'.'||json_quote(speaker.user_id)),
+              json_array(${creditedIdentityIdSql("speaker.occurrence_id", "speaker.user_id")})) AS identity_ids_json
           FROM event_agenda_occurrence_speakers speaker
           JOIN users user ON user.id=speaker.user_id
           JOIN event_agenda_occurrences occurrence ON occurrence.id=speaker.occurrence_id
+          LEFT JOIN event_agenda_contents content ON content.id=occurrence.content_id AND content.event_id=occurrence.event_id
           WHERE speaker.occurrence_id IN(SELECT value FROM json_each(?)) AND occurrence.event_id=? LIMIT 60000
         ) credited
-        LEFT JOIN identities spoken_as ON spoken_as.id=credited.identity_id
-        LEFT JOIN organizations spoken_as_organization ON spoken_as_organization.id=spoken_as.organization_id`,
+        JOIN json_each(credited.identity_ids_json) selected
+        LEFT JOIN identities spoken_as ON spoken_as.id=selected.value AND spoken_as.user_id=credited.user_id
+        LEFT JOIN organizations spoken_as_organization ON spoken_as_organization.id=spoken_as.organization_id
+        ORDER BY credited.occurrence_id,credited.speaker_order,credited.user_id,CAST(selected.key AS INTEGER)`,
         [JSON.stringify(occurrenceIds), eventId],
       )
     : [];
   const groups = new Map<string, AgendaOccurrence["speakers"]>();
   for (const row of rows) {
     const group = groups.get(row.occurrence_id) ?? [];
-    group.push(
-      agendaSpeakerSchema.parse({
-        userId: row.user_id,
-        displayName: row.display_name,
-        role: row.role,
-        attendanceMode: row.attendance_mode,
-        roomId: row.room_id,
-        profileCandidate: {
-          identityId: row.identity_id,
-          organizationName: row.organization_name,
-          jobTitle: row.job_title,
-          biography: row.biography,
-          links: parseLinksJson(row.links_json),
-          photoUrl: publicUserHeadshotPath(row.user_id, row.headshot_r2_key),
-        },
-      }),
-    );
+    const candidate = {
+      identityId: row.identity_id,
+      organizationId: row.organization_id,
+      organizationName: row.organization_name,
+      jobTitle: row.job_title,
+      biography: row.biography,
+      links: parseLinksJson(row.links_json),
+      photoUrl: publicUserHeadshotPath(row.user_id, row.headshot_r2_key),
+    };
+    const existing = group.find((speaker) => speaker.userId === row.user_id);
+    if (existing) existing.profileCandidates!.push(candidate);
+    else
+      group.push(
+        agendaSpeakerSchema.parse({
+          userId: row.user_id,
+          displayName: row.display_name,
+          role: row.role,
+          attendanceMode: row.attendance_mode,
+          roomId: row.room_id,
+          profileCandidate: candidate,
+          profileCandidates: [candidate],
+        }),
+      );
     groups.set(row.occurrence_id, group);
   }
   return groups;

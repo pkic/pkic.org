@@ -96,26 +96,31 @@ export async function searchLiveSpeakerCandidates(
   eventId: string,
   query: z.infer<typeof liveSpeakerCandidatesQuerySchema>,
   now: string,
+  scope: "event" | "directory" = "event",
 ): Promise<{ identities: LiveSpeakerCandidate[]; page: ReturnType<typeof buildPageInfo> }> {
-  const people = `SELECT person.id, ${personDisplayNameSql("person", "Guest")} AS name, ${livePersonHeadshotSql("person")} AS headshot_r2_key
-      FROM users person
-     WHERE person.active = 1 AND person.pii_redacted_at IS NULL AND person.merged_into_user_id IS NULL
-       AND (EXISTS(SELECT 1 FROM proposal_speakers speaker JOIN session_proposals proposal ON proposal.id = speaker.proposal_id
+  const membership =
+    scope === "directory"
+      ? "1=1"
+      : `EXISTS(SELECT 1 FROM proposal_speakers speaker JOIN session_proposals proposal ON proposal.id = speaker.proposal_id
                     WHERE speaker.user_id = person.id AND proposal.event_id = ?1)
          OR EXISTS(SELECT 1 FROM event_agenda_occurrence_speakers credited JOIN event_agenda_occurrences occurrence ON occurrence.id = credited.occurrence_id
                     WHERE credited.user_id = person.id AND occurrence.event_id = ?1)
          OR EXISTS(SELECT 1 FROM user_roles role WHERE role.user_id = person.id AND role.context_type = 'event' AND role.context_id = ?1
                     AND role.revoked_at IS NULL AND (role.expires_at IS NULL OR role.expires_at > ?2))
          OR EXISTS(SELECT 1 FROM registrations registration WHERE registration.user_id = person.id AND registration.event_id = ?1
-                    AND registration.status = 'registered'))`;
+                    AND registration.status = 'registered')`;
+  const people = `SELECT person.id, ${personDisplayNameSql("person", "Guest")} AS name, ${livePersonHeadshotSql("person")} AS headshot_r2_key
+      FROM users person
+     WHERE person.active = 1 AND person.pii_redacted_at IS NULL AND person.merged_into_user_id IS NULL
+       AND (${membership})`;
   const options = `SELECT people.id AS user_id, people.name, people.headshot_r2_key, identity.id AS identity_id,
          ${identityJobTitleSql("identity.id")} AS title, ${identityOrganizationNameSql("identity.id")} AS organization
       FROM (${people}) people
       LEFT JOIN identities identity ON identity.user_id = people.id AND ${ACTIVE_IDENTITY}`;
   const search = query.q
-    ? "WHERE INSTR(LOWER(options.name || ' ' || COALESCE(options.organization, '')), LOWER(?3)) > 0"
+    ? "WHERE INSTR(LOWER(options.name || ' ' || COALESCE(options.organization, '')), LOWER(?)) > 0"
     : "";
-  const values = [eventId, now, ...(query.q ? [query.q] : [])];
+  const values = [...(scope === "event" ? [eventId, now] : []), ...(query.q ? [query.q] : [])];
   const total = await first<{ total: number }>(
     db,
     `SELECT COUNT(*) AS total FROM (${options}) options ${search}`,

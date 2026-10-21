@@ -122,8 +122,8 @@
  * so wordmarks retain their proportions; missing logos are represented by organization text.
  */
   .pk-agenda-speaker-organization {
-    --pk-agenda-mark-block: 22px;
-    --pk-agenda-mark-inline: 112px;
+    --pk-agenda-mark-block: 1.375rem;
+    --pk-agenda-mark-inline: 7rem;
     display: inline-flex;
     flex: none;
     align-items: center;
@@ -133,20 +133,28 @@
     max-inline-size: var(--pk-agenda-mark-inline);
   }
   .pk-agenda-speaker-organization--card {
-    --pk-agenda-mark-block: 16px;
-    --pk-agenda-mark-inline: 96px;
+    --pk-agenda-mark-block: 1rem;
+    --pk-agenda-mark-inline: 6rem;
   }
   .pk-agenda-speaker-organization--profile {
-    --pk-agenda-mark-block: 24px;
-    --pk-agenda-mark-inline: 144px;
+    --pk-agenda-mark-block: 1.5rem;
+    --pk-agenda-mark-inline: 9rem;
   }
-  .pk-agenda-speaker-organization__logo {
+  .pk-agenda-speaker-organization > .pk-agenda-speaker-organization__logo {
+    --pk-avatar-size: var(--pk-agenda-mark-block);
     display: block;
-    inline-size: auto;
+    inline-size: var(--pk-agenda-mark-inline);
     max-inline-size: 100%;
-    block-size: 100%;
+    block-size: var(--pk-agenda-mark-block);
+    border: 0;
+    border-radius: 0;
+    background: transparent;
     object-fit: contain;
     object-position: left center;
+  }
+  .pk-agenda-speaker-organization__logo .pk-avatar__img {
+    object-fit: contain;
+    padding: 0;
   }
   /* Affiliations side by side: each a calm unit of mark and text, separated by the shared gap. */
   .pk-agenda-speaker-affiliations {

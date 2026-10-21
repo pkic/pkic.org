@@ -4,7 +4,7 @@ import { renderToStringAsync } from "preact-render-to-string";
 import { expect, it } from "vitest";
 import { AgendaSpeaker } from "../../assets/ts/site/AgendaSpeaker";
 import { agendaContent, agendaSessionContent, agendaSpeakerContent } from "../../assets/shared/public-agenda-content";
-import { publicSessionCredits } from "../../assets/shared/session-public-credits";
+import { publicSessionCredits, sessionDisplayCredits } from "../../assets/shared/session-public-credits";
 import { publishedSpeakerProfileRoute } from "../../assets/shared/public-agenda-pages";
 import { approvedAgendaSnapshot } from "../fixtures/approved-agenda";
 
@@ -163,4 +163,64 @@ it("does not manufacture person links when the approved agenda has no public ses
   snapshot.occurrences[0]!.description = "Brief";
   expect(agendaContent(snapshot).speakers[0]!.personPath).toBeUndefined();
   expect(agendaContent(snapshot).speakers[0]!.speakerKey).toBe("user:person");
+});
+
+it("preserves roster order and excludes approved credits removed from the roster", () => {
+  const occurrence = structuredClone(approvedAgendaSnapshot.occurrences[0]!);
+  const first = occurrence.speakers[0]!;
+  const appearance = occurrence.history!.appearances[0]!;
+  occurrence.speakers = [
+    { ...first, userId: "first" },
+    { ...first, userId: "second" },
+  ];
+  occurrence.history!.appearances = [
+    { ...appearance, userId: "second", displayName: "Second speaker" },
+    { ...appearance, userId: "removed", displayName: "Removed speaker" },
+    { ...appearance, userId: "first", displayName: "First speaker" },
+  ];
+  occurrence.history!.archivalCredits = [];
+  expect(publicSessionCredits(occurrence).map((credit) => credit.displayName)).toEqual([
+    "First speaker",
+    "Second speaker",
+  ]);
+});
+
+it("reads draft speaker details from the canonical identity rather than historical text", () => {
+  const occurrence = structuredClone(approvedAgendaSnapshot.occurrences[0]!);
+  const speaker = occurrence.speakers[0]!;
+  speaker.displayName = "Canonical speaker";
+  speaker.profileCandidate = {
+    identityId: "selected-identity",
+    organizationName: "Current employer",
+    jobTitle: "Current role",
+    biography: "Current biography",
+    links: [],
+    photoUrl: "/current-photo.jpg",
+  };
+  const draft = sessionDisplayCredits(occurrence, true)[0]!;
+  expect(draft.displayName).toBe("Canonical speaker");
+  expect(draft).toMatchObject({
+    biography: "Current biography",
+    photoUrl: "/current-photo.jpg",
+    affiliations: [{ identityId: "selected-identity", organizationName: "Current employer", title: "Current role" }],
+  });
+  expect(occurrence.history!.appearances[0]!.displayName).toBe("Historical speaker");
+});
+
+it("omits organization logos on compact session credits and retains them in session details", async () => {
+  const speaker = {
+    name: "Example speaker",
+    affiliations: [
+      { title: "Researcher", organization: { name: "Example Institute", logoSrc: "/example-institute.svg" } },
+    ],
+  };
+  const compact = document.createElement("div");
+  compact.innerHTML = await renderToStringAsync(<AgendaSpeaker speaker={speaker} />);
+  expect(compact.querySelector(".pk-agenda-speaker-organization")).toBeNull();
+  expect(compact.textContent).toContain("Researcher · Example Institute");
+  const detail = document.createElement("div");
+  detail.innerHTML = await renderToStringAsync(<AgendaSpeaker speaker={speaker} detail />);
+  expect(detail.querySelector(".pk-agenda-speaker-organization img")?.getAttribute("src")).toBe(
+    "/example-institute.svg",
+  );
 });

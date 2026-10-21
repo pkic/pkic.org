@@ -21,7 +21,6 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import {
   agendaOccurrenceCreateSchema,
   agendaOccurrencePatchSchema,
-  agendaPeopleListSchema,
   agendaSnapshotSchema,
   type AgendaOccurrence,
   type AgendaSnapshot,
@@ -34,7 +33,12 @@ import { Field } from "../../../../../../ui/Field";
 import { TextInput, Select } from "../../../../../../ui/TextControl";
 import { Checkbox } from "../../../../../../ui/Checkbox";
 import { FormSection } from "../../../../../../ui/FormSection";
-import { UserPicker, type PickedUser } from "../../../../../../components/UserPicker";
+import { SearchPicker } from "../../../../../../components/SearchPicker";
+import { PersonCell } from "../../../../../../ui/PersonCell";
+import {
+  liveSpeakerCandidatesResponseSchema,
+  type LiveSpeakerCandidate,
+} from "../../../../../../../shared/schemas/live-session-credit";
 import { MarkdownEditor } from "../../../../../../components/markdown-editor/MarkdownInput";
 import { ErrorAlert } from "../../../../../../components/ErrorAlert";
 
@@ -70,7 +74,7 @@ export function SessionEditor({
 }) {
   const focus = useEditorFocus();
   const [speakers, setSpeakers] = useState(occurrence?.speakers ?? []);
-  const [picked, setPicked] = useState<PickedUser | null>(null);
+  const [picked, setPicked] = useState<LiveSpeakerCandidate | null>(null);
   const [title, setTitle] = useState(occurrence?.title ?? "");
   const [track, setTrack] = useState(occurrence?.track ?? "");
   const [format, setFormat] = useState(occurrence?.format ?? "");
@@ -126,6 +130,14 @@ export function SessionEditor({
   }
   const body = {
     speakerUserIds: speakers.map((speaker) => speaker.userId),
+    speakerIdentityIds: Object.fromEntries(
+      speakers.flatMap((speaker) => {
+        const identities = (
+          speaker.profileCandidates ?? (speaker.profileCandidate ? [speaker.profileCandidate] : [])
+        ).flatMap((candidate) => (candidate.identityId ? [candidate.identityId] : []));
+        return identities.length ? [[speaker.userId, identities]] : [];
+      }),
+    ),
     speakerRoles: Object.fromEntries(speakers.map((speaker) => [speaker.userId, speaker.role ?? "speaker"])),
     speakerPlacements: Object.fromEntries(
       speakers.map((speaker) => [
@@ -318,23 +330,60 @@ export function SessionEditor({
                 />
                 <Field label="Add speaker" {...form.of("speakerUserIds")}>
                   {(control) => (
-                    <UserPicker
-                      responseSchema={agendaPeopleListSchema}
+                    <SearchPicker
+                      responseSchema={liveSpeakerCandidatesResponseSchema}
                       sort="name"
-                      placeholder="Search by name"
-                      endpoint={`/api/v1/events/${encodeURIComponent(snapshot.eventSlug)}/agenda/people`}
-                      value={picked}
-                      onChange={(person) => {
+                      placeholder="Name or organization"
+                      endpoint={`/api/v1/events/${encodeURIComponent(snapshot.eventSlug)}/agenda/speaker-identities`}
+                      picked={picked?.name ?? null}
+                      rows={(data) => data.identities}
+                      rowKey={(person) => `${person.userId}:${person.identityId ?? ""}`}
+                      rowText={(person) => [person.name, person.title, person.organization].filter(Boolean).join(" · ")}
+                      rowDisabled={(person) => !person.identityId}
+                      noun={["identity", "identities"]}
+                      label="Search speaker identities"
+                      resultsLabel="Matching speaker identities"
+                      emptyMessage="No matching speaker identities found."
+                      errorMessage="Could not search speaker identities."
+                      onClear={() => setPicked(null)}
+                      renderRow={(person) => (
+                        <PersonCell
+                          name={person.name}
+                          title={person.title}
+                          organization={person.organization}
+                          avatarSrc={person.photoUrl}
+                          size="sm"
+                        />
+                      )}
+                      onPick={(person) => {
                         setPicked(person);
-                        if (person && !speakers.some((speaker) => speaker.userId === person.id))
-                          setSpeakers([
-                            ...speakers,
-                            {
-                              userId: person.id,
-                              displayName:
-                                [person.firstName, person.lastName].filter(Boolean).join(" ") || person.email,
-                            },
-                          ]);
+                        const existing = speakers.find((value) => value.userId === person.userId);
+                        const candidate = {
+                          identityId: person.identityId,
+                          organizationName: person.organization,
+                          jobTitle: person.title,
+                          biography: null,
+                          links: [],
+                          photoUrl: person.photoUrl,
+                        };
+                        const candidates =
+                          existing?.profileCandidates ??
+                          (existing?.profileCandidate ? [existing.profileCandidate] : []);
+                        const selected = candidates.some((value) => value.identityId === person.identityId)
+                          ? candidates
+                          : [...candidates, candidate];
+                        const speaker = {
+                          ...existing,
+                          userId: person.userId,
+                          displayName: person.name,
+                          profileCandidate: selected[0],
+                          profileCandidates: selected,
+                        };
+                        setSpeakers(
+                          speakers.some((value) => value.userId === person.userId)
+                            ? speakers.map((value) => (value.userId === person.userId ? speaker : value))
+                            : [...speakers, speaker],
+                        );
                       }}
                       inputProps={{ ...control, name: "speakerUserIds" }}
                     />

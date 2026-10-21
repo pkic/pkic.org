@@ -22,10 +22,12 @@ export function AgendaSpeakerAffiliations({
   affiliations,
   layout = "list",
   size = "preview",
+  showLogos = true,
 }: {
   affiliations: readonly ContentAgendaAffiliation[] | undefined;
   layout?: "list" | "rotating" | "directory";
   size?: MarkSize;
+  showLogos?: boolean;
 }) {
   affiliations = affiliations?.filter(
     (affiliation) => affiliation.title?.trim() || affiliation.organization?.name?.trim(),
@@ -36,8 +38,12 @@ export function AgendaSpeakerAffiliations({
       <AgendaAffiliationRotation labels={affiliations.map(affiliationLabel)}>
         {affiliations.map((affiliation, index) => (
           <span key={index}>
-            <AffiliationMark affiliation={affiliation} size={size === "profile" ? "preview" : size} />
-            <span class="pk-agenda-speaker-affiliations__text">{affiliationText(affiliation)}</span>
+            {showLogos ? (
+              <AffiliationMark affiliation={affiliation} size={size === "profile" ? "preview" : size} />
+            ) : null}
+            <span class="pk-agenda-speaker-affiliations__text">
+              {showLogos ? affiliationText(affiliation) : affiliationLabel(affiliation)}
+            </span>
           </span>
         ))}
       </AgendaAffiliationRotation>
@@ -48,10 +54,11 @@ export function AgendaSpeakerAffiliations({
     >
       {affiliations.map((affiliation, index) => {
         const organization = affiliation.organization;
-        const mark = layout === "directory" ? null : <AffiliationMark affiliation={affiliation} size={size} />;
+        const mark =
+          layout === "directory" || !showLogos ? null : <AffiliationMark affiliation={affiliation} size={size} />;
         return (
           <li key={index}>
-            {organization?.href && organization.logoSrc && layout !== "directory" ? (
+            {showLogos && organization?.href && organization.logoSrc && layout !== "directory" ? (
               <a class="pk-agenda-speaker-affiliations__organization" href={organization.href}>
                 {mark}
               </a>
@@ -63,8 +70,10 @@ export function AgendaSpeakerAffiliations({
                 {affiliation.title ? <span title={affiliation.title}>{affiliation.title}</span> : null}
                 {organization ? <strong title={organization.name}>{organization.name}</strong> : null}
               </span>
-            ) : affiliationText(affiliation) ? (
-              <span class="pk-agenda-speaker-affiliations__text">{affiliationText(affiliation)}</span>
+            ) : (showLogos ? affiliationText(affiliation) : affiliationLabel(affiliation)) ? (
+              <span class="pk-agenda-speaker-affiliations__text">
+                {showLogos ? affiliationText(affiliation) : affiliationLabel(affiliation)}
+              </span>
             ) : null}
           </li>
         );

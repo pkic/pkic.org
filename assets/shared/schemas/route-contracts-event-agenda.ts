@@ -118,6 +118,14 @@ export const agendaPeopleIdentitiesRouteSchema = {
   responses: { ...responses, ...ok("Event people's identities", liveSpeakerCandidatesResponseSchema) },
 };
 
+/** Agenda authors select canonical identities even before a person has event credits. */
+export const agendaSpeakerIdentitiesRouteSchema = {
+  ...common,
+  summary: "Search active speaker identities for agenda authoring",
+  request: { params: eventSlugParamsSchema, query: liveSpeakerCandidatesQuerySchema },
+  responses: { ...responses, ...ok("Speaker identities", liveSpeakerCandidatesResponseSchema) },
+};
+
 export const agendaSettingsRouteSchema = {
   ...common,
   summary: "Configure agenda travel buffers",

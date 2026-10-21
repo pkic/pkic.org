@@ -279,8 +279,13 @@
   .pk-content-agenda .pk-content-agenda__session-body .pk-content-agenda__speaker {
     gap: 0.625rem;
   }
-  .pk-content-agenda .pk-content-agenda__session-body .pk-content-agenda__speaker .pk-avatar {
-    --pk-avatar-size: 40px;
+  .pk-content-agenda .pk-content-agenda__session-body .pk-content-agenda__speaker > .pk-avatar,
+  .pk-content-agenda
+    .pk-content-agenda__session-body
+    .pk-content-agenda__speaker
+    > .pk-agenda-speaker__portrait
+    > .pk-avatar {
+    --pk-avatar-size: 2.5rem;
   }
   .pk-content-agenda .pk-content-agenda__session-body .pk-content-agenda__speaker strong {
     font-size: var(--pk-agenda-type-14);

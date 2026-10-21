@@ -244,11 +244,13 @@ it("keeps saved speaker credits and placements through room changes; only the ro
   await act(() =>
     render(<SessionEditor snapshot={snapshot} occurrence={placed} onSaved={() => {}} onClose={() => {}} />, host),
   );
-  expect(host.querySelector('button[aria-label="Actions for Speaker"]')).toBeNull();
-  expect(host.querySelector('button[aria-label="Remove Speaker"]')).not.toBeNull();
+  expect(host.querySelector('button[aria-label="Actions for Speaker"]')).not.toBeNull();
+  expect(host.querySelector('button[aria-label="Remove Speaker"]')).toBeNull();
   const rows = host.querySelector(".pk-agenda-editor__speakers")!;
   expect(
-    rows.querySelectorAll("input, textarea, select:not([aria-label^='Role for']), button:not([aria-label^='Remove '])"),
+    rows.querySelectorAll(
+      "input, textarea, select:not([aria-label^='Role for']), button:not([aria-label^='Actions for '])",
+    ),
   ).toHaveLength(0);
   const roles = [...rows.querySelectorAll<HTMLSelectElement>("select[aria-label^='Role for']")];
   expect(roles.map((select) => [select.getAttribute("aria-label"), select.value])).toEqual([
@@ -360,7 +362,7 @@ describe("session editor structure", () => {
     expect(session.querySelector(".pk-panel")).toBeNull();
     const picker = host.querySelector<HTMLInputElement>('[name="speakerUserIds"]')!;
     expect(host.querySelector(`label[for="${picker.id}"]`)?.textContent).toContain("Add speaker");
-    expect(picker.placeholder).toBe("Search by name");
+    expect(picker.placeholder).toBe("Name or organization");
     expect(host.textContent).not.toContain("Markdown formatting is kept.");
   });
 
