@@ -49,7 +49,7 @@ it("refreshes an idle client onto the deployed shell, preserving its route and q
   await settle();
   expect(fetchMock).toHaveBeenCalledWith(
     "/portal/",
-    expect.objectContaining({ cache: "no-store", credentials: "omit", redirect: "error" }),
+    expect.objectContaining({ cache: "no-cache", credentials: "omit", redirect: "error" }),
   );
   expect(reload).toHaveBeenCalledOnce();
   expect(location.hash).toBe("#/users?users.q=delegate");
@@ -228,12 +228,45 @@ it("includes the existing offline inventory in the release fingerprint", () => {
   document.head.append(link);
   expect(clientPageRelease(document)).not.toBe(first);
 });
-it("does not enable automatic refresh on public pages or without fingerprinted scripts", () => {
-  history.replaceState(null, "", "/sessions/");
-  install();
-  expect(document.documentElement.hasAttribute("data-client-release-recovery")).toBe(false);
-  history.replaceState(null, "", "/portal/");
+it.each(["/sessions/", "/members/", "/events/2026/conference/register/", "/donate/"])(
+  "recovers active components outside the portal at %s",
+  async (path) => {
+    history.replaceState(null, "", path);
+    install();
+    await vi.advanceTimersByTimeAsync(300_000);
+    expect(fetchMock).toHaveBeenCalledWith(path, expect.objectContaining({ cache: "no-cache" }));
+    expect(reload).toHaveBeenCalledOnce();
+  },
+);
+it("does not enable automatic refresh without fingerprinted scripts", () => {
   document.head.innerHTML = "";
   install();
   expect(document.documentElement.hasAttribute("data-client-release-recovery")).toBe(false);
+});
+it.each(["/events/conference/live/", "/live-overlay/"])("never refreshes a live output at %s", async (path) => {
+  history.replaceState(null, "", path);
+  install();
+  await vi.advanceTimersByTimeAsync(300_000);
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+it("keeps embedded payment or media frames running", async () => {
+  history.replaceState(null, "", "/donate/");
+  document.body.innerHTML = '<iframe title="Payment"></iframe>';
+  install();
+  await vi.advanceTimersByTimeAsync(300_000);
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+it("keeps playing audio and video running", async () => {
+  document.body.innerHTML = "<video></video>";
+  vi.spyOn(document.querySelector("video")!, "paused", "get").mockReturnValue(false);
+  install();
+  await vi.advanceTimersByTimeAsync(300_000);
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+it("protects edited forms outside the portal", async () => {
+  history.replaceState(null, "", "/events/2026/conference/register/");
+  install();
+  document.dispatchEvent(new Event("input"));
+  await vi.advanceTimersByTimeAsync(300_000);
+  expect(fetchMock).not.toHaveBeenCalled();
 });

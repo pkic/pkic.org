@@ -191,3 +191,33 @@ test.describe("client release recovery", () => {
     }
   });
 });
+
+test("public interactive pages recover through the shared loader", async ({ page }) => {
+  const shell = await page.request.get("/sessions/");
+  const etag = shell.headers().etag;
+  expect(etag).toBeTruthy();
+  expect(shell.headers()["cache-control"]).toMatch(/must-revalidate|no-cache/);
+  const unchanged = await page.request.get("/sessions/", { headers: { "If-None-Match": etag } });
+  expect(unchanged.status()).toBe(304);
+  await page.goto("/sessions/");
+  const scripts = await page
+    .locator('script[type="module"][src]')
+    .evaluateAll((elements) => elements.map((element) => element.getAttribute("src")!));
+  const script = await page.request.get(scripts.find((src) => src.startsWith("/_assets/"))!);
+  expect(script.headers()["cache-control"]).toContain("immutable");
+  await expect(page.getByRole("heading", { name: "Session archive", exact: true })).toBeVisible();
+  await expect(page.locator("html")).toHaveAttribute("data-client-release-recovery", "");
+  await page.clock.install();
+  await page.route("**/sessions/", async (route) => {
+    if (route.request().isNavigationRequest()) return route.continue();
+    await route.fulfill({
+      contentType: "text/html",
+      body: '<script type="module" src="/_assets/site.next-release.js"></script>',
+    });
+  });
+  await page.clock.fastForward(16_000);
+  const reloaded = page.waitForEvent("domcontentloaded", { timeout: 15_000 });
+  await page.evaluate(() => window.dispatchEvent(new Event("vite:preloadError")));
+  await reloaded;
+  await expect(page.getByRole("heading", { name: "Session archive", exact: true })).toBeVisible();
+});

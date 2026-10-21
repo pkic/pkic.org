@@ -31,9 +31,9 @@ export function recoverClientImport(error: unknown): void {
   if (isClientImportError(error)) window.dispatchEvent(new Event(RECOVER_EVENT));
 }
 
-/** Install before importing the application, including the first lazy portal module. */
+/** Install before page behavior imports so lazy failures share one recovery handler. */
 export function installClientReleaseRecovery(reload = () => window.location.reload()): () => void {
-  if (location.pathname !== "/portal/" || document.documentElement.hasAttribute(INSTALLED_ATTRIBUTE)) return () => {};
+  if (document.documentElement.hasAttribute(INSTALLED_ATTRIBUTE)) return () => {};
   const release = clientPageRelease(document);
   if (!release) return () => {};
   document.documentElement.setAttribute(INSTALLED_ATTRIBUTE, "");
@@ -50,14 +50,18 @@ export function installClientReleaseRecovery(reload = () => window.location.relo
   const safe = () => {
     const route = `${location.pathname}/${location.hash.split("?", 1)[0]}`;
     // These surfaces own cameras, queued scans, live connections, or sign-in transitions.
-    const protectedRoute = /\/(scanner|lead-scanner|scan|attendance|live|studio|verify|join)(?:\/|$)/i.test(route);
+    const protectedRoute =
+      /\/(scanner|lead-scanner|scan|attendance|live|live-overlay|studio|verify|join)(?:\/|$)/i.test(route);
     const editing = document.activeElement?.matches("input, textarea, select, [contenteditable='true']");
     return (
       !edited &&
       !protectedRoute &&
       !editing &&
       clientMutationsAllowReload() &&
-      !document.querySelector('dialog[open], [role="dialog"], [aria-busy="true"]') &&
+      !document.querySelector('dialog[open], [role="dialog"], [aria-busy="true"], iframe') &&
+      ![...document.querySelectorAll<HTMLMediaElement>("audio, video")].some(
+        (media) => !media.paused && !media.ended,
+      ) &&
       document.visibilityState === "visible" &&
       navigator.onLine &&
       !document.fullscreenElement
@@ -92,9 +96,10 @@ export function installClientReleaseRecovery(reload = () => window.location.relo
     checking = true;
     lastCheck = Date.now();
     try {
-      // Fetch only the public shell, without hash/query secrets or a service-worker cache fallback.
+      // Native HTTP revalidation reuses an unchanged shell through ETag/304; no version endpoint or cookie.
+      // Query/hash capabilities and credentials never enter this public-shell probe.
       const response = await fetch(location.pathname, {
-        cache: "no-store",
+        cache: "no-cache",
         credentials: "omit",
         redirect: "error",
         headers: { Accept: "text/html" },

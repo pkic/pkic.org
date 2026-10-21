@@ -352,25 +352,34 @@ writes the generated IDs back into [wrangler.jsonc](wrangler.jsonc).
 
 ### Client updates after deployment
 
-The portal compares the current public shell's existing module fingerprints
+The shared client loader compares each page's existing module fingerprints
 (and offline inventory link) on return, hash navigation, import failure, and
 every five minutes while visible. Checks omit credentials, query strings, and
-hashes and bypass HTTP caching. There is no additional release manifest, build
-pass, package, or server-side release archive.
+hashes. Cacheable HTML reuses native ETag/304 revalidation. There is no additional
+release manifest, build pass, package, or server-side release archive.
 
 A changed release refreshes an idle tab in place, preserving its location.
 Editing or submitting a form disables automatic refresh for that document's
 lifetime, including after a save: draft ownership is not universally tracked.
 Pending API writes and uncertain save outcomes also block refresh. Scanning,
 live-session, studio, verification, open-dialog, and fullscreen surfaces are
-excluded. A missing lazy view keeps navigation available and offers **Reload
+excluded. A missing portal view keeps navigation available and offers **Reload
 page**; save unfinished work before using it.
 
 The browser records one bounded reload guard per tab. Unavailable storage,
 offline checks, and unsuccessful responses leave the current application
 running. This recovery starts with clients that have loaded this implementation;
 already-open clients from earlier releases need their first ordinary refresh.
-No migration, secret, or deployment configuration change is required.
+HTML uses the existing Cloudflare revalidation headers (private pages retain
+no-store); hashed assets keep their long-lived immutable policy. Vite's
+`vite:preloadError` event triggers recovery across public interactive pages and
+the portal. No custom version cookie, version endpoint, cache-busting parameter,
+cache purge, migration, secret, or build step is required. Embedded frames and
+playing media also block automatic refresh.
+
+This follows [Vite's production load-error handling](https://vite.dev/guide/build#load-error-handling)
+and [Cloudflare's standard static-asset validators](https://developers.cloudflare.com/workers/static-assets/headers/).
+Production recovery does not use Vite's development-only HMR hooks.
 
 ### System role permission defaults
 
