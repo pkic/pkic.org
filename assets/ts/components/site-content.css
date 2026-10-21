@@ -14,7 +14,7 @@
  */
 
 @layer legacy {
-  .pk-site main a:not([class]) {
+  .pk-site :where(.pk-public-prose, .wg-main-content, .wg-prose, .wg-data-body) a:not([class]) {
     color: var(--pk-accent-ink);
   }
 
