@@ -222,7 +222,7 @@ export function PortalShell() {
               )}
               {access.hasOrganizationsAccess && portalOrganizationRecordRoutes(access, session)}
               {access.hasOrganizationsAccess && (
-                <Route path="/organizations/:organizationId">
+                <Route path="/organizations/:organizationId/:activity?">
                   {(params: { organizationId: string }) =>
                     access.hasOrganizationsDirectory ? (
                       // No section title here: the record's PageHeader already
