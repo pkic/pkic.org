@@ -367,12 +367,13 @@ describe("D1 read replication", () => {
       staffLastActivityAt: activity,
     });
     const { primaryDb } = createDbWithSessionRecorder({ bookmark: "cookie/next" });
-    const response = await worker.fetch(
+    const response = await withRequestD1Session(
       new Request("https://app.test/api/v1/users", {
+        method: "POST",
         headers: { cookie: `pkic_session=${token}` },
       }),
       { ...env, DB: primaryDb, INTERNAL_SIGNING_SECRET: signingSecret },
-      createExecutionContext(),
+      async () => new Response(null, { status: 200 }),
     );
     expect(response.status).toBe(200);
     const cookie = response.headers.getSetCookie().find((value) => value.startsWith("pkic_session="))!;
@@ -384,6 +385,56 @@ describe("D1 read replication", () => {
       lastActivityAt: activity,
       staffLastActivityAt: activity,
     });
+  });
+  it.each(["GET", "HEAD"])("does not let a late %s cookie response replace a save bookmark", async (method) => {
+    const token = await createAdminToken("cookie/before-save");
+    const read = createDbWithSessionRecorder({ bookmark: "cookie/older-read" });
+    const write = createDbWithSessionRecorder({ bookmark: "cookie/after-save" });
+    let finishRead!: () => void;
+    let readStarted!: () => void;
+    const pendingRead = new Promise<void>((resolve) => {
+      finishRead = resolve;
+    });
+    const started = new Promise<void>((resolve) => {
+      readStarted = resolve;
+    });
+    const readResponse = withRequestD1Session(
+      new Request("https://app.test/api/v1/users/current", {
+        method,
+        headers: { cookie: `pkic_session=${token}` },
+      }),
+      { ...env, DB: read.primaryDb, INTERNAL_SIGNING_SECRET: signingSecret },
+      async () => {
+        readStarted();
+        await pendingRead;
+        return new Response(null, { status: 200 });
+      },
+    );
+    await started;
+    let savedCookie = "";
+    try {
+      const saved = await withRequestD1Session(
+        new Request("https://app.test/api/v1/users/current", {
+          method: "PATCH",
+          headers: { cookie: `pkic_session=${token}` },
+        }),
+        { ...env, DB: write.primaryDb, INTERNAL_SIGNING_SECRET: signingSecret },
+        async () => new Response(null, { status: 200 }),
+      );
+      savedCookie = saved.headers.getSetCookie().find((value) => value.startsWith("pkic_session="))!;
+    } finally {
+      finishRead();
+    }
+    const late = await readResponse;
+    expect(late.headers.has("set-cookie")).toBe(false);
+    expect(late.headers.has("x-user-token")).toBe(false);
+    const next = createDbWithSessionRecorder();
+    await withRequestD1Session(
+      new Request("https://app.test/api/v1/users/current", { headers: { cookie: savedCookie.split(";")[0]! } }),
+      { ...env, DB: next.primaryDb, INTERNAL_SIGNING_SECRET: signingSecret },
+      async () => new Response(null, { status: 200 }),
+    );
+    expect(next.withSessionCalls).toEqual(["cookie/after-save"]);
   });
   it("does not replace an authenticated bookmark during an unconstrained public directory read", async () => {
     const token = await createAdminToken("private/bookmark");

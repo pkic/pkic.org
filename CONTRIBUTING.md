@@ -136,8 +136,12 @@ policy comments in `functions/_lib/db/session.ts` and
 `functions/_lib/db/authorization-guard.ts`. Seconds of lag are expected, without
 a fixed D1 guarantee. Bookmarks preserve sequential consistency, including
 after login and saves, rather than immediate visibility of another actor's
-revocation. Explicitly public member and sponsor directory, wall, display, and
-logo reads ignore incidental login cookies and do not replace private bookmarks.
+revocation. Existing cookie credentials receive bookmark updates after writes,
+not ordinary `GET`/`HEAD` responses, so a late read cannot overwrite a save's
+bookmark. Newly issued credentials still receive their request's bookmark;
+token response headers continue to carry read bookmarks. Explicitly public
+member and sponsor directory, wall, display, and logo reads ignore incidental
+login cookies and do not replace private bookmarks.
 
 Enabling replicas in the dashboard is not sufficient: application reads must
 use the [D1 Sessions API](https://developers.cloudflare.com/d1/best-practices/read-replication/).

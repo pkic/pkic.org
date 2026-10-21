@@ -85,9 +85,12 @@ export async function withRequestD1Session(
         !issuedUserToken &&
         !request.headers.has(USER_SESSION_TOKEN_HEADER) &&
         getUserSessionCookieToken(request)
-      )
+      ) {
+        // A slow read must not overwrite a newer save bookmark already stored
+        // by a concurrent response. Credential issuance above still owns its cookie.
+        if (["GET", "HEAD"].includes(request.method)) return response;
         headers.append("Set-Cookie", serializeUserSessionCookie(token, request));
-      else headers.set(USER_SESSION_TOKEN_HEADER, token);
+      } else headers.set(USER_SESSION_TOKEN_HEADER, token);
     } else {
       headers.set("x-mcp-token", await signMcpSessionToken(env.INTERNAL_SIGNING_SECRET, { ...outputClaims, state }));
     }
