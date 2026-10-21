@@ -1,3 +1,5 @@
+import { contentVersionNotice } from "../../shared/content-versions";
+import { ContentVersionNotice } from "./ContentVersionNotice";
 import { Fragment } from "preact";
 
 import type { SiteHero, SiteWorkingGroupCard, SiteWorkingGroupSection } from "../../shared/site-content";
@@ -91,6 +93,7 @@ function SectionNav({ section }: { section: SiteWorkingGroupSection }) {
                 class="wg-nav-more-btn"
                 type="button"
                 data-wg-tree-btn
+                disabled
                 aria-expanded="false"
                 aria-label="Show contents"
               >
@@ -114,32 +117,6 @@ function TreePanels({ section }: { section: SiteWorkingGroupSection }) {
       {section.treePanels.map((panel) => (
         <div class={`wg-nav-tree-panel wg-${section.wgId.toLowerCase()}`} id={panel.id} key={panel.id} hidden>
           <WorkingGroupSidebarTree tree={panel.tree} />
-          {panel.versions ? (
-            <div class="wg-version-switcher">
-              <p class="wg-version-eyebrow">Switch version</p>
-              <div class="wg-version-list" role="group" aria-label="Switch PKIMM model version">
-                {panel.versions.map((version) => (
-                  <a
-                    key={version.id}
-                    class={`wg-version-item${version.current ? " is-active" : ""}`}
-                    href={version.href}
-                    aria-current={version.current ? "page" : undefined}
-                  >
-                    <span class="wg-version-badge">{version.label}</span>
-                    {version.latest ? <span class="wg-version-hint">Latest release</span> : null}
-                    {version.fallback ? (
-                      <span
-                        class="wg-version-hint wg-version-hint--fallback"
-                        title={`This page is not available in ${version.label} — go to the version overview instead`}
-                      >
-                        Overview
-                      </span>
-                    ) : null}
-                  </a>
-                ))}
-              </div>
-            </div>
-          ) : null}
         </div>
       ))}
     </>
@@ -412,12 +389,28 @@ export function WorkingGroupLandingPage({
  * the section tree beside it; the rest read as a single prose column.
  */
 export function WorkingGroupContentPage({ html, section }: { html: string; section: SiteWorkingGroupSection }) {
+  const versions =
+    section.sidebar?.versions ??
+    section.treePanels?.find((panel) => panel.tree.versions?.items.some((item) => item.current))?.tree.versions;
+  const notice = contentVersionNotice(versions);
+  const navigation = (
+    <>
+      <SectionNav section={section} />
+      <TreePanels section={section} />
+    </>
+  );
   const body = <div class="wg-main-content" data-pagefind-body dangerouslySetInnerHTML={{ __html: html }} />;
   return (
     <>
       <SubPageHeader section={section} />
-      <SectionNav section={section} />
-      <TreePanels section={section} />
+      {notice ? (
+        <div class="content-version-navigation">
+          {navigation}
+          <ContentVersionNotice notice={notice} />
+        </div>
+      ) : (
+        navigation
+      )}
       <div class="pk-container pk-section">
         {section.sidebar ? (
           <div class="wg-layout">

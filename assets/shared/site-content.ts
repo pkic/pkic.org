@@ -1,3 +1,4 @@
+import type { ContentVersionNavigation } from "./content-versions";
 import type { ContentContribution } from "./content-contribution";
 import type { PortalLoginCopy } from "./schemas/portal-login-copy";
 import type { PublicSponsor } from "./schemas/public-sponsors";
@@ -198,6 +199,7 @@ export interface SiteSidebarTree {
   promoted?: SiteSidebarNode[];
   root: { current: boolean; href: string; label: string };
   sections: SiteSidebarNode[];
+  versions?: ContentVersionNavigation;
 }
 
 export interface SiteWorkingGroupSection {
@@ -236,7 +238,6 @@ export interface SiteWorkingGroupSection {
   treePanels?: Array<{
     id: string;
     tree: SiteSidebarTree;
-    versions?: Array<{ id: string; label: string; href: string; current: boolean; latest: boolean; fallback: boolean }>;
   }>;
   wgId: string;
 }

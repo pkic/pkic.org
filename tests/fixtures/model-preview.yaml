@@ -1,0 +1,23 @@
+model:
+  id: pqcmm
+  version: 1.1.0
+scoring:
+  rule: Levels are cumulative
+levels:
+  - number: 1
+    name: Initial
+    title: Level 1
+    description: Test
+    summary: Summary
+    sourcePage: /wg/pqc/pqcmm/levels/1-initial/
+    criteria:
+      introduction: All criteria
+      items: [{id: 1.1.1, text: An objective}]
+    assessment:
+      methodology: How to assess
+      groups:
+        - name: Checks
+          questions: [{id: 1.2.1, question: What was tested?, guidance: Record the result}]
+    evidenceChecklist:
+      introduction: See [Level 1](/wg/pqc/pqcmm/levels/1-initial/)
+      items: [{id: 1.e.1, text: Test report}]

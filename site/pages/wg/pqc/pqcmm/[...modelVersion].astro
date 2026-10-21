@@ -1,0 +1,34 @@
+---
+import PublicPage from "../../../../layouts/PublicPage.astro";
+import { SitePageBody } from "../../../../../assets/ts/site/SitePageBody";
+import { modelContributionEntries } from "../../../../model-versions";
+import { loadModelPage, modelPageRoutes } from "../../../../model-page-content";
+import { publicationPageInputs } from "../../../../publication-page-inputs";
+import { publication, memberCounts } from "../../../../publication";
+
+export function getStaticPaths() {
+  const pages = [];
+  for (const entry of modelContributionEntries) for (const version of entry.versions) {
+    for (const sourceRoute of modelPageRoutes(entry)) {
+      const suffix = sourceRoute.slice(entry.root.length);
+      for (const root of [version.root, ...version.aliases]) pages.push({
+        params: { modelVersion: `${root.replace(entry.root, "")}${suffix}`.replace(/\/$/, "") },
+        props: root === version.root ? { entry, version, sourceRoute } : { redirect: `${version.root}${suffix}` },
+      });
+    }
+  }
+  return pages;
+}
+const props = Astro.props;
+if ("redirect" in props) {
+  if (!props.redirect) throw new Error("Missing model redirect target");
+  return Astro.redirect(props.redirect, 301);
+}
+const { entry, version, sourceRoute } = props;
+const content = await loadModelPage(entry, version, sourceRoute, version.root);
+const pageInputs = await publicationPageInputs({ route: content.route, title: content.title, description: content.description, robots: content.robots, content });
+---
+<PublicPage pageInputs={pageInputs} title={content.title} description={content.description} robots={content.robots} content={content}>
+  <Fragment slot="head"><meta name="pqcmm-source-revision" content={version.commit} /><meta name="pqcmm-source-sha256" content={version.sha256} /></Fragment>
+  <SitePageBody content={content} publication={publication} memberCount={memberCounts.organization} modelVersions={pageInputs.modelVersions} />
+</PublicPage>

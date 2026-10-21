@@ -7,7 +7,9 @@ summary: Review past releases and revisions of the PQC Maturity Model to ensure 
 weight: 90
 ---
 
-## Current Version: {{< param version >}}
+## Model version: {{< param version >}}
+
+Drafts are unreleased proposals for review. The version bar identifies the exact model revision being viewed; entries marked as releases below are published versions.
 
 ## PQCMM Version 1.0.0 - Initial Public Release
 
@@ -33,6 +35,6 @@ Key introductions in this version:
 
 ## Conducting Assessments
 
-**Important:** All assessments (Self-Assessments, Third-Party Assessments, and PKIC Certifications) must explicitly state the version of the PQCMM evaluated against. Assessments should always take place on the latest available version to ensure alignment with current cryptographic standards and best practices.
+**Important:** All assessments (Self-Assessments, Third-Party Assessments, and PKIC Certifications) must explicitly state the version of the PQCMM evaluated against. Assessments should always take place on the latest released version to ensure alignment with current cryptographic standards and best practices.
 
-**View Full Content Changes:** The entirety of the PQCMM is managed openly. To view the exact line-by-line differences (diffs) of any revision, refer to the [commit history in our GitHub repository](https://github.com/pkic/pkic.org).
+**View Full Content Changes:** The entirety of the PQCMM is managed openly. To view the exact line-by-line differences (diffs) of any revision, refer to the [model history in our GitHub repository](https://github.com/pkic/pqcmm/commits/main/model/).

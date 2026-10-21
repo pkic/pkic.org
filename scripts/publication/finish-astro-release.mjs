@@ -98,6 +98,7 @@ async function finishRelease(output, pages, timings) {
     );
     const files = svgFiles.map((file) => relative(output, file).split("\\").join("/"));
     const privatePaths = [];
+    const nonindexablePaths = [];
     const memberData = resolve(output, "_published", "members");
     await mkdir(memberData, { recursive: true });
     await writeFile(
@@ -148,8 +149,12 @@ async function finishRelease(output, pages, timings) {
           publishDownloads(document.window.document, `/${file.replace(/index\.html$/, "")}`),
         ))
           downloads.add(download);
-        if (/noindex/.test(document.window.document.querySelector('meta[name="robots"]')?.content ?? ""))
-          privatePaths.push(`/${file.replace(/index\.html$/, "")}`);
+        const robots = document.window.document.querySelector('meta[name="robots"]')?.content ?? "";
+        if (/noindex/.test(robots)) {
+          const route = `/${file.replace(/index\.html$/, "")}`;
+          nonindexablePaths.push(route);
+          if (document.window.document.body.hasAttribute("data-publication-private")) privatePaths.push(route);
+        }
         // Deferred images (assets/ts/site/deferred-images.ts) carry their sources until opened.
         const mediaAttributes = ["src", "srcset", "data-deferred-src", "data-deferred-srcset"];
         for (const element of document.window.document.querySelectorAll(
@@ -192,7 +197,7 @@ async function finishRelease(output, pages, timings) {
     ]) {
       let xml = await readFile(resolve(output, feed), "utf8");
       if (feed === "sitemap-0.xml") {
-        xml = excludeNonindexableSitemapEntries(xml, privatePaths);
+        xml = excludeNonindexableSitemapEntries(xml, nonindexablePaths);
         await writeFile(resolve(output, feed), xml);
       }
       if (XMLValidator.validate(xml) !== true) throw new Error(`Publication contains invalid XML: ${feed}`);

@@ -1,5 +1,6 @@
 import { logPublicationBuildCache } from "./publication/log-build-cache.mjs";
 import { spawnSync } from "node:child_process";
+import { resolve } from "node:path";
 import { publicationEnvironment } from "./publication/build-context.mjs";
 
 process.env.CLOUDFLARE_ENV = publicationEnvironment();
@@ -10,6 +11,13 @@ function run(command, args) {
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
 await logPublicationBuildCache("after dependency installation");
+process.env.PKIC_MODEL_REGISTRY_PATH = resolve("node_modules/.cache/model-versions/build-registry.yaml");
+run(process.execPath, [
+  "--experimental-strip-types",
+  "scripts/models/refresh-draft-pins.ts",
+  "--output",
+  process.env.PKIC_MODEL_REGISTRY_PATH,
+]);
 run(process.execPath, ["--experimental-strip-types", "scripts/prepare-public.mjs"]);
 run("pnpm", ["exec", "vite", "build"]);
 run("pnpm", [
