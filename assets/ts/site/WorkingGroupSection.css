@@ -262,9 +262,3 @@
     }
   }
 }
-
-@layer components {
-  .wg-version-children {
-    padding-inline-start: var(--pk-3);
-  }
-}

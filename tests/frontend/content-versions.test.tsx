@@ -61,21 +61,18 @@ describe("shared model tree version navigation", () => {
     expect(popup).not.toContain("All releases and downloads");
     expect(popup).toContain('aria-label="Switch model version"');
   });
-  it("groups releases by major and minor, separates drafts, and opens only the active branch", () => {
+  it("shows direct links to the latest release, selected older release, and every draft", () => {
     const root = document.createElement("div");
     root.innerHTML = render(<WorkingGroupSidebarTree tree={tree} />);
-    expect([...root.querySelectorAll("summary")].map((node) => node.textContent)).toEqual([
-      "2.x",
-      "2.0.x",
-      "1.x",
-      "1.2.x",
-      "1.1.x",
-      "Drafts",
+    expect(root.querySelectorAll("details")).toHaveLength(0);
+    expect([...root.querySelectorAll(".wg-version-item")].map((node) => node.getAttribute("href"))).toEqual([
+      "/model/1.1.2/",
+      "/model/draft/",
     ]);
-    expect([...root.querySelectorAll("details[open] > summary")].map((node) => node.textContent)).toEqual([
-      "1.x",
-      "1.1.x",
-    ]);
-    expect(root.querySelector('a[aria-current="page"]')?.getAttribute("href")).toBe("/model/1.1.2/");
+    const older = structuredClone(tree);
+    older.versions!.items[0]!.current = false;
+    older.versions!.items[1]!.current = true;
+    root.innerHTML = render(<WorkingGroupSidebarTree tree={older} />);
+    expect(root.querySelector('a[aria-current="page"]')?.getAttribute("href")).toBe("/model/1.2.0/");
   });
 });

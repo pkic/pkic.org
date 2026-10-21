@@ -1,6 +1,7 @@
+import { semanticVersionSchema } from "./content-versions.ts";
 import { z } from "zod";
 
-const version = z.string().regex(/^\d+\.\d+\.\d+$/);
+const version = semanticVersionSchema;
 export const modelVersionRootSchema = z
   .string()
   .regex(/^\/wg\/[a-z0-9./-]+\/$/)

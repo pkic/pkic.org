@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { parseDocument } from "yaml";
-import { dirname } from "node:path";
+import { dirname, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { modelRegistrySchema } from "../../assets/shared/model-registry.ts";
 import { verifyModelVersion } from "../../site/model-version-source.ts";
@@ -37,8 +38,8 @@ export async function refreshDraftPins(source: string, remote: DraftSource) {
   return { changes, source: changes ? document.toString() : source };
 }
 
-if (import.meta.main) {
-  const { values } = parseArgs({ options: { output: { type: "string" } } });
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  const { values } = parseArgs({ args: process.argv.slice(2), options: { output: { type: "string" } } });
   const result = await refreshDraftPins(
     await readFile("data/model-versions.yaml", "utf8"),
     githubDraftSource(process.env.GH_TOKEN),

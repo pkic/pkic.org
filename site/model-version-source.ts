@@ -58,7 +58,7 @@ async function readModelVersion(repository: string, sourcePath: string, version:
   }
   if (bytes === undefined) {
     const url = `https://raw.githubusercontent.com/${repository}/${version.commit}/${sourcePath}`;
-    const response = await fetch(url);
+    const response = await fetch(url, { signal: AbortSignal.timeout(30_000) });
     if (!response.ok) throw new Error(`Cannot fetch model version ${version.id}: ${response.status}`);
     bytes = await response.text();
     verifyModelVersion(bytes, version);

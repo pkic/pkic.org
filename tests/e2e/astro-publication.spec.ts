@@ -476,10 +476,7 @@ test("working-group sections scroll in one row and retain dropdowns", async ({ p
     "href",
     "/wg/pkimm/model/",
   );
-  await expect(versions.getByRole("link", { name: "1.0.0", exact: true, includeHidden: true })).toHaveAttribute(
-    "href",
-    "/wg/pkimm/1.0.0/",
-  );
+  await expect(versions.getByRole("link", { name: "1.0.0", exact: true, includeHidden: true })).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath("section-navigation.png"), fullPage: true });
 });
 
@@ -493,29 +490,6 @@ test("mobile search fields stay readable without disabling viewport zoom", async
   expect(await page.evaluate(() => window.visualViewport?.scale)).toBe(1);
   const viewport = await page.locator('meta[name="viewport"]').getAttribute("content");
   expect(viewport).not.toMatch(/user-scalable=no|maximum-scale=1/);
-});
-
-test("model versions preserve equivalent pages and fall back for new categories", async ({ page }) => {
-  await page.goto("/wg/pkimm/model/categories/");
-  let versions = page
-    .locator(".wg-nav-tree-panel")
-    .getByRole("group", { name: "Switch PKIMM model version", includeHidden: true });
-  await expect(versions.getByRole("link", { name: "1.0.0", exact: true, includeHidden: true })).toHaveAttribute(
-    "href",
-    "/wg/pkimm/1.0.0/categories/",
-  );
-  await expect(versions.getByRole("link", { name: "2.0.0 Latest release", includeHidden: true })).toHaveAttribute(
-    "aria-current",
-    "page",
-  );
-  await page.goto("/wg/pkimm/model/categories/cryptography/");
-  versions = page
-    .locator(".wg-nav-tree-panel")
-    .getByRole("group", { name: "Switch PKIMM model version", includeHidden: true });
-  await expect(versions.getByRole("link", { name: "1.0.0 Overview", includeHidden: true })).toHaveAttribute(
-    "href",
-    "/wg/pkimm/1.0.0/",
-  );
 });
 
 test("mobile hamburger stays at the right in normal, menu, and search states", async ({ page }, testInfo) => {
@@ -1701,7 +1675,6 @@ test("released model history stays readable while the default overview remains u
     "href",
     "/wg/pqc/pqcmm/drafts/1.1.0/",
   );
-  await switcher.getByText("Drafts", { exact: true }).click();
   await page.screenshot({ path: testInfo.outputPath("model-version-selector.png") });
 });
 
@@ -1719,7 +1692,6 @@ test("PQC model versions appear in the shared landing menu and document sidebar"
   await disclosure.press("Enter");
   const versions = page.locator(".wg-nav-tree-panel").getByRole("group", { name: "Switch PQCMM model version" });
   await expect(versions).toBeVisible();
-  await versions.getByText("Drafts", { exact: true }).click();
   await expect(versions.getByRole("link", { name: "1.1.0 — Draft", exact: true })).toBeInViewport();
   await page.screenshot({ path: testInfo.outputPath("landing-model-menu.png") });
   await page.goto("/wg/pqc/pqcmm/");

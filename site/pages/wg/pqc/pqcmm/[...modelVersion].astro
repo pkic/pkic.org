@@ -7,7 +7,7 @@ import { loadSiteContent } from "../../../../../functions/_lib/services/site-con
 import { modelContributionEntries } from "../../../../model-versions";
 import { loadModelVersion } from "../../../../model-version-source";
 import { modelLevelSlug, modelVersionMarkdown } from "../../../../model-version-markdown";
-import { renderSiteMarkdown } from "../../../../markdown-processor";
+import { renderModelMarkdown } from "../../../../model-version-html";
 import { publicationPageInputs } from "../../../../publication-page-inputs";
 import { publication, memberCounts } from "../../../../publication";
 
@@ -42,7 +42,7 @@ const content = {
   description: version.status === "draft" ? "An unreleased proposal for review. Its content and expected version may change." : `Published PQCMM ${version.version}, preserved for reference.`,
   hero: { ...base.hero, title: page.title },
   workingGroup: base.workingGroup ? { ...base.workingGroup, pageTitle: page.title, route, sidebar: undefined } : undefined,
-  html: await renderSiteMarkdown(modelVersionMarkdown(model, version.root, page.levelNumber)),
+  html: await renderModelMarkdown(modelVersionMarkdown(model, version.root, page.levelNumber)),
 };
 const pageInputs = await publicationPageInputs({ route, title: content.title, description: content.description, robots: content.robots, content });
 ---

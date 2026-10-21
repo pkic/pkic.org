@@ -50,7 +50,9 @@ export async function modelVersionsForRoute(route: string, publishedRoutes: read
   const defaultVersion = entry.versions.find((v) => v.id === entry.defaultVersion);
   const hasVersionPath = entry.versions.some((v) => route.startsWith(v.root));
   const selectedRoute =
-    !hasVersionPath && defaultVersion ? `${defaultVersion.root}${route.slice(entry.root.length)}` : route;
+    !hasVersionPath && route.startsWith(entry.root) && defaultVersion
+      ? `${defaultVersion.root}${route.slice(entry.root.length)}`
+      : route;
   return {
     ...modelVersionLinks(entry.versions, selectedRoute, available),
     root: entry.root,
