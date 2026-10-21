@@ -812,6 +812,24 @@ This private link manages only your own speaker profile.
 `,
   },
   {
+    key: "proposal_speaker_confirmed_by_organizer",
+    subjectTemplate: "Speaker participation confirmed — {{eventName}}",
+    contentType: "markdown",
+    messageType: "transactional",
+    content: `An organizer has confirmed your speaker identity and accepted your participation in **{{proposalTitle}}** at **{{eventName}}** on your behalf.
+
+Speaker identity: {{speakerName}}{{#if organizationName}}, {{organizationName}}{{else}} (individual){{/if}}.
+
+{{#if terms}}The organizer accepted the following terms and conditions on your behalf:
+
+{{#each terms}}- {{label}} (version {{version}}){{#if helpText}} — {{helpText}}{{/if}}{{#if contentRef}} — {{contentRef}}{{/if}}
+
+{{/each}}{{else}}There are no required speaker terms configured for this event.
+
+{{/if}}If you do not agree with this confirmation or these terms, contact the PKI Consortium at {{contactEmail}}.
+`,
+  },
+  {
     key: "proposal_organizational_representation_request",
     subjectTemplate: "Please speak on behalf of your organization — {{eventName}}",
     content: `Hello {{firstName}},

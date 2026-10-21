@@ -176,22 +176,28 @@ describe("organizer speaker acceptance", () => {
     });
     const emails = await queryAll<{ recipient_email: string; payload_json: string }>(
       env.DB,
-      "SELECT recipient_email, payload_json FROM email_outbox WHERE recipient_user_id=? AND subject LIKE 'Speaker participation confirmed%'",
+      "SELECT recipient_email, payload_json FROM email_outbox WHERE recipient_user_id=? AND template_key='proposal_speaker_confirmed_by_organizer'",
       [coSpeakerUserId],
     );
     expect(emails).toHaveLength(1);
     expect(emails[0].recipient_email).toBe("cospeaker@example.test");
     const payload = JSON.parse(emails[0].payload_json);
-    expect(payload.__directBodyContent).toContain("Speaker conditions");
-    expect(payload.__directBodyContent).toContain("Recording and publication permitted");
-    expect(payload.__directBodyContent).toContain("v1");
-    expect(payload.__directBodyContent).toContain("contact@pkic.org");
+    expect(payload).not.toHaveProperty("__directBodyContent");
+    const deliveries = vi.mocked(fetch).mock.calls.map(([, init]) => JSON.parse(String(init?.body ?? "{}")));
+    const notification = deliveries.find((message) => message.subject?.startsWith("Configured speaker notice"));
+    expect(notification).toBeDefined();
+    const rendered = notification.content.map((part: { value: string }) => part.value).join("\n");
+    expect(rendered).toContain("Configured speaker notice:");
+    expect(rendered).toContain("Speaker conditions");
+    expect(rendered).toContain("Recording and publication permitted");
+    expect(rendered).toContain("v1");
+    expect(rendered).toContain("contact@pkic.org");
     expect(payload.__replyTo).toBe("contact@pkic.org");
     expect((await acceptRequest(proposalId, coSpeakerUserId)).status).toBe(200);
     expect(
       await queryAll(
         env.DB,
-        "SELECT id FROM email_outbox WHERE recipient_user_id=? AND subject LIKE 'Speaker participation confirmed%'",
+        "SELECT id FROM email_outbox WHERE recipient_user_id=? AND template_key='proposal_speaker_confirmed_by_organizer'",
         [coSpeakerUserId],
       ),
     ).toHaveLength(1);
@@ -237,7 +243,7 @@ describe("organizer speaker acceptance", () => {
       expect(
         await queryAll(
           env.DB,
-          "SELECT recipient_email FROM email_outbox WHERE recipient_user_id=? AND subject LIKE 'Speaker participation confirmed%'",
+          "SELECT recipient_email FROM email_outbox WHERE recipient_user_id=? AND template_key='proposal_speaker_confirmed_by_organizer'",
           [coSpeakerUserId],
         ),
       ).toEqual([{ recipient_email: "speaker@organization.test" }]);
@@ -273,7 +279,7 @@ describe("organizer speaker acceptance", () => {
     expect(
       await queryAll(
         env.DB,
-        "SELECT id FROM email_outbox WHERE recipient_user_id=? AND subject LIKE 'Speaker participation confirmed%'",
+        "SELECT id FROM email_outbox WHERE recipient_user_id=? AND template_key='proposal_speaker_confirmed_by_organizer'",
         [coSpeakerUserId],
       ),
     ).toEqual([]);
@@ -337,7 +343,7 @@ describe("organizer speaker acceptance", () => {
     expect(
       await queryAll(
         env.DB,
-        "SELECT id FROM email_outbox WHERE recipient_user_id=? AND subject LIKE 'Speaker participation confirmed%'",
+        "SELECT id FROM email_outbox WHERE recipient_user_id=? AND template_key='proposal_speaker_confirmed_by_organizer'",
         [coSpeakerUserId],
       ),
     ).toEqual([]);

@@ -1,14 +1,13 @@
 import { first } from "../db/queries";
 import { prepareAuthorizationGuard } from "../db/authorization-guard";
-import { DIRECT_EMAIL_TEMPLATE_KEY, directEmailBodyPayload } from "../email/direct-body";
-import { escapeMarkdownText } from "../email/markdown";
+import { emailPlainText } from "../email/plain-text";
 import { prepareQueueEmailStatement } from "../email/outbox";
 import { AppError } from "../errors";
 import type { DatabaseLike } from "../types";
 import { SPEAKER_ACCEPTANCE_CONTACT_EMAIL } from "../../../assets/shared/proposal-speaker-acceptance";
 import { ownedIdentityAtEvidence } from "./identities/selection";
 import { ownedIdentityEmailEvidence } from "./identities/owned-email";
-import { getEventById, type EventTermRecord } from "./events";
+import { buildEventEmailVariables, getEventById, type EventTermRecord } from "./events";
 import { prepareProposalActingIdentity } from "./proposal-speaker-identity";
 import { proposalSpeakerIdentityIdSql } from "./proposal-speaker-profile-projection";
 import type { SpeakerWithContext } from "./proposals-speaker-capability";
@@ -80,7 +79,7 @@ export async function prepareOrganizerSpeakerIdentity(db: DatabaseLike, context:
   return { ...selected, guards, email: identity.email, organizationName: identity.organization_name };
 }
 
-/** The accepted terms and notification are fixed at confirmation, so delivery retries send the same account. */
+/** Supplies the accepted terms snapshot to the editable organizer-confirmation template. */
 export async function prepareOrganizerSpeakerNotification(
   db: DatabaseLike,
   context: SpeakerWithContext,
@@ -90,38 +89,34 @@ export async function prepareOrganizerSpeakerNotification(
   at: string,
 ) {
   const event = await getEventById(db, context.proposal.event_id);
-  const termLines = terms
-    .filter((term) => term.required === 1)
-    .map((term) =>
-      [
-        `- ${escapeMarkdownText(term.display_text || term.term_key)} (version ${escapeMarkdownText(term.version)})`,
-        term.help_text ? `  ${escapeMarkdownText(term.help_text)}` : "",
-        term.content_ref ? `  ${escapeMarkdownText(new URL(term.content_ref, appBaseUrl).href)}` : "",
-      ]
-        .filter(Boolean)
-        .join("\n"),
-    );
   return prepareQueueEmailStatement(
     db,
     {
       eventId: event.id,
       baseUrl: appBaseUrl,
-      templateKey: DIRECT_EMAIL_TEMPLATE_KEY,
+      templateKey: "proposal_speaker_confirmed_by_organizer",
       recipientUserId: context.speaker.user_id,
       recipientEmail: identity.email,
       replyTo: SPEAKER_ACCEPTANCE_CONTACT_EMAIL,
       messageType: "transactional",
-      subject: `Speaker participation confirmed — ${event.name}`,
-      data: directEmailBodyPayload(
-        [
-          `An organizer has confirmed your speaker identity and accepted your participation in **${escapeMarkdownText(context.proposal.title)}** at **${escapeMarkdownText(event.name)}** on your behalf.`,
-          `Speaker identity: ${escapeMarkdownText([context.user.first_name, context.user.last_name].filter(Boolean).join(" ") || identity.email)}${identity.organizationName ? `, ${escapeMarkdownText(identity.organizationName)}` : " (individual)"}.`,
-          termLines.length
-            ? `The organizer accepted the following terms and conditions on your behalf:\n\n${termLines.join("\n\n")}`
-            : "There are no required speaker terms configured for this event.",
-          `If you do not agree with this confirmation or these terms, contact the PKI Consortium at ${SPEAKER_ACCEPTANCE_CONTACT_EMAIL}.`,
-        ].join("\n\n"),
-      ),
+      data: {
+        ...buildEventEmailVariables(event, appBaseUrl),
+        eventName: emailPlainText(event.name),
+        proposalTitle: emailPlainText(context.proposal.title),
+        speakerName: emailPlainText(
+          [context.user.first_name, context.user.last_name].filter(Boolean).join(" ") || identity.email,
+        ),
+        organizationName: emailPlainText(identity.organizationName ?? ""),
+        contactEmail: SPEAKER_ACCEPTANCE_CONTACT_EMAIL,
+        terms: terms
+          .filter((term) => term.required === 1)
+          .map((term) => ({
+            label: emailPlainText(term.display_text || term.term_key),
+            version: emailPlainText(term.version),
+            helpText: emailPlainText(term.help_text ?? ""),
+            contentRef: emailPlainText(term.content_ref ? new URL(term.content_ref, appBaseUrl).href : ""),
+          })),
+      },
     },
     at,
   );
