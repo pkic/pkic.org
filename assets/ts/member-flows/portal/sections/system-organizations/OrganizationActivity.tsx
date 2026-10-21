@@ -316,9 +316,10 @@ export function OrganizationActivity({
   const [path, navigate] = usePortalHashLocation();
   const ownedPath = path.replace(/\/$/u, "");
   const available = ownedPath === basePath || tabs.some((view) => ownedPath === `${basePath}/${view}`);
+  const activityPath = ownedPath.startsWith(`${basePath}/`) && !ownedPath.slice(basePath.length + 1).includes("/");
   useEffect(() => {
-    if (!available) navigate(basePath, { replace: true });
-  }, [available, basePath, navigate]);
+    if (activityPath && !available) navigate(basePath, { replace: true });
+  }, [activityPath, available, basePath, navigate]);
   const [tab, setTab] = useRouteView(basePath, tabs, "groups");
   // A viewer who loses sponsorship access mid-session must not be left on a
   // tab that is no longer in the set.

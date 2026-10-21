@@ -70,6 +70,18 @@ afterEach(() => {
 });
 
 describe("organization activity routes", () => {
+  it.each(["/organizations", "/organizations/another-id/events", "/organizations/organization-id/domains/new"])(
+    "leaves an unowned path %s unchanged",
+    async (path) => {
+      window.location.hash = `#${path}`;
+      await act(async () => {
+        render(<OrganizationActivity organizationId="organization-id" canReadSponsorships />, container);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      expect(location.hash).toBe(`#${path}`);
+    },
+  );
+
   it.each(["typo", "sponsorships"])("recovers navigation from an unavailable %s activity", async (view) => {
     sponsorshipAccess.value = false;
     await open(`#/organizations/organization-id/${view}`);
