@@ -120,17 +120,24 @@ isolated per test file.
 
 ## D1 sessions and read replicas
 
-The Worker opens one D1 session per invocation. Public `GET` and `HEAD` requests
-use `first-unconstrained`; authenticated, capability-bearing, and state-changing
-requests start with `first-primary`. Scheduled and email invocations also start
-with `first-primary`.
+The Worker opens one D1 session per invocation. Ordinary `GET` and `HEAD`
+requests, including protected reads, use the signed caller's bookmark or
+`first-unconstrained`. Authentication endpoints, capability-bearing requests,
+state-changing requests, and opaque credentials without bookmark transport
+start with `first-primary`. Scheduled and email invocations also start with
+`first-primary`.
 
 That constraint applies only to the first query. Subsequent reads can use a
 replica that satisfies the session bookmark, while writes still go to the
-primary. Keeping authentication in the same session establishes a fresh
-consistency boundary before authorization and data reads. Explicitly public
-member and sponsor directory, wall, display, and logo reads ignore incidental
-login cookies when choosing a replica; staff projections do not.
+primary. Read authorization uses a read-only check in the same batch as the
+protected queries; mutations retain an atomic write guard. The owner explicitly
+accepts replica lag in permission and session revocations for reads; see the
+policy comments in `functions/_lib/db/session.ts` and
+`functions/_lib/db/authorization-guard.ts`. Seconds of lag are expected, without
+a fixed D1 guarantee. Bookmarks preserve sequential consistency, including
+after login and saves, rather than immediate visibility of another actor's
+revocation. Explicitly public member and sponsor directory, wall, display, and
+logo reads ignore incidental login cookies and do not replace private bookmarks.
 
 Enabling replicas in the dashboard is not sufficient: application reads must
 use the [D1 Sessions API](https://developers.cloudflare.com/d1/best-practices/read-replication/).

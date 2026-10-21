@@ -1,3 +1,4 @@
+import { profileD1Flow } from "./helpers/d1-flow-profile";
 import { grantAdministrator } from "./helpers/administrator";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
@@ -439,6 +440,18 @@ describe("group mailing-list management routes", () => {
       label: "Read race",
       purpose: "group",
     });
+
+    const profile = profileD1Flow(env.DB);
+    const page = await listGroupManagedMailingLists(
+      profile.db,
+      leader,
+      group.id,
+      groupMailingListManagementQuerySchema.parse({}),
+    );
+    expect(page.mailingLists).toHaveLength(1);
+    expect((await profile.report()).queries.some(({ sql }) => /INSERT INTO authorization_guards/.test(sql))).toBe(
+      false,
+    );
 
     await expect(
       listGroupManagedMailingLists(

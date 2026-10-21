@@ -5,7 +5,8 @@ import {
   agendaOccurrencePatchSchema,
   agendaSnapshotSchema,
 } from "../assets/shared/schemas/event-agenda";
-import { createAgendaOccurrence } from "../functions/_lib/services/event-agenda/mutations";
+import { profileD1Flow } from "./helpers/d1-flow-profile";
+import { patchAgendaOccurrence, createAgendaOccurrence } from "../functions/_lib/services/event-agenda/mutations";
 import { publishedSessionRoute } from "../assets/shared/public-agenda-pages";
 import { publishedAgendaPages } from "./helpers/published-agenda-pages";
 import { resetDb } from "./helpers/reset-db";
@@ -86,6 +87,25 @@ describe("occurrence PATCH omission semantics", () => {
     expect(publishedSessionRoute(publishedAgendaPages("pqc-2026"), publicCopy.occurrences[0]!)).toBe(
       `/events/pqc-2026/sessions/${publicCopy.occurrences[0]!.id}/`,
     );
+  });
+
+  it("bounds title-only saves to 20 database round trips without reloading the edited occurrence", async () => {
+    const { eventId, occurrenceId } = await fixture();
+    const profile = profileD1Flow(env.DB);
+    const saved = await patchAgendaOccurrence(
+      profile.db,
+      eventId,
+      "pqc-2026",
+      occurrenceId,
+      agendaOccurrencePatchSchema.parse({ expectedRevision: 1, title: "Faster save" }),
+    );
+    expect(saved.occurrences.find((occurrence) => occurrence.id === occurrenceId)?.title).toBe("Faster save");
+    const report = await profile.report();
+    expect(report.roundTrips).toBeLessThanOrEqual(20);
+    expect(report.queries.filter((query) => query.sql.startsWith("SELECT id,content_id,"))).toHaveLength(2);
+    const occurrenceRead = report.plans.find(({ sql }) => sql.startsWith("SELECT id,content_id,"));
+    const details = occurrenceRead!.plan.map((row) => (row as { detail: string }).detail).join("\n");
+    expect(details).not.toMatch(/SCAN proposal\b|SEARCH proposal USING INDEX idx_proposals_event/);
   });
 
   it("honors explicit clears and policy changes while a stale PATCH leaves every stored effect unchanged", async () => {

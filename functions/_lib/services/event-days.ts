@@ -81,12 +81,21 @@ export async function listEventDays(db: DatabaseLike, eventId: string): Promise<
   return all<EventDayRecord>(db, EVENT_DAYS_LIST_SQL, [eventId]);
 }
 
-export const CONFIGURED_EVENT_DAY_ATTENDANCE_COUNTS_SQL = `SELECT rda.event_day_id, rda.attendance_type, COUNT(*) AS count
-  FROM event_days day
-  JOIN registration_day_attendance rda ON rda.event_day_id = day.id
-  JOIN registrations r ON r.id = rda.registration_id AND r.event_id = day.event_id
-  WHERE day.event_id = ? AND r.status = 'registered'
-  GROUP BY rda.event_day_id, rda.attendance_type`;
+function eventDayAttendanceCountsSql(includePendingConfirmation: boolean) {
+  const status = includePendingConfirmation ? "IN ('pending_email_confirmation', 'registered')" : "= 'registered'";
+  return `WITH selected_event AS (SELECT ? AS id)
+    SELECT rda.event_day_id, rda.attendance_type, COUNT(*) AS count
+    FROM event_days day
+    JOIN registration_day_attendance rda ON rda.event_day_id = day.id
+    WHERE day.event_id = (SELECT id FROM selected_event)
+      AND rda.registration_id IN (
+        SELECT id FROM registrations
+        WHERE event_id = (SELECT id FROM selected_event) AND status ${status}
+      )
+    GROUP BY rda.event_day_id, rda.attendance_type`;
+}
+
+export const CONFIGURED_EVENT_DAY_ATTENDANCE_COUNTS_SQL = eventDayAttendanceCountsSql(false);
 
 /** Management projection with registered attendance counts grouped in D1, not in the browser. */
 export async function listConfiguredEventDaysWithCounts(db: DatabaseLike, eventId: string) {
@@ -195,21 +204,15 @@ export async function countRegisteredByEventDay(
   db: DatabaseLike,
   eventId: string,
 ): Promise<Map<string, Map<string, number>>> {
-  const rows = await all<{ event_day_id: string; attendance_type: string; total: number }>(
+  const rows = await all<{ event_day_id: string; attendance_type: string; count: number }>(
     db,
-    `SELECT rda.event_day_id, rda.attendance_type, COUNT(*) AS total
-     FROM event_days day
-     JOIN registration_day_attendance rda ON rda.event_day_id = day.id
-     JOIN registrations r ON r.id = rda.registration_id AND r.event_id = day.event_id
-     WHERE day.event_id = ?
-       AND r.status IN ('pending_email_confirmation', 'registered')
-     GROUP BY rda.event_day_id, rda.attendance_type`,
+    eventDayAttendanceCountsSql(true),
     [eventId],
   );
   const map = new Map<string, Map<string, number>>();
   for (const row of rows) {
     if (!map.has(row.event_day_id)) map.set(row.event_day_id, new Map());
-    map.get(row.event_day_id)!.set(row.attendance_type, Number(row.total));
+    map.get(row.event_day_id)!.set(row.attendance_type, Number(row.count));
   }
   return map;
 }

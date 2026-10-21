@@ -73,15 +73,15 @@ export interface AttendanceChangeStatistics {
 export function prepareAttendanceStatusByTypeStatement(db: DatabaseLike, eventId: string): StatementLike {
   return db
     .prepare(
-      `SELECT r.attendance_type,
-            SUM(CASE WHEN active_waitlist.registration_id IS NULL THEN 1 ELSE 0 END) AS accepted,
-            SUM(CASE WHEN active_waitlist.registration_id IS NULL THEN 0 ELSE 1 END) AS waitlisted
-     FROM registrations r
-     LEFT JOIN (
-       SELECT DISTINCT registration_id
+      `WITH active_waitlist AS (
+       SELECT registration_id
        FROM event_day_waitlist_entries
        WHERE event_id = ? AND status IN ('waiting', 'offered')
-     ) active_waitlist ON active_waitlist.registration_id = r.id
+     )
+     SELECT r.attendance_type,
+            SUM(CASE WHEN r.id IN (SELECT registration_id FROM active_waitlist) THEN 0 ELSE 1 END) AS accepted,
+            SUM(CASE WHEN r.id IN (SELECT registration_id FROM active_waitlist) THEN 1 ELSE 0 END) AS waitlisted
+     FROM registrations r
      WHERE r.event_id = ? AND r.status = 'registered'
      GROUP BY r.attendance_type`,
     )

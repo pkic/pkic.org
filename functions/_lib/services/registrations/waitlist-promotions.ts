@@ -167,7 +167,11 @@ export async function runWaitlistPromotionCycle(
        e.settings_json,
        e.capacity_in_person
      FROM events e
-     WHERE (e.ends_at IS NULL OR datetime(e.ends_at) >= datetime('now'))
+     WHERE e.id IN (
+       SELECT day.event_id FROM event_day_waitlist_entries candidate
+       JOIN event_days day ON day.id = candidate.event_day_id WHERE candidate.status = 'waiting'
+     )
+       AND (e.ends_at IS NULL OR datetime(e.ends_at) >= datetime('now'))
        AND EXISTS (
          SELECT 1
          FROM event_days ed
