@@ -2,6 +2,7 @@ import { affiliationLabel } from "../../assets/shared/agenda-speaker-affiliation
 // @vitest-environment jsdom
 import { renderToStringAsync } from "preact-render-to-string";
 import { expect, it } from "vitest";
+import { AgendaSpeakerProfile } from "../../assets/ts/site/AgendaSpeakerProfile";
 import { AgendaSpeaker } from "../../assets/ts/site/AgendaSpeaker";
 import { agendaContent, agendaSessionContent, agendaSpeakerContent } from "../../assets/shared/public-agenda-content";
 import { publicSessionCredits, sessionDisplayCredits } from "../../assets/shared/session-public-credits";
@@ -211,6 +212,7 @@ it("reads draft speaker details from the canonical identity rather than historic
 it("omits organization logos on compact session credits and retains them in session details", async () => {
   const speaker = {
     name: "Example speaker",
+    links: ["https://example.org/speaker"],
     affiliations: [
       { title: "Researcher", organization: { name: "Example Institute", logoSrc: "/example-institute.svg" } },
     ],
@@ -221,6 +223,17 @@ it("omits organization logos on compact session credits and retains them in sess
   expect(compact.textContent).toContain("Researcher · Example Institute");
   const detail = document.createElement("div");
   detail.innerHTML = await renderToStringAsync(<AgendaSpeaker speaker={speaker} detail />);
+  expect(detail.querySelector(".pk-agenda-speaker-affiliations")?.textContent).toBe("Researcher · Example Institute");
+  expect(detail.querySelector(".pk-agenda-speaker-affiliations .pk-agenda-speaker-organization")).toBeNull();
+  const info = detail.querySelector(".pk-content-agenda__speaker-info")!;
+  expect(info.lastElementChild?.classList.contains("pk-agenda-speaker-logos")).toBe(true);
+  expect(info.querySelector(".pk-link-list")!.nextElementSibling).toBe(info.lastElementChild);
+  const profile = document.createElement("div");
+  profile.innerHTML = await renderToStringAsync(<AgendaSpeakerProfile speaker={speaker} profileId="example" />);
+  const text = profile.querySelector(".pk-agenda-speaker-profile__affiliation-text")!;
+  expect(text.querySelector(".pk-agenda-speaker-organization")).toBeNull();
+  expect(text.querySelector(".pk-link-list")).not.toBeNull();
+  expect(text.nextElementSibling?.classList.contains("pk-agenda-speaker-logos")).toBe(true);
   expect(detail.querySelector(".pk-agenda-speaker-organization img")?.getAttribute("src")).toBe(
     "/example-institute.svg",
   );

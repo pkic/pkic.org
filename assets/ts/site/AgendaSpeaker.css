@@ -87,11 +87,10 @@
     gap: var(--pk-1);
   }
   .pk-agenda-speaker-profile__affiliations {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--pk-3);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: var(--pk-4);
   }
   .pk-agenda-speaker-profile__affiliations .pk-agenda-speaker-affiliations {
     margin: 0;
@@ -114,6 +113,46 @@
     }
     .pk-agenda-speaker-profile__portrait .pk-avatar {
       --pk-avatar-size: 3.5rem;
+    }
+  }
+
+  .pk-agenda-speaker-logos {
+    max-inline-size: 14rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--pk-3);
+  }
+  .pk-agenda-speaker-logos > a {
+    display: inline-flex;
+  }
+  .pk-content-agenda__speaker--detail .pk-content-agenda__speaker-info {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: var(--pk-2) var(--pk-5);
+  }
+  .pk-content-agenda__speaker--detail .pk-content-agenda__speaker-info > :not(.pk-agenda-speaker-logos) {
+    grid-column: 1;
+  }
+  .pk-content-agenda__speaker--detail .pk-content-agenda__speaker-info > .pk-agenda-speaker-logos {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    justify-content: flex-end;
+  }
+  .pk-agenda-speaker-profile__affiliation-text {
+    display: grid;
+    gap: var(--pk-3);
+  }
+  @media (max-width: 46rem) {
+    .pk-agenda-speaker-profile__affiliations,
+    .pk-content-agenda__speaker--detail .pk-content-agenda__speaker-info {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .pk-content-agenda__speaker--detail .pk-content-agenda__speaker-info > .pk-agenda-speaker-logos {
+      grid-column: 1;
+      grid-row: auto;
+      justify-content: flex-start;
     }
   }
 

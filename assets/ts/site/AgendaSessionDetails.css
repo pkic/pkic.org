@@ -204,11 +204,6 @@
   }
   :is(.pk-content-agenda__session, .pk-agenda-dialogs, .pk-agenda-speaker)
     .session-modal__speaker
-    .pk-content-agenda__speaker-info {
-    display: block;
-  }
-  :is(.pk-content-agenda__session, .pk-agenda-dialogs, .pk-agenda-speaker)
-    .session-modal__speaker
     .pk-content-agenda__speaker-bio {
     margin-block-start: var(--pk-3);
     font-size: var(--pk-text-sm);

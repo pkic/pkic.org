@@ -11,7 +11,7 @@ import "./AgendaSpeaker.css";
 import { useContext } from "preact/hooks";
 import { AgendaSpeakerDialogsContext, AgendaSpeakerProfile } from "./AgendaSpeakerProfile";
 import { AgendaSpeakerDirectoryCard } from "./AgendaSpeakerDirectoryCard";
-import { AgendaSpeakerAffiliations } from "./AgendaSpeakerAffiliations";
+import { AgendaSpeakerAffiliations, AgendaSpeakerLogos } from "./AgendaSpeakerAffiliations";
 
 /** The same supplied speaker credit on agenda cards, details and static history pages. */
 export function AgendaSpeaker({
@@ -158,12 +158,13 @@ export function AgendaSpeakerCredit({
             affiliations={speaker.affiliations}
             layout={detail ? "list" : "rotating"}
             size={detail ? "preview" : "card"}
-            showLogos={detail}
+            showLogos={false}
           />
         </div>
         {detail && speaker.links?.length ? (
           <LinkList links={speaker.links} ownerName={speaker.name} label={`${speaker.name} elsewhere`} compact />
         ) : null}
+        {detail ? <AgendaSpeakerLogos affiliations={speaker.affiliations} /> : null}
       </div>
       {detail && (speaker.bioMarkdown || speaker.bioHtml) ? (
         <div class="pk-content-agenda__speaker-bio">

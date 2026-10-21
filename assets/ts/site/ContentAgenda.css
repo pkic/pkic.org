@@ -677,9 +677,6 @@
     min-width: 0;
   }
 
-  .pk-content-agenda__speaker--detail .pk-content-agenda__speaker-info {
-    display: block;
-  }
   .pk-content-agenda__speaker--detail > .pk-content-agenda__speaker-bio {
     grid-column: 1 / -1;
   }

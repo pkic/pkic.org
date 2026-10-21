@@ -82,6 +82,32 @@ export function AgendaSpeakerAffiliations({
   );
 }
 
+/** Organization marks stay separate from the person's title, affiliations and links. */
+export function AgendaSpeakerLogos({
+  affiliations,
+  size = "preview",
+}: {
+  affiliations: readonly ContentAgendaAffiliation[] | undefined;
+  size?: MarkSize;
+}) {
+  const organizations =
+    affiliations?.flatMap(({ organization }) => (organization?.logoSrc ? [organization] : [])) ?? [];
+  if (!organizations.length) return null;
+  return (
+    <span class="pk-agenda-speaker-logos">
+      {organizations.map((organization) =>
+        organization.href ? (
+          <a href={organization.href}>
+            <AgendaSpeakerOrganizationLogo organization={organization} size={size} />
+          </a>
+        ) : (
+          <AgendaSpeakerOrganizationLogo organization={organization} size={size} />
+        ),
+      )}
+    </span>
+  );
+}
+
 /**
  * One unit at a time in a row without room: every unit shares one grid cell, so the row keeps the
  * widest unit's width (truncated by its container) and a fixed height while CSS keyframes crossfade

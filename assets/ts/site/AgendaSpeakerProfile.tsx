@@ -15,7 +15,7 @@ import { CloseButton } from "../ui/CloseButton";
 import { LinkList } from "../ui/LinkList";
 import { Markdown } from "../ui/Markdown";
 import { DeferredImages } from "./SiteImage";
-import { AgendaSpeakerAffiliations } from "./AgendaSpeakerAffiliations";
+import { AgendaSpeakerAffiliations, AgendaSpeakerLogos } from "./AgendaSpeakerAffiliations";
 import { AgendaSessionRow, AgendaSessionRows } from "./AgendaSessionRow";
 
 /**
@@ -128,10 +128,18 @@ export function AgendaSpeakerProfile({
         <div class="session-modal__body">
           {speaker.affiliations?.length || speaker.links?.length ? (
             <div class="pk-agenda-speaker-profile__affiliations">
-              <AgendaSpeakerAffiliations affiliations={speaker.affiliations} size="profile" />
-              {speaker.links?.length ? (
-                <LinkList links={speaker.links} ownerName={speaker.name} label={`${speaker.name} elsewhere`} compact />
-              ) : null}
+              <div class="pk-agenda-speaker-profile__affiliation-text">
+                <AgendaSpeakerAffiliations affiliations={speaker.affiliations} size="profile" showLogos={false} />
+                {speaker.links?.length ? (
+                  <LinkList
+                    links={speaker.links}
+                    ownerName={speaker.name}
+                    label={`${speaker.name} elsewhere`}
+                    compact
+                  />
+                ) : null}
+              </div>
+              <AgendaSpeakerLogos affiliations={speaker.affiliations} size="profile" />
             </div>
           ) : null}
           {speaker.bioMarkdown || speaker.bioHtml ? (

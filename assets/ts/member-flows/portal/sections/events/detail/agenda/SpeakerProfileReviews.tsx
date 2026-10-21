@@ -5,6 +5,7 @@ import {
   speakerProfileApprovalSchema,
   speakerProfileApprovalResponseSchema,
   speakerProfileReviewsResponseSchema,
+  speakerProfileReviewQuerySchema,
   type SpeakerProfileReview,
 } from "../../../../../../../shared/schemas/event-speaker-profile-reviews";
 import { formatNumber } from "../../../../../../../shared/format-number";
@@ -49,11 +50,10 @@ export function speakerProfileReviewColumns(
       header: "Review",
       filter: {
         param: "status",
-        options: [
-          { value: "all", label: "All profiles" },
-          { value: "pending", label: "Needs review" },
-          { value: "approved", label: "Approved" },
-        ],
+        options: speakerProfileReviewQuerySchema.shape.status.unwrap().options.map((value) => ({
+          value,
+          label: { all: "All profiles", pending: "Needs review", approved: "Approved" }[value],
+        })),
       },
       cell: (profile) =>
         profile.reviewedAt ? (
