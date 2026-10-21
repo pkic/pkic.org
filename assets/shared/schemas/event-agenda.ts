@@ -307,18 +307,18 @@ export const agendaPublicationSchema = agendaRevisionSchema.extend({
   acknowledgeArchiveRepresentation: z.boolean().default(false),
 });
 export const agendaRoomCreateSchema = agendaRoomSchema.omit({ id: true }).extend(agendaRevisionSchema.shape);
+const speakerIdentityIdsSchema = z.record(
+  id,
+  z
+    .array(id)
+    .min(1)
+    .max(MAX_SESSION_AFFILIATIONS)
+    .refine((values) => new Set(values).size === values.length, "Choose each identity once"),
+);
+
 export const agendaOccurrenceCreateSchema = agendaOccurrenceFieldsSchema.extend({
   ...agendaRevisionSchema.shape,
-  speakerIdentityIds: z
-    .record(
-      id,
-      z
-        .array(id)
-        .min(1)
-        .max(MAX_SESSION_AFFILIATIONS)
-        .refine((values) => new Set(values).size === values.length, "Choose each identity once"),
-    )
-    .optional(),
+  speakerIdentityIds: speakerIdentityIdsSchema.optional(),
   speakerRoles: z.record(id, agendaCreditRoleSchema).optional(),
   speakerPlacements: z.record(id, agendaSpeakerPlacementSchema).optional(),
   speakerUserIds: z
@@ -336,16 +336,7 @@ export const agendaOccurrencePatchSchema = agendaOccurrenceFieldsSchema.partial(
   remoteCapacity: agendaOccurrenceFieldsSchema.shape.remoteCapacity.unwrap().optional(),
   visibility: agendaOccurrenceFieldsSchema.shape.visibility.unwrap().optional(),
   kind: agendaOccurrenceFieldsSchema.shape.kind.unwrap().optional(),
-  speakerIdentityIds: z
-    .record(
-      id,
-      z
-        .array(id)
-        .min(1)
-        .max(MAX_SESSION_AFFILIATIONS)
-        .refine((values) => new Set(values).size === values.length, "Choose each identity once"),
-    )
-    .optional(),
+  speakerIdentityIds: speakerIdentityIdsSchema.optional(),
   speakerRoles: z.record(id, agendaCreditRoleSchema).optional(),
   speakerPlacements: z.record(id, agendaSpeakerPlacementSchema).optional(),
   speakerUserIds: z
