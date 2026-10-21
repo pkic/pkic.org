@@ -205,7 +205,8 @@
     object-fit: contain;
     object-position: left center;
   }
-  .pk-agenda-speaker-organization__logo .pk-avatar__img {
+  /* Lazy avatar styles can arrive later; a wordmark must never inherit tile padding. */
+  .pk-agenda-speaker-organization > .pk-agenda-speaker-organization__logo .pk-avatar__img {
     inline-size: auto;
     max-inline-size: var(--pk-agenda-mark-inline);
     block-size: 100%;
