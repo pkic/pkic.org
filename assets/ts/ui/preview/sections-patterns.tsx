@@ -27,6 +27,7 @@ import { EmptyState } from "../EmptyState";
 import { Field } from "../Field";
 import { InputGroup } from "../InputGroup";
 import { Menu } from "../Menu";
+import { Markdown } from "../Markdown";
 import { Meter } from "../Meter";
 import { Panel, PanelBody, PanelHeader } from "../Panel";
 import { PositionTimeline } from "../PositionTimeline";
@@ -74,7 +75,9 @@ const agendaDays: ContentAgendaDay[] = ["2025-12-01", "2025-12-02"].map((date, i
             name,
             affiliations: [{ title: "Migration program lead", organization: { name: "Example Organization" } }],
           })),
-          descriptionHtml: "<p>A practical discussion of migration planning.</p>",
+          descriptionHtml: "",
+          descriptionMarkdown:
+            "A **practical discussion** of migration planning.\n\nBring your questions.  \nWe will close with a discussion.",
           endsAt: `${date}T09:30:00.000Z`,
           durationMinutes: 30,
           track: "Migration",
@@ -313,6 +316,17 @@ function RowListSpecimen() {
 const wallLogo = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="16" viewBox="0 0 100 40"><path fill="currentColor" d="M0 0h28v40H0zm36 0h28v40H36zm36 0h28v40H72z"/></svg>')}`;
 
 export const patternSections: PreviewSection[] = [
+  {
+    id: "markdown",
+    title: "Markdown content",
+    render: () => (
+      <Markdown
+        markdown={
+          "A **practical discussion** of migration planning.\n\nThe session covers three things:\n\n- Hardware readiness\n- Migration priorities\n- Investment timing\n\nBring your questions.  \nWe will close with a discussion."
+        }
+      />
+    ),
+  },
   {
     id: "profile-biographies",
     title: "General introduction and organization bio",
