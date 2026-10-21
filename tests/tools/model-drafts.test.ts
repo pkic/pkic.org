@@ -1,3 +1,5 @@
+import { parse } from "yaml";
+import { modelRegistrySchema } from "../../assets/shared/model-registry";
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
@@ -61,5 +63,40 @@ describe("registered model drafts", () => {
     expect(markdown).toContain("Evidence 1.e.1");
     expect(markdown).toContain(`${draft.root}levels/1-initial/`);
     expect(markdown).not.toContain("](/wg/pqc/pqcmm/levels/");
+  });
+});
+
+describe("version namespace ownership", () => {
+  const registry = () => modelRegistrySchema.parse(parse(readFileSync("data/model-versions.yaml", "utf8")));
+  it("rejects a draft alias that claims a released address", () => {
+    const value = registry();
+    value.models[0]!.versions[1]!.aliases = ["/wg/pqc/pqcmm/versions/9.0.0/"];
+    expect(() => modelRegistrySchema.parse(value)).toThrow();
+  });
+  it.each(["/wg/pqc/pqcmm/versions/not-a-release/", "/wg/pqc/pqcmm/drafts/nested/extra/"])(
+    "rejects malformed released aliases such as %s",
+    (alias) => {
+      const value = registry();
+      value.models[0]!.versions[0]!.aliases = [alias];
+      expect(() => modelRegistrySchema.parse(value)).toThrow(/namespace/);
+    },
+  );
+  it("rejects a released primary root in the draft namespace", () => {
+    const value = registry();
+    value.models[0]!.versions[0]!.root = "/wg/pqc/pqcmm/versions/drafts/1.0.1/";
+    expect(() => modelRegistrySchema.parse(value)).toThrow(/namespace/);
+  });
+  it("retains both current and legacy draft redirects when a draft is released", () => {
+    const value = registry();
+    const entry = value.models[0]!;
+    const draft = entry.versions[1]!;
+    entry.versions[1] = {
+      ...draft,
+      status: "released",
+      tag: `v${draft.version}`,
+      root: `${entry.root}versions/${draft.version}/`,
+      aliases: [draft.root, ...draft.aliases],
+    };
+    expect(modelRegistrySchema.parse(value).models[0]!.versions[1]!.aliases).toContain(draft.root);
   });
 });

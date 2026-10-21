@@ -11,7 +11,7 @@ export function modelScopedHref(href: string, modelRoot: string, root: string): 
 
 export function modelVersionTree(
   tree: SiteSidebarTree,
-  model: ReadableModel,
+  model: ReadableModel | undefined,
   modelRoot: string,
   root: string,
   route: string,
@@ -19,7 +19,7 @@ export function modelVersionTree(
   const project = (node: SiteSidebarNode): SiteSidebarNode => {
     const href = modelScopedHref(node.href, modelRoot, root);
     const children =
-      node.href === `${modelRoot}levels/`
+      model && node.href === `${modelRoot}levels/`
         ? model.levels.map((level) =>
             project({ label: `${level.number} — ${level.name}`, href: level.sourcePage, current: false }),
           )

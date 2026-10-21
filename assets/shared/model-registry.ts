@@ -25,13 +25,21 @@ function validateModelRegistry(modelContributionEntries: z.infer<typeof modelReg
     if (entry.defaultVersion && !entry.versions.some((v) => v.id === entry.defaultVersion && v.status === "released"))
       throw new Error("The default model version must be an explicitly registered release");
     for (const version of entry.versions) {
-      const prefix = `${entry.root}${version.status === "draft" ? "versions/drafts" : "versions"}/`;
-      if (
-        !version.root.startsWith(prefix) ||
-        version.aliases.some(
-          (alias) => !alias.startsWith(`${entry.root}versions/`) && !alias.startsWith(`${entry.root}drafts/`),
-        )
-      )
+      const suffix = version.root.slice(entry.root.length);
+      const draftPath = (path: string) => /^(?:versions\/)?drafts\/[a-z0-9][a-z0-9.-]*\/$/.test(path);
+      const releasePath = (path: string) => /^versions\/\d+\.\d+\.\d+\/$/.test(path);
+      const rootValid =
+        version.root.startsWith(entry.root) &&
+        (version.status === "draft"
+          ? suffix.startsWith("versions/") && draftPath(suffix)
+          : suffix === `versions/${version.version}/`);
+      const aliasesValid = version.aliases.every((alias) => {
+        if (!alias.startsWith(entry.root)) return false;
+        const path = alias.slice(entry.root.length);
+        // A released edition may retain its former draft URLs as permanent redirects.
+        return draftPath(path) || (version.status === "released" && releasePath(path));
+      });
+      if (!rootValid || !aliasesValid)
         throw new Error("Model version paths must remain inside their release or draft namespace");
       if (version.status === "released" && version.tag !== `v${version.version}`)
         throw new Error("Release tag and version disagree");

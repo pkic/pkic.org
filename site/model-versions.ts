@@ -1,6 +1,4 @@
 import { readFile } from "node:fs/promises";
-import { loadModelVersion } from "./model-version-source";
-import { modelLevelSlug } from "./model-version-markdown";
 import { parse } from "yaml";
 import source from "../data/model-versions.yaml?raw";
 import { modelVersionLinks } from "../assets/shared/model-versions";
@@ -52,8 +50,6 @@ export async function modelVersionsForRoute(route: string, publishedRoutes: read
   );
   for (const version of scopedVersions) {
     for (const sourceRoute of sourceRoutes) available.add(`${version.root}${sourceRoute.slice(entry.root.length)}`);
-    const model = await loadModelVersion(entry.repository, version.sourcePath ?? entry.sourcePath, version);
-    for (const level of model.levels) available.add(`${version.root}levels/${modelLevelSlug(level)}/`);
   }
   const archive = entry.versions.find(
     (version) => version.id === entry.defaultVersion && route.startsWith(version.root),

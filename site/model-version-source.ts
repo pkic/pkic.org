@@ -78,3 +78,13 @@ export function loadModelVersion(repository: string, sourcePath: string, version
   }
   return result;
 }
+
+/** Only normative level details depend on model bytes; shared guidance stays available offline. */
+export async function loadModelLevelSource(
+  repository: string,
+  sourcePath: string,
+  version: ModelVersionSource,
+  page: string,
+) {
+  return /^levels\/[^/]+\/$/.test(page) ? loadModelVersion(repository, sourcePath, version) : undefined;
+}
