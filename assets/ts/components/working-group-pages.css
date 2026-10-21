@@ -47,7 +47,7 @@
     --wg-color-text: #fff;
   }
 
-  [id^=wg-] {
+  [id^="wg-"] {
     scroll-margin-top: calc(var(--pkic-navbar-height) + 48px);
   }
 
@@ -70,8 +70,16 @@
       linear-gradient(to left, var(--pk-chrome-deep) 40%, transparent),
       linear-gradient(to right, color-mix(in srgb, var(--pk-on-solid) 30%, transparent), transparent),
       linear-gradient(to left, color-mix(in srgb, var(--pk-on-solid) 30%, transparent), transparent);
-    background-position: left center, right center, left center, right center;
-    background-size: 32px 100%, 32px 100%, 12px 100%, 12px 100%;
+    background-position:
+      left center,
+      right center,
+      left center,
+      right center;
+    background-size:
+      32px 100%,
+      32px 100%,
+      12px 100%,
+      12px 100%;
     background-repeat: no-repeat;
     background-attachment: local, local, scroll, scroll;
   }
@@ -88,7 +96,9 @@
     text-decoration: none;
     white-space: nowrap;
     border-bottom: 2px solid transparent;
-    transition: color 0.15s, border-color 0.15s;
+    transition:
+      color 0.15s,
+      border-color 0.15s;
   }
   .wg-section-nav .wg-nav-link:hover {
     color: #fff;
@@ -131,7 +141,9 @@
     color: rgba(255, 255, 255, 0.78);
     text-decoration: none;
     border-radius: 0.35rem;
-    transition: color 0.12s, background 0.12s;
+    transition:
+      color 0.12s,
+      background 0.12s;
   }
   .wg-version-item:hover {
     color: #fff;
@@ -161,7 +173,7 @@
     font-weight: 600;
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    color: color-mix(in srgb, var(--pk-palette-green) 80%, #fff);
+    color: var(--pk-accent-lift);
   }
 
   .wg-version-hint--fallback {
@@ -183,7 +195,10 @@
     background: var(--pk-surface);
     color: inherit;
     text-decoration: none;
-    transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+    transition:
+      transform 0.15s ease,
+      box-shadow 0.15s ease,
+      background 0.15s ease;
   }
   .wg-explore-card:hover {
     transform: translateY(-3px);
@@ -264,7 +279,11 @@
     height: 100%;
     position: relative;
     overflow: hidden;
-    transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease, background 0.22s ease;
+    transition:
+      transform 0.22s ease,
+      box-shadow 0.22s ease,
+      border-color 0.22s ease,
+      background 0.22s ease;
   }
   .wg-key-card::before {
     content: "";
@@ -279,7 +298,9 @@
   .wg-key-card:hover {
     transform: translateY(-5px);
     background: rgba(255, 255, 255, 0.12);
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.22);
+    box-shadow:
+      0 20px 60px rgba(0, 0, 0, 0.4),
+      0 0 0 1px rgba(255, 255, 255, 0.22);
     border-color: rgba(255, 255, 255, 0.28);
   }
 
@@ -367,7 +388,9 @@
     font-weight: 600;
     font-size: 0.88rem;
     text-decoration: none !important;
-    transition: background 0.18s ease, transform 0.18s ease;
+    transition:
+      background 0.18s ease,
+      transform 0.18s ease;
   }
   .wg-key-cta:hover {
     background: rgba(255, 255, 255, 0.2);
@@ -491,7 +514,9 @@
     border: 1px solid rgba(0, 0, 0, 0.08);
     background: #fff;
     color: inherit;
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    transition:
+      transform 0.15s ease,
+      box-shadow 0.15s ease;
   }
   .pqc-conf-past-card:hover {
     transform: translateY(-2px);
@@ -528,7 +553,18 @@
   .wg-sub-header {
     position: relative;
     overflow: hidden;
-    background: radial-gradient(ellipse at 0% 50%, color-mix(in srgb, var(--wg-color, var(--pk-palette-green)) 22%, transparent) 0%, transparent 65%), radial-gradient(ellipse at 100% 0%, color-mix(in srgb, var(--wg-color, var(--pk-palette-green)) 10%, transparent) 0%, transparent 50%), linear-gradient(120deg, color-mix(in srgb, var(--wg-color, var(--pk-palette-green)) 50%, #000) 0%, #0d0d0d 60%);
+    background:
+      radial-gradient(
+        ellipse at 0% 50%,
+        color-mix(in srgb, var(--wg-color, var(--pk-palette-green)) 22%, transparent) 0%,
+        transparent 65%
+      ),
+      radial-gradient(
+        ellipse at 100% 0%,
+        color-mix(in srgb, var(--wg-color, var(--pk-palette-green)) 10%, transparent) 0%,
+        transparent 50%
+      ),
+      linear-gradient(120deg, color-mix(in srgb, var(--wg-color, var(--pk-palette-green)) 50%, #000) 0%, #0d0d0d 60%);
     border-top: 3px solid var(--wg-color, var(--pk-palette-green));
     padding: 2rem 0 1.75rem;
   }
@@ -663,7 +699,9 @@
     background: #1e1e2e;
     color: rgba(255, 255, 255, 0.35);
     cursor: pointer;
-    transition: color 0.15s, background 0.15s;
+    transition:
+      color 0.15s,
+      background 0.15s;
   }
   .wg-sidebar-toggle svg {
     transition: transform 0.25s ease;
@@ -695,13 +733,17 @@
   .wg-sidebar-wrap.is-collapsed .wg-sidebar {
     visibility: hidden;
     opacity: 0;
-    transition: opacity 0.15s ease, visibility 0s 0.15s;
+    transition:
+      opacity 0.15s ease,
+      visibility 0s 0.15s;
   }
 
   .wg-sidebar-wrap:not(.is-collapsed) .wg-sidebar {
     visibility: visible;
     opacity: 1;
-    transition: opacity 0.2s ease 0.1s, visibility 0s;
+    transition:
+      opacity 0.2s ease 0.1s,
+      visibility 0s;
   }
 
   .wg-main-content {
@@ -739,10 +781,10 @@
     padding: 0;
     transition: color 0.15s;
   }
-  .wg-nav-more-btn[aria-expanded=true] {
+  .wg-nav-more-btn[aria-expanded="true"] {
     color: #fff;
   }
-  .wg-nav-more-btn[aria-expanded=true] svg {
+  .wg-nav-more-btn[aria-expanded="true"] svg {
     transform: rotate(180deg);
   }
   .wg-nav-more-btn svg {
@@ -891,7 +933,9 @@
     color: rgba(255, 255, 255, 0.55);
     font-size: 0.8125rem;
     text-decoration: none;
-    transition: color 0.12s, background 0.12s;
+    transition:
+      color 0.12s,
+      background 0.12s;
   }
   .wg-sidebar-children li > a:hover {
     color: rgba(255, 255, 255, 0.85);
@@ -913,5 +957,40 @@
   .wg-sidebar-level3 {
     padding-left: 0.75rem;
     border-left: 1px solid rgba(255, 255, 255, 0.05);
+  }
+}
+
+@layer components {
+  .pk-site.pk-site--working-group {
+    --pk-accent: var(--page-accent);
+    --pk-accent-ink: color-mix(in oklab, var(--pk-accent) 62%, #000);
+    --pk-accent-strong: color-mix(in oklab, var(--pk-accent) 62%, #000);
+    --pk-accent-deep: color-mix(in oklab, var(--pk-accent) 72%, #000);
+    --pk-grad-tonal: linear-gradient(135deg, var(--pk-accent-deep), var(--pk-accent-lift));
+    --pk-accent-soft: color-mix(in oklab, var(--pk-accent) 12%, #fff);
+    --pk-accent-lift: color-mix(in oklab, var(--pk-accent) 62%, #fff);
+    --page-accent-2: var(--pk-accent-ink);
+  }
+
+  .pk-site--working-group :is(.wg-main-content, .wg-prose, .wg-data-body) :is(h1, h2, h3, h4, h5, h6) {
+    color: var(--pk-accent-ink);
+    background: none;
+    -webkit-text-fill-color: currentColor;
+  }
+
+  .wg-sidebar,
+  .wg-nav-tree-panel {
+    --pk-accent-ink: color-mix(in oklab, var(--wg-color) 62%, #fff);
+    --pk-accent-lift: var(--pk-accent-ink);
+  }
+
+  :root[data-theme="dark"] .pk-site.pk-site--working-group {
+    --pk-accent-ink: color-mix(in oklab, var(--pk-accent) 70%, #fff);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .pk-site.pk-site--working-group {
+      --pk-accent-ink: color-mix(in oklab, var(--pk-accent) 70%, #fff);
+    }
   }
 }
