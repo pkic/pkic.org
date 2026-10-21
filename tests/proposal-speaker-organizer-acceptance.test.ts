@@ -279,6 +279,77 @@ describe("organizer speaker acceptance", () => {
     },
   );
 
+  it.each(["invitation", "event window"])(
+    "rolls back acceptance when the %s expires before the batch",
+    async (deadline) => {
+      const { proposalId, coSpeakerUserId } = await acceptanceFixture();
+      const before = await queryAll(
+        env.DB,
+        "SELECT role, status FROM event_participant_role_sources WHERE event_id=? AND user_id=? ORDER BY role, status",
+        [eventId, coSpeakerUserId],
+      );
+      const db = raceBeforeFirstBatch(async () => {
+        if (deadline === "invitation")
+          await env.DB.prepare(
+            "UPDATE proposal_speakers SET invite_expires_at='2000-01-01T00:00:00.000Z' WHERE proposal_id=? AND user_id=?",
+          )
+            .bind(proposalId, coSpeakerUserId)
+            .run();
+        else
+          await env.DB.prepare(
+            "UPDATE events SET starts_at='2000-01-01T00:00:00.000Z', ends_at='2000-01-02T00:00:00.000Z' WHERE id=?",
+          )
+            .bind(eventId)
+            .run();
+      });
+      await expect(
+        acceptSpeakerParticipationByManager(
+          db,
+          { identityType: "user", id: adminUserId, email: "admin@pkic.org", grants: administratorGrants },
+          proposalId,
+          coSpeakerUserId,
+          "https://app.test",
+        ),
+      ).rejects.toMatchObject({ status: 410, code: "SPEAKER_INVITATION_EXPIRED" });
+      expect(
+        await queryAll(
+          env.DB,
+          "SELECT status, confirmed_at, terms_accepted_at FROM proposal_speakers WHERE proposal_id=? AND user_id=?",
+          [proposalId, coSpeakerUserId],
+        ),
+      ).toEqual([{ status: "invited", confirmed_at: null, terms_accepted_at: null }]);
+      expect(
+        await queryAll(
+          env.DB,
+          "SELECT role, status FROM event_participant_role_sources WHERE event_id=? AND user_id=? ORDER BY role, status",
+          [eventId, coSpeakerUserId],
+        ),
+      ).toEqual(before);
+      expect(await queryAll(env.DB, "SELECT id FROM audit_log WHERE action='speaker_confirmed_by_organizer'")).toEqual(
+        [],
+      );
+      expect(
+        await queryAll(
+          env.DB,
+          "SELECT id FROM email_outbox WHERE recipient_user_id=? AND template_key='proposal_speaker_confirmed_by_organizer'",
+          [coSpeakerUserId],
+        ),
+      ).toEqual([]);
+    },
+  );
+
+  it("returns the expiry response for an invitation already expired at the request", async () => {
+    const { proposalId, coSpeakerUserId } = await acceptanceFixture();
+    await env.DB.prepare(
+      "UPDATE proposal_speakers SET invite_expires_at='2000-01-01T00:00:00.000Z' WHERE proposal_id=? AND user_id=?",
+    )
+      .bind(proposalId, coSpeakerUserId)
+      .run();
+    const response = await acceptRequest(proposalId, coSpeakerUserId);
+    expect(response.status).toBe(410);
+    expect(await response.json()).toMatchObject({ error: { code: "SPEAKER_INVITATION_EXPIRED" } });
+  });
+
   it("rolls back identity confirmation, audit, and notification when the displayed identity changes", async () => {
     const { proposalId, coSpeakerUserId } = await acceptanceFixture();
     const db = raceBeforeFirstBatch(async () => {

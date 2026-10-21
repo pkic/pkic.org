@@ -6,6 +6,11 @@ import type { ParticipantAuthority } from "./participant-authority";
 import type { AuthAdmin, DatabaseLike } from "../types";
 import { first } from "../db/queries";
 import { AppError } from "../errors";
+import {
+  activeEffectiveInviteExpirySql,
+  inactiveEffectiveInviteExpirySql,
+  effectiveProposalSpeakerInviteExpirySql,
+} from "../invite-validity";
 import { nowIso } from "../utils/time";
 import { requireUserBackedAuthAdmin } from "../auth/admin-identity";
 import { preparePermissionsAuthorizationGuard } from "../auth/permissions";
@@ -134,6 +139,15 @@ async function confirmParticipation(
           now,
         )
       : null;
+  const invitationScope = {
+    sql: `SELECT 1 FROM proposal_speakers ps
+      JOIN session_proposals sp ON sp.id=ps.proposal_id AND sp.deleted_at IS NULL
+      JOIN events e ON e.id=sp.event_id
+      WHERE ps.id=? AND ps.status IN ('invited','pending')`,
+    bindings: [speaker.id],
+  };
+  const effectiveExpiry = effectiveProposalSpeakerInviteExpirySql("ps", "e");
+  const databaseNow = "strftime('%Y-%m-%dT%H:%M:%fZ','now')";
   const rosterRevision = await getProposalSpeakerRosterRevision(db, proposal.id);
   try {
     await db.batch([
@@ -148,6 +162,14 @@ async function confirmParticipation(
             inviteGeneration: speaker.invite_generation,
             expectedManageLinkSecret: speaker.manage_link_secret,
           }),
+      ...(manager
+        ? [
+            prepareAuthorizationGuard(db, {
+              sql: `${invitationScope.sql} AND (${activeEffectiveInviteExpirySql(effectiveExpiry, databaseNow)})`,
+              bindings: invitationScope.bindings,
+            }),
+          ]
+        : []),
       prepareProposalSpeakerRosterRevisionGuard(db, {
         proposalId: proposal.id,
         expectedRevision: rosterRevision,
@@ -234,6 +256,16 @@ async function confirmParticipation(
       })),
     ]);
   } catch (error) {
+    if (
+      manager &&
+      isAuthorizationGuardFailure(error) &&
+      (await first(
+        db,
+        `${invitationScope.sql} AND (${inactiveEffectiveInviteExpirySql(effectiveExpiry, databaseNow)})`,
+        invitationScope.bindings,
+      ))
+    )
+      throw new AppError(410, "SPEAKER_INVITATION_EXPIRED", "Speaker invitation has expired");
     if (isRegistrationTransitionConflict(error)) throw registrationChangedError();
     if (
       isAuditChangeGuardFailure(error) ||
