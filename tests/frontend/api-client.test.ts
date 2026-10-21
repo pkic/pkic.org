@@ -1,6 +1,7 @@
+import { clientMutationsAllowReload } from "../../assets/ts/shared/client-release-safety";
 import { serviceAvailability, publishAvailability } from "../../assets/ts/shared/availability-state";
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import {
   ApiClientError,
@@ -18,6 +19,9 @@ import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-
 import { eventInviteBulkResponseSchema } from "../../assets/shared/schemas/event-invite-bulk";
 
 describe("shared API client", () => {
+  beforeEach(() => {
+    Reflect.deleteProperty(globalThis, Symbol.for("pkic.client-release-safety"));
+  });
   afterEach(() => {
     vi.unstubAllGlobals();
     serviceAvailability.value = null;
@@ -385,4 +389,44 @@ describe("shared API client", () => {
     await expect(requestJson("/api/v1/users", successResponseSchema)).rejects.toMatchObject({ status: 503 });
     expect(fetcher).toHaveBeenCalledOnce();
   });
+});
+
+it("holds automatic refresh through a write and response validation", async () => {
+  Reflect.deleteProperty(globalThis, Symbol.for("pkic.client-release-safety"));
+  let respond!: (response: Response) => void;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          respond = resolve;
+        }),
+    ),
+  );
+  try {
+    const pending = requestJson("/api/v1/users/current", successResponseSchema, { method: "PATCH", body: "{}" });
+    expect(clientMutationsAllowReload()).toBe(false);
+    respond(Response.json({ success: true }));
+    await pending;
+    expect(clientMutationsAllowReload()).toBe(true);
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+it("does not automatically refresh after losing a save response", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => {
+      throw new TypeError("Connection lost");
+    }),
+  );
+  try {
+    await expect(
+      requestJson("/api/v1/users/current", successResponseSchema, { method: "PATCH", body: "{}" }),
+    ).rejects.toBeInstanceOf(ApiClientError);
+    expect(clientMutationsAllowReload()).toBe(false);
+  } finally {
+    vi.unstubAllGlobals();
+    Reflect.deleteProperty(globalThis, Symbol.for("pkic.client-release-safety"));
+  }
 });
