@@ -1,3 +1,4 @@
+import type { ContentVersionNavigation } from "./content-versions.ts";
 import { semanticVersionSchema } from "./content-versions.ts";
 import { z } from "zod";
 
@@ -33,7 +34,8 @@ export type ModelVersion = z.infer<typeof modelVersionSchema>;
 
 /** Expected versions may change; stable draft ids preserve the review work's identity. */
 export function modelVersionLinks(
-  versions: readonly Pick<ModelVersion, "id" | "version" | "status" | "root">[],
+  versions: readonly (Pick<ModelVersion, "id" | "version" | "status" | "root"> &
+    Pick<ContentVersionNavigation["items"][number], "revision">)[],
   route: string,
   availableRoutes: ReadonlySet<string> = new Set(),
 ) {
@@ -50,6 +52,7 @@ export function modelVersionLinks(
         label: v.status === "draft" ? `${v.version} — Draft` : v.version,
         href: current && equivalent ? candidate : v.root,
         fallback: Boolean(current && route !== current.root && !equivalent),
+        ...(v.revision ? { revision: v.revision } : {}),
       };
     }),
   };

@@ -43,6 +43,14 @@ export async function modelVersionsForRoute(route: string, publishedRoutes: read
   const scopedVersions = entry.versions.map((version) => ({
     ...version,
     root: version.id === entry.defaultVersion ? entry.root : version.root,
+    ...(version.status === "draft"
+      ? {
+          revision: {
+            label: version.commit.slice(0, 7),
+            href: `https://github.com/${entry.repository}/commit/${version.commit}`,
+          },
+        }
+      : {}),
   }));
   const available = new Set(publishedRoutes);
   const sourceRoutes = publishedRoutes.filter(

@@ -92,6 +92,6 @@ Each entry is the full anatomy of a control. The gallery id renders it (`pnpm ga
 ## Content version notice (`content-version-notice`)
 
 - Use: `site/ContentVersionNotice.tsx` with the selected and latest entries from the shared `ContentVersions` contract. Both maturity models use this component.
-- Shape: one slim full-width row below the section navigation, with the draft or historical version at the left and “View current release” at the right. Use plain version text, not a badge; hide only the supplementary description on phones.
+- Shape: one slim full-width row below the section navigation, with the draft or historical version at the left and “View current release” at the right. Use plain version text, not a badge; show a linked source revision when available for a draft, including on phones. Hide only the supplementary description on phones.
 - Placement: the section navigation and notice share one sticky container beneath the site header. Do not change the hero or repeat the notice in the page body. The current release has no notice.
 - Behavior: persistent, without dismissal. The current-release link preserves the equivalent page when available and is an ordinary keyboard-accessible link.

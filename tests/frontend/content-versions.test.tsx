@@ -105,3 +105,19 @@ describe("shared content version context", () => {
     expect(root.textContent).not.toContain("Overview");
   });
 });
+
+it("keeps a draft's source revision available in the shared version notice", () => {
+  const versions = structuredClone(tree.versions!);
+  versions.items.forEach((item) => {
+    item.current = item.id === "draft";
+  });
+  versions.items.find((item) => item.id === "draft")!.revision = {
+    label: "d003771",
+    href: "https://github.com/pkic/pqcmm/commit/d0037717273772460424cf338192ddd1dac01d80",
+  };
+  const root = document.createElement("div");
+  root.innerHTML = render(<ContentVersionNotice notice={contentVersionNotice(versions)!} />);
+  expect(root.querySelector('a[aria-label="View source revision d003771"]')?.getAttribute("href")).toBe(
+    versions.items.find((item) => item.current)!.revision!.href,
+  );
+});

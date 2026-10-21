@@ -13,6 +13,7 @@ export const contentVersionsSchema = z.object({
       current: z.boolean(),
       latest: z.boolean(),
       fallback: z.boolean(),
+      revision: z.object({ label: z.string().min(1), href: z.httpUrl() }).optional(),
     }),
   ),
 });
@@ -23,6 +24,11 @@ export function contentVersionNotice(versions?: ContentVersionNavigation) {
   const current = versions?.items.find((item) => item.current);
   const latest = versions?.items.find((item) => item.latest);
   if (!current || !latest || current.latest) return undefined;
-  return { version: current.version, status: current.status, currentHref: latest.href };
+  return {
+    version: current.version,
+    status: current.status,
+    currentHref: latest.href,
+    ...(current.revision ? { revision: current.revision } : {}),
+  };
 }
 export type ContentVersionNoticeData = NonNullable<ReturnType<typeof contentVersionNotice>>;

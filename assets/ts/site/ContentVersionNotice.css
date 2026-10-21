@@ -33,6 +33,9 @@
     gap: var(--pk-4);
     padding-block: var(--pk-2);
   }
+  .content-version-notice__revision {
+    white-space: nowrap;
+  }
   .content-version-notice a {
     color: inherit;
     font-weight: 600;

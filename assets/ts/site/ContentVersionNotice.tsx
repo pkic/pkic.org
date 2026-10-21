@@ -1,3 +1,4 @@
+import { ExternalLink } from "../ui/ExternalLink";
 import type { ContentVersionNoticeData } from "../../shared/content-versions";
 import "./ContentVersionNotice.css";
 
@@ -11,6 +12,15 @@ export function ContentVersionNotice({ notice }: { notice: ContentVersionNoticeD
           <strong>
             {draft ? "Draft" : "Version"} {notice.version}
           </strong>
+          {draft && notice.revision ? (
+            <span class="content-version-notice__revision">
+              {" "}
+              ·{" "}
+              <ExternalLink href={notice.revision.href} aria-label={`View source revision ${notice.revision.label}`}>
+                {notice.revision.label}
+              </ExternalLink>
+            </span>
+          ) : null}
           <span class="content-version-notice__detail"> · {draft ? "For review" : "Earlier release"}</span>
         </span>
         <a href={notice.currentHref}>View current release →</a>

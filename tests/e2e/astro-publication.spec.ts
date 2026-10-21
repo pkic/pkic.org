@@ -1816,6 +1816,19 @@ test("model editions share the levels layout and keep guidance navigation in the
     expect(modelLinks.every((href) => href?.startsWith(draft) || href === `${root}${suffix}`)).toBe(true);
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/);
   }
+  await page.goto(`${draft}version-history/`);
+  await expect(page.getByRole("heading", { name: "Model version: 1.1.0-draft", exact: true })).toBeVisible();
+  const sourceCommit = await page.locator('meta[name="pqcmm-source-revision"]').getAttribute("content");
+  const revision = page
+    .getByRole("status", { name: "Content version" })
+    .getByRole("link", { name: "View source revision", exact: false });
+  await expect(revision).toHaveAttribute("href", `https://github.com/pkic/pqcmm/commit/${sourceCommit}`);
+  await expect(revision).toContainText(sourceCommit!.slice(0, 7));
+  await expect(revision).toBeInViewport();
+  await page.screenshot({ path: testInfo.outputPath("draft-version-history-reference.png") });
+  await page.goto(`${root}version-history/`);
+  await expect(page.getByRole("heading", { name: "Model version: 1.0.1", exact: true })).toBeVisible();
+  await expect(page.getByRole("status", { name: "Content version" })).toHaveCount(0);
   await page.goto(`${root}drafts/1.1.0/levels/`);
   await expect(page).toHaveURL(`${page.url().split(root)[0]}${draft}levels/`);
 });

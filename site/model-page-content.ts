@@ -38,7 +38,10 @@ export function scopeModelHtml(html: string, modelRoot: string, root: string) {
 }
 
 export async function loadModelPage(entry: ModelEntry, version: ModelVersion, sourceRoute: string, root: string) {
-  const base = await loadSiteContent(sourceRoute, { publication, parameters: { version: version.version } });
+  const base = await loadSiteContent(sourceRoute, {
+    publication,
+    parameters: { version: version.status === "draft" ? `${version.version}-draft` : version.version },
+  });
   if (!base?.workingGroup) throw new Error(`Missing model page template: ${sourceRoute}`);
   const model = await loadModelLevelSource(
     entry.repository,
