@@ -1,3 +1,5 @@
+import { participantSessionDatabase } from "../functions/_lib/services/event-participation/self-authorization";
+import { createAdminSession } from "./helpers/auth";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { guardAuthorizedDatabase } from "../functions/_lib/db/authorization-guard";
@@ -77,4 +79,26 @@ describe("replica-compatible authorization batches", () => {
       "Denied",
     );
   });
+});
+
+it("keeps participant reads read-only and rolls back writes after session revocation", async () => {
+  const userId = await insertUser(env.DB);
+  await createAdminSession(env.DB, userId, crypto.randomUUID());
+  const sessionId = await env.DB.prepare("SELECT id FROM sessions WHERE user_id=?").bind(userId).first<string>("id");
+  const profile = profileD1Flow(env.DB);
+  const guarded = participantSessionDatabase(profile.db, userId, sessionId!);
+  expect(await guarded.prepare("SELECT id FROM users WHERE id=?").bind(userId).first("id")).toBe(userId);
+  expect((await profile.report()).queries.some(({ sql }) => sql.includes("INSERT INTO authorization_guards"))).toBe(
+    false,
+  );
+  await env.DB.prepare("UPDATE sessions SET revoked_at=? WHERE id=?").bind(new Date().toISOString(), sessionId).run();
+  await expect(guarded.prepare("SELECT id FROM users WHERE id=?").bind(userId).all()).rejects.toThrow(
+    "AUTHORIZATION_CONTEXT_CHANGED",
+  );
+  await expect(guarded.prepare("UPDATE users SET first_name='Denied' WHERE id=?").bind(userId).run()).rejects.toThrow(
+    "AUTHORIZATION_CONTEXT_CHANGED",
+  );
+  expect(await env.DB.prepare("SELECT first_name FROM users WHERE id=?").bind(userId).first("first_name")).not.toBe(
+    "Denied",
+  );
 });
