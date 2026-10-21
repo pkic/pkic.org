@@ -135,7 +135,13 @@ export function SessionEditor({
         const identities = (
           speaker.profileCandidates ?? (speaker.profileCandidate ? [speaker.profileCandidate] : [])
         ).flatMap((candidate) => (candidate.identityId ? [candidate.identityId] : []));
-        return identities.length ? [[speaker.userId, identities]] : [];
+        const original = occurrence?.speakers.find((value) => value.userId === speaker.userId);
+        const originalIds = (
+          original?.profileCandidates ?? (original?.profileCandidate ? [original.profileCandidate] : [])
+        ).flatMap((candidate) => (candidate.identityId ? [candidate.identityId] : []));
+        const changed =
+          identities.length !== originalIds.length || identities.some((id, index) => id !== originalIds[index]);
+        return identities.length && changed ? [[speaker.userId, identities]] : [];
       }),
     ),
     speakerRoles: Object.fromEntries(speakers.map((speaker) => [speaker.userId, speaker.role ?? "speaker"])),

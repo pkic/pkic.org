@@ -48,7 +48,10 @@ export async function prepareAgendaOccurrenceSettings(
     speakerIdentitiesChanged = false;
   const identityGuards: StatementLike[] = [];
   for (const candidate of changes) {
-    if (candidate.speakerIdentityIds !== undefined || candidate.speakerUserIds !== undefined) {
+    if (
+      Object.keys(candidate.speakerIdentityIds ?? {}).length ||
+      (candidate.speakerUserIds !== undefined && Object.hasOwn(speakerIdentities, candidate.id))
+    ) {
       const identities = record(speakerIdentities[candidate.id]);
       if (candidate.speakerUserIds) {
         for (const userId of Object.keys(identities))
@@ -88,11 +91,16 @@ export async function prepareAgendaOccurrenceSettings(
         }
         identities[userId] = identityIds;
       }
-      speakerIdentities[candidate.id] = identities;
+      if (Object.keys(identities).length) speakerIdentities[candidate.id] = identities;
+      else delete speakerIdentities[candidate.id];
       speakerIdentitiesChanged = true;
     }
-    if (candidate.speakerUserIds !== undefined) {
-      speakerOrder[candidate.id] = candidate.speakerUserIds;
+    if (
+      candidate.speakerUserIds !== undefined &&
+      (candidate.speakerUserIds.length || Object.hasOwn(speakerOrder, candidate.id))
+    ) {
+      if (candidate.speakerUserIds.length) speakerOrder[candidate.id] = candidate.speakerUserIds;
+      else delete speakerOrder[candidate.id];
       speakerOrderChanged = true;
     }
     if (candidate.virtualRoomUrl !== undefined) {
@@ -110,6 +118,7 @@ export async function prepareAgendaOccurrenceSettings(
       sponsorsChanged = true;
     }
   }
+  if (!mediaChanged && !sponsorsChanged && !speakerOrderChanged && !speakerIdentitiesChanged) return [];
   if (mediaChanged) agenda.sessionMedia = media;
   if (sponsorsChanged) agenda.sessionSponsors = sponsors;
   if (speakerOrderChanged) agenda.sessionSpeakerOrder = speakerOrder;

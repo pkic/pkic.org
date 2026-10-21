@@ -194,13 +194,14 @@ it("reads draft speaker details from the canonical identity rather than historic
     organizationName: "Current employer",
     jobTitle: "Current role",
     biography: "Current biography",
-    links: [],
+    links: ["https://example.org/current"],
     photoUrl: "/current-photo.jpg",
   };
   const draft = sessionDisplayCredits(occurrence, true)[0]!;
   expect(draft.displayName).toBe("Canonical speaker");
   expect(draft).toMatchObject({
     biography: "Current biography",
+    links: ["https://example.org/current"],
     photoUrl: "/current-photo.jpg",
     affiliations: [{ identityId: "selected-identity", organizationName: "Current employer", title: "Current role" }],
   });

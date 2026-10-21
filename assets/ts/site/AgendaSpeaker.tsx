@@ -152,28 +152,28 @@ export function AgendaSpeakerCredit({
                 {speaker.roleLabel}
               </Badge>
             ) : null}
-            {detail && speaker.links?.length ? (
-              <LinkList links={speaker.links} ownerName={speaker.name} label={`${speaker.name} elsewhere`} compact />
-            ) : null}
           </span>
-          {/* Only the profile has room for every affiliation; other rows show one at a time. */}
+          {/* Details list each affiliation; compact rows rotate through them. */}
           <AgendaSpeakerAffiliations
             affiliations={speaker.affiliations}
-            layout="rotating"
+            layout={detail ? "list" : "rotating"}
             size={detail ? "preview" : "card"}
             showLogos={detail}
           />
         </div>
-        {detail && (speaker.bioMarkdown || speaker.bioHtml) ? (
-          <div class="pk-content-agenda__speaker-bio">
-            {speaker.bioMarkdown ? (
-              <Markdown markdown={speaker.bioMarkdown} />
-            ) : (
-              <div dangerouslySetInnerHTML={{ __html: speaker.bioHtml! }} />
-            )}
-          </div>
+        {detail && speaker.links?.length ? (
+          <LinkList links={speaker.links} ownerName={speaker.name} label={`${speaker.name} elsewhere`} compact />
         ) : null}
       </div>
+      {detail && (speaker.bioMarkdown || speaker.bioHtml) ? (
+        <div class="pk-content-agenda__speaker-bio">
+          {speaker.bioMarkdown ? (
+            <Markdown markdown={speaker.bioMarkdown} />
+          ) : (
+            <div dangerouslySetInnerHTML={{ __html: speaker.bioHtml! }} />
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }

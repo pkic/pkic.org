@@ -28,6 +28,7 @@ export function sessionDisplayCredits(session: AgendaOccurrence, organizer = fal
     if (!speaker || !candidate) return credit;
     return {
       ...speaker,
+      links: candidate.links,
       affiliations: (speaker.profileCandidates ?? [candidate]).flatMap(candidateAffiliations),
       biography: candidate.biography ?? "",
       photoUrl: candidate.photoUrl ?? null,

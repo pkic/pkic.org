@@ -1,3 +1,4 @@
+import { liveSpeakerCandidatesResponseSchema } from "../assets/shared/schemas/live-session-credit";
 import { sessionHistoryMetadataSchema } from "../assets/shared/schemas/event-session-history";
 import { beforeEach, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
@@ -130,6 +131,13 @@ it("saves the selected canonical identity and reads later identity changes witho
     .run();
   const token = await createAdminSession(env.DB, admin.id, "canonical-speaker");
   const headers = { authorization: `Bearer ${token}`, "content-type": "application/json" };
+  for (const query of ["", "?q=A"]) {
+    const empty = await callApi(env, `/api/v1/events/pqc-2026/agenda/speaker-identities${query}`, { headers });
+    expect(empty.status, await empty.clone().text()).toBe(200);
+    expect(liveSpeakerCandidatesResponseSchema.parse(await empty.json()).identities).toEqual([]);
+  }
+  const blank = await callApi(env, "/api/v1/events/pqc-2026/agenda/speaker-identities?q=%20%20", { headers });
+  expect(blank.status).toBe(400);
   const choices = await callApi(
     env,
     "/api/v1/events/pqc-2026/agenda/speaker-identities?q=Canonical&limit=10&offset=0",
@@ -139,7 +147,7 @@ it("saves the selected canonical identity and reads later identity changes witho
   );
   expect(choices.status, await choices.clone().text()).toBe(200);
   expect(
-    ((await choices.json()) as { identities: { identityId: string }[] }).identities.map((item) => item.identityId),
+    liveSpeakerCandidatesResponseSchema.parse(await choices.json()).identities.map((item) => item.identityId),
   ).toContain(identityId);
   const response = await callApi(env, "/api/v1/events/pqc-2026/agenda/occurrences", {
     method: "POST",

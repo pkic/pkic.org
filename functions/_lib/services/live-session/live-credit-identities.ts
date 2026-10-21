@@ -98,6 +98,8 @@ export async function searchLiveSpeakerCandidates(
   now: string,
   scope: "event" | "directory" = "event",
 ): Promise<{ identities: LiveSpeakerCandidate[]; page: ReturnType<typeof buildPageInfo> }> {
+  if (scope === "directory" && (query.q?.trim().length ?? 0) < 2)
+    return { identities: [], page: buildPageInfo(query.limit, query.offset, 0, 0) };
   const membership =
     scope === "directory"
       ? "1=1"

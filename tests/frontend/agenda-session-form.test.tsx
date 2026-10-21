@@ -295,6 +295,14 @@ it("saves a speaker's changed credit role without touching the attendance placem
       {
         userId: "speaker",
         displayName: "Speaker",
+        profileCandidate: {
+          identityId: "11111111-1111-4111-8111-111111111111",
+          organizationName: "Canonical organization",
+          jobTitle: "Researcher",
+          biography: "",
+          links: [],
+          photoUrl: null,
+        },
         role: "speaker" as const,
         attendanceMode: "remote" as const,
       },
@@ -315,6 +323,7 @@ it("saves a speaker's changed credit role without touching the attendance placem
   expect(agendaOccurrencePatchSchema.parse(bodies[0].body)).toMatchObject({
     speakerUserIds: ["speaker"],
     speakerRoles: { speaker: "co_speaker" },
+    speakerIdentityIds: {},
     speakerPlacements: { speaker: { attendanceMode: "remote", roomId: null } },
   });
 });
