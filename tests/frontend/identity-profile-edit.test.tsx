@@ -12,6 +12,7 @@ import {
   ownIdentityProfileSchema,
 } from "../../assets/shared/schemas/own-identity-profile";
 import { IdentityProfileEditView } from "../../assets/ts/member-flows/portal/sections/system-users/IdentityProfileEditView";
+import { typeInto } from "./helpers/labeled-control";
 
 const navigate = vi.hoisted(() => vi.fn());
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["/users/self/profile", navigate] }));
@@ -24,7 +25,7 @@ const identity = ownIdentityProfileSchema.parse({
   organizationName: "Example Trust",
   jobTitle: "Advisor",
   biography: null,
-  links: [],
+  links: ["https://github.com/example", "https://orcid.org/0000"],
 });
 
 let container: HTMLDivElement;
@@ -84,14 +85,42 @@ it("saves the named identity through its own contract and returns to the profile
   await act(async () => {
     jobTitle.dispatchEvent(new Event("input", { bubbles: true }));
   });
+  await typeInto(container.querySelector<HTMLInputElement>('input[type="url"]')!, "https://example.org/profile");
   await act(async () => {
     jobTitle.closest("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
   });
   await settle();
 
-  expect(sent).toEqual([expect.objectContaining({ jobTitle: "Chair" })]);
+  expect(sent).toEqual([
+    expect.objectContaining({
+      jobTitle: "Chair",
+      links: [...identity.links, "https://example.org/profile"],
+    }),
+  ]);
   expect(navigate).toHaveBeenCalledWith(`/users/${userId}/profile`);
 });
+
+it.each(["not a link", "https://github.com/example"])(
+  "refuses an invalid or duplicate pending profile link before saving: %s",
+  async (pending) => {
+    const fetch = vi.fn(async () => Response.json(identity));
+    vi.stubGlobal("fetch", fetch);
+    await act(async () => {
+      render(<IdentityProfileEditView userId={userId} identityId={identityId} />, container);
+    });
+    await settle();
+    const input = container.querySelector<HTMLInputElement>('input[type="url"]')!;
+    await typeInto(input, pending);
+    await act(async () => {
+      input.closest("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    await settle();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    expect(container.querySelector('fieldset [role="alert"]')?.textContent).toBeTruthy();
+    expect(navigate).not.toHaveBeenCalled();
+  },
+);
 
 it("asks an organization identity saved without a job title for one before it saves", async () => {
   const sent: unknown[] = [];
