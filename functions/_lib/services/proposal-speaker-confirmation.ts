@@ -1,3 +1,7 @@
+import {
+  prepareOrganizerSpeakerIdentity,
+  prepareOrganizerSpeakerNotification,
+} from "./proposal-speaker-organizer-confirmation";
 import type { ParticipantAuthority } from "./participant-authority";
 import type { AuthAdmin, DatabaseLike } from "../types";
 import { first } from "../db/queries";
@@ -40,24 +44,25 @@ export async function confirmSpeakerParticipation(
   payload: { consents: Array<{ termKey: string; version: string }>; ip: string | null; userAgent: string | null },
 ): Promise<void> {
   const context = await getSpeakerByManageToken(db, authority, signingSecret);
-  return confirmParticipation(db, context, { kind: "speaker", authority, signingSecret, payload });
+  await confirmParticipation(db, context, { kind: "speaker", authority, signingSecret, payload });
 }
 
-/** Records an organizer's acceptance using only the speaker's existing identity and consent evidence. */
+/** Confirms the displayed identity and participation on behalf of the speaker, with attributed terms and notice. */
 export async function acceptSpeakerParticipationByManager(
   db: DatabaseLike,
   actor: AuthAdmin,
   proposalId: string,
   userId: string,
-): Promise<void> {
+  appBaseUrl: string,
+): Promise<string | null> {
   requireUserBackedAuthAdmin(actor);
   const context = await getSpeakerByProposalUser(db, proposalId, userId);
   await requireProposalSpeakerPermission(db, actor, context.proposal.event_id, "manage");
-  return confirmParticipation(db, context, { kind: "manager", actor });
+  return confirmParticipation(db, context, { kind: "manager", actor, appBaseUrl });
 }
 
 type SpeakerConfirmation =
-  | { kind: "manager"; actor: AuthAdmin }
+  | { kind: "manager"; actor: AuthAdmin; appBaseUrl: string }
   | {
       kind: "speaker";
       authority: ParticipantAuthority;
@@ -67,11 +72,12 @@ type SpeakerConfirmation =
 
 async function confirmParticipation(
   db: DatabaseLike,
-  { speaker, proposal, currentRepresentation }: SpeakerWithContext,
+  context: SpeakerWithContext,
   confirmation: SpeakerConfirmation,
-): Promise<void> {
+): Promise<string | null> {
+  const { speaker, proposal, currentRepresentation } = context;
   const manager = confirmation.kind === "manager" ? confirmation.actor : undefined;
-  if (speaker.status === "confirmed") return;
+  if (speaker.status === "confirmed") return null;
   if (!isProposalSpeakerRosterEditableStatus(proposal.status)) {
     throw new AppError(409, "PROPOSAL_CLOSED", "Speaker participation cannot be changed on a closed proposal");
   }
@@ -88,23 +94,25 @@ async function confirmParticipation(
     new AppError(
       409,
       "SPEAKER_REPRESENTATION_REQUIRED",
-      manager
-        ? "The speaker must confirm their speaker identity before you can accept this invitation for them."
-        : "Confirm your speaker identity before confirming participation.",
+      "Confirm your speaker identity before confirming participation.",
     );
-  // The current representation exists only once the speaker chose, and only while that identity is still theirs.
-  if (!currentRepresentation) throw representationRequired();
-  const mailbox = ownedIdentityEmailEvidence({
-    userId: speaker.user_id,
-    emailId: currentRepresentation.emailId,
-    normalizedEmail: currentRepresentation.email,
-    requireVerifiedPrimary: true,
-    ...(speaker.acting_identity_id ? { identityId: speaker.acting_identity_id } : {}),
-  });
   const now = nowIso();
-  const representation = speaker.acting_identity_id
-    ? ownedIdentityAtEvidence({ userId: speaker.user_id, identityId: speaker.acting_identity_id, at: now })
+  const organizerIdentity = manager ? await prepareOrganizerSpeakerIdentity(db, context, now) : null;
+  // The current representation exists only once the speaker chose, and only while that identity is still theirs.
+  if (!manager && !currentRepresentation) throw representationRequired();
+  const mailbox = currentRepresentation
+    ? ownedIdentityEmailEvidence({
+        userId: speaker.user_id,
+        emailId: currentRepresentation.emailId,
+        normalizedEmail: currentRepresentation.email,
+        requireVerifiedPrimary: true,
+        ...(speaker.acting_identity_id ? { identityId: speaker.acting_identity_id } : {}),
+      })
     : null;
+  const representation =
+    !manager && speaker.acting_identity_id
+      ? ownedIdentityAtEvidence({ userId: speaker.user_id, identityId: speaker.acting_identity_id, at: now })
+      : null;
   if (representation)
     representation.sql +=
       " AND identity.organization_id IS NOT NULL AND identity.ended_at IS NULL AND identity.blocked_at IS NULL";
@@ -114,24 +122,18 @@ async function confirmParticipation(
   )
     throw representationRequired();
   const requiredTerms = await getRequiredTerms(db, proposal.event_id, "speaker");
-  const consentEvidence = {
-    sql: `SELECT 1 WHERE NOT EXISTS (
-      SELECT 1 FROM event_terms et
-      WHERE et.event_id=? AND et.audience_type='speaker' AND et.active=1 AND et.required=1
-        AND NOT EXISTS (SELECT 1 FROM consent_acceptances ca
-          WHERE ca.event_id=et.event_id AND ca.user_id=?
-            AND ca.audience_type='speaker' AND ca.term_key=et.term_key AND ca.term_version=et.version))`,
-    bindings: [proposal.event_id, speaker.user_id],
-  };
-  if (manager) {
-    if (!(await first(db, consentEvidence.sql, consentEvidence.bindings)))
-      throw new AppError(
-        409,
-        "SPEAKER_CONSENT_REQUIRED",
-        "The speaker must accept the required speaker terms before you can accept this invitation for them.",
-      );
-  } else if (confirmation.kind === "speaker")
-    await validateRequiredConsents(requiredTerms, confirmation.payload.consents);
+  if (confirmation.kind === "speaker") await validateRequiredConsents(requiredTerms, confirmation.payload.consents);
+  const notification =
+    confirmation.kind === "manager" && organizerIdentity
+      ? await prepareOrganizerSpeakerNotification(
+          db,
+          context,
+          organizerIdentity,
+          requiredTerms,
+          confirmation.appBaseUrl,
+          now,
+        )
+      : null;
   const rosterRevision = await getProposalSpeakerRosterRevision(db, proposal.id);
   try {
     await db.batch([
@@ -151,13 +153,13 @@ async function confirmParticipation(
         expectedRevision: rosterRevision,
       }),
       prepareAuthorizationGuard(db, {
-        sql: "SELECT 1 FROM proposal_speakers WHERE id=? AND user_id=? AND acting_identity_selected_at IS NOT NULL AND acting_identity_id IS ? AND acting_identity_selected_at IS ?",
+        sql: "SELECT 1 FROM proposal_speakers WHERE id=? AND user_id=? AND acting_identity_id IS ? AND acting_identity_selected_at IS ?",
         bindings: [speaker.id, speaker.user_id, speaker.acting_identity_id, speaker.acting_identity_selected_at],
       }),
       ...(representation ? [prepareAuthorizationGuard(db, representation)] : []),
-      prepareAuthorizationGuard(db, mailbox),
+      ...(!manager && mailbox ? [prepareAuthorizationGuard(db, mailbox)] : []),
+      ...(organizerIdentity?.guards ?? []),
       prepareActiveTermsSnapshotGuard(db, proposal.event_id, requiredTerms, "speaker"),
-      ...(manager ? [prepareAuthorizationGuard(db, consentEvidence)] : []),
       ...(confirmation.kind === "speaker"
         ? await prepareConsentStatements(db, {
             proposalId: proposal.id,
@@ -173,7 +175,8 @@ async function confirmParticipation(
       db
         .prepare(
           `UPDATE proposal_speakers
-           SET status = 'confirmed', confirmed_at = ?, terms_accepted_at = COALESCE(?, terms_accepted_at)
+           SET status = 'confirmed', confirmed_at = ?, terms_accepted_at = ?,
+               acting_identity_id = ?, acting_identity_selected_at = ?
            WHERE id = ? AND proposal_id = ? AND user_id = ? AND role = ? AND status = ? AND invite_generation = ?
              AND acting_identity_id IS ? AND acting_identity_selected_at IS ?
              AND EXISTS (
@@ -183,7 +186,9 @@ async function confirmParticipation(
         )
         .bind(
           now,
-          manager ? null : now,
+          now,
+          organizerIdentity ? organizerIdentity.identityId : speaker.acting_identity_id,
+          speaker.acting_identity_selected_at ?? organizerIdentity?.selectedAt ?? null,
           speaker.id,
           proposal.id,
           speaker.user_id,
@@ -204,9 +209,21 @@ async function confirmParticipation(
         manager ? "speaker_confirmed_by_organizer" : "speaker_confirmed",
         "proposal_speaker",
         speaker.id,
-        { proposalId: speaker.proposal_id, ...(manager ? { speakerUserId: speaker.user_id } : {}) },
+        {
+          proposalId: speaker.proposal_id,
+          ...(manager
+            ? {
+                speakerUserId: speaker.user_id,
+                acceptanceSource: "organizer",
+                actingIdentityId: organizerIdentity?.identityId ?? null,
+                terms: requiredTerms.filter((term) => term.required === 1),
+                notificationOutboxId: notification?.id,
+              }
+            : {}),
+        },
         now,
       ),
+      ...(notification ? [notification.statement] : []),
       ...(await prepareProposalRoleCapacityForSpeakerChange(db, {
         eventId: proposal.event_id,
         userId: speaker.user_id,
@@ -233,4 +250,5 @@ async function confirmParticipation(
     }
     throw error;
   }
+  return notification?.id ?? null;
 }

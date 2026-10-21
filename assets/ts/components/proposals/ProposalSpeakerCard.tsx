@@ -299,7 +299,7 @@ export function ProposalSpeakerCard({
         if (
           !(await confirmAction({
             title: `Accept the invitation for ${name}?`,
-            body: "Confirm that the speaker has agreed to participate. Their identity and required terms must already be complete.",
+            body: "Confirm the displayed identity and accept participation and required event terms on this speaker’s behalf. We’ll email them the terms and explain how to contact the PKI Consortium if they disagree.",
             confirmLabel: "Accept invitation",
             tone: "primary",
           }))
