@@ -1,7 +1,3 @@
-import { h } from "preact";
-import { render } from "preact-render-to-string";
-import { Alert } from "../assets/ts/ui/Alert";
-import { ExternalLink } from "../assets/ts/ui/ExternalLink";
 import { fromHtml } from "hast-util-from-html";
 import { toHtml } from "hast-util-to-html";
 import type { RootContent } from "hast";
@@ -52,23 +48,7 @@ export async function loadModelPage(entry: ModelEntry, version: ModelVersion, so
     ...base,
     route,
     robots: root === entry.root ? base.robots : "noindex, follow",
-    html:
-      (version.status === "draft"
-        ? render(
-            h(
-              Alert,
-              { tone: "info", title: `${version.version} — Draft for feedback` },
-              h("p", null, "This is an unreleased proposal. Its expected version and scope remain subject to review."),
-              h(
-                ExternalLink,
-                {
-                  href: `https://github.com/${entry.repository}/blob/${version.commit}/${version.sourcePath ?? entry.sourcePath}`,
-                },
-                "View the exact source revision",
-              ),
-            ),
-          )
-        : "") + scopeModelHtml(html, entry.root, root),
+    html: scopeModelHtml(html, entry.root, root),
     workingGroup: {
       ...base.workingGroup,
       route,

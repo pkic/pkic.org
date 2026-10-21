@@ -1,3 +1,5 @@
+import { contentVersionNotice } from "../../assets/shared/content-versions";
+import { ContentVersionNotice } from "../../assets/ts/site/ContentVersionNotice";
 import { describe, expect, it } from "vitest";
 import { render } from "preact-render-to-string";
 import { WorkingGroupSidebar, WorkingGroupSidebarTree } from "../../assets/ts/site/WorkingGroupSidebar";
@@ -79,5 +81,27 @@ describe("shared model tree version navigation", () => {
     older.versions!.items[1]!.current = true;
     root.innerHTML = render(<WorkingGroupSidebarTree tree={older} />);
     expect(root.querySelector('a[aria-current="page"]')?.getAttribute("href")).toBe("/model/1.2.0/");
+  });
+});
+
+describe("shared content version context", () => {
+  it("leaves the current release and unrelated pages without a notice", () => {
+    expect(contentVersionNotice()).toBeUndefined();
+    expect(contentVersionNotice(tree.versions)).toBeUndefined();
+  });
+  it.each([
+    ["draft", "Draft 3.0.0"],
+    ["major", "Version 2.0.0"],
+  ])("identifies the selected %s and links to the current release", (id, label) => {
+    const versions = structuredClone(tree.versions!);
+    versions.items.forEach((item) => {
+      item.current = item.id === id;
+    });
+    const notice = contentVersionNotice(versions)!;
+    const root = document.createElement("div");
+    root.innerHTML = render(<ContentVersionNotice notice={notice} />);
+    expect(root.querySelector('[role="status"]')?.textContent).toContain(label);
+    expect(root.querySelector("a")?.getAttribute("href")).toBe("/model/1.1.2/");
+    expect(root.textContent).not.toContain("Overview");
   });
 });

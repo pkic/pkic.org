@@ -1,3 +1,5 @@
+import { contentVersionNotice } from "../../shared/content-versions";
+import { ContentVersionNotice } from "./ContentVersionNotice";
 import { Fragment } from "preact";
 
 import type { SiteHero, SiteWorkingGroupCard, SiteWorkingGroupSection } from "../../shared/site-content";
@@ -387,12 +389,28 @@ export function WorkingGroupLandingPage({
  * the section tree beside it; the rest read as a single prose column.
  */
 export function WorkingGroupContentPage({ html, section }: { html: string; section: SiteWorkingGroupSection }) {
+  const versions =
+    section.sidebar?.versions ??
+    section.treePanels?.find((panel) => panel.tree.versions?.items.some((item) => item.current))?.tree.versions;
+  const notice = contentVersionNotice(versions);
+  const navigation = (
+    <>
+      <SectionNav section={section} />
+      <TreePanels section={section} />
+    </>
+  );
   const body = <div class="wg-main-content" data-pagefind-body dangerouslySetInnerHTML={{ __html: html }} />;
   return (
     <>
       <SubPageHeader section={section} />
-      <SectionNav section={section} />
-      <TreePanels section={section} />
+      {notice ? (
+        <div class="content-version-navigation">
+          {navigation}
+          <ContentVersionNotice notice={notice} />
+        </div>
+      ) : (
+        navigation
+      )}
       <div class="pk-container pk-section">
         {section.sidebar ? (
           <div class="wg-layout">

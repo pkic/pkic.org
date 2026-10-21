@@ -478,6 +478,17 @@ test("working-group sections scroll in one row and retain dropdowns", async ({ p
   );
   await expect(versions.getByRole("link", { name: "1.0.0", exact: true, includeHidden: true })).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath("section-navigation.png"), fullPage: true });
+  await page.goto("/wg/pkimm/1.0.0/");
+  const versionNotice = page.getByRole("status", { name: "Content version" });
+  await expect(versionNotice).toContainText("Version 1.0.0");
+  await expect(versionNotice.getByRole("link", { name: "View current release" })).toHaveAttribute(
+    "href",
+    "/wg/pkimm/model/",
+  );
+  await page.screenshot({ path: testInfo.outputPath("pkimm-historical-notice.png") });
+  await versionNotice.getByRole("link", { name: "View current release" }).click();
+  await expect(page).toHaveURL(/\/wg\/pkimm\/model\/$/);
+  await expect(page.getByRole("status", { name: "Content version" })).toHaveCount(0);
 });
 
 test("mobile search fields stay readable without disabling viewport zoom", async ({ page }, testInfo) => {
@@ -1586,11 +1597,11 @@ test("reclassified model draft preserves feedback and redirects its former versi
     if (/github(?:usercontent)?\.com/.test(new URL(request.url()).hostname)) browserGithubRequests.push(request.url());
   });
   await page.goto("/wg/pqc/pqcmm/versions/drafts/1.1.0/levels/3-advanced/");
-  await expect(page.getByRole("status").filter({ hasText: "1.1.0 — Draft for feedback" })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "Draft 1.1.0" })).toBeVisible();
   expect(
     await page
       .getByRole("status")
-      .filter({ hasText: "1.1.0 — Draft for feedback" })
+      .filter({ hasText: "Draft 1.1.0" })
       .evaluate((notice) => {
         const nav = document.querySelector("#wgSectionNav")!;
         return Boolean(nav.compareDocumentPosition(notice) & Node.DOCUMENT_POSITION_FOLLOWING);
@@ -1621,6 +1632,16 @@ test("reclassified model draft preserves feedback and redirects its former versi
   await expect(versions.getByRole("link", { name: "2.0.0 — Draft", exact: true })).toHaveCount(0);
   await expect(page.getByText("A documented long-lived exposure register", { exact: false }).first()).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("draft-1.1.0.png") });
+  await page.evaluate(() => window.scrollTo(0, 800));
+  const noticeBox = await page.getByRole("status", { name: "Content version" }).boundingBox();
+  const navBox = await page.locator("#wgSectionNav").boundingBox();
+  expect(noticeBox!.y).toBeGreaterThanOrEqual(0);
+  expect(Math.abs(noticeBox!.y - navBox!.y - navBox!.height)).toBeLessThan(2);
+  await expect(
+    page.getByRole("status", { name: "Content version" }).getByRole("link", { name: "View current release" }),
+  ).toHaveAttribute("href", "/wg/pqc/pqcmm/levels/3-advanced/");
+  await page.screenshot({ path: testInfo.outputPath("sticky-version-notice.png") });
+
   await expect(page.getByRole("link", { name: "Suggest a change on GitHub", includeHidden: true })).toHaveCount(1);
   await page.getByRole("heading", { name: "Criterion 3.1.5", exact: true }).evaluate((element) => {
     const range = document.createRange();
@@ -1639,7 +1660,7 @@ test("reclassified model draft preserves feedback and redirects its former versi
   expect(context.searchParams.get("source-revision")).toMatch(/^[a-f0-9]{40}$/);
   await page.goto("/wg/pqc/pqcmm/drafts/2.0.0/levels/3-advanced/");
   await expect(page).toHaveURL(/\/drafts\/1\.1\.0\/levels\/3-advanced\/$/);
-  await expect(page.getByRole("status").filter({ hasText: "1.1.0 — Draft for feedback" })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "Draft 1.1.0" })).toBeVisible();
   await page.goto("/wg/pqc/pqcmm/drafts/2.0.0/");
   await expect(page).toHaveURL(/\/drafts\/1\.1\.0\/$/);
   expect(browserGithubRequests).toEqual([]);
@@ -1650,7 +1671,7 @@ test("released model history stays readable while the default overview remains u
 }, testInfo) => {
   await page.goto("/wg/pqc/pqcmm/versions/1.0.1/levels/3-advanced/");
   await expect(page.getByRole("heading", { name: "Criterion 3.1.5", exact: true })).toBeVisible();
-  await expect(page.getByRole("status").filter({ hasText: "Draft for feedback" })).toHaveCount(0);
+  await expect(page.getByRole("status").filter({ hasText: "Draft 1.1.0" })).toHaveCount(0);
   await expect(page.getByText("Released model 1.0.1.", { exact: false })).toHaveCount(0);
   await expect(page.locator("main > section.pk-section")).toHaveCount(0);
   await expect(
@@ -1753,14 +1774,14 @@ test("model readers navigate released levels, switch drafts, and return through 
   menu = await modelMenu();
   await menu.getByRole("link", { name: "1.1.0 — Draft", exact: true }).click();
   await expect(page).toHaveURL(/\/drafts\/1\.1\.0\/levels\/2-foundational\/$/);
-  await expect(page.getByRole("status").filter({ hasText: "Draft for feedback" })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "Draft 1.1.0" })).toBeVisible();
   menu = await modelMenu();
   await menu.getByRole("link", { name: "1.0.1 Latest release", exact: true }).click();
   await expect(page).toHaveURL(/\/wg\/pqc\/pqcmm\/levels\/2-foundational\/$/);
   menu = await modelMenu();
   await menu.locator(".wg-sidebar-root").click();
   await expect(page).toHaveURL(/\/wg\/pqc\/pqcmm\/$/);
-  await expect(page.getByRole("status").filter({ hasText: "Draft for feedback" })).toHaveCount(0);
+  await expect(page.getByRole("status").filter({ hasText: "Draft 1.1.0" })).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath("released-model-navigation.png") });
 });
 

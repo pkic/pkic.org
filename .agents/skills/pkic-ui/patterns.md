@@ -88,3 +88,10 @@ Each entry is the full anatomy of a control. The gallery id renders it (`pnpm ga
 - Use `IdentityProfileFields` inside the existing identity profile form. General introduction: **About you**. Organization profile: **Your bio at {organization}**. Speaker onboarding: **Your speaker bio at {organization}**.
 - Shared `Field` guidance appears above its control by default; validation feedback stays below. Explain the bio scope there: About you spans roles; an organization bio is reused only when participating as that organization. Neither edit copies into the other.
 - The About panel names an organization when using its bio as a fallback. Its menu edits the displayed source and separately offers adding a general introduction.
+
+## Content version notice (`content-version-notice`)
+
+- Use: `site/ContentVersionNotice.tsx` with the selected and latest entries from the shared `ContentVersions` contract. Both maturity models use this component.
+- Shape: one slim full-width row below the section navigation, with the draft or historical version at the left and “View current release” at the right. Use plain version text, not a badge; hide only the supplementary description on phones.
+- Placement: the section navigation and notice share one sticky container beneath the site header. Do not change the hero or repeat the notice in the page body. The current release has no notice.
+- Behavior: persistent, without dismissal. The current-release link preserves the equivalent page when available and is an ordinary keyboard-accessible link.
