@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-/** The user record's profile, participation, actions and staff-only account history. */
+/** The user record's profile, participation, actions and staff-only audit log. */
 import { render } from "preact";
 import { IDENTITY_ID, membership, userWith } from "./helpers/affiliation-fixtures";
 import { act } from "preact/test-utils";
@@ -40,6 +40,7 @@ const user: UserDetail = {
 };
 
 afterEach(() => {
+  history.replaceState(null, "", "/portal/#/");
   for (const container of mounted.splice(0)) {
     void act(() => render(null, container));
     container.remove();
@@ -152,17 +153,27 @@ describe("portal System Users detail record", () => {
     );
   });
 
-  it("shows account history only to staff with user read permission", async () => {
+  it("loads the audit log only when staff select its data view", async () => {
+    history.replaceState(null, "", `/portal/#/users/${user.id}`);
     stubDetail(user);
     const staff = await mountDetail(READ_ONLY);
-    expect(cardNamed(staff, "Account history")).not.toBeNull();
-    expect(
-      apiClient.getJson.mock.calls.some(([url]) => String(url).startsWith(`/api/v1/users/${user.id}/audit-log`)),
-    ).toBe(true);
+    const tabs = [...staff.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+    expect(tabs.map((tab) => tab.textContent)).toEqual(["Events", "Meetings", "Documents", "Votes", "Audit log"]);
+    expect(apiClient.getJson.mock.calls.some(([url]) => String(url).includes("/audit-log"))).toBe(false);
 
+    await act(() => tabs.at(-1)!.click());
+    await settle();
+    expect(location.hash).toBe(`#/users/${user.id}/audit-log`);
+    const panel = staff.querySelector('[role="tabpanel"]')!;
+    expect(panel.querySelector("table caption")?.textContent).toBe("Audit log");
+    expect(apiClient.getJson.mock.calls.some(([url]) => String(url).includes("/audit-log"))).toBe(true);
+  });
+
+  it("does not expose or fetch the audit log on a member's own record, including a direct link", async () => {
+    history.replaceState(null, "", `/portal/#/users/${user.id}/audit-log`);
     stubDetail(user);
     const self = await mountDetail({ ...READ_ONLY, canRead: false }, user.id);
-    expect(cardNamed(self, "Account history")).toBeNull();
+    expect(self.querySelector('[role="tab"]')).toBeNull();
     expect(apiClient.getJson.mock.calls.some(([url]) => String(url).includes("/audit-log"))).toBe(false);
   });
 
