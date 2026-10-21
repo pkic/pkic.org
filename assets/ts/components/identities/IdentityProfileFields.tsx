@@ -17,6 +17,7 @@ export interface IdentityProfileDraft {
   jobTitle: string;
   biography: string;
   links: string[];
+  pendingLink?: string;
 }
 
 /** The draft an edit starts from. */
@@ -37,7 +38,7 @@ export function identityProfileBody(draft: IdentityProfileDraft) {
   return {
     jobTitle: draft.jobTitle.trim(),
     biography: draft.biography.trim(),
-    links: draft.links,
+    links: draft.pendingLink?.trim() ? [...draft.links, draft.pendingLink.trim()] : draft.links,
   };
 }
 
@@ -121,6 +122,8 @@ export function IdentityProfileFields({
         value={draft.links}
         inputAriaLabel="Profile link URL"
         onChange={(links) => onChange({ links })}
+        onPendingChange={(pendingLink) => onChange({ pendingLink })}
+        presentation={of("links")}
       />
     </>
   );

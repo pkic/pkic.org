@@ -41,6 +41,19 @@ function addButton(root: ParentNode): HTMLButtonElement {
 }
 
 describe("ProfileLinksInput", () => {
+  it("reports a pending link and clears it when the link is added to the array", async () => {
+    const onChange = vi.fn();
+    const onPendingChange = vi.fn();
+    const container = mount(
+      <ProfileLinksInput fieldName="links" value={[]} onChange={onChange} onPendingChange={onPendingChange} />,
+    );
+    await typeInto(urlField(container), "https://example.org/profile");
+    expect(onPendingChange).toHaveBeenLastCalledWith("https://example.org/profile");
+    void act(() => addButton(container).click());
+    expect(onChange).toHaveBeenCalledWith(["https://example.org/profile"]);
+    expect(onPendingChange).toHaveBeenLastCalledWith("");
+    expect(urlField(container).value).toBe("");
+  });
   it("refuses a URL that is not http(s) and says so as an error, not just in a color", async () => {
     const onChange = vi.fn();
     const container = mount(<ProfileLinksInput fieldName="profile.links" value={[]} onChange={onChange} />);

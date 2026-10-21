@@ -14,6 +14,7 @@ import {
 import { Users } from "../../assets/ts/member-flows/portal/sections/system-users/Users";
 import { identityProfileEditPath } from "../../assets/ts/member-flows/portal/sections/system-users/IdentityProfilePage";
 import { press, settle } from "./helpers/affiliation-fixtures";
+import { typeInto } from "./helpers/labeled-control";
 
 const navigate = vi.hoisted(() => vi.fn());
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["/users/person", navigate] }));
@@ -65,7 +66,7 @@ it("lets staff edit an identity's profile through its resource and returns to th
     organizationId: "00000000-0000-4000-8000-000000000073",
     jobTitle: "Standards lead",
     biography: "Before.",
-    links: [],
+    links: ["https://github.com/example", "https://orcid.org/0000"],
   });
   const paths: string[] = [];
   const bodies: unknown[] = [];
@@ -80,9 +81,16 @@ it("lets staff edit an identity's profile through its resource and returns to th
 
   expect(container.textContent).toContain("Edit profile: Example Trust");
   expect(paths[0]).toBe(`/api/v1/identities/${identityId}`);
+  expect(container.querySelectorAll('[aria-label="Added profile links"] .pk-chip')).toHaveLength(2);
+  await typeInto(container.querySelector<HTMLInputElement>('input[type="url"]')!, "https://example.org/profile");
   await press(container, "Save changes");
   expect(paths).toContain(`/api/v1/identities/${identityId}`);
   expect(bodies).toHaveLength(1);
+  expect(bodies[0]).toEqual(
+    expect.objectContaining({
+      links: ["https://github.com/example", "https://orcid.org/0000", "https://example.org/profile"],
+    }),
+  );
   expect(navigate).toHaveBeenCalledWith(`/users/${userId}`);
 });
 

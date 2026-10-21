@@ -32,6 +32,22 @@ afterEach(() => {
 });
 
 describe("visual Markdown round trips", () => {
+  it("keeps biography titles as paragraphs rather than numbered lists", () => {
+    const source =
+      "Ir. Dr. Example has served as an engineer.\n\nFor the past 26 years, he has developed policy.\n\nDr. Example has a doctorate.";
+    const instance = editor(source);
+    expect(instance.view.dom.querySelector("ol")).toBeNull();
+    expect(instance.view.dom.querySelectorAll("p")).toHaveLength(3);
+    expect(instance.view.dom.textContent).toContain("Ir. Dr. Example");
+    expect(editor(instance.getMarkdown()).getJSON()).toEqual(instance.getJSON());
+  });
+
+  it("preserves numeric ordered lists through Markdown round trips", () => {
+    const instance = editor("3. Review the certificate.\n4. Check the issuer.");
+    expect(instance.view.dom.querySelector("ol")?.start).toBe(3);
+    expect(instance.view.dom.querySelectorAll("ol > li")).toHaveLength(2);
+    expect(editor(instance.getMarkdown()).getJSON()).toEqual(instance.getJSON());
+  });
   it("keeps nested lists, formatting, image descriptions, tables and videos in the public result", () => {
     const source =
       "## Our work\n\n**Strong** and *clear* with a [link](https://example.test).\n\n- First\n  - Nested\n- Second\n\n> A callout.\n\n![Accessible description](https://example.test/image.png)\n\n| Product | Status |\n| --- | --- |\n| Certificates | Ready |\n\nhttps://www.youtube.com/watch?v=HGoZW7MCF60";
