@@ -54,6 +54,38 @@ it("refreshes an idle client onto the deployed shell, preserving its route and q
   expect(reload).toHaveBeenCalledOnce();
   expect(location.hash).toBe("#/users?users.q=delegate");
 });
+it.each(["/_assets/", "/js/built/"])("recovers a stylesheet-only deployment from %s", async (prefix) => {
+  document.head.innerHTML = shell("unchanged") + `<link rel="stylesheet" href="${prefix}app.old.css">`;
+  fetchMock.mockResolvedValue(
+    new Response(shell("unchanged") + `<link rel="stylesheet" href="${prefix}app.new.css">`, {
+      headers: { "content-type": "text/html" },
+    }),
+  );
+  install();
+  await vi.advanceTimersByTimeAsync(300_000);
+  expect(reload).toHaveBeenCalledOnce();
+});
+it("does not refresh when unchanged stylesheet links are reordered or repeated", async () => {
+  const first = '<link rel="stylesheet" href="/_assets/first.same.css">';
+  const second = '<link rel="stylesheet" href="/_assets/second.same.css">';
+  document.head.innerHTML = shell("same") + first + second;
+  fetchMock.mockResolvedValue(
+    new Response(second + shell("same") + first + first, {
+      headers: { "content-type": "text/html" },
+    }),
+  );
+  install();
+  await vi.advanceTimersByTimeAsync(300_000);
+  expect(reload).not.toHaveBeenCalled();
+});
+it("ignores external stylesheets and preload-only links in the release fingerprint", () => {
+  const before = clientPageRelease(document);
+  document.head.insertAdjacentHTML(
+    "beforeend",
+    '<link rel="stylesheet" href="https://external.test/style.hash.css"><link rel="preload" as="style" href="/_assets/future.hash.css">',
+  );
+  expect(clientPageRelease(document)).toBe(before);
+});
 it("checks periodically without any build or version endpoint", async () => {
   install();
   await vi.advanceTimersByTimeAsync(300_000);

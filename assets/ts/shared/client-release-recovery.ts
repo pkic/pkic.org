@@ -6,11 +6,11 @@ const IDLE_MS = 15_000;
 const RELOAD_RECORD = "pkic.client-release-reload";
 const PAGE_LIMIT_BYTES = 512 * 1024;
 
-/** Module URLs already fingerprint the import graph; no extra manifest or build pass. */
+/** Emitted script and stylesheet URLs identify a release without another manifest or build pass. */
 export function clientPageRelease(page: Document): string | null {
-  const paths = [...page.querySelectorAll<HTMLScriptElement>('script[type="module"][src]')]
-    .map((script) => script.getAttribute("src"))
-    .filter((path): path is string => !!path && /^\/(?:_assets|js\/built)\/[A-Za-z0-9_./-]+\.js$/.test(path));
+  const paths = [...page.querySelectorAll('script[type="module"][src], link[rel~="stylesheet"][href]')]
+    .map((asset) => asset.getAttribute("src") ?? asset.getAttribute("href"))
+    .filter((path): path is string => !!path && /^\/(?:_assets|js\/built)\/[A-Za-z0-9_./-]+\.(?:js|css)$/.test(path));
   const inventory = page.querySelector<HTMLLinkElement>('link[rel="pkic-scanner-offline"]')?.getAttribute("href");
   if (inventory && /^\/_assets\/scanner-offline-[a-f0-9]{64}\.json$/.test(inventory)) paths.push(inventory);
   return paths.length ? [...new Set(paths)].sort().join("\n") : null;
