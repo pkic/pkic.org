@@ -25,6 +25,7 @@ import {
 
 export interface EditableIdentity {
   organizationId: string | null;
+  organizationName?: string | null;
   jobTitle: string | null;
   biography: string | null;
   links: readonly string[];
@@ -33,6 +34,7 @@ export interface EditableIdentity {
 export function IdentityProfileForm({
   identity,
   editor,
+  purpose = "profile",
   save,
   onSaved,
   cancel,
@@ -40,6 +42,7 @@ export function IdentityProfileForm({
   identity: EditableIdentity;
   /** Who edits: the owner is told how to report a changed affiliation, staff whose records change. */
   editor: "owner" | "staff";
+  purpose?: "profile" | "speaker";
   /** Stores the checked edit on the identity's resource. */
   save: (body: IdentityProfileUpdate) => Promise<unknown>;
   onSaved: () => void;
@@ -92,6 +95,8 @@ export function IdentityProfileForm({
         onChange={(patch) => setDraft((current) => ({ ...current, ...patch }))}
         of={form.of}
         organizationId={identity.organizationId}
+        organizationName={identity.organizationName}
+        purpose={purpose}
       />
       {error && <Alert tone="danger">{friendlyErrorMessage(error)}</Alert>}
       <div class="pk-cluster">

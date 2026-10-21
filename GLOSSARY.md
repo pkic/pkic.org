@@ -5,6 +5,8 @@ One name for one thing, in code, copy, and documentation. Add a term here when y
 ## People and organizations
 
 - **User**: a person who signs in. Holds the personal profile.
+- **About you**: an optional general introduction covering a person’s interests and roles, held on their personal identity. It does not imply individual membership.
+- **Organization bio**: the biography on an organization identity, describing the person’s role and relevant experience there. Speaker profiles use the selected identity’s bio. When About you is empty, the portal may show the primary identity’s bio with attribution, without copying it.
 - **Identity**: who a user acts as: themselves, or a capacity at an organization. Name, title, organization, bio, links, and headshot come only from the user and identity; nothing else stores a copy.
 - **Acting identity**: the identity a user has chosen for the current action, switched from the account menu.
 - **Representation**: an organization identity seen from the person holding it. It ends on a date; an end made by mistake is undone by **reinstating** it, which removes the end date from the same identity rather than starting a new one.

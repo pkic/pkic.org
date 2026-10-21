@@ -1,13 +1,7 @@
 // @vitest-environment jsdom
-/**
- * The user record page: what it shows, what it offers, and to whom.
- *
- * Split out of portal-system-users.test.tsx, which had grown to cover both
- * the record and the profile form inside it. They are two subjects, and the
- * file was over its line budget carrying both.
- */
+/** The user record's profile, participation, actions and staff-only account history. */
 import { render } from "preact";
-import { IDENTITY_ID, membership } from "./helpers/affiliation-fixtures";
+import { IDENTITY_ID, membership, userWith } from "./helpers/affiliation-fixtures";
 import { act } from "preact/test-utils";
 import { menuItemNamed } from "./helpers/row-actions";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -38,19 +32,11 @@ vi.mock("../../assets/ts/shared/api-client", async (importOriginal) => ({
 const mounted: HTMLElement[] = [];
 
 const user: UserDetail = {
-  id: "00000000-0000-4000-8000-000000000001",
-  email: "member@example.test",
+  ...userWith([]),
   first_name: "Ada",
   last_name: "Lovelace",
-  preferred_name: null,
-  active: true,
-  isEcMember: false,
-  headshotUrl: null,
   created_at: "2026-01-01T00:00:00.000Z",
   updated_at: "2026-01-01T00:00:00.000Z",
-  pii_redacted_at: null,
-  identities: [],
-  formerIdentities: [],
 };
 
 afterEach(() => {
@@ -113,6 +99,58 @@ describe("portal System Users detail record", () => {
   function terms(list: Element): string[] {
     return [...list.querySelectorAll(":scope > dt")].map((term) => term.textContent ?? "");
   }
+
+  function personalProfile(biography: string | null) {
+    return membership({
+      identityId: "00000000-0000-4000-8000-000000000099",
+      organizationId: null,
+      organizationName: null,
+      memberId: null,
+      membershipCategory: null,
+      groups: [],
+      biography,
+    });
+  }
+
+  it.each(["owner", "staff", "reader"] as const)(
+    "attributes a general introduction and its edit action for %s",
+    async (viewer) => {
+      const personal = personalProfile("General introduction across my roles.");
+      const organization = membership({ biography: "Role-specific organization biography." });
+      stubDetail({ ...user, identities: [personal, organization] });
+      const container = await mountDetail(
+        { ...READ_ONLY, canManageMembership: viewer === "staff" },
+        viewer === "owner" ? user.id : undefined,
+      );
+      const about = cardNamed(container, "About")!;
+      expect(about.textContent).toContain(personal.biography);
+      expect(about.textContent).not.toContain(organization.biography);
+      expect(container.textContent).toContain(organization.biography);
+      const trigger = about.querySelector<HTMLButtonElement>('button[aria-label="About actions"]');
+      if (viewer === "reader") {
+        expect(trigger).toBeNull();
+        return;
+      }
+      expect(trigger).not.toBeNull();
+      void act(() => trigger!.click());
+      expect(menuItemNamed(container, "Edit About you…")?.getAttribute("href")).toContain(personal.identityId);
+    },
+  );
+
+  it("attributes the fallback organization bio and offers separate general and organization edits", async () => {
+    const personal = personalProfile(null);
+    const organization = membership({ biography: "Role-specific organization biography." });
+    stubDetail({ ...user, identities: [personal, organization] });
+    const container = await mountDetail({ ...READ_ONLY, canManageMembership: true });
+    const about = cardNamed(container, "About")!;
+    expect(about.textContent).toContain(organization.biography);
+    expect(about.textContent).toContain(`From the ${organization.organizationName} profile.`);
+    void act(() => about.querySelector<HTMLButtonElement>('button[aria-label="About actions"]')!.click());
+    expect(menuItemNamed(container, "Add About you…")?.getAttribute("href")).toContain(personal.identityId);
+    expect(menuItemNamed(container, `Edit bio at ${organization.organizationName}…`)?.getAttribute("href")).toContain(
+      organization.identityId,
+    );
+  });
 
   it("shows account history only to staff with user read permission", async () => {
     stubDetail(user);

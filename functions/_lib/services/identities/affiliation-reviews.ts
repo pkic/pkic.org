@@ -26,6 +26,7 @@ interface ReviewRow {
   first_name: string | null;
   last_name: string | null;
   email: string;
+  has_verified_email: number;
   organization_name: string | null;
   job_title: string | null;
   email_domain: string | null;
@@ -42,9 +43,14 @@ interface GroupRow {
   email_domains: string | null;
   people: number;
   open_reviews: number;
+  unverified_people: number;
   resolved_reviews: number;
   first_recorded_at: string;
 }
+
+/** Verification evidence only: a verified address can still be on an unrelated domain. */
+const HAS_VERIFIED_EMAIL_SQL = `(person.email_verified_at IS NOT NULL OR EXISTS (
+  SELECT 1 FROM user_emails address WHERE address.user_id = person.id AND address.verified_at IS NOT NULL))`;
 
 const PERSON_NAME_SQL =
   "LOWER(COALESCE(NULLIF(TRIM(COALESCE(person.first_name, '') || ' ' || COALESCE(person.last_name, '')), ''), person.email))";
@@ -71,6 +77,7 @@ function toReview(row: ReviewRow): AffiliationReview {
     userId: row.user_id,
     personName: [row.first_name, row.last_name].filter(Boolean).join(" ") || row.email,
     personEmail: row.email,
+    hasVerifiedEmail: Boolean(row.has_verified_email),
     organizationName: row.organization_name,
     jobTitle: row.job_title,
     emailDomain: row.email_domain,
@@ -90,6 +97,7 @@ function toGroup(row: GroupRow, status: AffiliationReviewStatus): AffiliationRev
     emailDomains: row.email_domains ? row.email_domains.split(",").sort() : [],
     people: Number(row.people),
     openReviews: Number(row.open_reviews),
+    unverifiedPeople: Number(row.unverified_people),
     status,
     firstRecordedAt: row.first_recorded_at,
   });
@@ -107,6 +115,8 @@ function groupSelect(conditions: string[]): string {
       COUNT(DISTINCT review.user_id) AS people,
       (SELECT COUNT(*) FROM affiliation_reviews open_review
         WHERE open_review.group_key = review.group_key AND open_review.resolved_at IS NULL) AS open_reviews,
+      COUNT(DISTINCT CASE WHEN review.resolved_at IS NULL AND NOT ${HAS_VERIFIED_EMAIL_SQL}
+        THEN review.user_id END) AS unverified_people,
       SUM(review.resolved_identity_id IS NOT NULL) AS resolved_reviews,
       MIN(review.created_at) AS first_recorded_at
     FROM affiliation_reviews review
@@ -172,6 +182,7 @@ export async function listAffiliationReviews(db: DatabaseLike, params: Affiliati
   );
   const { rows, total } = await queryPage<ReviewRow>(db, {
     sql: `SELECT review.id, review.group_key, review.user_id, person.first_name, person.last_name, person.email,
+                 ${HAS_VERIFIED_EMAIL_SQL} AS has_verified_email,
                  review.organization_name, review.job_title, review.email_domain, review.source_type,
                  review.resolved_identity_id, review.created_at, review.resolved_at
             FROM affiliation_reviews review

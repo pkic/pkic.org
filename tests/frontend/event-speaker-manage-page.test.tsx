@@ -331,7 +331,11 @@ describe("speaker self-service page", () => {
     // The biography is the chosen identity's: edited on the identity, through this speaker link.
     expect(panel(root, "data-identity-profile").hidden).toBe(false);
     expect(root.querySelector('[data-profile-form] [name="biography"]')).toBeNull();
-    await typeMarkdown(root, "Biography", "An updated professional speaker biography for the conference program.");
+    await typeMarkdown(
+      root,
+      "Your speaker bio",
+      "An updated professional speaker biography for the conference program.",
+    );
     await act(async () => {
       root
         .querySelector("[data-identity-profile-form] form")!

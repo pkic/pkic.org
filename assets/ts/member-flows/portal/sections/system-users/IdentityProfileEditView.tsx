@@ -27,13 +27,17 @@ export function IdentityProfileEditView({ userId, identityId }: { userId: string
     () => getJson(identityProfileApi(identityId), ownIdentityProfileSchema),
     [identityId],
   );
-  const name = data ? (data.organizationName ?? "Individual identity") : "Identity";
+  const name = data ? (data.organizationName ?? "About you") : "Identity";
   return (
     <section class="pk pk-stack">
       <PageHeader
         trail={[{ label: "Professional profile", href: usePortalHashLocation.hrefs(profilePath) }, { label: name }]}
         title={`Edit ${name}`}
-        description="How this identity appears on your records and on your public profile."
+        description={
+          data?.organizationId
+            ? `Your role, bio, and links for ${name}. Your general introduction is edited in About you.`
+            : "A general introduction covering your interests and roles. Organization-specific bios are edited on their own profiles."
+        }
       />
       {loading && !data ? <Spinner /> : null}
       {error && !data ? <ErrorAlert error={error} /> : null}

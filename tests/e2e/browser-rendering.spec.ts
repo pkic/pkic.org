@@ -902,7 +902,7 @@ test.describe("browser workflows", () => {
     // After confirmation the speaker edits the profile of the identity they speak as, on the identity itself.
     const identityProfile = page.locator("[data-identity-profile-form]");
     await identityProfile
-      .getByLabel(/Biography/i)
+      .getByLabel(/speaker bio/i)
       .fill("Updated speaker biography with enough detail to satisfy validation and demonstrate the browser workflow.");
     await identityProfile
       .getByRole("textbox", { name: "Profile link URL", exact: true })
@@ -1092,7 +1092,7 @@ test.describe("browser workflows", () => {
     await page.getByRole("button", { name: /Confirm participation/i }).click();
     await expect(page.locator("[data-confirmed-msg]")).toBeVisible();
 
-    const bioValue = await page.getByRole("textbox", { name: "Biography", exact: true }).innerText();
+    const bioValue = await page.getByRole("textbox", { name: /speaker bio/i }).innerText();
     expect(bioValue).not.toContain("injected bio");
     await screenshot("05-speaker-token-isolation-verified");
 
@@ -1301,7 +1301,7 @@ test.describe("browser workflows", () => {
     await coSpeakerCard.getByRole("menuitem", { name: "Change role…", exact: true }).click();
     // The proposer changes the role only: a speaker's name, photo and profile are their own.
     await expect(coSpeakerCard.getByLabel("First name", { exact: true })).toHaveCount(0);
-    await expect(coSpeakerCard.getByLabel("Biography", { exact: true })).toHaveCount(0);
+    await expect(coSpeakerCard.getByRole("textbox", { name: /bio/i })).toHaveCount(0);
     await coSpeakerCard.getByLabel("Role").selectOption("speaker");
     await coSpeakerCard.getByRole("button", { name: "Save role", exact: true }).click();
     await expect(page.getByText(/Saved the role of co-sam-speaker@example.test/i)).toBeVisible({ timeout: 15_000 });
@@ -1337,7 +1337,7 @@ test.describe("browser workflows", () => {
     await expect(page.locator('[data-profile-form] input[name="organizationName"]')).toHaveCount(0);
     await page
       .locator("[data-identity-profile-form]")
-      .getByLabel(/Biography/i)
+      .getByLabel(/speaker bio/i)
       .fill("Written by the invited speaker on the identity they speak as.");
     await page
       .locator("[data-identity-profile-form]")

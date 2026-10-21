@@ -33,9 +33,16 @@ async function decidedCount(db: DatabaseLike, decisionId: string): Promise<numbe
 }
 
 /** One audit row per review this decision closed, recognized by the closing staff member and instant. */
-function prepareClosedReviewAudit(
+export function prepareClosedReviewAudit(
   db: DatabaseLike,
-  input: { action: string; staff: UserBackedAuthAdmin; at: string; decisionId: string; groupKey: string },
+  input: {
+    action: string;
+    staff: UserBackedAuthAdmin;
+    at: string;
+    decisionId: string;
+    groupKey: string;
+    identityId?: string;
+  },
 ): StatementLike {
   return db
     .prepare(
@@ -49,7 +56,8 @@ function prepareClosedReviewAudit(
                 'identityId', json_object('from', NULL, 'to', review.resolved_identity_id)),
               ?, NULL, NULL
          FROM affiliation_reviews review
-        WHERE review.group_key = ? AND review.resolved_at = ? AND review.resolved_by_user_id = ?`,
+        WHERE review.group_key = ? AND review.resolved_at = ? AND review.resolved_by_user_id = ?
+          AND (? IS NULL OR review.resolved_identity_id = ?)`,
     )
     .bind(
       input.staff.id,
@@ -60,6 +68,8 @@ function prepareClosedReviewAudit(
       input.groupKey,
       input.at,
       input.staff.id,
+      input.identityId ?? null,
+      input.identityId ?? null,
     );
 }
 

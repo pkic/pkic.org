@@ -96,8 +96,8 @@ export function UserAffiliationRow({
   /**
    * This tie's description is already the record's About.
    *
-   * There is one biography per identity and the record leads with the default
-   * one, so repeating it on the row that supplied it printed the same
+   * There is one biography per identity. Repeating the About text on the
+   * row that supplied it printed the same
    * paragraph twice. Every other affiliation still states its own.
    */
   summarized?: boolean;
@@ -116,7 +116,6 @@ export function UserAffiliationRow({
   // An organization-tied identity takes its category and status from the
   // organization, so only an individual capacity is editable here.
   const hasMembership = membership.memberId !== null;
-  const hasProfileTarget = Boolean(membership.organizationId) || hasMembership;
   const categoryEditable =
     hasMembership && membership.membershipCategory !== null && !membership.organizationId && canManage;
   const statusEditable = hasMembership && membership.status !== null && !membership.organizationId && canManage;
@@ -281,7 +280,7 @@ export function UserAffiliationRow({
   const rowActions: MenuItem[] = [];
   // Its owner edits any identity they hold through their own contract, even one
   // that is not an organization's; staff edit through the identity's own record.
-  if (hasProfileTarget || viewerIsSubject)
+  if (canManage || viewerIsSubject)
     rowActions.push({
       id: "profile",
       label: viewerIsSubject ? "Edit profile…" : "Edit identity profile…",

@@ -105,12 +105,14 @@ const identityProfileFields = {
   showOnOrganizationProfile: z.boolean().optional(),
 };
 
+export const immediateIdentityActivationSchema = z.object({
+  mode: z.literal("immediate"),
+  reason: trimmedString(1, 500, "Document why this identity is being activated immediately."),
+});
+
 const identityActivationSchema = z.discriminatedUnion("mode", [
   z.object({ mode: z.literal("invitation") }),
-  z.object({
-    mode: z.literal("immediate"),
-    reason: trimmedString(1, 500, "Document why this identity is being activated immediately."),
-  }),
+  immediateIdentityActivationSchema,
 ]);
 
 /** Invite an existing user or provision an attributable user by email. */
