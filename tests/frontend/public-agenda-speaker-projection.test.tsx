@@ -227,7 +227,8 @@ it("omits organization logos on compact session credits and retains them in sess
   expect(detail.querySelector(".pk-agenda-speaker-affiliations .pk-agenda-speaker-organization")).toBeNull();
   const info = detail.querySelector(".pk-content-agenda__speaker-info")!;
   expect(info.lastElementChild?.classList.contains("pk-agenda-speaker-logos")).toBe(true);
-  expect(info.querySelector(".pk-link-list")!.nextElementSibling).toBe(info.lastElementChild);
+  expect(info.querySelector(".pk-content-agenda__speaker-name .pk-link-list")).not.toBeNull();
+  expect(info.lastElementChild?.querySelector(".pk-link-list")).toBeNull();
   const profile = document.createElement("div");
   profile.innerHTML = await renderToStringAsync(<AgendaSpeakerProfile speaker={speaker} profileId="example" />);
   const text = profile.querySelector(".pk-agenda-speaker-profile__affiliation-text")!;

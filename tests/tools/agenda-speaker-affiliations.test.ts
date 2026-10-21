@@ -1,3 +1,4 @@
+import { approvedAgendaSnapshot } from "../fixtures/approved-agenda";
 import { describe, expect, it } from "vitest";
 import {
   affiliationLabel,
@@ -63,10 +64,10 @@ describe("speaker affiliations", () => {
       { identityId: "b", title: "CEO", organizationId: "org-b", organizationName: "Digitorus" },
     ]);
     expect(creditAffiliations(credit).map((value) => value.title)).toEqual(["Chair", "CEO"]);
-    expect(agendaCreditedOrganizationIds([{ history: { appearances: [credit] } } as never])).toEqual([
-      "org-a",
-      "org-b",
-    ]);
+    const occurrence = structuredClone(approvedAgendaSnapshot.occurrences[0]!);
+    occurrence.speakers = [];
+    occurrence.history!.appearances = [credit];
+    expect(agendaCreditedOrganizationIds([occurrence])).toEqual(["org-a", "org-b"]);
     expect(creditAffiliations({ jobTitle: "Researcher", organizationName: null })).toEqual([
       { identityId: null, title: "Researcher", organizationId: null, organizationName: null },
     ]);

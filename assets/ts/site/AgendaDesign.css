@@ -869,7 +869,7 @@
     .session-modal__speaker
     .pk-content-agenda__speaker
     h3 {
-    margin: 0 0 0.25rem;
+    margin: 0;
     font-size: var(--pk-agenda-type-16);
     font-weight: 700;
   }
