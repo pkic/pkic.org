@@ -9,11 +9,10 @@ import { scannerCapabilities } from "../../../assets/shared/event-scanner-permis
  */
 import { all } from "../db/queries";
 import {
-  isAuthorizationGuardFailure,
+  guardAuthorizedDatabase,
   prepareAuthorizationGuard,
   type AuthorizationEvidence,
 } from "../db/authorization-guard";
-import { guardDatabaseBatches } from "../db/guarded-database";
 import { AppError } from "../errors";
 import type { AuthAdmin, DatabaseLike, PermissionGrant, StatementLike } from "../types";
 import { isUserBackedAuthAdmin } from "./admin-identity";
@@ -94,9 +93,9 @@ export async function computeGrantsForContexts(
  * Called on every authenticated admin request — see requireAdminFromRequest
  * in ./admin.ts. This is a deliberate deviation from "no DB query on
  * the request path" design: the existing session model already performs a
- * DB lookup on every request for revocation, so recomputing grants on that
- * same lookup gives real-time (not eventually-consistent, ≤15-minute)
- * revocation at no extra request-path cost.
+ * DB lookup on every request for revocation. Grant resolution uses that
+ * request's D1 session; reads accept the owner-approved replication lag,
+ * while mutations recheck permission on primary in their atomic batch.
  */
 export async function computeGrantsForUser(
   db: DatabaseLike,
@@ -383,29 +382,14 @@ export function preparePermissionsAuthorizationGuard(
   return prepareAuthorizationGuard(db, permissionsAuthorizationEvidence(actor, requirements));
 }
 
-/**
- * Rechecks permission requirements before every batch issued by a mutation
- * service. The guard and the caller's statements commit or roll back as one D1
- * batch, while each domain retains its own public error code and message.
- */
+/** Rechecks read authorization on the serving replica and mutation authorization atomically on primary. */
 export function guardPermissionDatabase(
   db: DatabaseLike,
   actor: AuthAdmin,
   requirements: readonly PermissionRequirement[],
   authorizationChangedError: () => AppError,
 ): DatabaseLike {
-  return guardDatabaseBatches(db, async (statements) => {
-    try {
-      const [, ...results] = await db.batch([
-        preparePermissionsAuthorizationGuard(db, actor, requirements),
-        ...statements,
-      ]);
-      return results;
-    } catch (error) {
-      if (isAuthorizationGuardFailure(error)) throw authorizationChangedError();
-      throw error;
-    }
-  });
+  return guardAuthorizedDatabase(db, permissionsAuthorizationEvidence(actor, requirements), authorizationChangedError);
 }
 
 /** Backward-compatible domain name for mutation callers; behavior is identical. */

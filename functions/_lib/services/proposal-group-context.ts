@@ -1,10 +1,14 @@
 import {
-  preparePermissionsAuthorizationGuard,
+  permissionsAuthorizationEvidence,
   requireAnyPermission,
   requirePermission,
   type Permission,
 } from "../auth/permissions";
-import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../db/authorization-guard";
+import {
+  guardAuthorizedDatabase,
+  prepareAuthorizationGuard,
+  type AuthorizationEvidence,
+} from "../db/authorization-guard";
 import { buildOffsetPageStatements, decodeOffsetPageResults, type OffsetPageQuery } from "../db/pagination";
 import { first } from "../db/queries";
 import { AppError } from "../errors";
@@ -69,6 +73,16 @@ export async function requireGroupEventProposalContext(
   return { groupId: row.group_id, eventId: row.event_id, ...(proposalId ? { proposalId } : {}) };
 }
 
+function groupEventProposalContextEvidence(context: GroupEventProposalContext): AuthorizationEvidence {
+  const hasProposal = context.proposalId !== undefined;
+  return {
+    sql: exactContextSql(hasProposal),
+    bindings: hasProposal
+      ? [context.groupId, context.groupId, context.eventId, context.proposalId]
+      : [context.groupId, context.groupId, context.eventId],
+  };
+}
+
 /**
  * Rechecks the immutable path tuple in the same D1 batch as a proposal write.
  * Permission-specific guards remain in the proposal use case, so canonical
@@ -78,13 +92,7 @@ export function prepareGroupEventProposalContextGuard(
   db: DatabaseLike,
   context: GroupEventProposalContext,
 ): StatementLike {
-  const hasProposal = context.proposalId !== undefined;
-  return prepareAuthorizationGuard(db, {
-    sql: exactContextSql(hasProposal),
-    bindings: hasProposal
-      ? [context.groupId, context.groupId, context.eventId, context.proposalId]
-      : [context.groupId, context.groupId, context.eventId],
-  });
+  return prepareAuthorizationGuard(db, groupEventProposalContextEvidence(context));
 }
 
 /** Rechecks the exact program tuple and permission in the same D1 batch as a page and count. */
@@ -95,23 +103,23 @@ export async function queryGroupEventProposalPage<T>(
   permission: Permission,
   query: OffsetPageQuery,
 ): Promise<{ rows: T[]; total: number }> {
-  try {
-    const [, , pageResult, countResult] = await db.batch([
-      prepareGroupEventProposalContextGuard(db, context),
-      preparePermissionsAuthorizationGuard(db, actor, [
-        { permission, context: { type: "event", id: context.eventId } },
-      ]),
-      ...buildOffsetPageStatements(db, query),
-    ]);
-    return decodeOffsetPageResults<T>(pageResult, countResult);
-  } catch (error) {
-    if (isAuthorizationGuardFailure(error)) {
-      throw new AppError(
+  const program = groupEventProposalContextEvidence(context);
+  const authority = permissionsAuthorizationEvidence(actor, [
+    { permission, context: { type: "event", id: context.eventId } },
+  ]);
+  const guardedDb = guardAuthorizedDatabase(
+    db,
+    {
+      sql: `SELECT 1 WHERE EXISTS (${program.sql}) AND EXISTS (${authority.sql})`,
+      bindings: [...program.bindings, ...authority.bindings],
+    },
+    () =>
+      new AppError(
         409,
         "GROUP_EVENT_PROPOSAL_CONTEXT_CHANGED",
         "Proposal-program access changed while the invitation list was loading",
-      );
-    }
-    throw error;
-  }
+      ),
+  );
+  const [pageResult, countResult] = await guardedDb.batch(buildOffsetPageStatements(guardedDb, query));
+  return decodeOffsetPageResults<T>(pageResult, countResult);
 }

@@ -1,7 +1,7 @@
 import type { MailingListsListQuery } from "../../../../assets/shared/schemas/mailing-lists";
-import { prepareGroupManagementAuthorizationGuard, requireGroupManagement } from "../groups/governance";
+import { guardGroupManagementDatabase, requireGroupManagement } from "../groups/governance";
 import type { AuthAdmin } from "../../types";
-import { isAuthorizationGuardFailure, type AuthorizationEvidence } from "../../db/authorization-guard";
+import { type AuthorizationEvidence } from "../../db/authorization-guard";
 import { buildOffsetPageStatements, decodeOffsetPageResults, type OffsetPageQuery } from "../../db/pagination";
 import { all, first } from "../../db/queries";
 import { AppError } from "../../errors";
@@ -68,19 +68,10 @@ export async function listGroupManagedMailingLists(
       "manage",
     ),
   });
-  try {
-    const [, pageResult, countResult] = await db.batch([
-      prepareGroupManagementAuthorizationGuard(db, actor, [groupId]),
-      ...buildOffsetPageStatements(db, pageQuery),
-    ]);
-    const { rows, total } = decodeOffsetPageResults<MailingListRow>(pageResult, countResult);
-    return { mailingLists: rows.map(toMailingList), total };
-  } catch (error) {
-    if (isAuthorizationGuardFailure(error)) {
-      throw new AppError(403, "GROUP_MANAGEMENT_REQUIRED", "Effective group management permission is required");
-    }
-    throw error;
-  }
+  const guardedDb = guardGroupManagementDatabase(db, actor, [groupId]);
+  const [pageResult, countResult] = await guardedDb.batch(buildOffsetPageStatements(guardedDb, pageQuery));
+  const { rows, total } = decodeOffsetPageResults<MailingListRow>(pageResult, countResult);
+  return { mailingLists: rows.map(toMailingList), total };
 }
 
 /**

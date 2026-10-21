@@ -6,7 +6,8 @@ import { availabilityResponse, getAvailability } from "./_lib/availability";
 import { logError, logInfo } from "./_lib/logging";
 import { getConfig } from "./_lib/config";
 import type { Env } from "./_lib/types";
-import { primaryFirstDb, requestSessionDb } from "./_lib/db/session";
+import { primaryFirstDb } from "./_lib/db/session";
+import { withRequestD1Session } from "./_lib/db/request-session";
 import { WorkerEntrypoint } from "cloudflare:workers";
 import {
   publicSessionRecordingRequest,
@@ -31,7 +32,9 @@ function handleHttpRequest(request: Request, env: Env, ctx: ExecutionContext): P
   // Each request owns the scope that tells its audit records which identity the signed-in person acts as.
   return runWithAuditActorScope(async () => {
     const { default: fetchWithMcp } = await import("./http-router");
-    return fetchWithMcp(request, withDependencyHandling({ ...env, DB: requestSessionDb(env.DB, request) }), ctx);
+    return withRequestD1Session(request, env, (sessionEnv) =>
+      fetchWithMcp(request, withDependencyHandling(sessionEnv), ctx),
+    );
   });
 }
 
@@ -86,7 +89,9 @@ export default {
     const paused = await availabilityResponse(request, env);
     if (paused) return paused;
     if (isLiveRoomSocketPath(request))
-      return liveRoomSocketRequest(request, withDependencyHandling({ ...env, DB: requestSessionDb(env.DB, request) }));
+      return withRequestD1Session(request, env, (sessionEnv) =>
+        liveRoomSocketRequest(request, withDependencyHandling(sessionEnv)),
+      );
     try {
       if (isAnonymousReadRequest(request)) {
         const cacheContext = ctx as ExecutionContext & {

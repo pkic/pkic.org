@@ -25,6 +25,10 @@ const HOLDER_PAGE = 500;
 const PUBLIC_CONTRIBUTION_SQL = `(EXISTS(SELECT 1 ${PUBLIC_LEADERSHIP_SOURCE_SQL} AND ur.user_id=person.id)
   OR EXISTS(SELECT 1 ${PUBLIC_SEAT_SOURCE_SQL} AND membership.user_id=person.id)
   OR EXISTS(SELECT 1 ${PUBLIC_CANDIDACY_SOURCE_SQL} AND candidate.user_id=person.id))`;
+// Enumerate contributors once for scheduled issuance instead of probing every account.
+const PUBLIC_CONTRIBUTOR_IDS_SQL = `SELECT ur.user_id ${PUBLIC_LEADERSHIP_SOURCE_SQL}
+  UNION SELECT membership.user_id ${PUBLIC_SEAT_SOURCE_SQL}
+  UNION SELECT candidate.user_id ${PUBLIC_CANDIDACY_SOURCE_SQL}`;
 
 export interface PersonProfileSlugRow {
   slug: string;
@@ -199,7 +203,7 @@ export async function readUnaddressedContributors(db: DatabaseLike, limit: numbe
     `SELECT person.id FROM users person
       WHERE person.merged_into_user_id IS NULL AND person.pii_redacted_at IS NULL
         AND NOT EXISTS(SELECT 1 FROM person_profile_slugs held WHERE held.user_id=person.id AND held.retired_at IS NULL)
-        AND ${PUBLIC_CONTRIBUTION_SQL}
+        AND person.id IN (${PUBLIC_CONTRIBUTOR_IDS_SQL})
       ORDER BY person.id LIMIT ?`,
     [limit],
   );

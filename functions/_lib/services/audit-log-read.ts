@@ -179,14 +179,19 @@ export async function listProposalAuditLog(db: DatabaseLike, proposalId: string,
     throw new AppError(404, "PROPOSAL_NOT_FOUND", "Proposal not found");
   }
   return listAuditLogForScope(db, query, {
-    joins: `LEFT JOIN proposal_reviews pr ON al.entity_type = 'proposal_review' AND pr.id = al.entity_id
-      LEFT JOIN proposal_speakers ps ON al.entity_type = 'proposal_speaker' AND ps.id = al.entity_id`,
-    where: `((al.scope_type = 'proposal' AND al.scope_id = ?)
-      OR (al.scope_type IS NULL AND (
-        (al.entity_type = 'proposal' AND al.entity_id = ?)
-        OR (al.entity_type = 'proposal_review' AND pr.proposal_id = ?)
-        OR (al.entity_type = 'proposal_speaker' AND ps.proposal_id = ?)
-      )))`,
+    // Resolve each legacy entity through its index before joining display data.
+    // Both the page and count share this restriction and all outer filters.
+    where: `al.id IN (
+      SELECT id FROM audit_log WHERE scope_type = 'proposal' AND scope_id = ?
+      UNION ALL
+      SELECT id FROM audit_log WHERE scope_type IS NULL AND entity_type = 'proposal' AND entity_id = ?
+      UNION ALL
+      SELECT id FROM audit_log WHERE scope_type IS NULL AND entity_type = 'proposal_review'
+        AND entity_id IN (SELECT id FROM proposal_reviews WHERE proposal_id = ?)
+      UNION ALL
+      SELECT id FROM audit_log WHERE scope_type IS NULL AND entity_type = 'proposal_speaker'
+        AND entity_id IN (SELECT id FROM proposal_speakers WHERE proposal_id = ?)
+    )`,
     bindings: [proposalId, proposalId, proposalId, proposalId],
   });
 }

@@ -1,3 +1,4 @@
+import { profileD1Flow } from "./helpers/d1-flow-profile";
 import { grantAdministrator } from "./helpers/administrator";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -34,7 +35,11 @@ describe("group statistics", () => {
     await env.DB.prepare("UPDATE group_memberships SET left_at = ? WHERE group_id = ? AND user_id = ?")
       .bind(new Date().toISOString(), group.id, ended.userId)
       .run();
-    const stats = await getGroupStatistics(env.DB, admin, group.id, groupStatsQuerySchema.parse({}));
+    const profile = profileD1Flow(env.DB);
+    const stats = await getGroupStatistics(profile.db, admin, group.id, groupStatsQuerySchema.parse({}));
+    expect((await profile.report()).queries.some(({ sql }) => /INSERT INTO authorization_guards/.test(sql))).toBe(
+      false,
+    );
     expect(stats.participation).toEqual({
       people: { count: 3 },
       organizations: { count: 1 },

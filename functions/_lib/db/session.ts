@@ -1,5 +1,4 @@
 import type { DatabaseLike } from "../types";
-import { hasAuthenticationCredential } from "../auth/session-cookies";
 
 type D1SessionConstraint = "first-primary" | "first-unconstrained";
 
@@ -22,7 +21,7 @@ const PRIMARY_READ_PATH_PREFIXES = [
 const PRIMARY_READ_QUERY_KEYS = ["token", "signature", "session_id"] as const;
 
 /** These projections never resolve the caller's identity, even with a cookie. */
-function isPublicDirectoryRead(url: URL): boolean {
+export function isPublicDirectoryRead(url: URL): boolean {
   const path = url.pathname.replace(/\/+$/, "");
   if (path === "/api/v1/members") return !url.searchParams.getAll("view").includes("staff");
   if (path === "/api/v1/sponsors") return !url.searchParams.getAll("visibility").includes("all");
@@ -32,10 +31,9 @@ function isPublicDirectoryRead(url: URL): boolean {
 }
 
 /**
- * A public read can start on any current replica. Authenticated, capability-
- * bearing, and state-changing requests start on primary so revocation and
- * writes are current; D1 may serve the remaining session queries from any
- * replica consistent with the bookmark established by that first query.
+ * Reads, including authentication and authorization, may use a consistent
+ * replica. Capability redemption and auth endpoints retain primary freshness;
+ * state-changing requests start on primary and atomically recheck authority.
  */
 export function requestD1SessionConstraint(request: Request): D1SessionConstraint {
   if (!READ_METHODS.has(request.method.toUpperCase())) return "first-primary";
@@ -43,7 +41,6 @@ export function requestD1SessionConstraint(request: Request): D1SessionConstrain
   if (PRIMARY_READ_PATH_PREFIXES.some((prefix) => url.pathname.startsWith(prefix))) return "first-primary";
   if (PRIMARY_READ_QUERY_KEYS.some((key) => url.searchParams.has(key))) return "first-primary";
   if (isPublicDirectoryRead(url)) return "first-unconstrained";
-  if (hasAuthenticationCredential(request)) return "first-primary";
 
   return "first-unconstrained";
 }
@@ -53,6 +50,13 @@ export function withD1Session(db: DatabaseLike, constraint: D1SessionConstraint)
 }
 
 export function readReplicaDb(db: DatabaseLike, bookmark?: string | null): DatabaseSessionLike {
+  // Owner-approved policy (2026-10-21): read authorization may use replica state,
+  // including a delay in observing permission or session revocations. Seconds of
+  // replication lag are explicitly accepted; D1 provides no fixed maximum lag.
+  // Bookmarks preserve sequential consistency, not immediate visibility of
+  // another actor's revocation. This is an accepted product tradeoff, not a
+  // security defect: do not force reads to primary solely to eliminate that lag.
+  // Mutations still require atomic authorization against the primary.
   return db.withSession?.(bookmark || "first-unconstrained") ?? db;
 }
 
@@ -60,6 +64,9 @@ export function primaryFirstDb(db: DatabaseLike): DatabaseSessionLike {
   return withD1Session(db, "first-primary");
 }
 
-export function requestSessionDb(db: DatabaseLike, request: Request): DatabaseSessionLike {
-  return withD1Session(db, requestD1SessionConstraint(request));
+export function requestSessionDb(db: DatabaseLike, request: Request, bookmark?: string | null): DatabaseSessionLike {
+  const constraint = requestD1SessionConstraint(request);
+  return constraint === "first-primary"
+    ? primaryFirstDb(db)
+    : readReplicaDb(db, isPublicDirectoryRead(new URL(request.url)) ? null : bookmark);
 }
