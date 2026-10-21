@@ -60,7 +60,7 @@ describe("website contribution handoff", () => {
     expect(document.querySelector("a")?.textContent).toContain("Suggest a change");
   });
   it("keeps registered draft provenance separate from its editable branch", () => {
-    const draft = modelVersionContributionForRoute("/wg/pqc/pqcmm/drafts/1.1.0/levels/1-initial/");
+    const draft = modelVersionContributionForRoute("/wg/pqc/pqcmm/versions/drafts/1.1.0/levels/1-initial/");
     expect(draft?.sourceVersion).toBe("1.1.0");
     expect(draft?.sourceRevision).toMatch(/^[a-f0-9]{40}$/);
     expect(draft?.contributionBranch).toBe("agent/pqcmm-1.1.0-draft");

@@ -40,7 +40,7 @@ const excludeFromSearch = privatePage || robots?.includes("noindex");
     <slot name="head" />
     {!privatePage && !robots?.includes("noindex") && <template id="pkic-social-card">{JSON.stringify(page.socialCard)}</template>}
   </head>
-  <body class={`pk-site${page.workingGroup ? " pk-site--working-group" : ""}${accent ? ` pk-page--${accent}` : ""}`}>
+  <body data-publication-private={privatePage || undefined} class={`pk-site${page.workingGroup ? " pk-site--working-group" : ""}${accent ? ` pk-page--${accent}` : ""}`}>
     <SiteHeader currentPath={page.route} navigation={page.navigation} memberCounts={page.memberCounts} />
     <SiteMain privatePage={excludeFromSearch}><slot /></SiteMain>
     {page.route !== "/portal/" && <template id="pkic-public-form-resources">{JSON.stringify(page.publicResources)}</template>}

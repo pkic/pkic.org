@@ -1,4 +1,5 @@
 ---
+import { loadCurrentModelPage } from "../model-page-content";
 import PublicPage from "../layouts/PublicPage.astro";
 import { SitePageBody } from "../../assets/ts/site/SitePageBody";
 import { loadSiteContent, loadSiteContentMetadata, siteAgendaPageRoutes, publishedSiteRoutes, siteMapEntries } from "../../functions/_lib/services/site-content";
@@ -38,7 +39,7 @@ export async function getStaticPaths() {
   return pages;
 }
 const { route, sourceRoute, agendaRoute, pageInputs, hero } = Astro.props;
-const loadedContent = await loadSiteContent(sourceRoute, { publication, agendaRoute });
+const loadedContent = await loadCurrentModelPage(sourceRoute) ?? await loadSiteContent(sourceRoute, { publication, agendaRoute });
 if (!loadedContent) throw new Error(`The published page source is missing: ${route}`);
 const content = hero ? { ...loadedContent, hero } : loadedContent;
 const resolvedPageInputs = pageInputs ?? await publicationPageInputs({ route, title: content.title, description: content.description, accent: content.pageAccent, robots: content.robots, content });

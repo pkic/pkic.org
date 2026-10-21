@@ -25,8 +25,13 @@ function validateModelRegistry(modelContributionEntries: z.infer<typeof modelReg
     if (entry.defaultVersion && !entry.versions.some((v) => v.id === entry.defaultVersion && v.status === "released"))
       throw new Error("The default model version must be an explicitly registered release");
     for (const version of entry.versions) {
-      const prefix = `${entry.root}${version.status === "draft" ? "drafts" : "versions"}/`;
-      if (!version.root.startsWith(prefix) || version.aliases.some((alias) => !alias.startsWith(prefix)))
+      const prefix = `${entry.root}${version.status === "draft" ? "versions/drafts" : "versions"}/`;
+      if (
+        !version.root.startsWith(prefix) ||
+        version.aliases.some(
+          (alias) => !alias.startsWith(`${entry.root}versions/`) && !alias.startsWith(`${entry.root}drafts/`),
+        )
+      )
         throw new Error("Model version paths must remain inside their release or draft namespace");
       if (version.status === "released" && version.tag !== `v${version.version}`)
         throw new Error("Release tag and version disagree");

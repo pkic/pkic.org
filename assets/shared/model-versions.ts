@@ -7,7 +7,7 @@ export const modelVersionRootSchema = z
   .regex(/^\/wg\/[a-z0-9./-]+\/$/)
   .refine((path) => !path.includes("//") && !path.split("/").some((part) => part === "." || part === ".."));
 const draftRoot = modelVersionRootSchema.refine((path) =>
-  /^\/wg\/pqc\/pqcmm\/drafts\/[a-z0-9][a-z0-9.-]*\/$/.test(path),
+  /^\/wg\/pqc\/pqcmm\/(?:versions\/)?drafts\/[a-z0-9][a-z0-9.-]*\/$/.test(path),
 );
 const entry = z.object({
   id: z.string().regex(/^[a-z0-9-]+$/),

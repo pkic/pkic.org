@@ -1585,7 +1585,7 @@ test("reclassified model draft preserves feedback and redirects its former versi
   page.on("request", (request) => {
     if (/github(?:usercontent)?\.com/.test(new URL(request.url()).hostname)) browserGithubRequests.push(request.url());
   });
-  await page.goto("/wg/pqc/pqcmm/drafts/1.1.0/levels/3-advanced/");
+  await page.goto("/wg/pqc/pqcmm/versions/drafts/1.1.0/levels/3-advanced/");
   await expect(page.getByRole("status").filter({ hasText: "1.1.0 — Draft for feedback" })).toBeVisible();
   expect(
     await page
@@ -1610,7 +1610,7 @@ test("reclassified model draft preserves feedback and redirects its former versi
   await expect(versions).toBeVisible();
   await expect(versions.getByRole("link", { name: "1.0.1 Latest release", includeHidden: true })).toHaveAttribute(
     "href",
-    "/wg/pqc/pqcmm/versions/1.0.1/levels/3-advanced/",
+    "/wg/pqc/pqcmm/levels/3-advanced/",
   );
   await expect(versions.getByRole("link", { name: "1.1.0 — Draft", exact: true, includeHidden: true })).toHaveAttribute(
     "aria-current",
@@ -1694,7 +1694,7 @@ test("released model history stays readable while the default overview remains u
   await expect(switcher).toBeInViewport();
   await expect(switcher.getByRole("link", { name: "1.1.0 — Draft", exact: true, includeHidden: true })).toHaveAttribute(
     "href",
-    "/wg/pqc/pqcmm/drafts/1.1.0/",
+    "/wg/pqc/pqcmm/versions/drafts/1.1.0/",
   );
   await page.screenshot({ path: testInfo.outputPath("model-version-selector.png") });
 });
@@ -1722,7 +1722,7 @@ test("PQC model versions appear in the shared landing menu and document sidebar"
   await expect(sidebar).toHaveCount(1);
   await expect(sidebar.getByRole("link", { name: "1.1.0 — Draft", exact: true, includeHidden: true })).toHaveAttribute(
     "href",
-    "/wg/pqc/pqcmm/drafts/1.1.0/",
+    "/wg/pqc/pqcmm/versions/drafts/1.1.0/",
   );
   await page.screenshot({ path: testInfo.outputPath("model-sidebar.png") });
 });
@@ -1756,10 +1756,45 @@ test("model readers navigate released levels, switch drafts, and return through 
   await expect(page.getByRole("status").filter({ hasText: "Draft for feedback" })).toBeVisible();
   menu = await modelMenu();
   await menu.getByRole("link", { name: "1.0.1 Latest release", exact: true }).click();
-  await expect(page).toHaveURL(/\/versions\/1\.0\.1\/levels\/2-foundational\/$/);
+  await expect(page).toHaveURL(/\/wg\/pqc\/pqcmm\/levels\/2-foundational\/$/);
   menu = await modelMenu();
   await menu.locator(".wg-sidebar-root").click();
-  await expect(page).toHaveURL(/\/versions\/1\.0\.1\/$/);
+  await expect(page).toHaveURL(/\/wg\/pqc\/pqcmm\/$/);
   await expect(page.getByRole("status").filter({ hasText: "Draft for feedback" })).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath("released-model-navigation.png") });
+});
+
+test("model editions share the levels layout and keep guidance navigation in the selected edition", async ({
+  page,
+}, testInfo) => {
+  if (testInfo.project.name === "mobile") await page.setViewportSize({ width: 375, height: 812 });
+  const root = "/wg/pqc/pqcmm/";
+  const draft = `${root}versions/drafts/1.1.0/`;
+  await page.goto(`${root}levels/`);
+  const currentSteps = await page.locator(".maturity-staircase .maturity-step").count();
+  expect(currentSteps).toBe(6);
+  const currentHeadings = await page.locator(".wg-main-content h2").allTextContents();
+  await page.screenshot({ path: testInfo.outputPath("current-levels-index.png"), fullPage: true });
+  await page.goto(`${draft}levels/`);
+  await expect(page.locator(".maturity-staircase .maturity-step")).toHaveCount(currentSteps);
+  expect(await page.locator(".wg-main-content h2").allTextContents()).toEqual(currentHeadings);
+  const levelLinks = await page
+    .locator(".maturity-staircase a")
+    .evaluateAll((links) => links.map((link) => link.getAttribute("href")));
+  expect(levelLinks.every((href) => href?.startsWith(draft))).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath("draft-levels-index.png"), fullPage: true });
+  for (const suffix of ["adoption/", "adoption/playbooks/small-organizations/", "assessment/", "glossary/"]) {
+    const response = await page.goto(`${draft}${suffix}`);
+    expect(response?.status()).toBe(200);
+    expect(response?.headers()["cache-control"]).not.toContain("no-store");
+    const modelLinks = await page
+      .locator(".wg-sidebar a")
+      .evaluateAll((links) =>
+        links.map((link) => link.getAttribute("href")).filter((href) => href?.startsWith("/wg/pqc/pqcmm/")),
+      );
+    expect(modelLinks.every((href) => href?.startsWith(draft) || href === `${root}${suffix}`)).toBe(true);
+    await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/);
+  }
+  await page.goto(`${root}drafts/1.1.0/levels/`);
+  await expect(page).toHaveURL(`${page.url().split(root)[0]}${draft}levels/`);
 });

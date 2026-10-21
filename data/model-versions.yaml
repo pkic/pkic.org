@@ -20,8 +20,8 @@ models:
       - id: assessment-methods
         version: 1.1.0
         status: draft
-        root: /wg/pqc/pqcmm/drafts/1.1.0/
-        aliases: [/wg/pqc/pqcmm/drafts/2.0.0/]
+        root: /wg/pqc/pqcmm/versions/drafts/1.1.0/
+        aliases: [/wg/pqc/pqcmm/drafts/1.1.0/, /wg/pqc/pqcmm/drafts/2.0.0/]
         branch: agent/pqcmm-1.1.0-draft
         commit: d0037717273772460424cf338192ddd1dac01d80
         sha256: 36b3f7760f75d1cc2d0c5d845fc301fcf01cdf9bc9ce0923c462ed4016f2da4a

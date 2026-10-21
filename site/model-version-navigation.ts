@@ -1,8 +1,14 @@
-import type { SiteSidebarTree } from "../assets/shared/site-content";
+import type { SiteSidebarNode, SiteSidebarTree } from "../assets/shared/site-content";
 import type { ReadableModel } from "./model-version-source";
-import { modelLevelSlug } from "./model-version-markdown";
 
-/** Keep every model level inside the version being read, using the existing content tree. */
+/** Project model-owned destinations once for sidebar and dropdown navigation. */
+export function modelScopedHref(href: string, modelRoot: string, root: string): string {
+  if (!href.startsWith(modelRoot)) return href;
+  const suffix = href.slice(modelRoot.length);
+  if (/^(?:versions|drafts)\//.test(suffix)) return href;
+  return `${root}${suffix}`;
+}
+
 export function modelVersionTree(
   tree: SiteSidebarTree,
   model: ReadableModel,
@@ -10,17 +16,20 @@ export function modelVersionTree(
   root: string,
   route: string,
 ): SiteSidebarTree {
-  const levels = model.levels.map((level) => {
-    const href = `${root}levels/${modelLevelSlug(level)}/`;
-    return { label: `${level.number} — ${level.name}`, href, current: route === href };
-  });
+  const project = (node: SiteSidebarNode): SiteSidebarNode => {
+    const href = modelScopedHref(node.href, modelRoot, root);
+    const children =
+      node.href === `${modelRoot}levels/`
+        ? model.levels.map((level) =>
+            project({ label: `${level.number} — ${level.name}`, href: level.sourcePage, current: false }),
+          )
+        : node.children?.map(project);
+    return { ...node, href, current: route === href, open: route.startsWith(href), children };
+  };
   return {
     ...tree,
-    root: { ...tree.root, href: root, current: route === root },
-    sections: tree.sections.map((section) =>
-      section.href === `${modelRoot}levels/`
-        ? { ...section, href: root, current: false, open: route !== root, children: levels }
-        : { ...section, current: false, open: false },
-    ),
+    root: project(tree.root),
+    promoted: tree.promoted?.map(project),
+    sections: tree.sections.map(project),
   };
 }

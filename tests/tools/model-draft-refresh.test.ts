@@ -10,7 +10,7 @@ const draft = {
   id: "assessment-methods",
   version: "1.1.0",
   status: "draft",
-  root: "/wg/pqc/pqcmm/drafts/1.1.0/",
+  root: "/wg/pqc/pqcmm/versions/drafts/1.1.0/",
   branch: "agent/pqcmm-1.1.0-draft",
   commit: "a".repeat(40),
   sha256: createHash("sha256").update(bytes).digest("hex"),
@@ -70,7 +70,7 @@ describe("automatic model draft preview refresh", () => {
       id: "next-objectives",
       version: "2.0.0",
       branch: "agent/next-draft",
-      root: "/wg/pqc/pqcmm/drafts/2.0.0/",
+      root: "/wg/pqc/pqcmm/versions/drafts/2.0.0/",
       sourcePath: "model/next.yaml",
       aliases: [],
     });
