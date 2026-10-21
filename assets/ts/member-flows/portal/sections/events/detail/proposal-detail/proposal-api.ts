@@ -10,6 +10,8 @@ export function proposalSpeakerEndpoints(): ProposalSpeakerEndpointConfig {
   return {
     speakerPath: (proposalId, userId, suffix = "") =>
       proposalResourcePath(proposalId, `speakers/${encodeURIComponent(userId)}${suffix ? `/${suffix}` : ""}`),
+    acceptancePath: (proposalId, userId) =>
+      proposalResourcePath(proposalId, `speakers/${encodeURIComponent(userId)}/acceptance`),
     reminderPath: (proposalId, userId) =>
       proposalResourcePath(proposalId, `speakers/${encodeURIComponent(userId)}/reminders`),
     reminderBody: (kind) => ({ kind }),

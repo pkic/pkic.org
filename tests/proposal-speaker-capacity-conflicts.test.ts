@@ -4,14 +4,13 @@ import { ADMINISTRATOR_FIXTURE_USER_SQL, administratorGrants } from "./helpers/a
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
 import app from "./helpers/app";
-import type { DatabaseLike } from "../functions/_lib/types";
 import {
   addProposalSpeaker,
   createProposal,
   finalizeProposalDecision,
   getProposalByManageToken,
 } from "../functions/_lib/services/proposals";
-import { confirmSpeakerParticipation } from "../functions/_lib/services/proposals-speaker-profile";
+import { confirmSpeakerParticipation } from "../functions/_lib/services/proposal-speaker-confirmation";
 import {
   getProposerManagedSpeakerContext,
   updateProposalSpeakerRoleByProposer,
@@ -20,27 +19,13 @@ import { resetDb } from "./helpers/reset-db";
 import { queryAll, registrationAdmissionRole } from "./helpers/context";
 import { findOrCreateUser } from "../functions/_lib/services/users";
 import {
+  raceBeforeFirstBatch,
   inviteSpeakerAndSubmitCapacityProposal,
   seedAcceptedSpeakerRegistration,
   setupProposalSpeakerCapacityWorkflow,
 } from "./helpers/proposal-speaker-capacity";
 
 const requestOptions = { passThroughOnException: () => {}, waitUntil: () => {} } as any;
-
-function raceBeforeFirstBatch(action: () => Promise<void>): DatabaseLike {
-  const baseDb: DatabaseLike = env.DB;
-  let raced = false;
-  return {
-    prepare: (query) => baseDb.prepare(query),
-    async batch(statements) {
-      if (!raced) {
-        raced = true;
-        await action();
-      }
-      return baseDb.batch(statements);
-    },
-  };
-}
 
 describe("proposal speaker capacity conflicts", () => {
   let adminSessionToken: string;
