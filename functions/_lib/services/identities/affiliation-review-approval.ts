@@ -1,10 +1,12 @@
-/** Staff approval uses live mailbox proof, never the name or domain stored in a review. */
+/** Verified approval is the default; staff overrides are explicit, separately authorized decisions. */
 import type { AffiliationReviewApprove } from "../../../../assets/shared/schemas/affiliation-reviews";
 import { hostWithinDomainSql } from "../../email-domains/sql";
 import { all } from "../../db/queries";
 import type { DatabaseLike, UserBackedAuthAdmin } from "../../types";
 import { guardPermissionMutationDatabase } from "../../auth/permissions";
 import { AppError } from "../../errors";
+import { overrideAffiliationReviewVerification } from "./affiliation-review-override";
+import type { IdentityManagerActor } from "./types";
 import { uuid } from "../../utils/ids";
 import { getAffiliationReviewGroup } from "./affiliation-reviews";
 import { linkVerifiedAddressToDomainOrganization } from "./email-domain-link";
@@ -17,11 +19,22 @@ export async function approveAffiliationReviewGroup(
   groupKey: string,
   input: AffiliationReviewApprove,
   staff: UserBackedAuthAdmin,
+  overrideActor?: IdentityManagerActor,
 ) {
+  if (input.activation && (!overrideActor?.immediateActivationAuthorized || !overrideActor.staffAuthorized))
+    throw new AppError(
+      403,
+      "PERMISSION_REQUIRED",
+      "Verification overrides require membership write and identity activation permissions",
+    );
   const protectedDb = guardPermissionMutationDatabase(
     db,
     staff,
-    [{ permission: "users:write" }, { permission: "identities:activate" }],
+    [
+      { permission: "users:write" },
+      { permission: "identities:activate" },
+      ...(input.activation ? [{ permission: "membership:write" as const }] : []),
+    ],
     () => new AppError(403, "PERMISSION_REQUIRED", "Affiliation approval permission changed; refresh and try again"),
   );
   await getAffiliationReviewGroup(protectedDb, groupKey);
@@ -35,6 +48,19 @@ export async function approveAffiliationReviewGroup(
   const decisionId = uuid();
   let decided = 0;
   for (const person of people.slice(0, PEOPLE_PER_PASS)) {
+    if (input.activation && overrideActor) {
+      decided += await overrideAffiliationReviewVerification(
+        protectedDb,
+        {
+          userId: person.user_id,
+          groupKey,
+          decisionId,
+          activation: input.activation,
+        },
+        overrideActor,
+      );
+      continue;
+    }
     const addresses = await all<{ normalized_email: string; organization_id: string }>(
       db,
       `WITH addresses AS (

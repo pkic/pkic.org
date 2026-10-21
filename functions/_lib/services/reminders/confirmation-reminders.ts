@@ -53,6 +53,7 @@ export async function runConfirmationReminders(
     dryRun,
   } = params;
 
+  // The event/status index skips confirmed registrations when events drive the search.
   const expiredConfirmations =
     limit > 0
       ? await all<ConfirmationReminderRow>(
@@ -66,8 +67,8 @@ export async function runConfirmationReminders(
            e.timezone AS event_timezone, e.starts_at AS event_starts_at,
            e.ends_at AS event_ends_at, e.settings_json AS event_settings_json,
            ? AS reminder_count
-         FROM registrations r
-         JOIN events e ON e.id = r.event_id
+         FROM events e
+         CROSS JOIN registrations r ON r.event_id = e.id
          JOIN users u ON u.id = r.user_id
          WHERE r.status = 'pending_email_confirmation'
            AND r.confirmation_reminder_sent_at IS NOT NULL

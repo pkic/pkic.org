@@ -76,9 +76,31 @@ Each entry is the full anatomy of a control. The gallery id renders it (`pnpm ga
 
 - Use: `Avatar` (`shape="round"` for people, `"square"` for organizations), `PersonCell` in tables, `Badge` for exceptions.
 - Shape: photo, or initials when there is none or it fails to load. Badges have a dot and a tone; expected states are plain text.
+- Speaker details: keep personal links beside the name, wrapping as a group on narrow screens, with title and organization text beneath. Organization logos form a separate group on the right on desktop, below the title and links on phones. Never insert a logo into the title or affiliation text. Compact agenda rows show no organization logos; their affiliation text can rotate.
 
 ## Workflow stage (`workflow-stage`)
 
 - Use: `Badge` with `tone` and, for in-flight steps, `progress` and `progressStyle`; `DataTable`/`ApiDataTable` `rowTone` and `rowToneStyle` for rows. The stage list (label, tone, progress) lives in the workflow's shared domain module.
 - Shape: pill with dot, label in body ink, fill a light mix of the rainbow stop. Rows: label only by default; edge marker (a 0.25rem inset bar on the leading edge, on the record card on phones) for queues; tint (20%, deeper on hover) for short state-led queues. Selection wins over tint.
 - Never color by position, never invent a stop outside the rainbow, never let color carry the stage without its label.
+
+## Profile biographies (`profile-biographies`)
+
+- Use `IdentityProfileFields` inside the existing identity profile form. General introduction: **About you**. Organization profile: **Your bio at {organization}**. Speaker onboarding: **Your speaker bio at {organization}**.
+- Shared `Field` guidance appears above its control by default; validation feedback stays below. Explain the bio scope there: About you spans roles; an organization bio is reused only when participating as that organization. Neither edit copies into the other.
+- The About panel names an organization when using its bio as a fallback. Its menu edits the displayed source and separately offers adding a general introduction.
+
+## Content version notice (`content-version-notice`)
+
+- Use: `site/ContentVersionNotice.tsx` with the selected and latest entries from the shared `ContentVersions` contract. Both maturity models use this component.
+- Shape: one slim full-width row below the section navigation, with the draft or historical version at the left and “View current release” at the right. Use plain version text, not a badge; show a linked source revision when available for a draft, including on phones. Hide only the supplementary description on phones.
+- Placement: the section navigation and notice share one sticky container beneath the site header. Do not change the hero or repeat the notice in the page body. The current release has no notice.
+- Behavior: persistent, without dismissal. The current-release link preserves the equivalent page when available and is an ordinary keyboard-accessible link.
+
+## Page feedback (`content-contribution`)
+
+- Use: `site/ContentContributionLinks.tsx` with canonical source metadata, only on public pages with an editable source. Never portal screens.
+- Shape: one centered, muted italic sentence between the content and footer, with an underlined feedback link. No heading, panel, border, or decorative arrow. Wrap naturally on phones.
+- A small circular pencil stays at the bottom-right with safe-area spacing and an accessible edit label. Keep the hero unchanged.
+- Blog posts retain their footnote without the invitation; editing and selection feedback remain available.
+- Selection feedback includes the page, section or item, wording, source, and available version and revision. General feedback stays independent of the selection. Persistent links work without JavaScript.

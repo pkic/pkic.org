@@ -14,6 +14,11 @@
   },
   "observability": {
     "enabled": true,
+    "redact_query_string": true,
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 0.05,
+    },
   },
   "env": {
     "production": {

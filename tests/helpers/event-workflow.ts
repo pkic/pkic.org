@@ -44,6 +44,13 @@ export async function seedWorkflowEmailTemplates(db: DatabaseLike, adminId: stri
   await seedTemplate(
     db,
     adminId,
+    "proposal_speaker_confirmed_by_organizer",
+    "Configured speaker notice: {{proposalTitle}}. Identity: {{speakerName}}. {{#each terms}}{{label}} {{helpText}} {{version}} {{contentRef}} {{/each}} Contact {{contactEmail}}.",
+    "Configured speaker notice — {{eventName}}",
+  );
+  await seedTemplate(
+    db,
+    adminId,
     "co_speaker_invite",
     "You have been added as a speaker. Manage: {{{manageUrl}}}.",
     "Co-speaker invitation",

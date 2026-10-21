@@ -236,9 +236,9 @@ describe("group event management routes", () => {
       .all<{ detail: string }>();
     const details = plan.results.map((row) => row.detail).join("\n");
     expect(details).toContain("idx_registrations_event_status_created");
-    expect(details).toContain("sqlite_autoindex_registration_day_attendance_2");
-    expect(details).toContain("sqlite_autoindex_event_days_1");
-    expect(details).not.toContain("SCAN ");
+    expect(details).toContain("USING COVERING INDEX registration_day_attendance_capacity_cover");
+    expect(details).toContain("idx_event_days_event_sort");
+    expect(details).not.toMatch(/SCAN (?:registrations|rda|day)\b/);
   });
 
   it("creates, updates, and lists attendees through the selected owner group", async () => {

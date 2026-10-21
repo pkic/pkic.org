@@ -166,6 +166,7 @@
   }
 
   .selection-edit-tooltip {
+    visibility: hidden;
     position: fixed;
     z-index: 1100;
     display: inline-flex;
@@ -192,6 +193,7 @@
       transform 0.15s ease;
   }
   .selection-edit-tooltip.is-visible {
+    visibility: visible;
     opacity: 1;
     transform: translateY(0);
   }
@@ -211,11 +213,6 @@
     color: #fff;
     border-color: rgba(25, 135, 84, 0.8);
     background: #1a1a1a;
-  }
-  @media (max-width: 767px) {
-    .selection-edit-tooltip {
-      display: none;
-    }
   }
 
   .footer-col-title {

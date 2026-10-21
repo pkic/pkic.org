@@ -142,11 +142,11 @@ it("names every capacity once in structured data and rotates one unit at a time 
   expect(rotation.classList).toContain("pk-affiliation-rotation--rotate-3");
   const units = [...rotation.querySelectorAll(".pk-affiliation-rotation__unit")];
   expect(units.map((unit) => unit.querySelector(".pk-agenda-speaker-affiliations__text")?.textContent)).toEqual([
-    "Chair",
-    "CEO",
+    "Chair · PKI Consortium",
+    "CEO · Digitorus",
     "President · LDIQ",
   ]);
-  expect(units.map((unit) => unit.querySelectorAll(".pk-agenda-speaker-organization").length)).toEqual([1, 1, 0]);
+  expect(units.map((unit) => unit.querySelectorAll(".pk-agenda-speaker-organization").length)).toEqual([0, 0, 0]);
   // The units are hidden from assistive technology, which reads every affiliation once and hears no change.
   expect(rotation.querySelector(".pk-affiliation-rotation__units")?.getAttribute("aria-hidden")).toBe("true");
   expect(rotation.querySelector(".pk-sr-only")?.textContent).toBe(
@@ -160,6 +160,7 @@ it("names every capacity once in structured data and rotates one unit at a time 
   const dialog = card.querySelector("dialog")!;
   expect(dialog.querySelectorAll(".pk-agenda-speaker-affiliations > li")).toHaveLength(3);
   expect(dialog.querySelector(".pk-affiliation-rotation")).toBeNull();
+  expect(dialog.querySelectorAll(".pk-agenda-speaker-organization")).toHaveLength(2);
 });
 
 it("opens the profile dialog, in the session details' shell, on the speaker's name", async () => {

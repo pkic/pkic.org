@@ -68,6 +68,26 @@ describe("Field", () => {
     expect(container.querySelector(`#${describedBy}`)?.textContent).toBe("Used in the public URL.");
   });
 
+  it("places guidance before the control and validation feedback after it by default", () => {
+    const guided = mount(
+      <Field label="Biography" help="Describe your role at this organization.">
+        {(control) => <TextInput {...control} />}
+      </Field>,
+    );
+    const help = guided.querySelector(".pk-field__help")!;
+    expect(help.compareDocumentPosition(input(guided)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(input(guided).getAttribute("aria-describedby")).toBe(help.id);
+
+    const invalid = mount(
+      <Field label="Biography" state="invalid" message="Enter a shorter biography.">
+        {(control) => <TextInput {...control} />}
+      </Field>,
+    );
+    const message = invalid.querySelector(".pk-field__message")!;
+    expect(input(invalid).compareDocumentPosition(message) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(input(invalid).getAttribute("aria-describedby")).toBe(message.id);
+  });
+
   it("marks a blocking error invalid and announces it assertively", () => {
     const container = mount(
       <Field label="Deputy" state="invalid" message="Enter a complete email address.">

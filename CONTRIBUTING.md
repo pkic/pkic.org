@@ -120,17 +120,28 @@ isolated per test file.
 
 ## D1 sessions and read replicas
 
-The Worker opens one D1 session per invocation. Public `GET` and `HEAD` requests
-use `first-unconstrained`; authenticated, capability-bearing, and state-changing
-requests start with `first-primary`. Scheduled and email invocations also start
-with `first-primary`.
+The Worker opens one D1 session per invocation. Ordinary `GET` and `HEAD`
+requests, including protected reads, use the signed caller's bookmark or
+`first-unconstrained`. Authentication endpoints, capability-bearing requests,
+state-changing requests, and opaque credentials without bookmark transport
+start with `first-primary`. Scheduled and email invocations also start with
+`first-primary`.
 
 That constraint applies only to the first query. Subsequent reads can use a
 replica that satisfies the session bookmark, while writes still go to the
-primary. Keeping authentication in the same session establishes a fresh
-consistency boundary before authorization and data reads. Explicitly public
+primary. Read authorization uses a read-only check in the same batch as the
+protected queries; mutations retain an atomic write guard. The owner explicitly
+accepts replica lag in permission and session revocations for reads; see the
+policy comments in `functions/_lib/db/session.ts` and
+`functions/_lib/db/authorization-guard.ts`. Seconds of lag are expected, without
+a fixed D1 guarantee. Bookmarks preserve sequential consistency, including
+after login and saves, rather than immediate visibility of another actor's
+revocation. Existing cookie credentials receive bookmark updates after writes,
+not ordinary `GET`/`HEAD` responses, so a late read cannot overwrite a save's
+bookmark. Newly issued credentials still receive their request's bookmark;
+token response headers continue to carry read bookmarks. Explicitly public
 member and sponsor directory, wall, display, and logo reads ignore incidental
-login cookies when choosing a replica; staff projections do not.
+login cookies and do not replace private bookmarks.
 
 Enabling replicas in the dashboard is not sufficient: application reads must
 use the [D1 Sessions API](https://developers.cloudflare.com/d1/best-practices/read-replication/).
@@ -349,6 +360,37 @@ pnpm run deploy:production
 The MCP OAuth binding uses Wrangler automatic provisioning for `OAUTH_KV`. On
 the first deployment for an environment, Wrangler creates the namespace and
 writes the generated IDs back into [wrangler.jsonc](wrangler.jsonc).
+
+### Client updates after deployment
+
+The shared client loader compares each page's existing module fingerprints
+(and offline inventory link) on return, hash navigation, import failure, and
+every five minutes while visible. Checks omit credentials, query strings, and
+hashes. Cacheable HTML reuses native ETag/304 revalidation. There is no additional
+release manifest, build pass, package, or server-side release archive.
+
+A changed release refreshes an idle tab in place, preserving its location.
+Editing or submitting a form disables automatic refresh for that document's
+lifetime, including after a save: draft ownership is not universally tracked.
+Pending API writes and uncertain save outcomes also block refresh. Scanning,
+live-session, studio, verification, open-dialog, and fullscreen surfaces are
+excluded. A missing portal view keeps navigation available and offers **Reload
+page**; save unfinished work before using it.
+
+The browser records one bounded reload guard per tab. Unavailable storage,
+offline checks, and unsuccessful responses leave the current application
+running. This recovery starts with clients that have loaded this implementation;
+already-open clients from earlier releases need their first ordinary refresh.
+HTML uses the existing Cloudflare revalidation headers (private pages retain
+no-store); hashed assets keep their long-lived immutable policy. Vite's
+`vite:preloadError` event triggers recovery across public interactive pages and
+the portal. No custom version cookie, version endpoint, cache-busting parameter,
+cache purge, migration, secret, or build step is required. Embedded frames and
+playing media also block automatic refresh.
+
+This follows [Vite's production load-error handling](https://vite.dev/guide/build#load-error-handling)
+and [Cloudflare's standard static-asset validators](https://developers.cloudflare.com/workers/static-assets/headers/).
+Production recovery does not use Vite's development-only HMR hooks.
 
 ### System role permission defaults
 

@@ -2,8 +2,7 @@ import { requireIdentityFromRequest } from "../../auth/user-session";
 import { createUserBackedAuthAdmin } from "../../auth/admin-identity";
 import { computeGrantsForUser, hasPermission, guardPermissionDatabase } from "../../auth/permissions";
 import { first } from "../../db/queries";
-import { prepareAuthorizationGuard, isAuthorizationGuardFailure } from "../../db/authorization-guard";
-import { guardDatabaseBatches } from "../../db/guarded-database";
+import { guardAuthorizedDatabase } from "../../db/authorization-guard";
 import { requestDb, type AdminContext } from "../../db/context";
 import { getEventBySlug } from "../events";
 import { AppError } from "../../errors";
@@ -50,15 +49,10 @@ export async function requireSessionParticipantManager(c: AdminContext, slug: st
       "SESSION_MANAGEMENT_REQUIRED",
       "An organizer must delegate management of your assigned session.",
     );
-  const guarded = guardDatabaseBatches(sessionDb, async (statements) => {
-    try {
-      const [, ...results] = await sessionDb.batch([prepareAuthorizationGuard(db, evidence), ...statements]);
-      return results;
-    } catch (error) {
-      if (isAuthorizationGuardFailure(error))
-        throw new AppError(403, "SESSION_DELEGATION_CHANGED", "Your session delegation changed.");
-      throw error;
-    }
-  });
+  const guarded = guardAuthorizedDatabase(
+    sessionDb,
+    evidence,
+    () => new AppError(403, "SESSION_DELEGATION_CHANGED", "Your session delegation changed."),
+  );
   return { db: guarded, actor, event, canDelegate: false };
 }

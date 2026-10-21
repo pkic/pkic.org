@@ -1,6 +1,7 @@
 @layer components {
   .pk-markdown, .pk-markdown-editor__canvas {
     overflow-wrap: anywhere;
+    > * + * { margin-top: var(--pk-3); }
     > :first-child { margin-top: 0; }
     > :last-child { margin-bottom: 0; }
     img { display: block; max-width: 100%; max-height: 28rem; width: auto; height: auto; object-fit: contain; }

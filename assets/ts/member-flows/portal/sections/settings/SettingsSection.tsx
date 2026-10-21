@@ -108,6 +108,7 @@ export function SettingsSection({
         <AffiliationReviews
           groupKey={resourceId}
           canWrite={portalHasGlobalPermission(session, "users:write")}
+          canOverride={portalHasGlobalPermission(session, "membership:write")}
           canApprove={
             portalHasGlobalPermission(session, "users:write") &&
             portalHasGlobalPermission(session, "identities:activate")

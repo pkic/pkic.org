@@ -1,3 +1,4 @@
+import type { DatabaseLike } from "../../functions/_lib/types";
 import { prepareProposalProof } from "./proposal-proof";
 import { ADMINISTRATOR_FIXTURE_USER_SQL, administratorGrants } from "./administrator";
 import { env } from "cloudflare:workers";
@@ -239,4 +240,19 @@ export async function seedPendingSpeakerRegistration(input: {
     signingSecret: env.INTERNAL_SIGNING_SECRET!,
   });
   return speakerRegistration.registration.id;
+}
+
+export function raceBeforeFirstBatch(action: () => Promise<void>): DatabaseLike {
+  const baseDb: DatabaseLike = env.DB;
+  let raced = false;
+  return {
+    prepare: (query) => baseDb.prepare(query),
+    async batch(statements) {
+      if (!raced) {
+        raced = true;
+        await action();
+      }
+      return baseDb.batch(statements);
+    },
+  };
 }

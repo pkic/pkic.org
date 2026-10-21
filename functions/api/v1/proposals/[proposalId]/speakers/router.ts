@@ -1,7 +1,9 @@
+import { onRequestPost as acceptSpeaker } from "./[userId]/acceptance";
 import { Hono } from "hono";
 import { fromHono } from "chanfana";
 import {
   proposalSpeakerDisclosureReviewRouteSchema,
+  proposalSpeakerAcceptanceRouteSchema,
   proposalSpeakerDeleteRouteSchema,
   proposalSpeakerPatchRouteSchema,
   proposalSpeakerReminderRouteSchema,
@@ -17,6 +19,7 @@ const app = new Hono<RequestDbContext>();
 app.onError((error, _c) => handleError(error));
 export const openapi = fromHono(app);
 
+openapi.post("/:userId/acceptance", openApiRoute(proposalSpeakerAcceptanceRouteSchema, acceptSpeaker));
 openapi.patch("/:userId", openApiRoute(proposalSpeakerPatchRouteSchema, patchProposalSpeaker));
 openapi.delete("/:userId", openApiRoute(proposalSpeakerDeleteRouteSchema, deleteProposalSpeaker));
 openapi.post(

@@ -5,8 +5,10 @@ type AgendaSpeakerProfileCandidate = NonNullable<AgendaOccurrence["speakers"][nu
 /** Frozen canonical appearances supersede the same account's roster name; source-only credits remain distinct. */
 export function canonicalSessionCredits(session: AgendaOccurrence) {
   const appearances = session.history?.appearances ?? [];
-  const represented = new Set(appearances.map((credit) => credit.userId));
-  return [...appearances, ...session.speakers.filter((speaker) => !represented.has(speaker.userId))];
+  // Roster order is authored content. An approved profile replaces that person's
+  // display data; it never adds a removed speaker back or changes their position.
+  const approved = new Map(appearances.map((credit) => [credit.userId, credit]));
+  return session.speakers.map((speaker) => approved.get(speaker.userId) ?? speaker);
 }
 
 /** Source attribution is display evidence, never a manufactured account or profile link. */
@@ -18,15 +20,16 @@ export function publicSessionCredits(session: AgendaOccurrence) {
 export function sessionDisplayCredits(session: AgendaOccurrence, organizer = false) {
   const credits = publicSessionCredits(session);
   if (!organizer) return credits;
-  const approved = new Set((session.history?.appearances ?? []).map((credit) => credit.userId));
+  const canonical = new Map(session.speakers.map((speaker) => [speaker.userId, speaker]));
   return credits.map((credit) => {
-    if (!("userId" in credit) || approved.has(credit.userId)) return credit;
-    const candidate = "profileCandidate" in credit ? credit.profileCandidate : undefined;
-    if (!candidate) return credit;
+    if (!("userId" in credit)) return credit;
+    const speaker = canonical.get(credit.userId);
+    const candidate = speaker?.profileCandidate;
+    if (!speaker || !candidate) return credit;
     return {
-      ...credit,
-      // The identity the speaker speaks as, read live, as one draft affiliation; approval may add more.
-      affiliations: candidateAffiliations(candidate),
+      ...speaker,
+      links: candidate.links,
+      affiliations: (speaker.profileCandidates ?? [candidate]).flatMap(candidateAffiliations),
       biography: candidate.biography ?? "",
       photoUrl: candidate.photoUrl ?? null,
     };
@@ -40,7 +43,7 @@ export function candidateAffiliations(candidate: AgendaSpeakerProfileCandidate |
     {
       identityId: candidate.identityId,
       title: candidate.jobTitle,
-      organizationId: null,
+      organizationId: candidate.organizationId ?? null,
       organizationName: candidate.organizationName,
     },
   ];

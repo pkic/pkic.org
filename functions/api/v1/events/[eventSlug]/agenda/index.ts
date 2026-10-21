@@ -122,6 +122,14 @@ export const AgendaPeopleIdentitiesGet = openApiRoute(contracts.agendaPeopleIden
   return json(await searchLiveSpeakerCandidates(guarded, event.id, data.query, nowIso()));
 });
 
+export const AgendaSpeakerIdentitiesGet = openApiRoute(
+  contracts.agendaSpeakerIdentitiesRouteSchema,
+  async (c, data) => {
+    const { db, event } = await authorize(c, data.params.eventSlug, true);
+    return json(await searchLiveSpeakerCandidates(db, event.id, data.query, nowIso(), "directory"));
+  },
+);
+
 export const AgendaSettingsPost = openApiRoute(contracts.agendaSettingsRouteSchema, async (c, data) => {
   const { db, event, actor } = await authorize(c, data.params.eventSlug, true);
   return json(await saveAgendaSettings(db, event.id, event.slug, data.body, actor.id));

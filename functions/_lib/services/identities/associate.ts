@@ -1,3 +1,5 @@
+import { prepareOwnAffiliationReviewResolution } from "./affiliation-offer";
+import { prepareClosedReviewAudit } from "./affiliation-review-decisions";
 import { prepareOrganizationIdentityPublication } from "./lifecycle-publication";
 import { serializeLinks } from "../../../../assets/shared/schemas/links";
 import { queueEmailAuthCapability } from "../../auth/email-auth-capabilities";
@@ -32,6 +34,12 @@ import {
 import type { IdentityManagerActor } from "./types";
 import { ownedIdentityEmailEvidence, resolveOwnedIdentityEmail } from "./owned-email";
 
+interface ReviewApproval {
+  groupKey: string;
+  decisionId: string;
+  eligibility: AuthorizationEvidence;
+}
+
 type Activation = { mode: "invitation" } | { mode: "immediate"; reason: string };
 
 function requireImmediateActivation(actor: IdentityManagerActor, activation: Activation): UserBackedAuthAdmin | null {
@@ -62,9 +70,10 @@ async function commitIdentityCreation(
     signingSecret?: string;
     userStatements?: StatementLike[];
     notificationContext?: IdentityNotificationContext;
+    reviewApproval?: ReviewApproval;
     emailEvidence?: AuthorizationEvidence;
   },
-): Promise<{ identityId: string; state: "pending" | "active"; outboxId: string }> {
+): Promise<{ identityId: string; state: "pending" | "active"; outboxId: string; resolvedReviews: number }> {
   await requireOrganizationIdentityManagement(db, {
     memberId: input.memberId,
     organizationId: input.organizationId,
@@ -75,6 +84,12 @@ async function commitIdentityCreation(
     staffAuthorized: actor.staffAuthorized,
   });
   const permissionActor = requireImmediateActivation(actor, input.activation);
+  if (input.reviewApproval && (!permissionActor || !actor.staffAuthorized))
+    throw new AppError(
+      403,
+      "IDENTITY_IMMEDIATE_ACTIVATION_REQUIRED",
+      "Review overrides require staff immediate activation",
+    );
   const at = nowIso();
   const context =
     input.notificationContext ?? (await loadIdentityNotificationContext(db, input.organizationId, input.userId, false));
@@ -121,6 +136,7 @@ async function commitIdentityCreation(
       : []),
     ...(input.userStatements ?? []),
     ...(input.emailEvidence ? [prepareAuthorizationGuard(db, input.emailEvidence)] : []),
+    ...(input.reviewApproval ? [prepareAuthorizationGuard(db, input.reviewApproval.eligibility)] : []),
     prepared.statement,
     prepareScopedAuditLogAfterOneChange(
       db,
@@ -156,8 +172,32 @@ async function commitIdentityCreation(
       ? prepareAutomaticGroupEnrollmentForUserStatements(db, input.userId, at)
       : []),
   ];
+  const reviewResolution = input.reviewApproval
+    ? prepareOwnAffiliationReviewResolution(db, {
+        userId: input.userId,
+        identityId: prepared.identityId,
+        at,
+        resolvedByUserId: actor.userId,
+        groupKey: input.reviewApproval.groupKey,
+      })
+    : null;
+  const reviewResolutionIndex = statements.length;
+  if (reviewResolution && input.reviewApproval && permissionActor)
+    statements.push(
+      reviewResolution,
+      prepareClosedReviewAudit(db, {
+        action: "affiliation_review_resolved",
+        staff: permissionActor,
+        at,
+        decisionId: input.reviewApproval.decisionId,
+        groupKey: input.reviewApproval.groupKey,
+        identityId: prepared.identityId,
+      }),
+    );
+  let resolvedReviews: number;
   try {
-    await db.batch(statements);
+    const results = await db.batch(statements);
+    resolvedReviews = reviewResolution ? (results[reviewResolutionIndex]?.meta?.changes ?? 0) : 0;
   } catch (error) {
     if (isAuthorizationGuardFailure(error)) {
       throw new AppError(409, "IDENTITY_AUTHORIZATION_CHANGED", "Identity-management access changed while saving");
@@ -171,6 +211,7 @@ async function commitIdentityCreation(
     identityId: prepared.identityId,
     state: input.activation.mode === "immediate" ? "active" : "pending",
     outboxId,
+    resolvedReviews,
   };
 }
 
@@ -187,8 +228,9 @@ export async function createOrganizationIdentity(
     showOnOrganizationProfile: boolean;
     activation: Activation;
     signingSecret?: string;
+    reviewApproval?: ReviewApproval;
   },
-): Promise<{ identityId: string; state: "pending" | "active"; outboxId: string }> {
+): Promise<{ identityId: string; state: "pending" | "active"; outboxId: string; resolvedReviews: number }> {
   return commitIdentityCreation(db, actor, {
     ...input,
     memberId: await resolveOrganizationMemberId(db, input.organizationId),

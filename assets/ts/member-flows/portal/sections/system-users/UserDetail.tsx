@@ -18,7 +18,7 @@ import {
   MemberStandingPanel,
 } from "./UserMemberProfilePanels";
 import { UserAffiliationsPanel } from "./UserAffiliationsPanel";
-import { UserAuditLog } from "./UserAuditLog";
+import { identityProfileEditPath } from "./IdentityProfilePage";
 import { UserParticipationHistory } from "./UserParticipationHistory";
 import { UserProfileEditor } from "./UserProfileEditor";
 import { CURRENT_USER_API } from "./current-user-api";
@@ -204,6 +204,32 @@ export function UserDetail({
     user.identities.find((entry) => entry.organizationId !== null) ??
     user.identities[0];
 
+  const personalIdentity = user.identities.find((entry) => entry.organizationId === null);
+  const aboutIdentity = personalIdentity?.biography ? personalIdentity : identity;
+  const aboutEditable = !user.pii_redacted_at && (isSelf || permissions.canManageMembership);
+  const aboutActions = aboutEditable
+    ? [
+        ...(personalIdentity
+          ? [
+              {
+                id: "about",
+                label: personalIdentity.biography ? "Edit About you…" : "Add About you…",
+                href: usePortalHashLocation.hrefs(identityProfileEditPath(user.id, personalIdentity.identityId)),
+              },
+            ]
+          : []),
+        ...(aboutIdentity?.organizationId
+          ? [
+              {
+                id: "organization-bio",
+                label: `Edit bio at ${aboutIdentity.organizationName}…`,
+                href: usePortalHashLocation.hrefs(identityProfileEditPath(user.id, aboutIdentity.identityId)),
+              },
+            ]
+          : []),
+      ]
+    : [];
+
   const actingEntry = isSelf
     ? user.identities.find((entry) => entry.identityId === session?.actingIdentityId)
     : undefined;
@@ -311,22 +337,23 @@ export function UserDetail({
         <div class="pk-stack pk-user-record__main">
           {isSelf && session?.pendingIdentityCount ? <IdentityInvitationsPanel /> : null}
 
-          {/*
-            About speaks from the identity marked as default.
-
-            The only prose this system stores is `identity.biography`, which
-            describes what somebody does at one organization. Which of those
-            represents the person is theirs to say, so it is marked rather than
-            guessed — and the affiliation that supplied this text does not
-            repeat it below, or the same paragraph would appear twice on one
-            page. With nothing marked the record falls back to the first
-            affiliation, which is what it did before the flag existed.
-          */}
-          {identity?.biography && (
+          {/* A personal introduction spans roles; otherwise About attributes the primary role's bio.
+              Only the identity supplying About suppresses its repeated paragraph below. */}
+          {(aboutIdentity?.biography || (personalIdentity && aboutEditable)) && (
             <Panel aria-label="About">
-              <PanelHeader title="About" />
+              <PanelHeader
+                title="About"
+                menu={aboutActions.length ? <Menu label="About actions" align="end" items={aboutActions} /> : undefined}
+              />
               <PanelBody>
-                <p class="pk-affiliation__summary">{identity.biography}</p>
+                {aboutIdentity?.organizationId && aboutIdentity.biography && (
+                  <p class="pk-small pk-muted">From the {aboutIdentity.organizationName} profile.</p>
+                )}
+                {aboutIdentity?.biography ? (
+                  <p class="pk-affiliation__summary">{aboutIdentity.biography}</p>
+                ) : (
+                  <p class="pk-muted">Add a general introduction covering your interests and roles.</p>
+                )}
               </PanelBody>
             </Panel>
           )}
@@ -341,7 +368,7 @@ export function UserDetail({
             onChanged={isSelf ? refreshSelfProfile : reload}
             canManage={permissions.canManageMembership}
             canActivateIdentity={permissions.canActivateIdentity}
-            summarizedIdentityId={identity?.identityId}
+            summarizedIdentityId={aboutIdentity?.identityId}
             viewerIsSubject={isSelf}
             seats={participation?.groups ?? []}
             actingIdentityId={isSelf ? (session?.actingIdentityId ?? null) : null}
@@ -354,8 +381,6 @@ export function UserDetail({
           {(isSelf || permissions.canWrite) && (
             <EmailAddressesPanel userId={user.id} isSelf={isSelf} primaryEmail={user.email} />
           )}
-
-          {permissions.canRead && <UserAuditLog userId={user.id} />}
 
           {/* Email notifications are the person's own choice, made by nobody else. */}
           {isSelf && session?.member && <NotificationPreferencesCard />}

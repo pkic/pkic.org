@@ -84,3 +84,7 @@ export type ProposalSpeaker = z.infer<typeof proposalSpeakerSchema>;
 export type ProposalSpeakersResponse = z.infer<typeof proposalSpeakersResponseSchema>;
 export type ProposalRosterSpeaker = ProposalSpeakersResponse["speakers"][number];
 export type ProposalSpeakerPatchResponse = z.infer<typeof proposalSpeakerPatchResponseSchema>;
+
+/** An attributed organizer action; personal consent is never supplied by the organizer. */
+export const proposalSpeakerAcceptanceRequestSchema = z.object({}).strict();
+export const proposalSpeakerAcceptanceResponseSchema = successResponseSchema;

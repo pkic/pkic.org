@@ -8,6 +8,7 @@ import {
 import { postJson } from "../../../../../../shared/api-client";
 import { ErrorAlert } from "../../../../../../components/ErrorAlert";
 import { AgendaPublicationReview } from "./AgendaPublicationReview";
+import { SpeakerProfileReviews } from "./SpeakerProfileReviews";
 
 /** Dedicated approval interaction owns its preview, request state and refusal. */
 export function AgendaPublicationWorkspace({
@@ -48,6 +49,9 @@ export function AgendaPublicationWorkspace({
   }
   return (
     <div class="pk-stack">
+      {snapshot.occurrences.some((occurrence) => occurrence.speakers.length > 0) && (
+        <SpeakerProfileReviews snapshot={snapshot} onSaved={onSaved} />
+      )}
       {error && <ErrorAlert error={error} />}
       <form
         noValidate

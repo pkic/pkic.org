@@ -11,6 +11,7 @@ import {
   affiliationReviewsListRouteSchema,
 } from "../../../../assets/shared/schemas/affiliation-reviews";
 import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
+import { requireIdentityManagerActor } from "../../../_lib/auth/identity-access";
 import { requirePermission } from "../../../_lib/auth/permissions";
 import { approveAffiliationReviewGroup } from "../../../_lib/services/identities/affiliation-review-approval";
 import { requireStaffPermission } from "../../../_lib/auth/staff-permissions";
@@ -73,9 +74,11 @@ export const AffiliationReviewGroupApprove = openApiRoute(
   async (c: AdminContext, data) => {
     const { db, staff } = await requireStaffPermission(c, "users:write");
     requirePermission(staff, "identities:activate");
+    if (data.body.activation) requirePermission(staff, "membership:write");
+    const overrideActor = data.body.activation ? await requireIdentityManagerActor(db, c.req.raw, c.env) : undefined;
     return json(
       affiliationReviewApproveResponseSchema.parse(
-        await approveAffiliationReviewGroup(db, data.params.groupKey, data.body, staff),
+        await approveAffiliationReviewGroup(db, data.params.groupKey, data.body, staff, overrideActor),
       ),
     );
   },

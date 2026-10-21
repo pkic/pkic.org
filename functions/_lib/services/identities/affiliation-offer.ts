@@ -68,16 +68,26 @@ export async function hasOwnAffiliationReviewToResolve(
  */
 export function prepareOwnAffiliationReviewResolution(
   db: DatabaseLike,
-  input: { userId: string; identityId: string; at: string },
+  input: { userId: string; identityId: string; at: string; resolvedByUserId?: string; groupKey?: string },
 ): StatementLike {
   return db
     .prepare(
       `UPDATE affiliation_reviews
           SET resolved_identity_id = ?, resolved_by_user_id = ?, resolved_at = ?
         WHERE user_id = ? AND resolved_at IS NULL
-          AND ${OWN_REVIEW_IDENTITY_MATCH_SQL}`,
+          AND ${OWN_REVIEW_IDENTITY_MATCH_SQL}
+          AND (? IS NULL OR group_key = ?)`,
     )
-    .bind(input.identityId, input.userId, input.at, input.userId, input.identityId, input.userId);
+    .bind(
+      input.identityId,
+      input.resolvedByUserId ?? input.userId,
+      input.at,
+      input.userId,
+      input.identityId,
+      input.userId,
+      input.groupKey ?? null,
+      input.groupKey ?? null,
+    );
 }
 
 export async function readAffiliationOffer(db: DatabaseLike, userId: string): Promise<AffiliationOffer | null> {

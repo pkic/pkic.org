@@ -241,6 +241,7 @@ async function main(): Promise<void> {
           key={`${representation.identityId}:${representation.updatedAt}`}
           identity={representation}
           editor="owner"
+          purpose="speaker"
           save={async (body) => {
             const saved = await patchJson(
               `${boot.apiBase}/events/${encodeURIComponent(boot.eventSlug)}/proposals/proof/identities/${encodeURIComponent(representation.identityId)}`,

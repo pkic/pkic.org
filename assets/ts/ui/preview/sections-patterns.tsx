@@ -1,3 +1,6 @@
+import { ContentVersionNoticePreview } from "./ContentVersionNoticePreview";
+import { ModelNavigationPreview } from "./ModelNavigationPreview";
+import { contentContributionPreview } from "./ContentContributionPreview";
 /**
  * Pattern catalog specimens.
  *
@@ -26,6 +29,7 @@ import { EmptyState } from "../EmptyState";
 import { Field } from "../Field";
 import { InputGroup } from "../InputGroup";
 import { Menu } from "../Menu";
+import { Markdown } from "../Markdown";
 import { Meter } from "../Meter";
 import { Panel, PanelBody, PanelHeader } from "../Panel";
 import { PositionTimeline } from "../PositionTimeline";
@@ -38,82 +42,8 @@ import { Toast } from "../Toast";
 import { Toolbar } from "../Toolbar";
 import type { ToneProps } from "../tone";
 import type { PreviewSection } from "./PreviewShell";
-import { ContentAgenda } from "../../site/ContentAgenda";
-import type { ContentAgendaDay } from "../../../shared/site-agenda";
-
-const agendaDays: ContentAgendaDay[] = ["2025-12-01", "2025-12-02"].map((date, index) => ({
-  date,
-  staffing: [
-    {
-      id: `preparation-${index}`,
-      name: "Room preparation",
-      startAt: `${date}T08:00:00.000Z`,
-      endAt: `${date}T09:00:00.000Z`,
-      locationId: "unused",
-      duties: [{ role: "mc", displayName: "Alex Example" }],
-    },
-  ],
-  locations: [
-    { id: "main", label: "Main hall" },
-    { id: "workshop", label: "Workshop room" },
-    { id: "unused", label: "Unused room" },
-  ],
-  slots: [
-    {
-      startsAt: `${date}T09:00:00.000Z`,
-      time: "10:00",
-      sessions: [
-        {
-          id: `session-${index}`,
-          title: "Preparing for post-quantum migration",
-          kind: "session",
-          locations: index ? ["main", "workshop"] : ["main"],
-          speakers: ["Alex Example", "Sam Example", "Taylor Example"].map((name) => ({
-            name,
-            affiliations: [{ title: "Migration program lead", organization: { name: "Example Organization" } }],
-          })),
-          descriptionHtml: "<p>A practical discussion of migration planning.</p>",
-          endsAt: `${date}T09:30:00.000Z`,
-          durationMinutes: 30,
-          track: "Migration",
-          youtube: "M7lc1UVf-VE",
-          recordingApproved: true,
-        },
-      ],
-    },
-    {
-      startsAt: `${date}T09:15:00.000Z`,
-      time: "10:15",
-      sessions: [
-        {
-          id: `parallel-${index}`,
-          title: "An overlapping workshop with a longer title that must wrap without covering the next session",
-          kind: "session",
-          locations: ["workshop"],
-          speakers: [{ name: "Jordan Example" }],
-          descriptionHtml: "<p>Practical exercises for migration teams.</p>",
-          endsAt: `${date}T10:00:00.000Z`,
-          track: "Workshops",
-        },
-      ],
-    },
-    {
-      startsAt: `${date}T10:00:00.000Z`,
-      time: "11:00",
-      sessions: [
-        {
-          id: `break-${index}`,
-          title: "Coffee break",
-          kind: "break",
-          locations: [],
-          speakers: [],
-          descriptionHtml: "",
-          endsAt: `${date}T10:15:00.000Z`,
-        },
-      ],
-    },
-  ],
-}));
+import { ProfileBiographiesExample } from "./profile-biographies";
+import { AgendaExample } from "./agenda-example";
 
 /** One membership workflow, as its domain module would declare it: a tone, and a place in the flow while in flight. */
 const applicationStages: (ToneProps & { label: string })[] = [
@@ -311,6 +241,25 @@ function RowListSpecimen() {
 const wallLogo = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="16" viewBox="0 0 100 40"><path fill="currentColor" d="M0 0h28v40H0zm36 0h28v40H36zm36 0h28v40H72z"/></svg>')}`;
 
 export const patternSections: PreviewSection[] = [
+  { id: "content-version-notice", title: "Content version notice", render: () => <ContentVersionNoticePreview /> },
+  { id: "model-navigation", title: "Model navigation", render: () => <ModelNavigationPreview /> },
+  {
+    id: "markdown",
+    title: "Markdown content",
+    render: () => (
+      <Markdown
+        markdown={
+          "A **practical discussion** of migration planning.\n\nThe session covers three things:\n\n- Hardware readiness\n- Migration priorities\n- Investment timing\n\nBring your questions.  \nWe will close with a discussion."
+        }
+      />
+    ),
+  },
+  {
+    id: "profile-biographies",
+    title: "General introduction and organization bio",
+    note: "About you spans roles. A speaker bio belongs to the selected organization profile; editing one never copies into the other.",
+    render: () => <ProfileBiographiesExample />,
+  },
   {
     id: "member-wall",
     title: "Member wall",
@@ -340,7 +289,7 @@ export const patternSections: PreviewSection[] = [
   {
     id: "agenda",
     title: "Agenda",
-    render: () => <ContentAgenda days={agendaDays} speakers={[]} timeZone="Europe/Amsterdam" />,
+    render: () => <AgendaExample />,
   },
   {
     id: "row-list",
@@ -573,4 +522,5 @@ export const patternSections: PreviewSection[] = [
       </div>
     ),
   },
+  contentContributionPreview,
 ];

@@ -43,7 +43,7 @@ export function IdentityProfilePage({
         : getJson(identityResourcePath(identityId), identityRecordSchema),
     [identityId, viewerIsSubject],
   );
-  const subject = data ? (data.organizationName ?? "Individual identity") : "Identity";
+  const subject = data ? (data.organizationName ?? "About you") : "Identity";
   const personName = data && "personName" in data ? String(data.personName) : null;
   return (
     <section class="pk pk-stack">
@@ -59,7 +59,11 @@ export function IdentityProfilePage({
               ]
         }
         title={`Edit profile: ${subject}`}
-        description="How this identity appears on records and on the public profile."
+        description={
+          data?.organizationId
+            ? `Your role, bio, and links for ${subject}. Your general introduction is edited in About you.`
+            : "A general introduction covering interests and roles. Organization-specific bios are edited on their own profiles."
+        }
       />
       {loading && !data ? <Spinner /> : null}
       {error && !data ? <ErrorAlert error={error} /> : null}

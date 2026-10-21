@@ -1,3 +1,4 @@
+import { profileD1Flow } from "./helpers/d1-flow-profile";
 import { grantAdministrator } from "./helpers/administrator";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -195,13 +196,17 @@ describe("group user catalog", () => {
     await grantGroupLeadershipCapacity(env.DB, localOnlyChild.id, root.id);
     await updateGroup(env.DB, root, localOnlyChild.id, { governanceInheritanceMode: "local_only" });
 
+    const profile = profileD1Flow(env.DB);
     const inherited = await listGroupUsers(
-      env.DB,
+      profile.db,
       leader,
       child.id,
       userCatalogListQuerySchema.parse({ q: "catalog-parent" }),
     );
     expect(inherited.users.some((user) => user.id === leader.id)).toBe(true);
+    expect((await profile.report()).queries.some(({ sql }) => /INSERT INTO authorization_guards/.test(sql))).toBe(
+      false,
+    );
     await expect(
       listGroupUsers(env.DB, leader, localOnlyChild.id, userCatalogListQuerySchema.parse({ q: "catalog-parent" })),
     ).rejects.toMatchObject({ status: 403, code: "GROUP_MANAGEMENT_REQUIRED" });

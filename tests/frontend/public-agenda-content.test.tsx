@@ -44,13 +44,9 @@ describe("shared public agenda content", () => {
       });
       const before = structuredClone(parsed);
       const organizer = agendaContent(parsed, true).days[0]!.slots[0]!.sessions[0]!.speakers[0]!;
-      expect(organizer.bioMarkdown).toBe(
-        approved ? occurrence.history!.appearances[0].biography : "Current intrinsic profile biography",
-      );
-      expect(organizer.imageSrc).toBe(approved ? "/approved-photo.jpg" : "/candidate-photo.jpg");
-      expect(organizer.affiliations?.map(affiliationLabel)).toEqual(
-        approved ? ["Engineer · Historical organization"] : undefined,
-      );
+      expect(organizer.bioMarkdown).toBe("Current intrinsic profile biography");
+      expect(organizer.imageSrc).toBe("/candidate-photo.jpg");
+      expect(organizer.affiliations?.map(affiliationLabel)).toBeUndefined();
       const publicProjection = publicAgendaProjection(parsed, {
         basePath: null,
         visibility: "public",
@@ -268,7 +264,7 @@ describe("shared public agenda content", () => {
           selectedAt: state === "unselected" ? null : instant,
         },
       ];
-      // What the identity the speaker speaks as says now, read live; a draft shows it until a credit is approved.
+      // Organizer drafts always read the current canonical identity; public views keep the approved snapshot.
       occurrence.speakers[0] = {
         ...occurrence.speakers[0]!,
         profileCandidate: {
@@ -285,12 +281,10 @@ describe("shared public agenda content", () => {
       const organizer = agendaContent(parsed, true);
       const organizerCredit = organizer.days[0]!.slots[0]!.sessions[0]!.speakers[0]!;
       expect(organizerCredit).toMatchObject({ moderator: true });
-      expect(organizerCredit.affiliations?.map(affiliationLabel)).toEqual(
-        state === "approved"
-          ? ["Engineer · Historical organization"]
-          : ["Recorded proposal title · Recorded proposal organization"],
-      );
-      expect(organizerCredit.name).toBe(state === "approved" ? "Historical speaker" : "Current profile name");
+      expect(organizerCredit.affiliations?.map(affiliationLabel)).toEqual([
+        "Recorded proposal title · Recorded proposal organization",
+      ]);
+      expect(organizerCredit.name).toBe("Current profile name");
       expect(organizer.speakers).toEqual([organizerCredit]);
       for (const publicSource of [
         parsed,

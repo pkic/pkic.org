@@ -1,3 +1,4 @@
+import { contributionForSource } from "./site-content-contributions";
 import type { SiteContentPage } from "../../../assets/shared/site-content";
 import type { SitePublicationSnapshot } from "../../../assets/shared/schemas/site-publication";
 import { siteContentLanguageForPath, siteContentLanguagePrefix } from "../../../assets/shared/site-content-language";
@@ -31,13 +32,23 @@ export function createSiteContentResolution({
   documentsByRoute,
   searchPage,
   taxonomyPage,
-  documentMetadata,
+  documentMetadata: readDocumentMetadata,
 }: {
   documentsByRoute: ReadonlyMap<string, ContentDocument>;
   searchPage: (query: string) => SiteContentPage;
   taxonomyPage: (route: string) => SiteContentPage | null;
   documentMetadata: (document: ContentDocument, route: string, pageNumber: number) => SiteContentEnumeration;
 }) {
+  function documentMetadata(document: ContentDocument, route: string, pageNumber: number) {
+    const page = readDocumentMetadata(document, route, pageNumber);
+    return {
+      ...page,
+      metadata: {
+        ...page.metadata,
+        contribution: document.generated ? undefined : contributionForSource(document.sourcePath),
+      },
+    };
+  }
   function resolve(pathname: string, query = ""): ResolvedContent | null {
     const route = normalizeSitePath(decodedPath(pathname));
     if (route === "/search/") return { kind: "synthetic", page: searchPage(query) };
@@ -71,7 +82,7 @@ export function createSiteContentResolution({
     );
     return metadata ? { metadata } : null;
   }
-  return { resolve, enumerate };
+  return { resolve, enumerate, documentMetadata };
 }
 
 /** Only plain leaf prose with no unresolved renderer/publication dependencies receives a key. */

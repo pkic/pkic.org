@@ -1,9 +1,8 @@
 import type { GroupStatsQuery, GroupStatsResponse } from "../../../../assets/shared/schemas/group-statistics";
 import { AppError } from "../../errors";
 import type { AuthAdmin, DatabaseLike } from "../../types";
-import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import { nowIso } from "../../utils/time";
-import { prepareGroupManagementAuthorizationGuard, requireGroupManagement } from "./governance";
+import { guardGroupManagementDatabase, requireGroupManagement } from "./governance";
 import { getGroup } from "./read-model";
 
 const UNBOUNDED_FROM = "0000-01-01T00:00:00.000Z";
@@ -113,22 +112,13 @@ export async function getGroupStatistics(
 
   const generatedAt = nowIso();
   const queries = buildGroupStatsQuerySet(group.id, query, generatedAt);
-  let results;
-  try {
-    results = await db.batch([
-      prepareGroupManagementAuthorizationGuard(db, actor, [group.id]),
-      db.prepare(queries.participation.sql).bind(...queries.participation.bindings),
-      db.prepare(queries.activity.sql).bind(...queries.activity.bindings),
-      db.prepare(queries.joined.sql).bind(...queries.joined.bindings),
-      db.prepare(queries.left.sql).bind(...queries.left.bindings),
-    ]);
-  } catch (error) {
-    if (isAuthorizationGuardFailure(error)) {
-      throw new AppError(403, "GROUP_MANAGEMENT_REQUIRED", "Effective group management permission is required");
-    }
-    throw error;
-  }
-  const [, participationResult, activityResult, joinedResult, leftResult] = results;
+  const guardedDb = guardGroupManagementDatabase(db, actor, [group.id]);
+  const [participationResult, activityResult, joinedResult, leftResult] = await guardedDb.batch([
+    guardedDb.prepare(queries.participation.sql).bind(...queries.participation.bindings),
+    guardedDb.prepare(queries.activity.sql).bind(...queries.activity.bindings),
+    guardedDb.prepare(queries.joined.sql).bind(...queries.joined.bindings),
+    guardedDb.prepare(queries.left.sql).bind(...queries.left.bindings),
+  ]);
   const participation = participationResult.results?.[0] as ParticipationRow | undefined;
   const activity = activityResult.results?.[0] as ActivityRow | undefined;
   const joined = joinedResult.results?.[0] as CountRow | undefined;

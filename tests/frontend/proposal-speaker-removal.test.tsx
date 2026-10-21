@@ -9,6 +9,8 @@ import {
   SpeakerCard,
 } from "../../assets/ts/member-flows/portal/sections/events/detail/proposal-detail/SpeakerCard";
 import { ProposalSpeakerCard } from "../../assets/ts/components/proposals/ProposalSpeakerCard";
+import * as confirmation from "../../assets/ts/components/ConfirmDialog";
+import { proposalSpeakerAcceptanceRequestSchema } from "../../assets/shared/schemas/proposal-speakers";
 import { proposalSpeakerPatchSchema } from "../../assets/shared/schemas/proposal-management";
 import { identityUpdateSchema } from "../../assets/shared/schemas/identity-public-profile";
 import { PROPOSAL_SPEAKER_ROLES } from "../../assets/shared/schemas/participant-roles";
@@ -38,6 +40,7 @@ afterEach(() => {
   container.remove();
   container = null;
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 async function settle(): Promise<void> {
@@ -112,6 +115,54 @@ function mount(node: Parameters<typeof render>[0]): HTMLElement {
 }
 
 describe("proposal speaker removal UI", () => {
+  it("accepts an outstanding invitation through the organizer action and reloads the roster", async () => {
+    vi.spyOn(confirmation, "confirmAction").mockResolvedValue(true);
+    const fetcher = vi.fn().mockResolvedValue(Response.json({ success: true }));
+    vi.stubGlobal("fetch", fetcher);
+    const onReload = vi.fn();
+    const root = mount(
+      <ProposalSpeakerCard
+        speaker={proposalSpeaker({ status: "invited" })}
+        proposalId="proposal-1"
+        canFinalize
+        endpoints={proposalSpeakerEndpoints()}
+        isCurrentProposer={false}
+        replacementSpeakers={[]}
+        onSaved={() => {}}
+        onRemoved={() => {}}
+        onProfileChanged={onReload}
+      />,
+    );
+    await runCardAction(root, "Casey Speaker", "Accept on behalf of speaker");
+    await settle();
+    expect(confirmation.confirmAction).toHaveBeenCalled();
+    const [path, init] = fetcher.mock.calls[0];
+    expect(path).toBe("/api/v1/proposals/proposal-1/speakers/speaker-1/acceptance");
+    expect(init.method).toBe("POST");
+    expect(proposalSpeakerAcceptanceRequestSchema.safeParse(JSON.parse(init.body)).success).toBe(true);
+    expect(onReload).toHaveBeenCalledOnce();
+  });
+
+  it.each([false, true])(
+    "does not offer organizer acceptance for a confirmed speaker (manager: %s)",
+    async (canFinalize) => {
+      const root = mount(
+        <ProposalSpeakerCard
+          speaker={proposalSpeaker()}
+          proposalId="proposal-1"
+          canFinalize={canFinalize}
+          endpoints={proposalSpeakerEndpoints()}
+          isCurrentProposer={false}
+          replacementSpeakers={[]}
+          onSaved={() => {}}
+          onRemoved={() => {}}
+        />,
+      );
+      const items = await openCardMenu(root, "Casey Speaker");
+      expect(items.map((item) => item.textContent?.trim())).not.toContain("Accept on behalf of speaker");
+    },
+  );
+
   it("shows proposal reviewers the headshot without mutation controls", async () => {
     const root = mount(
       <SpeakerCard
@@ -314,12 +365,12 @@ describe("proposal speaker removal UI", () => {
 
     const form = root.querySelector("form")!;
     expect(form.noValidate).toBe(true);
-    expect(labelNames(form)).toEqual(["Job title", "Biography"]);
+    expect(labelNames(form)).toEqual(["Job title", "About you"]);
     // The links are a group of one-URL inputs, named as a group rather than by a single label.
     expect(form.querySelector('input[aria-label="Profile link URL"]')).not.toBeNull();
     expect(form.textContent).toContain("Social and profile links");
-    expect((await markdownControl(form, "Biography")).getAttribute("role")).toBe("textbox");
-    expect(await markdownValue(root, "Biography")).toBe("The identity biography.");
+    expect((await markdownControl(form, "About you")).getAttribute("role")).toBe("textbox");
+    expect(await markdownValue(root, "About you")).toBe("The identity biography.");
     expect(form.textContent).toContain("This changes the identity itself.");
     // The headshot is the person's own, changed with the shared picture tile.
     expect(root.querySelector('button[aria-label$="photo of Casey Speaker"]')).not.toBeNull();
@@ -452,7 +503,7 @@ describe("proposal speaker removal UI", () => {
 
     await runCardAction(root, "Casey Speaker", "Edit identity");
     await settle();
-    await typeMarkdown(root, "Biography", "A biography the server will refuse.");
+    await typeMarkdown(root, "About you", "A biography the server will refuse.");
     await submitForm(root);
     await settle();
 
@@ -467,6 +518,6 @@ describe("proposal speaker removal UI", () => {
     });
     expect(root.querySelector("form")?.textContent).toContain("Another editor saved first");
     // The form stays open, so the refused edit is still there to correct.
-    expect(await markdownValue(root, "Biography")).toBe("A biography the server will refuse.");
+    expect(await markdownValue(root, "About you")).toBe("A biography the server will refuse.");
   });
 });

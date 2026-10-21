@@ -1,3 +1,4 @@
+import type { ModelVersionNavigationData } from "../../shared/model-versions";
 import { SiteImage } from "./SiteImage";
 import { sponsorPublicationKey } from "../../shared/sponsor-publication-query";
 import { SponsorGridView } from "./SponsorDisplays";
@@ -15,19 +16,43 @@ export function SitePageBody({
   content,
   publication,
   memberCount,
+  modelVersions,
 }: {
   content: SiteContentPage;
   publication?: SitePublicationSnapshot;
   memberCount?: number;
+  modelVersions?: ModelVersionNavigationData;
 }) {
+  const group = content.workingGroup;
+  const decorateTree = (tree: NonNullable<typeof group>["sidebar"]) =>
+    tree && modelVersions && tree.root.href.startsWith(modelVersions.root)
+      ? {
+          ...tree,
+          versions: {
+            label: modelVersions.label,
+            items: modelVersions.items.map((item) => ({
+              ...item,
+              current: item.id === modelVersions.activeId,
+              latest: item.id === modelVersions.latestId,
+            })),
+          },
+        }
+      : tree;
+  const workingGroup = group
+    ? {
+        ...group,
+        sidebar: decorateTree(group.sidebar),
+        treePanels: group.treePanels?.map((panel) => ({ ...panel, tree: decorateTree(panel.tree)! })),
+      }
+    : undefined;
   if (content.home) return <HomePage hero={content.hero} home={{ ...content.home, memberCount }} html={content.html} />;
-  if (content.workingGroup?.section === "about")
+  if (workingGroup?.section === "about")
     return (
       <WorkingGroupLandingPage
         hero={content.hero}
-        section={content.workingGroup}
+        section={workingGroup}
         staticPublication={Boolean(publication)}
-        publishedDirectory={publication?.groups[content.workingGroup.wgId.toLowerCase()]}
+        publishedDirectory={publication?.groups[workingGroup.wgId.toLowerCase()]}
       />
     );
   if (content.events)
@@ -60,15 +85,13 @@ export function SitePageBody({
         />
       </>
     );
-  if (content.workingGroup?.section === "content")
-    return <WorkingGroupContentPage html={content.html} section={content.workingGroup} />;
-  if (content.workingGroup)
+  if (workingGroup?.section === "content")
+    return <WorkingGroupContentPage html={content.html} section={workingGroup} />;
+  if (workingGroup)
     return (
       <WorkingGroupSectionPage
-        section={content.workingGroup}
-        publishedMembers={
-          publication ? (publication.groupMembers[content.workingGroup.wgId.toLowerCase()] ?? []) : undefined
-        }
+        section={workingGroup}
+        publishedMembers={publication ? (publication.groupMembers[workingGroup.wgId.toLowerCase()] ?? []) : undefined}
       />
     );
   return (

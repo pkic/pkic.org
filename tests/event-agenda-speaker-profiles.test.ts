@@ -62,6 +62,7 @@ async function fixture() {
     agenda,
     proposal,
     organizationIdentityId,
+    organizationId,
     photoUrl: `/api/v1/users/${f.adminId}/headshots/portrait.jpg`,
   };
 }
@@ -84,6 +85,7 @@ describe("available speaker person profiles are organizer candidates only", () =
     const accepted = imported.occurrences.find((item) => item.id !== manual.id)!;
     expect(manual.speakers[0]!.profileCandidate).toEqual({
       identityId: f.organizationIdentityId,
+      organizationId: f.organizationId,
       organizationName: "Profile Candidate Labs",
       jobTitle: "Principal engineer",
       biography: "Organization identity biography",

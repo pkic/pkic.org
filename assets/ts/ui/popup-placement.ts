@@ -32,9 +32,14 @@ export function measurePopupPosition(
 ): PopupPosition {
   const gap = side === "right" ? 8 : 4;
   const margin = 8;
+  const viewport = window.visualViewport;
+  const viewportTop = viewport?.offsetTop ?? 0;
+  const viewportLeft = viewport?.offsetLeft ?? 0;
+  const viewportBottom = viewportTop + (viewport?.height ?? window.innerHeight);
+  const viewportRight = viewportLeft + (viewport?.width ?? window.innerWidth);
 
-  const fitsBelow = anchor.bottom + gap + popup.height <= window.innerHeight - margin;
-  const fitsAbove = anchor.top - gap - popup.height >= margin;
+  const fitsBelow = anchor.bottom + gap + popup.height <= viewportBottom - margin;
+  const fitsAbove = anchor.top - gap - popup.height >= viewportTop + margin;
   const above = anchor.top - gap - popup.height;
   const below = anchor.bottom + gap;
   // A popup that prefers the top opens above its anchor, as a reaction bar does, and drops below only without room.
@@ -51,16 +56,16 @@ export function measurePopupPosition(
 
   const preferred =
     side === "right"
-      ? anchor.right + gap + popup.width <= window.innerWidth - margin
+      ? anchor.right + gap + popup.width <= viewportRight - margin
         ? anchor.right + gap
         : anchor.left - gap - popup.width
       : align === "end"
         ? anchor.right - popup.width
         : anchor.left;
-  const left = Math.max(margin, Math.min(preferred, window.innerWidth - popup.width - margin));
+  const left = Math.max(viewportLeft + margin, Math.min(preferred, viewportRight - popup.width - margin));
 
   return {
-    top: Math.max(margin, Math.min(top, window.innerHeight - popup.height - margin)),
+    top: Math.max(viewportTop + margin, Math.min(top, viewportBottom - popup.height - margin)),
     left,
     minWidth: side === "right" ? 0 : anchor.width,
   };
@@ -187,9 +192,14 @@ export function usePopupPlacement({
     if (!open) return;
     window.addEventListener("resize", place);
     window.addEventListener("scroll", place, true);
+    const viewport = window.visualViewport;
+    viewport?.addEventListener("resize", place);
+    viewport?.addEventListener("scroll", place);
     return () => {
       window.removeEventListener("resize", place);
       window.removeEventListener("scroll", place, true);
+      viewport?.removeEventListener("resize", place);
+      viewport?.removeEventListener("scroll", place);
     };
   }, [open, place]);
 }

@@ -7,6 +7,7 @@ import {
   AgendaGet,
   AgendaPeopleGet,
   AgendaPeopleIdentitiesGet,
+  AgendaSpeakerIdentitiesGet,
   AgendaOccurrencesGet,
   AgendaHistoryIdentitiesGet,
   AgendaHistoryMaterialsGet,
@@ -23,6 +24,7 @@ export function registerAgendaReadRoutes(openapi: AgendaReadRouter): void {
   openapi.get("/agenda/previews", AgendaPreviewGet);
   openapi.get("/agenda/people", AgendaPeopleGet);
   openapi.get("/agenda/people/identities", AgendaPeopleIdentitiesGet);
+  openapi.get("/agenda/speaker-identities", AgendaSpeakerIdentitiesGet);
   openapi.get("/agenda/occurrences", AgendaOccurrencesGet);
   openapi.get("/agenda/occurrences/filters", AgendaOccurrenceFilterOptionsGet);
   openapi.get("/agenda/occurrences/:occurrenceId/history/identities", AgendaHistoryIdentitiesGet);

@@ -1,7 +1,7 @@
 import { preparePublicationDocumentEffectsGuard } from "./site-publication-document-effects";
 import { first } from "../db/queries";
 import { prepareAuthorizationGuard, isAuthorizationGuardFailure } from "../db/authorization-guard";
-import { requirePermission, preparePermissionsAuthorizationGuard } from "../auth/permissions";
+import { requirePermission, preparePermissionsAuthorizationGuard, guardPermissionDatabase } from "../auth/permissions";
 import { AppError } from "../errors";
 import { nowIso } from "../utils/time";
 import { prepareAuditLog } from "./audit";
@@ -109,26 +109,25 @@ export async function listSitePublicationRequests(
   const where =
     "resource_type=? AND resource_id=? AND (? IS NULL OR status=?) AND INSTR(LOWER(reason_code||' '||deduplication_key),LOWER(?))>0";
   const values = [scope.resourceType, scope.resourceId, page.status ?? null, page.status ?? null, page.q ?? ""];
-  try {
-    const results = await db.batch([
-      preparePermissionsAuthorizationGuard(db, actor, [requirement]),
-      db.prepare(`SELECT COUNT(*) AS total FROM site_publication_requests WHERE ${where}`).bind(...values),
-      db
-        .prepare(
-          `SELECT ${requestColumns} FROM site_publication_requests WHERE ${where} ORDER BY sequence ${page.sort?.startsWith("-") ? "DESC" : "ASC"} LIMIT ? OFFSET ?`,
-        )
-        .bind(...values, page.limit, page.offset),
-    ]);
-    const requests = (results[2]?.results ?? []).map((row) =>
-      sitePublicationRequestSchema.parse({ ...row, documentEffects: JSON.parse(String(row.documentEffectsJson)) }),
-    );
-    const total = Number((results[1]?.results?.[0] as { total?: number } | undefined)?.total ?? 0);
-    return { requests, page: buildPageInfo(page.limit, page.offset, total, requests.length) };
-  } catch (error) {
-    if (isAuthorizationGuardFailure(error))
-      throw new AppError(403, "PUBLICATION_ACCESS_CHANGED", "Publication access changed");
-    throw error;
-  }
+  const guardedDb = guardPermissionDatabase(
+    db,
+    actor,
+    [requirement],
+    () => new AppError(403, "PUBLICATION_ACCESS_CHANGED", "Publication access changed"),
+  );
+  const results = await guardedDb.batch([
+    guardedDb.prepare(`SELECT COUNT(*) AS total FROM site_publication_requests WHERE ${where}`).bind(...values),
+    guardedDb
+      .prepare(
+        `SELECT ${requestColumns} FROM site_publication_requests WHERE ${where} ORDER BY sequence ${page.sort?.startsWith("-") ? "DESC" : "ASC"} LIMIT ? OFFSET ?`,
+      )
+      .bind(...values, page.limit, page.offset),
+  ]);
+  const requests = (results[1]?.results ?? []).map((row) =>
+    sitePublicationRequestSchema.parse({ ...row, documentEffects: JSON.parse(String(row.documentEffectsJson)) }),
+  );
+  const total = Number((results[0]?.results?.[0] as { total?: number } | undefined)?.total ?? 0);
+  return { requests, page: buildPageInfo(page.limit, page.offset, total, requests.length) };
 }
 export async function getSitePublicationDelivery(db: DatabaseLike) {
   const row = await first(

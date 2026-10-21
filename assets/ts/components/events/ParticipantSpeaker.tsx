@@ -321,6 +321,7 @@ export function ParticipantSpeaker({
               <IdentityProfileForm
                 identity={representation}
                 editor="owner"
+                purpose="speaker"
                 save={(body) =>
                   patchJson(
                     identityPath(representation.identityId),

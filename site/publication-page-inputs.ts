@@ -1,9 +1,11 @@
+import { modelVersionContributionForRoute, modelVersionsForRoute } from "./model-versions";
+import { contentContributionForRoute } from "../functions/_lib/services/site-content-contributions";
 import { runtimeDatePresentation } from "../assets/shared/timezone";
 import { publishedFormResourcesForPath } from "../assets/shared/published-resource-url";
 import { siteContentLanguageForPath } from "../assets/shared/site-content-language";
 import type { PublicMemberDetail } from "../assets/shared/schemas/members-directory";
 import type { SiteContentPage } from "../assets/shared/site-content";
-import { siteNavigation } from "../functions/_lib/services/site-content";
+import { publishedSiteRoutes, siteNavigation } from "../functions/_lib/services/site-content";
 import { clientAssets } from "./client-assets";
 import { memberCounts, publication } from "./publication";
 import { PUBLICATION_SITE_ORIGIN, publicationImageInputs } from "./publication-cache";
@@ -12,7 +14,7 @@ import { socialCardDescriptor } from "./social-card";
 
 type SocialContent = Pick<
   SiteContentPage,
-  "workingGroup" | "hero" | "taxonomy" | "blog" | "socialCard" | "pageAccent" | "meta"
+  "workingGroup" | "hero" | "taxonomy" | "blog" | "socialCard" | "pageAccent" | "meta" | "contribution"
 >;
 
 /** The public layout consumes this same projection that participates in route keys. */
@@ -57,6 +59,11 @@ export async function publicationPageInputs({
   const renderedImageRefs = [...memberWall.map((entry) => ({ source: entry.logoUrl, portrait: false })), ...imageRefs];
   const imagesPrepared = await preparePublicationImages(renderedImageRefs);
   return {
+    isBlogPost: Boolean(content?.blog),
+    modelVersions: privatePage ? undefined : await modelVersionsForRoute(route, publishedSiteRoutes()),
+    contentContribution: privatePage
+      ? undefined
+      : (modelVersionContributionForRoute(route) ?? contentContributionForRoute(route, content?.contribution)),
     presentation: runtimeDatePresentation(),
     copyrightYear: new Date().getUTCFullYear(),
     route,
@@ -65,7 +72,8 @@ export async function publicationPageInputs({
     title,
     description,
     privatePage,
-    accent,
+    accent: content?.workingGroup?.accent ?? accent,
+    workingGroup: Boolean(content?.workingGroup),
     robots: privatePage ? "noindex, nofollow, noarchive" : robots,
     structuredData: privatePage ? undefined : structuredData,
     socialCard,

@@ -16,6 +16,8 @@ import {
 } from "./proposal-management";
 import {
   proposalSpeakerPatchResponseSchema,
+  proposalSpeakerAcceptanceRequestSchema,
+  proposalSpeakerAcceptanceResponseSchema,
   proposalSpeakersResponseSchema,
   proposalSpeakerReminderRequestSchema,
   proposalSpeakerReminderResponseSchema,
@@ -514,5 +516,27 @@ export const proposalSpeakerDisclosureReviewRouteSchema = {
     "403": { description: "The actor lacks proposal management permission." },
     "404": { description: "Proposal, speaker or current disclosure not found." },
     "409": { description: "The disclosure changed while it was reviewed." },
+  },
+};
+
+export const proposalSpeakerAcceptanceRouteSchema = {
+  tags: ["Proposal speakers"],
+  summary: "Accept an invitation on behalf of a speaker",
+  "x-pkic-auth": proposalManageAuth,
+  request: {
+    params: proposalSpeakerIdParamsSchema,
+    body: { required: true, content: { "application/json": { schema: proposalSpeakerAcceptanceRequestSchema } } },
+  },
+  responses: {
+    "200": {
+      description: "Speaker participation accepted.",
+      content: { "application/json": { schema: proposalSpeakerAcceptanceResponseSchema } },
+    },
+    "400": { description: "Invalid request." },
+    "401": { description: "Authentication required." },
+    "403": { description: "Proposal management permission and an attributable user session are required." },
+    "404": { description: "Proposal or speaker not found." },
+    "409": { description: "Speaker prerequisites are incomplete or participation changed." },
+    "410": { description: "The invitation has expired." },
   },
 };

@@ -16,7 +16,7 @@ afterEach(() => {
   }
   history.replaceState(null, "", "/portal/#/");
 });
-it.each(["events", "meetings", "documents", "votes"])(
+it.each(["events", "meetings", "documents", "votes", "audit-log"])(
   "loads %s from the user's participation collection",
   async (collection) => {
     history.replaceState(null, "", `/portal/#/users/${userId}${collection === "events" ? "" : `/${collection}`}`);
@@ -24,7 +24,9 @@ it.each(["events", "meetings", "documents", "votes"])(
     document.body.append(host);
     await act(() => render(<UserParticipationHistory userId={userId} canRead />, host!));
     expect(host.querySelector("[data-endpoint]")?.getAttribute("data-endpoint")).toBe(
-      `/api/v1/users/${userId}/participation/${collection}`,
+      collection === "audit-log"
+        ? `/api/v1/users/${userId}/audit-log`
+        : `/api/v1/users/${userId}/participation/${collection}`,
     );
   },
 );

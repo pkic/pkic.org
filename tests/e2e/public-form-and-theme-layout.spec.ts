@@ -1,5 +1,6 @@
 /** @covers presentation.13.1 */
 import { expect, test, type Locator } from "@playwright/test";
+import axe from "axe-core";
 import { EMAIL_FIRST_COPY } from "../../assets/shared/email-first-copy";
 
 const eventPath = "/events/2026/pqc-conference-amsterdam-nl";
@@ -167,6 +168,65 @@ for (const colorScheme of ["light", "dark"] as const) {
         expect(await input.evaluate((element) => getComputedStyle(element).backgroundColor)).not.toBe(
           await page.locator("body").evaluate((element) => getComputedStyle(element).backgroundColor),
         );
+      }
+    });
+  });
+}
+
+for (const colorScheme of ["light", "dark"] as const) {
+  test.describe(`${colorScheme} working-group accents`, () => {
+    test.use({ colorScheme });
+    test("working-group pages and dark model trees retain readable group colors", async ({ page }, testInfo) => {
+      if (testInfo.project.name === "mobile") await page.setViewportSize({ width: 375, height: 812 });
+      for (const [route, accent] of [
+        ["/wg/pqc/pqcmm/", "blue"],
+        ["/wg/pkimm/model/", "purple"],
+        ["/wg/cbom/charter/", "teal"],
+      ]) {
+        await page.goto(route!);
+        await expect(page.locator("body")).toHaveClass(new RegExp(`pk-page--${accent}`));
+        await page.evaluate(
+          (theme) => {
+            document.documentElement.dataset.theme = theme;
+          },
+          colorScheme === "light" ? "dark" : "light",
+        );
+        const heading = page.locator(".wg-main-content h2, .wg-prose h2").first();
+        if (await heading.count()) {
+          expect(
+            await heading.evaluate((element) => {
+              const probe = document.createElement("span");
+              probe.style.color = "var(--pk-accent-ink)";
+              element.appendChild(probe);
+              const expected = getComputedStyle(probe).color;
+              probe.remove();
+              return getComputedStyle(element).color === expected;
+            }),
+          ).toBe(true);
+          await expect(heading).toHaveCSS("background-image", "none");
+        }
+        const sidebar = page.locator(".wg-sidebar");
+        if (await sidebar.count()) {
+          await sidebar
+            .locator("details")
+            .first()
+            .evaluate((element) => {
+              (element as HTMLDetailsElement).open = true;
+            });
+          await page.evaluate(axe.source);
+          const violations = await page.evaluate(
+            async () =>
+              (
+                await (window as unknown as { axe: typeof axe }).axe.run(".wg-sidebar", {
+                  runOnly: { type: "rule", values: ["color-contrast"] },
+                })
+              ).violations,
+          );
+          expect(
+            violations.map((violation) => ({ id: violation.id, nodes: violation.nodes.map((node) => node.html) })),
+          ).toEqual([]);
+        }
+        await page.screenshot({ path: testInfo.outputPath(`${accent}-working-group.png`), fullPage: false });
       }
     });
   });

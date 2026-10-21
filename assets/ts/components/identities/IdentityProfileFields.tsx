@@ -64,13 +64,28 @@ export function IdentityProfileFields({
   onChange,
   of,
   organizationId,
+  organizationName,
+  purpose = "profile",
 }: {
   draft: IdentityProfileDraft;
   onChange: (patch: Partial<IdentityProfileDraft>) => void;
   of: (name: string) => FieldPresentation;
   /** An organization identity carries its own title; an individual one the person's own. */
   organizationId: string | null;
+  organizationName?: string | null;
+  purpose?: "profile" | "speaker";
 }) {
+  const organization = organizationName?.trim() || "this organization";
+  const biographyLabel = organizationId
+    ? `${purpose === "speaker" ? "Your speaker bio" : "Your bio"} at ${organization}`
+    : purpose === "speaker"
+      ? "Your speaker bio"
+      : "About you";
+  const biographyHint = organizationId
+    ? `Describe your role and relevant experience at ${organization}. This bio is used when you participate or speak as ${organization}. It does not replace About you, your general introduction.`
+    : purpose === "speaker"
+      ? "This is your general introduction from About you, used when you speak in your own name. To use an organization-specific bio, choose that organization profile instead."
+      : "A general introduction covering your interests and roles. For your work at a specific organization, edit that organization’s bio instead.";
   return (
     <>
       <Field
@@ -87,13 +102,13 @@ export function IdentityProfileFields({
           />
         )}
       </Field>
-      <Field label="Biography" {...of("biography")}>
+      <Field label={biographyLabel} help={biographyHint} {...of("biography")}>
         {(control) => (
           <MarkdownEditor
             {...control}
             variant="compact"
             name="biography"
-            label="Biography"
+            label={biographyLabel}
             initialValue={draft.biography}
             onChange={(biography) => onChange({ biography })}
           />

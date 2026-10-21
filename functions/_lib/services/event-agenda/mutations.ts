@@ -7,6 +7,7 @@ import { prepareAgendaRoomOrder } from "./room-order-settings";
 import { preparePublicAgendaSnapshot } from "./public-snapshot";
 import { occurrenceRepresentationReferences, prepareRepresentationEligibility } from "./representation-eligibility";
 import { assertPublicationRepresentations } from "./publication-representations";
+import { prepareReviewedSpeakerProfiles } from "./speaker-profile-reviews";
 import { agendaHistoricalPublicationReview } from "../../../../assets/shared/agenda-historical-publication-review";
 import { prepareScopedAuditLog } from "../audit";
 import { prepareSitePublicationRequest } from "../site-publication-requests";
@@ -45,7 +46,7 @@ import type { DatabaseLike } from "../../types";
 import { nowIso } from "../../utils/time";
 import { prepareSpeakerProfileSlugs } from "../people/profile-addresses";
 import { prepareSessionPageSlugs } from "./session-page-slugs";
-import { getAgenda, getAgendaOccurrence } from "./read";
+import { getAgenda } from "./read";
 import { canonicalAgendaSessionFormats, readAgendaSessionFormatLabels } from "./occurrence-formats";
 import {
   agendaScheduleConflictProposalSchema,
@@ -246,7 +247,8 @@ export async function patchAgendaOccurrence(
   actorUserId: string | null = null,
 ) {
   const snapshot = await getAgenda(db, eventId, eventSlug);
-  const existing = await getAgendaOccurrence(db, eventId, id);
+  const existing = snapshot.occurrences.find((occurrence) => occurrence.id === id);
+  if (!existing) throw new AppError(404, "AGENDA_OCCURRENCE_NOT_FOUND", "Session not found");
   // An unchanged format stays valid even if the event later retires that configured session type.
   const [input] =
     requested.format && requested.format !== existing.format
@@ -352,6 +354,10 @@ export async function patchAgendaOccurrence(
         id,
         kind: item.kind,
         virtualRoomUrl: input.virtualRoomUrl,
+        speakerUserIds:
+          input.speakerUserIds ??
+          (input.speakerIdentityIds ? item.speakers.map((speaker) => speaker.userId) : undefined),
+        speakerIdentityIds: input.speakerIdentityIds,
         sponsorIds: input.sponsorIds ?? (input.kind !== undefined && input.kind !== "break" ? [] : undefined),
       },
     ])),
@@ -404,7 +410,13 @@ export async function publishAgenda(
   const nextRevision = revision + 1;
   const event = await first<{ visibility: string }>(db, "SELECT visibility FROM events WHERE id=?", [eventId]);
   if (!event) throw new AppError(404, "EVENT_NOT_FOUND", "Event not found");
-  const approvedSnapshot = preparePublicAgendaSnapshot(snapshot, nextRevision, nowIso(), event.visibility === "public");
+  const reviewed = await prepareReviewedSpeakerProfiles(db, eventId, snapshot);
+  const approvedSnapshot = preparePublicAgendaSnapshot(
+    reviewed.snapshot,
+    nextRevision,
+    nowIso(),
+    event.visibility === "public",
+  );
   const historicalGuards = await assertPublicationRepresentations(
     db,
     eventId,
@@ -437,6 +449,7 @@ export async function publishAgenda(
         bindings: [eventId, event.visibility],
       }),
       ...representationGuards,
+      ...reviewed.guards,
       ...historicalGuards,
       ...(acknowledgeArchiveRepresentation && agendaHistoricalPublicationReview(approvedSnapshot).occurrenceIds.length
         ? [

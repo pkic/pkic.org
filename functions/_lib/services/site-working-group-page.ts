@@ -1,3 +1,4 @@
+import { modelVersionLinks } from "../../../assets/shared/model-versions";
 import { z } from "zod";
 import { parse as parseYaml } from "yaml";
 import modelVersionsSource from "../../../data/pkimm-versions.yaml?raw";
@@ -38,6 +39,7 @@ export function createWorkingGroupPages(source: WorkingGroupPagesSource) {
   const label = (document: ContentDocument) => document.data.linkTitle ?? document.data.title ?? titleFor(document);
   const sidebar = createSidebar({ documents, isPublished, label });
   const byRoute = new Map(documents.map((document) => [document.route, document]));
+  const publishedRoutes = new Set(documents.filter(isPublished).map((document) => document.route));
 
   /** The nearest ancestor that declares a `wgID`. */
   function groupFor(document: ContentDocument): ContentDocument | undefined {
@@ -88,25 +90,31 @@ export function createWorkingGroupPages(source: WorkingGroupPagesSource) {
       const section = deliverableSection(url);
       if (!section) return [];
       const inside = page.route.startsWith(url);
-      const currentVersion = modelVersions.find((version) => page.route.startsWith(version.path));
-      const subPath = currentVersion ? page.route.slice(currentVersion.path.length) : "";
+      const links = modelVersionLinks(
+        modelVersions.map((version) => ({
+          id: version.id,
+          version: version.label,
+          status: "released" as const,
+          root: version.path,
+        })),
+        page.route,
+        publishedRoutes,
+      );
       const versions = modelVersions.some((version) => version.path === url)
-        ? modelVersions.map((version) => {
-            const candidate = `${version.path}${subPath}`;
-            const equivalent = byRoute.get(candidate);
-            const exists = Boolean(equivalent && isPublished(equivalent));
-            return {
-              id: version.id,
-              label: version.label,
-              href: exists ? candidate : version.path,
-              current: version.id === currentVersion?.id,
-              latest: version.isLatestRelease,
-              fallback: Boolean(subPath && !exists),
-            };
-          })
+        ? links.items.map((version, index) => ({
+            ...version,
+            current: version.id === links.activeId,
+            latest: modelVersions[index].isLatestRelease,
+          }))
         : undefined;
       return [
-        { id: `wg-nav-tree-${pathSlug(url)}`, tree: sidebar.sidebarTree(section, inside ? page : section), versions },
+        {
+          id: `wg-nav-tree-${pathSlug(url)}`,
+          tree: {
+            ...sidebar.sidebarTree(section, inside ? page : section),
+            versions: versions ? { label: "Switch PKIMM model version", items: versions } : undefined,
+          },
+        },
       ];
     });
   }
@@ -176,7 +184,11 @@ export function createWorkingGroupPages(source: WorkingGroupPagesSource) {
       conferences: section === "conferences" ? conferenceBands() : undefined,
       route: document.route,
       section: section as SiteWorkingGroupSection["section"],
-      sidebar: isContent && root && sidebar.hasSideMenu(document) ? sidebar.sidebarTree(root, document) : undefined,
+      sidebar:
+        isContent && root && sidebar.hasSideMenu(document)
+          ? (treePanelsFor(group, document).find((panel) => panel.tree.root.href === root.route)?.tree ??
+            sidebar.sidebarTree(root, document))
+          : undefined,
       treePanels: treePanelsFor(group, document),
       wgId,
     });

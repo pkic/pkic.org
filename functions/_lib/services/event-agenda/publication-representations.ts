@@ -220,17 +220,13 @@ export async function assertPublicationRepresentations(
   const guards: StatementLike[] = [];
   for (let offset = 0; offset < rows.length; offset += 100)
     guards.push(historicalSourceGuard(db, eventId, rows.slice(offset, offset + 100)));
-  const missing = await first<{ id: string }>(
-    db,
-    `SELECT occurrence.id FROM event_agenda_occurrences occurrence
-     JOIN event_agenda_occurrence_speakers speaker ON speaker.occurrence_id=occurrence.id
-     LEFT JOIN event_agenda_session_history history ON history.occurrence_id=occurrence.id
-     WHERE occurrence.event_id=? AND occurrence.id IN(SELECT value FROM json_each(?))
-       AND NOT EXISTS(SELECT 1 FROM json_each(history.metadata_json,'$.appearances') appearance
-         WHERE json_extract(appearance.value,'$.userId')=speaker.user_id
-           AND json_extract(appearance.value,'$.approvedAt') IS NOT NULL)
-     LIMIT 1`,
-    [eventId, JSON.stringify(snapshot.occurrences.map((occurrence) => occurrence.id))],
+  const missing = snapshot.occurrences.some((occurrence) =>
+    occurrence.speakers.some(
+      (speaker) =>
+        !occurrence.history?.appearances.some(
+          (appearance) => appearance.userId === speaker.userId && appearance.approvedAt,
+        ),
+    ),
   );
   if (missing)
     throw new AppError(

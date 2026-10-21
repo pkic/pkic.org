@@ -18,6 +18,9 @@
 // Tokens and the base layer ship with the entry: every page needs them and
 // they are small. Component CSS rides its own lazy chunk instead.
 import "./design-system";
+import { installClientReleaseRecovery } from "./shared/client-release-recovery";
+
+installClientReleaseRecovery();
 
 import { installDeferredAvailabilityNotice } from "./shared/availability-notice-loader";
 

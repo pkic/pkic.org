@@ -1,3 +1,5 @@
+import type { ContentVersionNavigation } from "./content-versions";
+import type { ContentContribution } from "./content-contribution";
 import type { PortalLoginCopy } from "./schemas/portal-login-copy";
 import type { PublicSponsor } from "./schemas/public-sponsors";
 import type { SiteContentLanguage } from "./site-content-language";
@@ -197,6 +199,7 @@ export interface SiteSidebarTree {
   promoted?: SiteSidebarNode[];
   root: { current: boolean; href: string; label: string };
   sections: SiteSidebarNode[];
+  versions?: ContentVersionNavigation;
 }
 
 export interface SiteWorkingGroupSection {
@@ -235,7 +238,6 @@ export interface SiteWorkingGroupSection {
   treePanels?: Array<{
     id: string;
     tree: SiteSidebarTree;
-    versions?: Array<{ id: string; label: string; href: string; current: boolean; latest: boolean; fallback: boolean }>;
   }>;
   wgId: string;
 }
@@ -289,6 +291,7 @@ export interface SiteTaxonomy {
 }
 
 export interface SiteContentPage {
+  contribution?: ContentContribution;
   webinarSponsor?: { name: string; logoSrc?: string };
   /** An authored social visual, resolved through the same page asset reader. */
   socialCard?: { variant?: "webinar"; imageSrc?: string; imageRound?: boolean; sponsorSlug?: string };
