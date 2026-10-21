@@ -44,6 +44,8 @@ export function modelVersionLinks(
       const equivalent = availableRoutes.has(candidate);
       return {
         id: v.id,
+        version: v.version,
+        status: v.status,
         label: v.status === "draft" ? `${v.version} — Draft` : v.version,
         href: current && equivalent ? candidate : v.root,
         fallback: Boolean(current && route !== current.root && !equivalent),
@@ -58,5 +60,4 @@ export type ModelVersionNavigationData = ReturnType<typeof modelVersionLinks> & 
   root: string;
   label: string;
   latestId?: string;
-  releasesUrl: string;
 };

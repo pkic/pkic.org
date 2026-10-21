@@ -1,3 +1,4 @@
+import { applyPopupPosition, measurePopupPosition } from "../../ts/ui/popup-placement";
 import { formatTimeOfDay } from "../../shared/format-date";
 import { initLocalTime } from "./local-time.js";
 
@@ -77,12 +78,22 @@ document.querySelectorAll("time[datetime]").forEach(function ($e) {
 
     var open = function () {
       clearTimeout(closeTimer);
-      var r = trigger.getBoundingClientRect();
-      panel.style.top = r.bottom + 4 + "px";
-      panel.style.left = r.left + "px";
       panel.removeAttribute("hidden");
+      applyPopupPosition(panel, measurePopupPosition(trigger.getBoundingClientRect(), panel.getBoundingClientRect()));
       btn.setAttribute("aria-expanded", "true");
     };
+
+    panel.addEventListener(
+      "toggle",
+      function () {
+        if (!panel.hidden)
+          applyPopupPosition(
+            panel,
+            measurePopupPosition(trigger.getBoundingClientRect(), panel.getBoundingClientRect()),
+          );
+      },
+      true,
+    );
 
     var scheduleClose = function () {
       clearTimeout(closeTimer);

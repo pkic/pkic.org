@@ -37,7 +37,9 @@ export function modelVersionContributionForRoute(route: string) {
 }
 
 export async function modelVersionsForRoute(route: string, publishedRoutes: readonly string[]) {
-  const entry = modelContributionEntries.find((e) => route.startsWith(e.root));
+  const entry = modelContributionEntries.find((e) =>
+    route.startsWith(e.root.slice(0, e.root.lastIndexOf("/", e.root.length - 2) + 1)),
+  );
   if (!entry?.versions.length) return undefined;
   const available = new Set(publishedRoutes);
   for (const version of entry.versions) {
@@ -54,6 +56,5 @@ export async function modelVersionsForRoute(route: string, publishedRoutes: read
     root: entry.root,
     label: "Switch PQCMM model version",
     latestId: defaultVersion?.id,
-    releasesUrl: `https://github.com/${entry.repository}/releases`,
   };
 }

@@ -110,9 +110,10 @@ export function createWorkingGroupPages(source: WorkingGroupPagesSource) {
       return [
         {
           id: `wg-nav-tree-${pathSlug(url)}`,
-          tree: sidebar.sidebarTree(section, inside ? page : section),
-          versions,
-          versionsLabel: versions ? "Switch PKIMM model version" : undefined,
+          tree: {
+            ...sidebar.sidebarTree(section, inside ? page : section),
+            versions: versions ? { label: "Switch PKIMM model version", items: versions } : undefined,
+          },
         },
       ];
     });
@@ -183,7 +184,11 @@ export function createWorkingGroupPages(source: WorkingGroupPagesSource) {
       conferences: section === "conferences" ? conferenceBands() : undefined,
       route: document.route,
       section: section as SiteWorkingGroupSection["section"],
-      sidebar: isContent && root && sidebar.hasSideMenu(document) ? sidebar.sidebarTree(root, document) : undefined,
+      sidebar:
+        isContent && root && sidebar.hasSideMenu(document)
+          ? (treePanelsFor(group, document).find((panel) => panel.tree.root.href === root.route)?.tree ??
+            sidebar.sidebarTree(root, document))
+          : undefined,
       treePanels: treePanelsFor(group, document),
       wgId,
     });

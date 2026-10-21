@@ -115,39 +115,6 @@ function TreePanels({ section }: { section: SiteWorkingGroupSection }) {
       {section.treePanels.map((panel) => (
         <div class={`wg-nav-tree-panel wg-${section.wgId.toLowerCase()}`} id={panel.id} key={panel.id} hidden>
           <WorkingGroupSidebarTree tree={panel.tree} />
-          {panel.versions ? (
-            <div class="wg-version-switcher">
-              <p class="wg-version-eyebrow">Switch version</p>
-              <div class="wg-version-list" role="group" aria-label={panel.versionsLabel}>
-                {panel.versions.map((version) => (
-                  <a
-                    key={version.id}
-                    class={`wg-version-item${version.current ? " is-active" : ""}`}
-                    href={version.href}
-                    aria-current={version.current ? "page" : undefined}
-                  >
-                    <span class="wg-version-badge">{version.label}</span>
-                    {version.latest ? <span class="wg-version-hint">Latest release</span> : null}
-                    {version.fallback ? (
-                      <span
-                        class="wg-version-hint wg-version-hint--fallback"
-                        title={`This page is not available in ${version.label} — go to the version overview instead`}
-                      >
-                        Overview
-                      </span>
-                    ) : null}
-                  </a>
-                ))}
-              </div>
-              {panel.versionsReleasesUrl ? (
-                <p>
-                  <ExternalLink class="wg-version-item" href={panel.versionsReleasesUrl}>
-                    All releases and downloads
-                  </ExternalLink>
-                </p>
-              ) : null}
-            </div>
-          ) : null}
         </div>
       ))}
     </>

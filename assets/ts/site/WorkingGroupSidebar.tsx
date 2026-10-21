@@ -1,3 +1,4 @@
+import { WorkingGroupVersions } from "./WorkingGroupVersions";
 import type { SiteSidebarNode, SiteSidebarTree } from "../../shared/site-content";
 import { IconChevron } from "../ui/MediaIcons";
 
@@ -69,6 +70,7 @@ export function WorkingGroupSidebarTree({ tree }: { tree: SiteSidebarTree }) {
           </li>
         ))}
       </ul>
+      {tree.versions ? <WorkingGroupVersions versions={tree.versions} /> : null}
     </>
   );
 }

@@ -471,12 +471,15 @@ test("working-group sections scroll in one row and retain dropdowns", async ({ p
   await disclosure.press("Enter");
   await expect(disclosure).toHaveAttribute("aria-expanded", "true");
   await expect(page.locator(".wg-nav-tree-panel:visible")).toBeVisible();
-  const versions = page.getByRole("group", { name: "Switch PKIMM model version" });
-  await expect(versions.getByRole("link", { name: "2.0.0 Latest release" })).toHaveAttribute(
+  const versions = page.locator(".wg-nav-tree-panel").getByRole("group", { name: "Switch PKIMM model version" });
+  await expect(versions.getByRole("link", { name: "2.0.0 Latest release", includeHidden: true })).toHaveAttribute(
     "href",
     "/wg/pkimm/model/",
   );
-  await expect(versions.getByRole("link", { name: "1.0.0", exact: true })).toHaveAttribute("href", "/wg/pkimm/1.0.0/");
+  await expect(versions.getByRole("link", { name: "1.0.0", exact: true, includeHidden: true })).toHaveAttribute(
+    "href",
+    "/wg/pkimm/1.0.0/",
+  );
   await page.screenshot({ path: testInfo.outputPath("section-navigation.png"), fullPage: true });
 });
 
@@ -494,7 +497,9 @@ test("mobile search fields stay readable without disabling viewport zoom", async
 
 test("model versions preserve equivalent pages and fall back for new categories", async ({ page }) => {
   await page.goto("/wg/pkimm/model/categories/");
-  let versions = page.getByRole("group", { name: "Switch PKIMM model version", includeHidden: true });
+  let versions = page
+    .locator(".wg-nav-tree-panel")
+    .getByRole("group", { name: "Switch PKIMM model version", includeHidden: true });
   await expect(versions.getByRole("link", { name: "1.0.0", exact: true, includeHidden: true })).toHaveAttribute(
     "href",
     "/wg/pkimm/1.0.0/categories/",
@@ -504,7 +509,9 @@ test("model versions preserve equivalent pages and fall back for new categories"
     "page",
   );
   await page.goto("/wg/pkimm/model/categories/cryptography/");
-  versions = page.getByRole("group", { name: "Switch PKIMM model version", includeHidden: true });
+  versions = page
+    .locator(".wg-nav-tree-panel")
+    .getByRole("group", { name: "Switch PKIMM model version", includeHidden: true });
   await expect(versions.getByRole("link", { name: "1.0.0 Overview", includeHidden: true })).toHaveAttribute(
     "href",
     "/wg/pkimm/1.0.0/",
@@ -1616,13 +1623,13 @@ test("reclassified model draft preserves feedback and redirects its former versi
   await disclosure.focus();
   await disclosure.press("Escape");
   await disclosure.press("Enter");
-  const versions = page.getByRole("group", { name: "Switch PQCMM model version" });
+  const versions = page.locator(".wg-nav-tree-panel").getByRole("group", { name: "Switch PQCMM model version" });
   await expect(versions).toBeVisible();
-  await expect(versions.getByRole("link", { name: "1.0.1 Latest release" })).toHaveAttribute(
+  await expect(versions.getByRole("link", { name: "1.0.1 Latest release", includeHidden: true })).toHaveAttribute(
     "href",
     "/wg/pqc/pqcmm/versions/1.0.1/levels/3-advanced/",
   );
-  await expect(versions.getByRole("link", { name: "1.1.0 — Draft", exact: true })).toHaveAttribute(
+  await expect(versions.getByRole("link", { name: "1.1.0 — Draft", exact: true, includeHidden: true })).toHaveAttribute(
     "aria-current",
     "page",
   );
@@ -1665,9 +1672,7 @@ test("released model history stays readable while the default overview remains u
   const context = new URL((await feedback.getAttribute("href"))!);
   expect(context.searchParams.get("source-version")).toBe("1.0.1");
   expect(context.searchParams.get("source-revision")).toMatch(/^[a-f0-9]{40}$/);
-  await expect(
-    page.getByRole("link", { name: "All releases and downloads", exact: false, includeHidden: true }),
-  ).toHaveAttribute("href", "https://github.com/pkic/pqcmm/releases");
+  await expect(page.getByRole("link", { name: "All releases and downloads", includeHidden: true })).toHaveCount(0);
   await expect(page.getByText("A documented HNDL exposure register", { exact: false }).first()).toBeVisible();
   await expect(page.getByText("A documented long-lived exposure register", { exact: false })).toHaveCount(0);
   await page.goto("/wg/pqc/pqcmm/levels/3-advanced/");
@@ -1677,6 +1682,7 @@ test("released model history stays readable while the default overview remains u
   await expect(page).toHaveURL(/\/wg\/pqc\/pqcmm\/$/);
   await expect(
     page
+      .locator(".wg-nav-tree-panel")
       .getByRole("group", { name: "Switch PQCMM model version", includeHidden: true })
       .getByRole("link", { name: "1.0.1 Latest release", exact: true, includeHidden: true }),
   ).toHaveAttribute("aria-current", "page");
@@ -1689,11 +1695,41 @@ test("released model history stays readable while the default overview remains u
   await disclosure.focus();
   await disclosure.press("Escape");
   await disclosure.press("Enter");
-  const switcher = page.getByRole("group", { name: "Switch PQCMM model version" });
+  const switcher = page.locator(".wg-nav-tree-panel").getByRole("group", { name: "Switch PQCMM model version" });
   await expect(switcher).toBeInViewport();
-  await expect(switcher.getByRole("link", { name: "1.1.0 — Draft", exact: true })).toHaveAttribute(
+  await expect(switcher.getByRole("link", { name: "1.1.0 — Draft", exact: true, includeHidden: true })).toHaveAttribute(
     "href",
     "/wg/pqc/pqcmm/drafts/1.1.0/",
   );
+  await switcher.getByText("Drafts", { exact: true }).click();
   await page.screenshot({ path: testInfo.outputPath("model-version-selector.png") });
+});
+
+test("PQC model versions appear in the shared landing menu and document sidebar", async ({ page }, testInfo) => {
+  if (testInfo.project.name === "mobile") await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/wg/pqc/");
+  const disclosure = page
+    .locator("#wgSectionNav .wg-nav-link-wrap")
+    .filter({ has: page.getByRole("link", { name: "Maturity Model", exact: true }) })
+    .getByRole("button", { name: "Show contents" });
+  await disclosure.scrollIntoViewIfNeeded();
+  await expect(disclosure).toBeEnabled();
+  await disclosure.focus();
+  await disclosure.press("Escape");
+  await disclosure.press("Enter");
+  const versions = page.locator(".wg-nav-tree-panel").getByRole("group", { name: "Switch PQCMM model version" });
+  await expect(versions).toBeVisible();
+  await versions.getByText("Drafts", { exact: true }).click();
+  await expect(versions.getByRole("link", { name: "1.1.0 — Draft", exact: true })).toBeInViewport();
+  await page.screenshot({ path: testInfo.outputPath("landing-model-menu.png") });
+  await page.goto("/wg/pqc/pqcmm/");
+  const sidebar = page
+    .locator(".wg-sidebar")
+    .getByRole("group", { name: "Switch PQCMM model version", includeHidden: true });
+  await expect(sidebar).toHaveCount(1);
+  await expect(sidebar.getByRole("link", { name: "1.1.0 — Draft", exact: true, includeHidden: true })).toHaveAttribute(
+    "href",
+    "/wg/pqc/pqcmm/drafts/1.1.0/",
+  );
+  await page.screenshot({ path: testInfo.outputPath("model-sidebar.png") });
 });

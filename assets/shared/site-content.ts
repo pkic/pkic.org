@@ -198,6 +198,19 @@ export interface SiteSidebarTree {
   promoted?: SiteSidebarNode[];
   root: { current: boolean; href: string; label: string };
   sections: SiteSidebarNode[];
+  versions?: {
+    label: string;
+    items: Array<{
+      id: string;
+      version: string;
+      status: "released" | "draft";
+      label: string;
+      href: string;
+      current: boolean;
+      latest: boolean;
+      fallback: boolean;
+    }>;
+  };
 }
 
 export interface SiteWorkingGroupSection {
@@ -236,9 +249,6 @@ export interface SiteWorkingGroupSection {
   treePanels?: Array<{
     id: string;
     tree: SiteSidebarTree;
-    versions?: Array<{ id: string; label: string; href: string; current: boolean; latest: boolean; fallback: boolean }>;
-    versionsLabel?: string;
-    versionsReleasesUrl?: string;
   }>;
   wgId: string;
 }
