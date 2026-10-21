@@ -59,6 +59,11 @@ describe("shared model tree version navigation", () => {
     const sidebar = render(<WorkingGroupSidebar tree={tree} wgId="PQC" />);
     expect(sidebar).toContain(popup);
     expect(popup).not.toContain("All releases and downloads");
+    expect(popup).not.toContain("wg-version-hint--fallback");
+    const fallbackTree = structuredClone(tree);
+    fallbackTree.versions!.items[0]!.fallback = true;
+    expect(render(<WorkingGroupSidebarTree tree={fallbackTree} />)).toContain("aria-description=");
+    expect(render(<WorkingGroupSidebarTree tree={fallbackTree} />)).not.toContain(">Overview<");
     expect(popup).toContain('aria-label="Switch model version"');
   });
   it("shows direct links to the latest release, selected older release, and every draft", () => {

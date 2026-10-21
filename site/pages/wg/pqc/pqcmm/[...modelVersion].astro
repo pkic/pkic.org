@@ -1,9 +1,12 @@
 ---
+import { h } from "preact";
+import { render } from "preact-render-to-string";
 import PublicPage from "../../../../layouts/PublicPage.astro";
 import { SitePageBody } from "../../../../../assets/ts/site/SitePageBody";
 import { Alert } from "../../../../../assets/ts/ui/Alert";
 import { ExternalLink } from "../../../../../assets/ts/ui/ExternalLink";
 import { loadSiteContent } from "../../../../../functions/_lib/services/site-content";
+import { modelVersionTree } from "../../../../model-version-navigation";
 import { modelContributionEntries } from "../../../../model-versions";
 import { loadModelVersion } from "../../../../model-version-source";
 import { modelLevelSlug, modelVersionMarkdown } from "../../../../model-version-markdown";
@@ -37,22 +40,23 @@ const { entry, version, model, page } = props;
 const base = await loadSiteContent(entry.root, { publication });
 if (!base) throw new Error("Missing model overview template");
 const route = `${version.root}${page.slug}`;
+const sourceTree = base.workingGroup?.sidebar ?? base.workingGroup?.treePanels?.find((panel) => panel.tree.root.href === entry.root)?.tree;
+if (!base.workingGroup || !sourceTree) throw new Error("Missing model navigation template");
+const versionTree = modelVersionTree(sourceTree, model, entry.root, version.root, route);
+const draftNotice = version.status === "draft" ? render(h(Alert, { tone: "info", title: `${version.version} — Draft for feedback` },
+  h("p", null, "This is an unreleased proposal. Its expected version and scope remain subject to review."),
+  h(ExternalLink, { href: `https://github.com/${entry.repository}/blob/${version.commit}/${version.sourcePath ?? entry.sourcePath}` }, "View the exact source revision"),
+)) : "";
 const content = {
   ...base, route, title: page.title, draft: false, robots: "noindex, follow", meta: undefined, lastModified: undefined, listing: undefined,
   description: version.status === "draft" ? "An unreleased proposal for review. Its content and expected version may change." : `Published PQCMM ${version.version}, preserved for reference.`,
   hero: { ...base.hero, title: page.title },
-  workingGroup: base.workingGroup ? { ...base.workingGroup, pageTitle: page.title, route, sidebar: undefined } : undefined,
-  html: await renderModelMarkdown(modelVersionMarkdown(model, version.root, page.levelNumber)),
+  workingGroup: { ...base.workingGroup, pageTitle: page.title, route, nav: base.workingGroup.nav.map((item) => item.href === entry.root ? { ...item, href: version.root, current: true } : item), sidebar: versionTree, treePanels: base.workingGroup.treePanels?.map((panel) => panel.tree.root.href === entry.root ? { ...panel, tree: versionTree } : panel) },
+  html: draftNotice + await renderModelMarkdown(modelVersionMarkdown(model, version.root, page.levelNumber)),
 };
 const pageInputs = await publicationPageInputs({ route, title: content.title, description: content.description, robots: content.robots, content });
 ---
 <PublicPage pageInputs={pageInputs} title={content.title} description={content.description} robots={content.robots} content={content}>
   <Fragment slot="head"><meta name="pqcmm-source-revision" content={version.commit} /><meta name="pqcmm-source-sha256" content={version.sha256} /></Fragment>
-  <section class="pk pk-container pk-section">
-    {version.status === "draft" ? <Alert tone="info" title={`${version.version} — Draft for feedback`}>
-      This is an unreleased proposal. Its expected version and scope remain subject to review.
-      <ExternalLink href={`https://github.com/${entry.repository}/blob/${version.commit}/${version.sourcePath ?? entry.sourcePath}`}>View the exact source revision</ExternalLink>
-    </Alert> : <p>Released model {version.version}. <ExternalLink href={`https://github.com/${entry.repository}/releases/tag/${version.status === "released" ? version.tag : ""}`}>Release files and history</ExternalLink></p>}
-  </section>
   <SitePageBody content={content} publication={publication} memberCount={memberCounts.organization} modelVersions={pageInputs.modelVersions} />
 </PublicPage>

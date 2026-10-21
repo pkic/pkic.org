@@ -25,7 +25,7 @@ export function SitePageBody({
 }) {
   const group = content.workingGroup;
   const decorateTree = (tree: NonNullable<typeof group>["sidebar"]) =>
-    tree && modelVersions && tree.root.href === modelVersions.root
+    tree && modelVersions && tree.root.href.startsWith(modelVersions.root)
       ? {
           ...tree,
           versions: {

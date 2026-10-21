@@ -1587,6 +1587,15 @@ test("reclassified model draft preserves feedback and redirects its former versi
   });
   await page.goto("/wg/pqc/pqcmm/drafts/1.1.0/levels/3-advanced/");
   await expect(page.getByRole("status").filter({ hasText: "1.1.0 — Draft for feedback" })).toBeVisible();
+  expect(
+    await page
+      .getByRole("status")
+      .filter({ hasText: "1.1.0 — Draft for feedback" })
+      .evaluate((notice) => {
+        const nav = document.querySelector("#wgSectionNav")!;
+        return Boolean(nav.compareDocumentPosition(notice) & Node.DOCUMENT_POSITION_FOLLOWING);
+      }),
+  ).toBe(true);
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/);
   const disclosure = page
     .locator("#wgSectionNav .wg-nav-link-wrap")
@@ -1642,6 +1651,18 @@ test("released model history stays readable while the default overview remains u
   await page.goto("/wg/pqc/pqcmm/versions/1.0.1/levels/3-advanced/");
   await expect(page.getByRole("heading", { name: "Criterion 3.1.5", exact: true })).toBeVisible();
   await expect(page.getByRole("status").filter({ hasText: "Draft for feedback" })).toHaveCount(0);
+  await expect(page.getByText("Released model 1.0.1.", { exact: false })).toHaveCount(0);
+  await expect(page.locator("main > section.pk-section")).toHaveCount(0);
+  await expect(
+    page.locator("#wgSectionNav").getByRole("link", { name: "Maturity Model", exact: true }),
+  ).toHaveAttribute("href", "/wg/pqc/pqcmm/versions/1.0.1/");
+  const modelSidebar = page.locator(".wg-sidebar");
+  await expect(
+    modelSidebar.getByRole("link", { name: "2 — Foundational", exact: true, includeHidden: true }),
+  ).toHaveAttribute("href", "/wg/pqc/pqcmm/versions/1.0.1/levels/2-foundational/");
+  await expect(
+    modelSidebar.getByRole("group", { name: "Switch PQCMM model version", includeHidden: true }),
+  ).toHaveCount(1);
   const feedback = page.getByRole("link", { name: "Suggest a change", exact: false }).first();
   const context = new URL((await feedback.getAttribute("href"))!);
   expect(context.searchParams.get("source-version")).toBe("1.0.1");
@@ -1704,4 +1725,41 @@ test("PQC model versions appear in the shared landing menu and document sidebar"
     "/wg/pqc/pqcmm/drafts/1.1.0/",
   );
   await page.screenshot({ path: testInfo.outputPath("model-sidebar.png") });
+});
+
+test("model readers navigate released levels, switch drafts, and return through the shared menu", async ({
+  page,
+}, testInfo) => {
+  if (testInfo.project.name === "mobile") await page.setViewportSize({ width: 375, height: 812 });
+  const modelMenu = async () => {
+    const sidebar = page.locator(".wg-sidebar");
+    if (await sidebar.isVisible()) return sidebar;
+    const disclosure = page
+      .locator("#wgSectionNav .wg-nav-link-wrap")
+      .filter({ has: page.getByRole("link", { name: "Maturity Model", exact: true }) })
+      .getByRole("button", { name: "Show contents" });
+    await disclosure.scrollIntoViewIfNeeded();
+    await expect(disclosure).toBeEnabled();
+    await disclosure.focus();
+    await disclosure.press("Escape");
+    await disclosure.press("Enter");
+    return page.locator(".wg-nav-tree-panel:visible");
+  };
+  await page.goto("/wg/pqc/pqcmm/versions/1.0.1/");
+  let menu = await modelMenu();
+  await menu.locator("summary").filter({ hasText: "Maturity Levels" }).press("Enter");
+  await menu.getByRole("link", { name: "2 — Foundational", exact: true }).click();
+  await expect(page).toHaveURL(/\/versions\/1\.0\.1\/levels\/2-foundational\/$/);
+  menu = await modelMenu();
+  await menu.getByRole("link", { name: "1.1.0 — Draft", exact: true }).click();
+  await expect(page).toHaveURL(/\/drafts\/1\.1\.0\/levels\/2-foundational\/$/);
+  await expect(page.getByRole("status").filter({ hasText: "Draft for feedback" })).toBeVisible();
+  menu = await modelMenu();
+  await menu.getByRole("link", { name: "1.0.1 Latest release", exact: true }).click();
+  await expect(page).toHaveURL(/\/versions\/1\.0\.1\/levels\/2-foundational\/$/);
+  menu = await modelMenu();
+  await menu.locator(".wg-sidebar-root").click();
+  await expect(page).toHaveURL(/\/versions\/1\.0\.1\/$/);
+  await expect(page.getByRole("status").filter({ hasText: "Draft for feedback" })).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath("released-model-navigation.png") });
 });

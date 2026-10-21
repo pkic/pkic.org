@@ -9,17 +9,12 @@ function VersionLink({ item }: { item: Version }) {
       class={`wg-version-item${item.current ? " is-active" : ""}`}
       href={item.href}
       aria-current={item.current ? "page" : undefined}
+      aria-description={
+        item.fallback ? "Opens this version’s overview because this page has no equivalent." : undefined
+      }
     >
       <span class="wg-version-badge">{item.label}</span>
       {item.latest ? <span class="wg-version-hint">Latest release</span> : null}
-      {item.fallback ? (
-        <span
-          class="wg-version-hint wg-version-hint--fallback"
-          title="This page is unavailable in that version; open its overview"
-        >
-          Overview
-        </span>
-      ) : null}
     </a>
   );
 }
