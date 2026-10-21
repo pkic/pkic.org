@@ -155,16 +155,24 @@ describe("portal System Users detail record", () => {
     history.replaceState(null, "", `/portal/#/users/${user.id}`);
     stubDetail(user);
     const staff = await mountDetail(READ_ONLY);
-    const tabs = [...staff.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
-    expect(tabs.map((tab) => tab.textContent)).toEqual(["Events", "Meetings", "Documents", "Votes", "Audit log"]);
-    expect(apiClient.getJson.mock.calls.some(([url]) => String(url).includes("/audit-log"))).toBe(false);
+    const auditTab = staff.querySelector<HTMLButtonElement>('[role="tab"][id="participation-audit-log"]')!;
+    expect(auditTab).not.toBeNull();
+    expect(auditTab.getAttribute("aria-selected")).toBe("false");
+    const auditRequests = () =>
+      apiClient.getJson.mock.calls.filter(
+        ([url]) => new URL(String(url), location.origin).pathname === `/api/v1/users/${user.id}/audit-log`,
+      );
+    expect(auditRequests()).toHaveLength(0);
 
-    await act(() => tabs.at(-1)!.click());
+    await act(() => auditTab.click());
     await settle();
     expect(location.hash).toBe(`#/users/${user.id}/audit-log`);
     const panel = staff.querySelector('[role="tabpanel"]')!;
-    expect(panel.querySelector("table caption")?.textContent).toBe("Audit log");
-    expect(apiClient.getJson.mock.calls.some(([url]) => String(url).includes("/audit-log"))).toBe(true);
+    expect(auditTab.getAttribute("aria-selected")).toBe("true");
+    expect(auditTab.getAttribute("aria-controls")).toBe(panel.id);
+    expect(panel.getAttribute("aria-labelledby")).toBe(auditTab.id);
+    expect(panel.querySelector("table")).not.toBeNull();
+    expect(auditRequests()).toHaveLength(1);
   });
 
   it("does not expose or fetch the audit log on a member's own record, including a direct link", async () => {
