@@ -12,7 +12,9 @@ import { userAuthSessionResponseSchema, userAuthSessionRouteSchema } from "../..
 
 export const UserAuthSession = openApiRoute(userAuthSessionRouteSchema, async (c: AdminContext) => {
   const { session, token } = await refreshUserSessionFromRequest(c.env.DB, c.req.raw, c.env);
-  const response = json(userAuthSessionResponseSchema.parse({ success: true, ...publicUserSession(session) }));
+  const response = json(
+    userAuthSessionResponseSchema.parse({ success: true, ...(await publicUserSession(c.env.DB, session)) }),
+  );
   if (getUserSessionCookieToken(c.req.raw)) {
     response.headers.append("Set-Cookie", serializeUserSessionCookie(token, c.req.raw));
   } else {

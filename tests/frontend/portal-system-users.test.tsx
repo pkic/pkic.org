@@ -2,6 +2,8 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { UserAccessPanel } from "../../assets/ts/member-flows/portal/sections/system-users/UserAccessPanel";
+import { portalSessionFixture } from "../helpers/portal-session";
 import { UserProfileEditor } from "../../assets/ts/member-flows/portal/sections/system-users/UserProfileEditor";
 
 import type { UserDetail } from "../../assets/ts/member-flows/portal/sections/system-users/model";
@@ -254,5 +256,29 @@ describe("portal System Users profile permissions", () => {
     expect(container.querySelector("#user-jobTitle")).toBeNull();
     expect(container.querySelector("#user-biography")).toBeNull();
     expect(container.textContent).not.toContain("Canonical Organization");
+  });
+});
+
+describe("user access scope names", () => {
+  it("shows the friendly group name while retaining fallbacks for unnamed and global grants", () => {
+    const session = portalSessionFixture({ staff: true, grants: [] });
+    session.staff!.grants = [
+      {
+        permission: "groups:read",
+        contextType: "group",
+        contextId: "group-uuid",
+        contextName: "Post-Quantum Cryptography",
+      },
+      { permission: "events:read", contextType: "event", contextId: "event-uuid" },
+      { permission: "users:read", contextType: null, contextId: null },
+    ];
+    const container = document.createElement("div");
+    document.body.append(container);
+    mounted.push(container);
+    void act(() => render(<UserAccessPanel user={user} session={session} />, container));
+    expect(container.textContent).toContain("Post-Quantum Cryptography");
+    expect(container.textContent).not.toContain("group-uuid");
+    expect(container.textContent).toContain("event event-uuid");
+    expect(container.textContent).toContain("global");
   });
 });

@@ -6,6 +6,7 @@ export const publicStaffGrantSchema = z.object({
   permission: z.string().min(1),
   contextType: z.string().nullable(),
   contextId: z.string().nullable(),
+  contextName: z.string().nullable().optional(),
 });
 
 /** Allowlisted staff capacity returned as part of the canonical user session. */
