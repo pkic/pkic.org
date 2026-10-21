@@ -12,6 +12,12 @@ export const selfAssessmentReleases = {
     integrity: "sha384-m0O7PGIILT3hxVc500E7B9ophSb85NlVvZ57pOY1mccoAYgC6I1u1GPvrYOpO+y3",
     licenseIntegrity: "sha384-bg5Xp3dDY1n1kLnDc46T3wA6O71XMwqToyCiLm87zK/pjFwJQjrCtrBzbgVLcLOc",
   },
+  "v2.0.1": {
+    sourceUrl: "https://pkic.github.io/self-assessment/v2.0.1/self-assessment.js",
+    url: "/_published/assessment/v2.0.1/self-assessment.js",
+    integrity: "sha384-HOauaLpv0ls6jamgnaP5/5MPFOOeBvn0+tiy/viJ6Ln1uX19OFbILre/+N7/5xiM",
+    licenseIntegrity: "sha384-1BxJxG+dN/HM05X6ykQWsdzHAdvoHv3UTnfMViBg8yqg3cOLFsEBblO0BvPY5ojY",
+  },
 } as const;
 
 export function selfAssessmentRelease(version: string | undefined) {
