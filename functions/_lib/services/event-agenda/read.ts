@@ -1,3 +1,4 @@
+import { batchRows } from "../../db/pagination";
 import { readAgendaSnapshotRows } from "./snapshot-rows";
 import { publicUserHeadshotPath } from "../user-headshot";
 import { affiliationJobTitleSql, affiliationOrganizationNameSql } from "../identities/affiliation-projection";
@@ -89,43 +90,48 @@ async function occurrences(
     [eventId, ...values],
   );
   const requestedIds = JSON.stringify(rows.map((row) => row.id));
-  const speakerGroups = await readAgendaSpeakers(
-    db,
-    eventId,
-    rows.map((row) => row.id),
-  );
-  const histories = await all<{ occurrence_id: string; metadata_json: string }>(
-    db,
-    "SELECT h.occurrence_id,h.metadata_json FROM event_agenda_session_history h JOIN event_agenda_occurrences o ON o.id=h.occurrence_id WHERE h.occurrence_id IN(SELECT value FROM json_each(?)) AND o.event_id=? LIMIT 2001",
-    [requestedIds, eventId],
-  );
-  const historyById = new Map(
-    histories.map((row) => [row.occurrence_id, sessionHistoryMetadataSchema.parse(JSON.parse(row.metadata_json))]),
-  );
-  const copies = await all<{ occurrence_id: string; copy_json: string }>(
-    db,
-    "SELECT p.occurrence_id,p.copy_json FROM event_agenda_promotion_copy p JOIN event_agenda_occurrences o ON o.id=p.occurrence_id WHERE p.occurrence_id IN(SELECT value FROM json_each(?)) AND o.event_id=? LIMIT 2001",
-    [requestedIds, eventId],
-  );
-  const copyById = new Map(
-    copies.map((row) => [row.occurrence_id, promotionCopySchema.parse(JSON.parse(row.copy_json))]),
-  );
-  const additionalRooms = await all<{ occurrence_id: string; room_id: string }>(
-    db,
-    "SELECT occurrence_id,room_id FROM event_agenda_occurrence_rooms WHERE occurrence_id IN(SELECT value FROM json_each(?)) ORDER BY occurrence_id,room_id LIMIT 38001",
-    [requestedIds],
-  );
-  const roomsByOccurrence = new Map<string, string[]>();
-  for (const room of additionalRooms)
-    roomsByOccurrence.set(room.occurrence_id, [...(roomsByOccurrence.get(room.occurrence_id) ?? []), room.room_id]);
   const sponsorIdsByOccurrence = new Map(
     rows
       .filter((row) => row.kind === "break" && row.sponsor_ids_json !== null)
       .map((row) => [row.id, agendaSponsorIdsSchema.parse(JSON.parse(row.sponsor_ids_json!))]),
   );
-  const sponsorRows = await readAgendaSponsorRows(db, eventId, [
-    ...new Set([...sponsorIdsByOccurrence.values()].flat()),
+  const [speakerGroups, details, sponsorRows] = await Promise.all([
+    readAgendaSpeakers(
+      db,
+      eventId,
+      rows.map((row) => row.id),
+    ),
+    db.batch([
+      db
+        .prepare(
+          "SELECT h.occurrence_id,h.metadata_json FROM event_agenda_session_history h JOIN event_agenda_occurrences o ON o.id=h.occurrence_id WHERE h.occurrence_id IN(SELECT value FROM json_each(?)) AND o.event_id=? LIMIT 2001",
+        )
+        .bind(requestedIds, eventId),
+      db
+        .prepare(
+          "SELECT p.occurrence_id,p.copy_json FROM event_agenda_promotion_copy p JOIN event_agenda_occurrences o ON o.id=p.occurrence_id WHERE p.occurrence_id IN(SELECT value FROM json_each(?)) AND o.event_id=? LIMIT 2001",
+        )
+        .bind(requestedIds, eventId),
+      db
+        .prepare(
+          "SELECT occurrence_id,room_id FROM event_agenda_occurrence_rooms WHERE occurrence_id IN(SELECT value FROM json_each(?)) ORDER BY occurrence_id,room_id LIMIT 38001",
+        )
+        .bind(requestedIds),
+    ]),
+    readAgendaSponsorRows(db, eventId, [...new Set([...sponsorIdsByOccurrence.values()].flat())]),
   ]);
+  const histories = batchRows<{ occurrence_id: string; metadata_json: string }>(details[0]);
+  const copies = batchRows<{ occurrence_id: string; copy_json: string }>(details[1]);
+  const additionalRooms = batchRows<{ occurrence_id: string; room_id: string }>(details[2]);
+  const historyById = new Map(
+    histories.map((row) => [row.occurrence_id, sessionHistoryMetadataSchema.parse(JSON.parse(row.metadata_json))]),
+  );
+  const copyById = new Map(
+    copies.map((row) => [row.occurrence_id, promotionCopySchema.parse(JSON.parse(row.copy_json))]),
+  );
+  const roomsByOccurrence = new Map<string, string[]>();
+  for (const room of additionalRooms)
+    roomsByOccurrence.set(room.occurrence_id, [...(roomsByOccurrence.get(room.occurrence_id) ?? []), room.room_id]);
   const sponsorsById = new Map(sponsorRows.map((sponsor) => [sponsor.sponsor_id, agendaSponsorDisplay(sponsor)]));
   return rows.map((row) =>
     agendaOccurrenceSchema.parse({

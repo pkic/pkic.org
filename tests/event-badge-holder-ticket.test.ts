@@ -1,3 +1,5 @@
+import { mutateBeforeMatchingQuery } from "./helpers/database-races";
+import { profileD1Flow } from "./helpers/d1-flow-profile";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import {
@@ -67,7 +69,18 @@ describe("The holder's own badge ticket", () => {
 
   it("returns the organizer-issued badge with the exact QR the scanner accepts and the print design", async () => {
     const before = await badges(fixture.userId);
-    const response = await ticket(await sessionFor(fixture.userId));
+    const profile = profileD1Flow(env.DB);
+    const token = await sessionFor(fixture.userId);
+    const response = await callApi({ ...env, DB: profile.db }, `${base}/current`, {
+      method: "PUT",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    const report = await profile.report();
+    const badgeRead = report.queries.find(({ sql }) =>
+      sql.includes("SELECT id,expires_at FROM event_badge_credentials"),
+    );
+    expect(badgeRead).toBeDefined();
+    expect(badgeRead!.sql).not.toContain("INSERT INTO authorization_guards");
     expect(response.status, await response.clone().text()).toBe(200);
     expect(response.headers.get("cache-control")).toContain("no-store");
     const body = currentBadgeResponseSchema.parse(await response.json());
@@ -157,6 +170,35 @@ describe("The holder's own badge ticket", () => {
     expect(await response.json()).toMatchObject({ error: { code: "BADGE_REVOKED" } });
     expect(await badges(fixture.userId)).toHaveLength(1);
   });
+
+  it.each(["registration", "session"])(
+    "refuses ticket output when the %s changes before its final write",
+    async (change) => {
+      const before = await badges(fixture.userId);
+      const token = await sessionFor(fixture.userId);
+      const raced = mutateBeforeMatchingQuery(
+        env.DB,
+        (sql) => sql.startsWith("INSERT INTO authorization_guards"),
+        async () => {
+          if (change === "registration")
+            await env.DB.prepare("UPDATE registrations SET status='cancelled' WHERE event_id=? AND user_id=?")
+              .bind(fixture.eventId, fixture.userId)
+              .run();
+          else
+            await env.DB.prepare("UPDATE sessions SET revoked_at=? WHERE user_id=?")
+              .bind(new Date().toISOString(), fixture.userId)
+              .run();
+        },
+      );
+      const response = await callApi({ ...env, DB: raced }, `${base}/current`, {
+        method: "PUT",
+        headers: { authorization: `Bearer ${token}` },
+      });
+      expect(response.status, await response.clone().text()).toBe(409);
+      expect(await response.json()).toMatchObject({ error: { code: "BADGE_HOLDER_CHANGED" } });
+      expect(await badges(fixture.userId)).toEqual(before);
+    },
+  );
 
   it("lets organizer printing reuse the holder's active badge instead of adding a credential", async () => {
     const userId = await person();

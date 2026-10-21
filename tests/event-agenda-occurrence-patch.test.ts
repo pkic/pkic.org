@@ -89,7 +89,7 @@ describe("occurrence PATCH omission semantics", () => {
     );
   });
 
-  it("bounds title-only saves to 20 database round trips without reloading the edited occurrence", async () => {
+  it("bounds title-only saves to 16 database round trips without reloading the edited occurrence", async () => {
     const { eventId, occurrenceId } = await fixture();
     const profile = profileD1Flow(env.DB);
     const saved = await patchAgendaOccurrence(
@@ -101,7 +101,7 @@ describe("occurrence PATCH omission semantics", () => {
     );
     expect(saved.occurrences.find((occurrence) => occurrence.id === occurrenceId)?.title).toBe("Faster save");
     const report = await profile.report();
-    expect(report.roundTrips).toBeLessThanOrEqual(20);
+    expect(report.roundTrips).toBeLessThanOrEqual(16);
     expect(report.queries.filter((query) => query.sql.startsWith("SELECT id,content_id,"))).toHaveLength(2);
     const occurrenceRead = report.plans.find(({ sql }) => sql.startsWith("SELECT id,content_id,"));
     const details = occurrenceRead!.plan.map((row) => (row as { detail: string }).detail).join("\n");
