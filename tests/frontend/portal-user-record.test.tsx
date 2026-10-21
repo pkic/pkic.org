@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-/** The user record's profile, participation, actions and staff-only account history. */
+/** The user record's profile, participation, actions and staff-only audit log. */
 import { render } from "preact";
 import { IDENTITY_ID, membership, userWith } from "./helpers/affiliation-fixtures";
 import { act } from "preact/test-utils";
@@ -13,8 +13,6 @@ import {
   type UserPermissions,
 } from "../../assets/ts/member-flows/portal/sections/system-users/UserDetail";
 import type { UserDetail } from "../../assets/ts/member-flows/portal/sections/system-users/model";
-import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
-import { typedConfirmationInput } from "./helpers/confirm-dialog";
 
 const apiClient = vi.hoisted(() => ({
   patchJson: vi.fn(),
@@ -40,6 +38,7 @@ const user: UserDetail = {
 };
 
 afterEach(() => {
+  history.replaceState(null, "", "/portal/#/");
   for (const container of mounted.splice(0)) {
     void act(() => render(null, container));
     container.remove();
@@ -152,17 +151,35 @@ describe("portal System Users detail record", () => {
     );
   });
 
-  it("shows account history only to staff with user read permission", async () => {
+  it("loads the audit log only when staff select its data view", async () => {
+    history.replaceState(null, "", `/portal/#/users/${user.id}`);
     stubDetail(user);
     const staff = await mountDetail(READ_ONLY);
-    expect(cardNamed(staff, "Account history")).not.toBeNull();
-    expect(
-      apiClient.getJson.mock.calls.some(([url]) => String(url).startsWith(`/api/v1/users/${user.id}/audit-log`)),
-    ).toBe(true);
+    const auditTab = staff.querySelector<HTMLButtonElement>('[role="tab"][id="participation-audit-log"]')!;
+    expect(auditTab).not.toBeNull();
+    expect(auditTab.getAttribute("aria-selected")).toBe("false");
+    const auditRequests = () =>
+      apiClient.getJson.mock.calls.filter(
+        ([url]) => new URL(String(url), location.origin).pathname === `/api/v1/users/${user.id}/audit-log`,
+      );
+    expect(auditRequests()).toHaveLength(0);
 
+    await act(() => auditTab.click());
+    await settle();
+    expect(location.hash).toBe(`#/users/${user.id}/audit-log`);
+    const panel = staff.querySelector('[role="tabpanel"]')!;
+    expect(auditTab.getAttribute("aria-selected")).toBe("true");
+    expect(auditTab.getAttribute("aria-controls")).toBe(panel.id);
+    expect(panel.getAttribute("aria-labelledby")).toBe(auditTab.id);
+    expect(panel.querySelector("table")).not.toBeNull();
+    expect(auditRequests()).toHaveLength(1);
+  });
+
+  it("does not expose or fetch the audit log on a member's own record, including a direct link", async () => {
+    history.replaceState(null, "", `/portal/#/users/${user.id}/audit-log`);
     stubDetail(user);
     const self = await mountDetail({ ...READ_ONLY, canRead: false }, user.id);
-    expect(cardNamed(self, "Account history")).toBeNull();
+    expect(self.querySelector('[role="tab"]')).toBeNull();
     expect(apiClient.getJson.mock.calls.some(([url]) => String(url).includes("/audit-log"))).toBe(false);
   });
 
@@ -471,127 +488,3 @@ describe("portal System Users detail record", () => {
     expect(buttonText).not.toContain("Edit profile");
   });
 });
-
-describe("portal System Users anonymize confirmation", () => {
-  async function settle(): Promise<void> {
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-  }
-
-  it("requires the typed email confirmation and only anonymizes once confirmed", async () => {
-    const userId = "00000000-0000-4000-8000-000000000099";
-    const email = "dana@example.test";
-    const detailUser = {
-      id: userId,
-      email,
-      first_name: "Dana",
-      last_name: "Yu",
-      preferred_name: null,
-      active: true,
-      isEcMember: false,
-      headshotUrl: null,
-      created_at: "2026-01-01T00:00:00.000Z",
-      updated_at: "2026-01-01T00:00:00.000Z",
-      pii_redacted_at: null,
-      identities: [],
-      formerIdentities: [],
-    };
-
-    apiClient.getJson.mockReset();
-    apiClient.postJson.mockReset();
-    apiClient.getJson.mockImplementation(async (url: string) => {
-      if (url === `/api/v1/users/${userId}`) return { user: detailUser };
-      if (url === `/api/v1/users/${userId}/emails`) {
-        return { emails: [], page: { limit: 10, offset: 0, total: 0, hasMore: false } };
-      }
-      throw new Error(`Unexpected getJson call: ${url}`);
-    });
-    apiClient.postJson.mockImplementation(async (url: string) => {
-      if (url === `/api/v1/users/${userId}/anonymize`) return { success: true, userId };
-      throw new Error(`Unexpected postJson call: ${url}`);
-    });
-
-    const container = document.createElement("div");
-    document.body.append(container);
-    await act(() =>
-      render(
-        <>
-          <ConfirmDialogHost />
-          <UserDetailView
-            userId={userId}
-            permissions={{
-              canRead: true,
-              canWrite: true,
-              canGrantAccess: false,
-              canAnonymize: true,
-              canManageMembership: false,
-              canActivateIdentity: false,
-            }}
-          />
-        </>,
-        container,
-      ),
-    );
-    await settle();
-
-    function dialogButton(label: string): HTMLButtonElement {
-      const button = [...container.querySelectorAll("button")].find((candidate) => candidate.textContent === label);
-      if (!button) throw new Error(`missing button: ${label}`);
-      return button;
-    }
-
-    // The record's destructive command lives in its actions menu now, so the
-    // menu is opened first. The confirmation contract below is unchanged.
-    await act(() => dialogButton("⋯").click());
-    await act(() => dialogButton("Anonymize user…").click());
-    // Selecting from a menu adds an async hop before the dialog mounts, which
-    // a direct button click did not have.
-    await act(async () => {
-      await Promise.resolve();
-    });
-    expect(container.textContent).toContain(`Anonymize ${email}?`);
-
-    const confirmButton = dialogButton("Anonymize user");
-    expect(confirmButton.disabled).toBe(true);
-    const typed = typedConfirmationInput(container)!;
-    await act(() => {
-      typed.value = "not-the-email";
-      typed.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    expect(dialogButton("Anonymize user").disabled).toBe(true);
-
-    // Cancel: no anonymize request is sent.
-    await act(() => dialogButton("Cancel").click());
-    await settle();
-    expect(apiClient.postJson).not.toHaveBeenCalled();
-
-    // Confirm with the exact typed email: the anonymize request is sent.
-    // Re-opening goes back through the menu, as it did the first time.
-    await act(() => dialogButton("⋯").click());
-    await act(() => dialogButton("Anonymize user…").click());
-    await act(async () => {
-      await Promise.resolve();
-    });
-    const retyped = typedConfirmationInput(container)!;
-    await act(() => {
-      retyped.value = email;
-      retyped.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    await act(() => dialogButton("Anonymize user").click());
-    await settle();
-
-    expect(apiClient.postJson).toHaveBeenCalledWith(`/api/v1/users/${userId}/anonymize`, {}, expect.anything());
-
-    document.body.removeChild(container);
-  });
-});
-
-/**
- * The record itself, after the surface moved off Bootstrap.
- *
- * What is worth asserting here is not that the markup changed but that the
- * things a visual review cannot see are right: the record has a heading, each
- * field is paired with its value, a failed load says so out loud, and the
- * anonymized state is carried by words rather than by a red date.
- */

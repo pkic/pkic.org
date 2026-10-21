@@ -1,11 +1,9 @@
 /**
- * What a person has taken part in, as four views of one history: the events
+ * What a person has taken part in, alongside their account audit log: the events
  * they attended, the meetings they joined, the documents they contributed to,
  * and the ballots they cast.
  *
- * One panel with tabs rather than four stacked panels, because these are the
- * same question asked four ways and a record page that stacked them would bury
- * everything below the first. Each tab is its own bounded page from its own
+ * One tab strip keeps the histories together. Each tab loads a bounded page from its own
  * endpoint — the server orders, filters and pages; nothing here slices a set.
  *
  * On ballots, whether the choice appears is the vote's own decision: a vote
@@ -32,14 +30,16 @@ import { type Column } from "../../../../components/Table";
 import { usePortalHashLocation } from "../../hash-location";
 import { TabList } from "../../../../ui/TabList";
 import { fmt } from "../../ui";
+import { UserAuditLog } from "./UserAuditLog";
 
-type TabId = "events" | "meetings" | "documents" | "votes";
+type TabId = "events" | "meetings" | "documents" | "votes" | "audit-log";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "events", label: "Events" },
   { id: "meetings", label: "Meetings" },
   { id: "documents", label: "Documents" },
   { id: "votes", label: "Votes" },
+  { id: "audit-log", label: "Audit log" },
 ];
 
 /** The date every history is read by, formatted once. */
@@ -72,6 +72,7 @@ export function UserParticipationHistory({ userId, canRead }: { userId: string; 
         {tab === "meetings" && <MeetingsTab userId={userId} />}
         {tab === "documents" && <DocumentsTab userId={userId} />}
         {tab === "votes" && <VotesTab userId={userId} />}
+        {tab === "audit-log" && <UserAuditLog userId={userId} />}
       </div>
     </div>
   );
