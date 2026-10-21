@@ -46,7 +46,7 @@ import type { DatabaseLike } from "../../types";
 import { nowIso } from "../../utils/time";
 import { prepareSpeakerProfileSlugs } from "../people/profile-addresses";
 import { prepareSessionPageSlugs } from "./session-page-slugs";
-import { getAgenda, getAgendaOccurrence } from "./read";
+import { getAgenda } from "./read";
 import { canonicalAgendaSessionFormats, readAgendaSessionFormatLabels } from "./occurrence-formats";
 import {
   agendaScheduleConflictProposalSchema,
@@ -247,7 +247,8 @@ export async function patchAgendaOccurrence(
   actorUserId: string | null = null,
 ) {
   const snapshot = await getAgenda(db, eventId, eventSlug);
-  const existing = await getAgendaOccurrence(db, eventId, id);
+  const existing = snapshot.occurrences.find((occurrence) => occurrence.id === id);
+  if (!existing) throw new AppError(404, "AGENDA_OCCURRENCE_NOT_FOUND", "Session not found");
   // An unchanged format stays valid even if the event later retires that configured session type.
   const [input] =
     requested.format && requested.format !== existing.format

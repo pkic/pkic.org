@@ -118,14 +118,14 @@ describe("Event staffing catalog name refusals", () => {
         prepare: (sql) => wrap(env.DB.prepare(sql), sql),
         batch: (batch) => {
           const index = batch.findIndex((statement) => statements.get(statement)?.startsWith(`INSERT INTO ${table}(`));
-          expect(index).toBeGreaterThanOrEqual(0);
+          const actual = batch.map((statement) => originals.get(statement) ?? statement);
+          if (index < 0) return env.DB.batch(actual);
           const collision =
             field === "staffingRoles"
               ? env.DB.prepare(
                   "INSERT INTO event_agenda_staffing_roles(event_id,id,name,show_on_agenda) VALUES(?,?,?,0)",
                 )
               : env.DB.prepare("INSERT INTO event_agenda_staffing_posts(event_id,id,name,room_id) VALUES(?,?,?,NULL)");
-          const actual = batch.map((statement) => originals.get(statement) ?? statement);
           return env.DB.batch([
             ...actual.slice(0, index),
             collision.bind(eventId, "interposed", row.name),

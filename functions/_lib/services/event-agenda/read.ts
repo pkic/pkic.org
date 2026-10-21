@@ -1,3 +1,4 @@
+import { readAgendaSnapshotRows } from "./snapshot-rows";
 import { publicUserHeadshotPath } from "../user-headshot";
 import { affiliationJobTitleSql, affiliationOrganizationNameSql } from "../identities/affiliation-projection";
 import { readAgendaSponsorRows, agendaSponsorDisplay } from "./sponsors";
@@ -84,7 +85,7 @@ async function occurrences(
 ) {
   const rows = await all<OccurrenceRow>(
     db,
-    `SELECT ${columns},json_extract((SELECT settings_json FROM events WHERE id=event_agenda_occurrences.event_id),'$.agenda.sessionMedia.'||json_quote(id)||'.joinUrl') AS virtual_room_url,json_type((SELECT settings_json FROM events WHERE id=event_agenda_occurrences.event_id),'$.agenda.sessionMedia.'||json_quote(id)||'.joinUrl') AS virtual_room_type,json_extract((SELECT settings_json FROM events WHERE id=event_agenda_occurrences.event_id),'$.agenda.sessionSponsors.'||json_quote(id)||'.sponsorIds') AS sponsor_ids_json,${agendaPublicationStatusSql} AS publication_status,(SELECT proposal.proposal_type FROM session_proposals proposal WHERE proposal.event_id = event_agenda_occurrences.event_id AND event_agenda_occurrences.source_key = 'proposal:' || proposal.id) AS source_proposal_type,${pendingSpeakerCountSql} AS pending_speaker_count FROM event_agenda_occurrences WHERE event_id = ? ${where} ${suffix}`,
+    `SELECT ${columns},json_extract((SELECT settings_json FROM events WHERE id=event_agenda_occurrences.event_id),'$.agenda.sessionMedia.'||json_quote(id)||'.joinUrl') AS virtual_room_url,json_type((SELECT settings_json FROM events WHERE id=event_agenda_occurrences.event_id),'$.agenda.sessionMedia.'||json_quote(id)||'.joinUrl') AS virtual_room_type,json_extract((SELECT settings_json FROM events WHERE id=event_agenda_occurrences.event_id),'$.agenda.sessionSponsors.'||json_quote(id)||'.sponsorIds') AS sponsor_ids_json,${agendaPublicationStatusSql} AS publication_status,(SELECT proposal.proposal_type FROM session_proposals proposal WHERE proposal.id = substr(event_agenda_occurrences.source_key, 10) AND proposal.event_id = event_agenda_occurrences.event_id AND event_agenda_occurrences.source_key = 'proposal:' || proposal.id) AS source_proposal_type,${pendingSpeakerCountSql} AS pending_speaker_count FROM event_agenda_occurrences WHERE event_id = ? ${where} ${suffix}`,
     [eventId, ...values],
   );
   const requestedIds = JSON.stringify(rows.map((row) => row.id));
@@ -176,108 +177,22 @@ export async function getAgendaOccurrence(db: DatabaseLike, eventId: string, id:
   return result[0];
 }
 export async function getAgenda(db: DatabaseLike, eventId: string, eventSlug: string) {
-  const event = await first<{
-    settings_json: string;
-    timezone: string;
-    starts_at: string | null;
-    ends_at: string | null;
-    name: string;
-    base_path: string | null;
-    city: string | null;
-  }>(db, "SELECT settings_json,timezone,starts_at,ends_at,name,base_path,city FROM events WHERE id = ?", [eventId]);
+  const {
+    event,
+    state,
+    rooms,
+    shifts,
+    members,
+    staffingRoles,
+    staffingPosts,
+    staffingRequirements,
+    staffingPositions,
+    assignments,
+  } = await readAgendaSnapshotRows(db, eventId);
   if (!event) throw new AppError(404, "EVENT_NOT_FOUND", "Event not found");
-  const state = await first<{ revision: number; published_revision: number | null; travel_minutes: number }>(
-    db,
-    "SELECT revision,published_revision,travel_minutes FROM event_agenda_state WHERE event_id = ?",
-    [eventId],
-  );
-  const rooms = await all<{
-    id: string;
-    name: string;
-    capacity: number | null;
-    setup_minutes: number;
-    equipment_json: string;
-    available_periods_json: string;
-    virtual_room_url: string | null;
-  }>(
-    db,
-    "SELECT id,name,capacity,setup_minutes,equipment_json,available_periods_json,virtual_room_url FROM event_agenda_rooms WHERE event_id = ? ORDER BY name,id LIMIT 200",
-    [eventId],
-  );
   const items = await occurrences(db, eventId);
   if (items.length > 2000)
     throw new AppError(422, "AGENDA_TOO_LARGE", "Agenda exceeds the 2,000 occurrence editing limit");
-  const shifts = await all<{
-    id: string;
-    name: string;
-    start_at: string;
-    end_at: string;
-    room_id: string | null;
-    track: string | null;
-    roles_json: string;
-    role_requirements_json: string;
-    compatible_roles_json: string;
-    boundaries_json: string;
-  }>(
-    db,
-    "SELECT id,name,start_at,end_at,room_id,track,roles_json,role_requirements_json,compatible_roles_json,boundaries_json FROM event_agenda_shifts WHERE event_id = ? ORDER BY start_at,id LIMIT 200",
-    [eventId],
-  );
-  const members = await all<{
-    user_id: string;
-    display_name: string;
-    roles_json: string;
-    available_from: string | null;
-    available_until: string | null;
-    max_minutes: number | null;
-    seniority: string;
-    attendance_mode: string;
-  }>(
-    db,
-    "SELECT member.user_id,COALESCE(user.preferred_name,user.first_name,'Staff') AS display_name,member.roles_json,member.available_from,member.available_until,member.max_minutes,member.seniority,member.attendance_mode FROM event_agenda_role_members member JOIN users user ON user.id=member.user_id WHERE member.event_id = ? LIMIT 200",
-    [eventId],
-  );
-  const staffingRoles = await all<{ id: string; name: string; show_on_agenda: number }>(
-    db,
-    "SELECT id,name,show_on_agenda FROM event_agenda_staffing_roles WHERE event_id=? ORDER BY id LIMIT 100",
-    [eventId],
-  );
-  const staffingPosts = await all<{ id: string; name: string; roomId: string | null }>(
-    db,
-    "SELECT id,name,room_id AS roomId FROM event_agenda_staffing_posts WHERE event_id=? ORDER BY id LIMIT 200",
-    [eventId],
-  );
-  const staffingRequirements = await all<{
-    id: string;
-    shiftId: string;
-    roleId: string;
-    postId: string | null;
-    idealCount: number;
-    seniority: string;
-    attendanceMode: string;
-  }>(
-    db,
-    "SELECT id,shift_id AS shiftId,role_id AS roleId,post_id AS postId,ideal_count AS idealCount,seniority,attendance_mode AS attendanceMode FROM event_agenda_staffing_requirements WHERE event_id=? ORDER BY id LIMIT 1000",
-    [eventId],
-  );
-  const staffingPositions = await all<{ id: string; requirementId: string; index: number }>(
-    db,
-    "SELECT id,requirement_id AS requirementId,position_index AS [index] FROM event_agenda_staffing_positions WHERE event_id=? ORDER BY requirement_id,position_index LIMIT 2000",
-    [eventId],
-  );
-  const assignments = await all<{
-    position_id: string;
-    post_id: string | null;
-    shift_id: string;
-    role: string;
-    user_id: string;
-    pinned: number;
-    origin: "manual" | "generated";
-  }>(
-    db,
-    "SELECT assignment.position_id,assignment.post_id,assignment.shift_id,assignment.role,assignment.user_id,assignment.pinned,assignment.origin FROM event_agenda_assignments assignment JOIN event_agenda_shifts shift ON shift.id=assignment.shift_id WHERE shift.event_id = ? ORDER BY assignment.position_id LIMIT 2000",
-    [eventId],
-  );
   const snapshot = agendaSnapshotSchema.parse({
     eventSlug,
     eventName: event.name,

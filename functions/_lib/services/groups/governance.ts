@@ -1,5 +1,9 @@
 import { isUserBackedAuthAdmin } from "../../auth/admin-identity";
-import { prepareAuthorizationGuard, type AuthorizationEvidence } from "../../db/authorization-guard";
+import {
+  guardAuthorizedDatabase,
+  prepareAuthorizationGuard,
+  type AuthorizationEvidence,
+} from "../../db/authorization-guard";
 import { buildD1JsonMembershipFilter } from "../../db/json-membership";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
@@ -209,6 +213,15 @@ export function groupManagementCandidateAuthorizationEvidence(
     { sql: `SELECT ${groupIdExpression}`, bindings: [] },
     "groups:write",
     "effective",
+  );
+}
+
+/** Read-only consumers keep the canonical group policy in their replica transaction. */
+export function guardGroupManagementDatabase(db: DatabaseLike, actor: AuthAdmin, groupIds: readonly string[]) {
+  return guardAuthorizedDatabase(
+    db,
+    groupManagementAuthorizationEvidence(actor, groupIds),
+    () => new AppError(403, "GROUP_MANAGEMENT_REQUIRED", "Effective group management permission is required"),
   );
 }
 

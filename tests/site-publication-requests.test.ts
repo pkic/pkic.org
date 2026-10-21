@@ -1,3 +1,4 @@
+import { profileD1Flow } from "./helpers/d1-flow-profile";
 import { ADMINISTRATOR_FIXTURE_USER_SQL, administratorGrants } from "./helpers/administrator";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, it, expect } from "vitest";
@@ -201,13 +202,17 @@ describe("canonical site publication request ledger", () => {
     const { eventId, actor } = await fixture();
     await request(eventId, 1);
     await request(eventId, 2);
+    const profile = profileD1Flow(env.DB);
     const page = await listSitePublicationRequests(
-      env.DB,
+      profile.db,
       actor,
       { resourceType: "event_agenda", resourceId: eventId },
       sitePublicationRequestQuerySchema.parse({ limit: 1, sort: "-sequence" }),
     );
     expect(page.requests).toHaveLength(1);
+    expect((await profile.report()).queries.some(({ sql }) => /INSERT INTO authorization_guards/.test(sql))).toBe(
+      false,
+    );
     expect(page.page).toMatchObject({ total: 2, hasMore: true });
     expect(JSON.stringify(page)).not.toContain("leaseToken");
     const wrong: AuthAdmin = {

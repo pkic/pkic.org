@@ -1,8 +1,7 @@
 /** Live membership capacity resolved from the canonical user session. */
 import { AppError } from "../errors";
 import type { AuthMember, DatabaseLike, Env } from "../types";
-import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../db/authorization-guard";
-import { guardDatabaseBatches } from "../db/guarded-database";
+import { guardAuthorizedDatabase } from "../db/authorization-guard";
 import { getUserSessionToken, resolveUserSessionFromRequest } from "./user-session";
 import { memberSessionAuthorizationEvidence, userSessionAuthorizationEvidence } from "./identity-capacities";
 export {
@@ -15,20 +14,11 @@ export type { MemberEligibleUserRow } from "./identity-capacities";
 
 /** Apply the exact current user session and selected membership as a same-batch mutation guard. */
 export function guardMemberSessionMutationDatabase(db: DatabaseLike, member: AuthMember): DatabaseLike {
-  return guardDatabaseBatches(db, async (statements) => {
-    try {
-      const [, ...results] = await db.batch([
-        prepareAuthorizationGuard(db, memberSessionAuthorizationEvidence(member)),
-        ...statements,
-      ]);
-      return results;
-    } catch (error) {
-      if (isAuthorizationGuardFailure(error)) {
-        throw new AppError(409, "AUTHORIZATION_CONTEXT_CHANGED", "The active user session or membership changed");
-      }
-      throw error;
-    }
-  });
+  return guardAuthorizedDatabase(
+    db,
+    memberSessionAuthorizationEvidence(member),
+    () => new AppError(409, "AUTHORIZATION_CONTEXT_CHANGED", "The active user session or membership changed"),
+  );
 }
 
 /** The signed-in user behind an own-account route, with the membership context only when the session has one. */
@@ -64,20 +54,11 @@ export function guardUserSessionDatabase(
   db: DatabaseLike,
   account: Pick<OwnAccount, "userId" | "sessionId">,
 ): DatabaseLike {
-  return guardDatabaseBatches(db, async (statements) => {
-    try {
-      const [, ...results] = await db.batch([
-        prepareAuthorizationGuard(db, userSessionAuthorizationEvidence(account.userId, account.sessionId)),
-        ...statements,
-      ]);
-      return results;
-    } catch (error) {
-      if (isAuthorizationGuardFailure(error)) {
-        throw new AppError(409, "AUTHORIZATION_CONTEXT_CHANGED", "The active user session changed");
-      }
-      throw error;
-    }
-  });
+  return guardAuthorizedDatabase(
+    db,
+    userSessionAuthorizationEvidence(account.userId, account.sessionId),
+    () => new AppError(409, "AUTHORIZATION_CONTEXT_CHANGED", "The active user session changed"),
+  );
 }
 
 const memberByRequest = new WeakMap<Request, AuthMember>();
