@@ -1,3 +1,7 @@
+import { installClientReleaseRecovery } from "../assets/ts/shared/client-release-recovery";
+
+installClientReleaseRecovery();
+
 /** The private portal resolves the existing session before offering sign-in. */
 const mount = document.getElementById("portal-app");
 if (mount?.dataset.clientDev === "true") {

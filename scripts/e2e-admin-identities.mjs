@@ -19,6 +19,7 @@ export const E2E_ADMIN_SCOPES = Object.freeze([
   "portal-agenda-transfer-cli",
   "portal-appearance-overrides",
   "portal-login-layout-expiry",
+  "portal-release-recovery",
   "portal-offline-attendance",
   "portal-responsive-widths",
   "portal-responsive-navigation",

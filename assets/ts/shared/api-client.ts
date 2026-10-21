@@ -1,3 +1,4 @@
+import { beginClientMutation } from "./client-release-safety";
 import {
   isPublishedFormResource,
   publishedResourceKey,
@@ -93,6 +94,23 @@ export function setErrorPayloadInterceptor(interceptor: ErrorPayloadInterceptor 
 }
 
 export async function requestJson<Schema extends z.ZodType>(
+  url: string,
+  schema: Schema,
+  init?: JsonRequestInit,
+): Promise<z.output<Schema>> {
+  const mutation = !["GET", "HEAD", "OPTIONS"].includes((init?.method ?? "GET").toUpperCase());
+  const finish = mutation ? beginClientMutation() : undefined;
+  try {
+    const result = await sendJsonRequest(url, schema, init);
+    finish?.(true);
+    return result;
+  } catch (error) {
+    finish?.(error instanceof ApiClientError && error.status >= 400 && error.status < 500);
+    throw error;
+  }
+}
+
+async function sendJsonRequest<Schema extends z.ZodType>(
   url: string,
   schema: Schema,
   init?: JsonRequestInit,

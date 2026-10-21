@@ -80,3 +80,13 @@ it("preserves a healthy collection and its dialog opener across child-route navi
   expect(host!.querySelector("button")).toBe(opener);
   expect(document.activeElement).toBe(opener);
 });
+
+it("offers page reload for an unavailable lazy module while retaining navigation", async () => {
+  function MissingModule(): never {
+    throw new TypeError("Failed to fetch dynamically imported module: /_assets/old.js");
+  }
+  await mount(<MissingModule />);
+  expect(host!.querySelector("button")?.textContent).toContain("Reload page");
+  expect(host!.textContent).not.toContain("/_assets/old.js");
+  expect(host!.querySelector("a")).not.toBeNull();
+});
