@@ -1,0 +1,48 @@
+@layer components {
+  .content-contribution__invitation {
+    padding-block: 0 var(--pk-1);
+    font-size: var(--pk-text-sm);
+    font-style: italic;
+    line-height: 1.6;
+    text-align: center;
+    color: var(--pk-ink-muted);
+  }
+  .content-contribution__invitation p {
+    max-inline-size: 48rem;
+    margin: 0 auto;
+  }
+  .content-contribution__invitation a {
+    color: inherit;
+    text-decoration: underline;
+    text-decoration-color: var(--pk-ink-faint);
+    text-underline-offset: 0.2em;
+    white-space: nowrap;
+  }
+  .content-contribution__edit {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    inset-inline-end: var(--pk-4);
+    bottom: calc(var(--pk-4) + env(safe-area-inset-bottom, 0rem));
+    z-index: 1000;
+    inline-size: 2.25rem;
+    block-size: 2.25rem;
+    border: 1px solid var(--pk-line-strong);
+    border-radius: var(--pk-radius-pill);
+    background: var(--pk-ink);
+    color: var(--pk-surface);
+    box-shadow: var(--pk-shadow-2);
+    text-decoration: none;
+  }
+  .content-contribution__edit svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+  }
+  @media (max-width: 50rem) {
+    .content-contribution__invitation p { max-inline-size: 21rem; }
+  }
+  @media print {
+    .content-contribution { display: none; }
+  }
+}

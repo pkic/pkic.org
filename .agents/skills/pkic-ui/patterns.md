@@ -95,3 +95,11 @@ Each entry is the full anatomy of a control. The gallery id renders it (`pnpm ga
 - Shape: one slim full-width row below the section navigation, with the draft or historical version at the left and “View current release” at the right. Use plain version text, not a badge; show a linked source revision when available for a draft, including on phones. Hide only the supplementary description on phones.
 - Placement: the section navigation and notice share one sticky container beneath the site header. Do not change the hero or repeat the notice in the page body. The current release has no notice.
 - Behavior: persistent, without dismissal. The current-release link preserves the equivalent page when available and is an ordinary keyboard-accessible link.
+
+## Page feedback (`content-contribution`)
+
+- Use: `site/ContentContributionLinks.tsx` with canonical source metadata, only on public pages with an editable source. Never portal screens.
+- Shape: one centered, muted italic sentence between the content and footer, with an underlined feedback link. No heading, panel, border, or decorative arrow. Wrap naturally on phones.
+- A small circular pencil stays at the bottom-right with safe-area spacing and an accessible edit label. Keep the hero unchanged.
+- Blog posts retain their footnote without the invitation; editing and selection feedback remain available.
+- Selection feedback includes the page, section or item, wording, source, and available version and revision. General feedback stays independent of the selection. Persistent links work without JavaScript.

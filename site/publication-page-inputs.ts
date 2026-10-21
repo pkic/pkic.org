@@ -59,6 +59,7 @@ export async function publicationPageInputs({
   const renderedImageRefs = [...memberWall.map((entry) => ({ source: entry.logoUrl, portrait: false })), ...imageRefs];
   const imagesPrepared = await preparePublicationImages(renderedImageRefs);
   return {
+    isBlogPost: Boolean(content?.blog),
     modelVersions: privatePage ? undefined : await modelVersionsForRoute(route, publishedSiteRoutes()),
     contentContribution: privatePage
       ? undefined

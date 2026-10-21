@@ -1510,14 +1510,16 @@ test("homepage information callout has breathing room below the hero statistics"
 });
 
 test("model feedback carries selected wording without asking for a release version", async ({ page }, testInfo) => {
+  if (testInfo.project.name === "mobile") await page.setViewportSize({ width: 375, height: 812 });
   await page.goto("/wg/pqc/pqcmm/");
-  const feedback = page.getByRole("link", { name: "Suggest a change", exact: false }).first();
-  await expect(feedback).toBeVisible();
+  const feedback = page.getByRole("link", { name: "Suggest a change on GitHub", exact: true });
+  await expect(page.getByRole("link", { name: "give feedback", exact: false })).toBeVisible();
   const edit = page.getByRole("link", { name: "Edit this page on GitHub", exact: false });
   await expect(edit).toHaveAttribute("href", "https://github.com/pkic/pqcmm/edit/main/model/pqcmm-model.yaml");
   await expect(page.getByRole("link", { name: "Suggest a change on GitHub", includeHidden: true })).toHaveCount(1);
-  const paragraph = page.locator("[data-pagefind-body] p").first();
+  const paragraph = page.locator("[data-pagefind-body] p").filter({ hasText: /\S/ }).first();
   const wording = await paragraph.textContent();
+  await paragraph.scrollIntoViewIfNeeded();
   await paragraph.evaluate((element) => {
     const range = document.createRange();
     range.selectNodeContents(element);
@@ -1533,7 +1535,10 @@ test("model feedback carries selected wording without asking for a release versi
   expect(url.pathname).toBe("/pkic/pqcmm/issues/new");
   expect(url.searchParams.get("source-page")).toContain("/wg/pqc/pqcmm/");
   expect(url.searchParams.has("milestone")).toBe(false);
-  await feedback.scrollIntoViewIfNeeded();
+  const general = page.getByRole("link", { name: "give feedback", exact: false });
+  expect(new URL((await general.getAttribute("href"))!).searchParams.has("selected-text")).toBe(false);
+  await general.scrollIntoViewIfNeeded();
+  await expect(edit).toBeInViewport();
   await page.screenshot({ path: testInfo.outputPath("content-contribution.png") });
 });
 
@@ -1546,13 +1551,14 @@ for (const source of [
     const controls = page.getByRole("region", { name: "Contribute to this page" });
     const edit = controls.getByRole("link", { name: "Edit this page on GitHub", exact: false });
     await expect(edit).toHaveAttribute("href", `https://github.com/${source.repository}/edit/main/${source.file}`);
-    const feedback = controls.getByRole("link", { name: "Suggest a change", exact: false });
+    const feedback = controls.getByRole("link", { name: "give feedback", exact: false });
     const initial = new URL((await feedback.getAttribute("href"))!);
     expect(initial.pathname).toBe(`/${source.repository}/issues/new`);
     expect(initial.searchParams.has("template")).toBe(false);
     await expect(page.getByRole("link", { name: "Suggest a change on GitHub", includeHidden: true })).toHaveCount(1);
-    const paragraph = page.locator("[data-pagefind-body] p").first();
+    const paragraph = page.locator("[data-pagefind-body] p").filter({ hasText: /\S/ }).first();
     const wording = await paragraph.textContent();
+    await paragraph.scrollIntoViewIfNeeded();
     await paragraph.evaluate((element) => {
       const range = document.createRange();
       range.selectNodeContents(element);
@@ -1562,16 +1568,42 @@ for (const source of [
       document.dispatchEvent(new Event("selectionchange"));
     });
     await expect
-      .poll(async () => new URL((await feedback.getAttribute("href"))!).searchParams.get("body"))
+      .poll(async () =>
+        new URL(
+          (await page.getByRole("link", { name: "Suggest a change on GitHub", exact: true }).getAttribute("href"))!,
+        ).searchParams.get("body"),
+      )
       .toContain(wording!.trim().slice(0, 100));
   });
 }
 
-test("generated public pages offer feedback without a fictional edit target", async ({ page }) => {
+test("generated public pages omit editing and selection feedback", async ({ page }) => {
   await page.goto("/search/");
   const controls = page.getByRole("region", { name: "Contribute to this page" });
-  await expect(controls.getByRole("link", { name: "Suggest a change", exact: false })).toBeVisible();
-  await expect(controls.getByRole("link", { name: "Edit this page on GitHub", exact: false })).toHaveCount(0);
+  await expect(controls).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Suggest a change on GitHub", includeHidden: true })).toHaveCount(0);
+});
+
+test("public content shares the feedback invitation while portal screens omit it", async ({ page }, testInfo) => {
+  if (testInfo.project.name === "mobile") await page.setViewportSize({ width: 375, height: 812 });
+  for (const route of ["/blog/", "/events/"]) {
+    await page.goto(route);
+    const invitation = page.getByRole("region", { name: "Contribute to this page" });
+    await expect(invitation.getByRole("link", { name: "give feedback", exact: false })).toBeVisible();
+    const edit = invitation.getByRole("link", { name: "Edit this page on GitHub", exact: false });
+    await expect(edit).toBeInViewport();
+    await expect(edit).toHaveAttribute("href", /github\.com\/pkic\/pkic\.org\/edit\/main\/content\//);
+    await invitation.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: testInfo.outputPath(`${route.split("/")[1]}-feedback.png`) });
+  }
+  await page.goto("/2016/10/19/why-is-certificate-expiration-necessary/");
+  await expect(page.locator(".content-contribution__invitation")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Edit this page on GitHub", exact: false })).toBeInViewport();
+  await expect(page.getByText("This article was originally published", { exact: false })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Suggest a change on GitHub", includeHidden: true })).toHaveCount(1);
+  await page.goto("/portal/");
+  await expect(page.getByRole("region", { name: "Contribute to this page" })).toHaveCount(0);
+  await expect(page.locator(".selection-edit-tooltip")).toHaveCount(0);
 });
 
 test("website contribution links work without JavaScript", async ({ browser }) => {
@@ -1580,7 +1612,7 @@ test("website contribution links work without JavaScript", async ({ browser }) =
     const page = await context.newPage();
     await page.goto("/about/");
     const controls = page.getByRole("region", { name: "Contribute to this page" });
-    await expect(controls.getByRole("link", { name: "Suggest a change", exact: false })).toBeVisible();
+    await expect(controls.getByRole("link", { name: "give feedback", exact: false })).toBeVisible();
     await expect(controls.getByRole("link", { name: "Edit this page on GitHub", exact: false })).toHaveAttribute(
       "href",
       "https://github.com/pkic/pkic.org/edit/main/content/about/_index.md",
@@ -1651,7 +1683,7 @@ test("reclassified model draft preserves feedback and redirects its former versi
     selection.addRange(range);
     document.dispatchEvent(new Event("selectionchange"));
   });
-  const feedback = page.getByRole("link", { name: "Suggest a change", exact: false }).first();
+  const feedback = page.getByRole("link", { name: "Suggest a change on GitHub", exact: true });
   await expect
     .poll(async () => new URL((await feedback.getAttribute("href"))!).searchParams.get("item-id"))
     .toBe("3.1.5");
@@ -1684,7 +1716,7 @@ test("released model history stays readable while the default overview remains u
   await expect(
     modelSidebar.getByRole("group", { name: "Switch PQCMM model version", includeHidden: true }),
   ).toHaveCount(1);
-  const feedback = page.getByRole("link", { name: "Suggest a change", exact: false }).first();
+  const feedback = page.getByRole("link", { name: "give feedback", exact: false });
   const context = new URL((await feedback.getAttribute("href"))!);
   expect(context.searchParams.get("source-version")).toBe("1.0.1");
   expect(context.searchParams.get("source-revision")).toMatch(/^[a-f0-9]{40}$/);

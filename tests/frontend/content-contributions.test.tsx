@@ -34,6 +34,25 @@ describe("website contribution handoff", () => {
     const page = contentContributionForRoute("/a-custom-public-route/", authored)!;
     expect(contentEditUrl(page)).toBe("https://github.com/pkic/pkic.org/edit/main/content/about/custom-page.md");
   });
+  it("uses the same editable-source mapping for blog and event content", () => {
+    for (const sourcePath of ["blog/example.md", "events/example.md"]) {
+      const source = contributionForSource(`../../../content/${sourcePath}`);
+      const html = render(<ContentContributionLinks context={source} page={`https://pkic.org/${sourcePath}/`} />);
+      document.body.innerHTML = html;
+      expect(document.querySelector(".content-contribution__edit")?.getAttribute("href")).toBe(
+        `https://github.com/pkic/pkic.org/edit/main/content/${sourcePath}`,
+      );
+      expect(document.querySelector("[data-content-feedback-link]")).not.toBeNull();
+    }
+  });
+  it("keeps blog editing and selection context without adding an invitation beside its footnote", () => {
+    document.body.innerHTML = render(
+      <ContentContributionLinks context={context} page="https://pkic.org/blog/example/" showInvitation={false} />,
+    );
+    expect(document.querySelector(".content-contribution__invitation")).toBeNull();
+    expect(document.querySelector(".content-contribution__edit")).not.toBeNull();
+    expect(document.querySelector("[data-content-contribution]")).not.toBeNull();
+  });
   it("routes current and historic PKIMM pages to their owning repository", () => {
     for (const root of ["model", "1.0.0"]) {
       const authored = contributionForSource(`../../../content/wg/pkimm/${root}/categories/cryptography.md`);
@@ -52,12 +71,12 @@ describe("website contribution handoff", () => {
     expect(url.searchParams.get("body")).toContain("Suggested wording");
     expect(url.searchParams.get("body")).toContain("#scope");
   });
-  it("offers feedback without a fictional edit target on generated pages", () => {
+  it("omits contribution controls on pages without an editable source", () => {
     const source = contentContributionForRoute("/search/")!;
     expect(source.sourcePath).toBeUndefined();
     document.body.innerHTML = render(<ContentContributionLinks context={source} page="https://pkic.org/search/" />);
-    expect(document.querySelectorAll("a")).toHaveLength(1);
-    expect(document.querySelector("a")?.textContent).toContain("Suggest a change");
+    expect(document.querySelectorAll("a")).toHaveLength(0);
+    expect(document.querySelector("[data-content-contribution]")).toBeNull();
   });
   it("keeps registered draft provenance separate from its editable branch", () => {
     const draft = modelVersionContributionForRoute("/wg/pqc/pqcmm/versions/drafts/1.1.0/levels/1-initial/");
@@ -99,7 +118,7 @@ describe("website contribution handoff", () => {
       <ContentContributionLinks context={context} page="https://pkic.org/wg/pqc/pqcmm/" />,
     );
     expect(document.querySelectorAll("a")).toHaveLength(2);
-    expect(document.querySelector("[data-content-feedback-link]")?.textContent).toContain("Suggest a change");
+    expect(document.querySelector("[data-content-feedback-link]")?.textContent).toContain("give feedback");
   });
   it("captures a later authored region without confusing it with the first region or site chrome", () => {
     document.body.innerHTML = `${render(<ContentContributionLinks context={context} page="https://pkic.org/about/" />)}<section data-pagefind-body><h2 id="first">First</h2><p>First region</p></section><section data-pagefind-body><h2 id="second">Second</h2><p>Selected second region</p></section>`;
