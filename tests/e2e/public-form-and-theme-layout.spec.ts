@@ -197,7 +197,7 @@ for (const colorScheme of ["light", "dark"] as const) {
             await heading.evaluate((element) => {
               const probe = document.createElement("span");
               probe.style.color = "var(--pk-accent-ink)";
-              element.append(probe);
+              element.appendChild(probe);
               const expected = getComputedStyle(probe).color;
               probe.remove();
               return getComputedStyle(element).color === expected;
