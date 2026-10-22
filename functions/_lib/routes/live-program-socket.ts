@@ -62,7 +62,9 @@ export async function liveProgramSocketRequest(request: Request, env: Env): Prom
       new Request("https://live-session-room/program/connect", {
         headers: {
           upgrade: "websocket",
-          [LIVE_PROGRAM_ADMISSION_HEADER]: JSON.stringify(liveProgramAdmissionSchema.parse(admission)),
+          [LIVE_PROGRAM_ADMISSION_HEADER]: JSON.stringify(
+            liveProgramAdmissionSchema.parse({ ...admission, readBookmark: env.DB.getBookmark?.() ?? undefined }),
+          ),
         },
       }),
     );

@@ -1,4 +1,7 @@
-import { withLiveRoomCommandRead } from "../functions/_lib/services/live-session/room-command-read";
+import {
+  withLiveRoomCommandRead,
+  withLiveRoomSocketCommandRead,
+} from "../functions/_lib/services/live-session/room-command-read";
 import { readLiveAuthorStamp } from "../functions/_lib/services/live-session/room-author-stamp";
 import { anonymizedLiveParticipantIds } from "../functions/_lib/services/live-session/room-erasure";
 import type { LiveRoomParticipant } from "../functions/_lib/services/live-session/room-admission";
@@ -13,6 +16,11 @@ import { userAuthSessionResponseSchema } from "../assets/shared/schemas/user-aut
 import { resolveUserSessionClaims } from "../functions/_lib/auth/user-session";
 import { resolveUserSessionClaimsBatch } from "../functions/_lib/auth/user-session-live-data";
 import { verifyUserSessionToken, type UserSessionTokenClaims } from "../functions/_lib/auth/user-session-token";
+import {
+  currentLiveRoomCommandRead,
+  liveParticipantReadKey,
+} from "../functions/_lib/services/live-session/room-command-read-scope";
+import { liveRoomClientMessageSchema } from "../assets/shared/schemas/live-session-room";
 import type { DatabaseLike } from "../functions/_lib/types";
 import { createLiveRoomFixture } from "./helpers/live-session-room";
 const f = createLiveRoomFixture();
@@ -287,6 +295,51 @@ describe("distinct live recipient query bounds", () => {
 
 describe("live command read lifetime", () => {
   beforeEach(() => f.setup());
+  it.each(
+    [
+      { type: "chat.history", channel: "attendee", before: null },
+      { type: "author.lookup", handle: "a".repeat(32) },
+      { type: "question.answers.watch", questionId: null },
+      { type: "chat.react", messageId: crypto.randomUUID(), reaction: "love", on: true },
+      { type: "reaction.send", reaction: "love" },
+      { type: "poll.vote", pollId: crypto.randomUUID(), answer: "yes" },
+      { type: "chat.send", channel: "attendee", text: "Shared audience" },
+    ].map((message) => liveRoomClientMessageSchema.parse(message)),
+  )("reads only the immediate recipients for $type", async (message) => {
+    const participants: LiveRoomParticipant[] = await Promise.all(
+      (["attendee", "secondAttendee"] as const).map(async (person) => ({
+        role: "attendee" as const,
+        userId: f.users[person],
+        name: "Synthetic attendee",
+        sessionClaims: await claimsFor(person),
+      })),
+    );
+    const ctx = {
+      getWebSockets: () =>
+        participants.map((participant) => ({
+          readyState: WebSocket.OPEN,
+          deserializeAttachment: () => participant,
+        })),
+      getTags: () => [],
+    } as unknown as DurableObjectState;
+    const profile = profileD1Flow(env.DB);
+    await withLiveRoomSocketCommandRead(
+      {
+        env: { ...env, DB: profile.db },
+        ctx,
+        room: { eventId: f.eventId, session: { occurrenceId: f.occurrenceId } },
+        viewer: participants[0],
+        message,
+        erasureCandidates: [],
+      },
+      async () => {
+        const read = currentLiveRoomCommandRead()!;
+        expect(read.participants.has(liveParticipantReadKey(participants[0]))).toBe(true);
+        expect(read.participants.has(liveParticipantReadKey(participants[1]))).toBe(message.type === "chat.send");
+      },
+    );
+    expect((await profile.report()).roundTrips).toBe(1);
+  });
   it("shares one fresh batch across sender, author, erasure, and audience without retaining authority for later work", async () => {
     const participants: LiveRoomParticipant[] = await Promise.all(
       (["attendee", "secondAttendee"] as const).map(async (person) => ({

@@ -81,7 +81,18 @@ export async function withLiveRoomCommandRead<T>(
   return runWithLiveRoomCommandRead(snapshot, work);
 }
 
-/** Collect the current socket audience before executing the command's canonical read batch. */
+// These commands reply only to their sender. Their deferred aggregate broadcasts
+// obtain a new audience read when the timer fires, after this command scope ends.
+const SENDER_ONLY_COMMANDS = new Set<LiveRoomClientMessage["type"]>([
+  "chat.history",
+  "author.lookup",
+  "question.answers.watch",
+  "chat.react",
+  "reaction.send",
+  "poll.vote",
+]);
+
+/** Collect only the command's immediate protected audience before its canonical read batch. */
 export function withLiveRoomSocketCommandRead<T>(
   input: {
     env: Pick<Env, "DB" | "LIVE_SESSION_ROOMS">;
@@ -94,10 +105,14 @@ export function withLiveRoomSocketCommandRead<T>(
   work: () => Promise<T>,
 ): Promise<T> {
   const { env, ctx, room, viewer, message } = input;
-  const participants = ctx
-    .getWebSockets()
-    .filter((socket) => socket.readyState === WebSocket.OPEN && !ctx.getTags(socket).includes(LIVE_PROGRAM_SOCKET_TAG))
-    .map((socket) => socket.deserializeAttachment() as LiveRoomParticipant);
+  const participants = SENDER_ONLY_COMMANDS.has(message.type)
+    ? [viewer]
+    : ctx
+        .getWebSockets()
+        .filter(
+          (socket) => socket.readyState === WebSocket.OPEN && !ctx.getTags(socket).includes(LIVE_PROGRAM_SOCKET_TAG),
+        )
+        .map((socket) => socket.deserializeAttachment() as LiveRoomParticipant);
   const erasureCandidates = new Set(input.erasureCandidates);
   if (viewer.userId) erasureCandidates.add(viewer.userId);
   const writesAuthor = ["chat.send", "question.ask", "question.answer"].includes(message.type);

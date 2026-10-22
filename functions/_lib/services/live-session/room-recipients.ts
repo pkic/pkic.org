@@ -4,11 +4,11 @@ import type { Env } from "../../types";
 import { preserveLiveRoomThread, type LiveRoomParticipant } from "./room-admission";
 import { revalidateLiveRoomParticipants } from "./room-access";
 
-function closeQuietly(socket: WebSocket, code: number, reason: string): void {
+export function closeLiveRoomSocket(socket: WebSocket, code: number, reason: string): void {
   try {
     socket.close(code, reason);
   } catch {
-    // The socket may have closed while authorization was pending.
+    // The runtime or peer may already have closed the socket.
   }
 }
 
@@ -37,11 +37,11 @@ export async function authorizeLiveRoomRecipients(
     );
   } catch (error) {
     if (error instanceof AppError && error.status >= 400 && error.status < 500) {
-      for (const socket of sockets) closeQuietly(socket, liveRoomRefusalCloseCode(error.status), error.code);
+      for (const socket of sockets) closeLiveRoomSocket(socket, liveRoomRefusalCloseCode(error.status), error.code);
       return [];
     }
     // Fail closed on infrastructure faults; do not substitute stale socket authority.
-    for (const socket of sockets) closeQuietly(socket, 1011, "Room authorization unavailable");
+    for (const socket of sockets) closeLiveRoomSocket(socket, 1011, "Room authorization unavailable");
     throw error;
   }
   const authorized: WebSocket[] = [];
@@ -54,7 +54,7 @@ export async function authorizeLiveRoomRecipients(
         ? new AppError(403, "LIVE_SESSION_ACCESS_CHANGED", "Reconnect to use your current session access.")
         : null;
     if (error) {
-      closeQuietly(socket, liveRoomRefusalCloseCode(error.status), error.code);
+      closeLiveRoomSocket(socket, liveRoomRefusalCloseCode(error.status), error.code);
       continue;
     }
     if (!result.ok) continue;

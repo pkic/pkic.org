@@ -33,6 +33,7 @@ export const liveProgramAdmissionSchema = z
     roomId: databaseIdSchema,
     expiresAt: z.number().int().positive(),
     sessionClaims: z.custom<UserSessionTokenClaims>().optional(),
+    readBookmark: z.string().min(1).max(1024).optional(),
   })
   .strict();
 type Admission = z.infer<typeof liveProgramAdmissionSchema>;
@@ -54,6 +55,7 @@ export class LiveRoomProgram {
   constructor(
     private readonly ctx: DurableObjectState,
     private readonly env: Env,
+    private readonly seedReadBookmark: (bookmark?: string) => void,
   ) {}
   async exists(): Promise<boolean> {
     return (await this.ctx.storage.get(KEY)) !== undefined;
@@ -164,6 +166,7 @@ export class LiveRoomProgram {
     const admission = liveProgramAdmissionSchema.parse(
       JSON.parse(request.headers.get(LIVE_PROGRAM_ADMISSION_HEADER) ?? ""),
     );
+    this.seedReadBookmark(admission.readBookmark ?? admission.sessionClaims?.state);
     const program = await this.bound(admission.eventId, admission.roomId);
     const publishedRoom = await readPublishedProgramRoom(this.env.DB, admission.eventId, admission.roomId);
     program.purgeAt = liveProgramPointerPurgeAt(publishedRoom.lastScheduledEndAt, program.createdAt);

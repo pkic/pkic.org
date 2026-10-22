@@ -54,6 +54,7 @@ export const liveRoomAdmissionSchema = z
     eventId: z.string().min(1).max(200),
     session: liveRoomSessionSchema,
     participant: liveRoomParticipantSchema,
+    readBookmark: z.string().min(1).max(1024).optional(),
   })
   .strict();
 export type LiveRoomAdmissionMessage = z.infer<typeof liveRoomAdmissionSchema>;
