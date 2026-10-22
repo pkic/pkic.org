@@ -183,6 +183,7 @@ export async function getAgendaOccurrence(db: DatabaseLike, eventId: string, id:
   return result[0];
 }
 export async function getAgenda(db: DatabaseLike, eventId: string, eventSlug: string) {
+  const [snapshotRows, items] = await Promise.all([readAgendaSnapshotRows(db, eventId), occurrences(db, eventId)]);
   const {
     event,
     state,
@@ -194,9 +195,8 @@ export async function getAgenda(db: DatabaseLike, eventId: string, eventSlug: st
     staffingRequirements,
     staffingPositions,
     assignments,
-  } = await readAgendaSnapshotRows(db, eventId);
+  } = snapshotRows;
   if (!event) throw new AppError(404, "EVENT_NOT_FOUND", "Event not found");
-  const items = await occurrences(db, eventId);
   if (items.length > 2000)
     throw new AppError(422, "AGENDA_TOO_LARGE", "Agenda exceeds the 2,000 occurrence editing limit");
   const snapshot = agendaSnapshotSchema.parse({
@@ -259,10 +259,11 @@ export async function getAgenda(db: DatabaseLike, eventId: string, eventSlug: st
       origin: assignment.origin,
     })),
   });
-  return withAgendaSpeakerOrganizations(db, {
-    ...snapshot,
-    staffingReport: await getAgendaStaffingReport(db, eventId, snapshot),
-  });
+  const [withOrganizations, staffingReport] = await Promise.all([
+    withAgendaSpeakerOrganizations(db, snapshot),
+    getAgendaStaffingReport(db, eventId, snapshot),
+  ]);
+  return { ...withOrganizations, staffingReport };
 }
 export async function listAgendaOccurrences(
   db: DatabaseLike,
