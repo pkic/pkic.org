@@ -29,17 +29,11 @@ import {
   type LiveStage,
 } from "../../../../assets/shared/schemas/live-session-room";
 import type { Env, LiveSessionRoomRpc } from "../../types";
-import { AppError } from "../../errors";
-import { revalidateLiveRoomParticipant } from "./room-access";
+import { withLiveRoomSocketCommandRead } from "./room-command-read";
 import { authorizeLiveRoomRecipients } from "./room-recipients";
 import { liveRoomRefusalCloseCode } from "../../../../assets/shared/schemas/live-session-room";
 import { nowIso } from "../../utils/time";
-import {
-  LIVE_ROOM_ADMISSION_HEADER,
-  liveRoomAdmissionSchema,
-  preserveLiveRoomThread,
-  type LiveRoomParticipant,
-} from "./room-admission";
+import { LIVE_ROOM_ADMISSION_HEADER, liveRoomAdmissionSchema, type LiveRoomParticipant } from "./room-admission";
 import { LiveRoomBroadcast } from "./room-broadcast";
 import { LiveRoomControls, type LiveControlOutcome, type LiveRefusal } from "./room-controls";
 import { LiveRoomTimers } from "./room-timers";
@@ -229,29 +223,42 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
     // Presence arrives up to ten times a second; it rides on the socket's recent full access check.
     const ridesOnAccess =
       message?.type === "presence.update" && viewer.role === "operator" && this.presence.recentlyAuthorized(socket);
+    const run = () => this.handleSocketCommand(socket, viewer, message, threadRequestId, ridesOnAccess);
+    const room = this.store.session();
+    if (!message || viewer.role === "overlay" || ridesOnAccess || !room) return run();
+    return withLiveRoomSocketCommandRead(
+      {
+        env: this.env,
+        ctx: this.ctx,
+        room,
+        viewer,
+        message,
+        erasureCandidates: [
+          ...this.chat.authors(),
+          ...("questionId" in message && message.questionId ? this.answerStore.participants(message.questionId) : []),
+        ],
+      },
+      run,
+    );
+  }
+
+  private async handleSocketCommand(
+    socket: WebSocket,
+    viewer: LiveRoomParticipant,
+    message: LiveRoomClientMessage | null,
+    threadRequestId: string | null,
+    ridesOnAccess: boolean,
+  ): Promise<void> {
     if (message && viewer.role !== "overlay" && !ridesOnAccess) {
       const room = this.store.session();
       if (!room) return;
-      try {
-        const current = await revalidateLiveRoomParticipant(
-          this.env.DB,
-          viewer,
-          room.eventId,
-          room.session.occurrenceId,
-          this.env.LIVE_SESSION_ROOMS,
-        );
-        // Socket audience tags are fixed at admission; reconnect when the live role changes.
-        if (current.role !== viewer.role)
-          throw new AppError(403, "LIVE_SESSION_ACCESS_CHANGED", "Reconnect to use your current session access.");
-        viewer = preserveLiveRoomThread(current, socket.deserializeAttachment() as LiveRoomParticipant);
-        socket.serializeAttachment(viewer);
-        this.presence.authorized(socket);
-      } catch (error) {
-        if (!(error instanceof AppError) || error.status < 400 || error.status >= 500) throw error;
-        if (!this.ctx.getTags(socket).includes(LIVE_PROGRAM_SOCKET_TAG)) await this.left(socket);
-        socket.close(liveRoomRefusalCloseCode(error.status), error.code);
+      const authorized = await authorizeLiveRoomRecipients(this.env, room, [socket]);
+      if (!authorized.length) {
+        await this.left(socket);
         return;
       }
+      viewer = socket.deserializeAttachment() as LiveRoomParticipant;
+      this.presence.authorized(socket);
     }
     if (
       threadRequestId &&

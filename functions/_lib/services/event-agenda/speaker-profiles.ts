@@ -1,4 +1,3 @@
-import { all } from "../../db/queries";
 import type { DatabaseLike } from "../../types";
 import { agendaSpeakerSchema, type AgendaOccurrence } from "../../../../assets/shared/schemas/event-agenda";
 import { parseLinksJson } from "../../../../assets/shared/schemas/links";
@@ -7,31 +6,31 @@ import { creditedIdentityIdSql } from "./credited-identity";
 import { publicUserHeadshotPath } from "../user-headshot";
 import { agendaSpeakerDisplayNameSql } from "./speaker-name";
 
+export interface AgendaSpeakerRow {
+  occurrence_id: string;
+  user_id: string;
+  identity_order: number;
+  display_name: string;
+  role: string;
+  attendance_mode: "physical" | "remote";
+  room_id: string | null;
+  identity_id: string | null;
+  organization_id: string | null;
+  organization_name: string | null;
+  job_title: string | null;
+  biography: string | null;
+  links_json: string | null;
+  headshot_r2_key: string | null;
+}
+
 /**
  * Each credited person as the identity they speak as says now (the one rule in
  * `credited-identity.ts`), with the person's own photo. Available person data stays in the
  * authorized editing read model; representation requires explicit review.
  */
-export async function readAgendaSpeakers(db: DatabaseLike, eventId: string, occurrenceIds: string[]) {
-  const rows = occurrenceIds.length
-    ? await all<{
-        occurrence_id: string;
-        user_id: string;
-        identity_order: number;
-        display_name: string;
-        role: string;
-        attendance_mode: "physical" | "remote";
-        room_id: string | null;
-        identity_id: string | null;
-        organization_id: string | null;
-        organization_name: string | null;
-        job_title: string | null;
-        biography: string | null;
-        links_json: string | null;
-        headshot_r2_key: string | null;
-      }>(
-        db,
-        `SELECT credited.occurrence_id,credited.user_id,CAST(selected.key AS INTEGER) AS identity_order,credited.role,credited.attendance_mode,credited.room_id,
+export function prepareAgendaSpeakers(db: DatabaseLike, eventId: string, occurrenceIds?: string[]) {
+  return db
+    .prepare(`SELECT credited.occurrence_id,credited.user_id,CAST(selected.key AS INTEGER) AS identity_order,credited.role,credited.attendance_mode,credited.room_id,
           credited.display_name,
           CASE WHEN credited.available=1 THEN spoken_as.id END AS identity_id,
           CASE WHEN credited.available=1 THEN spoken_as.organization_id END AS organization_id,
@@ -54,15 +53,24 @@ export async function readAgendaSpeakers(db: DatabaseLike, eventId: string, occu
           JOIN users user ON user.id=speaker.user_id
           JOIN event_agenda_occurrences occurrence ON occurrence.id=speaker.occurrence_id
           LEFT JOIN event_agenda_contents content ON content.id=occurrence.content_id AND content.event_id=occurrence.event_id
-          WHERE speaker.occurrence_id IN(SELECT value FROM json_each(?)) AND occurrence.event_id=? LIMIT 60000
+          WHERE occurrence.event_id=?
+            AND speaker.occurrence_id IN(SELECT id FROM event_agenda_occurrences WHERE event_id=?
+              AND (? IS NULL OR id IN(SELECT value FROM json_each(?))) ORDER BY start_at,id LIMIT 2001)
+            LIMIT 60000
         ) credited
         JOIN json_each(credited.identity_ids_json) selected
         LEFT JOIN identities spoken_as ON spoken_as.id=selected.value AND spoken_as.user_id=credited.user_id
         LEFT JOIN organizations spoken_as_organization ON spoken_as_organization.id=spoken_as.organization_id
-        ORDER BY credited.occurrence_id,credited.speaker_order,credited.user_id,CAST(selected.key AS INTEGER)`,
-        [JSON.stringify(occurrenceIds), eventId],
-      )
-    : [];
+        ORDER BY credited.occurrence_id,credited.speaker_order,credited.user_id,CAST(selected.key AS INTEGER)`)
+    .bind(
+      eventId,
+      eventId,
+      occurrenceIds === undefined ? null : JSON.stringify(occurrenceIds),
+      occurrenceIds === undefined ? null : JSON.stringify(occurrenceIds),
+    );
+}
+
+export function decodeAgendaSpeakers(rows: AgendaSpeakerRow[]) {
   const groups = new Map<string, AgendaOccurrence["speakers"]>();
   for (const row of rows) {
     const group = groups.get(row.occurrence_id) ?? [];
@@ -92,4 +100,10 @@ export async function readAgendaSpeakers(db: DatabaseLike, eventId: string, occu
     groups.set(row.occurrence_id, group);
   }
   return groups;
+}
+
+export async function readAgendaSpeakers(db: DatabaseLike, eventId: string, occurrenceIds: string[]) {
+  if (!occurrenceIds.length) return new Map<string, AgendaOccurrence["speakers"]>();
+  const result = await prepareAgendaSpeakers(db, eventId, occurrenceIds).all<AgendaSpeakerRow>();
+  return decodeAgendaSpeakers(result.results);
 }

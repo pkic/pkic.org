@@ -1,5 +1,6 @@
 import type { DatabaseLike, StatementLike } from "../../types";
-import { first } from "../../db/queries";
+import { batchFirst } from "../../db/pagination";
+import { ownedIdentityLifecycleSql } from "../identities/selection";
 import { prepareAuthorizationGuard } from "../../db/authorization-guard";
 import { AppError } from "../../errors";
 import { nowIso } from "../../utils/time";
@@ -29,7 +30,33 @@ export async function prepareAgendaOccurrenceSettings(
       candidate.speakerIdentityIds !== undefined,
   );
   if (!changes.length) return [];
-  const event = await first<{ settings_json: string }>(db, "SELECT settings_json FROM events WHERE id=?", [eventId]);
+  const references = changes.flatMap((candidate) =>
+    Object.entries(candidate.speakerIdentityIds ?? {}).flatMap(([userId, identityIds]) => {
+      if (candidate.speakerUserIds && !candidate.speakerUserIds.includes(userId))
+        throw new AppError(
+          422,
+          "AGENDA_SPEAKER_IDENTITY_INVALID",
+          "Choose an identity belonging to a session speaker.",
+        );
+      return identityIds.map((identityId) => ({ userId, identityId }));
+    }),
+  );
+  const identityEvidence = {
+    sql: `SELECT 1 AS valid WHERE NOT EXISTS(SELECT 1 FROM json_each(?) reference
+      WHERE NOT EXISTS(SELECT 1 FROM identities identity JOIN users person ON person.id=identity.user_id
+        WHERE identity.id=json_extract(reference.value,'$.identityId')
+          AND identity.user_id=json_extract(reference.value,'$.userId')
+          AND ${ownedIdentityLifecycleSql("identity", null)} AND person.active=1
+          AND person.pii_redacted_at IS NULL AND person.merged_into_user_id IS NULL))`,
+    bindings: [JSON.stringify(references)],
+  };
+  const results = await db.batch([
+    db.prepare("SELECT settings_json FROM events WHERE id=?").bind(eventId),
+    ...(references.length ? [db.prepare(identityEvidence.sql).bind(...identityEvidence.bindings)] : []),
+  ]);
+  const event = batchFirst<{ settings_json: string }>(results[0]);
+  if (references.length && !batchFirst(results[1]))
+    throw new AppError(422, "AGENDA_SPEAKER_IDENTITY_INVALID", "Choose an active identity belonging to the speaker.");
   if (!event) throw new AppError(404, "EVENT_NOT_FOUND", "Event not found");
   const selected = [...new Set(changes.flatMap((candidate) => candidate.sponsorIds ?? []))];
   for (const candidate of changes)
@@ -46,7 +73,7 @@ export async function prepareAgendaOccurrenceSettings(
     sponsorsChanged = false,
     speakerOrderChanged = false,
     speakerIdentitiesChanged = false;
-  const identityGuards: StatementLike[] = [];
+  const identityGuards = references.length ? [prepareAuthorizationGuard(db, identityEvidence)] : [];
   for (const candidate of changes) {
     if (
       Object.keys(candidate.speakerIdentityIds ?? {}).length ||
@@ -58,37 +85,6 @@ export async function prepareAgendaOccurrenceSettings(
           if (!candidate.speakerUserIds.includes(userId)) delete identities[userId];
       }
       for (const [userId, identityIds] of Object.entries(candidate.speakerIdentityIds ?? {})) {
-        if (candidate.speakerUserIds && !candidate.speakerUserIds.includes(userId))
-          throw new AppError(
-            422,
-            "AGENDA_SPEAKER_IDENTITY_INVALID",
-            "Choose an identity belonging to a session speaker.",
-          );
-        for (const identityId of identityIds) {
-          const valid = await first(
-            db,
-            `SELECT 1 FROM identities identity JOIN users person ON person.id=identity.user_id
-          WHERE identity.id=? AND identity.user_id=? AND identity.started_at IS NOT NULL
-          AND identity.ended_at IS NULL AND identity.blocked_at IS NULL AND person.active=1
-          AND person.pii_redacted_at IS NULL AND person.merged_into_user_id IS NULL`,
-            [identityId, userId],
-          );
-          if (!valid)
-            throw new AppError(
-              422,
-              "AGENDA_SPEAKER_IDENTITY_INVALID",
-              "Choose an active identity belonging to the speaker.",
-            );
-          identityGuards.push(
-            prepareAuthorizationGuard(db, {
-              sql: `SELECT 1 FROM identities identity JOIN users person ON person.id=identity.user_id
-            WHERE identity.id=? AND identity.user_id=? AND identity.started_at IS NOT NULL
-            AND identity.ended_at IS NULL AND identity.blocked_at IS NULL AND person.active=1
-            AND person.pii_redacted_at IS NULL AND person.merged_into_user_id IS NULL`,
-              bindings: [identityId, userId],
-            }),
-          );
-        }
         identities[userId] = identityIds;
       }
       if (Object.keys(identities).length) speakerIdentities[candidate.id] = identities;

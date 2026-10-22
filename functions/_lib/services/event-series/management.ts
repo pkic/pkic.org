@@ -1,3 +1,4 @@
+import { executeAuthorizedDatabaseBatch } from "../../db/authorization-guard";
 import { AppError } from "../../errors";
 import { buildOffsetPageStatements, decodeOffsetPageResults, type OffsetPageQuery } from "../../db/pagination";
 import { guardDatabaseBatches } from "../../db/guarded-database";
@@ -5,7 +6,7 @@ import type { AuthAdmin, D1StatementResult, DatabaseLike, StatementLike } from "
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { getGroup } from "../groups";
-import { requireGroupResourceAccess } from "../resource-grants";
+import { requireGroupResourceAccess, managedGroupResourceAuthorizationEvidence } from "../resource-grants";
 
 export type EventResourceManagementCapability = "manage" | "manage_attendance";
 
@@ -100,13 +101,8 @@ export async function queryEventResourceManagementPage<T>(
   capability: EventResourceManagementCapability,
   query: OffsetPageQuery,
 ): Promise<{ rows: T[]; total: number }> {
-  const [, pageResult, countResult] = await executeEventResourceManagementBatch(
-    db,
-    actor,
-    context,
-    capability,
-    buildOffsetPageStatements(db, query),
-  );
+  const guarded = guardEventResourceManagementDatabase(db, actor, context, capability);
+  const [pageResult, countResult] = await guarded.batch(buildOffsetPageStatements(guarded, query));
   return decodeOffsetPageResults<T>(pageResult, countResult);
 }
 
@@ -122,7 +118,22 @@ export function guardEventResourceManagementDatabase(
   context: EventResourceManagementContext,
   capability: EventResourceManagementCapability,
 ): DatabaseLike {
-  return guardDatabaseBatches(db, async (statements) => {
+  return guardDatabaseBatches(db, async (statements, readOnly) => {
+    if (readOnly)
+      return executeAuthorizedDatabaseBatch(
+        db,
+        managedGroupResourceAuthorizationEvidence(actor, context.groupId, "event", context.eventId, capability),
+        statements,
+        true,
+        () =>
+          new AppError(
+            409,
+            capability === "manage_attendance"
+              ? "EVENT_ATTENDANCE_MANAGEMENT_CONTEXT_CHANGED"
+              : "EVENT_MANAGEMENT_CONTEXT_CHANGED",
+            "Event-management access changed; reload before retrying",
+          ),
+      );
     const [, ...results] = await executeEventResourceManagementBatch(db, actor, context, capability, statements);
     return results;
   });

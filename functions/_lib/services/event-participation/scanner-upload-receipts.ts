@@ -1,9 +1,10 @@
+import { guardDatabaseBatches } from "../../db/guarded-database";
 import {
   eventScanResponseSchema,
   type EventScanRequest,
   type EventScanResponse,
 } from "../../../../assets/shared/schemas/event-participation-scanning";
-import { first } from "../../db/queries";
+import { batchFirst } from "../../db/pagination";
 import { prepareScannerLifecycleGuard, isScannerLifecycleGuardFailure } from "./scanner-lifecycle-guard";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { AppError } from "../../errors";
@@ -38,19 +39,18 @@ export async function receiveScannerUpload(
   if (!session)
     throw new AppError(409, "SCANNER_ENROLLMENT_REQUIRED", "Prepare this scanner online before uploading scans.");
   const requestHash = await hashBadgeCredential(JSON.stringify(scan));
-  const readReceipt = async () => {
-    const row = await first<{
-      request_hash: string;
-      response_json: string;
-      sequence: number;
-      operation_id: string;
-      epoch_id: string;
-    }>(
-      db,
-      `SELECT receipt.request_hash,receipt.response_json,receipt.sequence,receipt.operation_id,receipt.epoch_id FROM event_scanner_upload_receipts receipt JOIN event_scanner_device_sessions session ON session.id=receipt.epoch_id
-       WHERE session.event_id=? AND session.operator_user_id=? AND session.device_id=? AND (receipt.operation_id=? OR (receipt.epoch_id=? AND receipt.sequence=?))`,
-      [eventId, scan.operatorUserId, scan.deviceId, scan.operationId, session.epochId, session.sequence],
-    );
+  type ReceiptRow = {
+    request_hash: string;
+    response_json: string;
+    sequence: number;
+    operation_id: string;
+    epoch_id: string;
+  };
+  const receiptRead = db
+    .prepare(`SELECT receipt.request_hash,receipt.response_json,receipt.sequence,receipt.operation_id,receipt.epoch_id FROM event_scanner_upload_receipts receipt JOIN event_scanner_device_sessions session ON session.id=receipt.epoch_id
+       WHERE session.event_id=? AND session.operator_user_id=? AND session.device_id=? AND (receipt.operation_id=? OR (receipt.epoch_id=? AND receipt.sequence=?))`)
+    .bind(...[eventId, scan.operatorUserId, scan.deviceId, scan.operationId, session.epochId, session.sequence]);
+  const decodeReceipt = (row: ReceiptRow | null) => {
     if (!row) return null;
     if (
       row.request_hash !== requestHash ||
@@ -65,10 +65,12 @@ export async function receiveScannerUpload(
       );
     return eventScanResponseSchema.parse(JSON.parse(row.response_json));
   };
+  const readReceipt = async () => decodeReceipt(await receiptRead.first<ReceiptRow>());
   const replay = await readReceipt();
   if (replay) return replay;
   const receivedAt = nowIso();
   let committed = false;
+  let committedResponse: EventScanResponse | null = null;
   const execute = async (statements: StatementLike[]) => {
     const guard = prepareScannerLifecycleGuard(db, {
       sql: `SELECT 1 FROM event_scanner_device_sessions session WHERE session.id=? AND session.event_id=? AND session.operator_user_id=? AND session.device_id=? AND session.closed_at IS NULL AND (session.high_water_sequence IS NULL OR ?>=1 AND ?<=session.high_water_sequence) AND ${scannerCaptureOpenSql}`,
@@ -149,11 +151,15 @@ export async function receiveScannerUpload(
         .prepare("UPDATE event_scanner_device_sessions SET last_receipt_at=? WHERE id=?")
         .bind(receivedAt, session.epochId),
       guard.cleanup,
+      receiptRead,
     ]);
+    committedResponse = decodeReceipt(batchFirst<ReceiptRow>(results[results.length - 1]));
     committed = true;
     return results.slice(1, 1 + statements.length);
   };
-  const guarded: DatabaseLike = { prepare: (query) => db.prepare(query), batch: execute };
+  const guarded = guardDatabaseBatches(db, (statements, readOnly) =>
+    readOnly ? db.batch(statements) : execute(statements),
+  );
   try {
     await capture(guarded);
     // Unknown credentials and business replays can legitimately have no business mutation batch.
@@ -182,7 +188,6 @@ export async function receiveScannerUpload(
     }
     throw error;
   }
-  const response = await readReceipt();
-  if (!response) throw new Error("Scanner upload receipt did not commit");
-  return response;
+  if (!committedResponse) throw new Error("Scanner upload receipt did not commit");
+  return committedResponse;
 }

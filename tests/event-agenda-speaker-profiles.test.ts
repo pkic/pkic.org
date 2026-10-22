@@ -74,6 +74,7 @@ describe("available speaker person profiles are organizer candidates only", () =
     const profile = profileD1Flow(env.DB);
     await getAgenda(profile.db, f.eventId, "pqc-2026");
     const report = await profile.report();
+    expect(report.roundTrips).toBe(1);
     const speakerRead = report.plans.find(({ sql }) => sql.startsWith("SELECT credited.occurrence_id,"));
     expect(speakerRead).toBeDefined();
     const details = speakerRead!.plan.map((row) => (row as { detail: string }).detail).join("\n");

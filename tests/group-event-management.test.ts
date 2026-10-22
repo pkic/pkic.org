@@ -26,7 +26,7 @@ import { grantResourceToGroup } from "../functions/_lib/services/resource-grants
 import type { DatabaseLike, StatementLike, UserBackedAuthAdmin } from "../functions/_lib/types";
 import { callApi } from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
-import { mutateBeforeNextBatch, mutateBeforeNextStatement } from "./helpers/database-races";
+import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { insertUser } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 import { seedPersona } from "./personas/seed";
@@ -692,7 +692,7 @@ describe("group event management routes", () => {
       .bind(fixture.ownerLeader.id)
       .run();
     const detail = await getGroupEvent(
-      mutateBeforeNextStatement(env.DB, async () => {
+      mutateBeforeNextBatch(env.DB, async () => {
         await env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE user_id = ?")
           .bind(fixture.ownerLeader.id)
           .run();

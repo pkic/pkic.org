@@ -6,7 +6,7 @@ import type { DatabaseLike, Env } from "../functions/_lib/types";
 import { callApi } from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
 import { seedEventAndAdmin, queryAll } from "./helpers/context";
-import { mutateBeforeNextBatch } from "./helpers/database-races";
+import { mutateBeforeMatchingQuery, mutateBeforeNextBatch } from "./helpers/database-races";
 import { insertUser } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 
@@ -219,8 +219,10 @@ describe("event-owned attendee session intent", () => {
   it("refuses a revoked management grant at the actual page boundary without side effects", async () => {
     const manager = await actor("events:manage");
     const before = await effects();
-    const db = mutateBeforeNextBatch(env.DB, () =>
-      env.DB.prepare("UPDATE permission_grants SET revoked_at=? WHERE id=?").bind(now, manager.grantId).run(),
+    const db = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => sql.startsWith("SELECT EXISTS") && sql.includes("permission_grants"),
+      () => env.DB.prepare("UPDATE permission_grants SET revoked_at=? WHERE id=?").bind(now, manager.grantId).run(),
     );
     const response = await request("", manager.token, db);
     expect(response.status).toBe(409);

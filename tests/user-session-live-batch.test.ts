@@ -1,3 +1,7 @@
+import { withLiveRoomCommandRead } from "../functions/_lib/services/live-session/room-command-read";
+import { readLiveAuthorStamp } from "../functions/_lib/services/live-session/room-author-stamp";
+import { anonymizedLiveParticipantIds } from "../functions/_lib/services/live-session/room-erasure";
+import type { LiveRoomParticipant } from "../functions/_lib/services/live-session/room-admission";
 import { addRepresentative, insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
 import { revalidateLiveRoomParticipants } from "../functions/_lib/services/live-session/room-access";
 import { env } from "cloudflare:workers";
@@ -30,7 +34,7 @@ function comparable(result: Awaited<ReturnType<typeof singleton>>) {
 }
 describe("live setwise auth follows the canonical HTTP claims policy", () => {
   beforeEach(() => f.setup());
-  it("refreshes an already-recorded month using at most seven read-only database round trips", async () => {
+  it("refreshes an already-recorded month using two read-only database round trips", async () => {
     await env.DB.prepare(
       "UPDATE standing_settings SET activity_started_at='2026-01-01T00:00:00.000Z' WHERE id='default'",
     ).run();
@@ -42,12 +46,14 @@ describe("live setwise auth follows the canonical HTTP claims policy", () => {
     expect(response.status).toBe(200);
     userAuthSessionResponseSchema.parse(await response.json());
     const report = await profile.report();
-    expect(report.roundTrips).toBeLessThanOrEqual(7);
+    expect(report.roundTrips).toBe(2);
     expect(report.queries.every(({ sql }) => !/\b(?:INSERT|UPDATE|DELETE)\b/u.test(sql))).toBe(true);
   });
   it("has identical active capacity and grants projections", async () => {
     const claims = await Promise.all([claimsFor("attendee"), claimsFor("speaker"), claimsFor("operator")]);
-    const batch = await resolveUserSessionClaimsBatch(env.DB, claims);
+    const profile = profileD1Flow(env.DB);
+    const batch = await resolveUserSessionClaimsBatch(profile.db, claims);
+    expect((await profile.report()).roundTrips).toBe(1);
     expect(batch.map(comparable)).toEqual((await Promise.all(claims.map(singleton))).map(comparable));
   });
   it.each([
@@ -84,13 +90,17 @@ describe("live setwise auth follows the canonical HTTP claims policy", () => {
   it.each([1, 10, 100, 512, 513])("bounds query count for %i connected claim entries", async (count) => {
     const claim = await claimsFor("attendee");
     let queries = 0;
+    let batches = 0;
     const db: DatabaseLike = {
       ...env.DB,
       prepare(sql) {
         queries++;
         return env.DB.prepare(sql);
       },
-      batch: env.DB.batch.bind(env.DB),
+      batch(statements) {
+        batches++;
+        return env.DB.batch(statements);
+      },
     };
     const results = await resolveUserSessionClaimsBatch(
       db,
@@ -98,6 +108,7 @@ describe("live setwise auth follows the canonical HTTP claims policy", () => {
     );
     expect(results.every((result) => result.ok)).toBe(true);
     expect(queries).toBe(6 * Math.ceil(count / 512));
+    expect(batches).toBe(Math.ceil(count / 512));
   });
 });
 
@@ -190,12 +201,16 @@ describe("setwise selected identity, membership, and verified sponsor email pari
   it.each([1, 10, 100, 512, 513])("bounds all recipient eligibility work for %i passive readers", async (count) => {
     const claim = await claimsFor("attendee");
     let queries = 0;
+    let batches = 0;
     const db: DatabaseLike = {
       prepare(sql) {
         queries++;
         return env.DB.prepare(sql);
       },
-      batch: env.DB.batch.bind(env.DB),
+      batch(statements) {
+        batches++;
+        return env.DB.batch(statements);
+      },
     };
     const participants = Array.from({ length: count }, () => ({
       role: "attendee" as const,
@@ -205,7 +220,8 @@ describe("setwise selected identity, membership, and verified sponsor email pari
     }));
     const results = await revalidateLiveRoomParticipants(db, participants, f.eventId, f.occurrenceId);
     expect(results.every((result) => result.ok)).toBe(true);
-    expect(queries).toBe(1 + 7 * Math.ceil(count / 512));
+    expect(queries).toBe(8 * Math.ceil(count / 512));
+    expect(batches).toBe(Math.ceil(count / 512));
   });
 });
 
@@ -238,18 +254,23 @@ describe("distinct live recipient query bounds", () => {
     ]);
     const claims = people.map((person) => ({ ...baseClaim, sub: person.userId, sid: person.sessionId }));
     let queries = 0;
+    let batches = 0;
     const db: DatabaseLike = {
       prepare(sql) {
         queries++;
         return env.DB.prepare(sql);
       },
-      batch: env.DB.batch.bind(env.DB),
+      batch(statements) {
+        batches++;
+        return env.DB.batch(statements);
+      },
     };
     const sessions = await resolveUserSessionClaimsBatch(db, claims);
     expect(queries).toBe(6);
     expect(sessions.every((result) => result.ok)).toBe(true);
     expect(new Set(sessions.flatMap((result) => (result.ok ? [result.session.identity.id] : []))).size).toBe(100);
     queries = 0;
+    batches = 0;
     const participants = claims.map((claim) => ({
       role: "attendee" as const,
       userId: claim.sub,
@@ -258,7 +279,69 @@ describe("distinct live recipient query bounds", () => {
     }));
     const audience = await revalidateLiveRoomParticipants(db, participants, f.eventId, f.occurrenceId);
     expect(queries).toBe(8);
+    expect(batches).toBe(1);
     expect(audience.every((result) => result.ok && result.participant.role === "attendee")).toBe(true);
     expect(new Set(audience.flatMap((result) => (result.ok ? [result.participant.userId] : []))).size).toBe(100);
+  });
+});
+
+describe("live command read lifetime", () => {
+  beforeEach(() => f.setup());
+  it("shares one fresh batch across sender, author, erasure, and audience without retaining authority for later work", async () => {
+    const participants: LiveRoomParticipant[] = await Promise.all(
+      (["attendee", "secondAttendee"] as const).map(async (person) => ({
+        role: "attendee" as const,
+        userId: f.users[person],
+        name: "Synthetic attendee",
+        sessionClaims: await claimsFor(person),
+      })),
+    );
+    const room = { eventId: f.eventId, session: { occurrenceId: f.occurrenceId } };
+    const profile = profileD1Flow(env.DB);
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let deferred!: Promise<Awaited<ReturnType<typeof revalidateLiveRoomParticipants>>>;
+    await withLiveRoomCommandRead(
+      profile.db,
+      env.LIVE_SESSION_ROOMS,
+      room,
+      participants,
+      participants[0],
+      [f.users.attendee],
+      async () => {
+        const sender = await revalidateLiveRoomParticipants(profile.db, [participants[0]], f.eventId, f.occurrenceId);
+        expect(sender[0].ok).toBe(true);
+        if (!sender[0].ok) throw sender[0].error;
+        expect(await readLiveAuthorStamp(profile.db, f.eventId, sender[0].participant)).toEqual({
+          affiliation: null,
+          roles: [],
+        });
+        expect(await anonymizedLiveParticipantIds(profile.db, [f.users.attendee])).toEqual([]);
+        expect(
+          (await revalidateLiveRoomParticipants(profile.db, participants, f.eventId, f.occurrenceId)).every(
+            (result) => result.ok,
+          ),
+        ).toBe(true);
+        // A timer or other continuation inherited from this command must not inherit its authority after completion.
+        deferred = gate.then(() => revalidateLiveRoomParticipants(profile.db, participants, f.eventId, f.occurrenceId));
+      },
+    );
+    expect((await profile.report()).roundTrips).toBe(1);
+    await env.DB.prepare("UPDATE sessions SET revoked_at=? WHERE user_id=?")
+      .bind(new Date().toISOString(), f.users.attendee)
+      .run();
+    release();
+    const later = await deferred;
+    expect(later[0]).toMatchObject({ ok: false, error: { status: 401 } });
+    expect(later[1].ok).toBe(true);
+    expect((await profile.report()).roundTrips).toBe(2);
+    await withLiveRoomCommandRead(profile.db, env.LIVE_SESSION_ROOMS, room, participants, null, [], async () => {
+      expect(
+        (await revalidateLiveRoomParticipants(profile.db, [participants[0]], f.eventId, f.occurrenceId))[0],
+      ).toMatchObject({ ok: false, error: { status: 401 } });
+    });
+    expect((await profile.report()).roundTrips).toBe(3);
   });
 });

@@ -18,7 +18,7 @@ import {
 } from "./helpers/membership";
 import { callApi } from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
-import { mutateBeforeNextBatch } from "./helpers/database-races";
+import { mutateBeforeMatchingQuery, mutateBeforeNextBatch } from "./helpers/database-races";
 import { nowIso } from "../functions/_lib/utils/time";
 import { resolveOwnedIdentityEmail } from "../functions/_lib/services/identities/owned-email";
 import { resetDb } from "./helpers/reset-db";
@@ -295,8 +295,10 @@ describe("acting identity domain evidence", () => {
     const beforeGroups = await queryAll(env.DB, "SELECT * FROM group_memberships WHERE user_id=? ORDER BY id", [
       f.userId,
     ]);
-    const racedDb = mutateBeforeNextBatch(env.DB, () =>
-      env.DB.prepare("UPDATE users SET active=0 WHERE id=?").bind(f.userId).run(),
+    const racedDb = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => /^\s*(?:INSERT|UPDATE|DELETE)/u.test(sql),
+      () => env.DB.prepare("UPDATE users SET active=0 WHERE id=?").bind(f.userId).run(),
     );
     const response = await callApi({ ...env, DB: racedDb }, "/api/v1/users/current/identities", {
       method: "POST",

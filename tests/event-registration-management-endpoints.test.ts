@@ -9,7 +9,7 @@ import { eventRegistrationsListResponseSchema } from "../assets/shared/schemas/e
 import { eventRegistrationManagementUpdateSchema } from "../assets/shared/schemas/route-contracts-event-registration-management";
 import { createAdminSession } from "./helpers/auth";
 import { seedEventAndAdmin, queryAll } from "./helpers/context";
-import { mutateBeforeNextBatch } from "./helpers/database-races";
+import { mutateBeforeMatchingQuery, mutateBeforeNextBatch } from "./helpers/database-races";
 import { insertUser } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 
@@ -165,10 +165,13 @@ describe("canonical event registration management", () => {
   it("rolls back when event-management authority is revoked after preflight", async () => {
     const fixture = await registrationFixture();
     const manager = await scopedToken(fixture.event.id, "events:manage");
-    const racedDb = mutateBeforeNextBatch(env.DB, () =>
-      env.DB.prepare("UPDATE permission_grants SET revoked_at = datetime('now') WHERE id = ?")
-        .bind(manager.grantId)
-        .run(),
+    const racedDb = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => /^\s*(?:INSERT|UPDATE|DELETE)/u.test(sql),
+      () =>
+        env.DB.prepare("UPDATE permission_grants SET revoked_at = datetime('now') WHERE id = ?")
+          .bind(manager.grantId)
+          .run(),
     );
 
     const response = await callApi(

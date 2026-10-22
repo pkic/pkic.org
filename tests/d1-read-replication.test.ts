@@ -179,7 +179,7 @@ describe("D1 read replication", () => {
     expect(response.status).toBe(200);
     expect(withSessionCalls).toEqual(["prior/bookmark"]);
     expect(primaryQueries).toEqual([]);
-    expect(sessionQueries.some((query) => query.includes("FROM sessions"))).toBe(true);
+    expect(sessionQueries.some((query) => /\b(?:FROM|JOIN) sessions\b/u.test(query))).toBe(true);
     expect(sessionQueries.some((query) => query.includes("FROM users"))).toBe(true);
     const verified = await verifyUserSessionToken(signingSecret, response.headers.get("x-user-token")!);
     expect(verified.ok && verified.claims.state).toBe("current/bookmark");
@@ -200,7 +200,7 @@ describe("D1 read replication", () => {
     expect(response.status).toBe(200);
     expect(withSessionCalls).toEqual(["first-unconstrained"]);
     expect(primaryQueries).toEqual([]);
-    expect(sessionQueries.some((query) => query.includes("FROM sessions"))).toBe(true);
+    expect(sessionQueries.some((query) => /\b(?:FROM|JOIN) sessions\b/u.test(query))).toBe(true);
     expect(sessionQueries.some((query) => query.includes("FROM users"))).toBe(true);
   });
 
@@ -272,7 +272,7 @@ describe("D1 read replication", () => {
     expect(response.status).toBe(200);
     expect(withSessionCalls).toEqual(["users/prior-bookmark"]);
     expect(primaryQueries).toEqual([]);
-    expect(sessionQueries.some((query) => query.includes("FROM sessions"))).toBe(true);
+    expect(sessionQueries.some((query) => /\b(?:FROM|JOIN) sessions\b/u.test(query))).toBe(true);
     const rotatedToken = response.headers.get("x-user-token");
     const verified = await verifyUserSessionToken(signingSecret, rotatedToken!);
     expect(verified.ok && verified.claims.state).toBe("users/next-bookmark");

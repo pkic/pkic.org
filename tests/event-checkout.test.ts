@@ -10,7 +10,7 @@ import { revokeBadge, recordScan } from "../functions/_lib/services/event-partic
 import { attendanceReport, sessionAttendancePeople } from "../functions/_lib/services/event-participation/reporting";
 import { eventScanRequestSchema } from "../assets/shared/schemas/event-participation-scanning";
 
-import { mutateBeforeNextBatch } from "./helpers/database-races";
+import { mutateBeforeMatchingQuery, mutateBeforeNextBatch } from "./helpers/database-races";
 
 const fixture = createEventScannerFixture();
 const { eventId, operatorId, occurrenceId, scan, scanBody } = fixture;
@@ -149,16 +149,20 @@ describe("Event checkout evidence", () => {
     async (kind) => {
       await restrictOperator("agenda:attendance_record");
       let revoked = false;
-      const db = mutateBeforeNextBatch(env.DB, async () => {
-        revoked = true;
-        await env.DB.prepare(
-          kind === "permission"
-            ? "UPDATE permission_grants SET revoked_at=? WHERE user_id=?"
-            : "UPDATE sessions SET revoked_at=? WHERE user_id=?",
-        )
-          .bind(new Date().toISOString(), operatorId)
-          .run();
-      });
+      const db = mutateBeforeMatchingQuery(
+        env.DB,
+        (sql) => /^\s*(?:INSERT|UPDATE|DELETE)/u.test(sql),
+        async () => {
+          revoked = true;
+          await env.DB.prepare(
+            kind === "permission"
+              ? "UPDATE permission_grants SET revoked_at=? WHERE user_id=?"
+              : "UPDATE sessions SET revoked_at=? WHERE user_id=?",
+          )
+            .bind(new Date().toISOString(), operatorId)
+            .run();
+        },
+      );
       const response = await callApi({ ...env, DB: db } as Env, "/api/v1/events/scan-test/scans", {
         method: "POST",
         headers: { authorization: `Bearer ${fixture.token}`, "content-type": "application/json" },

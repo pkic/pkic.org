@@ -10,14 +10,10 @@ import { canonicalAgendaOrder } from "../../../../assets/shared/event-agenda-ord
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
 import { getAgenda } from "./read";
-import { all } from "../../db/queries";
-import { agendaPublicationStatusSql } from "./publication-status";
-import { getAgendaStaffingReport } from "./staffing-report";
-import type { AgendaOccurrence } from "../../../../assets/shared/schemas/event-agenda";
 import { validateAgendaSchedule } from "./mutations";
 import { assertPublicationAllocations, preparePublicationAllocationGuard } from "./publication-allocations";
 import { agendaAdditionalRoomStatements } from "./occurrence-rooms";
-import { commitAgendaRevision } from "./revision";
+import { commitAgendaSnapshot } from "./commit-snapshot";
 import { occurrenceRepresentationReferences, prepareRepresentationEligibility } from "./representation-eligibility";
 async function prepare(
   db: DatabaseLike,
@@ -119,9 +115,10 @@ export async function applyAgendaSchedule(
       "AGENDA_SCHEDULE_REVIEW_CHANGED",
       "The schedule preview changed. Review it again before applying.",
     );
-  await commitAgendaRevision(
+  return commitAgendaSnapshot(
     db,
     eventId,
+    eventSlug,
     input.expectedRevision,
     [
       preparePublicationAllocationGuard(db, next),
@@ -137,26 +134,6 @@ export async function applyAgendaSchedule(
     actorId,
     conflictProposal,
   );
-  // The revision guard committed exactly this schedule. Refresh only the projections affected by placements.
-  const committed = { ...next, revision: input.expectedRevision + 1 };
-  const [statuses, staffingReport] = await Promise.all([
-    all<{ id: string; publication_status: AgendaOccurrence["publicationStatus"] | null }>(
-      db,
-      `SELECT id,CASE WHEN id IN(SELECT value FROM json_each(?)) THEN ${agendaPublicationStatusSql} END AS publication_status
-       FROM event_agenda_occurrences WHERE event_id=? ORDER BY start_at,id LIMIT 2001`,
-      [JSON.stringify(input.changes.map((change) => change.id)), eventId],
-    ),
-    getAgendaStaffingReport(db, eventId, committed),
-  ]);
-  const occurrenceById = new Map(committed.occurrences.map((item) => [item.id, item]));
-  return {
-    ...committed,
-    occurrences: statuses.flatMap((row) => {
-      const item = occurrenceById.get(row.id);
-      return item ? [{ ...item, publicationStatus: row.publication_status ?? item.publicationStatus }] : [];
-    }),
-    staffingReport,
-  };
 }
 
 function speakerPlacementStatements(

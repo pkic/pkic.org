@@ -6,7 +6,7 @@ import { decorateOpenApiSpec } from "../functions/_lib/openapi/mcp";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
-import { mutateBeforeNextBatch } from "./helpers/database-races";
+import { mutateBeforeMatchingQuery } from "./helpers/database-races";
 import { insertUser } from "./helpers/membership";
 import { apiErrorPayloadSchema, successResponseSchema } from "../assets/shared/schemas/api-common";
 import { eventImportResponseSchema } from "../assets/shared/schemas/event-imports";
@@ -251,10 +251,13 @@ describe("admin event configuration OpenAPI boundaries", () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const writer = await createEventStaff("events:write", eventId);
     const originalRevision = await eventRevision();
-    const permissionRace = mutateBeforeNextBatch(env.DB, () =>
-      env.DB.prepare("UPDATE permission_grants SET revoked_at = datetime('now') WHERE id = ?")
-        .bind(writer.grantId)
-        .run(),
+    const permissionRace = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => /^\s*(?:INSERT|UPDATE|DELETE)/u.test(sql),
+      () =>
+        env.DB.prepare("UPDATE permission_grants SET revoked_at = datetime('now') WHERE id = ?")
+          .bind(writer.grantId)
+          .run(),
     );
     const denied = await callWithDatabase(writer.token, "/api/v1/events/pqc-2026/settings", permissionRace, {
       method: "PATCH",
@@ -268,10 +271,13 @@ describe("admin event configuration OpenAPI boundaries", () => {
     );
 
     const ownerWriter = await createEventStaff("events:write", eventId);
-    const ownerRace = mutateBeforeNextBatch(env.DB, () =>
-      env.DB.prepare("UPDATE events SET owner_group_id = ?, source_mode = 'portal' WHERE id = ?")
-        .bind("20000000-0000-4000-8000-000000000001", eventId)
-        .run(),
+    const ownerRace = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => /^\s*(?:INSERT|UPDATE|DELETE)/u.test(sql),
+      () =>
+        env.DB.prepare("UPDATE events SET owner_group_id = ?, source_mode = 'portal' WHERE id = ?")
+          .bind("20000000-0000-4000-8000-000000000001", eventId)
+          .run(),
     );
     const moved = await callWithDatabase(ownerWriter.token, "/api/v1/events/pqc-2026/settings", ownerRace, {
       method: "PATCH",
@@ -327,10 +333,13 @@ describe("admin event configuration OpenAPI boundaries", () => {
         .first<number>("count"),
     ).toBe(1);
 
-    const permissionRace = mutateBeforeNextBatch(env.DB, () =>
-      env.DB.prepare("UPDATE permission_grants SET revoked_at = datetime('now') WHERE id = ?")
-        .bind(writer.grantId)
-        .run(),
+    const permissionRace = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => /^\s*(?:INSERT|UPDATE|DELETE)/u.test(sql),
+      () =>
+        env.DB.prepare("UPDATE permission_grants SET revoked_at = datetime('now') WHERE id = ?")
+          .bind(writer.grantId)
+          .run(),
     );
     const revoked = await callWithDatabase(writer.token, "/api/v1/events/pqc-2026/days", permissionRace, {
       method: "PUT",
@@ -376,10 +385,13 @@ describe("admin event configuration OpenAPI boundaries", () => {
       .bind(eventId)
       .first<number>("count");
 
-    const racingDb = mutateBeforeNextBatch(env.DB, () =>
-      env.DB.prepare("UPDATE permission_grants SET revoked_at = datetime('now') WHERE id = ?")
-        .bind(writer.grantId)
-        .run(),
+    const racingDb = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => /^\s*(?:INSERT|UPDATE|DELETE)/u.test(sql),
+      () =>
+        env.DB.prepare("UPDATE permission_grants SET revoked_at = datetime('now') WHERE id = ?")
+          .bind(writer.grantId)
+          .run(),
     );
     const response = await callWithDatabase(writer.token, "/api/v1/events/pqc-2026/sponsors/tiers", racingDb, {
       method: "PUT",

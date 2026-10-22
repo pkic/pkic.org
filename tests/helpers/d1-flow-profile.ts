@@ -114,6 +114,7 @@ export function profileD1Flow(database: DatabaseLike, options: { latencyMs?: num
         })),
         roundTrips: queries.length,
         statements: executed.length,
+        executedSql: executed.map(({ sql }) => sql.replace(/\s+/g, " ").trim()),
         queries,
         plans: [...plans].map(([sql, plan]) => ({ sql: sql.replace(/\s+/g, " ").trim(), plan })),
       };

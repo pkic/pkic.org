@@ -1,3 +1,4 @@
+import { profileD1Flow } from "./helpers/d1-flow-profile";
 import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./helpers/administrator";
 import { grantAdministrator } from "./helpers/administrator";
 import {
@@ -443,14 +444,8 @@ describe("event email campaign recipients", () => {
       .bind(users[0].registrationId)
       .run();
 
-    let batchCalls = 0;
-    const batchDb: DatabaseLike = {
-      prepare: (query) => env.DB.prepare(query),
-      batch: (statements) => {
-        batchCalls += 1;
-        return env.DB.batch(statements);
-      },
-    };
+    const profile = profileD1Flow(env.DB);
+    const batchDb = profile.db;
     let backgroundCalls = 0;
     const sendResponse = await app.fetch(
       makeRequest({ ...body, previewToken: preview.previewToken }, "create"),
@@ -472,7 +467,7 @@ describe("event email campaign recipients", () => {
     expect(sendBody.queuedRecipients).toBe(users.length);
     expect(sendBody.queuedBatches).toBe(users.length);
     expect(sendBody.stagedRecipients).toBe(100);
-    expect(batchCalls).toBeLessThanOrEqual(16);
+    expect((await profile.report()).roundTrips).toBeLessThanOrEqual(18);
     expect(backgroundCalls).toBe(0);
     expect((await queryAll<{ count: number }>(env.DB, "SELECT COUNT(*) AS count FROM email_outbox"))[0]?.count).toBe(
       100,

@@ -1,3 +1,4 @@
+import { profileD1Flow } from "./helpers/d1-flow-profile";
 import { grantAdministrator } from "./helpers/administrator";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -24,7 +25,7 @@ import type { UserBackedAuthAdmin } from "../functions/_lib/types";
 import { callApi } from "./helpers/app";
 import { createMemberSession } from "./helpers/auth";
 import { queryAll } from "./helpers/context";
-import { mutateAfterNextStatement, mutateBeforeNextBatch } from "./helpers/database-races";
+import { mutateAfterNextStatement, mutateBeforeNextBatch, mutateBeforeMatchingQuery } from "./helpers/database-races";
 import { insertOrgRepresentative, insertUser } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 import { seedPersona } from "./personas/seed";
@@ -272,10 +273,13 @@ describe("group form sharing", () => {
       status: "active",
       fields: [],
     });
-    const racingDb = mutateBeforeNextBatch(env.DB, () =>
-      env.DB.prepare("UPDATE form_placements SET owner_group_id = ? WHERE id = ?")
-        .bind(fixture.outsider.id, created.placement.id)
-        .run(),
+    const racingDb = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => /^\s*(?:INSERT|UPDATE|DELETE)/u.test(sql),
+      () =>
+        env.DB.prepare("UPDATE form_placements SET owner_group_id = ? WHERE id = ?")
+          .bind(fixture.outsider.id, created.placement.id)
+          .run(),
     );
 
     await expect(
@@ -589,13 +593,16 @@ describe("group form sharing", () => {
       granteeGroupId: fixture.grantee.id,
       capability: "submit",
     });
-    const racingDb = mutateBeforeNextBatch(env.DB, () =>
-      env.DB.prepare(
-        `DELETE FROM form_placement_group_grants
+    const racingDb = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => /^\s*(?:INSERT|UPDATE|DELETE)/u.test(sql),
+      () =>
+        env.DB.prepare(
+          `DELETE FROM form_placement_group_grants
             WHERE placement_id = ? AND group_id = ? AND capability = 'submit'`,
-      )
-        .bind(fixture.placementId, fixture.grantee.id)
-        .run(),
+        )
+          .bind(fixture.placementId, fixture.grantee.id)
+          .run(),
     );
 
     await expect(
@@ -671,14 +678,16 @@ describe("group form sharing", () => {
       capability: "submit",
     });
 
+    const profile = profileD1Flow(env.DB);
     const submissionId = await submitGroupFormResponse(
-      env.DB,
+      profile.db,
       { userId: fixture.memberId },
       fixture.grantee.id,
       fixture.placementId,
       { answers: { topic: "The answer as given" } },
     );
 
+    expect((await profile.report()).roundTrips).toBe(2);
     const [stored] = await queryAll<{ data_json: string; placement_id: string; submitted_by_user_id: string }>(
       env.DB,
       `SELECT a.data_json, s.placement_id, s.submitted_by_user_id
@@ -707,13 +716,16 @@ describe("group form sharing", () => {
       granteeGroupId: fixture.grantee.id,
       capability: "submit",
     });
-    const racingDb = mutateBeforeNextBatch(env.DB, () =>
-      env.DB.prepare(
-        `UPDATE forms SET updated_at = ?
+    const racingDb = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => /^\s*(?:INSERT|UPDATE|DELETE)/u.test(sql),
+      () =>
+        env.DB.prepare(
+          `UPDATE forms SET updated_at = ?
             WHERE id = (SELECT form_id FROM form_placements WHERE id = ?)`,
-      )
-        .bind("2999-01-01T00:00:00.000Z", fixture.placementId)
-        .run(),
+        )
+          .bind("2999-01-01T00:00:00.000Z", fixture.placementId)
+          .run(),
     );
 
     await expect(

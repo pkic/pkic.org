@@ -26,9 +26,10 @@ export async function commitAgendaRevision(
   statements: StatementLike[],
   actorUserId: string | null = null,
   conflictProposal?: AgendaScheduleConflictProposal,
+  responseStatements: StatementLike[] = [],
 ) {
   try {
-    await db.batch([
+    const results = await db.batch([
       db
         .prepare(
           "INSERT INTO event_agenda_state(event_id,revision,updated_at) VALUES (?,0,?) ON CONFLICT(event_id) DO NOTHING",
@@ -51,7 +52,9 @@ export async function commitAgendaRevision(
       db
         .prepare("UPDATE event_agenda_state SET revision=revision+1,updated_at=? WHERE event_id=? AND revision=?")
         .bind(nowIso(), eventId, revision),
+      ...responseStatements,
     ]);
+    return responseStatements.length ? results.slice(-responseStatements.length) : [];
   } catch (error) {
     if (isAgendaScheduleGuardFailure(error))
       throw new AppError(

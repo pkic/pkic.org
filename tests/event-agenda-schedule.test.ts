@@ -67,12 +67,16 @@ describe("reviewed atomic agenda scheduling", () => {
     expect(committed.revision).toBe(proposal.expectedRevision + 1);
     expect((await post("", proposal)).status).toBe(409);
   });
-  it("avoids a second complete occurrence projection when returning a committed placement", async () => {
+  it("reads the committed snapshot inside the final atomic write batch", async () => {
     const profile = profileD1Flow(env.DB);
     const committed = await applyAgendaSchedule(profile.db, eventId, "pqc-2026", proposal, "profile-actor");
     expect(committed.revision).toBe(proposal.expectedRevision + 1);
     const report = await profile.report();
-    expect(report.queries.filter(({ sql }) => sql.startsWith("SELECT id,content_id,"))).toHaveLength(1);
+    expect(report.roundTrips).toBeLessThanOrEqual(3);
+    const committedBatch = report.queries.at(-1)!;
+    expect(committedBatch.operation).toBe("batch");
+    expect(committedBatch.sql).toContain("UPDATE event_agenda_state SET revision=revision+1");
+    expect(committedBatch.sql).toContain("SELECT id,content_id,");
   });
 
   it("returns canonical before/after ordering without writing, then applies the whole schedule once", async () => {

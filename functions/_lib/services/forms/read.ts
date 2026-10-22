@@ -1,7 +1,8 @@
+import { batchFirst, batchRows } from "../../db/pagination";
 import { all, first } from "../../db/queries";
 import { AppError, isAppError } from "../../errors";
 import { parseJsonSafe } from "../../utils/json";
-import type { DatabaseLike } from "../../types";
+import type { DatabaseLike, D1StatementResult } from "../../types";
 import type {
   FormFieldDefinition,
   FormPlacement,
@@ -16,7 +17,14 @@ import {
   type FormFieldOption,
 } from "../../../../assets/shared/schemas/form-field-rules";
 import { FORM_FIELD_OPTION_SOURCES } from "../../../../assets/shared/schemas/forms";
-import { defaultFormAudience, findActiveFormPlacement, findFormPlacement } from "./placements";
+import {
+  FORM_PLACEMENT_COLUMNS,
+  mapFormPlacement,
+  type FormPlacementRow,
+  defaultFormAudience,
+  findActiveFormPlacement,
+  findFormPlacement,
+} from "./placements";
 import { formSubmissionWindowOpenSql } from "./submission-window";
 
 export type { FormFieldDefinition, FormPurpose } from "../../../../assets/shared/schemas/forms";
@@ -79,15 +87,15 @@ const FORM_COLUMNS = "id, key, scope_type, scope_ref, purpose, status, title, de
 const FORM_FIELD_COLUMNS =
   "id, key, label, field_type, required, options_json, option_source, validation_json, sort_order, created_at, updated_at, archived_at";
 
+function prepareFormFields(db: DatabaseLike, formIdsSql: string, bindings: unknown[], includeArchived = false) {
+  return db
+    .prepare(
+      `SELECT ${FORM_FIELD_COLUMNS} FROM form_fields WHERE form_id IN (${formIdsSql})${includeArchived ? "" : " AND archived_at IS NULL"} ORDER BY sort_order ASC,key ASC`,
+    )
+    .bind(...bindings);
+}
 async function loadFormFieldRows(db: DatabaseLike, formId: string, includeArchived = false): Promise<FormFieldRow[]> {
-  return all<FormFieldRow>(
-    db,
-    `SELECT ${FORM_FIELD_COLUMNS}
-     FROM form_fields
-     WHERE form_id = ?${includeArchived ? "" : " AND archived_at IS NULL"}
-     ORDER BY sort_order ASC, key ASC`,
-    [formId],
-  );
+  return (await prepareFormFields(db, "SELECT ?", [formId], includeArchived).all<FormFieldRow>()).results;
 }
 
 export function parseFormFieldOptionSource(value: string | null): FormFieldOptionSource | null {
@@ -120,21 +128,35 @@ export function mapManagedFormFields(fields: FormFieldRow[], catalogs: OptionCat
   });
 }
 
+interface OptionCatalogRow {
+  value: string;
+  label: string;
+  active: number;
+}
+function prepareOptionCatalog(
+  db: DatabaseLike,
+  source: FormFieldOptionSource,
+  includeInactive: boolean,
+  fieldSelection?: { sql: string; bindings: unknown[]; includeArchived?: boolean },
+) {
+  switch (source) {
+    case "active_working_groups":
+      return db
+        .prepare(
+          `SELECT id AS value,name AS label,active FROM groups WHERE type_key='working_group'${includeInactive ? "" : " AND active=1"}${fieldSelection ? ` AND EXISTS(SELECT 1 FROM form_fields WHERE form_id IN (${fieldSelection.sql}) AND option_source=?${fieldSelection.includeArchived ? "" : " AND archived_at IS NULL"})` : ""} ORDER BY name COLLATE NOCASE ASC,id ASC`,
+        )
+        .bind(...(fieldSelection ? [...fieldSelection.bindings, source] : []));
+  }
+}
+function decodeOptionCatalog(rows: OptionCatalogRow[]): FormFieldOption[] {
+  return rows.map((row) => ({ value: row.value, label: row.label, active: row.active === 1 }));
+}
 async function loadOptionCatalog(
   db: DatabaseLike,
   source: FormFieldOptionSource,
   includeInactive: boolean,
 ): Promise<FormFieldOption[]> {
-  switch (source) {
-    case "active_working_groups":
-      return all<{ value: string; label: string; active: number }>(
-        db,
-        `SELECT id AS value, name AS label, active
-           FROM groups
-          WHERE type_key = 'working_group'${includeInactive ? "" : " AND active = 1"}
-          ORDER BY name COLLATE NOCASE ASC, id ASC`,
-      ).then((rows) => rows.map((row) => ({ value: row.value, label: row.label, active: row.active === 1 })));
-  }
+  return decodeOptionCatalog((await prepareOptionCatalog(db, source, includeInactive).all<OptionCatalogRow>()).results);
 }
 
 export async function resolveFormFieldOptionCatalogs(
@@ -347,6 +369,14 @@ async function loadFormDefinition(
   const fields = await loadFormFieldRows(db, resolved.form.id, options.includeArchived ?? false);
   const catalogs = await resolveFormFieldOptionCatalogs(db, fields);
 
+  return decodeFormDefinition(resolved, fields, catalogs);
+}
+
+function decodeFormDefinition(
+  resolved: { form: FormRow & { updated_at: string }; placement: FormPlacement | null },
+  fields: FormFieldRow[],
+  catalogs: OptionCatalogs,
+): ActiveFormDefinition {
   return {
     id: resolved.form.id,
     key: resolved.form.key,
@@ -373,27 +403,57 @@ async function loadFormDefinition(
  * that it was not found. The window is refused, with its dates, by
  * `prepareFormSubmissionGuard`.
  */
+export function prepareFormDefinitionByPlacement(
+  db: DatabaseLike,
+  placementId: string,
+  options: { forSubmission?: boolean; includeArchived?: boolean } = {},
+) {
+  const formIdsSql = "SELECT form_id FROM form_placements WHERE id=?";
+  const statements = [
+    db
+      .prepare(
+        `SELECT ${FORM_COLUMNS.split(", ")
+          .map((column) => `f.${column}`)
+          .join(
+            ", ",
+          )},f.updated_at FROM form_placements fp JOIN forms f ON f.id=fp.form_id WHERE fp.id=? ${options.forSubmission ? "AND f.status='active' AND fp.active=1" : ""} LIMIT 1`,
+      )
+      .bind(placementId),
+    db.prepare(`SELECT ${FORM_PLACEMENT_COLUMNS} FROM form_placements WHERE id=?`).bind(placementId),
+    prepareFormFields(db, formIdsSql, [placementId], options.includeArchived ?? false),
+    ...FORM_FIELD_OPTION_SOURCES.map((source) =>
+      prepareOptionCatalog(db, source, false, {
+        sql: formIdsSql,
+        bindings: [placementId],
+        includeArchived: options.includeArchived,
+      }),
+    ),
+  ];
+  return {
+    statements,
+    decode(results: D1StatementResult[]): ActiveFormDefinition | null {
+      const form = batchFirst<FormRow & { updated_at: string }>(results[0]);
+      const placementRow = batchFirst<FormPlacementRow>(results[1]);
+      if (!form || !placementRow) return null;
+      const fields = batchRows<FormFieldRow>(results[2]);
+      const catalogs = Object.fromEntries(
+        FORM_FIELD_OPTION_SOURCES.map((source, index) => [
+          source,
+          decodeOptionCatalog(batchRows<OptionCatalogRow>(results[3 + index])),
+        ]),
+      );
+      return decodeFormDefinition({ form, placement: mapFormPlacement(placementRow) }, fields, catalogs);
+    },
+  };
+}
+
 export async function getFormDefinitionByPlacement(
   db: DatabaseLike,
   placementId: string,
   options: { forSubmission?: boolean; includeArchived?: boolean } = {},
 ): Promise<ActiveFormDefinition | null> {
-  const row = await first<FormRow & { updated_at: string; placement_id: string }>(
-    db,
-    `SELECT ${FORM_COLUMNS.split(", ")
-      .map((column) => `f.${column}`)
-      .join(", ")},
-            f.updated_at, fp.id AS placement_id
-       FROM form_placements fp
-       JOIN forms f ON f.id = fp.form_id
-      WHERE fp.id = ?
-        ${options.forSubmission ? "AND f.status = 'active' AND fp.active = 1" : ""}
-      LIMIT 1`,
-    [placementId],
-  );
-  if (!row) return null;
-  const placement = await findFormPlacement(db, row.id, { placementId: row.placement_id });
-  return loadFormDefinition(db, placement ? { form: row, placement } : null, options);
+  const read = prepareFormDefinitionByPlacement(db, placementId, options);
+  return read.decode(await db.batch(read.statements));
 }
 
 /**

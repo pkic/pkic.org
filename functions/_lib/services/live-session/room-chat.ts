@@ -156,7 +156,7 @@ export class LiveRoomChat {
       this.sql.exec(`DELETE FROM ${table} WHERE message_id IN (SELECT value FROM json_each(?))`, json);
   }
 
-  private authors(): string[] {
+  authors(): string[] {
     return CHANNELS.flatMap((channel) =>
       this.sql.rows<{ id: string }>(`SELECT DISTINCT author_user_id AS id FROM ${TABLES[channel]}`),
     ).map((row) => row.id);

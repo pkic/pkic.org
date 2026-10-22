@@ -1,3 +1,4 @@
+import { executeAuthorizedDatabaseBatch } from "../../db/authorization-guard";
 import { guardDatabaseBatches } from "../../db/guarded-database";
 import type { DatabaseLike } from "../../types";
 import { AppError } from "../../errors";
@@ -19,12 +20,26 @@ export function guardScannerPreparationDatabase(
   epochId: string,
   grantId?: string,
 ): DatabaseLike {
-  return guardDatabaseBatches(db, async (statements) => {
-    const guard = prepareScannerLifecycleGuard(db, {
+  return guardDatabaseBatches(db, async (statements, readOnly) => {
+    const evidence = {
       sql: `SELECT 1 FROM event_scanner_device_sessions session WHERE session.id=? AND session.event_id=? AND session.operator_user_id=? AND session.device_id=? AND session.closed_at IS NULL AND session.high_water_sequence IS NULL AND ${scannerCaptureOpenSql}
         AND (? IS NULL OR EXISTS(SELECT 1 FROM event_offline_admission_grants grant_record WHERE grant_record.id=? AND grant_record.event_id=session.event_id AND grant_record.operator_user_id=session.operator_user_id AND grant_record.device_id=session.device_id AND grant_record.scanner_epoch_id=session.id))`,
       bindings: [epochId, eventId, operatorUserId, deviceId, eventId, grantId ?? null, grantId ?? null],
-    });
+    };
+    if (readOnly)
+      return executeAuthorizedDatabaseBatch(
+        db,
+        evidence,
+        statements,
+        true,
+        () =>
+          new AppError(
+            409,
+            "SCANNER_PREPARATION_CLOSED",
+            "Prepare an open scanner session for this operator and device before downloading offline evidence.",
+          ),
+      );
+    const guard = prepareScannerLifecycleGuard(db, evidence);
     try {
       const results = await db.batch([guard.statement, ...statements, guard.cleanup]);
       return results.slice(1, 1 + statements.length);

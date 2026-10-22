@@ -1,3 +1,14 @@
+import {
+  createResourceGrantFixture,
+  insertResourceGrantActor,
+  addResourceGrantParticipant,
+} from "./helpers/resource-grant-fixture";
+import {
+  guardGroupResourceViewerDatabase,
+  guardManagedGroupResourceDatabase,
+} from "../functions/_lib/services/resource-grants";
+import { guardEventResourceManagementDatabase } from "../functions/_lib/services/event-series/management";
+import { guardGroupEventRegistrationDatabase } from "../functions/_lib/services/registrations/authorization";
 import { participantSessionDatabase } from "../functions/_lib/services/event-participation/self-authorization";
 import { createAdminSession } from "./helpers/auth";
 import { env } from "cloudflare:workers";
@@ -101,4 +112,24 @@ it("keeps participant reads read-only and rolls back writes after session revoca
   expect(await env.DB.prepare("SELECT first_name FROM users WHERE id=?").bind(userId).first("first_name")).not.toBe(
     "Denied",
   );
+});
+
+it("keeps shared resource, management, attendance, and registration reads free of primary guard writes", async () => {
+  const f = await createResourceGrantFixture();
+  const admin = await insertResourceGrantActor("replica-reader", "admin");
+  const participant = await addResourceGrantParticipant(f.owner.id, "replica-participant");
+  await env.DB.prepare("UPDATE events SET registration_mode='invite_or_open' WHERE id=?").bind(f.eventId).run();
+  const context = { eventId: f.eventId, groupId: f.owner.id };
+  const profile = profileD1Flow(env.DB);
+  const readers = [
+    guardGroupResourceViewerDatabase(profile.db, { userId: admin.id, admin }, f.owner.id, "event", f.eventId, "view"),
+    guardManagedGroupResourceDatabase(profile.db, admin, f.owner.id, "event", f.eventId, "manage"),
+    guardEventResourceManagementDatabase(profile.db, admin, context, "manage_attendance"),
+    guardGroupEventRegistrationDatabase(profile.db, { ...context, userId: participant.id }),
+  ];
+  for (const db of readers)
+    expect(await db.prepare("SELECT id FROM events WHERE id=?").bind(f.eventId).first("id")).toBe(f.eventId);
+  const report = await profile.report();
+  expect(report.roundTrips).toBe(readers.length);
+  expect(report.executedSql.every(isReadOnlySql)).toBe(true);
 });

@@ -44,19 +44,16 @@ interface GrantRow {
   context_id: string | null;
 }
 
-/** Setwise grant resolution uses one bound JSON input; no caller-controlled SQL expressions. */
-export async function computeGrantsForContexts(
-  db: DatabaseLike,
-  contexts: readonly { userId: string; memberId: string | null }[],
-): Promise<PermissionGrant[][]> {
-  const rows = await all<GrantRow & { request_index: number }>(
-    db,
-    `WITH requested AS (
-       SELECT CAST(key AS INTEGER) AS request_index,
-              json_extract(value,'$.userId') AS user_id,
-              json_extract(value,'$.memberId') AS member_id FROM json_each(?)
-     )
-     SELECT requested.request_index,rp.permission,ur.context_type,ur.context_id
+export interface ContextGrantRow extends GrantRow {
+  request_index: number;
+  member_id: string | null;
+}
+
+/** One canonical live grant policy; callers only vary the prepared context input. */
+function contextGrantStatement(db: DatabaseLike, requested: string, bindings: unknown[]) {
+  return db
+    .prepare(`WITH requested AS (${requested})
+     SELECT requested.request_index,requested.member_id,rp.permission,ur.context_type,ur.context_id
      FROM requested JOIN user_roles ur ON ur.user_id=requested.user_id
      JOIN role_permissions rp ON rp.role_id=ur.role_id
      WHERE ur.revoked_at IS NULL
@@ -65,12 +62,56 @@ export async function computeGrantsForContexts(
          AND EXISTS(SELECT 1 FROM group_memberships gm WHERE gm.group_id=ur.context_id
            AND gm.user_id=ur.user_id AND gm.member_id=ur.member_id AND gm.left_at IS NULL)))
      UNION ALL
-     SELECT requested.request_index,pg.permission,pg.context_type,pg.context_id
+     SELECT requested.request_index,requested.member_id,pg.permission,pg.context_type,pg.context_id
      FROM requested JOIN permission_grants pg ON pg.user_id=requested.user_id
      WHERE pg.revoked_at IS NULL
-       AND (pg.expires_at IS NULL OR pg.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
-    [JSON.stringify(contexts)],
+       AND (pg.expires_at IS NULL OR pg.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now'))`)
+    .bind(...bindings);
+}
+
+/** Prepare all assigned member-context candidates so choosing a live identity needs no second D1 call. */
+export function prepareUserGrantCandidates(db: DatabaseLike, userIds: readonly string[]) {
+  const users = JSON.stringify(userIds);
+  return contextGrantStatement(
+    db,
+    `
+    SELECT CAST(key AS INTEGER) AS request_index,value AS user_id,NULL AS member_id FROM json_each(?)
+    UNION SELECT CAST(requested.key AS INTEGER),requested.value,role.member_id
+      FROM json_each(?) requested JOIN user_roles role ON role.user_id=requested.value
+      WHERE role.member_id IS NOT NULL`,
+    [users, users],
   );
+}
+
+/** Decode only the chosen membership context, using the context-free candidate when no assignment names it. */
+export function selectUserGrantCandidates(
+  rows: ContextGrantRow[],
+  requestIndex: number,
+  memberId: string | null,
+): PermissionGrant[] {
+  const candidates = rows.filter((row) => row.request_index === requestIndex);
+  const selected = memberId !== null && candidates.some((row) => row.member_id === memberId) ? memberId : null;
+  return candidates
+    .filter((row) => row.member_id === selected)
+    .map((row) => ({
+      permission: row.permission,
+      contextType: row.context_type,
+      contextId: row.context_id,
+    }));
+}
+
+/** Setwise grant resolution uses one bound JSON input; no caller-controlled SQL expressions. */
+export async function computeGrantsForContexts(
+  db: DatabaseLike,
+  contexts: readonly { userId: string; memberId: string | null }[],
+): Promise<PermissionGrant[][]> {
+  const { results: rows } = await contextGrantStatement(
+    db,
+    `
+    SELECT CAST(key AS INTEGER) AS request_index,json_extract(value,'$.userId') AS user_id,
+      json_extract(value,'$.memberId') AS member_id FROM json_each(?)`,
+    [JSON.stringify(contexts)],
+  ).all<ContextGrantRow>();
   const results = contexts.map(() => [] as PermissionGrant[]);
   for (const row of rows)
     results[row.request_index].push({

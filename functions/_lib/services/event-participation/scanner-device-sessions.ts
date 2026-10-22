@@ -11,22 +11,19 @@ import type { DatabaseLike } from "../../types";
 import { AppError } from "../../errors";
 import { nowIso } from "../../utils/time";
 import { scannerCaptureOpenSql } from "./scanner-upload-receipts";
-import { guardDatabaseBatches } from "../../db/guarded-database";
-import { prepareAuthorizationGuard } from "../../db/authorization-guard";
+import { guardAuthorizedDatabase } from "../../db/authorization-guard";
 
 /** Sponsor-scoped enrollment and closure retain the active sponsorship boundary in every atomic command. */
 export function guardScannerSponsorDatabase(db: DatabaseLike, eventId: string, sponsorId?: string): DatabaseLike {
   if (!sponsorId) return db;
-  return guardDatabaseBatches(db, async (statements) => {
-    const [, ...results] = await db.batch([
-      prepareAuthorizationGuard(db, {
-        sql: "SELECT 1 FROM sponsorships WHERE id=? AND event_id=? AND sponsor_type='event' AND pipeline_stage='active'",
-        bindings: [sponsorId, eventId],
-      }),
-      ...statements,
-    ]);
-    return results;
-  });
+  return guardAuthorizedDatabase(
+    db,
+    {
+      sql: "SELECT 1 FROM sponsorships WHERE id=? AND event_id=? AND sponsor_type='event' AND pipeline_stage='active'",
+      bindings: [sponsorId, eventId],
+    },
+    () => new Error("AUTHORIZATION_CONTEXT_CHANGED"),
+  );
 }
 
 const enrollmentColumns =

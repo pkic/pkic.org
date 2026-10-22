@@ -1,3 +1,4 @@
+import { commitAgendaSnapshot } from "./commit-snapshot";
 import { prepareAgendaOccurrenceSettings } from "./occurrence-settings";
 import { prepareAgendaSponsorApproval } from "./sponsors";
 import { prepareAgendaOccurrenceInsert, plannedMediaJson } from "./occurrence-insert";
@@ -392,8 +393,15 @@ export async function patchAgendaOccurrence(
         ),
       ),
     );
-  await commitAgendaRevision(db, eventId, input.expectedRevision, statements, actorUserId, conflictProposal);
-  return getAgenda(db, eventId, eventSlug);
+  return commitAgendaSnapshot(
+    db,
+    eventId,
+    eventSlug,
+    input.expectedRevision,
+    statements,
+    actorUserId,
+    conflictProposal,
+  );
 }
 export async function publishAgenda(
   db: DatabaseLike,
