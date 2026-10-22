@@ -1,3 +1,7 @@
+import { seedEventAndAdmin } from "./helpers/context";
+import { createAdminSession } from "./helpers/auth";
+import { profileD1Flow } from "./helpers/d1-flow-profile";
+import { isReadOnlySql } from "../functions/_lib/db/read-only-sql";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
@@ -157,4 +161,18 @@ describe("event call for proposals", () => {
     // A call without an end date has no close date to show.
     expect(event.proposalCall).toEqual({ open: true, path: "/events/2026/detail-call/propose/", closesAt: null });
   });
+});
+
+it("loads the mounted staff event detail with one participation batch and no primary guard writes", async () => {
+  const fixture = await seedEventAndAdmin(env.DB);
+  const token = await createAdminSession(env.DB, fixture.admin.id, crypto.randomUUID());
+  const profile = profileD1Flow(env.DB);
+  const response = await callApi({ ...env, DB: profile.db }, "/api/v1/events/pqc-2026", {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  expect(response.status).toBe(200);
+  expect(eventDetailResponseSchema.parse(await response.json()).event.id).toBe(fixture.eventId);
+  const report = await profile.report();
+  expect(report.roundTrips).toBeLessThanOrEqual(4);
+  expect(report.executedSql.every(isReadOnlySql)).toBe(true);
 });
