@@ -1,5 +1,5 @@
 import { secondaryEmailSignInAllowedSql, signInEmailAuthorizationEvidence } from "./email-sign-in-policy";
-import { prepareMonthlyActivity } from "../services/member-standing/activity";
+import { prepareMonthlyActivity, recordMonthlyActivity } from "../services/member-standing/activity";
 import { hasEventParticipation } from "./event-participation";
 /**
  * Canonical human identity session.
@@ -49,6 +49,7 @@ import {
 } from "./user-session-token";
 import { createEstablishedUserSessionResult, type UserSessionResult } from "./user-session-result";
 
+import { resolveUserSessionClaimsBatch } from "./user-session-live-data";
 import { USER_SESSIONS, resolveUserSessionClaims } from "./user-session-claims";
 export { findActiveIdentity, resolveUserSessionClaims } from "./user-session-claims";
 
@@ -164,7 +165,10 @@ export async function resolveUserSessionContext(
   env: Pick<Env, "INTERNAL_SIGNING_SECRET">,
 ): Promise<{ session: UserSessionResult; claims: UserSessionTokenClaims }> {
   const claims = await verifyUserSessionRequest(request, env);
-  return { claims, session: await resolveUserSessionClaims(db, claims) };
+  const [resolved] = await resolveUserSessionClaimsBatch(db, [claims]);
+  if (!resolved.ok) throw resolved.error;
+  recordAuditActingIdentity(resolved.session.identity.id, resolved.session.actingIdentityId);
+  return { claims, session: resolved.session };
 }
 
 export async function resolveUserSessionFromRequest(
@@ -215,7 +219,7 @@ export async function refreshUserSessionFromRequest(
     lastActivityAt: activityAt,
     staffLastActivityAt: session.staff ? activityAt : (claims.staffLastActivityAt ?? 0),
   });
-  await db.batch([prepareMonthlyActivity(db, claims.sub, claims.sid, nowIso())]);
+  await recordMonthlyActivity(db, claims.sub, claims.sid, nowIso());
   return {
     session: {
       ...session,

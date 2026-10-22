@@ -82,31 +82,18 @@ function SelectionHarness() {
   );
 }
 describe("canonical scheduling preview", () => {
-  it("unschedules through shared row actions only after canonical revision-bound server review", async () => {
+  it("unschedules with one revision-bound command and no separate review", async () => {
     const applied: unknown[] = [];
     let current = snapshot;
     const proposals: ReturnType<typeof agendaScheduleProposalSchema.parse>[] = [];
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string, init: RequestInit) => {
-        if (url.includes("/schedule/reviews")) {
-          const proposal = agendaScheduleProposalSchema.parse(JSON.parse(String(init.body)));
-          proposals.push(proposal);
-          expect(applied).toHaveLength(0);
-          return json({
-            expectedRevision: snapshot.revision,
-            reviewHash: "b".repeat(64),
-            affected: proposal.changes.map((change) => ({
-              before: snapshot.occurrences.find((item) => item.id === change.id),
-              after: { ...snapshot.occurrences.find((item) => item.id === change.id), ...change },
-              beforeOrder: 2,
-              afterOrder: null,
-            })),
-          });
-        }
+        if (url.includes("/schedule/reviews")) throw new Error("Direct placement must not request a separate review");
         if (url.endsWith("/schedule")) {
           const body = agendaScheduleApplySchema.parse(JSON.parse(String(init.body)));
           applied.push(body);
+          proposals.push(agendaScheduleProposalSchema.parse(body));
           current = {
             ...snapshot,
             revision: 4,
@@ -150,7 +137,7 @@ describe("canonical scheduling preview", () => {
     expect(current.occurrences[1].startAt).toBeNull();
     expect(current.occurrences[1].endAt).toBeNull();
     expect(host.querySelector("form")).toBeNull();
-    expect(applied).toEqual([{ ...proposals[0], reviewHash: "b".repeat(64) }]);
+    expect(applied).toEqual([proposals[0]]);
   });
   it("previews a canonical neighbor hidden by table filters, and writes only on explicit apply", async () => {
     const changes = stepAgendaSessions(
@@ -198,23 +185,11 @@ describe("canonical scheduling preview", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string, init: RequestInit) => {
-        if (url.includes("/schedule/reviews")) {
-          const proposal = agendaScheduleProposalSchema.parse(JSON.parse(String(init.body)));
-          proposals.push(proposal);
-          expect(applied).toHaveLength(0);
-          return json({
-            expectedRevision: 3,
-            reviewHash: "a".repeat(64),
-            affected: proposal.changes.map((change) => ({
-              before: snapshot.occurrences.find((item) => item.id === change.id),
-              after: { ...snapshot.occurrences.find((item) => item.id === change.id), ...change },
-              beforeOrder: 1,
-              afterOrder: 2,
-            })),
-          });
-        }
+        if (url.includes("/schedule/reviews")) throw new Error("Direct placement must not request a separate review");
         if (url.endsWith("/schedule")) {
-          applied.push(agendaScheduleApplySchema.parse(JSON.parse(String(init.body))));
+          const body = agendaScheduleApplySchema.parse(JSON.parse(String(init.body)));
+          applied.push(body);
+          proposals.push(agendaScheduleProposalSchema.parse(body));
           return json({ ...snapshot, revision: 4 });
         }
         if (url.includes("/occurrences"))
@@ -245,7 +220,7 @@ describe("canonical scheduling preview", () => {
     await settle();
     const proposal = agendaScheduleProposalSchema.parse(proposals[0]);
     expect(proposal.changes.map((item) => item.id).sort()).toEqual(["talk-10", "talk-11"]);
-    expect(applied).toEqual([{ ...proposal, reviewHash: "a".repeat(64) }]);
+    expect(applied).toEqual([proposal]);
     expect(host.querySelector("form")).toBeNull();
   });
 
@@ -448,7 +423,7 @@ it("keeps a fixed break unchanged instead of displacing it in a bulk step", () =
   expect(fixed).toEqual(before);
 });
 
-it("undoes a primary-room move through a reviewed reverse proposal with exact speaker placements", async () => {
+it("undoes a primary-room move through one reverse command with exact speaker placements", async () => {
   document.adoptedStyleSheets = [];
   const original = agendaSnapshotSchema.parse({
     ...snapshot,
@@ -493,7 +468,7 @@ it("undoes a primary-room move through a reviewed reverse proposal with exact sp
             afterOrder: 1,
           })),
         });
-      expect(agendaScheduleApplySchema.parse(JSON.parse(String(init.body))).reviewHash).toBe("a".repeat(64));
+      expect(agendaScheduleApplySchema.parse(JSON.parse(String(init.body))).reviewHash).toBeUndefined();
       current = { ...current, occurrences: next, revision: current.revision + 1 };
       return json(current);
     }),
@@ -521,9 +496,9 @@ it("undoes a primary-room move through a reviewed reverse proposal with exact sp
   expect(host.querySelector("[aria-label='Agenda days'] [aria-selected='true']")?.getAttribute("aria-controls")).toBe(
     "agenda-day-2026-12-01",
   );
-  expect(requests).toHaveLength(4);
-  expect(requests[2].url).toBe("/api/v1/events/event/agenda/schedule/reviews");
-  expect(requests[2].body).toMatchObject({
+  expect(requests).toHaveLength(2);
+  expect(requests[1].url).toBe("/api/v1/events/event/agenda/schedule");
+  expect(requests[1].body).toMatchObject({
     expectedRevision: 4,
     changes: [
       { id: "talk-10", roomId: "room", speakerPlacements: { speaker: { attendanceMode: "physical", roomId: "room" } } },

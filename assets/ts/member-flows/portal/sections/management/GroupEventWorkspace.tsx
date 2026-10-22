@@ -1,6 +1,6 @@
 import { eventClock } from "../../../../../shared/event-clock";
 import { groupEventWhenAndWhere } from "./group-event-place";
-import { EventStaffScanner } from "./EventStaffScanner";
+
 /** URL-addressed event record and nested sections inside its owning group. */
 import { useEffect, useState } from "preact/hooks";
 import { usePortalHashLocation } from "../../hash-location";
@@ -17,6 +17,41 @@ import { BreadcrumbBranch } from "../../../../ui/BreadcrumbScope";
 import { ProfileHeader } from "../../../../ui/ProfileHeader";
 import { lazy, Suspense } from "preact/compat";
 import { Spinner } from "../../../../components/Spinner";
+const ProposalDetailPage = lazy(() =>
+  import("../events/detail/ProposalDetailPage").then((module) => ({ default: module.ProposalDetailPage })),
+);
+const GroupEventCommunications = lazy(() =>
+  import("./GroupEventCommunications").then((module) => ({ default: module.GroupEventCommunications })),
+);
+const GroupEventInvitations = lazy(() =>
+  import("./GroupEventInvitations").then((module) => ({ default: module.GroupEventInvitations })),
+);
+const GroupEventProposals = lazy(() =>
+  import("./GroupEventProposals").then((module) => ({ default: module.GroupEventProposals })),
+);
+const EventProposalSpeakersTable = lazy(() =>
+  import("../../../../components/proposals/EventProposalSpeakersTable").then((module) => ({
+    default: module.EventProposalSpeakersTable,
+  })),
+);
+const GroupEventOverview = lazy(() =>
+  import("./GroupEventOverview").then((module) => ({ default: module.GroupEventOverview })),
+);
+const GroupEventRegistrationRecord = lazy(() =>
+  import("./GroupEventRegistrationRecord").then((module) => ({ default: module.GroupEventRegistrationRecord })),
+);
+const GroupEventRegistrations = lazy(() =>
+  import("./GroupEventRegistrations").then((module) => ({ default: module.GroupEventRegistrations })),
+);
+const GroupEventSettingsTab = lazy(() =>
+  import("./GroupEventSettingsTab").then((module) => ({ default: module.GroupEventSettingsTab })),
+);
+const GroupEventRecordSections = lazy(() =>
+  import("./GroupEventRecordSections").then((module) => ({ default: module.GroupEventRecordSections })),
+);
+const EventStaffScanner = lazy(() =>
+  import("./EventStaffScanner").then((module) => ({ default: module.EventStaffScanner })),
+);
 const BadgeCredentials = lazy(() =>
   import("../events/detail/badges/BadgeCredentials").then((module) => ({ default: module.BadgeCredentials })),
 );
@@ -30,22 +65,15 @@ const EventLiveControlRoom = lazy(() =>
   import("../events/detail/live/EventLiveControlRoom").then((module) => ({ default: module.EventLiveControlRoom })),
 );
 const EventStats = lazy(() => import("../events/detail/EventStats").then((module) => ({ default: module.EventStats })));
-import { ProposalDetailPage } from "../events/detail/ProposalDetailPage";
-import { GroupEventCommunications, NEW_CAMPAIGN_SEGMENT } from "./GroupEventCommunications";
-import { GroupEventInvitations } from "./GroupEventInvitations";
-import { GroupEventProposals } from "./GroupEventProposals";
-import { groupEventProposalPath } from "./GroupEventProposals";
-import { EventProposalSpeakersTable } from "../../../../components/proposals/EventProposalSpeakersTable";
-import { GroupEventOverview } from "./GroupEventOverview";
-import { GroupEventRegistrationRecord } from "./GroupEventRegistrationRecord";
-import { GroupEventRegistrations } from "./GroupEventRegistrations";
-import { GroupEventSettingsTab } from "./GroupEventSettingsTab";
+
+import { groupEventProposalPath, CALL_SEGMENT, NEW_CAMPAIGN_SEGMENT } from "./group-event-paths";
+
 // `pk-datalist-aligned` and `pk-mono` ship in Content.css, a lazy chunk
 // rather than the entry stylesheet.
 import "../../../../ui/Content.css";
 
 const EVENT_RESPONSES_SEGMENT = "responses";
-import { CALL_SEGMENT, GroupEventRecordSections } from "./GroupEventRecordSections";
+
 import {
   EVENT_WORKSPACE_TABS,
   GROUP_EVENT_OVERVIEW_TAB,
@@ -187,189 +215,191 @@ export function GroupEventWorkspace({
           <ErrorAlert error="This event section is not available to your current identity." />
         ) : (
           <section aria-label={`${activeTabLabel} — ${event.name}`} class="pk-stack">
-            {activeTab === GROUP_EVENT_OVERVIEW_TAB && (
-              <GroupEventOverview
-                event={event}
-                groupId={groupId}
-                canRegister={canRegister}
-                visibleTabs={new Set(visibleTabs.map((item) => item.key))}
-                tabHref={(key) => usePortalHashLocation.hrefs(tabPath(key))}
-              />
-            )}
-
-            {activeTab === "registrations" &&
-              (recordOpen && detailId ? (
-                <GroupEventRegistrationRecord
-                  key={detailId}
+            <Suspense fallback={<Spinner />}>
+              {activeTab === GROUP_EVENT_OVERVIEW_TAB && (
+                <GroupEventOverview
+                  event={event}
                   groupId={groupId}
-                  eventId={event.id}
-                  eventSlug={event.slug}
-                  badgesPath={`${tabPath("registrations")}/badges`}
-                  registrationId={detailId}
-                  canVip={canManage}
+                  canRegister={canRegister}
+                  visibleTabs={new Set(visibleTabs.map((item) => item.key))}
+                  tabHref={(key) => usePortalHashLocation.hrefs(tabPath(key))}
                 />
-              ) : (
-                <GroupEventRecordSections
-                  label="Registration"
-                  basePath={tabPath("registrations")}
-                  responsesActive={responsesActive}
-                  eventSlug={event.slug}
-                  purpose="event_registration"
-                  badgesActive={detailId === "badges"}
-                  badges={
-                    canManage ? (
-                      <Suspense fallback={<Spinner />}>
-                        <BadgeCredentials
-                          slug={event.slug}
-                          basePath={`${tabPath("registrations")}/badges`}
-                          credentialId={detailTab}
-                          segment={detailSegment}
-                          eventId={event.id}
-                          groupId={groupId}
-                          printRequest={badgePrint?.eventId === event.id ? badgePrint : null}
-                          onPrintClose={() => setBadgePrint(null)}
-                        />
-                      </Suspense>
-                    ) : detailId === "badges" ? (
-                      <ErrorAlert error="Badge management is not available to your current identity." />
-                    ) : undefined
-                  }
-                >
-                  <GroupEventRegistrations
+              )}
+
+              {activeTab === "registrations" &&
+                (recordOpen && detailId ? (
+                  <GroupEventRegistrationRecord
+                    key={detailId}
                     groupId={groupId}
                     eventId={event.id}
                     eventSlug={event.slug}
                     badgesPath={`${tabPath("registrations")}/badges`}
-                    canManage={canManage}
-                    onPrint={(scope) => {
-                      setBadgePrint({ scope, session: portalSession.value, eventId: event.id });
-                      navigate(`${tabPath("registrations")}/badges`);
+                    registrationId={detailId}
+                    canVip={canManage}
+                  />
+                ) : (
+                  <GroupEventRecordSections
+                    label="Registration"
+                    basePath={tabPath("registrations")}
+                    responsesActive={responsesActive}
+                    eventSlug={event.slug}
+                    purpose="event_registration"
+                    badgesActive={detailId === "badges"}
+                    badges={
+                      canManage ? (
+                        <Suspense fallback={<Spinner />}>
+                          <BadgeCredentials
+                            slug={event.slug}
+                            basePath={`${tabPath("registrations")}/badges`}
+                            credentialId={detailTab}
+                            segment={detailSegment}
+                            eventId={event.id}
+                            groupId={groupId}
+                            printRequest={badgePrint?.eventId === event.id ? badgePrint : null}
+                            onPrintClose={() => setBadgePrint(null)}
+                          />
+                        </Suspense>
+                      ) : detailId === "badges" ? (
+                        <ErrorAlert error="Badge management is not available to your current identity." />
+                      ) : undefined
+                    }
+                  >
+                    <GroupEventRegistrations
+                      groupId={groupId}
+                      eventId={event.id}
+                      eventSlug={event.slug}
+                      badgesPath={`${tabPath("registrations")}/badges`}
+                      canManage={canManage}
+                      onPrint={(scope) => {
+                        setBadgePrint({ scope, session: portalSession.value, eventId: event.id });
+                        navigate(`${tabPath("registrations")}/badges`);
+                      }}
+                    />
+                  </GroupEventRecordSections>
+                ))}
+
+              {activeTab === "proposals" &&
+                (recordOpen && detailId ? (
+                  <ProposalDetailPage
+                    key={detailId}
+                    slug={event.slug}
+                    proposalId={detailId}
+                    tab={detailTab}
+                    segment={detailSegment}
+                    tabHref={(key) =>
+                      `${tabPath("proposals")}/${encodeURIComponent(detailId)}${key === "submission" ? "" : `/${key}`}`
+                    }
+                    parentNavigation
+                  />
+                ) : (
+                  <GroupEventRecordSections
+                    label="Proposal"
+                    basePath={tabPath("proposals")}
+                    responsesActive={responsesActive}
+                    speakersActive={speakersActive}
+                    speakers={
+                      <EventProposalSpeakersTable
+                        slug={event.slug}
+                        rowHref={(speaker) =>
+                          usePortalHashLocation.hrefs(groupEventProposalPath(groupId, event.id, speaker.proposalId))
+                        }
+                      />
+                    }
+                    eventSlug={event.slug}
+                    purpose="proposal_submission"
+                  >
+                    <GroupEventProposals groupId={groupId} eventId={event.id} eventSlug={event.slug} />
+                  </GroupEventRecordSections>
+                ))}
+
+              {activeTab === "invitations" && invitationAudience && (
+                <>
+                  {invitationAudiences.length > 1 && invitationSegment !== "new" && (
+                    <Tabs
+                      label="Invitation audiences"
+                      items={invitationAudiences.map(({ key, label }) => ({ key, label }))}
+                      active={invitationAudience.key}
+                      hrefFor={invitationPath}
+                    />
+                  )}
+                  <GroupEventInvitations
+                    key={invitationAudience.key}
+                    groupId={groupId}
+                    event={event}
+                    inviteType={invitationAudience.inviteType}
+                    segment={invitationSegment}
+                    listPath={invitationPath(invitationAudience.key)}
+                  />
+                </>
+              )}
+
+              {activeTab === "communications" && (
+                <GroupEventCommunications
+                  groupId={groupId}
+                  eventId={event.id}
+                  eventSlug={event.slug}
+                  composing={detailId === NEW_CAMPAIGN_SEGMENT}
+                  listPath={tabPath("communications")}
+                />
+              )}
+
+              {activeTab === "agenda" && (
+                <Suspense fallback={<Spinner />}>
+                  <AgendaEditor
+                    slug={event.slug}
+                    canEdit={hasEventAgendaPermission(event.id, "agenda:write")}
+                    canReviewAppearances={hasEventAgendaPermission(event.id, "agenda:appearance_approve")}
+                    teamEligibilityPath={`${tabPath("settings")}/team`}
+                  />
+                </Suspense>
+              )}
+              {activeTab === "scanner" && <EventStaffScanner eventId={event.id} slug={event.slug} />}
+              {activeTab === "live" && (
+                <Suspense fallback={<Spinner />}>
+                  <EventLiveControlRoom
+                    slug={event.slug}
+                    occurrenceId={detailId}
+                    sessionPath={(occurrenceId) => `${tabPath("live")}/${encodeURIComponent(occurrenceId)}`}
+                    eventPath={tabPath(GROUP_EVENT_OVERVIEW_TAB)}
+                  />
+                </Suspense>
+              )}
+              {activeTab === "leads" && (
+                <Suspense fallback={<Spinner />}>
+                  <SponsorLeads slug={event.slug} timeZone={event.timezone} />
+                </Suspense>
+              )}
+              {activeTab === "stats" && (
+                <Suspense fallback={<Spinner label="Loading analytics…" />}>
+                  <EventStats
+                    slug={event.slug}
+                    section={detailId}
+                    subTab={detailTab}
+                    basePath={tabPath("stats")}
+                    legacyAttendanceBasePath={tabPath("attendance")}
+                    canViewAnalytics={event.capabilities.includes("manage_attendance")}
+                    attendance={{
+                      timeZone: eventClock(event),
+                      canRead: hasEventAgendaPermission(event.id, "agenda:attendance_read"),
+                      canImport: hasEventAgendaPermission(event.id, "agenda:attendance_import"),
+                      canCorrect: hasEventAgendaPermission(event.id, "agenda:attendance_correct"),
                     }}
                   />
-                </GroupEventRecordSections>
-              ))}
+                </Suspense>
+              )}
 
-            {activeTab === "proposals" &&
-              (recordOpen && detailId ? (
-                <ProposalDetailPage
-                  key={detailId}
-                  slug={event.slug}
-                  proposalId={detailId}
-                  tab={detailTab}
-                  segment={detailSegment}
-                  tabHref={(key) =>
-                    `${tabPath("proposals")}/${encodeURIComponent(detailId)}${key === "submission" ? "" : `/${key}`}`
-                  }
-                  parentNavigation
-                />
-              ) : (
-                <GroupEventRecordSections
-                  label="Proposal"
-                  basePath={tabPath("proposals")}
-                  responsesActive={responsesActive}
-                  speakersActive={speakersActive}
-                  speakers={
-                    <EventProposalSpeakersTable
-                      slug={event.slug}
-                      rowHref={(speaker) =>
-                        usePortalHashLocation.hrefs(groupEventProposalPath(groupId, event.id, speaker.proposalId))
-                      }
-                    />
-                  }
-                  eventSlug={event.slug}
-                  purpose="proposal_submission"
-                >
-                  <GroupEventProposals groupId={groupId} eventId={event.id} eventSlug={event.slug} />
-                </GroupEventRecordSections>
-              ))}
-
-            {activeTab === "invitations" && invitationAudience && (
-              <>
-                {invitationAudiences.length > 1 && invitationSegment !== "new" && (
-                  <Tabs
-                    label="Invitation audiences"
-                    items={invitationAudiences.map(({ key, label }) => ({ key, label }))}
-                    active={invitationAudience.key}
-                    hrefFor={invitationPath}
-                  />
-                )}
-                <GroupEventInvitations
-                  key={invitationAudience.key}
-                  groupId={groupId}
+              {activeTab === "settings" && (
+                <GroupEventSettingsTab
                   event={event}
-                  inviteType={invitationAudience.inviteType}
-                  segment={invitationSegment}
-                  listPath={invitationPath(invitationAudience.key)}
+                  groupId={groupId}
+                  settingsPath={tabPath("settings")}
+                  detailId={detailId}
+                  detailTab={detailTab}
+                  detailSegment={detailSegment}
+                  onUpdated={onUpdated}
                 />
-              </>
-            )}
-
-            {activeTab === "communications" && (
-              <GroupEventCommunications
-                groupId={groupId}
-                eventId={event.id}
-                eventSlug={event.slug}
-                composing={detailId === NEW_CAMPAIGN_SEGMENT}
-                listPath={tabPath("communications")}
-              />
-            )}
-
-            {activeTab === "agenda" && (
-              <Suspense fallback={<Spinner />}>
-                <AgendaEditor
-                  slug={event.slug}
-                  canEdit={hasEventAgendaPermission(event.id, "agenda:write")}
-                  canReviewAppearances={hasEventAgendaPermission(event.id, "agenda:appearance_approve")}
-                  teamEligibilityPath={`${tabPath("settings")}/team`}
-                />
-              </Suspense>
-            )}
-            {activeTab === "scanner" && <EventStaffScanner eventId={event.id} slug={event.slug} />}
-            {activeTab === "live" && (
-              <Suspense fallback={<Spinner />}>
-                <EventLiveControlRoom
-                  slug={event.slug}
-                  occurrenceId={detailId}
-                  sessionPath={(occurrenceId) => `${tabPath("live")}/${encodeURIComponent(occurrenceId)}`}
-                  eventPath={tabPath(GROUP_EVENT_OVERVIEW_TAB)}
-                />
-              </Suspense>
-            )}
-            {activeTab === "leads" && (
-              <Suspense fallback={<Spinner />}>
-                <SponsorLeads slug={event.slug} timeZone={event.timezone} />
-              </Suspense>
-            )}
-            {activeTab === "stats" && (
-              <Suspense fallback={<Spinner label="Loading analytics…" />}>
-                <EventStats
-                  slug={event.slug}
-                  section={detailId}
-                  subTab={detailTab}
-                  basePath={tabPath("stats")}
-                  legacyAttendanceBasePath={tabPath("attendance")}
-                  canViewAnalytics={event.capabilities.includes("manage_attendance")}
-                  attendance={{
-                    timeZone: eventClock(event),
-                    canRead: hasEventAgendaPermission(event.id, "agenda:attendance_read"),
-                    canImport: hasEventAgendaPermission(event.id, "agenda:attendance_import"),
-                    canCorrect: hasEventAgendaPermission(event.id, "agenda:attendance_correct"),
-                  }}
-                />
-              </Suspense>
-            )}
-
-            {activeTab === "settings" && (
-              <GroupEventSettingsTab
-                event={event}
-                groupId={groupId}
-                settingsPath={tabPath("settings")}
-                detailId={detailId}
-                detailTab={detailTab}
-                detailSegment={detailSegment}
-                onUpdated={onUpdated}
-              />
-            )}
+              )}
+            </Suspense>
           </section>
         )}
       </section>

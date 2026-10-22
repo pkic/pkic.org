@@ -3,7 +3,7 @@ import type { EventFormsPurpose } from "../../../../../shared/schemas/forms";
 import { Tabs } from "../../../../components/Tabs";
 import { EventFormResponses } from "../../../../components/forms/management/FormManagement";
 const EVENT_RESPONSES_SEGMENT = "responses";
-export const CALL_SEGMENT = "call";
+import { CALL_SEGMENT } from "./group-event-paths";
 export function GroupEventRecordSections({
   label,
   basePath,

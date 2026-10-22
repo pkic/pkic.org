@@ -3,6 +3,9 @@ import { revalidateLiveRoomParticipants } from "../functions/_lib/services/live-
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { AppError } from "../functions/_lib/errors";
+import { callApi } from "./helpers/app";
+import { profileD1Flow } from "./helpers/d1-flow-profile";
+import { userAuthSessionResponseSchema } from "../assets/shared/schemas/user-auth";
 import { resolveUserSessionClaims } from "../functions/_lib/auth/user-session";
 import { resolveUserSessionClaimsBatch } from "../functions/_lib/auth/user-session-live-data";
 import { verifyUserSessionToken, type UserSessionTokenClaims } from "../functions/_lib/auth/user-session-token";
@@ -27,6 +30,21 @@ function comparable(result: Awaited<ReturnType<typeof singleton>>) {
 }
 describe("live setwise auth follows the canonical HTTP claims policy", () => {
   beforeEach(() => f.setup());
+  it("refreshes an already-recorded month using at most seven read-only database round trips", async () => {
+    await env.DB.prepare(
+      "UPDATE standing_settings SET activity_started_at='2026-01-01T00:00:00.000Z' WHERE id='default'",
+    ).run();
+    await callApi(env, "/api/v1/auth/session", { headers: { "x-user-token": f.tokens.operator } });
+    const profile = profileD1Flow(env.DB);
+    const response = await callApi({ ...env, DB: profile.db }, "/api/v1/auth/session", {
+      headers: { "x-user-token": f.tokens.operator },
+    });
+    expect(response.status).toBe(200);
+    userAuthSessionResponseSchema.parse(await response.json());
+    const report = await profile.report();
+    expect(report.roundTrips).toBeLessThanOrEqual(7);
+    expect(report.queries.every(({ sql }) => !/\b(?:INSERT|UPDATE|DELETE)\b/u.test(sql))).toBe(true);
+  });
   it("has identical active capacity and grants projections", async () => {
     const claims = await Promise.all([claimsFor("attendee"), claimsFor("speaker"), claimsFor("operator")]);
     const batch = await resolveUserSessionClaimsBatch(env.DB, claims);

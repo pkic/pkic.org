@@ -19,10 +19,7 @@ import { useData } from "../../../../hooks/useData";
 import { getJson } from "../../../../shared/api-client";
 import { usePortalHashLocation } from "../../hash-location";
 
-/** The proposal's address inside its group event. */
-export function groupEventProposalPath(groupId: string, eventId: string, proposalId: string): string {
-  return `/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(eventId)}/proposals/${encodeURIComponent(proposalId)}`;
-}
+import { groupEventProposalPath } from "./group-event-paths";
 
 export function GroupEventProposals({
   groupId,

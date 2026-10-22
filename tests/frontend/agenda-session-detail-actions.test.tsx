@@ -1,8 +1,4 @@
-import {
-  agendaScheduleProposalSchema,
-  agendaScheduleApplySchema,
-  agendaScheduleReviewSchema,
-} from "../../assets/shared/schemas/event-agenda-schedule";
+import { agendaScheduleApplySchema } from "../../assets/shared/schemas/event-agenda-schedule";
 // @vitest-environment jsdom
 import { render } from "preact";
 import { act } from "preact/test-utils";
@@ -153,37 +149,22 @@ describe("shared session actions in details", () => {
           },
         ],
       });
-      const reviews: ReturnType<typeof agendaScheduleProposalSchema.parse>[] = [];
       const commands: ReturnType<typeof agendaScheduleApplySchema.parse>[] = [];
       let refusing = true;
       vi.stubGlobal(
         "fetch",
         vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
           const path = new URL(String(input), "https://example.test").pathname;
-          if (path.endsWith("/schedule/reviews")) {
-            const request = agendaScheduleProposalSchema.parse(JSON.parse(String(init?.body)));
-            reviews.push(request);
+          if (path.endsWith("/schedule/reviews"))
+            throw new Error("Direct placement must not request a separate review");
+          if (path.endsWith("/schedule")) {
+            const request = agendaScheduleApplySchema.parse(JSON.parse(String(init?.body)));
+            commands.push(request);
             if (refusing)
               return new Response(
                 JSON.stringify({ error: { code: "CONFLICT", message: "Another organizer changed the agenda." } }),
                 { status: 409, headers: { "content-type": "application/json" } },
               );
-            return json(
-              agendaScheduleReviewSchema.parse({
-                expectedRevision: data.revision,
-                reviewHash: "a".repeat(64),
-                affected: request.changes.map((change) => ({
-                  before: data.occurrences.find((row) => row.id === change.id),
-                  after: { ...data.occurrences.find((row) => row.id === change.id), ...change },
-                  beforeOrder: 1,
-                  afterOrder: 1,
-                })),
-              }),
-            );
-          }
-          if (path.endsWith("/schedule")) {
-            const request = agendaScheduleApplySchema.parse(JSON.parse(String(init?.body)));
-            commands.push(request);
             return json(
               agendaSnapshotSchema.parse({
                 ...data,
@@ -249,14 +230,14 @@ describe("shared session actions in details", () => {
         await settle();
       };
       await submit();
-      await vi.waitFor(() => expect(reviews).toHaveLength(1));
+      await vi.waitFor(() => expect(commands).toHaveLength(1));
       expect(dialog.textContent).toContain("Another organizer changed the agenda.");
       expect(dialog.isConnected).toBe(true);
       expect(canvas.isConnected).toBe(true);
-      expect(commands).toHaveLength(0);
-      expect(reviews[0].expectedRevision).toBe(7);
+      expect(commands).toHaveLength(1);
+      expect(commands[0].expectedRevision).toBe(7);
       if (action === "locations")
-        expect(reviews[0].changes).toEqual([
+        expect(commands[0].changes).toEqual([
           {
             id: "session",
             startAt: "2026-12-01T10:00:00.000Z",
@@ -266,21 +247,21 @@ describe("shared session actions in details", () => {
           },
         ]);
       else if (action === "move")
-        expect(reviews[0].changes[0]).toMatchObject({
+        expect(commands[0].changes[0]).toMatchObject({
           id: "session",
           startAt: "2026-12-01T11:00:00.000Z",
           endAt: "2026-12-01T11:30:00.000Z",
           roomId: "room",
         });
       else
-        expect(reviews[0].changes.map((change) => [change.id, change.startAt, change.endAt])).toEqual([
+        expect(commands[0].changes.map((change) => [change.id, change.startAt, change.endAt])).toEqual([
           ["session", "2026-12-01T10:30:00.000Z", "2026-12-01T11:00:00.000Z"],
           ["second", "2026-12-01T10:00:00.000Z", "2026-12-01T10:30:00.000Z"],
         ]);
       refusing = false;
       await submit();
-      await vi.waitFor(() => expect(commands).toHaveLength(1));
-      expect(commands[0]).toEqual({ ...reviews[0], reviewHash: "a".repeat(64) });
+      await vi.waitFor(() => expect(commands).toHaveLength(2));
+      expect(commands[1]).toEqual(commands[0]);
       expect(dialog.isConnected).toBe(false);
       expect(canvas.isConnected).toBe(true);
     },

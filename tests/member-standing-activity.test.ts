@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { prepareUserSession } from "../functions/_lib/auth/user-session";
-import { prepareMonthlyActivity } from "../functions/_lib/services/member-standing/activity";
+import { prepareMonthlyActivity, recordMonthlyActivity } from "../functions/_lib/services/member-standing/activity";
 import {
   prepareEventSpeakingStanding,
   reconcileEventSpeakingStanding,
@@ -89,6 +89,22 @@ describe("atomic standing ledger", () => {
     const standing = memberStandingSchema.parse(await getMemberStanding(env.DB, userId, at));
     expect(standing.points).toBe(4);
     expect(standing.lastActiveAt).toBe("2026-10-01T00:00:00.000Z");
+  });
+
+  it("keeps concurrent refresh awards idempotent across the UTC month boundary", async () => {
+    const session = await prepareUserSession(env.DB, userId, 24);
+    await env.DB.batch(session.statements);
+    await env.DB.prepare("UPDATE sessions SET expires_at='2027-01-01T00:00:00.000Z' WHERE id=?")
+      .bind(session.sessionId)
+      .run();
+    await env.DB.prepare("DELETE FROM user_standing_awards WHERE user_id=?").bind(userId).run();
+    for (const month of ["2026-09-30T23:59:59.999Z", "2026-10-01T00:00:00.000Z"]) {
+      await Promise.all([
+        recordMonthlyActivity(env.DB, userId, session.sessionId, month),
+        recordMonthlyActivity(env.DB, userId, session.sessionId, month),
+      ]);
+    }
+    expect(await ledgerCount()).toBe(2);
   });
 
   it("does not award expired, revoked, wrong-owner or disabled-account sessions", async () => {

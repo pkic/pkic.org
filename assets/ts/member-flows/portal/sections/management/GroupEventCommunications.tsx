@@ -8,7 +8,7 @@ import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { usePortalHashLocation } from "../../hash-location";
 import { toast } from "../../ui";
 
-export const NEW_CAMPAIGN_SEGMENT = "new";
+import { NEW_CAMPAIGN_SEGMENT } from "./group-event-paths";
 
 export function GroupEventCommunications({
   groupId,

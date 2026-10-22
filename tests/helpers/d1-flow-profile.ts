@@ -4,10 +4,14 @@ interface QuerySample {
   sql: string;
   durationMs: number;
   operation: string;
+  startedAtMs: number;
 }
 
 /** Test-only instrumentation: never exports SQL parameter values or user data. */
-export function profileD1Flow(database: DatabaseLike) {
+export function profileD1Flow(database: DatabaseLike, options: { latencyMs?: number } = {}) {
+  const startedAt = performance.now();
+  const latencyMs = options.latencyMs ?? 0;
+  if (!Number.isFinite(latencyMs) || latencyMs < 0) throw new Error("D1 latency must be finite and nonnegative");
   const queries: QuerySample[] = [];
   const constraints: string[] = [];
   const statements = new WeakMap<StatementLike, { raw: StatementLike; sql: string; bindings: unknown[] }>();
@@ -27,9 +31,15 @@ export function profileD1Flow(database: DatabaseLike) {
   async function timed<T>(operation: string, sql: string, run: () => Promise<T>): Promise<T> {
     const start = performance.now();
     try {
+      if (latencyMs > 0) await new Promise((resolve) => setTimeout(resolve, latencyMs));
       return await run();
     } finally {
-      queries.push({ operation, sql: sql.replace(/\s+/g, " ").trim(), durationMs: performance.now() - start });
+      queries.push({
+        operation,
+        sql: sql.replace(/\s+/g, " ").trim(),
+        startedAtMs: start - startedAt,
+        durationMs: performance.now() - start,
+      });
     }
   }
 
@@ -91,6 +101,17 @@ export function profileD1Flow(database: DatabaseLike) {
       }
       return {
         constraints,
+        latencyMs,
+        traceEvents: queries.map((query, index) => ({
+          name: `D1 ${query.operation}`,
+          cat: "database",
+          ph: "X",
+          pid: 1,
+          tid: index + 1,
+          ts: query.startedAtMs * 1_000,
+          dur: query.durationMs * 1_000,
+          args: { sql: query.sql },
+        })),
         roundTrips: queries.length,
         statements: executed.length,
         queries,

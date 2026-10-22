@@ -10,6 +10,10 @@ import { canonicalAgendaOrder } from "../../../../assets/shared/event-agenda-ord
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
 import { getAgenda } from "./read";
+import { all } from "../../db/queries";
+import { agendaPublicationStatusSql } from "./publication-status";
+import { getAgendaStaffingReport } from "./staffing-report";
+import type { AgendaOccurrence } from "../../../../assets/shared/schemas/event-agenda";
 import { validateAgendaSchedule } from "./mutations";
 import { assertPublicationAllocations, preparePublicationAllocationGuard } from "./publication-allocations";
 import { agendaAdditionalRoomStatements } from "./occurrence-rooms";
@@ -109,7 +113,7 @@ export async function applyAgendaSchedule(
     input,
     actorId,
   );
-  if (review.reviewHash !== input.reviewHash)
+  if (input.reviewHash !== undefined && review.reviewHash !== input.reviewHash)
     throw new AppError(
       409,
       "AGENDA_SCHEDULE_REVIEW_CHANGED",
@@ -133,7 +137,26 @@ export async function applyAgendaSchedule(
     actorId,
     conflictProposal,
   );
-  return getAgenda(db, eventId, eventSlug);
+  // The revision guard committed exactly this schedule. Refresh only the projections affected by placements.
+  const committed = { ...next, revision: input.expectedRevision + 1 };
+  const [statuses, staffingReport] = await Promise.all([
+    all<{ id: string; publication_status: AgendaOccurrence["publicationStatus"] | null }>(
+      db,
+      `SELECT id,CASE WHEN id IN(SELECT value FROM json_each(?)) THEN ${agendaPublicationStatusSql} END AS publication_status
+       FROM event_agenda_occurrences WHERE event_id=? ORDER BY start_at,id LIMIT 2001`,
+      [JSON.stringify(input.changes.map((change) => change.id)), eventId],
+    ),
+    getAgendaStaffingReport(db, eventId, committed),
+  ]);
+  const occurrenceById = new Map(committed.occurrences.map((item) => [item.id, item]));
+  return {
+    ...committed,
+    occurrences: statuses.flatMap((row) => {
+      const item = occurrenceById.get(row.id);
+      return item ? [{ ...item, publicationStatus: row.publication_status ?? item.publicationStatus }] : [];
+    }),
+    staffingReport,
+  };
 }
 
 function speakerPlacementStatements(
