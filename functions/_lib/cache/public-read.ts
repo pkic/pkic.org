@@ -15,6 +15,13 @@ export function isAnonymousReadRequest(request: Request): boolean {
   return (request.method === "GET" || request.method === "HEAD") && !hasAuthenticationCredential(request);
 }
 
+/** Authentication responses cannot be shared, so avoid the cache entrypoint round trip. */
+export function isPublicReadCacheRequest(request: Request): boolean {
+  if (!isAnonymousReadRequest(request)) return false;
+  const pathname = new URL(request.url).pathname;
+  return pathname !== "/api/v1/auth" && !pathname.startsWith("/api/v1/auth/");
+}
+
 /** Route registration opts a successful, caller-independent read into the shared policy. */
 export function markPublicRead(request: Request, response: Response, sensitive = false): Response {
   if (!isAnonymousReadRequest(request) || sensitive || response.status !== 200 || response.headers.has("set-cookie")) {
