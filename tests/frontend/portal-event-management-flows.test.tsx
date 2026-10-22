@@ -181,8 +181,10 @@ describe("portal event management flows", () => {
     const container = mount(
       <GroupEventWorkspace event={responseEvent} groupId={GROUP_ID} tab="settings" detailId="terms" />,
     );
-    await settle();
-    expect(container.textContent).toContain("Terms and conditions");
+    await vi.waitFor(async () => {
+      await settle();
+      expect(container.textContent).toContain("Terms and conditions");
+    });
     await beginRecordEdit(container, "Event terms actions", "Edit terms");
     expect(
       Array.from(container.querySelectorAll<HTMLInputElement>("input")).some(

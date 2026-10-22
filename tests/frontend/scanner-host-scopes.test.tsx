@@ -76,7 +76,10 @@ async function mountGroup() {
   host = document.createElement("div");
   document.body.append(host);
   await act(() => render(<GroupEventWorkspace event={event} groupId="group" tab="scanner" />, host));
-  await settle();
+  await vi.waitFor(async () => {
+    await settle();
+    expect(mounts.count).toBeGreaterThan(0);
+  });
 }
 describe("scanner hosts", () => {
   it("limits group scanner actions and requires admission authority for exceptions", async () => {

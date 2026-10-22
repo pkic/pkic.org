@@ -481,8 +481,10 @@ describe("portal event form placement management", () => {
       capabilities: ["view", "manage"],
     };
     const manager = mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} tab="settings" detailId="cfp" />);
-    await settle();
-    expect(manager.textContent).toContain("Proposal submission questions");
+    await vi.waitFor(async () => {
+      await settle();
+      expect(manager.textContent).toContain("Proposal submission questions");
+    });
     const reviewer = mount(
       <GroupEventWorkspace
         event={{ ...event, capabilities: ["view"] }}
