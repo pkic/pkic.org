@@ -198,7 +198,7 @@ test("two already-open live moderator clients stop receiving private questions, 
       expect(await page.evaluate(() => performance.timeOrigin)).toBe(documents[index]);
       // Ordinary attendee access remains, but a fresh snapshot excludes operator-only content.
       expect((await page.request.get(`/api/v1/events/${fixture.slug}`)).status()).toBe(200);
-      expect((await page.request.post(`${api}/occurrences/${occurrence.id}/live/overlays`)).status()).toBe(403);
+      expect((await page.request.post(`${api}/rooms/${room.id}/live/overlays`)).status()).toBe(403);
       await connectLiveBrowser(page, path);
       await expect
         .poll(async () => (await liveMessages(page)).some((message) => message.type === "room.snapshot"))
