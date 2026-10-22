@@ -8,7 +8,7 @@ import { getConfig } from "./_lib/config";
 import type { Env } from "./_lib/types";
 import { primaryFirstDb } from "./_lib/db/session";
 import { withRequestD1Session } from "./_lib/db/request-session";
-import { WorkerEntrypoint } from "cloudflare:workers";
+import { WorkerEntrypoint, tracing } from "cloudflare:workers";
 import {
   publicSessionRecordingRequest,
   isSessionRecordingPublicPath,
@@ -19,7 +19,7 @@ import {
 } from "./_lib/services/session-presentation-public-release";
 import {
   conditionalPublicReadResponse,
-  isAnonymousReadRequest,
+  isPublicReadCacheRequest,
   publicReadCacheResponse,
 } from "./_lib/cache/public-read";
 
@@ -31,9 +31,11 @@ export { LiveSessionRoom } from "./_lib/services/live-session/room";
 function handleHttpRequest(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   // Each request owns the scope that tells its audit records which identity the signed-in person acts as.
   return runWithAuditActorScope(async () => {
-    const { default: fetchWithMcp } = await import("./http-router");
-    return withRequestD1Session(request, env, (sessionEnv) =>
-      fetchWithMcp(request, withDependencyHandling(sessionEnv), ctx),
+    const { default: fetchWithMcp } = await tracing.enterSpan("http.router.load", () => import("./http-router"));
+    return tracing.enterSpan("http.router.handle", () =>
+      withRequestD1Session(request, env, (sessionEnv) =>
+        fetchWithMcp(request, withDependencyHandling(sessionEnv), ctx),
+      ),
     );
   });
 }
@@ -46,7 +48,7 @@ export class PublicRead extends WorkerEntrypoint<Env> {
       isSessionRecordingPublicPath(new URL(request.url).pathname)
     )
       return new Response(null, { status: 404, headers: { "cache-control": "no-store" } });
-    if (!isAnonymousReadRequest(request)) {
+    if (!isPublicReadCacheRequest(request)) {
       return new Response(null, { status: 404, headers: { "cache-control": "no-store" } });
     }
     try {
@@ -93,16 +95,19 @@ export default {
         liveRoomSocketRequest(request, withDependencyHandling(sessionEnv)),
       );
     try {
-      if (isAnonymousReadRequest(request)) {
+      if (isPublicReadCacheRequest(request)) {
         const cacheContext = ctx as ExecutionContext & {
           exports?: { PublicRead: { fetch(request: Request, init: { cf: { cacheKey: string } }): Promise<Response> } };
         };
         if (cacheContext.exports && "PublicRead" in cacheContext.exports) {
+          const publicRead = cacheContext.exports.PublicRead;
           const headers = new Headers(request.headers);
           headers.delete("if-none-match");
           headers.delete("if-modified-since");
           const cacheRequest = new Request(request, { method: "GET", headers });
-          const response = await cacheContext.exports.PublicRead.fetch(cacheRequest, { cf: { cacheKey: request.url } });
+          const response = await tracing.enterSpan("http.public_read.cache", () =>
+            publicRead.fetch(cacheRequest, { cf: { cacheKey: request.url } }),
+          );
           const conditional = conditionalPublicReadResponse(request, response);
           return request.method === "HEAD" && conditional.status === 200
             ? new Response(null, conditional)

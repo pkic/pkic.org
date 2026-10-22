@@ -10,7 +10,7 @@ import { sha256Hex } from "../../utils/crypto";
 import { createDurableJobLease, durableRenderRetry } from "../../jobs/lease";
 import { AppError } from "../../errors";
 import { getPromotionKit } from "./promotion-kit";
-import { renderPromotionArtifact } from "./promotion-artifact";
+import type { renderPromotionArtifact } from "./promotion-artifact";
 import { storePromotionArtifact } from "./promotion-storage";
 type Source = Awaited<ReturnType<typeof getPromotionKit>>;
 interface Job {
@@ -74,7 +74,7 @@ export async function processPromotionRenderJob(
   db: DatabaseLike,
   env: Env,
   id: string,
-  render: typeof renderPromotionArtifact = renderPromotionArtifact,
+  render?: typeof renderPromotionArtifact,
 ) {
   const job = await first<Job>(
     db,
@@ -111,7 +111,8 @@ export async function processPromotionRenderJob(
     ]);
     const canManage = Boolean(await first(db, management.sql, [...management.bindings]));
     const source = await assignedPromotionKit(db, job.event_id, job.occurrence_id, job.user_id, canManage, job.origin);
-    const artifact = await render(
+    const renderArtifact = render ?? (await import("./promotion-artifact")).renderPromotionArtifact;
+    const artifact = await renderArtifact(
       env,
       job.origin,
       { ...source, ...source.kit },
