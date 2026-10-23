@@ -54,10 +54,16 @@ export async function publicationRepairAliasFixture(mode: z.infer<typeof transfe
   value.document.occurrences[0]!.archive!.appearances = [];
   value.document.occurrences[0]!.archive!.materials = [];
   value.mode = mode;
-  if (mode === "copy_as_new") {
+  if (mode !== "archive") {
     value.document.people = [];
     value.document.occurrences[0]!.personRefs = [];
     value.document.occurrences[0]!.archive!.archivalCredits = [];
+  }
+  if (mode === "current") {
+    const timing = value.document.occurrences[0]!.timing;
+    timing.authoredDate = "2099-04-01";
+    timing.startAt = "2099-04-01T10:00:00.000Z";
+    timing.endAt = "2099-04-01T11:00:00.000Z";
   }
   const reviewed = await callApi(env, "/api/v1/events/pqc-2026/agenda/transfers/reviews", {
     method: "POST",

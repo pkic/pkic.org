@@ -1,4 +1,6 @@
 import type { AgendaSnapshot } from "../../../assets/shared/schemas/event-agenda";
+import { agendaTransferModeSchema } from "../../../assets/shared/schemas/event-agenda-transfer";
+import { agendaTransferModePolicy } from "../../../assets/shared/event-agenda-transfer";
 import {
   authoredAgendaSourcesSchema,
   type AuthoredAgendaSource,
@@ -24,8 +26,13 @@ export async function resolveAuthoredAgendaRouteOwners(
   const routes = new Map<string, PublicationAuthoredAgendaRoute>();
   for (const source of sources) {
     const matches = authored.filter((document) => document.sourcePath === source.source_path);
-    if (!matches.length || source.import_mode === "copy_as_new") continue;
-    if (source.import_mode !== "archive") throw new Error("Authored agenda source has no trusted archive mode");
+    if (!matches.length) continue;
+    const mode = agendaTransferModeSchema.safeParse(source.import_mode);
+    if (!mode.success)
+      throw new Error(
+        `Authored agenda source has an invalid import mode: event=${approved.eventSlug}, occurrence=${source.id}, source=${source.source_path}, mode=${JSON.stringify(source.import_mode)}`,
+      );
+    if (agendaTransferModePolicy[mode.data].attribution !== "archival") continue;
     if (matches.length !== 1 || matches[0]!.sourceDigest !== source.source_digest)
       throw new Error("Authored agenda source changed since archival review");
     const owner = { ...matches[0]!, eventSlug: approved.eventSlug };

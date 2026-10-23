@@ -18,8 +18,9 @@ import { createSiteConferencePrograms } from "../functions/_lib/services/site-co
 import { renderContentAgenda } from "../functions/_lib/services/site-agenda";
 import { parseFrontMatter, contentPathToRoute } from "../functions/_lib/services/site-markdown";
 import { nodePathForSource, type ContentDocument } from "../functions/_lib/services/site-documents";
+import type { AgendaTransferMode } from "../assets/shared/schemas/event-agenda-transfer";
 
-async function fixture(mode?: "archive" | "copy_as_new") {
+async function fixture(mode?: AgendaTransferMode) {
   const value = await publicationRepairAliasFixture(mode);
   const agenda = value.snapshot.eventAgendas!["pqc-2026"];
   const authored = [
@@ -47,6 +48,22 @@ describe("trusted original event-root agenda ownership", () => {
   it("does not give a future copy ownership of the original source-page namespace", async () => {
     const value = await fixture("copy_as_new");
     expect(await resolveAuthoredAgendaRouteOwners(env.DB, value.eventId, value.agenda, value.authored)).toEqual([]);
+  });
+  it("publishes a current import without claiming archival source-page ownership", async () => {
+    const value = await fixture("current");
+    await env.DB.prepare("UPDATE events SET visibility='public' WHERE id=?").bind(value.eventId).run();
+    const token = await createAdminSession(env.DB, value.admin.id, "current-agenda-publication");
+    const response = await callApi(env, "/api/v1/events/pqc-2026/agenda/publications", {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify(agendaPublicationSchema.parse({ expectedRevision: value.agenda.revision })),
+    });
+    expect(response.status, await response.clone().text()).toBe(200);
+    const publication = await readSitePublicationSnapshot(env.DB, [], [], value.authored);
+    expect(publication.authoredAgendaRoutes).toEqual([]);
+    expect(publication.eventAgendas![value.agenda.eventSlug]!.occurrences.map((item) => item.id)).toContain(
+      value.occurrenceId,
+    );
   });
   it.each(["digest", "ambiguous source", "untrusted mode"])("refuses %s ownership evidence", async (change) => {
     const value = await fixture();
