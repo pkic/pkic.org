@@ -6,6 +6,12 @@ import { logError, logInfo } from "../logging";
 import { verifySignedRsvpAddressFull } from "../email/rsvp";
 import { sha256Hex } from "../utils/crypto";
 import { parseCalendarRsvp, recordCalendarRsvpEvent } from "./calendar-rsvp";
+import { calendarRsvpBounceRecipient } from "./calendar-rsvp-email-bounce";
+import {
+  calendarRsvpEmailAuthor,
+  parseAttendeeEmail,
+  requireCalendarRsvpEmailRecipient,
+} from "./calendar-rsvp-email-identity";
 
 export type IncomingRsvpEmail = Pick<ForwardableEmailMessage, "from" | "to" | "raw" | "rawSize">;
 
@@ -56,21 +62,14 @@ export async function processIncomingEmail(message: IncomingRsvpEmail, env: Env)
       return;
     }
 
-    // Handle RSVP addresses
-    const isBounce =
-      (emailData.subject &&
-        (emailData.subject.toLowerCase().includes("undeliverable") ||
-          emailData.subject.toLowerCase().includes("bounce") ||
-          emailData.subject.toLowerCase().includes("delivery status") ||
-          emailData.subject.toLowerCase().includes("failure notice"))) ||
-      message.from.toLowerCase().includes("mailer-daemon");
-
-    if (isBounce) {
+    const bounceRecipient = calendarRsvpBounceRecipient(emailData);
+    if (bounceRecipient) {
+      await requireCalendarRsvpEmailRecipient(env.DB, rsvpRegistrationId, bounceRecipient);
       await recordCalendarRsvpEvent(env.DB, {
         registrationId: rsvpRegistrationId,
         eventDayDate: rsvpDayDate,
         icsUid: `bounce-${rsvpRegistrationId}`,
-        attendeeEmail: message.from,
+        attendeeEmail: bounceRecipient,
         responseStatus: "bounced",
         provider: "cloudflare_email_routing_bounce",
         sourceMessageId,
@@ -80,6 +79,7 @@ export async function processIncomingEmail(message: IncomingRsvpEmail, env: Env)
       logInfo("BOUNCE_PROCESSED", { registrationId: rsvpRegistrationId });
       return;
     }
+    if (emailData.attachments.some((attachment) => attachment.mimeType === "message/delivery-status")) return;
 
     let icsContent = "";
 
@@ -127,11 +127,13 @@ export async function processIncomingEmail(message: IncomingRsvpEmail, env: Env)
       else if (subjectLower.startsWith("tentative:")) implicitStatus = "tentative";
 
       if (implicitStatus) {
+        const attendeeEmail = calendarRsvpEmailAuthor(emailData);
+        await requireCalendarRsvpEmailRecipient(env.DB, rsvpRegistrationId, attendeeEmail);
         await recordCalendarRsvpEvent(env.DB, {
           registrationId: rsvpRegistrationId,
           eventDayDate: rsvpDayDate,
           icsUid: rsvpDayDate ? `${rsvpRegistrationId}-${rsvpDayDate}@pkic.org` : `implicit-${rsvpRegistrationId}`,
-          attendeeEmail: message.from,
+          attendeeEmail,
           responseStatus: implicitStatus,
           provider: "cloudflare_email_routing_subject",
           sourceMessageId,
@@ -150,7 +152,7 @@ export async function processIncomingEmail(message: IncomingRsvpEmail, env: Env)
 
     let parsedRsvp;
     try {
-      parsedRsvp = parseCalendarRsvp(icsContent, message.from);
+      parsedRsvp = parseCalendarRsvp(icsContent);
     } catch (error) {
       if (!(error instanceof AppError) || error.code !== "INVALID_CALENDAR") throw error;
       logInfo("EMAIL_IGNORED_INVALID_CALENDAR", {
@@ -159,6 +161,8 @@ export async function processIncomingEmail(message: IncomingRsvpEmail, env: Env)
       });
       return;
     }
+    const attendeeEmail = parseAttendeeEmail(parsedRsvp.attendeeEmail);
+    await requireCalendarRsvpEmailRecipient(env.DB, rsvpRegistrationId, attendeeEmail);
 
     // Determine the ics_uid to store.  The per-day RSVP address (verified via
     // HMAC) is the cryptographic source of truth for *which day* was replied to.
@@ -175,7 +179,7 @@ export async function processIncomingEmail(message: IncomingRsvpEmail, env: Env)
       recurrenceId: parsedRsvp.recurrenceId,
       invitationSequence: parsedRsvp.invitationSequence,
       claimedReplyAt: parsedRsvp.claimedReplyAt,
-      attendeeEmail: parsedRsvp.attendeeEmail,
+      attendeeEmail,
       responseStatus: parsedRsvp.responseStatus,
       provider: "cloudflare_email_routing_ics",
       sourceMessageId,
@@ -185,7 +189,14 @@ export async function processIncomingEmail(message: IncomingRsvpEmail, env: Env)
     logInfo("RSVP_PROCESSED_ICS", { registrationId: rsvpRegistrationId, status: parsedRsvp.responseStatus });
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
-    logError("EMAIL_PROCESSING_FAILED", { error: errorMsg });
+    logError("EMAIL_PROCESSING_FAILED", {
+      error: errorMsg,
+      code: err instanceof AppError ? err.code : undefined,
+      validation:
+        err instanceof AppError && ["RSVP_EMAIL_ATTENDEE_INVALID", "INVALID_RSVP_EVENT"].includes(err.code)
+          ? err.details
+          : undefined,
+    });
     // Propagate failures to Email Routing so SMTP can defer delivery instead of acknowledging it.
     throw err;
   }

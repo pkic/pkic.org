@@ -21,7 +21,9 @@ import { renewMeetingCalendars } from "../functions/_lib/services/event-series/c
 import { buildSeriesCalendarPayload } from "../functions/_lib/services/event-series/series-calendar";
 import { materializeSeriesOccurrences } from "../functions/_lib/services/event-series/recurrence";
 import { recordCalendarRsvpEvent, normalizeCalendarRsvp } from "../functions/_lib/services/calendar-rsvp";
-import { verifySignedRsvpAddressFull } from "../functions/_lib/email/rsvp";
+import { generateSignedRsvpAddress, verifySignedRsvpAddressFull } from "../functions/_lib/email/rsvp";
+import { processIncomingEmail } from "../functions/_lib/services/calendar-rsvp-email-ingest";
+import { tnefRsvpEmail } from "./helpers/rsvp-email-fixtures";
 import type { AuthAdmin } from "../functions/_lib/types";
 import { insertUser } from "./helpers/membership";
 import { ensureGroupMembershipCapacity } from "./helpers/group-leadership";
@@ -81,6 +83,31 @@ beforeEach(async () => {
 });
 
 describe("recurring meeting calendars", () => {
+  it.each(["series", "occurrence"])("matches implicit %s replies to their invited recipient", async (target) => {
+    const series = await createGroupEventSeries(env.DB, admin, GROUP, input());
+    await dispatch(series.id);
+    const [first] = await occurrences(series.id);
+    const targetId = target === "series" ? series.id : first.id;
+    const to = await generateSignedRsvpAddress(targetId, signingSecret);
+    const raw = tnefRsvpEmail("Accepted: Working session", `implicit-${target}@example.test`).replace(
+      "Alice <alice@example.com>",
+      email,
+    );
+    const incoming = (content: string) => ({
+      from: `prvs=1234567890=${email}`,
+      to,
+      raw: new Response(content).body!,
+      rawSize: new TextEncoder().encode(content).byteLength,
+    });
+    const emailEnv = { ...env, INTERNAL_SIGNING_SECRET: signingSecret, RSVP_EMAIL: "rsvp@mail.pkic.org" };
+    await processIncomingEmail(incoming(raw), emailEnv);
+    expect((await getSeriesOccurrence(env.DB, GROUP, series.id, first.id)).occurrence.rsvp.accepted).toBe(1);
+    await expect(
+      processIncomingEmail(incoming(raw.replace(`From: ${email}`, "From: uninvited@example.test")), emailEnv),
+    ).rejects.toMatchObject({ code: "RSVP_EMAIL_RECIPIENT_MISMATCH" });
+    expect((await getSeriesOccurrence(env.DB, GROUP, series.id, first.id)).occurrence.rsvp.accepted).toBe(1);
+  });
+
   it("treats provider URLs as private destinations rather than public locations", () => {
     expect(outboundMeetingLocation("Room 12, Amsterdam")).toBe("Room 12, Amsterdam");
     for (const location of [
