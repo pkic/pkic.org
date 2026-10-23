@@ -172,18 +172,24 @@ test("organizers build the shared agenda and browse a compact session table on d
   await page.getByRole("button", { name: "Move selected sessions", exact: true }).click();
   await page.locator('[name="bulkMode"]').selectOption("day");
   await page.getByLabel(/^New day/).fill("2026-12-03");
-  const afterBulk = await commitScheduleCommand(page, slug, beforeBulk, async () => {
-    await page.getByRole("button", { name: "Review selected sessions", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Review schedule changes", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Apply reviewed schedule", exact: true })).toBeEnabled();
-    const reviewedBulk = agendaSnapshotSchema.parse(
-      await (await page.request.get(`/api/v1/events/${slug}/agenda`)).json(),
-    );
-    expect(reviewedBulk).toEqual(beforeBulk);
-    await page.screenshot({ path: `${artifacts}/sessions-bulk-review-phone.png`, fullPage: true });
-    await page.getByRole("button", { name: "Apply reviewed schedule", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Review schedule changes", exact: true })).toHaveCount(0);
-  });
+  const afterBulk = await commitScheduleCommand(
+    page,
+    slug,
+    beforeBulk,
+    async () => {
+      await page.getByRole("button", { name: "Review selected sessions", exact: true }).click();
+      await expect(page.getByRole("heading", { name: "Review schedule changes", exact: true })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Apply reviewed schedule", exact: true })).toBeEnabled();
+      const reviewedBulk = agendaSnapshotSchema.parse(
+        await (await page.request.get(`/api/v1/events/${slug}/agenda`)).json(),
+      );
+      expect(reviewedBulk).toEqual(beforeBulk);
+      await page.screenshot({ path: `${artifacts}/sessions-bulk-review-phone.png`, fullPage: true });
+      await page.getByRole("button", { name: "Apply reviewed schedule", exact: true }).click();
+      await expect(page.getByRole("heading", { name: "Review schedule changes", exact: true })).toHaveCount(0);
+    },
+    "reviewed",
+  );
   expect(afterBulk.revision).toBe(beforeBulk.revision + 1);
   for (const title of [sessions[0][0], sessions[2][0]]) {
     const original = beforeBulk.occurrences.find((row) => row.title === title)!;
