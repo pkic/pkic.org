@@ -1,3 +1,4 @@
+import type { MailingListDeliveryProvider } from "../mailing-list-subscriptions/delivery-provider";
 import type {
   ConfiguredGoogleServiceAccountEnv,
   GoogleGroupsDirectoryClient,
@@ -109,7 +110,12 @@ async function callDirectoryApi(
     return;
   }
 
-  const response = await fetchImpl(`${membersUrl}/${encodeURIComponent(memberEmail)}`, {
+  const memberUrl = `${membersUrl}/${encodeURIComponent(memberEmail)}`;
+  const membership = await fetchImpl(memberUrl, { headers: { authorization: `Bearer ${accessToken}` } });
+  if (membership.status === 404) return;
+  if (!membership.ok) throw new Error(`Directory API member read failed: HTTP ${membership.status}`);
+  if (isProtectedDirectoryMember((await membership.json()) as DirectoryMemberRow)) return;
+  const response = await fetchImpl(memberUrl, {
     method: "DELETE",
     headers: { authorization: `Bearer ${accessToken}` },
   });
@@ -121,7 +127,14 @@ async function callDirectoryApi(
 
 interface DirectoryMemberRow {
   email?: unknown;
+  role?: unknown;
+  type?: unknown;
+  delivery_settings?: unknown;
   status?: unknown;
+}
+
+function isProtectedDirectoryMember(member: DirectoryMemberRow) {
+  return member.role !== "MEMBER" || member.type !== "USER";
 }
 
 /**
@@ -138,8 +151,9 @@ async function listDirectoryMembers(
   accessToken: string,
   googleGroupEmail: string,
   maxPages: number,
-): Promise<{ emails: string[]; complete: boolean }> {
+): Promise<{ emails: string[]; members: DirectoryMemberRow[]; complete: boolean }> {
   const emails: string[] = [];
+  const members: DirectoryMemberRow[] = [];
   let pageToken: string | undefined;
   for (let page = 0; page < maxPages; page += 1) {
     const url = new URL(`${GOOGLE_DIRECTORY_GROUPS_URL}/${encodeURIComponent(googleGroupEmail)}/members`);
@@ -151,7 +165,8 @@ async function listDirectoryMembers(
     if (!response.ok) throw new Error(`Directory API list-members failed: HTTP ${response.status}`);
     const body = (await response.json()) as { members?: DirectoryMemberRow[]; nextPageToken?: unknown };
     for (const member of body.members ?? []) {
-      if (typeof member.email !== "string") continue;
+      if (typeof member.email !== "string") throw new Error("Provider returned a member without an email address");
+      members.push(member);
       // SUSPENDED accounts remain members; only true absence signals a leave.
       if (member.status === "SUSPENDED") {
         emails.push(member.email.toLowerCase());
@@ -160,10 +175,10 @@ async function listDirectoryMembers(
       emails.push(member.email.toLowerCase());
     }
     pageToken = typeof body.nextPageToken === "string" ? body.nextPageToken : undefined;
-    if (!pageToken) return { emails, complete: true };
+    if (!pageToken) return { emails, members, complete: true };
   }
   // Never infer an unsubscribe from a partial listing.
-  return { emails, complete: false };
+  return { emails, members, complete: false };
 }
 
 export async function createGoogleGroupsDirectoryClient(
@@ -199,6 +214,72 @@ export async function createGoogleGroupsDryRunDirectoryClient(
       if (!members.complete) throw new Error("Incomplete Google Group membership listing; no plan recorded");
       // Record intent even if already satisfied: the live adapter applies it idempotently.
       operations.push({ ...operation });
+    },
+  };
+}
+
+/** Google roles and delivery flags stay inside the provider adapter. */
+export async function createGoogleGroupsDeliveryProvider(
+  env: ConfiguredGoogleServiceAccountEnv,
+  readOnly = false,
+  fetchImpl: typeof fetch = fetch,
+): Promise<MailingListDeliveryProvider> {
+  const token = await getServiceAccountAccessToken(
+    env,
+    fetchImpl,
+    readOnly ? GOOGLE_GROUPS_READONLY_SCOPES : undefined,
+  );
+  const headers = { authorization: `Bearer ${token}`, "content-type": "application/json" };
+  return {
+    async listMembers(listEmail) {
+      const listing = await listDirectoryMembers(fetchImpl, token, listEmail, 25);
+      return {
+        complete: listing.complete,
+        members: listing.members.map((member) => ({
+          email: String(member.email).toLowerCase(),
+          protected: isProtectedDirectoryMember(member),
+          delivery: member.delivery_settings === "NONE" ? ("none" as const) : ("all" as const),
+        })),
+      };
+    },
+    async applyChange(listEmail, change) {
+      if (readOnly) throw new Error("Dry run cannot change provider memberships");
+      const collection = `${GOOGLE_DIRECTORY_GROUPS_URL}/${encodeURIComponent(listEmail)}/members`;
+      const memberUrl = `${collection}/${encodeURIComponent(change.email)}`;
+      const response = await fetchImpl(memberUrl, { headers });
+      if (!response.ok && response.status !== 404)
+        throw new Error(`Provider member read failed: HTTP ${response.status}`);
+      const current = response.ok ? ((await response.json()) as DirectoryMemberRow) : null;
+      if (current && isProtectedDirectoryMember(current)) return;
+      if (change.action === "unsubscribe") {
+        if (!current) return;
+        const removed = await fetchImpl(memberUrl, { method: "DELETE", headers });
+        if (!removed.ok && removed.status !== 404) throw new Error(`Provider removal failed: HTTP ${removed.status}`);
+      } else if (!current && change.action === "subscribe") {
+        const added = await fetchImpl(collection, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            email: change.email,
+            role: "MEMBER",
+            ...(change.delivery === "none" ? { delivery_settings: "NONE" } : {}),
+          }),
+        });
+        if (!added.ok && added.status !== 409) throw new Error(`Provider addition failed: HTTP ${added.status}`);
+        if (added.status === 409 && change.delivery === "none")
+          throw new Error("Membership changed; retry alias delivery with fresh state");
+      } else if (
+        current &&
+        (change.action === "disable_delivery" || change.delivery === "none") &&
+        current.delivery_settings !== "NONE"
+      ) {
+        const updated = await fetchImpl(memberUrl, {
+          method: "PATCH",
+          headers,
+          body: JSON.stringify({ delivery_settings: "NONE" }),
+        });
+        if (!updated.ok) throw new Error(`Provider delivery update failed: HTTP ${updated.status}`);
+      }
     },
   };
 }

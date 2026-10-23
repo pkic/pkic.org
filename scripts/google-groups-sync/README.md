@@ -1,6 +1,6 @@
 # Google Groups sync dry run
 
-This CLI runs the production sync use case against a read-only local SQLite database and a recording Directory adapter. It reports the next due queue batch (default 25, maximum 100), including planned adds/removes, suppressed adds, and missing users. It does not reconcile every subscriber or re-enroll people who left a group. Already satisfied membership intents are recorded too: the live adapter applies them idempotently.
+The default incremental mode runs the production sync use case against a read-only local SQLite database and a recording Directory adapter. It reports the next due queue batch (default 25, maximum 100), including planned adds/removes, suppressed adds, and missing users. This mode does not reconcile every subscriber or re-enroll people who left a group. Already satisfied membership intents are recorded too: the live adapter applies them idempotently.
 
 The CLI never claims jobs, updates attempts or observations, sends notifications, or writes to Google Groups. It authenticates and reads each affected group's membership, following pagination. Authentication, permission, and incomplete-listing failures stop the run with a nonzero exit code. An empty due batch does not contact Google.
 
@@ -28,3 +28,35 @@ pnpm exec node scripts/google-groups-sync-dry-run.mjs \
 ```
 
 The JSON report includes email addresses: share only synthetic output in issues. This is a bounded snapshot of work due at invocation, not a promise about a later live run; desired state may change. There is no apply flag. Running live sync remains a separate operation.
+
+## Full reconciliation
+
+Pass `--mode full` to compare each enabled, active mailing list's complete
+provider roster with current effective subscriptions and verified additional
+email addresses. The report includes `subscribe`, `unsubscribe`,
+`disable_delivery`, `unchanged`, `protected`, and `unsubscribed` outcomes.
+The CLI uses the same provider-neutral planner as the live scheduled job and
+never changes memberships, queue rows, or observations.
+
+Primary addresses receive ordinary membership. Verified additional addresses
+inherit membership while their primary is subscribed, with email delivery
+disabled. This does not restrict posting. Owners, managers, non-user members,
+and unrecognized privilege levels are protected by the Google adapter.
+Previously confirmed primary addresses now absent are treated as unsubscribes;
+full sync does not re-enroll them or retain their dependent aliases.
+
+The existing scheduled job shares its bounded work budget between queued
+changes and full reconciliation. Existing durable subscriptions and the job's
+lease/retry mechanism provide recovery; no additional queue, table, or migration
+is required. Changing an account's primary email queues its current subscription
+work atomically. Full reconciliation removes an obsolete address, or retains it
+without delivery when it remains a verified additional address. Verification
+and removal of additional addresses wake the existing job.
+
+```sh
+pnpm exec node scripts/google-groups-sync-dry-run.mjs \
+  --database /secure/path/application.sqlite \
+  --credentials /secure/path/groups-reader.json \
+  --impersonate groups-reader@example.org \
+  --mode full
+```

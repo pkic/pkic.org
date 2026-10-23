@@ -1,3 +1,5 @@
+import { prepareJobWake } from "./scheduled-jobs/dispatcher";
+import { prepareMailingListEmailChange } from "./mailing-list-subscriptions/queue-email-change";
 import { setOwnEmailSignInPermission } from "./own-email-sign-in";
 /**
  * The signed-in person manages their own email addresses.
@@ -224,6 +226,7 @@ export async function makeOwnEmailAddressPrimary(
       )
       .bind(userId, emailId, userId, emailId, emailId, userId),
   ];
+  statements.push(...prepareMailingListEmailChange(db, userId, at));
   try {
     await db.batch(statements);
   } catch (error) {
@@ -276,6 +279,7 @@ export async function removeOwnEmailAddress(
         { emailId: input.emailId, email: address.email },
         at,
       ),
+      prepareJobWake(db, "google_groups_sync"),
     ]);
   } catch (error) {
     if (isAuthorizationGuardFailure(error))

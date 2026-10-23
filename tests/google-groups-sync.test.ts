@@ -57,7 +57,7 @@ async function fakeServiceAccountEnv(): Promise<{
 }
 
 function stubGoogleFetch(directoryApiStatus: number): ReturnType<typeof vi.fn> {
-  const fetchMock = vi.fn().mockImplementation((url: string) => {
+  const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
     if (url === "https://oauth2.googleapis.com/token") {
       return Promise.resolve(
         new Response(JSON.stringify({ access_token: "fake-access-token" }), {
@@ -66,6 +66,8 @@ function stubGoogleFetch(directoryApiStatus: number): ReturnType<typeof vi.fn> {
         }),
       );
     }
+    if (!init?.method && directoryApiStatus >= 200 && directoryApiStatus < 300)
+      return Promise.resolve(Response.json({ role: "MEMBER", type: "USER" }));
     return Promise.resolve(new Response(null, { status: directoryApiStatus }));
   });
   vi.stubGlobal("fetch", fetchMock);
@@ -93,6 +95,7 @@ function stubGoogleFetchWithFirstDirectoryCallPaused(firstDirectoryStatus = 200)
         headers: { "content-type": "application/json" },
       });
     }
+    if (!init?.method) return Response.json({ role: "MEMBER", type: "USER" });
     directoryCalls++;
     if (directoryCalls === 1) {
       notifyDirectoryStarted();
@@ -337,7 +340,7 @@ describe("Google Groups sync", () => {
             }),
           );
         }
-        return Promise.resolve(new Response(null, { status: init?.method === "DELETE" ? 404 : 409 }));
+        return Promise.resolve(new Response(null, { status: init?.method === "POST" ? 409 : 404 }));
       }),
     );
 
@@ -1020,6 +1023,7 @@ describe("Google Groups sync", () => {
             headers: { "content-type": "application/json" },
           });
         }
+        if (!init?.method) return Response.json({ role: "MEMBER", type: "USER" });
         directoryCall++;
         const effect = init?.method === "DELETE" ? "remove" : "add";
         if (directoryCall === 1) {
@@ -1078,5 +1082,30 @@ describe("Google Groups sync", () => {
         group,
       ),
     ).toEqual([{ desired_action: "remove_from_list", status: "completed" }]);
+  });
+  it("does not replay an old queued add after a confirmed member leaves the provider", async () => {
+    const userId = await insertUser("left-before-queued-add@example.test");
+    await enqueueGoogleGroupsSync(env.DB, { userId, googleGroupEmail: "group@example.test", action: "add_to_list" });
+    await env.DB.prepare(
+      "INSERT INTO google_groups_observed_membership(user_id,google_group_email,confirmed_subscribed_at) VALUES (?,?,?)",
+    )
+      .bind(userId, "group@example.test", new Date().toISOString())
+      .run();
+    const fetch = vi.fn(async (url: string) =>
+      url === "https://oauth2.googleapis.com/token"
+        ? Response.json({ access_token: "synthetic-token" })
+        : Response.json({ members: [] }),
+    );
+    vi.stubGlobal("fetch", fetch);
+    expect(await processGoogleGroupsSyncQueue(env.DB, await fakeServiceAccountEnv(), 25)).toMatchObject({
+      succeeded: 0,
+      suppressed: 1,
+    });
+    expect(
+      await env.DB.prepare("SELECT suppressed FROM google_groups_observed_membership WHERE user_id=?")
+        .bind(userId)
+        .first("suppressed"),
+    ).toBe(1);
+    expect(fetch.mock.calls).toHaveLength(2);
   });
 });
