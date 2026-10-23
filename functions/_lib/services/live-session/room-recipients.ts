@@ -1,20 +1,13 @@
+import { closeLiveRoomSocket } from "./room-socket-close";
 import { liveRoomRefusalCloseCode } from "../../../../assets/shared/schemas/live-session-room";
 import { AppError } from "../../errors";
 import type { Env } from "../../types";
-import { preserveLiveRoomThread, type LiveRoomParticipant } from "./room-admission";
+import { preserveLiveRoomAttachmentState, type LiveRoomParticipant } from "./room-admission";
 import { revalidateLiveRoomParticipants } from "./room-access";
-
-export function closeLiveRoomSocket(socket: WebSocket, code: number, reason: string): void {
-  try {
-    socket.close(code, reason);
-  } catch {
-    // The runtime or peer may already have closed the socket.
-  }
-}
 
 /**
  * The sockets that may receive a protected payload: each one's participant
- * passes fresh canonical authorization in one batch first. A socket whose
+ * passes canonical authorization from its current room access lease. A socket whose
  * access ended or changed role closes with the refusal; an infrastructure
  * fault closes them all and throws rather than trusting stale authority.
  */
@@ -59,7 +52,7 @@ export async function authorizeLiveRoomRecipients(
     }
     if (!result.ok) continue;
     socket.serializeAttachment(
-      preserveLiveRoomThread(result.participant, socket.deserializeAttachment() as LiveRoomParticipant),
+      preserveLiveRoomAttachmentState(result.participant, socket.deserializeAttachment() as LiveRoomParticipant),
     );
     authorized.push(socket);
   }

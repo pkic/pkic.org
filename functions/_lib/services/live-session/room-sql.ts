@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS room_people (user_id TEXT PRIMARY KEY,handle TEXT,pho
 CREATE UNIQUE INDEX IF NOT EXISTS room_people_handle ON room_people(handle);
 CREATE TABLE IF NOT EXISTS room_chat_authorship (message_id TEXT PRIMARY KEY,author_json TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS question_authorship (question_id TEXT PRIMARY KEY,author_json TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS room_access_erasures (user_id TEXT PRIMARY KEY);
 CREATE TABLE IF NOT EXISTS room_d1_read_state (id INTEGER PRIMARY KEY CHECK(id=1), bookmark TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS room_session (id INTEGER PRIMARY KEY CHECK(id=1), event_id TEXT NOT NULL, session_json TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS questions (

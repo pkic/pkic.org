@@ -38,6 +38,7 @@ export type R2BucketLike = R2Bucket;
 export interface LiveSessionRoomRpc extends Rpc.DurableObjectBranded {
   /** Removes an anonymized person's questions, votes and ballots from the room and ends their connections. */
   forgetParticipant(userId: string): Promise<void>;
+  endProgramSources(roomId: string): Promise<void>;
   readProgram(eventId: string, roomId: string): Promise<LiveProgramSelection>;
   /** The composition this session's room has on Program. */
   programStage(): Promise<LiveStage>;

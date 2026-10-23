@@ -243,7 +243,7 @@ export function prepareLiveRoomParticipants(
                       "This source access is invalid or expired.",
                     ),
                   }
-                : { ok: true, participant },
+                : { ok: true, participant, expiresAt: participant.overlayExpiresAt! * 1000 },
           );
           continue;
         }
@@ -259,6 +259,12 @@ export function prepareLiveRoomParticipants(
         try {
           results.push({
             ok: true,
+            expiresAt: Math.min(
+              participant.sessionClaims.exp * 1000,
+              Date.parse(session.session.expiresAt),
+              Date.parse(session.session.idleExpiresAt),
+              session.session.staffIdleExpiresAt ? Date.parse(session.session.staffIdleExpiresAt) : Infinity,
+            ),
             participant: await participantFromSession(
               db,
               session.session,

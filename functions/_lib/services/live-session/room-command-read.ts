@@ -1,5 +1,3 @@
-import type { LiveRoomClientMessage } from "../../../../assets/shared/schemas/live-session-room";
-import { LIVE_PROGRAM_SOCKET_TAG } from "./room-program";
 import { batchRows } from "../../db/pagination";
 import { AppError } from "../../errors";
 import type { DatabaseLike, Env } from "../../types";
@@ -14,15 +12,14 @@ import {
 } from "./room-command-read-scope";
 
 /** Compose existing read models once for this command, including its protected broadcast audience. */
-export async function withLiveRoomCommandRead<T>(
+export async function loadLiveRoomCommandRead(
   db: DatabaseLike,
   rooms: Env["LIVE_SESSION_ROOMS"],
   room: { eventId: string; session: { occurrenceId: string } },
   participants: readonly LiveRoomParticipant[],
-  author: LiveRoomParticipant | null,
+  authors: readonly LiveRoomParticipant[],
   erasureCandidates: readonly string[],
-  work: () => Promise<T>,
-): Promise<T> {
+): Promise<LiveRoomCommandRead> {
   const {
     eventId,
     session: { occurrenceId },
@@ -32,7 +29,8 @@ export async function withLiveRoomCommandRead<T>(
     reads.push(prepareLiveRoomParticipants(db, participants.slice(offset, offset + 512), eventId, occurrenceId, rooms));
   const statements = reads.flatMap((read) => read.statements);
   const authorIndex = statements.length;
-  if (author?.userId) statements.push(prepareLiveAuthorStampCandidates(db, eventId, author.userId));
+  const authorIds = [...new Set(authors.flatMap((author) => (author.userId ? [author.userId] : [])))];
+  if (authorIds.length) statements.push(prepareLiveAuthorStampCandidates(db, eventId, authorIds));
   const erasureIndex = statements.length;
   statements.push(prepareAnonymizedLiveParticipantIds(db, erasureCandidates));
   const loaded = await db.batch(statements);
@@ -41,6 +39,7 @@ export async function withLiveRoomCommandRead<T>(
     eventId,
     occurrenceId,
     participants: new Map(),
+    authors: new Map(),
     erasureCandidates: new Set(erasureCandidates),
     erased: new Set(batchRows<{ id: string }>(loaded[erasureIndex]).map((row) => row.id)),
   };
@@ -63,66 +62,33 @@ export async function withLiveRoomCommandRead<T>(
     }
     offset += read.statements.length;
   }
-  if (author?.userId) {
+  const stampRows = authorIds.length ? batchRows<StampRow>(loaded[authorIndex]) : [];
+  for (const author of authors) {
     const resolved = snapshot.participants.get(liveParticipantReadKey(author));
-    if (resolved?.ok) {
-      const viewer = resolved.participant;
-      const identityId = viewer.actingIdentityId ?? null;
-      const row = batchRows<StampRow>(loaded[authorIndex]).find((row) => row.selected_identity_id === identityId);
-      if (row)
-        snapshot.author = {
-          userId: author.userId,
-          identityId,
-          role: viewer.role,
-          stamp: decodeLiveAuthorStamp(row, viewer),
-        };
+    if (!resolved?.ok) continue;
+    const viewer = resolved.participant;
+    const row = stampRows.find(
+      (row) => row.user_id === viewer.userId && row.selected_identity_id === (viewer.actingIdentityId ?? null),
+    );
+    if (row) {
+      const stamp = decodeLiveAuthorStamp(row, viewer);
+      snapshot.authors.set(liveParticipantReadKey(author), stamp);
+      snapshot.authors.set(liveParticipantReadKey(viewer), stamp);
     }
   }
-  return runWithLiveRoomCommandRead(snapshot, work);
+  return snapshot;
 }
 
-// These commands reply only to their sender. Their deferred aggregate broadcasts
-// obtain a new audience read when the timer fires, after this command scope ends.
-const SENDER_ONLY_COMMANDS = new Set<LiveRoomClientMessage["type"]>([
-  "chat.history",
-  "author.lookup",
-  "question.answers.watch",
-  "chat.react",
-  "reaction.send",
-  "poll.vote",
-]);
-
-/** Collect only the command's immediate protected audience before its canonical read batch. */
-export function withLiveRoomSocketCommandRead<T>(
-  input: {
-    env: Pick<Env, "DB" | "LIVE_SESSION_ROOMS">;
-    ctx: DurableObjectState;
-    room: { eventId: string; session: { occurrenceId: string } };
-    viewer: LiveRoomParticipant;
-    message: LiveRoomClientMessage;
-    erasureCandidates: string[];
-  },
+/** Fresh command scopes remain available for reads outside an admitted room connection. */
+export async function withLiveRoomCommandRead<T>(
+  db: DatabaseLike,
+  rooms: Env["LIVE_SESSION_ROOMS"],
+  room: { eventId: string; session: { occurrenceId: string } },
+  participants: readonly LiveRoomParticipant[],
+  author: LiveRoomParticipant | null,
+  erasureCandidates: readonly string[],
   work: () => Promise<T>,
 ): Promise<T> {
-  const { env, ctx, room, viewer, message } = input;
-  const participants = SENDER_ONLY_COMMANDS.has(message.type)
-    ? [viewer]
-    : ctx
-        .getWebSockets()
-        .filter(
-          (socket) => socket.readyState === WebSocket.OPEN && !ctx.getTags(socket).includes(LIVE_PROGRAM_SOCKET_TAG),
-        )
-        .map((socket) => socket.deserializeAttachment() as LiveRoomParticipant);
-  const erasureCandidates = new Set(input.erasureCandidates);
-  if (viewer.userId) erasureCandidates.add(viewer.userId);
-  const writesAuthor = ["chat.send", "question.ask", "question.answer"].includes(message.type);
-  return withLiveRoomCommandRead(
-    env.DB,
-    env.LIVE_SESSION_ROOMS,
-    room,
-    participants,
-    writesAuthor ? viewer : null,
-    [...erasureCandidates],
-    work,
-  );
+  const read = await loadLiveRoomCommandRead(db, rooms, room, participants, author ? [author] : [], erasureCandidates);
+  return runWithLiveRoomCommandRead(read, work);
 }

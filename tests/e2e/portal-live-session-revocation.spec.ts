@@ -17,6 +17,7 @@ import {
   expectLiveOperator,
   liveClose,
   liveMessages,
+  measureLiveChatDelivery,
   sendLiveMessage,
 } from "./helpers/live-session-browser";
 
@@ -165,10 +166,22 @@ test("two already-open live moderator clients stop receiving private questions, 
         question: { anonymous: true, status: "pending", authorName: expect.any(String) },
       });
     }
+    const latency = [];
+    for (let sample = 0; sample < 5; sample++)
+      latency.push(await measureLiveChatDelivery(staff, `Synthetic instant chat ${marker}-${sample}`));
+    await writeFile(
+      info.outputPath("live-chat-latency.json"),
+      JSON.stringify({ targetMilliseconds: 100, samples: latency }, null, 2),
+    );
     // Both passive clients stay on the same documents and send no command after this cutover.
     const baseline = await Promise.all(pages.map(liveMessages));
     const documents = await Promise.all(pages.map((page) => page.evaluate(() => performance.timeOrigin)));
     expect((await staff.request.delete(`/api/v1/permissions/grants/${grant.id}`)).status()).toBe(200);
+    // Revocation is discovered by the bounded background refresh, without a command from either passive client.
+    for (const page of pages) {
+      await expect.poll(() => liveClose(page)).not.toBeNull();
+      expect(await liveClose(page)).toMatchObject({ code: 4403, reason: "LIVE_SESSION_ACCESS_CHANGED" });
+    }
     const futureQuestion = `After revocation ${marker}`;
     await sendLiveMessage(staff, {
       type: "question.ask",
@@ -183,10 +196,7 @@ test("two already-open live moderator clients stop receiving private questions, 
         ),
       )
       .toBe(true);
-    for (const page of pages) {
-      await expect.poll(() => liveClose(page)).not.toBeNull();
-      expect(await liveClose(page)).toMatchObject({ code: 4403, reason: "LIVE_SESSION_ACCESS_CHANGED" });
-    }
+
     await prepareDraftPoll(staff, `Future private draft ${marker}`);
     await sendLiveMessage(staff, { type: "queue.remove", view: "poll", itemId: privatePoll.id });
     await expect

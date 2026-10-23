@@ -111,6 +111,12 @@ export class LiveRoomAnswerStore {
     );
   }
 
+  authors(): string[] {
+    return this.sql
+      .rows<{ author_user_id: string }>("SELECT DISTINCT author_user_id FROM question_answers")
+      .map((row) => row.author_user_id);
+  }
+
   /** Remove replies on erased questions, the person's replies and attribution to their acceptance decisions. */
   forget(userId: string): string[] {
     const changed = this.sql

@@ -3,7 +3,9 @@ import type { AppError } from "../../errors";
 import type { LiveAuthorStamp } from "../../../../assets/shared/schemas/live-session-author";
 import type { LiveRoomParticipant } from "./room-admission";
 
-export type LiveParticipantReadResult = { ok: true; participant: LiveRoomParticipant } | { ok: false; error: AppError };
+export type LiveParticipantReadResult =
+  | { ok: true; participant: LiveRoomParticipant; expiresAt: number }
+  | { ok: false; error: AppError };
 export interface LiveRoomCommandRead {
   active: boolean;
   eventId: string;
@@ -11,7 +13,7 @@ export interface LiveRoomCommandRead {
   participants: Map<string, LiveParticipantReadResult>;
   erasureCandidates: Set<string>;
   erased: Set<string>;
-  author?: { userId: string; identityId: string | null; role: LiveRoomParticipant["role"]; stamp: LiveAuthorStamp };
+  authors: Map<string, LiveAuthorStamp>;
 }
 
 const commandRead = new AsyncLocalStorage<LiveRoomCommandRead>();
@@ -33,7 +35,7 @@ export function currentLiveRoomCommandRead(): LiveRoomCommandRead | undefined {
   return current?.active ? current : undefined;
 }
 
-/** No authority survives this command; inherited timer callbacks must perform a new read after it finishes. */
+/** End this execution scope with its work; later callbacks obtain their own current lease scope or fresh read. */
 export async function runWithLiveRoomCommandRead<T>(read: LiveRoomCommandRead, work: () => Promise<T>): Promise<T> {
   return commandRead.run(read, async () => {
     try {

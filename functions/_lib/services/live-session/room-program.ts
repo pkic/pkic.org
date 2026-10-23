@@ -24,7 +24,8 @@ import { utcInstantSchema } from "../../../../assets/shared/schemas/api-common";
 import { nowIso } from "../../utils/time";
 import { readPublishedProgramRoom } from "./program-room";
 import { readLiveRoomSession } from "./room-session";
-import { liveRoomName } from "./room-admission";
+import { liveRoomName, type LiveRoomParticipant } from "./room-admission";
+import { closeLiveRoomSocket } from "./room-socket-close";
 export const LIVE_PROGRAM_ADMISSION_HEADER = "x-pkic-live-program-admission";
 export const LIVE_PROGRAM_SOCKET_TAG = "program";
 export const liveProgramAdmissionSchema = z
@@ -50,6 +51,14 @@ const KEY = "physical-room-program";
 export function liveProgramName(eventId: string, roomId: string) {
   return `program:${eventId}:${roomId}`;
 }
+/** A physical-room switch ends its old session's sources immediately, independently of D1 refresh. */
+export function closeLiveRoomProgramSources(ctx: DurableObjectState, roomId: string): void {
+  for (const socket of ctx.getWebSockets("overlay")) {
+    const viewer = socket.deserializeAttachment() as LiveRoomParticipant;
+    if (viewer.overlayRoomId === roomId) closeLiveRoomSocket(socket, 4403, "LIVE_PROGRAM_SELECTION_CHANGED");
+  }
+}
+
 /** Only the selected occurrence pointer lives here; session DOs retain all live content. */
 export class LiveRoomProgram {
   constructor(
@@ -151,6 +160,10 @@ export class LiveRoomProgram {
       });
       return selected;
     });
+    if (previousOccurrenceId && previousOccurrenceId !== selection.occurrenceId && this.env.LIVE_SESSION_ROOMS)
+      await this.env.LIVE_SESSION_ROOMS.getByName(liveRoomName(eventId, previousOccurrenceId)).endProgramSources(
+        roomId,
+      );
     // Carry room graphics into the newly active session; session-bound questions and polls stay behind.
     if (previousOccurrenceId && selection.occurrenceId && previousOccurrenceId !== selection.occurrenceId) {
       const rooms = this.env.LIVE_SESSION_ROOMS;

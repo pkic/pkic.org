@@ -12,7 +12,7 @@ import {
 import { first } from "../../db/queries";
 import { MAX_ACTING_IDENTITIES, SESSION_ACTING_IDENTITY_ORDER_SQL } from "../../auth/session-acting-identities";
 import { ownedIdentityLifecycleSql } from "../identities/selection";
-import { currentLiveRoomCommandRead } from "./room-command-read-scope";
+import { currentLiveRoomCommandRead, liveParticipantReadKey } from "./room-command-read-scope";
 import type { DatabaseLike } from "../../types";
 import { ACTIVE_LEADERSHIP_PREDICATE_SQL } from "../groups/leadership-sql";
 import { identityJobTitleSql } from "../identities/affiliation-projection";
@@ -21,6 +21,7 @@ import { PUBLIC_LEADERSHIP_SOURCE_SQL } from "../people/published-person";
 import type { LiveRoomParticipant } from "./room-admission";
 
 export interface StampRow {
+  user_id: string;
   selected_identity_id: string | null;
   title: string | null;
   organization: string | null;
@@ -42,7 +43,7 @@ const NOW = "strftime('%Y-%m-%dT%H:%M:%fZ','now')";
  * the organizer role of this event, credits on this event's published agenda,
  * duties the agenda shows, and leadership of groups that publish it.
  */
-const STAMP_SQL = `SELECT input.identity_id AS selected_identity_id,
+const STAMP_SQL = `SELECT input.user_id, input.identity_id AS selected_identity_id,
   (SELECT ${identityJobTitleSql("acting.id")}) AS title,
   current.name AS organization, current.id AS organization_id, current.logo_r2_key AS logo,
   EXISTS(SELECT 1 FROM members member WHERE member.status = 'active' AND (
@@ -84,18 +85,20 @@ function affiliationOf(row: StampRow): LiveAuthorAffiliation | null {
 }
 
 /** Prepare all live identity candidates; the canonical session decoder selects which one the person acts as. */
-export function prepareLiveAuthorStampCandidates(db: DatabaseLike, eventId: string, userId: string) {
+export function prepareLiveAuthorStampCandidates(db: DatabaseLike, eventId: string, userIds: readonly string[]) {
   return db
-    .prepare(`WITH input(event_id,user_id,identity_id) AS (
-    SELECT ?,?,NULL UNION ALL
-    SELECT ?,candidate.user_id,candidate.id FROM (
-      SELECT identity.user_id,identity.id FROM identities identity
+    .prepare(`WITH requested(user_id) AS (SELECT DISTINCT value FROM json_each(?)),
+    candidates AS (
+      SELECT identity.user_id,identity.id,
+        row_number() OVER (PARTITION BY identity.user_id ORDER BY ${SESSION_ACTING_IDENTITY_ORDER_SQL}) AS ordinal
+      FROM identities identity JOIN requested ON requested.user_id=identity.user_id
       LEFT JOIN organizations organization ON organization.id=identity.organization_id
-      WHERE identity.user_id=? AND ${ownedIdentityLifecycleSql("identity", null)}
-      ORDER BY ${SESSION_ACTING_IDENTITY_ORDER_SQL} LIMIT ?
-    ) candidate
-  ) ${STAMP_SQL}`)
-    .bind(eventId, userId, eventId, userId, MAX_ACTING_IDENTITIES);
+      WHERE ${ownedIdentityLifecycleSql("identity", null)}
+    ), input(event_id,user_id,identity_id) AS (
+      SELECT ?,user_id,NULL FROM requested UNION ALL
+      SELECT ?,user_id,id FROM candidates WHERE ordinal<=?
+    ) ${STAMP_SQL}`)
+    .bind(JSON.stringify(userIds), eventId, eventId, MAX_ACTING_IDENTITIES);
 }
 
 /** Who the person is as they write: their acting capacity and the roles the room recognizes, frozen with it. */
@@ -106,13 +109,8 @@ export async function readLiveAuthorStamp(
 ): Promise<LiveAuthorStamp> {
   if (!viewer.userId) return { affiliation: null, roles: [] };
   const current = currentLiveRoomCommandRead();
-  if (
-    current?.eventId === eventId &&
-    current.author?.userId === viewer.userId &&
-    current.author.identityId === (viewer.actingIdentityId ?? null) &&
-    current.author.role === viewer.role
-  )
-    return current.author.stamp;
+  const stamp = current?.eventId === eventId ? current.authors.get(liveParticipantReadKey(viewer)) : undefined;
+  if (stamp) return stamp;
   const row = await first<StampRow>(db, `WITH input(event_id,user_id,identity_id) AS(SELECT ?,?,?) ${STAMP_SQL}`, [
     eventId,
     viewer.userId,
