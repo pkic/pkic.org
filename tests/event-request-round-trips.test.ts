@@ -112,6 +112,36 @@ describe("one D1 round trip for bounded event listing", () => {
     },
   );
 
+  it.each(["anonymous", "attendee", "management"] as const)(
+    "serves the portal's default and phase-filtered event lists for %s within D1's expression limit",
+    async (capacity) => {
+      const token =
+        capacity === "anonymous"
+          ? null
+          : capacity === "management"
+            ? f.token
+            : await createAdminSession(env.DB, f.userId, crypto.randomUUID());
+      for (const query of [
+        "",
+        "?phase=upcoming",
+        "?phase=now",
+        "?phase=past&sort=name",
+        "?visibility=public",
+        "?kind=standalone&phase=now&sort=starts_at&limit=1",
+        "?kind=standalone&phase=upcoming&sort=starts_at&limit=1",
+      ]) {
+        const response = await callApi(
+          env,
+          `/api/v1/events${query}`,
+          { headers: token ? { authorization: `Bearer ${token}` } : {} },
+          strict,
+        );
+        expect(response.status, await response.clone().text()).toBe(200);
+        eventsListResponseSchema.parse(await response.json());
+      }
+    },
+  );
+
   it("refuses management-only sorting without management authority", async () => {
     const response = await callApi(env, "/api/v1/events?sort=total_registrations", undefined, strict);
     expect(response.status).toBe(400);
