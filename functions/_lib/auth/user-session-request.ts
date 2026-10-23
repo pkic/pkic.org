@@ -1,5 +1,5 @@
 import { AppError } from "../errors";
-import type { DatabaseLike, D1StatementResult, Env } from "../types";
+import type { DatabaseLike, D1StatementResult, Env, PermissionGrant } from "../types";
 import { getUserSessionToken, verifyUserSessionToken, type UserSessionTokenClaims } from "./user-session-token";
 import { prepareUserSessionClaimsBatch } from "./user-session-live-data";
 import type { UserSessionResult } from "./user-session-result";
@@ -28,6 +28,8 @@ async function verifyUserSessionRequest(
 export interface PreparedUserSessionRead {
   claims: UserSessionTokenClaims;
   statements: ReturnType<typeof prepareUserSessionClaimsBatch>["statements"];
+  /** Select an existing live grant candidate after decode validates this person's session. */
+  grantsForContext(results: D1StatementResult[], memberId: string | null): PermissionGrant[];
   decode(results: D1StatementResult[]): Promise<UserSessionResult>;
 }
 
@@ -42,6 +44,7 @@ export async function prepareUserSessionRequest(
   return {
     claims,
     statements: read.statements,
+    grantsForContext: (results, memberId) => read.grantsForContext(results, 0, memberId),
     async decode(results) {
       const [resolved] = await read.decode(results);
       if (!resolved.ok) throw resolved.error;

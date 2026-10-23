@@ -8,7 +8,7 @@ import {
 } from "../../../../../assets/shared/schemas/event-session-holds";
 import {
   createSessionHold,
-  listSessionHolds,
+  readSessionHoldsRequest,
   revokeSessionHold,
 } from "../../../../_lib/services/event-participation/holds";
 import {
@@ -33,11 +33,19 @@ import {
 import { getVisibleEventAudienceDetail } from "../../../../_lib/services/events/catalog";
 import { AppError } from "../../../../_lib/errors";
 import { reviewSessionParticipation } from "../../../../_lib/services/event-participation/approval";
-import { sessionBookings } from "../../../../_lib/services/event-participation/reporting";
+import { readSessionBookingsRequest } from "../../../../_lib/services/event-participation/reporting";
 export const SessionBookingsGet = openApiRoute(sessionBookingsRouteSchema, async (c: AdminContext, data) => {
   markResponseSensitive(c);
-  const { db, event } = await requireSessionParticipantManager(c, data.params.eventSlug, data.params.occurrenceId);
-  return json(await sessionBookings(db, event.id, data.params.occurrenceId, data.query));
+  return json(
+    await readSessionBookingsRequest(
+      requestDb(c),
+      c.req.raw,
+      c.env,
+      data.params.eventSlug,
+      data.params.occurrenceId,
+      data.query,
+    ),
+  );
 });
 export const SessionParticipationReviewPut = openApiRoute(sessionReviewRouteSchema, async (c: AdminContext, data) => {
   markResponseSensitive(c);
@@ -106,13 +114,9 @@ export const SessionHoldPost = openApiRoute(sessionHoldRouteSchema, async (c: Ad
 
 export const SessionHoldsGet = openApiRoute(sessionHoldsGetRouteSchema, async (c: AdminContext, data) => {
   markResponseSensitive(c);
-  const { db, event, canDelegate } = await requireSessionParticipantManager(
-    c,
-    data.params.eventSlug,
-    data.params.occurrenceId,
+  return json(
+    await readSessionHoldsRequest(requestDb(c), c.req.raw, c.env, data.params.eventSlug, data.params.occurrenceId),
   );
-  if (!canDelegate) throw new AppError(403, "HOLD_ORGANIZER_REQUIRED", "Only organizers can manage counted holds.");
-  return json(await listSessionHolds(db, event.id, data.params.occurrenceId));
 });
 export const SessionHoldDelete = openApiRoute(sessionHoldDeleteRouteSchema, async (c: AdminContext, data) => {
   markResponseSensitive(c);

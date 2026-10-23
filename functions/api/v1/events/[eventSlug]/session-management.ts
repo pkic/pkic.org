@@ -1,6 +1,6 @@
 import { addManagedSessionParticipation } from "../../../../_lib/services/event-participation/session-booking";
 import { sessionManagementInfoRouteSchema } from "../../../../../assets/shared/schemas/event-session-management";
-import { sessionManagementInfo } from "../../../../_lib/services/event-participation/management-info";
+import { readSessionManagementInfoRequest } from "../../../../_lib/services/event-participation/management-info";
 import {
   sessionInvitationRouteSchema,
   sessionDelegationRouteSchema,
@@ -76,11 +76,14 @@ export const SessionManagementInfoGet = openApiRoute(
   sessionManagementInfoRouteSchema,
   async (c: AdminContext, data) => {
     markResponseSensitive(c);
-    const { db, canDelegate } = await requireSessionParticipantManager(
-      c,
-      data.params.eventSlug,
-      data.params.occurrenceId,
+    return json(
+      await readSessionManagementInfoRequest(
+        requestDb(c),
+        c.req.raw,
+        c.env,
+        data.params.eventSlug,
+        data.params.occurrenceId,
+      ),
     );
-    return json(await sessionManagementInfo(db, data.params.occurrenceId, canDelegate));
   },
 );

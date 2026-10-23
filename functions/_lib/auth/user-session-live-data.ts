@@ -130,6 +130,9 @@ export function prepareUserSessionClaimsBatch(db: DatabaseLike, slice: readonly 
 
   return {
     statements,
+    grantsForContext(loaded: D1StatementResult[], requestIndex: number, memberId: string | null) {
+      return selectUserGrantCandidates(batchRows<ContextGrantRow>(loaded[5]), requestIndex, memberId);
+    },
     async decode(loaded: D1StatementResult[]): Promise<UserSessionBatchResult[]> {
       const result: UserSessionBatchResult[] = [];
       const sessions = batchRows<PlainSessionRow>(loaded[0]);

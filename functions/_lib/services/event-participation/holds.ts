@@ -1,8 +1,11 @@
 import { operationalAllocationCompatibleSql } from "./session-allocation";
 import { physicalAllocationAvailableSql } from "./session-allocation";
 import { first } from "../../db/queries";
-import { sessionHoldRequestSchema } from "../../../../assets/shared/schemas/event-session-holds";
-import type { DatabaseLike } from "../../types";
+import { sessionHoldRequestSchema, sessionHoldListSchema } from "../../../../assets/shared/schemas/event-session-holds";
+import type { DatabaseLike, D1StatementResult, Env } from "../../types";
+import { batchRows } from "../../db/pagination";
+import { eventReadIdSql, type EventReadSelection } from "../events/selection";
+import { readSessionParticipantResource } from "./management-authorization";
 import { nowIso } from "../../utils/time";
 import { AppError } from "../../errors";
 import { remoteOccupiedSql } from "./capacity-accounting";
@@ -64,13 +67,40 @@ export async function createSessionHold(
   return { id, expiresAt: input.expiresAt };
 }
 export async function listSessionHolds(db: DatabaseLike, eventId: string, occurrenceId: string) {
-  const result = await db
-    .prepare(
-      "SELECT id,user_id AS userId,attendance_mode AS attendanceMode,expires_at AS expiresAt,reason_code AS reasonCode,created_at AS createdAt FROM agenda_session_holds WHERE event_id=? AND occurrence_id=? AND revoked_at IS NULL AND expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now') ORDER BY expires_at,id LIMIT 500",
-    )
-    .bind(eventId, occurrenceId)
-    .all();
-  return { items: result.results ?? [] };
+  const read = prepareSessionHolds(db, eventId, occurrenceId);
+  return read.decode(await db.batch(read.statements));
+}
+export async function readSessionHoldsRequest(
+  db: DatabaseLike,
+  request: Request,
+  env: Pick<Env, "INTERNAL_SIGNING_SECRET">,
+  slug: string,
+  occurrenceId: string,
+) {
+  return readSessionParticipantResource(db, request, env, slug, occurrenceId, (event) => {
+    const read = prepareSessionHolds(db, event, occurrenceId);
+    return {
+      statements: read.statements,
+      decode(loaded, context) {
+        if (!context.canDelegate)
+          throw new AppError(403, "HOLD_ORGANIZER_REQUIRED", "Only organizers can manage counted holds.");
+        return read.decode(loaded);
+      },
+    };
+  });
+}
+function prepareSessionHolds(db: DatabaseLike, eventId: EventReadSelection, occurrenceId: string) {
+  const scope = eventReadIdSql(eventId);
+  return {
+    statements: [
+      db
+        .prepare(
+          `SELECT id,user_id AS userId,attendance_mode AS attendanceMode,expires_at AS expiresAt,reason_code AS reasonCode,created_at AS createdAt FROM agenda_session_holds WHERE event_id=${scope.sql} AND occurrence_id=? AND revoked_at IS NULL AND expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now') ORDER BY expires_at,id LIMIT 500`,
+        )
+        .bind(...scope.bindings, occurrenceId),
+    ],
+    decode: (loaded: D1StatementResult[]) => sessionHoldListSchema.parse({ items: batchRows(loaded[0]) }),
+  };
 }
 export async function revokeSessionHold(
   db: DatabaseLike,

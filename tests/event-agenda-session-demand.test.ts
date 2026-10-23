@@ -36,9 +36,7 @@ async function request(path: string, method = "GET", body?: unknown, authorizati
     },
     method === "GET" &&
       (path === "/agenda" ||
-        (path.startsWith("/agenda/occurrences") &&
-          !path.includes("/room-recommendations") &&
-          !new URL(path, "https://app.test").searchParams.has("day")))
+        (path.startsWith("/agenda/occurrences") && !new URL(path, "https://app.test").searchParams.has("day")))
       ? { maxRoundTrips: 1 }
       : undefined,
   );

@@ -2,8 +2,9 @@ import {
   eventContactRetentionSchema,
   type EventContactRetention,
 } from "../../../../assets/shared/schemas/event-contact-retention";
-import { first } from "../../db/queries";
-import type { DatabaseLike } from "../../types";
+import { batchFirst } from "../../db/pagination";
+import type { DatabaseLike, D1StatementResult } from "../../types";
+import { eventReadIdSql, type EventReadSelection } from "../events/selection";
 import { AppError } from "../../errors";
 /** Existing configured profile window supplies a contact deadline, never an evidence-purge deadline. */
 const contactDeadline =
@@ -20,21 +21,35 @@ export function eventContactAccessSql(eventIdExpression: string): string {
 }
 /** An unset policy/end is explicit; no guessed duration, date or global account redaction. */
 export async function readEventContactRetention(db: DatabaseLike, eventId: string): Promise<EventContactRetention> {
-  const row = await first<{ state: string; contactUntil: string | null; closedAt: string | null }>(
-    db,
-    `SELECT CASE WHEN contact_state.closed_at IS NOT NULL THEN 'closed'
+  const read = prepareEventContactRetention(db, eventId);
+  return read.decode(await db.batch(read.statements));
+}
+export function prepareEventContactRetention(db: DatabaseLike, eventId: EventReadSelection) {
+  const scope = eventReadIdSql(eventId);
+  return {
+    statements: [
+      db
+        .prepare(
+          `SELECT CASE WHEN contact_state.closed_at IS NOT NULL THEN 'closed'
       WHEN NOT (${deadlineConfigured}) THEN 'unconfigured'
       WHEN ${contactDeadline} IS NULL OR julianday(${contactDeadline})<=julianday('now') THEN 'closed' ELSE 'open' END AS state,
       COALESCE(contact_state.deadline_at,${contactDeadline}) AS contactUntil,COALESCE(contact_state.closed_at,CASE WHEN julianday(${contactDeadline})<=julianday('now') THEN ${contactDeadline} END) AS closedAt
       FROM events contact_event LEFT JOIN retention_policies contact_policy ON contact_policy.event_id=contact_event.id
-      LEFT JOIN event_contact_retention_state contact_state ON contact_state.event_id=contact_event.id WHERE contact_event.id=?`,
-    [eventId],
-  );
-  if (!row) throw new AppError(404, "EVENT_NOT_FOUND", "Event unavailable.");
-  return eventContactRetentionSchema.parse(row);
+      LEFT JOIN event_contact_retention_state contact_state ON contact_state.event_id=contact_event.id WHERE contact_event.id=${scope.sql}`,
+        )
+        .bind(...scope.bindings),
+    ],
+    decode(loaded: D1StatementResult[]): EventContactRetention {
+      const row = batchFirst(loaded[0]);
+      if (!row) throw new AppError(404, "EVENT_NOT_FOUND", "Event unavailable.");
+      return eventContactRetentionSchema.parse(row);
+    },
+  };
 }
 export async function assertEventContactAccess(db: DatabaseLike, eventId: string): Promise<EventContactRetention> {
-  const policy = await readEventContactRetention(db, eventId);
+  return requireEventContactAccess(await readEventContactRetention(db, eventId));
+}
+export function requireEventContactAccess(policy: EventContactRetention): EventContactRetention {
   if (policy.state === "closed")
     throw new AppError(
       410,

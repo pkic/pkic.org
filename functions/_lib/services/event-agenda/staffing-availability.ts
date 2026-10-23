@@ -7,7 +7,8 @@ import { eventReadIdSql, type EventReadSelection } from "../events/selection";
 export function prepareStaffingUnavailablePairs(
   db: DatabaseLike,
   eventId: EventReadSelection,
-  snapshot?: AgendaSnapshot,
+  // A trusted input SELECT supplies shifts/users JSON and travel minutes; all conflict policy stays below.
+  snapshot?: AgendaSnapshot | { sql: string; bindings: unknown[] },
 ) {
   const scope = eventReadIdSql(eventId);
   const eventSql = "(SELECT id FROM availability_event)";
@@ -52,7 +53,10 @@ export function prepareStaffingUnavailablePairs(
   );
   let input: string;
   let bindings: unknown[];
-  if (snapshot) {
+  if (snapshot && "sql" in snapshot) {
+    input = snapshot.sql;
+    bindings = snapshot.bindings;
+  } else if (snapshot) {
     const shifts = JSON.stringify(
       snapshot.staffingPositions.map((position) => {
         const requirement = snapshot.staffingRequirements.find((candidate) => candidate.id === position.requirementId)!;
