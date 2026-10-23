@@ -122,9 +122,9 @@ describe("source-owned original agenda publication paths", () => {
     ]);
     expect(() => collectSessionRedirects(snapshot, [])).toThrow("target was not generated");
     expect(() => collectSessionRedirects(snapshot, [eventPage, targetFile])).toThrow("collides");
-    expect(() => collectSessionRedirects(snapshot, [eventPage, "events/2023/original/agenda/index.html"])).toThrow(
-      "collides",
-    );
+    expect(collectSessionRedirects(snapshot, [eventPage, "events/2023/original/agenda/index.html"])).toEqual([
+      { from: agenda.publicAgendaPath, to: `${route}agenda/`, status: 301 },
+    ]);
   });
   it("refuses competing source owners and another canonical event root", () => {
     const snapshot = publication();
@@ -178,6 +178,30 @@ describe("bounded natural agenda child publication", () => {
     expect(children.some((child) => child.route.includes("2026-12-04"))).toBe(false);
     expect(authoredAgendaPageRoutes([event, { ...source, data: { ...source.data, draft: true } }])).toEqual([]);
     expect(authoredAgendaPageRoutes([{ ...event, data: { ...event.data, draft: true } }, source])).toEqual([]);
+  });
+
+  it("preserves the real 2026 agenda page when a current import owns its authored event root", async () => {
+    const sourcePath = "content/events/2026/pqc-conference-amsterdam-nl/_index.md";
+    const source = document(sourcePath, await readFile(sourcePath, "utf8"));
+    const eventRoute = source.route;
+    const agendaRoute = `${eventRoute}agenda/`;
+    const current = { ...agenda, publicAgendaPath: agendaRoute };
+    const snapshot = publication();
+    snapshot.eventAgendas = { [current.eventSlug]: current };
+    snapshot.authoredAgendaRoutes = [
+      {
+        sourcePath,
+        sourceDigest: await agendaTransferDigest(source.data.data),
+        route: eventRoute,
+        eventSlug: current.eventSlug,
+      },
+    ];
+    const files = [eventRoute, agendaRoute].map((path) => `${path.slice(1)}index.html`);
+    expect(collectSessionRedirects(snapshot, files)).toEqual([]);
+    current.publicAgendaPath = "/events/another-current-slug/agenda/";
+    expect(collectSessionRedirects(snapshot, files)).toEqual([
+      { from: current.publicAgendaPath, to: agendaRoute, status: 301 },
+    ]);
   });
 
   it("uses approved public days for an embedded authored agenda, without inventing private or unknown children", () => {

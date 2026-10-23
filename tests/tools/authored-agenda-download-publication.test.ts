@@ -32,12 +32,12 @@ const agenda = agendaSnapshotSchema.parse({
   assignments: [],
   occurrences: [],
 });
-async function fixture(presentation = "Exact file.pdf") {
+async function fixture(presentation = "Exact file.pdf", draft?: boolean) {
   const root = await createTemporaryDirectory("authored-downloads");
   roots.push(root);
   const output = resolve(root, "output");
   const sourcePath = "content/events/2023/original/index.md";
-  const data = { timezone: "UTC", agenda: { "2023-01-01": [{ time: "09:00", sessions: [{ presentation }] }] } };
+  const data = { draft, timezone: "UTC", agenda: { "2023-01-01": [{ time: "09:00", sessions: [{ presentation }] }] } };
   await mkdir(dirname(resolve(root, sourcePath)), { recursive: true });
   await writeFile(resolve(root, sourcePath), `---\n${stringify({ data })}---\nOriginal narrative\n`);
   const owner = {
@@ -66,6 +66,15 @@ it("retains exact authored PDF bytes despite a native agenda with no released ma
     expected,
   ]);
   expect(value.publication.eventAgendas[agenda.eventSlug].occurrences).toEqual([]);
+});
+
+it("publishes an approved agenda without treating its draft authored PDFs as a public baseline", async () => {
+  const value = await fixture("Exact file.pdf", true);
+  expect(await authoredAgendaDownloadReferences(value.publication, value.root)).toEqual([]);
+  expect(await publishAuthoredAgendaDownloads(value.output, value.publication, undefined, value.root)).toEqual([]);
+  await expect(readFile(resolve(value.output, "events/2023/original/Exact file.pdf"))).rejects.toMatchObject({
+    code: "ENOENT",
+  });
 });
 
 it("does not substitute NBSP or publish an unreferenced sponsor file", async () => {

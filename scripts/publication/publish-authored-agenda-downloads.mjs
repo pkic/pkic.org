@@ -39,7 +39,9 @@ export async function authoredAgendaDownloadReferences(publication, projectRoot 
     )
       throw new Error("Authored public download source changed since archival review");
     const program = conferenceProgramSourceSchema.parse(data.data);
-    if (program.draft === true) throw new Error("Draft conference downloads are not a public baseline");
+    // A draft authored program establishes no public download baseline.
+    // Its approved database agenda still owns the page and can publish independently.
+    if (program.draft === true) continue;
     const directory = dirname(owner.sourcePath.slice("content/".length));
     const presentations = new Set(
       Object.values(program.agenda).flatMap((slots) =>
