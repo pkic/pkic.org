@@ -1,3 +1,4 @@
+export { publishAgenda } from "./publication";
 export { createAgendaRoom } from "./create-room";
 export { createAgendaOccurrence } from "./create-occurrence";
 import { agendaSpeakerStatements } from "./occurrence-speakers";
@@ -6,17 +7,8 @@ export { agendaSpeakerStatements } from "./occurrence-speakers";
 export { validateAgendaSchedule } from "./schedule-validation";
 import { commitAgendaSnapshot } from "./commit-snapshot";
 import { prepareAgendaOccurrenceSettings } from "./occurrence-settings";
-import { prepareAgendaSponsorApproval } from "./sponsors";
 import { plannedMediaJson } from "./occurrence-insert";
-import { preparePublicAgendaSnapshot } from "./public-snapshot";
 import { occurrenceRepresentationReferences, prepareRepresentationEligibility } from "./representation-eligibility";
-import { assertPublicationRepresentations } from "./publication-representations";
-import { prepareReviewedSpeakerProfiles } from "./speaker-profile-reviews";
-import { agendaHistoricalPublicationReview } from "../../../../assets/shared/agenda-historical-publication-review";
-import { prepareScopedAuditLog } from "../audit";
-import { prepareSitePublicationRequest } from "../site-publication-requests";
-import { operationalDays, prepareOperationalDays } from "./operational-days";
-import { operationalPeople, prepareOperationalPeople } from "./operational-people";
 import { prepareAuthorizationGuard } from "../../db/authorization-guard";
 export { saveAgendaStaffing, allocateStaffing } from "./staffing";
 export { commitAgendaRevision } from "./revision";
@@ -26,22 +18,13 @@ import {
   agendaMovedSpeakers,
   agendaMovedAdditionalRoomIds,
 } from "../../../../assets/shared/event-agenda-rooms";
-import {
-  assertPublicationParticipation,
-  preparePublicationParticipationGuard,
-  preparePublicationParticipationChanges,
-} from "../event-participation/publication-impact";
 import { physicalOccupiedSql, remoteOccupiedSql } from "../event-participation/capacity-accounting";
 import { assertPublicationAllocations, preparePublicationAllocationGuard } from "./publication-allocations";
-import { prepareAgendaChangeNotifications } from "./notifications";
 import { z } from "zod";
 import { agendaSettingsSchema, agendaOccurrencePatchSchema } from "../../../../assets/shared/schemas/event-agenda";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
-import { nowIso } from "../../utils/time";
-import { prepareSpeakerProfileSlugs } from "../people/profile-addresses";
-import { prepareSessionPageSlugs } from "./session-page-slugs";
 import { getAgenda } from "./read";
 import { canonicalAgendaSessionFormats, readAgendaSessionFormatLabels } from "./occurrence-formats";
 import { agendaScheduleConflictProposalSchema } from "../../../../assets/shared/schemas/event-agenda-schedule";
@@ -210,110 +193,6 @@ export async function patchAgendaOccurrence(
     conflictProposal,
   );
 }
-export async function publishAgenda(
-  db: DatabaseLike,
-  eventId: string,
-  eventSlug: string,
-  revision: number,
-  userId: string,
-  acknowledgeArchiveRepresentation = false,
-) {
-  const snapshot = await getAgenda(db, eventId, eventSlug);
-  if (snapshot.publishedRevision === snapshot.revision)
-    throw new AppError(409, "AGENDA_ALREADY_APPROVED", "This agenda revision is already approved");
-  validateAgendaSchedule(snapshot, snapshot.occurrences);
-  const nextRevision = revision + 1;
-  const event = await first<{ visibility: string }>(db, "SELECT visibility FROM events WHERE id=?", [eventId]);
-  if (!event) throw new AppError(404, "EVENT_NOT_FOUND", "Event not found");
-  const reviewed = await prepareReviewedSpeakerProfiles(db, eventId, snapshot);
-  const approvedSnapshot = preparePublicAgendaSnapshot(
-    reviewed.snapshot,
-    nextRevision,
-    nowIso(),
-    event.visibility === "public",
-  );
-  const historicalGuards = await assertPublicationRepresentations(
-    db,
-    eventId,
-    approvedSnapshot,
-    acknowledgeArchiveRepresentation,
-  );
-  const representationGuards = await prepareRepresentationEligibility(
-    db,
-    occurrenceRepresentationReferences(approvedSnapshot.occurrences),
-  );
-  const privatePeople = operationalPeople(snapshot);
-  const privateDays = operationalDays(snapshot);
-  await assertPublicationAllocations(db, snapshot);
-  await assertPublicationParticipation(db, eventId, approvedSnapshot);
-  const notificationStatements = await prepareAgendaChangeNotifications(db, eventId, nextRevision, approvedSnapshot);
-  const profileSlugStatements = await prepareSpeakerProfileSlugs(db, approvedSnapshot, approvedSnapshot.approvedAt!);
-  const sessionSlugStatements = await prepareSessionPageSlugs(
-    db,
-    eventId,
-    approvedSnapshot,
-    approvedSnapshot.approvedAt!,
-  );
-  return commitAgendaSnapshot(
-    db,
-    eventId,
-    eventSlug,
-    revision,
-    [
-      prepareAuthorizationGuard(db, {
-        sql: "SELECT 1 FROM events WHERE id=? AND visibility=?",
-        bindings: [eventId, event.visibility],
-      }),
-      ...representationGuards,
-      ...reviewed.guards,
-      ...historicalGuards,
-      ...(acknowledgeArchiveRepresentation && agendaHistoricalPublicationReview(approvedSnapshot).occurrenceIds.length
-        ? [
-            prepareScopedAuditLog(
-              db,
-              { type: "event", id: eventId },
-              "user",
-              userId,
-              "agenda.archive.representation.acknowledged",
-              "event_agenda",
-              eventId,
-              { revision: nextRevision, ...agendaHistoricalPublicationReview(approvedSnapshot) },
-              approvedSnapshot.approvedAt,
-            ),
-          ]
-        : []),
-      ...(await prepareAgendaSponsorApproval(db, eventId, approvedSnapshot.occurrences)),
-      preparePublicationAllocationGuard(db, snapshot),
-      prepareOperationalPeople(db, eventId, nextRevision, privatePeople),
-      prepareOperationalDays(db, eventId, nextRevision, privateDays),
-      preparePublicationParticipationGuard(db, eventId, approvedSnapshot),
-      ...notificationStatements,
-      db
-        .prepare(
-          "INSERT INTO event_agenda_publications(id,event_id,revision,snapshot_json,created_by,created_at) VALUES(?,?,?,?,?,?)",
-        )
-        .bind(crypto.randomUUID(), eventId, nextRevision, JSON.stringify(approvedSnapshot), userId, nowIso()),
-      db
-        .prepare(
-          "INSERT INTO event_agenda_published_occurrences(event_id,revision,occurrence_id,payload_json,room_json) SELECT ?,?,json_extract(occurrence.value,'$.id'),occurrence.value,(SELECT room.value FROM json_each(?,'$.rooms') room WHERE json_extract(room.value,'$.id')=json_extract(occurrence.value,'$.roomId')) FROM json_each(?,'$.occurrences') occurrence",
-        )
-        .bind(eventId, nextRevision, JSON.stringify(approvedSnapshot), JSON.stringify(approvedSnapshot)),
-      db.prepare("UPDATE event_agenda_state SET published_revision=? WHERE event_id=?").bind(nextRevision, eventId),
-      ...profileSlugStatements,
-      ...sessionSlugStatements,
-      prepareSitePublicationRequest(db, {
-        resourceType: "event_agenda",
-        resourceId: eventId,
-        revision: nextRevision,
-        reasonCode: "agenda_approved",
-        deduplicationKey: `agenda:${eventId}:${nextRevision}`,
-      }),
-      ...preparePublicationParticipationChanges(db, eventId, approvedSnapshot),
-    ],
-    userId,
-  );
-}
-
 export async function saveAgendaSettings(
   db: DatabaseLike,
   eventId: string,

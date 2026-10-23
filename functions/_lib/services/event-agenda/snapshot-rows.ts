@@ -8,7 +8,7 @@ export function prepareAgendaSnapshotRows(db: DatabaseLike, eventId: EventReadSe
   return [
     db
       .prepare(
-        `SELECT settings_json,timezone,starts_at,ends_at,name,base_path,city FROM events WHERE id = ${scope.sql}`,
+        `SELECT settings_json,timezone,starts_at,ends_at,name,base_path,city,visibility FROM events WHERE id = ${scope.sql}`,
       )
       .bind(...scope.bindings),
     db
@@ -69,6 +69,7 @@ export function decodeAgendaSnapshotRows(results: D1StatementResult[]) {
       name: string;
       base_path: string | null;
       city: string | null;
+      visibility: string;
     }>(results[0]),
     state: batchFirst<{ revision: number; published_revision: number | null; travel_minutes: number }>(results[1]),
     rooms: batchRows<{

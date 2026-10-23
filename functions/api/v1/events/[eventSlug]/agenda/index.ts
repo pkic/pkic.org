@@ -9,6 +9,7 @@ import { json } from "../../../../../_lib/http";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { createAgendaRoomRequest } from "../../../../../_lib/services/event-agenda/create-room";
 import { createAgendaOccurrenceRequest } from "../../../../../_lib/services/event-agenda/create-occurrence";
+import { publishAgendaRequest } from "../../../../../_lib/services/event-agenda/publication";
 import { agendaWriteDatabase } from "../../../../../_lib/services/event-agenda/command-authorization";
 import {
   readAgendaRequest,
@@ -22,7 +23,6 @@ import {
   patchAgendaOccurrence,
   saveAgendaStaffing,
   allocateStaffing,
-  publishAgenda,
 } from "../../../../../_lib/services/event-agenda/mutations";
 import * as contracts from "../../../../../../assets/shared/schemas/route-contracts-event-agenda";
 import { requireAnyEventPermission, requireEventPermission } from "../authorization";
@@ -78,14 +78,13 @@ export const AgendaAllocation = openApiRoute(contracts.agendaAllocationRouteSche
   );
 });
 export const AgendaPublication = openApiRoute(contracts.agendaPublicationRouteSchema, async (c, data) => {
-  const { db, event, actor } = await authorize(c, data.params.eventSlug, true);
   return json(
-    await publishAgenda(
-      db,
-      event.id,
-      event.slug,
+    await publishAgendaRequest(
+      requestDb(c),
+      c.req.raw,
+      c.env,
+      data.params.eventSlug,
       data.body.expectedRevision,
-      actor.id,
       data.body.acknowledgeArchiveRepresentation,
     ),
   );

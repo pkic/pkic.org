@@ -5,9 +5,11 @@ import {
   sessionAppearanceSchema,
   sessionHistoryMetadataSchema,
 } from "../../../../assets/shared/schemas/event-session-history";
-import { all, first } from "../../db/queries";
+import { first } from "../../db/queries";
+import { batchRows } from "../../db/pagination";
+import type { EventReadSelection } from "../events/selection";
 import { prepareAuthorizationGuard } from "../../db/authorization-guard";
-import type { DatabaseLike } from "../../types";
+import type { DatabaseLike, D1StatementResult } from "../../types";
 import { AppError } from "../../errors";
 import { nowIso } from "../../utils/time";
 import { prepareScopedAuditLog } from "../audit";
@@ -17,6 +19,7 @@ import { agendaSettingsObject, agendaSettingsWriteSql } from "./settings-object"
 import {
   decodeSpeakerProfile,
   speakerProfilesSql,
+  speakerProfilesReadSource,
   speakerProfileColumns,
   type SpeakerProfileRow,
 } from "./speaker-profile-review-read";
@@ -126,108 +129,117 @@ export async function prepareReviewedSpeakerProfiles(
   snapshot: AgendaSnapshot,
   strict = true,
 ) {
-  const rows: SpeakerProfileRow[] = [];
-  for (let offset = 0; offset < 10000; offset += 100) {
-    const page = await all<SpeakerProfileRow>(
-      db,
-      `${speakerProfilesSql} SELECT ${speakerProfileColumns} FROM reviewed_profiles ORDER BY user_id,identity_id LIMIT 100 OFFSET ?`,
-      [eventId, eventId, offset],
-    );
-    rows.push(...page);
-    if (page.length < 100) break;
-    if (offset === 9900)
-      throw new AppError(
-        422,
-        "SPEAKER_PROFILE_REVIEW_LIMIT",
-        "Review an agenda with fewer than 10,000 speaker profiles.",
-      );
-  }
-  const byOccurrence = new Map<string, Map<string, z.infer<typeof sessionAppearanceSchema>>>();
-  const reviewedRows: SpeakerProfileRow[] = [];
-  for (const row of rows) {
-    const receipt = row.receipt ? JSON.parse(row.receipt) : null;
-    // Explicit existing session approvals remain valid. Once an event-level review
-    // exists, its version must be current; an older session credit cannot bypass it.
-    if (
-      !receipt &&
-      !row.explicit_identity &&
-      (JSON.parse(row.occurrence_ids) as string[]).every((id) =>
-        snapshot.occurrences
-          .find((occurrence) => occurrence.id === id)
-          ?.history?.appearances.some((appearance) => appearance.userId === row.user_id && appearance.approvedAt),
-      )
-    )
-      continue;
-    const profile = await decodeSpeakerProfile(row);
-    if (!row.available || !profile.reviewedAt || receipt?.profileDigest !== profile.profileDigest) {
-      if (!strict) continue;
-      throw new AppError(
-        422,
-        "AGENDA_REPRESENTATION_REVIEW_REQUIRED",
-        "Review pending speaker profiles in the publication workspace before approving this agenda.",
-      );
-    }
-    reviewedRows.push(row);
-    const appearance = sessionAppearanceSchema.parse({
-      userId: profile.userId,
-      displayName: profile.displayName,
-      affiliations: [
-        {
-          identityId: profile.identityId,
-          title: profile.jobTitle,
-          organizationId: profile.organizationId,
-          organizationName: profile.organizationName,
-        },
-      ],
-      biography: profile.biography ?? "",
-      links: profile.links,
-      photoUrl: profile.photoUrl,
-      approvedAt: profile.reviewedAt,
-    });
-    for (const id of JSON.parse(row.occurrence_ids) as string[]) {
-      const people = byOccurrence.get(id) ?? new Map();
-      const previous = people.get(profile.userId);
-      const primaryId = snapshot.occurrences
-        .find((occurrence) => occurrence.id === id)
-        ?.speakers.find((speaker) => speaker.userId === profile.userId)?.profileCandidate?.identityId;
-      if (previous) {
-        const primary = primaryId === profile.identityId ? appearance : previous;
-        people.set(profile.userId, {
-          ...primary,
-          affiliations: [...previous.affiliations, ...appearance.affiliations],
-        });
-      } else people.set(profile.userId, appearance);
-      byOccurrence.set(id, people);
-    }
-  }
-  const guards = [];
-  for (let offset = 0; offset < reviewedRows.length; offset += 100)
-    guards.push(unchangedProfilesGuard(db, eventId, reviewedRows.slice(offset, offset + 100), true));
+  const read = prepareReviewedSpeakerProfilesRead(db, eventId);
+  return read.decode(await db.batch(read.statements), eventId, snapshot, strict);
+}
+
+/** Load the bounded canonical review population once; the same decoder plans immutable appearances and guards. */
+export function prepareReviewedSpeakerProfilesRead(db: DatabaseLike, event: EventReadSelection) {
+  const source = speakerProfilesReadSource(event);
   return {
-    guards,
-    snapshot: {
-      ...snapshot,
-      occurrences: snapshot.occurrences.map((occurrence) => {
-        const profiles = byOccurrence.get(occurrence.id);
-        if (!profiles) return occurrence;
-        for (const [userId, appearance] of profiles) {
-          const order =
-            occurrence.speakers
-              .find((speaker) => speaker.userId === userId)
-              ?.profileCandidates?.map((candidate) => candidate.identityId) ?? [];
-          appearance.affiliations.sort(
-            (left, right) => order.indexOf(left.identityId) - order.indexOf(right.identityId),
+    statements: [
+      db
+        .prepare(
+          `${source.sql} SELECT ${speakerProfileColumns} FROM reviewed_profiles ORDER BY user_id,identity_id LIMIT 10000`,
+        )
+        .bind(...source.bindings),
+    ],
+    async decode(loaded: D1StatementResult[], eventId: string, snapshot: AgendaSnapshot, strict = true) {
+      const rows = batchRows<SpeakerProfileRow>(loaded[0]);
+      if (rows.length >= 10000)
+        throw new AppError(
+          422,
+          "SPEAKER_PROFILE_REVIEW_LIMIT",
+          "Review an agenda with fewer than 10,000 speaker profiles.",
+        );
+      const byOccurrence = new Map<string, Map<string, z.infer<typeof sessionAppearanceSchema>>>();
+      const reviewedRows: SpeakerProfileRow[] = [];
+      for (const row of rows) {
+        const receipt = row.receipt ? JSON.parse(row.receipt) : null;
+        // Explicit existing session approvals remain valid. Once an event-level review
+        // exists, its version must be current; an older session credit cannot bypass it.
+        if (
+          !receipt &&
+          !row.explicit_identity &&
+          (JSON.parse(row.occurrence_ids) as string[]).every((id) =>
+            snapshot.occurrences
+              .find((occurrence) => occurrence.id === id)
+              ?.history?.appearances.some((appearance) => appearance.userId === row.user_id && appearance.approvedAt),
+          )
+        )
+          continue;
+        const profile = await decodeSpeakerProfile(row);
+        if (!row.available || !profile.reviewedAt || receipt?.profileDigest !== profile.profileDigest) {
+          if (!strict) continue;
+          throw new AppError(
+            422,
+            "AGENDA_REPRESENTATION_REVIEW_REQUIRED",
+            "Review pending speaker profiles in the publication workspace before approving this agenda.",
           );
         }
-        const history = sessionHistoryMetadataSchema.parse(occurrence.history ?? {});
-        return {
-          ...occurrence,
-          history: {
-            ...history,
-            appearances: [...history.appearances.filter((a) => !profiles.has(a.userId)), ...profiles.values()],
-          },
-        };
-      }),
+        reviewedRows.push(row);
+        const appearance = sessionAppearanceSchema.parse({
+          userId: profile.userId,
+          displayName: profile.displayName,
+          affiliations: [
+            {
+              identityId: profile.identityId,
+              title: profile.jobTitle,
+              organizationId: profile.organizationId,
+              organizationName: profile.organizationName,
+            },
+          ],
+          biography: profile.biography ?? "",
+          links: profile.links,
+          photoUrl: profile.photoUrl,
+          approvedAt: profile.reviewedAt,
+        });
+        for (const id of JSON.parse(row.occurrence_ids) as string[]) {
+          const people = byOccurrence.get(id) ?? new Map();
+          const previous = people.get(profile.userId);
+          const primaryId = snapshot.occurrences
+            .find((occurrence) => occurrence.id === id)
+            ?.speakers.find((speaker) => speaker.userId === profile.userId)?.profileCandidate?.identityId;
+          if (previous) {
+            const primary = primaryId === profile.identityId ? appearance : previous;
+            people.set(profile.userId, {
+              ...primary,
+              affiliations: [...previous.affiliations, ...appearance.affiliations],
+            });
+          } else people.set(profile.userId, appearance);
+          byOccurrence.set(id, people);
+        }
+      }
+      const guards = [];
+      for (let offset = 0; offset < reviewedRows.length; offset += 100)
+        guards.push(unchangedProfilesGuard(db, eventId, reviewedRows.slice(offset, offset + 100), true));
+      return {
+        guards,
+        snapshot: {
+          ...snapshot,
+          occurrences: snapshot.occurrences.map((occurrence) => {
+            const profiles = byOccurrence.get(occurrence.id);
+            if (!profiles) return occurrence;
+            for (const [userId, appearance] of profiles) {
+              const order =
+                occurrence.speakers
+                  .find((speaker) => speaker.userId === userId)
+                  ?.profileCandidates?.map((candidate) => candidate.identityId) ?? [];
+              appearance.affiliations.sort(
+                (left, right) => order.indexOf(left.identityId) - order.indexOf(right.identityId),
+              );
+            }
+            const history = sessionHistoryMetadataSchema.parse(occurrence.history ?? {});
+            return {
+              ...occurrence,
+              history: {
+                ...history,
+                appearances: [...history.appearances.filter((a) => !profiles.has(a.userId)), ...profiles.values()],
+              },
+            };
+          }),
+        },
+      };
     },
   };
 }

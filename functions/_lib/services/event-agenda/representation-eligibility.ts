@@ -1,9 +1,9 @@
 import type { AgendaOccurrence } from "../../../../assets/shared/schemas/event-agenda";
 import { appearanceIdentityIds, type SessionAppearance } from "../../../../assets/shared/schemas/event-session-history";
 import { prepareAuthorizationGuard } from "../../db/authorization-guard";
-import { first } from "../../db/queries";
+import { batchFirst } from "../../db/pagination";
 import { AppError } from "../../errors";
-import type { DatabaseLike } from "../../types";
+import type { DatabaseLike, D1StatementResult } from "../../types";
 import { ownedIdentityLifecycleSql } from "../identities/selection";
 
 type RepresentationReference = { userId: string; actingIdentityId: string | null; at: string | null };
@@ -50,8 +50,12 @@ export async function prepareRepresentationEligibility(
   db: DatabaseLike,
   references: readonly RepresentationReference[],
 ) {
+  const read = prepareRepresentationEligibilityRead(db, references);
+  return read.decode(read.statements.length ? await db.batch(read.statements) : []);
+}
+
+export function prepareRepresentationEligibilityRead(db: DatabaseLike, references: readonly RepresentationReference[]) {
   const selected = references.filter((item) => item.actingIdentityId !== null);
-  if (!selected.length) return [];
   const at = "json_extract(reference.value,'$.at')";
   const validity = `identity.id=json_extract(reference.value,'$.actingIdentityId')
     AND identity.user_id=json_extract(reference.value,'$.userId')
@@ -59,11 +63,17 @@ export async function prepareRepresentationEligibility(
       OR (${at} IS NOT NULL AND ${ownedIdentityLifecycleSql("identity", at)}))`;
   const invalid = `SELECT 1 FROM json_each(?) reference WHERE NOT EXISTS(SELECT 1 FROM identities identity WHERE ${validity})`;
   const bindings = [JSON.stringify(selected)];
-  if (await first<{ invalid: number }>(db, `SELECT 1 AS invalid WHERE EXISTS(${invalid})`, bindings))
-    throw new AppError(
-      422,
-      "AGENDA_REPRESENTATION_IDENTITY_UNAVAILABLE",
-      "Choose a representation owned by this person and valid at the session date.",
-    );
-  return [prepareAuthorizationGuard(db, { sql: `SELECT 1 WHERE NOT EXISTS(${invalid})`, bindings })];
+  return {
+    statements: selected.length ? [db.prepare(`SELECT 1 AS invalid WHERE EXISTS(${invalid})`).bind(...bindings)] : [],
+    decode(loaded: D1StatementResult[]) {
+      if (!selected.length) return [];
+      if (batchFirst(loaded[0]))
+        throw new AppError(
+          422,
+          "AGENDA_REPRESENTATION_IDENTITY_UNAVAILABLE",
+          "Choose a representation owned by this person and valid at the session date.",
+        );
+      return [prepareAuthorizationGuard(db, { sql: `SELECT 1 WHERE NOT EXISTS(${invalid})`, bindings })];
+    },
+  };
 }

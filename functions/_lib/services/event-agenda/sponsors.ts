@@ -95,12 +95,6 @@ export function agendaSponsorDisplay(row: AgendaSponsorRow) {
 }
 
 /** Selection is presentation-only and never grants sponsor access, membership, or attendee data. */
-export async function prepareAgendaSponsorSelection(db: DatabaseLike, eventId: string, sponsorIds: readonly string[]) {
-  if (!sponsorIds.length) return [];
-  const read = prepareAgendaSponsorSelectionRead(db, eventId, sponsorIds);
-  return read.decode(await db.batch(read.statements), eventId);
-}
-
 /** Prepare selection evidence alongside the agenda snapshot; primary guards still own the final branding check. */
 export function prepareAgendaSponsorSelectionRead(
   db: DatabaseLike,
@@ -144,25 +138,34 @@ function prepareSponsorRowsGuard(
 }
 
 /** Approval freezes exactly the branding the organizer reviewed, with the same final active-public source guard. */
-export async function prepareAgendaSponsorApproval(
+export function prepareAgendaSponsorApprovalRead(
   db: DatabaseLike,
   eventId: string,
   occurrences: readonly AgendaOccurrence[],
 ) {
   const selected = occurrences.filter((occurrence) => occurrence.kind === "break" && occurrence.sponsorIds?.length);
   const ids = [...new Set(selected.flatMap((occurrence) => occurrence.sponsorIds ?? []))];
-  if (!ids.length) return [];
-  const rows = await readAgendaSponsorRows(db, eventId, ids);
-  const display = new Map(rows.map((row) => [row.sponsor_id, agendaSponsorDisplay(row)]));
-  if (
-    selected.some(
-      (occurrence) =>
-        JSON.stringify(occurrence.sponsors ?? []) !==
-        JSON.stringify(occurrence.sponsorIds!.flatMap((id) => (display.has(id) ? [display.get(id)!] : []))),
-    )
-  )
-    throw new AppError(409, "AGENDA_SPONSOR_CHANGED", "Sponsor branding changed. Refresh before approving the agenda.");
-  return prepareSponsorRowsGuard(db, eventId, ids, rows);
+  return {
+    statements: ids.length ? [prepareAgendaSponsorRead(db, eventId, ids)] : [],
+    decode(loaded: D1StatementResult[]) {
+      if (!ids.length) return [];
+      const rows = batchRows<AgendaSponsorRow>(loaded[0]);
+      const display = new Map(rows.map((row) => [row.sponsor_id, agendaSponsorDisplay(row)]));
+      if (
+        selected.some(
+          (occurrence) =>
+            JSON.stringify(occurrence.sponsors ?? []) !==
+            JSON.stringify(occurrence.sponsorIds!.flatMap((id) => (display.has(id) ? [display.get(id)!] : []))),
+        )
+      )
+        throw new AppError(
+          409,
+          "AGENDA_SPONSOR_CHANGED",
+          "Sponsor branding changed. Refresh before approving the agenda.",
+        );
+      return prepareSponsorRowsGuard(db, eventId, ids, rows);
+    },
+  };
 }
 
 /** Complete bounded branding population for configured event tiers, using the agenda's canonical visibility policy. */

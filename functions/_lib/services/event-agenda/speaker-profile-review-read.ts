@@ -12,9 +12,11 @@ import { publicUserHeadshotPath } from "../user-headshot";
 import { creditedIdentityIdSql } from "./credited-identity";
 import { agendaSpeakerDisplayNameSql } from "./speaker-name";
 import { identityJobTitleSql } from "../identities/affiliation-projection";
+import { eventReadIdSql, type EventReadSelection } from "../events/selection";
 
 /** Only ordinary/current sessions use live profile reviews; archive appearances retain their own evidence. */
-export const speakerProfilesSql = `WITH credits AS (
+function speakerProfilesSource(eventSql: string) {
+  return `WITH credits AS (
  SELECT speaker.user_id,occurrence.id AS occurrence_id,selected.value AS identity_id,
  json_type(credit_event.settings_json,'$.agenda.sessionSpeakerIdentities.'||json_quote(occurrence.id)||'.'||json_quote(speaker.user_id))='array' AS explicit_identity
  FROM event_agenda_occurrences occurrence
@@ -24,7 +26,7 @@ export const speakerProfilesSql = `WITH credits AS (
    '$.agenda.sessionSpeakerIdentities.'||json_quote(occurrence.id)||'.'||json_quote(speaker.user_id)),
    json_array(${creditedIdentityIdSql("occurrence.id", "speaker.user_id")}))) selected
  LEFT JOIN event_agenda_import_provenance provenance ON provenance.occurrence_id=occurrence.id
- WHERE occurrence.event_id=? AND occurrence.start_at IS NOT NULL AND occurrence.end_at IS NOT NULL
+ WHERE occurrence.event_id=${eventSql} AND occurrence.start_at IS NOT NULL AND occurrence.end_at IS NOT NULL
  AND COALESCE(provenance.import_mode,'current')<>'archive'
 ), canonical AS (
  SELECT credits.user_id,credits.identity_id,${agendaSpeakerDisplayNameSql} AS display_name,
@@ -54,13 +56,22 @@ export const speakerProfilesSql = `WITH credits AS (
  GROUP BY credits.user_id,credits.identity_id
 ), profiles AS (
  SELECT canonical.explicit_identity,canonical.user_id,canonical.identity_id,canonical.display_name,canonical.session_count,canonical.occurrence_ids,canonical.available,canonical.profile_json,canonical.canonical_version,canonical.legacy_reviewed_at,json_extract(event.settings_json,'$.agenda.speakerProfileReviews.'||json_quote(canonical.identity_id)) AS receipt
- FROM canonical JOIN events event ON event.id=?
+ FROM canonical JOIN events event ON event.id=${eventSql}
 ), reviewed_profiles AS (
  SELECT profiles.explicit_identity,profiles.user_id,profiles.identity_id,profiles.display_name,profiles.session_count,profiles.occurrence_ids,profiles.available,profiles.profile_json,profiles.canonical_version,profiles.legacy_reviewed_at,profiles.receipt,CASE WHEN available=1 AND explicit_identity=0 AND receipt IS NULL AND legacy_reviewed_at<>'' THEN legacy_reviewed_at
  WHEN available=1 AND json_extract(receipt,'$.userId')=user_id
  AND json_extract(receipt,'$.canonicalVersion')=canonical_version THEN json_extract(receipt,'$.reviewedAt') END AS reviewed_at
  FROM profiles
 )`;
+}
+
+export const speakerProfilesSql = speakerProfilesSource("?");
+
+/** The canonical profile source can resolve the owning event inside a composed read. */
+export function speakerProfilesReadSource(event: EventReadSelection) {
+  const scope = eventReadIdSql(event);
+  return { sql: speakerProfilesSource(scope.sql), bindings: [...scope.bindings, ...scope.bindings] };
+}
 
 export type SpeakerProfileRow = {
   explicit_identity: number;

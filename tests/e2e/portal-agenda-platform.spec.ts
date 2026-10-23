@@ -90,6 +90,10 @@ test("organizers build the shared agenda and browse a compact session table on d
   ];
   for (const [title, start, end, room, policy] of sessions) {
     await runAgendaAction(page, "New session");
+    await page
+      .getByRole("dialog", { name: "New session", exact: true })
+      .getByRole("tab", { name: "Session", exact: true })
+      .click();
     // The dialog takes the session title as its own name while it is typed.
     await page
       .getByRole("dialog", { name: "New session", exact: true })
@@ -140,7 +144,7 @@ test("organizers build the shared agenda and browse a compact session table on d
   await page.screenshot({ path: `${artifacts}/agenda-publication-review-desktop.png`, fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: `${artifacts}/agenda-publication-review-phone.png`, fullPage: true });
-  await page.getByRole("button", { name: "Back to agenda", exact: true }).click();
+  await page.getByRole("tab", { name: "Schedule", exact: true }).click();
   await expect(page.getByRole("table")).toBeVisible();
   await expect(page.getByText(/Draft revision/)).toHaveCount(0);
   await page.screenshot({ path: `${artifacts}/sessions-native-toolbar-phone.png`, fullPage: true });
@@ -340,7 +344,7 @@ test("organizers build the shared agenda and browse a compact session table on d
   const publicationResponse = await publication;
   expect(publicationResponse.status(), await publicationResponse.text()).toBe(200);
   await expect(page.getByRole("button", { name: "Approve for publication", exact: true })).toBeDisabled();
-  await page.getByRole("button", { name: "Back to agenda", exact: true }).click();
+  await page.getByRole("tab", { name: "Schedule", exact: true }).click();
 
   const response = await page.request.get(`/api/v1/events/${slug}/agenda`);
   expect(response.status()).toBe(200);
