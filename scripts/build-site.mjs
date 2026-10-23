@@ -15,6 +15,7 @@ process.env.PKIC_MODEL_REGISTRY_PATH = resolve("node_modules/.cache/model-versio
 run(process.execPath, [
   "--experimental-strip-types",
   "scripts/models/refresh-draft-pins.ts",
+  "--allow-unavailable",
   "--output",
   process.env.PKIC_MODEL_REGISTRY_PATH,
 ]);
