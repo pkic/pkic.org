@@ -30,7 +30,10 @@ describe("email publication images", () => {
       join(output, "wall.css"),
       ".sponsors {padding:32px;background:white} .sponsors-tier {margin-bottom:24px} img {width:200px;height:60px}",
     );
-    const dom = new JSDOM(`<html><head><link rel="stylesheet" href="/wall.css"></head><body>
+    const dom = new JSDOM(`<html><head><link rel="stylesheet" href="/wall.css">
+      <link rel="preload" as="image" href="/unrelated-page-image.jpg">
+      <link rel="modulepreload" href="/unrelated-page-module.js">
+      <link rel="icon" href="/unrelated-page-icon.svg"></head><body>
       <h1>Excluded event content</h1><div class="sponsors"><div class="sponsors-tier">Gold
       <img loading="lazy" src="/content-media${route}logo.jpg"></div>
       <div class="sponsors-tier">Silver<img src="/content-media${route}logo.svg"></div></div>

@@ -57,17 +57,19 @@ export function publicEmailImagePublisher(output) {
           }
         });
         const emailDocument = document.cloneNode(true);
-        emailDocument.querySelectorAll("script, meta[http-equiv]").forEach((node) => node.remove());
+        // Retain rendering dependencies only; page preloads and metadata do not belong in an email image.
+        emailDocument.head.replaceChildren(...emailDocument.head.querySelectorAll('link[rel="stylesheet"], style'));
         emailDocument.documentElement.setAttribute("data-theme", "light");
         emailDocument.body.innerHTML = wall.outerHTML;
+        for (const image of emailDocument.images) image.loading = "eager";
         const base = emailDocument.createElement("base");
         base.href = `https://pkic.org${eventPath}`;
         emailDocument.head.prepend(base);
-        await page.setContent(emailDocument.documentElement.outerHTML, { waitUntil: "networkidle0" });
+        // setContent has no navigation whose network-idle lifecycle we can reliably await.
+        await page.setContent(emailDocument.documentElement.outerHTML, { waitUntil: "load" });
         await page.evaluate(async () => {
           await document.fonts.ready;
           for (const image of document.images) {
-            image.loading = "eager";
             await image.decode();
           }
         });
