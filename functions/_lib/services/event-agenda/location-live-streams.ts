@@ -8,12 +8,15 @@ import {
   type LocationLiveStreamUpdate,
 } from "../../../../assets/shared/schemas/event-live-stream";
 import { calendarDatesBetween } from "../../../../assets/shared/timezone";
-import { all, first } from "../../db/queries";
+import { first } from "../../db/queries";
+import { batchFirst, batchRows } from "../../db/pagination";
 import { AppError } from "../../errors";
-import type { DatabaseLike } from "../../types";
+import type { DatabaseLike, D1StatementResult, Env } from "../../types";
 import { nowIso } from "../../utils/time";
 import { prepareScopedAuditLog } from "../audit";
 import type { EventRecord } from "../event-types";
+import { eventReadIdSql, type EventReadSelection } from "../events/selection";
+import { readEventAdminResource } from "../events/authorized-context";
 
 export interface LiveStreamRow {
   day_date: string | null;
@@ -52,24 +55,43 @@ async function locationName(db: DatabaseLike, eventId: string, roomId: string) {
   return room.name;
 }
 
-export async function readLocationLiveStream(
+function prepareLocationLiveStream(db: DatabaseLike, eventId: EventReadSelection, roomId: string) {
+  const scope = eventReadIdSql(eventId);
+  return {
+    statements: [
+      db
+        .prepare(`SELECT name FROM event_agenda_rooms WHERE id=? AND event_id=${scope.sql}`)
+        .bind(roomId, ...scope.bindings),
+      db
+        .prepare(
+          `SELECT day_date,provider,stream_ref FROM event_agenda_room_streams WHERE room_id=? AND event_id=${scope.sql} ORDER BY day_date IS NOT NULL,day_date`,
+        )
+        .bind(roomId, ...scope.bindings),
+    ],
+    decode(results: D1StatementResult[], event: Pick<EventRecord, "starts_at" | "ends_at" | "timezone">) {
+      const room = batchFirst<{ name: string }>(results[0]);
+      if (!room) throw new AppError(404, "AGENDA_ROOM_NOT_FOUND", "Location not found");
+      return locationLiveStreamResponseSchema.parse({
+        roomId,
+        roomName: room.name,
+        ...locationStreams(batchRows<LiveStreamRow>(results[1])),
+        eventDays: eventDays(event),
+        timeZone: event.timezone,
+      });
+    },
+  };
+}
+
+export async function readLocationLiveStreamRequest(
   db: DatabaseLike,
-  event: Pick<EventRecord, "id" | "starts_at" | "ends_at" | "timezone">,
+  request: Request,
+  env: Pick<Env, "ADMIN_API_KEY" | "INTERNAL_SIGNING_SECRET">,
+  eventSlug: string,
   roomId: string,
 ) {
-  const roomName = await locationName(db, event.id, roomId);
-  const rows = await all<LiveStreamRow>(
-    db,
-    "SELECT day_date,provider,stream_ref FROM event_agenda_room_streams WHERE room_id=? AND event_id=? ORDER BY day_date IS NOT NULL,day_date",
-    [roomId, event.id],
+  return readEventAdminResource(db, request, env, eventSlug, "agenda:read", (event) =>
+    prepareLocationLiveStream(db, event, roomId),
   );
-  return locationLiveStreamResponseSchema.parse({
-    roomId,
-    roomName,
-    ...locationStreams(rows),
-    eventDays: eventDays(event),
-    timeZone: event.timezone,
-  });
 }
 
 /** Replaces the location's whole configuration in one batch, with one audit row naming what it now streams. */
@@ -94,7 +116,8 @@ export async function replaceLocationLiveStream(
         "INSERT INTO event_agenda_room_streams(id,event_id,room_id,day_date,provider,stream_ref,updated_by,updated_at) VALUES(?,?,?,?,'youtube',?,?,?)",
       )
       .bind(crypto.randomUUID(), event.id, roomId, dayDate, videoId, actorUserId, now);
-  await db.batch([
+  const read = prepareLocationLiveStream(db, event.id, roomId);
+  const writes = [
     db.prepare("DELETE FROM event_agenda_room_streams WHERE room_id=? AND event_id=?").bind(roomId, event.id),
     ...(input.videoId ? [insert(null, input.videoId)] : []),
     ...input.days.map((day) => insert(day.dayDate, day.videoId)),
@@ -109,6 +132,7 @@ export async function replaceLocationLiveStream(
       { provider: "youtube", videoId: input.videoId, days: input.days },
       now,
     ),
-  ]);
-  return readLocationLiveStream(db, event, roomId);
+  ];
+  const results = await db.batch([...writes, ...read.statements]);
+  return read.decode(results.slice(writes.length), event);
 }

@@ -1,53 +1,61 @@
 import { batchFirst, batchRows } from "../../db/pagination";
 import type { D1StatementResult, DatabaseLike } from "../../types";
+import { eventReadIdSql, type EventReadSelection } from "../events/selection";
 
 /** Independent editor projections share one D1 transaction and network round trip. */
-export function prepareAgendaSnapshotRows(db: DatabaseLike, eventId: string) {
+export function prepareAgendaSnapshotRows(db: DatabaseLike, eventId: EventReadSelection) {
+  const scope = eventReadIdSql(eventId);
   return [
     db
-      .prepare("SELECT settings_json,timezone,starts_at,ends_at,name,base_path,city FROM events WHERE id = ?")
-      .bind(eventId),
-    db
-      .prepare("SELECT revision,published_revision,travel_minutes FROM event_agenda_state WHERE event_id = ?")
-      .bind(eventId),
+      .prepare(
+        `SELECT settings_json,timezone,starts_at,ends_at,name,base_path,city FROM events WHERE id = ${scope.sql}`,
+      )
+      .bind(...scope.bindings),
     db
       .prepare(
-        "SELECT id,name,capacity,setup_minutes,equipment_json,available_periods_json,virtual_room_url FROM event_agenda_rooms WHERE event_id = ? ORDER BY name,id LIMIT 200",
+        `SELECT revision,published_revision,travel_minutes FROM event_agenda_state WHERE event_id = ${scope.sql}`,
       )
-      .bind(eventId),
+      .bind(...scope.bindings),
     db
       .prepare(
-        "SELECT id,name,start_at,end_at,room_id,track,roles_json,role_requirements_json,compatible_roles_json,boundaries_json FROM event_agenda_shifts WHERE event_id = ? ORDER BY start_at,id LIMIT 200",
+        `SELECT id,name,capacity,setup_minutes,equipment_json,available_periods_json,virtual_room_url FROM event_agenda_rooms WHERE event_id = ${scope.sql} ORDER BY name,id LIMIT 200`,
       )
-      .bind(eventId),
+      .bind(...scope.bindings),
     db
       .prepare(
-        "SELECT member.user_id,COALESCE(user.preferred_name,user.first_name,'Staff') AS display_name,member.roles_json,member.available_from,member.available_until,member.max_minutes,member.seniority,member.attendance_mode FROM event_agenda_role_members member JOIN users user ON user.id=member.user_id WHERE member.event_id = ? LIMIT 200",
+        `SELECT id,name,start_at,end_at,room_id,track,roles_json,role_requirements_json,compatible_roles_json,boundaries_json FROM event_agenda_shifts WHERE event_id = ${scope.sql} ORDER BY start_at,id LIMIT 200`,
       )
-      .bind(eventId),
-    db
-      .prepare("SELECT id,name,show_on_agenda FROM event_agenda_staffing_roles WHERE event_id=? ORDER BY id LIMIT 100")
-      .bind(eventId),
+      .bind(...scope.bindings),
     db
       .prepare(
-        "SELECT id,name,room_id AS roomId FROM event_agenda_staffing_posts WHERE event_id=? ORDER BY id LIMIT 200",
+        `SELECT member.user_id,COALESCE(user.preferred_name,user.first_name,'Staff') AS display_name,member.roles_json,member.available_from,member.available_until,member.max_minutes,member.seniority,member.attendance_mode FROM event_agenda_role_members member JOIN users user ON user.id=member.user_id WHERE member.event_id = ${scope.sql} LIMIT 200`,
       )
-      .bind(eventId),
+      .bind(...scope.bindings),
     db
       .prepare(
-        "SELECT id,shift_id AS shiftId,role_id AS roleId,post_id AS postId,ideal_count AS idealCount,seniority,attendance_mode AS attendanceMode FROM event_agenda_staffing_requirements WHERE event_id=? ORDER BY id LIMIT 1000",
+        `SELECT id,name,show_on_agenda FROM event_agenda_staffing_roles WHERE event_id=${scope.sql} ORDER BY id LIMIT 100`,
       )
-      .bind(eventId),
+      .bind(...scope.bindings),
     db
       .prepare(
-        "SELECT id,requirement_id AS requirementId,position_index AS [index] FROM event_agenda_staffing_positions WHERE event_id=? ORDER BY requirement_id,position_index LIMIT 2000",
+        `SELECT id,name,room_id AS roomId FROM event_agenda_staffing_posts WHERE event_id=${scope.sql} ORDER BY id LIMIT 200`,
       )
-      .bind(eventId),
+      .bind(...scope.bindings),
     db
       .prepare(
-        "SELECT assignment.position_id,assignment.post_id,assignment.shift_id,assignment.role,assignment.user_id,assignment.pinned,assignment.origin FROM event_agenda_assignments assignment JOIN event_agenda_shifts shift ON shift.id=assignment.shift_id WHERE shift.event_id = ? ORDER BY assignment.position_id LIMIT 2000",
+        `SELECT id,shift_id AS shiftId,role_id AS roleId,post_id AS postId,ideal_count AS idealCount,seniority,attendance_mode AS attendanceMode FROM event_agenda_staffing_requirements WHERE event_id=${scope.sql} ORDER BY id LIMIT 1000`,
       )
-      .bind(eventId),
+      .bind(...scope.bindings),
+    db
+      .prepare(
+        `SELECT id,requirement_id AS requirementId,position_index AS [index] FROM event_agenda_staffing_positions WHERE event_id=${scope.sql} ORDER BY requirement_id,position_index LIMIT 2000`,
+      )
+      .bind(...scope.bindings),
+    db
+      .prepare(
+        `SELECT assignment.position_id,assignment.post_id,assignment.shift_id,assignment.role,assignment.user_id,assignment.pinned,assignment.origin FROM event_agenda_assignments assignment JOIN event_agenda_shifts shift ON shift.id=assignment.shift_id WHERE shift.event_id = ${scope.sql} ORDER BY assignment.position_id LIMIT 2000`,
+      )
+      .bind(...scope.bindings),
   ];
 }
 

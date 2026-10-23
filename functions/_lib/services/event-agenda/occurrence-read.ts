@@ -1,4 +1,5 @@
 import { batchRows } from "../../db/pagination";
+import { eventReadIdSql, type EventReadSelection } from "../events/selection";
 import type { DatabaseLike, D1StatementResult } from "../../types";
 import { readAgendaSpeakers } from "./speaker-profiles";
 import { readAgendaSponsorRows, agendaSponsorDisplay, type AgendaSponsorRow } from "./sponsors";
@@ -7,6 +8,7 @@ import { agendaPublicationStatusSql } from "./publication-status";
 import { promotionCopySchema } from "../../../../assets/shared/schemas/event-promotion-kit";
 import { sessionHistoryMetadataSchema } from "../../../../assets/shared/schemas/event-session-history";
 import { agendaOccurrenceSchema, type AgendaOccurrence } from "../../../../assets/shared/schemas/event-agenda";
+import { agendaOccurrenceSelection, type AgendaOccurrenceSelection } from "./occurrence-selection";
 export interface OccurrenceRow {
   source_proposal_type: string | null;
   content_id: string | null;
@@ -51,40 +53,42 @@ const columns =
   "id,content_id,title,description,presentation_url,recording_url,public_anchor,start_at,end_at,room_id,admission_policy,access_policy,booking_opens_at,booking_closes_at,capacity,remote_capacity,visibility,kind,track,format,placeholder,required_equipment_json,planned_media_json";
 export function prepareAgendaOccurrenceRows(
   db: DatabaseLike,
-  eventId: string,
+  eventId: EventReadSelection,
   where = "",
   values: unknown[] = [],
   suffix = "ORDER BY start_at,id LIMIT 2001",
 ) {
+  const scope = eventReadIdSql(eventId);
   return db
     .prepare(
-      `SELECT ${columns},json_extract((SELECT settings_json FROM events WHERE id=event_agenda_occurrences.event_id),'$.agenda.sessionMedia.'||json_quote(id)||'.joinUrl') AS virtual_room_url,json_type((SELECT settings_json FROM events WHERE id=event_agenda_occurrences.event_id),'$.agenda.sessionMedia.'||json_quote(id)||'.joinUrl') AS virtual_room_type,json_extract((SELECT settings_json FROM events WHERE id=event_agenda_occurrences.event_id),'$.agenda.sessionSponsors.'||json_quote(id)||'.sponsorIds') AS sponsor_ids_json,${agendaPublicationStatusSql} AS publication_status,(SELECT proposal.proposal_type FROM session_proposals proposal WHERE proposal.id = substr(event_agenda_occurrences.source_key, 10) AND proposal.event_id = event_agenda_occurrences.event_id AND event_agenda_occurrences.source_key = 'proposal:' || proposal.id) AS source_proposal_type,${pendingSpeakerCountSql} AS pending_speaker_count FROM event_agenda_occurrences WHERE event_id = ? ${where} ${suffix}`,
+      `SELECT ${columns},json_extract((SELECT settings_json FROM events WHERE id=event_agenda_occurrences.event_id),'$.agenda.sessionMedia.'||json_quote(id)||'.joinUrl') AS virtual_room_url,json_type((SELECT settings_json FROM events WHERE id=event_agenda_occurrences.event_id),'$.agenda.sessionMedia.'||json_quote(id)||'.joinUrl') AS virtual_room_type,json_extract((SELECT settings_json FROM events WHERE id=event_agenda_occurrences.event_id),'$.agenda.sessionSponsors.'||json_quote(id)||'.sponsorIds') AS sponsor_ids_json,${agendaPublicationStatusSql} AS publication_status,(SELECT proposal.proposal_type FROM session_proposals proposal WHERE proposal.id = substr(event_agenda_occurrences.source_key, 10) AND proposal.event_id = event_agenda_occurrences.event_id AND event_agenda_occurrences.source_key = 'proposal:' || proposal.id) AS source_proposal_type,${pendingSpeakerCountSql} AS pending_speaker_count FROM event_agenda_occurrences WHERE event_id = ${scope.sql} ${where} ${suffix}`,
     )
-    .bind(eventId, ...values);
+    .bind(...scope.bindings, ...values);
 }
 
 /** Histories, promotion copy, and room links use the same bounded event selection in both read paths. */
-export function prepareAgendaOccurrenceDetails(db: DatabaseLike, eventId: string, ids?: string[]) {
-  const selection = `SELECT id FROM event_agenda_occurrences WHERE event_id=?
-    AND (? IS NULL OR id IN(SELECT value FROM json_each(?))) ORDER BY start_at,id LIMIT 2001`;
-  const requested = ids === undefined ? null : JSON.stringify(ids);
-  const values = [eventId, requested, requested];
+export function prepareAgendaOccurrenceDetails(
+  db: DatabaseLike,
+  eventId: EventReadSelection,
+  ids?: string[] | AgendaOccurrenceSelection,
+) {
+  const selection = agendaOccurrenceSelection(eventId, ids);
   return [
     db
       .prepare(
-        `SELECT occurrence_id,metadata_json FROM event_agenda_session_history WHERE occurrence_id IN(${selection}) LIMIT 2001`,
+        `SELECT occurrence_id,metadata_json FROM event_agenda_session_history WHERE occurrence_id IN(${selection.sql}) LIMIT 2001`,
       )
-      .bind(...values),
+      .bind(...selection.bindings),
     db
       .prepare(
-        `SELECT occurrence_id,copy_json FROM event_agenda_promotion_copy WHERE occurrence_id IN(${selection}) LIMIT 2001`,
+        `SELECT occurrence_id,copy_json FROM event_agenda_promotion_copy WHERE occurrence_id IN(${selection.sql}) LIMIT 2001`,
       )
-      .bind(...values),
+      .bind(...selection.bindings),
     db
       .prepare(
-        `SELECT occurrence_id,room_id FROM event_agenda_occurrence_rooms WHERE occurrence_id IN(${selection}) ORDER BY occurrence_id,room_id LIMIT 38001`,
+        `SELECT occurrence_id,room_id FROM event_agenda_occurrence_rooms WHERE occurrence_id IN(${selection.sql}) ORDER BY occurrence_id,room_id LIMIT 38001`,
       )
-      .bind(...values),
+      .bind(...selection.bindings),
   ];
 }
 

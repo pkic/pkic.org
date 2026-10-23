@@ -3,11 +3,15 @@ import { updateAgendaRoom } from "../../../../../_lib/services/event-agenda/room
 import { saveSessionHistory, listSessionAppearanceChoices } from "../../../../../_lib/services/event-agenda/history";
 import { importAgenda } from "../../../../../_lib/services/event-agenda/import";
 import { guardPermissionDatabase } from "../../../../../_lib/auth/permissions";
-import type { AdminContext } from "../../../../../_lib/db/context";
+import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 import { AppError } from "../../../../../_lib/errors";
 import { json } from "../../../../../_lib/http";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
-import { getAgenda, listAgendaOccurrences, listAgendaPeople } from "../../../../../_lib/services/event-agenda/read";
+import {
+  readAgendaRequest,
+  readAgendaOccurrencesRequest,
+  listAgendaPeople,
+} from "../../../../../_lib/services/event-agenda/read";
 import { searchLiveSpeakerCandidates } from "../../../../../_lib/services/live-session/live-credit-identities";
 import { nowIso } from "../../../../../_lib/utils/time";
 import {
@@ -35,12 +39,10 @@ export async function authorize(c: AdminContext, slug: string, write: boolean) {
   };
 }
 export const AgendaGet = openApiRoute(contracts.agendaGetRouteSchema, async (c, data) => {
-  const { db, event } = await authorize(c, data.params.eventSlug, false);
-  return json(await getAgenda(db, event.id, event.slug));
+  return json(await readAgendaRequest(requestDb(c), c.req.raw, c.env, data.params.eventSlug));
 });
 export const AgendaOccurrencesGet = openApiRoute(contracts.agendaOccurrencesGetRouteSchema, async (c, data) => {
-  const { db, event } = await authorize(c, data.params.eventSlug, false);
-  return json(await listAgendaOccurrences(db, event.id, data.query));
+  return json(await readAgendaOccurrencesRequest(requestDb(c), c.req.raw, c.env, data.params.eventSlug, data.query));
 });
 export const AgendaRoomCreate = openApiRoute(contracts.agendaRoomCreateRouteSchema, async (c, data) => {
   const { db, event, actor } = await authorize(c, data.params.eventSlug, true);

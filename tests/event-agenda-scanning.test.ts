@@ -13,7 +13,7 @@ import { offlineScanRecordSchema, eventScanRequestSchema } from "../assets/share
 
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { offlineEligibility } from "../functions/_lib/services/event-participation/offline-eligibility";
-import { gateNextBatch } from "./helpers/d1-batch-gate";
+import { mutateBeforeMatchingQuery } from "./helpers/database-races";
 
 const fixture = createEventScannerFixture();
 const { eventId, userId, operatorId, occurrenceId, observedAt, scan, scanBody } = fixture;
@@ -111,30 +111,33 @@ describe("Event agenda scan evidence", () => {
     ).rejects.toMatchObject({ code: "OFFLINE_MANIFEST_CHANGED" });
   });
   it("rejects a booking when the approved admission policy changes after preflight", async () => {
-    const gate = gateNextBatch(env.DB);
-    const booking = setSessionParticipation(gate.db, eventId, occurrenceId, userId, {
-      action: "reserve",
-      attendanceMode: "physical",
-    });
-    const rejected = expect(booking).rejects.toMatchObject({ code: "SESSION_PARTICIPATION_CONFLICT" });
-    await gate.reached;
-    try {
-      const snapshot = await getAgenda(env.DB, eventId, "scan-test");
-      snapshot.revision = 1;
-      snapshot.publishedRevision = 1;
-      snapshot.occurrences[0]!.admissionPolicy = "approval";
-      await env.DB.prepare(
-        "INSERT INTO event_agenda_publications(id,event_id,revision,snapshot_json,created_by,created_at) VALUES(?,?,1,?,?,?)",
-      )
-        .bind(crypto.randomUUID(), eventId, JSON.stringify(snapshot), operatorId, observedAt)
-        .run();
-      await env.DB.prepare("UPDATE event_agenda_state SET revision=1,published_revision=1 WHERE event_id=?")
-        .bind(eventId)
-        .run();
-    } finally {
-      gate.release();
-    }
-    await rejected;
+    let raced = false;
+    const db = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => sql.includes("INSERT INTO agenda_session_participations"),
+      async () => {
+        raced = true;
+        const snapshot = await getAgenda(env.DB, eventId, "scan-test");
+        snapshot.revision = 1;
+        snapshot.publishedRevision = 1;
+        snapshot.occurrences[0]!.admissionPolicy = "approval";
+        await env.DB.prepare(
+          "INSERT INTO event_agenda_publications(id,event_id,revision,snapshot_json,created_by,created_at) VALUES(?,?,1,?,?,?)",
+        )
+          .bind(crypto.randomUUID(), eventId, JSON.stringify(snapshot), operatorId, observedAt)
+          .run();
+        await env.DB.prepare("UPDATE event_agenda_state SET revision=1,published_revision=1 WHERE event_id=?")
+          .bind(eventId)
+          .run();
+      },
+    );
+    await expect(
+      setSessionParticipation(db, eventId, occurrenceId, userId, {
+        action: "reserve",
+        attendanceMode: "physical",
+      }),
+    ).rejects.toMatchObject({ code: "SESSION_PARTICIPATION_CONFLICT" });
+    expect(raced).toBe(true);
     expect(
       (await env.DB.prepare("SELECT COUNT(*) AS total FROM agenda_session_participations").first<{ total: number }>())
         ?.total,

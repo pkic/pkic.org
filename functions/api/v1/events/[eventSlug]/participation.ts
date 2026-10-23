@@ -20,7 +20,7 @@ import { requireIdentityFromRequest } from "../../../../_lib/auth/user-session";
 import { markResponseSensitive, requestDb, type AdminContext } from "../../../../_lib/db/context";
 import { json } from "../../../../_lib/http";
 import { openApiRoute } from "../../../../_lib/openapi/route";
-import { setSessionParticipation } from "../../../../_lib/services/event-participation/session-booking";
+import { setSessionParticipationRequest } from "../../../../_lib/services/event-participation/session-booking";
 import { participantSessionDatabase } from "../../../../_lib/services/event-participation/self-authorization";
 import {
   personalAgendaProgramRouteSchema,
@@ -80,15 +80,13 @@ export const PersonalAgendaProgramGet = openApiRoute(
 );
 export const SessionParticipationPut = openApiRoute(sessionParticipationRouteSchema, async (c: AdminContext, data) => {
   markResponseSensitive(c);
-  const db = requestDb(c);
-  const actor = await requireIdentityFromRequest(db, c.req.raw, c.env);
-  const event = await getVisibleEventAudienceDetail(db, { userId: actor.userId }, data.params.eventSlug);
   return json(
-    await setSessionParticipation(
-      participantSessionDatabase(db, actor.userId, actor.sessionId),
-      event.id,
+    await setSessionParticipationRequest(
+      requestDb(c),
+      c.req.raw,
+      c.env,
+      data.params.eventSlug,
       data.params.occurrenceId,
-      actor.userId,
       data.body,
     ),
   );

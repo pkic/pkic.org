@@ -5,6 +5,8 @@ import { identityJobTitleSql } from "../identities/affiliation-projection";
 import { creditedIdentityIdSql } from "./credited-identity";
 import { publicUserHeadshotPath } from "../user-headshot";
 import { agendaSpeakerDisplayNameSql } from "./speaker-name";
+import { eventReadIdSql, type EventReadSelection } from "../events/selection";
+import { agendaOccurrenceSelection, type AgendaOccurrenceSelection } from "./occurrence-selection";
 
 export interface AgendaSpeakerRow {
   occurrence_id: string;
@@ -28,9 +30,16 @@ export interface AgendaSpeakerRow {
  * `credited-identity.ts`), with the person's own photo. Available person data stays in the
  * authorized editing read model; representation requires explicit review.
  */
-export function prepareAgendaSpeakers(db: DatabaseLike, eventId: string, occurrenceIds?: string[]) {
+export function prepareAgendaSpeakers(
+  db: DatabaseLike,
+  eventId: EventReadSelection,
+  occurrenceIds?: string[] | AgendaOccurrenceSelection,
+) {
+  const scope = eventReadIdSql(eventId);
+  const selection = agendaOccurrenceSelection(eventId, occurrenceIds);
   return db
-    .prepare(`SELECT credited.occurrence_id,credited.user_id,CAST(selected.key AS INTEGER) AS identity_order,credited.role,credited.attendance_mode,credited.room_id,
+    .prepare(`WITH agenda_speaker_page AS MATERIALIZED(${selection.sql})
+        SELECT credited.occurrence_id,credited.user_id,CAST(selected.key AS INTEGER) AS identity_order,credited.role,credited.attendance_mode,credited.room_id,
           credited.display_name,
           CASE WHEN credited.available=1 THEN spoken_as.id END AS identity_id,
           CASE WHEN credited.available=1 THEN spoken_as.organization_id END AS organization_id,
@@ -53,21 +62,15 @@ export function prepareAgendaSpeakers(db: DatabaseLike, eventId: string, occurre
           JOIN users user ON user.id=speaker.user_id
           JOIN event_agenda_occurrences occurrence ON occurrence.id=speaker.occurrence_id
           LEFT JOIN event_agenda_contents content ON content.id=occurrence.content_id AND content.event_id=occurrence.event_id
-          WHERE occurrence.event_id=?
-            AND speaker.occurrence_id IN(SELECT id FROM event_agenda_occurrences WHERE event_id=?
-              AND (? IS NULL OR id IN(SELECT value FROM json_each(?))) ORDER BY start_at,id LIMIT 2001)
+          WHERE occurrence.event_id=${scope.sql}
+            AND speaker.occurrence_id IN(SELECT id FROM agenda_speaker_page)
             LIMIT 60000
         ) credited
         JOIN json_each(credited.identity_ids_json) selected
         LEFT JOIN identities spoken_as ON spoken_as.id=selected.value AND spoken_as.user_id=credited.user_id
         LEFT JOIN organizations spoken_as_organization ON spoken_as_organization.id=spoken_as.organization_id
         ORDER BY credited.occurrence_id,credited.speaker_order,credited.user_id,CAST(selected.key AS INTEGER)`)
-    .bind(
-      eventId,
-      eventId,
-      occurrenceIds === undefined ? null : JSON.stringify(occurrenceIds),
-      occurrenceIds === undefined ? null : JSON.stringify(occurrenceIds),
-    );
+    .bind(...selection.bindings, ...scope.bindings);
 }
 
 export function decodeAgendaSpeakers(rows: AgendaSpeakerRow[]) {

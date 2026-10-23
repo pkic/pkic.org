@@ -2,12 +2,14 @@ import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { scopedAuditLogResponseSchema } from "../assets/shared/schemas/audit-log";
 import { prepareAuditLog, serializeAuditDetails } from "../functions/_lib/services/audit";
-import { callApi } from "./helpers/app";
+import { callApi as requestApi } from "./helpers/app";
 import { resetDb } from "./helpers/reset-db";
 import { onlyPersona } from "./personas/catalog";
 import { seedPersona } from "./personas/seed";
 
 beforeEach(() => resetDb());
+
+const callApi: typeof requestApi = (env, path, init) => requestApi(env, path, init, { maxRoundTrips: 1 });
 
 describe("User account audit history", () => {
   it("reads only the target account's changes with shared search, sort, filters and paging", async () => {

@@ -23,14 +23,25 @@ let eventId: string, adminId: string, token: string, alpha: string, beta: string
 let revision: number;
 const zero = () => ({ physical: emptySessionDemandCounts(), remote: emptySessionDemandCounts() });
 async function request(path: string, method = "GET", body?: unknown, authorization = token, environment: Env = env) {
-  return callApi(environment, `/api/v1/events/pqc-2026${path}`, {
-    method,
-    headers: {
-      ...(authorization ? { authorization: `Bearer ${authorization}` } : {}),
-      ...(body ? { "content-type": "application/json" } : {}),
+  return callApi(
+    environment,
+    `/api/v1/events/pqc-2026${path}`,
+    {
+      method,
+      headers: {
+        ...(authorization ? { authorization: `Bearer ${authorization}` } : {}),
+        ...(body ? { "content-type": "application/json" } : {}),
+      },
+      ...(body ? { body: JSON.stringify(body) } : {}),
     },
-    ...(body ? { body: JSON.stringify(body) } : {}),
-  });
+    method === "GET" &&
+      (path === "/agenda" ||
+        (path.startsWith("/agenda/occurrences") &&
+          !path.includes("/room-recommendations") &&
+          !new URL(path, "https://app.test").searchParams.has("day")))
+      ? { maxRoundTrips: 1 }
+      : undefined,
+  );
 }
 async function listing(query = "") {
   const response = await request(`/agenda/occurrences${query}`);
@@ -343,6 +354,7 @@ describe("Live organizer session demand projection", () => {
 
   it("requires real live agenda authorization and refuses another event's granted reader", async () => {
     expect((await request("/agenda/occurrences", "GET", undefined, "")).status).toBe(401);
+    expect((await request("/agenda", "GET", undefined, "")).status).toBe(401);
     const reader = await insertUser(env.DB);
     await env.DB.prepare(
       "INSERT INTO permission_grants(id,user_id,permission,context_type,context_id,created_at) VALUES(?,?,'agenda:read','event',?,?)",
@@ -351,6 +363,7 @@ describe("Live organizer session demand projection", () => {
       .run();
     const readerToken = await createAdminSession(env.DB, reader, crypto.randomUUID());
     expect((await request("/agenda/occurrences", "GET", undefined, readerToken)).status).toBe(200);
+    expect((await request("/agenda", "GET", undefined, readerToken)).status).toBe(200);
     const foreignEvent = crypto.randomUUID();
     await env.DB.prepare(
       "INSERT INTO events(id,slug,name,timezone,created_at,updated_at) VALUES(?,'foreign-reader-demand','Foreign','UTC',?,?)",
@@ -361,9 +374,22 @@ describe("Live organizer session demand projection", () => {
       headers: { authorization: `Bearer ${readerToken}` },
     });
     expect(foreign.status).toBe(403);
+    expect(
+      (
+        await callApi(
+          env,
+          "/api/v1/events/foreign-reader-demand/agenda",
+          {
+            headers: { authorization: `Bearer ${readerToken}` },
+          },
+          { maxRoundTrips: 1 },
+        )
+      ).status,
+    ).toBe(403);
     const before = await states();
     await env.DB.prepare("UPDATE sessions SET revoked_at=? WHERE user_id=?").bind(nowIso(), reader).run();
     expect((await request("/agenda/occurrences", "GET", undefined, readerToken)).status).toBe(401);
+    expect((await request("/agenda", "GET", undefined, readerToken)).status).toBe(401);
     expect(await states()).toEqual(before);
   });
 });

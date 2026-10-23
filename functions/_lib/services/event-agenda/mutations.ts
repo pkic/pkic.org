@@ -17,7 +17,6 @@ import { operationalPeople, prepareOperationalPeople } from "./operational-peopl
 import { prepareAuthorizationGuard } from "../../db/authorization-guard";
 export { saveAgendaStaffing, allocateStaffing } from "./staffing";
 export { commitAgendaRevision } from "./revision";
-import { commitAgendaRevision } from "./revision";
 import { agendaAdditionalRoomStatements } from "./occurrence-rooms";
 import {
   agendaOccurrenceRoomIds,
@@ -104,9 +103,10 @@ export async function createAgendaRoom(
   const id = crypto.randomUUID();
   const snapshot = await getAgenda(db, eventId, eventSlug);
   const roomOrder = await prepareAgendaRoomOrder(db, eventId, [...snapshot.rooms.map((room) => room.id), id]);
-  await commitAgendaRevision(
+  return commitAgendaSnapshot(
     db,
     eventId,
+    eventSlug,
     input.expectedRevision,
     [
       db
@@ -127,7 +127,6 @@ export async function createAgendaRoom(
     ],
     actorUserId,
   );
-  return getAgenda(db, eventId, eventSlug);
 }
 export async function createAgendaOccurrence(
   db: DatabaseLike,
@@ -154,9 +153,10 @@ export async function createAgendaOccurrence(
     occurrences: [candidate],
   });
   validateAgendaSchedule(snapshot, [...snapshot.occurrences, candidate], conflictProposal);
-  await commitAgendaRevision(
+  return commitAgendaSnapshot(
     db,
     eventId,
+    eventSlug,
     input.expectedRevision,
     [
       prepareAgendaOccurrenceInsert(db, eventId, id, input),
@@ -167,7 +167,6 @@ export async function createAgendaOccurrence(
     actorUserId,
     conflictProposal,
   );
-  return getAgenda(db, eventId, eventSlug);
 }
 export function validateAgendaSchedule(
   snapshot: Pick<
@@ -447,9 +446,10 @@ export async function publishAgenda(
     approvedSnapshot,
     approvedSnapshot.approvedAt!,
   );
-  await commitAgendaRevision(
+  return commitAgendaSnapshot(
     db,
     eventId,
+    eventSlug,
     revision,
     [
       prepareAuthorizationGuard(db, {
@@ -504,7 +504,6 @@ export async function publishAgenda(
     ],
     userId,
   );
-  return getAgenda(db, eventId, eventSlug);
 }
 
 export async function saveAgendaSettings(
@@ -516,9 +515,10 @@ export async function saveAgendaSettings(
 ) {
   const snapshot = await getAgenda(db, eventId, eventSlug);
   validateAgendaSchedule({ ...snapshot, travelMinutes: input.travelMinutes }, snapshot.occurrences);
-  await commitAgendaRevision(
+  return commitAgendaSnapshot(
     db,
     eventId,
+    eventSlug,
     input.expectedRevision,
     [
       db.prepare("UPDATE event_agenda_state SET travel_minutes=? WHERE event_id=?").bind(input.travelMinutes, eventId),
@@ -534,5 +534,4 @@ export async function saveAgendaSettings(
     ],
     actorUserId,
   );
-  return getAgenda(db, eventId, eventSlug);
 }

@@ -5,7 +5,8 @@ import type { agendaRoomCreateSchema } from "../../../../assets/shared/schemas/e
 import type { DatabaseLike } from "../../types";
 import { AppError } from "../../errors";
 import { getAgenda } from "./read";
-import { commitAgendaRevision, validateAgendaSchedule } from "./mutations";
+import { validateAgendaSchedule } from "./mutations";
+import { commitAgendaSnapshot } from "./commit-snapshot";
 import { assertPublicationAllocations, preparePublicationAllocationGuard } from "./publication-allocations";
 
 export async function updateAgendaRoom(
@@ -37,9 +38,10 @@ export async function updateAgendaRoom(
   };
   validateAgendaSchedule(proposed, proposed.occurrences);
   await assertPublicationAllocations(db, proposed);
-  await commitAgendaRevision(
+  return commitAgendaSnapshot(
     db,
     eventId,
+    eventSlug,
     input.expectedRevision,
     [
       db
@@ -65,7 +67,6 @@ export async function updateAgendaRoom(
     ],
     actorUserId,
   );
-  return getAgenda(db, eventId, eventSlug);
 }
 
 export async function reorderAgendaRooms(
@@ -81,12 +82,12 @@ export async function reorderAgendaRooms(
     input.roomIds.some((id) => !snapshot.rooms.some((room) => room.id === id))
   )
     throw new AppError(400, "AGENDA_ROOM_ORDER_INVALID", "Choose every location in this event exactly once.");
-  await commitAgendaRevision(
+  return commitAgendaSnapshot(
     db,
     eventId,
+    eventSlug,
     input.expectedRevision,
     await prepareAgendaRoomOrder(db, eventId, input.roomIds),
     actorUserId,
   );
-  return getAgenda(db, eventId, eventSlug);
 }

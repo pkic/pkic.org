@@ -38,7 +38,10 @@ async function fixture({ streamed = true }: { streamed?: boolean } = {}) {
         headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       },
-      method === "GET" && (path === `${base}/streams` || path.startsWith(`${base}/participation?`))
+      method === "GET" &&
+        (path === `${base}/streams` ||
+          path.startsWith(`${base}/participation?`) ||
+          /^\/api\/v1\/events\/[^/]+\/agenda\/rooms\/[^/]+\/stream$/.test(path))
         ? { maxRoundTrips: 1 }
         : undefined,
     );

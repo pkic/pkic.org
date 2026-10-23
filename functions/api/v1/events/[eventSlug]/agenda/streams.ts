@@ -7,7 +7,7 @@ import { markResponseSensitive, requestDb, type AdminContext } from "../../../..
 import { json } from "../../../../../_lib/http";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
 import {
-  readLocationLiveStream,
+  readLocationLiveStreamRequest,
   replaceLocationLiveStream,
 } from "../../../../../_lib/services/event-agenda/location-live-streams";
 import { readVirtualRoomRequest } from "../../../../../_lib/services/event-participation/virtual-room";
@@ -15,8 +15,9 @@ import { authorize } from "./index";
 
 export const LocationLiveStreamGet = openApiRoute(locationLiveStreamGetRouteSchema, async (c, data) => {
   markResponseSensitive(c);
-  const { db, event } = await authorize(c, data.params.eventSlug, false);
-  return json(await readLocationLiveStream(db, event, data.params.roomId));
+  return json(
+    await readLocationLiveStreamRequest(requestDb(c), c.req.raw, c.env, data.params.eventSlug, data.params.roomId),
+  );
 });
 
 export const LocationLiveStreamPut = openApiRoute(locationLiveStreamPutRouteSchema, async (c, data) => {
