@@ -47,9 +47,9 @@ export async function getAgendaOccurrence(db: DatabaseLike, eventId: string, id:
 /** Prepare the complete canonical response so command boundaries can append it to their atomic batch. */
 export function prepareAgendaRead(db: DatabaseLike, eventId: EventReadSelection, eventSlug: string) {
   const read = prepareAgendaEditorRead(db, eventId);
-  return {
+  const prepared = {
     statements: read.statements,
-    decode(results: D1StatementResult[]) {
+    decodeWithEvent(results: D1StatementResult[]) {
       const { snapshotRows, items, organizations, unavailable } = read.decode(results);
       const {
         event,
@@ -127,12 +127,17 @@ export function prepareAgendaRead(db: DatabaseLike, eventId: EventReadSelection,
         })),
       });
       return {
-        ...snapshot,
-        speakerOrganizations: retainedSpeakerOrganizations(organizations, snapshot.occurrences),
-        staffingReport: buildAgendaStaffingReport(snapshot, unavailable),
+        event,
+        snapshot: {
+          ...snapshot,
+          speakerOrganizations: retainedSpeakerOrganizations(organizations, snapshot.occurrences),
+          staffingReport: buildAgendaStaffingReport(snapshot, unavailable),
+        },
       };
     },
+    decode: (results: D1StatementResult[]) => prepared.decodeWithEvent(results).snapshot,
   };
+  return prepared;
 }
 
 export async function getAgenda(db: DatabaseLike, eventId: string, eventSlug: string) {

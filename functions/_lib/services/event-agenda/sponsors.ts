@@ -6,12 +6,12 @@ import {
 } from "../../../../assets/shared/schemas/event-agenda-sponsors";
 import { buildPublicSponsorReadModel, publicSponsorFromRow, type SponsorRow } from "../public-sponsors";
 import { buildD1TextSearchFilter } from "../../db/search";
-import { queryPage } from "../../db/pagination";
+import { queryPage, batchRows } from "../../db/pagination";
 import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
 import { all } from "../../db/queries";
 import { prepareAuthorizationGuard } from "../../db/authorization-guard";
 import { AppError } from "../../errors";
-import type { DatabaseLike } from "../../types";
+import type { DatabaseLike, D1StatementResult } from "../../types";
 import type { AgendaOccurrence } from "../../../../assets/shared/schemas/event-agenda";
 import { eventReadIdSql, type EventReadSelection } from "../events/selection";
 import type { AgendaOccurrenceSelection } from "./occurrence-selection";
@@ -97,8 +97,24 @@ export function agendaSponsorDisplay(row: AgendaSponsorRow) {
 /** Selection is presentation-only and never grants sponsor access, membership, or attendee data. */
 export async function prepareAgendaSponsorSelection(db: DatabaseLike, eventId: string, sponsorIds: readonly string[]) {
   if (!sponsorIds.length) return [];
-  const rows = await readAgendaSponsorRows(db, eventId, sponsorIds);
-  return prepareSponsorRowsGuard(db, eventId, sponsorIds, rows);
+  const read = prepareAgendaSponsorSelectionRead(db, eventId, sponsorIds);
+  return read.decode(await db.batch(read.statements), eventId);
+}
+
+/** Prepare selection evidence alongside the agenda snapshot; primary guards still own the final branding check. */
+export function prepareAgendaSponsorSelectionRead(
+  db: DatabaseLike,
+  eventId: EventReadSelection,
+  sponsorIds: readonly string[],
+) {
+  return {
+    statements: sponsorIds.length ? [prepareAgendaSponsorRead(db, eventId, sponsorIds)] : [],
+    decode(loaded: D1StatementResult[], canonicalEventId: string) {
+      return sponsorIds.length
+        ? prepareSponsorRowsGuard(db, canonicalEventId, sponsorIds, batchRows<AgendaSponsorRow>(loaded[0]))
+        : [];
+    },
+  };
 }
 
 function prepareSponsorRowsGuard(

@@ -7,6 +7,9 @@ import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 import { AppError } from "../../../../../_lib/errors";
 import { json } from "../../../../../_lib/http";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
+import { createAgendaRoomRequest } from "../../../../../_lib/services/event-agenda/create-room";
+import { createAgendaOccurrenceRequest } from "../../../../../_lib/services/event-agenda/create-occurrence";
+import { agendaWriteDatabase } from "../../../../../_lib/services/event-agenda/command-authorization";
 import {
   readAgendaRequest,
   readAgendaOccurrencesRequest,
@@ -16,8 +19,6 @@ import { searchLiveSpeakerCandidates } from "../../../../../_lib/services/live-s
 import { nowIso } from "../../../../../_lib/utils/time";
 import {
   saveAgendaSettings,
-  createAgendaRoom,
-  createAgendaOccurrence,
   patchAgendaOccurrence,
   saveAgendaStaffing,
   allocateStaffing,
@@ -30,12 +31,14 @@ export async function authorize(c: AdminContext, slug: string, write: boolean) {
   const context = await requireEventPermission(c, slug, write ? "agenda:write" : "agenda:read");
   return {
     ...context,
-    db: guardPermissionDatabase(
-      context.db,
-      context.actor,
-      [{ permission: write ? "agenda:write" : "agenda:read", context: context.context }],
-      () => new AppError(409, "AGENDA_AUTHORIZATION_CHANGED", "Agenda permission changed"),
-    ),
+    db: write
+      ? agendaWriteDatabase(context.db, context.actor, context.event.id)
+      : guardPermissionDatabase(
+          context.db,
+          context.actor,
+          [{ permission: "agenda:read", context: context.context }],
+          () => new AppError(409, "AGENDA_AUTHORIZATION_CHANGED", "Agenda permission changed"),
+        ),
   };
 }
 export const AgendaGet = openApiRoute(contracts.agendaGetRouteSchema, async (c, data) => {
@@ -45,12 +48,10 @@ export const AgendaOccurrencesGet = openApiRoute(contracts.agendaOccurrencesGetR
   return json(await readAgendaOccurrencesRequest(requestDb(c), c.req.raw, c.env, data.params.eventSlug, data.query));
 });
 export const AgendaRoomCreate = openApiRoute(contracts.agendaRoomCreateRouteSchema, async (c, data) => {
-  const { db, event, actor } = await authorize(c, data.params.eventSlug, true);
-  return json(await createAgendaRoom(db, event.id, event.slug, data.body, actor.id));
+  return json(await createAgendaRoomRequest(requestDb(c), c.req.raw, c.env, data.params.eventSlug, data.body));
 });
 export const AgendaOccurrenceCreate = openApiRoute(contracts.agendaOccurrenceCreateRouteSchema, async (c, data) => {
-  const { db, event, actor } = await authorize(c, data.params.eventSlug, true);
-  return json(await createAgendaOccurrence(db, event.id, event.slug, data.body, actor.id));
+  return json(await createAgendaOccurrenceRequest(requestDb(c), c.req.raw, c.env, data.params.eventSlug, data.body));
 });
 export const AgendaOccurrencePatch = openApiRoute(contracts.agendaOccurrencePatchRouteSchema, async (c, data) => {
   const { db, event, actor } = await authorize(c, data.params.eventSlug, true);
