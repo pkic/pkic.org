@@ -1,3 +1,4 @@
+import { profileD1Flow } from "./helpers/d1-flow-profile";
 import { grantAdministrator } from "./helpers/administrator";
 import { staffingFixture } from "./helpers/agenda-staffing";
 import { roomRecommendations } from "../functions/_lib/services/event-participation/room-recommendations";
@@ -573,7 +574,15 @@ describe("Participation capacity and private calendar lifecycle", () => {
     const from = new Date().toISOString();
     const upcoming = await personalAgenda(env.DB, eventId, firstUser, { from, sort: "startAt" });
     expect(upcoming.sessions.map((session) => session.id)).toEqual([occurrenceId, ahead]);
-    const mine = await personalAgenda(env.DB, eventId, firstUser, { from, mine: "true", sort: "startAt", limit: 1 });
+    // Service reads only: authentication and event visibility are measured separately by HTTP tests.
+    const profile = profileD1Flow(env.DB);
+    const mine = await personalAgenda(profile.db, eventId, firstUser, {
+      from,
+      mine: "true",
+      sort: "startAt",
+      limit: 1,
+    });
+    expect(profile.summary().roundTrips).toBe(2);
     expect(mine.sessions.map((session) => session.id)).toEqual([ahead]);
     expect(mine.page).toMatchObject({ total: 1, hasMore: false });
     expect(
@@ -581,7 +590,9 @@ describe("Participation capacity and private calendar lifecycle", () => {
         (session) => session.id,
       ),
     ).toEqual([ended, ahead]);
-    expect((await personalAgenda(env.DB, eventId, secondUser, { from, mine: "true" })).sessions).toEqual([]);
+    const empty = profileD1Flow(env.DB);
+    expect((await personalAgenda(empty.db, eventId, secondUser, { from, mine: "true" })).sessions).toEqual([]);
+    expect(empty.summary().roundTrips).toBe(1);
   });
 
   it("takes the seat's attendance mode from the person's day and puts a reserved session on their agenda", async () => {

@@ -1,5 +1,6 @@
 import { intervalsOverlap } from "../../../../assets/shared/event-agenda-policy";
-import { all } from "../../db/queries";
+import { batchRows } from "../../db/pagination";
+import type { D1StatementResult } from "../../types";
 import type { DatabaseLike } from "../../types";
 import { onPersonalAgendaSql } from "./personal-agenda-membership";
 interface OverlapRow {
@@ -15,10 +16,16 @@ interface OverlapRow {
 }
 /** Only requested page IDs receive bounded summaries; the server retains population-wide overlap detection. */
 export async function personalAgendaOverlaps(db: DatabaseLike, eventId: string, userId: string, pageIds: string[]) {
-  const rows = pageIds.length
-    ? await all<OverlapRow>(
-        db,
-        `WITH candidates AS(
+  const read = preparePersonalAgendaOverlaps(db, eventId, userId, pageIds);
+  return read.decode(read.statements.length ? await db.batch(read.statements) : []);
+}
+
+export function preparePersonalAgendaOverlaps(db: DatabaseLike, eventId: string, userId: string, pageIds: string[]) {
+  const statements = pageIds.length
+    ? [
+        db
+          .prepare(
+            `WITH candidates AS(
  SELECT current.occurrence_id AS current_id,json_extract(current.payload_json,'$.startAt') AS current_start,json_extract(current.payload_json,'$.endAt') AS current_end,other.occurrence_id AS id,json_extract(other.payload_json,'$.title') AS title,participation.status,json_extract(other.payload_json,'$.startAt') AS start_at,json_extract(other.payload_json,'$.endAt') AS end_at
  FROM event_agenda_published_occurrences current JOIN event_agenda_state state ON state.event_id=current.event_id AND state.published_revision=current.revision
  JOIN agenda_session_participations participation ON participation.event_id=current.event_id AND participation.user_id=? AND ${onPersonalAgendaSql("participation")} AND participation.occurrence_id<>current.occurrence_id
@@ -28,9 +35,18 @@ export async function personalAgendaOverlaps(db: DatabaseLike, eventId: string, 
  AND (json_extract(other.payload_json,'$.visibility')='public' OR participation.status IN('reserved','approval_pending') OR EXISTS(SELECT 1 FROM agenda_session_invitations invitation WHERE invitation.occurrence_id=other.occurrence_id AND invitation.user_id=participation.user_id AND invitation.revoked_at IS NULL))
  ),ranked AS(SELECT current_id,current_start,current_end,id,title,status,start_at,end_at,COUNT(*) OVER(PARTITION BY current_id) AS total,ROW_NUMBER() OVER(PARTITION BY current_id ORDER BY start_at,id) AS position FROM candidates)
  SELECT current_id,current_start,current_end,id,title,status,start_at,end_at,total FROM ranked WHERE position<=5 ORDER BY current_id,position`,
-        [userId, eventId, JSON.stringify(pageIds)],
-      )
+          )
+          .bind(userId, eventId, JSON.stringify(pageIds)),
+      ]
     : [];
+  return {
+    statements,
+    decode: (loaded: D1StatementResult[]) =>
+      decodePersonalAgendaOverlaps(loaded.length ? batchRows<OverlapRow>(loaded[0]) : []),
+  };
+}
+
+function decodePersonalAgendaOverlaps(rows: OverlapRow[]) {
   const overlaps = new Map<
     string,
     { overlapCount: number; overlaps: Array<{ id: string; title: string; status: string }> }

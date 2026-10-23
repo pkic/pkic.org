@@ -1,6 +1,6 @@
-import { personalAvailability } from "./personal-availability";
+import { personalAvailability, preparePersonalAvailability } from "./personal-availability";
 import type { ParticipationAvailability } from "../../../../assets/shared/schemas/event-participation-availability";
-import { personalAgendaOverlaps } from "./personal-agenda-overlaps";
+import { preparePersonalAgendaOverlaps } from "./personal-agenda-overlaps";
 import {
   personalAgendaProgramResponseSchema,
   personalAgendaQuerySchema,
@@ -11,7 +11,8 @@ import { AppError } from "../../errors";
 import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
 import { publishedSessionsSql, publishedRoomsSql } from "./published-schedule";
 import { approvedVirtualRoomUrlSql, draftVirtualRoomUrlSql } from "../event-agenda/virtual-room-links";
-import { all, first } from "../../db/queries";
+import { all } from "../../db/queries";
+import { batchFirst, batchRows } from "../../db/pagination";
 import { liveStreamDaysSql, sessionLiveStreamRoom } from "./virtual-room";
 import type { DatabaseLike } from "../../types";
 import { eventClockCity } from "../../../../assets/shared/event-clock";
@@ -41,7 +42,6 @@ export async function personalAgenda(db: DatabaseLike, eventId: string, userId: 
     query.mine ? 1 : 0,
   ];
   const from = `FROM (${publishedSessionsSql}) s LEFT JOIN agenda_session_participations p ON p.occurrence_id=s.id AND p.user_id=?`;
-  const count = await first<{ total: number }>(db, `SELECT COUNT(*) AS total ${from} WHERE ${where}`, bindings);
   const sort =
     query.sort === "title"
       ? "s.title ASC"
@@ -50,24 +50,33 @@ export async function personalAgenda(db: DatabaseLike, eventId: string, userId: 
         : query.sort === "-startAt"
           ? "s.start_at DESC"
           : "s.start_at ASC";
-  const sessions = await all(
-    db,
-    `SELECT s.id,s.room_id,s.published_revision AS publishedRevision,s.title,EXISTS(SELECT 1 FROM event_agenda_published_occurrences approved JOIN events event ON event.id=approved.event_id WHERE approved.event_id=s.event_id AND approved.revision=s.published_revision AND approved.occurrence_id=s.id AND ${approvedVirtualRoomUrlSql("approved")} IS NOT NULL AND ${approvedVirtualRoomUrlSql("approved")} IS ${draftVirtualRoomUrlSql("approved.occurrence_id", "event.settings_json")}) AS online_access_available,(SELECT json_group_array(json_object('id',location.id,'name',location.name)) FROM (${publishedRoomsSql}) location WHERE location.event_id=s.event_id AND (location.id=s.room_id OR EXISTS(SELECT 1 FROM json_each(s.additional_room_ids_json) selected WHERE selected.value=location.id))) AS rooms_json,s.timezone AS timeZone,s.start_at AS startAt,s.end_at AS endAt,s.admission_policy AS admissionPolicy,s.access_policy AS accessPolicy,EXISTS(SELECT 1 FROM agenda_session_invitations invitation WHERE invitation.occurrence_id=s.id AND invitation.user_id=? AND invitation.revoked_at IS NULL) AS invited,${liveStreamDaysSql("s")} AS live_stream_days,s.visibility,p.status,COALESCE(p.saved,0) AS saved,p.attendance_mode AS attendanceMode ${from} WHERE ${where} ORDER BY ${sort},s.id LIMIT ? OFFSET ?`,
-    [userId, userId, ...bindings, query.limit, query.offset],
-  );
-  const overlapGroups = await personalAgendaOverlaps(
+  const loaded = await db.batch([
+    db.prepare(`SELECT COUNT(*) AS total ${from} WHERE ${where}`).bind(...bindings),
+    db
+      .prepare(
+        `SELECT s.id,s.room_id,s.published_revision AS publishedRevision,s.title,EXISTS(SELECT 1 FROM event_agenda_published_occurrences approved JOIN events event ON event.id=approved.event_id WHERE approved.event_id=s.event_id AND approved.revision=s.published_revision AND approved.occurrence_id=s.id AND ${approvedVirtualRoomUrlSql("approved")} IS NOT NULL AND ${approvedVirtualRoomUrlSql("approved")} IS ${draftVirtualRoomUrlSql("approved.occurrence_id", "event.settings_json")}) AS online_access_available,(SELECT json_group_array(json_object('id',location.id,'name',location.name)) FROM (${publishedRoomsSql}) location WHERE location.event_id=s.event_id AND (location.id=s.room_id OR EXISTS(SELECT 1 FROM json_each(s.additional_room_ids_json) selected WHERE selected.value=location.id))) AS rooms_json,s.timezone AS timeZone,s.start_at AS startAt,s.end_at AS endAt,s.admission_policy AS admissionPolicy,s.access_policy AS accessPolicy,EXISTS(SELECT 1 FROM agenda_session_invitations invitation WHERE invitation.occurrence_id=s.id AND invitation.user_id=? AND invitation.revoked_at IS NULL) AS invited,${liveStreamDaysSql("s")} AS live_stream_days,s.visibility,p.status,COALESCE(p.saved,0) AS saved,p.attendance_mode AS attendanceMode ${from} WHERE ${where} ORDER BY ${sort},s.id LIMIT ? OFFSET ?`,
+      )
+      .bind(userId, userId, ...bindings, query.limit, query.offset),
+    db.prepare("SELECT city FROM events WHERE id=?").bind(eventId),
+  ]);
+  const count = batchFirst<{ total: number }>(loaded[0]);
+  const sessions = batchRows<Record<string, unknown>>(loaded[1]);
+  const overlapRead = preparePersonalAgendaOverlaps(
     db,
     eventId,
     userId,
     sessions.map((row) => String((row as { id: string }).id)),
   );
-  const availabilityGroups = await personalAvailability(
+  const availabilityRead = preparePersonalAvailability(
     db,
     eventId,
     userId,
     sessions as Array<{ id: string; startAt: string | null; timeZone: string }>,
   );
-  const event = await first<{ city: string | null }>(db, "SELECT city FROM events WHERE id=?", [eventId]);
+  const enrichment = sessions.length ? await db.batch([...overlapRead.statements, ...availabilityRead.statements]) : [];
+  const overlapGroups = overlapRead.decode(enrichment.slice(0, overlapRead.statements.length));
+  const availabilityGroups = availabilityRead.decode(enrichment.slice(overlapRead.statements.length));
+  const event = batchFirst<{ city: string | null }>(loaded[2]);
   const clockCity = eventClockCity(event?.city);
   return personalAgendaResponseSchema.parse({
     sessions: sessions.map((row) => {
