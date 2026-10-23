@@ -46,15 +46,18 @@ export async function getRequiredTerms(
   eventId: string,
   audienceType: "attendee" | "speaker" | "presentation",
 ): Promise<EventTermRecord[]> {
-  return all<EventTermRecord>(
-    db,
-    `SELECT term_key, version, required, content_ref
-            , display_text, help_text
-     FROM event_terms
-     WHERE event_id = ? AND audience_type = ? AND active = 1
-     ORDER BY term_key ASC`,
-    [eventId, audienceType],
-  );
+  return (await prepareRequiredTerms(db, eventId, audienceType).all<EventTermRecord>()).results;
+}
+
+export function prepareRequiredTerms(
+  db: DatabaseLike,
+  eventId: string,
+  audienceType: "attendee" | "speaker" | "presentation",
+) {
+  return db
+    .prepare(`SELECT term_key, version, required, content_ref, display_text, help_text
+     FROM event_terms WHERE event_id = ? AND audience_type = ? AND active = 1 ORDER BY term_key ASC`)
+    .bind(eventId, audienceType);
 }
 
 export interface EventUpsertPayload {

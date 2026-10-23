@@ -1,3 +1,6 @@
+import { profileD1Flow } from "./helpers/d1-flow-profile";
+import { getEventById } from "../functions/_lib/services/events";
+import { getEventRegistrationConfiguration } from "../functions/_lib/services/events/registration-configuration";
 import { grantAdministrator } from "./helpers/administrator";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -1445,9 +1448,16 @@ describe("group event management routes", () => {
     };
     // With no window, the event offers the form.
     expect(placed.form.placement).toMatchObject({ opensAt: null, closesAt: null });
+    const formProfile = profileD1Flow(env.DB);
     expect(
-      await getActiveFormForEvent(env.DB, { id: created.id, source_mode: "portal" }, "event_registration"),
+      await getActiveFormForEvent(formProfile.db, { id: created.id, source_mode: "portal" }, "event_registration"),
     ).not.toBeNull();
+    expect(formProfile.summary().roundTrips).toBe(1);
+    const event = await getEventById(env.DB, created.id);
+    const configurationProfile = profileD1Flow(env.DB);
+    const configuration = await getEventRegistrationConfiguration(configurationProfile.db, event, "event_registration");
+    expect(configuration.form?.placement?.id).toBe(placed.form.placement.id);
+    expect(configurationProfile.summary().roundTrips).toBe(1);
 
     // Registration that has not opened yet: the form exists for management
     // and is not offered to a reader.

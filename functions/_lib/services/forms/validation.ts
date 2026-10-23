@@ -99,6 +99,14 @@ export async function validateCustomAnswersForSubmission(
     ? getActiveFormForEvent(db, payload.event, payload.purpose)
     : getActiveFormForResolution(db, payload.eventId, payload.purpose, payload.resolution));
 
+  return validateCustomAnswersForResolvedForm(form, payload);
+}
+
+/** Validate the exact definition already read in the caller's combined snapshot. */
+export function validateCustomAnswersForResolvedForm(
+  form: ActiveFormDefinition | null,
+  payload: Omit<EventFormValidationPayload, "purpose">,
+): ValidatedCustomAnswers {
   if (!form) {
     if (Object.keys(payload.customAnswers ?? {}).length > 0) {
       throw new AppError(400, "VALIDATION_ERROR", "Custom answers are not configured for this form", {

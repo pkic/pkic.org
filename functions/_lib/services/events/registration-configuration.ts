@@ -4,11 +4,18 @@ import {
   type EventFormsResponse,
 } from "../../../../assets/shared/schemas/forms";
 import { normalizeEventRegistrationPolicy } from "./detail";
+import { batchRows } from "../../db/pagination";
 import type { DatabaseLike } from "../../types";
-import { countRegisteredByEventDay, listEventDays } from "../event-days";
+import {
+  prepareRegisteredEventDayCounts,
+  decodeRegisteredEventDayCounts,
+  prepareEventDays,
+  type EventDayRecord,
+  type EventDayAttendanceCountRow,
+} from "../event-days";
 import { eventDayReadModels, requiredTermReadModel } from "../event-read-models";
-import { getRequiredTerms, resolveEventSessionTypes, type EventRecord } from "../events";
-import { getActiveFormForEvent, toEventFormResolutionEvent } from "../forms";
+import { prepareRequiredTerms, resolveEventSessionTypes, type EventRecord, type EventTermRecord } from "../events";
+import { getActiveFormForEvent, toEventFormResolutionEvent, prepareEventFormDefinitionRead } from "../forms";
 
 type EventConfigurationEvent = Pick<
   EventRecord,
@@ -28,13 +35,18 @@ export async function getEventRegistrationConfiguration(
   purpose: EventFormsPurpose,
 ): Promise<EventFormsResponse> {
   const audience = purpose === "proposal_submission" ? "speaker" : "attendee";
-  const [form, requiredTerms, eventDays] = await Promise.all([
-    getActiveFormForEvent(db, toEventFormResolutionEvent({ id: event.id, source_mode: event.source_mode }), purpose),
-    getRequiredTerms(db, event.id, audience),
-    listEventDays(db, event.id),
+  const target = toEventFormResolutionEvent({ id: event.id, source_mode: event.source_mode });
+  const formRead = prepareEventFormDefinitionRead(db, target, purpose);
+  const [termsResult, daysResult, countsResult, ...formResults] = await db.batch([
+    prepareRequiredTerms(db, event.id, audience),
+    prepareEventDays(db, event.id),
+    prepareRegisteredEventDayCounts(db, event.id),
+    ...(formRead?.statements ?? []),
   ]);
-  const registeredCounts =
-    eventDays.length === 0 ? new Map<string, Map<string, number>>() : await countRegisteredByEventDay(db, event.id);
+  const form = formRead ? formRead.decode(formResults) : await getActiveFormForEvent(db, target, purpose);
+  const requiredTerms = batchRows<EventTermRecord>(termsResult);
+  const eventDays = batchRows<EventDayRecord>(daysResult);
+  const registeredCounts = decodeRegisteredEventDayCounts(batchRows<EventDayAttendanceCountRow>(countsResult));
 
   return eventFormsResponseSchema.parse({
     event: { id: event.id, slug: event.slug, name: event.name },

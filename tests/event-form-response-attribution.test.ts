@@ -1,3 +1,12 @@
+import { createGroup } from "../functions/_lib/services/groups";
+import type { DatabaseLike } from "../functions/_lib/types";
+import { profileD1Flow } from "./helpers/d1-flow-profile";
+import {
+  getActiveEventFormByPurpose,
+  getActiveFormById,
+  getFormDefinitionByPlacement,
+  getManagedFormWithFields,
+} from "../functions/_lib/services/forms/read";
 import { env } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { listCampaignRecipients } from "../functions/_lib/services/event-email-campaign";
@@ -128,6 +137,47 @@ async function seedProposalResponse(eventId: string, form: SeededForm): Promise<
 describe("historical event form response attribution", () => {
   beforeEach(resetDb);
   afterEach(() => vi.unstubAllGlobals());
+
+  it.each([false, true])("reads exact definitions and fields in one batch (catalog: %s)", async (catalog) => {
+    const { eventId, admin } = await seedEventAndAdmin(env.DB);
+    const form = await seedEventForm(eventId, "event_registration", "Saved question", "saved_answer");
+    const group = catalog
+      ? await createGroup(
+          env.DB,
+          { ...admin, identityType: "user" },
+          {
+            typeKey: "working_group",
+            name: "Form catalog group",
+            visibility: "authenticated",
+            eligibilityMode: "open",
+          },
+        )
+      : null;
+    if (catalog)
+      await env.DB.prepare(
+        "UPDATE form_fields SET field_type='multi_select', option_source='active_working_groups' WHERE id=?",
+      )
+        .bind(form.fieldId)
+        .run();
+    const [key] = await queryAll<{ key: string }>(env.DB, "SELECT key FROM forms WHERE id=?", [form.formId]);
+    for (const read of [
+      (db: DatabaseLike) => getActiveEventFormByPurpose(db, eventId, "event_registration"),
+      (db: DatabaseLike) => getActiveFormById(db, form.formId),
+      (db: DatabaseLike) => getFormDefinitionByPlacement(db, form.placementId),
+    ]) {
+      const profile = profileD1Flow(env.DB);
+      const definition = await read(profile.db);
+      expect(definition?.id).toBe(form.formId);
+      expect(definition?.fields).toEqual([expect.objectContaining({ key: "saved_answer", label: "Saved question" })]);
+      if (group)
+        expect(definition?.fields[0].options).toContainEqual({ value: group.id, label: group.name, active: true });
+      expect(profile.summary().roundTrips).toBe(1);
+    }
+    const profile = profileD1Flow(env.DB);
+    const managed = await getManagedFormWithFields(profile.db, key.key);
+    expect(managed?.fields).toEqual([expect.objectContaining({ key: "saved_answer" })]);
+    expect(profile.summary().roundTrips).toBe(1);
+  });
 
   it.each([false, true])(
     "queues the newly submitted answers before committing registration (restore: %s)",
