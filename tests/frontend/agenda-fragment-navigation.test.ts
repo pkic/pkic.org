@@ -74,6 +74,12 @@ it("resolves an initial later-day legacy modal and loads media through the nativ
   expect(root.querySelector("iframe")!.src).toBe("https://example.test/video");
   expect(document.body.classList.contains("agenda-modal-open")).toBe(true);
 });
+it("preserves a legacy modal anchor when the fragment also carries client state", async () => {
+  fragment("sessionModal-original?agendaPosition=native-dialog");
+  await initialize();
+  expect(selected()).toBe("two");
+  expect(root.querySelector("dialog")!.open).toBe(true);
+});
 it("resolves label, day, tab, speakers and native fragments on hash changes and removes its listener", async () => {
   await initialize();
   for (const id of ["sessionModal-original-label", "native-dialog", "native-dialog-title"]) {

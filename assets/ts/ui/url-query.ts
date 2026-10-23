@@ -34,12 +34,14 @@ export function writeUrlQuery({
   ownerPath,
   destinationPath = ownerPath,
   params,
+  fragmentParams,
   mode = "replace",
 }: {
   source: "hash" | "search";
   ownerPath: string;
   destinationPath?: string;
   params: URLSearchParams;
+  fragmentParams?: URLSearchParams;
   mode?: "push" | "replace";
 }): void {
   if (
@@ -54,6 +56,11 @@ export function writeUrlQuery({
   else {
     url.pathname = destinationPath;
     url.search = query;
+    if (fragmentParams) {
+      const fragmentQuery = fragmentParams.toString();
+      const anchor = splitHash().path;
+      url.hash = fragmentQuery ? `${anchor}?${fragmentQuery}` : anchor;
+    }
   }
   if (url.href === window.location.href) return;
   if (mode === "push") history.pushState(history.state, "", url);
