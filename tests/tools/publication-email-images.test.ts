@@ -7,7 +7,12 @@ import { describe, expect, it } from "vitest";
 import { publicEmailImagePublisher } from "../../scripts/publication/publish-email-images.mjs";
 
 describe("email publication images", () => {
-  it("preserves the organizer JPEG and renders the published tier wall at stable URLs", async () => {
+  it.each([
+    "events/2026/test-conference/",
+    "/events/2026/test-conference/",
+    "events/2026/test-conference",
+    "/events/2026/test-conference",
+  ])("publishes stable email images for page path %s", async (pathname) => {
     const output = await mkdtemp(join(tmpdir(), "pkic-email-images-"));
     const route = "/events/2026/test-conference/";
     const directory = join(output, "content-media", route);
@@ -25,14 +30,17 @@ describe("email publication images", () => {
       join(output, "wall.css"),
       ".sponsors {padding:32px;background:white} .sponsors-tier {margin-bottom:24px} img {width:200px;height:60px}",
     );
-    const dom = new JSDOM(`<html><head><link rel="stylesheet" href="/wall.css"></head><body>
+    const dom = new JSDOM(`<html><head><link rel="stylesheet" href="/wall.css">
+      <link rel="preload" as="image" href="/unrelated-page-image.jpg">
+      <link rel="modulepreload" href="/unrelated-page-module.js">
+      <link rel="icon" href="/unrelated-page-icon.svg"></head><body>
       <h1>Excluded event content</h1><div class="sponsors"><div class="sponsors-tier">Gold
       <img loading="lazy" src="/content-media${route}logo.jpg"></div>
       <div class="sponsors-tier">Silver<img src="/content-media${route}logo.svg"></div></div>
       </body></html>`);
     const publisher = publicEmailImagePublisher(output);
     try {
-      expect(await publisher.publish(dom.window.document, route)).toEqual([
+      expect(await publisher.publish(dom.window.document, pathname)).toEqual([
         `${route.slice(1)}organizational-support.jpg`,
         `${route.slice(1)}sponsors.jpg`,
       ]);
@@ -44,7 +52,7 @@ describe("email publication images", () => {
       expect(metadata.height).toBeGreaterThan(200);
       expect(await publisher.publish(dom.window.document, "/members/test/")).toEqual([]);
       dom.window.document.querySelector("img")!.src = "/missing-logo.jpg";
-      await expect(publisher.publish(dom.window.document, route)).rejects.toThrow();
+      await expect(publisher.publish(dom.window.document, pathname)).rejects.toThrow();
     } finally {
       await publisher.finish();
       dom.window.close();

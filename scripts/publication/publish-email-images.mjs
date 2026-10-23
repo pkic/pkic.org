@@ -8,9 +8,12 @@ export function publicEmailImagePublisher(output) {
   let browser;
   return {
     async publish(document, pathname) {
-      if (!/^\/events\/\d{4}\/[^/]+\/$/.test(pathname)) return [];
+      // Astro build hooks supply relative page names; callers may also use URL paths.
+      const route = pathname.replace(/^\/|\/$/g, "");
+      if (!/^events\/\d{4}\/[^/]+$/.test(route)) return [];
+      const eventPath = `/${route}/`;
       const files = [];
-      const organizer = `${pathname.slice(1)}organizational-support.jpg`;
+      const organizer = `${route}/organizational-support.jpg`;
       const source = publicImageFile(`/content-media/${organizer}`, output);
       try {
         await mkdir(dirname(resolve(output, organizer)), { recursive: true });
@@ -54,22 +57,24 @@ export function publicEmailImagePublisher(output) {
           }
         });
         const emailDocument = document.cloneNode(true);
-        emailDocument.querySelectorAll("script, meta[http-equiv]").forEach((node) => node.remove());
+        // Retain rendering dependencies only; page preloads and metadata do not belong in an email image.
+        emailDocument.head.replaceChildren(...emailDocument.head.querySelectorAll('link[rel="stylesheet"], style'));
         emailDocument.documentElement.setAttribute("data-theme", "light");
         emailDocument.body.innerHTML = wall.outerHTML;
+        for (const image of emailDocument.images) image.loading = "eager";
         const base = emailDocument.createElement("base");
-        base.href = `https://pkic.org${pathname}`;
+        base.href = `https://pkic.org${eventPath}`;
         emailDocument.head.prepend(base);
-        await page.setContent(emailDocument.documentElement.outerHTML, { waitUntil: "networkidle0" });
+        // setContent has no navigation whose network-idle lifecycle we can reliably await.
+        await page.setContent(emailDocument.documentElement.outerHTML, { waitUntil: "load" });
         await page.evaluate(async () => {
           await document.fonts.ready;
           for (const image of document.images) {
-            image.loading = "eager";
             await image.decode();
           }
         });
         if (failures.length) throw new AggregateError(failures, "Email sponsor image dependencies failed");
-        const image = `${pathname.slice(1)}sponsors.jpg`;
+        const image = `${route}/sponsors.jpg`;
         await mkdir(dirname(resolve(output, image)), { recursive: true });
         await (await page.$(".sponsors")).screenshot({ path: resolve(output, image), type: "jpeg", quality: 90 });
         files.push(image);
