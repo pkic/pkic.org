@@ -1,8 +1,10 @@
 import type { DatabaseLike } from "../../functions/_lib/types";
 import { sha256Hex } from "../../functions/_lib/utils/crypto";
 import { nowIso } from "../../functions/_lib/utils/time";
+import { makeOwnEmailAddressPrimary } from "../../functions/_lib/services/own-email-addresses";
+import { prepareVerifyPrimaryEmailStatement } from "../../functions/_lib/services/email-verification";
 
-export async function seedRsvpRegistration(db: DatabaseLike): Promise<{ registrationId: string }> {
+export async function seedRsvpRegistration(db: DatabaseLike): Promise<{ registrationId: string; userId: string }> {
   const eventId = crypto.randomUUID();
   const userId = crypto.randomUUID();
   const registrationId = crypto.randomUUID();
@@ -33,5 +35,26 @@ export async function seedRsvpRegistration(db: DatabaseLike): Promise<{ registra
       )
       .bind(registrationId, eventId, userId, await sha256Hex("manage-token"), at, at),
   ]);
-  return { registrationId };
+  return { registrationId, userId };
+}
+
+/** Switch through the real primary-address use case, retaining the verified invited address. */
+export async function switchRsvpRegistrationPrimaryEmail(db: DatabaseLike, userId: string): Promise<string> {
+  const emailId = crypto.randomUUID();
+  const at = nowIso();
+  await db.batch([
+    prepareVerifyPrimaryEmailStatement(db, {
+      userId,
+      normalizedEmail: "alice@example.com",
+      method: "registration_confirmation",
+      verifiedAt: at,
+    }),
+    db
+      .prepare(
+        "INSERT INTO user_emails(id,user_id,email,normalized_email,verified_at,verification_method,created_at) VALUES(?,?,'new-alice@example.test','new-alice@example.test',?,'magic_link',?)",
+      )
+      .bind(emailId, userId, at, at),
+  ]);
+  await makeOwnEmailAddressPrimary(db, { userId, emailId });
+  return emailId;
 }
