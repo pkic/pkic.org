@@ -58,6 +58,7 @@ export async function liveRoomSocketRequest(request: Request, env: Env): Promise
       eventId: admission.eventId,
       session: admission.session,
       participant: admission.participant,
+      readBookmark: env.DB.getBookmark?.() ?? admission.participant.sessionClaims?.state,
     });
     return await rooms.getByName(liveRoomName(admission.eventId, params.data.occurrenceId)).fetch(
       new Request("https://live-session-room/connect", {

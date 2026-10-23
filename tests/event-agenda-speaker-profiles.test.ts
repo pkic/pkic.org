@@ -7,6 +7,8 @@ import {
 } from "../assets/shared/schemas/event-agenda";
 import { sessionHistoryCorrectionSchema } from "../assets/shared/schemas/event-session-history";
 import { agendaAuthoringFixture, agendaAuthoringEffects } from "./helpers/agenda-authoring";
+import { profileD1Flow } from "./helpers/d1-flow-profile";
+import { getAgenda } from "../functions/_lib/services/event-agenda/read";
 import { resetDb } from "./helpers/reset-db";
 import { insertOrganization } from "./helpers/membership";
 
@@ -67,6 +69,19 @@ async function fixture() {
   };
 }
 describe("available speaker person profiles are organizer candidates only", () => {
+  it("resolves credited proposal identities by proposal ID without scanning event proposals", async () => {
+    const f = await fixture();
+    const profile = profileD1Flow(env.DB);
+    await getAgenda(profile.db, f.eventId, "pqc-2026");
+    const report = await profile.report();
+    expect(report.roundTrips).toBe(1);
+    const speakerRead = report.plans.find(({ sql }) => sql.startsWith("SELECT credited.occurrence_id,"));
+    expect(speakerRead).toBeDefined();
+    const details = speakerRead!.plan.map((row) => (row as { detail: string }).detail).join("\n");
+    expect(details).toMatch(/SEARCH credited_proposal USING INDEX sqlite_autoindex_session_proposals_1/);
+    expect(details).not.toMatch(/SCAN credited_proposal\b|SEARCH credited_proposal USING INDEX idx_proposals_event/);
+  });
+
   it("reads each credited person as the identity they speak as: the proposal's choice, else their primary", async () => {
     const f = await fixture(),
       source = await f.proposal(f.eventId);

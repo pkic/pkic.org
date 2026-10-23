@@ -46,10 +46,15 @@ export class LiveRoomBroadcast {
     private readonly authorize: (sockets: WebSocket[]) => Promise<WebSocket[]>,
     private readonly overlayLayouts: () => LiveOverlayLayoutGeometry[],
     private readonly tickerContext: () => LiveTickerContext,
+    private readonly withAccess: <T>(work: () => Promise<T>) => Promise<T>,
   ) {}
 
   /** The full room for one viewer as they join. */
   async snapshot(socket: WebSocket, session: LiveRoomSession): Promise<string | null> {
+    return this.withAccess(() => this.admittedSnapshot(socket, session));
+  }
+
+  private async admittedSnapshot(socket: WebSocket, session: LiveRoomSession): Promise<string | null> {
     const removedChat = await this.chat.eraseAnonymizedAuthors(this.db);
     const eligible = await this.authorize(this.ctx.getWebSockets());
     this.sendChatRemovals(removedChat, eligible);
@@ -247,6 +252,14 @@ export class LiveRoomBroadcast {
    * fully decide the message. Null serializes per socket.
    */
   async send(
+    messageFor: (viewer: LiveRoomParticipant, sockets: WebSocket[]) => LiveRoomServerMessage | null,
+    audience: ((viewer: LiveRoomParticipant) => string) | null,
+    only?: WebSocket | WebSocket[],
+  ): Promise<void> {
+    return this.withAccess(() => this.sendAdmitted(messageFor, audience, only));
+  }
+
+  private async sendAdmitted(
     messageFor: (viewer: LiveRoomParticipant, sockets: WebSocket[]) => LiveRoomServerMessage | null,
     audience: ((viewer: LiveRoomParticipant) => string) | null,
     only?: WebSocket | WebSocket[],

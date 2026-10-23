@@ -1,4 +1,4 @@
-import { runInDurableObject } from "cloudflare:test";
+import { runInDurableObject, runDurableObjectAlarm } from "cloudflare:test";
 import { LiveRoomChat } from "../functions/_lib/services/live-session/room-chat";
 import { LiveRoomSql } from "../functions/_lib/services/live-session/room-sql";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -141,6 +141,7 @@ describe("live room configured controls and participant chat", () => {
     await env.DB.prepare("UPDATE user_roles SET revoked_at=? WHERE user_id=?")
       .bind(new Date().toISOString(), f.users.operator)
       .run();
+    await runDurableObjectAlarm(f.room());
     const publicJoined = await f.connect({ person: "attendee" });
     expect((await publicJoined.next("room.snapshot")).chat).toEqual([]);
     expect(removed.received.filter((message) => message.type === "chat.message")).toHaveLength(1);
@@ -209,6 +210,7 @@ describe("live room configured controls and participant chat", () => {
     await env.DB.prepare("UPDATE registrations SET status='cancelled' WHERE event_id=? AND user_id=?")
       .bind(f.eventId, f.users.attendee)
       .run();
+    await runDurableObjectAlarm(f.room());
     remaining.send({ type: "chat.send", text: "Visible only to current participants" });
     await remaining.next("chat.message");
     expect(removed.received.some((message) => message.type === "chat.message")).toBe(false);

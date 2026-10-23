@@ -29,7 +29,12 @@ async function sponsor(name: string) {
   return id;
 }
 async function detail() {
-  const response = await callApi(env, "/api/v1/events/scan-test", { headers: { authorization: `Bearer ${token}` } });
+  const response = await callApi(
+    env,
+    "/api/v1/events/scan-test",
+    { headers: { authorization: `Bearer ${token}` } },
+    { maxRoundTrips: 1 },
+  );
   expect(response.status).toBe(200);
   return eventDetailResponseSchema.parse(await response.json()).event;
 }

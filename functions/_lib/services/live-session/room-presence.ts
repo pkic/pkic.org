@@ -26,27 +26,16 @@ interface Pending {
  * so a burst never leaves other screens on a stale position. A change flag
  * survives coalescing until it is sent.
  *
- * Presence rides on the full access check of a socket's other room messages:
- * at ten updates a second, the room re-checks a sender's access once every
- * `revalidateMs` instead of on every update, and fans out to the operator
- * sockets every other broadcast keeps authorized.
+ * Every send uses the room's current local access lease; the background
+ * refresh owns D1 revalidation, independently of the presence update rate.
  */
 export class LiveRoomPresence {
   private readonly people = new Map<string, Pending>();
-  private readonly checked = new WeakMap<WebSocket, number>();
 
-  constructor(private readonly ctx: DurableObjectState) {}
-
-  /** The socket just passed the room's full access check. */
-  authorized(socket: WebSocket, now = Date.now()): void {
-    this.checked.set(socket, now);
-  }
-
-  /** Whether a presence update from this socket may ride on its last access check. */
-  recentlyAuthorized(socket: WebSocket, now = Date.now()): boolean {
-    const at = this.checked.get(socket);
-    return at !== undefined && now - at < LIVE_PRESENCE_POLICY.revalidateMs;
-  }
+  constructor(
+    private readonly ctx: DurableObjectState,
+    private readonly eligible: (sockets: WebSocket[]) => WebSocket[],
+  ) {}
 
   update(operator: Operator, update: LivePresenceUpdate, now = Date.now()): void {
     const id = livePresenceKey(operator.userId);
@@ -100,7 +89,7 @@ export class LiveRoomPresence {
 
   private fanOut(message: LiveRoomServerMessage, senderUserId: string): void {
     const payload = serializeLiveRoomMessage(message);
-    for (const socket of this.ctx.getWebSockets("operator")) {
+    for (const socket of this.eligible(this.ctx.getWebSockets("operator"))) {
       const viewer = socket.deserializeAttachment() as LiveRoomParticipant | null;
       if (viewer?.role !== "operator" || viewer.userId === senderUserId) continue;
       this.sendTo(socket, payload);
@@ -108,7 +97,7 @@ export class LiveRoomPresence {
   }
 
   private sendTo(socket: WebSocket, payload: string): void {
-    if (socket.readyState !== WebSocket.OPEN) return;
+    if (!this.eligible([socket]).length) return;
     try {
       socket.send(payload);
     } catch {

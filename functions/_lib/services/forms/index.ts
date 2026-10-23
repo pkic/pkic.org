@@ -1,9 +1,7 @@
 export {
-  getActiveFormByPurpose,
   getActiveEventFormByPurpose,
-  getActivePortalEventFormByPurpose,
   getActiveFormForEvent,
-  getActiveFormForResolution,
+  prepareEventFormDefinitionRead,
   toEventFormResolutionEvent,
   getGlobalFormByKey,
   getFormDefinitionByPlacement,
@@ -15,7 +13,6 @@ export {
   type ActiveFormDefinition,
   type ManagedFormWithFields,
   type FormFieldDefinition,
-  type EventFormResolution,
   type EventFormResolutionEvent,
 } from "./read";
 export type { FormPurpose } from "../../../../assets/shared/schemas/forms";
@@ -40,6 +37,7 @@ export {
   validateCustomAnswersAgainstForm,
   validateCustomAnswersByPurpose,
   validateCustomAnswersForSubmission,
+  validateCustomAnswersForResolvedForm,
   type CustomAnswerValue,
   type DateRangeAnswer,
   type ValidatedCustomAnswers,

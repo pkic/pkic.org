@@ -4,18 +4,21 @@ import {
   type EventManagementCapability,
 } from "../../../../assets/shared/schemas/event-management";
 import { parseLinksJson } from "../../../../assets/shared/schemas/links";
-import { first } from "../../db/queries";
+import type { AuthorizationEvidence } from "../../db/authorization-guard";
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
 import { parseJsonSafe } from "../../utils/json";
 import { resolveEventSessionTypes } from "../events";
 import { eventColumns, type EventRecord } from "../event-types";
+import { EVENT_FORM_PURPOSES } from "../../../../assets/shared/schemas/forms";
+import { placedEventFormSelection } from "../forms/event-placement-read";
 import { readEventAudienceAccess } from "./scanner-access";
 import type { EventAudienceViewer } from "./visibility";
 
-interface EventDetailRow extends EventRecord {
+export interface EventDetailRow extends EventRecord {
   user_retention_days: number | null;
   series_id: string | null;
+  form_links_json: string;
 }
 
 export function normalizeEventRegistrationPolicy(value: string): EventDetail["registrationPolicy"] {
@@ -37,10 +40,6 @@ export function normalizeEventRegistrationPolicy(value: string): EventDetail["re
   }
 }
 
-export async function getEventIdBySlug(db: DatabaseLike, eventSlug: string): Promise<string | null> {
-  return (await first<{ id: string }>(db, "SELECT id FROM events WHERE slug = ?", [eventSlug]))?.id ?? null;
-}
-
 /** Canonical camelCase read model shared by event resource routes and callers. */
 export async function getEventDetail(
   db: DatabaseLike,
@@ -48,17 +47,39 @@ export async function getEventDetail(
   capabilities: readonly EventManagementCapability[],
   viewer?: EventAudienceViewer,
 ): Promise<EventDetail> {
-  const event = await first<EventDetailRow>(
-    db,
-    `SELECT ${eventColumns("event")}, policy.user_retention_days, series.id AS series_id
+  const read = prepareEventDetail(db, eventSlug);
+  const event = await read.first<EventDetailRow>();
+  if (!event) throw new AppError(404, "EVENT_NOT_FOUND", "Event not found");
+  const access = viewer
+    ? (await readEventAudienceAccess(db, viewer, [event.id])).get(event.id)?.scannerAccess
+    : undefined;
+  return decodeEventDetail(event, capabilities, access);
+}
+
+export function prepareEventDetail(db: DatabaseLike, eventSlug: string, authority?: AuthorizationEvidence) {
+  const formReads = EVENT_FORM_PURPOSES.map((purpose) =>
+    placedEventFormSelection({ slug: eventSlug }, purpose, {
+      includeClosed: true,
+    }),
+  );
+  return db
+    .prepare(`SELECT ${eventColumns("event")}, policy.user_retention_days, series.id AS series_id,
+      json_object('event_registration', (SELECT CASE WHEN COUNT(*)=1 THEN MIN(key) END FROM (${formReads[0].sql})),
+                  'proposal_submission', (SELECT CASE WHEN COUNT(*)=1 THEN MIN(key) END FROM (${formReads[1].sql}))) AS form_links_json
        FROM events event
        LEFT JOIN retention_policies policy ON policy.event_id = event.id
        LEFT JOIN event_series series ON series.event_id = event.id
-      WHERE event.slug = ?`,
-    [eventSlug],
-  );
-  if (!event) throw new AppError(404, "EVENT_NOT_FOUND", "Event not found");
+      WHERE event.slug = ? ${authority ? `AND EXISTS(${authority.sql})` : ""}`)
+    .bind(...formReads.flatMap((read) => read.bindings), eventSlug, ...(authority?.bindings ?? []));
+}
+
+export function decodeEventDetail(
+  event: EventDetailRow,
+  capabilities: readonly EventManagementCapability[],
+  scannerAccess?: EventDetail["scannerAccess"],
+): EventDetail {
   const settings = parseJsonSafe<Record<string, unknown>>(event.settings_json, {});
+  settings.forms = parseJsonSafe<Record<string, string | null>>(event.form_links_json, {});
   const directWriteAllowed =
     !event.owner_group_id &&
     event.source_mode !== "portal" &&
@@ -66,9 +87,7 @@ export async function getEventDetail(
     event.profile_key !== "board_meeting" &&
     !event.series_id;
   return eventDetailSchema.parse({
-    scannerAccess: viewer
-      ? (await readEventAudienceAccess(db, viewer, [event.id])).get(event.id)?.scannerAccess
-      : undefined,
+    scannerAccess,
     id: event.id,
     slug: event.slug,
     name: event.name,

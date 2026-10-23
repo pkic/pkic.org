@@ -1,3 +1,4 @@
+import { prepareFormPlacement } from "../functions/_lib/services/forms/placements";
 import { administratorGrants } from "./helpers/administrator";
 import { describe, expect, it, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
@@ -175,6 +176,13 @@ async function seedProposalWithReviews(
         datetime('now')
       )
     `),
+    prepareFormPlacement(env.DB, formId, {
+      ownerGroupId: null,
+      contextType: "event",
+      contextRef: eventId,
+      audience: "speaker",
+      active: true,
+    }).statement,
     env.DB.prepare(`
       INSERT INTO form_fields (
         id, form_id, key, label, field_type, required, options_json, validation_json, sort_order, created_at

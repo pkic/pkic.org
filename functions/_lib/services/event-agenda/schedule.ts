@@ -13,7 +13,7 @@ import { getAgenda } from "./read";
 import { validateAgendaSchedule } from "./mutations";
 import { assertPublicationAllocations, preparePublicationAllocationGuard } from "./publication-allocations";
 import { agendaAdditionalRoomStatements } from "./occurrence-rooms";
-import { commitAgendaRevision } from "./revision";
+import { commitAgendaSnapshot } from "./commit-snapshot";
 import { occurrenceRepresentationReferences, prepareRepresentationEligibility } from "./representation-eligibility";
 async function prepare(
   db: DatabaseLike,
@@ -109,15 +109,16 @@ export async function applyAgendaSchedule(
     input,
     actorId,
   );
-  if (review.reviewHash !== input.reviewHash)
+  if (input.reviewHash !== undefined && review.reviewHash !== input.reviewHash)
     throw new AppError(
       409,
       "AGENDA_SCHEDULE_REVIEW_CHANGED",
       "The schedule preview changed. Review it again before applying.",
     );
-  await commitAgendaRevision(
+  return commitAgendaSnapshot(
     db,
     eventId,
+    eventSlug,
     input.expectedRevision,
     [
       preparePublicationAllocationGuard(db, next),
@@ -133,7 +134,6 @@ export async function applyAgendaSchedule(
     actorId,
     conflictProposal,
   );
-  return getAgenda(db, eventId, eventSlug);
 }
 
 function speakerPlacementStatements(

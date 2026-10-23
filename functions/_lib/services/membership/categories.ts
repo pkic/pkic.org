@@ -1,6 +1,6 @@
 /** D1 category catalog and membership holder compatibility policy. */
 import { prepareMembershipCategoryRename } from "./category-renaming";
-import { all, first } from "../../db/queries";
+import { first } from "../../db/queries";
 import { preparePermissionsAuthorizationGuard } from "../../auth/permissions";
 import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import { prepareAuthorizationGuard } from "../../db/authorization-guard";
@@ -81,19 +81,29 @@ function toMembershipCategory(row: MembershipCategoryRow): MembershipCategoryCat
 }
 
 /** The DB-backed category reference table (consolidated migration 0035) — kept in parity with the shared TS vocabulary above by tests/membership-aggregate.test.ts. */
+export function prepareMembershipCategoriesRead(db: DatabaseLike, availableForApplication = false) {
+  const selection = {
+    sql: `SELECT ${MEMBERSHIP_CATEGORY_COLUMNS}
+       FROM membership_categories
+       ${availableForApplication ? "WHERE retired_at IS NULL AND EXISTS (SELECT 1 FROM membership_workflow_versions version WHERE version.id = membership_categories.workflow_version_id AND version.published_at IS NOT NULL AND NOT EXISTS (SELECT 1 FROM membership_workflow_archives archive WHERE archive.version_id = version.id))" : ""}
+      ORDER BY display_order, code LIMIT ?`,
+    bindings: [MEMBERSHIP_CATEGORY_CATALOG_LIMIT],
+  };
+  return {
+    selection,
+    statement: db.prepare(selection.sql).bind(...selection.bindings),
+    decode(rows: MembershipCategoryRow[]): MembershipCategoryCatalogEntry[] {
+      return rows.map(toMembershipCategory);
+    },
+  };
+}
+
 export async function listMembershipCategories(
   db: DatabaseLike,
   availableForApplication = false,
 ): Promise<MembershipCategoryCatalogEntry[]> {
-  const rows = await all<MembershipCategoryRow>(
-    db,
-    `SELECT ${MEMBERSHIP_CATEGORY_COLUMNS}
-       FROM membership_categories
-       ${availableForApplication ? "WHERE retired_at IS NULL AND EXISTS (SELECT 1 FROM membership_workflow_versions version WHERE version.id = membership_categories.workflow_version_id AND version.published_at IS NOT NULL AND NOT EXISTS (SELECT 1 FROM membership_workflow_archives archive WHERE archive.version_id = version.id))" : ""}
-      ORDER BY display_order, code LIMIT ?`,
-    [MEMBERSHIP_CATEGORY_CATALOG_LIMIT],
-  );
-  return rows.map(toMembershipCategory);
+  const read = prepareMembershipCategoriesRead(db, availableForApplication);
+  return read.decode((await read.statement.all<MembershipCategoryRow>()).results ?? []);
 }
 
 export async function getMembershipCategory(

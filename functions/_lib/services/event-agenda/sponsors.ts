@@ -14,7 +14,7 @@ import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
 import type { AgendaOccurrence } from "../../../../assets/shared/schemas/event-agenda";
 
-interface AgendaSponsorRow extends SponsorRow {
+export interface AgendaSponsorRow extends SponsorRow {
   sponsor_id: string;
   source_json: string;
 }
@@ -56,14 +56,24 @@ export async function listAgendaSponsorChoices(
   };
 }
 
+export function prepareAgendaSponsorRead(db: DatabaseLike, eventId: string, sponsorIds?: readonly string[]) {
+  const read = source(eventId);
+  const selection =
+    sponsorIds === undefined
+      ? `SELECT selected.value FROM events event
+       JOIN json_each(event.settings_json,'$.agenda.sessionSponsors') source
+       JOIN event_agenda_occurrences occurrence ON occurrence.id=source.key AND occurrence.event_id=event.id
+       JOIN json_each(source.value,'$.sponsorIds') selected
+       WHERE event.id=? AND occurrence.kind='break'`
+      : "SELECT value FROM json_each(?)";
+  return db
+    .prepare(`${read.sql} AND sp.id IN(${selection}) ORDER BY sp.id LIMIT 20001`)
+    .bind(...read.bindings, sponsorIds === undefined ? eventId : JSON.stringify(sponsorIds));
+}
+
 export async function readAgendaSponsorRows(db: DatabaseLike, eventId: string, sponsorIds: readonly string[]) {
   if (!sponsorIds.length) return [];
-  const read = source(eventId);
-  return all<AgendaSponsorRow>(
-    db,
-    `${read.sql} AND sp.id IN(SELECT value FROM json_each(?)) ORDER BY sp.id LIMIT 20001`,
-    [...read.bindings, JSON.stringify(sponsorIds)],
-  );
+  return (await prepareAgendaSponsorRead(db, eventId, sponsorIds).all<AgendaSponsorRow>()).results;
 }
 
 export function agendaSponsorDisplay(row: AgendaSponsorRow) {

@@ -1,3 +1,4 @@
+import { batchFirst } from "../../db/pagination";
 import type { GroupFormSubmissionInput } from "../../../../assets/shared/schemas/group-forms";
 import { AppError } from "../../errors";
 import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
@@ -5,7 +6,7 @@ import type { DatabaseLike } from "../../types";
 import { nowIso } from "../../utils/time";
 import { prepareScopedAuditLog } from "../audit";
 import {
-  canViewerAccessGroupResource,
+  groupResourceViewerAuthorizationEvidence,
   prepareMemberGroupResourceAuthorizationGuard,
   type GroupResourceViewer,
 } from "../resource-grants";
@@ -14,7 +15,7 @@ import {
   isFormSubmissionContextConflict,
   prepareCreateFormSubmission,
 } from "./submission-command";
-import { getFormDefinitionByPlacement } from "./read";
+import { prepareFormDefinitionByPlacement } from "./read";
 import { validateCustomAnswersAgainstForm } from "./validation";
 
 export async function submitGroupFormResponse(
@@ -24,22 +25,24 @@ export async function submitGroupFormResponse(
   placementId: string,
   input: GroupFormSubmissionInput,
 ): Promise<string> {
-  const canView = await canViewerAccessGroupResource(
-    db,
-    viewer,
-    groupId,
-    "formPlacement",
-    placementId,
-    "view_definition",
-  );
-  if (!canView) throw new AppError(404, "FORM_NOT_FOUND", "The form is not available through this group");
-  const canSubmit = await canViewerAccessGroupResource(db, viewer, groupId, "formPlacement", placementId, "submit");
-  if (!canSubmit) throw new AppError(403, "FORM_SUBMIT_REQUIRED", "The submit capability is required");
-
-  // Resolving for submission asks only whether the form is live at all. A form
-  // outside its submission window resolves here and is refused by the shared
-  // guard below, which can name the day it opens or the day it closed.
-  const form = await getFormDefinitionByPlacement(db, placementId, { forSubmission: true });
+  const permissions = (["view_definition", "submit"] as const).map((capability) => {
+    const evidence = groupResourceViewerAuthorizationEvidence(
+      viewer,
+      groupId,
+      "formPlacement",
+      placementId,
+      capability,
+    );
+    return db.prepare(`SELECT 1 AS authorized WHERE EXISTS(${evidence.sql})`).bind(...evidence.bindings);
+  });
+  // Resolve the live definition without hiding a form whose submission window has not opened or has closed.
+  // The canonical write guard below owns the precise submission-window refusal.
+  const formRead = prepareFormDefinitionByPlacement(db, placementId, { forSubmission: true });
+  const results = await db.batch([...permissions, ...formRead.statements]);
+  if (!batchFirst(results[0]))
+    throw new AppError(404, "FORM_NOT_FOUND", "The form is not available through this group");
+  if (!batchFirst(results[1])) throw new AppError(403, "FORM_SUBMIT_REQUIRED", "The submit capability is required");
+  const form = formRead.decode(results.slice(permissions.length));
   if (!form) throw new AppError(404, "FORM_NOT_ACCEPTING_RESPONSES", "The form is not accepting responses");
   if (form.purpose !== "survey" && form.purpose !== "feedback") {
     throw new AppError(

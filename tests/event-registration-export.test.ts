@@ -1,3 +1,4 @@
+import { prepareFormPlacement } from "../functions/_lib/services/forms/placements";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import app from "./helpers/app";
@@ -85,6 +86,13 @@ describe("event registration CSV export", () => {
            (id, key, scope_type, scope_ref, purpose, status, title, description, created_at, updated_at)
          VALUES (?, ?, 'event', ?, 'event_registration', 'active', 'Generic registration form', NULL, datetime('now'), datetime('now'))`,
       ).bind(formId, `generic-export-form-${formId}`, eventId),
+      prepareFormPlacement(env.DB, formId, {
+        ownerGroupId: null,
+        contextType: "event",
+        contextRef: eventId,
+        audience: "attendee",
+        active: true,
+      }).statement,
       env.DB.prepare(
         `INSERT INTO form_fields
            (id, form_id, key, label, field_type, required, options_json, validation_json, sort_order, created_at)

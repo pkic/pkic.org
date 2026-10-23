@@ -103,6 +103,19 @@ const EMPTY_QUEUE: LiveQueue = { question: [], "lower-third": [], poll: [], chan
 export class LiveRoomStore {
   constructor(private readonly sql: LiveRoomSql) {}
 
+  d1ReadBookmark(): string | null {
+    return (
+      this.sql.rows<{ bookmark: string }>("SELECT bookmark FROM room_d1_read_state WHERE id=1")[0]?.bookmark ?? null
+    );
+  }
+
+  saveD1ReadBookmark(bookmark: string): void {
+    this.sql.exec(
+      "INSERT INTO room_d1_read_state(id,bookmark) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET bookmark=excluded.bookmark",
+      bookmark,
+    );
+  }
+
   saveSession(eventId: string, session: LiveRoomSession): void {
     this.sql.exec(
       "INSERT INTO room_session(id, event_id, session_json) VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET event_id = excluded.event_id, session_json = excluded.session_json",

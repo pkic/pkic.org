@@ -1,3 +1,7 @@
+import { eventFormsResponseSchema } from "../assets/shared/schemas/forms";
+import { profileD1Flow } from "./helpers/d1-flow-profile";
+import { getEventById } from "../functions/_lib/services/events";
+import { getEventRegistrationConfiguration } from "../functions/_lib/services/events/registration-configuration";
 import { grantAdministrator } from "./helpers/administrator";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -26,7 +30,7 @@ import { grantResourceToGroup } from "../functions/_lib/services/resource-grants
 import type { DatabaseLike, StatementLike, UserBackedAuthAdmin } from "../functions/_lib/types";
 import { callApi } from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
-import { mutateBeforeNextBatch, mutateBeforeNextStatement } from "./helpers/database-races";
+import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { insertUser } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 import { seedPersona } from "./personas/seed";
@@ -692,7 +696,7 @@ describe("group event management routes", () => {
       .bind(fixture.ownerLeader.id)
       .run();
     const detail = await getGroupEvent(
-      mutateBeforeNextStatement(env.DB, async () => {
+      mutateBeforeNextBatch(env.DB, async () => {
         await env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE user_id = ?")
           .bind(fixture.ownerLeader.id)
           .run();
@@ -1445,9 +1449,26 @@ describe("group event management routes", () => {
     };
     // With no window, the event offers the form.
     expect(placed.form.placement).toMatchObject({ opensAt: null, closesAt: null });
+    const formProfile = profileD1Flow(env.DB);
     expect(
-      await getActiveFormForEvent(env.DB, { id: created.id, source_mode: "portal" }, "event_registration"),
+      await getActiveFormForEvent(formProfile.db, { id: created.id, source_mode: "portal" }, "event_registration"),
     ).not.toBeNull();
+    expect(formProfile.summary().roundTrips).toBe(1);
+    const event = await getEventById(env.DB, created.id);
+    const configurationProfile = profileD1Flow(env.DB);
+    const configuration = await getEventRegistrationConfiguration(configurationProfile.db, event, "event_registration");
+    expect(configuration.form?.placement?.id).toBe(placed.form.placement.id);
+    expect(configurationProfile.summary().roundTrips).toBe(1);
+    for (const purpose of ["event_registration", "proposal_submission"]) {
+      const response = await callApi(env, `/api/v1/events/${event.slug}/forms/placements/${purpose}`, undefined, {
+        maxRoundTrips: 1,
+      });
+      expect(response.status).toBe(200);
+      const publicConfiguration = eventFormsResponseSchema.parse(await response.json());
+      expect(publicConfiguration.form?.placement?.id ?? null).toBe(
+        purpose === "event_registration" ? placed.form.placement.id : null,
+      );
+    }
 
     // Registration that has not opened yet: the form exists for management
     // and is not offered to a reader.

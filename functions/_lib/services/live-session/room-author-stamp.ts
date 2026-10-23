@@ -10,6 +10,9 @@ import {
   type LiveAuthorStamp,
 } from "../../../../assets/shared/schemas/live-session-author";
 import { first } from "../../db/queries";
+import { MAX_ACTING_IDENTITIES, SESSION_ACTING_IDENTITY_ORDER_SQL } from "../../auth/session-acting-identities";
+import { ownedIdentityLifecycleSql } from "../identities/selection";
+import { currentLiveRoomCommandRead, liveParticipantReadKey } from "./room-command-read-scope";
 import type { DatabaseLike } from "../../types";
 import { ACTIVE_LEADERSHIP_PREDICATE_SQL } from "../groups/leadership-sql";
 import { identityJobTitleSql } from "../identities/affiliation-projection";
@@ -17,7 +20,9 @@ import { organizationLogoUrl } from "../organization-content/fields";
 import { PUBLIC_LEADERSHIP_SOURCE_SQL } from "../people/published-person";
 import type { LiveRoomParticipant } from "./room-admission";
 
-interface StampRow {
+export interface StampRow {
+  user_id: string;
+  selected_identity_id: string | null;
   title: string | null;
   organization: string | null;
   organization_id: string | null;
@@ -38,31 +43,31 @@ const NOW = "strftime('%Y-%m-%dT%H:%M:%fZ','now')";
  * the organizer role of this event, credits on this event's published agenda,
  * duties the agenda shows, and leadership of groups that publish it.
  */
-const STAMP_SQL = `SELECT
+const STAMP_SQL = `SELECT input.user_id, input.identity_id AS selected_identity_id,
   (SELECT ${identityJobTitleSql("acting.id")}) AS title,
   current.name AS organization, current.id AS organization_id, current.logo_r2_key AS logo,
   EXISTS(SELECT 1 FROM members member WHERE member.status = 'active' AND (
       (acting.organization_id IS NOT NULL AND member.member_type = 'organization' AND member.organization_id = acting.organization_id)
       OR (acting.organization_id IS NULL AND member.member_type = 'individual' AND member.identity_id = acting.id))) AS member,
   EXISTS(SELECT 1 FROM user_roles organizer WHERE organizer.user_id = person.id AND organizer.role_id = 'role-event_organizer'
-      AND organizer.context_type = 'event' AND organizer.context_id = ? AND organizer.revoked_at IS NULL
+      AND organizer.context_type = 'event' AND organizer.context_id = input.event_id AND organizer.revoked_at IS NULL
       AND (organizer.expires_at IS NULL OR organizer.expires_at > ${NOW})) AS organizer,
   (SELECT json_group_array(DISTINCT COALESCE(json_extract(credit.value, '$.role'), 'speaker'))
      FROM event_agenda_state state
      JOIN event_agenda_published_occurrences approved ON approved.event_id = state.event_id AND approved.revision = state.published_revision,
           json_each(approved.payload_json, '$.speakers') credit
-    WHERE state.event_id = ? AND json_extract(credit.value, '$.userId') = person.id) AS credit_roles,
+    WHERE state.event_id = input.event_id AND json_extract(credit.value, '$.userId') = person.id) AS credit_roles,
   (SELECT json_group_array(DISTINCT duty.name) FROM event_agenda_assignments assignment
      JOIN event_agenda_staffing_roles duty ON duty.event_id = assignment.event_id AND duty.id = assignment.role
-    WHERE assignment.event_id = ? AND assignment.user_id = person.id AND duty.show_on_agenda = 1) AS duties,
+    WHERE assignment.event_id = input.event_id AND assignment.user_id = person.id AND duty.show_on_agenda = 1) AS duties,
   (SELECT json_group_array(DISTINCT ur.role_id) ${PUBLIC_LEADERSHIP_SOURCE_SQL}
       AND ur.user_id = person.id AND ${ACTIVE_LEADERSHIP_PREDICATE_SQL}) AS leadership
-  FROM users person
-  LEFT JOIN identities acting ON acting.id = ? AND acting.user_id = person.id AND acting.ended_at IS NULL
+  FROM input JOIN users person ON person.id=input.user_id
+  LEFT JOIN identities acting ON acting.id = input.identity_id AND acting.user_id = person.id AND acting.ended_at IS NULL
        AND acting.blocked_at IS NULL AND acting.hidden_from_public_profile = 0
   LEFT JOIN organizations named ON named.id = acting.organization_id
   LEFT JOIN organizations current ON current.id = COALESCE(named.merged_into_organization_id, named.id)
- WHERE person.id = ?`;
+`;
 
 function strings(json: string): string[] {
   const parsed: unknown = JSON.parse(json || "[]");
@@ -79,6 +84,23 @@ function affiliationOf(row: StampRow): LiveAuthorAffiliation | null {
   return parsed.success ? parsed.data : null;
 }
 
+/** Prepare all live identity candidates; the canonical session decoder selects which one the person acts as. */
+export function prepareLiveAuthorStampCandidates(db: DatabaseLike, eventId: string, userIds: readonly string[]) {
+  return db
+    .prepare(`WITH requested(user_id) AS (SELECT DISTINCT value FROM json_each(?)),
+    candidates AS (
+      SELECT identity.user_id,identity.id,
+        row_number() OVER (PARTITION BY identity.user_id ORDER BY ${SESSION_ACTING_IDENTITY_ORDER_SQL}) AS ordinal
+      FROM identities identity JOIN requested ON requested.user_id=identity.user_id
+      LEFT JOIN organizations organization ON organization.id=identity.organization_id
+      WHERE ${ownedIdentityLifecycleSql("identity", null)}
+    ), input(event_id,user_id,identity_id) AS (
+      SELECT ?,user_id,NULL FROM requested UNION ALL
+      SELECT ?,user_id,id FROM candidates WHERE ordinal<=?
+    ) ${STAMP_SQL}`)
+    .bind(JSON.stringify(userIds), eventId, eventId, MAX_ACTING_IDENTITIES);
+}
+
 /** Who the person is as they write: their acting capacity and the roles the room recognizes, frozen with it. */
 export async function readLiveAuthorStamp(
   db: DatabaseLike,
@@ -86,13 +108,18 @@ export async function readLiveAuthorStamp(
   viewer: LiveRoomParticipant,
 ): Promise<LiveAuthorStamp> {
   if (!viewer.userId) return { affiliation: null, roles: [] };
-  const row = await first<StampRow>(db, STAMP_SQL, [
+  const current = currentLiveRoomCommandRead();
+  const stamp = current?.eventId === eventId ? current.authors.get(liveParticipantReadKey(viewer)) : undefined;
+  if (stamp) return stamp;
+  const row = await first<StampRow>(db, `WITH input(event_id,user_id,identity_id) AS(SELECT ?,?,?) ${STAMP_SQL}`, [
     eventId,
-    eventId,
-    eventId,
-    viewer.actingIdentityId ?? null,
     viewer.userId,
+    viewer.actingIdentityId ?? null,
   ]);
+  return decodeLiveAuthorStamp(row, viewer);
+}
+
+export function decodeLiveAuthorStamp(row: StampRow | null, viewer: LiveRoomParticipant): LiveAuthorStamp {
   if (!row) return { affiliation: null, roles: [] };
   const roles: LiveAuthorRole[] = [];
   if (viewer.role === "operator" || row.organizer === 1) roles.push("event_team");

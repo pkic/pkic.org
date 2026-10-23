@@ -1,5 +1,7 @@
 import { seedStaffingPositionAssignment } from "./helpers/agenda-staffing";
 import { beforeEach, describe, expect, it } from "vitest";
+import { profileD1Flow } from "./helpers/d1-flow-profile";
+import { applyAgendaSchedule } from "../functions/_lib/services/event-agenda/schedule";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
 import { seedEventAndAdmin, queryAll } from "./helpers/context";
@@ -56,6 +58,27 @@ beforeEach(async () => {
   });
 });
 describe("reviewed atomic agenda scheduling", () => {
+  it("commits direct placements in one request and returns the same snapshot as a fresh read", async () => {
+    const applied = await post("", proposal);
+    expect(applied.status, await applied.clone().text()).toBe(200);
+    const committed = agendaSnapshotSchema.parse(await applied.json());
+    const fresh = await getAgenda(env.DB, eventId, "pqc-2026");
+    expect(committed).toEqual(fresh);
+    expect(committed.revision).toBe(proposal.expectedRevision + 1);
+    expect((await post("", proposal)).status).toBe(409);
+  });
+  it("reads the committed snapshot inside the final atomic write batch", async () => {
+    const profile = profileD1Flow(env.DB);
+    const committed = await applyAgendaSchedule(profile.db, eventId, "pqc-2026", proposal, "profile-actor");
+    expect(committed.revision).toBe(proposal.expectedRevision + 1);
+    const report = await profile.report();
+    expect(report.roundTrips).toBeLessThanOrEqual(3);
+    const committedBatch = report.queries.at(-1)!;
+    expect(committedBatch.operation).toBe("batch");
+    expect(committedBatch.sql).toContain("UPDATE event_agenda_state SET revision=revision+1");
+    expect(committedBatch.sql).toContain("SELECT id,content_id,");
+  });
+
   it("returns canonical before/after ordering without writing, then applies the whole schedule once", async () => {
     const response = await post("/reviews", proposal);
     expect(response.status, await response.clone().text()).toBe(200);

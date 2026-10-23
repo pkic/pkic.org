@@ -268,7 +268,6 @@ describe("live session polls", () => {
   });
 
   it("refreshes a dynamic next-session ticker after the approved publication changes without another operator command", async () => {
-    const operator = await f.connect({ person: "operator" });
     const row = await env.DB.prepare(
       "SELECT snapshot_json FROM event_agenda_publications WHERE event_id=? AND revision=1",
     )
@@ -288,6 +287,7 @@ describe("live session polls", () => {
     await env.DB.prepare("UPDATE event_agenda_publications SET snapshot_json=? WHERE event_id=? AND revision=1")
       .bind(JSON.stringify(agenda), f.eventId)
       .run();
+    const operator = await f.connect({ person: "operator" });
     operator.send({
       type: "stage.ticker",
       ticker: {

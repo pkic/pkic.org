@@ -305,6 +305,20 @@ ON CONFLICT(key) DO UPDATE SET
 DELETE FROM form_fields WHERE form_id = (SELECT id FROM forms WHERE key = ${sqlString(form.key)});
 `);
 
+    if (!form.audience) throw new Error(`Form '${form.key}' requires an explicit placement audience`);
+    const eventScoped = (form.scopeType ?? "event") === "event";
+    statements.push(`
+INSERT INTO form_placements
+  (id, form_id, owner_group_id, context_type, context_ref, audience, active, opens_at, closes_at, created_at, updated_at)
+VALUES (
+  ${sqlString(randomUUID())}, (SELECT id FROM forms WHERE key = ${sqlString(form.key)}), NULL,
+  ${sqlString(eventScoped ? "event" : "installation")},
+  ${eventScoped ? `(SELECT id FROM events WHERE slug = ${sqlString(config.event.slug)})` : "NULL"},
+  ${sqlString(form.audience)}, ${(form.status ?? "active") === "active" ? 1 : 0}, NULL, NULL,
+  strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
+)
+ON CONFLICT DO UPDATE SET active = excluded.active, updated_at = excluded.updated_at;
+`);
     const fields = Array.isArray(form.fields) ? form.fields : [];
     for (const field of fields) {
       if (!field?.key || !field?.label || !field?.type) {

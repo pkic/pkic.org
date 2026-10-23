@@ -1,10 +1,8 @@
 import { AppError } from "../../errors";
 import {
   getActiveFormForEvent,
-  getActiveFormForResolution,
   type ActiveFormDefinition,
   type EventFormResolutionEvent,
-  type EventFormResolution,
   type FormPurpose,
 } from "./read";
 import { deriveEventAttendanceType, type DayAttendanceSelection } from "../event-days";
@@ -26,14 +24,8 @@ export interface ValidatedCustomAnswers {
   form: ActiveFormDefinition | null;
 }
 
-/**
- * Event-flow callers must either provide the canonical event source mode or
- * explicitly declare a narrow compatibility resolver. This prevents a new
- * portal path from silently inheriting the legacy installation fallback.
- */
-export type EventFormValidationTarget =
-  | { event: EventFormResolutionEvent; eventId?: never; resolution?: never }
-  | { event?: never; eventId: string; resolution: EventFormResolution };
+/** Event submissions always resolve their explicitly placed definition. */
+export type EventFormValidationTarget = { event: EventFormResolutionEvent };
 
 type EventFormValidationPayload = {
   purpose: FormPurpose;
@@ -95,10 +87,16 @@ export async function validateCustomAnswersForSubmission(
   db: DatabaseLike,
   payload: EventFormValidationPayload & EventFormValidationTarget,
 ): Promise<ValidatedCustomAnswers> {
-  const form = await (payload.event
-    ? getActiveFormForEvent(db, payload.event, payload.purpose)
-    : getActiveFormForResolution(db, payload.eventId, payload.purpose, payload.resolution));
+  const form = await getActiveFormForEvent(db, payload.event, payload.purpose);
 
+  return validateCustomAnswersForResolvedForm(form, payload);
+}
+
+/** Validate the exact definition already read in the caller's combined snapshot. */
+export function validateCustomAnswersForResolvedForm(
+  form: ActiveFormDefinition | null,
+  payload: Omit<EventFormValidationPayload, "purpose">,
+): ValidatedCustomAnswers {
   if (!form) {
     if (Object.keys(payload.customAnswers ?? {}).length > 0) {
       throw new AppError(400, "VALIDATION_ERROR", "Custom answers are not configured for this form", {

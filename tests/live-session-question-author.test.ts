@@ -300,6 +300,7 @@ describe("question author controls", () => {
     const closed = new Promise<number>((resolve) =>
       owner.socket.addEventListener("close", (event) => resolve(event.code)),
     );
+    await runDurableObjectAlarm(f.room());
     owner.send(edit(questionId));
     expect(await closed).toBe(4403);
     expect((await moderator.next("question.changed")).question.revision).toBe(0);

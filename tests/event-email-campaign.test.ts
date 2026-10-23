@@ -1,3 +1,4 @@
+import { profileD1Flow } from "./helpers/d1-flow-profile";
 import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./helpers/administrator";
 import { grantAdministrator } from "./helpers/administrator";
 import {
@@ -24,45 +25,17 @@ import { insertUser } from "./helpers/membership";
 import { createGroup } from "../functions/_lib/services/groups";
 import { createGroupManagedEvent } from "../functions/_lib/services/events/group-management";
 
-function countingDatabase(db: DatabaseLike, counts: { dayAttendance: number; dayWaitlist: number }): DatabaseLike {
-  function wrapStatement(statement: StatementLike, query: string): StatementLike {
-    const normalizedQuery = query.toLowerCase();
-    const queryType = normalizedQuery.includes("select rda.registration_id")
-      ? "dayAttendance"
-      : normalizedQuery.includes("select w.registration_id")
-        ? "dayWaitlist"
-        : null;
-
-    function countExecution(): void {
-      if (queryType) counts[queryType] += 1;
-    }
-
-    return {
-      bind(...values: unknown[]) {
-        return wrapStatement(statement.bind(...values), query);
-      },
-      async all<T>() {
-        countExecution();
-        return statement.all<T>();
-      },
-      async first<T>(columnName?: string) {
-        countExecution();
-        return statement.first<T>(columnName);
-      },
-      async run<T>() {
-        countExecution();
-        return statement.run<T>();
-      },
-    };
-  }
-
+function attendeeEnrichmentQueryCounts(profile: ReturnType<typeof profileD1Flow>) {
+  const queries = profile.summary().queries;
   return {
-    prepare(query: string) {
-      return wrapStatement(db.prepare(query), query);
-    },
-    batch(statements) {
-      return db.batch(statements);
-    },
+    dayAttendance: queries.reduce(
+      (count, query) => count + (query.sql.match(/select rda\.registration_id/gi)?.length ?? 0),
+      0,
+    ),
+    dayWaitlist: queries.reduce(
+      (count, query) => count + (query.sql.match(/select w\.registration_id/gi)?.length ?? 0),
+      0,
+    ),
   };
 }
 
@@ -293,17 +266,12 @@ describe("event email campaign recipients", () => {
     ]);
 
     const event = await getEventBySlug(env.DB, "pqc-2026");
-    const enrichmentQueryCounts = { dayAttendance: 0, dayWaitlist: 0 };
-    const recipients = await listCampaignRecipients(
-      countingDatabase(env.DB, enrichmentQueryCounts),
-      event,
-      "https://app.test",
-      {
-        audience: "attendees",
-        attendeeStatus: "registered",
-        dayWaitlistStatus: "all",
-      },
-    );
+    const profile = profileD1Flow(env.DB);
+    const recipients = await listCampaignRecipients(profile.db, event, "https://app.test", {
+      audience: "attendees",
+      attendeeStatus: "registered",
+      dayWaitlistStatus: "all",
+    });
 
     expect(recipients).toHaveLength(users.length);
     expect(recipients[0].templateData.dayWaitlist).toEqual([]);
@@ -319,8 +287,8 @@ describe("event email campaign recipients", () => {
       },
     ]);
     expect(enrichedRecipient?.templateData.dayWaitlist).toEqual([{ dayDate: "2026-12-02", status: "waiting" }]);
-    expect(enrichmentQueryCounts.dayAttendance).toBe(1);
-    expect(enrichmentQueryCounts.dayWaitlist).toBe(1);
+    expect(attendeeEnrichmentQueryCounts(profile).dayAttendance).toBe(1);
+    expect(attendeeEnrichmentQueryCounts(profile).dayWaitlist).toBe(1);
   });
 
   it("rejects an over-limit audience before loading per-registration enrichment", async () => {
@@ -346,17 +314,17 @@ describe("event email campaign recipients", () => {
     );
 
     const event = await getEventBySlug(env.DB, "pqc-2026");
-    const enrichmentQueryCounts = { dayAttendance: 0, dayWaitlist: 0 };
+    const profile = profileD1Flow(env.DB);
     await expect(
       listCampaignRecipients(
-        countingDatabase(env.DB, enrichmentQueryCounts),
+        profile.db,
         event,
         "https://app.test",
         { audience: "attendees", attendeeStatus: "registered" },
         { maxRecipients: 2 },
       ),
     ).rejects.toMatchObject({ status: 422, code: "CAMPAIGN_RECIPIENT_LIMIT_EXCEEDED" });
-    expect(enrichmentQueryCounts).toEqual({ dayAttendance: 0, dayWaitlist: 0 });
+    expect(attendeeEnrichmentQueryCounts(profile)).toEqual({ dayAttendance: 0, dayWaitlist: 0 });
   });
 
   it("accepts over 10,000 recipients before delivery and resumes bounded pages without duplicate sends", async () => {
@@ -443,14 +411,8 @@ describe("event email campaign recipients", () => {
       .bind(users[0].registrationId)
       .run();
 
-    let batchCalls = 0;
-    const batchDb: DatabaseLike = {
-      prepare: (query) => env.DB.prepare(query),
-      batch: (statements) => {
-        batchCalls += 1;
-        return env.DB.batch(statements);
-      },
-    };
+    const profile = profileD1Flow(env.DB);
+    const batchDb = profile.db;
     let backgroundCalls = 0;
     const sendResponse = await app.fetch(
       makeRequest({ ...body, previewToken: preview.previewToken }, "create"),
@@ -472,7 +434,7 @@ describe("event email campaign recipients", () => {
     expect(sendBody.queuedRecipients).toBe(users.length);
     expect(sendBody.queuedBatches).toBe(users.length);
     expect(sendBody.stagedRecipients).toBe(100);
-    expect(batchCalls).toBeLessThanOrEqual(16);
+    expect((await profile.report()).roundTrips).toBeLessThanOrEqual(18);
     expect(backgroundCalls).toBe(0);
     expect((await queryAll<{ count: number }>(env.DB, "SELECT COUNT(*) AS count FROM email_outbox"))[0]?.count).toBe(
       100,

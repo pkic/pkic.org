@@ -352,7 +352,11 @@ describe("admin event management endpoints", () => {
   });
 
   it("returns details and persists settings updates", async () => {
-    await setupAdmin();
+    const { baseEventId } = await setupAdmin();
+    await env.DB.prepare(`INSERT INTO forms(id,key,scope_type,scope_ref,purpose,status,title,created_at,updated_at)
+      VALUES(?,'pqc-reg-form','event',?,'event_registration','active','Registration questions',?,?)`)
+      .bind(crypto.randomUUID(), baseEventId, new Date().toISOString(), new Date().toISOString())
+      .run();
 
     const detailResponse = await callAdmin("/api/v1/events/pqc-2026");
     expect(detailResponse.status).toBe(200);

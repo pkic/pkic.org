@@ -2,21 +2,22 @@ import { eventFormPlacementGetRouteSchema } from "../../../../../../assets/share
 import { json } from "../../../../../_lib/http";
 import { logError } from "../../../../../_lib/logging";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
-import { getEventBySlug } from "../../../../../_lib/services/events";
-import { getEventRegistrationConfiguration } from "../../../../../_lib/services/events/registration-configuration";
+import { requestDb } from "../../../../../_lib/db/context";
+import { getEventRegistrationConfigurationBySlug } from "../../../../../_lib/services/events/registration-configuration";
 
 function isMissingTableError(error: unknown): boolean {
   return error instanceof Error && error.message.toLowerCase().includes("no such table");
 }
 
 export const EventFormPlacementGet = openApiRoute(eventFormPlacementGetRouteSchema, async (c: any, data) => {
-  const event = await getEventBySlug(c.env.DB, data.params.eventSlug);
   try {
-    return json(await getEventRegistrationConfiguration(c.env.DB, event, data.params.purpose));
+    return json(
+      await getEventRegistrationConfigurationBySlug(requestDb(c), data.params.eventSlug, data.params.purpose),
+    );
   } catch (error) {
     if (!isMissingTableError(error)) throw error;
     logError("EVENT_FORM_PLACEMENT_SCHEMA_MISSING", {
-      eventSlug: event.slug,
+      eventSlug: data.params.eventSlug,
       purpose: data.params.purpose,
     });
     return json(

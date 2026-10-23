@@ -5,11 +5,7 @@ import {
   agendaSnapshotSchema,
   type AgendaSnapshot,
 } from "../../../assets/shared/schemas/event-agenda";
-import {
-  agendaScheduleApplySchema,
-  agendaScheduleProposalSchema,
-  agendaScheduleReviewSchema,
-} from "../../../assets/shared/schemas/event-agenda-schedule";
+import { agendaScheduleApplySchema } from "../../../assets/shared/schemas/event-agenda-schedule";
 import { formatTimeRangeInZone } from "../../../assets/shared/format-date";
 import { instantToDateTimeLocal } from "../../../assets/shared/timezone";
 
@@ -38,7 +34,7 @@ export async function expectUnclippedAgendaLink(link: Locator) {
   expect(geometry.hit).toBe(true);
 }
 
-/** Observe the actual UI command through its canonical review and guarded apply receipts. */
+/** Observe the direct revision-bound command and compare its receipt with a fresh canonical read. */
 export async function commitScheduleCommand(
   page: Page,
   slug: string,
@@ -46,18 +42,6 @@ export async function commitScheduleCommand(
   perform: () => Promise<void>,
 ) {
   const endpoint = `/api/v1/events/${slug}/agenda/schedule`;
-  const reviewing = page
-    .waitForResponse(
-      (response) =>
-        response.request().method() === "POST" && new URL(response.url()).pathname === `${endpoint}/reviews`,
-    )
-    .then(async (response) => {
-      expect(response.status()).toBe(200);
-      return {
-        request: agendaScheduleProposalSchema.parse(response.request().postDataJSON()),
-        review: agendaScheduleReviewSchema.parse(await response.json()),
-      };
-    });
   const applying = page
     .waitForResponse(
       (response) => response.request().method() === "POST" && new URL(response.url()).pathname === endpoint,
@@ -69,13 +53,18 @@ export async function commitScheduleCommand(
         agenda: agendaSnapshotSchema.parse(await response.json()),
       };
     });
-  const [reviewed, applied] = await Promise.all([reviewing, applying, perform()]);
-  expect(reviewed.request.expectedRevision).toBe(before.revision);
-  expect(reviewed.review.expectedRevision).toBe(before.revision);
-  expect(applied.command).toEqual({ ...reviewed.request, reviewHash: reviewed.review.reviewHash });
-  for (const affected of reviewed.review.affected) {
-    expect(affected.before).toEqual(before.occurrences.find((row) => row.id === affected.before.id));
-    expect(affected.after).toEqual(applied.agenda.occurrences.find((row) => row.id === affected.after.id));
+  const [applied] = await Promise.all([applying, perform()]);
+  expect(applied.command.expectedRevision).toBe(before.revision);
+  expect(applied.command.reviewHash).toBeUndefined();
+  for (const change of applied.command.changes) {
+    expect(before.occurrences.some((row) => row.id === change.id)).toBe(true);
+    expect(applied.agenda.occurrences.find((row) => row.id === change.id)).toMatchObject({
+      id: change.id,
+      roomId: change.roomId,
+      additionalRoomIds: change.additionalRoomIds,
+      startAt: change.startAt,
+      endAt: change.endAt,
+    });
   }
   expect(applied.agenda.revision).toBe(before.revision + 1);
   expect(agendaSnapshotSchema.parse(await (await page.request.get(`/api/v1/events/${slug}/agenda`)).json())).toEqual(
@@ -228,8 +217,18 @@ export async function openSessionSources(page: Page) {
     viewport: element.clientWidth,
     canvas: element.parentElement!.clientWidth,
   }));
-  const control = page.getByRole("button", { name: /^(Show|Hide) session sources$/ });
-  if ((await control.getAttribute("aria-expanded")) !== "true") await control.click();
+  const control = page.getByRole("button", { name: /^(Show|Hide) session sources$/, includeHidden: true });
+  const trigger = (await control.isVisible())
+    ? control
+    : page.getByRole("button", { name: "Agenda filters and actions", exact: true });
+  async function showSources() {
+    if (await control.isVisible()) await control.click();
+    else {
+      await trigger.click();
+      await page.getByRole("menuitemradio", { name: "Show session sources", exact: true }).click();
+    }
+  }
+  if ((await control.getAttribute("aria-expanded")) !== "true") await showSources();
   const sidebar = page.getByRole("region", { name: "Session sources", exact: true });
   await expect(sidebar).toBeVisible();
   const bounds = await canvas.evaluate((element) => {
@@ -253,8 +252,8 @@ export async function openSessionSources(page: Page) {
   await sidebar.getByRole("button", { name: "Close session sources", exact: true }).click();
   await expect(sidebar).toBeHidden();
   await expect.poll(() => day.evaluate((element) => element.clientWidth)).toBe(before.viewport);
-  await expect(control).toBeFocused();
-  await control.press("Enter");
+  await expect(trigger).toBeFocused();
+  await showSources();
   await expect(sidebar).toBeVisible();
   return sidebar;
 }
@@ -345,7 +344,7 @@ export async function movePlacedSession(
     await sources.getByRole("button", { name: "Close session sources", exact: true }).click();
   const card = page.locator(`article[data-agenda-occurrence="${original.id}"]`).first();
   async function preparePointer() {
-    await card.scrollIntoViewIfNeeded();
+    await card.evaluate((element) => element.scrollIntoView({ block: "center", behavior: "instant" }));
     const origin = await card.boundingBox();
     if (!origin) throw new Error("Scheduled card has no pointer geometry");
     const target = await page.locator(`tr[data-agenda-start="${startAt}"]`).evaluate(
@@ -376,11 +375,6 @@ export async function movePlacedSession(
     await activate(dialog.getByRole("button", { name: "Cancel", exact: true }), mode);
   }
   expect(await readPlacementAgenda(page, endpoint)).toEqual(before);
-  const reviewing = page.waitForResponse(
-    (response) =>
-      response.request().method() === "POST" && new URL(response.url()).pathname === `${endpoint}/schedule/reviews`,
-    { timeout: 20_000 },
-  );
   const applying = page.waitForResponse(
     (response) => response.request().method() === "POST" && new URL(response.url()).pathname === `${endpoint}/schedule`,
     { timeout: 20_000 },
@@ -396,18 +390,12 @@ export async function movePlacedSession(
     await activate(dialog.getByRole("button", { name: "Move session", exact: true }), mode);
     await expect(dialog).toBeHidden();
   }
-  const reviewed = await reviewing,
-    applied = await applying;
-  expect(reviewed.status()).toBe(200);
+  const applied = await applying;
   expect(applied.status()).toBe(200);
-  const request = agendaScheduleProposalSchema.parse(reviewed.request().postDataJSON());
-  const review = agendaScheduleReviewSchema.parse(await reviewed.json());
   const command = agendaScheduleApplySchema.parse(applied.request().postDataJSON());
-  expect(request.expectedRevision).toBe(before.revision);
-  expect(request.changes).toEqual([{ id: original.id, startAt, endAt, roomId: room.id, additionalRoomIds: [] }]);
-  expect(review.affected[0]!.before).toEqual(original);
-  expect(command.changes).toEqual(request.changes);
-  expect(command.reviewHash).toBe(review.reviewHash);
+  expect(command.expectedRevision).toBe(before.revision);
+  expect(command.changes).toEqual([{ id: original.id, startAt, endAt, roomId: room.id, additionalRoomIds: [] }]);
+  expect(command.reviewHash).toBeUndefined();
   const after = await readPlacementAgenda(page, endpoint);
   expect(after.revision).toBe(before.revision + 1);
   expect(after.occurrences).toHaveLength(before.occurrences.length);

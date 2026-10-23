@@ -8,9 +8,9 @@ import {
 import { utcInstantSchema } from "../../../../assets/shared/schemas/api-common";
 import { databaseIdSchema } from "../../../../assets/shared/schemas/identifiers";
 import { offlineAdmissionRightSchema } from "../../../../assets/shared/schemas/event-offline-rights";
-import type { DatabaseLike } from "../../types";
+import type { DatabaseLike, D1StatementResult, StatementLike } from "../../types";
 import type { AuthorizationEvidence } from "../../db/authorization-guard";
-import { first } from "../../db/queries";
+import { batchFirst } from "../../db/pagination";
 import { AppError } from "../../errors";
 import { z } from "zod";
 
@@ -39,19 +39,14 @@ export interface ResolvedAttendanceCapture {
   contextEvidence: AuthorizationEvidence;
   admissionDayDate: string | null;
 }
-async function publishedContext(db: DatabaseLike, eventId: string, revision: number) {
-  const publication = await first<{ time_zone: string }>(
-    db,
-    "SELECT json_extract(snapshot_json,'$.timeZone') AS time_zone FROM event_agenda_publications WHERE event_id=? AND revision=?",
-    [eventId, revision],
-  );
-  if (!publication)
+function requirePublication(publication: { time_zone: string | null } | null): { time_zone: string } {
+  if (!publication || publication.time_zone === null)
     throw new AppError(
       409,
       "ATTENDANCE_CAPTURE_CONTEXT_UNAVAILABLE",
       "Refresh the event context before scanning again.",
     );
-  return publication;
+  return { time_zone: publication.time_zone };
 }
 function capture(
   observedAt: string,
@@ -69,12 +64,14 @@ function capture(
     );
   }
 }
-async function readCurrentContext(db: DatabaseLike, eventId: string): Promise<CurrentContext> {
-  const current = await first<CurrentContext>(
-    db,
-    "SELECT capture_event.timezone AS event_time_zone,capture_state.published_revision AS publication_revision,json_extract(capture_publication.snapshot_json,'$.timeZone') AS publication_time_zone FROM events capture_event LEFT JOIN event_agenda_state capture_state ON capture_state.event_id=capture_event.id LEFT JOIN event_agenda_publications capture_publication ON capture_publication.event_id=capture_event.id AND capture_publication.revision=capture_state.published_revision WHERE capture_event.id=?",
-    [eventId],
-  );
+function prepareCurrentContext(db: DatabaseLike, eventId: string) {
+  return db
+    .prepare(
+      "SELECT capture_event.timezone AS event_time_zone,capture_state.published_revision AS publication_revision,json_extract(capture_publication.snapshot_json,'$.timeZone') AS publication_time_zone FROM events capture_event LEFT JOIN event_agenda_state capture_state ON capture_state.event_id=capture_event.id LEFT JOIN event_agenda_publications capture_publication ON capture_publication.event_id=capture_event.id AND capture_publication.revision=capture_state.published_revision WHERE capture_event.id=?",
+    )
+    .bind(eventId);
+}
+function requireCurrentContext(current: CurrentContext | null): CurrentContext {
   if (!current) throw new AppError(404, "EVENT_NOT_FOUND", "Event unavailable.");
   return current;
 }
@@ -84,20 +81,74 @@ function currentContextEvidence(eventId: string, current: CurrentContext): Autho
     bindings: [eventId, current.publication_revision, current.event_time_zone, current.publication_time_zone],
   };
 }
-/** Current policy fence for ordinary admission, independent of a historical capture revision. */
-export async function currentOperationalContextEvidence(
+/** Prepare current policy and historical capture together, without inferring historical data from current settings. */
+export function prepareAttendanceCapture(
   db: DatabaseLike,
   eventId: string,
-): Promise<AuthorizationEvidence> {
-  return currentContextEvidence(eventId, await readCurrentContext(db, eventId));
+  raw: ResolveCaptureInput,
+  includeOperational = false,
+) {
+  const input = resolveAttendanceCaptureInputSchema.parse(raw);
+  const statements: StatementLike[] = [];
+  const needsCurrent =
+    includeOperational ||
+    (!input.nativeEventContext && !input.offlineRight && input.capturePublicationRevision === undefined);
+  const currentIndex = needsCurrent ? statements.push(prepareCurrentContext(db, eventId)) - 1 : -1;
+  let historyIndex = -1;
+  if (!input.nativeEventContext && input.offlineRight) {
+    historyIndex =
+      statements.push(
+        db
+          .prepare(
+            "SELECT grant_row.published_revision,grant_row.day_date,json_extract(publication.snapshot_json,'$.timeZone') AS time_zone FROM event_offline_admission_grants grant_row LEFT JOIN event_agenda_publications publication ON publication.event_id=grant_row.event_id AND publication.revision=grant_row.published_revision WHERE grant_row.id=? AND grant_row.event_id=? AND grant_row.operator_user_id=? AND grant_row.device_id=? AND grant_row.occurrence_id IS ?",
+          )
+          .bind(input.offlineRight.grantId, eventId, input.operatorUserId, input.deviceId, input.occurrenceId),
+      ) - 1;
+  } else if (!input.nativeEventContext && typeof input.capturePublicationRevision === "number") {
+    historyIndex =
+      statements.push(
+        db
+          .prepare(
+            "SELECT json_extract(snapshot_json,'$.timeZone') AS time_zone FROM event_agenda_publications WHERE event_id=? AND revision=?",
+          )
+          .bind(eventId, input.capturePublicationRevision),
+      ) - 1;
+  }
+  return {
+    statements,
+    decode(results: D1StatementResult[]) {
+      const current =
+        currentIndex < 0 ? null : requireCurrentContext(batchFirst<CurrentContext>(results[currentIndex]));
+      const resolved = decodeAttendanceCapture(
+        input,
+        eventId,
+        current,
+        historyIndex < 0 ? null : results[historyIndex],
+      );
+      return {
+        resolved,
+        operational: includeOperational ? currentContextEvidence(eventId, requireCurrentContext(current)) : null,
+      };
+    },
+  };
 }
+
 /** Resolve a frozen original context. The caller owns recognized-failure persistence and atomic command behavior. */
 export async function resolveAttendanceCapture(
   db: DatabaseLike,
   eventId: string,
   raw: ResolveCaptureInput,
 ): Promise<ResolvedAttendanceCapture> {
-  const input = resolveAttendanceCaptureInputSchema.parse(raw);
+  const read = prepareAttendanceCapture(db, eventId, raw);
+  return read.decode(read.statements.length ? await db.batch(read.statements) : []).resolved;
+}
+
+function decodeAttendanceCapture(
+  input: ResolveCaptureInput,
+  eventId: string,
+  currentRead: CurrentContext | null,
+  history: D1StatementResult | null,
+): ResolvedAttendanceCapture {
   if (input.nativeEventContext) {
     const native = input.nativeEventContext;
     // Preserve the submitted calendar provenance even when its live policy is stale.
@@ -112,11 +163,9 @@ export async function resolveAttendanceCapture(
     };
   }
   if (input.offlineRight) {
-    const grant = await first<{ published_revision: number | null; day_date: string }>(
-      db,
-      "SELECT published_revision,day_date FROM event_offline_admission_grants WHERE id=? AND event_id=? AND operator_user_id=? AND device_id=? AND occurrence_id IS ?",
-      [input.offlineRight.grantId, eventId, input.operatorUserId, input.deviceId, input.occurrenceId],
-    );
+    const grant = history
+      ? batchFirst<{ published_revision: number | null; day_date: string; time_zone: string | null }>(history)
+      : null;
     if (!grant)
       throw new AppError(409, "ATTENDANCE_CAPTURE_CONTEXT_UNAVAILABLE", "The prepared grant context is unavailable.");
     if (input.capturePublicationRevision !== undefined && input.capturePublicationRevision !== grant.published_revision)
@@ -134,7 +183,7 @@ export async function resolveAttendanceCapture(
         },
         admissionDayDate: grant.day_date,
       };
-    const publication = await publishedContext(db, eventId, grant.published_revision);
+    const publication = requirePublication(grant);
     return {
       context: capture(input.observedAt, publication.time_zone, grant.published_revision, "offline_grant"),
       contextEvidence: {
@@ -154,7 +203,7 @@ export async function resolveAttendanceCapture(
   }
   if (typeof input.capturePublicationRevision === "number") {
     const revision = input.capturePublicationRevision;
-    const publication = await publishedContext(db, eventId, revision);
+    const publication = requirePublication(history ? batchFirst<{ time_zone: string | null }>(history) : null);
     return {
       context: capture(input.observedAt, publication.time_zone, revision, "published_manifest"),
       contextEvidence: {
@@ -173,7 +222,7 @@ export async function resolveAttendanceCapture(
       },
       admissionDayDate: null,
     };
-  const current = await readCurrentContext(db, eventId);
+  const current = requireCurrentContext(currentRead);
   if (current.publication_revision !== null && current.publication_time_zone === null)
     throw new AppError(
       409,

@@ -7,10 +7,11 @@ import { first } from "../db/queries";
 import { constantTimeEqual } from "../utils/crypto";
 import { AUTH_SCOPES } from "./scopes";
 import { computeGrantsForUser } from "./permissions";
-import type { AuthAdmin, DatabaseLike, Env, UserBackedAuthAdmin } from "../types";
+import type { AuthAdmin, DatabaseLike, Env, UserBackedAuthAdmin, StatementLike, D1StatementResult } from "../types";
 import { createServiceAuthAdmin, createUserBackedAuthAdmin, requireUserBackedAuthAdmin } from "./admin-identity";
 import { assertSessionActive, getBearerToken } from "./session-engine";
-import { getUserSessionCookieToken, resolveUserSessionFromRequest, USER_SESSION_TOKEN_HEADER } from "./user-session";
+import { getUserSessionCookieToken, USER_SESSION_TOKEN_HEADER } from "./user-session";
+import { prepareUserSessionRequest } from "./user-session-request";
 import { verifyMcpSessionToken } from "./mcp-session";
 import { STAFF_ACCESS_CONDITION } from "./identity-capacities";
 
@@ -54,18 +55,9 @@ export async function requireAdminFromRequest(
     return cached;
   }
 
-  const explicitUserTransport = Boolean(
-    request.headers.get(USER_SESSION_TOKEN_HEADER) || getUserSessionCookieToken(request),
-  );
-  const token = getBearerToken(request);
-  if (!token && !explicitUserTransport) {
-    throw new AppError(401, "AUTH_REQUIRED", "Missing bearer token");
-  }
-
-  // API key auth is an explicit service identity. It never enters the human
-  // session verifier and therefore cannot be confused with a user JWT.
-  // Use constant-time comparison to avoid leaking the configured key via timing.
-  if (!explicitUserTransport && token && env?.ADMIN_API_KEY && (await constantTimeEqual(token, env.ADMIN_API_KEY))) {
+  const credential = await readAdminCredential(request, env);
+  // API keys remain explicit service identities and never enter the human verifier.
+  if (credential.kind === "api-key") {
     const admin = createServiceAuthAdmin({
       id: "api-key",
       email: "api-key",
@@ -76,12 +68,12 @@ export async function requireAdminFromRequest(
     return admin;
   }
 
-  if (!explicitUserTransport && request.headers.get(MACHINE_AUTH_HEADER) === "mcp") {
+  if (credential.kind === "mcp") {
     const internalSecret = env?.INTERNAL_SIGNING_SECRET;
     if (!internalSecret) {
       throw new AppError(500, "INTERNAL_SECRET_MISSING", "INTERNAL_SIGNING_SECRET is not configured");
     }
-    const mcpVerified = await verifyMcpSessionToken(internalSecret, token!);
+    const mcpVerified = await verifyMcpSessionToken(internalSecret, credential.token);
     if (!mcpVerified.ok) {
       throw new AppError(
         401,
@@ -126,17 +118,64 @@ export async function requireAdminFromRequest(
     return admin;
   }
 
-  // Every remaining credential is the one canonical human session. Capacity
-  // and grants are re-resolved from live D1; no JWT authority claims are trusted.
-  const userSession = await resolveUserSessionFromRequest(db, request, {
-    INTERNAL_SIGNING_SECRET: env?.INTERNAL_SIGNING_SECRET,
-  });
-  if (!userSession.staff) {
-    throw new AppError(403, "PERMISSION_REQUIRED", "Staff capacity required");
+  const read = await prepareHumanAdminRequest(db, request, env);
+  return read.decode(await db.batch(read.statements));
+}
+
+type AdminEnvironment = Pick<Env, "ADMIN_API_KEY" | "INTERNAL_SIGNING_SECRET">;
+interface PreparedAdminRead {
+  statements: StatementLike[];
+  decode(results: D1StatementResult[]): Promise<UserBackedAuthAdmin>;
+}
+
+/** Canonical transport selection; an explicit human credential takes precedence over machine headers. */
+async function readAdminCredential(
+  request: Request,
+  env?: AdminEnvironment,
+): Promise<{ kind: "api-key" | "user" } | { kind: "mcp"; token: string }> {
+  const explicitUserTransport = Boolean(
+    request.headers.get(USER_SESSION_TOKEN_HEADER) || getUserSessionCookieToken(request),
+  );
+  const token = getBearerToken(request);
+  if (!token && !explicitUserTransport) throw new AppError(401, "AUTH_REQUIRED", "Missing bearer token");
+  if (!explicitUserTransport && token && env?.ADMIN_API_KEY && (await constantTimeEqual(token, env.ADMIN_API_KEY)))
+    return { kind: "api-key" };
+  if (!explicitUserTransport && request.headers.get(MACHINE_AUTH_HEADER) === "mcp")
+    return { kind: "mcp", token: token! };
+  return { kind: "user" };
+}
+
+async function prepareHumanAdminRequest(
+  db: DatabaseLike,
+  request: Request,
+  env?: AdminEnvironment,
+): Promise<PreparedAdminRead> {
+  const read = await prepareUserSessionRequest(db, request, { INTERNAL_SIGNING_SECRET: env?.INTERNAL_SIGNING_SECRET });
+  return {
+    statements: read.statements,
+    async decode(results) {
+      const session = await read.decode(results);
+      if (!session.staff) throw new AppError(403, "PERMISSION_REQUIRED", "Staff capacity required");
+      cacheAdminForRequest(request, session.staff, getUserSessionCookieToken(request) ? "cookie" : "bearer");
+      return session.staff;
+    },
+  };
+}
+
+/** Compose human authentication with resource reads. Delegated OAuth/MCP keeps its canonical resolver. */
+export async function prepareUserBackedAdminFromRequest(
+  db: DatabaseLike,
+  request: Request,
+  env?: AdminEnvironment,
+): Promise<PreparedAdminRead | null> {
+  const cached = getCachedAdminForRequest(request);
+  if (cached) {
+    const actor = requireUserBackedAuthAdmin(cached);
+    return { statements: [], decode: async () => actor };
   }
-  const transport = getUserSessionCookieToken(request) ? "cookie" : "bearer";
-  cacheAdminForRequest(request, userSession.staff, transport);
-  return userSession.staff;
+  const credential = await readAdminCredential(request, env);
+  if (credential.kind !== "user") return null;
+  return prepareHumanAdminRequest(db, request, env);
 }
 
 /** Require an attributable database user for writes whose audit/history rows reference users(id). */

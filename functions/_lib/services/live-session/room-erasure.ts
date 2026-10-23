@@ -1,3 +1,4 @@
+import { currentLiveRoomCommandRead } from "./room-command-read-scope";
 import { all, run } from "../../db/queries";
 import type { DatabaseLike, Env, StatementLike } from "../../types";
 import { nowIso } from "../../utils/time";
@@ -15,14 +16,17 @@ import { liveRoomName } from "./room-admission";
 
 const ANONYMIZED_AUTHOR = "SELECT id FROM users WHERE active=0 AND pii_redacted_at IS NOT NULL";
 
+export function prepareAnonymizedLiveParticipantIds(db: DatabaseLike, userIds: readonly string[]) {
+  return db.prepare(`${ANONYMIZED_AUTHOR} AND id IN(SELECT value FROM json_each(?))`).bind(JSON.stringify(userIds));
+}
+
 /** The same canonical anonymization condition also protects room-local participant chat. */
 export async function anonymizedLiveParticipantIds(db: DatabaseLike, userIds: readonly string[]): Promise<string[]> {
   if (!userIds.length) return [];
-  return (
-    await all<{ id: string }>(db, `${ANONYMIZED_AUTHOR} AND id IN(SELECT value FROM json_each(?))`, [
-      JSON.stringify(userIds),
-    ])
-  ).map((row) => row.id);
+  const command = currentLiveRoomCommandRead();
+  if (command && userIds.every((id) => command.erasureCandidates.has(id)))
+    return userIds.filter((id) => command.erased.has(id));
+  return (await prepareAnonymizedLiveParticipantIds(db, userIds).all<{ id: string }>()).results.map((row) => row.id);
 }
 
 /** An erasure upsert re-arms a finished request: new words from the person reached the room after it ran. */

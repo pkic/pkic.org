@@ -19,7 +19,8 @@ export function creditedIdentityIdSql(occurrenceIdSql: string, userIdSql: string
       (SELECT ${proposalSpeakerIdentityIdSql("credited_speaker")}
       FROM session_proposals credited_proposal
       JOIN proposal_speakers credited_speaker ON credited_speaker.proposal_id=credited_proposal.id
-      WHERE credited_proposal.event_id=credited_occurrence.event_id
+      WHERE credited_proposal.id=substr(credited_occurrence.source_key,10)
+        AND credited_proposal.event_id=credited_occurrence.event_id
         AND credited_occurrence.source_key='proposal:'||credited_proposal.id
         AND credited_proposal.deleted_at IS NULL AND credited_proposal.status='accepted'
         AND credited_speaker.user_id=${userIdSql} AND credited_speaker.status<>'declined' LIMIT 1),

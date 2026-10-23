@@ -1,3 +1,4 @@
+import { LIVE_INTERACTION_BROADCAST_MILLISECONDS } from "./live-session-policy";
 /**
  * Product policy for a session's live chat: the reaction set, the report
  * reasons, the per-person limits, the history window and who may do what to
@@ -53,7 +54,7 @@ export const LIVE_CHAT_POLICY = {
   /** Author cards a person may open; each resolves only someone who wrote here. */
   authorLookupsPerPerson: { limit: 20, windowSeconds: 10 },
   /** Reaction counts are gathered, then broadcast together at most this often. */
-  reactionBroadcastMilliseconds: 1000,
+  reactionBroadcastMilliseconds: LIVE_INTERACTION_BROADCAST_MILLISECONDS,
   /**
    * A message reported by this many different people is held: attendees stop
    * seeing it until a moderator keeps or hides it. With thousands of people

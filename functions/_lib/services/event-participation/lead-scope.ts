@@ -1,5 +1,5 @@
 import type { DatabaseLike } from "../../types";
-import { prepareAuthorizationGuard, isAuthorizationGuardFailure } from "../../db/authorization-guard";
+import { guardAuthorizedDatabase } from "../../db/authorization-guard";
 import { AppError } from "../../errors";
 /** Exact sponsor scopes never inherit global or event administrative access. */
 export function sponsorLeadPermissionSql(
@@ -23,20 +23,12 @@ export function guardSponsorCaptureDatabase(
   operatorUserId: string,
   sponsorId: string,
 ): DatabaseLike {
-  return {
-    prepare: (sql) => sourceDb.prepare(sql),
-    batch: async (statements) => {
-      const guard = prepareAuthorizationGuard(sourceDb, {
-        sql: `SELECT 1 WHERE (${sponsorLeadPermissionSql("agenda:leads_capture")})`,
-        bindings: [operatorUserId, sponsorId, operatorUserId, sponsorId],
-      });
-      try {
-        return (await sourceDb.batch([guard, ...statements])).slice(1);
-      } catch (error) {
-        if (isAuthorizationGuardFailure(error))
-          throw new AppError(403, "LEAD_SCOPE_REQUIRED", "An active sponsor-specific scanning grant is required.");
-        throw error;
-      }
+  return guardAuthorizedDatabase(
+    sourceDb,
+    {
+      sql: `SELECT 1 WHERE (${sponsorLeadPermissionSql("agenda:leads_capture")})`,
+      bindings: [operatorUserId, sponsorId, operatorUserId, sponsorId],
     },
-  };
+    () => new AppError(403, "LEAD_SCOPE_REQUIRED", "An active sponsor-specific scanning grant is required."),
+  );
 }

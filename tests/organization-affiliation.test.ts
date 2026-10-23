@@ -10,7 +10,7 @@ import { nowIso } from "../functions/_lib/utils/time";
 import { callApi } from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
 import { deliveredEmailPayload, queryAll } from "./helpers/context";
-import { mutateBeforeNextBatch } from "./helpers/database-races";
+import { mutateBeforeNextBatch, mutateBeforeMatchingQuery } from "./helpers/database-races";
 import { insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 import {
@@ -558,8 +558,10 @@ describe("canonical organization affiliations", () => {
       );
       const beforeAudits = await queryAll(env.DB, "SELECT id FROM audit_log ORDER BY id");
       const beforeOutbox = await queryAll(env.DB, "SELECT id FROM email_outbox ORDER BY id");
-      const racedDb = mutateBeforeNextBatch(env.DB, () =>
-        env.DB.prepare("UPDATE sessions SET revoked_at=? WHERE id=?").bind(nowIso(), staffSession).run(),
+      const racedDb = mutateBeforeMatchingQuery(
+        env.DB,
+        (sql) => /^\s*(?:INSERT|UPDATE|DELETE)/u.test(sql),
+        () => env.DB.prepare("UPDATE sessions SET revoked_at=? WHERE id=?").bind(nowIso(), staffSession).run(),
       );
       const path = `/api/v1/organizations/${organizationId}/identities${identity ? `/${identity.identityId}` : ""}`;
       const body =

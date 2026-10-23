@@ -165,7 +165,7 @@ describe("event frontend routes and hydration contracts", () => {
     expect(payload.requiredTerms[0]).toHaveProperty("termKey");
   });
 
-  it("honors an explicit form link over the current active form", async () => {
+  it("uses the explicit event placement instead of settings links or the newest definition", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const registrationLinkedKey = "reg-linked";
     const registrationNewestKey = "reg-newest";
@@ -200,7 +200,21 @@ describe("event frontend routes and hydration contracts", () => {
         `UPDATE events
          SET settings_json = json_set(json_set(settings_json, '$.forms.event_registration', ?), '$.forms.proposal_submission', ?)
          WHERE id = ?`,
-      ).bind(registrationLinkedKey, proposalLinkedKey, eventId),
+      ).bind(registrationNewestKey, "unplaced-proposal", eventId),
+      ...[
+        [registrationLinkedKey, "attendee"],
+        [proposalLinkedKey, "speaker"],
+      ].map(([key, audience]) =>
+        env.DB.prepare(`INSERT INTO form_placements(id,form_id,context_type,context_ref,audience,active,created_at,updated_at)
+          VALUES(?,(SELECT id FROM forms WHERE key=?),'event',?,?,1,?,?)`).bind(
+          crypto.randomUUID(),
+          key,
+          eventId,
+          audience,
+          new Date().toISOString(),
+          new Date().toISOString(),
+        ),
+      ),
     ]);
 
     const registrationResponse = await app.fetch(
@@ -222,7 +236,7 @@ describe("event frontend routes and hydration contracts", () => {
     expect(proposalPayload.form?.key).toBe(proposalLinkedKey);
   });
 
-  it("treats an explicit null form link as no form", async () => {
+  it("does not infer a form from an unplaced event definition", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
 
     await env.DB.batch([

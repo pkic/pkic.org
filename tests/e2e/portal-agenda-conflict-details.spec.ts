@@ -19,7 +19,7 @@ import { formatTimeRangeInZone } from "../../assets/shared/format-date";
 async function capture(page: Page, info: TestInfo, name: string) {
   for (const [label, width, height] of [
     ["desktop", 1280, 900],
-    ["phone", 390, 844],
+    ["phone", 375, 844],
   ] as const) {
     await page.setViewportSize({ width, height });
     await page.evaluate(() => window.scrollTo(0, 0));

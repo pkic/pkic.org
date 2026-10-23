@@ -35,18 +35,27 @@ export async function listConfirmedInPersonEventDayIdsForRegistration(
   return rows.map((row) => row.event_day_id);
 }
 
-export async function listDayWaitlistForRegistration(
-  db: DatabaseLike,
-  registrationId: string,
-): Promise<Array<{ dayDate: string; status: string; priorityLane: DayWaitlistLane; offerExpiresAt: string | null }>> {
-  return all<{ dayDate: string; status: string; priorityLane: DayWaitlistLane; offerExpiresAt: string | null }>(
-    db,
-    `SELECT ed.day_date AS dayDate, w.status AS status,
+export interface RegistrationDayWaitlistRow {
+  dayDate: string;
+  status: string;
+  priorityLane: DayWaitlistLane;
+  offerExpiresAt: string | null;
+}
+
+export function prepareRegistrationDayWaitlist(db: DatabaseLike, registrationId: string) {
+  return db
+    .prepare(`SELECT ed.day_date AS dayDate, w.status AS status,
             w.priority_lane AS priorityLane, w.offer_expires_at AS offerExpiresAt
      FROM event_day_waitlist_entries w
      JOIN event_days ed ON ed.id = w.event_day_id
      WHERE w.registration_id = ? AND w.status IN ('waiting', 'offered', 'accepted')
-     ORDER BY ed.sort_order ASC, ed.day_date ASC`,
-    [registrationId],
-  );
+     ORDER BY ed.sort_order ASC, ed.day_date ASC`)
+    .bind(registrationId);
+}
+
+export async function listDayWaitlistForRegistration(
+  db: DatabaseLike,
+  registrationId: string,
+): Promise<RegistrationDayWaitlistRow[]> {
+  return (await prepareRegistrationDayWaitlist(db, registrationId).all<RegistrationDayWaitlistRow>()).results;
 }

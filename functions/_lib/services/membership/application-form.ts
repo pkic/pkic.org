@@ -15,15 +15,15 @@ import {
   type MemberApplicationFormResponse,
 } from "../../../../assets/shared/schemas/member-applications";
 import { membershipWorkflowDefinitionSchema } from "../../../../assets/shared/schemas/membership-workflows";
-import { all } from "../../db/queries";
-import { listMembershipCategories } from "./categories";
-import { eligibleApplicationWorkingGroupIds } from "./application-groups";
+import { batchRows } from "../../db/pagination";
+import { prepareMembershipCategoriesRead } from "./categories";
+import { prepareApplicationWorkingGroups } from "./application-groups";
 import { preparePermissionsAuthorizationGuard } from "../../auth/permissions";
 import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import { AppError } from "../../errors";
 import type { DatabaseLike, UserBackedAuthAdmin } from "../../types";
 import { formChangedError, isFormMutationConflict } from "../forms/mutation-guard";
-import { getGlobalFormByKey, getManagedFormWithFields, mapManagedFormFields } from "../forms/read";
+import { prepareGlobalFormDefinition, getManagedFormWithFields, mapManagedFormFields } from "../forms/read";
 import { updateManagedForm } from "../forms/management";
 
 export function rejectLegacyMembershipApplicationFormRoute(formKey: string): void {
@@ -156,20 +156,9 @@ interface WorkflowDefinitionRow {
   definition_json: string;
 }
 
-async function applicationFeesByWorkflow(
-  db: DatabaseLike,
-  workflowVersionIds: readonly string[],
-): Promise<Map<string, MemberApplicationFormResponse["categories"][number]["fee"]>> {
-  const ids = [...new Set(workflowVersionIds)];
-  if (ids.length === 0) return new Map();
-
-  const rows = await all<WorkflowDefinitionRow>(
-    db,
-    `SELECT id, definition_json
-       FROM membership_workflow_versions
-      WHERE id IN (SELECT value FROM json_each(?))`,
-    [JSON.stringify(ids)],
-  );
+function decodeApplicationFees(
+  rows: WorkflowDefinitionRow[],
+): Map<string, MemberApplicationFormResponse["categories"][number]["fee"]> {
   return new Map(
     rows.map((row) => {
       const definition = membershipWorkflowDefinitionSchema.parse(JSON.parse(row.definition_json));
@@ -192,25 +181,31 @@ async function applicationFeesByWorkflow(
 
 /** Public application form with the exact fee pinned to each category's published workflow. */
 export async function getPublicMembershipApplicationForm(db: DatabaseLike): Promise<MemberApplicationFormResponse> {
-  const [form, categories] = await Promise.all([
-    getGlobalFormByKey(db, MEMBERSHIP_APPLICATION_FORM_KEY),
-    listMembershipCategories(db, true),
+  const formRead = prepareGlobalFormDefinition(db, MEMBERSHIP_APPLICATION_FORM_KEY);
+  const categoriesRead = prepareMembershipCategoriesRead(db, true);
+  const groupRead = prepareApplicationWorkingGroups(db, categoriesRead.selection);
+  const results = await db.batch([
+    ...formRead.statements,
+    categoriesRead.statement,
+    db
+      .prepare(`SELECT id,definition_json FROM membership_workflow_versions
+      WHERE id IN (SELECT workflow_version_id FROM (${categoriesRead.selection.sql}))`)
+      .bind(...categoriesRead.selection.bindings),
+    groupRead.statement,
   ]);
+  const form = formRead.decode(results.slice(0, formRead.statements.length));
   if (form) requireMembershipApplicationPolicyFields(form.fields);
-
-  const fees = await applicationFeesByWorkflow(
-    db,
-    categories.flatMap((category) => (category.workflowVersionId ? [category.workflowVersionId] : [])),
-  );
+  const [categoryResult, feesResult, groupsResult] = results.slice(formRead.statements.length);
+  const categories = categoriesRead.decode(batchRows(categoryResult));
+  const fees = decodeApplicationFees(batchRows<WorkflowDefinitionRow>(feesResult));
+  const eligibleGroups = groupRead.decode(batchRows(groupsResult));
   return memberApplicationFormResponseSchema.parse({
     form,
-    categories: await Promise.all(
-      categories.map(async (category) => ({
-        ...category,
-        eligibleWorkingGroupIds: await eligibleApplicationWorkingGroupIds(db, category.code),
-        fee: category.workflowVersionId ? (fees.get(category.workflowVersionId) ?? null) : null,
-      })),
-    ),
+    categories: categories.map((category) => ({
+      ...category,
+      eligibleWorkingGroupIds: eligibleGroups.get(category.code) ?? [],
+      fee: category.workflowVersionId ? (fees.get(category.workflowVersionId) ?? null) : null,
+    })),
   });
 }
 

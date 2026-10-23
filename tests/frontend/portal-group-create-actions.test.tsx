@@ -49,9 +49,12 @@ function findButton(container: HTMLElement, label: string): HTMLButtonElement | 
   return Array.from(container.querySelectorAll("button")).find((button) => button.textContent?.trim() === label);
 }
 
-function clickButton(container: HTMLElement, label: string): Promise<void> {
-  const button = findButton(container, label);
-  expect(button).not.toBeUndefined();
+async function clickButton(container: HTMLElement, label: string): Promise<void> {
+  const button = await vi.waitFor(() => {
+    const found = findButton(container, label);
+    expect(found).not.toBeUndefined();
+    return found;
+  });
   return act(async () => {
     button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   });

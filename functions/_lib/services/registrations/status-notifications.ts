@@ -1,20 +1,26 @@
 import { REGISTRATION_ORGANIZATION_SQL, REGISTRATION_JOB_TITLE_SQL } from "./selected-identity";
 import type { CountryCode } from "../../../../assets/shared/countries";
-import { first } from "../../db/queries";
+import { batchFirst, batchRows } from "../../db/pagination";
 import { AppError } from "../../errors";
 import { prepareQueueEmailStatement } from "../../email/outbox";
 import { buildBadgeAttachment } from "../../email/attachments";
 import { buildEventEmailVariables } from "../events";
-import { getAcceptedTermsTextForRegistration, getCustomAnswerRows } from "../../utils/registration-email";
+import {
+  prepareAcceptedRegistrationTerms,
+  decodeAcceptedRegistrationTerms,
+  getCustomAnswerRows,
+  type AcceptedRegistrationTermRow,
+} from "../../utils/registration-email";
 import { buildAttendanceEmailData, buildRegistrationEmailStatusData } from "../../utils/attendance";
 import { buildRegistrationIcs } from "../../utils/calendar";
 import { generateSignedRsvpAddress } from "../../email/rsvp";
-import { getRegistrationDayAttendance } from "../event-days";
-import { listDayWaitlistForRegistration } from "./day-waitlist";
+import { prepareRegistrationDayAttendance, type RegistrationDayAttendanceRow } from "../event-days";
+import { prepareRegistrationDayWaitlist, type RegistrationDayWaitlistRow } from "./day-waitlist-queries";
+import { prepareRegistrationByIdForEvent } from "./queries";
 import type { DatabaseLike, StatementLike } from "../../types";
 import type { UserProfilePatch } from "../users";
 import { REGISTRATION_RECIPIENT_EMAIL_SQL } from "./recipient-email";
-import { REGISTRATION_COLUMNS, type RegistrationRecord } from "./types";
+import type { RegistrationRecord } from "./types";
 import { registrationConfirmationUrl, registrationManageCapability } from "./capability-urls";
 import { myAgendaPageUrl } from "../frontend-links";
 
@@ -49,7 +55,7 @@ interface RegistrationEmailOverrides {
   registration?: RegistrationRecord;
   profilePatch?: UserProfilePatch;
   dayAttendance?: DayAttendanceForEmail;
-  dayWaitlist?: Awaited<ReturnType<typeof listDayWaitlistForRegistration>>;
+  dayWaitlist?: RegistrationDayWaitlistRow[];
 }
 
 async function loadRegistrationEmailContext(
@@ -61,28 +67,25 @@ async function loadRegistrationEmailContext(
   registration: RegistrationRecord;
   user: UserRow;
   dayAttendance: DayAttendanceForEmail;
-  dayWaitlist: Awaited<ReturnType<typeof listDayWaitlistForRegistration>>;
+  dayWaitlist: RegistrationDayWaitlistRow[];
   customAnswerRows: Awaited<ReturnType<typeof getCustomAnswerRows>>;
   acceptedTermsText: string;
 }> {
-  const registration =
-    overrides.registration ??
-    (await first<RegistrationRecord>(
-      db,
-      `SELECT ${REGISTRATION_COLUMNS} FROM registrations WHERE id = ? AND event_id = ?`,
-      [registrationId, event.id],
-    ));
-  if (!registration) throw new AppError(404, "REGISTRATION_NOT_FOUND", "Registration not found");
-  const storedUser = await first<UserRow>(
-    db,
-    `SELECT u.id, ${REGISTRATION_RECIPIENT_EMAIL_SQL} AS email,
+  const [registrationResult, userResult, attendanceResult, waitlistResult, termsResult] = await db.batch([
+    prepareRegistrationByIdForEvent(db, event.id, registrationId),
+    db
+      .prepare(`SELECT u.id, ${REGISTRATION_RECIPIENT_EMAIL_SQL} AS email,
             u.first_name, u.last_name, ${REGISTRATION_ORGANIZATION_SQL} AS organization_name, ${REGISTRATION_JOB_TITLE_SQL} AS job_title
-       FROM registrations r
-       JOIN users u ON u.id = r.user_id
-
-      WHERE r.id = ? AND r.event_id = ?`,
-    [registration.id, event.id],
-  );
+       FROM registrations r JOIN users u ON u.id = r.user_id
+       WHERE r.id = ? AND r.event_id = ?`)
+      .bind(registrationId, event.id),
+    prepareRegistrationDayAttendance(db, registrationId),
+    prepareRegistrationDayWaitlist(db, registrationId),
+    prepareAcceptedRegistrationTerms(db, registrationId),
+  ]);
+  const registration = overrides.registration ?? batchFirst<RegistrationRecord>(registrationResult);
+  if (!registration) throw new AppError(404, "REGISTRATION_NOT_FOUND", "Registration not found");
+  const storedUser = batchFirst<UserRow>(userResult);
   if (!storedUser) throw new AppError(404, "USER_NOT_FOUND", "Associated user record is missing");
   const patch = overrides.profilePatch;
   const user: UserRow = {
@@ -90,17 +93,15 @@ async function loadRegistrationEmailContext(
     first_name: patch?.firstName === undefined ? storedUser.first_name : (patch.firstName ?? null),
     last_name: patch?.lastName === undefined ? storedUser.last_name : (patch.lastName ?? null),
   };
-  const [dayAttendance, dayWaitlist, customAnswerRows, acceptedTermsText] = await Promise.all([
-    overrides.dayAttendance ?? getRegistrationDayAttendance(db, registration.id),
-    overrides.dayWaitlist ?? listDayWaitlistForRegistration(db, registration.id),
-    getCustomAnswerRows(db, {
-      sourceId: registration.id,
-      event: { id: event.id, source_mode: event.source_mode ?? null },
-      formPlacementId: registration.form_placement_id,
-      answersJson: registration.custom_answers_json,
-    }),
-    getAcceptedTermsTextForRegistration(db, registration.id),
-  ]);
+  const dayAttendance = overrides.dayAttendance ?? batchRows<RegistrationDayAttendanceRow>(attendanceResult);
+  const dayWaitlist = overrides.dayWaitlist ?? batchRows<RegistrationDayWaitlistRow>(waitlistResult);
+  const acceptedTermsText = decodeAcceptedRegistrationTerms(batchRows<AcceptedRegistrationTermRow>(termsResult));
+  const customAnswerRows = await getCustomAnswerRows(db, {
+    sourceId: registration.id,
+    event: { id: event.id, source_mode: event.source_mode ?? null },
+    formPlacementId: registration.form_placement_id,
+    answersJson: registration.custom_answers_json,
+  });
   return { registration, user, dayAttendance, dayWaitlist, customAnswerRows, acceptedTermsText };
 }
 

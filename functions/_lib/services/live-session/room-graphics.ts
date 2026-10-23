@@ -1,4 +1,5 @@
 import type { LiveCheckInText } from "../../../../assets/shared/schemas/live-session-graphic-settings";
+import type { LiveRoomGraphicBasis } from "./room-graphic-basis";
 import { resolveUpcomingRooms } from "../../../../assets/shared/live-session-schedule";
 import type { LiveScheduleConfig } from "../../../../assets/shared/schemas/live-session-schedule";
 import { readPublishedLiveAgenda } from "./approved-agenda";
@@ -40,6 +41,7 @@ type Actor = { userId: string; name: string };
 
 /** Event geometry and computed ticker text refresh together; neither replaces the persisted source config. */
 export class LiveRoomGraphics {
+  private refreshing: Promise<void> | undefined;
   layouts: LiveOverlayLayoutGeometry[] = [];
   tickerContext: LiveTickerContext = DEFAULT_LIVE_TICKER_CONTEXT;
   /** The attendee chat lines a chat ticker may show now. */
@@ -52,14 +54,33 @@ export class LiveRoomGraphics {
     private readonly controls: LiveRoomControls,
     private readonly outputs: LiveRoomOutputs,
     private readonly preview: LiveRoomPreview,
-  ) {}
+    private readonly basis: LiveRoomGraphicBasis,
+  ) {
+    const saved = basis.read();
+    this.layouts = saved.layouts;
+    this.tickerContext = saved.context;
+  }
   private get db(): DatabaseLike {
     return this.env.DB;
   }
   /** The point's name and signed link under the event's current key, or null when it no longer exists. */
-  private async checkIn(selection: AttendancePointSelection | null, theme: LiveGraphicTheme, text: LiveCheckInText) {
+  private async checkIn(
+    selection: AttendancePointSelection | null,
+    theme: LiveGraphicTheme,
+    text: LiveCheckInText,
+    fresh = false,
+  ) {
     const secret = this.env.INTERNAL_SIGNING_SECRET;
     if (!selection || !secret) return null;
+    // An already prepared code stays local during transitions and appearance edits.
+    // Background refresh still resolves its point and signing key canonically.
+    if (!fresh) {
+      const outputs = this.store.outputs();
+      const existing = [this.store.stage(), this.store.preview(), ...LIVE_AUX_OUTPUTS.map((output) => outputs[output])]
+        .map((composition) => composition.checkIn)
+        .find((graphic) => graphic && JSON.stringify(graphic.selection) === JSON.stringify(selection));
+      if (existing) return { ...existing, theme, text };
+    }
     const resolved = await resolveLiveCheckIn(this.db, secret, this.store.session()!.eventId, selection);
     return resolved ? { ...resolved, theme, text } : null;
   }
@@ -74,7 +95,7 @@ export class LiveRoomGraphics {
         config,
         Date.now(),
         this.tickerContext,
-        undefined,
+        this.basis.read().agenda,
         this.chatTicker(),
       ),
       at,
@@ -83,12 +104,7 @@ export class LiveRoomGraphics {
   async setSchedule(actor: Actor, config: LiveScheduleConfig | null, at: string): Promise<LiveControlOutcome> {
     const room = this.store.session()!;
     const schedule = config
-      ? resolveUpcomingRooms(
-          await readPublishedLiveAgenda(this.db, room.eventId),
-          room.session.occurrenceId,
-          Date.parse(at),
-          config,
-        )
+      ? resolveUpcomingRooms(this.basis.read().agenda, room.session.occurrenceId, Date.parse(at), config)
       : null;
     return this.controls.setSchedule(actor, schedule, at);
   }
@@ -128,7 +144,7 @@ export class LiveRoomGraphics {
     at: string,
   ): Promise<ResolvedComposition> {
     const room = this.store.session()!;
-    const approved = input.ticker || input.schedule ? await readPublishedLiveAgenda(this.db, room.eventId) : null;
+    const approved = this.basis.read().agenda;
     return {
       questionId: input.questionId,
       creditKey: input.creditKey,
@@ -155,13 +171,31 @@ export class LiveRoomGraphics {
         : null,
     };
   }
+  /** Later joins reuse the persisted basis instead of repeating every event-wide graphics read. */
+  async initialize(): Promise<void> {
+    if (!this.basis.ready) await this.refresh();
+    else await this.refreshLocal();
+  }
+
   async refresh(): Promise<void> {
+    if (this.refreshing) return this.refreshing;
+    this.refreshing = this.refreshFromD1();
+    try {
+      await this.refreshing;
+    } finally {
+      this.refreshing = undefined;
+    }
+  }
+
+  private async refreshFromD1(): Promise<void> {
     const room = this.store.session();
     if (!room) return;
-    const [layouts, context] = await Promise.all([
+    const [layouts, context, agenda] = await Promise.all([
       readLiveOverlayLayoutGeometries(this.db, room.eventId),
       readLiveTickerContext(this.db, room.eventId),
+      readPublishedLiveAgenda(this.db, room.eventId),
     ]);
+    this.basis.save({ layouts, context, agenda });
     if (JSON.stringify(context) !== JSON.stringify(this.tickerContext)) {
       this.tickerContext = context;
       await this.broadcast.all({ type: "ticker.context.changed", context });
@@ -170,12 +204,23 @@ export class LiveRoomGraphics {
       this.layouts = layouts;
       await this.broadcast.all({ type: "overlay.layouts.changed", layouts });
     }
+    await this.refreshCompositions(true);
+  }
+
+  /** Recompute room-local chat and time-dependent graphics without querying D1. */
+  async refreshLocal(): Promise<void> {
+    await this.refreshCompositions(false);
+  }
+
+  private async refreshCompositions(freshCheckIn: boolean): Promise<void> {
+    const room = this.store.session();
+    if (!room) return;
     const stage = this.store.stage();
     const outputs = this.store.outputs();
     const preview = this.store.preview();
     const dynamic = [stage, preview, ...LIVE_AUX_OUTPUTS.map((output) => outputs[output])];
     if (!dynamic.some((composition) => composition.ticker || composition.schedule || composition.checkIn)) return;
-    const approved = await readPublishedLiveAgenda(this.db, room.eventId);
+    const approved = this.basis.read().agenda;
     const now = Date.now();
     const chat = this.chatTicker();
     const refreshed = async <Composition extends LiveStage>(composition: Composition): Promise<Composition | null> => {
@@ -197,9 +242,10 @@ export class LiveRoomGraphics {
           ? { config: value.config, available: value.available, timeZone: value.timeZone, rooms: value.rooms }
           : null;
       // A reissued key or a removed point changes the code an output shows; a removed one comes off.
-      const checkIn = composition.checkIn
-        ? await this.checkIn(composition.checkIn.selection, composition.checkIn.theme, composition.checkIn.text)
-        : null;
+      const checkIn =
+        composition.checkIn && freshCheckIn
+          ? await this.checkIn(composition.checkIn.selection, composition.checkIn.theme, composition.checkIn.text, true)
+          : composition.checkIn;
       return JSON.stringify(ticker?.segments) !== JSON.stringify(composition.ticker?.segments) ||
         JSON.stringify(content(schedule)) !== JSON.stringify(content(composition.schedule)) ||
         JSON.stringify(checkIn) !== JSON.stringify(composition.checkIn)
@@ -207,18 +253,18 @@ export class LiveRoomGraphics {
         : null;
     };
     const program = await refreshed(stage);
-    if (program) {
+    if (program && JSON.stringify(this.store.stage()) === JSON.stringify(stage)) {
       this.store.saveStage(program);
       await this.broadcast.all({ type: "stage.changed", stage: this.store.stage() });
     }
     for (const output of LIVE_AUX_OUTPUTS) {
       const composition = await refreshed(outputs[output]);
-      if (!composition) continue;
+      if (!composition || JSON.stringify(this.store.aux(output)) !== JSON.stringify(outputs[output])) continue;
       this.store.saveAux(output, composition);
       await this.broadcast.all({ type: "aux.changed", output, composition: this.store.aux(output) });
     }
     const shared = await refreshed(preview);
-    if (shared) {
+    if (shared && JSON.stringify(this.store.preview()) === JSON.stringify(preview)) {
       this.store.savePreview(shared);
       await this.broadcast.all({ type: "preview.changed", composition: this.store.preview() });
     }

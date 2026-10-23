@@ -1,22 +1,27 @@
-import { resolveUserSessionClaimsBatch } from "../../auth/user-session-live-data";
+import {
+  currentLiveRoomCommandRead,
+  liveParticipantReadKey,
+  type LiveParticipantReadResult,
+} from "./room-command-read-scope";
+import { prepareUserSessionClaimsBatch } from "../../auth/user-session-live-data";
 import type { LiveRoomRole } from "../../../../assets/shared/live-session-policy";
 import { LIVE_OVERLAY_PROTOCOL_PREFIX } from "../../../../assets/shared/schemas/live-session-room";
 import { verifyLiveOverlayToken } from "../../auth/live-session-overlay-token";
 import { hasPermission } from "../../auth/permissions";
-import { resolveUserSessionClaims, resolveUserSessionContext } from "../../auth/user-session";
+import { resolveUserSessionContext } from "../../auth/user-session";
 import type { UserSessionResult } from "../../auth/user-session-result";
 import type { UserSessionTokenClaims } from "../../auth/user-session-token";
 import { getUserSessionToken } from "../../auth/user-session-token";
-import { all, first } from "../../db/queries";
+import { batchFirst, batchRows } from "../../db/pagination";
 import { AppError } from "../../errors";
-import type { DatabaseLike, Env } from "../../types";
+import type { D1StatementResult, DatabaseLike, Env } from "../../types";
 import { personDisplayNameSql } from "../event-agenda/speaker-name";
 import { publishedSessionsSql } from "../event-participation/published-schedule";
 import { sessionAccessEligibleSql } from "../event-participation/session-access";
 import { getEventBySlug } from "../events";
 import { liveProgramName } from "./room-program";
 import { publicUserHeadshotPath } from "../user-headshot";
-import { readLiveRoomSession, type LiveRoomSessionRecord } from "./room-session";
+import { readLiveRoomSession, prepareLiveRoomSessionRead, type LiveRoomSessionRecord } from "./room-session";
 import type { LiveRoomParticipant } from "./room-admission";
 import { livePersonHeadshotSql } from "./live-person-photo";
 import type { LiveOverlayView } from "../../../../assets/shared/schemas/live-session-room";
@@ -37,6 +42,17 @@ interface LiveRoomPerson {
   name: string;
   attendee: number;
   headshot_r2_key: string | null;
+}
+
+/** One person projection is shared by socket admission and command revalidation. */
+function prepareLiveRoomPeople(db: DatabaseLike, eventId: string, occurrenceId: string, userIds: readonly string[]) {
+  return db
+    .prepare(`SELECT person.id, ${personDisplayNameSql("person", "Attendee")} AS name, ${livePersonHeadshotSql("person")} AS headshot_r2_key,
+      EXISTS(SELECT 1 FROM registrations registration WHERE registration.event_id=? AND registration.user_id=person.id AND registration.status='registered'
+        AND EXISTS(SELECT 1 FROM (${publishedSessionsSql}) access_session
+          WHERE access_session.event_id=registration.event_id AND access_session.id=? AND ${sessionAccessEligibleSql("access_session", "person.id", null, false)})) AS attendee
+     FROM users person JOIN json_each(?) requested ON requested.value=person.id WHERE person.active=1`)
+    .bind(eventId, occurrenceId, JSON.stringify(userIds));
 }
 
 async function signedInParticipant(
@@ -62,15 +78,7 @@ async function participantFromSession(
   const person =
     currentPerson !== undefined
       ? currentPerson
-      : await first<LiveRoomPerson>(
-          db,
-          `SELECT ${personDisplayNameSql("person", "Attendee")} AS name, ${livePersonHeadshotSql("person")} AS headshot_r2_key,
-      EXISTS(SELECT 1 FROM registrations registration WHERE registration.event_id=? AND registration.user_id=person.id AND registration.status='registered'
-        AND EXISTS(SELECT 1 FROM (${publishedSessionsSql}) access_session
-          WHERE access_session.event_id=registration.event_id AND access_session.id=? AND ${sessionAccessEligibleSql("access_session", "person.id", null, false)})) AS attendee
-     FROM users person WHERE person.id=? AND person.active=1`,
-          [record.eventId, occurrenceId, userId],
-        );
+      : await prepareLiveRoomPeople(db, record.eventId, occurrenceId, [userId]).first<LiveRoomPerson>();
   if (!person) throw new AppError(401, "AUTH_REQUIRED", "Sign in again to join this session.");
   // Operating the room is a staff capacity, exactly as on the control room's other staff routes.
   const operator =
@@ -148,7 +156,7 @@ export async function admitLiveRoomParticipant(
   return { ...record, participant: await signedInParticipant(db, request, env, record) };
 }
 
-/** Reuse the canonical live session and room policies for every socket command. */
+/** Single commands use the same bounded live policy and read batch as broadcast revalidation. */
 export async function revalidateLiveRoomParticipant(
   db: DatabaseLike,
   participant: LiveRoomParticipant,
@@ -156,131 +164,152 @@ export async function revalidateLiveRoomParticipant(
   occurrenceId: string,
   rooms?: Env["LIVE_SESSION_ROOMS"],
 ): Promise<LiveRoomParticipant> {
-  if (participant.role === "overlay") {
-    const record = await readLiveRoomSession(db, eventId, occurrenceId);
-    if (!participant.overlayRoomId || participant.overlayExpiresAt === undefined)
-      throw new AppError(401, "LIVE_OVERLAY_ACCESS_INVALID", "This source access is invalid or expired.");
-    if (
-      (participant.overlayExpiresAt !== undefined && participant.overlayExpiresAt <= Date.now() / 1000) ||
-      (participant.overlayRoomId && !record.roomIds.includes(participant.overlayRoomId))
-    )
-      throw new AppError(401, "LIVE_OVERLAY_ACCESS_INVALID", "This source access is invalid or expired.");
-    if (participant.overlayRoomId) {
-      if (!rooms) throw new AppError(503, "LIVE_ROOMS_UNAVAILABLE", "Live rooms are not available.");
-      const selection = await rooms
-        .getByName(liveProgramName(eventId, participant.overlayRoomId))
-        .readProgram(eventId, participant.overlayRoomId);
-      if (selection.occurrenceId !== occurrenceId)
-        throw new AppError(403, "LIVE_PROGRAM_SELECTION_CHANGED", "This source follows another active session now.");
-    }
-    return participant;
-  }
-  if (!participant.sessionClaims || participant.sessionClaims.sub !== participant.userId)
-    throw new AppError(401, "AUTH_REQUIRED", "Sign in again to join this session.");
-  const session = await resolveUserSessionClaims(db, participant.sessionClaims);
-  const record = await readLiveRoomSession(db, eventId, occurrenceId);
-  return participantFromSession(db, session, participant.sessionClaims, record);
+  const [current] = await revalidateLiveRoomParticipants(db, [participant], eventId, occurrenceId, rooms);
+  if (!current.ok) throw current.error;
+  return current.participant;
 }
 
-/** One fresh canonical claims batch and one setwise person/room check per bounded chunk. */
+/** Prepare one bounded recipient chunk for composition with a command's other live reads. */
+export function prepareLiveRoomParticipants(
+  db: DatabaseLike,
+  slice: readonly LiveRoomParticipant[],
+  eventId: string,
+  occurrenceId: string,
+  rooms?: Env["LIVE_SESSION_ROOMS"],
+) {
+  const valid = slice.filter((p) => p.role !== "overlay" && p.sessionClaims && p.sessionClaims.sub === p.userId);
+  const claims = valid.map((p) => p.sessionClaims!);
+  const roomRead = prepareLiveRoomSessionRead(db, eventId, occurrenceId);
+  const sessionRead = prepareUserSessionClaimsBatch(db, claims);
+  const statements = [
+    roomRead.statement,
+    ...sessionRead.statements,
+    prepareLiveRoomPeople(db, eventId, occurrenceId, [...new Set(valid.map((p) => p.userId!))]),
+  ];
+  return {
+    statements,
+    async decode(loaded: D1StatementResult[]): Promise<LiveParticipantReadResult[]> {
+      const results: LiveParticipantReadResult[] = [];
+      const record = await roomRead.decode(batchFirst<{ payload_json: string; timezone: string }>(loaded[0]));
+      const sessions = await sessionRead.decode(loaded.slice(1, 1 + sessionRead.statements.length));
+      const people = batchRows<LiveRoomPerson & { id: string }>(loaded[loaded.length - 1]);
+      const physicalRooms = [
+        ...new Set(
+          slice
+            .filter((p) => p.role === "overlay" && p.overlayRoomId && record.roomIds.includes(p.overlayRoomId))
+            .map((p) => p.overlayRoomId!),
+        ),
+      ];
+      if (physicalRooms.length && !rooms)
+        throw new AppError(503, "LIVE_ROOMS_UNAVAILABLE", "Live rooms are not available.");
+      const programSelections = new Map(
+        await Promise.all(
+          physicalRooms.map(
+            async (roomId) =>
+              [
+                roomId,
+                (await rooms!.getByName(liveProgramName(eventId, roomId)).readProgram(eventId, roomId)).occurrenceId,
+              ] as const,
+          ),
+        ),
+      );
+      const peopleById = new Map(people.map((person) => [person.id, person]));
+      let currentIndex = 0;
+      for (const participant of slice) {
+        if (participant.role === "overlay") {
+          const refused =
+            !participant.overlayRoomId ||
+            participant.overlayExpiresAt === undefined ||
+            (participant.overlayExpiresAt !== undefined && participant.overlayExpiresAt <= Date.now() / 1000) ||
+            (participant.overlayRoomId && !record.roomIds.includes(participant.overlayRoomId));
+          const inactive =
+            participant.overlayRoomId && programSelections.get(participant.overlayRoomId) !== occurrenceId;
+          results.push(
+            inactive
+              ? {
+                  ok: false,
+                  error: new AppError(
+                    403,
+                    "LIVE_PROGRAM_SELECTION_CHANGED",
+                    "This source follows another active session now.",
+                  ),
+                }
+              : refused
+                ? {
+                    ok: false,
+                    error: new AppError(
+                      401,
+                      "LIVE_OVERLAY_ACCESS_INVALID",
+                      "This source access is invalid or expired.",
+                    ),
+                  }
+                : { ok: true, participant, expiresAt: participant.overlayExpiresAt! * 1000 },
+          );
+          continue;
+        }
+        if (!participant.sessionClaims || participant.sessionClaims.sub !== participant.userId) {
+          results.push({ ok: false, error: new AppError(401, "AUTH_REQUIRED", "Sign in again to join this session.") });
+          continue;
+        }
+        const session = sessions[currentIndex++];
+        if (!session.ok) {
+          results.push(session);
+          continue;
+        }
+        try {
+          results.push({
+            ok: true,
+            expiresAt: Math.min(
+              participant.sessionClaims.exp * 1000,
+              Date.parse(session.session.expiresAt),
+              Date.parse(session.session.idleExpiresAt),
+              session.session.staffIdleExpiresAt ? Date.parse(session.session.staffIdleExpiresAt) : Infinity,
+            ),
+            participant: await participantFromSession(
+              db,
+              session.session,
+              participant.sessionClaims,
+              record,
+              peopleById.get(participant.userId!) ?? null,
+            ),
+          });
+        } catch (error) {
+          if (error instanceof AppError && error.status >= 400 && error.status < 500)
+            results.push({ ok: false, error });
+          else throw error;
+        }
+      }
+
+      return results;
+    },
+  };
+}
+
+/** One fresh D1 batch per bounded chunk; a command reuses only its own already-validated snapshot. */
 export async function revalidateLiveRoomParticipants(
   db: DatabaseLike,
   participants: readonly LiveRoomParticipant[],
   eventId: string,
   occurrenceId: string,
   rooms?: Env["LIVE_SESSION_ROOMS"],
-): Promise<Array<{ ok: true; participant: LiveRoomParticipant } | { ok: false; error: AppError }>> {
-  const record = await readLiveRoomSession(db, eventId, occurrenceId);
-  const physicalRooms = [
-    ...new Set(
-      participants
-        .filter((p) => p.role === "overlay" && p.overlayRoomId && record.roomIds.includes(p.overlayRoomId))
-        .map((p) => p.overlayRoomId!),
-    ),
-  ];
-  if (physicalRooms.length && !rooms)
-    throw new AppError(503, "LIVE_ROOMS_UNAVAILABLE", "Live rooms are not available.");
-  const programSelections = new Map(
-    await Promise.all(
-      physicalRooms.map(
-        async (roomId) =>
-          [
-            roomId,
-            (await rooms!.getByName(liveProgramName(eventId, roomId)).readProgram(eventId, roomId)).occurrenceId,
-          ] as const,
-      ),
-    ),
-  );
-  const results: Array<{ ok: true; participant: LiveRoomParticipant } | { ok: false; error: AppError }> = [];
+): Promise<LiveParticipantReadResult[]> {
+  const current = currentLiveRoomCommandRead();
+  if (
+    current?.eventId === eventId &&
+    current.occurrenceId === occurrenceId &&
+    participants.every((participant) => current.participants.has(liveParticipantReadKey(participant)))
+  )
+    return participants.map((participant) => current.participants.get(liveParticipantReadKey(participant))!);
+  const results: LiveParticipantReadResult[] = [];
   for (let offset = 0; offset < participants.length; offset += 512) {
-    const slice = participants.slice(offset, offset + 512);
-    const valid = slice.filter((p) => p.role !== "overlay" && p.sessionClaims && p.sessionClaims.sub === p.userId);
-    const claims = valid.map((p) => p.sessionClaims!);
-    const sessions = await resolveUserSessionClaimsBatch(db, claims);
-    const userIds = JSON.stringify([...new Set(valid.map((p) => p.userId))]);
-    const people = await all<LiveRoomPerson & { id: string }>(
+    const read = prepareLiveRoomParticipants(
       db,
-      `SELECT person.id, ${personDisplayNameSql("person", "Attendee")} AS name, ${livePersonHeadshotSql("person")} AS headshot_r2_key,
-       EXISTS(SELECT 1 FROM registrations registration WHERE registration.event_id=? AND registration.user_id=person.id AND registration.status='registered'
-        AND EXISTS(SELECT 1 FROM (${publishedSessionsSql}) access_session
-          WHERE access_session.event_id=registration.event_id AND access_session.id=? AND ${sessionAccessEligibleSql("access_session", "person.id", null, false)})) AS attendee
-       FROM users person JOIN json_each(?) requested ON requested.value=person.id WHERE person.active=1`,
-      [eventId, occurrenceId, userIds],
+      participants.slice(offset, offset + 512),
+      eventId,
+      occurrenceId,
+      rooms,
     );
-    const peopleById = new Map(people.map((person) => [person.id, person]));
-    let currentIndex = 0;
-    for (const participant of slice) {
-      if (participant.role === "overlay") {
-        const refused =
-          !participant.overlayRoomId ||
-          participant.overlayExpiresAt === undefined ||
-          (participant.overlayExpiresAt !== undefined && participant.overlayExpiresAt <= Date.now() / 1000) ||
-          (participant.overlayRoomId && !record.roomIds.includes(participant.overlayRoomId));
-        const inactive = participant.overlayRoomId && programSelections.get(participant.overlayRoomId) !== occurrenceId;
-        results.push(
-          inactive
-            ? {
-                ok: false,
-                error: new AppError(
-                  403,
-                  "LIVE_PROGRAM_SELECTION_CHANGED",
-                  "This source follows another active session now.",
-                ),
-              }
-            : refused
-              ? {
-                  ok: false,
-                  error: new AppError(401, "LIVE_OVERLAY_ACCESS_INVALID", "This source access is invalid or expired."),
-                }
-              : { ok: true, participant },
-        );
-        continue;
-      }
-      if (!participant.sessionClaims || participant.sessionClaims.sub !== participant.userId) {
-        results.push({ ok: false, error: new AppError(401, "AUTH_REQUIRED", "Sign in again to join this session.") });
-        continue;
-      }
-      const session = sessions[currentIndex++];
-      if (!session.ok) {
-        results.push(session);
-        continue;
-      }
-      try {
-        results.push({
-          ok: true,
-          participant: await participantFromSession(
-            db,
-            session.session,
-            participant.sessionClaims,
-            record,
-            peopleById.get(participant.userId!) ?? null,
-          ),
-        });
-      } catch (error) {
-        if (error instanceof AppError && error.status >= 400 && error.status < 500) results.push({ ok: false, error });
-        else throw error;
-      }
-    }
+    results.push(...(await read.decode(await db.batch(read.statements))));
   }
   return results;
 }

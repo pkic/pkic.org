@@ -52,7 +52,7 @@ describe("admin list D1 query plans", () => {
     expect(statsQuery.sql).toContain("e.id IN (SELECT value FROM json_each(?))");
     expect(occurrences(statsQuery.sql, /\?/g)).toBe(1);
     expect(statsQuery.bindings).toHaveLength(1);
-    expect(JSON.parse(statsQuery.bindings[0])).toEqual(eventIds);
+    expect(JSON.parse(String(statsQuery.bindings[0]))).toEqual(eventIds);
 
     const plan = await env.DB.prepare(`EXPLAIN QUERY PLAN ${statsQuery.sql}`)
       .bind(...statsQuery.bindings)
@@ -143,11 +143,13 @@ describe("admin list D1 query plans", () => {
 
     expect(pageSql).toMatch(/member_category_assignments/i);
     expect(countSql).toMatch(/^SELECT COUNT\(\*\) AS total\s+FROM identities identity/i);
-    expect(countSql).not.toMatch(/member_category_assignments/i);
+    // A category is required for membership capacity, including the count.
+    expect(countSql).toMatch(/JOIN member_category_assignments/i);
     expect(occurrences(pageSql, /INSTR\(/g)).toBe(occurrences(countSql, /INSTR\(/g));
     expect(countBindings).toEqual(bindings);
     const projectionPlan = pagePlan.results.map((row) => String((row as { detail?: unknown }).detail)).join("\n");
     expect(projectionPlan).toContain("idx_identities_user_lifecycle");
+    expect(projectionPlan).not.toMatch(/SCAN identity\b|CO-ROUTINE identity_member_capacities/);
   });
   it("counts an organization's group participation without its aggregate projection", async () => {
     const { pageSql, countSql, bindings, countBindings, pagePlan } = await explainOffsetPage(

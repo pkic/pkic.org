@@ -1,5 +1,7 @@
+import { eventReadIdSql, type EventReadSelection } from "./events/selection";
+import { registrationReadIdSql, type RegistrationReadSelection } from "./registrations/selection";
+import { batchRows } from "../db/pagination";
 import { prepareParticipationReconciliation } from "./event-participation/reconciliation";
-import { all } from "../db/queries";
 import { AppError } from "../errors";
 import { attendanceMethodName, dayAttendanceTypeNotConfiguredError, dayNotConfiguredError } from "./event-day-refusals";
 import { uuid } from "../utils/ids";
@@ -36,11 +38,13 @@ export interface DayAttendanceSelection {
   attendanceType: DayAttendanceType;
 }
 
-const EVENT_DAYS_LIST_SQL = `SELECT id, event_id, day_date, label, starts_at, ends_at, in_person_capacity, sort_order,
+function eventDaysListSql(eventIdSql: string) {
+  return `SELECT id, event_id, day_date, label, starts_at, ends_at, in_person_capacity, sort_order,
   attendance_options_json, capacity_revision
   FROM event_days
-  WHERE event_id = ?
+  WHERE event_id = ${eventIdSql}
   ORDER BY sort_order ASC, day_date ASC`;
+}
 
 /**
  * Parses the attendance options for a day from its JSON column.
@@ -78,12 +82,17 @@ export function attendanceOptionLabel(days: readonly EventDayRecord[], value: st
 }
 
 export async function listEventDays(db: DatabaseLike, eventId: string): Promise<EventDayRecord[]> {
-  return all<EventDayRecord>(db, EVENT_DAYS_LIST_SQL, [eventId]);
+  return (await prepareEventDays(db, eventId).all<EventDayRecord>()).results;
 }
 
-function eventDayAttendanceCountsSql(includePendingConfirmation: boolean) {
+export function prepareEventDays(db: DatabaseLike, event: EventReadSelection) {
+  const selection = eventReadIdSql(event);
+  return db.prepare(eventDaysListSql(selection.sql)).bind(...selection.bindings);
+}
+
+function eventDayAttendanceCountsSql(includePendingConfirmation: boolean, eventIdSql = "?") {
   const status = includePendingConfirmation ? "IN ('pending_email_confirmation', 'registered')" : "= 'registered'";
-  return `WITH selected_event AS (SELECT ? AS id)
+  return `WITH selected_event AS (SELECT ${eventIdSql} AS id)
     SELECT rda.event_day_id, rda.attendance_type, COUNT(*) AS count
     FROM event_days day
     JOIN registration_day_attendance rda ON rda.event_day_id = day.id
@@ -100,15 +109,21 @@ export const CONFIGURED_EVENT_DAY_ATTENDANCE_COUNTS_SQL = eventDayAttendanceCoun
 /** Management projection with registered attendance counts grouped in D1, not in the browser. */
 export async function listConfiguredEventDaysWithCounts(db: DatabaseLike, eventId: string) {
   const [daysResult, countsResult] = await db.batch([
-    db.prepare(EVENT_DAYS_LIST_SQL).bind(eventId),
-    db.prepare(CONFIGURED_EVENT_DAY_ATTENDANCE_COUNTS_SQL).bind(eventId),
+    prepareEventDays(db, eventId),
+    prepareConfiguredEventDayCounts(db, eventId),
   ]);
-  const days = (daysResult.results ?? []) as unknown as EventDayRecord[];
-  const counts = (countsResult.results ?? []) as unknown as Array<{
-    event_day_id: string;
-    attendance_type: string;
-    count: number;
-  }>;
+  return decodeConfiguredEventDays(
+    batchRows<EventDayRecord>(daysResult),
+    batchRows<EventDayAttendanceCountRow>(countsResult),
+  );
+}
+
+export function prepareConfiguredEventDayCounts(db: DatabaseLike, event: EventReadSelection) {
+  const selection = eventReadIdSql(event);
+  return db.prepare(eventDayAttendanceCountsSql(false, selection.sql)).bind(...selection.bindings);
+}
+
+export function decodeConfiguredEventDays(days: EventDayRecord[], counts: EventDayAttendanceCountRow[]) {
   const countByDay = new Map<string, Record<string, number>>();
   for (const row of counts) {
     const attendanceCounts = countByDay.get(row.event_day_id) ?? {};
@@ -127,36 +142,32 @@ export async function listConfiguredEventDaysWithCounts(db: DatabaseLike, eventI
   }));
 }
 
-export async function getRegistrationDayAttendance(
-  db: DatabaseLike,
-  registrationId: string,
-): Promise<
-  Array<{
-    dayDate: string;
-    attendanceType: DayAttendanceType;
-    label: string | null;
-    /** When the day was first held on this registration. */
-    heldSince: string;
-    /** When the day's attendance last changed. */
-    changedAt: string;
-  }>
-> {
-  return all<{
-    dayDate: string;
-    attendanceType: DayAttendanceType;
-    label: string | null;
-    heldSince: string;
-    changedAt: string;
-  }>(
-    db,
-    `SELECT ed.day_date AS dayDate, rda.attendance_type AS attendanceType, ed.label AS label,
+export interface RegistrationDayAttendanceRow {
+  dayDate: string;
+  attendanceType: DayAttendanceType;
+  label: string | null;
+  /** When the day was first held on this registration. */
+  heldSince: string;
+  /** When the day's attendance last changed. */
+  changedAt: string;
+}
+
+export function prepareRegistrationDayAttendance(db: DatabaseLike, registrationId: string) {
+  return db
+    .prepare(`SELECT ed.day_date AS dayDate, rda.attendance_type AS attendanceType, ed.label AS label,
             rda.created_at AS heldSince, rda.updated_at AS changedAt
      FROM registration_day_attendance rda
      JOIN event_days ed ON ed.id = rda.event_day_id
      WHERE rda.registration_id = ?
-     ORDER BY ed.sort_order ASC, ed.day_date ASC`,
-    [registrationId],
-  );
+     ORDER BY ed.sort_order ASC, ed.day_date ASC`)
+    .bind(registrationId);
+}
+
+export async function getRegistrationDayAttendance(
+  db: DatabaseLike,
+  registrationId: string,
+): Promise<RegistrationDayAttendanceRow[]> {
+  return (await prepareRegistrationDayAttendance(db, registrationId).all<RegistrationDayAttendanceRow>()).results;
 }
 
 function normalizeSelections(selections?: DayAttendanceSelection[]): DayAttendanceSelection[] {
@@ -204,11 +215,22 @@ export async function countRegisteredByEventDay(
   db: DatabaseLike,
   eventId: string,
 ): Promise<Map<string, Map<string, number>>> {
-  const rows = await all<{ event_day_id: string; attendance_type: string; count: number }>(
-    db,
-    eventDayAttendanceCountsSql(true),
-    [eventId],
-  );
+  const rows = await prepareRegisteredEventDayCounts(db, eventId).all<EventDayAttendanceCountRow>();
+  return decodeRegisteredEventDayCounts(rows.results);
+}
+
+export interface EventDayAttendanceCountRow {
+  event_day_id: string;
+  attendance_type: string;
+  count: number;
+}
+
+export function prepareRegisteredEventDayCounts(db: DatabaseLike, event: EventReadSelection) {
+  const selection = eventReadIdSql(event);
+  return db.prepare(eventDayAttendanceCountsSql(true, selection.sql)).bind(...selection.bindings);
+}
+
+export function decodeRegisteredEventDayCounts(rows: EventDayAttendanceCountRow[]) {
   const map = new Map<string, Map<string, number>>();
   for (const row of rows) {
     if (!map.has(row.event_day_id)) map.set(row.event_day_id, new Map());
@@ -217,16 +239,18 @@ export async function countRegisteredByEventDay(
   return map;
 }
 
+export interface RegistrationDayAttendanceChange {
+  registrationId: string;
+  eventId: string;
+  selections?: DayAttendanceSelection[];
+  changedBy?: string;
+  recordHistory?: boolean;
+  configuredEventDays?: EventDayRecord[];
+}
+
 export async function replaceRegistrationDayAttendance(
   db: DatabaseLike,
-  payload: {
-    registrationId: string;
-    eventId: string;
-    selections?: DayAttendanceSelection[];
-    changedBy?: string;
-    recordHistory?: boolean;
-    configuredEventDays?: EventDayRecord[];
-  },
+  payload: RegistrationDayAttendanceChange,
 ): Promise<void> {
   const statements = await prepareReplaceRegistrationDayAttendanceStatements(db, payload);
   if (statements.length > 0) await db.batch(statements);
@@ -234,24 +258,44 @@ export async function replaceRegistrationDayAttendance(
 
 export async function prepareReplaceRegistrationDayAttendanceStatements(
   db: DatabaseLike,
-  payload: {
-    registrationId: string;
-    eventId: string;
-    selections?: DayAttendanceSelection[];
-    changedBy?: string;
-    recordHistory?: boolean;
-    configuredEventDays?: EventDayRecord[];
-  },
+  payload: RegistrationDayAttendanceChange,
 ): Promise<StatementLike[]> {
-  const selections = normalizeSelections(payload.selections);
-  const previousRows = await all<{ event_day_id: string; attendance_type: string }>(
+  const results = await db.batch([
+    preparePreviousRegistrationDayAttendance(db, { registrationId: payload.registrationId }),
+    ...(payload.configuredEventDays ? [] : [prepareEventDays(db, payload.eventId)]),
+  ]);
+  return planRegistrationDayAttendanceChange(
     db,
-    "SELECT event_day_id, attendance_type FROM registration_day_attendance WHERE registration_id = ?",
-    [payload.registrationId],
+    payload,
+    batchRows<PreviousRegistrationDayAttendanceRow>(results[0]),
+    payload.configuredEventDays ?? batchRows<EventDayRecord>(results[1]),
   );
+}
+
+export interface PreviousRegistrationDayAttendanceRow {
+  event_day_id: string;
+  attendance_type: string;
+}
+
+export function preparePreviousRegistrationDayAttendance(db: DatabaseLike, selection: RegistrationReadSelection) {
+  const reference = registrationReadIdSql(selection);
+  return db
+    .prepare(
+      `SELECT event_day_id,attendance_type FROM registration_day_attendance WHERE registration_id=${reference.sql}`,
+    )
+    .bind(...reference.bindings);
+}
+
+/** Plan from the caller's single snapshot; this builder never reads or commits. */
+export function planRegistrationDayAttendanceChange(
+  db: DatabaseLike,
+  payload: RegistrationDayAttendanceChange,
+  previousRows: PreviousRegistrationDayAttendanceRow[],
+  eventDays: EventDayRecord[],
+): StatementLike[] {
+  const selections = normalizeSelections(payload.selections);
   const previousByDayId = new Map(previousRows.map((row) => [row.event_day_id, row.attendance_type]));
 
-  const eventDays = payload.configuredEventDays ?? (await listEventDays(db, payload.eventId));
   const dayMap = new Map(eventDays.map((day) => [day.day_date, day]));
   const nextByDayId = new Map<string, string>();
 

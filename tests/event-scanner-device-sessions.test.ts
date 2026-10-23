@@ -1,3 +1,4 @@
+import { profileD1Flow } from "./helpers/d1-flow-profile";
 import { generateBadgeCredential } from "../assets/shared/schemas/badge-credential";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
@@ -10,7 +11,10 @@ import {
   scannerDeviceSessionStatusSchema,
   scannerDeviceSessionEnrollmentResponseSchema,
 } from "../assets/shared/schemas/event-scanner-devices";
-import { enrolledEventScanRequestSchema } from "../assets/shared/schemas/event-participation-scanning";
+import {
+  enrolledEventScanRequestSchema,
+  eventScanResponseSchema,
+} from "../assets/shared/schemas/event-participation-scanning";
 
 const fixture = createEventScannerFixture();
 function request(path: string, body?: unknown, authenticated = true) {
@@ -25,6 +29,24 @@ function request(path: string, body?: unknown, authenticated = true) {
 }
 describe("Scanner device enrollment and immutable upload closing barrier", () => {
   beforeEach(fixture.setup);
+  it("acknowledges a recognized enrolled scan through the mounted route with a bounded number of D1 trips", async () => {
+    const profile = profileD1Flow(env.DB);
+    const body = enrolledEventScanRequestSchema.parse(fixture.scanBody({ capturePublicationRevision: 0 }));
+    const response = await callApi({ ...env, DB: profile.db }, "/api/v1/events/scan-test/scans", {
+      method: "POST",
+      headers: { authorization: `Bearer ${fixture.token}`, "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    expect(response.status).toBe(200);
+    const result = eventScanResponseSchema.parse(await response.json());
+    expect(result.scannerReceipt).toMatchObject({
+      operationId: body.operationId,
+      sequence: body.scannerSession.sequence,
+    });
+    expect(result.recorded).toBe(true);
+    expect(result.outcome).toBe("warning");
+    expect((await profile.report()).roundTrips).toBeLessThanOrEqual(5);
+  });
   it("enrolls idempotently and requires authenticated enrolled new uploads", async () => {
     const body = { operationId: crypto.randomUUID(), deviceId: crypto.randomUUID() };
     expect((await request("", body, false)).status).toBe(401);
@@ -49,8 +71,10 @@ describe("Scanner device enrollment and immutable upload closing barrier", () =>
     const headers = { authorization: `Bearer ${fixture.token}` };
     expect((await callApi(env, path, { headers })).status).toBe(400);
     const query = new URLSearchParams({ epochId: fixture.epochId, deviceId: fixture.deviceId });
-    const valid = await callApi(env, `${path}?${query}`, { headers });
+    const profile = profileD1Flow(env.DB);
+    const valid = await callApi({ ...env, DB: profile.db }, `${path}?${query}`, { headers });
     expect(valid.status).toBe(200);
+    expect((await profile.report()).executedSql.every((sql) => !/^\s*(?:INSERT|UPDATE|DELETE)/u.test(sql))).toBe(true);
     expect(await valid.json()).toMatchObject({
       epochId: fixture.epochId,
       deviceId: fixture.deviceId,

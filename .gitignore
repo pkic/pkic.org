@@ -66,6 +66,7 @@ types/
 # The repository's own skills are committed.
 /.agents/skills/*
 !/.agents/skills/pkic-ui/
+!/.agents/skills/pkic-backend/
 
 # Synthetic local test environment created by `pnpm dev:test`
 /.local-test/

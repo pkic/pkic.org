@@ -1,6 +1,4 @@
-import { z } from "zod";
 import { SCAN_STORAGE_VERSION } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/outbox-storage";
-import { offlineScanRecordSchema } from "../../assets/shared/schemas/event-participation-scanning";
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
@@ -14,6 +12,7 @@ import {
 import { confirmRegistration, ownDomainEmail, registerInBrowser } from "./helpers/registration";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
 import {
+  queuedScanSchema,
   openScannerDiagnostics,
   closeScannerDiagnostics,
   openScannerManualEntry,
@@ -25,7 +24,7 @@ test("phone scanner opens an immersive view and safely exits without camera perm
 }, testInfo) => {
   await context.clearPermissions();
   await page.setViewportSize({ width: 390, height: 844 });
-  await signInAsE2eStaff(page, e2eAdminEmail("default"));
+  await signInAsE2eStaff(page, e2eAdminEmail("portal-agenda-fast-scanner-idle"));
   await page.goto("/portal/#/events/pqc-conference-amsterdam-nl/scanner");
   await page.getByLabel("Scan mode", { exact: true }).selectOption("check");
   await openScannerDiagnostics(page);
@@ -83,7 +82,7 @@ test("continuous local eligibility checks queue a burst while attempt uploads ar
     await confirmRegistration(page, "Fast Scanner Attendee Org");
     await waitForCapturedEmail(email, "registration is confirmed", { since });
   }
-  await signInAsE2eStaff(page, e2eAdminEmail("default"));
+  await signInAsE2eStaff(page, e2eAdminEmail("portal-agenda-fast-scanner-burst"));
   const credentials: string[] = [];
   for (const email of [...emails, templateEmail]) {
     const response = await page.request.get(
@@ -153,16 +152,7 @@ test("continuous local eligibility checks queue a burst while attempt uploads ar
       db.close();
     }
   }, SCAN_STORAGE_VERSION);
-  const captured = queued.map((record) =>
-    offlineScanRecordSchema
-      .extend({
-        leaseUntil: z.number(),
-        owner: z.string().nullable(),
-        attempts: z.number().optional(),
-        nextAttemptAt: z.number().optional(),
-      })
-      .parse(record),
-  );
+  const captured = queued.map((record) => queuedScanSchema.parse(record));
   expect(captured).toHaveLength(4);
   expect(captured.map((record) => record.scan.badgeId)).toEqual(expect.arrayContaining(credentials));
   for (const record of captured) {

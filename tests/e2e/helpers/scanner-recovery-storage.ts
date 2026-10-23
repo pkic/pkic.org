@@ -4,11 +4,11 @@ import { uploadThroughControl } from "./file-upload";
 import { expect, type Page, type APIResponse, type BrowserContext, type Request, type Route } from "@playwright/test";
 import { z } from "zod";
 import { userAuthLogoutRequestSchema, userAuthLogoutResponseSchema } from "../../../assets/shared/schemas/user-auth";
-import { offlineScanRecordSchema } from "../../../assets/shared/schemas/event-participation-scanning";
+import { scannerQueueRecordSchema } from "../../../assets/shared/schemas/event-scanner-offline-queue";
 import { archivedScanSchema, scanRecoverySchema } from "../../../assets/shared/schemas/event-scan-recovery";
 import { SCAN_STORAGE_VERSION } from "../../../assets/ts/member-flows/portal/sections/events/detail/scanner/outbox-storage";
 
-const queuedScanSchema = offlineScanRecordSchema.extend({
+export const queuedScanSchema = scannerQueueRecordSchema.options[0].extend({
   leaseUntil: z.number(),
   owner: z.string().nullable(),
   attempts: z.number().optional(),
@@ -59,21 +59,19 @@ export async function scannerStorage(page: Page) {
 }
 
 function scannerDiagnostics(page: Page) {
-  return page.getByRole("dialog", { name: "Recovery and diagnostics", exact: true });
+  return page.getByRole("region", { name: "Recovery and diagnostics", exact: true });
 }
 
 export async function openScannerDiagnostics(page: Page) {
   const diagnostics = scannerDiagnostics(page);
-  if (!(await diagnostics.isVisible()))
-    await page.getByRole("button", { name: "Recovery and diagnostics", exact: true }).click();
+  if (!(await diagnostics.isVisible())) await page.getByRole("tab", { name: "Diagnostics", exact: true }).click();
   await expect(diagnostics).toBeVisible();
-  await expect(diagnostics).toHaveJSProperty("open", true);
   return diagnostics;
 }
 
 export async function closeScannerDiagnostics(page: Page): Promise<void> {
   const diagnostics = scannerDiagnostics(page);
-  if (await diagnostics.isVisible()) await diagnostics.getByRole("button", { name: "Done", exact: true }).click();
+  if (await diagnostics.isVisible()) await page.getByRole("tab", { name: "Setup", exact: true }).click();
   await expect(diagnostics).not.toBeVisible();
 }
 
@@ -88,14 +86,13 @@ export async function openScannerManualEntry(page: Page): Promise<void> {
         await controls.getByRole("button", { name: "Close operator controls", exact: true }).click();
       await continuous.getByRole("button", { name: "Enter or paste code", exact: true }).click();
     } else {
-      const scan = page.getByRole("tab", { name: "Scan", exact: true });
+      const scan = page.getByRole("tab", { name: "Setup", exact: true });
       if ((await scan.isVisible()) && (await scan.getAttribute("aria-selected")) === "false") await scan.click();
-      await page.getByRole("button", { name: "Enter code", exact: true }).click();
+      await page.getByRole("button", { name: "Manual entry", exact: true }).click();
     }
   }
   await expect(manual).toBeVisible();
   await expect(manual).toHaveJSProperty("open", true);
-  await expect(manual.getByRole("heading", { name: "Enter or paste badge code", exact: true })).toBeVisible();
   await expect(manual.getByLabel("Badge code", { exact: true })).toBeVisible();
 }
 

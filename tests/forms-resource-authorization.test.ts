@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import app from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
-import { mutateBeforeNextBatch } from "./helpers/database-races";
+import { mutateBeforeMatchingQuery } from "./helpers/database-races";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { insertUser } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
@@ -219,10 +219,13 @@ describe("canonical Forms resource authorization", () => {
   it("rolls back a global form create when forms:write is revoked before the guarded batch", async () => {
     const writer = await grant("forms:write");
     const key = `revoked-before-commit-${crypto.randomUUID()}`;
-    const racedDb = mutateBeforeNextBatch(env.DB, () =>
-      env.DB.prepare("UPDATE permission_grants SET revoked_at = datetime('now') WHERE id = ?")
-        .bind(writer.grantId)
-        .run(),
+    const racedDb = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => /^\s*(?:INSERT|UPDATE|DELETE)/u.test(sql),
+      () =>
+        env.DB.prepare("UPDATE permission_grants SET revoked_at = datetime('now') WHERE id = ?")
+          .bind(writer.grantId)
+          .run(),
     );
 
     const response = await call(
@@ -243,10 +246,13 @@ describe("canonical Forms resource authorization", () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const writer = await grant("events:write", { contextType: "event", contextId: eventId });
     const key = `event-revoked-before-commit-${crypto.randomUUID()}`;
-    const racedDb = mutateBeforeNextBatch(env.DB, () =>
-      env.DB.prepare("UPDATE permission_grants SET revoked_at = datetime('now') WHERE id = ?")
-        .bind(writer.grantId)
-        .run(),
+    const racedDb = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => /^\s*(?:INSERT|UPDATE|DELETE)/u.test(sql),
+      () =>
+        env.DB.prepare("UPDATE permission_grants SET revoked_at = datetime('now') WHERE id = ?")
+          .bind(writer.grantId)
+          .run(),
     );
 
     const response = await call(
@@ -275,10 +281,13 @@ describe("canonical Forms resource authorization", () => {
         })
       ).status,
     ).toBe(201);
-    const createRaceDb = mutateBeforeNextBatch(env.DB, () =>
-      env.DB.prepare("UPDATE permission_grants SET revoked_at = datetime('now') WHERE id = ?")
-        .bind(createWriter.grantId)
-        .run(),
+    const createRaceDb = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => /^\s*(?:INSERT|UPDATE|DELETE)/u.test(sql),
+      () =>
+        env.DB.prepare("UPDATE permission_grants SET revoked_at = datetime('now') WHERE id = ?")
+          .bind(createWriter.grantId)
+          .run(),
     );
     const createResponse = await call(
       createWriter.token,
@@ -311,10 +320,13 @@ describe("canonical Forms resource authorization", () => {
       body: JSON.stringify({ contextType: "event", contextRef: eventId, audience: "attendee" }),
     });
     const placement = formPlacementCreateResponseSchema.parse(await placementResponse.json()).placement;
-    const updateRaceDb = mutateBeforeNextBatch(env.DB, () =>
-      env.DB.prepare("UPDATE permission_grants SET revoked_at = datetime('now') WHERE id = ?")
-        .bind(updateWriter.grantId)
-        .run(),
+    const updateRaceDb = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => /^\s*(?:INSERT|UPDATE|DELETE)/u.test(sql),
+      () =>
+        env.DB.prepare("UPDATE permission_grants SET revoked_at = datetime('now') WHERE id = ?")
+          .bind(updateWriter.grantId)
+          .run(),
     );
     const updateResponse = await call(
       updateWriter.token,
@@ -343,10 +355,13 @@ describe("canonical Forms resource authorization", () => {
           })
         ).status,
       ).toBe(201);
-      const racedDb = mutateBeforeNextBatch(env.DB, () =>
-        env.DB.prepare("UPDATE permission_grants SET revoked_at = datetime('now') WHERE id = ?")
-          .bind(writer.grantId)
-          .run(),
+      const racedDb = mutateBeforeMatchingQuery(
+        env.DB,
+        (sql) => /^\s*(?:INSERT|UPDATE|DELETE)/u.test(sql),
+        () =>
+          env.DB.prepare("UPDATE permission_grants SET revoked_at = datetime('now') WHERE id = ?")
+            .bind(writer.grantId)
+            .run(),
       );
       const response = await call(
         writer.token,

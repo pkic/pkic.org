@@ -100,6 +100,20 @@ missing images and entity precedence. Durations are advisory; query-count and
 plan regressions fail the test. Compare repeated runs under similar machine
 load and keep profiles outside the repository.
 
+Mounted Worker tests can enforce a complete-request D1 budget with
+`callApi(env, path, init, { maxRoundTrips: 1 })`. The budget includes
+middleware, authentication, resource reads, writes, and request-owned
+`waitUntil` work through the instrumented D1 binding. A multi-statement batch
+counts once; separate calls count individually, including parallel calls and
+failures. Calls inside Durable Objects need their own instrumentation.
+Failures identify the request and SQL templates without bound parameter values.
+
+To audit existing tests without making every unfinished workflow fail, run
+`PKIC_D1_BUDGET_MODE=warn pnpm run test:worker <test-file>`. Use `fail` instead
+of `warn` to enforce a one-trip maximum for every `callApi` request in that run.
+Explicit per-request budgets take precedence. Converted workflows should keep
+a strict budget in their tests; avoid raising it to hide a regression.
+
 Oxlint (`pnpm run lint`) and Oxfmt (`pnpm run format:check`) run as separate
 gates so formatting is checked once. Oxlint's type-aware rules read the nearest
 `tsconfig.json` of each file. The `tsconfig.json` in `assets/ts`, `assets/design`,

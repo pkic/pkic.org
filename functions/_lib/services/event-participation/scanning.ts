@@ -1,8 +1,8 @@
+import { readScannerAttemptBasis } from "./scanner-attempt-basis";
 import { prepareCheckInStanding } from "../member-standing/awards";
 import { prepareAttemptCapturedValue } from "./scan-attempt-capture";
 import { scannerAdmissionDecisionSql } from "./scanner-admission-decision";
 import { recordScanTargetRefusal } from "./scan-target-refusal";
-import { scanCaptureDecision } from "./scan-capture-decision";
 import { hashBadgeCredential } from "./badge-hash";
 import { recordCheckout } from "./checkout";
 import { resolvePhysicalSessionRoom } from "./session-room";
@@ -13,7 +13,7 @@ import {
   type EventScanRequest,
   type EventScanResponse,
 } from "../../../../assets/shared/schemas/event-participation-scanning";
-import { first } from "../../db/queries";
+import { batchFirst } from "../../db/pagination";
 import type { DatabaseLike } from "../../types";
 import { publishedSessionsSql } from "./published-schedule";
 import { AppError } from "../../errors";
@@ -66,17 +66,15 @@ export async function recordScan(
       admissionDecision: receipt.admissionDecision,
     });
   };
-  const replay = await first<AttemptRow>(db, receiptSql, receiptBindings);
+  const {
+    replay,
+    location,
+    badge,
+    capture: decodeCapture,
+  } = await readScannerAttemptBasis<AttemptRow>(db, eventId, scan, db.prepare(receiptSql).bind(...receiptBindings));
   if (replay) return response(replay);
-  const location = scan.occurrenceId
-    ? await first<{ room_id: string | null; additional_room_ids_json: string }>(
-        db,
-        `SELECT room_id,additional_room_ids_json FROM (${publishedSessionsSql}) WHERE id=? AND event_id=?`,
-        [scan.occurrenceId, eventId],
-      )
-    : null;
   if (scan.occurrenceId && !location)
-    return recordScanTargetRefusal(db, eventId, scan, requestHash, "verification_required");
+    return recordScanTargetRefusal(db, eventId, scan, requestHash, "verification_required", badge?.id ?? null);
   const wrongLocation = Boolean(
     (!scan.occurrenceId && scan.roomId) ||
     (location &&
@@ -86,11 +84,6 @@ export async function recordScan(
       ]).safeParse(scan).success),
   );
   const roomId = !wrongLocation && location ? resolvePhysicalSessionRoom(location, scan.roomId) : null;
-  const badge = await first<{ id: string }>(
-    db,
-    "SELECT id FROM event_badge_credentials WHERE event_id=? AND credential_hash=?",
-    [eventId, await hashBadgeCredential(scan.badgeId)],
-  );
   if (!badge)
     return eventScanResponseSchema.parse({
       operationId: scan.operationId,
@@ -102,7 +95,7 @@ export async function recordScan(
       admissionDecision: null,
     });
   // Historical grant metadata is optional; normal evidence does not depend on grant availability.
-  const capture = await scanCaptureDecision(db, eventId, { ...scan, offlineRight: undefined }, true);
+  const capture = decodeCapture();
   const id = crypto.randomUUID();
   const now = nowIso();
   const registration = "COALESCE(reg.status,'')<>'registered'";
@@ -166,8 +159,8 @@ export async function recordScan(
     );
   statements.push(prepareCheckInStanding(db, id, nowIso()));
   statements.push(prepareAttemptCapturedValue(db, eventId, scan, requestHash));
-  await db.batch(statements);
-  const committed = await first<AttemptRow>(db, receiptSql, receiptBindings);
+  const results = await db.batch([...statements, db.prepare(receiptSql).bind(...receiptBindings)]);
+  const committed = batchFirst<AttemptRow>(results[results.length - 1]);
   if (!committed) throw new AppError(409, "SCAN_OPERATION_REUSED", "Use a new operation ID for a different scan.");
   return response(committed);
 }

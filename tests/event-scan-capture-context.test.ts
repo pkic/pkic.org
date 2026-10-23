@@ -2,7 +2,7 @@ import { generateBadgeCredential } from "../assets/shared/schemas/badge-credenti
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { createEventScannerFixture } from "./helpers/event-scanner-fixture";
-import { mutateBeforeNextBatch } from "./helpers/database-races";
+import { mutateBeforeMatchingQuery } from "./helpers/database-races";
 import { recordScan } from "../functions/_lib/services/event-participation/scanning";
 import { eventScanRequestSchema } from "../assets/shared/schemas/event-participation-scanning";
 
@@ -130,8 +130,10 @@ describe("Immutable scan calendar context", () => {
     expect(await env.DB.prepare("SELECT COUNT(*) AS total FROM event_entry_admissions").first()).toEqual({ total: 0 });
   });
   it("preserves a recognized unverified attempt without allocating admission on a context race", async () => {
-    const db = mutateBeforeNextBatch(env.DB, () =>
-      env.DB.prepare("UPDATE events SET timezone='Europe/Amsterdam' WHERE id=?").bind(fixture.eventId).run(),
+    const db = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => /INSERT INTO event_scan_attempts/u.test(sql),
+      () => env.DB.prepare("UPDATE events SET timezone='Europe/Amsterdam' WHERE id=?").bind(fixture.eventId).run(),
     );
     const body = eventScanRequestSchema.parse(fixture.scanBody({ action: "attendance", occurrenceId: null }));
     expect(

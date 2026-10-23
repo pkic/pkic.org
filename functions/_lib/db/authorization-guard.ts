@@ -36,20 +36,31 @@ export function guardAuthorizedDatabase(
   evidence: AuthorizationEvidence,
   authorizationChangedError: () => Error,
 ): DatabaseLike {
-  return guardDatabaseBatches(db, async (statements, readOnly) => {
-    try {
-      // Owner-approved (2026-10-21): replica lag in permission/session revocation
-      // is accepted for reads, without a fixed D1 lag bound. Do not replace this
-      // read-only check with a primary write solely to eliminate that lag.
-      const guard = readOnly
-        ? db.prepare(`SELECT EXISTS (${evidence.sql}) AS authorized`).bind(...evidence.bindings)
-        : prepareAuthorizationGuard(db, evidence);
-      const [authorization, ...results] = await db.batch([guard, ...statements]);
-      if (readOnly && authorization?.results?.[0]?.authorized !== 1) throw authorizationChangedError();
-      return results;
-    } catch (error) {
-      if (isAuthorizationGuardFailure(error)) throw authorizationChangedError();
-      throw error;
-    }
-  });
+  return guardDatabaseBatches(db, (statements, readOnly) =>
+    executeAuthorizedDatabaseBatch(db, evidence, statements, readOnly, authorizationChangedError),
+  );
+}
+
+/** Compose statements whose read-only classification has already been established by a guarded adapter. */
+export async function executeAuthorizedDatabaseBatch(
+  db: DatabaseLike,
+  evidence: AuthorizationEvidence,
+  statements: StatementLike[],
+  readOnly: boolean,
+  authorizationChangedError: () => Error,
+) {
+  try {
+    // Owner-approved (2026-10-21): replica lag in permission/session revocation
+    // is accepted for reads, without a fixed D1 lag bound. Do not replace this
+    // read-only check with a primary write solely to eliminate that lag.
+    const guard = readOnly
+      ? db.prepare(`SELECT EXISTS (${evidence.sql}) AS authorized`).bind(...evidence.bindings)
+      : prepareAuthorizationGuard(db, evidence);
+    const [authorization, ...results] = await db.batch([guard, ...statements]);
+    if (readOnly && authorization?.results?.[0]?.authorized !== 1) throw authorizationChangedError();
+    return results;
+  } catch (error) {
+    if (isAuthorizationGuardFailure(error)) throw authorizationChangedError();
+    throw error;
+  }
 }

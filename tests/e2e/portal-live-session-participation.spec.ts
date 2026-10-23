@@ -73,7 +73,7 @@ test("attendees ask, upvote, reply, accept answers and restore participation aft
   browser,
 }, info) => {
   test.setTimeout(300_000);
-  await signInAsE2eStaff(moderator, e2eAdminEmail("default"));
+  await signInAsE2eStaff(moderator, e2eAdminEmail("portal-live-session-participation"));
   // Clamp the live slot to this event's UTC day, including runs near midnight.
   const now = new Date();
   const fixture = await createRegistrationEvent(moderator, "live-participation", {

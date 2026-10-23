@@ -1,9 +1,9 @@
 import { batchFirst, batchRows } from "../../db/pagination";
-import type { DatabaseLike } from "../../types";
+import type { D1StatementResult, DatabaseLike } from "../../types";
 
 /** Independent editor projections share one D1 transaction and network round trip. */
-export async function readAgendaSnapshotRows(db: DatabaseLike, eventId: string) {
-  const results = await db.batch([
+export function prepareAgendaSnapshotRows(db: DatabaseLike, eventId: string) {
+  return [
     db
       .prepare("SELECT settings_json,timezone,starts_at,ends_at,name,base_path,city FROM events WHERE id = ?")
       .bind(eventId),
@@ -48,7 +48,10 @@ export async function readAgendaSnapshotRows(db: DatabaseLike, eventId: string) 
         "SELECT assignment.position_id,assignment.post_id,assignment.shift_id,assignment.role,assignment.user_id,assignment.pinned,assignment.origin FROM event_agenda_assignments assignment JOIN event_agenda_shifts shift ON shift.id=assignment.shift_id WHERE shift.event_id = ? ORDER BY assignment.position_id LIMIT 2000",
       )
       .bind(eventId),
-  ]);
+  ];
+}
+
+export function decodeAgendaSnapshotRows(results: D1StatementResult[]) {
   return {
     event: batchFirst<{
       settings_json: string;

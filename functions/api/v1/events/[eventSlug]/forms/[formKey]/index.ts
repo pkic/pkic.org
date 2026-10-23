@@ -9,7 +9,8 @@ import {
   eventFormPatchRouteSchema,
 } from "../../../../../../../assets/shared/schemas/route-contracts-forms";
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../../../../../_lib/db/authorization-guard";
-import type { AdminContext } from "../../../../../../_lib/db/context";
+import { requestDb, type AdminContext } from "../../../../../../_lib/db/context";
+import { getEventFormDetail } from "../../../../../../_lib/services/events/form-detail";
 import { AppError } from "../../../../../../_lib/errors";
 import { json } from "../../../../../../_lib/http";
 import { openApiRoute } from "../../../../../../_lib/openapi/route";
@@ -47,14 +48,8 @@ function rejectPortalEventFlowForm(event: { source_mode?: string | null }, form:
 }
 
 export const EventFormGet = openApiRoute(eventFormGetRouteSchema, async (c: AdminContext, data) => {
-  const { db, event } = await requireEventFormsPermission(c, data.params.eventSlug, "events:read");
-  const aggregate = await requireEventForm(db, event.id, data.params.formKey);
-  return json(
-    formDetailResponseSchema.parse({
-      form: aggregate.form,
-      fields: mapManagedFormFields(aggregate.fields),
-    }),
-  );
+  const detail = await getEventFormDetail(requestDb(c), c.req.raw, c.env, data.params.eventSlug, data.params.formKey);
+  return json(formDetailResponseSchema.parse(detail));
 });
 
 export const EventFormPatch = openApiRoute(eventFormPatchRouteSchema, async (c: AdminContext, data) => {

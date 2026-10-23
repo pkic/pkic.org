@@ -17,12 +17,18 @@ export async function recordScanTargetRefusal(
   scan: EventScanRequest,
   requestHash: string,
   reason: "wrong_location" | "verification_required",
+  recognizedBadgeId?: string | null,
 ) {
-  const badge = await first<{ id: string }>(
-    db,
-    "SELECT id FROM event_badge_credentials WHERE event_id=? AND credential_hash=?",
-    [eventId, await hashBadgeCredential(scan.badgeId)],
-  );
+  const badge =
+    recognizedBadgeId !== undefined
+      ? recognizedBadgeId
+        ? { id: recognizedBadgeId }
+        : null
+      : await first<{ id: string }>(
+          db,
+          "SELECT id FROM event_badge_credentials WHERE event_id=? AND credential_hash=?",
+          [eventId, await hashBadgeCredential(scan.badgeId)],
+        );
   if (!badge)
     return eventScanResponseSchema.parse({
       operationId: scan.operationId,

@@ -12,7 +12,7 @@ import { prepareQueueEmailStatement, processOutboxByIdBackground } from "../../e
 import { generateSignedRsvpAddress } from "../../email/rsvp";
 import { buildRegistrationIcs } from "../../utils/calendar";
 import { buildAttendanceEmailData, buildRegistrationEmailStatusData } from "../../utils/attendance";
-import { buildAcceptedTermsText, getCustomAnswerRows } from "../../utils/registration-email";
+import { buildAcceptedTermsText, buildCustomAnswerRows } from "../../utils/registration-email";
 import { prepareValidatedAttendeeRegistration } from "../attendee-registration";
 import { buildEventEmailVariables, getEventBySlug, recordHugoEventBasePath } from "../events";
 import { myAgendaPageUrl, registrationManagePageUrl } from "../frontend-links";
@@ -140,7 +140,7 @@ export async function submitEventRegistration(
     }
   }
 
-  const { prepared, requiredTerms } = await prepareValidatedAttendeeRegistration(db, body, {
+  const { prepared, requiredTerms, formResponse } = await prepareValidatedAttendeeRegistration(db, body, {
     sourceType: invite ? "invite" : body.sourceType,
     sourceRef: body.sourceRef,
     referredByCode: body.referralCode,
@@ -173,12 +173,7 @@ export async function submitEventRegistration(
   const dayWaitlist = prepared.plannedDayWaitlist;
   const attendanceData = buildAttendanceEmailData(registration.attendance_type, prepared.dayAttendance, dayWaitlist);
   const statusData = buildRegistrationEmailStatusData(registration.status, dayWaitlist);
-  const customAnswerRows = await getCustomAnswerRows(db, {
-    sourceId: registration.id,
-    event: { id: event.id, source_mode: event.source_mode ?? null },
-    formPlacementId: registration.form_placement_id,
-    answersJson: registration.custom_answers_json,
-  });
+  const customAnswerRows = buildCustomAnswerRows(formResponse.answers, formResponse.form?.fields);
   const acceptedTermsText = buildAcceptedTermsText(body.consents, requiredTerms);
   const affiliation = await readRegistrationAffiliation(db, {
     identityId: registration.registration_identity_id,

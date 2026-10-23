@@ -1,10 +1,12 @@
+import { AppError } from "../../errors";
 import { LiveRoomEngagement } from "./room-engagement";
 import { LiveRoomAnswers } from "./room-answers";
 import { LiveRoomAnswerStore } from "./room-answer-store";
 import { advanceLiveStage } from "./room-stage-next";
 import { LiveRoomGraphics } from "./room-graphics";
-import { LIVE_TICKER_REFRESH_MS } from "./room-ticker";
-import { LiveRoomProgram, LIVE_PROGRAM_SOCKET_TAG } from "./room-program";
+import { LiveRoomGraphicBasis } from "./room-graphic-basis";
+import { LIVE_TICKER_REFRESH_MS, liveChatTickerLines } from "./room-ticker";
+import { LiveRoomProgram, LIVE_PROGRAM_SOCKET_TAG, closeLiveRoomProgramSources } from "./room-program";
 import type {
   LiveProgramSelection,
   LiveProgramSelectResult,
@@ -29,30 +31,24 @@ import {
   type LiveStage,
 } from "../../../../assets/shared/schemas/live-session-room";
 import type { Env, LiveSessionRoomRpc } from "../../types";
-import { AppError } from "../../errors";
-import { revalidateLiveRoomParticipant } from "./room-access";
-import { authorizeLiveRoomRecipients } from "./room-recipients";
+import { LiveRoomAccessLease } from "./room-access-lease";
+import { runLiveRoomAlarm } from "./room-alarm";
+import { closeLiveRoomSocket } from "./room-socket-close";
 import { liveRoomRefusalCloseCode } from "../../../../assets/shared/schemas/live-session-room";
 import { nowIso } from "../../utils/time";
-import {
-  LIVE_ROOM_ADMISSION_HEADER,
-  liveRoomAdmissionSchema,
-  preserveLiveRoomThread,
-  type LiveRoomParticipant,
-} from "./room-admission";
+import { LIVE_ROOM_ADMISSION_HEADER, liveRoomAdmissionSchema, type LiveRoomParticipant } from "./room-admission";
 import { LiveRoomBroadcast } from "./room-broadcast";
 import { LiveRoomControls, type LiveControlOutcome, type LiveRefusal } from "./room-controls";
 import { LiveRoomTimers } from "./room-timers";
-import { copyLiveRoomToD1 } from "./room-durable-copy";
 import { LivePollStore } from "./room-poll-store";
 import { LiveRoomPolls } from "./room-polls";
 import { parseLiveRoomMessage, serializeLiveRoomMessage } from "./room-projection";
 import { LiveRoomSql } from "./room-sql";
+import { LiveRoomDatabaseSession } from "./room-database-session";
 import { LiveRoomStore } from "./room-store";
 import { LiveRoomOutputs } from "./room-outputs";
 import { LiveRoomPreview } from "./room-preview";
 import { LiveRoomPresence } from "./room-presence";
-import { liveChatTickerLines } from "./room-ticker";
 import { LiveRoomAddedCredits } from "./room-added-credits";
 import { refreshLiveCreditCopies } from "./room-credit-refresh";
 
@@ -70,13 +66,13 @@ const REFUSALS = {
 const ERASURE = { userId: "", name: "Privacy erasure" };
 
 /**
- * One session's live room: questions, polls, votes, reactions and the control
- * desk. Sockets use the Hibernation API, so an idle room costs nothing while
- * its connections stay open; each socket's participant rides its attachment.
- * The room's alarm owns its durable copy to D1 and, days after the session,
- * the erasure of its own storage.
+ * Session questions, polls, chat and controls use hibernating sockets with
+ * participant attachments. The alarm owns durable D1 copies and room erasure.
  */
 export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRoomRpc {
+  private readonly databaseSession: LiveRoomDatabaseSession;
+  private readonly sessionEnv: Env;
+  private readonly access: LiveRoomAccessLease;
   private readonly program: LiveRoomProgram;
   private readonly sql: LiveRoomSql;
   private readonly store: LiveRoomStore;
@@ -100,12 +96,26 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
-    this.program = new LiveRoomProgram(ctx, env);
     this.sql = new LiveRoomSql(ctx.storage.sql);
     this.store = new LiveRoomStore(this.sql);
+    this.databaseSession = new LiveRoomDatabaseSession(env.DB, this.store);
+    this.sessionEnv = { ...env, DB: this.databaseSession };
+    this.program = new LiveRoomProgram(ctx, this.sessionEnv, (bookmark) => this.databaseSession.seedBookmark(bookmark));
     this.pollStore = new LivePollStore(this.sql);
     this.chat = new LiveRoomChat(this.sql);
-    this.authors = new LiveRoomAuthors(this.sql, new LiveRoomPeople(this.sql), env, () => {
+    this.access = new LiveRoomAccessLease(
+      ctx,
+      this.sessionEnv,
+      this.sql,
+      () => this.store.session(),
+      () => [
+        ...this.chat.authors(),
+        ...this.store.questions().map((row) => row.author_user_id),
+        ...this.answerStore.authors(),
+      ],
+      (userId) => this.forgetParticipant(userId),
+    );
+    this.authors = new LiveRoomAuthors(this.sql, new LiveRoomPeople(this.sql), this.sessionEnv, () => {
       const room = this.store.session();
       return room ? { eventId: room.eventId, occurrenceId: room.session.occurrenceId } : null;
     });
@@ -124,18 +134,20 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       this.store,
       this.pollStore,
       this.chatFeed,
-      env.DB,
-      (sockets) => authorizeLiveRoomRecipients(env, this.store.session(), sockets),
+      this.sessionEnv.DB,
+      (sockets) => this.access.authorize(sockets),
       () => this.graphics.layouts,
       () => this.graphics.tickerContext,
+      (work) => this.access.run(work),
     );
     this.graphics = new LiveRoomGraphics(
-      env,
+      this.sessionEnv,
       this.store,
       this.broadcast,
       this.controls,
       this.outputs,
       new LiveRoomPreview(this.store, this.pollStore, this.controls),
+      new LiveRoomGraphicBasis(this.sql),
     );
     this.graphics.chatTicker = () => liveChatTickerLines(this.chat);
     this.chatActions = new LiveRoomChatActions(
@@ -146,7 +158,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       this.broadcast,
       this.authors,
       {
-        tickerChanged: () => this.graphics.refresh(),
+        tickerChanged: () => this.graphics.refreshLocal(),
         audited: () => this.scheduleCopy(),
       },
     );
@@ -155,14 +167,24 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       changed: () => this.scheduleCopy(),
     });
     this.answerStore = new LiveRoomAnswerStore(this.sql);
-    this.answers = new LiveRoomAnswers(ctx, this.store, this.answerStore, this.broadcast, this.authors, env.DB, () =>
-      this.scheduleCopy(),
+    this.answers = new LiveRoomAnswers(
+      ctx,
+      this.store,
+      this.answerStore,
+      this.broadcast,
+      this.authors,
+      this.sessionEnv.DB,
+      () => this.scheduleCopy(),
     );
-    this.presence = new LiveRoomPresence(ctx);
-    this.addedCredits = new LiveRoomAddedCredits(env.DB, this.store);
+    this.presence = new LiveRoomPresence(ctx, (sockets) => this.access.eligible(sockets));
+    this.addedCredits = new LiveRoomAddedCredits(this.sessionEnv.DB, this.store);
     this.engagement = new LiveRoomEngagement(ctx, this.store, this.polls, this.broadcast, () => this.scheduleCopy());
     // Keep-alive pings are answered without waking the room.
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
+  }
+
+  async endProgramSources(roomId: string): Promise<void> {
+    closeLiveRoomProgramSources(this.ctx, roomId);
   }
 
   async programStage(): Promise<LiveStage> {
@@ -191,9 +213,10 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
     if (request.headers.get("upgrade")?.toLowerCase() !== "websocket")
       return new Response("Expected a WebSocket upgrade", { status: 426 });
     const admission = liveRoomAdmissionSchema.parse(JSON.parse(request.headers.get(LIVE_ROOM_ADMISSION_HEADER) ?? ""));
+    this.databaseSession.seedBookmark(admission.readBookmark ?? admission.participant.sessionClaims?.state);
     this.store.saveSession(admission.eventId, admission.session);
     for (const message of refreshLiveCreditCopies(this.store, admission.session)) await this.broadcast.all(message);
-    await this.graphics.refresh();
+    await this.graphics.initialize();
     await this.scheduleAlarm(
       Math.min(liveRoomPurgeAt(admission.session.endAt), Date.now() + LIVE_TICKER_REFRESH_MS),
       true,
@@ -201,6 +224,9 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
     const { 0: client, 1: server } = new WebSocketPair();
     this.ctx.acceptWebSocket(server, [admission.participant.role]);
     server.serializeAttachment(admission.participant);
+    await this.access.admit(server);
+    const refreshAt = this.access.nextRefreshAt();
+    if (refreshAt !== null) await this.scheduleAlarm(refreshAt, true);
     const snapshot = await this.broadcast.snapshot(server, admission.session);
     if (snapshot !== null && server.readyState === WebSocket.OPEN) server.send(snapshot);
     if (admission.participant.role === "operator") {
@@ -226,40 +252,38 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       viewer = { ...viewer, questionThreadRequestId: threadRequestId };
       socket.serializeAttachment(viewer);
     }
-    // Presence arrives up to ten times a second; it rides on the socket's recent full access check.
-    const ridesOnAccess =
-      message?.type === "presence.update" && viewer.role === "operator" && this.presence.recentlyAuthorized(socket);
-    if (message && viewer.role !== "overlay" && !ridesOnAccess) {
+    return this.access.run(() => this.handleSocketCommand(socket, viewer, message, threadRequestId));
+  }
+
+  private async handleSocketCommand(
+    socket: WebSocket,
+    viewer: LiveRoomParticipant,
+    message: LiveRoomClientMessage | null,
+    threadRequestId: string | null,
+  ): Promise<void> {
+    if (message && viewer.role !== "overlay") {
       const room = this.store.session();
       if (!room) return;
-      try {
-        const current = await revalidateLiveRoomParticipant(
-          this.env.DB,
-          viewer,
-          room.eventId,
-          room.session.occurrenceId,
-          this.env.LIVE_SESSION_ROOMS,
-        );
-        // Socket audience tags are fixed at admission; reconnect when the live role changes.
-        if (current.role !== viewer.role)
-          throw new AppError(403, "LIVE_SESSION_ACCESS_CHANGED", "Reconnect to use your current session access.");
-        viewer = preserveLiveRoomThread(current, socket.deserializeAttachment() as LiveRoomParticipant);
-        socket.serializeAttachment(viewer);
-        this.presence.authorized(socket);
-      } catch (error) {
-        if (!(error instanceof AppError) || error.status < 400 || error.status >= 500) throw error;
-        if (!this.ctx.getTags(socket).includes(LIVE_PROGRAM_SOCKET_TAG)) await this.left(socket);
-        socket.close(liveRoomRefusalCloseCode(error.status), error.code);
+      const authorized = await this.access.authorize([socket]);
+      if (!authorized.length) {
+        await this.left(socket);
         return;
       }
+      viewer = socket.deserializeAttachment() as LiveRoomParticipant;
     }
     if (
       threadRequestId &&
       (socket.deserializeAttachment() as LiveRoomParticipant).questionThreadRequestId !== threadRequestId
     )
       return;
-    const refusal = message ? await this.handle(viewer, message, socket) : REFUSALS.invalid;
-    if (refusal)
+    let refusal: Handled;
+    try {
+      refusal = message ? await this.handle(viewer, message, socket) : REFUSALS.invalid;
+    } catch (error) {
+      if (!(error instanceof AppError) || error.status < 400 || error.status >= 500) throw error;
+      refusal = { code: error.code, message: error.message };
+    }
+    if (refusal && socket.readyState === WebSocket.OPEN)
       socket.send(
         serializeLiveRoomMessage({
           type: "room.refused",
@@ -271,49 +295,30 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
 
   async webSocketClose(socket: WebSocket, code: number, reason: string): Promise<void> {
     if (!this.ctx.getTags(socket).includes(LIVE_PROGRAM_SOCKET_TAG)) await this.left(socket);
-    try {
-      socket.close(code, reason);
-    } catch {
-      // Already closed by the runtime.
-    }
+    closeLiveRoomSocket(socket, code, reason);
   }
 
   async webSocketError(socket: WebSocket): Promise<void> {
     if (!this.ctx.getTags(socket).includes(LIVE_PROGRAM_SOCKET_TAG)) await this.left(socket);
-    try {
-      socket.close(1011, "Room error");
-    } catch {
-      // Already closed by the runtime.
-    }
+    closeLiveRoomSocket(socket, 1011, "Room error");
   }
 
   /**
-   * The durable copy's single retry owner: a failed batch throws, and the
-   * runtime retries the alarm. Once everything is copied and the session is
-   * long over, the room erases its own storage.
+   * The durable copy's single retry owner: failed copies stay pending for the
+   * next scheduled alarm without interrupting access refresh. Once everything
+   * is copied and the session is long over, the room erases its own storage.
    */
   async alarm(): Promise<void> {
-    if (await this.program.exists()) return this.program.alarm();
-    const pending = this.store.pendingCopy();
-    if (pending) {
-      await copyLiveRoomToD1(this.env.DB, pending);
-      this.store.markCopied(pending);
-    }
-    const room = this.store.session();
-    if (!room) return;
-    if (this.store.hasPendingCopy()) return this.ctx.storage.setAlarm(this.copyDue());
-    if (
-      Date.now() < liveRoomPurgeAt(room.session.endAt) &&
-      this.ctx.getWebSockets().some((socket) => socket.readyState === WebSocket.OPEN)
-    ) {
-      await this.graphics.refresh();
-      return this.ctx.storage.setAlarm(
-        Math.min(liveRoomPurgeAt(room.session.endAt), Date.now() + LIVE_TICKER_REFRESH_MS),
-      );
-    }
-    const purgeAt = liveRoomPurgeAt(room.session.endAt);
-    if (Date.now() < purgeAt) return this.ctx.storage.setAlarm(purgeAt);
-    await this.purge();
+    return runLiveRoomAlarm({
+      ctx: this.ctx,
+      program: this.program,
+      store: this.store,
+      db: this.env.DB,
+      access: this.access,
+      refreshGraphics: () => this.graphics.refresh(),
+      copyDue: () => this.copyDue(),
+      purge: () => this.purge(),
+    });
   }
 
   /**
@@ -324,6 +329,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
   async forgetParticipant(userId: string): Promise<void> {
     // A room already erased after its session holds nothing to forget, and must stay empty.
     if (!this.sql.holdsData()) return;
+    this.access.forget(userId);
     const at = nowIso();
     const changedThreads = this.answerStore.forget(userId);
     const { removed, recounted } = this.store.forgetQuestions(userId);
@@ -378,6 +384,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
     this.engagement.clear();
     await this.ctx.storage.deleteAll();
     this.sql.erased();
+    this.databaseSession.reset();
   }
 
   private async left(socket: WebSocket): Promise<void> {
@@ -518,7 +525,6 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       }
     >,
   ): Promise<LiveControlOutcome> {
-    await this.graphics.refresh();
     const at = nowIso();
     switch (message.type) {
       case "question.rewrite":

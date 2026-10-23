@@ -7,7 +7,7 @@ import { callApi } from "./helpers/app";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
 import {
-  getActiveFormByPurpose,
+  getActiveEventFormByPurpose,
   prepareCreateFormSubmission,
   validateCustomAnswersAgainstForm,
 } from "../functions/_lib/services/forms";
@@ -52,7 +52,7 @@ async function placeForm(formKey: string, eventId: string, audience: string) {
 }
 
 async function submit(
-  form: NonNullable<Awaited<ReturnType<typeof getActiveFormByPurpose>>>,
+  form: NonNullable<Awaited<ReturnType<typeof getActiveEventFormByPurpose>>>,
   answers: Record<string, unknown>,
 ) {
   const normalized = validateCustomAnswersAgainstForm(form, { customAnswers: answers, errorStatus: 422 });
@@ -123,8 +123,8 @@ describe("reusable live-editable form placements", () => {
     secondPlacement = formPlacementCreateResponseSchema.parse(await placementPatch.json()).placement;
     expect(secondPlacement.audience).toBe("reviewer");
 
-    const firstDefinition = await getActiveFormByPurpose(env.DB, firstEventId, "survey");
-    const secondDefinition = await getActiveFormByPurpose(env.DB, secondEventId, "survey");
+    const firstDefinition = await getActiveEventFormByPurpose(env.DB, firstEventId, "survey");
+    const secondDefinition = await getActiveEventFormByPurpose(env.DB, secondEventId, "survey");
     expect(firstDefinition?.id).toBe(created.formId);
     expect(secondDefinition?.id).toBe(created.formId);
     expect(firstDefinition?.placement?.id).toBe(firstPlacement.id);
@@ -225,8 +225,8 @@ describe("reusable live-editable form placements", () => {
       ]);
     }
 
-    const firstAfterEdit = await getActiveFormByPurpose(env.DB, firstEventId, "survey");
-    const secondAfterEdit = await getActiveFormByPurpose(env.DB, secondEventId, "survey");
+    const firstAfterEdit = await getActiveEventFormByPurpose(env.DB, firstEventId, "survey");
+    const secondAfterEdit = await getActiveEventFormByPurpose(env.DB, secondEventId, "survey");
     expect(firstAfterEdit?.fields.map((field) => field.key)).toEqual(["follow_up", "subject"]);
     expect(secondAfterEdit?.fields).toEqual(firstAfterEdit?.fields);
 
@@ -264,7 +264,7 @@ describe("reusable live-editable form placements", () => {
       }),
     });
     await placeForm("stale-survey", eventId, "group_member");
-    const staleDefinition = await getActiveFormByPurpose(env.DB, eventId, "survey");
+    const staleDefinition = await getActiveEventFormByPurpose(env.DB, eventId, "survey");
     const prepared = prepareCreateFormSubmission(
       env.DB,
       staleDefinition!,
@@ -294,7 +294,7 @@ describe("reusable live-editable form placements", () => {
       }),
     });
     const placement = await placeForm("placement-guard-survey", eventId, "group_member");
-    const definition = await getActiveFormByPurpose(env.DB, eventId, "survey");
+    const definition = await getActiveEventFormByPurpose(env.DB, eventId, "survey");
     const prepared = prepareCreateFormSubmission(
       env.DB,
       definition!,

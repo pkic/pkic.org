@@ -7,7 +7,7 @@ import {
   type EventSettingsInput,
   type EventSettingsUpdateInput,
 } from "../../../../assets/shared/schemas/event-management";
-import { prepareDirectProposalWindow } from "./proposal-window";
+import { prepareDirectEventFormSelectionRead } from "./direct-form-selection";
 import { BADGE_TEMPLATE_SETTINGS_MAX_BYTES } from "../../../../assets/shared/schemas/event-badge-template";
 import type { DatabaseLike, StatementLike, UserBackedAuthAdmin } from "../../types";
 import { AppError } from "../../errors";
@@ -28,17 +28,6 @@ import {
   requireDirectEventConfiguration,
   throwEventConfigurationConflict,
 } from "./direct-configuration";
-
-function setFormLink(
-  settings: Record<string, unknown>,
-  purpose: "event_registration" | "proposal_submission",
-  formKey: string | null | undefined,
-): void {
-  if (formKey === undefined) return;
-  const forms = (settings.forms as Record<string, unknown> | undefined) ?? {};
-  forms[purpose] = formKey;
-  settings.forms = forms;
-}
 
 function mergeEventSettings(
   existingJson: string,
@@ -81,8 +70,7 @@ function mergeEventSettings(
     if (Object.keys(proposal).length === 0) delete settings.proposal;
     else settings.proposal = proposal;
   }
-  setFormLink(settings, "event_registration", input.registrationFormKey);
-  setFormLink(settings, "proposal_submission", input.proposalFormKey);
+  delete settings.forms;
   return settings;
 }
 
@@ -293,16 +281,32 @@ export async function updateDirectEventSettings(
   const { expectedUpdatedAt, ...settings } = input.settings;
   const context = { type: "event", id: event.id };
   const updatedAt = nowIso();
-  const proposalWindowStatements =
-    settings.proposalSubmissionWindow !== undefined || settings.proposalFormKey !== undefined
-      ? await prepareDirectProposalWindow(
-          db,
-          event,
-          settings.proposalSubmissionWindow,
-          updatedAt,
-          settings.proposalFormKey,
-        )
-      : [];
+  const formReads = [
+    ...(settings.registrationFormKey === undefined
+      ? []
+      : [
+          prepareDirectEventFormSelectionRead(db, event, "event_registration", updatedAt, settings.registrationFormKey),
+        ]),
+    ...(settings.proposalSubmissionWindow === undefined && settings.proposalFormKey === undefined
+      ? []
+      : [
+          prepareDirectEventFormSelectionRead(
+            db,
+            event,
+            "proposal_submission",
+            updatedAt,
+            settings.proposalFormKey,
+            settings.proposalSubmissionWindow,
+          ),
+        ]),
+  ];
+  const formResults = formReads.length ? await db.batch(formReads.flatMap((read) => read.statements)) : [];
+  let offset = 0;
+  const formStatements = formReads.flatMap((read) => {
+    const statements = read.decode(formResults.slice(offset, offset + read.statements.length));
+    offset += read.statements.length;
+    return statements;
+  });
   try {
     await db.batch([
       ...buildEventSettingsMutationStatements(db, {
@@ -319,7 +323,7 @@ export async function updateDirectEventSettings(
           prepareDirectEventConfigurationGuard(db, event.id),
         ],
       }),
-      ...proposalWindowStatements,
+      ...formStatements,
     ]);
   } catch (error) {
     if (isAuditChangeGuardFailure(error)) {

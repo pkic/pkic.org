@@ -1,5 +1,7 @@
 import { env } from "cloudflare:workers";
-import { vi } from "vitest";
+import { vi, onTestFinished } from "vitest";
+import { runInDurableObject } from "cloudflare:test";
+import { closeLiveRoomSocket } from "../../functions/_lib/services/live-session/room-socket-close";
 import type { z } from "zod";
 import {
   LIVE_OVERLAY_PROTOCOL_PREFIX,
@@ -111,6 +113,13 @@ export function createLiveRoomFixture() {
       .run();
     for (const person of Object.keys(users) as Person[])
       tokens[person] = await createAdminSession(env.DB, users[person], crypto.randomUUID());
+    const room = env.LIVE_SESSION_ROOMS!.getByName(liveRoomName(eventId, occurrenceId));
+    onTestFinished(() =>
+      runInDurableObject(room, async (_instance, state) => {
+        for (const socket of state.getWebSockets()) closeLiveRoomSocket(socket, 1000, "Fixture complete");
+        await state.storage.deleteAlarm();
+      }),
+    );
   }
 
   function path(suffix = "") {
@@ -209,7 +218,7 @@ export function createLiveRoomFixture() {
               );
             if (!found) throw new Error(`No ${type} message yet`);
             return found;
-            // Reaction bursts are flushed on the room's own one-second cadence.
+            // Deferred updates are flushed on the room's configured broadcast cadence.
           },
           { timeout: 3000 },
         );
