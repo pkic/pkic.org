@@ -32,6 +32,7 @@ import { omittedSocialCardPublisher, publicSocialCardPublisher } from "./publish
 import { publishAgendaLayout } from "./publish-agenda-layout.mjs";
 import { publicDiagramPublisher } from "./publish-diagrams.mjs";
 import { excludeNonindexableSitemapEntries } from "./exclude-nonindexable-sitemap-entries.mjs";
+import { publicEmailImagePublisher } from "./publish-email-images.mjs";
 import { collectConferenceOutputs, conferenceDisplayRedirects } from "./collect-conference-outputs.mjs";
 
 /** Verify the framework's generated pages before exposing them as a static release. */
@@ -86,6 +87,7 @@ async function finishRelease(output, pages, timings) {
     console.log(
       "[publication] fast local build: original images; cached diagrams; no social cards or SVG optimization",
     );
+  const emailImages = publicEmailImagePublisher(output);
   try {
     const svgFiles = await timings.measure("SVG file optimization", () => optimizePublicSvgFiles(output));
     // Inline SVG optimization only reduces size; a fast local build serves the markup as rendered.
@@ -138,6 +140,9 @@ async function finishRelease(output, pages, timings) {
         async () => new JSDOM(await readFile(resolve(output, file), "utf8")),
       );
       try {
+        files.push(
+          ...(await timings.measure("email images", () => emailImages.publish(document.window.document, pathname))),
+        );
         const agendaLayout = await timings.measure("agenda layout", () =>
           publishAgendaLayout(document.window.document, output),
         );
@@ -247,5 +252,6 @@ async function finishRelease(output, pages, timings) {
     await rm(publicationStagingDirectory(), { recursive: true, force: true });
   } finally {
     await diagrams.finish();
+    await emailImages.finish();
   }
 }
