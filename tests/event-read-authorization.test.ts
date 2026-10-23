@@ -4,7 +4,7 @@ import app from "./helpers/app";
 import { computeGrantsForUser } from "../functions/_lib/auth/permissions";
 import { listVisibleEvents } from "../functions/_lib/services/events/catalog";
 import type { DatabaseLike, UserBackedAuthAdmin } from "../functions/_lib/types";
-import { eventsListResponseSchema } from "../assets/shared/schemas/event-management";
+import { eventDetailResponseSchema, eventsListResponseSchema } from "../assets/shared/schemas/event-management";
 import { groupEventsListResponseSchema } from "../assets/shared/schemas/group-events";
 import { createGroupEventInvitationFixture } from "./helpers/group-event-invitations";
 import { mutateBeforeMatchingQuery } from "./helpers/database-races";
@@ -82,7 +82,7 @@ describe("live event-read authorization", () => {
   });
 
   it.each(["invitation_only", "public"] as const)(
-    "protects management detail even when ordinary audience access remains: %s",
+    "uses one authority snapshot and protects management fields after revocation: %s",
     async (visibility) => {
       const { reader, grantId, eventId, eventSlug } = await fixture();
       await env.DB.prepare("UPDATE events SET visibility = ? WHERE id = ?").bind(visibility, eventId).run();
@@ -93,7 +93,17 @@ describe("live event-read authorization", () => {
           .bind(new Date().toISOString(), grantId)
           .run();
       });
-      expect((await request(path, reader.token, db)).status).toBe(403);
+      // Authentication and event selection now share a batch, so there is no
+      // authenticated-management snapshot before the revocation. Only the
+      // current audience projection may remain available.
+      const response = await request(path, reader.token, db);
+      expect(response.status).toBe(visibility === "public" ? 200 : 404);
+      if (response.ok) {
+        const { event } = eventDetailResponseSchema.parse(await response.json());
+        expect(event).not.toHaveProperty("capabilities");
+        expect(event).not.toHaveProperty("settings");
+        expect(event).not.toHaveProperty("userRetentionDays");
+      }
     },
   );
 

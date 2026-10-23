@@ -53,6 +53,7 @@ export default defineConfig(async () => {
     miniflare: { ...workerOptions.miniflare, assets: { directory: prepareD1AssetsDirectory() } },
   });
   const testOptions = {
+    env: { PKIC_D1_BUDGET_MODE: process.env.PKIC_D1_BUDGET_MODE ?? "" },
     deps: {
       optimizer: {
         ssr: {

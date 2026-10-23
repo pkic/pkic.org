@@ -5,7 +5,8 @@ import type { AdminContext } from "../../../../_lib/db/context";
 import { json } from "../../../../_lib/http";
 import { openApiRoute } from "../../../../_lib/openapi/route";
 import { updateDirectEventSettings } from "../../../../_lib/services/events/settings";
-import { eventManagementCapabilities, requireEventPermission } from "./authorization";
+import { requireEventPermission } from "./authorization";
+import { eventManagementCapabilities } from "../../../../_lib/services/events/capabilities";
 
 export const EventSettingsPatch = openApiRoute(eventSettingsPatchRouteSchema, async (c: AdminContext, data) => {
   const { actor, context, db } = await requireEventPermission(c, data.params.eventSlug, "events:write");

@@ -15,7 +15,6 @@ import {
 } from "../../../../assets/shared/schemas/event-management";
 import { queryPage } from "../../db/pagination";
 import { buildD1JsonMembershipFilter } from "../../db/json-membership";
-import { first } from "../../db/queries";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import { activeEffectiveInviteExpirySql, effectiveInviteExpirySql } from "../../invite-validity";
@@ -27,7 +26,7 @@ import { normalizeEventRegistrationPolicy } from "./detail";
 import { buildEventAudiencePredicate, guardEventReadDatabase, type EventAudienceViewer } from "./visibility";
 import { fetchViewerEventState, fetchViewerEventStates } from "./viewer-state";
 
-interface EventAudienceRow {
+export interface EventAudienceRow {
   id: string;
   slug: string;
   name: string;
@@ -48,7 +47,7 @@ const EVENT_AUDIENCE_SELECT = `SELECT event.id, event.slug, event.name, event.ti
   event.starts_at, event.ends_at, event.profile_key, event.registration_mode,
   event.visibility, event.settings_json, event.city, event.country, event.links_json, event.base_path`;
 
-function mapEventAudience(
+export function mapEventAudience(
   row: EventAudienceRow,
   viewer: EventViewerState | null,
   access?: Pick<EventAudienceDetail, "scannerAccess" | "sponsorLeadAccess">,
@@ -359,16 +358,17 @@ export async function getVisibleEventAudienceDetail(
   viewer: EventAudienceViewer,
   eventSlug: string,
 ): Promise<EventAudienceDetail> {
-  const audience = buildEventAudiencePredicate("event", viewer);
-  const row = await first<EventAudienceRow>(
-    db,
-    `${EVENT_AUDIENCE_SELECT}
-       FROM events event
-      WHERE event.slug = ? AND ${audience.sql}`,
-    [eventSlug, ...audience.bindings],
-  );
+  const row = await prepareEventAudienceDetail(db, viewer, eventSlug).first<EventAudienceRow>();
   if (!row) throw new AppError(404, "EVENT_NOT_FOUND", "Event not found or not visible to this caller");
   const viewerState = await fetchViewerEventState(db, viewer.userId, row.id);
   const audienceAccess = await readEventAudienceAccess(db, viewer, [row.id]);
   return mapEventAudience(row, viewerState, audienceAccess.get(row.id));
+}
+
+/** The canonical row visibility predicate remains inside SQL when composing a request snapshot. */
+export function prepareEventAudienceDetail(db: DatabaseLike, viewer: EventAudienceViewer, eventSlug: string) {
+  const audience = buildEventAudiencePredicate("event", viewer);
+  return db
+    .prepare(`${EVENT_AUDIENCE_SELECT} FROM events event WHERE event.slug=? AND ${audience.sql}`)
+    .bind(eventSlug, ...audience.bindings);
 }

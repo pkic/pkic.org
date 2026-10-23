@@ -23,7 +23,7 @@ const CLOSED: EventProposalCall = { open: false, path: null, closesAt: null };
  * and has a public page to submit through. An event that unlinks its proposal
  * form (`settings.forms.proposal_submission: null`) has no call.
  */
-export function prepareEventProposalCall(db: DatabaseLike, eventId: string) {
+export function prepareEventProposalCall(db: DatabaseLike, eventId: string | { slug: string }) {
   // The open placement that stays open longest decides when the call closes; one without an end never does.
   const statement = db
     .prepare(`SELECT event.slug, event.base_path, event.starts_at, event.settings_json, event.source_mode,
@@ -37,8 +37,8 @@ export function prepareEventProposalCall(db: DatabaseLike, eventId: string) {
           AND f.status = 'active' AND f.purpose = 'proposal_submission' AND ${formSubmissionWindowOpenSql("fp")}
         ORDER BY fp.closes_at IS NULL DESC, fp.closes_at DESC
         LIMIT 1)
-     WHERE event.id = ?`)
-    .bind(defaultFormAudience("proposal_submission"), eventId);
+     WHERE ${typeof eventId === "string" ? "event.id" : "event.slug"} = ?`)
+    .bind(defaultFormAudience("proposal_submission"), typeof eventId === "string" ? eventId : eventId.slug);
 
   return {
     statement,

@@ -87,8 +87,13 @@ export function profileD1Flow(database: DatabaseLike, options: { latencyMs?: num
     };
   }
 
+  function summary() {
+    return { roundTrips: queries.length, statements: executed.length, queries: [...queries] };
+  }
+
   return {
     db: wrap(database),
+    summary,
     async report() {
       for (const { sql, bindings } of executed) {
         if (!plans.has(sql)) {
@@ -112,10 +117,8 @@ export function profileD1Flow(database: DatabaseLike, options: { latencyMs?: num
           dur: query.durationMs * 1_000,
           args: { sql: query.sql },
         })),
-        roundTrips: queries.length,
-        statements: executed.length,
+        ...summary(),
         executedSql: executed.map(({ sql }) => sql.replace(/\s+/g, " ").trim()),
-        queries,
         plans: [...plans].map(([sql, plan]) => ({ sql: sql.replace(/\s+/g, " ").trim(), plan })),
       };
     },

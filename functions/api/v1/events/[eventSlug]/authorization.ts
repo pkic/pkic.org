@@ -36,17 +36,6 @@ export async function requireAnyEventPermission(
   return { actor, context, db, event, permission };
 }
 
-export function eventManagementCapabilities(
-  actor: Awaited<ReturnType<typeof requireUserBackedAdminFromRequest>>,
-  context: { type: string; id: string },
-): Array<"read" | "write" | "manage"> {
-  return [
-    ...(hasPermission(actor, "events:read", context) ? (["read"] as const) : []),
-    ...(hasPermission(actor, "events:write", context) ? (["write"] as const) : []),
-    ...(hasPermission(actor, "events:manage", context) ? (["manage"] as const) : []),
-  ];
-}
-
 /** Anonymous access is valid; a supplied but invalid credential is not silently downgraded. */
 export async function resolveOptionalEventUserSession(c: AdminContext): Promise<UserSessionResult | null> {
   if (!getUserSessionToken(c.req.raw)) return null;

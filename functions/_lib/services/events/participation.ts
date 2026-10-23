@@ -4,10 +4,10 @@ import {
 } from "../../../../assets/shared/schemas/event-participation";
 import { batchFirst, batchRows } from "../../db/pagination";
 import { prepareEventProposalCall, type EventProposalCallRow } from "./proposal-call";
-import { buildD1JsonMembershipFilter } from "../../db/json-membership";
+import { eventReadSelectionSql, type EventReadSelection } from "./read-selection";
 import type { DatabaseLike } from "../../types";
 
-interface EventParticipationRow {
+export interface EventParticipationRow {
   id: string;
   registrationId: string | null;
   registrationStatus: string | null;
@@ -17,8 +17,8 @@ interface EventParticipationRow {
   speakerProposals: number;
 }
 
-function prepareEventParticipation(db: DatabaseLike, userId: string, eventIds: readonly string[]) {
-  const filter = buildD1JsonMembershipFilter("e.id", eventIds);
+export function prepareEventParticipation(db: DatabaseLike, userId: string | null, selection: EventReadSelection) {
+  const filter = eventReadSelectionSql("e.id", selection);
   return db
     .prepare(
       `SELECT e.id, r.id AS registrationId, r.status AS registrationStatus,
@@ -34,7 +34,7 @@ function prepareEventParticipation(db: DatabaseLike, userId: string, eventIds: r
     .bind(userId, userId, userId, userId, userId, ...filter.bindings);
 }
 
-function decodeEventParticipation(rows: EventParticipationRow[]) {
+export function decodeEventParticipation(rows: EventParticipationRow[]) {
   const result = new Map<string, EventParticipation>();
   for (const row of rows)
     result.set(
