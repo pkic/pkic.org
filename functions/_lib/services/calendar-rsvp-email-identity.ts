@@ -4,6 +4,7 @@ import type { CalendarRsvpEventInput } from "../../../assets/shared/schemas/cale
 import { first } from "../db/queries";
 import { AppError } from "../errors";
 import type { DatabaseLike } from "../types";
+import { verifiedAddressesJsonSql } from "./user-emails";
 
 /** Envelope senders identify transport hops; an implicit reply names its author in From. */
 export function calendarRsvpEmailAuthor(email: Email): string {
@@ -33,8 +34,10 @@ export async function requireCalendarRsvpEmailRecipient(
   const invited = await first<{ invited: number }>(
     db,
     `SELECT 1 AS invited WHERE EXISTS (
-      SELECT 1 FROM registrations registration JOIN users person ON person.id=registration.user_id
-      WHERE registration.id=? AND person.normalized_email=?
+      SELECT 1 FROM registrations registration
+      WHERE registration.id=? AND ? IN (
+        SELECT LOWER(value) FROM json_each(${verifiedAddressesJsonSql("registration.user_id")})
+      )
     ) OR EXISTS (
       SELECT 1 FROM agenda_session_invitations invitation JOIN users person ON person.id=invitation.user_id
       WHERE invitation.id=? AND person.normalized_email=? AND invitation.revoked_at IS NULL AND person.active=1

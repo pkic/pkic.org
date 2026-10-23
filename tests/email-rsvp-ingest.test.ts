@@ -8,7 +8,7 @@ import { generateSignedRsvpAddress, verifySignedRsvpAddressFull } from "../funct
 import type { Env } from "../functions/_lib/types";
 import { queryAll } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
-import { seedRsvpRegistration } from "./helpers/rsvp";
+import { seedRsvpRegistration, switchRsvpRegistrationPrimaryEmail } from "./helpers/rsvp";
 import { calendarReplyIcs, deliveryStatusEmail, tnefRsvpEmail } from "./helpers/rsvp-email-fixtures";
 
 const secret = "test-internal-secret";
@@ -53,6 +53,46 @@ function rawCalendarEmail(calendarIcs: string, messageId: string): string {
 
 describe("incoming RSVP email persistence", () => {
   beforeEach(resetDb);
+
+  it.each(["subject", "calendar", "bounce"])(
+    "keeps an issued %s reply valid after changing the primary email",
+    async (transport) => {
+      const { registrationId, userId } = await seedRsvpRegistration(env.DB);
+      const to = await generateSignedRsvpAddress(registrationId, secret, rsvpEmail);
+      const calendar = rawCalendarEmail(calendarReplyIcs(registrationId), "old-primary@example.test");
+      await switchRsvpRegistrationPrimaryEmail(env.DB, userId);
+      const raw =
+        transport === "bounce"
+          ? deliveryStatusEmail()
+          : transport === "calendar"
+            ? calendar
+            : rawEmail("Accepted: PQC 2026", "old-primary@example.test");
+      await processIncomingEmail(incomingEmail("prvs=1234567890=alice@example.com", to, raw), testEnv());
+      expect(await queryAll(env.DB, "SELECT attendee_email,response_status FROM calendar_rsvp_events")).toEqual([
+        { attendee_email: "alice@example.com", response_status: transport === "bounce" ? "bounced" : "accepted" },
+      ]);
+    },
+  );
+
+  it.each(["unverified", "removed"])("refuses a retained invitation address after it becomes %s", async (state) => {
+    const { registrationId, userId } = await seedRsvpRegistration(env.DB);
+    const to = await generateSignedRsvpAddress(registrationId, secret, rsvpEmail);
+    const emailId = await switchRsvpRegistrationPrimaryEmail(env.DB, userId);
+    await env.DB.prepare(
+      state === "removed"
+        ? "DELETE FROM user_emails WHERE id=?"
+        : "UPDATE user_emails SET verified_at=NULL,verification_method=NULL WHERE id=?",
+    )
+      .bind(emailId)
+      .run();
+    await expect(
+      processIncomingEmail(
+        incomingEmail("alice@example.com", to, rawEmail("Accepted: PQC 2026", "retired-address@example.test")),
+        testEnv(),
+      ),
+    ).rejects.toMatchObject({ code: "RSVP_EMAIL_RECIPIENT_MISMATCH" });
+    expect(await queryAll(env.DB, "SELECT id FROM calendar_rsvp_events")).toEqual([]);
+  });
 
   it("records an implicit subject reply through the shared RSVP service", async () => {
     const { registrationId } = await seedRsvpRegistration(env.DB);
