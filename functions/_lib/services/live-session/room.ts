@@ -4,6 +4,7 @@ import { LiveRoomAnswers } from "./room-answers";
 import { LiveRoomAnswerStore } from "./room-answer-store";
 import { advanceLiveStage } from "./room-stage-next";
 import { LiveRoomGraphics } from "./room-graphics";
+import { LiveRoomGraphicBasis } from "./room-graphic-basis";
 import { LIVE_TICKER_REFRESH_MS, liveChatTickerLines } from "./room-ticker";
 import { LiveRoomProgram, LIVE_PROGRAM_SOCKET_TAG, closeLiveRoomProgramSources } from "./room-program";
 import type {
@@ -146,6 +147,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       this.controls,
       this.outputs,
       new LiveRoomPreview(this.store, this.pollStore, this.controls),
+      new LiveRoomGraphicBasis(this.sql),
     );
     this.graphics.chatTicker = () => liveChatTickerLines(this.chat);
     this.chatActions = new LiveRoomChatActions(
@@ -156,7 +158,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       this.broadcast,
       this.authors,
       {
-        tickerChanged: () => this.graphics.refresh(),
+        tickerChanged: () => this.graphics.refreshLocal(),
         audited: () => this.scheduleCopy(),
       },
     );
@@ -214,7 +216,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
     this.databaseSession.seedBookmark(admission.readBookmark ?? admission.participant.sessionClaims?.state);
     this.store.saveSession(admission.eventId, admission.session);
     for (const message of refreshLiveCreditCopies(this.store, admission.session)) await this.broadcast.all(message);
-    await this.graphics.refresh();
+    await this.graphics.initialize();
     await this.scheduleAlarm(
       Math.min(liveRoomPurgeAt(admission.session.endAt), Date.now() + LIVE_TICKER_REFRESH_MS),
       true,
@@ -523,7 +525,6 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       }
     >,
   ): Promise<LiveControlOutcome> {
-    await this.graphics.refresh();
     const at = nowIso();
     switch (message.type) {
       case "question.rewrite":
