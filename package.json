@@ -5,7 +5,7 @@
   "type": "module",
   "packageManager": "pnpm@12.5.1+sha512.e3f305bc784a2bc89f5ad3b6138889470fae8d2af5f36b61216ec91c2c3d64089775f9de38aac331044ea40f245cb0d5666392dfdf65824e1907ef6a2c62de5f",
   "engines": {
-    "node": "^22.12.0 || ^24 || >=26"
+    "node": "^22.23.4 || ^24 || >=26"
   },
   "scripts": {
     "skills:install": "pnpm dlx skills@1.7.1 experimental_install",
@@ -76,7 +76,7 @@
     "check:url-state": "node scripts/check-url-state-contracts.mjs"
   },
   "dependencies": {
-    "@astrojs/markdown-remark": "^7.3.1",
+    "@astrojs/markdown-remark": "^7.3.4",
     "@block65/webcrypto-web-push": "2.0.0",
     "@cloudflare/codemode": "^0.3.8",
     "@cloudflare/workers-oauth-provider": "^0.7.0",
@@ -94,7 +94,7 @@
     "@tiptap/pm": "3.31.3",
     "@tiptap/starter-kit": "3.31.3",
     "agents": "^0.13.3",
-    "astro": "7.3.5",
+    "astro": "7.4.2",
     "chanfana": "^3.3.0",
     "client-zip": "^2.5.0",
     "fast-xml-parser": "^5.11.1",
@@ -119,9 +119,9 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@astrojs/check": "^0.9.10",
-    "@astrojs/markdown-satteri": "0.4.2",
-    "@astrojs/preact": "6.0.5",
+    "@astrojs/check": "^0.9.12",
+    "@astrojs/markdown-satteri": "0.4.5",
+    "@astrojs/preact": "6.1.1",
     "@astrojs/rss": "^4.0.19",
     "@astrojs/sitemap": "^3.7.4",
     "@cloudflare/vite-plugin": "^1.42.1",
