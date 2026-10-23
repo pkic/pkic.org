@@ -1,6 +1,5 @@
 import { eventProposalCallSchema, type EventProposalCall } from "../../../../assets/shared/schemas/event-management";
 import type { DatabaseLike } from "../../types";
-import { parseJsonSafe } from "../../utils/json";
 import { resolveEventFrontendRoutes } from "../event-presentation";
 import type { EventRecord } from "../event-types";
 import { defaultFormAudience } from "../forms/placements";
@@ -20,8 +19,7 @@ const CLOSED: EventProposalCall = { open: false, path: null, closesAt: null };
  * Whether one event's call for proposals takes submissions now, from the
  * existing proposal-window data: an active proposal-submission form placed on
  * this event whose submission window is open, on an event that has not ended
- * and has a public page to submit through. An event that unlinks its proposal
- * form (`settings.forms.proposal_submission: null`) has no call.
+ * and has a public page to submit through. Only normalized placements select a form.
  */
 export function prepareEventProposalCall(db: DatabaseLike, eventId: string | { slug: string }) {
   // The open placement that stays open longest decides when the call closes; one without an end never does.
@@ -44,8 +42,6 @@ export function prepareEventProposalCall(db: DatabaseLike, eventId: string | { s
     statement,
     decode(row: EventProposalCallRow | null): EventProposalCall {
       if (!row?.accepting || !row.base_path) return CLOSED;
-      const forms = parseJsonSafe<{ forms?: Record<string, unknown> }>(row.settings_json, {}).forms;
-      if (forms?.proposal_submission === null) return CLOSED;
       return eventProposalCallSchema.parse({
         open: true,
         path: resolveEventFrontendRoutes(row).proposalPath,

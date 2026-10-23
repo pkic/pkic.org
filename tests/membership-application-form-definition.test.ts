@@ -1,3 +1,4 @@
+import { profileD1Flow } from "./helpers/d1-flow-profile";
 // Compile the real lazy HTTP graph before timed endpoint journeys.
 import "../functions/http-router";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -13,7 +14,7 @@ import {
   updateMembershipApplicationFormDefinition,
 } from "../functions/_lib/services/membership/application-form";
 import { getGlobalFormByKey } from "../functions/_lib/services/forms";
-import app from "./helpers/app";
+import app, { callApi } from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
@@ -86,8 +87,8 @@ beforeEach(async () => {
 });
 
 describe("membership application form definition", () => {
-  it("keeps the public form projection available without staff authentication", async () => {
-    const response = await call(null, "/api/v1/members/applications/form");
+  it("loads the complete public form, categories, fees, and eligibility in one request call", async () => {
+    const response = await callApi(env, "/api/v1/members/applications/form", undefined, { maxRoundTrips: 1 });
 
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toContain("no-store");
@@ -95,6 +96,15 @@ describe("membership application form definition", () => {
       categories: expect.any(Array),
       form: { key: MEMBERSHIP_APPLICATION_FORM_KEY },
     });
+  });
+
+  it("loads the global definition, placement, fields, and catalogs in one service call", async () => {
+    const profile = profileD1Flow(env.DB);
+    const form = await getGlobalFormByKey(profile.db, MEMBERSHIP_APPLICATION_FORM_KEY);
+    expect(form?.key).toBe(MEMBERSHIP_APPLICATION_FORM_KEY);
+    expect(form?.placement?.contextType).toBe("installation");
+    expect(form?.fields.length).toBeGreaterThan(0);
+    expect(profile.summary().roundTrips).toBe(1);
   });
 
   it("fails closed when the singleton has no exactly-one active installation placement", async () => {

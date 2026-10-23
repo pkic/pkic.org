@@ -1,11 +1,5 @@
 import { eventReadIdSql, type EventReadSelection } from "../events/selection";
-import {
-  placedEventFormSelection,
-  decodePlacedEventForm,
-  findPlacedEventForm,
-  type EventPlacementOwnershipPolicy,
-  type PlacedEventFormRow,
-} from "./event-placement-read";
+import { placedEventFormSelection, decodePlacedEventForm, type PlacedEventFormRow } from "./event-placement-read";
 import {
   FORM_COLUMNS,
   type FormRow,
@@ -15,7 +9,6 @@ import {
 } from "./definition-model";
 export type { FormRow, FormFieldRow, ManagedFormWithFields, ActiveFormDefinition } from "./definition-model";
 import { batchFirst, batchRows } from "../../db/pagination";
-import { first } from "../../db/queries";
 import { AppError, isAppError } from "../../errors";
 import { parseJsonSafe } from "../../utils/json";
 import type { DatabaseLike, D1StatementResult } from "../../types";
@@ -26,16 +19,14 @@ import {
   type FormFieldOption,
 } from "../../../../assets/shared/schemas/form-field-rules";
 import { FORM_FIELD_OPTION_SOURCES } from "../../../../assets/shared/schemas/forms";
-import { FORM_PLACEMENT_COLUMNS, mapFormPlacement, type FormPlacementRow, findActiveFormPlacement } from "./placements";
+import {
+  FORM_PLACEMENT_COLUMNS,
+  mapFormPlacement,
+  type FormPlacementRow,
+  prepareFormPlacementRead,
+} from "./placements";
 
 export type { FormFieldDefinition, FormPurpose } from "../../../../assets/shared/schemas/forms";
-
-interface EventSettings {
-  forms?: {
-    event_registration?: string | null;
-    proposal_submission?: string | null;
-  };
-}
 
 const FORM_FIELD_COLUMNS =
   "id, key, label, field_type, required, options_json, option_source, validation_json, sort_order, created_at, updated_at, archived_at";
@@ -197,97 +188,16 @@ export async function requireManagedEventForm(
 }
 
 /** Exact event selection, fields, and catalogs share one consistent D1 batch. */
-export function preparePlacedEventFormDefinition(
-  db: DatabaseLike,
-  event: EventReadSelection,
-  purpose: FormPurpose,
-  ownership: EventPlacementOwnershipPolicy = "legacy",
-) {
-  const selection = placedEventFormSelection(event, purpose, undefined, ownership);
+export function preparePlacedEventFormDefinition(db: DatabaseLike, event: EventReadSelection, purpose: FormPurpose) {
+  const selection = placedEventFormSelection(event, purpose);
   const fields = prepareFormDefinitionFields(db, `SELECT definition_id FROM (${selection.sql})`, selection.bindings);
   return {
     statements: [db.prepare(selection.sql).bind(...selection.bindings), ...fields.statements],
     decode(results: D1StatementResult[]) {
-      const resolved = decodePlacedEventForm(batchRows<PlacedEventFormRow>(results[0]), ownership);
+      const resolved = decodePlacedEventForm(batchRows<PlacedEventFormRow>(results[0]));
       return resolved ? decodeFormDefinition(resolved, ...fields.decode(results.slice(1))) : null;
     },
   };
-}
-
-async function findActiveForm(
-  db: DatabaseLike,
-  eventId: string,
-  purpose: FormPurpose,
-): Promise<{ form: FormRow & { updated_at: string }; placement: FormPlacement | null } | null> {
-  const event = await first<{ settings_json: string }>(db, "SELECT settings_json FROM events WHERE id = ?", [eventId]);
-  if (event) {
-    const settings = parseJsonSafe<EventSettings>(event.settings_json, {});
-    const linkedKey = settings.forms?.[purpose as keyof NonNullable<EventSettings["forms"]>];
-    if (linkedKey === null) {
-      return null;
-    }
-    if (purpose === "proposal_submission") {
-      const exact = await findPlacedEventForm(db, eventId, purpose);
-      if (exact) return exact;
-    }
-    if (typeof linkedKey === "string" && linkedKey) {
-      const placed = await findPlacedEventForm(db, eventId, purpose, linkedKey);
-      if (placed) return placed;
-      const linked = await first<FormRow & { updated_at: string }>(
-        db,
-        `SELECT ${FORM_COLUMNS}, updated_at
-         FROM forms
-         WHERE status = 'active' AND purpose = ? AND key = ?
-         LIMIT 1`,
-        [purpose, linkedKey],
-      );
-      if (linked) {
-        return { form: linked, placement: null };
-      }
-    }
-  }
-
-  const placed = await findPlacedEventForm(db, eventId, purpose);
-  if (placed) return placed;
-
-  const eventScoped = await first<FormRow & { updated_at: string }>(
-    db,
-    `SELECT ${FORM_COLUMNS}, updated_at
-     FROM forms
-     WHERE status = 'active' AND purpose = ? AND scope_type = 'event' AND scope_ref = ?
-     ORDER BY updated_at DESC
-     LIMIT 1`,
-    [purpose, eventId],
-  );
-  if (eventScoped) {
-    return { form: eventScoped, placement: null };
-  }
-
-  const globalForm = await first<FormRow & { updated_at: string }>(
-    db,
-    `SELECT ${FORM_COLUMNS}, updated_at
-     FROM forms
-     WHERE status = 'active' AND purpose = ? AND scope_type = 'global'
-     ORDER BY updated_at DESC
-     LIMIT 1`,
-    [purpose],
-  );
-  if (!globalForm) return null;
-  const placement = await findActiveFormPlacement(db, globalForm.id, {
-    contextType: "installation",
-    contextRef: null,
-  });
-  return { form: globalForm, placement };
-}
-
-async function loadFormDefinition(
-  db: DatabaseLike,
-  resolved: { form: FormRow & { updated_at: string }; placement: FormPlacement | null } | null,
-  options: { includeArchived?: boolean } = {},
-): Promise<ActiveFormDefinition | null> {
-  if (!resolved) return null;
-  const fields = prepareFormDefinitionFields(db, "SELECT ?", [resolved.form.id], options);
-  return decodeFormDefinition(resolved, ...fields.decode(await db.batch(fields.statements)));
 }
 
 function prepareFormDefinitionFields(
@@ -413,20 +323,7 @@ export async function getActiveFormById(db: DatabaseLike, formId: string): Promi
   return form ? decodeFormDefinition({ form, placement: null }, ...fields.decode(fieldResults)) : null;
 }
 
-export async function getActiveFormByPurpose(
-  db: DatabaseLike,
-  eventId: string,
-  purpose: FormPurpose,
-): Promise<ActiveFormDefinition | null> {
-  return loadFormDefinition(db, await findActiveForm(db, eventId, purpose));
-}
-
-/**
- * Resolves only an active event-context placement. Unlike
- * `getActiveFormByPurpose`, this deliberately does not fall back to a linked,
- * event-scoped, or global form. Group-scoped registration must not silently
- * inherit installation configuration that the owning group did not select.
- */
+/** Resolve a definition only through its active event placement and canonical owner. */
 export async function getActiveEventFormByPurpose(
   db: DatabaseLike,
   eventId: string,
@@ -436,78 +333,35 @@ export async function getActiveEventFormByPurpose(
   return read.decode(await db.batch(read.statements));
 }
 
-/**
- * Portal event forms are owned by the event's owning group. Do not treat a
- * legacy event/global placement as equivalent merely because its event ID
- * matches: that would let malformed or historical data become a live portal
- * form. Such records fail closed and are repaired through group management.
- */
-export async function getActivePortalEventFormByPurpose(
-  db: DatabaseLike,
-  eventId: string,
-  purpose: FormPurpose,
-): Promise<ActiveFormDefinition | null> {
-  const read = preparePlacedEventFormDefinition(db, eventId, purpose, "portal_owner");
-  return read.decode(await db.batch(read.statements));
-}
-
-export type EventFormResolution = "public_fallback" | "event_placement";
-
-/** Minimum event projection required to choose the public compatibility policy. */
+/** Event context passed between registration, proposal, and response workflows. */
 export interface EventFormResolutionEvent {
   id: string;
   source_mode: string | null;
 }
 
-/** Normalizes the nullable database source column before selecting a public flow policy. */
+/** Normalizes the nullable event source metadata at the service boundary. */
 export function toEventFormResolutionEvent(
   event: Pick<EventFormResolutionEvent, "id"> & { source_mode: string | null | undefined },
 ): EventFormResolutionEvent {
   return { id: event.id, source_mode: event.source_mode ?? null };
 }
 
-/**
- * Portal-created events own their event-flow configuration in D1 and must
- * never inherit an older event-settings link or installation form. Hugo and
- * integration records retain the explicit compatibility resolver until their
- * authored configuration is migrated.
- */
-export function eventFormResolutionFor(event: EventFormResolutionEvent): EventFormResolution {
-  return event.source_mode === "portal" ? "event_placement" : "public_fallback";
-}
-
-/** Selects the explicit compatibility policy used by each registration adapter. */
-export function getActiveFormForResolution(
-  db: DatabaseLike,
-  eventId: string,
-  purpose: FormPurpose,
-  resolution: EventFormResolution,
-): Promise<ActiveFormDefinition | null> {
-  return resolution === "event_placement"
-    ? getActiveEventFormByPurpose(db, eventId, purpose)
-    : getActiveFormByPurpose(db, eventId, purpose);
-}
-
-/** Legacy fallback resolution still needs its canonical compatibility resolver. */
+/** Every event source uses the same explicit placement query and owner decoder. */
 export function prepareEventFormDefinitionRead(
   db: DatabaseLike,
   event: EventFormResolutionEvent,
   purpose: FormPurpose,
 ) {
-  return event.source_mode === "portal"
-    ? preparePlacedEventFormDefinition(db, event.id, purpose, "portal_owner")
-    : null;
+  return preparePlacedEventFormDefinition(db, event.id, purpose);
 }
 
-/** Central event-aware resolver for every public and self-service event flow. */
+/** Event-context adapter for public, management, and self-service event flows. */
 export function getActiveFormForEvent(
   db: DatabaseLike,
   event: EventFormResolutionEvent,
   purpose: FormPurpose,
 ): Promise<ActiveFormDefinition | null> {
-  return event.source_mode === "portal"
-    ? getActivePortalEventFormByPurpose(db, event.id, purpose)
-    : getActiveFormForResolution(db, event.id, purpose, eventFormResolutionFor(event));
+  return getActiveEventFormByPurpose(db, event.id, purpose);
 }
 
 /**
@@ -515,26 +369,32 @@ export function getActiveFormForEvent(
  * installation placement. Global response flows must never create answers
  * without a normalized response-set attribution.
  */
+export function prepareGlobalFormDefinition(db: DatabaseLike, key: string) {
+  const formSelection = "SELECT id FROM forms WHERE status='active' AND scope_type='global' AND key=? LIMIT 1";
+  const fields = prepareFormDefinitionFields(db, formSelection, [key]);
+  const placement = prepareFormPlacementRead(db, { key }, { contextType: "installation", contextRef: null }, true);
+  return {
+    statements: [
+      db.prepare(`SELECT ${FORM_COLUMNS}, updated_at FROM forms WHERE id IN (${formSelection})`).bind(key),
+      placement.statement,
+      ...fields.statements,
+    ],
+    decode(results: D1StatementResult[]): ActiveFormDefinition | null {
+      const form = batchFirst<FormRow & { updated_at: string }>(results[0]);
+      if (!form) return null;
+      let selected: FormPlacement | null;
+      try {
+        selected = placement.decode(batchRows<FormPlacementRow>(results[1]));
+      } catch (error) {
+        if (isAppError(error) && error.code === "FORM_PLACEMENT_REQUIRED") return null;
+        throw error;
+      }
+      return selected ? decodeFormDefinition({ form, placement: selected }, ...fields.decode(results.slice(2))) : null;
+    },
+  };
+}
+
 export async function getGlobalFormByKey(db: DatabaseLike, key: string): Promise<ActiveFormDefinition | null> {
-  const form = await first<FormRow & { updated_at: string }>(
-    db,
-    `SELECT ${FORM_COLUMNS}, updated_at
-     FROM forms
-     WHERE status = 'active' AND scope_type = 'global' AND key = ?
-     LIMIT 1`,
-    [key],
-  );
-  if (!form) return null;
-  let placement: FormPlacement | null;
-  try {
-    placement = await findActiveFormPlacement(db, form.id, {
-      contextType: "installation",
-      contextRef: null,
-    });
-  } catch (error) {
-    if (isAppError(error) && error.code === "FORM_PLACEMENT_REQUIRED") return null;
-    throw error;
-  }
-  if (!placement) return null;
-  return loadFormDefinition(db, { form, placement });
+  const read = prepareGlobalFormDefinition(db, key);
+  return read.decode(await db.batch(read.statements));
 }

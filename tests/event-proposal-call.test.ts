@@ -7,7 +7,7 @@ import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
 import { callApi } from "./helpers/app";
 import { eventDetailResponseSchema } from "../assets/shared/schemas/event-management";
-import { prepareDirectProposalWindow } from "../functions/_lib/services/events/proposal-window";
+import { prepareDirectEventFormSelection } from "../functions/_lib/services/events/direct-form-selection";
 import { getEventById } from "../functions/_lib/services/events";
 import { getActiveFormForEvent } from "../functions/_lib/services/forms";
 import { prepareFormSubmissionGuard } from "../functions/_lib/services/forms/submission-command";
@@ -78,6 +78,7 @@ describe("event call for proposals", () => {
     await placeProposalForm(unpublished);
     const unlinked = await insertEvent({ slug: "unlinked-call", settings: { forms: { proposal_submission: null } } });
     await placeProposalForm(unlinked);
+    await env.DB.prepare("UPDATE form_placements SET active=0 WHERE context_ref=?").bind(unlinked).run();
     const none = await insertEvent({ slug: "no-call" });
     for (const id of [scheduled, closed, ended, unpublished, unlinked, none])
       expect(await readEventProposalCall(env.DB, id)).toEqual({ open: false, path: null, closesAt: null });
@@ -105,7 +106,16 @@ describe("event call for proposals", () => {
     const event = await getEventById(env.DB, id);
     const target = { id, source_mode: "hugo" };
     const save = async (window: { opensAt: string | null; closesAt: string | null }) => {
-      await env.DB.batch(await prepareDirectProposalWindow(env.DB, event, window, new Date().toISOString()));
+      await env.DB.batch(
+        await prepareDirectEventFormSelection(
+          env.DB,
+          event,
+          "proposal_submission",
+          new Date().toISOString(),
+          "website-proposals",
+          window,
+        ),
+      );
       return (await getActiveFormForEvent(env.DB, target, "proposal_submission"))!;
     };
     const scheduled = await save({ opensAt: at(2), closesAt: at(5) });
@@ -126,7 +136,13 @@ describe("event call for proposals", () => {
       .bind(replacementId, at(-10), at(-10))
       .run();
     await env.DB.batch(
-      await prepareDirectProposalWindow(env.DB, event, undefined, new Date().toISOString(), "replacement-proposals"),
+      await prepareDirectEventFormSelection(
+        env.DB,
+        event,
+        "proposal_submission",
+        new Date().toISOString(),
+        "replacement-proposals",
+      ),
     );
     const replacement = await getActiveFormForEvent(env.DB, target, "proposal_submission");
     expect(replacement?.id).toBe(replacementId);
@@ -138,14 +154,20 @@ describe("event call for proposals", () => {
         .first(),
     ).toEqual({ active: 0, form_id: formId });
     await env.DB.batch(
-      await prepareDirectProposalWindow(env.DB, event, undefined, new Date().toISOString(), "website-proposals"),
+      await prepareDirectEventFormSelection(
+        env.DB,
+        event,
+        "proposal_submission",
+        new Date().toISOString(),
+        "website-proposals",
+      ),
     );
     expect((await getActiveFormForEvent(env.DB, target, "proposal_submission"))?.placement?.id).toBe(
       reopened.placement?.id,
     );
 
     const otherForm = await getActiveFormForEvent(env.DB, { id: otherId, source_mode: "hugo" }, "proposal_submission");
-    expect(otherForm?.placement?.contextRef).not.toBe(id);
+    expect(otherForm).toBeNull();
     const global = await env.DB.prepare("SELECT opens_at, closes_at FROM form_placements WHERE id=?")
       .bind(globalPlacementId)
       .first();

@@ -10,12 +10,15 @@ import type { DatabaseLike } from "../../types";
 import { parseJsonSafe } from "../../utils/json";
 import { resolveEventSessionTypes } from "../events";
 import { eventColumns, type EventRecord } from "../event-types";
+import { EVENT_FORM_PURPOSES } from "../../../../assets/shared/schemas/forms";
+import { placedEventFormSelection } from "../forms/event-placement-read";
 import { readEventAudienceAccess } from "./scanner-access";
 import type { EventAudienceViewer } from "./visibility";
 
 export interface EventDetailRow extends EventRecord {
   user_retention_days: number | null;
   series_id: string | null;
+  form_links_json: string;
 }
 
 export function normalizeEventRegistrationPolicy(value: string): EventDetail["registrationPolicy"] {
@@ -54,13 +57,20 @@ export async function getEventDetail(
 }
 
 export function prepareEventDetail(db: DatabaseLike, eventSlug: string, authority?: AuthorizationEvidence) {
+  const formReads = EVENT_FORM_PURPOSES.map((purpose) =>
+    placedEventFormSelection({ slug: eventSlug }, purpose, {
+      includeClosed: true,
+    }),
+  );
   return db
-    .prepare(`SELECT ${eventColumns("event")}, policy.user_retention_days, series.id AS series_id
+    .prepare(`SELECT ${eventColumns("event")}, policy.user_retention_days, series.id AS series_id,
+      json_object('event_registration', (SELECT CASE WHEN COUNT(*)=1 THEN MIN(key) END FROM (${formReads[0].sql})),
+                  'proposal_submission', (SELECT CASE WHEN COUNT(*)=1 THEN MIN(key) END FROM (${formReads[1].sql}))) AS form_links_json
        FROM events event
        LEFT JOIN retention_policies policy ON policy.event_id = event.id
        LEFT JOIN event_series series ON series.event_id = event.id
       WHERE event.slug = ? ${authority ? `AND EXISTS(${authority.sql})` : ""}`)
-    .bind(eventSlug, ...(authority?.bindings ?? []));
+    .bind(...formReads.flatMap((read) => read.bindings), eventSlug, ...(authority?.bindings ?? []));
 }
 
 export function decodeEventDetail(
@@ -69,6 +79,7 @@ export function decodeEventDetail(
   scannerAccess?: EventDetail["scannerAccess"],
 ): EventDetail {
   const settings = parseJsonSafe<Record<string, unknown>>(event.settings_json, {});
+  settings.forms = parseJsonSafe<Record<string, string | null>>(event.form_links_json, {});
   const directWriteAllowed =
     !event.owner_group_id &&
     event.source_mode !== "portal" &&

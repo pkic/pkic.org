@@ -7,7 +7,6 @@ import { prepareRequiredTerms, type EventTermRecord } from "./events";
 import { batchRows } from "../db/pagination";
 import {
   toEventFormResolutionEvent,
-  getActiveFormForEvent,
   prepareEventFormDefinitionRead,
   validateCustomAnswersForResolvedForm,
 } from "./forms";
@@ -46,11 +45,11 @@ export async function prepareValidatedAttendeeRegistration(
   const formRead = prepareEventFormDefinitionRead(db, event, "event_registration");
   const [termsResult, ...formResults] = await db.batch([
     prepareRequiredTerms(db, event.id, "attendee"),
-    ...(formRead?.statements ?? []),
+    ...formRead.statements,
   ]);
   const requiredTerms = batchRows<EventTermRecord>(termsResult);
   await validateRequiredConsents(requiredTerms, input.consents);
-  const form = formRead ? formRead.decode(formResults) : await getActiveFormForEvent(db, event, "event_registration");
+  const form = formRead.decode(formResults);
   const validatedForm = validateCustomAnswersForResolvedForm(form, {
     customAnswers: input.customAnswers,
     context: { attendanceType, dayAttendance: input.dayAttendance },

@@ -128,6 +128,7 @@ organizers:
 forms:
   - key: pqc-2026-registration
     purpose: event_registration
+    audience: attendee
     title: PQC Conference 2026 Registration
     description: Event registration additional questions.
     fields:
@@ -221,6 +222,7 @@ forms:
 
   - key: pqc-2026-proposals
     purpose: proposal_submission
+    audience: speaker
     title: PQC Conference 2026 Proposal Details
     description: Additional proposal metadata for reviewers and organizers.
     fields:
