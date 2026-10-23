@@ -30,11 +30,18 @@ async function fixture({ streamed = true }: { streamed?: boolean } = {}) {
   const { eventId, admin } = await seedEventAndAdmin(env.DB);
   const staffToken = await createAdminSession(env.DB, admin.id, crypto.randomUUID());
   const call = (path: string, token: string | null, body?: unknown, method = body === undefined ? "GET" : "POST") =>
-    callApi(env, path, {
-      method,
-      headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-    });
+    callApi(
+      env,
+      path,
+      {
+        method,
+        headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      },
+      method === "GET" && (path === `${base}/streams` || path.startsWith(`${base}/participation?`))
+        ? { maxRoundTrips: 1 }
+        : undefined,
+    );
   const room = await call(`${base}/rooms`, staffToken, {
     expectedRevision: 0,
     name: "Main hall",
@@ -166,6 +173,51 @@ describe("virtual room access", () => {
     const cancelled = await f.call(`${base}/streams`, attendee.token);
     expect(cancelled.status).toBe(403);
     expect(await cancelled.text()).not.toContain(usual);
+  });
+
+  it("keeps staff stream access scoped to the event granting it", async () => {
+    const f = await fixture();
+    const staff = await signedInUser("scoped-stream-staff@example.test");
+    await env.DB.prepare(
+      "INSERT INTO user_roles(id,user_id,role_id,context_type,context_id,created_at) VALUES(?,?,'role-admin','event',?,?)",
+    )
+      .bind(crypto.randomUUID(), staff.id, f.eventId, new Date().toISOString())
+      .run();
+    expect((await f.call(`${base}/streams`, staff.token)).status).toBe(200);
+    const otherSlug = "unrelated-stream-event";
+    await env.DB.prepare(
+      "INSERT INTO events(id,slug,name,timezone,source_path,registration_mode,settings_json,created_at,updated_at) SELECT ?,?,'Other stream event',timezone,source_path,registration_mode,settings_json,created_at,updated_at FROM events WHERE id=?",
+    )
+      .bind(crypto.randomUUID(), otherSlug, f.eventId)
+      .run();
+    const other = await callApi(
+      env,
+      `/api/v1/events/${otherSlug}/agenda/streams`,
+      { headers: { authorization: `Bearer ${staff.token}` } },
+      { maxRoundTrips: 1 },
+    );
+    expect(other.status).toBe(403);
+    expect(await other.text()).not.toContain(usual);
+  });
+
+  it("refuses live streams after staff authority or the user's session is revoked", async () => {
+    const f = await fixture();
+    expect((await f.call(`${base}/streams`, f.staffToken)).status).toBe(200);
+    await env.DB.prepare("UPDATE user_roles SET revoked_at=? WHERE user_id=?")
+      .bind(new Date().toISOString(), f.adminId)
+      .run();
+    const revokedStaff = await f.call(`${base}/streams`, f.staffToken);
+    expect(revokedStaff.status).toBe(403);
+    expect(await revokedStaff.text()).not.toContain(usual);
+    const attendee = await signedInUser("revoked-viewer@example.test");
+    await f.register(attendee.id, "virtual");
+    expect((await f.call(`${base}/streams`, attendee.token)).status).toBe(200);
+    await env.DB.prepare("UPDATE sessions SET revoked_at=? WHERE user_id=?")
+      .bind(new Date().toISOString(), attendee.id)
+      .run();
+    const revokedSession = await f.call(`${base}/streams`, attendee.token);
+    expect(revokedSession.status).toBe(401);
+    expect(await revokedSession.text()).not.toContain(usual);
   });
 
   it("names the streaming location on the session only for a registered viewer and never in public data", async () => {

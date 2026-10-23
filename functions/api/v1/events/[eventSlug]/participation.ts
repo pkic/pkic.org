@@ -1,5 +1,5 @@
 import { sessionVirtualRoomRouteSchema } from "../../../../../assets/shared/schemas/event-session-virtual-room";
-import { readSessionVirtualRoom } from "../../../../_lib/services/event-participation/session-virtual-room";
+import { readSessionVirtualRoomRequest } from "../../../../_lib/services/event-participation/session-virtual-room";
 import { requireSessionParticipantManager } from "../../../../_lib/services/event-participation/management-authorization";
 import {
   sessionHoldRouteSchema,
@@ -20,14 +20,16 @@ import { requireIdentityFromRequest } from "../../../../_lib/auth/user-session";
 import { markResponseSensitive, requestDb, type AdminContext } from "../../../../_lib/db/context";
 import { json } from "../../../../_lib/http";
 import { openApiRoute } from "../../../../_lib/openapi/route";
-import { getEventBySlug } from "../../../../_lib/services/events";
 import { setSessionParticipation } from "../../../../_lib/services/event-participation/session-booking";
 import { participantSessionDatabase } from "../../../../_lib/services/event-participation/self-authorization";
 import {
   personalAgendaProgramRouteSchema,
   personalAgendaRouteSchema,
 } from "../../../../../assets/shared/schemas/event-personal-agenda";
-import { personalAgenda, personalAgendaProgram } from "../../../../_lib/services/event-participation/personal-agenda";
+import {
+  readPersonalAgendaRequest,
+  personalAgendaProgram,
+} from "../../../../_lib/services/event-participation/personal-agenda";
 import { getVisibleEventAudienceDetail } from "../../../../_lib/services/events/catalog";
 import { AppError } from "../../../../_lib/errors";
 import { reviewSessionParticipation } from "../../../../_lib/services/event-participation/approval";
@@ -57,17 +59,7 @@ export const SessionParticipationReviewPut = openApiRoute(sessionReviewRouteSche
 });
 export const PersonalAgendaGet = openApiRoute(personalAgendaRouteSchema, async (c: AdminContext, data) => {
   markResponseSensitive(c);
-  const db = requestDb(c);
-  const actor = await requireIdentityFromRequest(db, c.req.raw, c.env);
-  const event = await getVisibleEventAudienceDetail(db, { userId: actor.userId }, data.params.eventSlug);
-  return json(
-    await personalAgenda(
-      participantSessionDatabase(db, actor.userId, actor.sessionId),
-      event.id,
-      actor.userId,
-      data.query,
-    ),
-  );
+  return json(await readPersonalAgendaRequest(requestDb(c), c.req.raw, c.env, data.params.eventSlug, data.query));
 });
 /** Signed-in participants see the same approved projection as the public agenda, plus their own marks. */
 export const PersonalAgendaProgramGet = openApiRoute(
@@ -137,8 +129,13 @@ export const SessionHoldDelete = openApiRoute(sessionHoldDeleteRouteSchema, asyn
 
 export const SessionVirtualRoomGet = openApiRoute(sessionVirtualRoomRouteSchema, async (c: AdminContext, data) => {
   markResponseSensitive(c);
-  const db = requestDb(c);
-  const actor = await requireIdentityFromRequest(db, c.req.raw, c.env);
-  const event = await getEventBySlug(db, data.params.eventSlug);
-  return json(await readSessionVirtualRoom(db, event.id, data.params.occurrenceId, actor));
+  return json(
+    await readSessionVirtualRoomRequest(
+      requestDb(c),
+      c.req.raw,
+      c.env,
+      data.params.eventSlug,
+      data.params.occurrenceId,
+    ),
+  );
 });

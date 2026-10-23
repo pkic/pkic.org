@@ -56,10 +56,18 @@ async function publish(policy: AgendaAdmissionPolicy = "optional_reservation", a
   return snapshot;
 }
 async function api(path: string, token = attendeeToken, init: RequestInit = {}) {
-  return callApi(env, `/api/v1/events/scan-test${path}`, {
-    ...init,
-    headers: { authorization: `Bearer ${token}`, "content-type": "application/json", ...init.headers },
-  });
+  return callApi(
+    env,
+    `/api/v1/events/scan-test${path}`,
+    {
+      ...init,
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json", ...init.headers },
+    },
+    (init.method === undefined || init.method === "GET") &&
+      (path.endsWith("/virtual-room") || path.startsWith("/agenda/participation?"))
+      ? { maxRoundTrips: 1 }
+      : undefined,
+  );
 }
 async function participate(
   action: "save" | "reserve" | "request" | "cancel",

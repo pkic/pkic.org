@@ -582,7 +582,7 @@ describe("Participation capacity and private calendar lifecycle", () => {
       sort: "startAt",
       limit: 1,
     });
-    expect(profile.summary().roundTrips).toBe(2);
+    expect(profile.summary().roundTrips).toBe(1);
     expect(mine.sessions.map((session) => session.id)).toEqual([ahead]);
     expect(mine.page).toMatchObject({ total: 1, hasMore: false });
     expect(
