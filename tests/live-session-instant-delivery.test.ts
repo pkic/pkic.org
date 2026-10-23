@@ -1,9 +1,10 @@
 import { env } from "cloudflare:workers";
 import { runInDurableObject, runDurableObjectAlarm } from "cloudflare:test";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DatabaseLike } from "../functions/_lib/types";
 import { livePollDraftSchema } from "../assets/shared/schemas/live-session-poll";
 import { LIVE_ROOM_ACCESS_POLICY } from "../assets/shared/live-session-policy";
+import { runLiveRoomAlarm } from "../functions/_lib/services/live-session/room-alarm";
 import { LiveRoomGraphicBasis } from "../functions/_lib/services/live-session/room-graphic-basis";
 import { LiveRoomAccessLease } from "../functions/_lib/services/live-session/room-access-lease";
 import { currentLiveRoomCommandRead } from "../functions/_lib/services/live-session/room-command-read-scope";
@@ -45,6 +46,61 @@ describe("live interaction stays local to its Durable Object", () => {
         sql.includes("FROM json_each(?) requested JOIN sessions"),
       ),
     ).toHaveLength(1);
+  });
+
+  it("keeps access refresh scheduled after copy failures and retries the pending copy", async () => {
+    const operator = await f.connect({ person: "operator" });
+    operator.send({ type: "question.ask", text: "Keep this pending copy", anonymous: false });
+    const questionId = (await operator.next("question.changed")).question.id;
+    const reported = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      await runInDurableObject(f.room(), async (instance, state) => {
+        const store = Reflect.get(instance, "store"),
+          access = Reflect.get(instance, "access");
+        let failing = true;
+        const db: DatabaseLike = {
+          prepare: (sql) => env.DB.prepare(sql),
+          batch: (statements) => {
+            if (failing) return Promise.reject(new Error("Copy unavailable"));
+            return env.DB.batch(statements);
+          },
+        };
+        const alarm = () =>
+          runLiveRoomAlarm({
+            ctx: state,
+            program: Reflect.get(instance, "program"),
+            store,
+            db,
+            access,
+            refreshGraphics: () => Reflect.get(instance, "graphics").refresh(),
+            copyDue: () => Date.now() + 60_000,
+            purge: async () => {
+              throw new Error("An active room must not be purged");
+            },
+          });
+        // More failures than the runtime's automatic retry limit still retain a scheduled refresh.
+        for (let attempt = 0; attempt < 7; attempt++) {
+          await state.storage.deleteAlarm();
+          await alarm();
+          expect(store.hasPendingCopy()).toBe(true);
+          expect(await state.storage.getAlarm()).toBe(access.nextRefreshAt());
+        }
+        failing = false;
+        await alarm();
+        expect(store.hasPendingCopy()).toBe(false);
+        expect(await state.storage.getAlarm()).toBe(access.nextRefreshAt());
+      });
+      expect(reported).toHaveBeenCalledTimes(7);
+      expect(
+        await env.DB.prepare("SELECT body FROM event_session_questions WHERE id=?").bind(questionId).first("body"),
+      ).toBe("Keep this pending copy");
+      operator.send({ type: "question.ask", text: "Still connected after recovery", anonymous: false });
+      expect(
+        (await operator.next("question.changed", (message) => message.question.id !== questionId)).question.text,
+      ).toBe("Still connected after recovery");
+    } finally {
+      reported.mockRestore();
+    }
   });
 
   it("restores leases after hibernation without a D1 read or a longer authority lifetime", async () => {

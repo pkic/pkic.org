@@ -28,8 +28,12 @@ export async function runLiveRoomAlarm(input: {
   const pending = store.pendingCopy();
   await access.refresh();
   if (pending) {
-    await copyLiveRoomToD1(db, pending);
-    store.markCopied(pending);
+    try {
+      await copyLiveRoomToD1(db, pending);
+      store.markCopied(pending);
+    } catch (error) {
+      console.error("Live room durable copy failed", error);
+    }
   }
   const purgeAt = liveRoomPurgeAt(room.session.endAt);
   if (Date.now() >= purgeAt && !store.hasPendingCopy()) return input.purge();

@@ -304,9 +304,9 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
   }
 
   /**
-   * The durable copy's single retry owner: a failed batch throws, and the
-   * runtime retries the alarm. Once everything is copied and the session is
-   * long over, the room erases its own storage.
+   * The durable copy's single retry owner: failed copies stay pending for the
+   * next scheduled alarm without interrupting access refresh. Once everything
+   * is copied and the session is long over, the room erases its own storage.
    */
   async alarm(): Promise<void> {
     return runLiveRoomAlarm({
