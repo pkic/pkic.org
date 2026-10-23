@@ -1,3 +1,4 @@
+import type { EventReadSelection } from "../events/selection";
 import {
   placedEventFormSelection,
   decodePlacedEventForm,
@@ -171,11 +172,11 @@ export async function requireManagedEventForm(
 /** Exact event selection, fields, and catalogs share one consistent D1 batch. */
 export function preparePlacedEventFormDefinition(
   db: DatabaseLike,
-  eventId: string,
+  event: EventReadSelection,
   purpose: FormPurpose,
   ownership: EventPlacementOwnershipPolicy = "legacy",
 ) {
-  const selection = placedEventFormSelection(eventId, purpose, undefined, ownership);
+  const selection = placedEventFormSelection(event, purpose, undefined, ownership);
   const fields = prepareFormDefinitionFields(db, `SELECT definition_id FROM (${selection.sql})`, selection.bindings);
   return {
     statements: [db.prepare(selection.sql).bind(...selection.bindings), ...fields.statements],

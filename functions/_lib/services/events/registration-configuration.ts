@@ -4,8 +4,8 @@ import {
   type EventFormsResponse,
 } from "../../../../assets/shared/schemas/forms";
 import { normalizeEventRegistrationPolicy } from "./detail";
-import { batchRows } from "../../db/pagination";
-import type { DatabaseLike } from "../../types";
+import { batchFirst, batchRows } from "../../db/pagination";
+import type { DatabaseLike, D1StatementResult } from "../../types";
 import {
   prepareRegisteredEventDayCounts,
   decodeRegisteredEventDayCounts,
@@ -14,8 +14,22 @@ import {
   type EventDayAttendanceCountRow,
 } from "../event-days";
 import { eventDayReadModels, requiredTermReadModel } from "../event-read-models";
-import { prepareRequiredTerms, resolveEventSessionTypes, type EventRecord, type EventTermRecord } from "../events";
-import { getActiveFormForEvent, toEventFormResolutionEvent, prepareEventFormDefinitionRead } from "../forms";
+import {
+  prepareRequiredTerms,
+  prepareEventBySlug,
+  resolveEventSessionTypes,
+  type EventRecord,
+  type EventTermRecord,
+} from "../events";
+import {
+  getActiveFormForEvent,
+  toEventFormResolutionEvent,
+  prepareEventFormDefinitionRead,
+  type ActiveFormDefinition,
+} from "../forms";
+import { preparePlacedEventFormDefinition, eventFormResolutionFor } from "../forms/read";
+import type { EventReadSelection } from "./selection";
+import { AppError } from "../../errors";
 
 type EventConfigurationEvent = Pick<
   EventRecord,
@@ -34,20 +48,68 @@ export async function getEventRegistrationConfiguration(
   event: EventConfigurationEvent,
   purpose: EventFormsPurpose,
 ): Promise<EventFormsResponse> {
-  const audience = purpose === "proposal_submission" ? "speaker" : "attendee";
   const target = toEventFormResolutionEvent({ id: event.id, source_mode: event.source_mode });
   const formRead = prepareEventFormDefinitionRead(db, target, purpose);
-  const [termsResult, daysResult, countsResult, ...formResults] = await db.batch([
-    prepareRequiredTerms(db, event.id, audience),
-    prepareEventDays(db, event.id),
-    prepareRegisteredEventDayCounts(db, event.id),
-    ...(formRead?.statements ?? []),
-  ]);
-  const form = formRead ? formRead.decode(formResults) : await getActiveFormForEvent(db, target, purpose);
-  const requiredTerms = batchRows<EventTermRecord>(termsResult);
-  const eventDays = batchRows<EventDayRecord>(daysResult);
-  const registeredCounts = decodeRegisteredEventDayCounts(batchRows<EventDayAttendanceCountRow>(countsResult));
+  const read = prepareRegistrationConfiguration(db, event.id, purpose, formRead);
+  const snapshot = read.decode(await db.batch(read.statements));
+  const form = formRead ? snapshot.form : await getActiveFormForEvent(db, target, purpose);
+  return registrationConfiguration(event, purpose, snapshot, form);
+}
 
+/** Resolve the public slug and portal configuration in one complete request batch. */
+export async function getEventRegistrationConfigurationBySlug(
+  db: DatabaseLike,
+  eventSlug: string,
+  purpose: EventFormsPurpose,
+): Promise<EventFormsResponse> {
+  const selection = { slug: eventSlug };
+  const formRead = preparePlacedEventFormDefinition(db, selection, purpose, "portal_owner");
+  const read = prepareRegistrationConfiguration(db, selection, purpose, formRead);
+  const [eventResult, ...details] = await db.batch([prepareEventBySlug(db, eventSlug), ...read.statements]);
+  const event = batchFirst<EventRecord>(eventResult);
+  if (!event) throw new AppError(404, "EVENT_NOT_FOUND", `Event '${eventSlug}' not found`);
+  const snapshot = read.decode(details);
+  const target = toEventFormResolutionEvent({ id: event.id, source_mode: event.source_mode });
+  const form =
+    eventFormResolutionFor(target) === "event_placement"
+      ? snapshot.form
+      : await getActiveFormForEvent(db, target, purpose);
+  return registrationConfiguration(event, purpose, snapshot, form);
+}
+
+function prepareRegistrationConfiguration(
+  db: DatabaseLike,
+  event: EventReadSelection,
+  purpose: EventFormsPurpose,
+  formRead: ReturnType<typeof prepareEventFormDefinitionRead>,
+) {
+  const audience = purpose === "proposal_submission" ? "speaker" : "attendee";
+  return {
+    statements: [
+      prepareRequiredTerms(db, event, audience),
+      prepareEventDays(db, event),
+      prepareRegisteredEventDayCounts(db, event),
+      ...(formRead?.statements ?? []),
+    ],
+    decode(results: D1StatementResult[]) {
+      const [termsResult, daysResult, countsResult, ...formResults] = results;
+      return {
+        form: formRead?.decode(formResults) ?? null,
+        requiredTerms: batchRows<EventTermRecord>(termsResult),
+        eventDays: batchRows<EventDayRecord>(daysResult),
+        registeredCounts: decodeRegisteredEventDayCounts(batchRows<EventDayAttendanceCountRow>(countsResult)),
+      };
+    },
+  };
+}
+
+function registrationConfiguration(
+  event: EventConfigurationEvent,
+  purpose: EventFormsPurpose,
+  snapshot: ReturnType<ReturnType<typeof prepareRegistrationConfiguration>["decode"]>,
+  form: ActiveFormDefinition | null,
+): EventFormsResponse {
+  const { requiredTerms, eventDays, registeredCounts } = snapshot;
   return eventFormsResponseSchema.parse({
     event: { id: event.id, slug: event.slug, name: event.name },
     registrationPolicy: normalizeEventRegistrationPolicy(event.registration_mode),

@@ -1,3 +1,4 @@
+import { eventReadIdSql, type EventReadSelection } from "../events/selection";
 import type { DatabaseLike } from "../../types";
 import type { FormPurpose } from "../../../../assets/shared/schemas/forms";
 import { all } from "../../db/queries";
@@ -23,11 +24,12 @@ export type PlacedEventFormRow = Omit<FormRow, "id" | "updated_at"> &
  * form and fail closed for malformed records.
  */
 export function placedEventFormSelection(
-  eventId: string,
+  event: EventReadSelection,
   purpose: FormPurpose,
   key?: string,
   ownership: EventPlacementOwnershipPolicy = "legacy",
 ) {
+  const selection = eventReadIdSql(event);
   return {
     sql: `SELECT ${FORM_COLUMNS.split(", ")
       .map((column) => (column === "id" ? "f.id AS definition_id" : `f.${column}`))
@@ -41,7 +43,7 @@ export function placedEventFormSelection(
      JOIN forms f ON f.id = fp.form_id
      JOIN events event ON event.id = fp.context_ref
      WHERE fp.context_type = 'event'
-       AND fp.context_ref = ?
+       AND fp.context_ref = ${selection.sql}
        AND fp.active = 1
        AND f.status = 'active'
        AND f.purpose = ?
@@ -52,7 +54,7 @@ export function placedEventFormSelection(
      ORDER BY fp.created_at ASC, fp.id ASC
      LIMIT 2`,
     bindings: [
-      eventId,
+      ...selection.bindings,
       purpose,
       ...(purpose === "event_registration" || purpose === "proposal_submission" ? [defaultFormAudience(purpose)] : []),
       ...(key ? [key] : []),

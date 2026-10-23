@@ -1,3 +1,5 @@
+import { eventTermsResponseSchema } from "../assets/shared/schemas/forms";
+import { eventDaysManagementResponseSchema } from "../assets/shared/schemas/event-configuration";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { eventDetailResponseSchema, eventsListResponseSchema } from "../assets/shared/schemas/event-management";
@@ -5,7 +7,7 @@ import { createEventScannerFixture } from "./helpers/event-scanner-fixture";
 import { readEventAdminContext } from "../functions/_lib/services/events/authorized-context";
 import { buildRegistrationManageView } from "../functions/_lib/services/registrations/manage-view";
 import { getRegistrationById } from "../functions/_lib/services/registrations/queries";
-import { createAdminSession } from "./helpers/auth";
+import { createAdminSession, createMcpSession } from "./helpers/auth";
 import { callApi } from "./helpers/app";
 import { profileD1Flow } from "./helpers/d1-flow-profile";
 import { enforceD1RoundTripBudget } from "./helpers/d1-round-trip-budget";
@@ -15,6 +17,115 @@ const f = createEventScannerFixture();
 beforeEach(() => f.setup());
 const path = "/api/v1/events/scan-test";
 const strict = { maxRoundTrips: 1 };
+
+describe("one D1 round trip for event configuration endpoints", () => {
+  it("resolves the event and audience-specific terms in the same public batch", async () => {
+    await env.DB.batch(
+      ["attendee", "speaker"].map((audience) =>
+        env.DB.prepare(
+          `INSERT INTO event_terms(id,event_id,audience_type,term_key,version,required,content_ref,active,created_at)
+       VALUES(?,?,?,?,'v1',1,'/policy/',1,?)`,
+        ).bind(crypto.randomUUID(), f.eventId, audience, `${audience}-policy`, new Date().toISOString()),
+      ),
+    );
+    for (const audience of ["attendee", "speaker"]) {
+      const response = await callApi(env, `${path}/terms?audience=${audience}`, undefined, strict);
+      expect(response.status).toBe(200);
+      const result = eventTermsResponseSchema.parse(await response.json());
+      expect(result.event.id).toBe(f.eventId);
+      expect(result.terms.map((term) => term.termKey)).toEqual([`${audience}-policy`]);
+    }
+    expect((await callApi(env, "/api/v1/events/missing-event/terms", undefined, strict)).status).toBe(404);
+    expect((await callApi(env, `${path}/terms?audience=invalid`, undefined, { maxRoundTrips: 0 })).status).toBe(400);
+  });
+
+  it("includes live authorization, the event, days, and registered counts in one read", async () => {
+    await env.DB.batch([
+      env.DB.prepare(`INSERT INTO event_days(id,event_id,day_date,label,in_person_capacity,sort_order,created_at,updated_at)
+        VALUES('budget-day',?,'2026-12-01','First day',2,0,?,?)`).bind(
+        f.eventId,
+        new Date().toISOString(),
+        new Date().toISOString(),
+      ),
+      env.DB.prepare(`INSERT INTO registration_day_attendance(id,registration_id,event_day_id,attendance_type,created_at,updated_at)
+        SELECT ?,id,'budget-day','in_person',?,? FROM registrations WHERE event_id=? AND user_id=?`).bind(
+        crypto.randomUUID(),
+        new Date().toISOString(),
+        new Date().toISOString(),
+        f.eventId,
+        f.userId,
+      ),
+    ]);
+    const pendingId = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(`INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at)
+        VALUES(?,?,?,'pending_email_confirmation','in_person','test',?,?,?)`).bind(
+        pendingId,
+        f.eventId,
+        f.operatorId,
+        crypto.randomUUID(),
+        new Date().toISOString(),
+        new Date().toISOString(),
+      ),
+      env.DB.prepare(`INSERT INTO registration_day_attendance(id,registration_id,event_day_id,attendance_type,created_at,updated_at)
+        VALUES(?,?,'budget-day','in_person',?,?)`).bind(
+        crypto.randomUUID(),
+        pendingId,
+        new Date().toISOString(),
+        new Date().toISOString(),
+      ),
+    ]);
+    const response = await callApi(env, `${path}/days`, { headers: { authorization: `Bearer ${f.token}` } }, strict);
+    expect(response.status).toBe(200);
+    const result = eventDaysManagementResponseSchema.parse(await response.json());
+    expect(result.days).toEqual([
+      expect.objectContaining({ id: "budget-day", date: "2026-12-01", attendanceCounts: { in_person: 1 } }),
+    ]);
+  });
+
+  it("refuses missing or invalid credentials before accessing D1", async () => {
+    for (const token of [null, "invalid"]) {
+      const headers = new Headers();
+      if (token) headers.set("authorization", `Bearer ${token}`);
+      expect((await callApi(env, `${path}/days`, { headers }, { maxRoundTrips: 0 })).status).toBe(401);
+    }
+  });
+
+  it("rechecks permission revocation in the same day snapshot", async () => {
+    const db = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => sql.includes("FROM events WHERE slug"),
+      async () => {
+        const at = new Date().toISOString();
+        await env.DB.batch([
+          env.DB.prepare("UPDATE user_roles SET revoked_at=? WHERE user_id=?").bind(at, f.operatorId),
+          env.DB.prepare("UPDATE permission_grants SET revoked_at=? WHERE user_id=?").bind(at, f.operatorId),
+        ]);
+      },
+    );
+    const response = await callApi(
+      { ...env, DB: db },
+      `${path}/days`,
+      { headers: { authorization: `Bearer ${f.token}` } },
+      strict,
+    );
+    expect(response.status).toBe(403);
+    expect(await response.json()).not.toHaveProperty("days");
+  });
+
+  it.each([true, false])("retains delegated credential scope ceilings (permitted: %s)", async (permitted) => {
+    const token = await createMcpSession(
+      env.DB,
+      { id: f.operatorId, email: `${f.operatorId}@example.test` },
+      crypto.randomUUID(),
+      permitted ? ["events:read"] : ["forms:read"],
+    );
+    const response = await callApi(env, `${path}/days`, {
+      headers: { authorization: `Bearer ${token}`, "x-pkic-machine-auth": "mcp" },
+    });
+    expect(response.status).toBe(permitted ? 200 : 403);
+  });
+});
 
 describe("one D1 round trip includes JWT context and event data", () => {
   it.each(["anonymous", "attendee", "management"] as const)(

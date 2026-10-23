@@ -13,7 +13,12 @@ export function registerEventManagementAuthentication(app: Hono<RequestDbContext
   app.use("/agenda/transfers", requireEventManagementIdentity);
   app.use("/agenda/transfers/*", requireEventManagementIdentity);
   app.use("/agenda/occurrences/filters", requireEventManagementIdentity);
-  app.use("/days", requireEventManagementIdentity);
+  app.use("/days", async (c, next) => {
+    // The read use case combines live authentication with its complete resource snapshot.
+    // Writes retain the existing identity check before body validation.
+    if (c.req.method === "GET" || c.req.method === "HEAD") await next();
+    else await requireEventManagementIdentity(c, next);
+  });
   app.use("/team", requireEventManagementIdentity);
   app.use("/roles", requireEventManagementIdentity);
   app.use("/roles/*", requireEventManagementIdentity);

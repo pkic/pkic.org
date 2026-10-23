@@ -2,11 +2,19 @@ import type {
   EventDaysManagementReplaceInput,
   EventDaysManagementResponse,
 } from "../../../../assets/shared/schemas/event-configuration";
-import { preparePermissionsAuthorizationGuard } from "../../auth/permissions";
-import type { DatabaseLike, UserBackedAuthAdmin } from "../../types";
+import { preparePermissionsAuthorizationGuard, requirePermission } from "../../auth/permissions";
+import type { DatabaseLike, UserBackedAuthAdmin, Env } from "../../types";
 import { AppError } from "../../errors";
 import { isAuditChangeGuardFailure } from "../audit";
-import { listConfiguredEventDaysWithCounts } from "../event-days";
+import {
+  prepareEventDays,
+  prepareConfiguredEventDayCounts,
+  decodeConfiguredEventDays,
+  type EventDayRecord,
+  type EventDayAttendanceCountRow,
+} from "../event-days";
+import { batchRows } from "../../db/pagination";
+import { prepareEventAdminContext, readEventAdminContext } from "./authorized-context";
 import { getEventBySlug } from "../events";
 import { replaceConfiguredEventDays } from "./day-configuration";
 import {
@@ -15,11 +23,25 @@ import {
   throwEventConfigurationConflict,
 } from "./direct-configuration";
 
-export async function getDirectEventDays(db: DatabaseLike, eventSlug: string): Promise<EventDaysManagementResponse> {
-  const event = await getEventBySlug(db, eventSlug);
+export async function getDirectEventDays(
+  db: DatabaseLike,
+  request: Request,
+  env: Pick<Env, "ADMIN_API_KEY" | "INTERNAL_SIGNING_SECRET">,
+  eventSlug: string,
+): Promise<EventDaysManagementResponse> {
+  const context = await prepareEventAdminContext(db, request, env, eventSlug);
+  const reads = [prepareEventDays(db, { slug: eventSlug }), prepareConfiguredEventDayCounts(db, { slug: eventSlug })];
+  const fallback = context ? null : await readEventAdminContext(db, request, env, eventSlug);
+  const results = await db.batch([...(context?.statements ?? []), ...reads]);
+  const { actor, event } = context ? await context.decode(results.slice(0, context.statements.length)) : fallback!;
+  requirePermission(actor, "events:read", { type: "event", id: event.id });
+  const [daysResult, countsResult] = results.slice(context?.statements.length ?? 0);
   return {
     eventUpdatedAt: event.updated_at,
-    days: await listConfiguredEventDaysWithCounts(db, event.id),
+    days: decodeConfiguredEventDays(
+      batchRows<EventDayRecord>(daysResult),
+      batchRows<EventDayAttendanceCountRow>(countsResult),
+    ),
   };
 }
 

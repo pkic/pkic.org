@@ -1,3 +1,4 @@
+import { eventFormsResponseSchema } from "../assets/shared/schemas/forms";
 import { profileD1Flow } from "./helpers/d1-flow-profile";
 import { getEventById } from "../functions/_lib/services/events";
 import { getEventRegistrationConfiguration } from "../functions/_lib/services/events/registration-configuration";
@@ -1458,6 +1459,16 @@ describe("group event management routes", () => {
     const configuration = await getEventRegistrationConfiguration(configurationProfile.db, event, "event_registration");
     expect(configuration.form?.placement?.id).toBe(placed.form.placement.id);
     expect(configurationProfile.summary().roundTrips).toBe(1);
+    for (const purpose of ["event_registration", "proposal_submission"]) {
+      const response = await callApi(env, `/api/v1/events/${event.slug}/forms/placements/${purpose}`, undefined, {
+        maxRoundTrips: 1,
+      });
+      expect(response.status).toBe(200);
+      const publicConfiguration = eventFormsResponseSchema.parse(await response.json());
+      expect(publicConfiguration.form?.placement?.id ?? null).toBe(
+        purpose === "event_registration" ? placed.form.placement.id : null,
+      );
+    }
 
     // Registration that has not opened yet: the form exists for management
     // and is not offered to a reader.

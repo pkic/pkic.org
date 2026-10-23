@@ -1,3 +1,4 @@
+import { eventReadIdSql, type EventReadSelection } from "./events/selection";
 import { AppError } from "../errors";
 import { all, first, run } from "../db/queries";
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../db/authorization-guard";
@@ -51,13 +52,14 @@ export async function getRequiredTerms(
 
 export function prepareRequiredTerms(
   db: DatabaseLike,
-  eventId: string,
+  event: EventReadSelection,
   audienceType: "attendee" | "speaker" | "presentation",
 ) {
+  const selection = eventReadIdSql(event);
   return db
     .prepare(`SELECT term_key, version, required, content_ref, display_text, help_text
-     FROM event_terms WHERE event_id = ? AND audience_type = ? AND active = 1 ORDER BY term_key ASC`)
-    .bind(eventId, audienceType);
+     FROM event_terms WHERE event_id = ${selection.sql} AND audience_type = ? AND active = 1 ORDER BY term_key ASC`)
+    .bind(...selection.bindings, audienceType);
 }
 
 export interface EventUpsertPayload {

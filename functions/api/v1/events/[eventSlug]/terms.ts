@@ -1,27 +1,16 @@
 import { openApiRoute } from "../../../../_lib/openapi/route";
-import { getEventBySlug, getRequiredTerms } from "../../../../_lib/services/events";
+import { getEventTerms } from "../../../../_lib/services/events/terms-read";
+import { requestDb } from "../../../../_lib/db/context";
 import { json } from "../../../../_lib/http";
-import { requiredTermReadModel } from "../../../../_lib/services/event-read-models";
-import {
-  eventTermsGetRouteSchema,
-  eventTermsQuerySchema,
-  eventTermsResponseSchema,
-} from "../../../../../assets/shared/schemas/forms";
+import { eventTermsGetRouteSchema, eventTermsQuerySchema } from "../../../../../assets/shared/schemas/forms";
 
-async function getTerms(c: any, audience: "attendee" | "speaker"): Promise<Response> {
-  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
-  const terms = await getRequiredTerms(c.env.DB, event.id, audience);
-
-  return json(
-    eventTermsResponseSchema.parse({
-      event: { id: event.id, slug: event.slug, name: event.name },
-      audience,
-      terms: terms.map(requiredTermReadModel),
-    }),
-  );
+async function getTerms(c: any, eventSlug: string, audience: "attendee" | "speaker"): Promise<Response> {
+  return json(await getEventTerms(requestDb(c), eventSlug, audience));
 }
 
-export const TermsGet = openApiRoute(eventTermsGetRouteSchema, (c: any, data) => getTerms(c, data.query.audience));
+export const TermsGet = openApiRoute(eventTermsGetRouteSchema, (c: any, data) =>
+  getTerms(c, data.params.eventSlug, data.query.audience),
+);
 
 /** Compatibility entry point for direct Pages-function tests; validates the same shared contract. */
 export async function onRequestGet(c: any): Promise<Response> {
@@ -29,5 +18,5 @@ export async function onRequestGet(c: any): Promise<Response> {
   if (!parsed.success) {
     return json({ error: { code: "VALIDATION_ERROR", message: "Invalid terms audience" } }, 400);
   }
-  return getTerms(c, parsed.data.audience);
+  return getTerms(c, c.req.param("eventSlug"), parsed.data.audience);
 }
