@@ -1,3 +1,5 @@
+import { first } from "../../db/queries";
+import { recordProviderAbsence } from "./observe-membership";
 import { isMailingListSyncEnabled } from "./mailing-list-policy";
 import { isGoogleGroupsSuppressed } from "./observe-membership";
 import { supersedeSuppressedGoogleGroupsAdd } from "./sync-queue";
@@ -85,6 +87,7 @@ export async function processGoogleGroupsSyncQueue(
   const memberEmails = await loadActionableGoogleGroupsSyncRows(db, claims);
   if (!dryRun) await supersedeStaleGoogleGroupsSyncClaims(db, liveClaims, new Set(memberEmails.keys()));
 
+  const memberships = new Map<string, Awaited<ReturnType<typeof directoryClient.listMembers>>>();
   let succeeded = 0;
   let failed = 0;
   let suppressed = 0;
@@ -112,6 +115,28 @@ export async function processGoogleGroupsSyncQueue(
 
     if (!(await isMailingListSyncEnabled(db, claim.google_group_email))) continue;
     try {
+      if (claim.action === "add_to_list") {
+        const confirmed = await first(
+          db,
+          `SELECT 1 FROM google_groups_observed_membership
+          WHERE user_id = ? AND google_group_email = ? AND confirmed_subscribed_at IS NOT NULL`,
+          [claim.user_id, claim.google_group_email],
+        );
+        if (confirmed) {
+          let listing = memberships.get(claim.google_group_email);
+          if (!listing) {
+            listing = await directoryClient.listMembers(claim.google_group_email);
+            memberships.set(claim.google_group_email, listing);
+          }
+          if (!listing.complete) throw new Error("Incomplete provider membership listing; queued addition stopped");
+          if (!listing.emails.includes(memberEmail.toLowerCase())) {
+            if (!dryRun) await recordProviderAbsence(db, claim.user_id, claim.google_group_email);
+            if (liveClaim) await supersedeSuppressedGoogleGroupsAdd(db, liveClaim);
+            suppressed++;
+            continue;
+          }
+        }
+      }
       await directoryClient.applyMembership({
         action: claim.action,
         googleGroupEmail: claim.google_group_email,

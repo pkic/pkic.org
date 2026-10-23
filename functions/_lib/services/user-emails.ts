@@ -1,3 +1,4 @@
+import { prepareJobWake } from "./scheduled-jobs/dispatcher";
 /**
  * Secondary email addresses on a user account reserve its email namespace.
  * Verification proves the mailbox; a separate owner choice permits account
@@ -243,6 +244,7 @@ export async function removeUserEmail(
         { emailId, email: existing.email, identityEmailFallback: "primary" },
         now,
       ),
+      prepareJobWake(authorizedDb, "google_groups_sync"),
     ]);
   } catch (error) {
     if (isAuditChangeGuardFailure(error)) {

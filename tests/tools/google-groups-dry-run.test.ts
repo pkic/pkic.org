@@ -4,7 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { googleGroupsReadOnlyDatabase, runGoogleGroupsDryRun } from "../../scripts/google-groups-sync/dry-run";
+import {
+  googleGroupsReadOnlyDatabase,
+  runGoogleGroupsDryRun,
+  runMailingListFullDryRun,
+} from "../../scripts/google-groups-sync/dry-run";
 import { GOOGLE_GROUPS_READONLY_SCOPES } from "../../functions/_lib/services/google-groups/directory-client";
 
 const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
@@ -36,7 +40,10 @@ function mockGoogle(options: { incomplete?: boolean; status?: number } = {}) {
     expect(init?.method ?? "GET").toBe("GET");
     expect(url).toContain("/members?");
     return Response.json(
-      { members: [{ email: "remove@example.test" }], ...(options.incomplete ? { nextPageToken: "next" } : {}) },
+      {
+        members: [{ email: "remove@example.test", role: "MEMBER", type: "USER" }],
+        ...(options.incomplete ? { nextPageToken: "next" } : {}),
+      },
       { status: options.status ?? 200 },
     );
   });
@@ -116,6 +123,19 @@ describe("Google Groups dry run", () => {
       expect(readFileSync(path).equals(before)).toBe(true);
     },
   );
+  it("reports full roster changes through the live planner without writing", async () => {
+    mockGoogle();
+    const before = readFileSync(path);
+    const report = await runMailingListFullDryRun(path, credentials);
+    expect(report.scope).toBe("full_reconciliation");
+    expect(report.groups.length).toBeGreaterThan(1);
+    expect(
+      report.groups.every((group) =>
+        group.entries.some((entry) => entry.email === "remove@example.test" && entry.action === "unsubscribe"),
+      ),
+    ).toBe(true);
+    expect(readFileSync(path).equals(before)).toBe(true);
+  });
   it("rejects mutations even through read methods on the SQLite adapter", async () => {
     const sqlite = new DatabaseSync(path, { readOnly: true });
     try {
