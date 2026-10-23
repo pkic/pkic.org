@@ -22,7 +22,7 @@ export function eventContactAccessSql(eventIdExpression: string): string {
 /** An unset policy/end is explicit; no guessed duration, date or global account redaction. */
 export async function readEventContactRetention(db: DatabaseLike, eventId: string): Promise<EventContactRetention> {
   const read = prepareEventContactRetention(db, eventId);
-  return read.decode(await db.batch(read.statements));
+  return decodeEventContactRetention(await read.statements[0].first());
 }
 export function prepareEventContactRetention(db: DatabaseLike, eventId: EventReadSelection) {
   const scope = eventReadIdSql(eventId);
@@ -40,11 +40,13 @@ export function prepareEventContactRetention(db: DatabaseLike, eventId: EventRea
         .bind(...scope.bindings),
     ],
     decode(loaded: D1StatementResult[]): EventContactRetention {
-      const row = batchFirst(loaded[0]);
-      if (!row) throw new AppError(404, "EVENT_NOT_FOUND", "Event unavailable.");
-      return eventContactRetentionSchema.parse(row);
+      return decodeEventContactRetention(batchFirst(loaded[0]));
     },
   };
+}
+function decodeEventContactRetention(row: unknown): EventContactRetention {
+  if (!row) throw new AppError(404, "EVENT_NOT_FOUND", "Event unavailable.");
+  return eventContactRetentionSchema.parse(row);
 }
 export async function assertEventContactAccess(db: DatabaseLike, eventId: string): Promise<EventContactRetention> {
   return requireEventContactAccess(await readEventContactRetention(db, eventId));
