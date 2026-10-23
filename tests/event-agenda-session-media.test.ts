@@ -403,7 +403,7 @@ describe("join destinations stay private and require live actual attendee entitl
     expect(agendaSnapshotSchema.parse(await changed.json()).occurrences[0]!.publicationStatus).toBe("changed");
   });
 
-  it("rechecks live registration and exact caller session at the final destination read", async () => {
+  it("checks live registration and the exact caller session in the destination snapshot", async () => {
     const f = await approvedVirtualRoom();
     await f.register();
     for (const change of ["registration", "session"] as const) {
@@ -425,7 +425,7 @@ describe("join destinations stay private and require live actual attendee entitl
       );
       const response = await f.raw(f.path, undefined, "GET", db);
       expect(raced).toBe(true);
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(change === "session" ? 401 : 403);
       expect(await response.text()).not.toContain(joinUrl);
     }
   });
