@@ -17,18 +17,28 @@ export async function callApi(
   // Advisory audit applies to every mounted callApi request; individual converted workflows opt into a strict budget.
   const mode = process.env.PKIC_D1_BUDGET_MODE;
   const policy = budget ?? (mode === "warn" || mode === "fail" ? { maxRoundTrips: 1, mode } : undefined);
-  const profile = policy ? profileD1Flow(environment.DB) : null;
+  // Preserve zero-D1 routes: merely enabling measurement must not access the binding.
+  const measurement: { profile: ReturnType<typeof profileD1Flow> | null } = { profile: null };
+  const measuredEnvironment = policy
+    ? new Proxy(environment, {
+        get(target, property, receiver) {
+          if (property !== "DB") return Reflect.get(target, property, receiver);
+          measurement.profile ??= profileD1Flow(Reflect.get(target, property, receiver));
+          return measurement.profile.db;
+        },
+      })
+    : environment;
   const request = typeof path === "string" ? new Request(new URL(path, "https://app.test"), init) : path;
   const executionContext = createExecutionContext();
   try {
-    return await app.fetch(
-      request,
-      profile ? ({ ...environment, DB: profile.db } as Env) : environment,
-      executionContext,
-    );
+    return await app.fetch(request, measuredEnvironment, executionContext);
   } finally {
     await waitOnExecutionContext(executionContext);
-    if (profile && policy)
-      enforceD1RoundTripBudget(profile.summary(), policy, `${request.method} ${new URL(request.url).pathname}`);
+    if (policy)
+      enforceD1RoundTripBudget(
+        measurement.profile?.summary() ?? { roundTrips: 0, statements: 0, queries: [] },
+        policy,
+        `${request.method} ${new URL(request.url).pathname}`,
+      );
   }
 }
