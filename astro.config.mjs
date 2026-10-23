@@ -52,7 +52,7 @@ export default defineConfig({
   compressHTML: true,
   markdown: { processor: siteMarkdownProcessor, syntaxHighlight: false },
   trailingSlash: "always",
-  build: { assets: "_assets", inlineStylesheets: "never", concurrency: 1 },
+  build: { assets: "_assets", inlineStylesheets: "never", concurrency: 4 },
   integrations: [
     preact({ compat: true }),
     sitemap({
@@ -80,7 +80,7 @@ export default defineConfig({
           if (!publicationFastLocalBuild()) await sealPublicationTransformCache(publicationCacheDirectory());
         },
         "astro:build:done": async ({ dir, pages }) => {
-          await logPublicationBuildCache("after Astro generation");
+          await logPublicationBuildCache("after Astro generation, before post-processing");
           await finishAstroRelease(fileURLToPath(dir), pages);
           if (incrementalBuild) await sealPublicationPageCache(publicationCacheDirectory());
           await logPublicationBuildCache("after post-processing");

@@ -25,6 +25,7 @@ run("pnpm", [
   "exec",
   "astro",
   "build",
+  "--timings",
   "--config",
   "astro.config.mjs",
   ...(process.env.PKIC_PUBLICATION_FORCE_REBUILD === "1" ? ["--force"] : []),
