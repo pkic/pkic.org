@@ -1,5 +1,6 @@
 import { observeStaticImageFallbacks } from "./static-image-fallbacks";
 import { initializeAgendaUrlState } from "./agenda-url-state";
+import { splitHash } from "../ui/url-query";
 import { initializeAgendaSpeakers } from "./agenda-speakers";
 import { initializeAgendaFilters, refreshAgendaFilters } from "./agenda-filters";
 import { observeAgendaLayout } from "./agenda-layout-stylesheet";
@@ -274,7 +275,7 @@ export function initializeContentAgenda(root: HTMLElement): () => void {
   function resolvePublicFragment(): void {
     let id: string;
     try {
-      id = decodeURIComponent(window.location.hash.slice(1));
+      id = decodeURIComponent(splitHash().path);
     } catch {
       return;
     }

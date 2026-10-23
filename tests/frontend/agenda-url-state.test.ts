@@ -111,7 +111,7 @@ it("keeps portal router path, mine, calendar view and session while replacing li
 });
 
 it("restores history state and stable speaker identity, then releases native listeners on disposal", async () => {
-  const { root } = mount("/agenda/?agendaSpeaker=person-123&agendaDay=speakers");
+  const { root } = mount("/agenda/?agendaDay=speakers#?agendaSpeaker=person-123");
   await frame();
   expect(root.querySelector<HTMLDialogElement>("[data-agenda-speaker-key]")!.open).toBe(true);
   history.replaceState(null, "", "/agenda/?agendaDay=one&agendaView=list&agendaSearch=cryptography");
@@ -149,20 +149,37 @@ it("bookmarks authored speaker profiles by their supplied dialog identity when n
     h(AgendaSpeakerProfile, { speaker: { name: "Authored legacy speaker" }, profileId: "legacy-source-profile" }),
   );
   expect(markup).toContain('data-agenda-speaker-key="legacy-source-profile"');
-  const { root } = mount("/agenda/?agendaDay=speakers&agendaSpeaker=legacy-source-profile", markup);
+  const { root } = mount("/agenda/?agendaDay=speakers#?agendaSpeaker=legacy-source-profile", markup);
   await frame();
   expect(root.querySelector<HTMLDialogElement>('[data-agenda-speaker-key="legacy-source-profile"]')!.open).toBe(true);
-  expect(new URL(location.href).searchParams.get("agendaSpeaker")).toBe("legacy-source-profile");
+  expect(new URLSearchParams(location.hash.split("?")[1]).get("agendaSpeaker")).toBe("legacy-source-profile");
 });
 
 it("restores public authored session dialogs by their existing identifier without matching a title", async () => {
-  const { root } = mount("/agenda/?session=details");
+  const { root } = mount("/agenda/#?session=details");
   // The source-only card has a supplied dialog identifier, but no native occurrence ID.
   root.querySelector("[data-agenda-occurrence]")!.removeAttribute("data-agenda-occurrence");
   window.dispatchEvent(new PopStateEvent("popstate"));
   await frame();
   expect(root.querySelector<HTMLDialogElement>("#details")!.open).toBe(true);
-  expect(new URL(location.href).searchParams.get("session")).toBe("details");
+  expect(new URLSearchParams(location.hash.split("?")[1]).get("session")).toBe("details");
+});
+
+it("keeps dialog and scroll state out of server queries and clears a closed dialog", async () => {
+  const scroll = vi.fn();
+  vi.stubGlobal("scrollBy", vi.fn());
+  const { root, open } = mount("/agenda/?utm_source=mail#?session=session-one&agendaPosition=session-one");
+  const card = root.querySelector<HTMLElement>("[data-agenda-occurrence]")!;
+  card.scrollIntoView = scroll;
+  await frame();
+  expect(open).toHaveBeenCalledWith("session-one");
+  expect(scroll).toHaveBeenCalledOnce();
+  expect(location.search).toBe("?utm_source=mail&agendaDay=one");
+  expect(new URLSearchParams(location.hash.slice(2)).get("agendaPosition")).toBe("session-one");
+  root.querySelector<HTMLDialogElement>("#details")!.close();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(new URLSearchParams(location.hash.slice(2)).has("session")).toBe(false);
+  expect(new URLSearchParams(location.hash.slice(2)).get("agendaPosition")).toBe("session-one");
 });
 
 it("uses clean portal speaker and date paths while preserving filters and existing personal parameters", async () => {

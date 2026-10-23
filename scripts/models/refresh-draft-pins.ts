@@ -6,7 +6,7 @@ import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { modelRegistrySchema } from "../../assets/shared/model-registry.ts";
 import { verifyModelVersion } from "../../site/model-version-source.ts";
-import { githubDraftSource } from "./github-draft-source.ts";
+import { DraftSourceUnavailableError, githubDraftSource } from "./github-draft-source.ts";
 
 export interface DraftSource {
   head(repository: string, branch: string): Promise<string>;
@@ -39,11 +39,19 @@ export async function refreshDraftPins(source: string, remote: DraftSource) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  const { values } = parseArgs({ args: process.argv.slice(2), options: { output: { type: "string" } } });
-  const result = await refreshDraftPins(
-    await readFile("data/model-versions.yaml", "utf8"),
-    githubDraftSource(process.env.GH_TOKEN),
-  );
+  const { values } = parseArgs({
+    args: process.argv.slice(2),
+    options: { output: { type: "string" }, "allow-unavailable": { type: "boolean", default: false } },
+  });
+  const source = await readFile("data/model-versions.yaml", "utf8");
+  let result;
+  try {
+    result = await refreshDraftPins(source, githubDraftSource(process.env.GH_TOKEN));
+  } catch (error) {
+    if (!values["allow-unavailable"] || !(error instanceof DraftSourceUnavailableError)) throw error;
+    console.warn(`Draft refresh skipped; retaining reviewed model pins. ${error.message}`);
+    result = { changes: 0, source };
+  }
   if (values.output) {
     await mkdir(dirname(values.output), { recursive: true });
     await writeFile(values.output, result.source);
