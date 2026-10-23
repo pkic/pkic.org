@@ -15,9 +15,10 @@ import {
   type AgendaOrganizationRow,
 } from "./speaker-organizations";
 import { prepareStaffingUnavailablePairs, decodeStaffingUnavailablePairs } from "./staffing-availability";
+import type { EventReadSelection } from "../events/selection";
 
 /** Compose the canonical domain reads before execution; every projection observes one D1 batch. */
-export function prepareAgendaEditorRead(db: DatabaseLike, eventId: string) {
+export function prepareAgendaEditorRead(db: DatabaseLike, eventId: EventReadSelection) {
   const structure = prepareAgendaSnapshotRows(db, eventId);
   const details = prepareAgendaOccurrenceDetails(db, eventId);
   const statements = [

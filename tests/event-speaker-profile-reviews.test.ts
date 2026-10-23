@@ -1,4 +1,7 @@
-import { approveSpeakerProfile } from "../functions/_lib/services/event-agenda/speaker-profile-reviews";
+import {
+  approveSpeakerProfile,
+  prepareReviewedSpeakerProfilesRead,
+} from "../functions/_lib/services/event-agenda/speaker-profile-reviews";
 import type { DatabaseLike } from "../functions/_lib/types";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
@@ -7,6 +10,9 @@ import { seedEventAndAdmin } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { addRepresentative, insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
 import { callApi } from "./helpers/app";
+import { profileD1Flow } from "./helpers/d1-flow-profile";
+import { mutateBeforeMatchingQuery } from "./helpers/database-races";
+import { agendaAuthoringEffects } from "./helpers/agenda-authoring";
 import { createAgendaOccurrence, patchAgendaOccurrence } from "../functions/_lib/services/event-agenda/mutations";
 import { sessionHistoryMetadataSchema } from "../assets/shared/schemas/event-session-history";
 import {
@@ -63,8 +69,8 @@ async function fixture() {
     }),
   );
   const token = await createAdminSession(env.DB, userId, "speaker-review");
-  const request = (path: string, body?: unknown) =>
-    callApi(env, `/api/v1/events/pqc-2026${path}`, {
+  const request = (path: string, body?: unknown, db: DatabaseLike = env.DB) =>
+    callApi({ ...env, DB: db }, `/api/v1/events/pqc-2026${path}`, {
       method: body ? "POST" : "GET",
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
       ...(body ? { body: JSON.stringify(body) } : {}),
@@ -78,6 +84,37 @@ async function fixture() {
 }
 
 describe("event speaker profile reviews", () => {
+  it("loads more than one review page in a single prepared snapshot", async () => {
+    const f = await fixture();
+    const people = JSON.stringify(
+      Array.from({ length: 101 }, () => ({ id: crypto.randomUUID(), identityId: crypto.randomUUID() })),
+    );
+    const at = new Date().toISOString();
+    await env.DB.batch([
+      env.DB.prepare(`INSERT INTO users(id,email,normalized_email,first_name,last_name,active,created_at,updated_at)
+        SELECT json_extract(value,'$.id'),json_extract(value,'$.id')||'@example.test',json_extract(value,'$.id')||'@example.test','Fixture','Speaker',1,?,? FROM json_each(?)`).bind(
+        at,
+        at,
+        people,
+      ),
+      env.DB.prepare(`INSERT INTO identities(id,user_id,source,show_on_organization_profile,is_default,invited_at,started_at,created_at,updated_at)
+        SELECT json_extract(value,'$.identityId'),json_extract(value,'$.id'),'staff',0,1,?,?,?,? FROM json_each(?)`).bind(
+        at,
+        at,
+        at,
+        at,
+        people,
+      ),
+      env.DB.prepare(`INSERT INTO event_agenda_occurrence_speakers(occurrence_id,user_id)
+        SELECT ?,json_extract(value,'$.id') FROM json_each(?)`).bind(f.agenda.occurrences[0].id, people),
+    ]);
+    const profile = profileD1Flow(env.DB);
+    const read = prepareReviewedSpeakerProfilesRead(profile.db, f.eventId);
+    const loaded = await profile.db.batch(read.statements);
+    expect(loaded[0].results).toHaveLength(102);
+    await read.decode(loaded, f.eventId, f.agenda, false);
+    expect((await profile.report()).roundTrips).toBe(1);
+  });
   it("reviews one canonical profile for every session and publishes without presentation files", async () => {
     const f = await fixture();
     const pending = await f.queue();
@@ -85,8 +122,10 @@ describe("event speaker profile reviews", () => {
     expect(pending.profiles).toHaveLength(1);
     expect(pending.profiles[0].sessionCount).toBe(2);
     expect(pending.profiles[0].links).toEqual(["https://example.org/speaker"]);
-    const blocked = await f.request("/agenda/publications", { expectedRevision: f.agenda.revision });
+    const blockedProfile = profileD1Flow(env.DB);
+    const blocked = await f.request("/agenda/publications", { expectedRevision: f.agenda.revision }, blockedProfile.db);
     expect(blocked.status).toBe(422);
+    expect((await blockedProfile.report()).roundTrips).toBe(1);
     const profile = pending.profiles[0];
     const approved = await f.request("/speakers/profiles/reviews", {
       expectedRevision: f.agenda.revision,
@@ -102,8 +141,15 @@ describe("event speaker profile reviews", () => {
       .first<string>("settings_json");
     expect(settings).not.toContain("Reviewed biography");
     expect(result.agenda.occurrences.every((o) => !o.history?.appearances.length)).toBe(true);
-    const published = await f.request("/agenda/publications", { expectedRevision: result.agenda.revision });
+    const publicationProfile = profileD1Flow(env.DB);
+    const published = await f.request(
+      "/agenda/publications",
+      { expectedRevision: result.agenda.revision },
+      publicationProfile.db,
+    );
     expect(published.status, await published.clone().text()).toBe(200);
+    // The reviewed projection feeds a second evidence snapshot before the atomic command; one-call work remains.
+    expect((await publicationProfile.report()).roundTrips).toBe(3);
     const draft = agendaSnapshotSchema.parse(await published.json());
     const frozen = await env.DB.prepare(
       "SELECT snapshot_json FROM event_agenda_publications WHERE event_id=? AND revision=?",
@@ -118,6 +164,74 @@ describe("event speaker profile reviews", () => {
       expect(occurrence.presentationUrl).toBeNull();
     }
   });
+  it.each(["profile", "identity", "permission", "session", "revision", "visibility"] as const)(
+    "rolls back publication when %s changes at its atomic write",
+    async (change) => {
+      const f = await fixture();
+      const profile = (await f.queue()).profiles[0];
+      const reviewed = await approveSpeakerProfile(
+        env.DB,
+        f.eventId,
+        "pqc-2026",
+        {
+          expectedRevision: f.agenda.revision,
+          userId: profile.userId,
+          identityId: profile.identityId!,
+          profileDigest: profile.profileDigest,
+        },
+        f.userId,
+      );
+      const effects = async () => ({
+        ...(await agendaAuthoringEffects()),
+        profileSlugs: (
+          await env.DB.prepare(
+            "SELECT slug,user_id,created_at,retired_at FROM person_profile_slugs ORDER BY slug",
+          ).all()
+        ).results,
+        sessionSlugs: (
+          await env.DB.prepare(
+            "SELECT event_id,slug,occurrence_id,created_at,retired_at FROM session_page_slugs ORDER BY event_id,slug",
+          ).all()
+        ).results,
+      });
+      let raced = false;
+      let concurrent: Awaited<ReturnType<typeof effects>> | undefined;
+      const db = mutateBeforeMatchingQuery(
+        env.DB,
+        (sql) => sql.startsWith("INSERT INTO event_agenda_publications("),
+        async () => {
+          raced = true;
+          const at = new Date().toISOString();
+          if (change === "profile")
+            await env.DB.prepare("UPDATE identities SET biography='Changed after review',updated_at=? WHERE id=?")
+              .bind(at, f.identityId)
+              .run();
+          else if (change === "identity")
+            await env.DB.prepare("UPDATE identities SET ended_at=? WHERE id=?").bind(at, f.identityId).run();
+          else if (change === "permission")
+            await env.DB.prepare("UPDATE user_roles SET revoked_at=? WHERE user_id=?").bind(at, f.userId).run();
+          else if (change === "session")
+            await env.DB.prepare("UPDATE sessions SET revoked_at=? WHERE user_id=?").bind(at, f.userId).run();
+          else if (change === "revision")
+            await env.DB.prepare("UPDATE event_agenda_state SET revision=revision+1 WHERE event_id=?")
+              .bind(f.eventId)
+              .run();
+          else
+            await env.DB.prepare(
+              "UPDATE events SET visibility=CASE WHEN visibility='public' THEN 'invitation_only' ELSE 'public' END WHERE id=?",
+            )
+              .bind(f.eventId)
+              .run();
+          concurrent = await effects();
+        },
+      );
+      const response = await f.request("/agenda/publications", { expectedRevision: reviewed.agenda.revision }, db);
+      expect(raced).toBe(true);
+      expect(response.ok).toBe(false);
+      expect(concurrent).toBeDefined();
+      expect(await effects()).toEqual(concurrent);
+    },
+  );
   it("recognizes existing approvals when legacy stored links use object encoding", async () => {
     const f = await fixture();
     const profile = (await f.queue()).profiles[0];

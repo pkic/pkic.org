@@ -487,6 +487,7 @@ describe("agenda platform", () => {
       env,
       "/api/v1/events/pqc-2026/agenda/occurrences?publicationStatus=changed&limit=1",
       { headers },
+      { maxRoundTrips: 1 },
     );
     expect(filtered.status).toBe(200);
     expect(await filtered.json()).toMatchObject({

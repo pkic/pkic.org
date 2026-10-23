@@ -1,6 +1,8 @@
 import { agendaOccurrenceCalendarUid } from "../../../../assets/shared/event-agenda-calendar-identity";
 import ICAL from "ical.js";
-import { all } from "../../db/queries";
+import { batchRows } from "../../db/pagination";
+import { eventReadIdSql, type EventReadSelection } from "../events/selection";
+import type { D1StatementResult } from "../../types";
 import type { DatabaseLike } from "../../types";
 import { nowIso } from "../../utils/time";
 import { publishedRoomsSql, publishedSessionsSql } from "./published-schedule";
@@ -54,30 +56,52 @@ export async function personalAgendaCalendar(
   includeTentative: boolean,
   subscriptionId?: string,
 ) {
-  const rows = await all<{
-    occurrence_id: string;
-    sequence: number;
-    status: string;
-    title: string;
-    start_at: string | null;
-    end_at: string | null;
-    location: string | null;
-    updated_at: string;
-  }>(
-    db,
-    `SELECT occurrence_id,sequence,status,title,start_at,end_at,location,updated_at FROM agenda_calendar_entries
-      WHERE event_id=? AND user_id=? AND (? IS NULL OR EXISTS(SELECT 1 FROM agenda_calendar_subscriptions sub JOIN users person ON person.id=sub.user_id WHERE sub.id=? AND sub.event_id=agenda_calendar_entries.event_id AND sub.user_id=agenda_calendar_entries.user_id AND sub.revoked_at IS NULL AND person.active=1)) AND (status='confirmed' OR (status='canceled' OR ?=0 AND status='released') AND updated_at>=? OR ?=1 AND status IN ('tentative','released')) ORDER BY start_at,occurrence_id`,
-    [
-      eventId,
-      userId,
-      subscriptionId ?? null,
-      subscriptionId ?? null,
-      includeTentative ? 1 : 0,
-      new Date(Date.now() - 90 * 86400000).toISOString(),
-      includeTentative ? 1 : 0,
+  const owner = {
+    sql: `SELECT ? AS user_id,? AS include_tentative WHERE (? IS NULL OR EXISTS(SELECT 1 FROM agenda_calendar_subscriptions sub JOIN users person ON person.id=sub.user_id WHERE sub.id=? AND sub.event_id=? AND sub.user_id=? AND sub.revoked_at IS NULL AND person.active=1))`,
+    bindings: [userId, includeTentative ? 1 : 0, subscriptionId ?? null, subscriptionId ?? null, eventId, userId],
+  };
+  const read = preparePersonalCalendarRead(db, eventId, owner);
+  return read.decode(await db.batch(read.statements));
+}
+
+/** Trusted backend owner query; subscription callers include active-person and revocation checks. */
+export interface CalendarFeedOwnerSelection {
+  sql: string;
+  bindings: readonly unknown[];
+}
+interface CalendarEntryRow {
+  occurrence_id: string;
+  sequence: number;
+  status: string;
+  title: string;
+  start_at: string | null;
+  end_at: string | null;
+  location: string | null;
+  updated_at: string;
+  include_tentative: number;
+}
+
+export function preparePersonalCalendarRead(
+  db: DatabaseLike,
+  eventSelection: EventReadSelection,
+  owner: CalendarFeedOwnerSelection,
+) {
+  const event = eventReadIdSql(eventSelection);
+  return {
+    statements: [
+      db
+        .prepare(`WITH scope AS(SELECT ${event.sql} AS event_id),owner AS(${owner.sql})
+      SELECT entry.occurrence_id,entry.sequence,entry.status,entry.title,entry.start_at,entry.end_at,entry.location,entry.updated_at,owner.include_tentative
+      FROM agenda_calendar_entries entry CROSS JOIN scope JOIN owner ON owner.user_id=entry.user_id
+      WHERE entry.event_id=scope.event_id AND (entry.status='confirmed' OR (entry.status='canceled' OR owner.include_tentative=0 AND entry.status='released') AND entry.updated_at>=? OR owner.include_tentative=1 AND entry.status IN ('tentative','released')) ORDER BY entry.start_at,entry.occurrence_id`)
+        .bind(...event.bindings, ...owner.bindings, new Date(Date.now() - 90 * 86400000).toISOString()),
     ],
-  );
-  const feedStatus = (status: string) =>
+    decode: (loaded: D1StatementResult[]) => serializePersonalCalendar(batchRows<CalendarEntryRow>(loaded[0])),
+  };
+}
+
+function serializePersonalCalendar(rows: CalendarEntryRow[]) {
+  const feedStatus = (status: string, includeTentative: boolean) =>
     status === "canceled" || (status === "released" && !includeTentative)
       ? "CANCELLED"
       : status === "confirmed"
@@ -97,7 +121,7 @@ export async function personalAgendaCalendar(
     event.addPropertyWithValue("dtstart", ICAL.Time.fromJSDate(new Date(row.start_at), true));
     event.addPropertyWithValue("dtend", ICAL.Time.fromJSDate(new Date(row.end_at), true));
     event.addPropertyWithValue("summary", row.title);
-    event.addPropertyWithValue("status", feedStatus(row.status));
+    event.addPropertyWithValue("status", feedStatus(row.status, row.include_tentative === 1));
     if (row.location) event.addPropertyWithValue("location", row.location);
     calendar.addSubcomponent(event);
   }

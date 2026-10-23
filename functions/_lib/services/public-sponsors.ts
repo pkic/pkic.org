@@ -18,9 +18,12 @@ import type { DatabaseLike } from "../types";
  * filtered, sorted, counted, and paged in D1. Tier display weights come from
  * sponsorship_tier_catalog rather than a frontend constant.
  */
-function publicSponsorReadModelCte(source: "sponsorships" | "publication_sponsorships" = "sponsorships"): string {
+function publicSponsorReadModelCte(
+  source: "sponsorships" | "publication_sponsorships" = "sponsorships",
+  withSql = "",
+): string {
   return `
-  WITH sponsor_clock AS (SELECT strftime('%Y-%m-%dT%H:%M:%fZ','now') AS at), selected_event AS (
+  WITH ${withSql ? `${withSql},` : ""} sponsor_clock AS (SELECT strftime('%Y-%m-%dT%H:%M:%fZ','now') AS at), selected_event AS (
     __SELECTED_EVENT__
   ), consortium_candidates AS (
     ${consortiumLogoCandidatesSql(source)}
@@ -149,40 +152,46 @@ export function publicNonMemberSponsorPredicate(alias: "sponsorship"): string {
  * it is not used when a slug is supplied, so renamed/duplicate events cannot
  * silently redirect a sponsorship wall.
  */
-export function buildPublicSponsorReadModel(identity: PublicSponsorEventIdentity = {}): {
+export function buildPublicSponsorReadModel(
+  identity: PublicSponsorEventIdentity = {},
+  cte?: { sql: string; bindings: readonly unknown[] },
+): {
   sql: string;
   bindings: unknown[];
 } {
   if (identity.eventId) {
     return {
-      sql: publicSponsorReadModelCte().replace(
+      sql: publicSponsorReadModelCte("sponsorships", cte?.sql).replace(
         "__SELECTED_EVENT__",
         "SELECT id,starts_at,ends_at FROM events WHERE id = ? LIMIT 1",
       ),
-      bindings: [identity.eventId],
+      bindings: [...(cte?.bindings ?? []), identity.eventId],
     };
   }
   if (identity.eventSlug) {
     return {
-      sql: publicSponsorReadModelCte().replace(
+      sql: publicSponsorReadModelCte("sponsorships", cte?.sql).replace(
         "__SELECTED_EVENT__",
         "SELECT id,starts_at,ends_at FROM events WHERE slug = ? LIMIT 1",
       ),
-      bindings: [identity.eventSlug],
+      bindings: [...(cte?.bindings ?? []), identity.eventSlug],
     };
   }
   if (identity.eventName) {
     return {
-      sql: publicSponsorReadModelCte().replace(
+      sql: publicSponsorReadModelCte("sponsorships", cte?.sql).replace(
         "__SELECTED_EVENT__",
         "SELECT id,starts_at,ends_at FROM events WHERE lower(replace(name, ' - ', ' ')) = lower(replace(?, ' - ', ' ')) ORDER BY starts_at DESC, id ASC LIMIT 1",
       ),
-      bindings: [identity.eventName],
+      bindings: [...(cte?.bindings ?? []), identity.eventName],
     };
   }
   return {
-    sql: publicSponsorReadModelCte().replace("__SELECTED_EVENT__", "SELECT id,starts_at,ends_at FROM events WHERE 0"),
-    bindings: [],
+    sql: publicSponsorReadModelCte("sponsorships", cte?.sql).replace(
+      "__SELECTED_EVENT__",
+      "SELECT id,starts_at,ends_at FROM events WHERE 0",
+    ),
+    bindings: [...(cte?.bindings ?? [])],
   };
 }
 

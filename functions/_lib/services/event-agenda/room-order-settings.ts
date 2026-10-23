@@ -7,7 +7,7 @@ import { nowIso } from "../../utils/time";
 import { parseJsonSafe } from "../../utils/json";
 import { agendaSettingsObject, agendaSettingsWriteSql } from "./settings-object";
 
-/** Legacy rooms arrive in deterministic name/id order; stored IDs retain position across renames. */
+/** Rooms without a saved order use deterministic name/id order; stored IDs retain position across renames. */
 export function orderedAgendaRooms<T extends { id: string }>(rooms: T[], settingsJson: string): T[] {
   const settings = agendaSettingsObject(parseJsonSafe<unknown>(settingsJson, {}));
   const agenda = settings.agenda;
@@ -29,6 +29,13 @@ export async function prepareAgendaRoomOrder(db: DatabaseLike, eventId: string, 
   const ids = agendaRoomOrderIdsSchema.parse(roomIds);
   const event = await first<{ settings_json: string }>(db, "SELECT settings_json FROM events WHERE id=?", [eventId]);
   if (!event) throw new AppError(404, "EVENT_NOT_FOUND", "Event not found");
+  return planAgendaRoomOrder(db, { id: eventId, settings_json: event.settings_json }, ids);
+}
+
+/** Reuse the event settings already read with the canonical agenda; do no I/O while planning. */
+export function planAgendaRoomOrder(db: DatabaseLike, event: { id: string; settings_json: string }, roomIds: string[]) {
+  const ids = agendaRoomOrderIdsSchema.parse(roomIds);
+  const eventId = event.id;
   const agenda = agendaSettingsObject(agendaSettingsObject(JSON.parse(event.settings_json)).agenda);
   agenda.roomOrder = ids;
   const json = JSON.stringify(ids);

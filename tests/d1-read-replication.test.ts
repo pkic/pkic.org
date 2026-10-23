@@ -19,6 +19,7 @@ import { agendaOccurrenceCreateSchema, agendaSnapshotSchema } from "../assets/sh
 import { withRequestD1Session } from "../functions/_lib/db/request-session";
 import { serializeUserSessionCookie } from "../functions/_lib/auth/user-session-token";
 import { resilientDatabase } from "../functions/_lib/dependency-bindings";
+import { isReadOnlySql } from "../functions/_lib/db/read-only-sql";
 
 const signingSecret = "test-admin-signing-secret";
 
@@ -326,8 +327,8 @@ describe("D1 read replication", () => {
       );
     const before = await get(token);
     expect(before.status, await before.clone().text()).toBe(200);
-    expect(recorder.sessionQueries.some((sql) => /INSERT INTO authorization_guards/.test(sql))).toBe(false);
-    expect(recorder.sessionQueries.some((sql) => /SELECT EXISTS/.test(sql))).toBe(true);
+    expect(recorder.sessionQueries.length).toBeGreaterThan(0);
+    expect(recorder.sessionQueries.every(isReadOnlySql)).toBe(true);
     recorder.sessionQueries.length = 0;
     const saved = await worker.fetch(
       new Request(`https://app.test/api/v1/events/pqc-2026/agenda/occurrences/${created.occurrences[0]!.id}`, {

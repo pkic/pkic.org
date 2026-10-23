@@ -6,10 +6,19 @@ import {
 } from "../../../../assets/shared/schemas/event-participation-scanning";
 import { batchFirst } from "../../db/pagination";
 import { prepareScannerLifecycleGuard, isScannerLifecycleGuardFailure } from "./scanner-lifecycle-guard";
-import type { DatabaseLike, StatementLike } from "../../types";
+import type { DatabaseLike, StatementLike, D1StatementResult } from "../../types";
 import { AppError } from "../../errors";
 import { nowIso } from "../../utils/time";
 import { hashBadgeCredential } from "./badge-hash";
+import { eventReadIdSql, type EventReadSelection } from "../events/selection";
+
+interface ScannerUploadReceiptRow {
+  request_hash: string;
+  response_json: string;
+  sequence: number;
+  operation_id: string;
+  epoch_id: string;
+}
 
 export type ScannerUploadIdentity = Pick<
   EventScanRequest,
@@ -26,31 +35,28 @@ export type ScannerUploadIdentity = Pick<
   | "scannedValueTruncated"
 >;
 
-export const scannerCaptureOpenSql = `NOT EXISTS(SELECT 1 FROM event_evidence_retention_state retired WHERE retired.event_id=? AND (retired.capture_closed_at IS NOT NULL OR retired.active_run_id IS NOT NULL))`;
+/** Trusted event expression only; the bound adapter below serves existing write guards. */
+export function scannerCaptureOpenForEventSql(eventSql: string) {
+  return `NOT EXISTS(SELECT 1 FROM event_evidence_retention_state retired WHERE retired.event_id=${eventSql} AND (retired.capture_closed_at IS NOT NULL OR retired.active_run_id IS NOT NULL))`;
+}
+export const scannerCaptureOpenSql = scannerCaptureOpenForEventSql("?");
 
-/** A received business refusal resolves upload transport without asserting admission or presence. */
-export async function receiveScannerUpload(
+/** Prepare an immutable envelope lookup without reading or recording it. */
+export async function prepareScannerUploadReceipt(
   db: DatabaseLike,
-  eventId: string,
+  event: EventReadSelection,
   scan: ScannerUploadIdentity,
-  capture: (guarded: DatabaseLike) => Promise<unknown>,
-): Promise<EventScanResponse> {
+) {
+  const scope = eventReadIdSql(event);
   const session = scan.scannerSession;
   if (!session)
     throw new AppError(409, "SCANNER_ENROLLMENT_REQUIRED", "Prepare this scanner online before uploading scans.");
   const requestHash = await hashBadgeCredential(JSON.stringify(scan));
-  type ReceiptRow = {
-    request_hash: string;
-    response_json: string;
-    sequence: number;
-    operation_id: string;
-    epoch_id: string;
-  };
   const receiptRead = db
     .prepare(`SELECT receipt.request_hash,receipt.response_json,receipt.sequence,receipt.operation_id,receipt.epoch_id FROM event_scanner_upload_receipts receipt JOIN event_scanner_device_sessions session ON session.id=receipt.epoch_id
-       WHERE session.event_id=? AND session.operator_user_id=? AND session.device_id=? AND (receipt.operation_id=? OR (receipt.epoch_id=? AND receipt.sequence=?))`)
-    .bind(...[eventId, scan.operatorUserId, scan.deviceId, scan.operationId, session.epochId, session.sequence]);
-  const decodeReceipt = (row: ReceiptRow | null) => {
+       WHERE session.event_id=${scope.sql} AND session.operator_user_id=? AND session.device_id=? AND (receipt.operation_id=? OR (receipt.epoch_id=? AND receipt.sequence=?))`)
+    .bind(...scope.bindings, scan.operatorUserId, scan.deviceId, scan.operationId, session.epochId, session.sequence);
+  const decodeReceipt = (row: ScannerUploadReceiptRow | null) => {
     if (!row) return null;
     if (
       row.request_hash !== requestHash ||
@@ -65,8 +71,29 @@ export async function receiveScannerUpload(
       );
     return eventScanResponseSchema.parse(JSON.parse(row.response_json));
   };
-  const readReceipt = async () => decodeReceipt(await receiptRead.first<ReceiptRow>());
-  const replay = await readReceipt();
+  return {
+    statement: receiptRead,
+    requestHash,
+    decode: decodeReceipt,
+  };
+}
+
+/** A received business refusal resolves upload transport without asserting admission or presence. */
+export async function receiveScannerUpload(
+  db: DatabaseLike,
+  eventId: string,
+  scan: ScannerUploadIdentity,
+  capture: (guarded: DatabaseLike) => Promise<unknown>,
+  preloadedReceipt?: D1StatementResult,
+): Promise<EventScanResponse> {
+  const session = scan.scannerSession;
+  if (!session)
+    throw new AppError(409, "SCANNER_ENROLLMENT_REQUIRED", "Prepare this scanner online before uploading scans.");
+  const receipt = await prepareScannerUploadReceipt(db, eventId, scan);
+  const { statement: receiptRead, requestHash, decode: decodeReceipt } = receipt;
+  const decodeResult = (result: D1StatementResult) => decodeReceipt(batchFirst<ScannerUploadReceiptRow>(result));
+  const readReceipt = async () => decodeReceipt(await receiptRead.first<ScannerUploadReceiptRow>());
+  const replay = preloadedReceipt === undefined ? await readReceipt() : decodeResult(preloadedReceipt);
   if (replay) return replay;
   const receivedAt = nowIso();
   let committed = false;
@@ -153,7 +180,7 @@ export async function receiveScannerUpload(
       guard.cleanup,
       receiptRead,
     ]);
-    committedResponse = decodeReceipt(batchFirst<ReceiptRow>(results[results.length - 1]));
+    committedResponse = decodeResult(results[results.length - 1]);
     committed = true;
     return results.slice(1, 1 + statements.length);
   };

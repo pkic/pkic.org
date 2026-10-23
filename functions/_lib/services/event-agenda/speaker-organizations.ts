@@ -2,6 +2,7 @@ import type { DatabaseLike } from "../../types";
 import { agendaSpeakerOrganizationSchema, type AgendaSnapshot } from "../../../../assets/shared/schemas/event-agenda";
 import { agendaCreditedOrganizationIds } from "../../../../assets/shared/agenda-speaker-affiliations";
 import { organizationLogoUrl } from "../organization-content/fields";
+import { eventReadIdSql, type EventReadSelection } from "../events/selection";
 
 const BATCH = 100;
 export interface AgendaOrganizationRow {
@@ -21,19 +22,20 @@ function prepareOrganizationRows(db: DatabaseLike, selection: string, bindings: 
 }
 
 /** Restrict candidates to this event's credited people and historical affiliations; decode retains exact credits. */
-export function prepareAgendaEventOrganizations(db: DatabaseLike, eventId: string) {
+export function prepareAgendaEventOrganizations(db: DatabaseLike, eventId: EventReadSelection) {
+  const scope = eventReadIdSql(eventId);
   return prepareOrganizationRows(
     db,
     `
       SELECT identity.organization_id FROM identities identity WHERE identity.user_id IN(
         SELECT speaker.user_id FROM event_agenda_occurrence_speakers speaker
-        JOIN event_agenda_occurrences occurrence ON occurrence.id=speaker.occurrence_id WHERE occurrence.event_id=?)
+        JOIN event_agenda_occurrences occurrence ON occurrence.id=speaker.occurrence_id WHERE occurrence.event_id=${scope.sql})
       UNION SELECT json_extract(affiliation.value,'$.organizationId')
         FROM event_agenda_session_history history
         JOIN event_agenda_occurrences occurrence ON occurrence.id=history.occurrence_id
         JOIN json_each(history.metadata_json,'$.appearances') appearance
-        JOIN json_each(appearance.value,'$.affiliations') affiliation WHERE occurrence.event_id=?`,
-    [eventId, eventId],
+        JOIN json_each(appearance.value,'$.affiliations') affiliation WHERE occurrence.event_id=${scope.sql}`,
+    [...scope.bindings, ...scope.bindings],
     600001,
   );
 }

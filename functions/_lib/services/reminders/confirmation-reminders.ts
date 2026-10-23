@@ -1,4 +1,5 @@
 import { all } from "../../db/queries";
+import { eventCommunicationSettingsSql } from "../events/communication-settings";
 import { buildEventEmailVariables } from "../events";
 import { nowIso } from "../../utils/time";
 import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
@@ -65,7 +66,7 @@ export async function runConfirmationReminders(
            r.confirmation_reminder_sent_at, r.pending_confirmation_deadline_at, r.transition_revision, r.created_at,
            e.name AS event_name, e.slug AS event_slug, e.base_path AS event_base_path,
            e.timezone AS event_timezone, e.starts_at AS event_starts_at,
-           e.ends_at AS event_ends_at, e.settings_json AS event_settings_json,
+           e.ends_at AS event_ends_at, ${eventCommunicationSettingsSql("e.settings_json")} AS event_settings_json,
            ? AS reminder_count
          FROM events e
          CROSS JOIN registrations r ON r.event_id = e.id
@@ -182,7 +183,7 @@ export async function runConfirmationReminders(
            r.confirmation_reminder_sent_at, r.pending_confirmation_deadline_at, r.transition_revision, r.created_at,
            e.name AS event_name, e.slug AS event_slug, e.base_path AS event_base_path,
            e.timezone AS event_timezone, e.ends_at AS event_ends_at,
-           e.starts_at AS event_starts_at, e.settings_json AS event_settings_json,
+           e.starts_at AS event_starts_at, ${eventCommunicationSettingsSql("e.settings_json")} AS event_settings_json,
            MAX(0, MIN(?, CAST(((julianday(?) - julianday(r.created_at)) / ?) AS INTEGER) - 1)) AS reminder_count
          FROM registrations r
          JOIN events e ON e.id = r.event_id

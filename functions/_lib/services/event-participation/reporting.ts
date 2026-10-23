@@ -1,9 +1,17 @@
 import { AppError } from "../../errors";
-import { assertEventContactAccess, eventContactAccessSql } from "./evidence-retention";
+import {
+  assertEventContactAccess,
+  eventContactAccessSql,
+  prepareEventContactRetention,
+  requireEventContactAccess,
+} from "./evidence-retention";
 import { effectiveAttendanceSql } from "./attendance-corrections";
 import { publishedSessionsSql, publishedRoomsSql } from "./published-schedule";
 import { all, first } from "../../db/queries";
-import type { DatabaseLike } from "../../types";
+import type { DatabaseLike, D1StatementResult, Env } from "../../types";
+import { buildOffsetPageStatements, decodeOffsetPageResults } from "../../db/pagination";
+import { eventReadIdSql, type EventReadSelection } from "../events/selection";
+import { readSessionParticipantResource } from "./management-authorization";
 import {
   attendanceQuerySchema,
   attendanceReportSchema,
@@ -51,11 +59,27 @@ export async function scannerTargets(db: DatabaseLike, eventId: string, raw: unk
   });
 }
 export async function sessionBookings(db: DatabaseLike, eventId: string, occurrenceId: string, raw: unknown) {
+  const read = prepareSessionBookings(db, eventId, occurrenceId, raw);
+  return read.decode(await db.batch(read.statements));
+}
+export async function readSessionBookingsRequest(
+  db: DatabaseLike,
+  request: Request,
+  env: Pick<Env, "INTERNAL_SIGNING_SECRET">,
+  slug: string,
+  occurrenceId: string,
+  raw: unknown,
+) {
+  return readSessionParticipantResource(db, request, env, slug, occurrenceId, (event) =>
+    prepareSessionBookings(db, event, occurrenceId, raw),
+  );
+}
+function prepareSessionBookings(db: DatabaseLike, eventId: EventReadSelection, occurrenceId: string, raw: unknown) {
   const query = sessionBookingsQuerySchema.parse(raw);
-  await assertEventContactAccess(db, eventId);
-  const where = `FROM agenda_session_participations p JOIN users u ON u.id=p.user_id WHERE p.event_id=? AND p.occurrence_id=? AND ${eventContactAccessSql("p.event_id")} AND (? IS NULL AND p.status<>'canceled' OR p.status=?) AND INSTR(LOWER(COALESCE(u.preferred_name,'')||' '||COALESCE(u.first_name,'')||' '||COALESCE(u.last_name,'')),LOWER(?))>0`;
-  const bindings = [eventId, occurrenceId, query.status ?? null, query.status ?? null, query.q ?? ""];
-  const count = await first<{ total: number }>(db, `SELECT COUNT(*) AS total ${where}`, bindings);
+  const retention = prepareEventContactRetention(db, eventId);
+  const scope = eventReadIdSql(eventId);
+  const where = `FROM agenda_session_participations p JOIN users u ON u.id=p.user_id WHERE p.event_id=${scope.sql} AND p.occurrence_id=? AND ${eventContactAccessSql("p.event_id")} AND (? IS NULL AND p.status<>'canceled' OR p.status=?) AND INSTR(LOWER(COALESCE(u.preferred_name,'')||' '||COALESCE(u.first_name,'')||' '||COALESCE(u.last_name,'')),LOWER(?))>0`;
+  const bindings = [...scope.bindings, occurrenceId, query.status ?? null, query.status ?? null, query.q ?? ""];
   const sort =
     query.sort === "name"
       ? "displayName ASC"
@@ -64,21 +88,36 @@ export async function sessionBookings(db: DatabaseLike, eventId: string, occurre
         : query.sort === "-createdAt"
           ? "p.created_at DESC"
           : "p.created_at ASC";
-  const participants = await all<Record<string, unknown>>(
-    db,
-    `SELECT p.id,p.user_id AS userId,NULLIF(TRIM(COALESCE(u.preferred_name,u.first_name,'')||' '||COALESCE(u.last_name,'')),'') AS displayName,p.attendance_mode AS attendanceMode,p.status,p.created_at AS createdAt,
- (SELECT json_object('calendarReplyDisposition',receipt.disposition,'calendarReplyReceivedAt',receipt.received_at,'calendarReplyResponse',receipt.response_status) FROM agenda_session_invitations invitation JOIN agenda_session_rsvp_receipts receipt ON receipt.invitation_id=invitation.id WHERE invitation.event_id=p.event_id AND invitation.occurrence_id=p.occurrence_id AND invitation.user_id=p.user_id ORDER BY receipt.decision_revision DESC LIMIT 1) AS calendarReplyJson ${where} ORDER BY ${sort},p.id LIMIT ? OFFSET ?`,
-    [...bindings, query.limit, query.offset],
-  );
-  return sessionBookingsResponseSchema.parse({
-    participants: participants.map(({ calendarReplyJson, ...participant }) => ({
-      ...participant,
-      ...(typeof calendarReplyJson === "string"
-        ? JSON.parse(calendarReplyJson)
-        : { calendarReplyDisposition: null, calendarReplyReceivedAt: null, calendarReplyResponse: null }),
-    })),
-    page: buildPageInfo(query.limit, query.offset, count?.total ?? 0, participants.length),
+  const statements = buildOffsetPageStatements(db, {
+    source: {
+      selectSql: `SELECT p.id,p.user_id AS userId,NULLIF(TRIM(COALESCE(u.preferred_name,u.first_name,'')||' '||COALESCE(u.last_name,'')),'') AS displayName,p.attendance_mode AS attendanceMode,p.status,p.created_at AS createdAt,
+ (SELECT json_object('calendarReplyDisposition',receipt.disposition,'calendarReplyReceivedAt',receipt.received_at,'calendarReplyResponse',receipt.response_status) FROM agenda_session_invitations invitation JOIN agenda_session_rsvp_receipts receipt ON receipt.invitation_id=invitation.id WHERE invitation.event_id=p.event_id AND invitation.occurrence_id=p.occurrence_id AND invitation.user_id=p.user_id ORDER BY receipt.decision_revision DESC LIMIT 1) AS calendarReplyJson`,
+      fromSql: where,
+      bindings,
+    },
+    orderBy: `ORDER BY ${sort},p.id`,
+    limit: query.limit,
+    offset: query.offset,
   });
+  return {
+    statements: [...retention.statements, ...statements],
+    decode(loaded: D1StatementResult[]) {
+      requireEventContactAccess(retention.decode(loaded.slice(0, retention.statements.length)));
+      const { rows: participants, total } = decodeOffsetPageResults<Record<string, unknown>>(
+        loaded[retention.statements.length],
+        loaded[retention.statements.length + 1],
+      );
+      return sessionBookingsResponseSchema.parse({
+        participants: participants.map(({ calendarReplyJson, ...participant }) => ({
+          ...participant,
+          ...(typeof calendarReplyJson === "string"
+            ? JSON.parse(calendarReplyJson)
+            : { calendarReplyDisposition: null, calendarReplyReceivedAt: null, calendarReplyResponse: null }),
+        })),
+        page: buildPageInfo(query.limit, query.offset, total, participants.length),
+      });
+    },
+  };
 }
 export async function sessionAttendancePeople(db: DatabaseLike, eventId: string, occurrenceId: string, raw: unknown) {
   const query = attendancePeopleQuerySchema.parse(raw);

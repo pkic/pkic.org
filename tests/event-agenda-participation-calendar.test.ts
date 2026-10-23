@@ -1,3 +1,6 @@
+import { profileD1Flow } from "./helpers/d1-flow-profile";
+import { mutateBeforeMatchingQuery } from "./helpers/database-races";
+import { sessionHoldListSchema } from "../assets/shared/schemas/event-session-holds";
 import { grantAdministrator } from "./helpers/administrator";
 import { staffingFixture } from "./helpers/agenda-staffing";
 import { roomRecommendations } from "../functions/_lib/services/event-participation/room-recommendations";
@@ -110,6 +113,7 @@ describe("Participation capacity and private calendar lifecycle", () => {
       env,
       `/api/v1/events/calendar-test/agenda/occurrences/${occurrenceId}/room-recommendations`,
       { headers: { authorization: `Bearer ${organizerToken}` } },
+      { maxRoundTrips: 1 },
     );
     expect(response.status).toBe(200);
     const attendeeToken = await createAdminSession(env.DB, firstUser, crypto.randomUUID());
@@ -117,6 +121,7 @@ describe("Participation capacity and private calendar lifecycle", () => {
       env,
       `/api/v1/events/calendar-test/agenda/occurrences/${occurrenceId}/room-recommendations`,
       { headers: { authorization: `Bearer ${attendeeToken}` } },
+      { maxRoundTrips: 1 },
     );
     expect(denied.status).toBe(403);
     const result = await roomRecommendations(env.DB, eventId, "calendar-test", occurrenceId);
@@ -573,7 +578,15 @@ describe("Participation capacity and private calendar lifecycle", () => {
     const from = new Date().toISOString();
     const upcoming = await personalAgenda(env.DB, eventId, firstUser, { from, sort: "startAt" });
     expect(upcoming.sessions.map((session) => session.id)).toEqual([occurrenceId, ahead]);
-    const mine = await personalAgenda(env.DB, eventId, firstUser, { from, mine: "true", sort: "startAt", limit: 1 });
+    // Service reads only: authentication and event visibility are measured separately by HTTP tests.
+    const profile = profileD1Flow(env.DB);
+    const mine = await personalAgenda(profile.db, eventId, firstUser, {
+      from,
+      mine: "true",
+      sort: "startAt",
+      limit: 1,
+    });
+    expect(profile.summary().roundTrips).toBe(1);
     expect(mine.sessions.map((session) => session.id)).toEqual([ahead]);
     expect(mine.page).toMatchObject({ total: 1, hasMore: false });
     expect(
@@ -581,7 +594,9 @@ describe("Participation capacity and private calendar lifecycle", () => {
         (session) => session.id,
       ),
     ).toEqual([ended, ahead]);
-    expect((await personalAgenda(env.DB, eventId, secondUser, { from, mine: "true" })).sessions).toEqual([]);
+    const empty = profileD1Flow(env.DB);
+    expect((await personalAgenda(empty.db, eventId, secondUser, { from, mine: "true" })).sessions).toEqual([]);
+    expect(empty.summary().roundTrips).toBe(1);
   });
 
   it("takes the seat's attendance mode from the person's day and puts a reserved session on their agenda", async () => {
@@ -668,12 +683,25 @@ describe("Participation capacity and private calendar lifecycle", () => {
       action: "reserve",
       attendanceMode: "physical",
     });
+    const token = await createAdminSession(env.DB, admin, crypto.randomUUID());
+    const readHolds = async () => {
+      const response = await callApi(
+        env,
+        `/api/v1/events/calendar-test/agenda/occurrences/${occurrenceId}/holds`,
+        { headers: { authorization: `Bearer ${token}` } },
+        { maxRoundTrips: 1 },
+      );
+      expect(response.status).toBe(200);
+      return sessionHoldListSchema.parse(await response.json());
+    };
+    expect((await readHolds()).items.map((item) => item.id)).toEqual([hold.id]);
     expect((await listSessionHolds(env.DB, eventId, occurrenceId)).items).toHaveLength(1);
     expect(await revokeSessionHold(env.DB, eventId, occurrenceId, hold.id, admin)).toMatchObject({
       revoked: true,
       promoted: 1,
     });
     expect((await listSessionHolds(env.DB, eventId, occurrenceId)).items).toHaveLength(0);
+    expect((await readHolds()).items).toEqual([]);
     expect(
       await env.DB.prepare(
         "SELECT COUNT(*) AS count FROM agenda_session_invitation_audit WHERE occurrence_id=? AND action IN ('create_hold','revoke_hold')",
@@ -1191,7 +1219,7 @@ describe("Participation capacity and private calendar lifecycle", () => {
         .first("status"),
     ).toBe("canceled");
   });
-  it("limits ordinary delegated speakers to their assigned session and rechecks revocation", async () => {
+  async function delegatedApproval() {
     await publish("approval");
     await env.DB.prepare("INSERT INTO event_agenda_occurrence_speakers(occurrence_id,user_id) VALUES(?,?)")
       .bind(occurrenceId, firstUser)
@@ -1202,29 +1230,113 @@ describe("Participation capacity and private calendar lifecycle", () => {
       attendanceMode: "physical",
     });
     const token = await createAdminSession(env.DB, firstUser, crypto.randomUUID());
-    const headers = { authorization: `Bearer ${token}`, "content-type": "application/json" };
+    return { authorization: `Bearer ${token}`, "content-type": "application/json" };
+  }
+  it("limits ordinary delegated speakers to their assigned session and rechecks revocation", async () => {
+    const headers = await delegatedApproval();
+    const list = (id = occurrenceId) =>
+      callApi(
+        env,
+        `/api/v1/events/calendar-test/agenda/occurrences/${id}/participation?limit=1&sort=-createdAt`,
+        { headers },
+        { maxRoundTrips: 1 },
+      );
+    const assigned = await list();
+    expect(assigned.status).toBe(200);
+    expect(await assigned.json()).toMatchObject({
+      participants: [{ userId: secondUser, status: "approval_pending" }],
+      page: { total: 1 },
+    });
+    const location = await callApi(
+      env,
+      `/api/v1/events/calendar-test/agenda/occurrences/${occurrenceId}/room-recommendations`,
+      { headers },
+      { maxRoundTrips: 1 },
+    );
+    expect(location.status).toBe(403);
+    const management = await callApi(
+      env,
+      `/api/v1/events/calendar-test/agenda/occurrences/${occurrenceId}/management`,
+      { headers },
+      { maxRoundTrips: 1 },
+    );
+    expect(management.status).toBe(200);
+    expect(await management.json()).toMatchObject({ canDelegate: false, speakers: [{ userId: firstUser }] });
+    const holds = await callApi(
+      env,
+      `/api/v1/events/calendar-test/agenda/occurrences/${occurrenceId}/holds`,
+      { headers },
+      { maxRoundTrips: 1 },
+    );
+    expect(holds.status).toBe(403);
     const response = await callApi(
       env,
       `/api/v1/events/calendar-test/agenda/occurrences/${occurrenceId}/participation/${secondUser}`,
       { method: "PUT", headers, body: JSON.stringify({ decision: "approve" }) },
     );
     expect(response.status).toBe(200);
-    const foreign = await callApi(
-      env,
-      `/api/v1/events/calendar-test/agenda/occurrences/${crypto.randomUUID()}/participation`,
-      {
-        headers,
-      },
-    );
+    const foreign = await list(crypto.randomUUID());
     expect(foreign.status).toBe(403);
     await setSessionDelegation(env.DB, eventId, occurrenceId, admin, { userId: firstUser, enabled: false });
-    const revoked = await callApi(
-      env,
-      `/api/v1/events/calendar-test/agenda/occurrences/${occurrenceId}/participation`,
-      {
-        headers,
-      },
-    );
+    const revoked = await list();
     expect(revoked.status).toBe(403);
+    await setSessionDelegation(env.DB, eventId, occurrenceId, admin, { userId: firstUser, enabled: true });
+    await env.DB.prepare("DELETE FROM event_agenda_occurrence_speakers WHERE occurrence_id=? AND user_id=?")
+      .bind(occurrenceId, firstUser)
+      .run();
+    expect((await list()).status).toBe(403);
+    await env.DB.prepare("INSERT INTO event_agenda_occurrence_speakers(occurrence_id,user_id) VALUES(?,?)")
+      .bind(occurrenceId, firstUser)
+      .run();
+    await env.DB.prepare("UPDATE sessions SET revoked_at=? WHERE user_id=?")
+      .bind(new Date().toISOString(), firstUser)
+      .run();
+    expect((await list()).status).toBe(401);
   });
+  it.each(["delegation", "speaker", "session"] as const)(
+    "rolls back a managed approval when %s changes before its command",
+    async (change) => {
+      const headers = await delegatedApproval();
+      const effects = () =>
+        Promise.all(
+          [
+            "SELECT * FROM agenda_session_participations ORDER BY id",
+            "SELECT * FROM audit_log ORDER BY id",
+            "SELECT * FROM email_outbox ORDER BY id",
+            "SELECT * FROM agenda_calendar_entries ORDER BY occurrence_id,user_id",
+          ].map(async (sql) => (await env.DB.prepare(sql).all()).results),
+        );
+      const before = await effects();
+      let raced = false;
+      const db = mutateBeforeMatchingQuery(
+        env.DB,
+        (sql) => sql.includes("UPDATE agenda_session_participations AS pending"),
+        async () => {
+          raced = true;
+          if (change === "delegation")
+            await env.DB.prepare(
+              "UPDATE agenda_session_delegations SET revoked_at=? WHERE occurrence_id=? AND user_id=?",
+            )
+              .bind(new Date().toISOString(), occurrenceId, firstUser)
+              .run();
+          else if (change === "speaker")
+            await env.DB.prepare("DELETE FROM event_agenda_occurrence_speakers WHERE occurrence_id=? AND user_id=?")
+              .bind(occurrenceId, firstUser)
+              .run();
+          else
+            await env.DB.prepare("UPDATE sessions SET revoked_at=? WHERE user_id=?")
+              .bind(new Date().toISOString(), firstUser)
+              .run();
+        },
+      );
+      const response = await callApi(
+        { ...env, DB: db },
+        `/api/v1/events/calendar-test/agenda/occurrences/${occurrenceId}/participation/${secondUser}`,
+        { method: "PUT", headers, body: JSON.stringify({ decision: "approve" }) },
+      );
+      expect(raced).toBe(true);
+      expect(response.ok).toBe(false);
+      expect(await effects()).toEqual(before);
+    },
+  );
 });

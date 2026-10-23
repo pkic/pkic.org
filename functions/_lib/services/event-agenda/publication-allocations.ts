@@ -2,8 +2,9 @@ import { operationalPeople } from "./operational-people";
 import type { AgendaSnapshot } from "../../../../assets/shared/schemas/event-agenda";
 import { AppError } from "../../errors";
 import { first } from "../../db/queries";
+import { batchFirst } from "../../db/pagination";
 import { prepareAuthorizationGuard } from "../../db/authorization-guard";
-import type { DatabaseLike } from "../../types";
+import type { DatabaseLike, D1StatementResult } from "../../types";
 
 export interface ApprovedPublicationAllocationBasis {
   eventId: string;
@@ -38,7 +39,22 @@ export function preparePublicationAllocationGuard(
 }
 export async function assertPublicationAllocations(db: DatabaseLike, snapshot: AgendaSnapshot) {
   const evidence = publicationAllocationEvidence(snapshot);
-  if (!(await first(db, evidence.sql, evidence.bindings)))
+  assertAllocationEvidence(await first(db, evidence.sql, evidence.bindings));
+}
+
+export function preparePublicationAllocationRead(db: DatabaseLike, snapshot: AgendaSnapshot) {
+  const evidence = publicationAllocationEvidence(snapshot);
+  return {
+    statements: [db.prepare(evidence.sql).bind(...evidence.bindings)],
+    decode(loaded: D1StatementResult[]) {
+      assertAllocationEvidence(batchFirst(loaded[0]));
+      return [prepareAuthorizationGuard(db, evidence)];
+    },
+  };
+}
+
+function assertAllocationEvidence(row: unknown) {
+  if (!row)
     throw new AppError(
       409,
       "AGENDA_RESERVED_ALLOCATION",

@@ -4,6 +4,7 @@ import { scannerAdmissionDecisionSql } from "./scanner-admission-decision";
 import type { EventScanRequest } from "../../../../assets/shared/schemas/event-participation-scanning";
 import { eventScanResponseSchema } from "../../../../assets/shared/schemas/event-participation-scanning";
 import { first } from "../../db/queries";
+import { batchFirst } from "../../db/pagination";
 import type { DatabaseLike } from "../../types";
 import { AppError } from "../../errors";
 import { nowIso } from "../../utils/time";
@@ -18,6 +19,7 @@ export async function recordScanTargetRefusal(
   requestHash: string,
   reason: "wrong_location" | "verification_required",
   recognizedBadgeId?: string | null,
+  preparedCapture?: Awaited<ReturnType<typeof scanCaptureDecision>>,
 ) {
   const badge =
     recognizedBadgeId !== undefined
@@ -39,7 +41,7 @@ export async function recordScanTargetRefusal(
       admissionRecorded: false,
       checkoutRecorded: false,
     });
-  const capture = await scanCaptureDecision(db, eventId, scan);
+  const capture = preparedCapture ?? (await scanCaptureDecision(db, eventId, scan));
   const id = crypto.randomUUID();
   const statements = [
     db
@@ -78,17 +80,18 @@ export async function recordScanTargetRefusal(
         .bind(id, eventId, scan.operationId, requestHash),
     );
   statements.push(prepareAttemptCapturedValue(db, eventId, scan, requestHash));
-  await db.batch(statements);
-  const attempt = await first<{
+  const response = db
+    .prepare(
+      "SELECT request_hash,outcome,reason,admission_decision AS admissionDecision FROM event_scan_attempts WHERE operation_id=? AND event_id=? AND operator_user_id=?",
+    )
+    .bind(scan.operationId, eventId, scan.operatorUserId);
+  const results = await db.batch([...statements, response]);
+  const attempt = batchFirst<{
     request_hash: string;
     outcome: string;
     reason: string;
     admissionDecision: ScannerAdmissionDecision | null;
-  }>(
-    db,
-    "SELECT request_hash,outcome,reason,admission_decision AS admissionDecision FROM event_scan_attempts WHERE operation_id=? AND event_id=? AND operator_user_id=?",
-    [scan.operationId, eventId, scan.operatorUserId],
-  );
+  }>(results[results.length - 1]);
   if (!attempt || attempt.request_hash !== requestHash)
     throw new AppError(409, "SCAN_OPERATION_REUSED", "Use a new operation ID for a different scan.");
   return eventScanResponseSchema.parse({

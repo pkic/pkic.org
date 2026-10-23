@@ -77,12 +77,13 @@ export async function startPublicAgendaOutage(artifact: Awaited<ReturnType<typeo
         expect(response.status).toBe(500);
         const body: unknown = await response.json();
         expect(body).toMatchObject({ error: { code: "INTERNAL_ERROR" } });
-        // withD1Session is the real Worker's first access to the absent D1 binding.
-        await expect
-          .poll(() => JSON.stringify(server.getLogs()))
-          .toMatch(/Cannot read properties of undefined \(reading ['"]withSession['"]\)/);
-        const databaseLogs = server.getLogs().filter((entry) => JSON.stringify(entry).includes("withSession"));
-        expect(JSON.stringify(databaseLogs)).toContain("withD1Session");
+        // The real request/session boundary must fail on the deliberately absent binding.
+        // Its first accessed D1 member can change without changing the outage contract.
+        await expect.poll(() => JSON.stringify(server.getLogs())).toContain("at withRequestD1Session");
+        const databaseLogs = server
+          .getLogs()
+          .filter((entry) => JSON.stringify(entry).includes("at withRequestD1Session"));
+        expect(JSON.stringify(databaseLogs)).toContain("Cannot read properties of undefined");
         return {
           path,
           status: response.status,

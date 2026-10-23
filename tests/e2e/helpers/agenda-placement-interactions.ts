@@ -5,7 +5,10 @@ import {
   agendaSnapshotSchema,
   type AgendaSnapshot,
 } from "../../../assets/shared/schemas/event-agenda";
-import { agendaScheduleApplySchema } from "../../../assets/shared/schemas/event-agenda-schedule";
+import {
+  agendaScheduleApplySchema,
+  agendaScheduleReviewSchema,
+} from "../../../assets/shared/schemas/event-agenda-schedule";
 import { formatTimeRangeInZone } from "../../../assets/shared/format-date";
 import { instantToDateTimeLocal } from "../../../assets/shared/timezone";
 
@@ -34,14 +37,27 @@ export async function expectUnclippedAgendaLink(link: Locator) {
   expect(geometry.hit).toBe(true);
 }
 
-/** Observe the direct revision-bound command and compare its receipt with a fresh canonical read. */
+/** Verify revision-bound direct or reviewed commands against a fresh canonical read. */
 export async function commitScheduleCommand(
   page: Page,
   slug: string,
   before: AgendaSnapshot,
   perform: () => Promise<void>,
+  mode: "direct" | "reviewed" = "direct",
 ) {
   const endpoint = `/api/v1/events/${slug}/agenda/schedule`;
+  const reviewing =
+    mode === "reviewed"
+      ? page
+          .waitForResponse(
+            (response) =>
+              response.request().method() === "POST" && new URL(response.url()).pathname === `${endpoint}/reviews`,
+          )
+          .then(async (response) => {
+            expect(response.status()).toBe(200);
+            return agendaScheduleReviewSchema.parse(await response.json());
+          })
+      : Promise.resolve(undefined);
   const applying = page
     .waitForResponse(
       (response) => response.request().method() === "POST" && new URL(response.url()).pathname === endpoint,
@@ -53,9 +69,12 @@ export async function commitScheduleCommand(
         agenda: agendaSnapshotSchema.parse(await response.json()),
       };
     });
-  const [applied] = await Promise.all([applying, perform()]);
+  const [applied, reviewed] = await Promise.all([applying, reviewing, perform()]);
   expect(applied.command.expectedRevision).toBe(before.revision);
-  expect(applied.command.reviewHash).toBeUndefined();
+  if (mode === "reviewed") {
+    expect(reviewed!.expectedRevision).toBe(before.revision);
+    expect(applied.command.reviewHash).toBe(reviewed!.reviewHash);
+  } else expect(applied.command.reviewHash).toBeUndefined();
   for (const change of applied.command.changes) {
     expect(before.occurrences.some((row) => row.id === change.id)).toBe(true);
     expect(applied.agenda.occurrences.find((row) => row.id === change.id)).toMatchObject({

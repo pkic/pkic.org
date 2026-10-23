@@ -1,6 +1,7 @@
 import type { DatabaseLike } from "../../types";
 import { guardAuthorizedDatabase } from "../../db/authorization-guard";
 import { AppError } from "../../errors";
+import type { AuthorizationEvidence } from "../../db/authorization-guard";
 /** Exact sponsor scopes never inherit global or event administrative access. */
 export function sponsorLeadPermissionSql(
   permission: "agenda:leads_view" | "agenda:leads_capture" | "agenda:leads_export",
@@ -25,10 +26,14 @@ export function guardSponsorCaptureDatabase(
 ): DatabaseLike {
   return guardAuthorizedDatabase(
     sourceDb,
-    {
-      sql: `SELECT 1 WHERE (${sponsorLeadPermissionSql("agenda:leads_capture")})`,
-      bindings: [operatorUserId, sponsorId, operatorUserId, sponsorId],
-    },
+    sponsorCaptureAuthorizationEvidence(operatorUserId, sponsorId),
     () => new AppError(403, "LEAD_SCOPE_REQUIRED", "An active sponsor-specific scanning grant is required."),
   );
+}
+
+export function sponsorCaptureAuthorizationEvidence(operatorUserId: string, sponsorId: string): AuthorizationEvidence {
+  return {
+    sql: `SELECT 1 WHERE (${sponsorLeadPermissionSql("agenda:leads_capture")})`,
+    bindings: [operatorUserId, sponsorId, operatorUserId, sponsorId],
+  };
 }

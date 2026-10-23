@@ -5,10 +5,12 @@ import {
   agendaCalendarSubscriptionSchema,
 } from "../../../../assets/shared/schemas/event-agenda-calendar";
 import { AppError } from "../../errors";
-import { first } from "../../db/queries";
 import type { DatabaseLike } from "../../types";
 import { hmacSha256Hex, sha256Hex } from "../../utils/crypto";
 import { nowIso } from "../../utils/time";
+import { batchFirst } from "../../db/pagination";
+import { eventReadIdSql, type EventReadSelection } from "../events/selection";
+import type { D1StatementResult } from "../../types";
 /** Where a feed URL is served and the key that lets its owner read it again. */
 export interface AgendaCalendarFeedOrigin {
   baseUrl: string;
@@ -70,18 +72,36 @@ export async function currentAgendaCalendarSubscription(
   userId: string,
   origin: AgendaCalendarFeedOrigin,
 ) {
-  const row = await first<{ id: string; token_hash: string; created_at: string }>(
-    db,
-    "SELECT id,token_hash,created_at FROM agenda_calendar_subscriptions WHERE event_id=? AND user_id=? AND revoked_at IS NULL ORDER BY created_at DESC LIMIT 1",
-    [eventId, userId],
-  );
-  if (!row) return agendaCalendarCurrentSubscriptionSchema.parse({ active: false, subscription: null });
-  const token = origin.signingSecret ? await feedToken(row.id, origin.signingSecret) : null;
-  const recoverable = token !== null && (await sha256Hex(token)) === row.token_hash;
-  return agendaCalendarCurrentSubscriptionSchema.parse({
-    active: true,
-    subscription: recoverable ? { id: row.id, url: feedUrl(origin, token), createdAt: row.created_at } : null,
-  });
+  const read = prepareCurrentAgendaCalendarSubscription(db, eventId, userId, origin);
+  return read.decode(await db.batch(read.statements));
+}
+
+export function prepareCurrentAgendaCalendarSubscription(
+  db: DatabaseLike,
+  eventSelection: EventReadSelection,
+  userId: string,
+  origin: AgendaCalendarFeedOrigin,
+) {
+  const event = eventReadIdSql(eventSelection);
+  return {
+    statements: [
+      db
+        .prepare(
+          `SELECT id,token_hash,created_at FROM agenda_calendar_subscriptions WHERE event_id=${event.sql} AND user_id=? AND revoked_at IS NULL ORDER BY created_at DESC LIMIT 1`,
+        )
+        .bind(...event.bindings, userId),
+    ],
+    async decode(loaded: D1StatementResult[]) {
+      const row = batchFirst<{ id: string; token_hash: string; created_at: string }>(loaded[0]);
+      if (!row) return agendaCalendarCurrentSubscriptionSchema.parse({ active: false, subscription: null });
+      const token = origin.signingSecret ? await feedToken(row.id, origin.signingSecret) : null;
+      const recoverable = token !== null && (await sha256Hex(token)) === row.token_hash;
+      return agendaCalendarCurrentSubscriptionSchema.parse({
+        active: true,
+        subscription: recoverable ? { id: row.id, url: feedUrl(origin, token), createdAt: row.created_at } : null,
+      });
+    },
+  };
 }
 export async function revokeAgendaCalendarSubscriptions(db: DatabaseLike, eventId: string, userId: string) {
   await db
@@ -92,27 +112,58 @@ export async function revokeAgendaCalendarSubscriptions(db: DatabaseLike, eventI
     .run();
 }
 export async function resolveAgendaCalendarSubscription(db: DatabaseLike, eventId: string, token: string) {
+  const read = await prepareAgendaCalendarSubscription(db, eventId, token);
+  return read.decode(await db.batch([read.statement]));
+}
+
+/** The existing token and owner policy, prepared for composition with the feed read. */
+export async function prepareAgendaCalendarSubscription(
+  db: DatabaseLike,
+  eventSelection: EventReadSelection,
+  token: string,
+) {
   if (!/^[a-f0-9]{64}$/.test(token)) throw new AppError(404, "CALENDAR_NOT_FOUND", "Calendar subscription not found.");
-  const subscription = await first<{ id: string; user_id: string; include_tentative: number }>(
-    db,
-    `SELECT sub.id,sub.user_id,sub.include_tentative FROM agenda_calendar_subscriptions sub JOIN users person ON person.id=sub.user_id
-      WHERE sub.event_id=? AND sub.token_hash=? AND sub.revoked_at IS NULL AND person.active=1`,
-    [eventId, await sha256Hex(token)],
-  );
-  if (!subscription) throw new AppError(404, "CALENDAR_NOT_FOUND", "Calendar subscription not found.");
-  return subscription;
+  const event = eventReadIdSql(eventSelection);
+  const sql = `SELECT sub.id,sub.user_id,sub.include_tentative FROM agenda_calendar_subscriptions sub JOIN users person ON person.id=sub.user_id
+      WHERE sub.event_id=${event.sql} AND sub.token_hash=? AND sub.revoked_at IS NULL AND person.active=1`;
+  const bindings = [...event.bindings, await sha256Hex(token)];
+  return {
+    sql,
+    bindings,
+    statement: db.prepare(sql).bind(...bindings),
+    decode(loaded: D1StatementResult[]) {
+      const subscription = batchFirst<{ id: string; user_id: string; include_tentative: number }>(loaded[0]);
+      if (!subscription) throw new AppError(404, "CALENDAR_NOT_FOUND", "Calendar subscription not found.");
+      return subscription;
+    },
+  };
 }
 export async function agendaCalendarSettings(db: DatabaseLike, eventId: string, userId: string) {
-  const row = await first<{ reminder_enabled: number; reminder_minutes: number; include_tentative: number }>(
-    db,
-    `SELECT preference.reminder_enabled,preference.reminder_minutes,COALESCE((SELECT include_tentative FROM agenda_calendar_subscriptions WHERE event_id=? AND user_id=? AND revoked_at IS NULL ORDER BY created_at DESC LIMIT 1),0) AS include_tentative FROM agenda_calendar_preferences preference WHERE preference.event_id=? AND preference.user_id=?`,
-    [eventId, userId, eventId, userId],
-  );
-  return agendaCalendarSettingsSchema.parse({
-    reminderEnabled: row?.reminder_enabled === 1,
-    reminderMinutes: row?.reminder_minutes ?? 10,
-    includeTentative: row?.include_tentative === 1,
-  });
+  const read = prepareAgendaCalendarSettings(db, eventId, userId);
+  return read.decode(await db.batch(read.statements));
+}
+
+export function prepareAgendaCalendarSettings(db: DatabaseLike, eventSelection: EventReadSelection, userId: string) {
+  const event = eventReadIdSql(eventSelection);
+  return {
+    statements: [
+      db
+        .prepare(
+          `SELECT preference.reminder_enabled,preference.reminder_minutes,COALESCE((SELECT include_tentative FROM agenda_calendar_subscriptions WHERE event_id=${event.sql} AND user_id=? AND revoked_at IS NULL ORDER BY created_at DESC LIMIT 1),0) AS include_tentative FROM agenda_calendar_preferences preference WHERE preference.event_id=${event.sql} AND preference.user_id=?`,
+        )
+        .bind(...event.bindings, userId, ...event.bindings, userId),
+    ],
+    decode(loaded: D1StatementResult[]) {
+      const row = batchFirst<{ reminder_enabled: number; reminder_minutes: number; include_tentative: number }>(
+        loaded[0],
+      );
+      return agendaCalendarSettingsSchema.parse({
+        reminderEnabled: row?.reminder_enabled === 1,
+        reminderMinutes: row?.reminder_minutes ?? 10,
+        includeTentative: row?.include_tentative === 1,
+      });
+    },
+  };
 }
 export async function updateAgendaCalendarSettings(db: DatabaseLike, eventId: string, userId: string, raw: unknown) {
   const settings = agendaCalendarSettingsSchema.parse(raw);

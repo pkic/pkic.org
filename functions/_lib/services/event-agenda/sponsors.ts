@@ -6,20 +6,28 @@ import {
 } from "../../../../assets/shared/schemas/event-agenda-sponsors";
 import { buildPublicSponsorReadModel, publicSponsorFromRow, type SponsorRow } from "../public-sponsors";
 import { buildD1TextSearchFilter } from "../../db/search";
-import { queryPage } from "../../db/pagination";
+import { queryPage, batchRows } from "../../db/pagination";
 import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
 import { all } from "../../db/queries";
 import { prepareAuthorizationGuard } from "../../db/authorization-guard";
 import { AppError } from "../../errors";
-import type { DatabaseLike } from "../../types";
+import type { DatabaseLike, D1StatementResult } from "../../types";
 import type { AgendaOccurrence } from "../../../../assets/shared/schemas/event-agenda";
+import { eventReadIdSql, type EventReadSelection } from "../events/selection";
+import type { AgendaOccurrenceSelection } from "./occurrence-selection";
 
 export interface AgendaSponsorRow extends SponsorRow {
   sponsor_id: string;
   source_json: string;
 }
-function source(eventId: string) {
-  const read = buildPublicSponsorReadModel({ eventId });
+function source(eventId: EventReadSelection, occurrences?: AgendaOccurrenceSelection) {
+  const scope = eventReadIdSql(eventId);
+  const read = buildPublicSponsorReadModel(
+    typeof eventId === "string" ? { eventId } : { eventSlug: eventId.slug },
+    occurrences
+      ? { sql: `agenda_sponsor_page AS MATERIALIZED(${occurrences.sql})`, bindings: occurrences.bindings }
+      : undefined,
+  );
   return {
     sql: `${read.sql} SELECT public.id,public.name,public.website,public.logo_r2_key,public.sponsorship_logo_r2_key,
       public.tier,public.event_tier,public.effective_tier,public.effective_weight,sp.id AS sponsor_id,
@@ -27,12 +35,12 @@ function source(eventId: string) {
         'logo',public.logo_r2_key,'sponsorLogo',public.sponsorship_logo_r2_key,'tier',public.tier,'eventTier',public.event_tier,
         'weight',public.effective_weight) AS source_json FROM sponsorships sp JOIN enriched_sponsors public
         ON public.id=COALESCE(sp.organization_id,sp.id)
-      WHERE sp.event_id=? AND sp.sponsor_type='event' AND sp.pipeline_stage='active'
+      WHERE sp.event_id=${scope.sql} AND sp.sponsor_type='event' AND sp.pipeline_stage='active'
         AND public.event_tier IS NOT NULL AND public.effective_weight>0
         AND EXISTS(SELECT 1 FROM sponsorship_tier_catalog event_catalog
           WHERE event_catalog.sponsor_type='event' AND event_catalog.tier=public.event_tier
             AND event_catalog.active=1 AND event_catalog.display_weight>0)`,
-    bindings: [...read.bindings, eventId],
+    bindings: [...read.bindings, ...scope.bindings],
   };
 }
 
@@ -56,19 +64,25 @@ export async function listAgendaSponsorChoices(
   };
 }
 
-export function prepareAgendaSponsorRead(db: DatabaseLike, eventId: string, sponsorIds?: readonly string[]) {
-  const read = source(eventId);
+export function prepareAgendaSponsorRead(
+  db: DatabaseLike,
+  eventId: EventReadSelection,
+  sponsorIds?: readonly string[],
+  occurrences?: AgendaOccurrenceSelection,
+) {
+  const scope = eventReadIdSql(eventId);
+  const read = source(eventId, occurrences);
   const selection =
     sponsorIds === undefined
       ? `SELECT selected.value FROM events event
        JOIN json_each(event.settings_json,'$.agenda.sessionSponsors') source
        JOIN event_agenda_occurrences occurrence ON occurrence.id=source.key AND occurrence.event_id=event.id
        JOIN json_each(source.value,'$.sponsorIds') selected
-       WHERE event.id=? AND occurrence.kind='break'`
+       WHERE event.id=${scope.sql} AND occurrence.kind='break'${occurrences ? " AND occurrence.id IN(SELECT id FROM agenda_sponsor_page)" : ""}`
       : "SELECT value FROM json_each(?)";
   return db
     .prepare(`${read.sql} AND sp.id IN(${selection}) ORDER BY sp.id LIMIT 20001`)
-    .bind(...read.bindings, sponsorIds === undefined ? eventId : JSON.stringify(sponsorIds));
+    .bind(...read.bindings, ...(sponsorIds === undefined ? scope.bindings : [JSON.stringify(sponsorIds)]));
 }
 
 export async function readAgendaSponsorRows(db: DatabaseLike, eventId: string, sponsorIds: readonly string[]) {
@@ -81,10 +95,20 @@ export function agendaSponsorDisplay(row: AgendaSponsorRow) {
 }
 
 /** Selection is presentation-only and never grants sponsor access, membership, or attendee data. */
-export async function prepareAgendaSponsorSelection(db: DatabaseLike, eventId: string, sponsorIds: readonly string[]) {
-  if (!sponsorIds.length) return [];
-  const rows = await readAgendaSponsorRows(db, eventId, sponsorIds);
-  return prepareSponsorRowsGuard(db, eventId, sponsorIds, rows);
+/** Prepare selection evidence alongside the agenda snapshot; primary guards still own the final branding check. */
+export function prepareAgendaSponsorSelectionRead(
+  db: DatabaseLike,
+  eventId: EventReadSelection,
+  sponsorIds: readonly string[],
+) {
+  return {
+    statements: sponsorIds.length ? [prepareAgendaSponsorRead(db, eventId, sponsorIds)] : [],
+    decode(loaded: D1StatementResult[], canonicalEventId: string) {
+      return sponsorIds.length
+        ? prepareSponsorRowsGuard(db, canonicalEventId, sponsorIds, batchRows<AgendaSponsorRow>(loaded[0]))
+        : [];
+    },
+  };
 }
 
 function prepareSponsorRowsGuard(
@@ -114,25 +138,34 @@ function prepareSponsorRowsGuard(
 }
 
 /** Approval freezes exactly the branding the organizer reviewed, with the same final active-public source guard. */
-export async function prepareAgendaSponsorApproval(
+export function prepareAgendaSponsorApprovalRead(
   db: DatabaseLike,
   eventId: string,
   occurrences: readonly AgendaOccurrence[],
 ) {
   const selected = occurrences.filter((occurrence) => occurrence.kind === "break" && occurrence.sponsorIds?.length);
   const ids = [...new Set(selected.flatMap((occurrence) => occurrence.sponsorIds ?? []))];
-  if (!ids.length) return [];
-  const rows = await readAgendaSponsorRows(db, eventId, ids);
-  const display = new Map(rows.map((row) => [row.sponsor_id, agendaSponsorDisplay(row)]));
-  if (
-    selected.some(
-      (occurrence) =>
-        JSON.stringify(occurrence.sponsors ?? []) !==
-        JSON.stringify(occurrence.sponsorIds!.flatMap((id) => (display.has(id) ? [display.get(id)!] : []))),
-    )
-  )
-    throw new AppError(409, "AGENDA_SPONSOR_CHANGED", "Sponsor branding changed. Refresh before approving the agenda.");
-  return prepareSponsorRowsGuard(db, eventId, ids, rows);
+  return {
+    statements: ids.length ? [prepareAgendaSponsorRead(db, eventId, ids)] : [],
+    decode(loaded: D1StatementResult[]) {
+      if (!ids.length) return [];
+      const rows = batchRows<AgendaSponsorRow>(loaded[0]);
+      const display = new Map(rows.map((row) => [row.sponsor_id, agendaSponsorDisplay(row)]));
+      if (
+        selected.some(
+          (occurrence) =>
+            JSON.stringify(occurrence.sponsors ?? []) !==
+            JSON.stringify(occurrence.sponsorIds!.flatMap((id) => (display.has(id) ? [display.get(id)!] : []))),
+        )
+      )
+        throw new AppError(
+          409,
+          "AGENDA_SPONSOR_CHANGED",
+          "Sponsor branding changed. Refresh before approving the agenda.",
+        );
+      return prepareSponsorRowsGuard(db, eventId, ids, rows);
+    },
+  };
 }
 
 /** Complete bounded branding population for configured event tiers, using the agenda's canonical visibility policy. */

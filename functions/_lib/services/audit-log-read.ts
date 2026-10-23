@@ -6,11 +6,13 @@ import {
   type ScopedAuditLogListQuery,
 } from "../../../assets/shared/schemas/audit-log";
 import { first } from "../db/queries";
-import { queryPage } from "../db/pagination";
+import { batchFirst, buildOffsetPageStatements, decodeOffsetPageResults } from "../db/pagination";
+import { prepareUserBackedAdminFromRequest, requireUserBackedAdminFromRequest } from "../auth/admin";
+import { requirePermission } from "../auth/permissions";
 import { buildD1TextSearchFilter } from "../db/search";
 import { resolveMappedOrderBy } from "../db/sort";
 import { AppError } from "../errors";
-import type { DatabaseLike } from "../types";
+import type { DatabaseLike, D1StatementResult, Env } from "../types";
 import { toAuditLogResponseRows, type AuditLogReadRow } from "./audit";
 
 interface AuditLogPageQuery {
@@ -135,9 +137,24 @@ export async function listAuditLogPage(
   restriction: AuditLogRestriction,
   sortPolicy: AuditLogSortPolicy,
 ) {
-  const { rows, total } = await queryPage<AuditLogReadRow>(db, buildAuditLogPageQuery(query, restriction, sortPolicy));
-  const auditLog = toAuditLogResponseRows(rows);
-  return { auditLog, page: buildPageInfo(query.limit, query.offset, total, auditLog.length) };
+  const read = prepareAuditLogPage(db, query, restriction, sortPolicy);
+  return read.decode(await db.batch(read.statements));
+}
+
+function prepareAuditLogPage(
+  db: DatabaseLike,
+  query: AuditLogPageQuery,
+  restriction: AuditLogRestriction,
+  sortPolicy: AuditLogSortPolicy,
+) {
+  return {
+    statements: buildOffsetPageStatements(db, buildAuditLogPageQuery(query, restriction, sortPolicy)),
+    decode(results: D1StatementResult[]) {
+      const { rows, total } = decodeOffsetPageResults<AuditLogReadRow>(results[0], results[1]);
+      const auditLog = toAuditLogResponseRows(rows);
+      return { auditLog, page: buildPageInfo(query.limit, query.offset, total, auditLog.length) };
+    },
+  };
 }
 
 /** Platform-wide variant exposed for D1 query-plan assertions. */
@@ -215,16 +232,46 @@ export async function listRegistrationAuditLog(
 }
 
 /** The record's changes, never unrelated actions performed by its subject. */
-export async function listUserAuditLog(db: DatabaseLike, userId: string, query: ScopedAuditLogListQuery) {
-  if (!(await first<{ id: string }>(db, "SELECT id FROM users WHERE id = ?", [userId]))) {
-    throw new AppError(404, "USER_NOT_FOUND", "User not found");
-  }
-  return listAuditLogForScope(db, query, {
-    // Access audit details retain ownership even after the role or grant is removed.
-    // Older rows store userId directly; current writers normalize it as a delta.
-    where: `((al.entity_type = 'user' AND al.entity_id = ?)
+function prepareUserAuditLog(db: DatabaseLike, userId: string, query: ScopedAuditLogListQuery) {
+  const page = prepareAuditLogPage(
+    db,
+    query,
+    {
+      // Access audit details retain ownership even after the role or grant is removed.
+      // Older rows store userId directly; current writers normalize it as a delta.
+      where: `((al.entity_type = 'user' AND al.entity_id = ?)
       OR (al.entity_type IN ('user_roles', 'permission_grant')
         AND COALESCE(json_extract(al.details_json, '$.userId.to'), json_extract(al.details_json, '$.userId')) = ?))`,
-    bindings: [userId, userId],
-  });
+      bindings: [userId, userId],
+    },
+    SCOPED_AUDIT_SORT_POLICY,
+  );
+  return {
+    statements: [db.prepare("SELECT id FROM users WHERE id = ?").bind(userId), ...page.statements],
+    decode(results: D1StatementResult[]) {
+      if (!batchFirst(results[0])) throw new AppError(404, "USER_NOT_FOUND", "User not found");
+      return page.decode(results.slice(1));
+    },
+  };
+}
+
+/** Resolve live staff authority and the scoped page from the same serving-replica snapshot. */
+export async function readUserAuditLogRequest(
+  db: DatabaseLike,
+  request: Request,
+  env: Pick<Env, "ADMIN_API_KEY" | "INTERNAL_SIGNING_SECRET">,
+  userId: string,
+  query: ScopedAuditLogListQuery,
+) {
+  const auth = await prepareUserBackedAdminFromRequest(db, request, env);
+  const read = prepareUserAuditLog(db, userId, query);
+  if (!auth) {
+    const actor = await requireUserBackedAdminFromRequest(db, request, env);
+    requirePermission(actor, "users:read");
+    return read.decode(await db.batch(read.statements));
+  }
+  const loaded = await db.batch([...auth.statements, ...read.statements]);
+  const actor = await auth.decode(loaded.slice(0, auth.statements.length));
+  requirePermission(actor, "users:read");
+  return read.decode(loaded.slice(auth.statements.length));
 }

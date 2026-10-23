@@ -22,3 +22,13 @@ export const publishedSessionsSql = `SELECT published.event_id,published.revisio
 export const publishedRoomsSql = `SELECT published.event_id,source.key AS position,json_extract(source.value,'$.id') AS id,json_extract(source.value,'$.name') AS name,json_extract(source.value,'$.capacity') AS capacity
  FROM event_agenda_publications published JOIN event_agenda_state state ON state.event_id=published.event_id AND state.published_revision=published.revision
  JOIN json_each(published.snapshot_json,'$.rooms') source`;
+
+/** Trusted, bounded SQL selecting approved occurrence IDs; composed by backend read builders only. */
+export interface PublishedSessionSelection {
+  sql: string;
+  bindings: readonly unknown[];
+}
+
+export function publishedSessionIds(ids: readonly string[]): PublishedSessionSelection {
+  return { sql: "SELECT value AS id FROM json_each(?)", bindings: [JSON.stringify(ids)] };
+}

@@ -13,6 +13,7 @@ import type { AuthorizationEvidence } from "../../db/authorization-guard";
 import { batchFirst } from "../../db/pagination";
 import { AppError } from "../../errors";
 import { z } from "zod";
+import { eventReadIdSql, type EventReadSelection } from "../events/selection";
 
 /** Internal resolver input composes canonical request fields, rather than inventing a second HTTP shape. */
 export const resolveAttendanceCaptureInputSchema = z
@@ -64,12 +65,13 @@ function capture(
     );
   }
 }
-function prepareCurrentContext(db: DatabaseLike, eventId: string) {
+function prepareCurrentContext(db: DatabaseLike, event: EventReadSelection) {
+  const scope = eventReadIdSql(event);
   return db
     .prepare(
-      "SELECT capture_event.timezone AS event_time_zone,capture_state.published_revision AS publication_revision,json_extract(capture_publication.snapshot_json,'$.timeZone') AS publication_time_zone FROM events capture_event LEFT JOIN event_agenda_state capture_state ON capture_state.event_id=capture_event.id LEFT JOIN event_agenda_publications capture_publication ON capture_publication.event_id=capture_event.id AND capture_publication.revision=capture_state.published_revision WHERE capture_event.id=?",
+      `SELECT capture_event.timezone AS event_time_zone,capture_state.published_revision AS publication_revision,json_extract(capture_publication.snapshot_json,'$.timeZone') AS publication_time_zone FROM events capture_event LEFT JOIN event_agenda_state capture_state ON capture_state.event_id=capture_event.id LEFT JOIN event_agenda_publications capture_publication ON capture_publication.event_id=capture_event.id AND capture_publication.revision=capture_state.published_revision WHERE capture_event.id=${scope.sql}`,
     )
-    .bind(eventId);
+    .bind(...scope.bindings);
 }
 function requireCurrentContext(current: CurrentContext | null): CurrentContext {
   if (!current) throw new AppError(404, "EVENT_NOT_FOUND", "Event unavailable.");
@@ -84,39 +86,48 @@ function currentContextEvidence(eventId: string, current: CurrentContext): Autho
 /** Prepare current policy and historical capture together, without inferring historical data from current settings. */
 export function prepareAttendanceCapture(
   db: DatabaseLike,
-  eventId: string,
+  event: EventReadSelection,
   raw: ResolveCaptureInput,
   includeOperational = false,
 ) {
+  const scope = eventReadIdSql(event);
   const input = resolveAttendanceCaptureInputSchema.parse(raw);
   const statements: StatementLike[] = [];
   const needsCurrent =
     includeOperational ||
     (!input.nativeEventContext && !input.offlineRight && input.capturePublicationRevision === undefined);
-  const currentIndex = needsCurrent ? statements.push(prepareCurrentContext(db, eventId)) - 1 : -1;
+  const currentIndex = needsCurrent ? statements.push(prepareCurrentContext(db, event)) - 1 : -1;
   let historyIndex = -1;
   if (!input.nativeEventContext && input.offlineRight) {
     historyIndex =
       statements.push(
         db
           .prepare(
-            "SELECT grant_row.published_revision,grant_row.day_date,json_extract(publication.snapshot_json,'$.timeZone') AS time_zone FROM event_offline_admission_grants grant_row LEFT JOIN event_agenda_publications publication ON publication.event_id=grant_row.event_id AND publication.revision=grant_row.published_revision WHERE grant_row.id=? AND grant_row.event_id=? AND grant_row.operator_user_id=? AND grant_row.device_id=? AND grant_row.occurrence_id IS ?",
+            `SELECT grant_row.published_revision,grant_row.day_date,json_extract(publication.snapshot_json,'$.timeZone') AS time_zone FROM event_offline_admission_grants grant_row LEFT JOIN event_agenda_publications publication ON publication.event_id=grant_row.event_id AND publication.revision=grant_row.published_revision WHERE grant_row.id=? AND grant_row.event_id=${scope.sql} AND grant_row.operator_user_id=? AND grant_row.device_id=? AND grant_row.occurrence_id IS ?`,
           )
-          .bind(input.offlineRight.grantId, eventId, input.operatorUserId, input.deviceId, input.occurrenceId),
+          .bind(
+            input.offlineRight.grantId,
+            ...scope.bindings,
+            input.operatorUserId,
+            input.deviceId,
+            input.occurrenceId,
+          ),
       ) - 1;
   } else if (!input.nativeEventContext && typeof input.capturePublicationRevision === "number") {
     historyIndex =
       statements.push(
         db
           .prepare(
-            "SELECT json_extract(snapshot_json,'$.timeZone') AS time_zone FROM event_agenda_publications WHERE event_id=? AND revision=?",
+            `SELECT json_extract(snapshot_json,'$.timeZone') AS time_zone FROM event_agenda_publications WHERE event_id=${scope.sql} AND revision=?`,
           )
-          .bind(eventId, input.capturePublicationRevision),
+          .bind(...scope.bindings, input.capturePublicationRevision),
       ) - 1;
   }
   return {
     statements,
-    decode(results: D1StatementResult[]) {
+    decode(results: D1StatementResult[], canonicalEventId?: string) {
+      const eventId = typeof event === "string" ? event : canonicalEventId;
+      if (!eventId) throw new Error("Capture decoding requires the resolved event ID");
       const current =
         currentIndex < 0 ? null : requireCurrentContext(batchFirst<CurrentContext>(results[currentIndex]));
       const resolved = decodeAttendanceCapture(

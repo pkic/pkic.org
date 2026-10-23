@@ -9,7 +9,11 @@ export async function readAgendaSessionFormatLabels(db: DatabaseLike, eventId: s
   const event = await first<{ settings_json: string | null }>(db, "SELECT settings_json FROM events WHERE id=?", [
     eventId,
   ]);
-  return resolveEventSessionTypes(event?.settings_json ?? "{}").map((sessionType) => sessionType.label);
+  return agendaSessionFormatLabels(event?.settings_json ?? "{}");
+}
+
+export function agendaSessionFormatLabels(settingsJson: string): string[] {
+  return resolveEventSessionTypes(settingsJson).map((sessionType) => sessionType.label);
 }
 
 /** Every written format must name a configured session type; the stored value is the canonical configured label. */

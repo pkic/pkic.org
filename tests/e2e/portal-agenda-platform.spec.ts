@@ -90,6 +90,10 @@ test("organizers build the shared agenda and browse a compact session table on d
   ];
   for (const [title, start, end, room, policy] of sessions) {
     await runAgendaAction(page, "New session");
+    await page
+      .getByRole("dialog", { name: "New session", exact: true })
+      .getByRole("tab", { name: "Session", exact: true })
+      .click();
     // The dialog takes the session title as its own name while it is typed.
     await page
       .getByRole("dialog", { name: "New session", exact: true })
@@ -140,7 +144,7 @@ test("organizers build the shared agenda and browse a compact session table on d
   await page.screenshot({ path: `${artifacts}/agenda-publication-review-desktop.png`, fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: `${artifacts}/agenda-publication-review-phone.png`, fullPage: true });
-  await page.getByRole("button", { name: "Back to agenda", exact: true }).click();
+  await page.getByRole("tab", { name: "Schedule", exact: true }).click();
   await expect(page.getByRole("table")).toBeVisible();
   await expect(page.getByText(/Draft revision/)).toHaveCount(0);
   await page.screenshot({ path: `${artifacts}/sessions-native-toolbar-phone.png`, fullPage: true });
@@ -168,18 +172,24 @@ test("organizers build the shared agenda and browse a compact session table on d
   await page.getByRole("button", { name: "Move selected sessions", exact: true }).click();
   await page.locator('[name="bulkMode"]').selectOption("day");
   await page.getByLabel(/^New day/).fill("2026-12-03");
-  const afterBulk = await commitScheduleCommand(page, slug, beforeBulk, async () => {
-    await page.getByRole("button", { name: "Review selected sessions", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Review schedule changes", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Apply reviewed schedule", exact: true })).toBeEnabled();
-    const reviewedBulk = agendaSnapshotSchema.parse(
-      await (await page.request.get(`/api/v1/events/${slug}/agenda`)).json(),
-    );
-    expect(reviewedBulk).toEqual(beforeBulk);
-    await page.screenshot({ path: `${artifacts}/sessions-bulk-review-phone.png`, fullPage: true });
-    await page.getByRole("button", { name: "Apply reviewed schedule", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Review schedule changes", exact: true })).toHaveCount(0);
-  });
+  const afterBulk = await commitScheduleCommand(
+    page,
+    slug,
+    beforeBulk,
+    async () => {
+      await page.getByRole("button", { name: "Review selected sessions", exact: true }).click();
+      await expect(page.getByRole("heading", { name: "Review schedule changes", exact: true })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Apply reviewed schedule", exact: true })).toBeEnabled();
+      const reviewedBulk = agendaSnapshotSchema.parse(
+        await (await page.request.get(`/api/v1/events/${slug}/agenda`)).json(),
+      );
+      expect(reviewedBulk).toEqual(beforeBulk);
+      await page.screenshot({ path: `${artifacts}/sessions-bulk-review-phone.png`, fullPage: true });
+      await page.getByRole("button", { name: "Apply reviewed schedule", exact: true }).click();
+      await expect(page.getByRole("heading", { name: "Review schedule changes", exact: true })).toHaveCount(0);
+    },
+    "reviewed",
+  );
   expect(afterBulk.revision).toBe(beforeBulk.revision + 1);
   for (const title of [sessions[0][0], sessions[2][0]]) {
     const original = beforeBulk.occurrences.find((row) => row.title === title)!;
@@ -340,7 +350,7 @@ test("organizers build the shared agenda and browse a compact session table on d
   const publicationResponse = await publication;
   expect(publicationResponse.status(), await publicationResponse.text()).toBe(200);
   await expect(page.getByRole("button", { name: "Approve for publication", exact: true })).toBeDisabled();
-  await page.getByRole("button", { name: "Back to agenda", exact: true }).click();
+  await page.getByRole("tab", { name: "Schedule", exact: true }).click();
 
   const response = await page.request.get(`/api/v1/events/${slug}/agenda`);
   expect(response.status()).toBe(200);

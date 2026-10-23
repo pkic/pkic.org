@@ -28,7 +28,7 @@ import { callApi } from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
 import { insertIndividualMember, insertUser } from "./helpers/membership";
 import { staffingFixture } from "./helpers/agenda-staffing";
-import { mutateBeforeNextBatch } from "./helpers/database-races";
+import { mutateBeforeMatchingQuery } from "./helpers/database-races";
 import { nowIso } from "../functions/_lib/utils/time";
 import { processSitePublicationDispatch } from "../functions/_lib/services/site-publication-dispatch";
 beforeEach(resetDb);
@@ -365,16 +365,23 @@ async function assertActivationRefused(
   preflightIdentity = false,
 ) {
   let expected = await activationState();
+  let mutated = false;
   const db = mutate
-    ? mutateBeforeNextBatch(env.DB, async () => {
-        await mutate();
-        expected = await activationState();
-      })
+    ? mutateBeforeMatchingQuery(
+        env.DB,
+        (sql) => /^INSERT INTO site_publication_attempt_activation\b/u.test(sql),
+        async () => {
+          await mutate();
+          mutated = true;
+          expected = await activationState();
+        },
+      )
     : env.DB;
   const fetcher = activationFetcher(fixture.release);
   const result = expect(activatePublicationAttempt(db, config, fixture.attempt.id, "token", fetcher)).rejects;
   if (preflightIdentity) await result.toMatchObject({ code: "AGENDA_REPRESENTATION_IDENTITY_UNAVAILABLE" });
   else await result.toThrow("AUTHORIZATION_CONTEXT_CHANGED");
+  if (mutate) expect(mutated).toBe(true);
   expect(fetcher.mock.calls.filter(([, init]) => init.method === "POST")).toHaveLength(0);
   expect(await activationState()).toEqual(expected);
   expect((await readPublicationAttempt(env.DB, fixture.attempt.id))?.phase).toBe("awaiting_activation");
@@ -384,11 +391,20 @@ async function assertActivationSucceeds(
   fixture: Awaited<ReturnType<typeof approvedActivationAgenda>>,
   mutate: () => Promise<unknown>,
 ) {
-  const db = mutateBeforeNextBatch(env.DB, mutate);
+  let mutated = false;
+  const db = mutateBeforeMatchingQuery(
+    env.DB,
+    (sql) => /^INSERT INTO site_publication_attempt_activation\b/u.test(sql),
+    async () => {
+      await mutate();
+      mutated = true;
+    },
+  );
   const fetcher = activationFetcher(fixture.release);
   expect((await activatePublicationAttempt(db, config, fixture.attempt.id, "token", fetcher)).state).toBe(
     "awaiting_receipt",
   );
+  expect(mutated).toBe(true);
   expect(fetcher.mock.calls.filter(([, init]) => init.method === "POST")).toHaveLength(1);
 }
 describe("approved agenda constraint guards at provider activation", () => {

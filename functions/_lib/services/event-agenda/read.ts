@@ -1,5 +1,13 @@
 import { agendaPublicationStatusSql } from "./publication-status";
-import { readAgendaOccurrences } from "./occurrence-read";
+import {
+  readAgendaOccurrences,
+  prepareAgendaOccurrenceRows,
+  prepareAgendaOccurrenceDetails,
+  decodeAgendaOccurrences,
+  type OccurrenceRow,
+} from "./occurrence-read";
+import { prepareAgendaSpeakers, decodeAgendaSpeakers, type AgendaSpeakerRow } from "./speaker-profiles";
+import { prepareAgendaSponsorRead, type AgendaSponsorRow } from "./sponsors";
 import { prepareAgendaEditorRead } from "./editor-read";
 import { publicUserHeadshotPath } from "../user-headshot";
 import { affiliationJobTitleSql, affiliationOrganizationNameSql } from "../identities/affiliation-projection";
@@ -13,7 +21,7 @@ import {
   agendaConflictCategorySchema,
 } from "../../../../assets/shared/schemas/event-agenda";
 import { retainedSpeakerOrganizations } from "../../../../assets/shared/agenda-speaker-affiliations";
-import { readSessionDemand } from "../event-participation/session-demand";
+import { prepareSessionDemand } from "../event-participation/session-demand";
 import { zonedDateTimeToDate } from "../../../../assets/shared/timezone";
 import { z } from "zod";
 import { agendaSnapshotSchema, agendaOccurrenceQuerySchema } from "../../../../assets/shared/schemas/event-agenda";
@@ -25,6 +33,11 @@ import { AppError } from "../../errors";
 import { agendaSessionFormatOptions } from "../../../../assets/shared/event-agenda-format";
 import { resolveEventSessionTypes } from "../event-presentation";
 import { eventClockCity } from "../../../../assets/shared/event-clock";
+import { eventReadIdSql, type EventReadSelection } from "../events/selection";
+import { readEventAdminResource, readEventAdminContext } from "../events/authorized-context";
+import type { Env } from "../../types";
+import { requirePermission } from "../../auth/permissions";
+import { batchFirst, batchRows, buildOffsetPageSql } from "../../db/pagination";
 
 export async function getAgendaOccurrence(db: DatabaseLike, eventId: string, id: string) {
   const result = await readAgendaOccurrences(db, eventId, "AND id = ?", [id], "LIMIT 1");
@@ -32,11 +45,11 @@ export async function getAgendaOccurrence(db: DatabaseLike, eventId: string, id:
   return result[0];
 }
 /** Prepare the complete canonical response so command boundaries can append it to their atomic batch. */
-export function prepareAgendaRead(db: DatabaseLike, eventId: string, eventSlug: string) {
+export function prepareAgendaRead(db: DatabaseLike, eventId: EventReadSelection, eventSlug: string) {
   const read = prepareAgendaEditorRead(db, eventId);
-  return {
+  const prepared = {
     statements: read.statements,
-    decode(results: D1StatementResult[]) {
+    decodeWithEvent(results: D1StatementResult[]) {
       const { snapshotRows, items, organizations, unavailable } = read.decode(results);
       const {
         event,
@@ -114,12 +127,17 @@ export function prepareAgendaRead(db: DatabaseLike, eventId: string, eventSlug: 
         })),
       });
       return {
-        ...snapshot,
-        speakerOrganizations: retainedSpeakerOrganizations(organizations, snapshot.occurrences),
-        staffingReport: buildAgendaStaffingReport(snapshot, unavailable),
+        event,
+        snapshot: {
+          ...snapshot,
+          speakerOrganizations: retainedSpeakerOrganizations(organizations, snapshot.occurrences),
+          staffingReport: buildAgendaStaffingReport(snapshot, unavailable),
+        },
       };
     },
+    decode: (results: D1StatementResult[]) => prepared.decodeWithEvent(results).snapshot,
   };
+  return prepared;
 }
 
 export async function getAgenda(db: DatabaseLike, eventId: string, eventSlug: string) {
@@ -127,11 +145,37 @@ export async function getAgenda(db: DatabaseLike, eventId: string, eventSlug: st
   return read.decode(await db.batch(read.statements));
 }
 
+export async function readAgendaRequest(
+  db: DatabaseLike,
+  request: Request,
+  env: Pick<Env, "ADMIN_API_KEY" | "INTERNAL_SIGNING_SECRET">,
+  eventSlug: string,
+) {
+  return readEventAdminResource(db, request, env, eventSlug, "agenda:read", (event) =>
+    prepareAgendaRead(db, event, eventSlug),
+  );
+}
+
 export async function listAgendaOccurrences(
   db: DatabaseLike,
   eventId: string,
   query: z.infer<typeof agendaOccurrenceQuerySchema>,
 ) {
+  const event = query.day
+    ? await first<{ timezone: string }>(db, "SELECT timezone FROM events WHERE id=?", [eventId])
+    : null;
+  if (query.day && !event) throw new AppError(404, "EVENT_NOT_FOUND", "Event not found");
+  const read = prepareAgendaOccurrenceList(db, eventId, query, event?.timezone);
+  return read.decode(await db.batch(read.statements));
+}
+
+function prepareAgendaOccurrenceList(
+  db: DatabaseLike,
+  eventId: EventReadSelection,
+  query: z.infer<typeof agendaOccurrenceQuerySchema>,
+  timeZone?: string,
+) {
+  const scope = eventReadIdSql(eventId);
   const conditions: string[] = [];
   const values: unknown[] = [];
   if (query.conflict && query.conflict !== "all") {
@@ -185,14 +229,10 @@ export async function listAgendaOccurrences(
     values.push(query.track);
   }
   if (query.day) {
-    const event = await first<{ timezone: string }>(db, "SELECT timezone FROM events WHERE id=?", [eventId]);
-    if (!event) throw new AppError(404, "EVENT_NOT_FOUND", "Event not found");
+    if (!timeZone) throw new Error("Agenda day selection requires the owning event's time zone");
     const [year, month, day] = query.day.split("-").map(Number);
     const nextDay = new Date(Date.UTC(year, month - 1, day + 1));
-    const start = zonedDateTimeToDate(
-      { year, month, day, hour: 0, minute: 0, second: 0 },
-      event.timezone,
-    ).toISOString();
+    const start = zonedDateTimeToDate({ year, month, day, hour: 0, minute: 0, second: 0 }, timeZone).toISOString();
     const end = zonedDateTimeToDate(
       {
         year: nextDay.getUTCFullYear(),
@@ -202,55 +242,93 @@ export async function listAgendaOccurrences(
         minute: 0,
         second: 0,
       },
-      event.timezone,
+      timeZone,
     ).toISOString();
     conditions.push(`(${agendaOccurrenceDisplayStartSql}) >= ? AND (${agendaOccurrenceDisplayStartSql}) < ?`);
     values.push(start, end);
   }
   const where = conditions.length ? `AND ${conditions.join(" AND ")}` : "";
-  const total = await first<{ total: number }>(
-    db,
-    `SELECT COUNT(*) AS total FROM event_agenda_occurrences WHERE event_id = ? ${where}`,
-    [eventId, ...values],
-  );
   const field = query.sort?.replace(/^-/u, "") ?? "startAt";
   const sort =
     { title: "title", startAt: `(${agendaOccurrenceDisplayStartSql})`, endAt: "end_at" }[field] ??
     `(${agendaOccurrenceDisplayStartSql})`;
-  const items = await readAgendaOccurrences(
-    db,
-    eventId,
-    where,
-    values,
-    `ORDER BY ${sort} ${query.sort?.startsWith("-") ? "DESC" : "ASC"},id LIMIT ${query.limit} OFFSET ${query.offset}`,
-  );
-  const summaries = items.length
-    ? await all<Record<string, unknown> & { id: string }>(
-        db,
-        `SELECT id,(${agendaOccurrenceConflictCoverageSql}) AS coverage,${agendaOccurrenceConflictSql().projection} FROM event_agenda_occurrences WHERE event_id=? AND id IN(SELECT value FROM json_each(?)) LIMIT ?`,
-        [eventId, JSON.stringify(items.map((item) => item.id)), query.limit],
-      )
-    : [];
-  const byId = new Map(summaries.map((row) => [row.id, row]));
-  const demandById = await readSessionDemand(
-    db,
-    eventId,
-    items.map((item) => item.id),
-  );
-  const listed = items.map((item) => {
-    const row = byId.get(item.id);
-    const categories = agendaConflictCategorySchema.options.filter((category) => Boolean(row?.[category]));
-    return {
-      ...item,
-      demand: demandById.get(item.id)!,
-      conflicts: {
-        hasConflict: categories.length > 0,
-        categories,
-        coverage: agendaConflictCoverageSchema.parse(row?.coverage ?? "not_scheduled"),
-      },
-    };
+  const suffix = `ORDER BY ${sort} ${query.sort?.startsWith("-") ? "DESC" : "ASC"},id LIMIT ${query.limit} OFFSET ${query.offset}`;
+  const page = buildOffsetPageSql({
+    source: {
+      selectSql: "SELECT id",
+      fromSql: `FROM event_agenda_occurrences WHERE event_id=${scope.sql} ${where}`,
+      bindings: [...scope.bindings, ...values],
+    },
+    orderBy: `ORDER BY ${sort} ${query.sort?.startsWith("-") ? "DESC" : "ASC"},id`,
+    limit: query.limit,
+    offset: query.offset,
   });
-  return { occurrences: listed, page: buildPageInfo(query.limit, query.offset, total?.total ?? 0, listed.length) };
+  const selection = { sql: page.pageSql, bindings: [...page.bindings, query.limit, query.offset] };
+  const details = prepareAgendaOccurrenceDetails(db, eventId, selection);
+  const demand = prepareSessionDemand(db, eventId, selection);
+  return {
+    statements: [
+      db.prepare(page.countSql).bind(...page.countBindings),
+      prepareAgendaOccurrenceRows(db, eventId, where, values, suffix),
+      prepareAgendaSpeakers(db, eventId, selection),
+      ...details,
+      prepareAgendaSponsorRead(db, eventId, undefined, selection),
+      db
+        .prepare(
+          `SELECT id,(${agendaOccurrenceConflictCoverageSql}) AS coverage,${agendaOccurrenceConflictSql().projection} FROM event_agenda_occurrences WHERE event_id=${scope.sql} AND id IN(${selection.sql}) LIMIT ?`,
+        )
+        .bind(...scope.bindings, ...selection.bindings, query.limit),
+      ...demand.statements,
+    ],
+    decode(results: D1StatementResult[]) {
+      const total = batchFirst<{ total: number }>(results[0]);
+      const items = decodeAgendaOccurrences(
+        batchRows<OccurrenceRow>(results[1]),
+        decodeAgendaSpeakers(batchRows<AgendaSpeakerRow>(results[2])),
+        results.slice(3, 6),
+        batchRows<AgendaSponsorRow>(results[6]),
+      );
+      const summaries = batchRows<Record<string, unknown> & { id: string }>(results[7]);
+      const byId = new Map(summaries.map((row) => [row.id, row]));
+      const demandById = demand.decode(
+        results.slice(8),
+        items.map((item) => item.id),
+      );
+      const listed = items.map((item) => {
+        const row = byId.get(item.id);
+        const categories = agendaConflictCategorySchema.options.filter((category) => Boolean(row?.[category]));
+        return {
+          ...item,
+          demand: demandById.get(item.id)!,
+          conflicts: {
+            hasConflict: categories.length > 0,
+            categories,
+            coverage: agendaConflictCoverageSchema.parse(row?.coverage ?? "not_scheduled"),
+          },
+        };
+      });
+      return { occurrences: listed, page: buildPageInfo(query.limit, query.offset, total?.total ?? 0, listed.length) };
+    },
+  };
+}
+
+export async function readAgendaOccurrencesRequest(
+  db: DatabaseLike,
+  request: Request,
+  env: Pick<Env, "ADMIN_API_KEY" | "INTERNAL_SIGNING_SECRET">,
+  eventSlug: string,
+  query: z.infer<typeof agendaOccurrenceQuerySchema>,
+) {
+  if (query.day) {
+    // UTC day bounds depend on the persisted IANA zone; keep that conversion in the shared codec.
+    const { actor, event } = await readEventAdminContext(db, request, env, eventSlug);
+    requirePermission(actor, "agenda:read", { type: "event", id: event.id });
+    const read = prepareAgendaOccurrenceList(db, event.id, query, event.timezone);
+    return read.decode(await db.batch(read.statements));
+  }
+  return readEventAdminResource(db, request, env, eventSlug, "agenda:read", (event) =>
+    prepareAgendaOccurrenceList(db, event, query),
+  );
 }
 
 export async function listAgendaPeople(
