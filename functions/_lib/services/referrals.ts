@@ -6,7 +6,7 @@ import { hmacSha256Hex } from "../utils/crypto";
 import { prepareEngagementStatement } from "./engagement";
 import type { DatabaseLike, StatementLike } from "../types";
 
-interface ReferralRow {
+export interface ReferralRow {
   code: string;
   event_id: string;
   owner_type: string;
@@ -116,10 +116,21 @@ export async function prepareReferralConversionStatements(
   code: string,
   conversion: { type: "registration" | "proposal"; ref: string },
 ): Promise<StatementLike[]> {
-  const referral = await first<ReferralRow>(db, `SELECT ${REFERRAL_COLUMNS} FROM referral_codes WHERE code = ?`, [
-    code,
-  ]);
+  const referral = await prepareReferralByCode(db, code).first<ReferralRow>();
+  return planReferralConversionStatements(db, code, conversion, referral);
+}
 
+export function prepareReferralByCode(db: DatabaseLike, code: string) {
+  return db.prepare(`SELECT ${REFERRAL_COLUMNS} FROM referral_codes WHERE code = ?`).bind(code);
+}
+
+/** Compose conversion and engagement writes from the caller's preflight snapshot. */
+export function planReferralConversionStatements(
+  db: DatabaseLike,
+  code: string,
+  conversion: { type: "registration" | "proposal"; ref: string },
+  referral: ReferralRow | null,
+): StatementLike[] {
   const conversionKey = `${conversion.type}:${conversion.ref}`;
   const statements: StatementLike[] = [
     db

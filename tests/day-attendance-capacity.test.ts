@@ -15,6 +15,7 @@ import { updateRegistrationDayAttendance } from "../functions/_lib/services/regi
 import { promoteDayWaitlistIfCapacity } from "../functions/_lib/services/registrations/day-waitlist";
 import { buildCreateRegistration } from "../functions/_lib/services/registrations/create";
 import { promoteEventWaitlistWithNotifications } from "../functions/_lib/services/registrations/waitlist-promotions";
+import { profileD1Flow } from "./helpers/d1-flow-profile";
 import { gateNextBatch } from "./helpers/d1-batch-gate";
 
 describe("day attendance capacity", () => {
@@ -204,26 +205,39 @@ describe("day attendance capacity", () => {
           ('user-final-seat-b', 'final-seat-b@example.test', 'final-seat-b@example.test', 'Final', 'B', datetime('now'), datetime('now'))
       `),
     ]);
+    await env.DB.prepare(`INSERT INTO referral_codes
+      (code, event_id, owner_type, owner_id, created_by_user_id, clicks, conversions, created_at)
+      VALUES ('SeatRef123', ?, 'registration', 'referrer-registration', NULL, 0, 0, datetime('now'))`)
+      .bind(eventId)
+      .run();
     const event = await getEventBySlug(env.DB, "pqc-2026");
     const common = {
       event,
       attendanceType: "in_person" as const,
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
+      referredByCode: "SeatRef123",
       confirmationTtlHours: 48,
       signingSecret: "test-signing-secret",
     };
 
     // Both plans intentionally read the same capacity revision, as two
     // concurrent requests can do before either batch acquires D1's writer.
+    const profiles = [profileD1Flow(env.DB), profileD1Flow(env.DB)];
     const [firstPlan, stalePlan] = await Promise.all([
-      buildCreateRegistration(env.DB, { ...common, userId: "user-final-seat-a" }),
-      buildCreateRegistration(env.DB, { ...common, userId: "user-final-seat-b" }),
+      buildCreateRegistration(profiles[0].db, { ...common, userId: "user-final-seat-a" }),
+      buildCreateRegistration(profiles[1].db, { ...common, userId: "user-final-seat-b" }),
     ]);
-    await env.DB.batch(firstPlan.statements);
-    await expect(env.DB.batch(stalePlan.statements)).rejects.toThrow(/EVENT_DAY_CAPACITY_CHANGED/);
+    for (const profile of profiles) expect(profile.summary().roundTrips).toBe(1);
+    await profiles[0].db.batch(firstPlan.statements);
+    await expect(profiles[1].db.batch(stalePlan.statements)).rejects.toThrow(/EVENT_DAY_CAPACITY_CHANGED/);
 
     const rebuilt = await createRegistration(env.DB, { ...common, userId: "user-final-seat-b" });
+    expect(
+      await queryAll<{ conversions: number }>(env.DB, "SELECT conversions FROM referral_codes WHERE code = ?", [
+        "SeatRef123",
+      ]),
+    ).toEqual([{ conversions: 2 }]);
     const rows = await queryAll<{ registration_id: string; status: string }>(
       env.DB,
       `SELECT registration_id, status

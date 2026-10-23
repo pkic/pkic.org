@@ -1,3 +1,4 @@
+import { registrationReadIdSql, type RegistrationReadSelection } from "./selection";
 import { AppError } from "../../errors";
 import { all, first } from "../../db/queries";
 import { verifyDatabaseCapability } from "../capability-links";
@@ -91,4 +92,11 @@ export async function listRegistrationsForEvent(db: DatabaseLike, eventId: strin
     `SELECT ${REGISTRATION_COLUMNS} FROM registrations WHERE event_id = ? ORDER BY created_at DESC`,
     [eventId],
   );
+}
+
+export function prepareRegistrationBySelection(db: DatabaseLike, selection: RegistrationReadSelection) {
+  const reference = registrationReadIdSql(selection);
+  return db
+    .prepare(`SELECT ${REGISTRATION_COLUMNS} FROM registrations WHERE id=${reference.sql}`)
+    .bind(...reference.bindings);
 }

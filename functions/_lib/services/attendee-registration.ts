@@ -76,5 +76,5 @@ export async function prepareValidatedAttendeeRegistration(
     verifiedIdentity: options.verifiedIdentity,
     mailboxVerified: options.mailboxVerified,
   });
-  return { prepared, requiredTerms };
+  return { prepared, requiredTerms, formResponse: validatedForm };
 }

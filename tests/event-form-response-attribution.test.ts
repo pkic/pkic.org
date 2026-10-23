@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { listCampaignRecipients } from "../functions/_lib/services/event-email-campaign";
 import { getEventBySlug } from "../functions/_lib/services/events";
 import { resolveEventFormResponse } from "../functions/_lib/services/forms";
@@ -7,7 +7,9 @@ import { getProposalDetailData } from "../functions/_lib/services/proposal-detai
 import { buildRegistrationCsv } from "../functions/_lib/services/registrations/export";
 import { getRegistrationDetail } from "../functions/_lib/services/registrations/detail";
 import { getCustomAnswerRows } from "../functions/_lib/utils/registration-email";
-import { queryAll, seedEventAndAdmin } from "./helpers/context";
+import { deliveredEmailPayload, queryAll, seedEventAndAdmin } from "./helpers/context";
+import { callApi } from "./helpers/app";
+import { stubSuccessfulMxLookup } from "./helpers/mx-lookup";
 import { resetDb } from "./helpers/reset-db";
 
 type EventFormPurpose = "event_registration" | "proposal_submission";
@@ -125,6 +127,54 @@ async function seedProposalResponse(eventId: string, form: SeededForm): Promise<
 
 describe("historical event form response attribution", () => {
   beforeEach(resetDb);
+  afterEach(() => vi.unstubAllGlobals());
+
+  it.each([false, true])(
+    "queues the newly submitted answers before committing registration (restore: %s)",
+    async (restore) => {
+      const { eventId } = await seedEventAndAdmin(env.DB);
+      const form = await seedEventForm(eventId, "event_registration", "Current question", "current_answer");
+      if (restore) {
+        await seedRegistrationResponse({
+          eventId,
+          id: "10000000-0000-4000-8000-000000000009",
+          email: "submitted@example.test",
+          form,
+          fieldKey: "current_answer",
+          value: "old answer",
+          formPlacementId: form.placementId,
+          submissionPlacementId: form.placementId,
+        });
+        await env.DB.prepare("UPDATE registrations SET status = 'cancelled' WHERE id = ?")
+          .bind("10000000-0000-4000-8000-000000000009")
+          .run();
+      }
+      stubSuccessfulMxLookup();
+      const response = await callApi(env, "/api/v1/events/pqc-2026/registrations", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          firstName: "Submitted",
+          lastName: "Attendee",
+          email: "submitted@example.test",
+          attendanceType: "virtual",
+          sourceType: "direct",
+          customAnswers: { current_answer: "new answer" },
+          consents: [
+            { termKey: "privacy-policy", version: "v1" },
+            { termKey: "code-of-conduct", version: "v1" },
+          ],
+        }),
+      });
+      expect(response.status).toBe(200);
+      const [email] = await queryAll<{ payload_json: string }>(
+        env.DB,
+        "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirm_email' ORDER BY created_at DESC LIMIT 1",
+      );
+      const payload = await deliveredEmailPayload<{ customAnswerRows: unknown[] }>(env.DB, env, email.payload_json);
+      expect(payload.customAnswerRows).toEqual([{ label: "Current question", displayValue: "new answer" }]);
+    },
+  );
 
   it("preserves the submitted form, archived fields, and normalized answers after switching from form A to B", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);

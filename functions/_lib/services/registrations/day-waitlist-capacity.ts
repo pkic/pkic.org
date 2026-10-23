@@ -1,7 +1,7 @@
 import { isEventDayCapacityConflict, eventDayCapacityChangedError } from "../../db/event-day-capacity-guard";
 export { isEventDayCapacityConflict, eventDayCapacityChangedError } from "../../db/event-day-capacity-guard";
 import { eventEntryOccupiedSql } from "../event-participation/event-entry-capacity";
-import { first, all } from "../../db/queries";
+import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
@@ -45,14 +45,14 @@ function roleBasedCapacityExemptReasonForRole(role: string | undefined): string 
 }
 
 export async function listCapacityEventDays(db: DatabaseLike, eventId: string): Promise<EventDayCapacityRow[]> {
-  return all<EventDayCapacityRow>(
-    db,
-    `SELECT id, day_date, in_person_capacity, capacity_revision
-     FROM event_days
-     WHERE event_id = ?
-     ORDER BY sort_order ASC, day_date ASC`,
-    [eventId],
-  );
+  return (await prepareCapacityEventDays(db, eventId).all<EventDayCapacityRow>()).results;
+}
+
+export function prepareCapacityEventDays(db: DatabaseLike, eventId: string) {
+  return db
+    .prepare(`SELECT id, day_date, in_person_capacity, capacity_revision
+     FROM event_days WHERE event_id = ? ORDER BY sort_order ASC, day_date ASC`)
+    .bind(eventId);
 }
 
 export async function countConfirmedInPersonForDay(
@@ -88,51 +88,49 @@ export async function countActiveOffersForDay(
   return Number(row?.total ?? 0);
 }
 
+/** The same canonical role policy serves ordinary admission and an overlaid proposal acceptance. */
+export function prepareRoleBasedCapacityExemption(
+  db: DatabaseLike,
+  input: { eventId: string; userId: string; activeProposalRoles?: readonly EventParticipantRole[] },
+) {
+  const priority = ROLE_BASED_CAPACITY_EXEMPT_ROLES.map((role, index) => `WHEN '${role}' THEN ${index}`).join(" ");
+  const source = input.activeProposalRoles
+    ? `SELECT role FROM event_participant_role_sources
+       WHERE event_id=? AND user_id=? AND status='active'
+         AND role IN (${ROLE_BASED_CAPACITY_EXEMPT_ROLE_SQL}) AND source_kind='event_participant'`
+    : `SELECT role FROM effective_event_participant_roles
+       WHERE event_id=? AND user_id=? AND status='active'
+         AND role IN (${ROLE_BASED_CAPACITY_EXEMPT_ROLE_SQL})`;
+  const statement = db
+    .prepare(`${source} ORDER BY CASE role ${priority} ELSE 9 END LIMIT 1`)
+    .bind(input.eventId, input.userId);
+  return {
+    statement,
+    decode(rows: { role: string }[]) {
+      const roles = rows.map((row) => row.role);
+      roles.push(...(input.activeProposalRoles ?? []).filter((role) => roleBasedCapacityExemptReasonForRole(role)));
+      roles.sort((left, right) => rolePriority(left) - rolePriority(right));
+      return roleBasedCapacityExemptReasonForRole(roles[0]);
+    },
+  };
+}
+
 export async function roleBasedCapacityExemptReason(
   db: DatabaseLike,
   eventId: string,
   userId: string,
 ): Promise<string | null> {
-  const row = await first<{ role: string }>(
-    db,
-    `SELECT role
-     FROM effective_event_participant_roles
-     WHERE event_id = ? AND user_id = ? AND status = 'active'
-       AND role IN (${ROLE_BASED_CAPACITY_EXEMPT_ROLE_SQL})
-     ORDER BY CASE role WHEN 'organizer' THEN 1 WHEN 'speaker' THEN 2 WHEN 'moderator' THEN 3
-                        WHEN 'panelist' THEN 4 WHEN 'staff' THEN 5 ELSE 9 END
-     LIMIT 1`,
-    [eventId, userId],
-  );
-  return roleBasedCapacityExemptReasonForRole(row?.role);
+  const read = prepareRoleBasedCapacityExemption(db, { eventId, userId });
+  return read.decode((await read.statement.all<{ role: string }>()).results);
 }
 
-/**
- * Resolves the role exemption after one proposal participant source changes.
- * The source mutation is still part of the caller's atomic batch, so this
- * reads direct roles and overlays the intended next proposal roles here.
- */
+/** Direct roles plus the intended next proposal roles, before their shared atomic commit. */
 export async function roleBasedCapacityExemptReasonAfterParticipantChange(
   db: DatabaseLike,
-  input: {
-    eventId: string;
-    userId: string;
-    activeProposalRoles: readonly EventParticipantRole[];
-  },
+  input: { eventId: string; userId: string; activeProposalRoles: readonly EventParticipantRole[] },
 ): Promise<string | null> {
-  const rows = await all<{ role: string }>(
-    db,
-    `SELECT role
-     FROM event_participant_role_sources
-     WHERE event_id = ? AND user_id = ? AND status = 'active'
-       AND role IN (${ROLE_BASED_CAPACITY_EXEMPT_ROLE_SQL})
-       AND source_kind = 'event_participant'`,
-    [input.eventId, input.userId],
-  );
-  const roles = rows.map((row) => row.role);
-  roles.push(...input.activeProposalRoles.filter((role) => roleBasedCapacityExemptReasonForRole(role)));
-  roles.sort((left, right) => rolePriority(left) - rolePriority(right));
-  return roleBasedCapacityExemptReasonForRole(roles[0]);
+  const read = prepareRoleBasedCapacityExemption(db, input);
+  return read.decode((await read.statement.all<{ role: string }>()).results);
 }
 
 export async function resolveCapacityExemptReason(

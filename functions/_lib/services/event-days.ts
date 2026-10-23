@@ -1,5 +1,6 @@
+import { registrationReadIdSql, type RegistrationReadSelection } from "./registrations/selection";
+import { batchRows } from "../db/pagination";
 import { prepareParticipationReconciliation } from "./event-participation/reconciliation";
-import { all } from "../db/queries";
 import { AppError } from "../errors";
 import { attendanceMethodName, dayAttendanceTypeNotConfiguredError, dayNotConfiguredError } from "./event-day-refusals";
 import { uuid } from "../utils/ids";
@@ -227,16 +228,18 @@ export function decodeRegisteredEventDayCounts(rows: EventDayAttendanceCountRow[
   return map;
 }
 
+export interface RegistrationDayAttendanceChange {
+  registrationId: string;
+  eventId: string;
+  selections?: DayAttendanceSelection[];
+  changedBy?: string;
+  recordHistory?: boolean;
+  configuredEventDays?: EventDayRecord[];
+}
+
 export async function replaceRegistrationDayAttendance(
   db: DatabaseLike,
-  payload: {
-    registrationId: string;
-    eventId: string;
-    selections?: DayAttendanceSelection[];
-    changedBy?: string;
-    recordHistory?: boolean;
-    configuredEventDays?: EventDayRecord[];
-  },
+  payload: RegistrationDayAttendanceChange,
 ): Promise<void> {
   const statements = await prepareReplaceRegistrationDayAttendanceStatements(db, payload);
   if (statements.length > 0) await db.batch(statements);
@@ -244,24 +247,44 @@ export async function replaceRegistrationDayAttendance(
 
 export async function prepareReplaceRegistrationDayAttendanceStatements(
   db: DatabaseLike,
-  payload: {
-    registrationId: string;
-    eventId: string;
-    selections?: DayAttendanceSelection[];
-    changedBy?: string;
-    recordHistory?: boolean;
-    configuredEventDays?: EventDayRecord[];
-  },
+  payload: RegistrationDayAttendanceChange,
 ): Promise<StatementLike[]> {
-  const selections = normalizeSelections(payload.selections);
-  const previousRows = await all<{ event_day_id: string; attendance_type: string }>(
+  const results = await db.batch([
+    preparePreviousRegistrationDayAttendance(db, { registrationId: payload.registrationId }),
+    ...(payload.configuredEventDays ? [] : [prepareEventDays(db, payload.eventId)]),
+  ]);
+  return planRegistrationDayAttendanceChange(
     db,
-    "SELECT event_day_id, attendance_type FROM registration_day_attendance WHERE registration_id = ?",
-    [payload.registrationId],
+    payload,
+    batchRows<PreviousRegistrationDayAttendanceRow>(results[0]),
+    payload.configuredEventDays ?? batchRows<EventDayRecord>(results[1]),
   );
+}
+
+export interface PreviousRegistrationDayAttendanceRow {
+  event_day_id: string;
+  attendance_type: string;
+}
+
+export function preparePreviousRegistrationDayAttendance(db: DatabaseLike, selection: RegistrationReadSelection) {
+  const reference = registrationReadIdSql(selection);
+  return db
+    .prepare(
+      `SELECT event_day_id,attendance_type FROM registration_day_attendance WHERE registration_id=${reference.sql}`,
+    )
+    .bind(...reference.bindings);
+}
+
+/** Plan from the caller's single snapshot; this builder never reads or commits. */
+export function planRegistrationDayAttendanceChange(
+  db: DatabaseLike,
+  payload: RegistrationDayAttendanceChange,
+  previousRows: PreviousRegistrationDayAttendanceRow[],
+  eventDays: EventDayRecord[],
+): StatementLike[] {
+  const selections = normalizeSelections(payload.selections);
   const previousByDayId = new Map(previousRows.map((row) => [row.event_day_id, row.attendance_type]));
 
-  const eventDays = payload.configuredEventDays ?? (await listEventDays(db, payload.eventId));
   const dayMap = new Map(eventDays.map((day) => [day.day_date, day]));
   const nextByDayId = new Map<string, string>();
 
