@@ -1,5 +1,6 @@
 import { addressParser, type Email } from "postal-mime";
 import { normalizedEmailSchema } from "../../../assets/shared/schemas/api-common";
+import type { CalendarRsvpEventInput } from "../../../assets/shared/schemas/calendar-rsvp";
 import { first } from "../db/queries";
 import { AppError } from "../errors";
 import type { DatabaseLike } from "../types";
@@ -23,7 +24,12 @@ export function parseAttendeeEmail(value: unknown): string {
 }
 
 /** A signed target and a claimed address must identify the same invited recipient. */
-export async function requireCalendarRsvpEmailRecipient(db: DatabaseLike, targetId: string, email: string) {
+export async function requireCalendarRsvpEmailRecipient(
+  db: DatabaseLike,
+  targetId: string,
+  email: string,
+  responseStatus: CalendarRsvpEventInput["responseStatus"],
+) {
   const invited = await first<{ invited: number }>(
     db,
     `SELECT 1 AS invited WHERE EXISTS (
@@ -34,12 +40,12 @@ export async function requireCalendarRsvpEmailRecipient(db: DatabaseLike, target
       WHERE invitation.id=? AND person.normalized_email=? AND invitation.revoked_at IS NULL AND person.active=1
     ) OR EXISTS (
       SELECT 1 FROM event_series_calendar_deliveries delivery
-      WHERE delivery.series_id=? AND delivery.recipient_email=? AND delivery.cancelled=0
+      WHERE delivery.series_id=? AND delivery.recipient_email=? AND (delivery.cancelled=0 OR ?='bounced')
     ) OR EXISTS (
       SELECT 1 FROM meeting_occurrence_invitations invitation
       WHERE invitation.occurrence_id=? AND invitation.recipient_email=?
     )`,
-    [targetId, email, targetId, email, targetId, email, targetId, email],
+    [targetId, email, targetId, email, targetId, email, responseStatus, targetId, email],
   );
   if (!invited)
     throw new AppError(403, "RSVP_EMAIL_RECIPIENT_MISMATCH", "The reply does not match an invited recipient.");

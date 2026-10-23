@@ -64,7 +64,7 @@ export async function processIncomingEmail(message: IncomingRsvpEmail, env: Env)
 
     const bounceRecipient = calendarRsvpBounceRecipient(emailData);
     if (bounceRecipient) {
-      await requireCalendarRsvpEmailRecipient(env.DB, rsvpRegistrationId, bounceRecipient);
+      await requireCalendarRsvpEmailRecipient(env.DB, rsvpRegistrationId, bounceRecipient, "bounced");
       await recordCalendarRsvpEvent(env.DB, {
         registrationId: rsvpRegistrationId,
         eventDayDate: rsvpDayDate,
@@ -128,7 +128,7 @@ export async function processIncomingEmail(message: IncomingRsvpEmail, env: Env)
 
       if (implicitStatus) {
         const attendeeEmail = calendarRsvpEmailAuthor(emailData);
-        await requireCalendarRsvpEmailRecipient(env.DB, rsvpRegistrationId, attendeeEmail);
+        await requireCalendarRsvpEmailRecipient(env.DB, rsvpRegistrationId, attendeeEmail, implicitStatus);
         await recordCalendarRsvpEvent(env.DB, {
           registrationId: rsvpRegistrationId,
           eventDayDate: rsvpDayDate,
@@ -162,7 +162,7 @@ export async function processIncomingEmail(message: IncomingRsvpEmail, env: Env)
       return;
     }
     const attendeeEmail = parseAttendeeEmail(parsedRsvp.attendeeEmail);
-    await requireCalendarRsvpEmailRecipient(env.DB, rsvpRegistrationId, attendeeEmail);
+    await requireCalendarRsvpEmailRecipient(env.DB, rsvpRegistrationId, attendeeEmail, parsedRsvp.responseStatus);
 
     // Determine the ics_uid to store.  The per-day RSVP address (verified via
     // HMAC) is the cryptographic source of truth for *which day* was replied to.

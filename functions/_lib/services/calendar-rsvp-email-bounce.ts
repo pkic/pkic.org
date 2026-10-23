@@ -20,7 +20,7 @@ export function calendarRsvpBounceRecipient(email: Email): string | null {
       .replace(/\n[ \t]+/g, " ")
       .split(/\n\n+/u)) {
       if (!/^Action:\s*failed\s*$/imu.test(block)) continue;
-      if (!/^Status:\s*[45]\.\d{1,3}\.\d{1,3}\s*$/mu.test(block))
+      if (!/^Status:\s*[45]\.\d{1,3}\.\d{1,3}\s*$/imu.test(block))
         throw new AppError(400, "RSVP_EMAIL_BOUNCE_INVALID", "A delivery failure requires a failure status.");
       const recipient = block.match(/^Final-Recipient:\s*rfc822\s*;\s*(.+)$/imu)?.[1]?.trim();
       if (!recipient)

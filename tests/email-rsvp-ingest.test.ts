@@ -148,19 +148,27 @@ describe("incoming RSVP email persistence", () => {
     expect(await queryAll(env.DB, "SELECT id FROM calendar_rsvp_events")).toEqual([]);
   });
 
-  it("records a delivery failure for its recipient with an empty envelope sender", async () => {
-    const { registrationId } = await seedRsvpRegistration(env.DB);
-    const to = await generateSignedRsvpAddress(registrationId, secret, rsvpEmail);
-    for (let attempt = 0; attempt < 2; attempt++)
-      await processIncomingEmail(incomingEmail("", to, deliveryStatusEmail()), testEnv());
-    expect(await queryAll(env.DB, "SELECT attendee_email,response_status,provider FROM calendar_rsvp_events")).toEqual([
-      {
-        attendee_email: "alice@example.com",
-        response_status: "bounced",
-        provider: "cloudflare_email_routing_bounce",
-      },
-    ]);
-  });
+  it.each(["Status", "status", "sTaTuS"])(
+    "records a delivery failure with a %s field and empty envelope sender",
+    async (field) => {
+      const { registrationId } = await seedRsvpRegistration(env.DB);
+      const to = await generateSignedRsvpAddress(registrationId, secret, rsvpEmail);
+      for (let attempt = 0; attempt < 2; attempt++)
+        await processIncomingEmail(
+          incomingEmail("", to, deliveryStatusEmail().replace("Status: 5.1.1", `${field}: 5.1.1`)),
+          testEnv(),
+        );
+      expect(
+        await queryAll(env.DB, "SELECT attendee_email,response_status,provider FROM calendar_rsvp_events"),
+      ).toEqual([
+        {
+          attendee_email: "alice@example.com",
+          response_status: "bounced",
+          provider: "cloudflare_email_routing_bounce",
+        },
+      ]);
+    },
+  );
 
   it("refuses delivery failures for a recipient outside the signed registration", async () => {
     const { registrationId } = await seedRsvpRegistration(env.DB);

@@ -23,7 +23,7 @@ import { materializeSeriesOccurrences } from "../functions/_lib/services/event-s
 import { recordCalendarRsvpEvent, normalizeCalendarRsvp } from "../functions/_lib/services/calendar-rsvp";
 import { generateSignedRsvpAddress, verifySignedRsvpAddressFull } from "../functions/_lib/email/rsvp";
 import { processIncomingEmail } from "../functions/_lib/services/calendar-rsvp-email-ingest";
-import { tnefRsvpEmail } from "./helpers/rsvp-email-fixtures";
+import { deliveryStatusEmail, tnefRsvpEmail } from "./helpers/rsvp-email-fixtures";
 import type { AuthAdmin } from "../functions/_lib/types";
 import { insertUser } from "./helpers/membership";
 import { ensureGroupMembershipCapacity } from "./helpers/group-leadership";
@@ -83,6 +83,37 @@ beforeEach(async () => {
 });
 
 describe("recurring meeting calendars", () => {
+  it("records a cancellation delivery bounce while refusing ordinary replies from the canceled recipient", async () => {
+    const series = await createGroupEventSeries(env.DB, admin, GROUP, input());
+    await dispatch(series.id);
+    await env.DB.prepare("UPDATE group_memberships SET left_at=? WHERE user_id=?")
+      .bind(new Date().toISOString(), userId)
+      .run();
+    await dispatch(series.id);
+    expect((await deliveries()).at(-1)!.getFirstPropertyValue("method")).toBe("CANCEL");
+    const to = await generateSignedRsvpAddress(series.id, signingSecret);
+    const incoming = (raw: string) => ({
+      from: "",
+      to,
+      raw: new Response(raw).body!,
+      rawSize: new TextEncoder().encode(raw).byteLength,
+    });
+    const emailEnv = { ...env, INTERNAL_SIGNING_SECRET: signingSecret, RSVP_EMAIL: "rsvp@mail.pkic.org" };
+    await processIncomingEmail(incoming(deliveryStatusEmail(email)), emailEnv);
+    const ordinary = tnefRsvpEmail("Accepted: Working session", "canceled-reply@example.test").replace(
+      "Alice <alice@example.com>",
+      email,
+    );
+    await expect(processIncomingEmail(incoming(ordinary), emailEnv)).rejects.toMatchObject({
+      code: "RSVP_EMAIL_RECIPIENT_MISMATCH",
+    });
+    expect(
+      await queryAll(env.DB, "SELECT attendee_email,response_status FROM event_series_rsvps WHERE series_id=?", [
+        series.id,
+      ]),
+    ).toEqual([{ attendee_email: email, response_status: "bounced" }]);
+  });
+
   it.each(["series", "occurrence"])("matches implicit %s replies to their invited recipient", async (target) => {
     const series = await createGroupEventSeries(env.DB, admin, GROUP, input());
     await dispatch(series.id);
