@@ -31,5 +31,10 @@ export function registerEventManagementAuthentication(app: Hono<RequestDbContext
   app.use("/email/*", requireEventManagementIdentity);
 
   app.use("/forms", requireEventManagementIdentity);
-  app.use("/forms/*", requireEventManagementIdentity);
+  app.use("/forms/*", async (c, next) => {
+    // Only the detail read composes live authentication; nested reports and writes retain middleware checks.
+    if ((c.req.method === "GET" || c.req.method === "HEAD") && /\/forms\/[^/]+\/?$/.test(c.req.path)) {
+      await next();
+    } else await requireEventManagementIdentity(c, next);
+  });
 }

@@ -1,4 +1,4 @@
-import type { EventReadSelection } from "../events/selection";
+import { eventReadIdSql, type EventReadSelection } from "../events/selection";
 import {
   placedEventFormSelection,
   decodePlacedEventForm,
@@ -125,48 +125,75 @@ export async function resolveFormFieldOptionCatalogs(
   return Object.fromEntries(entries) as OptionCatalogs;
 }
 
+function prepareManagedFormWithFields(db: DatabaseLike, formKey: string) {
+  return {
+    statements: [
+      db.prepare(`SELECT ${FORM_COLUMNS}, created_at, updated_at FROM forms WHERE key = ?`).bind(formKey),
+      prepareFormFields(db, "SELECT id FROM forms WHERE key = ?", [formKey], true),
+    ],
+    decode(results: D1StatementResult[]): ManagedFormWithFields | null {
+      const form = batchFirst<ManagedFormWithFields["form"]>(results[0]);
+      return form ? { form, fields: batchRows<FormFieldRow>(results[1]) } : null;
+    },
+  };
+}
+
 export async function getManagedFormWithFields(
   db: DatabaseLike,
   formKey: string,
 ): Promise<ManagedFormWithFields | null> {
-  const [formResult, fieldsResult] = await db.batch([
-    db.prepare(`SELECT ${FORM_COLUMNS}, created_at, updated_at FROM forms WHERE key = ?`).bind(formKey),
-    prepareFormFields(db, "SELECT id FROM forms WHERE key = ?", [formKey], true),
-  ]);
-  const form = batchFirst<ManagedFormWithFields["form"]>(formResult);
-  return form ? { form, fields: batchRows<FormFieldRow>(fieldsResult) } : null;
+  const read = prepareManagedFormWithFields(db, formKey);
+  return read.decode(await db.batch(read.statements));
 }
 
 /** Resolve one form through its event ownership or an unowned event placement. */
+export function prepareManagedEventForm(
+  db: DatabaseLike,
+  event: EventReadSelection,
+  formKey: string,
+  options: { ownedOnly?: boolean } = {},
+) {
+  const aggregate = prepareManagedFormWithFields(db, formKey);
+  const eventId = eventReadIdSql(event);
+  return {
+    statements: [
+      ...aggregate.statements,
+      db
+        .prepare(`SELECT 1 AS found
+         FROM forms form
+        WHERE form.key = ?
+          AND (
+            (form.scope_type = 'event' AND form.scope_ref = ${eventId.sql})
+            OR (? = 0 AND EXISTS (
+              SELECT 1 FROM form_placements placement
+               WHERE placement.form_id = form.id
+                 AND placement.owner_group_id IS NULL
+                 AND placement.context_type = 'event'
+                 AND placement.context_ref = ${eventId.sql}
+            ))
+          )
+        LIMIT 1`)
+        .bind(formKey, ...eventId.bindings, options.ownedOnly ? 1 : 0, ...eventId.bindings),
+    ],
+    decode(results: D1StatementResult[]): ManagedFormWithFields {
+      const loaded = aggregate.decode(results);
+      if (!loaded) throw new AppError(404, "FORM_NOT_FOUND", `Form '${formKey}' not found`);
+      if (!batchFirst<{ found: number }>(results[aggregate.statements.length])) {
+        throw new AppError(404, "FORM_NOT_FOUND", `Form '${formKey}' not found for this event`);
+      }
+      return loaded;
+    },
+  };
+}
+
 export async function requireManagedEventForm(
   db: DatabaseLike,
   eventId: string,
   formKey: string,
   options: { ownedOnly?: boolean } = {},
 ): Promise<ManagedFormWithFields> {
-  const aggregate = await getManagedFormWithFields(db, formKey);
-  if (!aggregate) throw new AppError(404, "FORM_NOT_FOUND", `Form '${formKey}' not found`);
-  const related = await first<{ found: number }>(
-    db,
-    `SELECT 1 AS found
-       FROM forms form
-      WHERE form.id = ?
-        AND (
-          (form.scope_type = 'event' AND form.scope_ref = ?)
-          OR (? = 0 AND EXISTS (
-            SELECT 1
-              FROM form_placements placement
-             WHERE placement.form_id = form.id
-               AND placement.owner_group_id IS NULL
-               AND placement.context_type = 'event'
-               AND placement.context_ref = ?
-          ))
-        )
-      LIMIT 1`,
-    [aggregate.form.id, eventId, options.ownedOnly ? 1 : 0, eventId],
-  );
-  if (!related) throw new AppError(404, "FORM_NOT_FOUND", `Form '${formKey}' not found for this event`);
-  return aggregate;
+  const read = prepareManagedEventForm(db, eventId, formKey, options);
+  return read.decode(await db.batch(read.statements));
 }
 
 /** Exact event selection, fields, and catalogs share one consistent D1 batch. */
