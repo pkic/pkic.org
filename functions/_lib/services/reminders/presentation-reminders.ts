@@ -1,4 +1,5 @@
 import { all } from "../../db/queries";
+import { eventCommunicationSettingsSql } from "../events/communication-settings";
 import { emailPlainText } from "../../email/plain-text";
 import { speakerPresentationPageUrl } from "../frontend-links";
 import { buildEventEmailVariables } from "../events";
@@ -44,7 +45,7 @@ export async function runPresentationReminders(
          sp.title AS proposal_title, sp.event_id, sp.proposal_type,
          e.name AS event_name, e.slug AS event_slug,
          e.base_path AS event_base_path, e.starts_at AS event_starts_at,
-         e.settings_json AS event_settings_json,
+         ${eventCommunicationSettingsSql("e.settings_json")} AS event_settings_json,
          sp.presentation_deadline, ps.presentation_reminder_count AS reminder_count
        FROM proposal_speakers ps
        JOIN users u ON u.id = ps.user_id
@@ -168,7 +169,7 @@ export async function runPresentationReminders(
               LEFT JOIN events e ON e.id = sp.event_id
               WHERE sp.id IS NULL OR sp.status != 'accepted'
                 OR sp.proposal_type IS NOT json_extract(candidate.value, '$.proposalType')
-                OR e.settings_json IS NOT json_extract(candidate.value, '$.settingsJson')
+                OR ${eventCommunicationSettingsSql("e.settings_json")} IS NOT json_extract(candidate.value, '$.settingsJson')
             )`,
             bindings: [
               stringifyJson(

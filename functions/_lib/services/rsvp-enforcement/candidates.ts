@@ -1,5 +1,6 @@
 import { RSVP_WARNING_DELAY_HOURS } from "../../../../assets/shared/constants/rsvp-enforcement";
 import { all } from "../../db/queries";
+import { eventCommunicationSettingsSql } from "../events/communication-settings";
 import type { DatabaseLike } from "../../types";
 
 export interface RsvpEnforcementCandidate {
@@ -34,7 +35,7 @@ const CANDIDATE_PROJECTION = `rsvp.id, rsvp.registration_id, r.manage_link_secre
   rsvp.received_at, rsvp.warning_sent_at,
   r.event_id, r.user_id, r.source_type, r.source_ref,
   e.name AS event_name, e.slug AS event_slug, e.base_path AS event_base_path,
-  e.starts_at AS event_starts_at, e.settings_json AS event_settings_json,
+  e.starts_at AS event_starts_at, ${eventCommunicationSettingsSql("e.settings_json")} AS event_settings_json,
   ed.day_date, ed.label AS day_label, ed.starts_at AS day_starts_at,
   ed.attendance_options_json, ed.in_person_capacity,
   rda.attendance_type AS current_attendance_type,

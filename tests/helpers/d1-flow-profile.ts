@@ -5,10 +5,16 @@ interface QuerySample {
   durationMs: number;
   operation: string;
   startedAtMs: number;
+  /** JSON UTF-8 estimates, not the platform's RPC wire encoding. */
+  requestBytes?: number;
+  resultBytes?: number;
 }
 
 /** Test-only instrumentation: never exports SQL parameter values or user data. */
-export function profileD1Flow(database: DatabaseLike, options: { latencyMs?: number } = {}) {
+export function profileD1Flow(
+  database: DatabaseLike,
+  options: { latencyMs?: number; measurePayloadBytes?: boolean } = {},
+) {
   const startedAt = performance.now();
   const latencyMs = options.latencyMs ?? 0;
   if (!Number.isFinite(latencyMs) || latencyMs < 0) throw new Error("D1 latency must be finite and nonnegative");
@@ -20,25 +26,34 @@ export function profileD1Flow(database: DatabaseLike, options: { latencyMs?: num
   function statement(raw: StatementLike, sql: string, bindings: unknown[] = []): StatementLike {
     const wrapped: StatementLike = {
       bind: (...values) => statement(raw.bind(...values), sql, values),
-      run: () => timed("run", sql, () => raw.run()),
-      all: () => timed("all", sql, () => raw.all()),
-      first: (column) => timed("first", sql, () => raw.first(column)),
+      run: () => timed("run", sql, () => raw.run(), { sql, bindings }),
+      all: () => timed("all", sql, () => raw.all(), { sql, bindings }),
+      first: (column) => timed("first", sql, () => raw.first(column), { sql, bindings, column }),
     };
     statements.set(wrapped, { raw, sql, bindings });
     return wrapped;
   }
 
-  async function timed<T>(operation: string, sql: string, run: () => Promise<T>): Promise<T> {
+  function serializedBytes(value: unknown): number {
+    return new TextEncoder().encode(JSON.stringify(value) ?? "null").byteLength;
+  }
+
+  async function timed<T>(operation: string, sql: string, run: () => Promise<T>, request: unknown): Promise<T> {
     const start = performance.now();
+    const requestBytes = options.measurePayloadBytes ? serializedBytes(request) : undefined;
+    let resultBytes: number | undefined;
     try {
       if (latencyMs > 0) await new Promise((resolve) => setTimeout(resolve, latencyMs));
-      return await run();
+      const result = await run();
+      if (options.measurePayloadBytes) resultBytes = serializedBytes(result);
+      return result;
     } finally {
       queries.push({
         operation,
         sql: sql.replace(/\s+/g, " ").trim(),
         startedAtMs: start - startedAt,
         durationMs: performance.now() - start,
+        ...(options.measurePayloadBytes ? { requestBytes, resultBytes } : {}),
       });
     }
   }
@@ -71,8 +86,11 @@ export function profileD1Flow(database: DatabaseLike, options: { latencyMs?: num
       batch: async (batch) => {
         const details = batch.map((item) => statements.get(item)!);
         executed.push(...details);
-        return timed("batch", details.map((item) => item.sql).join("; "), () =>
-          db.batch(details.map((item) => item.raw)),
+        return timed(
+          "batch",
+          details.map((item) => item.sql).join("; "),
+          () => db.batch(details.map((item) => item.raw)),
+          details.map(({ sql, bindings }) => ({ sql, bindings })),
         );
       },
       ...(db.getBookmark ? { getBookmark: db.getBookmark.bind(db) } : {}),

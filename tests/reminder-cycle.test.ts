@@ -16,6 +16,7 @@ import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
 import { seedEventAndAdmin, queryAll } from "./helpers/context";
 import { gateNextBatch } from "./helpers/d1-batch-gate";
+import { profileD1Flow } from "./helpers/d1-flow-profile";
 import { runReminderCycle } from "../functions/_lib/services/reminders";
 import { runInviteReminders } from "../functions/_lib/services/reminders/invite-reminders";
 import type { Env } from "../functions/_lib/types";
@@ -214,6 +215,52 @@ describe("runReminderCycle", () => {
   });
 
   // ── Section 1: Attendee invites ──────────────────────────────────────────────
+
+  it("queues a full reminder pass without repeating the event's large badge template", async () => {
+    await db
+      .prepare("UPDATE events SET settings_json = ? WHERE id = ?")
+      .bind(
+        JSON.stringify({
+          badgeTemplate: { background: "x".repeat(350_000) },
+          sponsorsImageUrl: null,
+          frontend: { routes: { registration: "/custom/register/", inviteDecline: "/custom/decline/" } },
+        }),
+        eventId,
+      )
+      .run();
+    const ids = Array.from({ length: 120 }, () => crypto.randomUUID());
+    await db
+      .prepare(`INSERT INTO invites
+      (id,event_id,invitee_email,invitee_first_name,invite_type,link_secret,status,reminder_count,last_communication_at,source_type,max_uses,used_count,created_at)
+      SELECT value,?,value||'@example.test','Alice','attendee','secret-'||value,'sent',0,
+        '2026-01-01T00:00:00.000Z','direct',1,0,'2026-01-01T00:00:00.000Z'
+      FROM json_each(?)`)
+      .bind(eventId, JSON.stringify(ids))
+      .run();
+
+    const profile = profileD1Flow(db, { measurePayloadBytes: true });
+    const result = await runReminderCycle(profile.db, { ...BASE_PAYLOAD, limit: 120 });
+
+    // Keep ample headroom below production's RPC boundary, on both sides of every call.
+    for (const query of profile.summary().queries) {
+      expect(query.requestBytes).toBeLessThan(1_000_000);
+      expect(query.resultBytes).toBeLessThan(1_000_000);
+    }
+
+    expect(result.inviteRemindersQueued).toBe(120);
+    const emails = await queryAll<{ payload_json: string }>(
+      db,
+      "SELECT payload_json FROM email_outbox WHERE template_key = 'attendee_invite'",
+    );
+    expect(emails).toHaveLength(120);
+    for (const email of emails) {
+      const payload = JSON.parse(email.payload_json);
+      expect(payload.registrationUrl).toContain("/custom/register/");
+      expect(payload.declineUrl).toContain("/custom/decline/");
+      expect(payload.sponsorsImageUrl).toBeNull();
+    }
+    expect(await queryAll(db, "SELECT id FROM invites WHERE reminder_count <> 1")).toEqual([]);
+  });
 
   it("queues an email and updates state for an eligible attendee invite", async () => {
     const userId = crypto.randomUUID();
@@ -1238,6 +1285,10 @@ describe("runReminderCycle", () => {
   // ── Multiple sections in one cycle ───────────────────────────────────────────
 
   it("processes all four reminder types in a single cycle", async () => {
+    await db
+      .prepare("UPDATE events SET settings_json = ? WHERE id = ?")
+      .bind(JSON.stringify({ badgeTemplate: { background: "x".repeat(350_000) } }), eventId)
+      .run();
     // Attendee invite
     await insertAttendeeInvite(crypto.randomUUID(), eventId, "att@example.test");
 
@@ -1284,7 +1335,12 @@ describe("runReminderCycle", () => {
       userId: confUserId,
     });
 
-    const result = await runReminderCycle(db, BASE_PAYLOAD);
+    const profile = profileD1Flow(db, { measurePayloadBytes: true });
+    const result = await runReminderCycle(profile.db, BASE_PAYLOAD);
+    for (const query of profile.summary().queries) {
+      expect(query.requestBytes).toBeLessThan(100_000);
+      expect(query.resultBytes).toBeLessThan(100_000);
+    }
 
     expect(result.inviteRemindersQueued).toBe(1);
     expect(result.speakerInviteRemindersQueued).toBe(1);

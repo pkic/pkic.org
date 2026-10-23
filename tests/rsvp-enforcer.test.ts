@@ -15,6 +15,7 @@ import {
 } from "../assets/shared/constants/rsvp-enforcement";
 import { queryAll } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
+import { profileD1Flow } from "./helpers/d1-flow-profile";
 
 interface SeededRegistration {
   eventId: string;
@@ -174,9 +175,17 @@ describe("day-scoped RSVP enforcement", () => {
 
   it("warns and later downgrades only the declined day atomically", async () => {
     const seeded = await seedTwoDayRegistration();
+    await env.DB.prepare("UPDATE events SET settings_json = ? WHERE id = ?")
+      .bind(JSON.stringify({ badgeTemplate: { background: "x".repeat(350_000) } }), seeded.eventId)
+      .run();
     await recordResponse(seeded, "declined", seeded.dayOneDate, hoursFromNow(-2));
 
-    await expect(runRsvpEnforcer(env.DB, testEnv())).resolves.toMatchObject({ warningsSent: 1 });
+    const profile = profileD1Flow(env.DB, { measurePayloadBytes: true });
+    await expect(runRsvpEnforcer(profile.db, testEnv())).resolves.toMatchObject({ warningsSent: 1 });
+    for (const query of profile.summary().queries) {
+      expect(query.requestBytes).toBeLessThan(100_000);
+      expect(query.resultBytes).toBeLessThan(100_000);
+    }
     const [warning] = await queryAll<{ warning_sent_at: string; action_due_at: string }>(
       env.DB,
       "SELECT warning_sent_at, action_due_at FROM calendar_rsvp_events WHERE registration_id = ?",
