@@ -33,9 +33,14 @@ async function prepare(eventWide = false, roomId = roomA) {
     ...(eventWide ? {} : { occurrenceId: fixture.occurrenceId, roomId }),
   });
   const search = new URLSearchParams(Object.entries(query).map(([key, value]) => [key, String(value)]));
-  return callApi(env, `/api/v1/events/scan-test/offline-eligibility?${search}`, {
-    headers: headers(),
-  });
+  return callApi(
+    env,
+    `/api/v1/events/scan-test/offline-eligibility?${search}`,
+    {
+      headers: headers(),
+    },
+    { maxRoundTrips: 1 },
+  );
 }
 
 async function capture(overrides: Partial<EventScanRequest> = {}) {

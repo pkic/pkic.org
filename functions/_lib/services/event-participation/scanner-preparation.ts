@@ -1,68 +1,48 @@
-import { executeAuthorizedDatabaseBatch } from "../../db/authorization-guard";
-import { guardDatabaseBatches } from "../../db/guarded-database";
-import type { DatabaseLike } from "../../types";
+import { batchFirst } from "../../db/pagination";
+import type { DatabaseLike, Env } from "../../types";
 import { AppError } from "../../errors";
-import { prepareScannerLifecycleGuard, isScannerLifecycleGuardFailure } from "./scanner-lifecycle-guard";
-import { scannerCaptureOpenSql } from "./scanner-upload-receipts";
-import { offlineEligibility } from "./offline-eligibility";
+import { prepareEventAdminContext, readEventAdminContext } from "../events/authorized-context";
+import { eventReadIdSql } from "../events/selection";
+import { scannerCaptureOpenForEventSql } from "./scanner-upload-receipts";
+import { prepareOfflineEligibility } from "./offline-eligibility";
+import { requireScannerCapability } from "./scanner-authorization";
 import {
   enrolledOfflineEligibilityResponseSchema,
   type enrolledOfflineEligibilityQuerySchema,
 } from "../../../../assets/shared/schemas/event-offline-eligibility";
 import type { z } from "zod";
 
-/** Every preparation page rechecks its open epoch, including cached clients and quota activation. */
-export function guardScannerPreparationDatabase(
+/** Human-session authority, epoch ownership, and dated evidence share the same replica snapshot. */
+export async function readEnrolledOfflineEligibilityRequest(
   db: DatabaseLike,
-  eventId: string,
-  operatorUserId: string,
-  deviceId: string,
-  epochId: string,
-  grantId?: string,
-): DatabaseLike {
-  return guardDatabaseBatches(db, async (statements, readOnly) => {
-    const evidence = {
-      sql: `SELECT 1 FROM event_scanner_device_sessions session WHERE session.id=? AND session.event_id=? AND session.operator_user_id=? AND session.device_id=? AND session.closed_at IS NULL AND session.high_water_sequence IS NULL AND ${scannerCaptureOpenSql}
-        AND (? IS NULL OR EXISTS(SELECT 1 FROM event_offline_admission_grants grant_record WHERE grant_record.id=? AND grant_record.event_id=session.event_id AND grant_record.operator_user_id=session.operator_user_id AND grant_record.device_id=session.device_id AND grant_record.scanner_epoch_id=session.id))`,
-      bindings: [epochId, eventId, operatorUserId, deviceId, eventId, grantId ?? null, grantId ?? null],
-    };
-    if (readOnly)
-      return executeAuthorizedDatabaseBatch(
-        db,
-        evidence,
-        statements,
-        true,
-        () =>
-          new AppError(
-            409,
-            "SCANNER_PREPARATION_CLOSED",
-            "Prepare an open scanner session for this operator and device before downloading offline evidence.",
-          ),
-      );
-    const guard = prepareScannerLifecycleGuard(db, evidence);
-    try {
-      const results = await db.batch([guard.statement, ...statements, guard.cleanup]);
-      return results.slice(1, 1 + statements.length);
-    } catch (error) {
-      if (isScannerLifecycleGuardFailure(error))
-        throw new AppError(
-          409,
-          "SCANNER_PREPARATION_CLOSED",
-          "Prepare an open scanner session for this operator and device before downloading offline evidence.",
-        );
-      throw error;
-    }
-  });
-}
-export async function enrolledOfflineEligibility(
-  db: DatabaseLike,
-  eventId: string,
-  operatorUserId: string,
+  request: Request,
+  env: Pick<Env, "ADMIN_API_KEY" | "INTERNAL_SIGNING_SECRET">,
+  eventSlug: string,
   query: z.infer<typeof enrolledOfflineEligibilityQuerySchema>,
 ) {
-  const guarded = guardScannerPreparationDatabase(db, eventId, operatorUserId, query.deviceId, query.epochId);
+  const context = await prepareEventAdminContext(db, request, env, eventSlug);
+  const fallback = context ? null : await readEventAdminContext(db, request, env, eventSlug);
+  const scope = eventReadIdSql({ slug: eventSlug });
+  const read = prepareOfflineEligibility(db, { slug: eventSlug }, query);
+  const epoch = db
+    .prepare(`SELECT session.operator_user_id FROM event_scanner_device_sessions session
+    WHERE session.id=? AND session.device_id=? AND session.event_id=${scope.sql}
+      AND session.closed_at IS NULL AND session.high_water_sequence IS NULL
+      AND ${scannerCaptureOpenForEventSql("session.event_id")}`)
+    .bind(query.epochId, query.deviceId, ...scope.bindings);
+  const results = await db.batch([...(context?.statements ?? []), epoch, ...read.statements]);
+  const offset = context?.statements.length ?? 0;
+  const { actor, event } = context ? await context.decode(results.slice(0, offset)) : fallback!;
+  requireScannerCapability(actor, event.id, ["agenda:check", "agenda:admit", "agenda:attendance_record"]);
+  // Epoch ownership comes from D1, never the request. Release no badge data for another operator/device.
+  if (batchFirst<{ operator_user_id: string }>(results[offset])?.operator_user_id !== actor.id)
+    throw new AppError(
+      409,
+      "SCANNER_PREPARATION_CLOSED",
+      "Prepare an open scanner session for this operator and device before downloading offline evidence.",
+    );
   return enrolledOfflineEligibilityResponseSchema.parse({
-    ...(await offlineEligibility(guarded, eventId, operatorUserId, query)),
+    ...read.decode(results.slice(offset + 1), actor.id),
     epochId: query.epochId,
     deviceId: query.deviceId,
   });

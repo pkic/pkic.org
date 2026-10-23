@@ -1,4 +1,5 @@
-import { scannerPermission, type ScannerCapability } from "../../../../../assets/shared/event-scanner-permissions";
+import type { ScannerCapability } from "../../../../../assets/shared/event-scanner-permissions";
+import { requireScannerCapability } from "../../../../_lib/services/event-participation/scanner-authorization";
 import type { Permission } from "../../../../../assets/shared/schemas/permissions";
 import { hasPermission, requireAnyPermission, requirePermission } from "../../../../_lib/auth/permissions";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
@@ -48,11 +49,5 @@ export async function requireEventScannerPermission(
 ) {
   const db = requestDb(c);
   const { actor, event } = await readEventAdminContext(db, c.req.raw, c.env, eventSlug);
-  const context = { type: "event", id: event.id };
-  const capabilities = typeof capability === "string" ? [capability] : capability;
-  const permission = capabilities
-    .map((value) => scannerPermission((candidate) => hasPermission(actor, candidate, context), value))
-    .find(Boolean);
-  if (!permission) requirePermission(actor, capabilities[0]!, context);
-  return { actor, context, db, event, permission: permission ?? capabilities[0]! };
+  return { actor, db, event, ...requireScannerCapability(actor, event.id, capability) };
 }

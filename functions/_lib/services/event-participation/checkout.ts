@@ -1,4 +1,5 @@
-import { readScannerAttemptBasis } from "./scanner-attempt-basis";
+import { readScannerAttemptBasis, type ScannerAttemptBasis } from "./scanner-attempt-basis";
+import { prepareScannerAttemptReceipt, type ScannerAttemptReceipt } from "./scanner-attempt-receipt";
 import { prepareAttemptCapturedValue } from "./scan-attempt-capture";
 import { recordScanTargetRefusal } from "./scan-target-refusal";
 import { hashBadgeCredential } from "./badge-hash";
@@ -13,13 +14,15 @@ import { AppError } from "../../errors";
 import { nowIso } from "../../utils/time";
 import { resolvePhysicalSessionRoom } from "./session-room";
 
-type Receipt = { request_hash: string; outcome: string; reason: string; attendanceRecorded: number };
 /** Departure evidence never allocates admission, spends offline rights, or changes capacity. */
-export async function recordCheckout(db: DatabaseLike, eventId: string, scan: EventScanRequest) {
+export async function recordCheckout(
+  db: DatabaseLike,
+  eventId: string,
+  scan: EventScanRequest,
+  preparedBasis?: ScannerAttemptBasis,
+) {
   const requestHash = await hashBadgeCredential(JSON.stringify(scan));
-  const receiptSql = `SELECT a.request_hash,a.outcome,a.reason,EXISTS(SELECT 1 FROM event_attendance_observations observation WHERE observation.attempt_id=a.id) AS attendanceRecorded FROM event_scan_attempts a WHERE a.operation_id=? AND a.event_id=? AND a.operator_user_id=?`;
-  const values = [scan.operationId, eventId, scan.operatorUserId];
-  const response = (receipt: Receipt) => {
+  const response = (receipt: ScannerAttemptReceipt) => {
     if (receipt.request_hash !== requestHash)
       throw new AppError(409, "SCAN_OPERATION_REUSED", "Use a new operation ID for a different scan.");
     return eventScanResponseSchema.parse({
@@ -37,12 +40,28 @@ export async function recordCheckout(db: DatabaseLike, eventId: string, scan: Ev
     location,
     badge,
     capture: decodeCapture,
-  } = await readScannerAttemptBasis<Receipt>(db, eventId, scan, db.prepare(receiptSql).bind(...values));
+  } = preparedBasis ?? (await readScannerAttemptBasis(db, eventId, scan));
   if (replay) return response(replay);
   if (scan.occurrenceId && !location)
-    return recordScanTargetRefusal(db, eventId, scan, requestHash, "verification_required", badge?.id ?? null);
+    return recordScanTargetRefusal(
+      db,
+      eventId,
+      scan,
+      requestHash,
+      "verification_required",
+      badge?.id ?? null,
+      badge ? decodeCapture() : undefined,
+    );
   if (!scan.occurrenceId && scan.roomId)
-    return recordScanTargetRefusal(db, eventId, scan, requestHash, "wrong_location", badge?.id ?? null);
+    return recordScanTargetRefusal(
+      db,
+      eventId,
+      scan,
+      requestHash,
+      "wrong_location",
+      badge?.id ?? null,
+      badge ? decodeCapture() : undefined,
+    );
   if (
     location &&
     !eventScanRequestForRoomsSchema([
@@ -50,7 +69,15 @@ export async function recordCheckout(db: DatabaseLike, eventId: string, scan: Ev
       ...JSON.parse(location.additional_room_ids_json),
     ]).safeParse(scan).success
   )
-    return recordScanTargetRefusal(db, eventId, scan, requestHash, "wrong_location", badge?.id ?? null);
+    return recordScanTargetRefusal(
+      db,
+      eventId,
+      scan,
+      requestHash,
+      "wrong_location",
+      badge?.id ?? null,
+      badge ? decodeCapture() : undefined,
+    );
   const roomId = location ? resolvePhysicalSessionRoom(location, scan.roomId) : null;
   if (!badge)
     return eventScanResponseSchema.parse({
@@ -92,9 +119,9 @@ export async function recordCheckout(db: DatabaseLike, eventId: string, scan: Ev
       )
       .bind(crypto.randomUUID(), id),
     prepareAttemptCapturedValue(db, eventId, scan, requestHash),
-    db.prepare(receiptSql).bind(...values),
+    prepareScannerAttemptReceipt(db, eventId, scan),
   ]);
-  const committed = batchFirst<Receipt>(results[results.length - 1]);
+  const committed = batchFirst<ScannerAttemptReceipt>(results[results.length - 1]);
   if (!committed) throw new AppError(409, "SCAN_OPERATION_REUSED", "Use a new operation ID for a different scan.");
   return response(committed);
 }

@@ -14,6 +14,7 @@ import { offlineScanRecordSchema, eventScanRequestSchema } from "../assets/share
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { offlineEligibility } from "../functions/_lib/services/event-participation/offline-eligibility";
 import { mutateBeforeMatchingQuery } from "./helpers/database-races";
+import { profileD1Flow } from "./helpers/d1-flow-profile";
 
 const fixture = createEventScannerFixture();
 const { eventId, userId, operatorId, occurrenceId, observedAt, scan, scanBody } = fixture;
@@ -430,10 +431,18 @@ describe("Event agenda scan evidence", () => {
     const body = scanBody({ action: "lead", sponsorId: sponsorshipId, consentConfirmed: true, occurrenceId: null });
     expect(await (await scan(body)).json()).toMatchObject({ outcome: "warning", recorded: true });
     await leadConsent();
-    const result = await (
-      await scan(scanBody({ action: "lead", sponsorId: sponsorshipId, consentConfirmed: true, occurrenceId: null }))
-    ).json();
+    const accepted = scanBody({ action: "lead", sponsorId: sponsorshipId, consentConfirmed: true, occurrenceId: null });
+    const init = {
+      method: "POST",
+      headers: { authorization: `Bearer ${fixture.token}`, "content-type": "application/json" },
+      body: JSON.stringify(accepted),
+    };
+    const profile = profileD1Flow(env.DB);
+    const result = await (await callApi({ ...env, DB: profile.db }, "/api/v1/events/scan-test/scans", init)).json();
+    expect(profile.summary().roundTrips).toBe(2);
     expect(result).toMatchObject({ outcome: "eligible", recorded: true, attendanceRecorded: false });
+    const replay = await callApi(env, "/api/v1/events/scan-test/scans", init, { maxRoundTrips: 1 });
+    expect(await replay.json()).toEqual(result);
     expect(JSON.stringify(result)).not.toContain("example.test");
     expect(
       (await env.DB.prepare("SELECT COUNT(*) AS total FROM event_sponsor_leads").first<{ total: number }>())?.total,

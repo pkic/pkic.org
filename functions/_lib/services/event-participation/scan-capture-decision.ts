@@ -2,11 +2,12 @@ import type { EventScanRequest } from "../../../../assets/shared/schemas/event-p
 import type { DatabaseLike, D1StatementResult } from "../../types";
 import { AppError } from "../../errors";
 import { prepareAttendanceCapture } from "./attendance-capture-context";
+import type { EventReadSelection } from "../events/selection";
 
 /** Resolve after recognizing the badge so unavailable history still leaves an unsuccessful attempt. */
 export function prepareScanCaptureDecision(
   db: DatabaseLike,
-  eventId: string,
+  eventId: EventReadSelection,
   scan: EventScanRequest,
   evidenceOnly = false,
 ) {
@@ -27,9 +28,9 @@ export function prepareScanCaptureDecision(
   );
   return {
     statements: read.statements,
-    decode(results: D1StatementResult[]) {
+    decode(results: D1StatementResult[], canonicalEventId?: string) {
       try {
-        const { resolved, operational } = read.decode(results);
+        const { resolved, operational } = read.decode(results, canonicalEventId);
         const context = resolved.context;
         const missingPublication =
           scan.capturePublicationRevision === null &&
