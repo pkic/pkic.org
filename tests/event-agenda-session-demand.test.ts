@@ -384,6 +384,40 @@ describe("Live organizer session demand projection", () => {
         )
       ).status,
     ).toBe(403);
+    const foreignOccurrence = crypto.randomUUID();
+    const foreignSpeaker = await insertUser(env.DB);
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO event_agenda_occurrences(id,event_id,title,visibility) VALUES(?,?,'Private speaker session','private')",
+      ).bind(foreignOccurrence, foreignEvent),
+      env.DB.prepare("INSERT INTO event_agenda_occurrence_speakers(occurrence_id,user_id) VALUES(?,?),(?,?)").bind(
+        foreignOccurrence,
+        foreignSpeaker,
+        alpha,
+        reader,
+      ),
+      env.DB.prepare(
+        "INSERT INTO permission_grants(id,user_id,permission,context_type,context_id,created_at) VALUES(?,?,'agenda:participants_manage','event',?,?)",
+      ).bind(crypto.randomUUID(), reader, eventId, nowIso()),
+    ]);
+    const ownManagement = await request(`/agenda/occurrences/${alpha}/management`, "GET", undefined, readerToken);
+    expect(ownManagement.status).toBe(200);
+    expect(await ownManagement.json()).toMatchObject({ canDelegate: true, speakers: [{ userId: reader }] });
+    const mismatchedManagement = await request(
+      `/agenda/occurrences/${foreignOccurrence}/management`,
+      "GET",
+      undefined,
+      readerToken,
+    );
+    expect(mismatchedManagement.status).toBe(200);
+    expect(await mismatchedManagement.json()).toEqual({ canDelegate: true, speakers: [] });
+    const foreignManagement = await callApi(
+      env,
+      `/api/v1/events/foreign-reader-demand/agenda/occurrences/${foreignOccurrence}/management`,
+      { headers: { authorization: `Bearer ${readerToken}` } },
+      { maxRoundTrips: 1 },
+    );
+    expect(foreignManagement.status).toBe(403);
     const before = await states();
     await env.DB.prepare("UPDATE sessions SET revoked_at=? WHERE user_id=?").bind(nowIso(), reader).run();
     expect((await request("/agenda/occurrences", "GET", undefined, readerToken)).status).toBe(401);
