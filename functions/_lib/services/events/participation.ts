@@ -21,7 +21,7 @@ export function prepareEventParticipation(db: DatabaseLike, userId: string | nul
   const filter = eventReadSelectionSql("e.id", selection);
   return db
     .prepare(
-      `SELECT e.id, r.id AS registrationId, r.status AS registrationStatus,
+      `${filter.withSql ? `WITH ${filter.withSql} ` : ""}SELECT e.id, r.id AS registrationId, r.status AS registrationStatus,
       (SELECT group_concat(DISTINCT p.status) FROM session_proposals p WHERE p.event_id = e.id AND p.deleted_at IS NULL AND p.proposer_user_id = ?) AS proposalStates,
       (SELECT group_concat(DISTINCT ps.status) FROM proposal_speakers ps JOIN session_proposals p ON p.id = ps.proposal_id AND p.deleted_at IS NULL WHERE p.event_id = e.id AND ps.user_id = ?) AS speakerStates,
       (SELECT COUNT(*) FROM session_proposals p WHERE p.event_id = e.id AND p.deleted_at IS NULL
@@ -31,7 +31,15 @@ export function prepareEventParticipation(db: DatabaseLike, userId: string | nul
       FROM events e LEFT JOIN registrations r ON r.event_id = e.id AND r.user_id = ?
       WHERE ${filter.sql}`,
     )
-    .bind(userId, userId, userId, userId, userId, ...filter.bindings);
+    .bind(
+      ...(filter.withSql ? filter.bindings : []),
+      userId,
+      userId,
+      userId,
+      userId,
+      userId,
+      ...(filter.withSql ? [] : filter.bindings),
+    );
 }
 
 export function decodeEventParticipation(rows: EventParticipationRow[]) {

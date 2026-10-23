@@ -425,7 +425,7 @@ async function materializeString(
   db: DatabaseLike,
   signingSecret: string,
   value: string,
-  cache: Map<string, string>,
+  cache: Map<string, Promise<string>>,
   authorizedMarkers: Map<string, AuthorizedQueuedMarker>,
 ): Promise<string> {
   const markers = Array.from(new Set(value.match(queuedMarkerPattern) ?? [])).filter((marker) =>
@@ -433,61 +433,68 @@ async function materializeString(
   );
   if (markers.length === 0) return value;
 
-  await Promise.all(
-    markers.map(async (marker) => {
+  const tokens = await Promise.all(
+    markers.map((marker) => {
       const canonicalMarker = canonicalQueuedMarker(marker);
-      if (cache.has(canonicalMarker)) return;
-      const descriptor = parseQueuedDescriptor(marker);
-      if (!descriptor) throw new AppError(500, "CAPABILITY_DESCRIPTOR_INVALID", "Queued capability is invalid");
-      try {
-        const authorization = authorizedMarkers.get(canonicalMarker);
-        if (descriptor.purpose === "speaker_manage" && !authorization?.recipientNormalizedEmail) {
-          throw new AppError(410, "CAPABILITY_RESOURCE_STALE", "Queued speaker capability is not recipient-bound");
-        }
-        const nowSeconds = Math.floor(Date.now() / 1000);
-        const remainingTtlSeconds = descriptor.expiresAtSeconds
-          ? descriptor.expiresAtSeconds - nowSeconds
-          : descriptor.ttlSeconds;
-        if (remainingTtlSeconds <= 0) {
-          throw new AppError(410, "CAPABILITY_RESOURCE_STALE", "Queued capability delivery deadline expired");
-        }
-        const token = await issueDatabaseCapability({
-          db,
-          signingSecret,
-          purpose: descriptor.purpose,
-          resourceId: descriptor.resourceId,
-          ttlSeconds: Math.min(descriptor.ttlSeconds, remainingTtlSeconds),
-          expectedLinkSecretFingerprint: descriptor.linkSecretFingerprint,
-          expectedRecipientNormalizedEmail:
-            descriptor.purpose === "speaker_manage" ? authorization?.recipientNormalizedEmail : undefined,
-        });
-        cache.set(canonicalMarker, token);
-      } catch (error) {
-        if (
-          error instanceof AppError &&
-          (error.code === "CAPABILITY_RESOURCE_NOT_FOUND" || error.code === "CAPABILITY_RESOURCE_STALE")
-        ) {
-          throw new AppError(410, "CAPABILITY_RESOURCE_STALE", "Queued capability resource is no longer available", {
-            purpose: descriptor.purpose,
-            resourceId: descriptor.resourceId,
-          });
-        }
-        throw error;
+      let pending = cache.get(canonicalMarker);
+      if (!pending) {
+        pending = (async () => {
+          const descriptor = parseQueuedDescriptor(marker);
+          if (!descriptor) throw new AppError(500, "CAPABILITY_DESCRIPTOR_INVALID", "Queued capability is invalid");
+          try {
+            const authorization = authorizedMarkers.get(canonicalMarker);
+            if (descriptor.purpose === "speaker_manage" && !authorization?.recipientNormalizedEmail) {
+              throw new AppError(410, "CAPABILITY_RESOURCE_STALE", "Queued speaker capability is not recipient-bound");
+            }
+            const nowSeconds = Math.floor(Date.now() / 1000);
+            const remainingTtlSeconds = descriptor.expiresAtSeconds
+              ? descriptor.expiresAtSeconds - nowSeconds
+              : descriptor.ttlSeconds;
+            if (remainingTtlSeconds <= 0) {
+              throw new AppError(410, "CAPABILITY_RESOURCE_STALE", "Queued capability delivery deadline expired");
+            }
+            return await issueDatabaseCapability({
+              db,
+              signingSecret,
+              purpose: descriptor.purpose,
+              resourceId: descriptor.resourceId,
+              ttlSeconds: Math.min(descriptor.ttlSeconds, remainingTtlSeconds),
+              expectedLinkSecretFingerprint: descriptor.linkSecretFingerprint,
+              expectedRecipientNormalizedEmail:
+                descriptor.purpose === "speaker_manage" ? authorization?.recipientNormalizedEmail : undefined,
+            });
+          } catch (error) {
+            if (
+              error instanceof AppError &&
+              (error.code === "CAPABILITY_RESOURCE_NOT_FOUND" || error.code === "CAPABILITY_RESOURCE_STALE")
+            ) {
+              throw new AppError(
+                410,
+                "CAPABILITY_RESOURCE_STALE",
+                "Queued capability resource is no longer available",
+                {
+                  purpose: descriptor.purpose,
+                  resourceId: descriptor.resourceId,
+                },
+              );
+            }
+            throw error;
+          }
+        })();
+        // Cache the promise before another payload field starts the same lookup.
+        cache.set(canonicalMarker, pending);
       }
+      return pending;
     }),
   );
-
-  return markers.reduce(
-    (result, marker) => replaceQueuedMarker(result, marker, cache.get(canonicalQueuedMarker(marker))!),
-    value,
-  );
+  return markers.reduce((result, marker, index) => replaceQueuedMarker(result, marker, tokens[index]!), value);
 }
 
 async function materializeValue(
   db: DatabaseLike,
   signingSecret: string,
   value: unknown,
-  cache: Map<string, string>,
+  cache: Map<string, Promise<string>>,
   authorizedMarkers: Map<string, AuthorizedQueuedMarker>,
 ): Promise<unknown> {
   if (typeof value === "string") return materializeString(db, signingSecret, value, cache, authorizedMarkers);

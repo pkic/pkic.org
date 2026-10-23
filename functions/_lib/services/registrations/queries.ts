@@ -72,17 +72,17 @@ export async function getRegistrationByIdForEvent(
   eventId: string,
   registrationId: string,
 ): Promise<RegistrationRecord> {
-  const registration = await first<RegistrationRecord>(
-    db,
-    `SELECT ${REGISTRATION_COLUMNS}
-       FROM registrations
-      WHERE id = ? AND event_id = ?`,
-    [registrationId, eventId],
-  );
+  const registration = await prepareRegistrationByIdForEvent(db, eventId, registrationId).first<RegistrationRecord>();
   if (!registration) {
     throw new AppError(404, "REGISTRATION_NOT_FOUND", "Registration not found for this event");
   }
   return registration;
+}
+
+export function prepareRegistrationByIdForEvent(db: DatabaseLike, eventId: string, registrationId: string) {
+  return db
+    .prepare(`SELECT ${REGISTRATION_COLUMNS} FROM registrations WHERE id = ? AND event_id = ?`)
+    .bind(registrationId, eventId);
 }
 
 export async function listRegistrationsForEvent(db: DatabaseLike, eventId: string): Promise<RegistrationRecord[]> {

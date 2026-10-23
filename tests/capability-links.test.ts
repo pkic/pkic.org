@@ -14,6 +14,8 @@ import {
   verifyStatelessCapabilityToken,
 } from "../functions/_lib/services/capability-links";
 import { buildAddProposalSpeaker, queuedSpeakerManageToken } from "../functions/_lib/services/proposal-speakers";
+import { profileD1Flow } from "./helpers/d1-flow-profile";
+import { enforceD1RoundTripBudget } from "./helpers/d1-round-trip-budget";
 import { resetDb } from "./helpers/reset-db";
 import { run } from "../functions/_lib/db/queries";
 import { nowIso } from "../functions/_lib/utils/time";
@@ -228,6 +230,33 @@ describe("public capability links", () => {
       }),
     ).resolves.toMatchObject({ ok: true, resourceId: "registration-capability" });
     expect(materializedIcs.split("\r\n").every((line) => textEncoder.encode(line).length <= 75)).toBe(true);
+  });
+
+  it("shares an in-flight capability lookup across repeated nested and folded email values", async () => {
+    await seedRegistrationCapability();
+    const marker = queuedCapabilityToken("registration_manage", "registration-capability");
+    const folded = `${marker.slice(0, 24)}\r\n ${marker.slice(24)}`;
+    const payload = authorizeQueuedCapabilityLinks(
+      { url: marker, nested: [marker, { repeated: marker }], calendar: folded },
+      [marker],
+    );
+    const profile = profileD1Flow(env.DB, { latencyMs: 10 });
+    const result = await materializeQueuedCapabilityLinks(
+      profile.db,
+      { INTERNAL_SIGNING_SECRET: signingSecret },
+      payload,
+    );
+    enforceD1RoundTripBudget(profile.summary(), { maxRoundTrips: 1 }, "one email capability generation");
+    expect(result.url).toMatch(/^pkc1_/);
+    expect(result.nested).toEqual([result.url, { repeated: result.url }]);
+    expect(String(result.calendar).replace(/\r\n /g, "")).toBe(result.url);
+
+    // Sharing is local to one delivery. A later attempt must observe rotation.
+    await env.DB.prepare("UPDATE registrations SET manage_link_secret=? WHERE id=?")
+      .bind(newCapabilityLinkSecret(), "registration-capability")
+      .run();
+    const later = await materializeQueuedCapabilityLinks(env.DB, { INTERNAL_SIGNING_SECRET: signingSecret }, payload);
+    expect(later.url).not.toBe(result.url);
   });
 
   it("binds queued invite markers to the current secret generation", async () => {

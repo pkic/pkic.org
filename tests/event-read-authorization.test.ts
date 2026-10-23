@@ -45,7 +45,7 @@ describe("live event-read authorization", () => {
   beforeEach(resetDb);
 
   it.each(["revoke", "expire", "disable"] as const)(
-    "rejects a management list when authority changes after authentication: %s",
+    "uses current authority for a combined event list snapshot: %s",
     async (change) => {
       const { reader, grantId, eventSlug } = await fixture();
       const path = `/api/v1/events?q=${eventSlug}`;
@@ -63,11 +63,17 @@ describe("live event-read authorization", () => {
             .run();
         }
       });
-      expect((await request(path, reader.token, db)).status).toBe(403);
+      const response = await request(path, reader.token, db);
+      expect(response.status).toBe(change === "disable" ? 401 : 200);
+      if (response.ok) {
+        const result = eventsListResponseSchema.parse(await response.json());
+        expect(result.events).toEqual([]);
+        expect(result.page.total).toBe(0);
+      }
     },
   );
 
-  it("rejects management statistics when permission is revoked after page selection", async () => {
+  it("withholds management statistics when permission is revoked before the combined snapshot", async () => {
     const { reader, grantId } = await fixture();
     const db = mutateBeforeMatchingQuery(
       env.DB,
@@ -78,7 +84,11 @@ describe("live event-read authorization", () => {
           .run();
       },
     );
-    expect((await request("/api/v1/events", reader.token, db)).status).toBe(403);
+    const response = await request("/api/v1/events", reader.token, db);
+    expect(response.status).toBe(200);
+    const result = eventsListResponseSchema.parse(await response.json());
+    expect(result.events).toEqual([]);
+    expect(result.page.total).toBe(0);
   });
 
   it.each(["invitation_only", "public"] as const)(

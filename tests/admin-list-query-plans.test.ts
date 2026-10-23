@@ -52,7 +52,7 @@ describe("admin list D1 query plans", () => {
     expect(statsQuery.sql).toContain("e.id IN (SELECT value FROM json_each(?))");
     expect(occurrences(statsQuery.sql, /\?/g)).toBe(1);
     expect(statsQuery.bindings).toHaveLength(1);
-    expect(JSON.parse(statsQuery.bindings[0])).toEqual(eventIds);
+    expect(JSON.parse(String(statsQuery.bindings[0]))).toEqual(eventIds);
 
     const plan = await env.DB.prepare(`EXPLAIN QUERY PLAN ${statsQuery.sql}`)
       .bind(...statsQuery.bindings)

@@ -66,10 +66,15 @@ export function prepareEventAudienceSponsors(
     { type: "event_sponsor", idSql: "s.id" },
   );
   const filter = eventReadSelectionSql("s.event_id", selection);
+  const withSql = filter.withSql
+    ? `WITH ${filter.withSql}, authorized_event_sponsors AS NOT MATERIALIZED (SELECT s.id FROM sponsorships s WHERE EXISTS(${authority.sql})) `
+    : "";
+  const authorityJoin = filter.withSql ? "JOIN authorized_event_sponsors authorized ON authorized.id=s.id" : "";
+  const authoritySql = filter.withSql ? "1" : `EXISTS(${authority.sql})`;
   return db
-    .prepare(`SELECT s.id,s.event_id,COALESCE(o.name,s.non_member_name,'Sponsor') AS name
-    FROM sponsorships s LEFT JOIN organizations o ON o.id=s.organization_id
-    WHERE ${filter.sql} AND s.sponsor_type='event' AND s.pipeline_stage='active' AND EXISTS(${authority.sql})
+    .prepare(`${withSql}SELECT s.id,s.event_id,COALESCE(o.name,s.non_member_name,'Sponsor') AS name
+    FROM sponsorships s ${authorityJoin} LEFT JOIN organizations o ON o.id=s.organization_id
+    WHERE ${filter.sql} AND s.sponsor_type='event' AND s.pipeline_stage='active' AND ${authoritySql}
     ORDER BY s.event_id,name,s.id`)
     .bind(...filter.bindings, ...authority.bindings);
 }

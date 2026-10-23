@@ -95,8 +95,10 @@ export async function fetchViewerEventState(
 export function prepareViewerEventStates(db: DatabaseLike, userId: string | null, selection: EventReadSelection) {
   const filter = eventReadSelectionSql("r.event_id", selection);
   return db
-    .prepare(`${VIEWER_STATE_SELECT} WHERE r.user_id=? AND r.status<>'cancelled' AND ${filter.sql}`)
-    .bind(userId, ...filter.bindings);
+    .prepare(
+      `${filter.withSql ? `WITH ${filter.withSql} ` : ""}${VIEWER_STATE_SELECT} WHERE r.user_id=? AND r.status<>'cancelled' AND ${filter.sql}`,
+    )
+    .bind(...(filter.withSql ? filter.bindings : []), userId, ...(filter.withSql ? [] : filter.bindings));
 }
 
 export function decodeViewerEventStates(rows: EventViewerStateRow[]): Map<string, EventViewerState> {

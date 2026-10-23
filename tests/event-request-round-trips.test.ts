@@ -1,7 +1,10 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { eventDetailResponseSchema } from "../assets/shared/schemas/event-management";
+import { eventDetailResponseSchema, eventsListResponseSchema } from "../assets/shared/schemas/event-management";
 import { createEventScannerFixture } from "./helpers/event-scanner-fixture";
+import { readEventAdminContext } from "../functions/_lib/services/events/authorized-context";
+import { buildRegistrationManageView } from "../functions/_lib/services/registrations/manage-view";
+import { getRegistrationById } from "../functions/_lib/services/registrations/queries";
 import { createAdminSession } from "./helpers/auth";
 import { callApi } from "./helpers/app";
 import { profileD1Flow } from "./helpers/d1-flow-profile";
@@ -77,6 +80,68 @@ describe("one D1 round trip includes JWT context and event data", () => {
     );
     expect(response.status).toBe(404);
   });
+});
+
+describe("one D1 round trip for bounded event listing", () => {
+  it.each(["anonymous", "attendee", "management"] as const)(
+    "includes auth, pagination, count and %s enrichment in one batch",
+    async (capacity) => {
+      await env.DB.prepare("UPDATE events SET visibility='public' WHERE id=?").bind(f.eventId).run();
+      const token =
+        capacity === "anonymous"
+          ? null
+          : capacity === "management"
+            ? f.token
+            : await createAdminSession(env.DB, f.userId, crypto.randomUUID());
+      for (const offset of [0, 1]) {
+        const response = await callApi(
+          env,
+          `/api/v1/events?q=scan-test&limit=1&offset=${offset}${capacity === "management" ? "&sort=-total_registrations" : ""}`,
+          { headers: token ? { authorization: `Bearer ${token}` } : {} },
+          strict,
+        );
+        expect(response.status, await response.clone().text()).toBe(200);
+        const body = eventsListResponseSchema.parse(await response.json());
+        expect(body.page.total).toBe(1);
+        expect(body.events).toHaveLength(offset === 0 ? 1 : 0);
+        if (offset === 0) {
+          expect("totalRegistrations" in body.events[0]).toBe(capacity === "management");
+          if (capacity === "attendee") expect(body.events[0].participation?.registrationId).toBeDefined();
+        }
+      }
+    },
+  );
+
+  it("refuses management-only sorting without management authority", async () => {
+    const response = await callApi(env, "/api/v1/events?sort=total_registrations", undefined, strict);
+    expect(response.status).toBe(400);
+  });
+});
+
+it("shares the canonical human actor and owning event lookup in one batch", async () => {
+  const profile = profileD1Flow(env.DB);
+  const context = await readEventAdminContext(
+    profile.db,
+    new Request("https://app.test/api/v1/events/scan-test", { headers: { authorization: `Bearer ${f.token}` } }),
+    env,
+    "scan-test",
+  );
+  enforceD1RoundTripBudget(profile.summary(), strict, "shared event authorization context");
+  expect(context.actor.id).toBe(f.operatorId);
+  expect(context.event.id).toBe(f.eventId);
+});
+
+it("loads the shared registration management projection in one resource batch", async () => {
+  const row = await env.DB.prepare("SELECT id FROM registrations WHERE event_id=? AND user_id=?")
+    .bind(f.eventId, f.userId)
+    .first<{ id: string }>();
+  const registration = await getRegistrationById(env.DB, row!.id);
+  const profile = profileD1Flow(env.DB);
+  const result = await buildRegistrationManageView(profile.db, registration, "https://app.test");
+  enforceD1RoundTripBudget(profile.summary(), strict, "registration management projection");
+  expect(result.registration.id).toBe(registration.id);
+  expect(result.event.id).toBe(f.eventId);
+  expect(result.sponsorSharing.allowed).toBe(false);
 });
 
 describe("D1 budget instrumentation uses real binding calls", () => {

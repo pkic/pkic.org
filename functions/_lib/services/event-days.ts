@@ -78,7 +78,11 @@ export function attendanceOptionLabel(days: readonly EventDayRecord[], value: st
 }
 
 export async function listEventDays(db: DatabaseLike, eventId: string): Promise<EventDayRecord[]> {
-  return all<EventDayRecord>(db, EVENT_DAYS_LIST_SQL, [eventId]);
+  return (await prepareEventDays(db, eventId).all<EventDayRecord>()).results;
+}
+
+export function prepareEventDays(db: DatabaseLike, eventId: string) {
+  return db.prepare(EVENT_DAYS_LIST_SQL).bind(eventId);
 }
 
 function eventDayAttendanceCountsSql(includePendingConfirmation: boolean) {
@@ -127,36 +131,32 @@ export async function listConfiguredEventDaysWithCounts(db: DatabaseLike, eventI
   }));
 }
 
-export async function getRegistrationDayAttendance(
-  db: DatabaseLike,
-  registrationId: string,
-): Promise<
-  Array<{
-    dayDate: string;
-    attendanceType: DayAttendanceType;
-    label: string | null;
-    /** When the day was first held on this registration. */
-    heldSince: string;
-    /** When the day's attendance last changed. */
-    changedAt: string;
-  }>
-> {
-  return all<{
-    dayDate: string;
-    attendanceType: DayAttendanceType;
-    label: string | null;
-    heldSince: string;
-    changedAt: string;
-  }>(
-    db,
-    `SELECT ed.day_date AS dayDate, rda.attendance_type AS attendanceType, ed.label AS label,
+export interface RegistrationDayAttendanceRow {
+  dayDate: string;
+  attendanceType: DayAttendanceType;
+  label: string | null;
+  /** When the day was first held on this registration. */
+  heldSince: string;
+  /** When the day's attendance last changed. */
+  changedAt: string;
+}
+
+export function prepareRegistrationDayAttendance(db: DatabaseLike, registrationId: string) {
+  return db
+    .prepare(`SELECT ed.day_date AS dayDate, rda.attendance_type AS attendanceType, ed.label AS label,
             rda.created_at AS heldSince, rda.updated_at AS changedAt
      FROM registration_day_attendance rda
      JOIN event_days ed ON ed.id = rda.event_day_id
      WHERE rda.registration_id = ?
-     ORDER BY ed.sort_order ASC, ed.day_date ASC`,
-    [registrationId],
-  );
+     ORDER BY ed.sort_order ASC, ed.day_date ASC`)
+    .bind(registrationId);
+}
+
+export async function getRegistrationDayAttendance(
+  db: DatabaseLike,
+  registrationId: string,
+): Promise<RegistrationDayAttendanceRow[]> {
+  return (await prepareRegistrationDayAttendance(db, registrationId).all<RegistrationDayAttendanceRow>()).results;
 }
 
 function normalizeSelections(selections?: DayAttendanceSelection[]): DayAttendanceSelection[] {
@@ -204,11 +204,21 @@ export async function countRegisteredByEventDay(
   db: DatabaseLike,
   eventId: string,
 ): Promise<Map<string, Map<string, number>>> {
-  const rows = await all<{ event_day_id: string; attendance_type: string; count: number }>(
-    db,
-    eventDayAttendanceCountsSql(true),
-    [eventId],
-  );
+  const rows = await prepareRegisteredEventDayCounts(db, eventId).all<EventDayAttendanceCountRow>();
+  return decodeRegisteredEventDayCounts(rows.results);
+}
+
+export interface EventDayAttendanceCountRow {
+  event_day_id: string;
+  attendance_type: string;
+  count: number;
+}
+
+export function prepareRegisteredEventDayCounts(db: DatabaseLike, eventId: string) {
+  return db.prepare(eventDayAttendanceCountsSql(true)).bind(eventId);
+}
+
+export function decodeRegisteredEventDayCounts(rows: EventDayAttendanceCountRow[]) {
   const map = new Map<string, Map<string, number>>();
   for (const row of rows) {
     if (!map.has(row.event_day_id)) map.set(row.event_day_id, new Map());

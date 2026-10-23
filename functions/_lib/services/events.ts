@@ -15,11 +15,15 @@ export type { EventRecord, EventTermRecord } from "./event-types";
 export * from "./event-presentation";
 
 export async function getEventBySlug(db: DatabaseLike, slug: string): Promise<EventRecord> {
-  const event = await first<EventRecord>(db, `SELECT ${EVENT_COLUMNS} FROM events WHERE slug = ?`, [slug]);
+  const event = await prepareEventBySlug(db, slug).first<EventRecord>();
   if (!event) {
     throw new AppError(404, "EVENT_NOT_FOUND", `Event '${slug}' not found`);
   }
   return event;
+}
+
+export function prepareEventBySlug(db: DatabaseLike, slug: string) {
+  return db.prepare(`SELECT ${EVENT_COLUMNS} FROM events WHERE slug = ?`).bind(slug);
 }
 
 export async function eventSlugExists(db: DatabaseLike, slug: string): Promise<boolean> {
@@ -27,9 +31,14 @@ export async function eventSlugExists(db: DatabaseLike, slug: string): Promise<b
 }
 
 export async function getEventById(db: DatabaseLike, eventId: string): Promise<EventRecord> {
-  const event = await first<EventRecord>(db, `SELECT ${EVENT_COLUMNS} FROM events WHERE id = ?`, [eventId]);
+  const event = await prepareEventById(db, eventId).first<EventRecord>();
   if (!event) throw new AppError(404, "EVENT_NOT_FOUND", "Event not found");
   return event;
+}
+
+/** Share the canonical event row with a larger read snapshot. */
+export function prepareEventById(db: DatabaseLike, eventId: string) {
+  return db.prepare(`SELECT ${EVENT_COLUMNS} FROM events WHERE id = ?`).bind(eventId);
 }
 
 export async function getRequiredTerms(

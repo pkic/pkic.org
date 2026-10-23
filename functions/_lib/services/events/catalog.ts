@@ -14,7 +14,7 @@ import {
   type EventViewerState,
 } from "../../../../assets/shared/schemas/event-management";
 import { queryPage } from "../../db/pagination";
-import { buildD1JsonMembershipFilter } from "../../db/json-membership";
+import { eventReadSelectionSql, type EventReadSelection } from "./read-selection";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import { activeEffectiveInviteExpirySql, effectiveInviteExpirySql } from "../../invite-validity";
@@ -136,11 +136,21 @@ const AUDIENCE_SORT_COLUMNS = {
   ends_at: "event.ends_at",
 } satisfies Record<(typeof EVENT_LIST_SORT_COLUMNS)[number], string>;
 
-export function buildEventsPageQuery(viewer: EventAudienceViewer, query: EventsListQuery) {
+export function buildEventsPageQuery(
+  viewer: EventAudienceViewer,
+  query: EventsListQuery,
+  excludeGlobalManagement = false,
+) {
   if (query.sort && !isAudienceSortColumn(query.sort)) {
     throw new AppError(400, "INVALID_SORT", "This sort column requires event management permission");
   }
-  const { whereSql, bindings } = buildEventsListPredicate(viewer, query);
+  const audience = buildEventAudiencePredicate("event", viewer);
+  if (excludeGlobalManagement && viewer.admin) {
+    const evidence = permissionsAuthorizationEvidence(viewer.admin, [{ permission: "events:read" }]);
+    audience.sql = `(${audience.sql}) AND NOT EXISTS (${evidence.sql})`;
+    audience.bindings.push(...evidence.bindings);
+  }
+  const { whereSql, bindings } = buildEventsListPredicate(viewer, query, audience);
   return {
     sql: `${EVENT_AUDIENCE_SELECT}
       FROM events event
@@ -157,7 +167,7 @@ export function buildEventsPageQuery(viewer: EventAudienceViewer, query: EventsL
   };
 }
 
-function isAudienceSortColumn(sort: string): boolean {
+export function isAudienceSortColumn(sort: string): boolean {
   return Object.hasOwn(AUDIENCE_SORT_COLUMNS, sort.replace(/^-/, ""));
 }
 
@@ -193,7 +203,7 @@ const EVENT_MANAGEMENT_SELECT = `SELECT event.id, event.slug, event.name, event.
   owner_group_type.singular_label AS owner_group_type_label,
   event.source_path, event.base_path, event.settings_json, event.city, event.country, event.updated_at`;
 
-interface EventManagementRow {
+export interface EventManagementRow {
   settings_json: string;
   city: string | null;
   country: CountryCode | null;
@@ -257,10 +267,10 @@ export function buildManagedEventsPageQuery(viewer: EventAudienceViewer, query: 
  * JSON-membership filter keeps this at one D1 binding even when the shared
  * list contract returns its maximum 200 rows.
  */
-export function buildEventRegistrationStatsQuery(eventIds: readonly string[]) {
-  const eventFilter = buildD1JsonMembershipFilter("e.id", eventIds);
+export function buildEventRegistrationStatsQuery(selection: EventReadSelection) {
+  const eventFilter = eventReadSelectionSql("e.id", selection);
   return {
-    sql: `WITH page_events AS (
+    sql: `WITH ${eventFilter.withSql ? `${eventFilter.withSql}, ` : ""}page_events AS (
          SELECT e.id AS event_id
            FROM events e
           WHERE ${eventFilter.sql}
@@ -297,7 +307,7 @@ export function buildEventRegistrationStatsQuery(eventIds: readonly string[]) {
   };
 }
 
-interface EventStatsRow {
+export interface EventStatsRow {
   event_id: string;
   total_registrations: number;
   confirmed_registrations: number;
@@ -323,34 +333,42 @@ export async function listManagedEvents(db: DatabaseLike, viewer: EventAudienceV
     for (const row of result.results) statsByEvent.set(row.event_id, row);
   }
   const events = page.rows.map((row) =>
-    eventManagementSummarySchema.parse({
-      participation: participation.get(row.id),
-      id: row.id,
-      slug: row.slug,
-      name: row.name,
-      heroImageUrl: resolveHeroImageUrl(row),
-      timezone: row.timezone,
-      startsAt: row.starts_at,
-      endsAt: row.ends_at,
-      profileKey: row.profile_key,
-      sourceMode: row.source_mode,
-      registrationPolicy: normalizeEventRegistrationPolicy(row.registration_mode),
-      visibility: row.visibility,
-      inviteLimitAttendee: row.invite_limit_attendee,
-      updatedAt: row.updated_at,
-      ownerGroupId: row.owner_group_id,
-      ownerGroupName: row.owner_group_name,
-      ownerGroupTypeLabel: row.owner_group_type_label,
-      sourcePath: row.source_path,
-      basePath: row.base_path,
-      city: row.city,
-      country: row.country,
-      totalRegistrations: statsByEvent.get(row.id)?.total_registrations ?? 0,
-      confirmedRegistrations: statsByEvent.get(row.id)?.confirmed_registrations ?? 0,
-      pendingInvites: statsByEvent.get(row.id)?.pending_invites ?? 0,
-    }),
+    mapEventManagementSummary(row, statsByEvent.get(row.id), participation.get(row.id)),
   );
   return { events, total: page.total };
+}
+
+export function mapEventManagementSummary(
+  row: EventManagementRow,
+  stats?: EventStatsRow,
+  participation?: EventManagementSummary["participation"],
+) {
+  return eventManagementSummarySchema.parse({
+    participation,
+    id: row.id,
+    slug: row.slug,
+    name: row.name,
+    heroImageUrl: resolveHeroImageUrl(row),
+    timezone: row.timezone,
+    startsAt: row.starts_at,
+    endsAt: row.ends_at,
+    profileKey: row.profile_key,
+    sourceMode: row.source_mode,
+    registrationPolicy: normalizeEventRegistrationPolicy(row.registration_mode),
+    visibility: row.visibility,
+    inviteLimitAttendee: row.invite_limit_attendee,
+    updatedAt: row.updated_at,
+    ownerGroupId: row.owner_group_id,
+    ownerGroupName: row.owner_group_name,
+    ownerGroupTypeLabel: row.owner_group_type_label,
+    sourcePath: row.source_path,
+    basePath: row.base_path,
+    city: row.city,
+    country: row.country,
+    totalRegistrations: stats?.total_registrations ?? 0,
+    confirmedRegistrations: stats?.confirmed_registrations ?? 0,
+    pendingInvites: stats?.pending_invites ?? 0,
+  });
 }
 
 export async function getVisibleEventAudienceDetail(
