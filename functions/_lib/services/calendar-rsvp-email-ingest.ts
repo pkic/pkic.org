@@ -6,7 +6,7 @@ import { logError, logInfo } from "../logging";
 import { verifySignedRsvpAddressFull } from "../email/rsvp";
 import { sha256Hex } from "../utils/crypto";
 import { parseCalendarRsvp, recordCalendarRsvpEvent } from "./calendar-rsvp";
-import { calendarRsvpBounceRecipient } from "./calendar-rsvp-email-bounce";
+import { parseCalendarRsvpDeliveryReport } from "./calendar-rsvp-email-bounce";
 import {
   calendarRsvpEmailAuthor,
   parseAttendeeEmail,
@@ -62,24 +62,40 @@ export async function processIncomingEmail(message: IncomingRsvpEmail, env: Env)
       return;
     }
 
-    const bounceRecipient = calendarRsvpBounceRecipient(emailData);
-    if (bounceRecipient) {
-      await requireCalendarRsvpEmailRecipient(env.DB, rsvpRegistrationId, bounceRecipient, "bounced");
-      await recordCalendarRsvpEvent(env.DB, {
-        registrationId: rsvpRegistrationId,
-        eventDayDate: rsvpDayDate,
-        icsUid: `bounce-${rsvpRegistrationId}`,
-        attendeeEmail: bounceRecipient,
-        responseStatus: "bounced",
-        provider: "cloudflare_email_routing_bounce",
-        sourceMessageId,
-        rawPayloadJson: JSON.stringify({ subject: String(emailData.subject || "").slice(0, 500) }),
-      });
+    try {
+      const report = parseCalendarRsvpDeliveryReport(emailData);
+      if (report) {
+        if (!report.failedRecipient) return;
+        await requireCalendarRsvpEmailRecipient(env.DB, rsvpRegistrationId, report.failedRecipient, "bounced");
+        await recordCalendarRsvpEvent(env.DB, {
+          registrationId: rsvpRegistrationId,
+          eventDayDate: rsvpDayDate,
+          icsUid: `bounce-${rsvpRegistrationId}`,
+          attendeeEmail: report.failedRecipient,
+          responseStatus: "bounced",
+          provider: "cloudflare_email_routing_bounce",
+          sourceMessageId,
+          rawPayloadJson: JSON.stringify({ subject: String(emailData.subject || "").slice(0, 500) }),
+        });
 
-      logInfo("BOUNCE_PROCESSED", { registrationId: rsvpRegistrationId });
-      return;
+        logInfo("BOUNCE_PROCESSED", { registrationId: rsvpRegistrationId });
+        return;
+      }
+    } catch (error) {
+      if (
+        error instanceof AppError &&
+        [
+          "RSVP_EMAIL_BOUNCE_INVALID",
+          "RSVP_EMAIL_BOUNCE_AMBIGUOUS",
+          "RSVP_EMAIL_ATTENDEE_INVALID",
+          "RSVP_EMAIL_RECIPIENT_MISMATCH",
+        ].includes(error.code)
+      ) {
+        logInfo("RSVP_EMAIL_BOUNCE_IGNORED", { code: error.code, targetId: rsvpRegistrationId });
+        return;
+      }
+      throw error;
     }
-    if (emailData.attachments.some((attachment) => attachment.mimeType === "message/delivery-status")) return;
 
     let icsContent = "";
 
