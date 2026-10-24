@@ -35,45 +35,73 @@ export async function requestPromotionRender(
   format: z.infer<typeof promotionFormatSchema>,
   origin: string,
 ) {
-  const id = await sha256Hex(
-    JSON.stringify({
-      occurrence: source.kit.occurrenceId,
-      fingerprint: source.kit.fingerprint,
-      user: source.actorId,
-      revision: source.kit.publishedRevision,
-      format,
-      template: source.kit.templateVersion,
-      campaign: source.kit.copy.campaign,
-      registration: source.kit.registrationUrl,
+  return (await requestPromotionRenders(db, eventId, source, [format], origin))[0]!;
+}
+/** Enqueue one complete kit atomically; every format shares the same validated source. */
+export async function requestPromotionRenders(
+  db: DatabaseLike,
+  eventId: string,
+  source: Source,
+  formats: readonly z.infer<typeof promotionFormatSchema>[],
+  origin: string,
+) {
+  if (!formats.length || formats.length > 5 || new Set(formats).size !== formats.length)
+    throw new Error("Choose one to five distinct promotion formats.");
+  const now = nowIso();
+  const jobs = await Promise.all(
+    formats.map(async (format) => {
+      const id = await sha256Hex(
+        JSON.stringify({
+          occurrence: source.kit.occurrenceId,
+          fingerprint: source.kit.fingerprint,
+          user: source.actorId,
+          revision: source.kit.publishedRevision,
+          format,
+          template: source.kit.templateVersion,
+          campaign: source.kit.copy.campaign,
+          registration: source.kit.registrationUrl,
+        }),
+      );
+      return {
+        id,
+        format,
+        key: `promotion/v${source.kit.templateVersion}/${id}.${format === "carousel" ? "pdf" : "png"}`,
+      };
     }),
   );
-  const key = `promotion/v${source.kit.templateVersion}/${id}.${format === "carousel" ? "pdf" : "png"}`;
-  const now = nowIso();
-  await run(
-    db,
-    `INSERT INTO event_promotion_renders(id,event_id,occurrence_id,user_id,revision,fingerprint,format,origin,cache_key,status,next_attempt_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,'queued',?,?,?) ON CONFLICT(id) DO UPDATE SET status='queued',attempts=0,next_attempt_at=excluded.next_attempt_at,processing_token=NULL,lease_expires_at=NULL,last_error=NULL,updated_at=excluded.updated_at WHERE event_promotion_renders.status IN ('failed','obsolete')`,
-    [
-      id,
-      eventId,
-      source.kit.occurrenceId,
-      source.actorId,
-      source.kit.publishedRevision,
-      source.kit.fingerprint,
-      format,
-      origin,
-      key,
-      now,
-      now,
-      now,
-    ],
-  );
-  const job = await first<Job>(
-    db,
-    "SELECT id,event_id,occurrence_id,user_id,revision,fingerprint,format,origin,cache_key,status,attempts FROM event_promotion_renders WHERE id=?",
-    [id],
-  );
-  if (!job) throw new AppError(409, "PROMOTION_JOB_CHANGED", "Refresh your promotion kit and try again.");
-  return job;
+  const loaded = await db.batch([
+    ...jobs.map(({ id, format, key }) =>
+      db
+        .prepare(
+          `INSERT INTO event_promotion_renders(id,event_id,occurrence_id,user_id,revision,fingerprint,format,origin,cache_key,status,next_attempt_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,'queued',?,?,?) ON CONFLICT(id) DO UPDATE SET status='queued',attempts=0,next_attempt_at=excluded.next_attempt_at,processing_token=NULL,lease_expires_at=NULL,last_error=NULL,updated_at=excluded.updated_at WHERE event_promotion_renders.status IN ('failed','obsolete')`,
+        )
+        .bind(
+          id,
+          eventId,
+          source.kit.occurrenceId,
+          source.actorId,
+          source.kit.publishedRevision,
+          source.kit.fingerprint,
+          format,
+          origin,
+          key,
+          now,
+          now,
+          now,
+        ),
+    ),
+    db
+      .prepare(
+        "SELECT id,event_id,occurrence_id,user_id,revision,fingerprint,format,origin,cache_key,status,attempts FROM event_promotion_renders WHERE id IN (SELECT value FROM json_each(?)) LIMIT 5",
+      )
+      .bind(JSON.stringify(jobs.map((job) => job.id))),
+  ]);
+  const rows = loaded.at(-1)!.results as unknown as Job[];
+  return jobs.map(({ id }) => {
+    const job = rows.find((row) => row.id === id);
+    if (!job) throw new AppError(409, "PROMOTION_JOB_CHANGED", "Refresh your promotion kit and try again.");
+    return job;
+  });
 }
 export async function processPromotionRenderJob(
   db: DatabaseLike,

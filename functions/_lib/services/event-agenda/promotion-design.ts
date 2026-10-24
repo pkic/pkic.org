@@ -35,6 +35,7 @@ export async function resolvePromotionDesign(db: DatabaseLike, eventId: string) 
 }
 export async function promotionSponsorArtwork(db: DatabaseLike, env: Pick<Env, "ASSETS_BUCKET">, eventId: string) {
   const { design } = await resolvePromotionDesign(db, eventId);
+  if (!design.sponsorGroups.length) return { revision: "", sponsors: [] };
   const context = await getBadgePrintingContext(db, env, eventId, design.sponsorGroups);
   return {
     revision: context.revision,

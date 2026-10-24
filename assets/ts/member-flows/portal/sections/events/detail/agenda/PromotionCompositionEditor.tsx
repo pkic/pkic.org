@@ -56,7 +56,7 @@ export function PromotionCompositionEditor({
       onSaved(await postJson(`${base}/composition`, checked.data, promotionKitSchema));
       setError("");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save your kit.");
+      setError(form.refuse(e));
     } finally {
       setBusy(false);
     }

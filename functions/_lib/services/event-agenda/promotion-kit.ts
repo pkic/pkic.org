@@ -1,4 +1,4 @@
-import { promotionRenderStatus } from "./promotion-render-status";
+import { promotionKitProgress } from "./promotion-render-status";
 import { readPromotionComposition } from "./promotion-composition";
 import { resolvePromotionDesign } from "./promotion-design";
 import { readAgendaSpeakers } from "./speaker-profiles";
@@ -8,8 +8,7 @@ import { eventPublishesPages, publishedSessionRoute } from "../../../../assets/s
 import { withSessionPageSlugs } from "./session-page-slugs";
 import { storedAgendaSnapshotSchema } from "../../../../assets/shared/schemas/event-agenda-stored";
 import { PROMOTION_TEMPLATE_VERSION } from "../../../../assets/shared/schemas/event-promotion-kit";
-import { promotionReferral, promotionReferralMetrics } from "./promotion-referral";
-import { getEventBySlug } from "../events";
+import { promotionReferral } from "./promotion-referral";
 import {
   promotionFormatSchema,
   promotionKitSchema,
@@ -54,10 +53,10 @@ export async function getPromotionKit(
   actorId: string,
   origin: string,
 ) {
-  const row = await first<{ snapshot_json: string; revision: number; copy_json: string | null }>(
+  const row = await first<{ snapshot_json: string; revision: number }>(
     db,
-    `SELECT p.snapshot_json,p.revision,k.copy_json FROM event_agenda_publications p JOIN event_agenda_state s ON s.event_id=p.event_id AND s.published_revision=p.revision LEFT JOIN event_agenda_promotion_copy k ON k.occurrence_id=? WHERE p.event_id=?`,
-    [occurrenceId, eventId],
+    `SELECT p.snapshot_json,p.revision FROM event_agenda_publications p JOIN event_agenda_state s ON s.event_id=p.event_id AND s.published_revision=p.revision WHERE p.event_id=?`,
+    [eventId],
   );
   if (!row)
     throw new AppError(409, "AGENDA_NOT_PUBLISHED", "Approve this event agenda before generating promotion materials.");
@@ -75,9 +74,9 @@ export async function getPromotionKit(
     approvedAt: null,
   };
   const code = await promotionReferral(db, eventId, actorId);
-  const event = await getEventBySlug(db, agenda.eventSlug);
   const personal = await readPromotionComposition(db, eventId, actorId, occurrenceId);
   const visual = await resolvePromotionDesign(db, eventId);
+  const event = visual.event;
   if (personal.revision === 0) personal.composition.panels = [...visual.design.panels];
   const candidates = (await readAgendaSpeakers(db, eventId, [occurrenceId])).get(occurrenceId) ?? [];
   const approvedIds = new Set(occurrence.speakers.map((person) => person.userId));
@@ -102,17 +101,6 @@ export async function getPromotionKit(
   const mediaWording = visual.design.advertiseLiveStreaming && media.liveStreaming ? "In person and online" : undefined;
 
   const registrationUrl = new URL(`/r/${encodeURIComponent(code)}`, origin).href;
-  const downloads = await first<{ count: number }>(
-    db,
-    "SELECT COALESCE(SUM(download_count),0) AS count FROM event_agenda_promotion_downloads WHERE occurrence_id=? AND user_id=?",
-    [occurrenceId, actorId],
-  );
-  const referral = await promotionReferralMetrics(db, eventId, actorId, code);
-  const rsvps = await first<{ count: number }>(
-    db,
-    "SELECT COUNT(*) AS count FROM agenda_session_participations WHERE occurrence_id=? AND event_id=? AND status = 'reserved'",
-    [occurrenceId, eventId],
-  );
   // The same page rule as every other link: only a session page the site renders is promoted.
   const sessionPage = publishedSessionRoute(
     await withSessionPageSlugs(db, eventId, {
@@ -135,12 +123,7 @@ export async function getPromotionKit(
     compositionRevision: personal.revision,
     stale: false,
     artifacts: [],
-    metrics: {
-      downloads: downloads?.count ?? 0,
-      clicks: referral?.clicks ?? 0,
-      confirmedRegistrations: referral?.confirmedRegistrations ?? 0,
-      sessionRsvps: rsvps?.count ?? 0,
-    },
+    metrics: { downloads: 0, clicks: 0, confirmedRegistrations: 0, sessionRsvps: 0 },
   });
   const source = {
     kit,
@@ -167,6 +150,6 @@ export async function getPromotionKit(
       registrationUrl,
     }),
   );
-  kit.artifacts = await promotionRenderStatus(db, eventId, actorId, occurrenceId, kit.fingerprint!);
+  Object.assign(kit, await promotionKitProgress(db, eventId, actorId, occurrenceId, kit.fingerprint!, code));
   return source;
 }

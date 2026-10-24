@@ -1,6 +1,5 @@
 import { plainText } from "../../../../assets/shared/markdown-plain-text";
-import { formatDateRange } from "../../../../assets/shared/format-date";
-import { zonedClock } from "../../../../assets/shared/timezone";
+import { formatClockInZone, formatTimeRangeInZone, formatDateRange } from "../../../../assets/shared/format-date";
 import {
   defaultPromotionComposition,
   type PromotionComposition,
@@ -145,8 +144,9 @@ export function buildPromotionPages(
     }
     return page;
   }
+  const clock = { timeZone: data.agenda.timeZone, city: data.agenda.clockCity ?? null };
   const time = data.occurrence.startAt
-    ? `${zonedClock(data.occurrence.startAt, data.agenda.timeZone)}${data.occurrence.endAt ? `–${zonedClock(data.occurrence.endAt, data.agenda.timeZone)}` : ""} · ${data.agenda.timeZone}`
+    ? formatTimeRangeInZone(data.occurrence.startAt, data.occurrence.endAt ?? undefined, clock)
     : "";
   const dates = formatDateRange(data.occurrence.startAt, data.occurrence.endAt, data.agenda.timeZone);
   const location = data.agenda.rooms.find((room) => room.id === data.occurrence.roomId)?.name;
@@ -316,7 +316,7 @@ export function buildPromotionPages(
           {
             text: [
               formatDateRange(pick.startAt, pick.endAt, data.agenda.timeZone),
-              pick.startAt ? zonedClock(pick.startAt, data.agenda.timeZone) : "",
+              pick.startAt ? formatClockInZone(pick.startAt, clock) : "",
             ]
               .filter(Boolean)
               .join(" · "),

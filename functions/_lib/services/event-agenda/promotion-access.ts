@@ -3,7 +3,8 @@ import { agendaOccurrenceQuerySchema, agendaOccurrenceSchema } from "../../../..
 import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
 import { zonedDateTimeToDate } from "../../../../assets/shared/timezone";
 import type { DatabaseLike } from "../../types";
-import { all, first } from "../../db/queries";
+import { batchFirst, batchRows } from "../../db/pagination";
+import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import { getPromotionKit } from "./promotion-kit";
 export async function assignedPromotionKit(
@@ -82,15 +83,19 @@ export async function listPublishedPromotionSessions(
     values.push(begin, end);
   }
   const source = `FROM event_agenda_publications publication JOIN event_agenda_state state ON state.event_id=publication.event_id AND state.published_revision=publication.revision, json_each(publication.snapshot_json,'$.occurrences') entry WHERE ${conditions.join(" AND ")}`;
-  const total = await first<{ total: number }>(db, `SELECT COUNT(*) AS total ${source}`, values);
   const key = query.sort?.replace(/^-/u, "") ?? "title";
   const sort = key === "startAt" ? "startAt" : key === "endAt" ? "endAt" : "title";
   const direction = query.sort?.startsWith("-") ? "DESC" : "ASC";
-  const rows = await all<{ value: string }>(
-    db,
-    `SELECT entry.value ${source} ORDER BY json_extract(entry.value,'$.${sort}') ${direction}, json_extract(entry.value,'$.id') ASC LIMIT ? OFFSET ?`,
-    [...values, query.limit, query.offset],
-  );
+  const results = await db.batch([
+    db.prepare(`SELECT COUNT(*) AS total ${source}`).bind(...values),
+    db
+      .prepare(
+        `SELECT entry.value ${source} ORDER BY json_extract(entry.value,'$.${sort}') ${direction}, json_extract(entry.value,'$.id') ASC LIMIT ? OFFSET ?`,
+      )
+      .bind(...values, query.limit, query.offset),
+  ]);
+  const total = batchFirst<{ total: number }>(results[0]);
+  const rows = batchRows<{ value: string }>(results[1]);
   const occurrences = rows.map((row) => agendaOccurrenceSchema.parse(JSON.parse(row.value)));
   return { occurrences, page: buildPageInfo(query.limit, query.offset, total?.total ?? 0, occurrences.length) };
 }

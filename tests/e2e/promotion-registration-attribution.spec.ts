@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import sharp from "sharp";
+import { PDFDocument } from "pdf-lib";
 import jsQR from "jsqr";
 import { EMAIL_FIRST_COPY } from "../../assets/shared/email-first-copy";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
@@ -138,6 +139,14 @@ test("a rendered promotion QR preserves its referral through email sign-in and c
     return promotionKitSchema.parse(await response.json());
   };
   const kit = await readKit();
+  const pdfResponse = await page.request.get(
+    `${kitApi}/artifact?format=carousel&revision=${kit.publishedRevision}&fingerprint=${kit.fingerprint}`,
+  );
+  expect(pdfResponse.status()).toBe(200);
+  expect(pdfResponse.headers()["content-type"]).toBe("application/pdf");
+  const pdf = await PDFDocument.load(await pdfResponse.body());
+  expect(pdf.getPageCount()).toBeGreaterThan(1);
+  await info.attach("downloaded-carousel.pdf", { body: await pdfResponse.body(), contentType: "application/pdf" });
   expect(kit.copy.campaign).toBe(campaign);
   expect(kit.metrics).toMatchObject({ clicks: 0, confirmedRegistrations: 0 });
   expect(decoded.data).toBe(kit.registrationUrl);

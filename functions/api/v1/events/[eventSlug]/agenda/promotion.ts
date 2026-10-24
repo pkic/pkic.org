@@ -1,6 +1,9 @@
 import { eventPromotionSessionsGetRouteSchema } from "../../../../../../assets/shared/schemas/route-contracts-event-promotion";
 import { promotionRenderStatus } from "../../../../../_lib/services/event-agenda/promotion-render-status";
-import { getAttendeePromotionKit } from "../../../../../_lib/services/event-agenda/promotion-attendee";
+import {
+  getAttendeePromotionKit,
+  requirePromotionRegistration,
+} from "../../../../../_lib/services/event-agenda/promotion-attendee";
 import { savePromotionComposition } from "../../../../../_lib/services/event-agenda/promotion-composition";
 import { requireUserBackedAdminFromRequest } from "../../../../../_lib/auth/admin";
 import {
@@ -14,6 +17,7 @@ import type { z } from "zod";
 import { promotionArtifactQuerySchema } from "../../../../../../assets/shared/schemas/event-promotion-kit";
 import {
   requestPromotionRender,
+  requestPromotionRenders,
   processPromotionRenderJob,
 } from "../../../../../_lib/services/event-agenda/promotion-render-jobs";
 import { promotionFormatSchema } from "../../../../../../assets/shared/schemas/event-promotion-kit";
@@ -149,15 +153,14 @@ async function download(
   });
 }
 async function queueRenders(c: AdminContext, source: Awaited<ReturnType<typeof ownKit>>) {
-  for (const format of promotionFormatSchema.options)
-    await requestPromotionRender(requestDb(c), source.eventId, source, format, resolveAppBaseUrl(c.env, c.req.raw));
-  const preview = await requestPromotionRender(
+  const jobs = await requestPromotionRenders(
     requestDb(c),
     source.eventId,
     source,
-    "portrait",
+    promotionFormatSchema.options,
     resolveAppBaseUrl(c.env, c.req.raw),
   );
+  const preview = jobs.find((job) => job.format === "portrait")!;
   c.executionCtx.waitUntil(processPromotionRenderJob(requestDb(c), c.env, preview.id));
   source.kit.artifacts = await promotionRenderStatus(
     requestDb(c),
@@ -217,6 +220,9 @@ export const PromotionSessionsGet = openApiRoute(promotionSessionsGetRouteSchema
 });
 
 export const EventPromotionSessionsGet = openApiRoute(eventPromotionSessionsGetRouteSchema, async (c, data) => {
-  const source = await ownKit(c, data.params.eventSlug, null);
-  return json(await listPublishedPromotionSessions(requestDb(c), source.eventId, null, data.query));
+  const db = requestDb(c);
+  const { userId } = await promotionActor(c);
+  const event = await getEventBySlug(db, data.params.eventSlug);
+  await requirePromotionRegistration(db, event.id, userId);
+  return json(await listPublishedPromotionSessions(db, event.id, null, data.query));
 });

@@ -1,4 +1,4 @@
-import { promotionRenderStatus } from "./promotion-render-status";
+import { promotionKitProgress } from "./promotion-render-status";
 import { storedAgendaSnapshotSchema } from "../../../../assets/shared/schemas/event-agenda-stored";
 import { agendaOccurrenceSchema } from "../../../../assets/shared/schemas/event-agenda";
 import {
@@ -8,7 +8,7 @@ import {
 } from "../../../../assets/shared/schemas/event-promotion-kit";
 import { resolvePromotionDesign } from "./promotion-design";
 import { readPromotionComposition } from "./promotion-composition";
-import { promotionReferral, promotionReferralMetrics } from "./promotion-referral";
+import { promotionReferral } from "./promotion-referral";
 import { first } from "../../db/queries";
 import { sha256Hex } from "../../utils/crypto";
 import { AppError } from "../../errors";
@@ -16,7 +16,7 @@ import { personDisplayNameSql } from "./speaker-name";
 import { primaryIdentityIdSql, identityJobTitleSql } from "../identities/affiliation-projection";
 import { publicUserHeadshotPath } from "../user-headshot";
 import type { DatabaseLike } from "../../types";
-export async function getAttendeePromotionKit(db: DatabaseLike, eventId: string, userId: string, origin: string) {
+export async function requirePromotionRegistration(db: DatabaseLike, eventId: string, userId: string) {
   const registered = await first<{ id: string }>(
     db,
     "SELECT id FROM registrations WHERE event_id=? AND user_id=? AND status='registered' LIMIT 1",
@@ -28,6 +28,10 @@ export async function getAttendeePromotionKit(db: DatabaseLike, eventId: string,
       "PROMOTION_REGISTRATION_REQUIRED",
       "Promotion materials are available to registered attendees.",
     );
+  return registered;
+}
+export async function getAttendeePromotionKit(db: DatabaseLike, eventId: string, userId: string, origin: string) {
+  await requirePromotionRegistration(db, eventId, userId);
   const visual = await resolvePromotionDesign(db, eventId),
     personal = await readPromotionComposition(db, eventId, userId, null);
   const row = await first<{ snapshot_json: string }>(
@@ -108,12 +112,6 @@ export async function getAttendeePromotionKit(db: DatabaseLike, eventId: string,
       registrationUrl,
     }),
   );
-  const referral = await promotionReferralMetrics(db, eventId, userId, code);
-  const downloads = await first<{ count: number }>(
-    db,
-    "SELECT COALESCE(SUM(download_count),0) AS count FROM event_promotion_renders WHERE event_id=? AND user_id=? AND occurrence_id IS NULL",
-    [eventId, userId],
-  );
   const kit = promotionKitSchema.parse({
     occurrenceId: null,
     source: { title: occurrence.title, description: occurrence.description },
@@ -128,14 +126,9 @@ export async function getAttendeePromotionKit(db: DatabaseLike, eventId: string,
     registrationUrl,
     stale: false,
     artifacts: [],
-    metrics: {
-      downloads: downloads?.count ?? 0,
-      clicks: referral.clicks,
-      confirmedRegistrations: referral.confirmedRegistrations,
-      sessionRsvps: 0,
-    },
+    metrics: { downloads: 0, clicks: 0, confirmedRegistrations: 0, sessionRsvps: 0 },
   });
-  kit.artifacts = await promotionRenderStatus(db, eventId, userId, null, fingerprint);
+  Object.assign(kit, await promotionKitProgress(db, eventId, userId, null, fingerprint, code));
   return {
     kit,
     agenda,

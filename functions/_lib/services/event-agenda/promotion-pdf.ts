@@ -95,8 +95,12 @@ export async function renderPromotionPdf(
     }
     const footer = tags.element("P");
     tags.content(footer, () =>
-      page.drawText(`${scene.index + 1} / ${scene.total}`, { x: 40, y: 70, size: 11, font, color: rgb(1, 1, 1) }),
+      page.drawText(`${scene.index + 1} / ${scene.total}`, { x: 40, y: 90, size: 11, font, color: rgb(1, 1, 1) }),
     );
+    if (scene.index === 0 && scene.total > 1)
+      tags.content(footer, () =>
+        page.drawText("SWIPE", { x: (scene.width - 380) * scale, y: 90, size: 11, font, color: rgb(1, 1, 1) }),
+      );
     const link = tags.element("Link");
     const annotation = pdf.context.register(
       pdf.context.obj({

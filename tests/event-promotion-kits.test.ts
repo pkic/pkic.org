@@ -127,10 +127,15 @@ describe("personal event promotion kits", () => {
     await env.SPEAKER_UPLOADS_BUCKET!.put(key, validJpegBytes(64, 64));
     await env.DB.prepare("UPDATE users SET headshot_r2_key=? WHERE id=?").bind(key, f.admin.id).run();
     const source = await getPromotionKit(env.DB, f.eventId, f.sessionId, f.admin.id, "https://pkic.org");
-    const portraits = await promotionPortraits({ ...env, IMAGES: undefined }, "https://pkic.org", source);
+    const portraits = await promotionPortraits({ ...env, IMAGES: undefined }, "https://pkic.org", {
+      ...source,
+      ...source.kit,
+    });
     expect(portraits[f.admin.id]).toMatch(/^data:image\/jpeg;base64,/);
     await env.DB.prepare("UPDATE users SET headshot_r2_key=NULL WHERE id=?").bind(f.admin.id).run();
-    expect(await promotionPortraits({ ...env, IMAGES: undefined }, "https://pkic.org", source)).toEqual({});
+    expect(
+      await promotionPortraits({ ...env, IMAGES: undefined }, "https://pkic.org", { ...source, ...source.kit }),
+    ).toEqual({});
   });
   it("keeps speaker and attendee compositions private and rejects stale saves atomically", async () => {
     const f = await fixture();

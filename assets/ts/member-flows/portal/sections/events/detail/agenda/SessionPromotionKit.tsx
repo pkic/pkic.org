@@ -61,7 +61,7 @@ export function SessionPromotionKit({
       onSaved?.(await postJson(base, checked.data, agendaSnapshotSchema));
       setError("");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save promotion copy.");
+      setError(form.refuse(e));
     } finally {
       setBusy(false);
     }
