@@ -80,7 +80,7 @@
     "@block65/webcrypto-web-push": "2.0.0",
     "@cloudflare/codemode": "^0.3.8",
     "@cloudflare/workers-oauth-provider": "^0.7.0",
-    "@modelcontextprotocol/sdk": "1.31.0",
+    "@modelcontextprotocol/sdk": "1.32.0",
     "@pdf-lib/fontkit": "^1.1.1",
     "@preact/signals": "^2.9.1",
     "@resvg/resvg-wasm": "^2.6.2",
