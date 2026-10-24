@@ -45,7 +45,12 @@ const MySessionManagement = lazy(() =>
   import("./detail/participation/MySessionManagement").then((module) => ({ default: module.MySessionManagement })),
 );
 type EventDetail = z.infer<typeof eventDetailResponseSchema>["event"];
-type Selection = { kind?: "registration" | "proposal"; resourceId?: string; tab?: string; pointToken?: string };
+type Selection = {
+  kind?: "registration" | "proposal";
+  resourceId?: string;
+  tab?: string;
+  pointToken?: string;
+};
 const href = usePortalHashLocation.hrefs;
 /** The compact header's title for each participant page other than the event home. */
 const PAGE_LABELS: Record<string, string> = {
@@ -68,10 +73,17 @@ export function ParticipantEventPage({ slug, ...selection }: Selection & { slug:
   );
   if (loaded.loading) return <Spinner label="Loading event…" />;
   if (!loaded.data) return <Alert tone="danger">{loaded.error}</Alert>;
-  return <ParticipantEvent event={loaded.data.event} {...selection} />;
+  return <ParticipantEvent event={loaded.data.event} {...selection} onRegistered={loaded.reload} />;
 }
 
-export function ParticipantEvent({ event, kind, resourceId, tab, pointToken }: Selection & { event: EventDetail }) {
+export function ParticipantEvent({
+  event,
+  kind,
+  resourceId,
+  tab,
+  pointToken,
+  onRegistered,
+}: Selection & { event: EventDetail; onRegistered?: () => Promise<void> }) {
   const [location] = useHashLocation();
   // One agenda route: the whole program, or with `?mine=1` the same view filtered to the reader's sessions.
   const mine = isMyAgendaQuery(new URLSearchParams(location.split("?", 2)[1] ?? ""));
@@ -177,7 +189,7 @@ export function ParticipantEvent({ event, kind, resourceId, tab, pointToken }: S
           <VirtualRoom slug={event.slug} eventName={event.name} />
         </Suspense>
       ) : tab === "ticket" ? (
-        <EventTicket event={event} />
+        <EventTicket event={event} onRegistered={onRegistered} />
       ) : tab === "check-in" ? (
         <Suspense fallback={<Spinner />}>
           <EventCheckIn slug={event.slug} pointToken={pointToken} />
@@ -185,7 +197,7 @@ export function ParticipantEvent({ event, kind, resourceId, tab, pointToken }: S
       ) : tab === "more" ? (
         <EventMore event={event} />
       ) : (
-        <EventHome event={event} />
+        <EventHome event={event} onRegistered={onRegistered} />
       )}
     </div>
   );

@@ -32,20 +32,16 @@ export function eventRegistrationStanding(event: {
 }
 
 /**
- * How the reader may register when they have not: a link into the existing
- * registration flow when the audience projection offers one, otherwise the
- * policy that explains why not.
+ * Whether the reader can open the registration form, or the policy that
+ * explains why it is unavailable. The portal retains the signed-in session.
  */
-export type RegistrationOffer =
-  | { kind: "open"; href: string }
-  | { kind: "public-page"; href: string }
-  | { kind: "closed"; reason: string };
+export type RegistrationOffer = { kind: "open" } | { kind: "closed"; reason: string };
 
 const OPEN_POLICIES = new Set(["optional", "required", "public"]);
 
 export function registrationOffer(event: ParticipantEventDetail, ended: boolean): RegistrationOffer {
   if (ended) return { kind: "closed", reason: "This event has ended." };
-  if ("registrationPath" in event && event.registrationPath) return { kind: "open", href: event.registrationPath };
+  if ("registrationPath" in event && event.registrationPath) return { kind: "open" };
   switch (event.registrationPolicy) {
     case "invitation_only":
       return { kind: "closed", reason: "Registration for this event is by invitation only." };
@@ -54,9 +50,8 @@ export function registrationOffer(event: ParticipantEventDetail, ended: boolean)
     case "automatic":
       return { kind: "closed", reason: "Members of the organizing group are registered automatically." };
   }
-  // The management projection carries no registration path; its public page links the flow.
-  if (!("viewer" in event) && OPEN_POLICIES.has(event.registrationPolicy) && event.basePath)
-    return { kind: "public-page", href: event.basePath };
+  // The management projection has no public registration path; its policy still permits the in-app form.
+  if (!("viewer" in event) && OPEN_POLICIES.has(event.registrationPolicy) && event.basePath) return { kind: "open" };
   return { kind: "closed", reason: "Registration is not open for this event." };
 }
 

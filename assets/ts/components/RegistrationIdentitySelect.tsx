@@ -29,7 +29,13 @@ export function currentIdentitiesUrl(params: Record<string, string> = {}): strin
  * identity, never from a typed answer — with a way to choose another one they
  * already hold; without one, the registration shows their current affiliation.
  */
-export function RegistrationIdentityField({ preferred }: { preferred?: ActingIdentity | null }) {
+export function RegistrationIdentityField({
+  preferred,
+  onSelect,
+}: {
+  preferred?: ActingIdentity | null;
+  onSelect?: (identityId: string | null) => void;
+}) {
   const [selected, setSelected] = useState<ActingIdentity | null>(preferred ?? null);
   const [choosing, setChoosing] = useState(!preferred);
   const hidden = <input type="hidden" name="identityId" value={selected?.id ?? ""} />;
@@ -59,7 +65,10 @@ export function RegistrationIdentityField({ preferred }: { preferred?: ActingIde
             value={selected?.id ?? null}
             selectedLabel={selected ? identityLabel(selected) : undefined}
             placeholder="Use my current affiliation"
-            onChange={setSelected}
+            onChange={(identity) => {
+              setSelected(identity);
+              onSelect?.(identity?.id ?? null);
+            }}
           />
           {hidden}
         </>
@@ -69,7 +78,7 @@ export function RegistrationIdentityField({ preferred }: { preferred?: ActingIde
 }
 
 /** Optional attribution for a signed-in registration. Opening the form never selects or activates an identity. */
-export function RegistrationIdentitySelect() {
+export function RegistrationIdentitySelect({ onSelect }: { onSelect?: (identityId: string | null) => void } = {}) {
   const [attempt, setAttempt] = useState(0);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
@@ -108,5 +117,5 @@ export function RegistrationIdentitySelect() {
         </Button>
       </>
     );
-  return selectable ? <RegistrationIdentityField /> : null;
+  return selectable ? <RegistrationIdentityField onSelect={onSelect} /> : null;
 }
