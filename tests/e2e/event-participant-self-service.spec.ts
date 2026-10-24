@@ -7,6 +7,8 @@ import {
 import {
   registrationManageSchema,
   registrationManageUpdateResponseSchema,
+  registrationCreateSchema,
+  registrationSubmissionResponseSchema,
 } from "../../assets/shared/schemas/registration";
 import { speakerSelfProfilePatchSchema } from "../../assets/shared/schemas/proposal-management";
 import { acceptConfirmDialog } from "./helpers/confirm-dialog";
@@ -15,7 +17,73 @@ import { submitProposal, inviteCoSpeaker, PROPOSAL_EVENT_SLUG } from "./helpers/
 import { registerInBrowser } from "./helpers/registration";
 import { completeIndependentCapacityDisclosure } from "./helpers/independent-capacity";
 
+import { myProfileUpdateSchema } from "../../assets/shared/schemas/me";
+import { signInAsE2eStaff } from "./helpers/staff-auth";
+import { e2eAdminEmail } from "../helpers/e2e-admin";
+import { createRegistrationEvent } from "./helpers/participation-state-fixture";
+
 test.use({ actionTimeout: 15_000 });
+
+test("a signed-in user registers from event home without another email challenge", async ({ page }, info) => {
+  const email = e2eAdminEmail("portal-agenda-preview");
+  await signInAsE2eStaff(page, email);
+  const profile = await page.request.patch("/api/v1/users/current", {
+    data: myProfileUpdateSchema.parse({ firstName: "Ada", lastName: "Example" }),
+  });
+  expect(profile.status(), await profile.text()).toBe(200);
+  const dayDate = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
+  const event = await createRegistrationEvent(page, "quick-registration", {
+    date: dayDate,
+    startTime: "09:00",
+    endTime: "17:00",
+  });
+  await page.goto(`/portal/#/events/${event.slug}`);
+  const challenged: string[] = [];
+  page.on("request", (request) => {
+    if (request.method() === "POST" && /\/(?:proof|auth\/request)(?:\/|$)/.test(new URL(request.url()).pathname))
+      challenged.push(request.url());
+  });
+  await page.getByRole("button", { name: "Register", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Register for this event", exact: true });
+  await expect(dialog.getByText(email, { exact: true })).toBeVisible();
+  await expect(dialog.getByLabel("Work email", { exact: true })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(dialog).not.toBeVisible();
+  await expect(page.getByRole("button", { name: "Register", exact: true })).toBeFocused();
+  await page.getByRole("button", { name: "Register", exact: true }).click();
+  await expect(dialog.getByText(email, { exact: true })).toBeVisible();
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.screenshot({ path: info.outputPath("quick-registration-desktop.png"), fullPage: true });
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.screenshot({ path: info.outputPath("quick-registration-phone.png"), fullPage: true });
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await dialog.getByRole("checkbox", { name: "I'm participating as an individual", exact: true }).focus();
+  await page.keyboard.press("Tab");
+  await expect(dialog.getByRole("radio", { name: "In person", exact: true })).toBeFocused();
+  await page.keyboard.press("Space");
+  await expect(dialog.getByRole("radio", { name: "In person", exact: true })).toBeChecked();
+  await dialog.getByRole("checkbox", { name: "I agree to the privacy policy", exact: true }).check();
+  await dialog.getByRole("checkbox", { name: "I agree to the code of conduct", exact: true }).check();
+  const saved = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === `/api/v1/events/${event.slug}/registrations` &&
+      response.request().method() === "POST",
+  );
+  await dialog.getByRole("button", { name: "Register", exact: true }).click();
+  const response = await saved;
+  expect(response.status(), await response.text()).toBe(200);
+  const body = registrationCreateSchema.parse(response.request().postDataJSON());
+  expect(body.email).toBe(email);
+  expect(body.emailProof).toBeUndefined();
+  expect(body.dayAttendance).toEqual([{ dayDate, attendanceType: "in_person" }]);
+  expect(registrationSubmissionResponseSchema.parse(await response.json()).status).toBe("registered");
+  await expect(page).toHaveURL(new RegExp(`#/events/${event.slug}/ticket$`));
+  await expect(dialog).not.toBeVisible();
+  expect(challenged).toEqual([]);
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "No ticket yet", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Registration details", exact: true })).toBeVisible();
+});
 
 // Event-only identities deliberately have no staff or membership capacity.
 test("attendee manages a registration and downloads a personal event calendar", async ({ page }, testInfo) => {

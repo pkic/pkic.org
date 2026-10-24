@@ -160,8 +160,8 @@ describe("portal landmarks and headings", () => {
 
   it("group event workspace overview: the event is the page's h1 and its panels step down", async () => {
     await renderPortalScreen(<GroupEventWorkspace event={groupEvent} groupId={groupEvent.ownerGroupId} />);
+    await vi.waitFor(() => expect(pageHeadingLevels().slice(1).length).toBeGreaterThan(0));
     await expectPortalStructure("Architecture workshop");
-    expect(pageHeadingLevels().slice(1).length).toBeGreaterThan(0);
   });
 
   it("a PageHeader list page: the page title is the page's h1", async () => {

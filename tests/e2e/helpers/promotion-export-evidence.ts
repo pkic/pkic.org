@@ -87,7 +87,9 @@ function inspectPdfStructure(pdf: PDFDocument, registrationUrl: string) {
   expect(roles.filter((role) => role === "H2").length).toBeGreaterThanOrEqual(3);
   expect(roles).toContain("LI");
   expect(roles.at(-1)).toBe("Link");
-  expect(figures).toEqual([`QR code: register for this event at ${registrationUrl}`]);
+  expect(figures).toEqual(
+    Array.from({ length: pdf.getPageCount() }, () => `QR code: register for this event at ${registrationUrl}`),
+  );
   const links: Array<{ page: number; url: string }> = [];
   for (const [index, page] of pdf.getPages().entries()) {
     const parent = page.node.lookup(PDFName.of("StructParents"), PDFNumber).asNumber();
@@ -99,13 +101,25 @@ function inspectPdfStructure(pdf: PDFDocument, registrationUrl: string) {
       const action = annotation.lookup(PDFName.of("A"), PDFDict);
       const url = action.lookup(PDFName.of("URI"), PDFString).decodeText();
       expect(url).toBe(registrationUrl);
-      expect(annotation.lookup(PDFName.of("StructParent"), PDFNumber).asNumber()).toBeGreaterThanOrEqual(
-        pdf.getPageCount(),
+      const annotationKey = annotation.lookup(PDFName.of("StructParent"), PDFNumber).asNumber();
+      expect(annotationKey).not.toBe(parent);
+      const entries = parentTree.asArray();
+      const parentIndex = entries.findIndex(
+        (value) => value instanceof PDFNumber && value.asNumber() === annotationKey,
       );
+      expect(parentIndex).toBeGreaterThanOrEqual(0);
+      expect(
+        pdf.context
+          .lookup(entries[parentIndex + 1]!, PDFDict)
+          .lookup(PDFName.of("S"), PDFName)
+          .decodeText(),
+      ).toBe("Link");
       links.push({ page: index + 1, url });
     }
   }
-  expect(links).toEqual([{ page: pdf.getPageCount(), url: registrationUrl }]);
+  expect(links).toEqual(
+    Array.from({ length: pdf.getPageCount() }, (_, index) => ({ page: index + 1, url: registrationUrl })),
+  );
   return { roles, figures, links, contentOrder: [...contentOrder.values()] };
 }
 
@@ -116,7 +130,6 @@ export async function inspectPromotionExport(options: {
   contentType: string;
   bytes: Buffer;
   registrationUrl: string;
-  sessionUrl: string;
   expectedPdfText: string[];
 }) {
   const { directory, format, contentType, bytes, registrationUrl } = options;
@@ -136,17 +149,30 @@ export async function inspectPromotionExport(options: {
     const structure = inspectPdfStructure(pdf, registrationUrl);
     const extracted = await runFile("pdftotext", ["-enc", "UTF-8", file, "-"], { maxBuffer: 4 * 1024 * 1024 });
     const text = normalized(extracted.stdout);
-    for (const expected of options.expectedPdfText) expect(text).toContain(normalized(expected));
-    // The long canonical URL can wrap inside its unbroken token. Preserve
-    // every character while ignoring only the extraction's line whitespace.
-    expect(extracted.stdout.replace(/\s+/gu, "")).toContain(options.sessionUrl);
+    // Continued text crosses page furniture; remove only repeated headers and footer artifacts.
+    const firstHeader = extracted.stdout
+      .split("\n")
+      .find((line) => line.trim())!
+      .trim();
+    const continuous = extracted.stdout
+      .split(firstHeader)
+      .join("")
+      .split(registrationUrl)
+      .join("")
+      .replace(/^\s*\d+\s*\/\s*\d+\s*$/gmu, "")
+      .replace(/\bSWIPE\b/gu, "")
+      .replace(/\s+/gu, "");
+    for (const expected of options.expectedPdfText)
+      expect(continuous.toLowerCase()).toContain(expected.replace(/\s+/gu, "").toLowerCase());
+    // The digital material directs every response through its personal referral link.
+    expect(extracted.stdout.replace(/\s+/gu, "")).toContain(registrationUrl);
     const sections = [
-      options.expectedPdfText[0]!,
-      "What you will take away",
-      "Meet the panel",
+      options.expectedPdfText[0]!.split(":")[0]!,
+      "Meet the speakers",
+      "Key takeaways",
       options.expectedPdfText.at(-1)!,
     ];
-    const positions = sections.map((section) => text.indexOf(normalized(section)));
+    const positions = sections.map((section) => text.toLowerCase().indexOf(normalized(section).toLowerCase()));
     expect(positions.every((position) => position >= 0)).toBe(true);
     expect(positions).toEqual([...positions].sort((a, b) => a - b));
     const counters = [...extracted.stdout.matchAll(/(?:^|\n)\s*(\d+)\s*\/\s*(\d+)\s*(?=\n|$)/gu)].map((match) => [
@@ -163,7 +189,7 @@ export async function inspectPromotionExport(options: {
     expect(names).toHaveLength(pdf.getPageCount());
     const pages = [];
     for (const [index, name] of names.entries()) {
-      const image = await inspectImage(join(directory, name), registrationUrl, index === names.length - 1);
+      const image = await inspectImage(join(directory, name), registrationUrl, true);
       expect([image.width, image.height]).toEqual([1080, 1350]);
       pages.push({ page: index + 1, pdfSha256: base.sha256, ...image });
     }

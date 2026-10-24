@@ -1,9 +1,13 @@
+import { promotionKitSchema } from "../assets/shared/schemas/event-promotion-kit";
+import { organizationsListResponseSchema } from "../assets/shared/schemas/organization-management";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { env as workerEnv } from "cloudflare:workers";
 import "../functions/http-router";
 const env = { ...workerEnv, INTERNAL_SIGNING_SECRET: "synthetic-oauth-test-signing-secret-32-plus" };
 import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
-import app from "./helpers/app";
+import app, { callApi } from "./helpers/app";
 import { MCP_PATH } from "../functions/_lib/api-tools/mcp-worker";
 import {
   MCP_OAUTH_AUTHORIZE_PATH,
@@ -62,7 +66,7 @@ async function createAuthorization(userToken?: string) {
       actingIdentityId: null,
     }),
   });
-  expect(approval.status).toBe(202);
+  expect(approval.status, await approval.clone().text()).toBe(202);
   const { authorizationId } = (await approval.json()) as { authorizationId: string };
   const completed = await call(`/api/v1/auth/oauth/authorizations/${authorizationId}/completion`, {
     headers: { cookie: `pkic_session=${session}` },
@@ -121,6 +125,64 @@ function initialize(token: string) {
   });
 }
 
+async function withAuthorizedMcpClient(
+  run: (client: Client, grant: Awaited<ReturnType<typeof authorize>>) => Promise<void>,
+) {
+  const grant = await authorize();
+  const client = new Client({ name: "scoped-operation-test", version: "1" });
+  const transport = new StreamableHTTPClientTransport(new URL(MCP_PATH, origin), {
+    requestInit: { headers: { authorization: `Bearer ${grant.access_token}` } },
+    fetch: (input, init) => callApi(env, new Request(input, init), undefined, { maxRoundTrips: 1 }),
+  });
+  try {
+    await client.connect(transport);
+    await run(client, grant);
+  } finally {
+    await client.close();
+  }
+}
+function executeMcp(client: Client, code: string) {
+  return client.callTool({ name: "execute", arguments: { code } });
+}
+async function registerPromotionAttendee(userId: string) {
+  const event = await env.DB.prepare("SELECT id FROM events WHERE slug='pqc-2026'").first<{ id: string }>();
+  const at = new Date().toISOString();
+  await env.DB.prepare(
+    "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','virtual','direct','synthetic',?,?)",
+  )
+    .bind(crypto.randomUUID(), event!.id, userId, at, at)
+    .run();
+}
+async function prepareAttendeePromotion(grant: Awaited<ReturnType<typeof authorize>>) {
+  await registerPromotionAttendee(grant.userId);
+  const initialized = await callApi(
+    env,
+    "/api/v1/events/pqc-2026/promotion/referrals",
+    {
+      method: "POST",
+      headers: { cookie: `pkic_session=${grant.userToken}`, "content-type": "application/json" },
+      body: "{}",
+    },
+    { maxRoundTrips: 1 },
+  );
+  expect(initialized.status, await initialized.clone().text()).toBe(200);
+  return promotionKitSchema.parse(await initialized.json());
+}
+function promotionSaveOperation(kit: ReturnType<typeof promotionKitSchema.parse>) {
+  return {
+    method: "POST",
+    path: "/api/v1/events/pqc-2026/promotion/composition",
+    body: {
+      expectedRevision: kit.compositionRevision,
+      composition: {
+        ...kit.composition,
+        summary: "An attendee invitation prepared through MCP.",
+        takeaways: ["Compare practical cryptographic migration controls"],
+      },
+    },
+  };
+}
+
 describe("MCP OAuth session interoperability", () => {
   afterEach(() => {
     vi.useRealTimers();
@@ -153,6 +215,189 @@ describe("MCP OAuth session interoperability", () => {
     expect((await initialize(tokens.access_token)).status).toBe(200);
   });
 
+  it("discovers scoped operations through MCP search", async () => {
+    await withAuthorizedMcpClient(async (client) => {
+      expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual(
+        expect.arrayContaining(["search", "execute"]),
+      );
+      const search = await client.callTool({
+        name: "search",
+        arguments: {
+          code: 'async () => { const spec = await codemode.spec(); return Object.keys(spec.paths).filter(path => path === "/api/v1/organizations"); }',
+        },
+      });
+      expect(search.isError).not.toBe(true);
+      expect(JSON.stringify(search.content)).toContain("/api/v1/organizations");
+    });
+  });
+  it("executes a scoped organization listing in one authorized batch", async () => {
+    await withAuthorizedMcpClient(async (client) => {
+      const allowed = await executeMcp(
+        client,
+        'async () => codemode.request({ method: "GET", path: "/api/v1/organizations", query: { limit: 1 } })',
+      );
+      expect(allowed.isError, JSON.stringify(allowed)).not.toBe(true);
+      const content = allowed.content as Array<{ type: string; text?: string }>;
+      expect(content[0]?.type).toBe("text");
+      expect(organizationsListResponseSchema.parse(JSON.parse(content[0]!.text!)).page.limit).toBe(1);
+    });
+  });
+  it("enforces live removal of a delegated operation scope", async () => {
+    await withAuthorizedMcpClient(async (client, grant) => {
+      const code = 'async () => codemode.request({ method: "GET", path: "/api/v1/users" })';
+      const allowed = await executeMcp(client, code);
+      expect(allowed.isError, JSON.stringify(allowed)).not.toBe(true);
+      await env.DB.prepare("DELETE FROM oauth_authorization_permissions WHERE authorization_id=? AND permission=?")
+        .bind(grant.authorizationId, "users:read")
+        .run();
+      const narrowed = await executeMcp(client, code);
+      expect(JSON.stringify(narrowed.content)).toMatch(/PERMISSION|SCOPE|FORBIDDEN/i);
+    });
+  });
+  it.each([
+    [
+      "external origins",
+      'async () => codemode.request({ method: "GET", path: "https://untrusted.example/api/v1/users" })',
+      "exposed API operation",
+    ],
+    [
+      "operation chains",
+      'async () => { await codemode.request({ method: "GET", path: "/api/v1/users" }); return codemode.request({ method: "GET", path: "/api/v1/organizations" }); }',
+      "exactly one",
+    ],
+  ])("refuses %s through the MCP protocol", async (_scenario, code, message) => {
+    await withAuthorizedMcpClient(async (client) => {
+      const refused = await executeMcp(client, code);
+      expect(refused.isError).toBe(true);
+      expect(JSON.stringify(refused.content)).toContain(message);
+    });
+  });
+  it("initializes personal promotion materials through MCP", async () => {
+    await withAuthorizedMcpClient(async (client, grant) => {
+      await registerPromotionAttendee(grant.userId);
+      const initialized = await executeMcp(
+        client,
+        'async () => codemode.request({method:"POST",path:"/api/v1/events/pqc-2026/promotion/referrals",body:{}})',
+      );
+      expect(initialized.isError, JSON.stringify(initialized)).not.toBe(true);
+      const kit = promotionKitSchema.parse(JSON.parse((initialized.content as Array<{ text: string }>)[0]!.text));
+      expect(kit.audience).toBe("attendee");
+      expect(kit.registrationUrl).toMatch(/^https:\/\/app\.test\/r\//);
+    });
+  });
+  it("saves and queues personal promotion materials through MCP", async () => {
+    await withAuthorizedMcpClient(async (client, grant) => {
+      const kit = await prepareAttendeePromotion(grant);
+      const operation = promotionSaveOperation(kit);
+      const saved = await executeMcp(client, `async () => codemode.request(${JSON.stringify(operation)})`);
+      expect(saved.isError, JSON.stringify(saved)).not.toBe(true);
+      const personal = promotionKitSchema.parse(JSON.parse((saved.content as Array<{ text: string }>)[0]!.text));
+      expect(personal.compositionRevision).toBe(1);
+      expect(personal.registrationUrl).toBe(kit.registrationUrl);
+      expect(personal.composition?.takeaways).toEqual(operation.body.composition.takeaways);
+      const queued = await executeMcp(
+        client,
+        `async () => codemode.request(${JSON.stringify({ method: "POST", path: "/api/v1/events/pqc-2026/promotion/renders", body: { fingerprint: personal.fingerprint, publishedRevision: personal.publishedRevision, compositionRevision: personal.compositionRevision, formats: ["portrait"] } })})`,
+      );
+      expect(queued.isError, JSON.stringify(queued)).not.toBe(true);
+      expect(
+        promotionKitSchema.parse(JSON.parse((queued.content as Array<{ text: string }>)[0]!.text)).artifacts,
+      ).toMatchObject([{ format: "portrait", status: "queued" }]);
+    });
+  });
+  it("refuses a caught operation chain before its first promotion write", async () => {
+    await withAuthorizedMcpClient(async (client, grant) => {
+      const kit = await prepareAttendeePromotion(grant);
+      const operation = promotionSaveOperation(kit);
+      const chained = await executeMcp(
+        client,
+        `async () => { const first = await codemode.request(${JSON.stringify(operation)}); try { await codemode.request({method:"GET",path:"/api/v1/events/pqc-2026/promotion"}); } catch {} return first; }`,
+      );
+      expect(chained.isError).toBe(true);
+      expect(
+        await env.DB.prepare("SELECT COUNT(*) AS count FROM event_promotion_kits WHERE user_id=?")
+          .bind(grant.userId)
+          .first(),
+      ).toEqual({ count: 0 });
+    });
+  });
+  it("refuses promotion writes atomically when no selected MCP permission remains", async () => {
+    await withAuthorizedMcpClient(async (_client, grant) => {
+      const kit = await prepareAttendeePromotion(grant);
+      const operation = promotionSaveOperation(kit);
+      const saved = await callApi(
+        env,
+        operation.path,
+        {
+          method: operation.method,
+          headers: { cookie: `pkic_session=${grant.userToken}`, "content-type": "application/json" },
+          body: JSON.stringify(operation.body),
+        },
+        { maxRoundTrips: 1 },
+      );
+      expect(saved.status, await saved.clone().text()).toBe(200);
+      const referencePermissions = await queryAll<{
+        id: string;
+        role_id: string;
+        permission: string;
+        created_at: string;
+      }>(
+        env.DB,
+        "SELECT id,role_id,permission,created_at FROM role_permissions WHERE permission IN('forms:read','organizations:read','users:read')",
+      );
+      try {
+        await env.DB.prepare(
+          "DELETE FROM role_permissions WHERE permission IN('forms:read','organizations:read','users:read')",
+        ).run();
+        const refused = await callApi(
+          env,
+          MCP_PATH,
+          {
+            method: "POST",
+            headers: {
+              authorization: `Bearer ${grant.access_token}`,
+              "content-type": "application/json",
+              accept: "application/json, text/event-stream",
+            },
+            body: JSON.stringify({
+              jsonrpc: "2.0",
+              id: 3,
+              method: "tools/call",
+              params: {
+                name: "execute",
+                arguments: {
+                  code: `async () => codemode.request(${JSON.stringify({ ...operation, body: { ...operation.body, expectedRevision: 1 } })})`,
+                },
+              },
+            }),
+          },
+          { maxRoundTrips: 1 },
+        );
+        expect(refused.status, await refused.clone().text()).toBe(401);
+        expect(refused.headers.get("www-authenticate")).toContain("invalid_token");
+        expect(
+          await env.DB.prepare("SELECT revision FROM event_promotion_kits WHERE user_id=?").bind(grant.userId).first(),
+        ).toEqual({ revision: 1 });
+      } finally {
+        await env.DB.batch(
+          referencePermissions.map((row) =>
+            env.DB.prepare("INSERT INTO role_permissions(id,role_id,permission,created_at) VALUES(?,?,?,?)").bind(
+              row.id,
+              row.role_id,
+              row.permission,
+              row.created_at,
+            ),
+          ),
+        );
+        expect(
+          await queryAll(
+            env.DB,
+            "SELECT id,role_id,permission,created_at FROM role_permissions WHERE permission IN('forms:read','organizations:read','users:read')",
+          ),
+        ).toEqual(referencePermissions);
+      }
+    });
+  });
   it("issues only the approved subset and keeps refresh downscoping", async () => {
     const grant = await authorize();
     expect(new Set(grant.scope.split(" "))).toEqual(new Set(["forms:read", "organizations:read", "users:read"]));

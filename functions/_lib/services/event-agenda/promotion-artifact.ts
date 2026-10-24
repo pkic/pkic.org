@@ -1,4 +1,5 @@
 import { promotionPortraits } from "./promotion-portraits";
+import fontkit from "@pdf-lib/fontkit";
 import { downloadZip } from "client-zip";
 import type { Env } from "../../types";
 import { AppError } from "../../errors";
@@ -52,15 +53,34 @@ export async function renderPromotionArtifact(
       renderer.free();
     }
   }
+  const faces = [fontkit.create(fonts[0]!), fontkit.create(fonts[1]!)];
   const source = {
     ...data,
     portraits: await promotionPortraits(env, origin, data),
     logoPng,
     logoDataUrl: logoBytes ? `data:image/svg+xml;base64,${uint8ToBase64(logoBytes)}` : undefined,
+    measure: (text: string, size: number, bold: boolean) => {
+      const face = faces[bold ? 1 : 0]!;
+      return (
+        (face
+          .layout(text)
+          .positions.reduce((sum: number, position: { xAdvance: number }) => sum + position.xAdvance, 0) *
+          size) /
+        face.unitsPerEm
+      );
+    },
+  };
+  const rasterize = async (svg: string) => {
+    const renderer = new Resvg(svg, { font: { fontBuffers: fonts, defaultFontFamily: "Roboto" } });
+    try {
+      return renderer.render().asPng();
+    } finally {
+      renderer.free();
+    }
   };
   if (format === "carousel")
     return {
-      body: await renderPromotionPdf(source, fonts[0]!, fonts[1]!, fonts.slice(2)),
+      body: await renderPromotionPdf(source, fonts[0]!, fonts[1]!, fonts.slice(2), rasterize),
       contentType: "application/pdf",
       count: 1,
     };

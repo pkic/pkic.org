@@ -23,8 +23,9 @@ openapi.route("/:userId/headshots", publicUserHeadshotsRouter);
 openapi.route("/:userId", communityProfileRouter);
 // This read composes its live staff authorization with the scoped audit page.
 openapi.get("/:userId/audit-log", UserAuditLogGet);
-app.use("*", createRequestScopedD1SessionMiddleware());
+// The list also composes live authority with its bounded page and count.
 openapi.get("/", UsersList);
+app.use("*", createRequestScopedD1SessionMiddleware());
 openapi.post("/", UserCreate);
 openapi.route("/:userId", userIdRouter);
 

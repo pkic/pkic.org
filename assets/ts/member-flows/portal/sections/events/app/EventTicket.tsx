@@ -24,13 +24,23 @@ import { RegistrationOfferNotice } from "./RegistrationOfferNotice";
 import { attendanceStanding, type AttendanceStanding } from "../../../../../shared/viewer-attendance";
 import { formatDayList } from "../../../../../../shared/format-date";
 
-export function EventTicket({ event }: { event: ParticipantEventDetail }) {
+export function EventTicket({
+  event,
+  onRegistered,
+}: {
+  event: ParticipantEventDetail;
+  onRegistered?: () => Promise<void>;
+}) {
   const standing = eventRegistrationStanding(event);
   const ended = eventPhase(event.startsAt, event.endsAt).kind === "ended";
   if (!standing.registered)
     return (
       <EventCard eyebrow="Registration" title="No ticket yet">
-        <RegistrationOfferNotice offer={registrationOffer(event, ended)} />
+        <RegistrationOfferNotice
+          offer={registrationOffer(event, ended)}
+          slug={event.slug}
+          onRegistered={onRegistered}
+        />
       </EventCard>
     );
   if (!standing.registrationId)

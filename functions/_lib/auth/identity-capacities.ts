@@ -1,3 +1,4 @@
+import { MAX_ACTING_IDENTITIES, SESSION_ACTING_IDENTITY_ORDER_SQL } from "./session-acting-identities";
 import { sessionEmailSignInAllowedSql } from "./email-sign-in-policy";
 import { hasEventParticipation } from "./event-participation";
 import type { AuthMember, DatabaseLike, EligibleIdentity } from "../types";
@@ -409,4 +410,20 @@ export async function resolveIdentityCapacities(
         actingIdentities,
       }
     : null;
+}
+
+/** Canonical live acting identity choice, shared by atomic audit and membership selection. */
+export function userSessionActingIdentitySelection(userId: string, selectedIdentityId?: string) {
+  return {
+    sql: `WITH acting AS MATERIALIZED(SELECT identity.id FROM identities identity LEFT JOIN organizations organization ON organization.id=identity.organization_id WHERE identity.user_id=? AND identity.started_at IS NOT NULL AND identity.ended_at IS NULL AND identity.blocked_at IS NULL ORDER BY ${SESSION_ACTING_IDENTITY_ORDER_SQL} LIMIT ${MAX_ACTING_IDENTITIES}) SELECT COALESCE((SELECT id FROM acting WHERE id=?),(SELECT MIN(id) FROM acting HAVING COUNT(*)=1))`,
+    bindings: [userId, selectedIdentityId ?? null],
+  };
+}
+/** The same live acting identity/member choice used by the session decoder, available inside a command guard. */
+export function userSessionMemberSelection(userId: string, selectedIdentityId?: string) {
+  const identity = userSessionActingIdentitySelection(userId, selectedIdentityId);
+  return {
+    sql: `SELECT eligible.member_id FROM (${MEMBER_ELIGIBLE_USER_SELECT}) eligible WHERE eligible.id=? AND eligible.active=1 AND eligible.identity_id=(${identity.sql}) ORDER BY eligible.sort_key LIMIT 1`,
+    bindings: [userId, ...identity.bindings],
+  };
 }

@@ -219,7 +219,16 @@ describe("event bottom tabs", () => {
     // Each tab has a decorative glyph over its label; the label stays the accessible name.
     for (const tab of bar.querySelectorAll("a, button"))
       expect(tab.querySelector("svg.pk-app-tabbar__icon")?.getAttribute("aria-hidden")).toBe("true");
-    expect(tabLabels("Event")).toEqual(["Overview", "Agenda", "My agenda", "Ticket", "Virtual room", "Registration"]);
+    expect(tabLabels("Event")).toEqual([
+      "Overview",
+      "Agenda",
+      "My agenda",
+      "Ticket",
+      "Virtual room",
+      "Registration",
+      "Promotion kits",
+    ]);
+    expect(host.querySelector('[data-event-more="promotion"]')?.getAttribute("href")).toBe("#/events/summit/promotion");
     // The desktop tabs remain the page's one "Event" navigation.
     expect(host.querySelectorAll('nav[aria-label="Event"]')).toHaveLength(1);
     expect(host.querySelector('[data-event-more="registration"]')?.getAttribute("href")).toBe(
@@ -235,8 +244,9 @@ describe("event home", () => {
     await act(() => render(<ParticipantEvent event={event()} />, host));
     expect(host.querySelector(".pk-event-hero__title")?.textContent).toBe("Summit");
     expect(host.textContent).toContain("Amsterdam");
-    const register = [...host.querySelectorAll("a")].find((link) => link.textContent === "Register");
-    expect(register?.getAttribute("href")).toBe("/events/summit/register/");
+    const register = [...host.querySelectorAll("button")].find((button) => button.textContent === "Register");
+    expect(register).toBeTruthy();
+    expect(host.querySelector('a[href="/events/summit/register/"]')).toBeNull();
     const card = register!.closest(".pk-event-card")!;
     expect(card.querySelector(".pk-event-card__eyebrow")?.textContent).toBe("Registration");
     expect(card.querySelector(".pk-event-card__title")?.textContent).toBe("You're not registered yet");
@@ -437,7 +447,7 @@ describe("event home", () => {
   it("offers registration on the ticket tab to a reader without one", async () => {
     await act(() => render(<ParticipantEvent event={event()} tab="ticket" />, host));
     expect(host.textContent).toContain("No ticket yet");
-    expect(host.querySelector('a[href="/events/summit/register/"]')).not.toBeNull();
+    expect([...host.querySelectorAll("button")].some((button) => button.textContent === "Register")).toBe(true);
     expect(requests).toEqual([]);
   });
 });

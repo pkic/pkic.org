@@ -1227,11 +1227,7 @@ describe("users list — type filter", () => {
   }
 
   async function listUsers(query: string): Promise<{ users: ListedUser[] }> {
-    const response = await app.fetch(
-      adminRequest(`/api/v1/users?${query}`, "GET"),
-      env as any,
-      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
-    );
+    const response = await callApi(env, adminRequest(`/api/v1/users?${query}`, "GET"), undefined, { maxRoundTrips: 1 });
     expect(response.status).toBe(200);
     return response.json();
   }

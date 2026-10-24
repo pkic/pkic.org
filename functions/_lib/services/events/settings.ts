@@ -47,6 +47,7 @@ function mergeEventSettings(
   };
   assignNullable("venue", input.venue);
   assignNullable("badgeTemplate", input.badgeTemplate);
+  assignNullable("promotionDesign", input.promotionDesign);
   assignNullable("virtualUrl", input.virtualUrl);
   assignNullable("attendance", input.attendance);
   if (input.heroImageUrl !== undefined) {
@@ -127,7 +128,10 @@ export function buildEventSettingsMutationStatements(
   );
   const settingsJson = stringifyJson(mergedSettings);
   if (
-    (input.settings.badgeTemplate !== undefined || mergedSettings.badgeTemplate !== undefined) &&
+    (input.settings.badgeTemplate !== undefined ||
+      mergedSettings.badgeTemplate !== undefined ||
+      input.settings.promotionDesign !== undefined ||
+      mergedSettings.promotionDesign !== undefined) &&
     new TextEncoder().encode(settingsJson).byteLength > BADGE_TEMPLATE_SETTINGS_MAX_BYTES
   ) {
     throw new AppError(
@@ -137,7 +141,7 @@ export function buildEventSettingsMutationStatements(
     );
   }
   const auditSource = input.auditDetails ?? input.settings;
-  const auditDetails =
+  const templateAuditDetails =
     input.settings.badgeTemplate === undefined
       ? auditSource
       : {
@@ -153,6 +157,21 @@ export function buildEventSettingsMutationStatements(
                   assetCount: Object.keys(input.settings.badgeTemplate.assets).length,
                   bytes: new TextEncoder().encode(stringifyJson(input.settings.badgeTemplate)).byteLength,
                 },
+        };
+  const auditDetails =
+    input.settings.promotionDesign === undefined
+      ? templateAuditDetails
+      : {
+          ...(templateAuditDetails && typeof templateAuditDetails === "object" && !Array.isArray(templateAuditDetails)
+            ? templateAuditDetails
+            : { details: templateAuditDetails }),
+          promotionDesign: input.settings.promotionDesign
+            ? {
+                version: input.settings.promotionDesign.version,
+                name: input.settings.promotionDesign.name,
+                bytes: new TextEncoder().encode(stringifyJson(input.settings.promotionDesign)).byteLength,
+              }
+            : null,
         };
   const statements: StatementLike[] = [
     ...(input.authorizationGuards ?? []),

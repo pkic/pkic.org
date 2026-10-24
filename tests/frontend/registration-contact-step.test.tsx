@@ -348,7 +348,8 @@ describe("registration contact step", () => {
 describe("signed-in registration identity", () => {
   it("offers an existing organization identity", async () => {
     installResponses("Example Corp");
-    const form = await mount(<RegistrationIdentitySelect />);
+    const onSelect = vi.fn();
+    const form = await mount(<RegistrationIdentitySelect onSelect={onSelect} />);
     const combobox = form.querySelector<HTMLInputElement>('[role="combobox"]');
     expect(combobox).not.toBeNull();
     await act(async () => {
@@ -357,6 +358,12 @@ describe("signed-in registration identity", () => {
     expect(
       [...document.querySelectorAll('[role="option"]')].some((option) => option.textContent === "Example Corp"),
     ).toBe(true);
+    const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
+      (item) => item.textContent === "Example Corp",
+    )!;
+    await act(() => option.click());
+    expect(onSelect).toHaveBeenCalledWith(IDENTITY_ID);
+    expect(value(form, "identityId")).toBe(IDENTITY_ID);
   });
 
   it("hides the selector for a person with only an individual identity", async () => {

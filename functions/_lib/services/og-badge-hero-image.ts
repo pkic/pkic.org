@@ -1,3 +1,5 @@
+import { bytesToBase64 as uint8ToBase64 } from "../../../assets/shared/base64";
+export { bytesToBase64 as uint8ToBase64 } from "../../../assets/shared/base64";
 import type { Env } from "../types";
 import { readBoundedStream } from "../utils/bounded-stream";
 import { SUPPORTED_RASTER_IMAGE_CONTENT_TYPES, validateRasterImage } from "../utils/image-format";
@@ -21,16 +23,6 @@ export async function fetchStaticAsset(
   const request = new Request(new URL(path, origin).toString(), signal ? { signal } : undefined);
   const binding = getAssetBinding(env);
   return binding ? binding.fetch(request) : fetch(request);
-}
-
-/** Fast Uint8Array to base64 without quadratic string reallocation. */
-export function uint8ToBase64(bytes: Uint8Array): string {
-  const chunkSize = 0x8000;
-  let binary = "";
-  for (let index = 0; index < bytes.length; index += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
-  }
-  return btoa(binary);
 }
 
 export const MAX_HERO_IMAGE_BYTES = 5 * 1024 * 1024;

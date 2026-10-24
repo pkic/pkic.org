@@ -31,7 +31,7 @@ import { SectionHeading } from "../../../../ui/SectionHeading";
 import { EventTicket } from "./app/EventTicket";
 import { EventMore } from "./app/EventMore";
 import { eventRegistrationStanding } from "./app/event-app-model";
-import { participantEventAppSubject } from "./app/event-app-tabs";
+import { hasEventProposals, hasEventPromotionMaterials, participantEventAppSubject } from "./app/event-app-tabs";
 
 const MyAgenda = lazy(() => import("./detail/participation/MyAgenda").then((module) => ({ default: module.MyAgenda })));
 const EventCheckIn = lazy(() => import("./app/EventCheckIn").then((module) => ({ default: module.EventCheckIn })));
@@ -45,7 +45,12 @@ const MySessionManagement = lazy(() =>
   import("./detail/participation/MySessionManagement").then((module) => ({ default: module.MySessionManagement })),
 );
 type EventDetail = z.infer<typeof eventDetailResponseSchema>["event"];
-type Selection = { kind?: "registration" | "proposal"; resourceId?: string; tab?: string; pointToken?: string };
+type Selection = {
+  kind?: "registration" | "proposal";
+  resourceId?: string;
+  tab?: string;
+  pointToken?: string;
+};
 const href = usePortalHashLocation.hrefs;
 /** The compact header's title for each participant page other than the event home. */
 const PAGE_LABELS: Record<string, string> = {
@@ -68,16 +73,23 @@ export function ParticipantEventPage({ slug, ...selection }: Selection & { slug:
   );
   if (loaded.loading) return <Spinner label="Loading event…" />;
   if (!loaded.data) return <Alert tone="danger">{loaded.error}</Alert>;
-  return <ParticipantEvent event={loaded.data.event} {...selection} />;
+  return <ParticipantEvent event={loaded.data.event} {...selection} onRegistered={loaded.reload} />;
 }
 
-export function ParticipantEvent({ event, kind, resourceId, tab, pointToken }: Selection & { event: EventDetail }) {
+export function ParticipantEvent({
+  event,
+  kind,
+  resourceId,
+  tab,
+  pointToken,
+  onRegistered,
+}: Selection & { event: EventDetail; onRegistered?: () => Promise<void> }) {
   const [location] = useHashLocation();
   // One agenda route: the whole program, or with `?mine=1` the same view filtered to the reader's sessions.
   const mine = isMyAgendaQuery(new URLSearchParams(location.split("?", 2)[1] ?? ""));
   const base = `/events/${encodeURIComponent(event.slug)}`;
   const registrationId = event.participation?.registrationId;
-  const hasProposals = Boolean(event.participation?.proposals || event.participation?.speakerProposals);
+  const hasProposals = hasEventProposals(event);
   const active =
     kind === "registration"
       ? "registration"
@@ -115,6 +127,9 @@ export function ParticipantEvent({ event, kind, resourceId, tab, pointToken }: S
           },
         ]
       : []),
+    ...(hasEventPromotionMaterials(event)
+      ? [{ id: "promotion", label: "Promotion kits", href: href(base + "/promotion") }]
+      : []),
     ...(hasProposals
       ? [
           {
@@ -122,7 +137,6 @@ export function ParticipantEvent({ event, kind, resourceId, tab, pointToken }: S
             label: "Proposals",
             href: href(base + "/submissions"),
           },
-          { id: "promotion", label: "Promotion kits", href: href(base + "/promotion") },
           { id: "session-management", label: "My sessions", href: href(base + "/session-management") },
         ]
       : []),
@@ -164,7 +178,7 @@ export function ParticipantEvent({ event, kind, resourceId, tab, pointToken }: S
         </Suspense>
       ) : tab === "promotion" ? (
         <Suspense fallback={<Spinner />}>
-          <MyPromotionKits slug={event.slug} />
+          <MyPromotionKits slug={event.slug} attendeeEligible={eventRegistrationStanding(event).registered} />
         </Suspense>
       ) : tab === "lead-scanner" ? (
         <ParticipantLeadScanner eventId={event.id} slug={event.slug} scannerAccess={event.scannerAccess} />
@@ -175,7 +189,7 @@ export function ParticipantEvent({ event, kind, resourceId, tab, pointToken }: S
           <VirtualRoom slug={event.slug} eventName={event.name} />
         </Suspense>
       ) : tab === "ticket" ? (
-        <EventTicket event={event} />
+        <EventTicket event={event} onRegistered={onRegistered} />
       ) : tab === "check-in" ? (
         <Suspense fallback={<Spinner />}>
           <EventCheckIn slug={event.slug} pointToken={pointToken} />
@@ -183,7 +197,7 @@ export function ParticipantEvent({ event, kind, resourceId, tab, pointToken }: S
       ) : tab === "more" ? (
         <EventMore event={event} />
       ) : (
-        <EventHome event={event} />
+        <EventHome event={event} onRegistered={onRegistered} />
       )}
     </div>
   );

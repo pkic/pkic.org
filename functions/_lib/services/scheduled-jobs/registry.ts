@@ -12,6 +12,7 @@ import {
 } from "../event-recordings/acquisition-cleanup";
 import { recordingAcquisitionCleanupStorage } from "../event-recordings/acquisition-cleanup-storage";
 import { runSitePublicationPipeline } from "../site-publication-runtime";
+import { processPendingPromotionRecipients } from "../event-agenda/promotion-batch-dispatch";
 import { processPendingPromotionRenders } from "../event-agenda/promotion-render-jobs";
 import { runAgendaParticipationDueWork } from "../event-participation/reconciliation";
 import { runAgendaSessionReminders } from "../event-participation/reminders";
@@ -222,6 +223,7 @@ export const SCHEDULED_JOB_DEFINITIONS: readonly ScheduledJobDefinition[] = [
     leaseSeconds: DEFAULT_LEASE_SECONDS,
     requiredPermissions: ["email:manage"],
     run: async ({ env, d1QueryBudget }) => {
+      await processPendingPromotionRecipients(env.DB, 1);
       await processPendingPromotionRenders(env.DB, env, 2);
       await runScheduledDueWork(env, { d1QueryBudget });
     },
