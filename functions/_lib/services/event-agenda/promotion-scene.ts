@@ -1,3 +1,4 @@
+import { layoutPromotionSponsors } from "./promotion-sponsors";
 import { plainText } from "../../../../assets/shared/markdown-plain-text";
 import { formatClockInZone, formatTimeRangeInZone, formatDateRange } from "../../../../assets/shared/format-date";
 import {
@@ -37,6 +38,9 @@ export interface PromotionPage {
   height: number;
   light?: boolean;
   qr?: boolean;
+  sponsorBoard?: { x: number; width: number };
+  markX?: number;
+  rules?: { x: number; y: number; width: number }[];
 }
 interface PromotionBlock {
   text: string;
@@ -102,12 +106,16 @@ export function buildPromotionPages(
     x = margin,
   ) => page.texts.push({ text, x, y, size, bold, role });
   let blockSequence = 0;
-  function flow(title: string, blocks: PromotionBlock[], start = 200 * scale, maxWidth = usable) {
+  let reservedRight = 0;
+  function flow(title: string, blocks: PromotionBlock[], start = 200 * scale, maxWidth = usable - reservedRight) {
     let page = add(title),
       y = start;
-    const header = promotionMeasuredLines(title.toUpperCase(), usable, (line) => measure(line, 22 * scale, true));
-    for (const [index, line] of header.entries()) put(page, line, (120 + index * 28) * scale, 22 * scale, true, "H2");
-    y = Math.max(y, (170 + header.length * 28) * scale);
+    const headerTop =
+      format === "carousel" && title === composition.callToAction && selected.indexOf("register") >= 2 ? 410 : 120;
+    const header = promotionMeasuredLines(title.toUpperCase(), maxWidth, (line) => measure(line, 22 * scale, true));
+    for (const [index, line] of header.entries())
+      put(page, line, (headerTop + index * 28) * scale, 22 * scale, true, "H2");
+    y = Math.max(y, (headerTop + 50 + header.length * 28) * scale);
     for (const block of blocks) {
       const group = `block-${blockSequence++}`;
       const indent = block.indent ?? (block.portrait ? 150 * scale : 0);
@@ -200,6 +208,12 @@ export function buildPromotionPages(
     flow(data.agenda.eventName ?? "PKI Consortium", blocks, 220 * scale);
   }
   for (const panel of format === "carousel" ? selected : selected.filter((panel) => panel === "sponsors")) {
+    reservedRight =
+      format === "carousel" &&
+      selected[selected.indexOf(panel) + 1] === "sponsors" &&
+      data.sponsors?.some((group) => group.sponsors.length)
+        ? (composition.overlap === "bold" ? 220 : 90) * scale
+        : 0;
     if (panel === "cover") {
       const size = (height < 800 ? 52 : 84) * scale;
       const before = pages.length;
@@ -220,7 +234,7 @@ export function buildPromotionPages(
           { text: [dates, time, location].filter(Boolean).join(" · "), size: 23 * scale },
         ],
         height < 800 ? 170 * scale : 420 * scale,
-        Math.min(usable, 760 * scale),
+        Math.min(usable - reservedRight, 760 * scale),
       );
       if (pages[before]?.texts[0]) pages[before].texts[0].y = height < 800 ? 140 * scale : 355 * scale;
       const primary = people.find((p) => p.userId === data.actorId) ?? people[0];
@@ -229,7 +243,7 @@ export function buildPromotionPages(
         if (photo)
           page.pictures.push({
             src: photo,
-            x: width - 300 * scale,
+            x: width - 300 * scale - reservedRight,
             y: 50 * scale,
             width: 220 * scale,
             height: 220 * scale,
@@ -330,46 +344,31 @@ export function buildPromotionPages(
         { text: [data.place, dates].filter(Boolean).join(" · "), size: 32 * scale },
         { text: data.registrationUrl, size: 24 * scale },
       ]);
-      page.qr = true;
+      page.qr = composition.qrCode;
     }
     if (panel === "sponsors" && data.sponsors?.some((group) => group.sponsors.length)) {
-      let page = add("Our sponsors", true),
-        y = 200 * scale;
-      put(page, "Our sponsors", 120 * scale, 48 * scale, true, "H2");
-      for (const group of data.sponsors) {
-        if (!group.sponsors.length) continue;
-        const columns = Math.min(5, group.sponsors.length),
-          cell = usable / columns;
-        for (let offset = 0; offset < group.sponsors.length; offset += columns) {
-          if (y + 140 * scale > footer) {
-            page = add("Our sponsors", true);
-            put(page, "Our sponsors", 120 * scale, 48 * scale, true, "H2");
-            y = 200 * scale;
-          }
-          if (offset === 0 || y === 200 * scale) {
-            put(page, group.label ?? group.tierName, y, 22 * scale, true, "H2");
-            y += 35 * scale;
-          }
-          for (const [index, sponsor] of group.sponsors.slice(offset, offset + columns).entries())
-            page.pictures.push({
-              src: `data:image/svg+xml;base64,${sponsor.base64}`,
-              x: margin + index * cell,
-              y,
-              width: cell - 24 * scale,
-              height: 65 * scale,
-              alt: sponsor.name,
-            });
-          y += 95 * scale;
-        }
-        y += 20 * scale;
-      }
+      layoutPromotionSponsors(data.sponsors, add, put, scale, footer);
     }
   }
 
   if (!pages.length) flow("Promotion materials", [{ text: heading, size: 48 * scale, bold: true, role: "H1" }]);
   for (const page of pages) {
     page.total = pages.length;
-    page.qr = true;
+    page.qr = composition.qrCode;
+  }
+  for (const page of pages) {
+    if (!page.light) continue;
+    const overlap = format === "carousel" && page.index > 0 ? (composition.overlap === "bold" ? 220 : 90) * scale : 0;
+    page.sponsorBoard = { x: -overlap, width: width + overlap };
+    const previous = pages[page.index - 1];
+    if (overlap && previous && !previous.light) previous.sponsorBoard = { x: width - overlap, width: width + overlap };
+  }
+  // Artwork occupies one panorama coordinate system, clipped by each exported page.
+  const registerIndex = pages.findIndex((page) => page.title === composition.callToAction);
+  if (format === "carousel" && registerIndex >= 2 && !pages[registerIndex - 1]!.light) {
+    const x = (composition.overlap === "bold" ? 800 : 940) * scale;
+    pages[registerIndex - 1]!.markX = x;
+    pages[registerIndex]!.markX = x - width;
   }
   const first = pages[0],
     next = pages[1],

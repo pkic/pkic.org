@@ -1,3 +1,4 @@
+import { promotionBatchCreateSchema, promotionBatchSchema } from "./event-promotion-batches";
 import { z } from "zod";
 import { eventSlugParamsSchema } from "./api-common";
 import { promotionArtifactQuerySchema, promotionKitSchema, promotionKitSaveSchema } from "./event-promotion-kit";
@@ -88,4 +89,27 @@ export const eventPromotionArtifactGetRouteSchema = {
 export const eventPromotionSessionsGetRouteSchema = {
   ...promotionSessionsGetRouteSchema,
   summary: "List public sessions available for own promotion kit",
+};
+
+export const promotionBatchesCreateRouteSchema = {
+  tags: ["Event promotion"],
+  "x-pkic-mcp": { expose: true },
+  ...requiresPermissions("agenda:write"),
+  summary: "Prepare personal promotion materials for all published session speakers",
+  request: {
+    params: eventSlugParamsSchema,
+    body: { content: { "application/json": { schema: promotionBatchCreateSchema } } },
+  },
+  responses: {
+    ...ok("Bulk promotion progress", promotionBatchSchema),
+    ...authErrors({ conflict: "Published agenda changed" }),
+  },
+};
+export const promotionBatchGetRouteSchema = {
+  tags: ["Event promotion"],
+  "x-pkic-mcp": { expose: true, readonly: true },
+  ...requiresPermissions("agenda:write"),
+  summary: "Read bulk speaker promotion progress",
+  request: { params: eventSlugParamsSchema.extend({ batchId: z.uuid() }) },
+  responses: { ...ok("Bulk promotion progress", promotionBatchSchema), ...authErrors({ notFound: "Batch not found" }) },
 };

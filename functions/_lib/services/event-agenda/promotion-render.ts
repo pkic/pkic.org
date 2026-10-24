@@ -23,7 +23,11 @@ export interface PromotionRenderData {
   mediaWording?: string;
   picks?: AgendaOccurrence[];
   people?: { userId: string; displayName: string; affiliation: string; photoUrl: string | null; role: string }[];
-  sponsors?: { tierName: string; label?: string; sponsors: { id: string; name: string; base64: string }[] }[];
+  sponsors?: {
+    tierName: string;
+    label?: string;
+    sponsors: { id: string; name: string; base64: string; aspectRatio?: number }[];
+  }[];
   logoDataUrl?: string;
   logoPng?: Uint8Array;
   portraits?: Record<string, string>;

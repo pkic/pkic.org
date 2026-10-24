@@ -29,3 +29,32 @@ CREATE TABLE event_promotion_renders (
 );
 CREATE INDEX event_promotion_render_due ON event_promotion_renders(status,next_attempt_at,lease_expires_at);
 CREATE INDEX event_promotion_render_owner ON event_promotion_renders(event_id,user_id,occurrence_id,fingerprint,format);
+
+-- A bulk request contains resource references only. The dispatcher prepares
+-- bounded recipients for the existing render queue; it never renders a full
+-- event inside an HTTP request.
+CREATE TABLE event_promotion_batches (
+ id TEXT PRIMARY KEY,
+ event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+ requested_by TEXT NOT NULL REFERENCES users(id),
+ published_revision INTEGER NOT NULL,
+ formats_json TEXT NOT NULL CHECK(json_valid(formats_json)),
+ origin TEXT NOT NULL,
+ created_at TEXT NOT NULL
+);
+CREATE INDEX event_promotion_batch_event ON event_promotion_batches(event_id,created_at);
+CREATE TABLE event_promotion_batch_recipients (
+ batch_id TEXT NOT NULL REFERENCES event_promotion_batches(id) ON DELETE CASCADE,
+ occurrence_id TEXT NOT NULL REFERENCES event_agenda_occurrences(id) ON DELETE CASCADE,
+ user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ status TEXT NOT NULL DEFAULT 'queued',
+ fingerprint TEXT,
+ attempts INTEGER NOT NULL DEFAULT 0,
+ next_attempt_at TEXT NOT NULL,
+ processing_token TEXT,
+ lease_expires_at TEXT,
+ last_error TEXT,
+ updated_at TEXT NOT NULL,
+ PRIMARY KEY(batch_id,occurrence_id,user_id)
+);
+CREATE INDEX event_promotion_batch_due ON event_promotion_batch_recipients(status,next_attempt_at,lease_expires_at);

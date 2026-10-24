@@ -1,3 +1,6 @@
+import { findOrCreateUser } from "../functions/_lib/services/users";
+import { promotionBatchCreateSchema, promotionBatchSchema } from "../assets/shared/schemas/event-promotion-batches";
+import { processPendingPromotionRecipients } from "../functions/_lib/services/event-agenda/promotion-batch-dispatch";
 import { promotionPortraits } from "../functions/_lib/services/event-agenda/promotion-portraits";
 import { getPromotionKit } from "../functions/_lib/services/event-agenda/promotion-kit";
 import { validJpegBytes } from "./helpers/raster-images";
@@ -19,7 +22,7 @@ import { getAttendeePromotionKit } from "../functions/_lib/services/event-agenda
 import { recordReferralClick, recordReferralConversion } from "../functions/_lib/services/referrals";
 
 const eventBase = "/api/v1/events/pqc-2026";
-async function fixture() {
+async function fixture(withSecondSpeaker = false) {
   const { eventId } = await seedEventAndAdmin(env.DB);
   const admin = (await env.DB.prepare("SELECT id,email FROM users WHERE email='admin@pkic.org'").first<{
     id: string;
@@ -29,6 +32,9 @@ async function fixture() {
     authorization: `Bearer ${await createAdminSession(env.DB, admin.id, "promotion-admin")}`,
     "content-type": "application/json",
   };
+  const secondSpeaker = withSecondSpeaker
+    ? await findOrCreateUser(env.DB, { email: "bulk-speaker@example.test", firstName: "Second", lastName: "Speaker" })
+    : null;
   const draft = await createAgendaOccurrence(
     env.DB,
     eventId,
@@ -40,7 +46,7 @@ async function fixture() {
       startAt: "2026-12-01T09:00:00.000Z",
       endAt: "2026-12-01T09:30:00.000Z",
       roomId: null,
-      speakerUserIds: [admin.id],
+      speakerUserIds: secondSpeaker ? [admin.id, secondSpeaker.id] : [admin.id],
     }),
     admin.id,
   );
@@ -51,6 +57,18 @@ async function fixture() {
       expectedRevision: draft.revision,
       history: {
         appearances: [
+          ...(secondSpeaker
+            ? [
+                {
+                  userId: secondSpeaker.id,
+                  displayName: "Second Speaker",
+                  affiliations: [],
+                  biography: "",
+                  photoUrl: null,
+                  approvedAt: new Date().toISOString(),
+                },
+              ]
+            : []),
           {
             userId: admin.id,
             displayName: "Example Speaker",
@@ -91,6 +109,7 @@ async function fixture() {
   return {
     eventId,
     admin,
+    secondSpeaker,
     headers,
     userId,
     attendeeHeaders,
@@ -100,6 +119,81 @@ async function fixture() {
 }
 describe("personal event promotion kits", () => {
   beforeEach(() => resetDb());
+  it("prepares all published speaker kits durably, preserves attribution, and reports real render completion", async () => {
+    const f = await fixture(true);
+    const source = promotionKitSchema.parse(await (await callApi(env, f.sessionBase, { headers: f.headers })).json());
+    const input = promotionBatchCreateSchema.parse({
+      requestId: crypto.randomUUID(),
+      publishedRevision: source.publishedRevision,
+      formats: ["portrait", "carousel"],
+    });
+    const endpoint = `${eventBase}/promotion/batches`;
+    const started = await callApi(env, endpoint, { method: "POST", headers: f.headers, body: JSON.stringify(input) });
+    expect(started.status, await started.clone().text()).toBe(200);
+    const batch = promotionBatchSchema.parse(await started.json());
+    expect(batch).toMatchObject({ totalKits: 2, readyKits: 0, pendingKits: 2, status: "preparing" });
+    const read = () => callApi(env, `${endpoint}/${batch.id}`, { headers: f.headers }, { maxRoundTrips: 1 });
+    expect((await read()).status).toBe(200);
+    const forbidden = await callApi(env, endpoint, {
+      method: "POST",
+      headers: f.attendeeHeaders,
+      body: JSON.stringify({ ...input, requestId: crypto.randomUUID() }),
+    });
+    expect(forbidden.status).toBe(403);
+    const repeated = await callApi(env, endpoint, { method: "POST", headers: f.headers, body: JSON.stringify(input) });
+    expect(repeated.status).toBe(200);
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS count FROM event_promotion_batch_recipients WHERE batch_id=?")
+        .bind(batch.id)
+        .first("count"),
+    ).toBe(2);
+    expect(await processPendingPromotionRecipients(env.DB, 0)).toEqual({ prepared: 0, failed: 0 });
+    expect(await processPendingPromotionRecipients(env.DB, 1)).toEqual({ prepared: 1, failed: 0 });
+    expect(promotionBatchSchema.parse(await (await read()).json()).status).toBe("preparing");
+    expect(await processPendingPromotionRecipients(env.DB, 1)).toEqual({ prepared: 1, failed: 0 });
+    expect(await processPendingPromotionRecipients(env.DB, 1)).toEqual({ prepared: 0, failed: 0 });
+    expect(promotionBatchSchema.parse(await (await read()).json()).status).toBe("rendering");
+    const jobs = await env.DB.prepare(
+      "SELECT id,user_id,format FROM event_promotion_renders WHERE event_id=? AND occurrence_id=?",
+    )
+      .bind(f.eventId, f.sessionId)
+      .all<{ id: string; user_id: string; format: string }>();
+    expect(jobs.results).toHaveLength(4);
+    const destinations = new Map<string, string>();
+    destinations.set(f.admin.id, source.registrationUrl);
+    destinations.set(
+      f.secondSpeaker!.id,
+      (await getPromotionKit(env.DB, f.eventId, f.sessionId, f.secondSpeaker!.id, "https://app.test")).kit
+        .registrationUrl,
+    );
+    expect(new Set(destinations.values()).size).toBe(2);
+    for (const job of jobs.results)
+      await processPromotionRenderJob(env.DB, env, job.id, async (_env, _origin, data) => {
+        expect(data.registrationUrl).toBe(destinations.get(job.user_id));
+        expect(data.actorId).toBe(job.user_id);
+        return {
+          body: new Uint8Array([1, 2, 3]),
+          contentType: job.format === "carousel" ? "application/pdf" : "image/png",
+          count: 1,
+        };
+      });
+    expect(promotionBatchSchema.parse(await (await read()).json())).toMatchObject({
+      readyKits: 2,
+      pendingKits: 0,
+      failedKits: 0,
+      status: "complete",
+    });
+    await env.DB.prepare("UPDATE event_agenda_state SET published_revision=published_revision+1 WHERE event_id=?")
+      .bind(f.eventId)
+      .run();
+    expect(promotionBatchSchema.parse(await (await read()).json()).status).toBe("obsolete");
+    const stale = await callApi(env, endpoint, {
+      method: "POST",
+      headers: f.headers,
+      body: JSON.stringify({ ...input, requestId: crypto.randomUUID() }),
+    });
+    expect(stale.status).toBe(409);
+  });
   it("provides a tracked default from the approved abstract without requiring takeaways", async () => {
     const f = await fixture();
     const response = await callApi(env, f.sessionBase, { headers: f.headers });

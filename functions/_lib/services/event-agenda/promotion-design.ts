@@ -1,3 +1,4 @@
+import { svgLogoDimensions } from "../../utils/svg-logo";
 import {
   defaultEventPromotionDesign,
   eventPromotionDesignSchema,
@@ -43,6 +44,10 @@ export async function promotionSponsorArtwork(db: DatabaseLike, env: Pick<Env, "
       tierName: group.tierName,
       ...(group.label ? { label: group.label } : {}),
       sponsors: group.sponsors.map((s) => ({
+        aspectRatio: (() => {
+          const size = svgLogoDimensions(s.svg);
+          return size && size.width > 0 && size.height > 0 ? size.width / size.height : 2.8;
+        })(),
         id: s.id,
         name: s.name,
         base64: bytesToBase64(new TextEncoder().encode(s.svg)),

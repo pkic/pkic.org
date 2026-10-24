@@ -3,7 +3,7 @@ import { promotionCopySchema } from "./event-promotion-copy";
 import { agendaOccurrenceFieldsSchema } from "./event-agenda";
 export { promotionCopySchema } from "./event-promotion-copy";
 import { promotionCompositionSchema } from "./event-promotion-design";
-export const PROMOTION_TEMPLATE_VERSION = 3 as const;
+export const PROMOTION_TEMPLATE_VERSION = 4 as const;
 export const promotionRenderStateSchema = z.enum(["queued", "rendering", "retrying", "rendered", "failed", "obsolete"]);
 export const promotionFormatSchema = z.enum(["landscape", "square", "portrait", "panel", "carousel"]);
 export const promotionKitSaveSchema = z.object({

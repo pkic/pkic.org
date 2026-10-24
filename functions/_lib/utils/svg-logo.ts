@@ -37,7 +37,7 @@ function decodeSvgText(buffer: ArrayBuffer): string {
   return text.replace(/^\uFEFF/, "").trim();
 }
 
-function rootCanvas(svg: string): { width: number; height: number } | null {
+export function svgLogoDimensions(svg: string): { width: number; height: number } | null {
   const root = /<svg\b[^>]*>/i.exec(svg)?.[0];
   if (!root) return null;
   const viewBox = /viewBox\s*=\s*["']\s*([\d.eE+-]+)[\s,]+([\d.eE+-]+)[\s,]+([\d.eE+-]+)[\s,]+([\d.eE+-]+)\s*["']/.exec(
@@ -92,7 +92,7 @@ const NON_PAINTED_CONTAINERS = new Set([
  * rects qualify, so a rectangle that is part of the artwork is never touched.
  */
 function stripBackgroundRects(svg: string): string {
-  const canvas = rootCanvas(svg);
+  const canvas = svgLogoDimensions(svg);
   if (!canvas || !Number.isFinite(canvas.width) || !Number.isFinite(canvas.height)) return svg;
   let output = svg;
   for (let round = 0; round < 3; round += 1) {

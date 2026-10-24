@@ -72,6 +72,16 @@ describe("promotion exports", () => {
     };
     const pages = buildPromotionPages(sample, "carousel");
     expect(pages).toHaveLength(2);
+    expect(pages.every((page) => !page.qr)).toBe(true);
+    expect(renderPromotionSvg(sample, "portrait")).not.toContain('<g fill="#0b0d0c">');
+    expect(pages[0]!.sponsorBoard).toEqual({ x: 990, width: 1170 });
+    expect(pages[1]!.sponsorBoard).toEqual({ x: -90, width: 1170 });
+    const bold = buildPromotionPages(
+      { ...sample, composition: { ...sample.composition, overlap: "bold" } },
+      "carousel",
+    );
+    expect(bold[0]!.sponsorBoard?.x).toBe(860);
+    expect(bold[1]!.sponsorBoard?.x).toBe(-220);
     expect(pages[0]!.texts.map((item) => item.text).join(" ")).toContain(data.occurrence.description);
     expect(pages[1]!.pictures.map((item) => item.alt)).toEqual(["Synthetic supporter"]);
     const noSponsors = buildPromotionPages({ ...sample, sponsors: [] }, "carousel");
@@ -112,9 +122,42 @@ describe("promotion exports", () => {
       }).success,
     ).toBe(false);
   });
+  it("keeps dynamic sponsor logos inside padded, optically balanced cells across continuation pages", () => {
+    const sponsors = [1, 4, 60].map((count, tier) => ({
+      tierName: `Tier ${tier + 1}`,
+      sponsors: Array.from({ length: count }, (_, index) => ({
+        id: `${tier}-${index}`,
+        name: `Sponsor ${tier}-${index}`,
+        base64: "PHN2Zy8+",
+        aspectRatio: index % 2 ? 7 : 1,
+      })),
+    }));
+    const pages = buildPromotionPages(
+      { ...data, composition: { ...defaultPromotionComposition(), panels: ["register", "sponsors"] }, sponsors },
+      "carousel",
+    );
+    const boards = pages.filter((page) => page.light);
+    expect(boards.length).toBeGreaterThan(1);
+    expect(boards.flatMap((page) => page.pictures)).toHaveLength(65);
+    for (const page of boards)
+      for (const picture of page.pictures) {
+        expect(picture.x).toBeGreaterThanOrEqual(124);
+        expect(picture.x + picture.width).toBeLessThanOrEqual(956);
+        expect(picture.y + picture.height).toBeLessThan(1140);
+        for (const other of page.pictures) {
+          if (picture === other) continue;
+          const separated =
+            picture.x + picture.width + 39 <= other.x ||
+            other.x + other.width + 39 <= picture.x ||
+            picture.y + picture.height <= other.y ||
+            other.y + other.height <= picture.y;
+          expect(separated).toBe(true);
+        }
+      }
+  });
   it("provides ordered headings, list items, QR alternate text and linked annotations", async () => {
     const bytes = await renderPromotionPdf(
-      data,
+      { ...data, composition: { ...defaultPromotionComposition(), qrCode: true } },
       readFileSync("static/fonts/Roboto-Regular.ttf"),
       readFileSync("static/fonts/Roboto-Bold.ttf"),
     );
@@ -178,7 +221,11 @@ describe("promotion exports", () => {
   it("escapes speaker titles and includes a decodable matrix destination in every card aspect", async () => {
     for (const format of ["landscape", "square", "portrait", "panel"] as const) {
       const svg = renderPromotionSvg(
-        { ...data, occurrence: { ...data.occurrence, title: "A <script> title & question" } },
+        {
+          ...data,
+          composition: { ...defaultPromotionComposition(), qrCode: true },
+          occurrence: { ...data.occurrence, title: "A <script> title & question" },
+        },
         format,
       );
       expect(svg).toContain("&lt;script&gt;");

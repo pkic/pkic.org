@@ -25,6 +25,7 @@ export const promotionCompositionSchema = z.strictObject({
   overlap: z.enum(["subtle", "bold"]).default("subtle"),
   stillLayout: z.enum(["compact", "expanded"]).default("compact"),
   motif: z.boolean().default(true),
+  qrCode: z.boolean().default(false),
   summary: z.string().trim().max(800).default(""),
   takeaways: z.array(z.string().trim().min(5).max(180)).max(8).default([]),
   callToAction: z.string().trim().min(5).max(100).default("Register for this event"),

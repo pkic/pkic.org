@@ -3,6 +3,7 @@ import type { z } from "zod";
 import { promotionKitSchema, promotionFormatSchema } from "../../../../../../../shared/schemas/event-promotion-kit";
 import { getJson, postJson } from "../../../../../../shared/api-client";
 import { Panel, PanelHeader, PanelBody } from "../../../../../../ui/Panel";
+import { IconPlus } from "../../../../../../components/icons";
 import { Button } from "../../../../../../ui/Button";
 import { CloseButton } from "../../../../../../ui/CloseButton";
 import { ExternalLink } from "../../../../../../ui/ExternalLink";
@@ -64,6 +65,16 @@ export function PersonalPromotionKit({ base, title, onClose }: { base: string; t
   return (
     <Panel>
       <PanelHeader title={title}>
+        {kit && (
+          <Button
+            icon
+            aria-label="Personalize promotion materials"
+            title="Personalize promotion materials"
+            onClick={() => setEditing(true)}
+          >
+            <IconPlus />
+          </Button>
+        )}
         {onClose && <CloseButton label="Close promotion materials" onClick={onClose} />}
       </PanelHeader>
       <PanelBody>
@@ -87,15 +98,13 @@ export function PersonalPromotionKit({ base, title, onClose }: { base: string; t
               >
                 Copy post and registration link
               </Button>
-              <Button onClick={() => setEditing(!editing)}>
-                {editing ? "Close adjustments" : "Adjust my materials"}
-              </Button>
             </div>
             {editing && (
               <PromotionCompositionEditor
                 key={kit.compositionRevision}
                 kit={kit}
                 base={base}
+                onCancel={() => setEditing(false)}
                 onSaved={(value) => {
                   setKit(value);
                   setEditing(false);

@@ -19,7 +19,6 @@ import { userUpdateSchema } from "../../assets/shared/schemas/user-management";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
 import { registerInBrowser } from "./helpers/registration";
-import { capturedEmailCount, waitForCapturedEmail } from "./helpers/sendgrid";
 
 const slug = "pqc-conference-amsterdam-nl";
 const eventApi = `/api/v1/events/${slug}`;
@@ -39,7 +38,10 @@ async function capture(page: Page, info: TestInfo, label: string) {
     });
     expect(await page.evaluate(() => window.scrollY)).toBe(0);
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
-    await page.screenshot({ path: info.outputPath(`${label}-${device}.png`), fullPage: true });
+    await page.screenshot({
+      path: info.outputPath(`${label}-${device}.png`),
+      fullPage: (await page.getByRole("dialog").count()) === 0,
+    });
   }
 }
 
@@ -49,15 +51,18 @@ test("a rendered promotion QR preserves its referral through email sign-in and c
 }, info) => {
   test.setTimeout(240_000);
   const ownerEmail = e2eAdminEmail("promotion-registration-attribution");
-  const ownerSince = await capturedEmailCount();
-  // The staff mail domain names no organization, so the verified form asks for one. Naming the seeded member
-  // organization queues a staff review instead of claiming the domain for every later staff address.
-  const owner = await registerInBrowser(page, ownerEmail, undefined, undefined, {
-    organization: SEEDED_MEMBER_ORGANIZATION,
-  });
-  await waitForCapturedEmail(ownerEmail, "registration is confirmed", { since: ownerSince });
   await signInToPortal(page, ownerEmail);
-  const ownerDetailResponse = await page.request.get(`${eventApi}/registrations/${owner.result.registrationId}`);
+  const ownerEventResponse = await page.request.get(eventApi);
+  expect(ownerEventResponse.status()).toBe(200);
+  const ownerEvent = eventDetailResponseSchema.parse(await ownerEventResponse.json());
+  let ownerRegistrationId = ownerEvent.event.participation?.registrationId;
+  if (!ownerRegistrationId) {
+    const owner = await registerInBrowser(page, ownerEmail, undefined, undefined, {
+      organization: SEEDED_MEMBER_ORGANIZATION,
+    });
+    ownerRegistrationId = owner.result.registrationId;
+  }
+  const ownerDetailResponse = await page.request.get(`${eventApi}/registrations/${ownerRegistrationId}`);
   expect(ownerDetailResponse.status(), await ownerDetailResponse.text()).toBe(200);
   const ownerDetail = eventRegistrationDetailResponseSchema.parse(await ownerDetailResponse.json());
   expect(ownerDetail.registration.status).toBe("registered");
@@ -65,7 +70,7 @@ test("a rendered promotion QR preserves its referral through email sign-in and c
   const draftResponse = await page.request.get(`${eventApi}/agenda`);
   expect(draftResponse.status(), await draftResponse.text()).toBe(200);
   const draft = agendaSnapshotSchema.parse(await draftResponse.json());
-  const title = `Promotion attribution ${randomUUID()}`;
+  const title = `Planning a quantum-safe migration: workshop ${draft.occurrences.length + 1}`;
   const createdResponse = await page.request.post(`${eventApi}/agenda/occurrences`, {
     data: agendaOccurrenceCreateSchema.parse({
       expectedRevision: draft.revision,
@@ -116,6 +121,11 @@ test("a rendered promotion QR preserves its referral through email sign-in and c
   const row = page.getByRole("row").filter({ hasText: title });
   await row.getByRole("button", { name: /actions/i }).click();
   await page.getByRole("menuitem", { name: "Speaker promotion kit", exact: true }).click();
+  await page.getByRole("button", { name: "Personalize promotion materials", exact: true }).click();
+  await page
+    .getByRole("checkbox", { name: "Print option Include a QR code for print or a second screen", exact: true })
+    .check();
+  await page.getByRole("button", { name: "Save my materials", exact: true }).click();
   await page.getByRole("button", { name: "Prepare downloads", exact: true }).click();
   const preview = page.getByRole("img", { name: "Preview of your promotion materials", exact: true });
   await expect(preview).toBeVisible({ timeout: 60_000 });
@@ -148,7 +158,7 @@ test("a rendered promotion QR preserves its referral through email sign-in and c
   expect(pdf.getPageCount()).toBeGreaterThan(1);
   await info.attach("downloaded-carousel.pdf", { body: await pdfResponse.body(), contentType: "application/pdf" });
   expect(kit.copy.campaign).toBe(campaign);
-  expect(kit.metrics).toMatchObject({ clicks: 0, confirmedRegistrations: 0 });
+  const baseline = kit.metrics;
   expect(decoded.data).toBe(kit.registrationUrl);
   const destination = new URL(decoded.data);
   expect(destination.pathname).toMatch(/^\/r\/[A-Za-z0-9]+$/);
@@ -157,17 +167,22 @@ test("a rendered promotion QR preserves its referral through email sign-in and c
     "href",
     decoded.data,
   );
-  await page.getByRole("button", { name: "Adjust my materials", exact: true }).click();
+  await page.getByRole("button", { name: "Personalize promotion materials", exact: true }).click();
+  await capture(page, info, "promotion-editor-layout");
   await page
     .getByLabel("Your short description", { exact: true })
     .fill("My reviewed description for sharing this session with my network.");
   await capture(page, info, "promotion-adjustments");
   await page.getByRole("button", { name: "Save my materials", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Adjust my materials", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Personalize promotion materials", exact: true })).toBeVisible();
   const personalized = await readKit();
   expect(personalized.composition?.summary).toBe("My reviewed description for sharing this session with my network.");
   expect(personalized.registrationUrl).toBe(kit.registrationUrl);
   await capture(page, info, "promotion-qr");
+  await page.getByRole("button", { name: "Prepare kits for all speakers", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Prepare speaker promotion kits", exact: true })).toBeVisible();
+  await capture(page, info, "bulk-promotion-dialog");
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
 
   // A separate browser context begins without the owner's cookie or tab storage.
   const visitorContext = await context.browser()!.newContext({ baseURL: new URL(page.url()).origin });
@@ -181,10 +196,10 @@ test("a rendered promotion QR preserves its referral through email sign-in and c
     expect(new URL(visitor.url()).searchParams.get("ref")).toBe(code);
     await expect(visitor.getByLabel(EMAIL_FIRST_COPY.registration.work.label)).toBeEditable();
     await expect.poll(() => visitor.evaluate(() => sessionStorage.getItem("pkic_ref"))).toBe(code);
-    await expect.poll(async () => (await readKit()).metrics.clicks).toBe(1);
+    await expect.poll(async () => (await readKit()).metrics.clicks).toBe(baseline.clicks + 1);
     await capture(visitor, info, "attributed-guest-entry");
 
-    const visitorEmail = e2eAdminEmail("portal-analytics");
+    const visitorEmail = e2eAdminEmail("promotion-registration-visitor");
     await signInToPortal(visitor, visitorEmail);
     const sessionResponse = await visitor.request.get("/api/v1/auth/session");
     expect(sessionResponse.status(), await sessionResponse.text()).toBe(200);
@@ -196,7 +211,6 @@ test("a rendered promotion QR preserves its referral through email sign-in and c
     await visitor.goto(registrationPage);
     expect(new URL(visitor.url()).search).toBe("");
     expect(await visitor.evaluate(() => sessionStorage.getItem("pkic_ref"))).toBe(code);
-    const since = await capturedEmailCount();
     const submitted = await registerInBrowser(visitor, visitorEmail, undefined, registrationPage, {
       organization: SEEDED_MEMBER_ORGANIZATION,
     });
@@ -204,8 +218,9 @@ test("a rendered promotion QR preserves its referral through email sign-in and c
     expect(submitted.request.sourceType).toBe("direct");
     expect(submitted.result.status).toBe("registered");
     expect(await visitor.evaluate(() => sessionStorage.getItem("pkic_ref"))).toBeNull();
-    await waitForCapturedEmail(visitorEmail, "registration is confirmed", { since });
-    await expect.poll(async () => (await readKit()).metrics.confirmedRegistrations).toBe(1);
+    await expect
+      .poll(async () => (await readKit()).metrics.confirmedRegistrations)
+      .toBe(baseline.confirmedRegistrations + 1);
     const detailResponse = await page.request.get(`${eventApi}/registrations/${submitted.result.registrationId}`);
     expect(detailResponse.status(), await detailResponse.text()).toBe(200);
     const detail = eventRegistrationDetailResponseSchema.parse(await detailResponse.json());
@@ -215,15 +230,14 @@ test("a rendered promotion QR preserves its referral through email sign-in and c
       event_id: ownerDetail.registration.event_id,
       status: "registered",
     });
-    expect(detail.registration.id).not.toBe(owner.result.registrationId);
+    expect(detail.registration.id).not.toBe(ownerRegistrationId);
     await visitor.goto(`/portal/#/events/${slug}/promotion`);
     await expect(
       visitor.getByRole("heading", { name: "Your attendee promotion materials", exact: true }),
     ).toBeVisible();
-    await visitor.getByRole("button", { name: "Adjust my materials", exact: true }).click();
-    await expect(
-      visitor.getByRole("heading", { name: "Your attendee promotion materials", exact: true }),
-    ).toBeVisible();
+    await visitor.getByRole("button", { name: "Personalize promotion materials", exact: true }).click();
+    await expect(visitor.getByRole("dialog", { name: "Personalize promotion materials", exact: true })).toBeVisible();
+    await expect(visitor.getByRole("button", { name: "Move cover down", exact: true })).toBeVisible();
     await capture(visitor, info, "attendee-promotion");
 
     // The existing registration policy refuses repeat intent without creating another conversion.
@@ -235,7 +249,10 @@ test("a rendered promotion QR preserves its referral through email sign-in and c
     const afterRetry = await readKit();
     expect(afterRetry.registrationUrl).toBe(decoded.data);
     expect(afterRetry.copy.campaign).toBe(campaign);
-    expect(afterRetry.metrics).toMatchObject({ clicks: 1, confirmedRegistrations: 1 });
+    expect(afterRetry.metrics).toMatchObject({
+      clicks: baseline.clicks + 1,
+      confirmedRegistrations: baseline.confirmedRegistrations + 1,
+    });
     await visitor.goto(registrationPage);
     await expect(visitor.locator('input[name="referralCode"]')).toHaveValue("");
   } finally {

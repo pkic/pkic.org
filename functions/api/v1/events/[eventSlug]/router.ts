@@ -1,3 +1,4 @@
+import { PromotionBatchesCreate, PromotionBatchGet } from "./agenda/promotion-batches";
 import { EventPromotionSessionsGet } from "./agenda/promotion";
 import {
   PromotionCompositionSave,
@@ -212,6 +213,8 @@ openapi.post("/calendar/subscriptions", AgendaCalendarRotatePost);
 openapi.delete("/calendar/subscriptions", AgendaCalendarRevokeDelete);
 openapi.get("/calendar/subscriptions/current", AgendaCalendarCurrentGet);
 openapi.get("/calendar/subscriptions/:token/calendar.ics", AgendaCalendarFeedGet);
+openapi.post("/promotion/batches", PromotionBatchesCreate);
+openapi.get("/promotion/batches/:batchId", PromotionBatchGet);
 openapi.get("/promotion", EventPromotionGet);
 openapi.get("/promotion/sessions", EventPromotionSessionsGet);
 openapi.post("/promotion/composition", EventPromotionCompositionSave);

@@ -3,7 +3,7 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, expect, it, vi } from "vitest";
 import { PromotionCompositionEditor } from "../../assets/ts/member-flows/portal/sections/events/detail/agenda/PromotionCompositionEditor";
-import { promotionKitSchema } from "../../assets/shared/schemas/event-promotion-kit";
+import { PROMOTION_TEMPLATE_VERSION, promotionKitSchema } from "../../assets/shared/schemas/event-promotion-kit";
 import {
   defaultPromotionComposition,
   promotionCompositionSaveSchema,
@@ -23,7 +23,7 @@ it("saves personal copy and ordered panels through the canonical contract withou
     compositionRevision: 3,
     composition: defaultPromotionComposition(),
     publishedRevision: 2,
-    templateVersion: 3,
+    templateVersion: PROMOTION_TEMPLATE_VERSION,
     copy: {
       whyAttend: "The approved published session description.",
       takeaways: [],
@@ -54,10 +54,20 @@ it("saves personal copy and ordered panels through the canonical contract withou
         kit={kit}
         base="/api/v1/events/event/agenda/occurrences/session/promotion"
         onSaved={saved}
+        onCancel={() => {}}
       />,
       root,
     ),
   );
+  expect(root.querySelector("dialog form")).not.toBeNull();
+  const reorder = (label: string) =>
+    [...root.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.getAttribute("aria-label") === label,
+    )!;
+  await act(() => reorder("Move cover down").click());
+  expect(reorder("Move cover up").disabled).toBe(false);
+  await act(() => reorder("Move cover up").click());
+  expect(reorder("Move cover up").disabled).toBe(true);
   await typeInto(
     controlFor(root, "Your short description"),
     "A personal description grounded in the official abstract.",
@@ -70,11 +80,15 @@ it("saves personal copy and ordered panels through the canonical contract withou
     controlFor<HTMLInputElement>(root, "Sponsors").click();
   });
   await act(() => {
+    controlFor<HTMLInputElement>(root, "Print option").click();
+  });
+  await act(() => {
     root.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
   });
   await vi.waitFor(() => expect(saved).toHaveBeenCalledOnce());
   const request = promotionCompositionSaveSchema.parse(captured);
   expect(request.expectedRevision).toBe(3);
+  expect(request.composition.qrCode).toBe(true);
   expect(request.composition.takeaways).toHaveLength(2);
   expect(request.composition.panels).not.toContain("sponsors");
   expect(Object.keys(request)).toEqual(["expectedRevision", "composition"]);

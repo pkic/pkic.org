@@ -26,7 +26,8 @@ export function PromotionSessionPicks({
           header: "Include",
           cell: (row) => (
             <Checkbox
-              label={`Include ${row.title}`}
+              label="Include session"
+              aria-label={`Include ${row.title}`}
               checked={selected.includes(row.id)}
               onChange={(event) =>
                 onChange(event.currentTarget.checked ? [...selected, row.id] : selected.filter((id) => id !== row.id))
