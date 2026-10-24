@@ -1,68 +1,65 @@
 import { promotionKitSchema } from "../../../../assets/shared/schemas/event-promotion-kit";
-import type { DatabaseLike } from "../../types";
-import { preparePromotionReferralMetrics } from "./promotion-referral";
+import type { DatabaseLike, D1StatementResult } from "../../types";
+import { promotionReferralOwnerSql } from "./promotion-referral";
+import { eventReadIdSql, type EventReadSelection } from "../events/selection";
 import { batchFirst, batchRows } from "../../db/pagination";
-export async function promotionRenderStatus(
-  db: DatabaseLike,
-  eventId: string,
-  userId: string,
-  occurrenceId: string | null,
-  fingerprint: string,
-) {
-  const rows = await preparePromotionRenderStatus(db, eventId, userId, occurrenceId, fingerprint).all();
-  return promotionKitSchema.shape.artifacts.parse(rows.results);
-}
 
-function preparePromotionRenderStatus(
+export function preparePromotionRenderStatus(
   db: DatabaseLike,
-  eventId: string,
+  event: EventReadSelection,
   userId: string,
   occurrenceId: string | null,
-  fingerprint: string,
+  fingerprint?: string,
 ) {
+  const scope = eventReadIdSql(event);
   return db
     .prepare(
-      "SELECT format,status,attempts FROM event_promotion_renders WHERE event_id=? AND user_id=? AND occurrence_id IS ? AND fingerprint=? ORDER BY format LIMIT 5",
+      fingerprint
+        ? `SELECT format,status,attempts,fingerprint FROM event_promotion_renders WHERE event_id=${scope.sql} AND user_id=? AND occurrence_id IS ? AND fingerprint=? ORDER BY format LIMIT 5`
+        : `SELECT format,status,attempts,fingerprint FROM (SELECT format,status,attempts,fingerprint,row_number() OVER(PARTITION BY format ORDER BY COALESCE(requested_at,created_at) DESC,id DESC) AS ordinal FROM event_promotion_renders WHERE event_id=${scope.sql} AND user_id=? AND occurrence_id IS ?) WHERE ordinal=1 ORDER BY format LIMIT 5`,
     )
-    .bind(eventId, userId, occurrenceId, fingerprint);
+    .bind(...scope.bindings, userId, occurrenceId, ...(fingerprint ? [fingerprint] : []));
 }
-/** Current personal progress is projected together; metrics never participate in artwork fingerprints. */
-export async function promotionKitProgress(
+/** Independent metrics and the stable owner code join the same source snapshot, before its artwork hash exists. */
+export function preparePromotionMetrics(
   db: DatabaseLike,
-  eventId: string,
+  event: EventReadSelection,
   userId: string,
   occurrenceId: string | null,
-  fingerprint: string,
-  code: string,
 ) {
-  const results = await db.batch([
-    preparePromotionRenderStatus(db, eventId, userId, occurrenceId, fingerprint),
-    preparePromotionReferralMetrics(db, eventId, userId, code),
-    occurrenceId
-      ? db
-          .prepare(
-            "SELECT COALESCE(SUM(download_count),0) AS count FROM event_agenda_promotion_downloads WHERE occurrence_id=? AND user_id=?",
-          )
-          .bind(occurrenceId, userId)
-      : db
-          .prepare(
-            "SELECT COALESCE(SUM(download_count),0) AS count FROM event_promotion_renders WHERE event_id=? AND user_id=? AND occurrence_id IS NULL",
-          )
-          .bind(eventId, userId),
-    db
-      .prepare(
-        "SELECT COUNT(*) AS count FROM agenda_session_participations WHERE occurrence_id=? AND event_id=? AND status='reserved'",
-      )
-      .bind(occurrenceId, eventId),
-  ]);
-  const referral = batchFirst<{ clicks: number; confirmedRegistrations: number }>(results[1]);
+  const scope = eventReadIdSql(event),
+    owner = promotionReferralOwnerSql(event, userId);
   return {
-    artifacts: promotionKitSchema.shape.artifacts.parse(batchRows(results[0])),
-    metrics: {
-      downloads: batchFirst<{ count: number }>(results[2])?.count ?? 0,
-      clicks: referral?.clicks ?? 0,
-      confirmedRegistrations: referral?.confirmedRegistrations ?? 0,
-      sessionRsvps: batchFirst<{ count: number }>(results[3])?.count ?? 0,
+    statements: [
+      db
+        .prepare(`WITH target AS(SELECT ${scope.sql} AS event_id,? AS user_id,? AS occurrence_id),owner AS(${owner.sql})
+    SELECT referral.code,COALESCE(referral.clicks,0) AS clicks,
+      (SELECT COUNT(*) FROM referral_conversions conversion JOIN registrations converted ON converted.id=conversion.conversion_ref WHERE conversion.code=referral.code AND conversion.conversion_type='registration' AND converted.event_id=target.event_id AND converted.status='registered') AS confirmedRegistrations,
+      CASE WHEN target.occurrence_id IS NULL THEN (SELECT COALESCE(SUM(download_count),0) FROM event_promotion_renders WHERE event_id=target.event_id AND user_id=target.user_id AND occurrence_id IS NULL) ELSE (SELECT COALESCE(SUM(download_count),0) FROM event_agenda_promotion_downloads WHERE occurrence_id=target.occurrence_id AND user_id=target.user_id) END AS downloads,
+      (SELECT COUNT(*) FROM agenda_session_participations WHERE occurrence_id=target.occurrence_id AND event_id=target.event_id AND status='reserved') AS sessionRsvps
+    FROM target LEFT JOIN owner ON 1 LEFT JOIN referral_codes referral ON referral.code=owner.code`)
+        .bind(...scope.bindings, userId, occurrenceId, ...owner.bindings),
+    ],
+    decode(loaded: D1StatementResult[]) {
+      const row = batchFirst<{
+        code: string | null;
+        clicks: number;
+        confirmedRegistrations: number;
+        downloads: number;
+        sessionRsvps: number;
+      }>(loaded[0]);
+      return {
+        code: row?.code ?? null,
+        metrics: promotionKitSchema.shape.metrics.parse(
+          row ?? { clicks: 0, confirmedRegistrations: 0, downloads: 0, sessionRsvps: 0 },
+        ),
+      };
     },
   };
+}
+export function decodePromotionProgress(loaded: D1StatementResult[], fingerprint: string) {
+  const rows = batchRows<{ format: string; status: string; attempts: number; fingerprint: string }>(loaded[0]).filter(
+    (row) => row.fingerprint === fingerprint,
+  );
+  return promotionKitSchema.shape.artifacts.parse(rows);
 }

@@ -1,4 +1,6 @@
 import sharp from "sharp";
+import { agendaOccurrenceMedia } from "../../assets/shared/event-agenda-media";
+import { promotionMediaWording } from "../../assets/shared/promotion-media";
 import { promotionSceneSvg } from "../../functions/_lib/services/event-agenda/promotion-svg";
 import jsQR from "jsqr";
 import { describe, it, expect } from "vitest";
@@ -55,6 +57,24 @@ const data = {
   sessionUrl: "https://pkic.org/events/event/sessions/session/",
 };
 describe("promotion exports", () => {
+  it("inherits location media but honors session overrides without promising unavailable recordings", () => {
+    const rooms = [{ id: "main", equipment: ["live_streaming", "recording"] }];
+    const inherited = agendaOccurrenceMedia(rooms, { roomId: "main" });
+    const design = { advertiseLiveStreaming: true, advertiseRecordings: true };
+    expect(promotionMediaWording(design, inherited)).toBe("In person and online · Recording planned");
+    expect(promotionMediaWording(design, inherited, "https://example.test/recording")).toContain(
+      "On-demand recording available",
+    );
+    const overridden = agendaOccurrenceMedia(rooms, {
+      roomId: "main",
+      plannedMedia: { recording: false, liveStreaming: false },
+    });
+    expect(overridden.inherited).toBe(false);
+    expect(promotionMediaWording(design, overridden, "https://example.test/recording")).toBeUndefined();
+    expect(
+      promotionMediaWording({ advertiseLiveStreaming: false, advertiseRecordings: false }, inherited),
+    ).toBeUndefined();
+  });
   it("separates every line of the cover eyebrow from the session title", () => {
     for (const eventName of ["PQC Conference", "Post-Quantum Cryptography Conference ".repeat(4)]) {
       const page = buildPromotionPages({ ...data, agenda: { ...data.agenda, eventName } }, "carousel")[0]!;
@@ -171,6 +191,7 @@ describe("promotion exports", () => {
           sponsorSource: "event",
           panels: ["cover"],
           advertiseLiveStreaming: false,
+          advertiseRecordings: false,
         },
       },
       "portrait",
@@ -228,8 +249,12 @@ describe("promotion exports", () => {
       }
   });
   it("provides ordered headings, list items, QR alternate text and linked annotations", async () => {
+    const takeaways = Array.from(
+      { length: 8 },
+      (_, index) => `${index + 1}. ${"Explain migration controls and deployment evidence. ".repeat(3)}`,
+    );
     const bytes = await renderPromotionPdf(
-      { ...data, composition: { ...defaultPromotionComposition(), qrCode: true } },
+      { ...data, composition: { ...defaultPromotionComposition(), qrCode: true, takeaways } },
       readFileSync("static/fonts/Roboto-Regular.ttf"),
       readFileSync("static/fonts/Roboto-Bold.ttf"),
     );
@@ -237,6 +262,7 @@ describe("promotion exports", () => {
     const root = pdf.catalog.lookup(PDFName.of("StructTreeRoot"), PDFDict);
     const roles: string[] = [];
     const figures: string[] = [];
+    const order = new Map<string, number[]>();
     function walk(node: PDFDict) {
       const role = node.get(PDFName.of("S"));
       if (role instanceof PDFName) roles.push(role.decodeText());
@@ -245,14 +271,22 @@ describe("promotion exports", () => {
       if (children instanceof PDFArray)
         for (const child of children.asArray()) {
           const value = pdf.context.lookup(child);
-          if (value instanceof PDFDict) walk(value);
+          if (value instanceof PDFDict) {
+            if (value.get(PDFName.of("Type"))?.toString() === "/MCR") {
+              const page = value.get(PDFName.of("Pg"))!.toString();
+              const ids = order.get(page) ?? [];
+              ids.push(value.lookup(PDFName.of("MCID"), PDFNumber).asNumber());
+              order.set(page, ids);
+            } else walk(value);
+          }
         }
     }
     walk(root);
+    for (const ids of order.values()) expect(ids).toEqual(Array.from({ length: ids.length }, (_, index) => index));
     expect(roles[0]).toBe("Document");
     expect(roles.filter((role) => role === "H1")).toHaveLength(1);
     expect(roles.filter((role) => role === "H2").length).toBeGreaterThan(0);
-    expect(roles.filter((role) => role === "LI")).toHaveLength(data.copy.takeaways.length);
+    expect(roles.filter((role) => role === "LI")).toHaveLength(takeaways.length);
     expect(roles).toContain("LBody");
     expect(figures).toHaveLength(pdf.getPageCount());
     expect(new Set(figures)).toEqual(new Set([`QR code: register for this event at ${data.registrationUrl}`]));

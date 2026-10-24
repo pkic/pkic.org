@@ -368,6 +368,11 @@ export function isAuditChangeGuardFailure(error: unknown): boolean {
 export function prepareAuditLogWhen(
   db: DatabaseLike,
   input: {
+    id?: string;
+    idempotencyKey?: string | null;
+    actorIdentityIdSelection?: { sql: string; bindings: readonly unknown[] };
+    entityIdSelection?: { sql: string; bindings: readonly unknown[] };
+    scopeIdSelection?: { sql: string; bindings: readonly unknown[] };
     actorType: string;
     actorId: string | null;
     action: string;
@@ -384,23 +389,26 @@ export function prepareAuditLogWhen(
     .prepare(
       `INSERT INTO audit_log (
          id, actor_type, actor_id, actor_identity_id, action, entity_type, entity_id, details_json, created_at,
-         scope_type, scope_id
+         scope_type, scope_id, idempotency_key
        )
-       SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-       WHERE EXISTS (${input.conditionSql})`,
+       SELECT ?, ?, ?, ${input.actorIdentityIdSelection ? `(${input.actorIdentityIdSelection.sql})` : "?"}, ?, ?, ${input.entityIdSelection ? `(${input.entityIdSelection.sql})` : "?"}, ?, ?, ?, ${input.scopeIdSelection ? `(${input.scopeIdSelection.sql})` : "?"}, ?
+       WHERE EXISTS (${input.conditionSql}) ON CONFLICT(idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING`,
     )
     .bind(
-      uuid(),
+      input.id ?? uuid(),
       input.actorType,
       input.actorId,
-      auditActorIdentityId(input.actorType, input.actorId),
+      ...(input.actorIdentityIdSelection
+        ? input.actorIdentityIdSelection.bindings
+        : [auditActorIdentityId(input.actorType, input.actorId)]),
       input.action,
       input.entityType,
-      input.entityId,
+      ...(input.entityIdSelection ? input.entityIdSelection.bindings : [input.entityId]),
       serializeAuditDetails(input.details),
       input.createdAt ?? nowIso(),
       input.scope?.type ?? null,
-      input.scope?.id ?? null,
+      ...(input.scopeIdSelection ? input.scopeIdSelection.bindings : [input.scope?.id ?? null]),
+      input.idempotencyKey ?? null,
       ...input.conditionBindings,
     );
 }

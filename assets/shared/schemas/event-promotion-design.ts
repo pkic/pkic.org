@@ -55,6 +55,7 @@ export const eventPromotionDesignSchema = z
     panels: promotionCompositionSchema.shape.panels,
     /** A plan to capture media never grants permission to advertise it. */
     advertiseLiveStreaming: z.boolean().default(false),
+    advertiseRecordings: z.boolean().default(false),
   })
   .strict()
   .superRefine((design, ctx) => {

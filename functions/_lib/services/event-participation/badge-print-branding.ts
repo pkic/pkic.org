@@ -117,14 +117,12 @@ export async function prepareBadgePrintingBasis(
       );
     }
   }
-  const revision = await sha256Hex(
-    JSON.stringify({
-      eventId,
-      eventName: event.name,
-      settings: event.settings_json,
-      sponsors: populations.event.map((row) => JSON.parse(row.source_json)),
-      consortiumSponsors: populations.consortium.map((row) => JSON.parse(row.source_json)),
-    }),
+  const revision = await badgePrintingBasisRevision(
+    eventId,
+    event.name,
+    event.settings_json,
+    populations.event,
+    populations.consortium,
   );
   return {
     revision,
@@ -229,4 +227,23 @@ export async function getBadgePrintingContext(
   }
   await db.batch(basis.guards);
   return { revision: basis.revision, template: basis.template, branding: checkedBranding.data };
+}
+
+/** One canonical fingerprint for badge and promotion sponsor populations. */
+export function badgePrintingBasisRevision(
+  eventId: string,
+  eventName: string,
+  settings: string,
+  sponsors: readonly BrandingRow[],
+  consortiumSponsors: readonly BrandingRow[],
+) {
+  return sha256Hex(
+    JSON.stringify({
+      eventId,
+      eventName,
+      settings,
+      sponsors: sponsors.map((row) => JSON.parse(row.source_json)),
+      consortiumSponsors: consortiumSponsors.map((row) => JSON.parse(row.source_json)),
+    }),
+  );
 }

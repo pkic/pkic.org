@@ -1,7 +1,9 @@
+import { downloadFile } from "../../../../../../shared/download-file";
+import { loadPromotionKit } from "./promotion-kit-client";
 import { useEffect, useState } from "preact/hooks";
 import type { z } from "zod";
 import { promotionKitSchema, promotionFormatSchema } from "../../../../../../../shared/schemas/event-promotion-kit";
-import { getJson, postJson } from "../../../../../../shared/api-client";
+import { postJson, getBlob } from "../../../../../../shared/api-client";
 import { Panel, PanelHeader, PanelBody } from "../../../../../../ui/Panel";
 import { IconPlus } from "../../../../../../components/icons";
 import { Button } from "../../../../../../ui/Button";
@@ -21,7 +23,7 @@ export function PersonalPromotionKit({ base, title, onClose }: { base: string; t
   useEffect(() => {
     let cancelled = false;
     setKit(null);
-    void getJson(base, promotionKitSchema)
+    void loadPromotionKit(base)
       .then((value) => {
         if (!cancelled) setKit(value);
       })
@@ -36,7 +38,7 @@ export function PersonalPromotionKit({ base, title, onClose }: { base: string; t
     if (!kit?.artifacts.some((item) => ["queued", "rendering", "retrying"].includes(item.status))) return;
     let cancelled = false;
     const timer = setTimeout(() => {
-      void getJson(base, promotionKitSchema)
+      void loadPromotionKit(base)
         .then((value) => {
           if (!cancelled) setKit(value);
         })
@@ -52,10 +54,40 @@ export function PersonalPromotionKit({ base, title, onClose }: { base: string; t
   async function prepare() {
     setBusy(true);
     try {
-      setKit(await postJson(`${base}/renders`, {}, promotionKitSchema));
+      setKit(
+        await postJson(
+          `${base}/renders`,
+          {
+            fingerprint: kit!.fingerprint,
+            publishedRevision: kit!.publishedRevision,
+            compositionRevision: kit!.compositionRevision,
+          },
+          promotionKitSchema,
+        ),
+      );
       setError("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not prepare your materials.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function download(format: string) {
+    if (!kit) return;
+    setBusy(true);
+    try {
+      const content = await getBlob(artifact(format));
+      const extension = content.type === "application/zip" ? "zip" : format === "carousel" ? "pdf" : "png";
+      downloadFile(content, content.type, `promotion-${format}.${extension}`);
+      setError("");
+      // Metrics are best effort after successful delivery and never block the file itself.
+      void postJson(
+        `${base}/downloads`,
+        { fingerprint: kit.fingerprint, format },
+        promotionKitSchema.shape.metrics,
+      ).catch(() => undefined);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not download these materials.");
     } finally {
       setBusy(false);
     }
@@ -117,7 +149,17 @@ export function PersonalPromotionKit({ base, title, onClose }: { base: string; t
                 return (
                   <li key={format}>
                     {state?.status === "rendered" ? (
-                      <a href={artifact(format)} download>
+                      <a
+                        href={artifact(format)}
+                        download
+                        aria-disabled={busy}
+                        onClick={(event) => {
+                          if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+                            return;
+                          event.preventDefault();
+                          if (!busy) void download(format);
+                        }}
+                      >
                         {format === "carousel" ? "Carousel PDF" : `${format} images`}
                       </a>
                     ) : (

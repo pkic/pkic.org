@@ -1,15 +1,10 @@
 import { z } from "zod";
 import { utcInstantSchema } from "./api-common";
-import { promotionFormatSchema } from "./event-promotion-kit";
+import { promotionFormatsSchema } from "./event-promotion-kit";
 export const promotionBatchCreateSchema = z.strictObject({
   requestId: z.uuid(),
   publishedRevision: z.number().int().positive(),
-  formats: z
-    .array(promotionFormatSchema)
-    .min(1)
-    .max(5)
-    .refine((items) => new Set(items).size === items.length, "Choose each format once.")
-    .default([...promotionFormatSchema.options]),
+  formats: promotionFormatsSchema,
 });
 export const promotionBatchSchema = z.object({
   id: z.uuid(),

@@ -134,7 +134,22 @@ async function setup() {
 let fixture: Awaited<ReturnType<typeof setup>>;
 
 async function readKit(token = fixture.ownerToken) {
-  const response = await callApi(env, fixture.path, { headers: { authorization: `Bearer ${token}` } });
+  let response = await callApi(
+    env,
+    fixture.path,
+    { headers: { authorization: `Bearer ${token}` } },
+    { maxRoundTrips: 1 },
+  );
+  if (
+    response.status === 409 &&
+    ((await response.clone().json()) as { error: { code: string } }).error.code === "PROMOTION_REFERRAL_REQUIRED"
+  )
+    response = await callApi(
+      env,
+      `${fixture.path}/referrals`,
+      { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: "{}" },
+      { maxRoundTrips: 1 },
+    );
   expect(response.status, await response.clone().text()).toBe(200);
   const body = await response.json();
   const kit = promotionKitSchema.parse(body);
@@ -257,7 +272,15 @@ describe("promotion confirmed registration metrics", () => {
       "https://pkic.org",
     );
     const job = await requestPromotionRender(env.DB, fixture.eventId, source, "square", "https://pkic.org");
-    await recordPromotionDownload(env.DB, fixture.occurrenceId, fixture.owner.user.id, "square", job.id);
+    await env.DB.prepare("UPDATE event_promotion_renders SET status='rendered' WHERE id=?").bind(job.id).run();
+    await recordPromotionDownload(
+      env.DB,
+      fixture.eventId,
+      fixture.occurrenceId,
+      fixture.owner.user.id,
+      "square",
+      job.id,
+    );
     const reservation = await setSessionParticipation(env.DB, fixture.eventId, fixture.occurrenceId, attendee.user.id, {
       action: "reserve",
       attendanceMode: "remote",

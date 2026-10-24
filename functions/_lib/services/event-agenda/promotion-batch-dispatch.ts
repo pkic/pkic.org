@@ -1,3 +1,4 @@
+import { prepareJobWake } from "../scheduled-jobs/dispatcher";
 import type { DatabaseLike } from "../../types";
 import { all, first, run } from "../../db/queries";
 import { createDurableJobLease, durableRenderRetry } from "../../jobs/lease";
@@ -95,5 +96,9 @@ export async function processPendingPromotionRecipients(db: DatabaseLike, limit 
       failed++;
     }
   }
+  await prepareJobWake(db, "due_work", {
+    sql: "SELECT 1 FROM event_promotion_batch_recipients WHERE status='queued' AND next_attempt_at<=? LIMIT 1",
+    bindings: [nowIso()],
+  }).run();
   return { prepared, failed };
 }

@@ -290,12 +290,19 @@ export function permissionAuthorizationEvidenceForResource(
   actor: AuthAdmin,
   permission: string,
   context: { type: string; idSql: string },
+  memberSelection?: AuthorizationEvidence,
 ): AuthorizationEvidence {
   if (!isUserBackedAuthAdmin(actor)) return permissionsAuthorizationEvidence(actor, [{ permission }]);
-  return buildPermissionsAuthorizationEvidence(actor, [{ permission }], {
-    sql: `SELECT ? AS permission, ? AS context_type, ${context.idSql} AS context_id`,
-    bindings: [permission, context.type],
-  });
+  return buildPermissionsAuthorizationEvidence(
+    actor,
+    [{ permission }],
+    {
+      sql: `SELECT ? AS permission, ? AS context_type, ${context.idSql} AS context_id`,
+      bindings: [permission, context.type],
+    },
+    "all",
+    memberSelection,
+  );
 }
 
 /** Live alternatives for a trusted resource column, with delegated scopes still limiting each alternative. */
@@ -326,6 +333,7 @@ function buildPermissionsAuthorizationEvidence(
   unique: readonly PermissionRequirement[],
   required: AuthorizationEvidence,
   match: "all" | "any" = "all",
+  memberSelection?: AuthorizationEvidence,
 ): AuthorizationEvidence {
   if (unique.length === 0) return { sql: "SELECT 1", bindings: [] };
   if (unique.some(({ permission }) => !tokenAllowsPermission(actor, permission))) {
@@ -347,7 +355,7 @@ function buildPermissionsAuthorizationEvidence(
             SELECT permission, context_type, context_id,
                    permission IN (SELECT value FROM json_each(?))
               FROM (${required.sql})
-          )
+          )${memberSelection ? `, selected_actor_member(member_id) AS MATERIALIZED(${memberSelection.sql})` : ""}
           SELECT 1
             FROM users actor
            WHERE actor.id = ? AND actor.active = 1
@@ -368,7 +376,7 @@ function buildPermissionsAuthorizationEvidence(
                        AND (
                          role.member_id IS NULL
                          OR (
-                           role.member_id = ?
+                           role.member_id = ${memberSelection ? "(SELECT member_id FROM selected_actor_member)" : "?"}
                            AND role.context_type = 'group'
                            AND EXISTS (
                              SELECT 1 FROM group_memberships membership
@@ -407,10 +415,11 @@ function buildPermissionsAuthorizationEvidence(
     bindings: [
       JSON.stringify(scannerCapabilities),
       ...required.bindings,
+      ...(memberSelection?.bindings ?? []),
       actor.id,
       ...(actor.sessionId ? [actor.sessionId] : []),
       ...(actor.oauthAuthorizationId ? [actor.oauthAuthorizationId, actor.sessionId ?? null] : []),
-      actor.memberId ?? null,
+      ...(memberSelection ? [] : [actor.memberId ?? null]),
     ],
   };
 }

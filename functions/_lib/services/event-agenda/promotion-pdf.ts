@@ -63,11 +63,7 @@ export async function renderPromotionPdf(
         tags.artifact(() => page.drawImage(logo, { x: 40, y: page.getHeight() - 50, width: 118, height: 31 }));
       }
     }
-    for (const picture of scene.pictures) {
-      const figure = tags.element("Figure", undefined, picture.alt);
-      tags.content(figure, () => {});
-    }
-    for (const text of scene.texts) {
+    const drawText = (text: (typeof scene.texts)[number]) => {
       const key = text.role === "H1" ? "heading" : text.group;
       let node = key ? elements.get(key) : undefined;
       if (!node) {
@@ -92,7 +88,21 @@ export async function renderPromotionPdf(
           x += run.font.widthOfTextAtSize(run.text, text.size * scale);
         }
       });
+    };
+    // A continued semantic paragraph belongs before new elements on this page.
+    // Paint order does not change its measured visual coordinates.
+    const existing = scene.texts.filter((text) => elements.has(text.role === "H1" ? "heading" : (text.group ?? "")));
+    const order = [...elements.keys()];
+    existing.sort(
+      (a, b) =>
+        order.indexOf(a.role === "H1" ? "heading" : a.group!) - order.indexOf(b.role === "H1" ? "heading" : b.group!),
+    );
+    for (const text of existing) drawText(text);
+    for (const picture of scene.pictures) {
+      const figure = tags.element("Figure", undefined, picture.alt);
+      tags.content(figure, () => {});
     }
+    for (const text of scene.texts) if (!existing.includes(text)) drawText(text);
     const footer = tags.element("P");
     tags.content(footer, () =>
       page.drawText(`${scene.index + 1} / ${scene.total}`, { x: 40, y: 90, size: 11, font, color: rgb(1, 1, 1) }),
@@ -101,6 +111,10 @@ export async function renderPromotionPdf(
       tags.content(footer, () =>
         page.drawText("SWIPE", { x: (scene.width - 380) * scale, y: 90, size: 11, font, color: rgb(1, 1, 1) }),
       );
+    if (scene.qr) {
+      const qr = tags.element("Figure", undefined, `QR code: register for this event at ${data.registrationUrl}`);
+      tags.content(qr, () => {});
+    }
     const link = tags.element("Link");
     const annotation = pdf.context.register(
       pdf.context.obj({
@@ -122,10 +136,6 @@ export async function renderPromotionPdf(
         color: rgb(1, 1, 1),
       }),
     );
-    if (scene.qr) {
-      const qr = tags.element("Figure", undefined, `QR code: register for this event at ${data.registrationUrl}`);
-      tags.content(qr, () => {});
-    }
   }
   structure.finish();
   return pdf.save();

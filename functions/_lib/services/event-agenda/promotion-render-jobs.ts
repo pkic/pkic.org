@@ -1,33 +1,20 @@
+import { prepareJobWake } from "../scheduled-jobs/dispatcher";
+import { preparePromotionRenderRequests, type PromotionRenderJob as Job } from "./promotion-render-request";
 import { promotionSponsorArtwork } from "./promotion-design";
 import { permissionsAuthorizationEvidence } from "../../auth/permissions";
 import { createUserBackedAuthAdmin } from "../../auth/admin-identity";
-import { getAttendeePromotionKit } from "./promotion-attendee";
 import { assignedPromotionKit } from "./promotion-access";
 import { promotionFormatSchema } from "../../../../assets/shared/schemas/event-promotion-kit";
 import type { z } from "zod";
 import type { DatabaseLike, Env } from "../../types";
 import { first, all, run } from "../../db/queries";
 import { nowIso } from "../../utils/time";
-import { sha256Hex } from "../../utils/crypto";
 import { createDurableJobLease, durableRenderRetry } from "../../jobs/lease";
 import { AppError } from "../../errors";
-import { getPromotionKit } from "./promotion-kit";
+import { getPromotionKit, getAttendeePromotionKit } from "./promotion-source";
 import type { renderPromotionArtifact } from "./promotion-artifact";
 import { storePromotionArtifact } from "./promotion-storage";
 type Source = Awaited<ReturnType<typeof getPromotionKit>> | Awaited<ReturnType<typeof getAttendeePromotionKit>>;
-interface Job {
-  id: string;
-  event_id: string;
-  occurrence_id: string | null;
-  fingerprint: string;
-  user_id: string;
-  revision: number;
-  format: z.infer<typeof promotionFormatSchema>;
-  origin: string;
-  cache_key: string;
-  status: string;
-  attempts: number;
-}
 export async function requestPromotionRender(
   db: DatabaseLike,
   eventId: string,
@@ -45,64 +32,19 @@ export async function requestPromotionRenders(
   formats: readonly z.infer<typeof promotionFormatSchema>[],
   origin: string,
 ) {
-  if (!formats.length || formats.length > 5 || new Set(formats).size !== formats.length)
-    throw new Error("Choose one to five distinct promotion formats.");
-  const now = nowIso();
-  const jobs = await Promise.all(
-    formats.map(async (format) => {
-      const id = await sha256Hex(
-        JSON.stringify({
-          occurrence: source.kit.occurrenceId,
-          fingerprint: source.kit.fingerprint,
-          user: source.actorId,
-          revision: source.kit.publishedRevision,
-          format,
-          template: source.kit.templateVersion,
-          campaign: source.kit.copy.campaign,
-          registration: source.kit.registrationUrl,
-        }),
-      );
-      return {
-        id,
-        format,
-        key: `promotion/v${source.kit.templateVersion}/${id}.${format === "carousel" ? "pdf" : "png"}`,
-      };
-    }),
+  const read = await preparePromotionRenderRequests(
+    db,
+    eventId,
+    source.actorId,
+    source.kit.occurrenceId,
+    source.kit.publishedRevision,
+    source.kit.fingerprint!,
+    formats,
+    origin,
   );
-  const loaded = await db.batch([
-    ...jobs.map(({ id, format, key }) =>
-      db
-        .prepare(
-          `INSERT INTO event_promotion_renders(id,event_id,occurrence_id,user_id,revision,fingerprint,format,origin,cache_key,status,next_attempt_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,'queued',?,?,?) ON CONFLICT(id) DO UPDATE SET status='queued',attempts=0,next_attempt_at=excluded.next_attempt_at,processing_token=NULL,lease_expires_at=NULL,last_error=NULL,updated_at=excluded.updated_at WHERE event_promotion_renders.status IN ('failed','obsolete')`,
-        )
-        .bind(
-          id,
-          eventId,
-          source.kit.occurrenceId,
-          source.actorId,
-          source.kit.publishedRevision,
-          source.kit.fingerprint,
-          format,
-          origin,
-          key,
-          now,
-          now,
-          now,
-        ),
-    ),
-    db
-      .prepare(
-        "SELECT id,event_id,occurrence_id,user_id,revision,fingerprint,format,origin,cache_key,status,attempts FROM event_promotion_renders WHERE id IN (SELECT value FROM json_each(?)) LIMIT 5",
-      )
-      .bind(JSON.stringify(jobs.map((job) => job.id))),
-  ]);
-  const rows = loaded.at(-1)!.results as unknown as Job[];
-  return jobs.map(({ id }) => {
-    const job = rows.find((row) => row.id === id);
-    if (!job) throw new AppError(409, "PROMOTION_JOB_CHANGED", "Refresh your promotion kit and try again.");
-    return job;
-  });
+  return read.decode(await db.batch(read.statements));
 }
+
 export async function processPromotionRenderJob(
   db: DatabaseLike,
   env: Env,
@@ -219,5 +161,9 @@ export async function processPendingPromotionRenders(db: DatabaseLike, env: Env,
     if (await processPromotionRenderJob(db, env, row.id)) processed++;
     else failed++;
   }
+  await prepareJobWake(db, "due_work", {
+    sql: "SELECT 1 FROM event_promotion_renders WHERE status IN ('queued','retrying') AND next_attempt_at<=? LIMIT 1",
+    bindings: [nowIso()],
+  }).run();
   return { processed, failed };
 }

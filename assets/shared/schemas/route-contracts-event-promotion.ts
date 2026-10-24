@@ -1,8 +1,15 @@
 import { promotionBatchCreateSchema, promotionBatchSchema } from "./event-promotion-batches";
 import { z } from "zod";
 import { eventSlugParamsSchema } from "./api-common";
-import { promotionArtifactQuerySchema, promotionKitSchema, promotionKitSaveSchema } from "./event-promotion-kit";
-import { agendaSnapshotSchema, agendaOccurrenceQuerySchema, promotionSessionListSchema } from "./event-agenda";
+import {
+  promotionArtifactQuerySchema,
+  promotionKitSchema,
+  promotionKitSaveSchema,
+  promotionSessionsQuerySchema,
+  promotionRenderRequestSchema,
+  promotionDownloadRecordSchema,
+} from "./event-promotion-kit";
+import { agendaSnapshotSchema, promotionSessionListSchema } from "./event-agenda";
 import { authErrors, ok, requiresPermissions, requiresSession } from "./route-contract";
 import { promotionCompositionSaveSchema } from "./event-promotion-design";
 const params = eventSlugParamsSchema.extend({ occurrenceId: z.string().min(1) });
@@ -49,7 +56,7 @@ export const promotionArtifactGetRouteSchema = {
 export const promotionSessionsGetRouteSchema = {
   ...promotionKitGetRouteSchema,
   summary: "List assigned published sessions with promotion kits",
-  request: { params: eventSlugParamsSchema, query: agendaOccurrenceQuerySchema },
+  request: { params: eventSlugParamsSchema, query: promotionSessionsQuerySchema },
   responses: {
     ...ok("Assigned published sessions", promotionSessionListSchema),
     ...authErrors({ notFound: "Event not found" }),
@@ -58,9 +65,9 @@ export const promotionSessionsGetRouteSchema = {
 
 export const promotionRendersCreateRouteSchema = {
   ...promotionKitGetRouteSchema,
-  "x-pkic-mcp": { expose: false },
+  "x-pkic-mcp": { expose: true },
   summary: "Queue durable versioned promotion renders",
-  request: { params },
+  request: { params, body: { content: { "application/json": { schema: promotionRenderRequestSchema } } } },
 };
 export const promotionCompositionSaveRouteSchema = {
   ...promotionKitGetRouteSchema,
@@ -79,7 +86,7 @@ export const eventPromotionCompositionSaveRouteSchema = {
 };
 export const eventPromotionRendersCreateRouteSchema = {
   ...promotionRendersCreateRouteSchema,
-  request: { params: eventSlugParamsSchema },
+  request: { ...promotionRendersCreateRouteSchema.request, params: eventSlugParamsSchema },
 };
 export const eventPromotionArtifactGetRouteSchema = {
   ...promotionArtifactGetRouteSchema,
@@ -112,4 +119,30 @@ export const promotionBatchGetRouteSchema = {
   summary: "Read bulk speaker promotion progress",
   request: { params: eventSlugParamsSchema.extend({ batchId: z.uuid() }) },
   responses: { ...ok("Bulk promotion progress", promotionBatchSchema), ...authErrors({ notFound: "Batch not found" }) },
+};
+
+export const promotionKitInitializeRouteSchema = {
+  ...promotionKitGetRouteSchema,
+  "x-pkic-mcp": { expose: true },
+  summary: "Initialize own personal promotion link",
+  request: { params, body: { content: { "application/json": { schema: z.strictObject({}) } } } },
+};
+export const eventPromotionInitializeRouteSchema = {
+  ...promotionKitInitializeRouteSchema,
+  request: { ...promotionKitInitializeRouteSchema.request, params: eventSlugParamsSchema },
+};
+
+export const promotionDownloadsCreateRouteSchema = {
+  ...promotionKitGetRouteSchema,
+  "x-pkic-mcp": { expose: false },
+  summary: "Record a completed personal material download",
+  request: { params, body: { content: { "application/json": { schema: promotionDownloadRecordSchema } } } },
+  responses: {
+    ...ok("Promotion metrics", promotionKitSchema.shape.metrics),
+    ...authErrors({ notFound: "Prepared material not found" }),
+  },
+};
+export const eventPromotionDownloadsCreateRouteSchema = {
+  ...promotionDownloadsCreateRouteSchema,
+  request: { ...promotionDownloadsCreateRouteSchema.request, params: eventSlugParamsSchema },
 };

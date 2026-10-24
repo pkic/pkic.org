@@ -1,6 +1,8 @@
-const KNOWN_IMAGE_EXTENSION_RE = /\.(?:jpe?g|png|webp|gif|avif|svg|tiff?|ico|bmp|heic|heif)$/i;
+const KNOWN_FILE_EXTENSION_RE = /\.(?:jpe?g|png|webp|gif|avif|svg|tiff?|ico|bmp|heic|heif|pdf|zip)$/i;
 
 export function contentTypeToFileExtension(contentType: string): string {
+  if (contentType === "application/pdf") return "pdf";
+  if (contentType === "application/zip") return "zip";
   if (!contentType.startsWith("image/")) {
     return "jpg";
   }
@@ -43,7 +45,7 @@ export function buildDownloadDisposition(
       .replace(/^\.+|\.+$/g, "") // Remove leading/trailing dots to prevent hidden files/extension trickery
       .replace(/\.+/g, ".") // Collapse multiple dots
       .trim()
-      .replace(KNOWN_IMAGE_EXTENSION_RE, "") || fallbackBaseName;
+      .replace(KNOWN_FILE_EXTENSION_RE, "") || fallbackBaseName;
 
   const normalizedType = contentType?.split(";")[0]?.trim().toLowerCase() ?? "image/jpeg";
   const ext = contentTypeToFileExtension(normalizedType);

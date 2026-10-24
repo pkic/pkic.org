@@ -127,8 +127,18 @@ test("a rendered promotion QR preserves its referral through email sign-in and c
     .check();
   await page.getByRole("button", { name: "Save my materials", exact: true }).click();
   await page.getByRole("button", { name: "Prepare downloads", exact: true }).click();
+  await page.request.get("/cdn-cgi/local/scheduled");
   const preview = page.getByRole("img", { name: "Preview of your promotion materials", exact: true });
-  await expect(preview).toBeVisible({ timeout: 60_000 });
+  await expect
+    .poll(
+      async () => {
+        if (await preview.isVisible()) return true;
+        await page.request.get("/cdn-cgi/local/scheduled");
+        return preview.isVisible();
+      },
+      { timeout: 120_000, intervals: [1000, 2000, 5000] },
+    )
+    .toBe(true);
   await expect
     .poll(() => preview.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0))
     .toBe(true);
@@ -175,6 +185,7 @@ test("a rendered promotion QR preserves its referral through email sign-in and c
   await capture(page, info, "promotion-adjustments");
   await page.getByRole("button", { name: "Save my materials", exact: true }).click();
   await expect(page.getByRole("button", { name: "Personalize promotion materials", exact: true })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Personalize promotion materials", exact: true })).toHaveCount(0);
   const personalized = await readKit();
   expect(personalized.composition?.summary).toBe("My reviewed description for sharing this session with my network.");
   expect(personalized.registrationUrl).toBe(kit.registrationUrl);

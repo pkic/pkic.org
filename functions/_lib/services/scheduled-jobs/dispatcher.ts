@@ -1,3 +1,4 @@
+import type { AuthorizationEvidence } from "../../db/authorization-guard";
 import { getAvailability } from "../../availability";
 import { all, run } from "../../db/queries";
 import { logInfo } from "../../logging";
@@ -145,10 +146,16 @@ export async function recordJobOutcome(
 }
 
 /** Marks a job for the next dispatcher pass without waiting for its interval. */
-export function prepareJobWake(db: DatabaseLike, jobKey: ScheduledJobKey): StatementLike {
+export function prepareJobWake(
+  db: DatabaseLike,
+  jobKey: ScheduledJobKey,
+  condition?: AuthorizationEvidence,
+): StatementLike {
   return db
-    .prepare(`UPDATE scheduled_jobs SET wake_requested = 1, updated_at = ${NOW_SQL} WHERE job_key = ?`)
-    .bind(jobKey);
+    .prepare(
+      `${condition ? `WITH wake_condition AS MATERIALIZED(${condition.sql}) ` : ""}UPDATE scheduled_jobs SET wake_requested = 1, updated_at = ${NOW_SQL} WHERE job_key = ? ${condition ? "AND EXISTS(SELECT 1 FROM wake_condition)" : ""}`,
+    )
+    .bind(...(condition?.bindings ?? []), jobKey);
 }
 
 export async function requestJobWake(db: DatabaseLike, jobKey: ScheduledJobKey): Promise<void> {
