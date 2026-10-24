@@ -191,6 +191,16 @@ test("every delivered long-panel promotion export has complete evidence and refu
     .filter({ has: page.getByText(title, { exact: true }) });
   await runRowAction(page, row, "Speaker promotion kit");
   await page.getByRole("button", { name: "Personalize promotion materials", exact: true }).click();
+  const editor = page.getByRole("dialog", { name: "Personalize promotion materials", exact: true });
+  for (const [device, width, height] of [
+    ["desktop", 1280, 900],
+    ["phone", 375, 812],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await editor.getByLabel("Session content", { exact: true }).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: info.outputPath(`promotion-editor-${device}.png`) });
+  }
+
   await page
     .getByRole("checkbox", { name: "Print option Include a QR code for print or a second screen", exact: true })
     .check();

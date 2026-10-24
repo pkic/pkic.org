@@ -2,6 +2,7 @@ import { PromotionSessionPicks } from "./PromotionSessionPicks";
 import { useState } from "preact/hooks";
 import {
   promotionCompositionSaveSchema,
+  promotionCompositionSchema,
   promotionPanelSchema,
   defaultPromotionComposition,
   type PromotionComposition,
@@ -27,6 +28,20 @@ const labels: Record<z.infer<typeof promotionPanelSchema>, string> = {
   register: "Registration",
   sponsors: "Sponsors",
 };
+const contentLabels: Record<PromotionComposition["content"], string> = {
+  auto: "Use takeaways when available",
+  takeaways: "Key takeaways",
+  abstract: "Session abstract",
+};
+const overlapLabels: Record<PromotionComposition["overlap"], string> = {
+  subtle: "Subtle",
+  bold: "More prominent",
+};
+const stillLayoutLabels: Record<PromotionComposition["stillLayout"], string> = {
+  compact: "Compact",
+  expanded: "Expanded",
+};
+
 export function PromotionCompositionEditor({
   kit,
   base,
@@ -164,9 +179,11 @@ export function PromotionCompositionEditor({
                   value={composition.content}
                   onChange={(event) => change("content", event.currentTarget.value as PromotionComposition["content"])}
                 >
-                  <option value="auto">Use takeaways when available</option>
-                  <option value="takeaways">Key takeaways</option>
-                  <option value="abstract">Session abstract</option>
+                  {promotionCompositionSchema.shape.content.unwrap().options.map((value) => (
+                    <option key={value} value={value}>
+                      {contentLabels[value]}
+                    </option>
+                  ))}
                 </Select>
               )}
             </Field>
@@ -220,8 +237,11 @@ export function PromotionCompositionEditor({
               value={composition.overlap}
               onChange={(event) => change("overlap", event.currentTarget.value as PromotionComposition["overlap"])}
             >
-              <option value="subtle">Subtle</option>
-              <option value="bold">More prominent</option>
+              {promotionCompositionSchema.shape.overlap.unwrap().options.map((value) => (
+                <option key={value} value={value}>
+                  {overlapLabels[value]}
+                </option>
+              ))}
             </Select>
           )}
         </Field>
@@ -234,8 +254,11 @@ export function PromotionCompositionEditor({
                 change("stillLayout", event.currentTarget.value as PromotionComposition["stillLayout"])
               }
             >
-              <option value="compact">Compact</option>
-              <option value="expanded">Expanded</option>
+              {promotionCompositionSchema.shape.stillLayout.unwrap().options.map((value) => (
+                <option key={value} value={value}>
+                  {stillLayoutLabels[value]}
+                </option>
+              ))}
             </Select>
           )}
         </Field>
