@@ -6,7 +6,7 @@ import {
   type UsersListQuery,
 } from "../../../assets/shared/schemas/user-management";
 import { buildPageInfo } from "../../../assets/shared/schemas/pagination";
-import { queryPage } from "../db/pagination";
+import { buildOffsetPageStatements, decodeOffsetPageResults } from "../db/pagination";
 import { resolveOrderBy } from "../db/sort";
 import type { DatabaseLike } from "../types";
 import { buildUserIdentitySearchFilter } from "./user-search";
@@ -100,27 +100,36 @@ export function buildUsersPageQuery(query: UsersListQuery) {
   };
 }
 
-export async function listUsers(db: DatabaseLike, query: UsersListQuery) {
-  const { rows: users, total } = await queryPage<UserRow>(db, buildUsersPageQuery(query));
+export function prepareUsersList(db: DatabaseLike, query: UsersListQuery) {
+  return {
+    statements: buildOffsetPageStatements(db, buildUsersPageQuery(query)),
+    decode(loaded: import("../types").D1StatementResult[]) {
+      const { rows: users, total } = decodeOffsetPageResults<UserRow>(loaded[0]!, loaded[1]!);
 
-  const results = users.map(
-    ({
-      headshot_r2_key: headshotR2Key,
-      active_identity_count: organizationCount,
-      organization_names: organizationNames,
-      has_membership: hasMembership,
-      has_event_participation: hasEventParticipation,
-      ...row
-    }) => ({
-      ...row,
-      headshotUrl: publicUserHeadshotPath(row.id, headshotR2Key),
-      type: hasMembership ? "member" : hasEventParticipation ? "event_attendee" : "contact_only",
-      organizationNames: organizationNames ? organizationNames.split(NAME_SEPARATOR) : [],
-      organizationCount,
-    }),
-  );
-  return usersListResponseSchema.parse({
-    users: results,
-    page: buildPageInfo(query.limit, query.offset, total, results.length),
-  });
+      const results = users.map(
+        ({
+          headshot_r2_key: headshotR2Key,
+          active_identity_count: organizationCount,
+          organization_names: organizationNames,
+          has_membership: hasMembership,
+          has_event_participation: hasEventParticipation,
+          ...row
+        }) => ({
+          ...row,
+          headshotUrl: publicUserHeadshotPath(row.id, headshotR2Key),
+          type: hasMembership ? "member" : hasEventParticipation ? "event_attendee" : "contact_only",
+          organizationNames: organizationNames ? organizationNames.split(NAME_SEPARATOR) : [],
+          organizationCount,
+        }),
+      );
+      return usersListResponseSchema.parse({
+        users: results,
+        page: buildPageInfo(query.limit, query.offset, total, results.length),
+      });
+    },
+  };
+}
+export async function listUsers(db: DatabaseLike, query: UsersListQuery) {
+  const read = prepareUsersList(db, query);
+  return read.decode(await db.batch(read.statements));
 }

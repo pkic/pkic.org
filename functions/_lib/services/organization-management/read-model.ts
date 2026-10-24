@@ -8,7 +8,7 @@
  * provisioning; this file owns only reads.
  */
 import { all, first } from "../../db/queries";
-import { queryPage } from "../../db/pagination";
+import { buildOffsetPageStatements, decodeOffsetPageResults } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { AppError } from "../../errors";
 import { resolveMappedOrderBy } from "../../db/sort";
@@ -135,14 +135,22 @@ export function buildOrganizationsPageQuery(params: OrganizationsListQuery) {
   };
 }
 
+export function prepareOrganizationsList(db: DatabaseLike, params: OrganizationsListQuery) {
+  const statements = buildOffsetPageStatements(db, buildOrganizationsPageQuery(params));
+  return {
+    statements,
+    decode(loaded: import("../../types").D1StatementResult[]) {
+      const { rows, total } = decodeOffsetPageResults<OrgSummaryRow>(loaded[0]!, loaded[1]!);
+      return { organizations: rows.map(toOrgSummary), total };
+    },
+  };
+}
 export async function listOrganizations(
   db: DatabaseLike,
   params: OrganizationsListQuery,
 ): Promise<{ organizations: ReturnType<typeof toOrgSummary>[]; total: number }> {
-  const pageQuery = buildOrganizationsPageQuery(params);
-  const { rows, total } = await queryPage<OrgSummaryRow>(db, pageQuery);
-
-  return { organizations: rows.map(toOrgSummary), total };
+  const read = prepareOrganizationsList(db, params);
+  return read.decode(await db.batch(read.statements));
 }
 
 // ── Detail ───────────────────────────────────────────────────────────────
