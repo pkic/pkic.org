@@ -19,15 +19,17 @@ export function layoutPromotionSponsors(
 ) {
   const margin = 104 * scale,
     usable = 872 * scale,
-    gap = 48 * scale;
+    gap = 48 * scale,
+    compact = footer < 600 * scale,
+    contentTop = (compact ? 175 : 340) * scale;
   const newPage = () => {
     const page = add("Our sponsors", true);
-    put(page, "MADE POSSIBLE BY", 220 * scale, 22 * scale, true, "P", margin);
-    put(page, "Our sponsors", 290 * scale, 60 * scale, true, "H2", margin);
+    put(page, "MADE POSSIBLE BY", (compact ? 90 : 220) * scale, 22 * scale, true, "P", margin);
+    put(page, "Our sponsors", (compact ? 150 : 290) * scale, (compact ? 40 : 60) * scale, true, "H2", margin);
     return page;
   };
   let page = newPage(),
-    y = 340 * scale;
+    y = contentTop;
   const populated = groups.filter((group) => group.sponsors.length);
   for (let index = 0; index < populated.length; index++) {
     const first = populated[index]!,
@@ -49,7 +51,7 @@ export function layoutPromotionSponsors(
       const availableRows = Math.floor((footer - y - 80 * scale) / (logoHeight + 24 * scale));
       if (availableRows < 1) {
         page = newPage();
-        y = 340 * scale;
+        y = contentTop;
         continue;
       }
       const count = Math.min(availableRows, maxRows - offset);

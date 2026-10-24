@@ -493,6 +493,111 @@ describe("personal event promotion kits", () => {
     expect(saved.status).toBe(200);
     expect(promotionKitSchema.parse(await saved.json()).composition?.takeaways).toHaveLength(2);
   });
+  it("keeps withdrawn attendee picks editable and refuses exports without queue writes", async () => {
+    const f = await fixture();
+    const base = `${eventBase}/promotion`;
+    const read = async () => {
+      const response = await callApi(env, base, { headers: f.attendeeHeaders }, { maxRoundTrips: 1 });
+      expect(response.status, await response.clone().text()).toBe(200);
+      return promotionKitSchema.parse(await response.json());
+    };
+    const original = await read();
+    const saved = await callApi(
+      env,
+      `${base}/composition`,
+      {
+        method: "POST",
+        headers: f.attendeeHeaders,
+        body: JSON.stringify(
+          promotionCompositionSaveSchema.parse({
+            expectedRevision: 0,
+            composition: { ...original.composition, sessionIds: [f.sessionId] },
+          }),
+        ),
+      },
+      { maxRoundTrips: 1 },
+    );
+    expect(saved.status).toBe(200);
+    const source = await getAttendeePromotionKit(env.DB, f.eventId, f.userId, "https://app.test");
+    const job = await requestPromotionRender(env.DB, f.eventId, source, "portrait", "https://app.test");
+    await env.DB.prepare(
+      "UPDATE event_agenda_publications SET snapshot_json=json_set(snapshot_json,'$.occurrences[0].visibility','private') WHERE event_id=?",
+    )
+      .bind(f.eventId)
+      .run();
+    const draft = await read();
+    expect(draft).toMatchObject({
+      stale: true,
+      compositionRevision: 1,
+      composition: { sessionIds: [] },
+      artifacts: [],
+    });
+    expect(
+      await env.DB.prepare(
+        "SELECT json_extract(composition_json,'$.sessionIds[0]') AS id FROM event_promotion_kits WHERE event_id=? AND user_id=?",
+      )
+        .bind(f.eventId, f.userId)
+        .first("id"),
+    ).toBe(f.sessionId);
+    const before = await env.DB.prepare("SELECT COUNT(*) AS count FROM event_promotion_renders").first("count");
+    const queued = await callApi(
+      env,
+      `${base}/renders`,
+      {
+        method: "POST",
+        headers: f.attendeeHeaders,
+        body: JSON.stringify({
+          fingerprint: draft.fingerprint,
+          publishedRevision: draft.publishedRevision,
+          compositionRevision: draft.compositionRevision,
+          formats: ["carousel"],
+        }),
+      },
+      { maxRoundTrips: 1 },
+    );
+    expect(queued.status).toBe(409);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM event_promotion_renders").first("count")).toBe(before);
+    let rendered = false;
+    await processPromotionRenderJob(env.DB, env, job.id, async () => {
+      rendered = true;
+      return { body: new Uint8Array(), contentType: "image/png", count: 1 };
+    });
+    expect(rendered).toBe(false);
+    const recovered = await callApi(
+      env,
+      `${base}/composition`,
+      {
+        method: "POST",
+        headers: f.attendeeHeaders,
+        body: JSON.stringify(
+          promotionCompositionSaveSchema.parse({
+            expectedRevision: draft.compositionRevision,
+            composition: draft.composition,
+          }),
+        ),
+      },
+      { maxRoundTrips: 1 },
+    );
+    expect(recovered.status, await recovered.clone().text()).toBe(200);
+    const fresh = promotionKitSchema.parse(await recovered.json());
+    expect(fresh).toMatchObject({ stale: false, compositionRevision: 2, composition: { sessionIds: [] } });
+    const prepared = await callApi(
+      env,
+      `${base}/renders`,
+      {
+        method: "POST",
+        headers: f.attendeeHeaders,
+        body: JSON.stringify({
+          fingerprint: fresh.fingerprint,
+          publishedRevision: fresh.publishedRevision,
+          compositionRevision: fresh.compositionRevision,
+          formats: ["portrait"],
+        }),
+      },
+      { maxRoundTrips: 1 },
+    );
+    expect(prepared.status, await prepared.clone().text()).toBe(200);
+  });
   it("accepts public session picks, queues attendee exports, and invalidates obsolete compositions", async () => {
     const f = await fixture();
     const response = await callApi(env, `${eventBase}/promotion`, { headers: f.attendeeHeaders });

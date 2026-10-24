@@ -39,7 +39,11 @@ export async function downloadOwnPromotionArtifact(
       .bind(location.id, ...event.bindings, source.actor.subjectId, occurrenceId, query.fingerprint),
   ]);
   const current = await source.decode(loaded.slice(0, source.statements.length));
-  if (current.kit.fingerprint !== query.fingerprint || current.kit.publishedRevision !== query.revision)
+  if (
+    current.kit.stale ||
+    current.kit.fingerprint !== query.fingerprint ||
+    current.kit.publishedRevision !== query.revision
+  )
     throw new AppError(409, "PROMOTION_ARTIFACT_STALE", "Your materials changed. Refresh your kit before downloading.");
   const job = batchFirst<{ status: string }>(loaded.at(-1)!);
   if (!cached || job?.status !== "rendered")

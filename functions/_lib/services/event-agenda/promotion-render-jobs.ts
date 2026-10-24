@@ -90,7 +90,7 @@ export async function processPromotionRenderJob(
         ? assignedPromotionKit(db, job.event_id, job.occurrence_id, job.user_id, canManage, job.origin)
         : getAttendeePromotionKit(db, job.event_id, job.user_id, job.origin);
     const source = await resolveSource();
-    if (source.kit.fingerprint !== job.fingerprint)
+    if (source.kit.stale || source.kit.fingerprint !== job.fingerprint)
       throw new AppError(409, "PROMOTION_SOURCE_CHANGED", "Promotion material changed. Prepare a new kit.");
     const branding = await promotionSponsorArtwork(db, env, job.event_id);
     const renderArtifact = render ?? (await import("./promotion-artifact")).renderPromotionArtifact;

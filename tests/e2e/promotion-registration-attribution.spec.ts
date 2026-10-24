@@ -1,3 +1,4 @@
+import { promotionCompositionSaveSchema } from "../../assets/shared/schemas/event-promotion-design";
 import { randomUUID } from "node:crypto";
 import sharp from "sharp";
 import { PDFDocument } from "pdf-lib";
@@ -7,6 +8,7 @@ import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import { apiErrorPayloadSchema } from "../../assets/shared/schemas/api-common";
 import {
   agendaOccurrenceCreateSchema,
+  agendaOccurrencePatchSchema,
   agendaRevisionSchema,
   agendaSnapshotSchema,
 } from "../../assets/shared/schemas/event-agenda";
@@ -38,9 +40,11 @@ async function capture(page: Page, info: TestInfo, label: string) {
     });
     expect(await page.evaluate(() => window.scrollY)).toBe(0);
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    if (device === "phone" && label === "attendee-recovery")
+      await page.getByRole("alert").filter({ hasText: "Unavailable sessions" }).scrollIntoViewIfNeeded();
     await page.screenshot({
       path: info.outputPath(`${label}-${device}.png`),
-      fullPage: (await page.getByRole("dialog").count()) === 0,
+      fullPage: device === "desktop" && (await page.getByRole("dialog").count()) === 0,
     });
   }
 }
@@ -269,4 +273,72 @@ test("a rendered promotion QR preserves its referral through email sign-in and c
   } finally {
     await visitorContext.close();
   }
+});
+
+test("attendees can recover promotion materials after a selected session is withdrawn", async ({ page }, info) => {
+  test.setTimeout(120_000);
+  const ownerEmail = e2eAdminEmail("promotion-registration-attribution");
+  await signInToPortal(page, ownerEmail);
+  const eventResponse = await page.request.get(eventApi);
+  const event = eventDetailResponseSchema.parse(await eventResponse.json());
+  if (!event.event.participation?.registrationId)
+    await registerInBrowser(page, ownerEmail, undefined, undefined, { organization: SEEDED_MEMBER_ORGANIZATION });
+  const agendaResponse = await page.request.get(`${eventApi}/agenda`);
+  const agenda = agendaSnapshotSchema.parse(await agendaResponse.json());
+  const title = `Withdrawn promotion selection ${randomUUID()}`;
+  const createdResponse = await page.request.post(`${eventApi}/agenda/occurrences`, {
+    data: agendaOccurrenceCreateSchema.parse({
+      expectedRevision: agenda.revision,
+      title,
+      description: "A synthetic session used to verify promotion draft recovery.",
+      startAt: "2026-12-01T08:00:00.000Z",
+      endAt: "2026-12-01T09:00:00.000Z",
+      roomId: null,
+      speakerUserIds: [],
+    }),
+  });
+  expect(createdResponse.status(), await createdResponse.text()).toBe(200);
+  const created = agendaSnapshotSchema.parse(await createdResponse.json());
+  const occurrence = created.occurrences.find((item) => item.title === title)!;
+  const publishedResponse = await page.request.post(`${eventApi}/agenda/publications`, {
+    data: agendaRevisionSchema.parse({ expectedRevision: created.revision }),
+  });
+  expect(publishedResponse.status(), await publishedResponse.text()).toBe(200);
+  const published = agendaSnapshotSchema.parse(await publishedResponse.json());
+  const base = `${eventApi}/promotion`;
+  let response = await page.request.get(base);
+  if (response.status() === 409) response = await page.request.post(`${base}/referrals`, { data: {} });
+  expect(response.status(), await response.text()).toBe(200);
+  const kit = promotionKitSchema.parse(await response.json());
+  const saved = await page.request.post(`${base}/composition`, {
+    data: promotionCompositionSaveSchema.parse({
+      expectedRevision: kit.compositionRevision,
+      composition: { ...kit.composition, sessionIds: [occurrence.id] },
+    }),
+  });
+  expect(saved.status(), await saved.text()).toBe(200);
+  const withdrawnResponse = await page.request.patch(`${eventApi}/agenda/occurrences/${occurrence.id}`, {
+    data: agendaOccurrencePatchSchema.parse({ expectedRevision: published.revision, visibility: "private" }),
+  });
+  expect(withdrawnResponse.status(), await withdrawnResponse.text()).toBe(200);
+  const withdrawn = agendaSnapshotSchema.parse(await withdrawnResponse.json());
+  const republished = await page.request.post(`${eventApi}/agenda/publications`, {
+    data: agendaRevisionSchema.parse({ expectedRevision: withdrawn.revision }),
+  });
+  expect(republished.status(), await republished.text()).toBe(200);
+  await page.goto(`/portal/#/events/${slug}/promotion`);
+  await expect(page.getByRole("alert").filter({ hasText: "Unavailable sessions" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Prepare downloads", exact: true })).toBeDisabled();
+  await capture(page, info, "attendee-recovery");
+  await page.getByRole("button", { name: "Personalize promotion materials", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Personalize promotion materials", exact: true });
+  await expect(dialog).toBeVisible();
+  await capture(page, info, "attendee-recovery-editor");
+  await dialog.getByRole("button", { name: "Save my materials", exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole("alert").filter({ hasText: "Unavailable sessions" })).toBeHidden();
+  await expect(page.getByRole("button", { name: "Prepare downloads", exact: true })).toBeEnabled();
+  const fresh = promotionKitSchema.parse(await (await page.request.get(base)).json());
+  expect(fresh.stale).toBe(false);
+  expect(fresh.composition?.sessionIds).toEqual([]);
 });

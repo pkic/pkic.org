@@ -19,12 +19,9 @@ export async function buildAttendeePromotionSource(basis: PromotionSourceBasis, 
   if (!person) throw new AppError(403, "PROMOTION_PERSON_UNAVAILABLE", "Your profile is unavailable.");
   const available = agenda.occurrences.filter((item) => item.visibility === "public" && item.kind !== "break");
   const picks = personal.composition.sessionIds.map((id) => available.find((item) => item.id === id));
-  if (picks.some((item) => !item))
-    throw new AppError(
-      409,
-      "PROMOTION_SESSION_UNAVAILABLE",
-      "A selected session is no longer public. Update your kit.",
-    );
+  const availablePicks = picks.filter((item): item is NonNullable<typeof item> => Boolean(item));
+  const stale = availablePicks.length !== picks.length;
+  const composition = { ...personal.composition, sessionIds: availablePicks.map((item) => item.id) };
   if (!code)
     throw new AppError(
       409,
@@ -75,27 +72,27 @@ export async function buildAttendeePromotionSource(basis: PromotionSourceBasis, 
     publishedRevision: Math.max(1, agenda.publishedRevision ?? 0),
     templateVersion: PROMOTION_TEMPLATE_VERSION,
     copy,
-    composition: personal.composition,
+    composition,
     compositionRevision: personal.revision,
     fingerprint,
     formats: promotionFormatSchema.options,
     registrationUrl,
-    stale: false,
+    stale,
     artifacts: [],
     metrics: { downloads: 0, clicks: 0, confirmedRegistrations: 0, sessionRsvps: 0 },
   });
   kit.metrics = basis.metrics;
-  kit.artifacts = basis.artifacts(fingerprint);
+  kit.artifacts = stale ? [] : basis.artifacts(fingerprint);
   return {
     kit,
     agenda,
     occurrence,
     actorId: userId,
     audience: "attendee" as const,
-    composition: personal.composition,
+    composition,
     design: visual.design,
     place: visual.place,
     people,
-    picks: picks.filter((item): item is NonNullable<typeof item> => Boolean(item)),
+    picks: availablePicks,
   };
 }

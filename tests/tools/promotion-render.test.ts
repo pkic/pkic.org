@@ -166,8 +166,8 @@ describe("promotion exports", () => {
     expect(pages).toHaveLength(2);
     expect(pages.every((page) => !page.qr)).toBe(true);
     expect(renderPromotionSvg(sample, "portrait")).not.toContain('<g fill="#0b0d0c">');
-    expect(pages[0]!.sponsorBoard).toEqual({ x: 990, width: 1170 });
-    expect(pages[1]!.sponsorBoard).toEqual({ x: -90, width: 1170 });
+    expect(pages[0]!.sponsorBoard).toMatchObject({ x: 990, width: 1170 });
+    expect(pages[1]!.sponsorBoard).toMatchObject({ x: -90, width: 1170 });
     const bold = buildPromotionPages(
       { ...sample, composition: { ...sample.composition, overlap: "bold" } },
       "carousel",
@@ -225,28 +225,46 @@ describe("promotion exports", () => {
         aspectRatio: index % 2 ? 7 : 1,
       })),
     }));
-    const pages = buildPromotionPages(
-      { ...data, composition: { ...defaultPromotionComposition(), panels: ["register", "sponsors"] }, sponsors },
-      "carousel",
-    );
-    const boards = pages.filter((page) => page.light);
-    expect(boards.length).toBeGreaterThan(1);
-    expect(boards.flatMap((page) => page.pictures)).toHaveLength(65);
-    for (const page of boards)
-      for (const picture of page.pictures) {
-        expect(picture.x).toBeGreaterThanOrEqual(124);
-        expect(picture.x + picture.width).toBeLessThanOrEqual(956);
-        expect(picture.y + picture.height).toBeLessThan(1140);
-        for (const other of page.pictures) {
-          if (picture === other) continue;
-          const separated =
-            picture.x + picture.width + 39 <= other.x ||
-            other.x + other.width + 39 <= picture.x ||
-            picture.y + picture.height <= other.y ||
-            other.y + other.height <= picture.y;
-          expect(separated).toBe(true);
+    for (const qrCode of [false, true]) {
+      for (const format of ["landscape", "panel", "square", "portrait", "carousel"] as const) {
+        const pages = buildPromotionPages(
+          {
+            ...data,
+            composition: { ...defaultPromotionComposition(), panels: ["register", "sponsors"], qrCode },
+            sponsors,
+          },
+          format,
+        );
+        const boards = pages.filter((page) => page.light);
+        expect(boards.length).toBeGreaterThan(1);
+        expect(boards.flatMap((page) => page.pictures)).toHaveLength(65);
+        for (const page of boards) {
+          if (page.height < 800)
+            expect(page.sponsorBoard!.y + page.sponsorBoard!.height).toBeLessThanOrEqual(
+              page.height - (qrCode ? 180 : 130),
+            );
+          for (const text of page.texts) {
+            expect(text.y - text.size).toBeGreaterThanOrEqual(page.sponsorBoard!.y);
+            expect(text.y).toBeLessThan(page.sponsorBoard!.y + page.sponsorBoard!.height);
+          }
+          for (const picture of page.pictures) {
+            expect(picture.x).toBeGreaterThanOrEqual(124 * (page.width / 1080));
+            expect(picture.x + picture.width).toBeLessThanOrEqual(956 * (page.width / 1080));
+            expect(picture.y).toBeGreaterThanOrEqual(page.sponsorBoard!.y);
+            expect(picture.y + picture.height).toBeLessThanOrEqual(page.sponsorBoard!.y + page.sponsorBoard!.height);
+            for (const other of page.pictures) {
+              if (picture === other) continue;
+              const separated =
+                picture.x + picture.width + 39 * (page.width / 1080) <= other.x ||
+                other.x + other.width + 39 * (page.width / 1080) <= picture.x ||
+                picture.y + picture.height <= other.y ||
+                other.y + other.height <= picture.y;
+              expect(separated).toBe(true);
+            }
+          }
         }
       }
+    }
   });
   it("provides ordered headings, list items, QR alternate text and linked annotations", async () => {
     const takeaways = Array.from(

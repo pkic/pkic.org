@@ -1,3 +1,4 @@
+import { promotionSessionPicksEvidence } from "./promotion-composition";
 import { prepareAuthorizationGuard, isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import { promotionReferralOwnerSql } from "./promotion-referral";
 import type { z } from "zod";
@@ -28,10 +29,13 @@ export async function saveOwnPromotionComposition(
     sql: "SELECT 1 FROM audit_log WHERE id=?",
     bindings: [auditId],
   });
-  const picks = {
-    sql: `SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM json_each(?) requested WHERE NOT EXISTS(SELECT 1 FROM event_agenda_publications publication JOIN event_agenda_state state ON state.event_id=publication.event_id AND state.published_revision=publication.revision,json_each(publication.snapshot_json,'$.occurrences') entry WHERE publication.event_id=${event.sql} AND json_extract(entry.value,'$.id')=requested.value AND json_extract(entry.value,'$.visibility')='public' AND json_extract(entry.value,'$.kind')<>'break'))`,
-    bindings: [JSON.stringify(input.composition.sessionIds), ...event.bindings],
-  };
+  const picks = promotionSessionPicksEvidence(
+    { slug },
+    {
+      sql: "SELECT ?",
+      bindings: [JSON.stringify(input.composition.sessionIds)],
+    },
+  );
   const command = db
     .prepare(`WITH allowed AS MATERIALIZED(${response.authority.sql}), valid_picks AS MATERIALIZED(${picks.sql}) INSERT INTO event_promotion_kits(id,event_id,user_id,occurrence_id,revision,composition_json,updated_at)
     SELECT ?,${event.sql},?,?,1,?,? FROM allowed,valid_picks WHERE ?=0 OR EXISTS(SELECT 1 FROM event_promotion_kits WHERE event_id=${event.sql} AND user_id=? AND occurrence_id IS ? AND revision=?)

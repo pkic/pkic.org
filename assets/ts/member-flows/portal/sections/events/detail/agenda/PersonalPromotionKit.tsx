@@ -1,3 +1,4 @@
+import { Alert } from "../../../../../../ui/Alert";
 import { downloadFile } from "../../../../../../shared/download-file";
 import { loadPromotionKit } from "./promotion-kit-client";
 import { useEffect, useState } from "preact/hooks";
@@ -113,10 +114,16 @@ export function PersonalPromotionKit({ base, title, onClose }: { base: string; t
         {error && <ErrorAlert error={error} />}
         {kit && (
           <div class="pk-stack">
+            {kit.stale && (
+              <Alert tone="warn">
+                Unavailable sessions have been removed from this draft. Use the + button to review and save your
+                materials to continue.
+              </Alert>
+            )}
             <p>Your downloads and registration link credit referrals to you.</p>
             <ExternalLink href={kit.registrationUrl}>Your registration referral link</ExternalLink>
             <div class="pk-promotion-kit__actions">
-              <Button onClick={prepare} disabled={busy}>
+              <Button onClick={prepare} disabled={busy || kit.stale}>
                 Prepare downloads
               </Button>
               <Button

@@ -47,7 +47,7 @@ export interface PromotionPage {
   light?: boolean;
   qr?: boolean;
   bars?: { x: number; y: number; width: number; height: number; color: string; opacity?: number }[];
-  sponsorBoard?: { x: number; width: number };
+  sponsorBoard?: { x: number; y: number; width: number; height: number };
   markX?: number;
   rules?: { x: number; y: number; width: number }[];
 }
@@ -93,6 +93,7 @@ export function buildPromotionPages(
     margin = 80 * scale,
     usable = width - margin * 2;
   const footer = height - (format === "landscape" || format === "panel" ? 95 : 210);
+  const sponsorBottom = height < 800 ? height - (data.composition?.qrCode ? 180 : 130) : footer;
   const pages: PromotionPage[] = [];
   const people = promotionPeople(data);
   const composition: PromotionComposition =
@@ -397,7 +398,7 @@ export function buildPromotionPages(
       page.qr = composition.qrCode;
     }
     if (panel === "sponsors" && data.sponsors?.some((group) => group.sponsors.length)) {
-      layoutPromotionSponsors(data.sponsors, add, put, scale, footer);
+      layoutPromotionSponsors(data.sponsors, add, put, scale, sponsorBottom);
     }
   }
 
@@ -409,9 +410,14 @@ export function buildPromotionPages(
   for (const page of pages) {
     if (!page.light) continue;
     const overlap = format === "carousel" && page.index > 0 ? (composition.overlap === "bold" ? 220 : 90) * scale : 0;
-    page.sponsorBoard = { x: -overlap, width: width + overlap };
+    const board = {
+      y: (height < 800 ? 40 : 150) * scale,
+      height: sponsorBottom - (height < 800 ? 40 : 150) * scale,
+      width: width + overlap,
+    };
+    page.sponsorBoard = { ...board, x: -overlap };
     const previous = pages[page.index - 1];
-    if (overlap && previous && !previous.light) previous.sponsorBoard = { x: width - overlap, width: width + overlap };
+    if (overlap && previous && !previous.light) previous.sponsorBoard = { ...board, x: width - overlap };
   }
   // Artwork occupies one panorama coordinate system, clipped by each exported page.
   const registerIndex = pages.findIndex((page) => page.title === composition.callToAction);

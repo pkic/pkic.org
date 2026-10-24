@@ -37,3 +37,15 @@ export function preparePromotionComposition(
     },
   };
 }
+
+/** Public session picks share the same publication predicate for saves and render requests. */
+export function promotionSessionPicksEvidence(
+  event: EventReadSelection,
+  requested: { sql: string; bindings: readonly unknown[] },
+) {
+  const scope = eventReadIdSql(event);
+  return {
+    sql: `SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM json_each((${requested.sql})) requested WHERE NOT EXISTS(SELECT 1 FROM event_agenda_publications publication JOIN event_agenda_state state ON state.event_id=publication.event_id AND state.published_revision=publication.revision,json_each(publication.snapshot_json,'$.occurrences') entry WHERE publication.event_id=${scope.sql} AND json_extract(entry.value,'$.id')=requested.value AND json_extract(entry.value,'$.visibility')='public' AND json_extract(entry.value,'$.kind')<>'break'))`,
+    bindings: [...requested.bindings, ...scope.bindings],
+  };
+}
