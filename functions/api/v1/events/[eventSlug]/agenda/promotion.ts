@@ -1,3 +1,17 @@
+import { eventPromotionSessionsGetRouteSchema } from "../../../../../../assets/shared/schemas/route-contracts-event-promotion";
+import { promotionRenderStatus } from "../../../../../_lib/services/event-agenda/promotion-render-status";
+import { getAttendeePromotionKit } from "../../../../../_lib/services/event-agenda/promotion-attendee";
+import { savePromotionComposition } from "../../../../../_lib/services/event-agenda/promotion-composition";
+import { requireUserBackedAdminFromRequest } from "../../../../../_lib/auth/admin";
+import {
+  eventPromotionGetRouteSchema,
+  eventPromotionCompositionSaveRouteSchema,
+  eventPromotionRendersCreateRouteSchema,
+  eventPromotionArtifactGetRouteSchema,
+  promotionCompositionSaveRouteSchema,
+} from "../../../../../../assets/shared/schemas/route-contracts-event-promotion";
+import type { z } from "zod";
+import { promotionArtifactQuerySchema } from "../../../../../../assets/shared/schemas/event-promotion-kit";
 import {
   requestPromotionRender,
   processPromotionRenderJob,
@@ -6,7 +20,7 @@ import { promotionFormatSchema } from "../../../../../../assets/shared/schemas/e
 import { resolveAppBaseUrl } from "../../../../../_lib/config";
 import {
   assignedPromotionKit,
-  listAssignedPromotionSessions,
+  listPublishedPromotionSessions,
   recordPromotionDownload,
 } from "../../../../../_lib/services/event-agenda/promotion-access";
 import {
@@ -25,24 +39,32 @@ import { hasPermission, guardPermissionDatabase } from "../../../../../_lib/auth
 import { getEventBySlug } from "../../../../../_lib/services/events";
 import { AppError } from "../../../../../_lib/errors";
 import { savePromotionCopy } from "../../../../../_lib/services/event-agenda/promotion-kit";
-async function ownKit(c: AdminContext, eventSlug: string, occurrenceId: string) {
+async function promotionActor(c: AdminContext) {
   const db = requestDb(c);
-  const session = await resolveUserSessionFromRequest(db, c.req.raw, {
-    INTERNAL_SIGNING_SECRET: c.env.INTERNAL_SIGNING_SECRET,
-  });
-  const actor = session.staff;
-  const userId = session.identity.id;
+  const machine = c.req.raw.headers.get("x-pkic-machine-auth") === "mcp";
+  const actor = machine ? await requireUserBackedAdminFromRequest(db, c.req.raw, c.env) : null;
+  const session = machine ? null : await resolveUserSessionFromRequest(db, c.req.raw, c.env);
+  const userId = actor?.id ?? session!.identity.id;
+  const staff = actor ?? session?.staff;
+  return { userId, staff };
+}
+async function ownKit(c: AdminContext, eventSlug: string, occurrenceId: string | null) {
+  const db = requestDb(c),
+    { userId, staff } = await promotionActor(c);
   const event = await getEventBySlug(db, eventSlug);
   return {
-    ...(await assignedPromotionKit(
-      db,
-      event.id,
-      occurrenceId,
-      userId,
-      Boolean(actor && hasPermission(actor, "agenda:write", { type: "event", id: event.id })),
-      resolveAppBaseUrl(c.env, c.req.raw),
-    )),
+    ...(occurrenceId
+      ? await assignedPromotionKit(
+          db,
+          event.id,
+          occurrenceId,
+          userId,
+          Boolean(staff && hasPermission(staff, "agenda:write", { type: "event", id: event.id })),
+          resolveAppBaseUrl(c.env, c.req.raw),
+        )
+      : await getAttendeePromotionKit(db, event.id, userId, resolveAppBaseUrl(c.env, c.req.raw))),
     eventId: event.id,
+    eventSlug: event.slug,
   };
 }
 export const PromotionKitGet = openApiRoute(promotionKitGetRouteSchema, async (c, data) =>
@@ -68,11 +90,17 @@ export const PromotionCopySave = openApiRoute(promotionCopySaveRouteSchema, asyn
     ),
   );
 });
-export const PromotionArtifactGet = openApiRoute(promotionArtifactGetRouteSchema, async (c, data) => {
-  const source = await ownKit(c, data.params.eventSlug, data.params.occurrenceId);
-  if (source.kit.publishedRevision !== data.query.revision)
+async function download(
+  c: AdminContext,
+  source: Awaited<ReturnType<typeof ownKit>>,
+  query: z.infer<typeof promotionArtifactQuerySchema>,
+) {
+  if (
+    source.kit.publishedRevision !== query.revision ||
+    (query.fingerprint && query.fingerprint !== source.kit.fingerprint)
+  )
     throw new AppError(409, "PROMOTION_ARTIFACT_STALE", "The agenda changed. Refresh your kit before downloading.");
-  const format = data.query.format;
+  const format = query.format;
   const job = await requestPromotionRender(
     requestDb(c),
     source.eventId,
@@ -80,10 +108,12 @@ export const PromotionArtifactGet = openApiRoute(promotionArtifactGetRouteSchema
     format,
     resolveAppBaseUrl(c.env, c.req.raw),
   );
-  let cached = await c.env.ASSETS_BUCKET.get(job.cache_key);
+  const bucket = c.env.ASSETS_BUCKET;
+  if (!bucket) throw new AppError(503, "PROMOTION_STORAGE_UNAVAILABLE", "Promotion storage is unavailable.");
+  let cached = await bucket.get(job.cache_key);
   if (!cached) {
     await processPromotionRenderJob(requestDb(c), c.env, job.id);
-    cached = await c.env.ASSETS_BUCKET.get(job.cache_key);
+    cached = await bucket.get(job.cache_key);
   }
   if (!cached)
     throw new AppError(
@@ -91,16 +121,25 @@ export const PromotionArtifactGet = openApiRoute(promotionArtifactGetRouteSchema
       "PROMOTION_RENDER_PENDING",
       "Your promotion material is being prepared. Refresh the kit shortly; failed renders retry automatically.",
     );
+  const current = await ownKit(c, source.eventSlug, source.kit.occurrenceId);
+  const statuses = await promotionRenderStatus(
+    requestDb(c),
+    source.eventId,
+    source.actorId,
+    source.kit.occurrenceId,
+    source.kit.fingerprint!,
+  );
   if (
-    data.query.download === "false" &&
-    format !== "carousel" &&
-    cached.httpMetadata?.contentType === "application/zip"
-  ) {
-    cached = await c.env.ASSETS_BUCKET.get(`${job.cache_key}.preview.png`);
+    current.kit.fingerprint !== source.kit.fingerprint ||
+    !statuses.some((item) => item.format === format && item.status === "rendered")
+  )
+    throw new AppError(409, "PROMOTION_ARTIFACT_STALE", "Your materials changed. Refresh your kit before downloading.");
+  if (query.download === "false" && format !== "carousel" && cached.httpMetadata?.contentType === "application/zip") {
+    cached = await bucket.get(`${job.cache_key}.preview.png`);
     if (!cached) throw new AppError(409, "PROMOTION_PREVIEW_PENDING", "Preview is being prepared. Refresh shortly.");
   }
-  if (data.query.download === "true")
-    await recordPromotionDownload(requestDb(c), data.params.occurrenceId, source.actorId, format);
+  if (query.download === "true")
+    await recordPromotionDownload(requestDb(c), source.kit.occurrenceId, source.actorId, format, job.id);
   return new Response(cached.body, {
     headers: {
       "content-type": cached.httpMetadata?.contentType ?? (format === "carousel" ? "application/pdf" : "image/png"),
@@ -108,27 +147,76 @@ export const PromotionArtifactGet = openApiRoute(promotionArtifactGetRouteSchema
       "content-disposition": `attachment; filename="session-${format}.${cached.httpMetadata?.contentType === "application/zip" ? "zip" : format === "carousel" ? "pdf" : "png"}"`,
     },
   });
-});
-export const PromotionRendersCreate = openApiRoute(promotionRendersCreateRouteSchema, async (c, data) => {
-  const source = await ownKit(c, data.params.eventSlug, data.params.occurrenceId);
-  const jobs = [];
+}
+async function queueRenders(c: AdminContext, source: Awaited<ReturnType<typeof ownKit>>) {
   for (const format of promotionFormatSchema.options)
-    jobs.push(
-      await requestPromotionRender(requestDb(c), source.eventId, source, format, resolveAppBaseUrl(c.env, c.req.raw)),
-    );
-  c.executionCtx.waitUntil(
-    (async () => {
-      for (const job of jobs) await processPromotionRenderJob(requestDb(c), c.env, job.id);
-    })(),
+    await requestPromotionRender(requestDb(c), source.eventId, source, format, resolveAppBaseUrl(c.env, c.req.raw));
+  const preview = await requestPromotionRender(
+    requestDb(c),
+    source.eventId,
+    source,
+    "portrait",
+    resolveAppBaseUrl(c.env, c.req.raw),
   );
-  return json((await ownKit(c, data.params.eventSlug, data.params.occurrenceId)).kit);
-});
+  c.executionCtx.waitUntil(processPromotionRenderJob(requestDb(c), c.env, preview.id));
+  source.kit.artifacts = await promotionRenderStatus(
+    requestDb(c),
+    source.eventId,
+    source.actorId,
+    source.kit.occurrenceId,
+    source.kit.fingerprint!,
+  );
+  return json(source.kit);
+}
+export const PromotionArtifactGet = openApiRoute(promotionArtifactGetRouteSchema, async (c, data) =>
+  download(c, await ownKit(c, data.params.eventSlug, data.params.occurrenceId), data.query),
+);
+export const PromotionRendersCreate = openApiRoute(promotionRendersCreateRouteSchema, async (c, data) =>
+  queueRenders(c, await ownKit(c, data.params.eventSlug, data.params.occurrenceId)),
+);
+async function saveOwn(
+  c: AdminContext,
+  slug: string,
+  occurrenceId: string | null,
+  input: Parameters<typeof savePromotionComposition>[4],
+) {
+  const source = await ownKit(c, slug, occurrenceId);
+  await savePromotionComposition(
+    requestDb(c),
+    source.eventId,
+    source.actorId,
+    occurrenceId,
+    input,
+    source.agenda.occurrences
+      .filter((item) => item.visibility === "public" && item.kind !== "break")
+      .map((item) => item.id),
+  );
+  return json((await ownKit(c, slug, occurrenceId)).kit);
+}
+export const PromotionCompositionSave = openApiRoute(promotionCompositionSaveRouteSchema, async (c, data) =>
+  saveOwn(c, data.params.eventSlug, data.params.occurrenceId, data.body),
+);
+export const EventPromotionGet = openApiRoute(eventPromotionGetRouteSchema, async (c, data) =>
+  json((await ownKit(c, data.params.eventSlug, null)).kit),
+);
+export const EventPromotionCompositionSave = openApiRoute(eventPromotionCompositionSaveRouteSchema, async (c, data) =>
+  saveOwn(c, data.params.eventSlug, null, data.body),
+);
+export const EventPromotionRendersCreate = openApiRoute(eventPromotionRendersCreateRouteSchema, async (c, data) =>
+  queueRenders(c, await ownKit(c, data.params.eventSlug, null)),
+);
+export const EventPromotionArtifactGet = openApiRoute(eventPromotionArtifactGetRouteSchema, async (c, data) =>
+  download(c, await ownKit(c, data.params.eventSlug, null), data.query),
+);
 
 export const PromotionSessionsGet = openApiRoute(promotionSessionsGetRouteSchema, async (c, data) => {
   const db = requestDb(c);
-  const session = await resolveUserSessionFromRequest(db, c.req.raw, {
-    INTERNAL_SIGNING_SECRET: c.env.INTERNAL_SIGNING_SECRET,
-  });
+  const { userId } = await promotionActor(c);
   const event = await getEventBySlug(db, data.params.eventSlug);
-  return json(await listAssignedPromotionSessions(db, event.id, session.identity.id, data.query));
+  return json(await listPublishedPromotionSessions(db, event.id, userId, data.query));
+});
+
+export const EventPromotionSessionsGet = openApiRoute(eventPromotionSessionsGetRouteSchema, async (c, data) => {
+  const source = await ownKit(c, data.params.eventSlug, null);
+  return json(await listPublishedPromotionSessions(requestDb(c), source.eventId, null, data.query));
 });

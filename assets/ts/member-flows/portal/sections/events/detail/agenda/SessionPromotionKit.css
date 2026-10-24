@@ -1,4 +1,9 @@
 @layer components {
+  .pk-promotion-kit__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--pk-3);
+  }
   .pk-promotion-kit__preview {
     display: block;
     width: 100%;

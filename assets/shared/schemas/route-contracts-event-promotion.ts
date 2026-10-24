@@ -3,8 +3,10 @@ import { eventSlugParamsSchema } from "./api-common";
 import { promotionArtifactQuerySchema, promotionKitSchema, promotionKitSaveSchema } from "./event-promotion-kit";
 import { agendaSnapshotSchema, agendaOccurrenceQuerySchema, promotionSessionListSchema } from "./event-agenda";
 import { authErrors, ok, requiresPermissions, requiresSession } from "./route-contract";
+import { promotionCompositionSaveSchema } from "./event-promotion-design";
 const params = eventSlugParamsSchema.extend({ occurrenceId: z.string().min(1) });
 export const promotionKitGetRouteSchema = {
+  "x-pkic-mcp": { expose: true, readonly: true },
   tags: ["Event promotion"],
   ...requiresSession(),
   summary: "Read own approved session promotion kit",
@@ -15,6 +17,7 @@ export const promotionKitGetRouteSchema = {
   },
 };
 export const promotionCopySaveRouteSchema = {
+  "x-pkic-mcp": { expose: true },
   tags: ["Event promotion"],
   summary: "Review and approve promotion narrative",
   ...requiresPermissions("agenda:write"),
@@ -26,6 +29,7 @@ export const promotionCopySaveRouteSchema = {
 };
 export const promotionArtifactGetRouteSchema = {
   ...promotionKitGetRouteSchema,
+  "x-pkic-mcp": { expose: false },
   summary: "Download own current promotion artifact",
   request: { params, query: promotionArtifactQuerySchema },
   responses: {
@@ -53,6 +57,35 @@ export const promotionSessionsGetRouteSchema = {
 
 export const promotionRendersCreateRouteSchema = {
   ...promotionKitGetRouteSchema,
+  "x-pkic-mcp": { expose: false },
   summary: "Queue durable versioned promotion renders",
   request: { params },
+};
+export const promotionCompositionSaveRouteSchema = {
+  ...promotionKitGetRouteSchema,
+  "x-pkic-mcp": { expose: true },
+  summary: "Save own promotion composition without changing the shared session",
+  request: { params, body: { content: { "application/json": { schema: promotionCompositionSaveSchema } } } },
+};
+export const eventPromotionGetRouteSchema = {
+  ...promotionKitGetRouteSchema,
+  summary: "Read own attendee promotion kit",
+  request: { params: eventSlugParamsSchema },
+};
+export const eventPromotionCompositionSaveRouteSchema = {
+  ...promotionCompositionSaveRouteSchema,
+  request: { ...promotionCompositionSaveRouteSchema.request, params: eventSlugParamsSchema },
+};
+export const eventPromotionRendersCreateRouteSchema = {
+  ...promotionRendersCreateRouteSchema,
+  request: { params: eventSlugParamsSchema },
+};
+export const eventPromotionArtifactGetRouteSchema = {
+  ...promotionArtifactGetRouteSchema,
+  request: { ...promotionArtifactGetRouteSchema.request, params: eventSlugParamsSchema },
+};
+
+export const eventPromotionSessionsGetRouteSchema = {
+  ...promotionSessionsGetRouteSchema,
+  summary: "List public sessions available for own promotion kit",
 };

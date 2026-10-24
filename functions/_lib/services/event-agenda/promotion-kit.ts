@@ -1,8 +1,14 @@
+import { promotionRenderStatus } from "./promotion-render-status";
+import { readPromotionComposition } from "./promotion-composition";
+import { resolvePromotionDesign } from "./promotion-design";
+import { readAgendaSpeakers } from "./speaker-profiles";
+import { agendaOccurrenceMedia } from "../../../../assets/shared/event-agenda-media";
+import { sha256Hex } from "../../utils/crypto";
 import { eventPublishesPages, publishedSessionRoute } from "../../../../assets/shared/public-agenda-pages";
 import { withSessionPageSlugs } from "./session-page-slugs";
 import { storedAgendaSnapshotSchema } from "../../../../assets/shared/schemas/event-agenda-stored";
 import { PROMOTION_TEMPLATE_VERSION } from "../../../../assets/shared/schemas/event-promotion-kit";
-import { registrationPageUrl } from "../frontend-links";
+import { promotionReferral, promotionReferralMetrics } from "./promotion-referral";
 import { getEventBySlug } from "../events";
 import {
   promotionFormatSchema,
@@ -10,12 +16,12 @@ import {
   type PromotionCopy,
 } from "../../../../assets/shared/schemas/event-promotion-kit";
 import type { DatabaseLike } from "../../types";
-import { first, all } from "../../db/queries";
+import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import { nowIso } from "../../utils/time";
 import { commitAgendaRevision } from "./mutations";
 import { getAgenda, getAgendaOccurrence } from "./read";
-import { createReferralCode } from "../referrals";
+
 export async function savePromotionCopy(
   db: DatabaseLike,
   eventId: string,
@@ -60,67 +66,51 @@ export async function getPromotionKit(
     (item) => item.id === occurrenceId && item.visibility === "public" && item.kind !== "break",
   );
   if (!occurrence) throw new AppError(404, "PUBLIC_SESSION_NOT_FOUND", "This session is not available for promotion.");
-  if (!occurrence.promotionCopy)
-    throw new AppError(409, "PROMOTION_COPY_UNAPPROVED", "Review promotion copy and approve the agenda first.");
-  const copy = occurrence.promotionCopy;
-  if (!copy.approvedAt)
-    throw new AppError(409, "PROMOTION_COPY_UNAPPROVED", "Review and approve the promotion copy first.");
-  const registration = await first<{ id: string }>(
-    db,
-    "SELECT id FROM registrations WHERE event_id=? AND user_id=? LIMIT 1",
-    [eventId, actorId],
-  );
-  const existing = registration
-    ? await first<{ code: string }>(
-        db,
-        "SELECT code FROM referral_codes WHERE event_id=? AND owner_type='registration' AND owner_id=? AND channel_hint=? LIMIT 1",
-        [eventId, registration.id, copy.campaign],
-      )
-    : null;
-  const code = registration
-    ? (existing?.code ??
-      (await createReferralCode(db, {
-        eventId,
-        ownerType: "registration",
-        ownerId: registration.id,
-        createdByUserId: actorId,
-        channelHint: copy.campaign,
-        length: 10,
-      })))
-    : undefined;
+  const approvedCopy = occurrence.promotionCopy?.approvedAt ? occurrence.promotionCopy : null;
+  const copy = approvedCopy ?? {
+    whyAttend: occurrence.description,
+    takeaways: [],
+    callToAction: "Register for this event",
+    campaign: "speaker-kit",
+    approvedAt: null,
+  };
+  const code = await promotionReferral(db, eventId, actorId);
   const event = await getEventBySlug(db, agenda.eventSlug);
-  const registrationUrl = code
-    ? new URL(`/r/${encodeURIComponent(code)}`, origin).toString()
-    : registrationPageUrl(origin, event, { source: copy.campaign });
+  const personal = await readPromotionComposition(db, eventId, actorId, occurrenceId);
+  const visual = await resolvePromotionDesign(db, eventId);
+  if (personal.revision === 0) personal.composition.panels = [...visual.design.panels];
+  const candidates = (await readAgendaSpeakers(db, eventId, [occurrenceId])).get(occurrenceId) ?? [];
+  const approvedIds = new Set(occurrence.speakers.map((person) => person.userId));
+  const people = candidates
+    .filter((person) => approvedIds.has(person.userId))
+    .sort(
+      (a, b) =>
+        occurrence.speakers.findIndex((p) => p.userId === a.userId) -
+        occurrence.speakers.findIndex((p) => p.userId === b.userId),
+    )
+    .map((person) => ({
+      userId: person.userId,
+      displayName: person.displayName,
+      affiliation: [person.profileCandidate?.jobTitle, person.profileCandidate?.organizationName]
+        .filter(Boolean)
+        .join(" · "),
+      photoUrl: person.profileCandidate?.photoUrl ?? null,
+      role: person.role ?? "speaker",
+    }));
+  const media = agendaOccurrenceMedia(agenda.rooms, occurrence);
+  const mediaWording = visual.design.advertiseLiveStreaming && media.liveStreaming ? "In person and online" : undefined;
+
+  const registrationUrl = new URL(`/r/${encodeURIComponent(code)}`, origin).href;
   const downloads = await first<{ count: number }>(
     db,
     "SELECT COALESCE(SUM(download_count),0) AS count FROM event_agenda_promotion_downloads WHERE occurrence_id=? AND user_id=?",
     [occurrenceId, actorId],
   );
-  const referral =
-    code && registration
-      ? await first<{ clicks: number; confirmedRegistrations: number }>(
-          db,
-          `SELECT referral.clicks,
-          (SELECT COUNT(*) FROM referral_conversions conversion
-           JOIN registrations converted ON converted.id=conversion.conversion_ref
-           WHERE conversion.code=referral.code AND conversion.conversion_type='registration'
-             AND converted.event_id=referral.event_id AND converted.status='registered') AS confirmedRegistrations
-         FROM referral_codes referral
-         WHERE referral.code=? AND referral.event_id=?
-           AND referral.owner_type='registration' AND referral.owner_id=?`,
-          [code, eventId, registration.id],
-        )
-      : null;
+  const referral = await promotionReferralMetrics(db, eventId, actorId, code);
   const rsvps = await first<{ count: number }>(
     db,
     "SELECT COUNT(*) AS count FROM agenda_session_participations WHERE occurrence_id=? AND event_id=? AND status = 'reserved'",
     [occurrenceId, eventId],
-  );
-  const artifacts = await all<{ format: string; status: string; attempts: number }>(
-    db,
-    "SELECT format,status,attempts FROM event_agenda_promotion_render_jobs WHERE occurrence_id=? AND user_id=? AND revision=? AND cache_key LIKE ? ORDER BY format LIMIT 5",
-    [occurrenceId, actorId, row.revision, `promotion/v${PROMOTION_TEMPLATE_VERSION}/%`],
   );
   // The same page rule as every other link: only a session page the site renders is promoted.
   const sessionPage = publishedSessionRoute(
@@ -132,14 +122,18 @@ export async function getPromotionKit(
   );
   const kit = promotionKitSchema.parse({
     occurrenceId,
+    source: { title: occurrence.title, description: occurrence.description },
     publishedRevision: row.revision,
     templateVersion: PROMOTION_TEMPLATE_VERSION,
     copy,
     formats: promotionFormatSchema.options,
     registrationUrl,
     ...(sessionPage ? { sessionUrl: new URL(sessionPage, origin).href } : {}),
+    audience: "speaker",
+    composition: personal.composition,
+    compositionRevision: personal.revision,
     stale: false,
-    artifacts,
+    artifacts: [],
     metrics: {
       downloads: downloads?.count ?? 0,
       clicks: referral?.clicks ?? 0,
@@ -147,5 +141,31 @@ export async function getPromotionKit(
       sessionRsvps: rsvps?.count ?? 0,
     },
   });
-  return { kit, agenda, occurrence, actorId };
+  const source = {
+    kit,
+    agenda,
+    occurrence,
+    actorId,
+    audience: "speaker" as const,
+    composition: personal.composition,
+    design: visual.design,
+    place: visual.place,
+    people,
+    mediaWording,
+  };
+  kit.fingerprint = await sha256Hex(
+    JSON.stringify({
+      agenda,
+      occurrence,
+      people,
+      composition: personal,
+      design: visual.design,
+      brandingRevision: visual.brandingRevision,
+      place: visual.place,
+      mediaWording,
+      registrationUrl,
+    }),
+  );
+  kit.artifacts = await promotionRenderStatus(db, eventId, actorId, occurrenceId, kit.fingerprint!);
+  return source;
 }

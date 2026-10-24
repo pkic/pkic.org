@@ -1,28 +1,20 @@
 import "./SessionPromotionKit.css";
-import { useEffect, useState } from "preact/hooks";
-import {
-  promotionKitSaveSchema,
-  promotionKitSchema,
-  promotionFormatSchema,
-} from "../../../../../../../shared/schemas/event-promotion-kit";
+import { useState } from "preact/hooks";
+import { promotionKitSaveSchema } from "../../../../../../../shared/schemas/event-promotion-kit";
 import {
   agendaSnapshotSchema,
   type AgendaSnapshot,
   type AgendaOccurrence,
 } from "../../../../../../../shared/schemas/event-agenda";
 import { useContractForm } from "../../../../../../hooks/useContractForm";
-import { getJson, postJson } from "../../../../../../shared/api-client";
-import { copyText } from "../../../../../../shared/clipboard";
-import { toast } from "../../../../ui";
+import { postJson } from "../../../../../../shared/api-client";
 import { Button } from "../../../../../../ui/Button";
 import { CloseButton } from "../../../../../../ui/CloseButton";
 import { Panel, PanelHeader, PanelBody } from "../../../../../../ui/Panel";
 import { Field } from "../../../../../../ui/Field";
 import { TextInput, Textarea } from "../../../../../../ui/TextControl";
 import { ErrorAlert } from "../../../../../../components/ErrorAlert";
-import { z } from "zod";
-import { ExternalLink } from "../../../../../../ui/ExternalLink";
-type Kit = z.infer<typeof promotionKitSchema>;
+import { PersonalPromotionKit } from "./PersonalPromotionKit";
 export function SessionPromotionKit({
   slug,
   occurrence,
@@ -40,7 +32,6 @@ export function SessionPromotionKit({
   const [takeaways, setTakeaways] = useState(occurrence.promotionCopy?.takeaways.join("\n") ?? "");
   const [callToAction, setCta] = useState(occurrence.promotionCopy?.callToAction ?? "Join this session");
   const [campaign, setCampaign] = useState(occurrence.promotionCopy?.campaign ?? "speaker-kit");
-  const [kit, setKit] = useState<Kit | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const base = `/api/v1/events/${encodeURIComponent(slug)}/agenda/occurrences/${encodeURIComponent(occurrence.id)}/promotion`;
@@ -68,7 +59,6 @@ export function SessionPromotionKit({
     setBusy(true);
     try {
       onSaved?.(await postJson(base, checked.data, agendaSnapshotSchema));
-      setKit(null);
       setError("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save promotion copy.");
@@ -76,35 +66,6 @@ export function SessionPromotionKit({
       setBusy(false);
     }
   }
-  async function load() {
-    setBusy(true);
-    setError("");
-    try {
-      setKit(await postJson(`${base}/renders`, {}, promotionKitSchema));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not prepare promotion kit.");
-    } finally {
-      setBusy(false);
-    }
-  }
-  useEffect(() => {
-    if (!kit || !kit.artifacts.some((artifact) => ["queued", "rendering", "retrying"].includes(artifact.status)))
-      return;
-    let cancelled = false;
-    const timer = setTimeout(() => {
-      void getJson(base, promotionKitSchema)
-        .then((next) => {
-          if (!cancelled) setKit(next);
-        })
-        .catch((failure) => {
-          if (!cancelled) setError(failure instanceof Error ? failure.message : "Could not refresh render progress.");
-        });
-    }, 2500);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [base, kit]);
   return (
     <Panel>
       <PanelHeader title={`Promotion kit · ${occurrence.title}`}>
@@ -121,7 +82,7 @@ export function SessionPromotionKit({
             </Field>
             <Field
               label="Key questions / takeaways"
-              help="One per line; two to five specific points."
+              help="Optional: one per line, up to eight specific points."
               {...form.of("copy.takeaways")}
             >
               {(control) => (
@@ -143,75 +104,8 @@ export function SessionPromotionKit({
             </Button>
           </form>
         )}
-        <Button onClick={load} disabled={busy}>
-          Prepare published kit
-        </Button>
-        {error && <ErrorAlert error={error} />}{" "}
-        {kit && (
-          <section>
-            <p>
-              Approved agenda revision {kit.publishedRevision} · template {kit.templateVersion}. Times use the event
-              timezone. Check the session page for current details.
-            </p>
-            <p>
-              {kit.sessionUrl ? (
-                <>
-                  <a href={kit.sessionUrl}>Session page</a> ·{" "}
-                </>
-              ) : null}
-              <a href={kit.registrationUrl}>Event registration / promoter link</a>
-            </p>
-            <Button
-              onClick={() =>
-                void copyText(`${occurrence.title}\n${kit.copy.whyAttend}\n${kit.registrationUrl}`, {
-                  copied: "Post and registration link copied",
-                  failed: "Your browser would not let the page copy the post",
-                  notify: toast,
-                })
-              }
-            >
-              Copy post and registration link
-            </Button>
-            <p>
-              {kit.metrics.downloads} downloads · {kit.metrics.clicks} registration-link clicks ·{" "}
-              {kit.metrics.confirmedRegistrations} confirmed referrals · {kit.metrics.sessionRsvps} session RSVPs.
-              Registrations and RSVPs are separate from observed attendance.
-            </p>
-            <ul>
-              {promotionFormatSchema.options.map((format) => (
-                <li>
-                  {kit.artifacts.some((artifact) => artifact.format === format && artifact.status === "rendered") ? (
-                    <a href={`${base}/artifact?format=${format}&revision=${kit.publishedRevision}`} download>
-                      {format === "carousel" ? "LinkedIn carousel PDF" : `${format} cards (PNG or ZIP)`}
-                    </a>
-                  ) : (
-                    <span>
-                      {format}: {kit.artifacts.find((artifact) => artifact.format === format)?.status ?? "not prepared"}
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ul>
-            <p>
-              Document uploads support up to 100 MB and 300 pages.{" "}
-              <ExternalLink href="https://www.linkedin.com/help/linkedin/answer/a518909" external>
-                LinkedIn document guidance
-              </ExternalLink>
-            </p>
-            <p>
-              Long titles and complete panel credits continue across additional cards, downloaded together as a ZIP.
-            </p>
-            {kit.artifacts.some((artifact) => artifact.format === "landscape" && artifact.status === "rendered") && (
-              <img
-                class="pk-promotion-kit__preview"
-                src={`${base}/artifact?format=landscape&download=false&revision=${kit.publishedRevision}`}
-                width="1200"
-                height="630"
-                alt={`First landscape promotion card for ${occurrence.title}`}
-              />
-            )}
-          </section>
-        )}
+        {error && <ErrorAlert error={error} />}
+        <PersonalPromotionKit key={snapshot?.revision} base={base} title="My published materials" />
       </PanelBody>
     </Panel>
   );

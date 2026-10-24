@@ -1,3 +1,11 @@
+import { EventPromotionSessionsGet } from "./agenda/promotion";
+import {
+  PromotionCompositionSave,
+  EventPromotionGet,
+  EventPromotionCompositionSave,
+  EventPromotionRendersCreate,
+  EventPromotionArtifactGet,
+} from "./agenda/promotion";
 import { registerRecordingRoutes } from "./register-recording-routes";
 import { registerScanningRoutes } from "./register-scanning-routes";
 import { registerEventManagementAuthentication } from "./register-event-management-authentication";
@@ -201,6 +209,12 @@ openapi.post("/calendar/subscriptions", AgendaCalendarRotatePost);
 openapi.delete("/calendar/subscriptions", AgendaCalendarRevokeDelete);
 openapi.get("/calendar/subscriptions/current", AgendaCalendarCurrentGet);
 openapi.get("/calendar/subscriptions/:token/calendar.ics", AgendaCalendarFeedGet);
+openapi.get("/promotion", EventPromotionGet);
+openapi.get("/promotion/sessions", EventPromotionSessionsGet);
+openapi.post("/promotion/composition", EventPromotionCompositionSave);
+openapi.post("/promotion/renders", EventPromotionRendersCreate);
+openapi.get("/promotion/artifact", EventPromotionArtifactGet);
+openapi.post("/agenda/occurrences/:occurrenceId/promotion/composition", PromotionCompositionSave);
 openapi.get("/agenda/promotion", PromotionSessionsGet);
 openapi.get("/agenda/occurrences/:occurrenceId/promotion", PromotionKitGet);
 openapi.post("/agenda/occurrences/:occurrenceId/promotion", PromotionCopySave);

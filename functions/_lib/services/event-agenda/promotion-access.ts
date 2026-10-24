@@ -29,10 +29,10 @@ export async function assignedPromotionKit(
   }
   return getPromotionKit(db, eventId, occurrenceId, userId, origin);
 }
-export async function listAssignedPromotionSessions(
+export async function listPublishedPromotionSessions(
   db: DatabaseLike,
   eventId: string,
-  userId: string,
+  userId: string | null,
   query: z.infer<typeof agendaOccurrenceQuerySchema>,
 ) {
   const conditions = [
@@ -41,7 +41,8 @@ export async function listAssignedPromotionSessions(
     "json_extract(entry.value,'$.kind') <> 'break'",
     "EXISTS (SELECT 1 FROM event_agenda_occurrence_speakers speaker JOIN event_agenda_occurrences occurrence ON occurrence.id=speaker.occurrence_id WHERE occurrence.event_id=publication.event_id AND speaker.user_id=? AND speaker.occurrence_id=json_extract(entry.value,'$.id'))",
   ];
-  const values: unknown[] = [eventId, userId];
+  if (userId === null) conditions.pop();
+  const values: unknown[] = userId === null ? [eventId] : [eventId, userId];
   if (query.q) {
     conditions.push(
       "INSTR(LOWER(json_extract(entry.value,'$.title') || ' ' || json_extract(entry.value,'$.description')),LOWER(?)) > 0",
@@ -93,11 +94,25 @@ export async function listAssignedPromotionSessions(
   const occurrences = rows.map((row) => agendaOccurrenceSchema.parse(JSON.parse(row.value)));
   return { occurrences, page: buildPageInfo(query.limit, query.offset, total?.total ?? 0, occurrences.length) };
 }
-export async function recordPromotionDownload(db: DatabaseLike, occurrenceId: string, userId: string, format: string) {
-  await db
-    .prepare(
-      "INSERT INTO event_agenda_promotion_downloads(occurrence_id,user_id,format,download_count) VALUES(?,?,?,1) ON CONFLICT(occurrence_id,user_id,format) DO UPDATE SET download_count=download_count+1",
-    )
-    .bind(occurrenceId, userId, format)
-    .run();
+export async function recordPromotionDownload(
+  db: DatabaseLike,
+  occurrenceId: string | null,
+  userId: string,
+  format: string,
+  jobId: string,
+) {
+  const statements = [
+    db
+      .prepare("UPDATE event_promotion_renders SET download_count=download_count+1 WHERE id=? AND user_id=?")
+      .bind(jobId, userId),
+  ];
+  if (occurrenceId)
+    statements.push(
+      db
+        .prepare(
+          "INSERT INTO event_agenda_promotion_downloads(occurrence_id,user_id,format,download_count) VALUES(?,?,?,1) ON CONFLICT(occurrence_id,user_id,format) DO UPDATE SET download_count=download_count+1",
+        )
+        .bind(occurrenceId, userId, format),
+    );
+  await db.batch(statements);
 }

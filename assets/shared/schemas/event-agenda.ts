@@ -10,7 +10,7 @@ import {
   agendaStaffingPositionAssignmentSchema,
   agendaStaffingPositionPlanSchema,
 } from "./event-agenda-staffing-positions";
-import { promotionCopySchema } from "./event-promotion-kit";
+import { promotionCopySchema } from "./event-promotion-copy";
 import { sessionHistoryMetadataSchema, publicSessionPortraitUrlSchema } from "./event-session-history";
 import { sessionDemandSchema } from "./event-session-demand";
 import { httpOrSameOriginUrlSchema, httpUrlSchema, sameOriginPathSchema } from "./urls";

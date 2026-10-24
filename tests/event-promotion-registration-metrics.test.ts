@@ -16,6 +16,8 @@ import {
   recordReferralClick,
   recordReferralConversion,
 } from "../functions/_lib/services/referrals";
+import { requestPromotionRender } from "../functions/_lib/services/event-agenda/promotion-render-jobs";
+import { assignedPromotionKit } from "../functions/_lib/services/event-agenda/promotion-access";
 import { recordPromotionDownload } from "../functions/_lib/services/event-agenda/promotion-access";
 import { setSessionParticipation } from "../functions/_lib/services/event-participation/session-booking";
 import { issueBadge, recordScan } from "../functions/_lib/services/event-participation/scanning";
@@ -246,7 +248,16 @@ describe("promotion confirmed registration metrics", () => {
       userAgent: null,
       secret: signingSecret,
     });
-    await recordPromotionDownload(env.DB, fixture.occurrenceId, fixture.owner.user.id, "square");
+    const source = await assignedPromotionKit(
+      env.DB,
+      fixture.eventId,
+      fixture.occurrenceId,
+      fixture.owner.user.id,
+      false,
+      "https://pkic.org",
+    );
+    const job = await requestPromotionRender(env.DB, fixture.eventId, source, "square", "https://pkic.org");
+    await recordPromotionDownload(env.DB, fixture.occurrenceId, fixture.owner.user.id, "square", job.id);
     const reservation = await setSessionParticipation(env.DB, fixture.eventId, fixture.occurrenceId, attendee.user.id, {
       action: "reserve",
       attendanceMode: "remote",

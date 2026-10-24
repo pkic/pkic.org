@@ -1,29 +1,25 @@
 import { z } from "zod";
-import { utcInstantSchema } from "./api-common";
-export const PROMOTION_TEMPLATE_VERSION = 2 as const;
+import { promotionCopySchema } from "./event-promotion-copy";
+import { agendaOccurrenceFieldsSchema } from "./event-agenda";
+export { promotionCopySchema } from "./event-promotion-copy";
+import { promotionCompositionSchema } from "./event-promotion-design";
+export const PROMOTION_TEMPLATE_VERSION = 3 as const;
 export const promotionRenderStateSchema = z.enum(["queued", "rendering", "retrying", "rendered", "failed", "obsolete"]);
 export const promotionFormatSchema = z.enum(["landscape", "square", "portrait", "panel", "carousel"]);
-export const promotionCopySchema = z.object({
-  whyAttend: z.string().trim().min(20).max(800),
-  takeaways: z.array(z.string().trim().min(5).max(180)).min(2).max(5),
-  callToAction: z.string().trim().min(5).max(100),
-  campaign: z
-    .string()
-    .trim()
-    .regex(/^[a-z0-9-]+$/)
-    .max(60)
-    .default("speaker-kit"),
-  approvedAt: utcInstantSchema.nullable(),
-});
 export const promotionKitSaveSchema = z.object({
   expectedRevision: z.number().int().min(0),
   copy: promotionCopySchema,
 });
 export const promotionKitSchema = z.object({
-  occurrenceId: z.string(),
+  occurrenceId: z.string().nullable(),
+  source: agendaOccurrenceFieldsSchema.pick({ title: true, description: true }).optional(),
+  audience: z.enum(["speaker", "attendee"]).default("speaker"),
+  composition: promotionCompositionSchema.optional(),
+  compositionRevision: z.number().int().nonnegative().default(0),
+  fingerprint: z.string().optional(),
   publishedRevision: z.number().int(),
   templateVersion: z.literal(PROMOTION_TEMPLATE_VERSION),
-  copy: promotionCopySchema,
+  copy: promotionCopySchema.extend({ whyAttend: z.string().max(20000) }),
   formats: z.array(promotionFormatSchema),
   registrationUrl: z.string().url(),
   /** Present only when the site renders this session's page. */
@@ -47,5 +43,9 @@ export const promotionArtifactQuerySchema = z.object({
   download: z.enum(["true", "false"]).default("true"),
   format: promotionFormatSchema,
   revision: z.coerce.number().int().positive(),
+  fingerprint: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional(),
 });
 export type PromotionCopy = z.infer<typeof promotionCopySchema>;

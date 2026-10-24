@@ -29,7 +29,7 @@ const SEEDED_MEMBER_ORGANIZATION = "Digitorus";
 async function capture(page: Page, info: TestInfo, label: string) {
   for (const [device, width, height] of [
     ["desktop", 1280, 900],
-    ["phone", 390, 844],
+    ["phone", 375, 812],
   ] as const) {
     await page.setViewportSize({ width, height });
     await page.evaluate(async () => {
@@ -115,8 +115,8 @@ test("a rendered promotion QR preserves its referral through email sign-in and c
   const row = page.getByRole("row").filter({ hasText: title });
   await row.getByRole("button", { name: /actions/i }).click();
   await page.getByRole("menuitem", { name: "Speaker promotion kit", exact: true }).click();
-  await page.getByRole("button", { name: "Prepare published kit", exact: true }).click();
-  const preview = page.getByRole("img", { name: `First landscape promotion card for ${title}`, exact: true });
+  await page.getByRole("button", { name: "Prepare downloads", exact: true }).click();
+  const preview = page.getByRole("img", { name: "Preview of your promotion materials", exact: true });
   await expect(preview).toBeVisible({ timeout: 60_000 });
   await expect
     .poll(() => preview.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0))
@@ -142,12 +142,22 @@ test("a rendered promotion QR preserves its referral through email sign-in and c
   expect(kit.metrics).toMatchObject({ clicks: 0, confirmedRegistrations: 0 });
   expect(decoded.data).toBe(kit.registrationUrl);
   const destination = new URL(decoded.data);
-  expect(destination.pathname).toMatch(/^\/r\/[A-Za-z0-9]{10}$/);
+  expect(destination.pathname).toMatch(/^\/r\/[A-Za-z0-9]+$/);
   expect(destination.search).toBe("");
-  await expect(page.getByRole("link", { name: "Event registration / promoter link", exact: true })).toHaveAttribute(
+  await expect(page.getByRole("link", { name: "Your registration referral link", exact: true })).toHaveAttribute(
     "href",
     decoded.data,
   );
+  await page.getByRole("button", { name: "Adjust my materials", exact: true }).click();
+  await page
+    .getByLabel("Your short description", { exact: true })
+    .fill("My reviewed description for sharing this session with my network.");
+  await capture(page, info, "promotion-adjustments");
+  await page.getByRole("button", { name: "Save my materials", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Adjust my materials", exact: true })).toBeVisible();
+  const personalized = await readKit();
+  expect(personalized.composition?.summary).toBe("My reviewed description for sharing this session with my network.");
+  expect(personalized.registrationUrl).toBe(kit.registrationUrl);
   await capture(page, info, "promotion-qr");
 
   // A separate browser context begins without the owner's cookie or tab storage.
@@ -197,7 +207,15 @@ test("a rendered promotion QR preserves its referral through email sign-in and c
       status: "registered",
     });
     expect(detail.registration.id).not.toBe(owner.result.registrationId);
-    await capture(visitor, info, "confirmed-referral");
+    await visitor.goto(`/portal/#/events/${slug}/promotion`);
+    await expect(
+      visitor.getByRole("heading", { name: "Your attendee promotion materials", exact: true }),
+    ).toBeVisible();
+    await visitor.getByRole("button", { name: "Adjust my materials", exact: true }).click();
+    await expect(
+      visitor.getByRole("heading", { name: "Your attendee promotion materials", exact: true }),
+    ).toBeVisible();
+    await capture(visitor, info, "attendee-promotion");
 
     // The existing registration policy refuses repeat intent without creating another conversion.
     const retry = await visitor.request.post(`${eventApi}/registrations`, {

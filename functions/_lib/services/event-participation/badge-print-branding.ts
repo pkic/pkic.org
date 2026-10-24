@@ -1,3 +1,4 @@
+import type { z } from "zod";
 import { ZodError } from "zod";
 import {
   eventBadgeTemplateSchema,
@@ -33,7 +34,11 @@ function sourceTier(row: BrandingRow, source: BadgeSponsorSource): string | null
 }
 
 /** Cheap database basis is rechecked for each badge; artwork is loaded once per document. */
-export async function prepareBadgePrintingBasis(db: DatabaseLike, eventId: string) {
+export async function prepareBadgePrintingBasis(
+  db: DatabaseLike,
+  eventId: string,
+  sponsorGroups?: z.infer<typeof badgeTemplateSponsorGroupSchema>[],
+) {
   const event = await first<{ name: string; settings_json: string }>(
     db,
     "SELECT name,settings_json FROM events WHERE id=?",
@@ -45,14 +50,19 @@ export async function prepareBadgePrintingBasis(db: DatabaseLike, eventId: strin
     rawSettings && typeof rawSettings === "object" && !Array.isArray(rawSettings)
       ? (rawSettings as Record<string, unknown>)
       : {};
-  const parsed = eventBadgeTemplateSchema.nullable().safeParse(settings.badgeTemplate ?? null);
+  const parsed = eventBadgeTemplateSchema.nullable().safeParse(sponsorGroups ? null : (settings.badgeTemplate ?? null));
   if (!parsed.success)
     throw new AppError(
       422,
       "BADGE_TEMPLATE_INVALID",
       "The event badge template is invalid. Update it before printing.",
     );
-  const override = parsed.data;
+  const override = sponsorGroups
+    ? {
+        ...(parsed.data ?? createGenericBadgeTemplate({ eventName: event.name, sponsorGroups: [] })),
+        sponsorGroups: sponsorGroups.map((group) => badgeTemplateSponsorGroupSchema.parse(group)),
+      }
+    : parsed.data;
   const tiersOf = (source: BadgeSponsorSource) =>
     (override?.sponsorGroups ?? []).filter((group) => badgeSponsorGroupSource(group) === source).map((g) => g.tierName);
   const eventPopulation = override
@@ -142,8 +152,9 @@ export async function getBadgePrintingContext(
   db: DatabaseLike,
   environment: Pick<Env, "ASSETS_BUCKET">,
   eventId: string,
+  sponsorGroups?: z.infer<typeof badgeTemplateSponsorGroupSchema>[],
 ) {
-  const basis = await prepareBadgePrintingBasis(db, eventId);
+  const basis = await prepareBadgePrintingBasis(db, eventId, sponsorGroups);
   const logos = new Map<string, { id: string; name: string; svg: string }>();
   const capturedObjects: { key: string; etag: string }[] = [];
   let totalBytes = 0;

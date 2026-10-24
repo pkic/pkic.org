@@ -115,6 +115,9 @@ export function ParticipantEvent({ event, kind, resourceId, tab, pointToken }: S
           },
         ]
       : []),
+    ...(hasProposals || eventRegistrationStanding(event).registered
+      ? [{ id: "promotion", label: "Promotion kits", href: href(base + "/promotion") }]
+      : []),
     ...(hasProposals
       ? [
           {
@@ -122,7 +125,6 @@ export function ParticipantEvent({ event, kind, resourceId, tab, pointToken }: S
             label: "Proposals",
             href: href(base + "/submissions"),
           },
-          { id: "promotion", label: "Promotion kits", href: href(base + "/promotion") },
           { id: "session-management", label: "My sessions", href: href(base + "/session-management") },
         ]
       : []),
@@ -164,7 +166,7 @@ export function ParticipantEvent({ event, kind, resourceId, tab, pointToken }: S
         </Suspense>
       ) : tab === "promotion" ? (
         <Suspense fallback={<Spinner />}>
-          <MyPromotionKits slug={event.slug} />
+          <MyPromotionKits slug={event.slug} attendeeEligible={eventRegistrationStanding(event).registered} />
         </Suspense>
       ) : tab === "lead-scanner" ? (
         <ParticipantLeadScanner eventId={event.id} slug={event.slug} scannerAccess={event.scannerAccess} />

@@ -1,15 +1,15 @@
-import { useState } from "preact/hooks";
-import { promotionSessionListSchema, type AgendaOccurrence } from "../../../../../../../shared/schemas/event-agenda";
+import { promotionSessionListSchema } from "../../../../../../../shared/schemas/event-agenda";
+import { useHashQueryParam } from "../../../../../../hooks/useHashQueryParam";
 import { ApiDataTable } from "../../../../../../components/ApiDataTable";
-import { SessionPromotionKit } from "./SessionPromotionKit";
+import { PersonalPromotionKit } from "./PersonalPromotionKit";
 import { Button } from "../../../../../../ui/Button";
-export function MyPromotionKits({ slug }: { slug: string }) {
-  const [selected, setSelected] = useState<AgendaOccurrence | null>(null);
+export function MyPromotionKits({ slug, attendeeEligible = false }: { slug: string; attendeeEligible?: boolean }) {
+  const [selected, setSelected] = useHashQueryParam("promotionSession", "");
   return (
     <div class="pk-stack">
       <p>
-        Download reviewed promotion materials for sessions where you are an assigned speaker. Kits use the approved
-        public agenda and your event registration referral link.
+        Download and personalize materials for your sessions or share the event as an attendee. Each kit uses your own
+        referral link.
       </p>
       <ApiDataTable
         urlState="promotion-kits"
@@ -21,11 +21,26 @@ export function MyPromotionKits({ slug }: { slug: string }) {
         paginate
         columns={[
           { header: "Session", cell: (row) => row.title, sort: { asc: "title", desc: "-title" } },
-          { header: "Promotion materials", cell: (row) => <Button onClick={() => setSelected(row)}>Open kit</Button> },
+          {
+            header: "Promotion materials",
+            cell: (row) => <Button onClick={() => setSelected(row.id)}>Open kit</Button>,
+          },
         ]}
         rowKey={(row) => row.id}
       />
-      {selected && <SessionPromotionKit slug={slug} occurrence={selected} onClose={() => setSelected(null)} />}
+      {selected && (
+        <PersonalPromotionKit
+          base={`/api/v1/events/${encodeURIComponent(slug)}/agenda/occurrences/${encodeURIComponent(selected)}/promotion`}
+          title="Your session promotion materials"
+          onClose={() => setSelected("")}
+        />
+      )}
+      {attendeeEligible && (
+        <PersonalPromotionKit
+          base={`/api/v1/events/${encodeURIComponent(slug)}/promotion`}
+          title="Your attendee promotion materials"
+        />
+      )}
     </div>
   );
 }

@@ -19,6 +19,7 @@ import { linksSchema } from "./links";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { attendanceTypeSchema, registrationLifecycleStatusSchema } from "./registration";
 import { eventBadgeTemplateSchema } from "./event-badge-template";
+import { eventPromotionDesignSchema } from "./event-promotion-design";
 import { countryCodeSchema } from "../countries";
 import { eventCitySchema, eventPlaceSchema } from "../event-place";
 import { eventAttendanceSettingsSchema } from "../attendance-attribution";
@@ -49,6 +50,7 @@ export const EVENT_MANAGED_SETTING_KEYS = [
   "agenda",
   "attendance",
   "badgeTemplate",
+  "promotionDesign",
   "forms",
   "frontend",
   "heroImageUrl",
@@ -123,6 +125,7 @@ export const eventSettingsSchema = z.object({
   inviteLimitAttendee: attendeeInviteLimitSchema.optional(),
   settings: eventCustomSettingsSchema.optional(),
   badgeTemplate: eventBadgeTemplateSchema.nullable().optional(),
+  promotionDesign: eventPromotionDesignSchema.nullable().optional(),
   /** How self check-ins are attributed to sessions; stored under `attendance` in the event settings. */
   attendance: eventAttendanceSettingsSchema.optional(),
   userRetentionDays: z.number().int().positive().max(3650).optional(),

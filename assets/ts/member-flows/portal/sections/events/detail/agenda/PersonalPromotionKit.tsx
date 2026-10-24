@@ -1,0 +1,137 @@
+import { useEffect, useState } from "preact/hooks";
+import type { z } from "zod";
+import { promotionKitSchema, promotionFormatSchema } from "../../../../../../../shared/schemas/event-promotion-kit";
+import { getJson, postJson } from "../../../../../../shared/api-client";
+import { Panel, PanelHeader, PanelBody } from "../../../../../../ui/Panel";
+import { Button } from "../../../../../../ui/Button";
+import { CloseButton } from "../../../../../../ui/CloseButton";
+import { ExternalLink } from "../../../../../../ui/ExternalLink";
+import { ErrorAlert } from "../../../../../../components/ErrorAlert";
+import { PromotionCompositionEditor } from "./PromotionCompositionEditor";
+import { copyText } from "../../../../../../shared/clipboard";
+import { toast } from "../../../../ui";
+import "./SessionPromotionKit.css";
+type Kit = z.infer<typeof promotionKitSchema>;
+export function PersonalPromotionKit({ base, title, onClose }: { base: string; title: string; onClose?: () => void }) {
+  const [kit, setKit] = useState<Kit | null>(null),
+    [error, setError] = useState(""),
+    [busy, setBusy] = useState(false),
+    [editing, setEditing] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    setKit(null);
+    void getJson(base, promotionKitSchema)
+      .then((value) => {
+        if (!cancelled) setKit(value);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : "Could not load promotion materials.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [base]);
+  useEffect(() => {
+    if (!kit?.artifacts.some((item) => ["queued", "rendering", "retrying"].includes(item.status))) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void getJson(base, promotionKitSchema)
+        .then((value) => {
+          if (!cancelled) setKit(value);
+        })
+        .catch((e) => {
+          if (!cancelled) setError(e instanceof Error ? e.message : "Could not refresh your materials.");
+        });
+    }, 2500);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [kit, base]);
+  async function prepare() {
+    setBusy(true);
+    try {
+      setKit(await postJson(`${base}/renders`, {}, promotionKitSchema));
+      setError("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not prepare your materials.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  const artifact = (format: string, preview = false) =>
+    `${base}/artifact?format=${encodeURIComponent(format)}&revision=${kit!.publishedRevision}&fingerprint=${kit!.fingerprint}${preview ? "&download=false" : ""}`;
+  return (
+    <Panel>
+      <PanelHeader title={title}>
+        {onClose && <CloseButton label="Close promotion materials" onClick={onClose} />}
+      </PanelHeader>
+      <PanelBody>
+        {error && <ErrorAlert error={error} />}
+        {kit && (
+          <div class="pk-stack">
+            <p>Your downloads and registration link credit referrals to you.</p>
+            <ExternalLink href={kit.registrationUrl}>Your registration referral link</ExternalLink>
+            <div class="pk-promotion-kit__actions">
+              <Button onClick={prepare} disabled={busy}>
+                Prepare downloads
+              </Button>
+              <Button
+                onClick={() =>
+                  void copyText(`${kit.source?.title ?? title}\n${kit.copy.whyAttend}\n${kit.registrationUrl}`, {
+                    copied: "Post and registration link copied",
+                    failed: "Your browser could not copy the post",
+                    notify: toast,
+                  })
+                }
+              >
+                Copy post and registration link
+              </Button>
+              <Button onClick={() => setEditing(!editing)}>
+                {editing ? "Close adjustments" : "Adjust my materials"}
+              </Button>
+            </div>
+            {editing && (
+              <PromotionCompositionEditor
+                key={kit.compositionRevision}
+                kit={kit}
+                base={base}
+                onSaved={(value) => {
+                  setKit(value);
+                  setEditing(false);
+                }}
+              />
+            )}
+            <ul>
+              {promotionFormatSchema.options.map((format) => {
+                const state = kit.artifacts.find((item) => item.format === format);
+                return (
+                  <li key={format}>
+                    {state?.status === "rendered" ? (
+                      <a href={artifact(format)} download>
+                        {format === "carousel" ? "Carousel PDF" : `${format} images`}
+                      </a>
+                    ) : (
+                      <span>
+                        {format}: {state?.status ?? "not prepared"}
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+            {kit.artifacts.some((item) => item.format === "portrait" && item.status === "rendered") && (
+              <img
+                class="pk-promotion-kit__preview"
+                src={artifact("portrait", true)}
+                width="1080"
+                height="1350"
+                alt="Preview of your promotion materials"
+              />
+            )}
+          </div>
+        )}
+      </PanelBody>
+    </Panel>
+  );
+}
