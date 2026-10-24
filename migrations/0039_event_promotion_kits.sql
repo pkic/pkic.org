@@ -25,10 +25,12 @@ CREATE TABLE event_promotion_renders (
  format TEXT NOT NULL, origin TEXT NOT NULL, cache_key TEXT NOT NULL,
  status TEXT NOT NULL DEFAULT 'queued', attempts INTEGER NOT NULL DEFAULT 0, download_count INTEGER NOT NULL DEFAULT 0,
  next_attempt_at TEXT NOT NULL, processing_token TEXT, lease_expires_at TEXT,
- last_error TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+ last_error TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, requested_at TEXT
 );
 CREATE INDEX event_promotion_render_due ON event_promotion_renders(status,next_attempt_at,lease_expires_at);
 CREATE INDEX event_promotion_render_owner ON event_promotion_renders(event_id,user_id,occurrence_id,fingerprint,format);
+-- Keep current kit progress bounded independently of completed or obsolete render history.
+CREATE INDEX event_promotion_render_requested ON event_promotion_renders(event_id,user_id,occurrence_id,format,requested_at DESC);
 
 -- A bulk request contains resource references only. The dispatcher prepares
 -- bounded recipients for the existing render queue; it never renders a full
