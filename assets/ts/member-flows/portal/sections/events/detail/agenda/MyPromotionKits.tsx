@@ -1,5 +1,5 @@
 import { useState } from "preact/hooks";
-import { agendaOccurrenceListSchema, type AgendaOccurrence } from "../../../../../../../shared/schemas/event-agenda";
+import { promotionSessionListSchema, type AgendaOccurrence } from "../../../../../../../shared/schemas/event-agenda";
 import { ApiDataTable } from "../../../../../../components/ApiDataTable";
 import { SessionPromotionKit } from "./SessionPromotionKit";
 import { Button } from "../../../../../../ui/Button";
@@ -14,7 +14,7 @@ export function MyPromotionKits({ slug }: { slug: string }) {
       <ApiDataTable
         urlState="promotion-kits"
         endpoint={`/api/v1/events/${encodeURIComponent(slug)}/agenda/promotion`}
-        responseSchema={agendaOccurrenceListSchema}
+        responseSchema={promotionSessionListSchema}
         resolve={(data) => data.occurrences}
         resolvePage={(data) => data.page}
         caption="My promotion kits"

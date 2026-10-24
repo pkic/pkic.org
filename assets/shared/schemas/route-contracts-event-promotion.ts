@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { eventSlugParamsSchema } from "./api-common";
 import { promotionArtifactQuerySchema, promotionKitSchema, promotionKitSaveSchema } from "./event-promotion-kit";
-import { agendaSnapshotSchema, agendaOccurrenceQuerySchema, agendaOccurrenceListSchema } from "./event-agenda";
+import { agendaSnapshotSchema, agendaOccurrenceQuerySchema, promotionSessionListSchema } from "./event-agenda";
 import { authErrors, ok, requiresPermissions, requiresSession } from "./route-contract";
 const params = eventSlugParamsSchema.extend({ occurrenceId: z.string().min(1) });
 export const promotionKitGetRouteSchema = {
@@ -46,7 +46,7 @@ export const promotionSessionsGetRouteSchema = {
   summary: "List assigned published sessions with promotion kits",
   request: { params: eventSlugParamsSchema, query: agendaOccurrenceQuerySchema },
   responses: {
-    ...ok("Assigned published sessions", agendaOccurrenceListSchema),
+    ...ok("Assigned published sessions", promotionSessionListSchema),
     ...authErrors({ notFound: "Event not found" }),
   },
 };

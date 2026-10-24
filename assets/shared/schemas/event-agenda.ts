@@ -421,6 +421,7 @@ export const agendaOccurrenceListItemSchema = agendaOccurrenceSchema.extend({
     coverage: agendaConflictCoverageSchema.default("complete"),
   }),
 });
+export const promotionSessionListSchema = paginatedResponseSchema("occurrences", agendaOccurrenceSchema);
 export const agendaOccurrenceListSchema = paginatedResponseSchema("occurrences", agendaOccurrenceListItemSchema);
 export type AgendaSnapshot = z.infer<typeof agendaSnapshotSchema>;
 export type AgendaOccurrence = z.infer<typeof agendaOccurrenceSchema>;

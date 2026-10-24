@@ -1,3 +1,4 @@
+import { promotionSessionListSchema } from "../assets/shared/schemas/event-agenda";
 import { projectLiveAgendaMaterials } from "../functions/_lib/services/site-agenda-material-eligibility";
 import { saveSessionHistory, listSessionMaterialVersions } from "../functions/_lib/services/event-agenda/history";
 import { createAgendaOccurrence } from "../functions/_lib/services/event-agenda/mutations";
@@ -511,6 +512,11 @@ describe("session archive and promotion publication", () => {
     await expect(
       assignedPromotionKit(env.DB, eventId, occurrenceId, "unassigned", false, "https://pkic.org"),
     ).rejects.toMatchObject({ status: 403 });
+    const response = await callApi(env, `${base}/promotion?q=Approved&limit=1&offset=0`, { headers });
+    expect(response.status).toBe(200);
+    const assignedSessions = promotionSessionListSchema.parse(await response.json());
+    expect(assignedSessions.occurrences.map((occurrence) => occurrence.id)).toEqual([occurrenceId]);
+    expect(assignedSessions.page.total).toBe(1);
     const page = await listAssignedPromotionSessions(
       env.DB,
       eventId,
