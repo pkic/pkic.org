@@ -50,9 +50,9 @@ export interface ContextGrantRow extends GrantRow {
 }
 
 /** One canonical live grant policy; callers only vary the prepared context input. */
-function contextGrantStatement(db: DatabaseLike, requested: string, bindings: unknown[]) {
-  return db
-    .prepare(`WITH requested AS (${requested})
+function contextGrantSelection(requested: string, bindings: unknown[]) {
+  return {
+    sql: `WITH requested AS (${requested})
      SELECT requested.request_index,requested.member_id,rp.permission,ur.context_type,ur.context_id
      FROM requested JOIN user_roles ur ON ur.user_id=requested.user_id
      JOIN role_permissions rp ON rp.role_id=ur.role_id
@@ -65,10 +65,22 @@ function contextGrantStatement(db: DatabaseLike, requested: string, bindings: un
      SELECT requested.request_index,requested.member_id,pg.permission,pg.context_type,pg.context_id
      FROM requested JOIN permission_grants pg ON pg.user_id=requested.user_id
      WHERE pg.revoked_at IS NULL
-       AND (pg.expires_at IS NULL OR pg.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now'))`)
-    .bind(...bindings);
+       AND (pg.expires_at IS NULL OR pg.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
+    bindings,
+  };
 }
 
+function contextGrantStatement(db: DatabaseLike, requested: string, bindings: unknown[]) {
+  const selection = contextGrantSelection(requested, bindings);
+  return db.prepare(selection.sql).bind(...selection.bindings);
+}
+/** Reference the canonical live grants from another authorization predicate without issuing a read. */
+export function userContextGrantSelection(userId: string, memberSelection?: AuthorizationEvidence) {
+  return contextGrantSelection(
+    `SELECT 0 AS request_index,? AS user_id,${memberSelection ? `(${memberSelection.sql})` : "NULL"} AS member_id`,
+    [userId, ...(memberSelection?.bindings ?? [])],
+  );
+}
 /** Prepare all assigned member-context candidates so choosing a live identity needs no second D1 call. */
 export function prepareUserGrantCandidates(db: DatabaseLike, userIds: readonly string[]) {
   const users = JSON.stringify(userIds);
@@ -305,6 +317,23 @@ export function permissionAuthorizationEvidenceForResource(
   );
 }
 
+/** Dynamic requirements remain internal SQL; the canonical matcher enforces token, live grants, and OAuth ceilings. */
+export function anyPermissionAuthorizationEvidenceFromSelection(
+  actor: AuthAdmin,
+  permissions: readonly string[],
+  required: AuthorizationEvidence,
+  memberSelection?: AuthorizationEvidence,
+) {
+  const allowed = [...new Set(permissions)].filter((permission) => tokenAllowsPermission(actor, permission));
+  if (!allowed.length) return { sql: "SELECT 1 WHERE 0", bindings: [] };
+  return buildPermissionsAuthorizationEvidence(
+    actor,
+    allowed.map((permission) => ({ permission })),
+    required,
+    "any",
+    memberSelection,
+  );
+}
 /** Live alternatives for a trusted resource column, with delegated scopes still limiting each alternative. */
 export function anyPermissionAuthorizationEvidenceForResource(
   actor: AuthAdmin,

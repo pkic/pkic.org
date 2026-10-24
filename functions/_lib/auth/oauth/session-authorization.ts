@@ -133,3 +133,14 @@ export async function authorizationHeaderForMcp(
   });
   return `Bearer ${token}`;
 }
+
+/** The API operation composes the live grant with its own resource batch. Frozen deadlines still bound its credential. */
+export async function deferredAuthorizationHeaderForMcp(request: Request, env: Env, props?: McpOAuthProps) {
+  if (!props || props.identityType === "service") return request.headers.get("authorization");
+  const expiry = Math.min(Date.parse(props.sessionExpiresAt), Date.parse(props.sessionIdleExpiresAt));
+  if (!Number.isFinite(expiry) || expiry <= Date.now())
+    throw new AppError(401, "AUTH_EXPIRED", "Your MCP authorization session expired. Sign in again.");
+  if (!env.INTERNAL_SIGNING_SECRET)
+    throw new AppError(500, "INTERNAL_SECRET_MISSING", "INTERNAL_SIGNING_SECRET is not configured");
+  return `Bearer ${await signMcpSessionToken(env.INTERNAL_SIGNING_SECRET, { sub: props.id, sid: props.sessionId, exp: Math.floor(expiry / 1000), email: props.email, state: props.state ?? undefined, scopes: props.scopes, ...(props.authTransport === "oauth" ? { authorizationId: props.authorizationId } : {}) })}`;
+}

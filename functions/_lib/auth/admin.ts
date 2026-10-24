@@ -98,6 +98,14 @@ export interface PreparedAdminRead {
   decode(results: D1StatementResult[]): Promise<UserBackedAuthAdmin>;
 }
 
+const requestAdminKey = Symbol("prepared-request-admin");
+type PreparedRequestAdminEnvironment = AdminEnvironment & {
+  [requestAdminKey]?: { request: Request; read: PreparedAdminRead };
+};
+/** Trusted request-owned context; no header or client value can install prepared authority. */
+export function withPreparedRequestAdmin<T extends object>(env: T, request: Request, read: PreparedAdminRead): T {
+  return { ...env, [requestAdminKey]: { request, read } };
+}
 /** Canonical transport selection; an explicit human credential takes precedence over machine headers. */
 async function readAdminCredential(
   request: Request,
@@ -149,6 +157,8 @@ export async function prepareUserBackedAdminFromRequest(
   request: Request,
   env?: AdminEnvironment,
 ): Promise<PreparedAdminRead | null> {
+  const prepared = (env as PreparedRequestAdminEnvironment | undefined)?.[requestAdminKey];
+  if (prepared?.request === request) return prepared.read;
   const cached = getCachedAdminForRequest(request);
   if (cached) {
     const actor = requireUserBackedAuthAdmin(cached);
