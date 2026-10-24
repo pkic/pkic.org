@@ -219,7 +219,16 @@ describe("event bottom tabs", () => {
     // Each tab has a decorative glyph over its label; the label stays the accessible name.
     for (const tab of bar.querySelectorAll("a, button"))
       expect(tab.querySelector("svg.pk-app-tabbar__icon")?.getAttribute("aria-hidden")).toBe("true");
-    expect(tabLabels("Event")).toEqual(["Overview", "Agenda", "My agenda", "Ticket", "Virtual room", "Registration"]);
+    expect(tabLabels("Event")).toEqual([
+      "Overview",
+      "Agenda",
+      "My agenda",
+      "Ticket",
+      "Virtual room",
+      "Registration",
+      "Promotion kits",
+    ]);
+    expect(host.querySelector('[data-event-more="promotion"]')?.getAttribute("href")).toBe("#/events/summit/promotion");
     // The desktop tabs remain the page's one "Event" navigation.
     expect(host.querySelectorAll('nav[aria-label="Event"]')).toHaveLength(1);
     expect(host.querySelector('[data-event-more="registration"]')?.getAttribute("href")).toBe(

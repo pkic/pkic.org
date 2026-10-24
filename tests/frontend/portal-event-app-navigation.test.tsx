@@ -77,13 +77,25 @@ describe("event app tab selection", () => {
   it("gives a registered attendee My agenda and Ticket, and keeps everything else under More", () => {
     const { tabs, more } = navigation(registeredParticipant);
     expect(labels(tabs)).toEqual(["Home", "Agenda", "My agenda", "Ticket"]);
-    expect(ids(more)).toEqual(["registration", "virtual", "calendar", "venue", "event-page"]);
+    expect(ids(more)).toEqual(["registration", "virtual", "calendar", "promotion", "venue", "event-page"]);
     expect(more.find((item) => item.id === "virtual")?.href).toBe("#/events/summit/virtual");
     expect(more.find((item) => item.id === "registration")?.href).toBe(
       `#/events/summit/registrations/${participantRegistrationId}`,
     );
     expect(more.find((item) => item.id === "calendar")?.href).toBe("#/events/summit/agenda?mine=1&view=calendar");
   });
+
+  it.each(["pending_email_confirmation", "cancelled"] as const)(
+    "does not offer personal promotion for a %s registration",
+    (registrationStatus) => {
+      const { more } = navigation({
+        ...registeredParticipant,
+        viewer: { ...registeredParticipant.viewer, registrationStatus },
+        participation: { ...registeredParticipant.participation, registrationStatus },
+      });
+      expect(ids(more)).not.toContain("promotion");
+    },
+  );
 
   it("gives a registered attendee a Scan tab for check-in only while the event runs", () => {
     const running = {
@@ -209,6 +221,7 @@ describe("event app More sheet", () => {
       "Registration",
       "Virtual room",
       "Calendar and reminders",
+      "Promotion kits",
       "Venue & links",
       "Event website",
     ]);

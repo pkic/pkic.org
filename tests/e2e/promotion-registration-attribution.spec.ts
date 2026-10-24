@@ -42,6 +42,11 @@ async function capture(page: Page, info: TestInfo, label: string) {
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
     if (device === "phone" && label === "attendee-recovery")
       await page.getByRole("alert").filter({ hasText: "Unavailable sessions" }).scrollIntoViewIfNeeded();
+    if (device === "phone" && label === "attendee-promotion-menu")
+      await page
+        .getByRole("list", { name: "More event pages" })
+        .getByRole("link", { name: "Promotion kits", exact: true })
+        .scrollIntoViewIfNeeded();
     await page.screenshot({
       path: info.outputPath(`${label}-${device}.png`),
       fullPage: device === "desktop" && (await page.getByRole("dialog").count()) === 0,
@@ -326,7 +331,13 @@ test("attendees can recover promotion materials after a selected session is with
     data: agendaRevisionSchema.parse({ expectedRevision: withdrawn.revision }),
   });
   expect(republished.status(), await republished.text()).toBe(200);
-  await page.goto(`/portal/#/events/${slug}/promotion`);
+  await page.goto(`/portal/#/events/${slug}/more`);
+  const promotionLink = page
+    .getByRole("list", { name: "More event pages" })
+    .getByRole("link", { name: "Promotion kits", exact: true });
+  await expect(promotionLink).toBeVisible();
+  await capture(page, info, "attendee-promotion-menu");
+  await promotionLink.click();
   await expect(page.getByRole("alert").filter({ hasText: "Unavailable sessions" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Prepare downloads", exact: true })).toBeDisabled();
   await capture(page, info, "attendee-recovery");

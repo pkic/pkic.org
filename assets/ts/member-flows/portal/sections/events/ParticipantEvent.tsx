@@ -31,7 +31,7 @@ import { SectionHeading } from "../../../../ui/SectionHeading";
 import { EventTicket } from "./app/EventTicket";
 import { EventMore } from "./app/EventMore";
 import { eventRegistrationStanding } from "./app/event-app-model";
-import { participantEventAppSubject } from "./app/event-app-tabs";
+import { hasEventProposals, hasEventPromotionMaterials, participantEventAppSubject } from "./app/event-app-tabs";
 
 const MyAgenda = lazy(() => import("./detail/participation/MyAgenda").then((module) => ({ default: module.MyAgenda })));
 const EventCheckIn = lazy(() => import("./app/EventCheckIn").then((module) => ({ default: module.EventCheckIn })));
@@ -77,7 +77,7 @@ export function ParticipantEvent({ event, kind, resourceId, tab, pointToken }: S
   const mine = isMyAgendaQuery(new URLSearchParams(location.split("?", 2)[1] ?? ""));
   const base = `/events/${encodeURIComponent(event.slug)}`;
   const registrationId = event.participation?.registrationId;
-  const hasProposals = Boolean(event.participation?.proposals || event.participation?.speakerProposals);
+  const hasProposals = hasEventProposals(event);
   const active =
     kind === "registration"
       ? "registration"
@@ -115,7 +115,7 @@ export function ParticipantEvent({ event, kind, resourceId, tab, pointToken }: S
           },
         ]
       : []),
-    ...(hasProposals || eventRegistrationStanding(event).registered
+    ...(hasEventPromotionMaterials(event)
       ? [{ id: "promotion", label: "Promotion kits", href: href(base + "/promotion") }]
       : []),
     ...(hasProposals
