@@ -1,4 +1,5 @@
 import sharp from "sharp";
+import { promotionSceneSvg } from "../../functions/_lib/services/event-agenda/promotion-svg";
 import jsQR from "jsqr";
 import { describe, it, expect } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -54,6 +55,77 @@ const data = {
   sessionUrl: "https://pkic.org/events/event/sessions/session/",
 };
 describe("promotion exports", () => {
+  it("separates every line of the cover eyebrow from the session title", () => {
+    for (const eventName of ["PQC Conference", "Post-Quantum Cryptography Conference ".repeat(4)]) {
+      const page = buildPromotionPages({ ...data, agenda: { ...data.agenda, eventName } }, "carousel")[0]!;
+      const title = page.texts.find((text) => text.role === "H1")!;
+      const eyebrow = page.texts.filter((text) => text.role === "H2");
+      expect(title.y - title.size - Math.max(...eyebrow.map((text) => text.y))).toBeGreaterThanOrEqual(24);
+    }
+  });
+  it("fades the event grid smoothly to transparency before the footer", async () => {
+    const sample = {
+      ...data,
+      composition: { ...defaultPromotionComposition(), panels: ["cover"] as "cover"[] },
+      design: eventPromotionDesignSchema.parse({
+        version: 1,
+        name: "Sample",
+        colors: ["#123456", "#654321"],
+        panels: ["cover"],
+        assets: {
+          texture: {
+            mime: "image/svg+xml",
+            base64: Buffer.from(
+              '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><rect width="48" height="48" fill="white"/></svg>',
+            ).toString("base64"),
+          },
+        },
+      }),
+    };
+    const page = buildPromotionPages(sample, "carousel")[0]!;
+    const raster = async (value: typeof sample) =>
+      await sharp(Buffer.from(promotionSceneSvg(value, page, false)))
+        .removeAlpha()
+        .raw()
+        .toBuffer();
+    const textured = await raster(sample),
+      plain = await raster({ ...sample, design: { ...sample.design, assets: {} } });
+    const difference = (y: number) => {
+      const pixel = (y * page.width + 10) * 3;
+      return Math.abs(textured[pixel]! - plain[pixel]!);
+    };
+    expect(difference(50)).toBeGreaterThan(difference(600));
+    expect(difference(600)).toBeGreaterThan(difference(1050));
+    expect(difference(1050)).toBe(0);
+  });
+  it("uses the numbered takeaway rail and labeled details grid without losing long copy", () => {
+    const items = Array.from(
+      { length: 8 },
+      (_, index) => `Takeaway ${index + 1}: ${"Complete migration guidance ".repeat(5)}`,
+    );
+    const pages = buildPromotionPages(
+      {
+        ...data,
+        composition: { ...defaultPromotionComposition(), panels: ["content", "details"], takeaways: items },
+        occurrence: { ...data.occurrence, format: "Workshop" },
+      },
+      "carousel",
+    );
+    const content = pages.filter((page) => page.title === "Key takeaways");
+    expect(content.length).toBeGreaterThan(1);
+    const text = content
+      .flatMap((page) => page.texts.filter((value) => value.role === "LI").map((value) => value.text))
+      .join(" ");
+    for (const item of items) expect(text).toContain(item.trim());
+    expect(content.flatMap((page) => page.bars ?? [])).toHaveLength(8);
+    const details = pages.find((page) => page.title === "When & where")!;
+    const day = details.texts.find((value) => value.text === "DAY")!,
+      time = details.texts.find((value) => value.text === "TIME")!;
+    expect(day.y).toBe(time.y);
+    expect(time.x).toBeGreaterThan(day.x);
+    expect(details.texts.some((value) => value.text === "Workshop")).toBe(true);
+    expect(details.texts.some((value) => /livestream|recording/i.test(value.text))).toBe(false);
+  });
   it("uses variable panels, abstract content, event artwork, and lower-tier-only sponsors", () => {
     const composition = {
       ...defaultPromotionComposition(),

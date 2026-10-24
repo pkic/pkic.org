@@ -1,6 +1,14 @@
+import { layoutPromotionTakeaways, layoutPromotionDetails } from "./promotion-content-panels";
 import { layoutPromotionSponsors } from "./promotion-sponsors";
 import { plainText } from "../../../../assets/shared/markdown-plain-text";
-import { formatClockInZone, formatTimeRangeInZone, formatDateRange } from "../../../../assets/shared/format-date";
+import {
+  formatClockInZone,
+  formatTimeRangeInZone,
+  formatDateRange,
+  formatClockRangeInZone,
+  formatClockName,
+  formatDuration,
+} from "../../../../assets/shared/format-date";
 import {
   defaultPromotionComposition,
   type PromotionComposition,
@@ -38,6 +46,7 @@ export interface PromotionPage {
   height: number;
   light?: boolean;
   qr?: boolean;
+  bars?: { x: number; y: number; width: number; height: number; color: string; opacity?: number }[];
   sponsorBoard?: { x: number; width: number };
   markX?: number;
   rules?: { x: number; y: number; width: number }[];
@@ -107,15 +116,24 @@ export function buildPromotionPages(
   ) => page.texts.push({ text, x, y, size, bold, role });
   let blockSequence = 0;
   let reservedRight = 0;
-  function flow(title: string, blocks: PromotionBlock[], start = 200 * scale, maxWidth = usable - reservedRight) {
+  function flow(
+    title: string,
+    blocks: PromotionBlock[],
+    start = 200 * scale,
+    maxWidth = usable - reservedRight,
+    coverHeaderTop?: number,
+  ) {
     let page = add(title),
       y = start;
     const headerTop =
-      format === "carousel" && title === composition.callToAction && selected.indexOf("register") >= 2 ? 410 : 120;
+      coverHeaderTop ??
+      (format === "carousel" && title === composition.callToAction && selected.indexOf("register") >= 2 ? 410 : 120);
     const header = promotionMeasuredLines(title.toUpperCase(), maxWidth, (line) => measure(line, 22 * scale, true));
     for (const [index, line] of header.entries())
       put(page, line, (headerTop + index * 28) * scale, 22 * scale, true, "H2");
     y = Math.max(y, (headerTop + 50 + header.length * 28) * scale);
+    if (coverHeaderTop !== undefined)
+      y = Math.max(y, (headerTop + (header.length - 1) * 28 + 24) * scale + (blocks[0]?.size ?? 0));
     for (const block of blocks) {
       const group = `block-${blockSequence++}`;
       const indent = block.indent ?? (block.portrait ? 150 * scale : 0);
@@ -156,6 +174,17 @@ export function buildPromotionPages(
   const time = data.occurrence.startAt
     ? formatTimeRangeInZone(data.occurrence.startAt, data.occurrence.endAt ?? undefined, clock)
     : "";
+  const detailTime = data.occurrence.startAt
+    ? formatClockRangeInZone(data.occurrence.startAt, data.occurrence.endAt ?? undefined, clock)
+    : "";
+  const duration =
+    data.occurrence.startAt && data.occurrence.endAt
+      ? formatDuration(Date.parse(data.occurrence.endAt) - Date.parse(data.occurrence.startAt))
+      : "";
+  const formatLabel =
+    data.agenda.formats?.find((option) => option.id === data.occurrence.format)?.label ??
+    data.occurrence.format ??
+    data.occurrence.sourceProposalType;
   const dates = formatDateRange(data.occurrence.startAt, data.occurrence.endAt, data.agenda.timeZone);
   const location = data.agenda.rooms.find((room) => room.id === data.occurrence.roomId)?.name;
   const heading =
@@ -216,7 +245,6 @@ export function buildPromotionPages(
         : 0;
     if (panel === "cover") {
       const size = (height < 800 ? 52 : 84) * scale;
-      const before = pages.length;
       const page = flow(
         data.agenda.eventName ?? "PKI Consortium",
         [
@@ -235,8 +263,8 @@ export function buildPromotionPages(
         ],
         height < 800 ? 170 * scale : 420 * scale,
         Math.min(usable - reservedRight, 760 * scale),
+        height < 800 ? 100 : 355,
       );
-      if (pages[before]?.texts[0]) pages[before].texts[0].y = height < 800 ? 140 * scale : 355 * scale;
       const primary = people.find((p) => p.userId === data.actorId) ?? people[0];
       if (primary && height >= 1080) {
         const photo = data.portraits?.[primary.userId];
@@ -304,23 +332,45 @@ export function buildPromotionPages(
         composition.summary ||
         (composition.content === "abstract" ? data.occurrence.description : data.copy.whyAttend) ||
         data.occurrence.description;
-      if (useTake)
-        flow(
-          "Key takeaways",
-          takeaways.map((text, index) => ({
-            text: `${String(index + 1).padStart(2, "0")}  ${text}`,
-            size: 36 * scale,
-            role: "LI",
-          })),
-        );
+      if (useTake) layoutPromotionTakeaways(takeaways, add, measure, scale, reservedRight);
       else if (summary) flow("About this session", [{ text: summary, size: 38 * scale }]);
     }
     if (panel === "details" && data.audience !== "attendee")
-      flow(
-        "When & where",
-        [dates, time, location, data.place, data.mediaWording]
-          .filter((text): text is string => Boolean(text))
-          .map((text) => ({ text, size: 36 * scale })),
+      layoutPromotionDetails(
+        [
+          ...(dates ? [{ label: "Day", value: dates }] : []),
+          ...(detailTime
+            ? [
+                {
+                  label: "Time",
+                  value: detailTime,
+                  sub: [formatClockName(clock), duration].filter(Boolean).join(" · "),
+                },
+              ]
+            : []),
+          ...(location || data.place
+            ? [
+                {
+                  label: "Room",
+                  value: location ?? data.place!,
+                  ...(location && data.place ? { sub: data.place } : {}),
+                },
+              ]
+            : []),
+          ...(formatLabel || data.mediaWording
+            ? [
+                {
+                  label: "Format",
+                  value: formatLabel ?? "Session",
+                  ...(data.mediaWording ? { sub: data.mediaWording } : {}),
+                },
+              ]
+            : []),
+        ],
+        add,
+        measure,
+        scale,
+        reservedRight,
       );
     if (panel === "picks" && data.picks?.length)
       flow(
