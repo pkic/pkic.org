@@ -1,3 +1,6 @@
+import { organizationsListResponseSchema } from "../assets/shared/schemas/organization-management";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { env as workerEnv } from "cloudflare:workers";
 import "../functions/http-router";
@@ -153,6 +156,59 @@ describe("MCP OAuth session interoperability", () => {
     expect((await initialize(tokens.access_token)).status).toBe(200);
   });
 
+  it("discovers scoped operations through MCP tools and enforces the delegated scope ceiling on execution", async () => {
+    const grant = await authorize();
+    const client = new Client({ name: "scoped-operation-test", version: "1" });
+    const transport = new StreamableHTTPClientTransport(new URL(MCP_PATH, origin), {
+      requestInit: { headers: { authorization: `Bearer ${grant.access_token}` } },
+      fetch: async (input, init) => {
+        const context = createExecutionContext();
+        const response = await app.fetch(new Request(input, init), env, context);
+        await waitOnExecutionContext(context);
+        return response;
+      },
+    });
+    try {
+      await client.connect(transport);
+      expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual(
+        expect.arrayContaining(["search", "execute"]),
+      );
+      const search = await client.callTool({
+        name: "search",
+        arguments: {
+          code: 'async () => { const spec = await codemode.spec(); return Object.keys(spec.paths).filter(path => path === "/api/v1/organizations"); }',
+        },
+      });
+      expect(search.isError).not.toBe(true);
+      expect(JSON.stringify(search.content)).toContain("/api/v1/organizations");
+      const allowed = await client.callTool({
+        name: "execute",
+        arguments: {
+          code: 'async () => codemode.request({ method: "GET", path: "/api/v1/organizations", query: { limit: 1 } })',
+        },
+      });
+      expect(allowed.isError).not.toBe(true);
+      const organizationResult = allowed.content as Array<{ type: string; text?: string }>;
+      expect(organizationResult[0]?.type).toBe("text");
+      expect(organizationsListResponseSchema.parse(JSON.parse(organizationResult[0]!.text!)).page.limit).toBe(1);
+      const denied = await client.callTool({
+        name: "execute",
+        arguments: { code: 'async () => codemode.request({ method: "GET", path: "/api/v1/users" })' },
+      });
+      // This authorization has users:read, so removing it from the live ceiling must immediately deny it.
+      await env.DB.prepare("DELETE FROM oauth_authorization_permissions WHERE authorization_id=? AND permission=?")
+        .bind(grant.authorizationId, "users:read")
+        .run();
+      const narrowed = await client.callTool({
+        name: "execute",
+        arguments: { code: 'async () => codemode.request({ method: "GET", path: "/api/v1/users" })' },
+      });
+      expect(JSON.stringify(narrowed.content)).toMatch(/PERMISSION|SCOPE|FORBIDDEN/i);
+      expect(denied.isError).not.toBe(true);
+    } finally {
+      await client.close();
+    }
+  });
   it("issues only the approved subset and keeps refresh downscoping", async () => {
     const grant = await authorize();
     expect(new Set(grant.scope.split(" "))).toEqual(new Set(["forms:read", "organizations:read", "users:read"]));
