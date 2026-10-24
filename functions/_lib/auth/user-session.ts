@@ -1,5 +1,5 @@
 import { secondaryEmailSignInAllowedSql, signInEmailAuthorizationEvidence } from "./email-sign-in-policy";
-import { prepareMonthlyActivity } from "../services/member-standing/activity";
+import { prepareMonthlyActivity, recordMonthlyActivity } from "../services/member-standing/activity";
 import { hasEventParticipation } from "./event-participation";
 /**
  * Canonical human identity session.
@@ -41,14 +41,10 @@ import {
   sessionIdleExpiresAt,
   STAFF_SESSION_IDLE_TTL_HOURS,
 } from "./session-policy";
-import {
-  getUserSessionToken,
-  signUserSessionToken,
-  verifyUserSessionToken,
-  type UserSessionTokenClaims,
-} from "./user-session-token";
+import { getUserSessionToken, signUserSessionToken, type UserSessionTokenClaims } from "./user-session-token";
 import { createEstablishedUserSessionResult, type UserSessionResult } from "./user-session-result";
 
+import { prepareUserSessionRequest } from "./user-session-request";
 import { USER_SESSIONS, resolveUserSessionClaims } from "./user-session-claims";
 export { findActiveIdentity, resolveUserSessionClaims } from "./user-session-claims";
 
@@ -138,33 +134,13 @@ async function findCapabilitySignInIdentity(
     : null;
 }
 
-async function verifyUserSessionRequest(
-  request: Request,
-  env: Pick<Env, "INTERNAL_SIGNING_SECRET">,
-): Promise<UserSessionTokenClaims> {
-  const token = getUserSessionToken(request);
-  if (!token) throw new AppError(401, "AUTH_REQUIRED", "Missing user session token");
-  if (!env.INTERNAL_SIGNING_SECRET) {
-    throw new AppError(500, "INTERNAL_SECRET_MISSING", "INTERNAL_SIGNING_SECRET is not configured");
-  }
-  const verified = await verifyUserSessionToken(env.INTERNAL_SIGNING_SECRET, token);
-  if (!verified.ok) {
-    throw new AppError(
-      401,
-      verified.reason === "expired" ? "AUTH_EXPIRED" : "AUTH_INVALID",
-      verified.reason === "expired" ? "User session expired" : "Invalid user session token",
-    );
-  }
-  return verified.claims;
-}
-
 export async function resolveUserSessionContext(
   db: DatabaseLike,
   request: Request,
   env: Pick<Env, "INTERNAL_SIGNING_SECRET">,
 ): Promise<{ session: UserSessionResult; claims: UserSessionTokenClaims }> {
-  const claims = await verifyUserSessionRequest(request, env);
-  return { claims, session: await resolveUserSessionClaims(db, claims) };
+  const read = await prepareUserSessionRequest(db, request, env);
+  return { claims: read.claims, session: await read.decode(await db.batch(read.statements)) };
 }
 
 export async function resolveUserSessionFromRequest(
@@ -215,7 +191,7 @@ export async function refreshUserSessionFromRequest(
     lastActivityAt: activityAt,
     staffLastActivityAt: session.staff ? activityAt : (claims.staffLastActivityAt ?? 0),
   });
-  await db.batch([prepareMonthlyActivity(db, claims.sub, claims.sid, nowIso())]);
+  await recordMonthlyActivity(db, claims.sub, claims.sid, nowIso());
   return {
     session: {
       ...session,
@@ -479,12 +455,12 @@ export async function redeemUserSignInCapability(
 }
 
 export {
+  verifyUserSessionToken,
   getUserSessionCookieToken,
   getUserSessionToken,
   serializeExpiredUserSessionCookie,
   serializeUserSessionCookie,
   signUserSessionToken,
-  verifyUserSessionToken,
   USER_SESSION_COOKIE_NAME,
   USER_SESSION_COOKIE_PATH,
   USER_SESSION_TOKEN_HEADER,

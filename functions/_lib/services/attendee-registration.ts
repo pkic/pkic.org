@@ -3,8 +3,13 @@ import type { DatabaseLike, StatementLike } from "../types";
 import { AppError } from "../errors";
 import { deriveEventAttendanceType } from "./event-days";
 import { prepareActiveTermsSnapshotGuard, validateRequiredConsents } from "./consent";
-import { getRequiredTerms } from "./events";
-import { toEventFormResolutionEvent, validateCustomAnswersForSubmission } from "./forms";
+import { prepareRequiredTerms, type EventTermRecord } from "./events";
+import { batchRows } from "../db/pagination";
+import {
+  toEventFormResolutionEvent,
+  prepareEventFormDefinitionRead,
+  validateCustomAnswersForResolvedForm,
+} from "./forms";
 import type { InviteRecord } from "./invites";
 import { prepareRegistrationSubmission } from "./registration-submission";
 import type { VerifiedRegistrationIdentityContext } from "./registrations";
@@ -37,11 +42,15 @@ export async function prepareValidatedAttendeeRegistration(
     throw new AppError(400, "ATTENDANCE_REQUIRED", "attendanceType or dayAttendance is required");
   }
 
-  const requiredTerms = await getRequiredTerms(db, event.id, "attendee");
+  const formRead = prepareEventFormDefinitionRead(db, event, "event_registration");
+  const [termsResult, ...formResults] = await db.batch([
+    prepareRequiredTerms(db, event.id, "attendee"),
+    ...formRead.statements,
+  ]);
+  const requiredTerms = batchRows<EventTermRecord>(termsResult);
   await validateRequiredConsents(requiredTerms, input.consents);
-  const validatedForm = await validateCustomAnswersForSubmission(db, {
-    purpose: "event_registration",
-    event,
+  const form = formRead.decode(formResults);
+  const validatedForm = validateCustomAnswersForResolvedForm(form, {
     customAnswers: input.customAnswers,
     context: { attendanceType, dayAttendance: input.dayAttendance },
   });
@@ -76,5 +85,5 @@ export async function prepareValidatedAttendeeRegistration(
     verifiedIdentity: options.verifiedIdentity,
     mailboxVerified: options.mailboxVerified,
   });
-  return { prepared, requiredTerms };
+  return { prepared, requiredTerms, formResponse: validatedForm };
 }

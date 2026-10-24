@@ -11,7 +11,7 @@ import "./AgendaSpeaker.css";
 import { useContext } from "preact/hooks";
 import { AgendaSpeakerDialogsContext, AgendaSpeakerProfile } from "./AgendaSpeakerProfile";
 import { AgendaSpeakerDirectoryCard } from "./AgendaSpeakerDirectoryCard";
-import { AgendaSpeakerAffiliations } from "./AgendaSpeakerAffiliations";
+import { AgendaSpeakerAffiliations, AgendaSpeakerLogos } from "./AgendaSpeakerAffiliations";
 
 /** The same supplied speaker credit on agenda cards, details and static history pages. */
 export function AgendaSpeaker({
@@ -140,7 +140,7 @@ export function AgendaSpeakerCredit({
       )}
       <div class="pk-content-agenda__speaker-info">
         <div>
-          <span class="pk-content-agenda__speaker-name">
+          <div class="pk-content-agenda__speaker-name">
             {detail ? <h3>{name}</h3> : <strong>{name}</strong>}
             {speaker.moderator ? (
               <Badge tone="warn" dot={false}>
@@ -155,24 +155,26 @@ export function AgendaSpeakerCredit({
             {detail && speaker.links?.length ? (
               <LinkList links={speaker.links} ownerName={speaker.name} label={`${speaker.name} elsewhere`} compact />
             ) : null}
-          </span>
-          {/* Only the profile has room for every affiliation; other rows show one at a time. */}
+          </div>
+          {/* Details list each affiliation; compact rows rotate through them. */}
           <AgendaSpeakerAffiliations
             affiliations={speaker.affiliations}
-            layout="rotating"
+            layout={detail ? "list" : "rotating"}
             size={detail ? "preview" : "card"}
+            showLogos={false}
           />
         </div>
-        {detail && (speaker.bioMarkdown || speaker.bioHtml) ? (
-          <div class="pk-content-agenda__speaker-bio">
-            {speaker.bioMarkdown ? (
-              <Markdown markdown={speaker.bioMarkdown} />
-            ) : (
-              <div dangerouslySetInnerHTML={{ __html: speaker.bioHtml! }} />
-            )}
-          </div>
-        ) : null}
+        {detail ? <AgendaSpeakerLogos affiliations={speaker.affiliations} /> : null}
       </div>
+      {detail && (speaker.bioMarkdown || speaker.bioHtml) ? (
+        <div class="pk-content-agenda__speaker-bio">
+          {speaker.bioMarkdown ? (
+            <Markdown markdown={speaker.bioMarkdown} />
+          ) : (
+            <div dangerouslySetInnerHTML={{ __html: speaker.bioHtml! }} />
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }

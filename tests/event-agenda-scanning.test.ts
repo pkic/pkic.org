@@ -13,7 +13,8 @@ import { offlineScanRecordSchema, eventScanRequestSchema } from "../assets/share
 
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { offlineEligibility } from "../functions/_lib/services/event-participation/offline-eligibility";
-import { gateNextBatch } from "./helpers/d1-batch-gate";
+import { mutateBeforeMatchingQuery } from "./helpers/database-races";
+import { profileD1Flow } from "./helpers/d1-flow-profile";
 
 const fixture = createEventScannerFixture();
 const { eventId, userId, operatorId, occurrenceId, observedAt, scan, scanBody } = fixture;
@@ -111,30 +112,33 @@ describe("Event agenda scan evidence", () => {
     ).rejects.toMatchObject({ code: "OFFLINE_MANIFEST_CHANGED" });
   });
   it("rejects a booking when the approved admission policy changes after preflight", async () => {
-    const gate = gateNextBatch(env.DB);
-    const booking = setSessionParticipation(gate.db, eventId, occurrenceId, userId, {
-      action: "reserve",
-      attendanceMode: "physical",
-    });
-    const rejected = expect(booking).rejects.toMatchObject({ code: "SESSION_PARTICIPATION_CONFLICT" });
-    await gate.reached;
-    try {
-      const snapshot = await getAgenda(env.DB, eventId, "scan-test");
-      snapshot.revision = 1;
-      snapshot.publishedRevision = 1;
-      snapshot.occurrences[0]!.admissionPolicy = "approval";
-      await env.DB.prepare(
-        "INSERT INTO event_agenda_publications(id,event_id,revision,snapshot_json,created_by,created_at) VALUES(?,?,1,?,?,?)",
-      )
-        .bind(crypto.randomUUID(), eventId, JSON.stringify(snapshot), operatorId, observedAt)
-        .run();
-      await env.DB.prepare("UPDATE event_agenda_state SET revision=1,published_revision=1 WHERE event_id=?")
-        .bind(eventId)
-        .run();
-    } finally {
-      gate.release();
-    }
-    await rejected;
+    let raced = false;
+    const db = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => sql.includes("INSERT INTO agenda_session_participations"),
+      async () => {
+        raced = true;
+        const snapshot = await getAgenda(env.DB, eventId, "scan-test");
+        snapshot.revision = 1;
+        snapshot.publishedRevision = 1;
+        snapshot.occurrences[0]!.admissionPolicy = "approval";
+        await env.DB.prepare(
+          "INSERT INTO event_agenda_publications(id,event_id,revision,snapshot_json,created_by,created_at) VALUES(?,?,1,?,?,?)",
+        )
+          .bind(crypto.randomUUID(), eventId, JSON.stringify(snapshot), operatorId, observedAt)
+          .run();
+        await env.DB.prepare("UPDATE event_agenda_state SET revision=1,published_revision=1 WHERE event_id=?")
+          .bind(eventId)
+          .run();
+      },
+    );
+    await expect(
+      setSessionParticipation(db, eventId, occurrenceId, userId, {
+        action: "reserve",
+        attendanceMode: "physical",
+      }),
+    ).rejects.toMatchObject({ code: "SESSION_PARTICIPATION_CONFLICT" });
+    expect(raced).toBe(true);
     expect(
       (await env.DB.prepare("SELECT COUNT(*) AS total FROM agenda_session_participations").first<{ total: number }>())
         ?.total,
@@ -427,10 +431,18 @@ describe("Event agenda scan evidence", () => {
     const body = scanBody({ action: "lead", sponsorId: sponsorshipId, consentConfirmed: true, occurrenceId: null });
     expect(await (await scan(body)).json()).toMatchObject({ outcome: "warning", recorded: true });
     await leadConsent();
-    const result = await (
-      await scan(scanBody({ action: "lead", sponsorId: sponsorshipId, consentConfirmed: true, occurrenceId: null }))
-    ).json();
+    const accepted = scanBody({ action: "lead", sponsorId: sponsorshipId, consentConfirmed: true, occurrenceId: null });
+    const init = {
+      method: "POST",
+      headers: { authorization: `Bearer ${fixture.token}`, "content-type": "application/json" },
+      body: JSON.stringify(accepted),
+    };
+    const profile = profileD1Flow(env.DB);
+    const result = await (await callApi({ ...env, DB: profile.db }, "/api/v1/events/scan-test/scans", init)).json();
+    expect(profile.summary().roundTrips).toBe(2);
     expect(result).toMatchObject({ outcome: "eligible", recorded: true, attendanceRecorded: false });
+    const replay = await callApi(env, "/api/v1/events/scan-test/scans", init, { maxRoundTrips: 1 });
+    expect(await replay.json()).toEqual(result);
     expect(JSON.stringify(result)).not.toContain("example.test");
     expect(
       (await env.DB.prepare("SELECT COUNT(*) AS total FROM event_sponsor_leads").first<{ total: number }>())?.total,

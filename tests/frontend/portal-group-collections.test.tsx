@@ -405,16 +405,18 @@ describe("portal selected-group collections", () => {
     const registrationsView = mount(
       <GroupEvents groupId={GROUP_ID} initialEventId={event.id} initialEventTab="registrations" />,
     );
-    await settle();
-    await settle();
-    expect(registrationsView.textContent).toContain("Group Member");
+    await vi.waitFor(async () => {
+      await settle();
+      expect(registrationsView.textContent).toContain("Group Member");
+    });
     expect(requests.some(({ url }) => url.pathname.endsWith(`/events/${event.id}/registrations`))).toBe(true);
 
     // The settings URL resolves to the settings tab, which surfaces the meeting-series link for a series event.
     const settingsView = mount(<GroupEvents groupId={GROUP_ID} initialEventId={event.id} initialEventTab="settings" />);
-    await settle();
-    await settle();
-    expect(settingsView.textContent).toContain("Manage meeting series");
+    await vi.waitFor(async () => {
+      await settle();
+      expect(settingsView.textContent).toContain("Manage meeting series");
+    });
     expect(settingsView.querySelector(`a[href="#/groups/${GROUP_ID}/meetings"]`)).not.toBeNull();
   });
 });

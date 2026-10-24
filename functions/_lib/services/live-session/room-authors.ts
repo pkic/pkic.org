@@ -7,6 +7,8 @@ import {
   type LiveAuthorStamp,
 } from "../../../../assets/shared/schemas/live-session-author";
 import { publicSessionPortraitUrlSchema } from "../../../../assets/shared/schemas/event-session-history";
+import { AppError } from "../../errors";
+import { currentLiveRoomCommandRead } from "./room-command-read-scope";
 import { first } from "../../db/queries";
 import type { DatabaseLike } from "../../types";
 import { liveRoomName, type LiveRoomParticipant } from "./room-admission";
@@ -70,6 +72,8 @@ export class LiveRoomAuthors {
       this.handle(viewer.userId),
       readLiveAuthorStamp(this.env.DB, room.eventId, viewer),
     ]);
+    if (currentLiveRoomCommandRead()?.erased.has(viewer.userId))
+      throw new AppError(401, "AUTH_INVALID", "This account is no longer active.");
     this.people.remember(viewer.userId, {
       photoUrl: viewer.photoUrl ?? null,
       staff: viewer.role === "operator",

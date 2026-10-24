@@ -214,11 +214,6 @@
     border-color: rgba(25, 135, 84, 0.8);
     background: #1a1a1a;
   }
-  @media (max-width: 767px) {
-    .selection-edit-tooltip {
-      display: none;
-    }
-  }
 
   .footer-col-title {
     font-size: 0.7rem;

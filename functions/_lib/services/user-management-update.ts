@@ -1,3 +1,4 @@
+import { prepareMailingListEmailChange } from "./mailing-list-subscriptions/queue-email-change";
 import type { z } from "zod";
 import { executiveCouncilSeatSql } from "../auth/executive-council";
 import { userUpdateSchema } from "../../../assets/shared/schemas/user-management";
@@ -193,6 +194,7 @@ export async function updateUser(db: DatabaseLike, actor: UserBackedAuthAdmin, u
     );
   }
   if (changingPrimaryEmail) {
+    statements.push(...prepareMailingListEmailChange(db, user.id, at));
     statements.push(
       prepareRotateUserRegistrationManageSecrets(db, user.id, at),
       prepareRotateUserProposalSpeakerManageSecrets(db, user.id),

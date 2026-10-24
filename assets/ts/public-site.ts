@@ -1,6 +1,7 @@
 import "./site/public-styles";
 // Site chrome must be interactive when the deferred public entry finishes loading.
 import "../js/navbar.js";
+import "../js/modules/global-ui.js";
 /**
  * Public-site entry: presentation and behavior.
  *
@@ -32,10 +33,9 @@ async function start(): Promise<void> {
   // Site-wide behavior that `main.js` carried, minus its Bootstrap import:
   // this build has no Bootstrap to load.
   await Promise.all([
-    import("../js/modules/global-ui.js"),
     import("../js/modules/sponsor-banner-marquee.js"),
     whenPresent(
-      "[data-content-feedback-link], .edit-on-github",
+      "[data-content-contribution], .edit-on-github",
       () => import("../js/modules/text-selection-edit-tooltip.js"),
     ),
   ]);

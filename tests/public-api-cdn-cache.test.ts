@@ -44,6 +44,21 @@ describe("public API CDN cache gateway", () => {
     expect(cacheKey).toBe("https://pkic.org/api/v1/members");
   });
 
+  it.each(["GET", "HEAD"])("handles anonymous authentication %s directly without a cache hop", async (method) => {
+    const ctx = {
+      exports: {
+        PublicRead: {
+          async fetch() {
+            throw new Error("Authentication must not enter the shared cache");
+          },
+        },
+      },
+    } as unknown as ExecutionContext;
+    const response = await worker.fetch(new Request("https://pkic.org/api/v1/auth/session", { method }), env, ctx);
+    expect(response.status).toBe(401);
+    expect(response.headers.get("cache-control")).toContain("no-store");
+  });
+
   it("answers browser validators from the cached representation", async () => {
     let forwardedMethod = "";
     let forwardedValidator: string | null = null;

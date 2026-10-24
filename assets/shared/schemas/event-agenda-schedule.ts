@@ -73,7 +73,8 @@ export const agendaScheduleReviewSchema = z.object({
     .max(AGENDA_SCHEDULE_BATCH_LIMIT),
 });
 export const agendaScheduleApplySchema = agendaScheduleProposalSchema.extend({
-  reviewHash: agendaScheduleReviewSchema.shape.reviewHash,
+  // Direct placement validates and commits once; a visible preview remains bound to its reviewed result.
+  reviewHash: agendaScheduleReviewSchema.shape.reviewHash.optional(),
 });
 export type AgendaScheduleProposal = z.infer<typeof agendaScheduleProposalSchema>;
 export type AgendaScheduleReview = z.infer<typeof agendaScheduleReviewSchema>;
@@ -95,7 +96,7 @@ export const agendaScheduleReviewRouteSchema = {
 };
 export const agendaScheduleApplyRouteSchema = {
   ...route,
-  summary: "Apply a reviewed schedule change atomically",
+  summary: "Apply a schedule change atomically",
   request: { ...route.request, body: { content: { "application/json": { schema: agendaScheduleApplySchema } } } },
   responses: { ...route.responses, ...ok("Updated agenda", agendaSnapshotSchema) },
 };

@@ -279,8 +279,13 @@
   .pk-content-agenda .pk-content-agenda__session-body .pk-content-agenda__speaker {
     gap: 0.625rem;
   }
-  .pk-content-agenda .pk-content-agenda__session-body .pk-content-agenda__speaker .pk-avatar {
-    --pk-avatar-size: 40px;
+  .pk-content-agenda .pk-content-agenda__session-body .pk-content-agenda__speaker > .pk-avatar,
+  .pk-content-agenda
+    .pk-content-agenda__session-body
+    .pk-content-agenda__speaker
+    > .pk-agenda-speaker__portrait
+    > .pk-avatar {
+    --pk-avatar-size: 2.5rem;
   }
   .pk-content-agenda .pk-content-agenda__session-body .pk-content-agenda__speaker strong {
     font-size: var(--pk-agenda-type-14);
@@ -670,14 +675,14 @@
   :is(.pk-content-agenda__session, .pk-agenda-dialogs, .pk-agenda-speaker)
     .session-modal__header
     .pk-content-agenda__metadata {
-    gap: 0.25rem 1.125rem;
-    font-family: var(--agenda-mono);
+    gap: 0.25rem 0.75rem;
+    font-family: inherit;
   }
   :is(.pk-content-agenda__session, .pk-agenda-dialogs, .pk-agenda-speaker)
     .session-modal__header
     .pk-content-agenda__metadata
     span {
-    gap: 0 1.125rem;
+    gap: 0 0.75rem;
     font-size: var(--pk-agenda-type-13);
     line-height: 1.5;
   }
@@ -825,7 +830,6 @@
     .session-modal__body
     section:not(:has(.session-modal__speaker))
     p {
-    margin: 0;
     color: var(--pk-ink);
     font-size: var(--pk-agenda-type-16);
     line-height: 1.7;
@@ -857,14 +861,14 @@
     .session-modal__speaker
     .pk-agenda-speaker__portrait
     > .pk-avatar {
-    --pk-avatar-size: 64px;
+    --pk-avatar-size: 3.5rem;
     border-radius: 50%;
   }
   :is(.pk-content-agenda__session, .pk-agenda-dialogs, .pk-agenda-speaker)
     .session-modal__speaker
     .pk-content-agenda__speaker
     h3 {
-    margin: 0 0 0.25rem;
+    margin: 0;
     font-size: var(--pk-agenda-type-16);
     font-weight: 700;
   }
@@ -879,9 +883,9 @@
   :is(.pk-content-agenda__session, .pk-agenda-dialogs, .pk-agenda-speaker)
     .session-modal__speaker
     .pk-content-agenda__speaker-bio {
-    margin-block-start: 0.375rem;
+    margin-block-start: 0;
     color: color-mix(in srgb, var(--pk-ink) 90%, var(--pk-surface));
-    font-size: var(--pk-agenda-type-14);
+    font-size: var(--pk-agenda-type-16);
     line-height: 1.6;
   }
   :is(.pk-content-agenda__session, .pk-agenda-dialogs, .pk-agenda-speaker)

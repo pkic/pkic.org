@@ -9,9 +9,7 @@ import type {
 import { hasPermission } from "../../auth/permissions";
 import type { AuthAdmin, DatabaseLike } from "../../types";
 import { AppError } from "../../errors";
-import { hasActiveGroupMembership } from "./access";
-import { canManageGroup } from "./governance";
-import { getGroup, getVisibleGroup } from "./read-model";
+import { readAuthenticatedGroupContext } from "./read-model";
 
 export interface AuthenticatedGroupViewer {
   userId: string;
@@ -67,20 +65,15 @@ export async function getAuthenticatedGroupContext(
   viewer: AuthenticatedGroupViewer,
   groupIdOrSlug: string,
 ): Promise<AuthenticatedGroupContext> {
-  const visibleGroup = await getVisibleGroup(db, groupIdOrSlug, {
-    userId: viewer.userId,
-    canReadAll: viewer.admin ? hasPermission(viewer.admin, "groups:read") : false,
-  });
-  const group = visibleGroup ?? (viewer.admin ? await getGroup(db, groupIdOrSlug) : null);
-  if (!group) throw new AppError(404, "GROUP_NOT_FOUND", "Group not found or not visible");
-
-  const [participant, manager] = await Promise.all([
-    hasActiveGroupMembership(db, viewer.userId, group.id),
-    viewer.admin ? canManageGroup(db, viewer.admin, group.id) : Promise.resolve(false),
-  ]);
-  if (!visibleGroup && !manager) {
+  const context = await readAuthenticatedGroupContext(
+    db,
+    groupIdOrSlug,
+    viewer,
+    viewer.admin ? hasPermission(viewer.admin, "groups:read") : false,
+  );
+  if (!context || (!context.visible && !context.manager))
     throw new AppError(404, "GROUP_NOT_FOUND", "Group not found or not visible");
-  }
+  const { group, participant, manager } = context;
 
   const capabilities: GroupCapability[] = [
     "view",

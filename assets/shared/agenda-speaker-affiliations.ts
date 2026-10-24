@@ -19,10 +19,14 @@ export function creditAffiliations(credit: object): SessionAffiliation[] {
 /** Organizations the agenda's approved appearances credit; their logos are projected live, never frozen. */
 export function agendaCreditedOrganizationIds(occurrences: readonly AgendaOccurrence[]): string[] {
   const ids = new Set<string>();
-  for (const occurrence of occurrences)
+  for (const occurrence of occurrences) {
+    for (const speaker of occurrence.speakers)
+      for (const candidate of speaker.profileCandidates ?? (speaker.profileCandidate ? [speaker.profileCandidate] : []))
+        if (candidate.organizationId) ids.add(candidate.organizationId);
     for (const appearance of occurrence.history?.appearances ?? [])
       for (const affiliation of appearance.affiliations)
         if (affiliation.organizationId) ids.add(affiliation.organizationId);
+  }
   return [...ids].sort();
 }
 

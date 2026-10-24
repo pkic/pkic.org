@@ -1,22 +1,17 @@
-import { all, first } from "../../db/queries";
+import { nowIso } from "../../utils/time";
 import type { DatabaseLike, StatementLike } from "../../types";
 import type { DayAttendanceSelection } from "../event-days";
 import { uuid } from "../../utils/ids";
-import { nowIso } from "../../utils/time";
 import { prepareAuditLog } from "../audit";
 import {
   dayWaitlistOfferUnavailableError,
-  listCapacityEventDays,
+  prepareCapacityEventDays,
   prepareCapacityGuardStatements,
   type EventDayCapacityGuardPlan,
 } from "./day-waitlist-capacity";
-import type {
-  DayWaitlistLane,
-  DayWaitlistRow,
-  EventDayCapacityRow,
-  PlannedDayWaitlistEntry,
-} from "./day-waitlist-types";
-import { NON_CAPACITY_CONSUMING_DAY_WAITLIST_SQL } from "./day-waitlist-policy";
+import type { DayWaitlistLane, EventDayCapacityRow, PlannedDayWaitlistEntry } from "./day-waitlist-types";
+import { prepareRegistrationDayWaitlistRead, type RegistrationDayWaitlistSnapshot } from "./day-waitlist-read";
+import { batchRows } from "../../db/pagination";
 
 function normalizeSelections(selections?: DayAttendanceSelection[]): DayAttendanceSelection[] {
   if (!selections?.length) return [];
@@ -36,88 +31,59 @@ export interface DayCapacityDecision {
   roleReason: string | null;
 }
 
-export async function buildRegistrationDayWaitlistSync(
-  db: DatabaseLike,
-  payload: {
-    registrationId: string;
-    eventId: string;
-    userId: string;
-    selections?: DayAttendanceSelection[];
-    capacityExemptReason: string | null;
-    preserveConfirmedEventDayIds?: string[];
-    registrationStatus?: string;
-    configuredEventDays?: EventDayCapacityRow[];
-    sharedCapacityGuards?: EventDayCapacityGuardPlan;
-    reArbitrateExistingCapacityRows?: boolean;
-    forceWaitlistDayDates?: string[];
-    claimOfferedDayDates?: string[];
-    auditActor?: { type: "user" | "admin" | "system"; id: string | null };
-  },
-): Promise<{
+export interface RegistrationDayWaitlistSyncInput {
+  registrationId: string;
+  eventId: string;
+  userId: string;
+  selections?: DayAttendanceSelection[];
+  capacityExemptReason: string | null;
+  preserveConfirmedEventDayIds?: string[];
+  registrationStatus?: string;
+  configuredEventDays?: EventDayCapacityRow[];
+  sharedCapacityGuards?: EventDayCapacityGuardPlan;
+  reArbitrateExistingCapacityRows?: boolean;
+  forceWaitlistDayDates?: string[];
+  claimOfferedDayDates?: string[];
+  auditActor?: { type: "user" | "admin" | "system"; id: string | null };
+}
+export interface RegistrationDayWaitlistPlan {
   guardStatements: StatementLike[];
   statements: StatementLike[];
   activeRows: PlannedDayWaitlistEntry[];
   changed: boolean;
   decisions: DayCapacityDecision[];
-}> {
+}
+
+export async function buildRegistrationDayWaitlistSync(
+  db: DatabaseLike,
+  payload: RegistrationDayWaitlistSyncInput,
+): Promise<RegistrationDayWaitlistPlan> {
+  const read = prepareRegistrationDayWaitlistRead(db, {
+    ...payload,
+    registration: { registrationId: payload.registrationId },
+  });
+  const results = await db.batch([
+    ...read.statements,
+    ...(payload.configuredEventDays ? [] : [prepareCapacityEventDays(db, payload.eventId)]),
+  ]);
+  return planRegistrationDayWaitlistSync(db, payload, {
+    ...read.decode(results.slice(0, read.statements.length)),
+    eventDays: payload.configuredEventDays ?? batchRows<EventDayCapacityRow>(results[read.statements.length]),
+  });
+}
+
+/** One planner for standalone changes and create/restore's combined preflight. */
+export function planRegistrationDayWaitlistSync(
+  db: DatabaseLike,
+  payload: RegistrationDayWaitlistSyncInput,
+  snapshot: RegistrationDayWaitlistSnapshot & { eventDays: EventDayCapacityRow[] },
+): RegistrationDayWaitlistPlan {
   const selections = normalizeSelections(payload.selections);
   const selectedByDate = new Map(selections.map((entry) => [entry.dayDate, entry.attendanceType]));
   const preserved = new Set(payload.preserveConfirmedEventDayIds ?? []);
   const forcedWaitlistDates = new Set(payload.forceWaitlistDayDates ?? []);
   const claimOfferedDayDates = new Set(payload.claimOfferedDayDates ?? []);
-  const now = nowIso();
-  const [eventDays, existingRows, capacityRows, storedRegistration] = await Promise.all([
-    payload.configuredEventDays
-      ? Promise.resolve(payload.configuredEventDays)
-      : listCapacityEventDays(db, payload.eventId),
-    all<DayWaitlistRow>(
-      db,
-      `SELECT id, event_id, event_day_id, registration_id, user_id, priority_lane,
-              status, position, offer_expires_at, reason_code
-       FROM event_day_waitlist_entries WHERE registration_id = ?`,
-      [payload.registrationId],
-    ),
-    all<{ event_day_id: string; reserved: number; waiting: number; max_position: number | null }>(
-      db,
-      `SELECT ed.id AS event_day_id,
-              (
-                SELECT COUNT(*)
-                FROM registration_day_attendance rda
-                JOIN registrations r ON r.id = rda.registration_id
-                LEFT JOIN event_day_waitlist_entries w
-                  ON w.event_day_id = rda.event_day_id
-                 AND w.registration_id = rda.registration_id
-                 AND ${NON_CAPACITY_CONSUMING_DAY_WAITLIST_SQL}
-                WHERE rda.event_day_id = ed.id
-                  AND rda.attendance_type = 'in_person'
-                  AND r.status IN ('pending_email_confirmation', 'registered')
-                  AND w.id IS NULL
-                  AND r.id <> ?
-              ) + (
-                SELECT COUNT(*)
-                FROM event_day_waitlist_entries w
-                JOIN registrations r ON r.id = w.registration_id
-                WHERE w.event_day_id = ed.id
-                  AND w.status = 'offered'
-                  AND (w.offer_expires_at IS NULL OR w.offer_expires_at > ?)
-                  AND r.status IN ('pending_email_confirmation', 'registered')
-                  AND r.id <> ?
-              ) AS reserved,
-              (SELECT COUNT(*)
-               FROM event_day_waitlist_entries w
-               JOIN registrations r ON r.id = w.registration_id
-               WHERE w.event_day_id = ed.id
-                 AND w.status = 'waiting'
-                 AND r.status IN ('pending_email_confirmation', 'registered')
-                 AND w.registration_id <> ?) AS waiting,
-              (SELECT MAX(position) FROM event_day_waitlist_entries w WHERE w.event_day_id = ed.id) AS max_position
-       FROM event_days ed WHERE ed.event_id = ?`,
-      [payload.registrationId, now, payload.registrationId, payload.registrationId, payload.eventId],
-    ),
-    payload.registrationStatus
-      ? Promise.resolve({ status: payload.registrationStatus })
-      : first<{ status: string }>(db, "SELECT status FROM registrations WHERE id = ?", [payload.registrationId]),
-  ]);
+  const { at: now, eventDays, existingRows, capacityRows, storedRegistration } = snapshot;
   if (!eventDays.length) {
     if (claimOfferedDayDates.size > 0) throw dayWaitlistOfferUnavailableError();
     return { guardStatements: [], statements: [], activeRows: [], changed: false, decisions: [] };

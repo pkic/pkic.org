@@ -1,8 +1,9 @@
+import { readScannerAttemptBasis, type ScannerAttemptBasis } from "./scanner-attempt-basis";
+import { prepareScannerAttemptReceipt, type ScannerAttemptReceipt } from "./scanner-attempt-receipt";
 import { prepareCheckInStanding } from "../member-standing/awards";
 import { prepareAttemptCapturedValue } from "./scan-attempt-capture";
 import { scannerAdmissionDecisionSql } from "./scanner-admission-decision";
 import { recordScanTargetRefusal } from "./scan-target-refusal";
-import { scanCaptureDecision } from "./scan-capture-decision";
 import { hashBadgeCredential } from "./badge-hash";
 import { recordCheckout } from "./checkout";
 import { resolvePhysicalSessionRoom } from "./session-room";
@@ -13,7 +14,7 @@ import {
   type EventScanRequest,
   type EventScanResponse,
 } from "../../../../assets/shared/schemas/event-participation-scanning";
-import { first } from "../../db/queries";
+import { batchFirst } from "../../db/pagination";
 import type { DatabaseLike } from "../../types";
 import { publishedSessionsSql } from "./published-schedule";
 import { AppError } from "../../errors";
@@ -24,13 +25,6 @@ export { hashBadgeCredential } from "./badge-hash";
 export { issueBadge, revokeBadge } from "./badge-lifecycle";
 
 type ScannerAuthority = { operatorUserId: string; canScan: boolean; canAdmitExceptions: boolean };
-type AttemptRow = {
-  request_hash: string;
-  outcome: EventScanResponse["outcome"];
-  reason: EventScanResponse["reason"];
-  attendanceRecorded: number;
-  admissionDecision: EventScanResponse["admissionDecision"];
-};
 
 /** Scans report registration information and record evidence; they never allocate entry or spend quota. */
 export async function recordScan(
@@ -38,6 +32,7 @@ export async function recordScan(
   eventId: string,
   authority: ScannerAuthority,
   raw: EventScanRequest,
+  preparedBasis?: ScannerAttemptBasis,
 ): Promise<EventScanResponse> {
   if (!authority.canScan) throw new AppError(403, "SCAN_PERMISSION_REQUIRED", "Scanning permission required.");
   const scan = eventScanRequestSchema.parse(raw);
@@ -47,13 +42,9 @@ export async function recordScan(
     throw new AppError(403, "LEAD_SCOPE_REQUIRED", "Use the sponsor-scoped lead capture service.");
   if (scan.action === "exception" && !authority.canAdmitExceptions)
     throw new AppError(403, "EXCEPTION_PERMISSION_REQUIRED", "Exception permission required.");
-  if (scan.action === "checkout") return recordCheckout(db, eventId, scan);
+  if (scan.action === "checkout") return recordCheckout(db, eventId, scan, preparedBasis);
   const requestHash = await hashBadgeCredential(JSON.stringify(scan));
-  const receiptSql = `SELECT a.request_hash,a.outcome,a.reason,a.admission_decision AS admissionDecision,
-    EXISTS(SELECT 1 FROM event_attendance_observations o WHERE o.attempt_id=a.id) AS attendanceRecorded
-    FROM event_scan_attempts a WHERE a.operation_id=? AND a.event_id=? AND a.operator_user_id=?`;
-  const receiptBindings = [scan.operationId, eventId, authority.operatorUserId];
-  const response = (receipt: AttemptRow) => {
+  const response = (receipt: ScannerAttemptReceipt) => {
     if (receipt.request_hash !== requestHash)
       throw new AppError(409, "SCAN_OPERATION_REUSED", "Use a new operation ID for a different scan.");
     return eventScanResponseSchema.parse({
@@ -66,17 +57,23 @@ export async function recordScan(
       admissionDecision: receipt.admissionDecision,
     });
   };
-  const replay = await first<AttemptRow>(db, receiptSql, receiptBindings);
+  const {
+    replay,
+    location,
+    badge,
+    capture: decodeCapture,
+  } = preparedBasis ?? (await readScannerAttemptBasis(db, eventId, scan));
   if (replay) return response(replay);
-  const location = scan.occurrenceId
-    ? await first<{ room_id: string | null; additional_room_ids_json: string }>(
-        db,
-        `SELECT room_id,additional_room_ids_json FROM (${publishedSessionsSql}) WHERE id=? AND event_id=?`,
-        [scan.occurrenceId, eventId],
-      )
-    : null;
   if (scan.occurrenceId && !location)
-    return recordScanTargetRefusal(db, eventId, scan, requestHash, "verification_required");
+    return recordScanTargetRefusal(
+      db,
+      eventId,
+      scan,
+      requestHash,
+      "verification_required",
+      badge?.id ?? null,
+      badge && !scan.offlineRight ? decodeCapture() : undefined,
+    );
   const wrongLocation = Boolean(
     (!scan.occurrenceId && scan.roomId) ||
     (location &&
@@ -86,11 +83,6 @@ export async function recordScan(
       ]).safeParse(scan).success),
   );
   const roomId = !wrongLocation && location ? resolvePhysicalSessionRoom(location, scan.roomId) : null;
-  const badge = await first<{ id: string }>(
-    db,
-    "SELECT id FROM event_badge_credentials WHERE event_id=? AND credential_hash=?",
-    [eventId, await hashBadgeCredential(scan.badgeId)],
-  );
   if (!badge)
     return eventScanResponseSchema.parse({
       operationId: scan.operationId,
@@ -102,7 +94,7 @@ export async function recordScan(
       admissionDecision: null,
     });
   // Historical grant metadata is optional; normal evidence does not depend on grant availability.
-  const capture = await scanCaptureDecision(db, eventId, { ...scan, offlineRight: undefined }, true);
+  const capture = decodeCapture();
   const id = crypto.randomUUID();
   const now = nowIso();
   const registration = "COALESCE(reg.status,'')<>'registered'";
@@ -166,8 +158,8 @@ export async function recordScan(
     );
   statements.push(prepareCheckInStanding(db, id, nowIso()));
   statements.push(prepareAttemptCapturedValue(db, eventId, scan, requestHash));
-  await db.batch(statements);
-  const committed = await first<AttemptRow>(db, receiptSql, receiptBindings);
+  const results = await db.batch([...statements, prepareScannerAttemptReceipt(db, eventId, scan)]);
+  const committed = batchFirst<ScannerAttemptReceipt>(results[results.length - 1]);
   if (!committed) throw new AppError(409, "SCAN_OPERATION_REUSED", "Use a new operation ID for a different scan.");
   return response(committed);
 }

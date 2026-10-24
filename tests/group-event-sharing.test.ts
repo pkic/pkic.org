@@ -47,7 +47,7 @@ import { createManagedForm, createManagedFormPlacement } from "../functions/_lib
 import type { DatabaseLike, Env, UserBackedAuthAdmin } from "../functions/_lib/types";
 import { callApi } from "./helpers/app";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
-import { mutateBeforeNextBatch, mutateBeforeNextStatement } from "./helpers/database-races";
+import { mutateBeforeMatchingQuery, mutateBeforeNextBatch } from "./helpers/database-races";
 import { insertOrgRepresentative, insertUser } from "./helpers/membership";
 import { userRecordColumns, type UserRecord } from "../functions/_lib/services/users";
 import { resetDb } from "./helpers/reset-db";
@@ -518,7 +518,7 @@ describe("group event sharing", () => {
     });
     await expect(
       getGroupEvent(
-        mutateBeforeNextStatement(env.DB, async () => {
+        mutateBeforeNextBatch(env.DB, async () => {
           await env.DB.prepare(
             "DELETE FROM event_group_grants WHERE event_id = ? AND group_id = ? AND capability = 'register'",
           )
@@ -1090,13 +1090,16 @@ describe("group event sharing", () => {
       200,
     );
 
-    const revokedGrantDb = mutateBeforeNextBatch(env.DB, () =>
-      env.DB.prepare(
-        `DELETE FROM event_group_grants
+    const revokedGrantDb = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => sql.startsWith("SELECT EXISTS") && sql.includes("registration_group"),
+      () =>
+        env.DB.prepare(
+          `DELETE FROM event_group_grants
           WHERE event_id = ? AND group_id = ? AND capability = 'register'`,
-      )
-        .bind(fixture.eventId, fixture.granteeId)
-        .run(),
+        )
+          .bind(fixture.eventId, fixture.granteeId)
+          .run(),
     );
     const revokedGrant = await authenticatedRequestWithDatabase(revokedGrantDb, fixture.memberToken, path);
     expect(revokedGrant.status).toBe(403);
@@ -1108,12 +1111,15 @@ describe("group event sharing", () => {
       granteeGroupId: fixture.granteeId,
       capability: "register",
     });
-    const revokedMembershipDb = mutateBeforeNextBatch(env.DB, () =>
-      env.DB.prepare(
-        "UPDATE group_memberships SET left_at = joined_at WHERE group_id = ? AND user_id = ? AND left_at IS NULL",
-      )
-        .bind(fixture.granteeId, fixture.memberId)
-        .run(),
+    const revokedMembershipDb = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => sql.startsWith("SELECT EXISTS") && sql.includes("registration_group"),
+      () =>
+        env.DB.prepare(
+          "UPDATE group_memberships SET left_at = joined_at WHERE group_id = ? AND user_id = ? AND left_at IS NULL",
+        )
+          .bind(fixture.granteeId, fixture.memberId)
+          .run(),
     );
     const revokedMembership = await authenticatedRequestWithDatabase(revokedMembershipDb, fixture.memberToken, path);
     expect(revokedMembership.status).toBe(403);
@@ -1134,11 +1140,14 @@ describe("group event sharing", () => {
       capability: "register",
     });
 
-    const grantRaceDb = mutateBeforeNextBatch(env.DB, () =>
-      revokeResourceGroupGrant(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
-        granteeGroupId: fixture.granteeId,
-        capability: "register",
-      }),
+    const grantRaceDb = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => /^\s*(?:INSERT|UPDATE|DELETE)/u.test(sql),
+      () =>
+        revokeResourceGroupGrant(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+          granteeGroupId: fixture.granteeId,
+          capability: "register",
+        }),
     );
     await expect(
       submitGroupEventRegistration(
@@ -1156,12 +1165,15 @@ describe("group event sharing", () => {
       granteeGroupId: fixture.granteeId,
       capability: "register",
     });
-    const membershipRaceDb = mutateBeforeNextBatch(env.DB, () =>
-      env.DB.prepare(
-        "UPDATE group_memberships SET left_at = '9999-12-31T23:59:59.999Z' WHERE group_id = ? AND user_id = ? AND left_at IS NULL",
-      )
-        .bind(fixture.granteeId, fixture.memberId)
-        .run(),
+    const membershipRaceDb = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => /^\s*(?:INSERT|UPDATE|DELETE)/u.test(sql),
+      () =>
+        env.DB.prepare(
+          "UPDATE group_memberships SET left_at = '9999-12-31T23:59:59.999Z' WHERE group_id = ? AND user_id = ? AND left_at IS NULL",
+        )
+          .bind(fixture.granteeId, fixture.memberId)
+          .run(),
     );
     await expect(
       submitGroupEventRegistration(
@@ -1178,10 +1190,13 @@ describe("group event sharing", () => {
     await env.DB.prepare("UPDATE group_memberships SET left_at = NULL WHERE group_id = ? AND user_id = ?")
       .bind(fixture.granteeId, fixture.memberId)
       .run();
-    const ownershipRaceDb = mutateBeforeNextBatch(env.DB, () =>
-      env.DB.prepare("UPDATE events SET source_mode = 'legacy', owner_group_id = NULL WHERE id = ?")
-        .bind(fixture.eventId)
-        .run(),
+    const ownershipRaceDb = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => /^\s*(?:INSERT|UPDATE|DELETE)/u.test(sql),
+      () =>
+        env.DB.prepare("UPDATE events SET source_mode = 'legacy', owner_group_id = NULL WHERE id = ?")
+          .bind(fixture.eventId)
+          .run(),
     );
     await expect(
       submitGroupEventRegistration(

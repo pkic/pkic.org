@@ -1,3 +1,4 @@
+import { prepareFormPlacement } from "../functions/_lib/services/forms/placements";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import type { DatabaseLike } from "../functions/_lib/types";
@@ -18,11 +19,12 @@ async function seedEventDay(eventId: string): Promise<void> {
 }
 
 async function seedRegistrationForm(_db: DatabaseLike, eventId: string): Promise<void> {
+  const formId = crypto.randomUUID();
   await env.DB.batch([
     env.DB.prepare(`
       INSERT INTO forms (id, key, scope_type, scope_ref, purpose, status, title, description, created_at, updated_at)
       VALUES (
-        '${crypto.randomUUID()}',
+        '${formId}',
         'test-registration-form',
         'event',
         '${eventId}',
@@ -34,6 +36,13 @@ async function seedRegistrationForm(_db: DatabaseLike, eventId: string): Promise
         datetime('now')
       )
     `),
+    prepareFormPlacement(env.DB, formId, {
+      ownerGroupId: null,
+      contextType: "event",
+      contextRef: eventId,
+      audience: "attendee",
+      active: true,
+    }).statement,
     env.DB.prepare(`
       INSERT INTO form_fields (id, form_id, key, label, field_type, required, options_json, validation_json, sort_order, created_at)
       VALUES

@@ -47,13 +47,14 @@ export function collectSessionRedirects(snapshot, files) {
       throw new Error(`Page address alias has multiple destinations: ${redirect.from}`);
     redirects.set(redirect.from, redirect);
   }
-  // The authored event page embeds its agenda (as in production), so agenda URLs lead there.
+  // Preserve a dedicated generated agenda page; otherwise the authored event page embeds its agenda.
   for (const owner of publicationAuthoredAgendaRoutes(snapshot)) {
     const agenda = snapshot.eventAgendas[owner.eventSlug];
-    const to = owner.route;
+    const natural = `${owner.route}agenda/`;
+    const to = owned.has(natural) ? natural : owner.route;
     if (!owned.has(to)) throw new Error(`Authored agenda alias target was not generated: ${to}`);
     const canonical = agenda.publicAgendaPath ?? `/events/${encodeURIComponent(agenda.eventSlug)}/agenda/`;
-    for (const from of new Set([`${owner.route}agenda/`, canonical])) {
+    for (const from of new Set([natural, canonical])) {
       if (from === to) continue;
       if (owned.has(from)) throw new Error(`Authored agenda alias collides with a generated page: ${from}`);
       const previous = redirects.get(from);

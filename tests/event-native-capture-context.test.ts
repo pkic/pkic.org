@@ -20,7 +20,8 @@ import type { Env } from "../functions/_lib/types";
 import { callApi } from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
 import { seedEventAndAdmin, queryAll } from "./helpers/context";
-import { mutateBeforeNextBatch, mutateAfterNextStatement } from "./helpers/database-races";
+import { mutateBeforeNextBatch } from "./helpers/database-races";
+import { profileD1Flow } from "./helpers/d1-flow-profile";
 import { insertUser } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 
@@ -419,12 +420,13 @@ describe("Native meeting event-wide captured calendar context", () => {
     ).toEqual([]);
   });
 
-  it("does not publish a stale native manifest when the profile changes during preparation", async () => {
-    // The first state read is the producer's read; standalone use keeps that race exact.
+  it("reads the changed native profile and eligibility from one consistent manifest snapshot", async () => {
     const { offlineEligibility } = await import("../functions/_lib/services/event-participation/offline-eligibility");
-    const db = mutateAfterNextStatement(env.DB, () => changeContext("profile"));
-    await expect(offlineEligibility(db, eventId, operatorId, {})).rejects.toMatchObject({
-      code: "OFFLINE_MANIFEST_CHANGED",
-    });
+    const profile = profileD1Flow(env.DB);
+    const db = mutateBeforeNextBatch(profile.db, () => changeContext("profile"));
+    const manifest = await offlineEligibility(db, eventId, operatorId, {});
+    expect(manifest.nativeEventContext).toEqual({ ...nativeEventContext, profileKey: "board_meeting" });
+    expect(manifest.entries[0]).toMatchObject({ eventRegistered: true, physicalDayEligible: true });
+    expect(profile.summary().roundTrips).toBe(1);
   });
 });

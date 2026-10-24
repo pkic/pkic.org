@@ -16,14 +16,14 @@ import {
   transferTimingSchema,
 } from "../../../../assets/shared/schemas/event-agenda-transfer";
 import { agendaTransferModePolicy } from "../../../../assets/shared/event-agenda-transfer";
-import { first } from "../../db/queries";
+import { batchFirst } from "../../db/pagination";
 import { AppError } from "../../errors";
-import type { DatabaseLike, StatementLike } from "../../types";
+import type { DatabaseLike, StatementLike, D1StatementResult } from "../../types";
 import { nowIso } from "../../utils/time";
 import { parseJsonSafe } from "../../utils/json";
 import {
   historicalSourceGuard,
-  readHistoricalOccurrenceSources,
+  prepareHistoricalOccurrenceSources,
   type HistoricalSourceRow,
 } from "./historical-mapping-import";
 
@@ -169,86 +169,96 @@ function assertHistoricalPublicationSource(
 }
 
 /** Canonical speakers still require approved appearances, including in mixed archival rosters. */
-export async function assertPublicationRepresentations(
+export function preparePublicationRepresentationsRead(
   db: DatabaseLike,
   eventId: string,
   snapshot: AgendaSnapshot,
   acknowledgeArchiveRepresentation = false,
-): Promise<StatementLike[]> {
+) {
   const approvalTime = Date.parse(nowIso());
-  if (
-    snapshot.occurrences.some((occurrence) =>
-      occurrence.history?.appearances.some((appearance) => Date.parse(appearance.approvedAt) > approvalTime),
-    )
-  )
-    throw new AppError(422, "APPEARANCE_APPROVAL_IN_FUTURE", "An appearance approval cannot be dated in the future.");
-  const { occurrenceIds } = agendaHistoricalPublicationReview(snapshot);
-  const required = new Set(occurrenceIds);
-  const occurrences = new Map(snapshot.occurrences.map((occurrence) => [occurrence.id, occurrence]));
-  const rows = await readHistoricalOccurrenceSources(db, eventId, [...occurrences.keys()]);
-  const byId = new Map(rows.map((row) => [row.id, row]));
-  if (byId.size !== rows.length || occurrenceIds.some((id) => !byId.has(id))) historicalEvidenceRequired();
-  for (const row of rows) {
-    const occurrence = occurrences.get(row.id);
-    const mode = transferPrepareSchema.shape.mode.safeParse(row.import_mode);
-    const timing = transferTimingSchema.safeParse(parseJsonSafe<unknown>(row.timing_json, undefined));
-    if (
-      !occurrence ||
-      !mode.success ||
-      !timing.success ||
-      !agendaTransferSchema.shape.source.shape.kind.safeParse(row.source_format).success
-    )
-      historicalEvidenceRequired();
-    // Current and copied imports carry no archival attribution; they publish as ordinary authored sessions.
-    if (agendaTransferModePolicy[mode.data].attribution !== "archival") {
-      if (required.has(row.id)) historicalEvidenceRequired();
-      continue;
-    }
-    const pastSource =
-      timing.data.startAt !== null &&
-      Date.parse(timing.data.startAt) < approvalTime &&
-      (timing.data.endAt === null || Date.parse(timing.data.endAt) < approvalTime);
-    if (row.source_format === "hugo" || pastSource || required.has(row.id))
-      assertHistoricalPublicationSource(row, occurrence, approvalTime);
-  }
-  if (occurrenceIds.length && !acknowledgeArchiveRepresentation)
-    throw new AppError(
-      400,
-      "AGENDA_PUBLICATION_ARCHIVE_REVIEW_REQUIRED",
-      "Confirm the retained historical source attribution and unknown facts before approving this agenda.",
-    );
-  const guards: StatementLike[] = [];
-  for (let offset = 0; offset < rows.length; offset += 100)
-    guards.push(historicalSourceGuard(db, eventId, rows.slice(offset, offset + 100)));
-  const missing = await first<{ id: string }>(
+  const historical = prepareHistoricalOccurrenceSources(
     db,
-    `SELECT occurrence.id FROM event_agenda_occurrences occurrence
-     JOIN event_agenda_occurrence_speakers speaker ON speaker.occurrence_id=occurrence.id
-     LEFT JOIN event_agenda_session_history history ON history.occurrence_id=occurrence.id
-     WHERE occurrence.event_id=? AND occurrence.id IN(SELECT value FROM json_each(?))
-       AND NOT EXISTS(SELECT 1 FROM json_each(history.metadata_json,'$.appearances') appearance
-         WHERE json_extract(appearance.value,'$.userId')=speaker.user_id
-           AND json_extract(appearance.value,'$.approvedAt') IS NOT NULL)
-     LIMIT 1`,
-    [eventId, JSON.stringify(snapshot.occurrences.map((occurrence) => occurrence.id))],
+    eventId,
+    snapshot.occurrences.map((occurrence) => occurrence.id),
   );
-  if (missing)
-    throw new AppError(
-      422,
-      "AGENDA_REPRESENTATION_REVIEW_REQUIRED",
-      "Review and approve each speaker's representation before approving this agenda.",
-    );
   const unaccepted = unacceptedProposalSpeakerEvidence(eventId, snapshot);
-  if (await first<{ id: string }>(db, `${unaccepted.sql} LIMIT 1`, unaccepted.bindings))
-    throw new AppError(422, "AGENDA_SPEAKER_ACCEPTANCE_REQUIRED", SPEAKER_ACCEPTANCE_REQUIRED_MESSAGE);
-  // Pinned at commit too: a speaker who withdraws their acceptance meanwhile is never published.
-  guards.push(
-    prepareAuthorizationGuard(db, {
-      sql: `SELECT 1 WHERE NOT EXISTS(${unaccepted.sql})`,
-      bindings: unaccepted.bindings,
-    }),
-  );
-  return guards;
+  return {
+    statements: [...historical.statements, db.prepare(`${unaccepted.sql} LIMIT 1`).bind(...unaccepted.bindings)],
+    decode(loaded: D1StatementResult[]): StatementLike[] {
+      if (
+        snapshot.occurrences.some((occurrence) =>
+          occurrence.history?.appearances.some((appearance) => Date.parse(appearance.approvedAt) > approvalTime),
+        )
+      )
+        throw new AppError(
+          422,
+          "APPEARANCE_APPROVAL_IN_FUTURE",
+          "An appearance approval cannot be dated in the future.",
+        );
+      const { occurrenceIds } = agendaHistoricalPublicationReview(snapshot);
+      const required = new Set(occurrenceIds);
+      const occurrences = new Map(snapshot.occurrences.map((occurrence) => [occurrence.id, occurrence]));
+      const rows = historical.decode(loaded.slice(0, historical.statements.length));
+      const byId = new Map(rows.map((row) => [row.id, row]));
+      if (byId.size !== rows.length || occurrenceIds.some((id) => !byId.has(id))) historicalEvidenceRequired();
+      for (const row of rows) {
+        const occurrence = occurrences.get(row.id);
+        const mode = transferPrepareSchema.shape.mode.safeParse(row.import_mode);
+        const timing = transferTimingSchema.safeParse(parseJsonSafe<unknown>(row.timing_json, undefined));
+        if (
+          !occurrence ||
+          !mode.success ||
+          !timing.success ||
+          !agendaTransferSchema.shape.source.shape.kind.safeParse(row.source_format).success
+        )
+          historicalEvidenceRequired();
+        // Current and copied imports carry no archival attribution; they publish as ordinary authored sessions.
+        if (agendaTransferModePolicy[mode.data].attribution !== "archival") {
+          if (required.has(row.id)) historicalEvidenceRequired();
+          continue;
+        }
+        const pastSource =
+          timing.data.startAt !== null &&
+          Date.parse(timing.data.startAt) < approvalTime &&
+          (timing.data.endAt === null || Date.parse(timing.data.endAt) < approvalTime);
+        if (row.source_format === "hugo" || pastSource || required.has(row.id))
+          assertHistoricalPublicationSource(row, occurrence, approvalTime);
+      }
+      if (occurrenceIds.length && !acknowledgeArchiveRepresentation)
+        throw new AppError(
+          400,
+          "AGENDA_PUBLICATION_ARCHIVE_REVIEW_REQUIRED",
+          "Confirm the retained historical source attribution and unknown facts before approving this agenda.",
+        );
+      const guards: StatementLike[] = [];
+      for (let offset = 0; offset < rows.length; offset += 100)
+        guards.push(historicalSourceGuard(db, eventId, rows.slice(offset, offset + 100)));
+      const missing = snapshot.occurrences.some((occurrence) =>
+        occurrence.speakers.some(
+          (speaker) =>
+            !occurrence.history?.appearances.some(
+              (appearance) => appearance.userId === speaker.userId && appearance.approvedAt,
+            ),
+        ),
+      );
+      if (missing)
+        throw new AppError(
+          422,
+          "AGENDA_REPRESENTATION_REVIEW_REQUIRED",
+          "Review and approve each speaker's representation before approving this agenda.",
+        );
+      if (batchFirst(loaded[historical.statements.length]))
+        throw new AppError(422, "AGENDA_SPEAKER_ACCEPTANCE_REQUIRED", SPEAKER_ACCEPTANCE_REQUIRED_MESSAGE);
+      // Pinned at commit too: a speaker who withdraws their acceptance meanwhile is never published.
+      guards.push(
+        prepareAuthorizationGuard(db, {
+          sql: `SELECT 1 WHERE NOT EXISTS(${unaccepted.sql})`,
+          bindings: unaccepted.bindings,
+        }),
+      );
+      return guards;
+    },
+  };
 }
 
 /**

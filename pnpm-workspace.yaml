@@ -1,5 +1,5 @@
 allowBuilds:
-  '@parcel/watcher': false
+  "@parcel/watcher": false
   better-sqlite3: true
   core-js-pure: true
   esbuild: true
@@ -8,12 +8,12 @@ allowBuilds:
   sharp: true
   workerd: true
 minimumReleaseAgeExclude:
-  - '@cloudflare/vite-plugin@1.39.1'
-  - '@cloudflare/workers-types@4.20260602.1'
+  - "@cloudflare/vite-plugin@1.39.1"
+  - "@cloudflare/workers-types@4.20260602.1"
   - miniflare@4.20260529.0
   - wrangler@4.96.0
   - ws@8.20.1
-  - '@cloudflare/vitest-plugin@1.4.3'
+  - "@cloudflare/vitest-plugin@1.4.3"
 overrides:
   # The inspected Cloudflare entrypoint uses a remote browser binding, not the
   # Node browser installer. Omit its unused, unpatched extract-zip dependency chain.
@@ -22,7 +22,7 @@ overrides:
   "@hono/node-server@<1.19.15": 1.19.15
   "body-parser@>=2.0.0 <2.3.0": 2.3.0
   "brace-expansion@>=3.0.0 <5.0.9": 5.0.9
-  "agents>@modelcontextprotocol/sdk": 1.31.0
+  "agents>@modelcontextprotocol/sdk": 1.32.0
   esbuild: "^0.28.1"
   "fast-uri@>=3.0.0 <3.1.6": 3.1.6
   "ip-address@<=10.3.0": 10.3.1

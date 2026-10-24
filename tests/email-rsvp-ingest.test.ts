@@ -8,7 +8,8 @@ import { generateSignedRsvpAddress, verifySignedRsvpAddressFull } from "../funct
 import type { Env } from "../functions/_lib/types";
 import { queryAll } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
-import { seedRsvpRegistration } from "./helpers/rsvp";
+import { seedRsvpRegistration, switchRsvpRegistrationPrimaryEmail } from "./helpers/rsvp";
+import { calendarReplyIcs, deliveryStatusEmail, tnefRsvpEmail } from "./helpers/rsvp-email-fixtures";
 
 const secret = "test-internal-secret";
 const rsvpEmail = "rsvp@mail.pkic.org";
@@ -53,6 +54,46 @@ function rawCalendarEmail(calendarIcs: string, messageId: string): string {
 describe("incoming RSVP email persistence", () => {
   beforeEach(resetDb);
 
+  it.each(["subject", "calendar", "bounce"])(
+    "keeps an issued %s reply valid after changing the primary email",
+    async (transport) => {
+      const { registrationId, userId } = await seedRsvpRegistration(env.DB);
+      const to = await generateSignedRsvpAddress(registrationId, secret, rsvpEmail);
+      const calendar = rawCalendarEmail(calendarReplyIcs(registrationId), "old-primary@example.test");
+      await switchRsvpRegistrationPrimaryEmail(env.DB, userId);
+      const raw =
+        transport === "bounce"
+          ? deliveryStatusEmail()
+          : transport === "calendar"
+            ? calendar
+            : rawEmail("Accepted: PQC 2026", "old-primary@example.test");
+      await processIncomingEmail(incomingEmail("prvs=1234567890=alice@example.com", to, raw), testEnv());
+      expect(await queryAll(env.DB, "SELECT attendee_email,response_status FROM calendar_rsvp_events")).toEqual([
+        { attendee_email: "alice@example.com", response_status: transport === "bounce" ? "bounced" : "accepted" },
+      ]);
+    },
+  );
+
+  it.each(["unverified", "removed"])("refuses a retained invitation address after it becomes %s", async (state) => {
+    const { registrationId, userId } = await seedRsvpRegistration(env.DB);
+    const to = await generateSignedRsvpAddress(registrationId, secret, rsvpEmail);
+    const emailId = await switchRsvpRegistrationPrimaryEmail(env.DB, userId);
+    await env.DB.prepare(
+      state === "removed"
+        ? "DELETE FROM user_emails WHERE id=?"
+        : "UPDATE user_emails SET verified_at=NULL,verification_method=NULL WHERE id=?",
+    )
+      .bind(emailId)
+      .run();
+    await expect(
+      processIncomingEmail(
+        incomingEmail("alice@example.com", to, rawEmail("Accepted: PQC 2026", "retired-address@example.test")),
+        testEnv(),
+      ),
+    ).rejects.toMatchObject({ code: "RSVP_EMAIL_RECIPIENT_MISMATCH" });
+    expect(await queryAll(env.DB, "SELECT id FROM calendar_rsvp_events")).toEqual([]);
+  });
+
   it("records an implicit subject reply through the shared RSVP service", async () => {
     const { registrationId } = await seedRsvpRegistration(env.DB);
     const to = await generateSignedRsvpAddress(registrationId, secret, rsvpEmail);
@@ -89,42 +130,192 @@ describe("incoming RSVP email persistence", () => {
     expect(await queryAll(env.DB, "SELECT id FROM calendar_rsvp_events")).toHaveLength(1);
   });
 
-  it("propagates an awaited D1 failure and records a later SMTP retry only once", async () => {
+  it.each(["Accepted", "Declined", "Tentative"])(
+    "records an Outlook %s reply using its author despite a rewritten envelope sender",
+    async (response) => {
+      const { registrationId } = await seedRsvpRegistration(env.DB);
+      const dayId = crypto.randomUUID();
+      await env.DB.prepare(
+        "INSERT INTO event_days(id,event_id,day_date,created_at,updated_at) SELECT ?,event_id,'2026-05-13',created_at,updated_at FROM registrations WHERE id=?",
+      )
+        .bind(dayId, registrationId)
+        .run();
+      const to = await generateSignedRsvpAddress(registrationId, secret, rsvpEmail, "2026-05-13");
+      const raw = tnefRsvpEmail(`${response}: PQC 2026`, "outlook-reply@example.test");
+      for (let attempt = 0; attempt < 2; attempt++)
+        await processIncomingEmail(incomingEmail("prvs=1234567890=alice@example.com", to, raw), testEnv());
+      expect(
+        await queryAll(env.DB, "SELECT attendee_email,response_status,event_day_id,ics_uid FROM calendar_rsvp_events"),
+      ).toEqual([
+        {
+          attendee_email: "alice@example.com",
+          response_status: response.toLowerCase(),
+          event_day_id: dayId,
+          ics_uid: `${registrationId}-2026-05-13@pkic.org`,
+        },
+      ]);
+    },
+  );
+
+  it.each([
+    "",
+    "From: invalid-address\r\n",
+    "From: Alice <alice@example.com>, Mallory <mallory@example.test>\r\n",
+    "From: Alice <alice@example.com>\r\nFrom: Mallory <mallory@example.test>\r\n",
+  ])("refuses an invalid or ambiguous author without using the envelope sender: %s", async (from) => {
     const { registrationId } = await seedRsvpRegistration(env.DB);
     const to = await generateSignedRsvpAddress(registrationId, secret, rsvpEmail);
-    const raw = rawEmail("Accepted: PQC 2026", "smtp-retry@example.test");
-    const message = () => ({
-      ...incomingEmail("alice@example.com", to, raw),
-      setReject: vi.fn(),
-      forward: vi.fn(),
-      reply: vi.fn(),
-      headers: new Headers(),
+    const raw = rawEmail("Accepted: PQC 2026", "invalid-author@example.test").replace(
+      "From: Alice <alice@example.com>\r\n",
+      from,
+    );
+    await expect(processIncomingEmail(incomingEmail("alice@example.com", to, raw), testEnv())).rejects.toMatchObject({
+      status: 400,
     });
-    const context = createExecutionContext();
-    const waitUntil = vi.spyOn(context, "waitUntil");
-    const failed = message();
-    await expect(
-      app.email(
-        failed,
-        {
-          ...testEnv(),
-          DB: {
-            prepare: () => {
-              throw new Error("D1_ERROR: Network connection lost.");
-            },
-            batch: vi.fn(),
-          },
-        },
-        context,
-      ),
-    ).rejects.toThrow("D1_ERROR: Network connection lost.");
-    expect(waitUntil).not.toHaveBeenCalled();
-    expect(failed.setReject).not.toHaveBeenCalled();
-    expect(await queryAll(env.DB, "SELECT id FROM calendar_rsvp_events")).toHaveLength(0);
-    await app.email(message(), testEnv(), createExecutionContext());
-    await app.email(message(), testEnv(), createExecutionContext());
-    expect(await queryAll(env.DB, "SELECT id FROM calendar_rsvp_events")).toHaveLength(1);
+    expect(await queryAll(env.DB, "SELECT id FROM calendar_rsvp_events")).toEqual([]);
   });
+
+  it("refuses a subject reply whose author does not match the signed registration", async () => {
+    const { registrationId } = await seedRsvpRegistration(env.DB);
+    const to = await generateSignedRsvpAddress(registrationId, secret, rsvpEmail);
+    const raw = rawEmail("Accepted: PQC 2026", "mismatched-author@example.test").replace(
+      "alice@example.com",
+      "mallory@example.test",
+    );
+    await expect(processIncomingEmail(incomingEmail("alice@example.com", to, raw), testEnv())).rejects.toMatchObject({
+      code: "RSVP_EMAIL_RECIPIENT_MISMATCH",
+    });
+    expect(await queryAll(env.DB, "SELECT id FROM calendar_rsvp_events")).toEqual([]);
+  });
+
+  it.each(["Status", "status", "sTaTuS"])(
+    "records a delivery failure with a %s field and empty envelope sender",
+    async (field) => {
+      const { registrationId } = await seedRsvpRegistration(env.DB);
+      const to = await generateSignedRsvpAddress(registrationId, secret, rsvpEmail);
+      for (let attempt = 0; attempt < 2; attempt++)
+        await processIncomingEmail(
+          incomingEmail("", to, deliveryStatusEmail().replace("Status: 5.1.1", `${field}: 5.1.1`)),
+          testEnv(),
+        );
+      expect(
+        await queryAll(env.DB, "SELECT attendee_email,response_status,provider FROM calendar_rsvp_events"),
+      ).toEqual([
+        {
+          attendee_email: "alice@example.com",
+          response_status: "bounced",
+          provider: "cloudflare_email_routing_bounce",
+        },
+      ]);
+    },
+  );
+
+  it.each([
+    { original: "alice@example.com", final: "forwarded@example.test" },
+    { original: "<ALICE@example.com>", final: "<forwarded@example.test>" },
+    { original: undefined, final: "<alice@example.com>" },
+  ])("attributes a forwarded or bracketed delivery report: $original / $final", async ({ original, final }) => {
+    const { registrationId } = await seedRsvpRegistration(env.DB);
+    const to = await generateSignedRsvpAddress(registrationId, secret, rsvpEmail);
+    let raw = deliveryStatusEmail(final);
+    if (original !== undefined)
+      raw = raw.replace("Final-Recipient:", `Original-Recipient: rfc822; ${original}\r\nFinal-Recipient:`);
+    await processIncomingEmail(incomingEmail("", to, raw), testEnv());
+    expect(await queryAll(env.DB, "SELECT attendee_email,response_status FROM calendar_rsvp_events")).toEqual([
+      { attendee_email: "alice@example.com", response_status: "bounced" },
+    ]);
+  });
+
+  it("acknowledges an unattributable signed delivery failure without logging its address", async () => {
+    const { registrationId } = await seedRsvpRegistration(env.DB);
+    const to = await generateSignedRsvpAddress(registrationId, secret, rsvpEmail);
+    const logged = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      await expect(
+        processIncomingEmail(incomingEmail("", to, deliveryStatusEmail("mallory@example.test")), testEnv()),
+      ).resolves.toBeUndefined();
+      const diagnostics = logged.mock.calls.map((entry) => JSON.parse(String(entry[0])));
+      expect(diagnostics.find((entry) => entry.message === "RSVP_EMAIL_BOUNCE_IGNORED")?.data).toEqual({
+        code: "RSVP_EMAIL_RECIPIENT_MISMATCH",
+        targetId: registrationId,
+      });
+      expect(JSON.stringify(logged.mock.calls)).not.toContain("mallory@example.test");
+    } finally {
+      logged.mockRestore();
+    }
+    expect(await queryAll(env.DB, "SELECT id FROM calendar_rsvp_events")).toEqual([]);
+  });
+
+  it.each([
+    ["delayed", "4.2.0"],
+    ["delivered", "2.0.0"],
+  ])("does not turn a %s delivery report into an RSVP", async (action, status) => {
+    const { registrationId } = await seedRsvpRegistration(env.DB);
+    const to = await generateSignedRsvpAddress(registrationId, secret, rsvpEmail);
+    const raw = deliveryStatusEmail("alice@example.com", action, status).replace(
+      "Subject: Delivery Status Notification",
+      "Subject: Accepted: PQC 2026",
+    );
+    await processIncomingEmail(incomingEmail("", to, raw), testEnv());
+    expect(await queryAll(env.DB, "SELECT id FROM calendar_rsvp_events")).toEqual([]);
+  });
+
+  it("does not classify a reply as a bounce from its subject alone", async () => {
+    const { registrationId } = await seedRsvpRegistration(env.DB);
+    const to = await generateSignedRsvpAddress(registrationId, secret, rsvpEmail);
+    await processIncomingEmail(
+      incomingEmail(
+        "alice@example.com",
+        to,
+        rawEmail("Accepted: bounce handling workshop", "bounce-topic@example.test"),
+      ),
+      testEnv(),
+    );
+    expect(await queryAll(env.DB, "SELECT response_status FROM calendar_rsvp_events")).toEqual([
+      { response_status: "accepted" },
+    ]);
+  });
+
+  it.each(["subject", "bounce"])(
+    "propagates an awaited %s D1 failure and records a later SMTP retry only once",
+    async (transport) => {
+      const { registrationId } = await seedRsvpRegistration(env.DB);
+      const to = await generateSignedRsvpAddress(registrationId, secret, rsvpEmail);
+      const raw =
+        transport === "bounce" ? deliveryStatusEmail() : rawEmail("Accepted: PQC 2026", "smtp-retry@example.test");
+      const message = () => ({
+        ...incomingEmail("alice@example.com", to, raw),
+        setReject: vi.fn(),
+        forward: vi.fn(),
+        reply: vi.fn(),
+        headers: new Headers(),
+      });
+      const context = createExecutionContext();
+      const waitUntil = vi.spyOn(context, "waitUntil");
+      const failed = message();
+      await expect(
+        app.email(
+          failed,
+          {
+            ...testEnv(),
+            DB: {
+              prepare: () => {
+                throw new Error("D1_ERROR: Network connection lost.");
+              },
+              batch: vi.fn(),
+            },
+          },
+          context,
+        ),
+      ).rejects.toThrow("D1_ERROR: Network connection lost.");
+      expect(waitUntil).not.toHaveBeenCalled();
+      expect(failed.setReject).not.toHaveBeenCalled();
+      expect(await queryAll(env.DB, "SELECT id FROM calendar_rsvp_events")).toHaveLength(0);
+      await app.email(message(), testEnv(), createExecutionContext());
+      await app.email(message(), testEnv(), createExecutionContext());
+      expect(await queryAll(env.DB, "SELECT id FROM calendar_rsvp_events")).toHaveLength(1);
+    },
+  );
 
   it("defers processing when signing configuration is missing instead of acknowledging the message", async () => {
     await expect(
@@ -159,17 +350,17 @@ describe("incoming RSVP email persistence", () => {
   it("parses calendar replies through the shared calendar RSVP parser", async () => {
     const { registrationId } = await seedRsvpRegistration(env.DB);
     const to = await generateSignedRsvpAddress(registrationId, secret, rsvpEmail);
-    const calendarIcs = [
-      "BEGIN:VCALENDAR",
-      "BEGIN:VEVENT",
-      `UID:${registrationId}@pkic.org`,
-      "ATTENDEE;PARTSTAT=ACCEPTED:mailto:alice@example.com",
-      "END:VEVENT",
-      "END:VCALENDAR",
-    ].join("\r\n");
+    const calendarIcs = calendarReplyIcs(registrationId);
 
     await processIncomingEmail(
-      incomingEmail("alice@example.com", to, rawCalendarEmail(calendarIcs, "calendar-accept@example.test")),
+      incomingEmail(
+        "prvs=1234567890=alice@example.com",
+        to,
+        rawCalendarEmail(calendarIcs, "calendar-accept@example.test").replace(
+          "Alice <alice@example.com>",
+          "Delegate <delegate@example.test>",
+        ),
+      ),
       testEnv(),
     );
 
@@ -202,6 +393,102 @@ describe("incoming RSVP email persistence", () => {
     });
 
     expect(await queryAll(env.DB, "SELECT id FROM calendar_rsvp_events")).toHaveLength(2);
+  });
+
+  it("refuses a calendar attendee outside the signed registration despite a matching message author", async () => {
+    const { registrationId } = await seedRsvpRegistration(env.DB);
+    const to = await generateSignedRsvpAddress(registrationId, secret, rsvpEmail);
+    const raw = rawCalendarEmail(
+      calendarReplyIcs(registrationId, "mallory@example.test"),
+      "wrong-attendee@example.test",
+    );
+    await expect(processIncomingEmail(incomingEmail("alice@example.com", to, raw), testEnv())).rejects.toMatchObject({
+      code: "RSVP_EMAIL_RECIPIENT_MISMATCH",
+    });
+    expect(await queryAll(env.DB, "SELECT id FROM calendar_rsvp_events")).toEqual([]);
+  });
+
+  it("does not infer a missing calendar attendee from the message author or envelope", async () => {
+    const { registrationId } = await seedRsvpRegistration(env.DB);
+    const to = await generateSignedRsvpAddress(registrationId, secret, rsvpEmail);
+    const raw = rawCalendarEmail(calendarReplyIcs(registrationId, ""), "missing-attendee@example.test");
+    await processIncomingEmail(incomingEmail("alice@example.com", to, raw), testEnv());
+    expect(await queryAll(env.DB, "SELECT id FROM calendar_rsvp_events")).toEqual([]);
+  });
+
+  it.each([
+    {
+      name: "ambiguous recipients",
+      code: "RSVP_EMAIL_BOUNCE_AMBIGUOUS",
+      raw: deliveryStatusEmail(["alice@example.com", "mallory@example.test"]),
+    },
+    { name: "invalid recipient", code: "RSVP_EMAIL_ATTENDEE_INVALID", raw: deliveryStatusEmail("invalid-address") },
+    {
+      name: "invalid original recipient",
+      code: "RSVP_EMAIL_ATTENDEE_INVALID",
+      raw: deliveryStatusEmail().replace(
+        "Final-Recipient:",
+        "Original-Recipient: rfc822; invalid-address\r\nFinal-Recipient:",
+      ),
+    },
+    {
+      name: "missing recipient",
+      code: "RSVP_EMAIL_BOUNCE_INVALID",
+      raw: deliveryStatusEmail().replace("Final-Recipient: rfc822; alice@example.com", "Final-Recipient: rfc822; "),
+    },
+    {
+      name: "invalid failure status",
+      code: "RSVP_EMAIL_BOUNCE_INVALID",
+      raw: deliveryStatusEmail("alice@example.com", "failed", "2.0.0"),
+    },
+    {
+      name: "missing delivery-status part",
+      code: "RSVP_EMAIL_BOUNCE_INVALID",
+      raw: deliveryStatusEmail().replace("Content-Type: message/delivery-status", "Content-Type: text/plain"),
+    },
+  ])("acknowledges a signed report with $name without recording an RSVP", async ({ raw, code }) => {
+    const { registrationId } = await seedRsvpRegistration(env.DB);
+    const to = await generateSignedRsvpAddress(registrationId, secret, rsvpEmail);
+    const logged = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      await expect(
+        processIncomingEmail(
+          incomingEmail("", to, raw.replace("Subject: Delivery Status Notification", "Subject: Accepted: PQC 2026")),
+          testEnv(),
+        ),
+      ).resolves.toBeUndefined();
+      const diagnostics = logged.mock.calls.map((entry) => JSON.parse(String(entry[0])));
+      expect(diagnostics.find((entry) => entry.message === "RSVP_EMAIL_BOUNCE_IGNORED")?.data).toEqual({
+        code,
+        targetId: registrationId,
+      });
+    } finally {
+      logged.mockRestore();
+    }
+    expect(await queryAll(env.DB, "SELECT id FROM calendar_rsvp_events")).toEqual([]);
+  });
+
+  it("logs validation fields and codes without exposing the claimed address", async () => {
+    const { registrationId } = await seedRsvpRegistration(env.DB);
+    const to = await generateSignedRsvpAddress(registrationId, secret, rsvpEmail);
+    const raw = rawEmail("Accepted: PQC 2026", "invalid-email@example.test").replace(
+      "alice@example.com",
+      "prvs=1234567890=alice@example.com",
+    );
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      await expect(processIncomingEmail(incomingEmail("alice@example.com", to, raw), testEnv())).rejects.toMatchObject({
+        code: "RSVP_EMAIL_ATTENDEE_INVALID",
+      });
+      const diagnostic = JSON.parse(String(logged.mock.calls.at(-1)?.[0]));
+      expect(diagnostic.data).toMatchObject({
+        code: "RSVP_EMAIL_ATTENDEE_INVALID",
+        validation: { validationIssues: [{ field: "attendeeEmail", code: "invalid_format" }] },
+      });
+      expect(JSON.stringify(logged.mock.calls)).not.toContain("alice@example.com");
+    } finally {
+      logged.mockRestore();
+    }
   });
 
   it("rejects an oversized email before reading its stream", async () => {

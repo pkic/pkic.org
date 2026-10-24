@@ -158,7 +158,10 @@ export function normalizeCalendarRsvp(input: CalendarRsvpInput): CalendarRsvpEve
 /** Idempotently records one RSVP, rejecting UIDs for registrations that do not exist. */
 export async function recordCalendarRsvpEvent(db: DatabaseLike, input: CalendarRsvpEventInput): Promise<void> {
   const parsed = calendarRsvpEventInputSchema.safeParse(input);
-  if (!parsed.success) throw new AppError(400, "INVALID_RSVP_EVENT", "Invalid calendar RSVP event");
+  if (!parsed.success)
+    throw new AppError(400, "INVALID_RSVP_EVENT", "Invalid calendar RSVP event", {
+      validationIssues: parsed.error.issues.map((issue) => ({ field: issue.path.join("."), code: issue.code })),
+    });
   const event = parsed.data;
   if (await recordSessionInvitationRsvp(db, { ...event, invitationId: event.registrationId })) return;
   if (await recordSeriesRsvp(db, event)) return;

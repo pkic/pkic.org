@@ -15,7 +15,6 @@ export const LIVE_PRESENCE_POLICY = {
   /** A client sends at most ten updates a second; the room fans out each operator at the same pace. */
   minIntervalMs: 100,
   /** How long presence updates ride on a socket's last full access check before the room checks again. */
-  revalidateMs: 15_000,
   /** How long other operators see who just changed a control. */
   changeFlashMs: 1_500,
 } as const;

@@ -83,3 +83,13 @@ it("allows email styling only in the isolated preview document", () => {
   expect(preview["X-Frame-Options"]).toBe("SAMEORIGIN");
   expect(siteContentSecurityPolicy("/email/preview/other")).not.toContain("'unsafe-inline'");
 });
+
+it("excludes public search responses from indexing without applying private cache policy", () => {
+  expect(siteSecurityHeaders("/search/")["X-Robots-Tag"]).toBe("noindex, follow");
+  expect(siteSecurityHeaders("/searching/")["X-Robots-Tag"]).toBeUndefined();
+  const rule = siteStaticHeaders()
+    .split("\n\n")
+    .find((block) => block.startsWith("/search/*\n"));
+  expect(rule).toContain("X-Robots-Tag: noindex, follow");
+  expect(rule).not.toContain("Cache-Control");
+});

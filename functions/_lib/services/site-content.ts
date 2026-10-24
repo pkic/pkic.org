@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+import type { SiteContentOptions } from "./site-content-options";
 import { authoredAgendaPageRoutes } from "./site-agenda-page-routes";
 import { readAuthoredAgendaSources } from "./site-authored-agenda-sources";
 
@@ -62,11 +63,7 @@ import { siteContentLanguagePrefix, type SiteContentLanguage } from "../../../as
 export { contentPathToRoute, normalizeSitePath, parseFrontMatter } from "./site-markdown";
 export type { SiteContentPage, SiteMapEntry } from "../../../assets/shared/site-content";
 
-export interface SiteContentOptions {
-  query?: string;
-  agendaRoute?: { agendaBasePath: string; initialDay?: string };
-  publication?: SitePublicationSnapshot;
-}
+export type { SiteContentOptions } from "./site-content-options";
 
 const rawContentSources = import.meta.glob(
   [
@@ -451,7 +448,7 @@ export async function loadSiteContent(
     agendaRoute: options.agendaRoute,
     assetUrl: (assetName) => contentAssetUrl(document, assetName),
     assetUrls: (pattern) => matchingContentAssetUrls(document.sourcePath, contentMediaPaths, pattern),
-    data: document.data,
+    data: { ...document.data, params: { ...document.data.params, ...options.parameters } },
     eventData: eventDocument?.data.data,
     eventSlug: eventDocument?.route.split("/").filter(Boolean).at(-1),
     eventRoute: eventDocument?.route,

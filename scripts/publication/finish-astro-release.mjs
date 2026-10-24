@@ -32,6 +32,7 @@ import { omittedSocialCardPublisher, publicSocialCardPublisher } from "./publish
 import { publishAgendaLayout } from "./publish-agenda-layout.mjs";
 import { publicDiagramPublisher } from "./publish-diagrams.mjs";
 import { excludeNonindexableSitemapEntries } from "./exclude-nonindexable-sitemap-entries.mjs";
+import { publicEmailImagePublisher } from "./publish-email-images.mjs";
 import { collectConferenceOutputs, conferenceDisplayRedirects } from "./collect-conference-outputs.mjs";
 
 /** Verify the framework's generated pages before exposing them as a static release. */
@@ -86,6 +87,7 @@ async function finishRelease(output, pages, timings) {
     console.log(
       "[publication] fast local build: original images; cached diagrams; no social cards or SVG optimization",
     );
+  const emailImages = publicEmailImagePublisher(output);
   try {
     const svgFiles = await timings.measure("SVG file optimization", () => optimizePublicSvgFiles(output));
     // Inline SVG optimization only reduces size; a fast local build serves the markup as rendered.
@@ -98,6 +100,7 @@ async function finishRelease(output, pages, timings) {
     );
     const files = svgFiles.map((file) => relative(output, file).split("\\").join("/"));
     const privatePaths = [];
+    const nonindexablePaths = [];
     const memberData = resolve(output, "_published", "members");
     await mkdir(memberData, { recursive: true });
     await writeFile(
@@ -137,6 +140,9 @@ async function finishRelease(output, pages, timings) {
         async () => new JSDOM(await readFile(resolve(output, file), "utf8")),
       );
       try {
+        files.push(
+          ...(await timings.measure("email images", () => emailImages.publish(document.window.document, pathname))),
+        );
         const agendaLayout = await timings.measure("agenda layout", () =>
           publishAgendaLayout(document.window.document, output),
         );
@@ -148,8 +154,12 @@ async function finishRelease(output, pages, timings) {
           publishDownloads(document.window.document, `/${file.replace(/index\.html$/, "")}`),
         ))
           downloads.add(download);
-        if (/noindex/.test(document.window.document.querySelector('meta[name="robots"]')?.content ?? ""))
-          privatePaths.push(`/${file.replace(/index\.html$/, "")}`);
+        const robots = document.window.document.querySelector('meta[name="robots"]')?.content ?? "";
+        if (/noindex/.test(robots)) {
+          const route = `/${file.replace(/index\.html$/, "")}`;
+          nonindexablePaths.push(route);
+          if (document.window.document.body.hasAttribute("data-publication-private")) privatePaths.push(route);
+        }
         // Deferred images (assets/ts/site/deferred-images.ts) carry their sources until opened.
         const mediaAttributes = ["src", "srcset", "data-deferred-src", "data-deferred-srcset"];
         for (const element of document.window.document.querySelectorAll(
@@ -192,7 +202,7 @@ async function finishRelease(output, pages, timings) {
     ]) {
       let xml = await readFile(resolve(output, feed), "utf8");
       if (feed === "sitemap-0.xml") {
-        xml = excludeNonindexableSitemapEntries(xml, privatePaths);
+        xml = excludeNonindexableSitemapEntries(xml, nonindexablePaths);
         await writeFile(resolve(output, feed), xml);
       }
       if (XMLValidator.validate(xml) !== true) throw new Error(`Publication contains invalid XML: ${feed}`);
@@ -242,5 +252,6 @@ async function finishRelease(output, pages, timings) {
     await rm(publicationStagingDirectory(), { recursive: true, force: true });
   } finally {
     await diagrams.finish();
+    await emailImages.finish();
   }
 }

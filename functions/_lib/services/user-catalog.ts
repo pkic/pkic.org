@@ -5,7 +5,6 @@ import {
 } from "../../../assets/shared/schemas/user-catalog";
 import type { AuthorizationEvidence } from "../db/authorization-guard";
 import { buildPageInfo } from "../../../assets/shared/schemas/pagination";
-import { isAuthorizationGuardFailure } from "../db/authorization-guard";
 import { buildOffsetPageStatements, decodeOffsetPageResults, type OffsetPageQuery } from "../db/pagination";
 import { resolveOrderBy } from "../db/sort";
 import { AppError } from "../errors";
@@ -13,7 +12,7 @@ import type { AuthAdmin, DatabaseLike } from "../types";
 import { groupCanSeatUserPredicate } from "./groups/capacities";
 import { publicUserHeadshotPath } from "./user-headshot";
 import { affiliationJobTitleSql, affiliationOrganizationNameSql } from "./identities/affiliation-projection";
-import { prepareGroupManagementAuthorizationGuard, requireGroupManagement } from "./groups/governance";
+import { guardGroupManagementDatabase, requireGroupManagement } from "./groups/governance";
 import { ALL_ACTIVE_USER_CAPACITIES_CTE } from "./membership/capacity-query";
 import { getGroup } from "./groups/read-model";
 import { buildUserIdentitySearchFilter } from "./user-search";
@@ -108,16 +107,8 @@ export async function listGroupUsers(
   await requireGroupManagement(db, actor, group.id);
 
   const pageQuery = buildUserCatalogPageQuery(query, group.id);
-  const pageStatements = buildOffsetPageStatements(db, pageQuery);
-  let results;
-  try {
-    results = await db.batch([prepareGroupManagementAuthorizationGuard(db, actor, [group.id]), ...pageStatements]);
-  } catch (error) {
-    if (isAuthorizationGuardFailure(error)) {
-      throw new AppError(403, "GROUP_MANAGEMENT_REQUIRED", "Effective group management permission is required");
-    }
-    throw error;
-  }
-  const { rows, total } = decodeOffsetPageResults<UserCatalogRow>(results[1], results[2]);
+  const guardedDb = guardGroupManagementDatabase(db, actor, [group.id]);
+  const [pageResult, countResult] = await guardedDb.batch(buildOffsetPageStatements(guardedDb, pageQuery));
+  const { rows, total } = decodeOffsetPageResults<UserCatalogRow>(pageResult, countResult);
   return serializeUserCatalogPage(query, rows, total);
 }

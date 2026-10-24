@@ -1,12 +1,10 @@
 import { publicationCacheDirectory } from "./build-context.mjs";
 import { createHash, randomUUID } from "node:crypto";
-import { access, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { spawn } from "node:child_process";
-import { once } from "node:events";
 import { createRequire } from "node:module";
 import { diagramTheme } from "../../assets/shared/diagram-theme.ts";
-import { linuxDiagramBrowserOptions } from "./diagram-browser.mjs";
+import { launchPublicationBrowser } from "./publication-browser.mjs";
 import { externalizeDiagramStyles } from "./diagram-styles.mjs";
 
 // Build-done hooks outlive Astro's Vite module runner. Load build tools through
@@ -14,31 +12,6 @@ import { externalizeDiagramStyles } from "./diagram-styles.mjs";
 const require = createRequire(import.meta.url);
 const cliRequire = createRequire(require.resolve("@mermaid-js/mermaid-cli"));
 const rendererVersions = [cliRequire("../package.json").version, cliRequire("mermaid/package.json").version];
-
-async function launchDiagramBrowser() {
-  const { default: puppeteer } = require("puppeteer");
-  if (process.platform === "linux" && process.arch === "x64") {
-    return puppeteer.launch(await linuxDiagramBrowserOptions());
-  }
-  process.env.PLAYWRIGHT_BROWSERS_PATH ??= publicationCacheDirectory("publication-browser");
-  const { chromium } = require("@playwright/test");
-  const executablePath = chromium.executablePath();
-  try {
-    await access(executablePath);
-  } catch (error) {
-    if (error.code !== "ENOENT") throw error;
-    const args = ["exec", "playwright", "install", "chromium"];
-    // Build hosts are unprivileged; OS dependencies belong in the build image.
-    // Download Chromium without attempting a privileged package installation.
-    const installer = spawn("pnpm", args, { stdio: "inherit" });
-    const [code] = await once(installer, "exit");
-    if (code !== 0)
-      throw new Error(`Diagram publication requires Playwright's Chromium installation (installer exit ${code})`, {
-        cause: error,
-      });
-  }
-  return puppeteer.launch({ executablePath, headless: true, args: ["--no-sandbox"] });
-}
 
 /** Render each distinct definition once, with the official Mermaid CLI and a persistent cache. */
 export async function publicDiagramPublisher(
@@ -65,7 +38,7 @@ export async function publicDiagramPublisher(
           diagram = JSON.parse(await readFile(cached, "utf8"));
         } catch (error) {
           if (error.code !== "ENOENT") throw error;
-          browser ??= await launchDiagramBrowser();
+          browser ??= await launchPublicationBrowser();
           const { renderMermaid } = require("@mermaid-js/mermaid-cli");
           const result = await renderMermaid(browser, definition, "svg", {
             svgId: "diagram",

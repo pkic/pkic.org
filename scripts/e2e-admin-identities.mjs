@@ -4,6 +4,9 @@
 // `check-e2e-signin-budget.mjs` keeps it that way.
 export const E2E_ADMIN_SCOPES = Object.freeze([
   "default",
+  "portal-agenda-fast-scanner-idle",
+  "portal-agenda-fast-scanner-burst",
+  "portal-live-session-participation",
   "scanner-recovery-owner",
   "scanner-recovery-other",
   "portal-agenda-accepted-placement",
@@ -19,6 +22,7 @@ export const E2E_ADMIN_SCOPES = Object.freeze([
   "portal-agenda-transfer-cli",
   "portal-appearance-overrides",
   "portal-login-layout-expiry",
+  "portal-release-recovery",
   "portal-offline-attendance",
   "portal-responsive-widths",
   "portal-responsive-navigation",

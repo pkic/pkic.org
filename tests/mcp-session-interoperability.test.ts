@@ -378,7 +378,7 @@ describe("MCP OAuth session interoperability", () => {
     const prepare = env.DB.prepare.bind(env.DB);
     let sessionReads = 0;
     vi.spyOn(env.DB, "prepare").mockImplementation((sql) => {
-      if (/FROM sessions\b/.test(sql) && ++sessionReads === 2) throw failure;
+      if (/\b(?:FROM|JOIN) sessions\b/u.test(sql) && ++sessionReads === 2) throw failure;
       return prepare(sql);
     });
     const lookup = resolveMcpExternalToken({

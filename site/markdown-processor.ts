@@ -44,6 +44,8 @@ function sitePresentation(): HastPluginDefinition {
       async visit(node, context) {
         if (/^h[1-6]$/.test(node.tagName)) {
           const label = toText(node);
+          const modelItem = /^(?:Criterion|Question|Evidence) ([0-9]+(?:\.[a-z0-9]+)+)$/.exec(label);
+          if (modelItem) context.setProperty(node, "data-content-item-id", modelItem[1]);
           const base = headingAnchor(label);
           const seen = headings.get(base) ?? 0;
           headings.set(base, seen + 1);

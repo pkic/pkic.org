@@ -19,10 +19,8 @@ import { identitiesListResponseSchema } from "../assets/shared/schemas/identity"
 import { nowIso } from "../functions/_lib/utils/time";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { getSpeakerByManageToken } from "../functions/_lib/services/proposals";
-import {
-  confirmSpeakerParticipation,
-  updateSpeakerProfile,
-} from "../functions/_lib/services/proposals-speaker-profile";
+import { updateSpeakerProfile } from "../functions/_lib/services/proposals-speaker-profile";
+import { confirmSpeakerParticipation } from "../functions/_lib/services/proposal-speaker-confirmation";
 import { prepareProposalActingIdentity } from "../functions/_lib/services/proposal-speaker-identity";
 import {
   eventProposalProofIdentityPatchResponseSchema,

@@ -10,8 +10,7 @@ import {
 import { parseLinksJson } from "../../../../assets/shared/schemas/links";
 import { outboundMeetingLocation } from "../../../../assets/shared/meeting-calendar-policy";
 import type { EventGroupCapability } from "../../../../assets/shared/schemas/resource-grants";
-import { queryPage } from "../../db/pagination";
-import { first } from "../../db/queries";
+import { batchFirst, queryPage } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import { AppError } from "../../errors";
@@ -28,7 +27,7 @@ import {
   type GroupResourceViewer,
 } from "../resource-grants";
 import { getProposalAccessForEvent } from "../../auth/proposal-access";
-import { readEventProposalCall } from "./proposal-call";
+import { prepareEventProposalCall, type EventProposalCallRow } from "./proposal-call";
 import { buildEventAudiencePredicate } from "./visibility";
 
 interface GroupEventRow {
@@ -229,9 +228,9 @@ export async function getGroupEvent(db: DatabaseLike, viewer: GroupResourceViewe
     userId: viewer.userId,
     admin: viewer.admin,
   });
-  const row = await first<GroupEventRow>(
-    db,
-    `WITH ${NEXT_OCCURRENCE_CTE},
+  const eventRead = db
+    .prepare(
+      `WITH ${NEXT_OCCURRENCE_CTE},
      ${accessibleEvents.sql}
      ${EVENT_SELECT}, group_access.member_access, group_access.manager_access
        FROM accessible_resource accessible
@@ -243,8 +242,11 @@ export async function getGroupEvent(db: DatabaseLike, viewer: GroupResourceViewe
       WHERE event.id = ? AND event.owner_group_id IS NOT NULL
         AND (group_access.manager_access = 1 OR ${audience.sql})
      GROUP BY event.id`,
-    [...accessibleEvents.bindings, groupId, eventId, ...audience.bindings],
-  );
+    )
+    .bind(...accessibleEvents.bindings, groupId, eventId, ...audience.bindings);
+  const proposalCallRead = prepareEventProposalCall(db, eventId);
+  const results = await db.batch([eventRead, proposalCallRead.statement]);
+  const row = batchFirst<GroupEventRow>(results[0]);
   if (!row) throw new AppError(404, "EVENT_NOT_FOUND", "The event is not available through this group");
   const event = mapGroupEvent(row, groupId);
   if (!event.capabilities.includes("view")) {
@@ -252,6 +254,6 @@ export async function getGroupEvent(db: DatabaseLike, viewer: GroupResourceViewe
   }
   const proposalAccess = viewer.admin ? await getProposalAccessForEvent(db, event.id, viewer.admin) : null;
   // The managed event's call for proposals, from the one server definition of "open" that the public event detail uses.
-  const proposalCall = await readEventProposalCall(db, event.id);
+  const proposalCall = proposalCallRead.decode(batchFirst<EventProposalCallRow>(results[1]));
   return groupEventDetailResponseSchema.parse({ event: { ...event, proposalAccess, proposalCall } });
 }

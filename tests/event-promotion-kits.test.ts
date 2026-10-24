@@ -1,3 +1,6 @@
+import { promotionPortraits } from "../functions/_lib/services/event-agenda/promotion-portraits";
+import { getPromotionKit } from "../functions/_lib/services/event-agenda/promotion-kit";
+import { validJpegBytes } from "./helpers/raster-images";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
@@ -109,6 +112,25 @@ describe("personal event promotion kits", () => {
       .bind(code)
       .first();
     expect(referral).toMatchObject({ owner_id: f.admin.id, created_by_user_id: f.admin.id });
+    const at = new Date().toISOString();
+    await env.DB.prepare(
+      "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','virtual','direct','synthetic',?,?)",
+    )
+      .bind(crypto.randomUUID(), f.eventId, f.admin.id, at, at)
+      .run();
+    const after = promotionKitSchema.parse(await (await callApi(env, f.sessionBase, { headers: f.headers })).json());
+    expect(after.registrationUrl).toBe(kit.registrationUrl);
+  });
+  it("loads current profile portraits without routing API requests through static assets", async () => {
+    const f = await fixture();
+    const key = `headshots/${f.admin.id}/promotion.jpg`;
+    await env.SPEAKER_UPLOADS_BUCKET!.put(key, validJpegBytes(64, 64));
+    await env.DB.prepare("UPDATE users SET headshot_r2_key=? WHERE id=?").bind(key, f.admin.id).run();
+    const source = await getPromotionKit(env.DB, f.eventId, f.sessionId, f.admin.id, "https://pkic.org");
+    const portraits = await promotionPortraits({ ...env, IMAGES: undefined }, "https://pkic.org", source);
+    expect(portraits[f.admin.id]).toMatch(/^data:image\/jpeg;base64,/);
+    await env.DB.prepare("UPDATE users SET headshot_r2_key=NULL WHERE id=?").bind(f.admin.id).run();
+    expect(await promotionPortraits({ ...env, IMAGES: undefined }, "https://pkic.org", source)).toEqual({});
   });
   it("keeps speaker and attendee compositions private and rejects stale saves atomically", async () => {
     const f = await fixture();

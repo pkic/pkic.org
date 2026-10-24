@@ -161,7 +161,7 @@ test("proposer and invited speaker manage their own event records without emaile
     const selectionResponse = speaker.waitForResponse(
       (response) => new URL(response.url()).pathname === profilePath && response.request().method() === "PATCH",
     );
-    await speaker.getByRole("button", { name: "Save speaker profile", exact: true }).click();
+    await speaker.getByRole("button", { name: "Save speaker identity", exact: true }).click();
     const selectedResponse = await selectionResponse;
     expect(selectedResponse.status()).toBe(200);
     const selectedBody = speakerSelfProfilePatchSchema.parse(selectedResponse.request().postDataJSON());
@@ -170,21 +170,21 @@ test("proposer and invited speaker manage their own event records without emaile
     const selected = speakerProfileUpdateResponseSchema.parse(await selectedResponse.json());
     expect(selected.profile.actingIdentitySelection).toBe("individual");
     expect(selected.profile.actingIdentitySelectedAt).not.toBeNull();
-    await expect(speaker.getByText("Speaker profile saved.", { exact: true })).toBeVisible();
+    await expect(speaker.getByText("Speaker identity saved.", { exact: true })).toBeVisible();
     await speaker.getByRole("button", { name: "Confirm participation", exact: true }).click();
     await expect(speaker.getByText("Participation confirmed.", { exact: true })).toBeVisible();
     await expect(speaker.getByRole("button", { name: "Save proposal", exact: true })).toHaveCount(0);
     // The saved profile reads back as text until the reader chooses to edit it.
-    const bio = speaker.getByRole("textbox", { name: "Biography", exact: true });
+    const bio = speaker.getByRole("textbox", { name: "Your speaker bio", exact: true });
     await expect(bio).toHaveCount(0);
-    await expect(speaker.getByRole("button", { name: "Save speaker profile", exact: true })).toHaveCount(0);
+    await expect(speaker.getByRole("button", { name: "Save speaker identity", exact: true })).toHaveCount(0);
     await speaker
       .getByRole("region", { name: "Speaker profile", exact: true })
       .getByRole("button", { name: "Edit", exact: true })
       .click();
     await bio.fill("Guest speaker biography saved through authenticated self-service.");
-    await speaker.getByRole("button", { name: "Save speaker profile", exact: true }).click();
-    await expect(speaker.getByText("Speaker profile saved.", { exact: true })).toBeVisible();
+    await speaker.getByRole("button", { name: "Save changes", exact: true }).click();
+    await expect(speaker.getByText("Profile updated.", { exact: true })).toBeVisible();
     await expect(bio).toHaveCount(0);
     await speaker.reload();
     await expect(

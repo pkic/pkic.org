@@ -5,7 +5,6 @@ import {
 } from "../../assets/shared/schemas/badge-credential";
 import { splitBadgePrintSvg } from "../../assets/shared/badge-print-svg";
 import { SCAN_STORAGE_VERSION } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/outbox-storage";
-import { z } from "zod";
 import { archivedScanSchema } from "../../assets/shared/schemas/event-scan-recovery";
 import { expect, test, type Page, type Response, type TestInfo } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
@@ -15,7 +14,6 @@ import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./hel
 import {
   eventScanRequestSchema,
   eventScanResponseSchema,
-  offlineScanRecordSchema,
 } from "../../assets/shared/schemas/event-participation-scanning";
 import {
   badgeCredentialMetadataSchema,
@@ -34,6 +32,7 @@ import {
   openScannerManualEntry,
   openScannerRecovery,
   scannerShellCachedUrls,
+  queuedScanSchema,
 } from "./helpers/scanner-recovery-storage";
 
 const slug = "pqc-conference-amsterdam-nl";
@@ -255,18 +254,18 @@ test("phone scanner retains an IDs-only offline scan and acknowledges it after r
   await signInAsE2eStaff(page, e2eAdminEmail("default"));
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(scannerPath);
-  await expect(page.getByRole("heading", { name: "Badge scanner", exact: true })).toBeVisible();
-  const recovery = page.getByRole("dialog", { name: "Recovery and diagnostics", exact: true });
+  await expect(page.getByRole("tabpanel", { name: "Setup", exact: true })).toBeVisible();
+  const recovery = page.getByRole("region", { name: "Recovery and diagnostics", exact: true });
   await expect(recovery).not.toBeVisible();
   await openScannerManualEntry(page);
   const manual = page.getByRole("dialog", { name: "Enter badge code", exact: true });
-  await expect(manual.getByRole("heading", { name: "Enter or paste badge code", exact: true })).toBeVisible();
+  await expect(manual.getByRole("button", { name: "Record attendance", exact: true })).toBeVisible();
   await manual.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(manual).not.toBeVisible();
   await page.getByRole("tab", { name: "Recent scans", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Recent scans", exact: true })).toBeVisible();
-  await page.getByRole("tab", { name: "Scan", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Badge scanner", exact: true })).toBeVisible();
+  await page.getByRole("tab", { name: "Setup", exact: true }).click();
+  await expect(page.getByRole("tabpanel", { name: "Setup", exact: true })).toBeVisible();
   await openScannerDiagnostics(page);
   await expect(
     page.getByText("Eligibility data ready. Checks run locally; attendance uploads in the background.", {
@@ -298,14 +297,7 @@ test("phone scanner retains an IDs-only offline scan and acknowledges it after r
   await expect(page.getByText("Unknown badge", { exact: true })).toBeVisible();
   const records = await queuedRecords(page);
   expect(records).toHaveLength(1);
-  const record = offlineScanRecordSchema
-    .extend({
-      leaseUntil: z.number(),
-      owner: z.string().nullable(),
-      attempts: z.number().optional(),
-      nextAttemptAt: z.number().optional(),
-    })
-    .parse(records[0]);
+  const record = queuedScanSchema.parse(records[0]);
   expect(record.scan.badgeId).toBe(badgeId);
   expect(record.scan.action).toBe("attendance");
   expect(record.scan.offlineRight).toBeUndefined();
@@ -341,7 +333,7 @@ test("phone scanner retains an IDs-only offline scan and acknowledges it after r
   const archived = archivedScanSchema.parse(retained[0]);
   expect(archived.scan.operationId).toBe(record.scan.operationId);
   expect(archived.scan.observedAt).toBe(record.scan.observedAt);
-  expect(archived.receipt).toMatchObject({ outcome: "unknown", recorded: false, attendanceRecorded: false });
+  expect(archived.receipt).toMatchObject({ outcome: "unknown", recorded: true, attendanceRecorded: false });
   expect(archived.expiresAt - archived.acknowledgedAt).toBeGreaterThanOrEqual(14 * 24 * 60 * 60 * 1000);
   await openScannerRecovery(page);
   await expect(
@@ -358,6 +350,7 @@ test("phone scanner retains an IDs-only offline scan and acknowledges it after r
     observedAt: record.scan.observedAt,
   });
   expect(await replayResponse.json()).toMatchObject({ operationId: record.scan.operationId, outcome: "unknown" });
+  await closeScannerDiagnostics(page);
   await expect(page.getByText("0 scans awaiting upload", { exact: true })).toBeVisible();
 
   expect(

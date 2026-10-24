@@ -1,3 +1,4 @@
+import { eventReadIdSql, type EventReadSelection } from "./events/selection";
 import { AppError } from "../errors";
 import { all, first, run } from "../db/queries";
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../db/authorization-guard";
@@ -15,11 +16,15 @@ export type { EventRecord, EventTermRecord } from "./event-types";
 export * from "./event-presentation";
 
 export async function getEventBySlug(db: DatabaseLike, slug: string): Promise<EventRecord> {
-  const event = await first<EventRecord>(db, `SELECT ${EVENT_COLUMNS} FROM events WHERE slug = ?`, [slug]);
+  const event = await prepareEventBySlug(db, slug).first<EventRecord>();
   if (!event) {
     throw new AppError(404, "EVENT_NOT_FOUND", `Event '${slug}' not found`);
   }
   return event;
+}
+
+export function prepareEventBySlug(db: DatabaseLike, slug: string) {
+  return db.prepare(`SELECT ${EVENT_COLUMNS} FROM events WHERE slug = ?`).bind(slug);
 }
 
 export async function eventSlugExists(db: DatabaseLike, slug: string): Promise<boolean> {
@@ -27,9 +32,14 @@ export async function eventSlugExists(db: DatabaseLike, slug: string): Promise<b
 }
 
 export async function getEventById(db: DatabaseLike, eventId: string): Promise<EventRecord> {
-  const event = await first<EventRecord>(db, `SELECT ${EVENT_COLUMNS} FROM events WHERE id = ?`, [eventId]);
+  const event = await prepareEventById(db, eventId).first<EventRecord>();
   if (!event) throw new AppError(404, "EVENT_NOT_FOUND", "Event not found");
   return event;
+}
+
+/** Share the canonical event row with a larger read snapshot. */
+export function prepareEventById(db: DatabaseLike, eventId: string) {
+  return db.prepare(`SELECT ${EVENT_COLUMNS} FROM events WHERE id = ?`).bind(eventId);
 }
 
 export async function getRequiredTerms(
@@ -37,15 +47,19 @@ export async function getRequiredTerms(
   eventId: string,
   audienceType: "attendee" | "speaker" | "presentation",
 ): Promise<EventTermRecord[]> {
-  return all<EventTermRecord>(
-    db,
-    `SELECT term_key, version, required, content_ref
-            , display_text, help_text
-     FROM event_terms
-     WHERE event_id = ? AND audience_type = ? AND active = 1
-     ORDER BY term_key ASC`,
-    [eventId, audienceType],
-  );
+  return (await prepareRequiredTerms(db, eventId, audienceType).all<EventTermRecord>()).results;
+}
+
+export function prepareRequiredTerms(
+  db: DatabaseLike,
+  event: EventReadSelection,
+  audienceType: "attendee" | "speaker" | "presentation",
+) {
+  const selection = eventReadIdSql(event);
+  return db
+    .prepare(`SELECT term_key, version, required, content_ref, display_text, help_text
+     FROM event_terms WHERE event_id = ${selection.sql} AND audience_type = ? AND active = 1 ORDER BY term_key ASC`)
+    .bind(...selection.bindings, audienceType);
 }
 
 export interface EventUpsertPayload {

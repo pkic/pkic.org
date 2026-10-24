@@ -2,7 +2,7 @@ import { useState } from "preact/hooks";
 import { eventSettingsUpdateSchema, type EventDetail } from "../../../../../../../shared/schemas/event-management";
 import {
   eventPromotionDesignSchema,
-  DEFAULT_PROMOTION_PANELS,
+  defaultEventPromotionDesign,
   type EventPromotionDesign,
 } from "../../../../../../../shared/schemas/event-promotion-design";
 import { eventBadgeTemplateSchema } from "../../../../../../../shared/schemas/event-badge-template";
@@ -26,14 +26,7 @@ function initialDesign(event: EventDetail): EventPromotionDesign {
   const saved = eventPromotionDesignSchema.safeParse(event.settings.promotionDesign);
   if (saved.success) return saved.data;
   const badge = eventBadgeTemplateSchema.safeParse(event.settings.badgeTemplate);
-  const assets = badge.success ? badge.data.assets : {};
-  return eventPromotionDesignSchema.parse({
-    version: 1,
-    name: event.name,
-    colors: ["#0b2a1c", "#125c3c", "#20506e", "#b0581f"],
-    assets: { logo: assets.logo_white, mark: assets.mark, motif: assets.canal_houses, texture: assets.dot_grid },
-    panels: [...DEFAULT_PROMOTION_PANELS],
-  });
+  return defaultEventPromotionDesign(event.name, badge.success ? badge.data : null);
 }
 export function PromotionDesignSettings({
   event,

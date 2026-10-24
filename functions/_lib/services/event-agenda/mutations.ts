@@ -1,242 +1,34 @@
+export { publishAgenda } from "./publication";
+export { createAgendaRoom } from "./create-room";
+export { createAgendaOccurrence } from "./create-occurrence";
+import { agendaSpeakerStatements } from "./occurrence-speakers";
+import { validateAgendaSchedule } from "./schedule-validation";
+export { agendaSpeakerStatements } from "./occurrence-speakers";
+export { validateAgendaSchedule } from "./schedule-validation";
+import { commitAgendaSnapshot } from "./commit-snapshot";
 import { prepareAgendaOccurrenceSettings } from "./occurrence-settings";
-import { prepareAgendaSponsorApproval } from "./sponsors";
-import { prepareAgendaOccurrenceInsert, plannedMediaJson } from "./occurrence-insert";
-import { agendaOccurrenceRequiredEquipment } from "../../../../assets/shared/event-agenda-media";
-import { agendaEventWindowViolations } from "../../../../assets/shared/event-agenda-event-window";
-import { prepareAgendaRoomOrder } from "./room-order-settings";
-import { preparePublicAgendaSnapshot } from "./public-snapshot";
+import { plannedMediaJson } from "./occurrence-insert";
 import { occurrenceRepresentationReferences, prepareRepresentationEligibility } from "./representation-eligibility";
-import { assertPublicationRepresentations } from "./publication-representations";
-import { agendaHistoricalPublicationReview } from "../../../../assets/shared/agenda-historical-publication-review";
-import { prepareScopedAuditLog } from "../audit";
-import { prepareSitePublicationRequest } from "../site-publication-requests";
-import { operationalDays, prepareOperationalDays } from "./operational-days";
-import { operationalPeople, prepareOperationalPeople } from "./operational-people";
 import { prepareAuthorizationGuard } from "../../db/authorization-guard";
 export { saveAgendaStaffing, allocateStaffing } from "./staffing";
 export { commitAgendaRevision } from "./revision";
-import { commitAgendaRevision } from "./revision";
 import { agendaAdditionalRoomStatements } from "./occurrence-rooms";
 import {
   agendaOccurrenceRoomIds,
   agendaMovedSpeakers,
   agendaMovedAdditionalRoomIds,
 } from "../../../../assets/shared/event-agenda-rooms";
-import {
-  assertPublicationParticipation,
-  preparePublicationParticipationGuard,
-  preparePublicationParticipationChanges,
-} from "../event-participation/publication-impact";
 import { physicalOccupiedSql, remoteOccupiedSql } from "../event-participation/capacity-accounting";
 import { assertPublicationAllocations, preparePublicationAllocationGuard } from "./publication-allocations";
-import { prepareAgendaChangeNotifications } from "./notifications";
 import { z } from "zod";
-import {
-  agendaSettingsSchema,
-  agendaOccurrenceCreateSchema,
-  agendaOccurrencePatchSchema,
-  agendaRoomCreateSchema,
-  type AgendaSnapshot,
-} from "../../../../assets/shared/schemas/event-agenda";
-import { agendaConflicts, agendaRoomIsAvailable } from "../../../../assets/shared/event-agenda-policy";
+import { agendaSettingsSchema, agendaOccurrencePatchSchema } from "../../../../assets/shared/schemas/event-agenda";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
-import { nowIso } from "../../utils/time";
-import { prepareSpeakerProfileSlugs } from "../people/profile-addresses";
-import { prepareSessionPageSlugs } from "./session-page-slugs";
-import { getAgenda, getAgendaOccurrence } from "./read";
+import { getAgenda } from "./read";
 import { canonicalAgendaSessionFormats, readAgendaSessionFormatLabels } from "./occurrence-formats";
-import {
-  agendaScheduleConflictProposalSchema,
-  agendaScheduleConflictDetailsSchema,
-  type AgendaScheduleConflictProposal,
-} from "../../../../assets/shared/schemas/event-agenda-schedule";
+import { agendaScheduleConflictProposalSchema } from "../../../../assets/shared/schemas/event-agenda-schedule";
 
-export function agendaSpeakerStatements(
-  db: DatabaseLike,
-  id: string,
-  userIds: string[],
-  roles?: Record<string, string>,
-  placements?: Record<string, { attendanceMode: "physical" | "remote"; roomId: string | null }>,
-) {
-  return [
-    ...userIds.map((userId) =>
-      db
-        .prepare(
-          "INSERT INTO event_agenda_occurrence_speakers(occurrence_id,user_id,role,attendance_mode,room_id) VALUES(?,?,COALESCE(?,(SELECT role FROM event_agenda_occurrence_speakers WHERE occurrence_id=? AND user_id=?),'speaker'),COALESCE(?,(SELECT attendance_mode FROM event_agenda_occurrence_speakers WHERE occurrence_id=? AND user_id=?),'physical'),CASE WHEN ? THEN ? ELSE (SELECT room_id FROM event_agenda_occurrence_speakers WHERE occurrence_id=? AND user_id=?) END) ON CONFLICT(occurrence_id,user_id) DO UPDATE SET role=COALESCE(?,role),attendance_mode=COALESCE(?,attendance_mode),room_id=CASE WHEN ? THEN ? ELSE room_id END",
-        )
-        .bind(
-          id,
-          userId,
-          roles?.[userId] ?? null,
-          id,
-          userId,
-          placements?.[userId]?.attendanceMode ?? null,
-          id,
-          userId,
-          placements?.[userId] ? 1 : 0,
-          placements?.[userId]?.roomId ?? null,
-          id,
-          userId,
-          roles?.[userId] ?? null,
-          placements?.[userId]?.attendanceMode ?? null,
-          placements?.[userId] ? 1 : 0,
-          placements?.[userId]?.roomId ?? null,
-        ),
-    ),
-    db
-      .prepare(
-        "DELETE FROM event_agenda_occurrence_speakers WHERE occurrence_id=? AND user_id NOT IN(SELECT value FROM json_each(?))",
-      )
-      .bind(id, JSON.stringify(userIds)),
-  ];
-}
-export async function createAgendaRoom(
-  db: DatabaseLike,
-  eventId: string,
-  eventSlug: string,
-  input: z.infer<typeof agendaRoomCreateSchema>,
-  actorUserId: string | null = null,
-) {
-  const id = crypto.randomUUID();
-  const snapshot = await getAgenda(db, eventId, eventSlug);
-  const roomOrder = await prepareAgendaRoomOrder(db, eventId, [...snapshot.rooms.map((room) => room.id), id]);
-  await commitAgendaRevision(
-    db,
-    eventId,
-    input.expectedRevision,
-    [
-      db
-        .prepare(
-          "INSERT INTO event_agenda_rooms(id,event_id,name,capacity,setup_minutes,equipment_json,available_periods_json,virtual_room_url) VALUES (?,?,?,?,?,?,?,?)",
-        )
-        .bind(
-          id,
-          eventId,
-          input.name,
-          input.capacity,
-          input.setupMinutes,
-          JSON.stringify(input.equipment ?? []),
-          JSON.stringify(input.availablePeriods ?? []),
-          input.virtualRoomUrl ?? null,
-        ),
-      ...roomOrder,
-    ],
-    actorUserId,
-  );
-  return getAgenda(db, eventId, eventSlug);
-}
-export async function createAgendaOccurrence(
-  db: DatabaseLike,
-  eventId: string,
-  eventSlug: string,
-  requested: z.infer<typeof agendaOccurrenceCreateSchema>,
-  actorUserId: string | null = null,
-) {
-  const id = crypto.randomUUID();
-  const [input] = canonicalAgendaSessionFormats(await readAgendaSessionFormatLabels(db, eventId), [requested]);
-  const snapshot = await getAgenda(db, eventId, eventSlug);
-  const candidate = {
-    ...input,
-    id,
-    speakers: input.speakerUserIds.map((userId) => ({
-      userId,
-      displayName: "",
-      ...input.speakerPlacements?.[userId],
-      role: input.speakerRoles?.[userId],
-    })),
-  };
-  const conflictProposal = agendaScheduleConflictProposalSchema.parse({
-    timeZone: snapshot.timeZone,
-    occurrences: [candidate],
-  });
-  validateAgendaSchedule(snapshot, [...snapshot.occurrences, candidate], conflictProposal);
-  await commitAgendaRevision(
-    db,
-    eventId,
-    input.expectedRevision,
-    [
-      prepareAgendaOccurrenceInsert(db, eventId, id, input),
-      ...agendaAdditionalRoomStatements(db, id, input.additionalRoomIds ?? []),
-      ...agendaSpeakerStatements(db, id, input.speakerUserIds, input.speakerRoles, input.speakerPlacements),
-      ...(await prepareAgendaOccurrenceSettings(db, eventId, [candidate])),
-    ],
-    actorUserId,
-    conflictProposal,
-  );
-  return getAgenda(db, eventId, eventSlug);
-}
-export function validateAgendaSchedule(
-  snapshot: Pick<
-    AgendaSnapshot,
-    "travelMinutes" | "rooms" | "eventStartsAt" | "eventEndsAt" | "shifts" | "assignments"
-  >,
-  items: AgendaSnapshot["occurrences"],
-  conflictProposal?: AgendaScheduleConflictProposal,
-) {
-  const conflicts = agendaConflicts(items, snapshot.travelMinutes, snapshot.rooms);
-  for (const item of items) {
-    if (item.bookingOpensAt && item.bookingClosesAt && item.bookingOpensAt >= item.bookingClosesAt)
-      conflicts.push(`${item.title}: booking closing time must follow opening time`);
-    const outside = agendaEventWindowViolations(item, snapshot);
-    if (outside.startsBefore) conflicts.push(`${item.title}: session starts before the event`);
-    if (outside.endsAfter) conflicts.push(`${item.title}: session ends after the event`);
-    if (Boolean(item.startAt) !== Boolean(item.endAt)) conflicts.push(`${item.title}: both start and end are required`);
-    if ((item.additionalRoomIds?.length ?? 0) > 0 && !item.roomId)
-      conflicts.push(`${item.title}: choose a primary room`);
-    if (item.roomId && item.additionalRoomIds?.includes(item.roomId))
-      conflicts.push(`${item.title}: primary room is already reserved`);
-    const roomIds = agendaOccurrenceRoomIds(item);
-    for (const speaker of item.speakers) {
-      if (speaker.attendanceMode !== "remote" && speaker.roomId && !roomIds.includes(speaker.roomId))
-        conflicts.push(`${item.title}: a physical speaker location is not reserved for this session`);
-      if (speaker.attendanceMode === "remote" && speaker.roomId)
-        conflicts.push(`${item.title}: a remote speaker cannot have a physical location`);
-    }
-    for (const roomId of roomIds) {
-      const room = snapshot.rooms.find((candidate) => candidate.id === roomId);
-      if (!room) {
-        conflicts.push(`${item.title}: room does not belong to this event`);
-        continue;
-      }
-      if (item.startAt && item.endAt && !agendaRoomIsAvailable(room, item.startAt, item.endAt))
-        conflicts.push(`${item.title}: ${room.name} is unavailable for this session and setup time`);
-      for (const equipment of agendaOccurrenceRequiredEquipment(item))
-        if (!room.equipment?.includes(equipment))
-          conflicts.push(`${item.title}: ${room.name} does not provide ${equipment}`);
-      if (roomIds.length === 1 && room.capacity !== null && item.capacity !== null && item.capacity > room.capacity)
-        conflicts.push(`${item.title}: session capacity exceeds room capacity`);
-    }
-  }
-  for (const shift of snapshot.shifts) {
-    const room = snapshot.rooms.find((candidate) => candidate.id === shift.roomId);
-    if (room && !agendaRoomIsAvailable(room, shift.startAt, shift.endAt, false))
-      conflicts.push(`${shift.name}: ${room.name} is unavailable for this staffing shift`);
-  }
-  for (const assignment of snapshot.assignments) {
-    const shift = snapshot.shifts.find((item) => item.id === assignment.shiftId);
-    if (
-      shift &&
-      items.some(
-        (item) =>
-          item.startAt &&
-          item.endAt &&
-          item.startAt < shift.endAt &&
-          shift.startAt < item.endAt &&
-          item.speakers.some((speaker) => speaker.userId === assignment.userId),
-      )
-    )
-      conflicts.push("A speaker has an overlapping shift duty");
-  }
-  if (conflicts.length)
-    throw new AppError(
-      409,
-      "AGENDA_SCHEDULE_CONFLICT",
-      "This change conflicts with the agenda",
-      agendaScheduleConflictDetailsSchema.parse({ conflicts, proposal: conflictProposal }),
-    );
-}
 export async function patchAgendaOccurrence(
   db: DatabaseLike,
   eventId: string,
@@ -246,7 +38,8 @@ export async function patchAgendaOccurrence(
   actorUserId: string | null = null,
 ) {
   const snapshot = await getAgenda(db, eventId, eventSlug);
-  const existing = await getAgendaOccurrence(db, eventId, id);
+  const existing = snapshot.occurrences.find((occurrence) => occurrence.id === id);
+  if (!existing) throw new AppError(404, "AGENDA_OCCURRENCE_NOT_FOUND", "Session not found");
   // An unchanged format stays valid even if the event later retires that configured session type.
   const [input] =
     requested.format && requested.format !== existing.format
@@ -352,6 +145,10 @@ export async function patchAgendaOccurrence(
         id,
         kind: item.kind,
         virtualRoomUrl: input.virtualRoomUrl,
+        speakerUserIds:
+          input.speakerUserIds ??
+          (input.speakerIdentityIds ? item.speakers.map((speaker) => speaker.userId) : undefined),
+        speakerIdentityIds: input.speakerIdentityIds,
         sponsorIds: input.sponsorIds ?? (input.kind !== undefined && input.kind !== "break" ? [] : undefined),
       },
     ])),
@@ -386,106 +183,16 @@ export async function patchAgendaOccurrence(
         ),
       ),
     );
-  await commitAgendaRevision(db, eventId, input.expectedRevision, statements, actorUserId, conflictProposal);
-  return getAgenda(db, eventId, eventSlug);
+  return commitAgendaSnapshot(
+    db,
+    eventId,
+    eventSlug,
+    input.expectedRevision,
+    statements,
+    actorUserId,
+    conflictProposal,
+  );
 }
-export async function publishAgenda(
-  db: DatabaseLike,
-  eventId: string,
-  eventSlug: string,
-  revision: number,
-  userId: string,
-  acknowledgeArchiveRepresentation = false,
-) {
-  const snapshot = await getAgenda(db, eventId, eventSlug);
-  if (snapshot.publishedRevision === snapshot.revision)
-    throw new AppError(409, "AGENDA_ALREADY_APPROVED", "This agenda revision is already approved");
-  validateAgendaSchedule(snapshot, snapshot.occurrences);
-  const nextRevision = revision + 1;
-  const event = await first<{ visibility: string }>(db, "SELECT visibility FROM events WHERE id=?", [eventId]);
-  if (!event) throw new AppError(404, "EVENT_NOT_FOUND", "Event not found");
-  const approvedSnapshot = preparePublicAgendaSnapshot(snapshot, nextRevision, nowIso(), event.visibility === "public");
-  const historicalGuards = await assertPublicationRepresentations(
-    db,
-    eventId,
-    approvedSnapshot,
-    acknowledgeArchiveRepresentation,
-  );
-  const representationGuards = await prepareRepresentationEligibility(
-    db,
-    occurrenceRepresentationReferences(approvedSnapshot.occurrences),
-  );
-  const privatePeople = operationalPeople(snapshot);
-  const privateDays = operationalDays(snapshot);
-  await assertPublicationAllocations(db, snapshot);
-  await assertPublicationParticipation(db, eventId, approvedSnapshot);
-  const notificationStatements = await prepareAgendaChangeNotifications(db, eventId, nextRevision, approvedSnapshot);
-  const profileSlugStatements = await prepareSpeakerProfileSlugs(db, approvedSnapshot, approvedSnapshot.approvedAt!);
-  const sessionSlugStatements = await prepareSessionPageSlugs(
-    db,
-    eventId,
-    approvedSnapshot,
-    approvedSnapshot.approvedAt!,
-  );
-  await commitAgendaRevision(
-    db,
-    eventId,
-    revision,
-    [
-      prepareAuthorizationGuard(db, {
-        sql: "SELECT 1 FROM events WHERE id=? AND visibility=?",
-        bindings: [eventId, event.visibility],
-      }),
-      ...representationGuards,
-      ...historicalGuards,
-      ...(acknowledgeArchiveRepresentation && agendaHistoricalPublicationReview(approvedSnapshot).occurrenceIds.length
-        ? [
-            prepareScopedAuditLog(
-              db,
-              { type: "event", id: eventId },
-              "user",
-              userId,
-              "agenda.archive.representation.acknowledged",
-              "event_agenda",
-              eventId,
-              { revision: nextRevision, ...agendaHistoricalPublicationReview(approvedSnapshot) },
-              approvedSnapshot.approvedAt,
-            ),
-          ]
-        : []),
-      ...(await prepareAgendaSponsorApproval(db, eventId, approvedSnapshot.occurrences)),
-      preparePublicationAllocationGuard(db, snapshot),
-      prepareOperationalPeople(db, eventId, nextRevision, privatePeople),
-      prepareOperationalDays(db, eventId, nextRevision, privateDays),
-      preparePublicationParticipationGuard(db, eventId, approvedSnapshot),
-      ...notificationStatements,
-      db
-        .prepare(
-          "INSERT INTO event_agenda_publications(id,event_id,revision,snapshot_json,created_by,created_at) VALUES(?,?,?,?,?,?)",
-        )
-        .bind(crypto.randomUUID(), eventId, nextRevision, JSON.stringify(approvedSnapshot), userId, nowIso()),
-      db
-        .prepare(
-          "INSERT INTO event_agenda_published_occurrences(event_id,revision,occurrence_id,payload_json,room_json) SELECT ?,?,json_extract(occurrence.value,'$.id'),occurrence.value,(SELECT room.value FROM json_each(?,'$.rooms') room WHERE json_extract(room.value,'$.id')=json_extract(occurrence.value,'$.roomId')) FROM json_each(?,'$.occurrences') occurrence",
-        )
-        .bind(eventId, nextRevision, JSON.stringify(approvedSnapshot), JSON.stringify(approvedSnapshot)),
-      db.prepare("UPDATE event_agenda_state SET published_revision=? WHERE event_id=?").bind(nextRevision, eventId),
-      ...profileSlugStatements,
-      ...sessionSlugStatements,
-      prepareSitePublicationRequest(db, {
-        resourceType: "event_agenda",
-        resourceId: eventId,
-        revision: nextRevision,
-        reasonCode: "agenda_approved",
-        deduplicationKey: `agenda:${eventId}:${nextRevision}`,
-      }),
-      ...preparePublicationParticipationChanges(db, eventId, approvedSnapshot),
-    ],
-    userId,
-  );
-  return getAgenda(db, eventId, eventSlug);
-}
-
 export async function saveAgendaSettings(
   db: DatabaseLike,
   eventId: string,
@@ -495,9 +202,10 @@ export async function saveAgendaSettings(
 ) {
   const snapshot = await getAgenda(db, eventId, eventSlug);
   validateAgendaSchedule({ ...snapshot, travelMinutes: input.travelMinutes }, snapshot.occurrences);
-  await commitAgendaRevision(
+  return commitAgendaSnapshot(
     db,
     eventId,
+    eventSlug,
     input.expectedRevision,
     [
       db.prepare("UPDATE event_agenda_state SET travel_minutes=? WHERE event_id=?").bind(input.travelMinutes, eventId),
@@ -513,5 +221,4 @@ export async function saveAgendaSettings(
     ],
     actorUserId,
   );
-  return getAgenda(db, eventId, eventSlug);
 }

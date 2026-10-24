@@ -10,7 +10,7 @@ import { queryAll } from "./helpers/context";
 import { schedulerJobsListResponseSchema } from "../assets/shared/schemas/scheduler";
 import { apiErrorPayloadSchema } from "../assets/shared/schemas/api-common";
 import type { DatabaseLike } from "../functions/_lib/types";
-import { mutateBeforeNextBatch } from "./helpers/database-races";
+import { mutateBeforeMatchingQuery } from "./helpers/database-races";
 
 async function call(token: string | null, path: string, init: RequestInit = {}): Promise<Response> {
   return callWithDatabase(token, path, env.DB, init);
@@ -270,10 +270,13 @@ describe("scheduler API", () => {
 
   it("rolls back a state update when scheduler authority is revoked before commit", async () => {
     const identity = await staffIdentityWith(["schedulerOperator"]);
-    const racedDb = mutateBeforeNextBatch(env.DB, () =>
-      env.DB.prepare("UPDATE permission_grants SET revoked_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?")
-        .bind(identity.grantIds.get("scheduler:manage"))
-        .run(),
+    const racedDb = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => /^\s*(?:INSERT|UPDATE|DELETE)/u.test(sql),
+      () =>
+        env.DB.prepare("UPDATE permission_grants SET revoked_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?")
+          .bind(identity.grantIds.get("scheduler:manage"))
+          .run(),
     );
     const response = await callWithDatabase(identity.token, "/api/v1/scheduler/jobs/retention", racedDb, {
       method: "PATCH",
@@ -295,10 +298,13 @@ describe("scheduler API", () => {
 
   it("rolls back a manual claim when a job-domain grant is revoked before commit", async () => {
     const identity = await staffIdentityWith(["schedulerOperator", "retentionOperator"]);
-    const racedDb = mutateBeforeNextBatch(env.DB, () =>
-      env.DB.prepare("UPDATE permission_grants SET revoked_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?")
-        .bind(identity.grantIds.get("users:anonymize"))
-        .run(),
+    const racedDb = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => /^\s*(?:INSERT|UPDATE|DELETE)/u.test(sql),
+      () =>
+        env.DB.prepare("UPDATE permission_grants SET revoked_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?")
+          .bind(identity.grantIds.get("users:anonymize"))
+          .run(),
     );
     const response = await callWithDatabase(identity.token, "/api/v1/scheduler/jobs/retention/runs", racedDb, {
       method: "POST",

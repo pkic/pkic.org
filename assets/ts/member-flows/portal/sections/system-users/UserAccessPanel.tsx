@@ -10,11 +10,13 @@ import { Link } from "wouter";
 import { useMembershipCategoryLabels } from "../../../../hooks/useMembershipCategoryLabels";
 import { DescriptionList, type DescriptionListItem } from "../../../../ui/DescriptionList";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
+import type { PublicStaffCapacity } from "../../../../../shared/schemas/staff-capacity";
 import type { PortalSession } from "../../types";
 import type { UserDetail as UserRecord } from "./model";
 
-function grantScopeLabel(grant: { contextType: string | null; contextId: string | null }): string {
+function grantScopeLabel(grant: PublicStaffCapacity["grants"][number]): string {
   if (grant.contextType === null) return "global";
+  if (grant.contextName) return grant.contextName;
   return grant.contextId ? `${grant.contextType} ${grant.contextId}` : grant.contextType;
 }
 

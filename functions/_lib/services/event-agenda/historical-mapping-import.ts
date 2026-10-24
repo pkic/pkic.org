@@ -1,4 +1,6 @@
 import type { z } from "zod";
+import { batchRows } from "../../db/pagination";
+import type { D1StatementResult } from "../../types";
 import type { AgendaSnapshot } from "../../../../assets/shared/schemas/event-agenda";
 import { agendaContentFieldsSchema } from "../../../../assets/shared/schemas/event-agenda-content";
 import {
@@ -8,7 +10,6 @@ import {
   historicalMetadataReviewIssues,
   type HistoricalReviewPerson,
 } from "../../../../assets/shared/schemas/event-agenda-historical-review";
-import { all } from "../../db/queries";
 import { prepareAuthorizationGuard } from "../../db/authorization-guard";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
@@ -54,12 +55,22 @@ async function readHistoricalSourcePages(
   references: string[],
   field: "source_key" | "id",
 ) {
+  const read = prepareHistoricalSourcePages(db, eventId, references, field);
+  return read.decode(read.statements.length ? await db.batch(read.statements) : []);
+}
+function prepareHistoricalSourcePages(
+  db: DatabaseLike,
+  eventId: string,
+  references: string[],
+  field: "source_key" | "id",
+) {
   const distinct = [...new Set(references)],
-    rows: HistoricalSourceRow[] = [];
+    statements = [];
   for (let offset = 0; offset < distinct.length; offset += 100) {
-    const page = await all<HistoricalSourceRow>(
-      db,
-      `SELECT occurrence.id,occurrence.content_id,occurrence.source_key,occurrence.start_at,occurrence.end_at,content.title,
+    statements.push(
+      db
+        .prepare(
+          `SELECT occurrence.id,occurrence.content_id,occurrence.source_key,occurrence.start_at,occurrence.end_at,content.title,
     history.metadata_json,content.source_review_json,content.source_snapshot_json,
     source.import_mode,source.source_format,source.source_version,source.source_path,source.source_ref,source.source_anchor,
     source.source_digest,source.timing_json,source.media_json,source.people_json,source.imported_by,source.imported_at
@@ -69,17 +80,27 @@ async function readHistoricalSourcePages(
     LEFT JOIN event_agenda_session_history history ON history.occurrence_id=occurrence.id
     WHERE occurrence.event_id=? AND occurrence.${field} IN(SELECT value FROM json_each(?))
     ORDER BY occurrence.id LIMIT 101`,
-      [eventId, JSON.stringify(distinct.slice(offset, offset + 100))],
+        )
+        .bind(eventId, JSON.stringify(distinct.slice(offset, offset + 100))),
     );
-    if (page.length > 100)
-      throw new AppError(
-        422,
-        "AGENDA_HISTORICAL_REVIEW_LIMIT",
-        "Review at most 100 historical sessions per source page.",
-      );
-    rows.push(...page);
   }
-  return rows;
+  return {
+    statements,
+    decode(loaded: D1StatementResult[]) {
+      const rows: HistoricalSourceRow[] = [];
+      for (const result of loaded) {
+        const page = batchRows<HistoricalSourceRow>(result);
+        if (page.length > 100)
+          throw new AppError(
+            422,
+            "AGENDA_HISTORICAL_REVIEW_LIMIT",
+            "Review at most 100 historical sessions per source page.",
+          );
+        rows.push(...page);
+      }
+      return rows;
+    },
+  };
 }
 export async function readHistoricalSources(db: DatabaseLike, eventId: string, sourceKeys: string[]) {
   return readHistoricalSourcePages(db, eventId, sourceKeys, "source_key");
@@ -87,6 +108,9 @@ export async function readHistoricalSources(db: DatabaseLike, eventId: string, s
 /** Publication resolves each exact occurrence, including agendas spanning several transfer parts. */
 export async function readHistoricalOccurrenceSources(db: DatabaseLike, eventId: string, occurrenceIds: string[]) {
   return readHistoricalSourcePages(db, eventId, occurrenceIds, "id");
+}
+export function prepareHistoricalOccurrenceSources(db: DatabaseLike, eventId: string, occurrenceIds: string[]) {
+  return prepareHistoricalSourcePages(db, eventId, occurrenceIds, "id");
 }
 export function historicalSourceProvenance(row: HistoricalSourceRow) {
   return {

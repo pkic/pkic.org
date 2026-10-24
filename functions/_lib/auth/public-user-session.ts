@@ -1,11 +1,15 @@
 import type { PublicStaffCapacity } from "../../../assets/shared/schemas/staff-capacity";
 import type { SponsorCapacity } from "../../../assets/shared/schemas/sponsor-access";
-import type { AuthMember } from "../types";
+import { all } from "../db/queries";
+import type { AuthMember, DatabaseLike } from "../types";
 import type { SessionActingIdentity } from "../../../assets/shared/session-acting-identity";
 import type { UserSessionResult } from "./user-session";
 import { publicStaffCapacity } from "./admin-identity";
 
-export function publicUserSession(result: UserSessionResult): {
+export async function publicUserSession(
+  db: DatabaseLike,
+  result: UserSessionResult,
+): Promise<{
   sessionId: string;
   expiresAt: string;
   idleExpiresAt: string;
@@ -18,7 +22,27 @@ export function publicUserSession(result: UserSessionResult): {
   hasActiveIdentity: boolean;
   actingIdentities: SessionActingIdentity[];
   actingIdentityId: string | null;
-} {
+}> {
+  const staff = result.staff ? publicStaffCapacity(result.staff) : undefined;
+  const groupIds = [
+    ...new Set(
+      (staff?.grants ?? [])
+        .filter((grant) => grant.contextType === "group" && grant.contextId)
+        .map((grant) => grant.contextId),
+    ),
+  ];
+  // Resolve only the caller's granted groups, once for the whole response.
+  if (staff && groupIds.length > 0) {
+    const groups = await all<{ id: string; name: string }>(
+      db,
+      "SELECT g.id, g.name FROM groups g JOIN json_each(?) requested ON requested.value = g.id",
+      [JSON.stringify(groupIds)],
+    );
+    const names = new Map(groups.map((group) => [group.id, group.name]));
+    staff.grants = staff.grants.map((grant) =>
+      grant.contextType === "group" ? { ...grant, contextName: names.get(grant.contextId ?? "") ?? null } : grant,
+    );
+  }
   return {
     sessionId: result.sessionId,
     expiresAt: result.expiresAt,
@@ -27,7 +51,7 @@ export function publicUserSession(result: UserSessionResult): {
     ...(result.staff
       ? {
           staff: {
-            ...publicStaffCapacity(result.staff),
+            ...staff!,
             idleExpiresAt: result.staffIdleExpiresAt!,
           },
         }

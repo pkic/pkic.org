@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { utcInstantSchema } from "../../../../assets/shared/schemas/api-common";
+import { liveAuthorStampSchema } from "../../../../assets/shared/schemas/live-session-author";
 import type { UserSessionTokenClaims } from "../../auth/user-session-token";
 import { databaseIdSchema } from "../../../../assets/shared/schemas/identifiers";
 import {
@@ -9,8 +11,8 @@ import {
 
 /**
  * What the Worker tells a room about a socket it has already admitted. The
- * room is reachable only through its binding, so it trusts this header and
- * never re-reads D1 on the connection path.
+ * room accepts admission metadata only through its binding and validates
+ * live access before protected delivery.
  */
 export const LIVE_ROOM_ADMISSION_HEADER = "x-pkic-live-room-admission";
 
@@ -42,7 +44,18 @@ export const liveRoomParticipantSchema = z
     if (value.role !== "overlay" && value.overlayOutput !== undefined)
       context.addIssue({ code: "custom", message: "Only read-only sources draw an output." });
   });
+/** Server-owned connection lease; never accepted in the admission header. */
+export const liveRoomAccessGrantSchema = z
+  .object({
+    key: z.string(),
+    checkedAt: utcInstantSchema,
+    credentialExpiresAt: utcInstantSchema,
+    author: liveAuthorStampSchema,
+  })
+  .strict();
+
 export type LiveRoomParticipant = z.infer<typeof liveRoomParticipantSchema> & {
+  accessGrant?: z.infer<typeof liveRoomAccessGrantSchema>;
   /** Server-owned subscription, persisted with this socket through hibernation. Never accepted in admission input. */
   questionThreadId?: string;
   /** Latest server-received watch request, so a slower authorization cannot restore an older thread. */
@@ -54,6 +67,7 @@ export const liveRoomAdmissionSchema = z
     eventId: z.string().min(1).max(200),
     session: liveRoomSessionSchema,
     participant: liveRoomParticipantSchema,
+    readBookmark: z.string().min(1).max(1024).optional(),
   })
   .strict();
 export type LiveRoomAdmissionMessage = z.infer<typeof liveRoomAdmissionSchema>;
@@ -63,13 +77,14 @@ export function liveRoomName(eventId: string, occurrenceId: string): string {
   return `${eventId}:${occurrenceId}`;
 }
 
-/** Preserve only server-owned thread metadata when fresh canonical admission replaces an attachment. */
-export function preserveLiveRoomThread(
+/** Preserve server-owned connection metadata when fresh canonical admission replaces an attachment. */
+export function preserveLiveRoomAttachmentState(
   participant: LiveRoomParticipant,
   attachment: LiveRoomParticipant,
 ): LiveRoomParticipant {
   return {
     ...participant,
+    accessGrant: attachment.accessGrant,
     questionThreadId: attachment.questionThreadId,
     questionThreadRequestId: attachment.questionThreadRequestId,
   };

@@ -1,5 +1,14 @@
+import { createGroup } from "../functions/_lib/services/groups";
+import type { DatabaseLike } from "../functions/_lib/types";
+import { profileD1Flow } from "./helpers/d1-flow-profile";
+import {
+  getActiveEventFormByPurpose,
+  getActiveFormById,
+  getFormDefinitionByPlacement,
+  getManagedFormWithFields,
+} from "../functions/_lib/services/forms/read";
 import { env } from "cloudflare:workers";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { listCampaignRecipients } from "../functions/_lib/services/event-email-campaign";
 import { getEventBySlug } from "../functions/_lib/services/events";
 import { resolveEventFormResponse } from "../functions/_lib/services/forms";
@@ -7,7 +16,9 @@ import { getProposalDetailData } from "../functions/_lib/services/proposal-detai
 import { buildRegistrationCsv } from "../functions/_lib/services/registrations/export";
 import { getRegistrationDetail } from "../functions/_lib/services/registrations/detail";
 import { getCustomAnswerRows } from "../functions/_lib/utils/registration-email";
-import { queryAll, seedEventAndAdmin } from "./helpers/context";
+import { deliveredEmailPayload, queryAll, seedEventAndAdmin } from "./helpers/context";
+import { callApi } from "./helpers/app";
+import { stubSuccessfulMxLookup } from "./helpers/mx-lookup";
 import { resetDb } from "./helpers/reset-db";
 
 type EventFormPurpose = "event_registration" | "proposal_submission";
@@ -125,6 +136,95 @@ async function seedProposalResponse(eventId: string, form: SeededForm): Promise<
 
 describe("historical event form response attribution", () => {
   beforeEach(resetDb);
+  afterEach(() => vi.unstubAllGlobals());
+
+  it.each([false, true])("reads exact definitions and fields in one batch (catalog: %s)", async (catalog) => {
+    const { eventId, admin } = await seedEventAndAdmin(env.DB);
+    const form = await seedEventForm(eventId, "event_registration", "Saved question", "saved_answer");
+    const group = catalog
+      ? await createGroup(
+          env.DB,
+          { ...admin, identityType: "user" },
+          {
+            typeKey: "working_group",
+            name: "Form catalog group",
+            visibility: "authenticated",
+            eligibilityMode: "open",
+          },
+        )
+      : null;
+    if (catalog)
+      await env.DB.prepare(
+        "UPDATE form_fields SET field_type='multi_select', option_source='active_working_groups' WHERE id=?",
+      )
+        .bind(form.fieldId)
+        .run();
+    const [key] = await queryAll<{ key: string }>(env.DB, "SELECT key FROM forms WHERE id=?", [form.formId]);
+    for (const read of [
+      (db: DatabaseLike) => getActiveEventFormByPurpose(db, eventId, "event_registration"),
+      (db: DatabaseLike) => getActiveFormById(db, form.formId),
+      (db: DatabaseLike) => getFormDefinitionByPlacement(db, form.placementId),
+    ]) {
+      const profile = profileD1Flow(env.DB);
+      const definition = await read(profile.db);
+      expect(definition?.id).toBe(form.formId);
+      expect(definition?.fields).toEqual([expect.objectContaining({ key: "saved_answer", label: "Saved question" })]);
+      if (group)
+        expect(definition?.fields[0].options).toContainEqual({ value: group.id, label: group.name, active: true });
+      expect(profile.summary().roundTrips).toBe(1);
+    }
+    const profile = profileD1Flow(env.DB);
+    const managed = await getManagedFormWithFields(profile.db, key.key);
+    expect(managed?.fields).toEqual([expect.objectContaining({ key: "saved_answer" })]);
+    expect(profile.summary().roundTrips).toBe(1);
+  });
+
+  it.each([false, true])(
+    "queues the newly submitted answers before committing registration (restore: %s)",
+    async (restore) => {
+      const { eventId } = await seedEventAndAdmin(env.DB);
+      const form = await seedEventForm(eventId, "event_registration", "Current question", "current_answer");
+      if (restore) {
+        await seedRegistrationResponse({
+          eventId,
+          id: "10000000-0000-4000-8000-000000000009",
+          email: "submitted@example.test",
+          form,
+          fieldKey: "current_answer",
+          value: "old answer",
+          formPlacementId: form.placementId,
+          submissionPlacementId: form.placementId,
+        });
+        await env.DB.prepare("UPDATE registrations SET status = 'cancelled' WHERE id = ?")
+          .bind("10000000-0000-4000-8000-000000000009")
+          .run();
+      }
+      stubSuccessfulMxLookup();
+      const response = await callApi(env, "/api/v1/events/pqc-2026/registrations", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          firstName: "Submitted",
+          lastName: "Attendee",
+          email: "submitted@example.test",
+          attendanceType: "virtual",
+          sourceType: "direct",
+          customAnswers: { current_answer: "new answer" },
+          consents: [
+            { termKey: "privacy-policy", version: "v1" },
+            { termKey: "code-of-conduct", version: "v1" },
+          ],
+        }),
+      });
+      expect(response.status).toBe(200);
+      const [email] = await queryAll<{ payload_json: string }>(
+        env.DB,
+        "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirm_email' ORDER BY created_at DESC LIMIT 1",
+      );
+      const payload = await deliveredEmailPayload<{ customAnswerRows: unknown[] }>(env.DB, env, email.payload_json);
+      expect(payload.customAnswerRows).toEqual([{ label: "Current question", displayValue: "new answer" }]);
+    },
+  );
 
   it("preserves the submitted form, archived fields, and normalized answers after switching from form A to B", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);

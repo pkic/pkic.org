@@ -49,7 +49,24 @@ const Video = Node.create({
 /** Native table sizing uses inline styles; this portal uses stylesheet sizing. */
 export function editorExtensions() {
   return [
-    StarterKit.configure({
+    StarterKit.extend({
+      addExtensions() {
+        return (this.parent?.() ?? []).map((extension) =>
+          extension.name === "orderedList"
+            ? extension.extend({
+                // Use Markdown's numeric list grammar. The extended alphabetical
+                // tokenizer mistakes ordinary titles such as Ir. and Dr. for lists.
+                markdownTokenizer: {
+                  name: "orderedList",
+                  level: "block",
+                  start: () => -1,
+                  tokenize: () => undefined,
+                },
+              })
+            : extension,
+        );
+      },
+    }).configure({
       underline: false,
       heading: { levels: [2, 3, 4] },
       link: { openOnClick: false },

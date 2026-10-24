@@ -15,11 +15,14 @@ import { getJson } from "../../../../shared/api-client";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { usePortalHashLocation } from "../../hash-location";
 import { fmt } from "../../ui";
-import { GroupEventEditor } from "./GroupEventEditor";
+
 import { EventScopeToggle, eventScopeActions, useEventScope } from "../events/EventScopeToggle";
 import { lazy, Suspense } from "preact/compat";
-const GroupEventWorkspace = lazy(() =>
-  import("./GroupEventWorkspace").then((module) => ({ default: module.GroupEventWorkspace })),
+const loadEventWorkspace = () =>
+  import("./GroupEventWorkspace").then((module) => ({ default: module.GroupEventWorkspace }));
+const GroupEventWorkspace = lazy(loadEventWorkspace);
+const GroupEventEditor = lazy(() =>
+  import("./GroupEventEditor").then((module) => ({ default: module.GroupEventEditor })),
 );
 
 /** Reserved event segment that routes to the create page instead of a record. */
@@ -66,10 +69,13 @@ export function GroupEvents({
   const detail = useData(
     () =>
       selectedEventId
-        ? getJson(
-            `/api/v1/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(selectedEventId)}`,
-            groupEventDetailResponseSchema,
-          )
+        ? Promise.all([
+            getJson(
+              `/api/v1/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(selectedEventId)}`,
+              groupEventDetailResponseSchema,
+            ),
+            loadEventWorkspace(),
+          ]).then(([response]) => response)
         : Promise.resolve(null),
     [groupId, selectedEventId],
   );
@@ -85,12 +91,14 @@ export function GroupEvents({
         <Panel aria-label="New group event">
           <PanelHeader title="New group event" headingLevel={2} breadcrumb />
           <PanelBody>
-            <GroupEventEditor
-              groupId={groupId}
-              event={null}
-              onSaved={async () => navigate(eventsPath)}
-              onCancel={() => navigate(eventsPath)}
-            />
+            <Suspense fallback={<Spinner />}>
+              <GroupEventEditor
+                groupId={groupId}
+                event={null}
+                onSaved={async () => navigate(eventsPath)}
+                onCancel={() => navigate(eventsPath)}
+              />
+            </Suspense>
           </PanelBody>
         </Panel>
       </div>

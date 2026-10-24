@@ -121,3 +121,103 @@ test("an expired administrator elevation keeps member access and offers a fresh 
   });
   await expect(page.getByText("you'll receive a sign-in link shortly", { exact: false })).toBeVisible();
 });
+
+test.describe("client release recovery", () => {
+  // Missing-file simulations must reach the browser routes rather than the offline cache.
+  test.use({ serviceWorkers: "block" });
+  test("an idle portal refreshes once after a deployment and preserves its location", async ({ page }) => {
+    await page.clock.install();
+    await page.goto("/portal/#/home?appearance=dark");
+    await expect(
+      page
+        .getByRole("button", { name: "Sign in", exact: true })
+        .or(page.getByRole("button", { name: "Sign in with a passkey", exact: true })),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Sign in with a passkey", exact: true })).toBeEnabled();
+    let shellRequests = 0;
+    await page.route("**/portal/", async (route) => {
+      if (route.request().isNavigationRequest()) return route.continue();
+      shellRequests += 1;
+      await route.fulfill({
+        contentType: "text/html",
+        body: '<script type="module" src="/_assets/portal.next-release.js"></script>',
+      });
+    });
+    await page.clock.fastForward(16_000);
+    const reloaded = page.waitForEvent("domcontentloaded", { timeout: 15_000 });
+    await page.evaluate(() => window.dispatchEvent(new Event("vite:preloadError")));
+    await reloaded;
+    await expect(page).toHaveURL(/#\/home\?appearance=dark$/);
+    await page.clock.fastForward(300_000);
+    expect(shellRequests).toBeGreaterThan(0);
+    // Returning the stale shell again cannot cause another automatic reload.
+    let extraNavigations = 0;
+    page.on("request", (request) => {
+      if (request.isNavigationRequest()) extraNavigations += 1;
+    });
+    await page.evaluate(() => window.dispatchEvent(new Event("vite:preloadError")));
+    await page.clock.fastForward(30_000);
+    expect(extraNavigations).toBe(0);
+  });
+
+  test("a deployment does not discard an edited sign-in form", async ({ page }) => {
+    await page.clock.install();
+    await page.goto("/portal/");
+    await openEmailSignIn(page);
+    await page.getByLabel("Work email").fill("release-recovery@example.test");
+    await page.route("**/portal/", async (route) => {
+      if (route.request().isNavigationRequest()) return route.continue();
+      await route.fulfill({
+        contentType: "text/html",
+        body: '<script type="module" src="/_assets/portal.next-release.js"></script>',
+      });
+    });
+    await page.evaluate(() => window.dispatchEvent(new Event("vite:preloadError")));
+    await page.clock.fastForward(600_000);
+    await expect(page.getByLabel("Work email")).toHaveValue("release-recovery@example.test");
+  });
+
+  test("a missing lazy view offers recovery without removing portal navigation", async ({ page }) => {
+    const { signInToPortal } = await import("./helpers/portal-auth");
+    const { e2eAdminEmail } = await import("../helpers/e2e-admin");
+    await page.route(/\/(?:chunks\/)?Home(?:\.[^/?]+)?\.js(?:\?.*)?$/, (route) => route.abort());
+    await signInToPortal(page, e2eAdminEmail("portal-release-recovery"));
+    await expect(page.getByRole("button", { name: "Reload page", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Account menu", exact: true })).toBeVisible();
+    for (const width of [1440, 375]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expect(page.getByRole("button", { name: "Reload page", exact: true })).toBeVisible();
+      await page.screenshot({ path: test.info().outputPath(`release-recovery-${width}.png`), fullPage: true });
+    }
+  });
+});
+
+test("public interactive pages recover through the shared loader", async ({ page }) => {
+  const shell = await page.request.get("/sessions/");
+  const etag = shell.headers().etag;
+  expect(etag).toBeTruthy();
+  expect(shell.headers()["cache-control"]).toMatch(/must-revalidate|no-cache/);
+  const unchanged = await page.request.get("/sessions/", { headers: { "If-None-Match": etag } });
+  expect(unchanged.status()).toBe(304);
+  await page.goto("/sessions/");
+  const scripts = await page
+    .locator('script[type="module"][src]')
+    .evaluateAll((elements) => elements.map((element) => element.getAttribute("src")!));
+  const script = await page.request.get(scripts.find((src) => src.startsWith("/_assets/"))!);
+  expect(script.headers()["cache-control"]).toContain("immutable");
+  await expect(page.getByRole("heading", { name: "Session archive", exact: true })).toBeVisible();
+  await expect(page.locator("html")).toHaveAttribute("data-client-release-recovery", "");
+  await page.clock.install();
+  await page.route("**/sessions/", async (route) => {
+    if (route.request().isNavigationRequest()) return route.continue();
+    await route.fulfill({
+      contentType: "text/html",
+      body: '<script type="module" src="/_assets/site.next-release.js"></script>',
+    });
+  });
+  await page.clock.fastForward(16_000);
+  const reloaded = page.waitForEvent("domcontentloaded", { timeout: 15_000 });
+  await page.evaluate(() => window.dispatchEvent(new Event("vite:preloadError")));
+  await reloaded;
+  await expect(page.getByRole("heading", { name: "Session archive", exact: true })).toBeVisible();
+});

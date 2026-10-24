@@ -1,3 +1,4 @@
+import { mutateBeforeMatchingQuery } from "./helpers/database-races";
 import { prepareProposalProof } from "./helpers/proposal-proof";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -48,19 +49,12 @@ async function advanceFormRevision(formId: string): Promise<void> {
   await env.DB.prepare("UPDATE forms SET updated_at = '2099-01-01T00:00:00.000Z' WHERE id = ?").bind(formId).run();
 }
 
-function editFormBeforeFirstBatch(formId: string): DatabaseLike {
-  const database = env.DB as unknown as DatabaseLike;
-  let edited = false;
-  return {
-    prepare: (query) => database.prepare(query),
-    async batch(statements) {
-      if (!edited) {
-        edited = true;
-        await advanceFormRevision(formId);
-      }
-      return database.batch(statements);
-    },
-  };
+function editFormBeforeCommit(formId: string): DatabaseLike {
+  return mutateBeforeMatchingQuery(
+    env.DB,
+    (sql) => sql.includes("INSERT INTO form_submission_guards"),
+    () => advanceFormRevision(formId),
+  );
 }
 
 async function prepareRegistration(eventId: string, answer: string) {
@@ -214,7 +208,7 @@ describe("form revision guards on registration and proposal commands", () => {
     const proposal = await submitCurrentProposal(eventId, "original proposal answer");
 
     await expect(
-      updateManagedRegistration(editFormBeforeFirstBatch(registrationFormId), {
+      updateManagedRegistration(editFormBeforeCommit(registrationFormId), {
         registration: prepared.registration,
         manageToken: prepared.manageToken,
         isAdminManageJwt: false,
@@ -233,7 +227,7 @@ describe("form revision guards on registration and proposal commands", () => {
     ).rejects.toMatchObject({ status: 409, code: "FORM_CHANGED" });
 
     await expect(
-      saveProposalAccessChanges(editFormBeforeFirstBatch(proposalFormId), {
+      saveProposalAccessChanges(editFormBeforeCommit(proposalFormId), {
         token: proposal.manageToken!,
         signingSecret: env.INTERNAL_SIGNING_SECRET!,
         body: { details: { answer: "stale proposal answer" } },

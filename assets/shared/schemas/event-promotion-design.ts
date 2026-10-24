@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { badgeTemplateAssetSchema, badgeTemplateSponsorGroupSchema } from "./event-badge-template";
+import {
+  eventBadgeTemplateSchema,
+  badgeTemplateAssetSchema,
+  badgeTemplateSponsorGroupSchema,
+} from "./event-badge-template";
 import { validateBadgeTemplateAsset } from "../badge-template-policy";
 
 export const promotionPanelSchema = z.enum([
@@ -75,5 +79,25 @@ export const DEFAULT_PROMOTION_PANELS = ["cover", "speakers", "content", "detail
 export function defaultPromotionComposition(attendee = false): PromotionComposition {
   return promotionCompositionSchema.parse({
     panels: attendee ? ["cover", "picks", "register", "sponsors"] : [...DEFAULT_PROMOTION_PANELS],
+  });
+}
+
+/** Event artwork follows the same selected badge design until a promotion design is saved. */
+export function defaultEventPromotionDesign(
+  name: string,
+  badge?: z.infer<typeof eventBadgeTemplateSchema> | null,
+): EventPromotionDesign {
+  return eventPromotionDesignSchema.parse({
+    version: 1,
+    name: badge?.name ?? name,
+    colors: ["#0b2a1c", "#125c3c", "#20506e", "#b0581f"],
+    assets: {
+      logo: badge?.assets.logo_white,
+      mark: badge?.assets.mark,
+      motif: badge?.assets.canal_houses,
+      texture: badge?.assets.dot_grid,
+    },
+    sponsorGroups: badge?.sponsorGroups ?? [],
+    panels: [...DEFAULT_PROMOTION_PANELS],
   });
 }

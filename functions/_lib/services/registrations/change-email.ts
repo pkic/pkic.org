@@ -1,3 +1,4 @@
+import { prepareMailingListEmailChange } from "../mailing-list-subscriptions/queue-email-change";
 /**
  * Initiates an email change for a registration by storing the pending email
  * on the user record. Does not change the email until verified via confirmation token.
@@ -469,6 +470,7 @@ export async function prepareFinalizeEmailChange(
     );
   }
 
+  stmts.push(...prepareMailingListEmailChange(db, user.id, now));
   return {
     registration: finalizedRegistration,
     finalEmail: user.pending_email,

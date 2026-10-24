@@ -1,4 +1,5 @@
 import { all } from "../../db/queries";
+import { eventCommunicationSettingsSql } from "../events/communication-settings";
 import { sha256Hex } from "../../utils/crypto";
 import { formatInviterList, type InviteInviterInfo } from "../invites";
 import { buildInviteEmailQueueRow } from "../invite-email";
@@ -45,7 +46,7 @@ export async function runInviteReminders(
          i.invite_type, i.link_secret, i.reminder_count, i.transition_revision,
          ${effectiveInviteExpirySql("i", "e")} AS expires_at,
          e.name AS event_name, e.slug AS event_slug, e.base_path AS event_base_path,
-         e.starts_at AS event_starts_at, e.ends_at AS event_ends_at, e.settings_json AS event_settings_json,
+         e.starts_at AS event_starts_at, e.ends_at AS event_ends_at, ${eventCommunicationSettingsSql("e.settings_json")} AS event_settings_json,
          CASE WHEN json_valid(e.settings_json)
            THEN COALESCE(
              json_extract(e.settings_json, '$.registration.closesAt'),

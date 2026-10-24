@@ -27,9 +27,9 @@ interface UserOrganizationRow {
 
 const USER_ORGANIZATIONS_FROM = `
   FROM identities identity
-  JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
-  JOIN members m ON m.id = capacity.member_id AND m.status = 'active' AND m.organization_id IS NOT NULL
-  JOIN organizations o ON o.id = m.organization_id`;
+  JOIN members m ON m.organization_id = identity.organization_id AND m.status = 'active'
+  JOIN organizations o ON o.id = m.organization_id
+  JOIN member_category_assignments mca ON mca.member_id = m.id`;
 
 /** Exported separately so an EXPLAIN QUERY PLAN test can assert index use (tests/admin-list-query-plans.test.ts). */
 export function buildUserOrganizationsPageQuery(userId: string, params: UserOrganizationsListQuery): OffsetPageQuery {
@@ -49,7 +49,7 @@ export function buildUserOrganizationsPageQuery(userId: string, params: UserOrga
     source: {
       selectSql:
         "SELECT o.id AS organization_id, m.id AS member_id, o.name AS name, mca.category_code AS membership_category",
-      fromSql: `${USER_ORGANIZATIONS_FROM}\n  LEFT JOIN member_category_assignments mca ON mca.member_id = m.id\n  ${where}`,
+      fromSql: `${USER_ORGANIZATIONS_FROM}\n  ${where}`,
       countFromSql: `${USER_ORGANIZATIONS_FROM}\n  ${where}`,
       bindings,
       countBindings: bindings,
@@ -76,9 +76,10 @@ async function resolveContactRoles(
     `SELECT ur.context_id AS member_id, ur.role_id
      FROM user_roles ur
      JOIN users u ON u.id = ur.user_id
-     JOIN identity_member_capacities capacity ON capacity.member_id = ur.context_id
+     JOIN members member ON member.id = ur.context_id
+     JOIN member_category_assignments category ON category.member_id = member.id
      JOIN identities identity
-       ON identity.id = capacity.identity_id AND identity.user_id = ur.user_id
+       ON identity.organization_id = member.organization_id AND identity.user_id = ur.user_id
      WHERE ur.context_type = 'organization'
        AND ur.user_id = ?
        AND ur.role_id IN (?, ?)

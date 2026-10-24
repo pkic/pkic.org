@@ -1,7 +1,8 @@
+import { clientMutationsAllowReload } from "../../assets/ts/shared/client-release-safety";
 // @vitest-environment jsdom
 import { render } from "preact";
 import { act } from "preact/test-utils";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   meetingInvitationVerificationUpdateSchema,
   meetingJoinConfirmSchema,
@@ -56,6 +57,10 @@ function buttonLabeled(root: ParentNode, label: string): HTMLButtonElement {
   return found;
 }
 
+beforeEach(() => {
+  Reflect.deleteProperty(globalThis, Symbol.for("pkic.client-release-safety"));
+});
+
 afterEach(() => {
   for (const container of mounted.splice(0)) {
     void act(() => render(null, container));
@@ -81,9 +86,15 @@ describe("secure meeting join browser flow", () => {
     expect(replaceState).toHaveBeenCalledWith({}, "", "/meetings/join/?occurrence=occurrence-id");
   });
 
-  it.each([true, false])(
-    "keeps a personal link reloadable and requires verification on a new browser (clear succeeds=%s)",
-    async (clearSucceeds) => {
+  it.each([204, 403, 500, "network"] as const)(
+    "protects meeting identity switching from release refresh (DELETE outcome=%s)",
+    async (deleteOutcome) => {
+      let completeDelete!: (response: Response) => void;
+      let failDelete!: (error: Error) => void;
+      const pendingDelete = new Promise<Response>((resolve, reject) => {
+        completeDelete = resolve;
+        failDelete = reject;
+      });
       const token = `m2.${"A".repeat(22)}.${"B".repeat(22)}.0.${"C".repeat(22)}`;
       expect(parsePersonalMeetingLinkFragment(`#token=${token}`)).toBe(token);
       expect(parsePersonalMeetingLinkFragment(`#p=${token}`)).toBeNull();
@@ -104,7 +115,7 @@ describe("secure meeting join browser flow", () => {
               name: "Paul",
             });
           if (url === `/api/v1/meetings/occurrences/${occurrence.id}/links/session` && init?.method === "DELETE")
-            return clearSucceeds ? new Response(null, { status: 204 }) : jsonResponse({ error: "refused" }, 403);
+            return pendingDelete;
           if (url === "/api/v1/auth/logout") return jsonResponse({ success: true, outcome: "no_current_session" });
           if (url === `/api/v1/meetings/occurrences/${occurrence.id}/links/session`)
             return jsonResponse({
@@ -129,7 +140,17 @@ describe("secure meeting join browser flow", () => {
         `/api/v1/meetings/occurrences/${occurrence.id}/links/session`,
       ]);
       await act(async () => buttonLabeled(container, "Verify and continue").click());
-      if (clearSucceeds) {
+      expect(clientMutationsAllowReload()).toBe(false);
+      await act(async () => {
+        if (deleteOutcome === "network") failDelete(new TypeError("Connection lost"));
+        else
+          completeDelete(
+            deleteOutcome === 204
+              ? new Response(null, { status: 204 })
+              : jsonResponse({ error: "refused" }, deleteOutcome),
+          );
+      });
+      if (deleteOutcome === 204) {
         await vi.waitFor(() => expect(assign).toHaveBeenCalledWith(`/portal/#/meeting-link/${token}`));
         expect(requests.slice(2)).toEqual([
           `/api/v1/meetings/occurrences/${occurrence.id}/links/session`,
@@ -142,6 +163,7 @@ describe("secure meeting join browser flow", () => {
         expect(requests).not.toContain("/api/v1/auth/logout");
         expect(buttonLabeled(container, "Verify and continue").disabled).toBe(false);
       }
+      expect(clientMutationsAllowReload()).toBe(deleteOutcome === 204 || deleteOutcome === 403);
     },
   );
 

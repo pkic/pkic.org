@@ -1,17 +1,29 @@
 import { REGISTRATION_ORGANIZATION_SQL, REGISTRATION_JOB_TITLE_SQL } from "./selected-identity";
-import { batchFirst } from "../../db/pagination";
+import { batchFirst, batchRows } from "../../db/pagination";
 import type { DatabaseLike } from "../../types";
 import { parseJsonSafe } from "../../utils/json";
-import { countRegisteredByEventDay, getRegistrationDayAttendance, listEventDays } from "../event-days";
-import { getEventById } from "../events";
+import {
+  prepareEventDays,
+  prepareRegistrationDayAttendance,
+  prepareRegisteredEventDayCounts,
+  decodeRegisteredEventDayCounts,
+  type EventDayRecord,
+  type RegistrationDayAttendanceRow,
+  type EventDayAttendanceCountRow,
+} from "../event-days";
+import { prepareEventById, type EventRecord } from "../events";
 import { firstReferralCodeQuerySql } from "../referral-code-projection";
-import { listDayWaitlistForRegistration } from "./day-waitlist";
+import { prepareRegistrationDayWaitlist, type RegistrationDayWaitlistRow } from "./day-waitlist-queries";
 import type { RegistrationRecord } from "./types";
 import { publicUserHeadshotUrl } from "../user-headshot";
 import { eventDayReadModels } from "../event-read-models";
 import { AppError } from "../../errors";
 import { registrationManageReadResponseSchema } from "../../../../assets/shared/schemas/registration";
-import { readRegistrationSponsorSharing } from "../event-participation/sponsor-consent";
+import {
+  prepareRegistrationSponsorSharing,
+  decodeRegistrationSponsorSharing,
+  type RegistrationSponsorSharingRow,
+} from "../event-participation/sponsor-consent";
 import { holdsWorkAddress } from "../../email-domains/contact-kind";
 import { parseVerifiedAddresses, verifiedAddressesJsonSql } from "../user-emails";
 
@@ -31,30 +43,44 @@ export async function buildRegistrationManageView(
   registration: RegistrationRecord,
   appBaseUrl: string,
 ) {
-  const event = await getEventById(db, registration.event_id);
-  const [identityResults, eventDays, dayAttendance, dayWaitlist, registeredCounts, sponsorSharing] = await Promise.all([
-    db.batch([
-      db
-        .prepare(
-          `SELECT u.id, u.email, u.first_name, u.last_name, ${verifiedAddressesJsonSql("u.id")} AS verified_addresses,
+  const [
+    eventResult,
+    userResult,
+    referralResult,
+    daysResult,
+    attendanceResult,
+    waitlistResult,
+    countsResult,
+    sharingResult,
+  ] = await db.batch([
+    prepareEventById(db, registration.event_id),
+    db
+      .prepare(
+        `SELECT u.id, u.email, u.first_name, u.last_name, ${verifiedAddressesJsonSql("u.id")} AS verified_addresses,
              ${REGISTRATION_ORGANIZATION_SQL} AS organization_name, ${REGISTRATION_JOB_TITLE_SQL} AS job_title, u.headshot_r2_key
              FROM registrations r JOIN users u ON u.id = r.user_id
               WHERE r.id = ?`,
-        )
-        .bind(registration.id),
-      db.prepare(firstReferralCodeQuerySql("registration", "?")).bind(registration.id),
-    ]),
-    listEventDays(db, registration.event_id),
-    getRegistrationDayAttendance(db, registration.id),
-    listDayWaitlistForRegistration(db, registration.id),
-    countRegisteredByEventDay(db, event.id),
-    readRegistrationSponsorSharing(db, registration),
+      )
+      .bind(registration.id),
+    db.prepare(firstReferralCodeQuerySql("registration", "?")).bind(registration.id),
+    prepareEventDays(db, registration.event_id),
+    prepareRegistrationDayAttendance(db, registration.id),
+    prepareRegistrationDayWaitlist(db, registration.id),
+    prepareRegisteredEventDayCounts(db, registration.event_id),
+    prepareRegistrationSponsorSharing(db, registration),
   ]);
-  const user = batchFirst<ManageUserRow>(identityResults[0]);
+  const event = batchFirst<EventRecord>(eventResult);
+  if (!event) throw new AppError(404, "EVENT_NOT_FOUND", "Event not found");
+  const eventDays = batchRows<EventDayRecord>(daysResult);
+  const dayAttendance = batchRows<RegistrationDayAttendanceRow>(attendanceResult);
+  const dayWaitlist = batchRows<RegistrationDayWaitlistRow>(waitlistResult);
+  const registeredCounts = decodeRegisteredEventDayCounts(batchRows<EventDayAttendanceCountRow>(countsResult));
+  const sponsorSharing = decodeRegistrationSponsorSharing(batchFirst<RegistrationSponsorSharingRow>(sharingResult));
+  const user = batchFirst<ManageUserRow>(userResult);
   if (!user) {
     throw new AppError(409, "REGISTRATION_USER_MISSING", "The registration identity is no longer available");
   }
-  const referral = batchFirst<{ code: string }>(identityResults[1]);
+  const referral = batchFirst<{ code: string }>(referralResult);
   const headshotUrl = publicUserHeadshotUrl(appBaseUrl, user.id, user.headshot_r2_key);
 
   return registrationManageReadResponseSchema.parse({

@@ -9,7 +9,8 @@
  */
 import { prepareSitePublicationRequest } from "../site-publication-requests";
 import { all } from "../../db/queries";
-import type { DatabaseLike } from "../../types";
+import { batchRows } from "../../db/pagination";
+import type { DatabaseLike, D1StatementResult } from "../../types";
 import type { AgendaSnapshot } from "../../../../assets/shared/schemas/event-agenda";
 import {
   nextPublicPageSlug,
@@ -25,6 +26,10 @@ const HOLDER_PAGE = 500;
 const PUBLIC_CONTRIBUTION_SQL = `(EXISTS(SELECT 1 ${PUBLIC_LEADERSHIP_SOURCE_SQL} AND ur.user_id=person.id)
   OR EXISTS(SELECT 1 ${PUBLIC_SEAT_SOURCE_SQL} AND membership.user_id=person.id)
   OR EXISTS(SELECT 1 ${PUBLIC_CANDIDACY_SOURCE_SQL} AND candidate.user_id=person.id))`;
+// Enumerate contributors once for scheduled issuance instead of probing every account.
+const PUBLIC_CONTRIBUTOR_IDS_SQL = `SELECT ur.user_id ${PUBLIC_LEADERSHIP_SOURCE_SQL}
+  UNION SELECT membership.user_id ${PUBLIC_SEAT_SOURCE_SQL}
+  UNION SELECT candidate.user_id ${PUBLIC_CANDIDACY_SOURCE_SQL}`;
 
 export interface PersonProfileSlugRow {
   slug: string;
@@ -91,32 +96,52 @@ export function planPersonProfileSlugs(
   return changes;
 }
 
-async function readRows(db: DatabaseLike, userIds: readonly string[]) {
-  const rows: PersonProfileSlugRow[] = [];
+function prepareOwnedRows(db: DatabaseLike, userIds: readonly string[]) {
+  const owned = [];
   for (let offset = 0; offset < userIds.length; offset += BATCH)
-    rows.push(
-      ...(await all<PersonProfileSlugRow>(
-        db,
-        `SELECT slug,user_id AS userId,created_at AS createdAt,retired_at AS retiredAt FROM person_profile_slugs
+    owned.push(
+      db
+        .prepare(
+          `SELECT slug,user_id AS userId,created_at AS createdAt,retired_at AS retiredAt FROM person_profile_slugs
           WHERE user_id IN (SELECT value FROM json_each(?)) ORDER BY user_id,created_at,slug`,
-        [JSON.stringify(userIds.slice(offset, offset + BATCH))],
-      )),
+        )
+        .bind(JSON.stringify(userIds.slice(offset, offset + BATCH))),
     );
-  return rows;
+  return owned;
 }
-
-async function readTaken(db: DatabaseLike, bases: readonly string[]) {
-  const taken = new Set<string>();
+async function readRows(db: DatabaseLike, userIds: readonly string[]) {
+  const statements = prepareOwnedRows(db, userIds);
+  return statements.length
+    ? (await db.batch(statements)).flatMap((result) => batchRows<PersonProfileSlugRow>(result))
+    : [];
+}
+function preparePersonSlugPlan(db: DatabaseLike, people: readonly PersonProfileName[]) {
+  const owned = prepareOwnedRows(
+    db,
+    people.map((person) => person.userId),
+  );
+  const bases = [...new Set(people.map((person) => personProfileSlugBase(person.displayName)))];
+  const collisions = [];
   for (let offset = 0; offset < bases.length; offset += BATCH) {
-    const rows = await all<{ slug: string }>(
-      db,
-      `SELECT slug FROM person_profile_slugs slugs JOIN json_each(?) base
+    collisions.push(
+      db
+        .prepare(
+          `SELECT slug FROM person_profile_slugs slugs JOIN json_each(?) base
         ON slugs.slug=base.value OR slugs.slug GLOB base.value||'-[1-9]*'`,
-      [JSON.stringify(bases.slice(offset, offset + BATCH))],
+        )
+        .bind(JSON.stringify(bases.slice(offset, offset + BATCH))),
     );
-    for (const row of rows) taken.add(row.slug);
   }
-  return taken;
+  return {
+    statements: [...owned, ...collisions],
+    decode(loaded: D1StatementResult[]) {
+      const rows = loaded.slice(0, owned.length).flatMap((result) => batchRows<PersonProfileSlugRow>(result));
+      const taken = new Set(
+        loaded.slice(owned.length).flatMap((result) => batchRows<{ slug: string }>(result).map((row) => row.slug)),
+      );
+      return planPersonProfileSlugs(people, rows, taken);
+    },
+  };
 }
 
 /**
@@ -145,18 +170,17 @@ function changeStatements(db: DatabaseLike, changes: readonly PersonProfileSlugC
 }
 
 async function planSlugs(db: DatabaseLike, people: readonly PersonProfileName[]) {
-  if (!people.length) return [];
-  const rows = await readRows(
-    db,
-    people.map((person) => person.userId),
-  );
-  const taken = await readTaken(db, [...new Set(people.map((person) => personProfileSlugBase(person.displayName)))]);
-  return planPersonProfileSlugs(people, rows, taken);
+  const read = preparePersonSlugPlan(db, people);
+  return read.decode(read.statements.length ? await db.batch(read.statements) : []);
 }
 
 /** Statements that give every person this approval credits a public profile address, inside the approval's own batch. */
-export async function prepareSpeakerProfileSlugs(db: DatabaseLike, approved: AgendaSnapshot, at: string) {
-  return changeStatements(db, await planSlugs(db, approvedSpeakerNames(approved.occurrences)), at);
+export function prepareSpeakerProfileSlugsRead(db: DatabaseLike, approved: AgendaSnapshot, at: string) {
+  const read = preparePersonSlugPlan(db, approvedSpeakerNames(approved.occurrences));
+  return {
+    statements: read.statements,
+    decode: (loaded: D1StatementResult[]) => changeStatements(db, read.decode(loaded), at),
+  };
 }
 
 /**
@@ -199,7 +223,7 @@ export async function readUnaddressedContributors(db: DatabaseLike, limit: numbe
     `SELECT person.id FROM users person
       WHERE person.merged_into_user_id IS NULL AND person.pii_redacted_at IS NULL
         AND NOT EXISTS(SELECT 1 FROM person_profile_slugs held WHERE held.user_id=person.id AND held.retired_at IS NULL)
-        AND ${PUBLIC_CONTRIBUTION_SQL}
+        AND person.id IN (${PUBLIC_CONTRIBUTOR_IDS_SQL})
       ORDER BY person.id LIMIT ?`,
     [limit],
   );

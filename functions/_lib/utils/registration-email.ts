@@ -1,4 +1,3 @@
-import { all } from "../db/queries";
 import { formatCustomAnswerValue, isCustomAnswerRecord } from "./custom-answer-display";
 import { resolveEventFormResponse } from "../services/forms";
 import type { DatabaseLike } from "../types";
@@ -67,23 +66,31 @@ export function buildAcceptedTermsText(
  * Use in flows where the original consent list is no longer in scope (e.g.
  * confirm-email, resend, update).
  */
-export async function getAcceptedTermsTextForRegistration(db: DatabaseLike, registrationId: string): Promise<string> {
-  const rows = await all<{ title: string | null }>(
-    db,
-    `SELECT et.display_text AS title
+export function prepareAcceptedRegistrationTerms(db: DatabaseLike, registrationId: string) {
+  return db
+    .prepare(`SELECT et.display_text AS title
      FROM consent_acceptances ca
      JOIN event_terms et
-       ON et.event_id    = ca.event_id
-      AND et.term_key    = ca.term_key
-      AND et.version     = ca.term_version
-     WHERE ca.registration_id = ?
-     ORDER BY ca.term_key ASC`,
-    [registrationId],
-  );
+       ON et.event_id = ca.event_id AND et.term_key = ca.term_key AND et.version = ca.term_version
+     WHERE ca.registration_id = ? ORDER BY ca.term_key ASC`)
+    .bind(registrationId);
+}
+
+export interface AcceptedRegistrationTermRow {
+  title: string | null;
+}
+
+export function decodeAcceptedRegistrationTerms(rows: AcceptedRegistrationTermRow[]): string {
   return rows
-    .map((r) => r.title)
+    .map((row) => row.title)
     .filter(Boolean)
     .join("  \n> - ");
+}
+
+export async function getAcceptedTermsTextForRegistration(db: DatabaseLike, registrationId: string): Promise<string> {
+  return decodeAcceptedRegistrationTerms(
+    (await prepareAcceptedRegistrationTerms(db, registrationId).all<AcceptedRegistrationTermRow>()).results,
+  );
 }
 
 /**

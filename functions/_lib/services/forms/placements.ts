@@ -346,15 +346,26 @@ export async function listFormPlacements(
   return { placements: page.rows.map(mapFormPlacement), total: page.total };
 }
 
-async function queryFormPlacement(
+export interface FormPlacementSelector {
+  placementId?: string;
+  contextType?: FormPlacement["contextType"];
+  contextRef?: string | null;
+  audience?: string;
+}
+
+export function prepareFormPlacementRead(
   db: DatabaseLike,
-  formId: string,
-  selector: { placementId?: string; contextType?: FormPlacement["contextType"]; contextRef?: string | null },
+  form: string | { key: string },
+  selector: FormPlacementSelector,
   activeOnly: boolean,
-): Promise<FormPlacement | null> {
-  const conditions = ["form_id = ?"];
-  const bindings: unknown[] = [formId];
+) {
+  const conditions = [typeof form === "string" ? "form_id = ?" : "form_id = (SELECT id FROM forms WHERE key = ?)"];
+  const bindings: unknown[] = [typeof form === "string" ? form : form.key];
   if (activeOnly) conditions.push("active = 1");
+  if (selector.audience !== undefined) {
+    conditions.push("audience = ?");
+    bindings.push(selector.audience);
+  }
   if (selector.placementId) {
     conditions.push("id = ?");
     bindings.push(selector.placementId);
@@ -363,30 +374,40 @@ async function queryFormPlacement(
     conditions.push("context_type = ?", "context_ref IS ?");
     bindings.push(selector.contextType, selector.contextRef ?? null);
   }
-  const result = await db
-    .prepare(
-      `SELECT ${FORM_PLACEMENT_COLUMNS}
+  return {
+    statement: db
+      .prepare(`SELECT ${FORM_PLACEMENT_COLUMNS}
        FROM form_placements
        WHERE ${conditions.join(" AND ")}
          ${activeOnly ? `AND ${formSubmissionWindowOpenSql("form_placements")}` : ""}
        ORDER BY created_at ASC, id ASC
-       LIMIT 2`,
-    )
-    .bind(...bindings)
-    .all<FormPlacementRow>();
-  const rows = result.results ?? [];
-  if (rows.length === 0) return null;
-  if (rows.length > 1) {
-    throw new AppError(400, "FORM_PLACEMENT_REQUIRED", "Select the form placement whose responses you want");
-  }
-  return mapFormPlacement(rows[0]);
+       LIMIT 2`)
+      .bind(...bindings),
+    decode(rows: FormPlacementRow[]): FormPlacement | null {
+      if (rows.length === 0) return null;
+      if (rows.length > 1) {
+        throw new AppError(400, "FORM_PLACEMENT_REQUIRED", "Select the form placement whose responses you want");
+      }
+      return mapFormPlacement(rows[0]);
+    },
+  };
+}
+
+async function queryFormPlacement(
+  db: DatabaseLike,
+  formId: string,
+  selector: FormPlacementSelector,
+  activeOnly: boolean,
+): Promise<FormPlacement | null> {
+  const read = prepareFormPlacementRead(db, formId, selector, activeOnly);
+  return read.decode((await read.statement.all<FormPlacementRow>()).results ?? []);
 }
 
 /** Resolves response history regardless of whether collection is still open. */
 export function findFormPlacement(
   db: DatabaseLike,
   formId: string,
-  selector: { placementId?: string; contextType?: FormPlacement["contextType"]; contextRef?: string | null },
+  selector: FormPlacementSelector,
 ): Promise<FormPlacement | null> {
   return queryFormPlacement(db, formId, selector, false);
 }
@@ -395,7 +416,7 @@ export function findFormPlacement(
 export function findActiveFormPlacement(
   db: DatabaseLike,
   formId: string,
-  selector: { placementId?: string; contextType?: FormPlacement["contextType"]; contextRef?: string | null },
+  selector: FormPlacementSelector,
 ): Promise<FormPlacement | null> {
   return queryFormPlacement(db, formId, selector, true);
 }
@@ -403,7 +424,7 @@ export function findActiveFormPlacement(
 export async function requireActiveFormPlacement(
   db: DatabaseLike,
   formId: string,
-  selector: { placementId?: string; contextType?: FormPlacement["contextType"]; contextRef?: string | null },
+  selector: FormPlacementSelector,
 ): Promise<FormPlacement> {
   const placement = await findActiveFormPlacement(db, formId, selector);
   if (!placement) {

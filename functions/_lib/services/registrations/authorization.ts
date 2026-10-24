@@ -1,5 +1,4 @@
-import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../db/authorization-guard";
-import { guardDatabaseBatches } from "../../db/guarded-database";
+import { guardAuthorizedDatabase, prepareAuthorizationGuard } from "../../db/authorization-guard";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
 import type { UserRecord } from "../users";
@@ -20,11 +19,8 @@ export function prepareVerifiedRegistrationUserGuard(db: DatabaseLike, user: Use
 }
 
 /** Rechecks selected-group membership and the event's live register capability. */
-export function prepareGroupEventRegistrationGuard(
-  db: DatabaseLike,
-  input: { eventId: string; groupId: string; userId: string },
-): StatementLike {
-  return prepareAuthorizationGuard(db, {
+function groupEventRegistrationEvidence(input: { eventId: string; groupId: string; userId: string }) {
+  return {
     sql: `SELECT 1
             FROM events event
             JOIN groups registration_group
@@ -51,7 +47,14 @@ export function prepareGroupEventRegistrationGuard(
              )
            LIMIT 1`,
     bindings: [input.groupId, input.eventId, input.userId],
-  });
+  };
+}
+
+export function prepareGroupEventRegistrationGuard(
+  db: DatabaseLike,
+  input: { eventId: string; groupId: string; userId: string },
+): StatementLike {
+  return prepareAuthorizationGuard(db, groupEventRegistrationEvidence(input));
 }
 
 /** Rechecks live membership and register access around every group-only configuration read. */
@@ -59,15 +62,9 @@ export function guardGroupEventRegistrationDatabase(
   db: DatabaseLike,
   input: { eventId: string; groupId: string; userId: string },
 ): DatabaseLike {
-  return guardDatabaseBatches(db, async (statements) => {
-    try {
-      const [, ...results] = await db.batch([prepareGroupEventRegistrationGuard(db, input), ...statements]);
-      return results;
-    } catch (error) {
-      if (isAuthorizationGuardFailure(error)) {
-        throw new AppError(403, "EVENT_REGISTRATION_ACCESS_REQUIRED", "Registration access is required");
-      }
-      throw error;
-    }
-  });
+  return guardAuthorizedDatabase(
+    db,
+    groupEventRegistrationEvidence(input),
+    () => new AppError(403, "EVENT_REGISTRATION_ACCESS_REQUIRED", "Registration access is required"),
+  );
 }

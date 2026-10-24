@@ -385,7 +385,6 @@ describe("touch and keyboard agenda destinations", () => {
     expect(host.textContent).not.toContain("Apply reviewed schedule");
     expect(bodies[0]).toMatchObject({
       expectedRevision: 7,
-      reviewHash: "a".repeat(64),
       changes: [{ id: "session", roomId: null, additionalRoomIds: [] }],
     });
     expect(host.querySelectorAll(".pk-agenda-editor__drop")).toHaveLength(0);
@@ -417,8 +416,8 @@ describe("touch and keyboard agenda destinations", () => {
     });
     await settle();
     expect(host.textContent).toContain("Another organizer changed the agenda.");
-    expect(reviews).toHaveLength(1);
-    expect(apply).not.toHaveBeenCalled();
+    expect(reviews).toHaveLength(0);
+    expect(apply).toHaveBeenCalledTimes(1);
     expect(host.querySelectorAll(".pk-agenda-editor__drop").length).toBeGreaterThan(0);
     expect(host.querySelector('[role="status"]')?.textContent).toContain("Original workshop");
     expect(host.textContent).not.toContain("Cancel schedule changes");
@@ -427,8 +426,8 @@ describe("touch and keyboard agenda destinations", () => {
       await Promise.resolve();
     });
     await settle();
-    expect(reviews).toHaveLength(2);
-    expect(apply).not.toHaveBeenCalled();
+    expect(reviews).toHaveLength(0);
+    expect(apply).toHaveBeenCalledTimes(2);
     await act(() =>
       [...host.querySelectorAll<HTMLButtonElement>("button")]
         .find((button) => button.textContent === "Cancel selection")!

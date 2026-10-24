@@ -10,6 +10,13 @@ export async function getAgendaStaffingReport(db: DatabaseLike, eventId: string,
   const unavailable = unfilledPositions.length
     ? await getStaffingUnavailablePairs(db, eventId, { ...snapshot, staffingPositions: unfilledPositions })
     : [];
+  return buildAgendaStaffingReport(snapshot, unavailable);
+}
+
+export function buildAgendaStaffingReport(
+  snapshot: AgendaSnapshot,
+  unavailable: { shiftId: string; userId: string }[],
+) {
   return agendaStaffingReport(
     snapshot,
     new Set(unavailable.map(({ shiftId, userId }) => JSON.stringify([shiftId, userId]))),

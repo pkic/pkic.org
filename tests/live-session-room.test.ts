@@ -98,6 +98,7 @@ describe("live session room admission", () => {
       attendee.socket.addEventListener("close", (event) => resolve({ code: event.code, reason: event.reason })),
     );
     await env.DB.prepare(sql).bind("2000-01-01T00:00:00.000Z", f.users.attendee).run();
+    await runDurableObjectAlarm(f.room());
     attendee.send({ type: "question.ask", text: "This must never be recorded", anonymous: false });
     expect(await closed).toEqual({ code: reason === "LIVE_SESSION_ACCESS_REQUIRED" ? 4403 : 4401, reason });
     const operator = await f.connect({ person: "operator" });
@@ -112,6 +113,7 @@ describe("live session room admission", () => {
     await env.DB.prepare("UPDATE user_roles SET revoked_at=? WHERE user_id=?")
       .bind(new Date().toISOString(), f.users.operator)
       .run();
+    await runDurableObjectAlarm(f.room());
     // Revoking room authority does not invalidate the person's otherwise active sign-in.
     expect(
       (
@@ -429,6 +431,7 @@ describe("live room passive access revocation", () => {
     await env.DB.prepare("UPDATE user_roles SET revoked_at=? WHERE user_id=?")
       .bind(new Date().toISOString(), f.users.operator)
       .run();
+    await runDurableObjectAlarm(f.room());
     attendee.send({ type: "question.ask", text: "Pending private question", anonymous: true });
     await attendee.next("question.changed");
     expect(await closed).toEqual({ code: 4403, reason: "LIVE_SESSION_ACCESS_REQUIRED" });
@@ -460,6 +463,7 @@ describe("live room passive access revocation", () => {
       reader.socket.addEventListener("close", (event) => resolve({ code: event.code, reason: event.reason })),
     );
     await env.DB.prepare(sql).bind(f.users.attendee).run();
+    await runDurableObjectAlarm(f.room());
     author.send({ type: "question.ask", text: "Fresh question after revocation", anonymous: false });
     await author.next("question.changed");
     expect(await closed).toEqual({ code, reason });
@@ -479,6 +483,7 @@ describe("live room passive access revocation", () => {
     await env.DB.prepare("UPDATE user_roles SET revoked_at=? WHERE user_id=?")
       .bind(new Date().toISOString(), f.users.operator)
       .run();
+    await runDurableObjectAlarm(f.room());
     author.send({ type: "question.ask", text: "Anonymous author remains private", anonymous: true });
     await author.next("question.changed");
     expect(await closed).toEqual({ code: 4403, reason: "LIVE_SESSION_ACCESS_CHANGED" });
@@ -498,6 +503,7 @@ describe("passive private poll and queue fanout", () => {
     await env.DB.prepare("UPDATE user_roles SET revoked_at=? WHERE user_id=?")
       .bind(new Date().toISOString(), f.users.operator)
       .run();
+    await runDurableObjectAlarm(f.room());
     author.send({
       type: "poll.save",
       pollId: null,
@@ -528,6 +534,7 @@ describe("passive private poll and queue fanout", () => {
       reader.socket.addEventListener("close", (event) => resolve({ code: event.code, reason: event.reason })),
     );
     await env.DB.prepare("UPDATE registrations SET status='cancelled' WHERE user_id=?").bind(f.users.attendee).run();
+    await runDurableObjectAlarm(f.room());
     author.send({ type: "stage.lowerThird", creditKey: `user:${f.users.speaker}` });
     await author.next("stage.changed");
     expect(await closed).toEqual({ code: 4403, reason: "LIVE_SESSION_ACCESS_REQUIRED" });
@@ -548,6 +555,7 @@ describe("live initial snapshot operator roster authorization", () => {
     await env.DB.prepare("UPDATE user_roles SET revoked_at=? WHERE user_id=?")
       .bind(new Date().toISOString(), f.users.operator)
       .run();
+    await runDurableObjectAlarm(f.room());
     const joining = await f.connect({ person: "secondAttendee" });
     const snapshot = await joining.next("room.snapshot");
     expect(await closed).toEqual({ code: 4403, reason: "LIVE_SESSION_ACCESS_REQUIRED" });

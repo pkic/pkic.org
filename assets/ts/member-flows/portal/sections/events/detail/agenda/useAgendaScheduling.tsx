@@ -4,7 +4,6 @@ import type { z } from "zod";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import {
   agendaScheduleProposalSchema,
-  agendaScheduleReviewSchema,
   agendaScheduleApplySchema,
   AGENDA_SCHEDULE_BATCH_LIMIT,
   type AgendaScheduleProposal,
@@ -56,13 +55,7 @@ export function useAgendaScheduling(
     setRefusal(null);
     const endpoint = `/api/v1/events/${encodeURIComponent(snapshot.eventSlug)}/agenda/schedule`;
     try {
-      const request = agendaScheduleProposalSchema.parse(proposal);
-      const reviewed = await postJson(`${endpoint}/reviews`, request, agendaScheduleReviewSchema);
-      const next = await postJson(
-        endpoint,
-        agendaScheduleApplySchema.parse({ ...request, reviewHash: reviewed.reviewHash }),
-        agendaSnapshotSchema,
-      );
+      const next = await postJson(endpoint, agendaScheduleApplySchema.parse(proposal), agendaSnapshotSchema);
       onSaved(next);
       onCommitted();
       return { saved: true, message: "" };

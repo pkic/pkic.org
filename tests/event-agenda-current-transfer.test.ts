@@ -15,6 +15,8 @@ import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { individualAppearanceFixture } from "./helpers/agenda-appearances";
 import { resetDb } from "./helpers/reset-db";
+import { readSitePublicationSnapshot } from "../functions/_lib/services/site-publication-snapshot";
+import { approvedEventAgendaForRoute } from "../functions/_lib/services/site-published-event-agendas";
 
 const sourcePath = "content/events/2026/pqc-conference-amsterdam-nl/_index.md";
 const sourceDigest = "c".repeat(64);
@@ -194,6 +196,12 @@ describe("current agenda transfer for an upcoming authored program", () => {
     expect(published.status, await published.clone().text()).toBe(200);
     const snapshot = agendaSnapshotSchema.parse(await published.json());
     expect(snapshot.publishedRevision).toBe(snapshot.revision);
+    const authored = { sourcePath, sourceDigest, route: "/events/2026/pqc-conference-amsterdam-nl/" };
+    const publication = await readSitePublicationSnapshot(env.DB, [], [], [authored]);
+    expect(publication.authoredAgendaRoutes).toEqual([{ ...authored, eventSlug: snapshot.eventSlug }]);
+    expect(approvedEventAgendaForRoute(publication, authored.route)?.occurrences.map((item) => item.title)).toEqual(
+      expect.arrayContaining(["Opening keynote", "Coffee break"]),
+    );
   });
 
   it("blocks unresolved people, source-only credits, not-recorded decisions and unknown ends", async () => {

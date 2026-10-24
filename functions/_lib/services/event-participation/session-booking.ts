@@ -9,15 +9,90 @@ import {
 import { sessionAttendanceModeForDay } from "../../../../assets/shared/event-participation-availability";
 import { instantToDateTimeLocal } from "../../../../assets/shared/timezone";
 import { first } from "../../db/queries";
-import type { DatabaseLike } from "../../types";
+import { batchFirst } from "../../db/pagination";
+import type { DatabaseLike, D1StatementResult, Env } from "../../types";
 import { nowIso } from "../../utils/time";
 import { publishedSessionsSql } from "./published-schedule";
 import { AppError } from "../../errors";
 import { prepareAuthorizationGuard, isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import { remoteOccupiedSql } from "./capacity-accounting";
-import { registrationDayAttendanceSql } from "./session-access";
+import {
+  registrationDayAttendanceSql,
+  registrationSessionDayOptionsSql,
+  registrationSessionAttendance,
+} from "./session-access";
 import { prepareScopedAuditLogAfterOneChange, isAuditChangeGuardFailure } from "../audit";
 import { HELD_PARTICIPATION_STATUSES } from "./personal-agenda-membership";
+import { eventReadIdSql, type EventReadSelection } from "../events/selection";
+import { readParticipantEvent } from "./participant-read-context";
+import { participantSessionDatabase } from "./self-authorization";
+
+interface ParticipationBasis {
+  event_id: string;
+  published_revision: number;
+  admission_policy: string;
+  visibility: string;
+  start_at: string | null;
+  timezone: string;
+  approval_state: string | null;
+  prior_status: string | null;
+  prior_participation_id: string | null;
+  prior_mode: "physical" | "remote" | null;
+  access_policy: string;
+  booking_opens_at: string | null;
+  booking_closes_at: string | null;
+  invited: number;
+  registered: number;
+  registration_default_mode: string | null;
+  registration_days_json: string | null;
+}
+
+function prepareParticipationBasis(db: DatabaseLike, event: EventReadSelection, occurrenceId: string, userId: string) {
+  const scope = eventReadIdSql(event);
+  return {
+    statements: [
+      db
+        .prepare(`SELECT s.event_id,s.published_revision,s.visibility,p.id AS prior_participation_id,s.admission_policy,s.start_at,s.timezone,p.status AS prior_status,p.attendance_mode AS prior_mode,p.approval_state,s.access_policy,s.booking_opens_at,s.booking_closes_at,EXISTS(SELECT 1 FROM agenda_session_invitations invitation WHERE invitation.occurrence_id=s.id AND invitation.user_id=p.user_id AND invitation.revoked_at IS NULL) AS invited,
+      reg.id IS NOT NULL AS registered,reg.attendance_type AS registration_default_mode,${registrationSessionDayOptionsSql("reg", "s")} AS registration_days_json
+      FROM (${publishedSessionsSql}) s LEFT JOIN agenda_session_participations p ON p.occurrence_id=s.id AND p.user_id=?
+      LEFT JOIN registrations reg ON reg.event_id=s.event_id AND reg.user_id=? AND reg.status='registered'
+      WHERE s.id=? AND s.event_id=${scope.sql}`)
+        .bind(userId, userId, occurrenceId, ...scope.bindings),
+    ],
+    decode(results: D1StatementResult[]) {
+      const session = batchFirst<ParticipationBasis>(results[0]);
+      if (!session) throw new AppError(404, "SESSION_NOT_FOUND", "Session not found.");
+      return session;
+    },
+  };
+}
+
+/** Preflight is one authenticated snapshot; the second call retains the atomic primary command. */
+export async function setSessionParticipationRequest(
+  db: DatabaseLike,
+  request: Request,
+  env: Pick<Env, "INTERNAL_SIGNING_SECRET">,
+  eventSlug: string,
+  occurrenceId: string,
+  input: unknown,
+) {
+  const basis = await readParticipantEvent(db, request, env, eventSlug, "audience", (userId, event, sessionId) => {
+    const read = prepareParticipationBasis(db, event, occurrenceId, userId);
+    return {
+      statements: read.statements,
+      decode: (results: D1StatementResult[]) => ({ session: read.decode(results), userId, sessionId }),
+    };
+  });
+  return applySessionParticipation(
+    participantSessionDatabase(db, basis.userId, basis.sessionId),
+    basis.session.event_id,
+    occurrenceId,
+    basis.userId,
+    input,
+    {},
+    basis.session,
+  );
+}
 
 interface ParticipationOptions {
   management?: { actorId: string; reasonCode: string };
@@ -51,6 +126,7 @@ async function applySessionParticipation(
   userId: string,
   raw: unknown,
   { management, cancelUnstars = false }: ParticipationOptions,
+  preparedSession?: ParticipationBasis,
 ) {
   const input = sessionParticipationCommandSchema.parse(raw);
   const requiresReconfirmation =
@@ -61,26 +137,8 @@ async function applySessionParticipation(
       "SESSION_PUBLICATION_CHANGED",
       "The published agenda changed. Refresh it and confirm your choice again. Any existing reservation has been preserved.",
     );
-  const session = await first<{
-    published_revision: number;
-    admission_policy: string;
-    visibility: string;
-    start_at: string | null;
-    timezone: string;
-    approval_state: string | null;
-    prior_status: string | null;
-    prior_participation_id: string | null;
-    prior_mode: "physical" | "remote" | null;
-    access_policy: string;
-    booking_opens_at: string | null;
-    booking_closes_at: string | null;
-    invited: number;
-  }>(
-    db,
-    `SELECT s.published_revision,s.visibility,p.id AS prior_participation_id,s.admission_policy,s.start_at,s.timezone,p.status AS prior_status,p.attendance_mode AS prior_mode,p.approval_state,s.access_policy,s.booking_opens_at,s.booking_closes_at,EXISTS(SELECT 1 FROM agenda_session_invitations invitation WHERE invitation.occurrence_id=s.id AND invitation.user_id=p.user_id AND invitation.revoked_at IS NULL) AS invited FROM (${publishedSessionsSql}) s LEFT JOIN agenda_session_participations p ON p.occurrence_id=s.id AND p.user_id=? WHERE s.id=? AND s.event_id=?`,
-    [userId, occurrenceId, eventId],
-  );
-  if (!session) throw new AppError(404, "SESSION_NOT_FOUND", "Session not found.");
+  const read = prepareParticipationBasis(db, eventId, occurrenceId, userId);
+  const session = preparedSession ?? read.decode(await db.batch(read.statements));
   if (requiresReconfirmation && input.expectedPublishedRevision !== session.published_revision)
     throw stalePublication();
   if (input.action === "reserve" && session.admission_policy === "preference" && session.prior_status !== "reserved")
@@ -106,17 +164,14 @@ async function applySessionParticipation(
     session.prior_status && (HELD_PARTICIPATION_STATUSES as readonly string[]).includes(session.prior_status),
   );
   const retainingAllocation = ["save", "unsave"].includes(input.action) && holding;
-  const attendanceMode = await resolveAttendanceMode();
-  async function resolveAttendanceMode(): Promise<"physical" | "remote"> {
+  const attendanceMode = resolveAttendanceMode();
+  function resolveAttendanceMode(): "physical" | "remote" {
     if (retainingAllocation && session!.prior_mode) return session!.prior_mode;
     if (input.attendanceMode) return input.attendanceMode;
     if (["save", "unsave", "cancel"].includes(input.action) && session!.prior_mode) return session!.prior_mode;
-    const registration = await first<{ mode: string | null }>(
-      db,
-      `SELECT ${registrationDayAttendanceSql("reg", "?")} AS mode FROM registrations reg WHERE reg.event_id=? AND reg.user_id=? AND reg.status='registered'`,
-      [date, date, eventId, userId],
+    const derived = sessionAttendanceModeForDay(
+      registrationSessionAttendance({ ...session!, startAt: session!.start_at, timeZone: session!.timezone }),
     );
-    const derived = sessionAttendanceModeForDay(registration?.mode ?? null);
     if (derived) return derived;
     // A star or a release holds no seat, so its mode is inert.
     if (["save", "unsave", "cancel"].includes(input.action)) return "physical";
@@ -286,9 +341,17 @@ async function applySessionParticipation(
         ]
       : []),
   ];
+  const response = db
+    .prepare(
+      "SELECT status,attendance_mode AS attendanceMode FROM agenda_session_participations WHERE occurrence_id=? AND user_id=?",
+    )
+    .bind(occurrenceId, userId);
   let result;
+  let row;
   try {
-    [result] = await db.batch(statements);
+    const results = await db.batch([...statements, response]);
+    result = results[0];
+    row = batchFirst(results[results.length - 1]);
   } catch (error) {
     if (requiresReconfirmation && isAuthorizationGuardFailure(error)) {
       const current = await first<{ published_revision: number | null }>(
@@ -312,11 +375,6 @@ async function applySessionParticipation(
       "SESSION_PARTICIPATION_CONFLICT",
       "Check your event registration, attendance mode, session access, or overlapping reservations. Any existing reservation has been preserved.",
     );
-  const row = await first(
-    db,
-    "SELECT status,attendance_mode AS attendanceMode FROM agenda_session_participations WHERE occurrence_id=? AND user_id=?",
-    [occurrenceId, userId],
-  );
   return sessionParticipationResponseSchema.parse(row);
 }
 

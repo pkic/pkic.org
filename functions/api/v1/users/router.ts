@@ -7,6 +7,7 @@ import currentUserRouter from "./current/router";
 import publicUserHeadshotsRouter from "./[userId]/headshots/router";
 import communityProfileRouter from "./[userId]/community-profile-router";
 import userIdRouter from "./[userId]/router";
+import { UserAuditLogGet } from "./[userId]/audit-log";
 
 const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
@@ -20,6 +21,8 @@ openapi.route("/:userId/headshots", publicUserHeadshotsRouter);
 // registered before the staff-only D1 session boundary below and carries its
 // own authorization.
 openapi.route("/:userId", communityProfileRouter);
+// This read composes its live staff authorization with the scoped audit page.
+openapi.get("/:userId/audit-log", UserAuditLogGet);
 app.use("*", createRequestScopedD1SessionMiddleware());
 openapi.get("/", UsersList);
 openapi.post("/", UserCreate);

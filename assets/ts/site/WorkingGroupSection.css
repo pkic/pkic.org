@@ -144,7 +144,11 @@
     padding: 1.75rem;
     border: 1px solid color-mix(in srgb, var(--pk-wg-accent) 15%, transparent);
     border-radius: var(--pk-public-radius-card-lg);
-    background: linear-gradient(145deg, var(--pk-surface) 0%, color-mix(in srgb, var(--pk-wg-accent) 8%, transparent) 100%);
+    background: linear-gradient(
+      145deg,
+      var(--pk-surface) 0%,
+      color-mix(in srgb, var(--pk-wg-accent) 8%, transparent) 100%
+    );
     box-shadow: 0 4px 12px color-mix(in srgb, var(--pk-wg-accent) 5%, transparent);
     color: var(--pk-ink);
     text-decoration: none;
@@ -212,7 +216,6 @@
     font-size: var(--pk-text-sm);
     font-weight: 600;
   }
-
 
   .pk-wg-cta {
     padding-block: var(--pk-7);

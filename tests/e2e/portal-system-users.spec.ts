@@ -160,23 +160,24 @@ test("staff read registration and account changes through the shared audit table
     await expect(registrationHistory).toBeVisible();
 
     await page.goto(`/portal/#/users/${record!.user_id}`);
-    const accountHistory = page.getByRole("region", { name: "Account history", exact: true });
-    await expect(accountHistory.getByRole("table", { name: "Account history", exact: true })).toBeVisible();
+    await expect(page.getByRole("table", { name: "Audit log", exact: true })).toHaveCount(0);
+    const auditLoaded = page.waitForResponse((response) =>
+      new URL(response.url()).pathname.endsWith(`/users/${record!.user_id}/audit-log`),
+    );
+    await page.getByRole("tab", { name: "Audit log", exact: true }).click();
+    expect((await auditLoaded).status()).toBe(200);
+    const accountHistory = page.getByRole("tabpanel", { name: "Audit log", exact: true });
+    await expect(accountHistory.getByRole("table", { name: "Audit log", exact: true })).toBeVisible();
     await expect(accountHistory.getByText("user updated", { exact: true })).toBeVisible();
-    const emailAddresses = page.getByRole("region", { name: "Email addresses", exact: true });
-    await expect(emailAddresses).toBeVisible();
-    expect(
-      await emailAddresses.evaluate((panel) =>
-        Boolean(
-          panel.compareDocumentPosition(document.querySelector('[aria-label="Account history"]')!) &
-          Node.DOCUMENT_POSITION_FOLLOWING,
-        ),
-      ),
-    ).toBe(true);
+    await expect(page.getByRole("heading", { name: /^Audit example/ })).toBeVisible();
+    await expect(page).toHaveURL(new RegExp(`/users/${record!.user_id}/audit-log$`));
+    await page.reload();
+    await expect(page.getByRole("tab", { name: "Audit log", exact: true })).toHaveAttribute("aria-selected", "true");
+    await expect(accountHistory.getByText("user updated", { exact: true })).toBeVisible();
     for (const width of [1280, 375]) {
       await page.setViewportSize({ width, height: 900 });
       await page.evaluate(() => window.scrollTo(0, 0));
-      await page.screenshot({ path: info.outputPath(`account-history-${width}.png`), fullPage: true });
+      await page.screenshot({ path: info.outputPath(`account-audit-log-${width}.png`), fullPage: true });
     }
   } finally {
     await context.close();

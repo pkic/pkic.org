@@ -49,6 +49,7 @@ const EXPECTED_BASELINE_TEMPLATE_KEYS = [
   "proposal_manage_link_transferred",
   "proposal_organizational_representation_request",
   "proposal_representation_review",
+  "proposal_speaker_confirmed_by_organizer",
   "proposal_submitted",
   "registration_confirm_email",
   "registration_confirmation_reminder",
@@ -119,6 +120,36 @@ describe("buildTemplateSqlStatements", () => {
       expect(rendered.html).not.toContain("{{");
     },
   );
+  it("renders organizer speaker confirmation from the seeded template", async () => {
+    const seeded = DEFAULT_TEMPLATES.find((item) => item.key === "proposal_speaker_confirmed_by_organizer")!;
+    const rendered = await renderEmail(
+      seeded.content,
+      {
+        eventName: emailPlainText("Test Conference"),
+        proposalTitle: emailPlainText("Certificate Automation"),
+        speakerName: emailPlainText("Test Speaker"),
+        organizationName: emailPlainText("Speaker Organization"),
+        contactEmail: "contact@pkic.org",
+        terms: [
+          {
+            label: emailPlainText("Recording permission"),
+            version: emailPlainText("v2"),
+            helpText: emailPlainText("Publication permitted"),
+            contentRef: emailPlainText("https://example.test/terms"),
+          },
+        ],
+      },
+      DEFAULT_LAYOUT_HTML,
+      seeded.contentType ?? "markdown",
+    );
+    expect(rendered.text).toContain("on your behalf");
+    expect(rendered.text).toContain("Speaker Organization");
+    expect(rendered.text).toContain("Recording permission");
+    expect(rendered.text).toContain("Publication permitted");
+    expect(rendered.text).toContain("v2");
+    expect(rendered.text).toContain("contact@pkic.org");
+  });
+
   it("delivers a dedicated speaker representation link without depending on the configured submission template", async () => {
     const review = DEFAULT_TEMPLATES.find((item) => item.key === "proposal_representation_review")!;
     const rendered = await renderEmail(

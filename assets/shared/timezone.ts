@@ -7,9 +7,16 @@ export interface ZonedDateTimeParts {
   second: number;
 }
 
+// Agenda redraws convert many instants in the same zone. Reuse the formatter,
+// not a formatted instant: its IANA rules still resolve each date's DST offset.
+const zonedFormatters = new Map<string, Intl.DateTimeFormat>();
+const MAX_CACHED_ZONES = 32;
+
 function formatter(timeZone: string): Intl.DateTimeFormat {
+  const existing = zonedFormatters.get(timeZone);
+  if (existing) return existing;
   try {
-    return new Intl.DateTimeFormat("en-US-u-ca-gregory", {
+    const result = new Intl.DateTimeFormat("en-US-u-ca-gregory", {
       timeZone,
       year: "numeric",
       month: "2-digit",
@@ -19,6 +26,9 @@ function formatter(timeZone: string): Intl.DateTimeFormat {
       second: "2-digit",
       hourCycle: "h23",
     });
+    if (zonedFormatters.size >= MAX_CACHED_ZONES) zonedFormatters.delete(zonedFormatters.keys().next().value!);
+    zonedFormatters.set(timeZone, result);
+    return result;
   } catch {
     throw new RangeError(`Unknown IANA time zone: ${timeZone}`);
   }

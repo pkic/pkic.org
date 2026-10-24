@@ -1,14 +1,15 @@
 import { selectedContentFeedbackUrl } from "../../ts/site/content-selection-feedback";
 
 (function () {
-  var editLink = document.querySelector('[data-content-feedback-link], .edit-on-github');
+  var contextElement = document.querySelector('[data-content-contribution]');
+  var editLink = contextElement || document.querySelector('.edit-on-github');
   if (!editLink) return;
-  var hasContext = Boolean(document.querySelector('[data-content-contribution]'));
+  var hasContext = Boolean(contextElement);
 
   // If the page body has a data-edit-url (for dynamically-generated pages),
   // use that as the default edit URL instead of the page's file path.
   var pageBody = document.querySelector('[data-pagefind-body]');
-  var defaultEditUrl = editLink.href;
+  var defaultEditUrl = contextElement ? contextElement.dataset.contentFeedbackUrl : editLink.href;
   if (!hasContext && pageBody && pageBody.dataset.editUrl) {
     defaultEditUrl = pageBody.dataset.editUrl;
     editLink.href = defaultEditUrl;
@@ -49,7 +50,6 @@ import { selectedContentFeedbackUrl } from "../../ts/site/content-selection-feed
     var feedbackUrl = selectedContentFeedbackUrl(document, sel, window.location.href);
     if (hasContext && !feedbackUrl) { tooltip.classList.remove('is-visible'); return; }
     tooltip.href = feedbackUrl || dataEditUrl || defaultEditUrl;
-    if (feedbackUrl) editLink.href = feedbackUrl;
 
     var tw = tooltip.offsetWidth || 160;
     var th = tooltip.offsetHeight || 32;

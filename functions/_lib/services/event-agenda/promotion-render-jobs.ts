@@ -12,7 +12,7 @@ import { sha256Hex } from "../../utils/crypto";
 import { createDurableJobLease, durableRenderRetry } from "../../jobs/lease";
 import { AppError } from "../../errors";
 import { getPromotionKit } from "./promotion-kit";
-import { renderPromotionArtifact } from "./promotion-artifact";
+import type { renderPromotionArtifact } from "./promotion-artifact";
 import { storePromotionArtifact } from "./promotion-storage";
 type Source = Awaited<ReturnType<typeof getPromotionKit>> | Awaited<ReturnType<typeof getAttendeePromotionKit>>;
 interface Job {
@@ -79,7 +79,7 @@ export async function processPromotionRenderJob(
   db: DatabaseLike,
   env: Env,
   id: string,
-  render: typeof renderPromotionArtifact = renderPromotionArtifact,
+  render?: typeof renderPromotionArtifact,
 ) {
   const job = await first<Job>(
     db,
@@ -123,7 +123,8 @@ export async function processPromotionRenderJob(
     if (source.kit.fingerprint !== job.fingerprint)
       throw new AppError(409, "PROMOTION_SOURCE_CHANGED", "Promotion material changed. Prepare a new kit.");
     const branding = await promotionSponsorArtwork(db, env, job.event_id);
-    const artifact = await render(
+    const renderArtifact = render ?? (await import("./promotion-artifact")).renderPromotionArtifact;
+    const artifact = await renderArtifact(
       env,
       job.origin,
       { ...source, ...source.kit, sponsors: branding.sponsors },

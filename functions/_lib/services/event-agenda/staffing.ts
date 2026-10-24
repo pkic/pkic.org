@@ -11,7 +11,7 @@ import { prepareScopedAuditLog } from "../audit";
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
 import { getAgenda } from "./read";
-import { commitAgendaRevision } from "./revision";
+import { commitAgendaSnapshot } from "./commit-snapshot";
 
 export async function saveAgendaStaffing(
   db: DatabaseLike,
@@ -288,7 +288,7 @@ export async function saveAgendaStaffing(
       ),
     );
   try {
-    await commitAgendaRevision(db, eventId, input.expectedRevision, statements, actorUserId);
+    return await commitAgendaSnapshot(db, eventId, eventSlug, input.expectedRevision, statements, actorUserId);
   } catch (error) {
     const constraint =
       error instanceof Error &&
@@ -315,7 +315,6 @@ export async function saveAgendaStaffing(
       formErrors: Object.keys(fieldErrors).length ? [] : [message],
     });
   }
-  return getAgenda(db, eventId, eventSlug);
 }
 export async function allocateStaffing(
   db: DatabaseLike,

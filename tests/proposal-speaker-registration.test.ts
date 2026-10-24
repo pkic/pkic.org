@@ -1,5 +1,5 @@
 import { administratorGrants } from "./helpers/administrator";
-import { mutateBeforeNextBatch } from "./helpers/database-races";
+import { mutateBeforeMatchingQuery } from "./helpers/database-races";
 import { createExecutionContext } from "cloudflare:test";
 import { createRegistration } from "../functions/_lib/services/registrations/create";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -251,14 +251,17 @@ describe("accepted proposal speaker registration", () => {
   it("rolls back acceptance if a speaker registers concurrently, then succeeds on retry", async () => {
     const { proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitCapacityProposal(adminSessionToken);
     await env.DB.prepare("UPDATE event_days SET in_person_capacity = NULL WHERE event_id = ?").bind(eventId).run();
-    const racingDb = mutateBeforeNextBatch(env.DB, () =>
-      createRegistration(env.DB, {
-        event: { id: eventId },
-        userId: coSpeakerUserId,
-        attendanceType: "virtual",
-        sourceType: "public",
-        dayAttendance: [{ dayDate: "2026-12-02", attendanceType: "virtual" }],
-      }),
+    const racingDb = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => /INSERT INTO registrations\b/.test(sql),
+      () =>
+        createRegistration(env.DB, {
+          event: { id: eventId },
+          userId: coSpeakerUserId,
+          attendanceType: "virtual",
+          sourceType: "public",
+          dayAttendance: [{ dayDate: "2026-12-02", attendanceType: "virtual" }],
+        }),
     );
     await expect(
       finalizeProposalDecision(racingDb, {

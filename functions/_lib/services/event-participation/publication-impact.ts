@@ -1,9 +1,10 @@
 import type { AgendaSnapshot } from "../../../../assets/shared/schemas/event-agenda";
 import { instantToDateTimeLocal } from "../../../../assets/shared/timezone";
 import { first } from "../../db/queries";
+import { batchFirst } from "../../db/pagination";
 import { prepareAuthorizationGuard } from "../../db/authorization-guard";
 import { AppError } from "../../errors";
-import type { DatabaseLike } from "../../types";
+import type { DatabaseLike, D1StatementResult } from "../../types";
 import { prepareParticipationReconciliation } from "./reconciliation";
 function bookingOverlapEvidence(eventId: string, snapshot: AgendaSnapshot) {
   return {
@@ -19,7 +20,20 @@ function bookingOverlapEvidence(eventId: string, snapshot: AgendaSnapshot) {
 }
 export async function assertPublicationParticipation(db: DatabaseLike, eventId: string, snapshot: AgendaSnapshot) {
   const evidence = bookingOverlapEvidence(eventId, snapshot);
-  if (!(await first(db, evidence.sql, evidence.bindings)))
+  assertParticipationEvidence(await first(db, evidence.sql, evidence.bindings));
+}
+export function preparePublicationParticipationRead(db: DatabaseLike, eventId: string, snapshot: AgendaSnapshot) {
+  const evidence = bookingOverlapEvidence(eventId, snapshot);
+  return {
+    statements: [db.prepare(evidence.sql).bind(...evidence.bindings)],
+    decode(loaded: D1StatementResult[]) {
+      assertParticipationEvidence(batchFirst(loaded[0]));
+      return [prepareAuthorizationGuard(db, evidence)];
+    },
+  };
+}
+function assertParticipationEvidence(row: unknown) {
+  if (!row)
     throw new AppError(
       409,
       "AGENDA_ATTENDEE_OVERLAP",

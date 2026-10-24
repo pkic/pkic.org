@@ -1,14 +1,24 @@
+import { guardDatabaseBatches } from "../../db/guarded-database";
 import {
   eventScanResponseSchema,
   type EventScanRequest,
   type EventScanResponse,
 } from "../../../../assets/shared/schemas/event-participation-scanning";
-import { first } from "../../db/queries";
+import { batchFirst } from "../../db/pagination";
 import { prepareScannerLifecycleGuard, isScannerLifecycleGuardFailure } from "./scanner-lifecycle-guard";
-import type { DatabaseLike, StatementLike } from "../../types";
+import type { DatabaseLike, StatementLike, D1StatementResult } from "../../types";
 import { AppError } from "../../errors";
 import { nowIso } from "../../utils/time";
 import { hashBadgeCredential } from "./badge-hash";
+import { eventReadIdSql, type EventReadSelection } from "../events/selection";
+
+interface ScannerUploadReceiptRow {
+  request_hash: string;
+  response_json: string;
+  sequence: number;
+  operation_id: string;
+  epoch_id: string;
+}
 
 export type ScannerUploadIdentity = Pick<
   EventScanRequest,
@@ -25,32 +35,28 @@ export type ScannerUploadIdentity = Pick<
   | "scannedValueTruncated"
 >;
 
-export const scannerCaptureOpenSql = `NOT EXISTS(SELECT 1 FROM event_evidence_retention_state retired WHERE retired.event_id=? AND (retired.capture_closed_at IS NOT NULL OR retired.active_run_id IS NOT NULL))`;
+/** Trusted event expression only; the bound adapter below serves existing write guards. */
+export function scannerCaptureOpenForEventSql(eventSql: string) {
+  return `NOT EXISTS(SELECT 1 FROM event_evidence_retention_state retired WHERE retired.event_id=${eventSql} AND (retired.capture_closed_at IS NOT NULL OR retired.active_run_id IS NOT NULL))`;
+}
+export const scannerCaptureOpenSql = scannerCaptureOpenForEventSql("?");
 
-/** A received business refusal resolves upload transport without asserting admission or presence. */
-export async function receiveScannerUpload(
+/** Prepare an immutable envelope lookup without reading or recording it. */
+export async function prepareScannerUploadReceipt(
   db: DatabaseLike,
-  eventId: string,
+  event: EventReadSelection,
   scan: ScannerUploadIdentity,
-  capture: (guarded: DatabaseLike) => Promise<unknown>,
-): Promise<EventScanResponse> {
+) {
+  const scope = eventReadIdSql(event);
   const session = scan.scannerSession;
   if (!session)
     throw new AppError(409, "SCANNER_ENROLLMENT_REQUIRED", "Prepare this scanner online before uploading scans.");
   const requestHash = await hashBadgeCredential(JSON.stringify(scan));
-  const readReceipt = async () => {
-    const row = await first<{
-      request_hash: string;
-      response_json: string;
-      sequence: number;
-      operation_id: string;
-      epoch_id: string;
-    }>(
-      db,
-      `SELECT receipt.request_hash,receipt.response_json,receipt.sequence,receipt.operation_id,receipt.epoch_id FROM event_scanner_upload_receipts receipt JOIN event_scanner_device_sessions session ON session.id=receipt.epoch_id
-       WHERE session.event_id=? AND session.operator_user_id=? AND session.device_id=? AND (receipt.operation_id=? OR (receipt.epoch_id=? AND receipt.sequence=?))`,
-      [eventId, scan.operatorUserId, scan.deviceId, scan.operationId, session.epochId, session.sequence],
-    );
+  const receiptRead = db
+    .prepare(`SELECT receipt.request_hash,receipt.response_json,receipt.sequence,receipt.operation_id,receipt.epoch_id FROM event_scanner_upload_receipts receipt JOIN event_scanner_device_sessions session ON session.id=receipt.epoch_id
+       WHERE session.event_id=${scope.sql} AND session.operator_user_id=? AND session.device_id=? AND (receipt.operation_id=? OR (receipt.epoch_id=? AND receipt.sequence=?))`)
+    .bind(...scope.bindings, scan.operatorUserId, scan.deviceId, scan.operationId, session.epochId, session.sequence);
+  const decodeReceipt = (row: ScannerUploadReceiptRow | null) => {
     if (!row) return null;
     if (
       row.request_hash !== requestHash ||
@@ -65,10 +71,33 @@ export async function receiveScannerUpload(
       );
     return eventScanResponseSchema.parse(JSON.parse(row.response_json));
   };
-  const replay = await readReceipt();
+  return {
+    statement: receiptRead,
+    requestHash,
+    decode: decodeReceipt,
+  };
+}
+
+/** A received business refusal resolves upload transport without asserting admission or presence. */
+export async function receiveScannerUpload(
+  db: DatabaseLike,
+  eventId: string,
+  scan: ScannerUploadIdentity,
+  capture: (guarded: DatabaseLike) => Promise<unknown>,
+  preloadedReceipt?: D1StatementResult,
+): Promise<EventScanResponse> {
+  const session = scan.scannerSession;
+  if (!session)
+    throw new AppError(409, "SCANNER_ENROLLMENT_REQUIRED", "Prepare this scanner online before uploading scans.");
+  const receipt = await prepareScannerUploadReceipt(db, eventId, scan);
+  const { statement: receiptRead, requestHash, decode: decodeReceipt } = receipt;
+  const decodeResult = (result: D1StatementResult) => decodeReceipt(batchFirst<ScannerUploadReceiptRow>(result));
+  const readReceipt = async () => decodeReceipt(await receiptRead.first<ScannerUploadReceiptRow>());
+  const replay = preloadedReceipt === undefined ? await readReceipt() : decodeResult(preloadedReceipt);
   if (replay) return replay;
   const receivedAt = nowIso();
   let committed = false;
+  let committedResponse: EventScanResponse | null = null;
   const execute = async (statements: StatementLike[]) => {
     const guard = prepareScannerLifecycleGuard(db, {
       sql: `SELECT 1 FROM event_scanner_device_sessions session WHERE session.id=? AND session.event_id=? AND session.operator_user_id=? AND session.device_id=? AND session.closed_at IS NULL AND (session.high_water_sequence IS NULL OR ?>=1 AND ?<=session.high_water_sequence) AND ${scannerCaptureOpenSql}`,
@@ -149,11 +178,15 @@ export async function receiveScannerUpload(
         .prepare("UPDATE event_scanner_device_sessions SET last_receipt_at=? WHERE id=?")
         .bind(receivedAt, session.epochId),
       guard.cleanup,
+      receiptRead,
     ]);
+    committedResponse = decodeResult(results[results.length - 1]);
     committed = true;
     return results.slice(1, 1 + statements.length);
   };
-  const guarded: DatabaseLike = { prepare: (query) => db.prepare(query), batch: execute };
+  const guarded = guardDatabaseBatches(db, (statements, readOnly) =>
+    readOnly ? db.batch(statements) : execute(statements),
+  );
   try {
     await capture(guarded);
     // Unknown credentials and business replays can legitimately have no business mutation batch.
@@ -182,7 +215,6 @@ export async function receiveScannerUpload(
     }
     throw error;
   }
-  const response = await readReceipt();
-  if (!response) throw new Error("Scanner upload receipt did not commit");
-  return response;
+  if (!committedResponse) throw new Error("Scanner upload receipt did not commit");
+  return committedResponse;
 }

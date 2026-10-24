@@ -2,17 +2,24 @@ import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { scopedAuditLogResponseSchema } from "../assets/shared/schemas/audit-log";
 import { prepareAuditLog, serializeAuditDetails } from "../functions/_lib/services/audit";
-import { callApi } from "./helpers/app";
+import { callApi as requestApi } from "./helpers/app";
 import { resetDb } from "./helpers/reset-db";
 import { onlyPersona } from "./personas/catalog";
 import { seedPersona } from "./personas/seed";
 
 beforeEach(() => resetDb());
 
+const callApi: typeof requestApi = (env, path, init) => requestApi(env, path, init, { maxRoundTrips: 1 });
+
 describe("User account audit history", () => {
   it("reads only the target account's changes with shared search, sort, filters and paging", async () => {
     const reader = await seedPersona(env.DB, onlyPersona("users:read"));
     const target = await seedPersona(env.DB, onlyPersona("admin:read"));
+    await env.DB.prepare("UPDATE users SET email = ? WHERE id = ?")
+      .bind("ada-audit-actor@example.test", target.userId)
+      .run();
+    // Search includes actor emails and UUIDs; use a distinct full name for the detail match.
+    const searchedName = "Ada Lovelace";
     const ids = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()];
     for (const [index, id] of ids.entries()) {
       await env.DB.prepare(
@@ -24,7 +31,7 @@ describe("User account audit history", () => {
           target.userId,
           index === 3 ? "registration" : "user",
           index === 2 ? reader.userId : target.userId,
-          JSON.stringify({ firstName: { from: null, to: index === 0 ? "Ada" : "Grace" } }),
+          JSON.stringify({ firstName: { from: null, to: index === 0 ? searchedName : "Grace" } }),
           `2026-10-20T09:00:0${index}.000Z`,
         )
         .run();
@@ -41,7 +48,9 @@ describe("User account audit history", () => {
     );
     expect(last.auditLog.map((entry) => entry.id)).toEqual([ids[1]]);
     const searched = scopedAuditLogResponseSchema.parse(
-      await (await callApi(env, `${path}?q=Ada&action=user_updated`, { headers })).json(),
+      await (
+        await callApi(env, `${path}?q=${encodeURIComponent(searchedName)}&action=user_updated`, { headers })
+      ).json(),
     );
     expect(searched.auditLog.map((entry) => entry.id)).toEqual([ids[0]]);
     const escaped = scopedAuditLogResponseSchema.parse(

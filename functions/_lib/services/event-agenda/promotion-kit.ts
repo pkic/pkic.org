@@ -91,9 +91,10 @@ export async function getPromotionKit(
     .map((person) => ({
       userId: person.userId,
       displayName: person.displayName,
-      affiliation: [person.profileCandidate?.jobTitle, person.profileCandidate?.organizationName]
+      affiliation: (person.profileCandidates ?? (person.profileCandidate ? [person.profileCandidate] : []))
+        .map((identity) => [identity.jobTitle, identity.organizationName].filter(Boolean).join(" · "))
         .filter(Boolean)
-        .join(" · "),
+        .join("; "),
       photoUrl: person.profileCandidate?.photoUrl ?? null,
       role: person.role ?? "speaker",
     }));

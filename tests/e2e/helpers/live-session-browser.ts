@@ -64,3 +64,36 @@ export async function expectLiveOperator(page: Page) {
     )
     .toBe(true);
 }
+
+/** Advisory browser-observed latency includes the native socket round trip and durable room acknowledgment. */
+export async function measureLiveChatDelivery(page: Page, text: string): Promise<number> {
+  const command = liveRoomClientMessageSchema.parse({ type: "chat.send", text });
+  if (command.type !== "chat.send") throw new Error("Expected a chat send command");
+  const result = await page.evaluate(
+    (command) =>
+      new Promise<{ milliseconds: number; raw: string }>((resolve, reject) => {
+        const probe = globalThis.liveSessionBrowserProbe;
+        if (!probe || probe.socket.readyState !== WebSocket.OPEN)
+          throw new Error("Live browser probe is not connected");
+        const started = performance.now();
+        const timer = setTimeout(() => {
+          probe.socket.removeEventListener("message", receive);
+          reject(new Error("Persisted chat acknowledgment did not arrive"));
+        }, 10_000);
+        function receive(event: MessageEvent) {
+          const raw = String(event.data),
+            message = JSON.parse(raw);
+          if (message.type !== "chat.message" || message.message.text !== command.text) return;
+          clearTimeout(timer);
+          probe!.socket.removeEventListener("message", receive);
+          resolve({ milliseconds: performance.now() - started, raw });
+        }
+        probe.socket.addEventListener("message", receive);
+        probe.socket.send(JSON.stringify(command));
+      }),
+    command,
+  );
+  const delivered = liveRoomServerMessageSchema.parse(JSON.parse(result.raw));
+  expect(delivered).toMatchObject({ type: "chat.message", message: { text } });
+  return result.milliseconds;
+}

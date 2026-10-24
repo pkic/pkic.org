@@ -10,6 +10,7 @@ import { AppError } from "../../errors";
 import { publishedSessionsSql } from "./published-schedule";
 import { sessionInvitationContextSql } from "./session-invitation-calendar";
 import { setSessionParticipationFromCalendar } from "./session-booking";
+import { guardDatabaseBatches } from "../../db/guarded-database";
 interface Target {
   event_id: string;
   occurrence_id: string;
@@ -156,19 +157,17 @@ export async function recordSessionInvitationRsvp(db: DatabaseLike, raw: unknown
   ];
   try {
     if (disposition === "applied") {
-      const wrapped: DatabaseLike = {
-        prepare: (query) => db.prepare(query),
-        batch: async (statements) => {
-          const results = await db.batch([
-            guard(true),
-            statements[0],
-            prepareAuthorizationGuard(db, { sql: "SELECT 1 WHERE changes()=1", bindings: [] }),
-            ...statements.slice(1),
-            ...finish(),
-          ]);
-          return [results[1], ...results.slice(3, 3 + statements.length - 1)];
-        },
-      };
+      const wrapped = guardDatabaseBatches(db, async (statements, readOnly) => {
+        if (readOnly) return db.batch(statements);
+        const results = await db.batch([
+          guard(true),
+          statements[0],
+          prepareAuthorizationGuard(db, { sql: "SELECT 1 WHERE changes()=1", bindings: [] }),
+          ...statements.slice(1),
+          ...finish(),
+        ]);
+        return [results[1], ...results.slice(3, 3 + statements.length - 1)];
+      });
       const result = await setSessionParticipationFromCalendar(
         wrapped,
         target.event_id,

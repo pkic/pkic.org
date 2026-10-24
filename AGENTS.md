@@ -93,6 +93,7 @@ A change is done when all of these hold:
 
 Load these skills when they are available and the work enters their scope:
 
+- [$pkic-backend](.agents/skills/pkic-backend/SKILL.md) for every Worker/backend behavior change, including routes, services, D1 queries, authentication, and live interactions; apply its request-budget practices to new features by default.
 - `$pkic-ui` for every portal, site, or studio UI change: shared components, the pattern catalog, copy, and the component gallery.
 - `$cloudflare`, `$workers-best-practices`, and `$wrangler` for Worker code and before Wrangler, D1, R2, or deployment commands; `$durable-objects` for live session rooms.
 - `$hono` for routes and middleware; `$vitest` for unit, frontend, and Worker tests; `$playwright-best-practices` for e2e specs.
@@ -103,6 +104,6 @@ Load these skills when they are available and the work enters their scope:
 
 The other skills in `skills-lock.json` are optional; load one when the task needs it.
 
-Project skills are pinned in `skills-lock.json` and installed on demand into the shared, tool-neutral `.agents/skills/` directory with `pnpm run skills:install`; installed copies are not committed. The repository's own skills (`.agents/skills/pkic-ui/`) are committed and edited in place. Add or update a skill with `pnpm dlx skills@1.7.1 add <source> --skill <name> --agent universal --yes`, review its `SKILL.md`, and commit only the lock file. Agents that read skills from another location point their own configuration at `.agents/skills/`; the repository does not maintain per-agent copies. Where a skill shows `npx` commands, run the `pnpm dlx` or `pnpm exec` equivalent.
+Project skills are pinned in `skills-lock.json` and installed on demand into the shared, tool-neutral `.agents/skills/` directory with `pnpm run skills:install`; installed copies are not committed. The repository's own skills (`.agents/skills/pkic-ui/` and `.agents/skills/pkic-backend/`) are committed and edited in place. Add or update a skill with `pnpm dlx skills@1.7.1 add <source> --skill <name> --agent universal --yes`, review its `SKILL.md`, and commit only the lock file. Agents that read skills from another location point their own configuration at `.agents/skills/`; the repository does not maintain per-agent copies. Where a skill shows `npx` commands, run the `pnpm dlx` or `pnpm exec` equivalent.
 
 If a required skill is unavailable, use the relevant current official documentation and state the limitation.

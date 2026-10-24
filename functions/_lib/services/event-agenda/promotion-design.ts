@@ -1,4 +1,7 @@
-import { eventPromotionDesignSchema } from "../../../../assets/shared/schemas/event-promotion-design";
+import {
+  defaultEventPromotionDesign,
+  eventPromotionDesignSchema,
+} from "../../../../assets/shared/schemas/event-promotion-design";
 import { eventBadgeTemplateSchema } from "../../../../assets/shared/schemas/event-badge-template";
 import type { DatabaseLike, Env } from "../../types";
 import { getEventById } from "../events";
@@ -14,19 +17,7 @@ export async function resolvePromotionDesign(db: DatabaseLike, eventId: string) 
     .nullable()
     .parse(settings.promotionDesign ? null : (settings.badgeTemplate ?? null));
   const design = eventPromotionDesignSchema.parse(
-    settings.promotionDesign ?? {
-      version: 1,
-      name: badge?.name ?? event.name,
-      colors: ["#0b2a1c", "#125c3c", "#20506e", "#b0581f"],
-      assets: {
-        logo: badge?.assets.logo_white,
-        mark: badge?.assets.mark,
-        motif: badge?.assets.canal_houses,
-        texture: badge?.assets.dot_grid,
-      },
-      sponsorGroups: badge?.sponsorGroups ?? [],
-      panels: ["cover", "speakers", "content", "details", "register", "sponsors"],
-    },
+    settings.promotionDesign ?? defaultEventPromotionDesign(event.name, badge),
   );
   if (design.sponsorSource === "event")
     design.sponsorGroups = (await listActiveSponsorshipTierNames(db, "event"))

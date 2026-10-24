@@ -1,4 +1,5 @@
 import { all } from "../../db/queries";
+import { eventCommunicationSettingsSql } from "../events/communication-settings";
 import { emailPlainText } from "../../email/plain-text";
 import { speakerManagePageUrl } from "../frontend-links";
 import { buildEventEmailVariables } from "../events";
@@ -39,7 +40,7 @@ export async function runCoSpeakerInviteReminders(
          sp.event_id, e.name AS event_name, e.slug AS event_slug,
          e.base_path AS event_base_path, e.starts_at AS event_starts_at,
          e.ends_at AS event_ends_at, ps.invite_expires_at,
-         e.settings_json AS event_settings_json,
+         ${eventCommunicationSettingsSql("e.settings_json")} AS event_settings_json,
          ps.speaker_invite_reminder_count AS reminder_count
        FROM proposal_speakers ps INDEXED BY idx_proposal_speakers_speaker_invite_reminder_due
        JOIN users u ON u.id = ps.user_id

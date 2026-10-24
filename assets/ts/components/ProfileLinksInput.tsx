@@ -1,9 +1,9 @@
 import { useCallback, useId, useImperativeHandle, useState } from "preact/hooks";
 import { forwardRef, type Ref } from "preact/compat";
-import { IconPlus } from "./icons";
 import { Button } from "../ui/Button";
 import { Chip } from "../ui/Chip";
-import { Field, StateIcon } from "../ui/Field";
+import { Field, StateIcon, type FieldControlProps } from "../ui/Field";
+import type { FieldPresentation } from "../hooks/useContractForm";
 import { InputGroup } from "../ui/InputGroup";
 import { LinkMark } from "../ui/LinkMark";
 import "./ProfileLinksInput.css";
@@ -30,6 +30,9 @@ interface ProfileLinksInputProps {
   max?: number;
   value?: string[];
   onChange?: (links: string[]) => void;
+  /** Include the unfinished entry in the owning form's contract validation and save. */
+  onPendingChange?: (link: string) => void;
+  presentation?: FieldPresentation;
   helpText?: string;
   inputAriaLabel?: string;
 }
@@ -41,6 +44,8 @@ export const ProfileLinksInput = forwardRef(function ProfileLinksInput(
     max = MAX_LINKS,
     value,
     onChange,
+    onPendingChange,
+    presentation,
     helpText = "Add professional profile links that demonstrate your expertise, such as LinkedIn, GitHub, ORCID, research publications, or any page that shows your work.",
     inputAriaLabel = "Profile URL",
   }: ProfileLinksInputProps,
@@ -65,10 +70,10 @@ export const ProfileLinksInput = forwardRef(function ProfileLinksInput(
   useImperativeHandle(
     ref,
     () => ({
-      getLinks: () => [...links],
+      getLinks: () => (inputValue.trim() ? [...links, inputValue.trim()] : [...links]),
       setLinks,
     }),
-    [links, setLinks],
+    [links, inputValue, setLinks],
   );
 
   const atMax = links.length >= linkLimit;
@@ -94,7 +99,8 @@ export const ProfileLinksInput = forwardRef(function ProfileLinksInput(
 
     setLinks([...links, url]);
     setInputValue("");
-  }, [inputValue, links, linkLimit, setLinks]);
+    onPendingChange?.("");
+  }, [inputValue, links, linkLimit, setLinks, onPendingChange]);
 
   const remove = useCallback(
     (index: number) => {
@@ -113,7 +119,7 @@ export const ProfileLinksInput = forwardRef(function ProfileLinksInput(
     [tryAdd],
   );
 
-  const body = (
+  const body = (control?: FieldControlProps) => (
     <div class="pk-stack pk-stack--snug">
       {/* Prose about the whole widget — the chips as well as the box that adds
           one — rather than one control's help text, so it is muted small print
@@ -145,20 +151,27 @@ export const ProfileLinksInput = forwardRef(function ProfileLinksInput(
         <div class={["pk-field", error ? "pk-field--invalid" : null].filter(Boolean).join(" ")}>
           {!atMax && (
             // The shared input group: the URL field absorbs the shrinking so
-            // the square add button keeps its size and the input's height.
+            // the add button keeps its label width and the input's height.
             <InputGroup>
               <TextInput
+                {...control}
+                name={fieldName}
                 type="url"
                 placeholder="https://"
                 aria-label={inputAriaLabel}
-                aria-invalid={error ? "true" : undefined}
-                aria-describedby={error ? errorId : undefined}
+                aria-invalid={error ? "true" : control?.["aria-invalid"]}
+                aria-describedby={error ? errorId : control?.["aria-describedby"]}
                 value={inputValue}
-                onInput={(e) => setInputValue((e.target as HTMLInputElement).value)}
+                onInput={(e) => {
+                  const next = e.currentTarget.value;
+                  setInputValue(next);
+                  setError("");
+                  onPendingChange?.(next);
+                }}
                 onKeyDown={handleKeyDown}
               />
-              <Button icon aria-label="Add profile link" onClick={tryAdd}>
-                <IconPlus />
+              <Button aria-label="Add profile link" onClick={tryAdd}>
+                Add link
               </Button>
             </InputGroup>
           )}
@@ -191,10 +204,10 @@ export const ProfileLinksInput = forwardRef(function ProfileLinksInput(
    * leave the rest anonymous.
    */
   return label ? (
-    <Field label={label} group>
-      {() => body}
+    <Field label={label} group {...presentation}>
+      {body}
     </Field>
   ) : (
-    body
+    body()
   );
 });

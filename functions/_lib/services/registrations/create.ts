@@ -1,29 +1,30 @@
 import type { EventDayCapacityGuardPlan } from "./day-waitlist-capacity";
 import { assertRegistrationRestorationAllowed } from "./restoration";
 import type { EventParticipantRole } from "../../../../assets/shared/schemas/participant-roles";
-import { roleBasedCapacityExemptReasonAfterParticipantChange } from "./day-waitlist-capacity";
+import { prepareRoleBasedCapacityExemption } from "./day-waitlist-capacity";
 import { prepareRegistrationTransitionGuard } from "./transition-guard";
 import { AppError } from "../../errors";
-import { first } from "../../db/queries";
+import { batchFirst, batchRows } from "../../db/pagination";
+import { prepareRegistrationBySelection } from "./queries";
+import { prepareRegistrationDayWaitlistRead } from "./day-waitlist-read";
+import { planRegistrationDayWaitlistSync } from "./day-waitlist-plan";
 import { uuid } from "../../utils/ids";
 import { nowIso, addHours } from "../../utils/time";
-import { prepareReferralConversionStatements } from "../referrals";
+import { prepareReferralByCode, planReferralConversionStatements, type ReferralRow } from "../referrals";
 import { prepareEngagementStatement } from "../engagement";
 import {
   deriveEventAttendanceType,
-  listEventDays,
-  prepareReplaceRegistrationDayAttendanceStatements,
+  prepareEventDays,
+  preparePreviousRegistrationDayAttendance,
+  planRegistrationDayAttendanceChange,
+  type EventDayRecord,
+  type PreviousRegistrationDayAttendanceRow,
   type DayAttendanceSelection,
 } from "../event-days";
-import {
-  buildRegistrationDayWaitlistSync,
-  roleBasedCapacityExemptReason,
-  withDayCapacityRetry,
-  type PlannedDayWaitlistEntry,
-} from "./day-waitlist";
+import { withDayCapacityRetry, type PlannedDayWaitlistEntry } from "./day-waitlist";
 import { newCapabilityLinkSecret, signedOrQueuedCapability } from "../capability-links";
 import type { DatabaseLike, StatementLike } from "../../types";
-import { REGISTRATION_COLUMNS, type RegistrationRecord, type VerifiedRegistrationIdentityContext } from "./types";
+import type { RegistrationRecord, VerifiedRegistrationIdentityContext } from "./types";
 import type { AttendanceType } from "../../../../assets/shared/schemas/registration";
 
 const DEFAULT_PENDING_CONFIRMATION_DEADLINE_HOURS = 14 * 24;
@@ -95,11 +96,32 @@ export async function buildCreateRegistration(
   plannedDayWaitlist: PlannedDayWaitlistEntry[];
   dayAttendance: Array<{ dayDate: string; attendanceType: string; label: string | null }>;
 }> {
-  const existing = await first<RegistrationRecord>(
-    db,
-    `SELECT ${REGISTRATION_COLUMNS} FROM registrations WHERE event_id = ? AND user_id = ?`,
-    [payload.event.id, payload.userId],
+  const status = initialRegistrationStatus(
+    payload.inviteId ?? null,
+    Boolean(payload.verifiedIdentity || payload.mailboxVerified || payload.acceptedProposalRoles?.length),
   );
+  const selection = { eventId: payload.event.id, userId: payload.userId };
+  const roles = prepareRoleBasedCapacityExemption(db, {
+    ...selection,
+    activeProposalRoles: payload.acceptedProposalRoles,
+  });
+  const capacity = prepareRegistrationDayWaitlistRead(db, {
+    eventId: payload.event.id,
+    registration: selection,
+    registrationStatus: status,
+  });
+  const [existingResult, rolesResult, daysResult, ...details] = await db.batch([
+    prepareRegistrationBySelection(db, selection),
+    roles.statement,
+    prepareEventDays(db, payload.event.id),
+    ...capacity.statements,
+    preparePreviousRegistrationDayAttendance(db, selection),
+    ...(payload.referredByCode ? [prepareReferralByCode(db, payload.referredByCode)] : []),
+  ]);
+  const existing = batchFirst<RegistrationRecord>(existingResult);
+  const configuredEventDays = batchRows<EventDayRecord>(daysResult);
+  const capacitySnapshot = capacity.decode(details.slice(0, capacity.statements.length));
+  const previousAttendance = batchRows<PreviousRegistrationDayAttendanceRow>(details[capacity.statements.length]);
   if (existing) {
     if (payload.acceptedProposalRoles) assertRegistrationRestorationAllowed(existing);
     if (existing.status !== "cancelled") {
@@ -110,19 +132,7 @@ export async function buildCreateRegistration(
   const registrationId = existing?.id ?? uuid();
   const manageLinkSecret = newCapabilityLinkSecret();
   const attendanceType = deriveEventAttendanceType(payload.dayAttendance) ?? payload.attendanceType;
-  const roleExemptReason = payload.acceptedProposalRoles
-    ? await roleBasedCapacityExemptReasonAfterParticipantChange(db, {
-        eventId: payload.event.id,
-        userId: payload.userId,
-        activeProposalRoles: payload.acceptedProposalRoles,
-      })
-    : await roleBasedCapacityExemptReason(db, payload.event.id, payload.userId);
-  const configuredEventDays = await listEventDays(db, payload.event.id);
-  const capacityExemptReason = roleExemptReason;
-  const status = initialRegistrationStatus(
-    payload.inviteId ?? null,
-    Boolean(payload.verifiedIdentity || payload.mailboxVerified || payload.acceptedProposalRoles?.length),
-  );
+  const capacityExemptReason = roles.decode(batchRows<{ role: string }>(rolesResult));
   let confirmationLinkSecret: string | null = null;
   let pendingConfirmationDeadlineAt: string | null = null;
   if (status === "pending_email_confirmation") {
@@ -241,26 +251,35 @@ export async function buildCreateRegistration(
         ),
     );
   }
-  const waitlist = await buildRegistrationDayWaitlistSync(db, {
-    registrationId: registration.id,
-    eventId: registration.event_id,
-    userId: registration.user_id,
-    selections: payload.dayAttendance,
-    capacityExemptReason,
-    sharedCapacityGuards: payload.sharedCapacityGuards,
-    registrationStatus: registration.status,
-    configuredEventDays,
-    auditActor: { type: "user", id: registration.user_id },
-  });
-  statements.unshift(...waitlist.guardStatements);
-  statements.push(
-    ...(await prepareReplaceRegistrationDayAttendanceStatements(db, {
+  const waitlist = planRegistrationDayWaitlistSync(
+    db,
+    {
       registrationId: registration.id,
       eventId: registration.event_id,
+      userId: registration.user_id,
       selections: payload.dayAttendance,
-      recordHistory: Boolean(existing),
+      capacityExemptReason,
+      sharedCapacityGuards: payload.sharedCapacityGuards,
+      registrationStatus: registration.status,
       configuredEventDays,
-    })),
+      auditActor: { type: "user", id: registration.user_id },
+    },
+    { ...capacitySnapshot, eventDays: configuredEventDays },
+  );
+  statements.unshift(...waitlist.guardStatements);
+  statements.push(
+    ...planRegistrationDayAttendanceChange(
+      db,
+      {
+        registrationId: registration.id,
+        eventId: registration.event_id,
+        selections: payload.dayAttendance,
+        recordHistory: Boolean(existing),
+        configuredEventDays,
+      },
+      previousAttendance,
+      configuredEventDays,
+    ),
     ...waitlist.statements,
     prepareEngagementStatement(db, {
       userId: registration.user_id,
@@ -277,10 +296,12 @@ export async function buildCreateRegistration(
   );
   if (payload.referredByCode) {
     statements.push(
-      ...(await prepareReferralConversionStatements(db, payload.referredByCode, {
-        type: "registration",
-        ref: registration.id,
-      })),
+      ...planReferralConversionStatements(
+        db,
+        payload.referredByCode,
+        { type: "registration", ref: registration.id },
+        batchFirst<ReferralRow>(details[capacity.statements.length + 1]),
+      ),
     );
   }
   const manageToken = await signedOrQueuedCapability({

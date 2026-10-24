@@ -1,5 +1,6 @@
 import { promotionRenderStatus } from "./promotion-render-status";
-import { agendaSnapshotSchema, agendaOccurrenceSchema } from "../../../../assets/shared/schemas/event-agenda";
+import { storedAgendaSnapshotSchema } from "../../../../assets/shared/schemas/event-agenda-stored";
+import { agendaOccurrenceSchema } from "../../../../assets/shared/schemas/event-agenda";
 import {
   promotionKitSchema,
   promotionFormatSchema,
@@ -34,7 +35,7 @@ export async function getAttendeePromotionKit(db: DatabaseLike, eventId: string,
     "SELECT p.snapshot_json FROM event_agenda_publications p JOIN event_agenda_state s ON s.event_id=p.event_id AND s.published_revision=p.revision WHERE p.event_id=?",
     [eventId],
   );
-  const agenda = agendaSnapshotSchema.parse(
+  const agenda = storedAgendaSnapshotSchema.parse(
     row
       ? JSON.parse(row.snapshot_json)
       : {

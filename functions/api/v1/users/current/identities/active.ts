@@ -18,7 +18,9 @@ export const CurrentUserActiveIdentityPut = openApiRoute(
     const { session, token } = await refreshUserSessionFromRequest(requestDb(c), c.req.raw, c.env, {
       actingIdentityId: data.body.identityId,
     });
-    const response = jsonPrivate(userAuthSessionResponseSchema.parse({ success: true, ...publicUserSession(session) }));
+    const response = jsonPrivate(
+      userAuthSessionResponseSchema.parse({ success: true, ...(await publicUserSession(requestDb(c), session)) }),
+    );
     if (getUserSessionCookieToken(c.req.raw)) {
       response.headers.append("Set-Cookie", serializeUserSessionCookie(token, c.req.raw));
     } else {

@@ -3,6 +3,7 @@ import { splitHash, subscribeUrlQuery, writeUrlQuery } from "../ui/url-query";
 import { refreshAgendaFilters } from "./agenda-filters";
 
 const sessionKey = (card: HTMLElement) => card.dataset.agendaOccurrence ?? card.dataset.agendaSessionDialog;
+const fragmentFields = ["session", "agendaSpeaker", "agendaPosition", "agendaRoom"] as const;
 
 const fields = {
   agendaSearch: "[data-agenda-search]",
@@ -11,7 +12,7 @@ const fields = {
   agendaZone: "[data-agenda-time-select]",
 } as const;
 
-/** Shared agenda state lives in the public query or the portal route's existing query. */
+/** Public dialog and scroll state stays in the fragment; filters retain the route's query. */
 export function initializeAgendaUrlState(
   root: HTMLElement,
   selectTab: (button: HTMLButtonElement) => void,
@@ -45,7 +46,17 @@ export function initializeAgendaUrlState(
     naturalPaths
       ? currentPath() === route || (agendaRoute(currentPath())?.[1] ?? currentPath().replace(/\/$/, "")) === basePath
       : currentPath() === route;
-  const params = () => (portal ? splitHash().params : new URL(location.href).searchParams);
+  const params = () => {
+    if (portal) return splitHash().params;
+    const query = new URL(location.href).searchParams;
+    const fragment = splitHash().params;
+    for (const key of fragmentFields) {
+      query.delete(key);
+      const value = fragment.get(key);
+      if (value !== null) query.set(key, value);
+    }
+    return query;
+  };
   function write(changes: Record<string, string | null>, push = false) {
     if (restoring || disposed || !sameRoute()) return;
     const next = params();
@@ -61,11 +72,20 @@ export function initializeAgendaUrlState(
     }
     writing = true;
     try {
+      const fragmentParams = portal ? undefined : splitHash().params;
+      if (fragmentParams)
+        for (const key of fragmentFields) {
+          const value = next.get(key);
+          if (value === null) fragmentParams.delete(key);
+          else fragmentParams.set(key, value);
+          next.delete(key);
+        }
       writeUrlQuery({
         source: portal ? "hash" : "search",
         ownerPath: currentPath(),
         destinationPath,
         params: next,
+        fragmentParams,
         mode: push ? "push" : "replace",
       });
     } finally {
@@ -117,7 +137,7 @@ export function initializeAgendaUrlState(
     const fragmentOnly =
       !portal &&
       root.hasAttribute("data-agenda-public-fragments") &&
-      Boolean(location.hash) &&
+      Boolean(splitHash().path) &&
       !query.has("session") &&
       !query.has("agendaSpeaker");
     const tab = tabs.find(

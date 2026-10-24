@@ -1,12 +1,11 @@
 import { guardMemberSessionMutationDatabase } from "../auth/member";
 import { hasPermission, guardPermissionMutationDatabase } from "../auth/permissions";
 import type { UserSessionResult } from "../auth/user-session-result";
-import { guardDatabaseBatches } from "../db/guarded-database";
-import { isAuthorizationGuardFailure } from "../db/authorization-guard";
+import { guardAuthorizedDatabase } from "../db/authorization-guard";
 import { AppError } from "../errors";
 import type { DatabaseLike } from "../types";
 import {
-  prepareOrganizationIdentityManagementGuard,
+  organizationIdentityManagementEvidence,
   requireOrganizationIdentityManagement,
 } from "./identities/authorization";
 
@@ -48,24 +47,16 @@ export async function organizationContactAccess(
   await requireOrganizationIdentityManagement(db, evidence);
   const sessionDb = guardMemberSessionMutationDatabase(db, member);
   return {
-    db: guardDatabaseBatches(sessionDb, async (statements) => {
-      try {
-        const [, ...results] = await sessionDb.batch([
-          prepareOrganizationIdentityManagementGuard(sessionDb, evidence),
-          ...statements,
-        ]);
-        return results;
-      } catch (error) {
-        if (isAuthorizationGuardFailure(error)) {
-          throw new AppError(
-            409,
-            "ORGANIZATION_AUTHORIZATION_CHANGED",
-            "Organization contact access changed; reload before retrying",
-          );
-        }
-        throw error;
-      }
-    }),
+    db: guardAuthorizedDatabase(
+      sessionDb,
+      organizationIdentityManagementEvidence(evidence),
+      () =>
+        new AppError(
+          409,
+          "ORGANIZATION_AUTHORIZATION_CHANGED",
+          "Organization contact access changed; reload before retrying",
+        ),
+    ),
     actor: { userId: member.userId, actorType: "member" as const },
   };
 }

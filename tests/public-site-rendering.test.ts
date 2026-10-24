@@ -284,7 +284,7 @@ describe("Vite public-site rendering", () => {
     expect(response.status).toBe(200);
     expect(html).toContain('data-module="site/self-assessment"');
     expect(html).toContain("data-self-assessment");
-    expect(html).toContain('data-version="v2.0.0"');
+    expect(html).toContain('data-version="v2.0.1"');
     expect(response.headers.get("content-security-policy")).not.toContain("pkic.github.io");
     expect(response.headers.get("content-security-policy")).toContain("script-src 'self'");
   });

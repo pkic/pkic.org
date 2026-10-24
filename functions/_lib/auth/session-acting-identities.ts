@@ -5,6 +5,8 @@ import type { DatabaseLike } from "../types";
 
 /** A person holds one active identity per organization plus at most one individual identity. */
 export const MAX_ACTING_IDENTITIES = 100;
+export const SESSION_ACTING_IDENTITY_ORDER_SQL =
+  "identity.organization_id IS NOT NULL, organization.name COLLATE NOCASE, identity.id";
 
 interface ActingIdentityRow {
   id: string;
@@ -24,7 +26,7 @@ export async function findActingIdentitiesForUser(db: DatabaseLike, userId: stri
         AND identity.started_at IS NOT NULL
         AND identity.ended_at IS NULL
         AND identity.blocked_at IS NULL
-      ORDER BY identity.organization_id IS NOT NULL, organization.name COLLATE NOCASE, identity.id
+      ORDER BY ${SESSION_ACTING_IDENTITY_ORDER_SQL}
       LIMIT ?`,
     [userId, MAX_ACTING_IDENTITIES],
   );

@@ -4,6 +4,18 @@
  * Object, the Worker and both browser surfaces read these values from here.
  */
 
+/**
+ * Live rooms validate on admission and refresh access in the background.
+ * Owner-requested instant interaction accepts up to five seconds of cached
+ * authority, in addition to accepted D1 replica lag. Never add per-message D1
+ * checks to eliminate this intentional window. Expired leases fail closed;
+ * known credential deadlines and explicit room erasures apply immediately.
+ */
+export const LIVE_ROOM_ACCESS_POLICY = { refreshMilliseconds: 2_000, leaseMilliseconds: 5_000 } as const;
+
+/** Coalesce live updates while reserving half of the 100 ms interaction target for delivery and rendering. */
+export const LIVE_INTERACTION_BROADCAST_MILLISECONDS = 50;
+
 /** The fixed quick reactions, in display order. */
 export const LIVE_REACTIONS = [
   { id: "applause", emoji: "👏", label: "Applause" },
@@ -31,7 +43,7 @@ export const LIVE_ROOM_POLICY = {
   questionsPerPerson: { limit: 3, windowSeconds: 60 },
   reactionsPerPerson: { limit: 10, windowSeconds: 10 },
   /** Reactions are counted, then broadcast together at most this often. */
-  reactionBurstMilliseconds: 1000,
+  reactionBurstMilliseconds: LIVE_INTERACTION_BROADCAST_MILLISECONDS,
   /** A changed room writes its durable copy at most this long after the change. */
   durableCopyDelaySeconds: 30,
   /** An overlay link stays usable for one conference day. */
@@ -97,7 +109,7 @@ export const LIVE_POLL_POLICY = {
   /** The room refuses new polls once it holds this many. */
   maxPollsPerRoom: 30,
   /** Tallies are recounted on every ballot, then broadcast together at most this often. */
-  tallyBroadcastMilliseconds: 1000,
+  tallyBroadcastMilliseconds: LIVE_INTERACTION_BROADCAST_MILLISECONDS,
 } as const;
 
 /** A poll is prepared as a draft, opened for voting and may be reopened with its answers retained. */

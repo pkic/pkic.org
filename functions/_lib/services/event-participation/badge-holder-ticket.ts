@@ -1,7 +1,6 @@
 import { badgeIssueRequestSchema } from "../../../../assets/shared/schemas/route-contracts-event-badges";
 import { currentBadgeResponseSchema } from "../../../../assets/shared/schemas/route-contracts-event-current-badge";
-import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../db/authorization-guard";
-import { guardDatabaseBatches } from "../../db/guarded-database";
+import { guardAuthorizedDatabase } from "../../db/authorization-guard";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { DatabaseLike, Env } from "../../types";
@@ -20,23 +19,15 @@ const eligibleRegistrationSql = `SELECT 1 FROM registrations r JOIN users u ON u
 
 /** Every statement rechecks the live session and the print-population eligibility of the holder's registration. */
 function badgeHolderDatabase(db: DatabaseLike, eventId: string, holder: BadgeHolder): DatabaseLike {
-  return guardDatabaseBatches(db, async (statements) => {
-    try {
-      const [, , ...results] = await db.batch([
-        prepareAuthorizationGuard(db, {
-          sql: "SELECT 1 FROM sessions s WHERE s.id=? AND s.user_id=? AND s.revoked_at IS NULL AND s.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now')",
-          bindings: [holder.sessionId, holder.userId],
-        }),
-        prepareAuthorizationGuard(db, { sql: eligibleRegistrationSql, bindings: [eventId, holder.userId] }),
-        ...statements,
-      ]);
-      return results;
-    } catch (error) {
-      if (isAuthorizationGuardFailure(error))
-        throw new AppError(409, "BADGE_HOLDER_CHANGED", "Your badge or registration changed. Reload your ticket.");
-      throw error;
-    }
-  });
+  return guardAuthorizedDatabase(
+    db,
+    {
+      sql: `SELECT 1 FROM sessions s WHERE s.id=? AND s.user_id=? AND s.revoked_at IS NULL
+        AND s.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now') AND EXISTS (${eligibleRegistrationSql})`,
+      bindings: [holder.sessionId, holder.userId, eventId, holder.userId],
+    },
+    () => new AppError(409, "BADGE_HOLDER_CHANGED", "Your badge or registration changed. Reload your ticket."),
+  );
 }
 
 /**

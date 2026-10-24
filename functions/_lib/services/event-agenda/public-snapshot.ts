@@ -22,7 +22,9 @@ export function preparePublicAgendaSnapshot(
       .map(({ pendingSpeakerCount: _pending, ...item }) => ({
         ...item,
         ...publicSessionMediaUrls(item.history?.materials ?? []),
-        speakers: item.speakers.map(({ profileCandidate: _candidate, ...speaker }) => speaker),
+        speakers: item.speakers.map(
+          ({ profileCandidate: _candidate, profileCandidates: _candidates, ...speaker }) => speaker,
+        ),
       })),
     displayRoles: [
       ...new Set(snapshot.shifts.map((shift) => instantToDateTimeLocal(shift.startAt, snapshot.timeZone).slice(0, 10))),

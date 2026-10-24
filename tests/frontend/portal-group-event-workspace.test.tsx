@@ -44,11 +44,15 @@ function json(value: unknown): Response {
   return new Response(JSON.stringify(value), { status: 200, headers: { "content-type": "application/json" } });
 }
 
-function mount(node: ComponentChildren): HTMLElement {
+async function mount(node: ComponentChildren): Promise<HTMLElement> {
   const container = document.createElement("div");
   document.body.append(container);
   mounted.push(container);
-  void act(() => render(node, container));
+  await act(async () => {
+    render(node, container);
+    await vi.dynamicImportSettled();
+  });
+  await settle();
   return container;
 }
 
@@ -112,7 +116,7 @@ afterEach(() => {
 });
 
 describe("group event workspace", () => {
-  it("keeps Live settings reachable only for the event's explicit live moderator scope", () => {
+  it("keeps Live settings reachable only for the event's explicit live moderator scope", async () => {
     const previous = portalSession.value;
     try {
       portalSession.value = portalSessionFixture({
@@ -128,9 +132,9 @@ describe("group event workspace", () => {
     }
   });
 
-  it("shows a location-less event on its own clock with the zone named, not the organizer's", () => {
+  it("shows a location-less event on its own clock with the zone named, not the organizer's", async () => {
     const event = baseEvent({ city: null, country: null, capabilities: ["view", "manage"] });
-    const container = mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} />);
+    const container = await mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} />);
 
     // 15:00 UTC is 17:00 in Amsterdam in September; the zone travels with the
     // time, on the agenda's 24-hour clock and named by its city.
@@ -141,7 +145,7 @@ describe("group event workspace", () => {
     expect(starts?.nextElementSibling?.textContent).toContain("17:00 Amsterdam time");
   });
 
-  it("names an event's clock by the event's city, not by its zone's", () => {
+  it("names an event's clock by the event's city, not by its zone's", async () => {
     const event = baseEvent({
       timezone: "America/Chicago",
       city: "Austin",
@@ -152,7 +156,7 @@ describe("group event workspace", () => {
       nextOccurrenceAt: null,
       capabilities: ["view", "manage"],
     });
-    const container = mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} />);
+    const container = await mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} />);
 
     // Austin runs on the Chicago zone: 15:00 UTC is 09:00 there in January.
     const lede = container.querySelector(".pk-profile-header__lede")?.textContent ?? "";
@@ -164,9 +168,9 @@ describe("group event workspace", () => {
     expect(starts?.nextElementSibling?.textContent).toContain("09:00 Austin time");
   });
 
-  it("defaults to the overview tab, never settings, even for a manager", () => {
+  it("defaults to the overview tab, never settings, even for a manager", async () => {
     const event = baseEvent({ capabilities: ["view", "manage_attendance", "manage"] });
-    const container = mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} />);
+    const container = await mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} />);
 
     expect(isCurrentTab(tab(container, "Overview"))).toBe(true);
     expect(isCurrentTab(tab(container, "Settings"))).toBe(false);
@@ -178,9 +182,9 @@ describe("group event workspace", () => {
     expect(container.querySelector(".pk-record")).toBeNull();
   });
 
-  it("filters tabs by capability: a manager sees settings, invitations, and communications", () => {
+  it("filters tabs by capability: a manager sees settings, invitations, and communications", async () => {
     const event = baseEvent({ capabilities: ["view", "manage_attendance", "manage"] });
-    const container = mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} />);
+    const container = await mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} />);
 
     expect(tabLabels(container)).toEqual([
       "Overview",
@@ -192,15 +196,15 @@ describe("group event workspace", () => {
     ]);
   });
 
-  it("keeps management navigation under Settings and Analytics for capable events", () => {
+  it("keeps management navigation under Settings and Analytics for capable events", async () => {
     const manager = baseEvent({ capabilities: ["view", "manage_attendance", "manage"] });
-    const managerContainer = mount(<GroupEventWorkspace event={manager} groupId={GROUP_ID} />);
+    const managerContainer = await mount(<GroupEventWorkspace event={manager} groupId={GROUP_ID} />);
     expect(tabLabels(managerContainer)).toEqual(expect.arrayContaining(["Settings", "Analytics"]));
     expect(tabLabels(managerContainer)).not.toContain("Team");
     expect(tabLabels(managerContainer)).not.toContain("Promoters");
 
     const viewer = baseEvent({ capabilities: ["view"] });
-    const viewerContainer = mount(<GroupEventWorkspace event={viewer} groupId={GROUP_ID} />);
+    const viewerContainer = await mount(<GroupEventWorkspace event={viewer} groupId={GROUP_ID} />);
     expect(tabLabels(viewerContainer)).not.toEqual(expect.arrayContaining(["Team"]));
     expect(tabLabels(viewerContainer)).not.toEqual(expect.arrayContaining(["Promoters"]));
     expect(tabLabels(viewerContainer)).not.toEqual(expect.arrayContaining(["Analytics"]));
@@ -222,16 +226,16 @@ describe("group event workspace", () => {
       ),
     );
     const event = baseEvent({ capabilities: ["view", "register"] });
-    const container = mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} />);
+    const container = await mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} />);
     await settle();
 
     expect(tabLabels(container)).toEqual(["Overview"]);
     expect(container.textContent).toContain("Register for this event");
   });
 
-  it("adds the proposals tab only when proposalAccess.canRead is granted", () => {
+  it("adds the proposals tab only when proposalAccess.canRead is granted", async () => {
     const withoutAccess = baseEvent({ capabilities: ["view"] });
-    const readOnly = mount(<GroupEventWorkspace event={withoutAccess} groupId={GROUP_ID} />);
+    const readOnly = await mount(<GroupEventWorkspace event={withoutAccess} groupId={GROUP_ID} />);
     expect(tabLabels(readOnly)).toEqual(["Overview"]);
 
     const withAccess = baseEvent({
@@ -245,7 +249,7 @@ describe("group event workspace", () => {
         canCancelAcceptedProposal: false,
       },
     });
-    const container = mount(<GroupEventWorkspace event={withAccess} groupId={GROUP_ID} />);
+    const container = await mount(<GroupEventWorkspace event={withAccess} groupId={GROUP_ID} />);
     expect(tabLabels(container)).toEqual(["Overview", "Proposals"]);
   });
 
@@ -264,7 +268,9 @@ describe("group event workspace", () => {
       }),
     );
 
-    const container = mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} tab="settings" detailId="team" />);
+    const container = await mount(
+      <GroupEventWorkspace event={event} groupId={GROUP_ID} tab="settings" detailId="team" />,
+    );
     await settle();
     await settle();
 
@@ -299,7 +305,7 @@ describe("group event workspace", () => {
         throw new Error(`Unexpected request: ${url.pathname}`);
       }),
     );
-    const container = mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} tab="settings" />);
+    const container = await mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} tab="settings" />);
     await settle();
 
     expect(tab(container, "Registrations")?.getAttribute("href")).toBe(
@@ -319,7 +325,7 @@ describe("group event workspace", () => {
     expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/events/${EVENT_ID}`);
   });
 
-  it("exposes routed response views for registration and proposal forms", () => {
+  it("exposes routed response views for registration and proposal forms", async () => {
     const event = baseEvent({
       capabilities: ["view", "manage_attendance"],
       proposalAccess: {
@@ -332,13 +338,21 @@ describe("group event workspace", () => {
       },
     });
 
-    const registrations = mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} tab="registrations" />);
+    const registrations = await mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} tab="registrations" />);
+    await vi.waitFor(async () => {
+      await settle();
+      expect(registrations.querySelector('nav[aria-label="Registration sections"]')).not.toBeNull();
+    });
     const registrationSections = registrations.querySelector('nav[aria-label="Registration sections"]');
     expect(registrationSections?.textContent).toContain("Summary");
     expect(registrationSections?.textContent).toContain("Responses");
     expect(registrationSections?.querySelector('a[href$="/registrations/responses"]')).not.toBeNull();
 
-    const proposals = mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} tab="proposals" />);
+    const proposals = await mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} tab="proposals" />);
+    await vi.waitFor(async () => {
+      await settle();
+      expect(proposals.querySelector('nav[aria-label="Proposal sections"]')).not.toBeNull();
+    });
     const proposalSections = proposals.querySelector('nav[aria-label="Proposal sections"]');
     expect(proposalSections?.textContent).toContain("Summary");
     expect(proposalSections?.textContent).toContain("Speakers");
@@ -346,13 +360,13 @@ describe("group event workspace", () => {
     expect(proposalSections?.textContent).toContain("Responses");
     expect(proposalSections?.querySelector('a[href$="/proposals/responses"]')).not.toBeNull();
     expect(proposalSections?.querySelector('a[href$="/proposals/call"]')).toBeNull();
-    mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} tab="proposals" detailId="call" />);
+    await mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} tab="proposals" detailId="call" />);
     expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/events/${EVENT_ID}/settings/cfp`);
   });
 
-  it("separates General settings from other topics and starts read-only", () => {
+  it("separates General settings from other topics and starts read-only", async () => {
     const event = baseEvent({ capabilities: ["view", "manage"] });
-    const container = mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} tab="settings" />);
+    const container = await mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} tab="settings" />);
     expect(
       container.querySelector('section[aria-label="Canonical general settings"]')?.getAttribute("data-can-edit"),
     ).toBe("true");
@@ -364,9 +378,9 @@ describe("group event workspace", () => {
     expect(container.querySelector('section[aria-label="Sponsor tiers"]')).toBeNull();
   });
 
-  it("loads Location directly without exposing General fields", () => {
+  it("loads Location directly without exposing General fields", async () => {
     const event = baseEvent({ capabilities: ["view", "manage"] });
-    const container = mount(
+    const container = await mount(
       <GroupEventWorkspace event={event} groupId={GROUP_ID} tab="settings" detailId="location" />,
     );
     expect(
@@ -377,24 +391,26 @@ describe("group event workspace", () => {
     expect(container.querySelector("form")).toBeNull();
   });
 
-  it("redirects the obsolete staffing route into the unified Team", () => {
+  it("redirects the obsolete staffing route into the unified Team", async () => {
     const event = baseEvent({ capabilities: ["view", "manage"] });
-    mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} tab="settings" detailId="team" detailTab="staffing" />);
+    await mount(
+      <GroupEventWorkspace event={event} groupId={GROUP_ID} tab="settings" detailId="team" detailTab="staffing" />,
+    );
     expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/events/${EVENT_ID}/settings/team`);
   });
 
-  it("preserves the Attendance deep link under the Analytics permission gate", () => {
+  it("preserves the Attendance deep link under the Analytics permission gate", async () => {
     const event = baseEvent({ capabilities: ["view"] });
-    const container = mount(
+    const container = await mount(
       <GroupEventWorkspace event={event} groupId={GROUP_ID} tab="attendance" detailId="imports" />,
     );
     expect(container.textContent).toContain("This event section is not available to your current identity.");
     expect(tabLabels(container)).not.toContain("Attendance");
   });
 
-  it("shows the not-available pattern for a capability-less tab request instead of falling back", () => {
+  it("shows the not-available pattern for a capability-less tab request instead of falling back", async () => {
     const event = baseEvent({ capabilities: ["view"] });
-    const container = mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} tab="settings" />);
+    const container = await mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} tab="settings" />);
 
     expect(container.textContent).toContain("This event section is not available to your current identity.");
     expect(container.textContent).not.toContain("Manage meeting series");
@@ -405,12 +421,12 @@ describe("group event workspace", () => {
     expect(alert?.textContent).toContain("not available to your current identity");
   });
 
-  it("names the workspace, the open section, and the overview metadata for assistive technology", () => {
+  it("names the workspace, the open section, and the overview metadata for assistive technology", async () => {
     const event = baseEvent({
       capabilities: ["view", "manage_attendance", "manage"],
       links: ["https://example.test/agenda"],
     });
-    const container = mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} />);
+    const container = await mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} />);
 
     // Both nested regions are named, so a reader moving by landmark is not
     // told only "region, region".
@@ -444,13 +460,13 @@ describe("group event workspace", () => {
     expect(link?.querySelector(".pk-link-list__label")?.textContent).toBe("example.test");
   });
 
-  it("offers the meeting series as a real link rather than a handler no keyboard can reach", () => {
+  it("offers the meeting series as a real link rather than a handler no keyboard can reach", async () => {
     const event = baseEvent({
       capabilities: ["view", "manage_attendance", "manage"],
       seriesId: "20000000-0000-4000-8000-000000000001",
       profileKey: "meeting",
     });
-    const container = mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} tab="settings" />);
+    const container = await mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} tab="settings" />);
 
     const series = Array.from(container.querySelectorAll("a")).find(
       (anchor) => anchor.textContent === "Manage meeting series",
@@ -461,9 +477,9 @@ describe("group event workspace", () => {
     expect(container.textContent).not.toContain("Edit event");
   });
 
-  it("falls back to the default tab for an unrecognized tab key", () => {
+  it("falls back to the default tab for an unrecognized tab key", async () => {
     const event = baseEvent({ capabilities: ["view", "manage"] });
-    const container = mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} tab="not-a-real-tab" />);
+    const container = await mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} tab="not-a-real-tab" />);
 
     expect(container.textContent).not.toContain("not available to your current identity");
     expect(isCurrentTab(tab(container, "Overview"))).toBe(true);
@@ -512,11 +528,16 @@ describe("group event workspace", () => {
       }),
     );
 
-    const container = mount(<GroupEvents groupId={GROUP_ID} initialEventId={EVENT_ID} initialEventTab="proposals" />);
+    const container = await mount(
+      <GroupEvents groupId={GROUP_ID} initialEventId={EVENT_ID} initialEventTab="proposals" />,
+    );
     await settle();
     await settle();
 
     expect(isCurrentTab(tab(container, "Proposals"))).toBe(true);
-    expect(container.querySelector("caption")?.textContent).toBe("Event proposals");
+    await vi.waitFor(async () => {
+      await settle();
+      expect(container.querySelector("caption")?.textContent).toBe("Event proposals");
+    });
   });
 });

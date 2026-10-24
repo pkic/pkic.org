@@ -85,6 +85,19 @@ describe("the shortcode registry", () => {
 });
 
 describe("Markdown rendering a shortcode", () => {
+  it("keeps abstract paragraphs, inline formatting, lists, and explicit line breaks", () => {
+    const container = mount(
+      <Markdown
+        markdown={"First **paragraph**.\n\nSecond paragraph.  \nNext line.\n\n- First point\n- Second point"}
+      />,
+    );
+    const paragraphs = container.querySelectorAll(".pk-markdown > p");
+    expect(paragraphs).toHaveLength(2);
+    expect(paragraphs[0].querySelector("strong")?.textContent).toBe("paragraph");
+    expect(paragraphs[1].querySelector("br")).not.toBeNull();
+    expect(container.querySelectorAll("ul > li")).toHaveLength(2);
+  });
+
   it("embeds the video a supported shortcode names", () => {
     const container = mount(<Markdown markdown="{{< youtube HGoZW7MCF60 >}}" />);
     expect(container.querySelector("iframe")?.getAttribute("src")).toBe("https://www.youtube.com/embed/HGoZW7MCF60");

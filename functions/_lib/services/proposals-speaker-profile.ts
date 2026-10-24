@@ -5,22 +5,7 @@ import { all, first } from "../db/queries";
 import { AppError } from "../errors";
 import { nowIso } from "../utils/time";
 import { isAuditChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "./audit";
-import {
-  isConsentAcceptanceContextConflict,
-  prepareActiveTermsSnapshotGuard,
-  prepareConsentStatements,
-  validateRequiredConsents,
-} from "./consent";
-import { getRequiredTerms } from "./events";
-import { getSpeakerByManageToken } from "./proposals";
-import { proposalParticipantStatus, prepareProposalRoleCapacityForSpeakerChange } from "./proposal-role-capacity";
-import { isRegistrationTransitionConflict, registrationChangedError } from "./registrations/transition-guard";
-import { isEventParticipantSourceConflict } from "./event-participant-source-revision";
-import {
-  getProposalSpeakerRosterRevision,
-  isProposalSpeakerRosterConflict,
-  prepareProposalSpeakerRosterRevisionGuard,
-} from "./proposal-speaker-roster-revision";
+import { validateRequiredConsents } from "./consent";
 import { prepareUserProfileStatements, type UserProfilePatch } from "./users";
 import { prepareProposalSpeakerWriteGuard, type ProposalSpeakerWriteContext } from "./proposal-speaker-authority";
 import { proposalSpeakerProfileColumns } from "./proposal-speakers";
@@ -36,8 +21,6 @@ import { prepareAuthorizationGuard, isAuthorizationGuardFailure } from "../db/au
 import { parseCapabilityToken } from "../auth/capability-token";
 import { activeEffectiveInviteExpirySql, effectiveProposalSpeakerInviteExpirySql } from "../invite-validity";
 import { isProposalSpeakerRosterEditableStatus } from "../../../assets/shared/schemas/proposal-status";
-import { ownedIdentityAtEvidence } from "./identities/selection";
-import { ownedIdentityEmailEvidence } from "./identities/owned-email";
 import { assertProvedCapacity, prepareSelectedCapacityDisclosure } from "./proposal-speaker-capacity-selection";
 
 /** Rechecks the verified link/session and current invitation scope inside the profile/confirmation batch. */
@@ -116,154 +99,6 @@ export async function getPresentationUploader(
   );
   if (!row) return null;
   return { firstName: row.first_name, lastName: row.last_name, uploadedAt: row.uploaded_at };
-}
-
-export async function confirmSpeakerParticipation(
-  db: DatabaseLike,
-  manageToken: ParticipantAuthority,
-  signingSecret: string,
-  payload: {
-    consents: Array<{ termKey: string; version: string }>;
-    ip: string | null;
-    userAgent: string | null;
-  },
-): Promise<void> {
-  const { speaker, proposal, currentRepresentation } = await getSpeakerByManageToken(db, manageToken, signingSecret);
-
-  if (speaker.status === "confirmed") return;
-  if (!isProposalSpeakerRosterEditableStatus(proposal.status)) {
-    throw new AppError(409, "PROPOSAL_CLOSED", "Speaker participation cannot be changed on a closed proposal");
-  }
-  if (speaker.status === "declined") {
-    throw new AppError(
-      409,
-      "SPEAKER_ALREADY_DECLINED",
-      "You have already declined participation. Please contact the organizer if you changed your mind.",
-    );
-  }
-  const representationRequired = () =>
-    new AppError(
-      409,
-      "SPEAKER_REPRESENTATION_REQUIRED",
-      "Confirm your speaker identity before confirming participation.",
-    );
-  // The current representation exists only once the speaker chose, and only while that identity is still theirs.
-  if (!currentRepresentation) throw representationRequired();
-  const mailbox = ownedIdentityEmailEvidence({
-    userId: speaker.user_id,
-    emailId: currentRepresentation.emailId,
-    normalizedEmail: currentRepresentation.email,
-    requireVerifiedPrimary: true,
-    ...(speaker.acting_identity_id ? { identityId: speaker.acting_identity_id } : {}),
-  });
-  const now = nowIso();
-  const representation = speaker.acting_identity_id
-    ? ownedIdentityAtEvidence({ userId: speaker.user_id, identityId: speaker.acting_identity_id, at: now })
-    : null;
-  if (representation)
-    representation.sql +=
-      " AND identity.organization_id IS NOT NULL AND identity.ended_at IS NULL AND identity.blocked_at IS NULL";
-  if (
-    representation &&
-    !(await first(db, `SELECT 1 WHERE EXISTS (${representation.sql})`, [...representation.bindings]))
-  )
-    throw representationRequired();
-  const requiredTerms = await getRequiredTerms(db, proposal.event_id, "speaker");
-  await validateRequiredConsents(requiredTerms, payload.consents);
-  const rosterRevision = await getProposalSpeakerRosterRevision(db, proposal.id);
-  try {
-    await db.batch([
-      prepareSpeakerSelfAuthorityGuard(db, manageToken, {
-        proposalSpeakerId: speaker.id,
-        proposalId: proposal.id,
-        userId: speaker.user_id,
-        inviteGeneration: speaker.invite_generation,
-        expectedManageLinkSecret: speaker.manage_link_secret,
-      }),
-      prepareProposalSpeakerRosterRevisionGuard(db, {
-        proposalId: proposal.id,
-        expectedRevision: rosterRevision,
-      }),
-      prepareAuthorizationGuard(db, {
-        sql: "SELECT 1 FROM proposal_speakers WHERE id=? AND user_id=? AND acting_identity_selected_at IS NOT NULL AND acting_identity_id IS ? AND acting_identity_selected_at IS ?",
-        bindings: [speaker.id, speaker.user_id, speaker.acting_identity_id, speaker.acting_identity_selected_at],
-      }),
-      ...(representation ? [prepareAuthorizationGuard(db, representation)] : []),
-      prepareAuthorizationGuard(db, mailbox),
-      prepareActiveTermsSnapshotGuard(db, proposal.event_id, requiredTerms, "speaker"),
-      ...(await prepareConsentStatements(db, {
-        proposalId: proposal.id,
-        eventId: proposal.event_id,
-        userId: speaker.user_id,
-        audienceType: "speaker",
-        accepted: payload.consents,
-        ip: payload.ip,
-        userAgent: payload.userAgent,
-        secret: signingSecret,
-      })),
-      db
-        .prepare(
-          `UPDATE proposal_speakers
-           SET status = 'confirmed', confirmed_at = ?, terms_accepted_at = ?
-           WHERE id = ? AND proposal_id = ? AND user_id = ? AND role = ? AND status = ? AND invite_generation = ?
-             AND acting_identity_id IS ? AND acting_identity_selected_at IS ?
-             AND EXISTS (
-               SELECT 1 FROM session_proposals
-               WHERE id = ? AND status = ? AND updated_at = ? AND deleted_at IS NULL
-             )`,
-        )
-        .bind(
-          now,
-          now,
-          speaker.id,
-          proposal.id,
-          speaker.user_id,
-          speaker.role,
-          speaker.status,
-          speaker.invite_generation,
-          speaker.acting_identity_id,
-          speaker.acting_identity_selected_at,
-          proposal.id,
-          proposal.status,
-          proposal.updated_at,
-        ),
-      prepareScopedAuditLogAfterOneChange(
-        db,
-        { type: "proposal", id: speaker.proposal_id },
-        "user",
-        speaker.user_id,
-        "speaker_confirmed",
-        "proposal_speaker",
-        speaker.id,
-        { proposalId: speaker.proposal_id },
-        now,
-      ),
-      ...(await prepareProposalRoleCapacityForSpeakerChange(db, {
-        eventId: proposal.event_id,
-        userId: speaker.user_id,
-        proposalRole: speaker.role,
-        sourceRef: proposal.id,
-        status: proposalParticipantStatus(proposal.status, "confirmed"),
-        sourceRevisionAdvance: 1,
-      })),
-    ]);
-  } catch (error) {
-    if (isRegistrationTransitionConflict(error)) throw registrationChangedError();
-    if (
-      isAuditChangeGuardFailure(error) ||
-      isAuthorizationGuardFailure(error) ||
-      isEventParticipantSourceConflict(error) ||
-      isProposalSpeakerRosterConflict(error) ||
-      isConsentAcceptanceContextConflict(error)
-    ) {
-      throw new AppError(
-        409,
-        "PROPOSAL_SPEAKER_CONFLICT",
-        "Speaker participation changed while it was being confirmed",
-      );
-    }
-    throw error;
-  }
 }
 
 export async function updateSpeakerProfile(

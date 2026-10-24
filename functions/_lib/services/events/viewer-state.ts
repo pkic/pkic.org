@@ -1,6 +1,6 @@
 import { eventViewerStateSchema, type EventViewerState } from "../../../../assets/shared/schemas/event-management";
-import { buildD1JsonMembershipFilter } from "../../db/json-membership";
-import { all, toBool } from "../../db/queries";
+import { eventReadSelectionSql, type EventReadSelection } from "./read-selection";
+import { toBool } from "../../db/queries";
 import type { DatabaseLike } from "../../types";
 import { holdsWorkAddress } from "../../email-domains/contact-kind";
 import { NON_CAPACITY_CONSUMING_DAY_WAITLIST_SQL } from "../registrations/day-waitlist-policy";
@@ -42,7 +42,7 @@ const VIEWER_STATE_SELECT = `SELECT r.event_id AS event_id,
     ${verifiedAddressesJsonSql("r.user_id")} AS verified_addresses
   FROM registrations r`;
 
-interface EventViewerStateRow {
+export interface EventViewerStateRow {
   event_id: string;
   status: string;
   attendance_type: string;
@@ -77,15 +77,8 @@ export async function fetchViewerEventStates(
 ): Promise<Map<string, EventViewerState>> {
   const states = new Map<string, EventViewerState>();
   if (!userId || eventIds.length === 0) return states;
-  const eventFilter = buildD1JsonMembershipFilter("r.event_id", eventIds);
-  const rows = await all<EventViewerStateRow>(
-    db,
-    `${VIEWER_STATE_SELECT}
-      WHERE r.user_id = ? AND r.status <> 'cancelled' AND ${eventFilter.sql}`,
-    [userId, ...eventFilter.bindings],
-  );
-  for (const row of rows) states.set(row.event_id, mapViewerStateRow(row));
-  return states;
+  const read = prepareViewerEventStates(db, userId, eventIds);
+  return decodeViewerEventStates((await read.all<EventViewerStateRow>()).results);
 }
 
 /** Single-event convenience wrapper over {@link fetchViewerEventStates} for detail routes. */
@@ -96,4 +89,18 @@ export async function fetchViewerEventState(
 ): Promise<EventViewerState | null> {
   const states = await fetchViewerEventStates(db, userId, [eventId]);
   return states.get(eventId) ?? null;
+}
+
+/** Prepare caller-specific standing before the owning event ID is resolved. */
+export function prepareViewerEventStates(db: DatabaseLike, userId: string | null, selection: EventReadSelection) {
+  const filter = eventReadSelectionSql("r.event_id", selection);
+  return db
+    .prepare(
+      `${filter.withSql ? `WITH ${filter.withSql} ` : ""}${VIEWER_STATE_SELECT} WHERE r.user_id=? AND r.status<>'cancelled' AND ${filter.sql}`,
+    )
+    .bind(...(filter.withSql ? filter.bindings : []), userId, ...(filter.withSql ? [] : filter.bindings));
+}
+
+export function decodeViewerEventStates(rows: EventViewerStateRow[]): Map<string, EventViewerState> {
+  return new Map(rows.map((row) => [row.event_id, mapViewerStateRow(row)]));
 }

@@ -11,7 +11,7 @@ export function selectedContentFeedbackUrl(document: Document, selection: Select
     return undefined;
   }
   const parsed = contentContributionSchema.safeParse(raw);
-  if (!parsed.success || !selection.anchorNode || !selection.focusNode) return undefined;
+  if (!parsed.success || !parsed.data.sourcePath || !selection.anchorNode || !selection.focusNode) return undefined;
   const anchor = selection.getRangeAt(0).startContainer;
   const element = anchor instanceof Element ? anchor : anchor.parentElement;
   const body = element?.closest("[data-pagefind-body]");
@@ -23,7 +23,7 @@ export function selectedContentFeedbackUrl(document: Document, selection: Select
     headings
       .reverse()
       .find((entry) => Boolean(entry.compareDocumentPosition(anchor) & Node.DOCUMENT_POSITION_FOLLOWING));
-  const item = identified?.dataset.contentItemId ?? heading?.id ?? "";
+  const item = identified?.dataset.contentItemId ?? heading?.dataset.contentItemId ?? heading?.id ?? "";
   const url = new URL(page);
   if (heading) url.hash = heading.id;
   return contentFeedbackUrl(parsed.data, url.href, selection.toString().trim(), item);

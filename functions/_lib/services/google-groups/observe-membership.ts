@@ -1,3 +1,4 @@
+import { chunkJsonRows } from "../../db/json-bulk";
 import { all, run } from "../../db/queries";
 import { logInfo } from "../../logging";
 import type { DatabaseLike } from "../../types";
@@ -76,7 +77,7 @@ export async function observeGoogleGroupsMembership(
       }
       // Absent. Only meaningful once presence was actually confirmed —
       // otherwise this is simply someone queued but not yet added.
-      const detected = await recordAbsence(db, member.user_id, googleGroupEmail);
+      const detected = await recordProviderAbsence(db, member.user_id, googleGroupEmail);
       if (detected) result.unsubscribesDetected += 1;
     }
   }
@@ -102,7 +103,11 @@ async function recordPresence(db: DatabaseLike, userId: string, googleGroupEmail
 }
 
 /** Returns true when this observation newly established an unsubscribe. */
-async function recordAbsence(db: DatabaseLike, userId: string, googleGroupEmail: string): Promise<boolean> {
+export async function recordProviderAbsence(
+  db: DatabaseLike,
+  userId: string,
+  googleGroupEmail: string,
+): Promise<boolean> {
   const outcome = await run(
     db,
     `UPDATE google_groups_observed_membership
@@ -162,5 +167,31 @@ export async function clearGoogleGroupsSuppression(
         SET suppressed = 0, unsubscribed_at = NULL, unsubscribe_source = NULL, updated_at = ${NOW_SQL}
       WHERE user_id = ? AND google_group_email = ?`,
     [userId, googleGroupEmail],
+  );
+}
+
+/** Establish a bounded presence baseline without one D1 query per member. */
+export async function recordProviderPresences(
+  db: DatabaseLike,
+  listEmail: string,
+  addresses: { userId: string; email: string }[],
+) {
+  const at = new Date().toISOString();
+  const chunks = chunkJsonRows(addresses.slice(0, 500));
+  if (!chunks.length) return;
+  await db.batch(
+    chunks.map((chunk) =>
+      db
+        .prepare(`INSERT INTO google_groups_observed_membership
+    (user_id,google_group_email,confirmed_subscribed_at,last_observed_present_at,updated_at)
+    SELECT person.id,?,?,?,? FROM json_each(?) input JOIN users person
+      ON person.id = json_extract(input.value,'$.userId')
+      AND lower(person.email) = json_extract(input.value,'$.email')
+    WHERE person.active = 1
+    ON CONFLICT(user_id,google_group_email) DO UPDATE SET
+      confirmed_subscribed_at = COALESCE(google_groups_observed_membership.confirmed_subscribed_at,excluded.confirmed_subscribed_at),
+      last_observed_present_at = excluded.last_observed_present_at,updated_at = excluded.updated_at`)
+        .bind(listEmail, at, at, at, chunk.json),
+    ),
   );
 }

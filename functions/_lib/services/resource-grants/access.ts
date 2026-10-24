@@ -1,10 +1,9 @@
 import { hasPermission } from "../../auth/permissions";
 import {
-  isAuthorizationGuardFailure,
+  guardAuthorizedDatabase,
   prepareAuthorizationGuard,
   type AuthorizationEvidence,
 } from "../../db/authorization-guard";
-import { guardDatabaseBatches } from "../../db/guarded-database";
 import { all, first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../../types";
@@ -173,20 +172,11 @@ export function guardGroupResourceViewerDatabase<K extends ResourceGrantKind>(
   resourceId: string,
   capability: ResourceGrantCapability<K>,
 ): DatabaseLike {
-  return guardDatabaseBatches(db, async (statements) => {
-    try {
-      const [, ...results] = await db.batch([
-        prepareGroupResourceViewerAuthorizationGuard(db, viewer, groupId, kind, resourceId, capability),
-        ...statements,
-      ]);
-      return results;
-    } catch (error) {
-      if (isAuthorizationGuardFailure(error)) {
-        throw new AppError(403, "RESOURCE_CAPABILITY_REQUIRED", "Resource capability is required");
-      }
-      throw error;
-    }
-  });
+  return guardAuthorizedDatabase(
+    db,
+    groupResourceViewerAuthorizationEvidence(viewer, groupId, kind, resourceId, capability),
+    () => new AppError(403, "RESOURCE_CAPABILITY_REQUIRED", "Resource capability is required"),
+  );
 }
 
 /** Proves that a resource is still owned by or shared with one managed group. */
@@ -309,20 +299,11 @@ export function guardManagedGroupResourceDatabase<K extends ResourceGrantKind>(
   resourceId: string,
   capability: ResourceGrantCapability<K>,
 ): DatabaseLike {
-  return guardDatabaseBatches(db, async (statements) => {
-    try {
-      const [, ...results] = await db.batch([
-        prepareManagedGroupResourceAuthorizationGuard(db, actor, groupId, kind, resourceId, capability),
-        ...statements,
-      ]);
-      return results;
-    } catch (error) {
-      if (isAuthorizationGuardFailure(error)) {
-        throw new AppError(403, "RESOURCE_CAPABILITY_REQUIRED", "Resource capability is required");
-      }
-      throw error;
-    }
-  });
+  return guardAuthorizedDatabase(
+    db,
+    managedGroupResourceAuthorizationEvidence(actor, groupId, kind, resourceId, capability),
+    () => new AppError(403, "RESOURCE_CAPABILITY_REQUIRED", "Resource capability is required"),
+  );
 }
 
 async function resourceOwnerGroupId<K extends ResourceGrantKind>(

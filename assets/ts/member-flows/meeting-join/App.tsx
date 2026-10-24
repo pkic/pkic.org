@@ -27,6 +27,7 @@ import { Field } from "../../ui/Field";
 import { Panel, PanelBody } from "../../ui/Panel";
 import { TextInput } from "../../ui/TextControl";
 import { ApiClientError, getJson, patchJson, postJson, requestJson } from "../../shared/api-client";
+import { beginClientMutation } from "../../shared/client-release-safety";
 import type { MeetingGuestInvitationFragment } from "./invitation-fragment";
 import { MeetingJoinForm, type MeetingJoinConfirmInput } from "./MeetingJoinForm";
 
@@ -233,8 +234,11 @@ export function App({
     if (!occurrenceId) return;
     setSubmitting(true);
     setError(null);
+    const finishMutation = beginClientMutation();
+    let deleteCompleted = false;
     try {
       const forgotten = await fetch(`${occurrenceEndpoint(occurrenceId)}/links/session`, { method: "DELETE" });
+      deleteCompleted = forgotten.ok || (forgotten.status >= 400 && forgotten.status < 500);
       if (!forgotten.ok) throw new Error("The remembered meeting identity could not be cleared.");
       await postJson("/api/v1/auth/logout", {}, userAuthLogoutResponseSchema);
       window.location.assign(
@@ -243,6 +247,8 @@ export function App({
     } catch (caught) {
       setError(errorMessage(caught));
       setSubmitting(false);
+    } finally {
+      finishMutation(deleteCompleted);
     }
   }
 

@@ -1,5 +1,6 @@
 import { all } from "../../db/queries";
-import type { DatabaseLike } from "../../types";
+import { batchRows } from "../../db/pagination";
+import type { DatabaseLike, D1StatementResult } from "../../types";
 import type { AgendaSnapshot } from "../../../../assets/shared/schemas/event-agenda";
 import { sessionHasPageContent } from "../../../../assets/shared/public-agenda-pages";
 import {
@@ -55,13 +56,13 @@ export function planSessionPageSlugs(
   return changes;
 }
 
-async function readEventRows(db: DatabaseLike, eventId: string) {
-  return all<SessionPageSlugRow>(
-    db,
-    `SELECT slug,occurrence_id AS occurrenceId,retired_at AS retiredAt FROM session_page_slugs
+function prepareEventRows(db: DatabaseLike, eventId: string) {
+  return db
+    .prepare(
+      `SELECT slug,occurrence_id AS occurrenceId,retired_at AS retiredAt FROM session_page_slugs
       WHERE event_id=? ORDER BY occurrence_id,created_at,slug`,
-    [eventId],
-  );
+    )
+    .bind(eventId);
 }
 
 /**
@@ -69,31 +70,38 @@ async function readEventRows(db: DatabaseLike, eventId: string) {
  * inside the approval's own atomic batch. Addresses are issued whatever the
  * event's visibility, so a later public event already has stable addresses.
  */
-export async function prepareSessionPageSlugs(db: DatabaseLike, eventId: string, approved: AgendaSnapshot, at: string) {
+export function prepareSessionPageSlugsRead(db: DatabaseLike, eventId: string, approved: AgendaSnapshot, at: string) {
   const sessions = approved.occurrences
     .filter(sessionHasPageContent)
     .map((occurrence) => ({ occurrenceId: occurrence.id, title: occurrence.title }))
     .sort((a, b) => a.occurrenceId.localeCompare(b.occurrenceId));
-  if (!sessions.length) return [];
-  const rows = await readEventRows(db, eventId);
-  const changes = planSessionPageSlugs(sessions, rows, new Set(rows.map((row) => row.slug)));
-  return changes.map((change) =>
-    change.kind === "retire"
-      ? db
-          .prepare(
-            "UPDATE session_page_slugs SET retired_at=? WHERE event_id=? AND slug=? AND occurrence_id=? AND retired_at IS NULL",
-          )
-          .bind(at, eventId, change.slug, change.occurrenceId)
-      : change.kind === "restore"
-        ? db
-            .prepare("UPDATE session_page_slugs SET retired_at=NULL WHERE event_id=? AND slug=? AND occurrence_id=?")
-            .bind(eventId, change.slug, change.occurrenceId)
-        : db
-            .prepare(
-              "INSERT INTO session_page_slugs(event_id,slug,occurrence_id,created_at,retired_at) VALUES(?,?,?,?,NULL)",
-            )
-            .bind(eventId, change.slug, change.occurrenceId, at),
-  );
+  return {
+    statements: sessions.length ? [prepareEventRows(db, eventId)] : [],
+    decode(loaded: D1StatementResult[]) {
+      if (!sessions.length) return [];
+      const rows = batchRows<SessionPageSlugRow>(loaded[0]);
+      const changes = planSessionPageSlugs(sessions, rows, new Set(rows.map((row) => row.slug)));
+      return changes.map((change) =>
+        change.kind === "retire"
+          ? db
+              .prepare(
+                "UPDATE session_page_slugs SET retired_at=? WHERE event_id=? AND slug=? AND occurrence_id=? AND retired_at IS NULL",
+              )
+              .bind(at, eventId, change.slug, change.occurrenceId)
+          : change.kind === "restore"
+            ? db
+                .prepare(
+                  "UPDATE session_page_slugs SET retired_at=NULL WHERE event_id=? AND slug=? AND occurrence_id=?",
+                )
+                .bind(eventId, change.slug, change.occurrenceId)
+            : db
+                .prepare(
+                  "INSERT INTO session_page_slugs(event_id,slug,occurrence_id,created_at,retired_at) VALUES(?,?,?,?,NULL)",
+                )
+                .bind(eventId, change.slug, change.occurrenceId, at),
+      );
+    },
+  };
 }
 
 async function readOccurrenceRows(db: DatabaseLike, eventId: string, occurrenceIds: readonly string[]) {
