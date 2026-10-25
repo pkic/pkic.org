@@ -1,3 +1,5 @@
+import { consentSelectionRefusal } from "../consent-selection";
+import type { RequiredTerm } from "./event-read-models";
 import { z } from "zod";
 import { formAnswersSchema, submittedFormAnswersSchema } from "./form-answers";
 import { databaseIdSchema } from "./identifiers";
@@ -286,6 +288,14 @@ export const registrationCreateSchema = attendeeRegistrationFieldsSchema
     organization: registrationConfirmOrganizationSchema.optional(),
   })
   .superRefine(requireAttendance);
+
+/** The shared request contract resolved against the event's currently offered terms. */
+export function registrationCreateForTermsSchema(terms: readonly RequiredTerm[]) {
+  return registrationCreateSchema.superRefine((body, context) => {
+    const refusal = consentSelectionRefusal(terms, body.consents);
+    if (refusal) context.addIssue({ code: "custom", path: ["consents"], message: refusal.message });
+  });
+}
 
 export const registrationConfirmQuerySchema = z.object({ id: databaseIdSchema.optional(), token: tokenSchema });
 

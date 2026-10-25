@@ -1,3 +1,4 @@
+import { consentSelectionRefusal } from "../../../assets/shared/consent-selection";
 import { AppError } from "../errors";
 import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
@@ -10,29 +11,11 @@ export async function validateRequiredConsents(
   requiredTerms: EventTermRecord[],
   accepted: Array<{ termKey: string; version: string }>,
 ): Promise<void> {
-  const activeTerms = new Set(requiredTerms.map((term) => `${term.term_key}:${term.version}`));
-  const acceptedSet = new Set(accepted.map((item) => `${item.termKey}:${item.version}`));
-
-  for (const acceptance of accepted) {
-    if (!activeTerms.has(`${acceptance.termKey}:${acceptance.version}`)) {
-      throw new AppError(
-        400,
-        "CONSENT_INVALID",
-        `Consent for ${acceptance.termKey} v${acceptance.version} is not an active event term`,
-      );
-    }
-  }
-
-  for (const term of requiredTerms) {
-    if (term.required !== 1) {
-      continue;
-    }
-
-    const key = `${term.term_key}:${term.version}`;
-    if (!acceptedSet.has(key)) {
-      throw new AppError(400, "CONSENT_REQUIRED", `Missing required consent for ${term.term_key} v${term.version}`);
-    }
-  }
+  const refusal = consentSelectionRefusal(
+    requiredTerms.map((term) => ({ termKey: term.term_key, version: term.version, required: term.required === 1 })),
+    accepted,
+  );
+  if (refusal) throw new AppError(400, refusal.code, refusal.message);
 }
 
 export async function persistConsents(

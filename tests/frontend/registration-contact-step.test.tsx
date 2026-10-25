@@ -2,7 +2,7 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { identitiesListQuerySchema, identitiesListResponseSchema } from "../../assets/shared/schemas/identity";
+import { identitiesListResponseSchema } from "../../assets/shared/schemas/identity";
 import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-auth";
 import {
   registrationEmailProofStartSchema,
@@ -10,8 +10,8 @@ import {
   registrationEmailProofVerifySchema,
 } from "../../assets/shared/schemas/registration-email-proof";
 import type { ConfirmOrganizationController } from "../../assets/ts/components/RegistrationConfirmOrganization";
-import { userDetailResponseSchema } from "../../assets/shared/schemas/user-management";
-import { RegistrationIdentitySelect } from "../../assets/ts/components/RegistrationIdentitySelect";
+import { portalProfileFixture, portalSessionFixture } from "../helpers/portal-session";
+import { RegistrationIdentityField } from "../../assets/ts/components/RegistrationIdentitySelect";
 import { RegistrationContactStep } from "../../assets/ts/components/RegistrationContactStep";
 import {
   EMAIL_FIRST_ADVISORY_COPY,
@@ -30,7 +30,7 @@ const ORGANIZATION_ID = "00000000-0000-4000-8000-000000000044";
 const NOW = "2026-01-01T00:00:00.000Z";
 let host: HTMLDivElement | null = null;
 
-function session() {
+function session(organizationName?: string | null) {
   // Event participation is an authenticated capacity without membership.
   return userAuthSessionResponseSchema.parse({
     success: true,
@@ -39,28 +39,23 @@ function session() {
     idleExpiresAt: "2099-12-31T23:59:59.000Z",
     identity: { id: USER_ID, email: "ada@example.test" },
     eventParticipation: true,
+    actingIdentityId: organizationName === undefined ? null : IDENTITY_ID,
+    actingIdentities:
+      organizationName === undefined
+        ? []
+        : [
+            {
+              id: IDENTITY_ID,
+              organizationId: organizationName ? ORGANIZATION_ID : null,
+              organizationName,
+              jobTitle: "Engineer",
+            },
+          ],
   });
 }
 
 function profile() {
-  return userDetailResponseSchema.parse({
-    user: {
-      id: USER_ID,
-      email: "ada@example.test",
-      first_name: "Ada",
-      last_name: "Lovelace",
-      preferred_name: null,
-      role: "user",
-      active: true,
-      isEcMember: false,
-      created_at: NOW,
-      updated_at: NOW,
-      pii_redacted_at: null,
-      headshotUrl: null,
-      identities: [],
-      formerIdentities: [],
-    },
-  });
+  return { ...portalProfileFixture(portalSessionFixture({})), firstName: "Ada", lastName: "Lovelace" };
 }
 
 function identity(organizationName: string | null) {
@@ -121,7 +116,7 @@ function installResponses(
       let body: unknown;
       let status = 200;
       if (url.pathname === "/api/v1/auth/session") {
-        body = signedIn ? session() : { error: { code: "UNAUTHORIZED", message: "Sign in" } };
+        body = signedIn ? session(organizationName) : { error: { code: "UNAUTHORIZED", message: "Sign in" } };
         status = signedIn ? 200 : 401;
       } else if (url.pathname.endsWith("/registrations/proof")) body = { status: "verification_sent" };
       else if (url.pathname.endsWith("/registrations/proof/verify"))
@@ -131,7 +126,7 @@ function installResponses(
           person: verifiedPerson,
           asksOrganization,
         });
-      else if (url.pathname === `/api/v1/users/${USER_ID}`) body = profile();
+      else if (url.pathname === "/api/v1/users/current") body = profile();
       else if (url.pathname.startsWith("/api/v1/email/domains/")) {
         // The server's lists; the browser only ever sees this answer.
         const domain = decodeURIComponent(url.pathname.slice("/api/v1/email/domains/".length));
@@ -307,12 +302,7 @@ describe("registration contact step", () => {
     expect(value(form, "emailProof")).toBeUndefined();
     expect(form.textContent).toContain(REGISTRATION_IDENTITY_COPY.representing("Example Corp"));
     expect(value(form, "identityId")).toBe(IDENTITY_ID);
-    const lookup = recorded.find((request) => request.path === "/api/v1/users/current/identities");
-    expect(identitiesListQuerySchema.parse(Object.fromEntries(lookup!.query))).toMatchObject({
-      emailDomain: "example.test",
-      organizationOnly: true,
-      active: true,
-    });
+    expect(recorded.some((request) => request.path === "/api/v1/users/current/identities")).toBe(false);
 
     await act(async () => button(form, REGISTRATION_IDENTITY_COPY.chooseOther)!.click());
     expect(form.querySelector('[role="combobox"]')).not.toBeNull();
@@ -349,7 +339,7 @@ describe("signed-in registration identity", () => {
   it("offers an existing organization identity", async () => {
     installResponses("Example Corp");
     const onSelect = vi.fn();
-    const form = await mount(<RegistrationIdentitySelect onSelect={onSelect} />);
+    const form = await mount(<RegistrationIdentityField onSelect={onSelect} />);
     const combobox = form.querySelector<HTMLInputElement>('[role="combobox"]');
     expect(combobox).not.toBeNull();
     await act(async () => {
@@ -362,14 +352,19 @@ describe("signed-in registration identity", () => {
       (item) => item.textContent === "Example Corp",
     )!;
     await act(() => option.click());
-    expect(onSelect).toHaveBeenCalledWith(IDENTITY_ID);
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: IDENTITY_ID }));
     expect(value(form, "identityId")).toBe(IDENTITY_ID);
   });
 
-  it("hides the selector for a person with only an individual identity", async () => {
+  it("defaults to the selected individual identity and allows changing it", async () => {
     installResponses(null);
-    const form = await mount(<RegistrationIdentitySelect />);
+    const form = await mount(
+      <RegistrationIdentityField
+        preferred={{ id: IDENTITY_ID, organizationId: null, organizationName: null, jobTitle: null }}
+      />,
+    );
     expect(form.querySelector('[role="combobox"]')).toBeNull();
-    expect(value(form, "identityId")).toBeUndefined();
+    expect(value(form, "identityId")).toBe(IDENTITY_ID);
+    expect(button(form, REGISTRATION_IDENTITY_COPY.chooseOther)).toBeDefined();
   });
 });

@@ -3,7 +3,8 @@
  * server route parses — and nothing else.
  *
  * The caller passes the schema and the body it would send. The hook parses
- * that body on every render, so the fields always reflect what the contract
+ * that body on every render and submit. A body getter reads uncontrolled or
+ * imperatively populated controls fresh at submission. The fields reflect what the contract
  * would say; a field only *shows* a state once the reader has touched it
  * (input, change or leaving it) or once a submission was refused, so a form
  * does not open covered in red. Messages come from the contract through the
@@ -106,7 +107,8 @@ export function useContractForm<Schema extends z.ZodType>(
   const [showAll, setShowAll] = useState(false);
   const [focusAt, setFocusAt] = useState(0);
 
-  const result = schema.safeParse(body);
+  const readBody = () => (typeof body === "function" ? body() : body);
+  const result = schema.safeParse(readBody());
   const issues: Record<string, string> = result.success ? {} : normalizeValidation(result.error).fields;
 
   // After a refusal the first refused field takes focus — once its mark is
@@ -153,6 +155,7 @@ export function useContractForm<Schema extends z.ZodType>(
   };
 
   const submit = () => {
+    const result = schema.safeParse(readBody());
     if (result.success) return { data: result.data as z.output<Schema>, message: null };
     setShowAll(true);
     setFocusAt(Date.now());

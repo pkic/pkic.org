@@ -2,7 +2,6 @@ import { HeadshotDialogTemplates } from "./HeadshotDialogTemplates";
 import { Button } from "../ui/Button";
 import { Field } from "../ui/Field";
 import { TextInput } from "../ui/TextControl";
-import { EventPersonalFields } from "./EventPersonalFields";
 
 /** Registration management markup consumed by the existing token-bound controller. */
 export function EventRegistrationManagement() {
@@ -65,49 +64,7 @@ export function EventRegistrationManagement() {
             commands — is rendered here by the page module; the form below
             stays hidden until the attendee chooses to edit. */}
         <div data-manage-summary />
-        <form class="pk-form pk-stack--loose needs-validation" noValidate hidden>
-          <div class="pk-stack pk-stack--snug">
-            <h3>Your details</h3>
-            <Field id="manage-email" label="Email address" errorSlot="email">
-              {(control) => <TextInput {...control} name="email" type="email" autoComplete="email" />}
-            </Field>
-            <p data-email-change-notice class="pk-warning-note" hidden>
-              Changing your email will require you to confirm the new address before your registration is active again.
-            </p>
-            <EventPersonalFields prefix="manage" />
-            {/* Organization and title, read-only from the identity, are rendered here by the page module. */}
-            <div data-registration-affiliation />
-          </div>
-          <div data-custom-fields-section class="pk-stack pk-stack--snug">
-            <h3>Event questions</h3>
-            <div data-custom-fields>
-              <p class="pk-muted pk-small">Loading…</p>
-            </div>
-          </div>
-          <div class="pk-stack pk-stack--snug">
-            <h3>Attendance per day</h3>
-            <Field
-              group
-              label="Attendance"
-              errorSlot="dayAttendance"
-              help="Change attendance mode for each day. For multi-day events, switch a day to On demand to watch the recording instead of canceling individual days."
-            >
-              {() => (
-                <div data-day-attendance>
-                  <p class="pk-muted pk-small">Loading event days…</p>
-                </div>
-              )}
-            </Field>
-          </div>
-          <div class="pk-cluster" data-action-buttons>
-            <Button type="submit" variant="primary">
-              Save changes
-            </Button>
-            <Button type="button" data-action="discard" variant="secondary">
-              Discard changes
-            </Button>
-          </div>
-        </form>
+        <div data-registration-editor hidden />
         <p data-flow-status class="pk-alert pk-sr-only" role="status" aria-live="polite" />
       </div>
       <HeadshotDialogTemplates />

@@ -31,7 +31,7 @@ test("a signed-in user registers from event home without another email challenge
     data: myProfileUpdateSchema.parse({ firstName: "Ada", lastName: "Example" }),
   });
   expect(profile.status(), await profile.text()).toBe(200);
-  const dayDate = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
+  const dayDate = new Date(Date.now() + 400 * 86_400_000).toISOString().slice(0, 10);
   const event = await createRegistrationEvent(page, "quick-registration", {
     date: dayDate,
     startTime: "09:00",
@@ -53,15 +53,16 @@ test("a signed-in user registers from event home without another email challenge
   await page.getByRole("button", { name: "Register", exact: true }).click();
   await expect(dialog.getByText(email, { exact: true })).toBeVisible();
   await page.setViewportSize({ width: 1280, height: 900 });
+  await expect(dialog.locator('[data-step="1"]')).toHaveCSS("opacity", "1");
   await page.screenshot({ path: info.outputPath("quick-registration-desktop.png"), fullPage: true });
   await page.setViewportSize({ width: 375, height: 812 });
   await page.screenshot({ path: info.outputPath("quick-registration-phone.png"), fullPage: true });
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await dialog.getByRole("checkbox", { name: "I'm participating as an individual", exact: true }).focus();
-  await page.keyboard.press("Tab");
-  await expect(dialog.getByRole("radio", { name: "In person", exact: true })).toBeFocused();
-  await page.keyboard.press("Space");
+  await dialog.getByRole("button", { name: "Continue", exact: true }).click();
+  await dialog.locator(`label[for="dayAttendance-${dayDate}-in_person"]`).click();
   await expect(dialog.getByRole("radio", { name: "In person", exact: true })).toBeChecked();
+  await dialog.getByRole("button", { name: "Continue", exact: true }).click();
+  await dialog.getByRole("button", { name: "Continue", exact: true }).click();
   await dialog.getByRole("checkbox", { name: "I agree to the privacy policy", exact: true }).check();
   await dialog.getByRole("checkbox", { name: "I agree to the code of conduct", exact: true }).check();
   const saved = page.waitForResponse(

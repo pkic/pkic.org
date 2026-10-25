@@ -274,7 +274,8 @@ test("a rendered promotion QR preserves its referral through email sign-in and c
       confirmedRegistrations: baseline.confirmedRegistrations + 1,
     });
     await visitor.goto(registrationPage);
-    await expect(visitor.locator('input[name="referralCode"]')).toHaveValue("");
+    await expect(visitor.locator("[data-registration-contact]")).toBeVisible();
+    expect(await visitor.evaluate((value) => Object.values(sessionStorage).includes(value), code)).toBe(false);
   } finally {
     await visitorContext.close();
   }

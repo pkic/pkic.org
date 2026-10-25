@@ -96,6 +96,30 @@ afterEach(() => {
 });
 
 describe("useContractForm", () => {
+  it("reads the latest uncontrolled body at submission and applies the contract", async () => {
+    let value = "";
+    function GetterHarness() {
+      const form = useContractForm(contract, () => ({ name: value, website: null }));
+      return (
+        <button
+          onClick={() => {
+            const checked = form.submit();
+            outcome = checked.data ? checked.data.name : checked.message;
+          }}
+        >
+          Save
+        </button>
+      );
+    }
+    container = document.createElement("div");
+    document.body.append(container);
+    await act(() => render(<GetterHarness />, container!));
+    await act(() => container!.querySelector("button")!.click());
+    expect(outcome).toBe("Please correct the highlighted fields.");
+    value = "  Updated without a render  ";
+    await act(() => container!.querySelector("button")!.click());
+    expect(outcome).toBe("Updated without a render");
+  });
   it("keeps individual nested and repeated field errors alongside group errors", () => {
     const result = z
       .object({

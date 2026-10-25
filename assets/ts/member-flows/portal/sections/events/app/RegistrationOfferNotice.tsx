@@ -46,7 +46,7 @@ export function RegistrationOfferNotice({
           <Suspense fallback={<Spinner label="Loading registration…" />}>
             <EventRegistrationCreate
               slug={slug}
-              onCancel={() => setOpen(false)}
+
               onRegistered={async () => {
                 await onRegistered?.();
                 setOpen(false);

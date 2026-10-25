@@ -167,10 +167,15 @@ describe("registration email-first entry", () => {
       ["Last name", "Lovelace"],
     ]) {
       const control = controlFor(step, label);
-      control.value = value;
-      control.dispatchEvent(new Event("input", { bubbles: true }));
+      await act(() => {
+        control.value = value;
+        control.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      await settle();
     }
 
+    expect(controlFor(step, "First name").value).toBe("Ada");
+    expect(controlFor(step, "Last name").value).toBe("Lovelace");
     await act(async () => {
       form.querySelector<HTMLInputElement>("[data-term-key] input")!.checked = true;
       form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));

@@ -1,6 +1,10 @@
 /** @covers event.3.2.b */
 import { expect, test } from "@playwright/test";
 import { registerInBrowser } from "./helpers/registration";
+import {
+  registrationManageSchema,
+  registrationManageUpdateResponseSchema,
+} from "../../assets/shared/schemas/registration";
 import { EMAIL_FIRST_COPY } from "../../assets/shared/email-first-copy";
 import { userDetailResponseSchema, usersListResponseSchema } from "../../assets/shared/schemas/user-management";
 import { userParticipationResponseSchema } from "../../assets/shared/schemas/user-participation";
@@ -123,6 +127,25 @@ test("verified approved-domain registration affiliates once and an organization 
     await attendee.getByRole("button", { name: "Edit details", exact: true }).click();
     await expect(attendee.getByRole("textbox", { name: "Organization", exact: true })).toHaveCount(0);
     await expect(attendee.getByRole("link", { name: "Manage identities", exact: true })).toBeVisible();
+    await expect(attendee.getByLabel("Country", { exact: true })).toHaveValue("US");
+    await attendee.getByLabel("Country", { exact: true }).selectOption("CA");
+    const savedResponse = attendee.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname.startsWith("/api/v1/registrations/access/") &&
+        response.request().method() === "PATCH",
+    );
+    await attendee.getByRole("button", { name: "Save changes", exact: true }).click();
+    const saved = await savedResponse;
+    expect(saved.status(), await saved.text()).toBe(200);
+    expect(registrationManageSchema.parse(saved.request().postDataJSON())).toMatchObject({
+      action: "update",
+      customAnswers: { country: "CA" },
+    });
+    registrationManageUpdateResponseSchema.parse(await saved.json());
+    await expect(attendee.getByRole("heading", { name: "Changes saved", exact: true })).toBeVisible();
+    await attendee.reload();
+    await attendee.getByRole("button", { name: "Edit details", exact: true }).click();
+    await expect(attendee.getByLabel("Country", { exact: true })).toHaveValue("CA");
     const badge = attendee.locator("[data-og-badge-img]");
     await expect(badge).toHaveAttribute("src", /[?]v=/);
     await expect
@@ -130,7 +153,7 @@ test("verified approved-domain registration affiliates once and an organization 
       .toBe(true);
     await badge.screenshot({ path: testInfo.outputPath("selected-identity-badge.png") });
     await attendee.screenshot({ path: testInfo.outputPath("registration-selected-identity.png"), fullPage: true });
-    await attendee.setViewportSize({ width: 390, height: 844 });
+    await attendee.setViewportSize({ width: 375, height: 812 });
     await attendee.screenshot({
       path: testInfo.outputPath("registration-selected-identity-phone.png"),
       fullPage: true,

@@ -3,14 +3,16 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, expect, it, vi } from "vitest";
 import { eventFormsResponseSchema } from "../../assets/shared/schemas/forms";
-import { registrationCreateSchema } from "../../assets/shared/schemas/registration";
+import { registrationCreateForTermsSchema, registrationCreateSchema } from "../../assets/shared/schemas/registration";
 import { EventRegistrationCreate } from "../../assets/ts/components/events/EventRegistrationCreate";
 import { portalProfileFixture, portalSessionFixture } from "../helpers/portal-session";
 
 let host: HTMLDivElement;
 afterEach(() => {
-  render(null, host);
-  host.remove();
+  if (host) {
+    render(null, host);
+    host.remove();
+  }
   vi.unstubAllGlobals();
 });
 
@@ -34,7 +36,10 @@ it("uses the session address, validates event questions, and submits the shared 
         label: "Workshop",
         sortOrder: 0,
         inPersonCapacity: null,
-        attendanceOptions: [{ value: "virtual", label: "Watch online" }],
+        attendanceOptions: [
+          { value: "virtual", label: "Watch online" },
+          { value: "in_person", label: "At the venue" },
+        ],
       },
     ],
     requiredTerms: [
@@ -66,9 +71,44 @@ it("uses the session address, validates event questions, and submits the shared 
           updatedAt: "2026-01-01T00:00:00.000Z",
           archivedAt: null,
         },
+        {
+          id: "00000000-0000-4000-8000-000000000014",
+          key: "dietary_restrictions",
+          label: "Dietary restrictions",
+          fieldType: "multi_select",
+          required: false,
+          options: ["Nut allergy", "Vegan"],
+          optionSource: null,
+          validation: {
+            uiWidget: "checkboxes",
+            showWhen: { dayAttendanceIn: ["in_person"] },
+            helpText: "The venue receives these answers. Accommodation cannot be guaranteed.",
+          },
+          sortOrder: 1,
+          updatedAt: "2026-01-01T00:00:00.000Z",
+          archivedAt: null,
+        },
       ],
     },
   });
+  const terms = [...config.requiredTerms, { ...config.requiredTerms[0], termKey: "conduct" }];
+  const consentContract = registrationCreateForTermsSchema(terms);
+  const request = {
+    email: "ada@example.test",
+    firstName: "Ada",
+    lastName: "Lovelace",
+    attendanceType: "virtual",
+    consents: [{ termKey: "privacy", version: "1" }],
+  };
+  expect(consentContract.safeParse(request).success).toBe(false);
+  expect(
+    consentContract.safeParse({ ...request, consents: [...request.consents, { termKey: "conduct", version: "old" }] })
+      .success,
+  ).toBe(false);
+  expect(
+    consentContract.safeParse({ ...request, consents: [...request.consents, { termKey: "conduct", version: "1" }] })
+      .success,
+  ).toBe(true);
   const posted: unknown[] = [];
   vi.stubGlobal(
     "fetch",
@@ -98,15 +138,26 @@ it("uses the session address, validates event questions, and submits the shared 
     }),
   );
   const onRegistered = vi.fn(async () => {});
-  await act(() =>
-    render(<EventRegistrationCreate slug="summit" onCancel={() => {}} onRegistered={onRegistered} />, host),
-  );
+  await act(() => render(<EventRegistrationCreate slug="summit" onRegistered={onRegistered} />, host));
   await vi.waitFor(() => expect(host.querySelector("form")).not.toBeNull());
   expect(host.textContent).toContain("Ada Lovelace");
   expect(host.textContent).toContain(session.identity.email);
   expect(host.textContent).not.toContain(profile.email);
-  expect(host.querySelector('input[name="email"]')).toBeNull();
+  expect(host.querySelector('input[name="email"]')?.getAttribute("type")).toBe("hidden");
   await act(() => host.querySelector<HTMLInputElement>('input[value="virtual"]')!.click());
+  expect(host.querySelector('[data-custom-field-key="dietary_restrictions"]')?.getAttribute("aria-hidden")).toBe(
+    "true",
+  );
+  await act(() => host.querySelector<HTMLInputElement>('input[value="in_person"]')!.click());
+  expect(host.querySelector('[data-custom-field-key="dietary_restrictions"]')?.getAttribute("aria-hidden")).toBe(
+    "false",
+  );
+  expect(host.textContent).toContain(config.form!.fields[1].validation!.helpText);
+  expect(host.textContent).toContain("Nut allergy");
+  await act(() => host.querySelector<HTMLInputElement>('input[value="virtual"]')!.click());
+  expect(host.querySelector('[data-custom-field-key="dietary_restrictions"]')?.getAttribute("aria-hidden")).toBe(
+    "true",
+  );
   await act(() => host.querySelector<HTMLInputElement>('input[name="consents"]')!.click());
   await act(() => {
     host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
