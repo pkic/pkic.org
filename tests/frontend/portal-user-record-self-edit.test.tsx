@@ -12,6 +12,7 @@ import type { UserPermissions } from "../../assets/ts/member-flows/portal/sectio
 import { portalSession } from "../../assets/ts/member-flows/portal/state";
 import { portalSessionFixture } from "../helpers/portal-session";
 import { myProfileSchema } from "../../assets/shared/schemas/me";
+import { currentUserIdentityCreateSchema } from "../../assets/shared/schemas/identity";
 
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["/users/self", vi.fn()] }));
 vi.mock("wouter", () => ({
@@ -115,7 +116,7 @@ function record(id: string) {
 }
 
 /** Answers the record and the account resources; anything else is an empty refusal the panels tolerate. */
-function stubApi(): Array<{ method: string; path: string; body: unknown }> {
+function stubApi(domainOffer = false): Array<{ method: string; path: string; body: unknown }> {
   const paths: Array<{ method: string; path: string; body: unknown }> = [];
   vi.stubGlobal(
     "fetch",
@@ -153,6 +154,7 @@ function stubApi(): Array<{ method: string; path: string; body: unknown }> {
               id: null,
               email: "person@example.test",
               primary: true,
+              signInEnabled: true,
               verifiedAt: "2026-08-01T00:00:00.000Z",
               verificationMethod: "magic_link",
               identityId: null,
@@ -172,7 +174,20 @@ function stubApi(): Array<{ method: string; path: string; body: unknown }> {
         });
       }
       if (url.pathname === "/api/v1/auth/passkeys") return json({ passkeys: [] });
+      if (url.pathname === "/api/v1/users/current/identities/offer")
+        return json({
+          offer: domainOffer
+            ? {
+                kind: "organization",
+                organization: { id: ORGANIZATION_ID, name: "Example Org" },
+                emailId: null,
+                domain: "example.test",
+                writtenOrganizationName: null,
+              }
+            : null,
+        });
       if (url.pathname === "/api/v1/users/current/identities") {
+        if (init?.method === "POST") return json({ success: true, identityId: IDENTITY_ID, state: "active" }, 201);
         return json({ identities: [], page: page(0) });
       }
       return json({ error: { code: "NOT_FOUND", message: "Not stubbed" } }, 404);
@@ -298,6 +313,36 @@ describe("editing your own record", () => {
 });
 
 describe("who you are signed in as, and adding an identity", () => {
+  it("prefills the existing organization resolved from a verified work address and links to its ID", async () => {
+    portalSession.value = portalSessionFixture({ member: true });
+    const requests = stubApi(true);
+    await mount(SELF_ID, NO_PERMISSIONS);
+    await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Add identity"]')!.click());
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    const form = container.querySelector<HTMLFormElement>('form[aria-label="Add identity"]')!;
+    expect(form.querySelector<HTMLInputElement>('[role="combobox"]')?.value).toBe("Example Org");
+    const title = form.querySelector<HTMLInputElement>('input[name="jobTitle"]')!;
+    await act(async () => {
+      title.value = "Engineer";
+      title.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    const sent = requests.find(
+      (request) => request.path === "/api/v1/users/current/identities" && request.method === "POST",
+    );
+    expect(currentUserIdentityCreateSchema.parse(sent?.body)).toEqual({
+      organizationId: ORGANIZATION_ID,
+      emailId: null,
+      jobTitle: "Engineer",
+    });
+    expect(requests.some((request) => request.path === "/api/v1/organizations" && request.method === "POST")).toBe(
+      false,
+    );
+  });
   function twoIdentities() {
     const session = portalSessionFixture({ member: true });
     session.actingIdentities = [

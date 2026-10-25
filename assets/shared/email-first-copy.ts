@@ -159,12 +159,6 @@ export const ORGANIZATION_JOB_TITLE_COPY = {
   help: "Your role at the organization you represent, shown with your name.",
 } as const;
 
-/** The identity a signed-in registrant continues as: shown read-only, with a way to choose another they hold. */
-export const REGISTRATION_IDENTITY_COPY = {
-  representing: (organization: string) => `You'll register as ${organization}.`,
-  chooseOther: "Choose another identity",
-} as const;
-
 /** The organization a verified work address names when its domain resolves to none. */
 export const REGISTRATION_ORGANIZATION_COPY = {
   question: "Add your organization and job title to confirm your registration.",

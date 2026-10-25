@@ -25,7 +25,7 @@ test("verified approved-domain registration affiliates once and an organization 
   browser,
 }, testInfo) => {
   await signInToPortal(page, e2eAdminEmail("portal-event-management"));
-  const representative = await createMember(page);
+  const representative = await createMember(page, { organizationName: "Summit Trust Services" });
   const owner = userDetailResponseSchema.parse(
     await (await page.request.get(`/api/v1/users/${representative.userId}`)).json(),
   );
@@ -122,7 +122,34 @@ test("verified approved-domain registration affiliates once and an organization 
     await expect(attendee.getByRole("heading", { name: /You're registered/i })).toBeVisible();
     const selectedEmail = await waitForCapturedEmail(email, "registration is confirmed", { since: sinceSelected });
     await attendee.goto(extractEmailUrl(selectedEmail, "/register/manage/"));
-    // The organization comes from the selected identity: read-only, managed with the identities.
+    await attendee.getByRole("button", { name: "Change representation", exact: true }).click();
+    const changeIdentity = attendee.getByRole("dialog", { name: "Change representation", exact: true });
+    await changeIdentity.getByRole("combobox", { name: "Event identity", exact: true }).click();
+    await attendee.getByRole("option").filter({ hasText: "Personal" }).click();
+    for (const [width, height, device] of [
+      [1280, 900, "desktop"],
+      [375, 812, "phone"],
+    ] as const) {
+      await attendee.setViewportSize({ width, height });
+      await attendee.screenshot({ path: testInfo.outputPath(`public-update-identity-${device}.png`) });
+    }
+    await changeIdentity.getByRole("button", { name: "Add identity", exact: true }).click();
+    const addIdentity = attendee.getByRole("dialog", { name: "Add identity", exact: true });
+    await expect(addIdentity.getByRole("combobox", { name: /^Organization/ })).toBeVisible();
+    await attendee.screenshot({ path: testInfo.outputPath("public-update-add-identity-phone.png") });
+    await addIdentity.getByRole("button", { name: "Cancel", exact: true }).click();
+    await changeIdentity.getByRole("button", { name: "Save changes", exact: true }).click();
+    await expect(changeIdentity).not.toBeVisible();
+    await attendee.reload();
+    await attendee.getByRole("button", { name: "Change representation", exact: true }).click();
+    await expect(changeIdentity.getByRole("combobox", { name: "Event identity", exact: true })).toContainText(
+      "Personal",
+    );
+    await changeIdentity.getByRole("combobox", { name: "Event identity", exact: true }).click();
+    await attendee.getByRole("option").filter({ hasText: organizationName }).click();
+    await changeIdentity.getByRole("button", { name: "Save changes", exact: true }).click();
+    await expect(changeIdentity).not.toBeVisible();
+    // Profile edits preserve the independently selected registration representation.
     await expect(attendee.getByRole("definition").filter({ hasText: organizationName })).toBeVisible();
     await attendee.getByRole("button", { name: "Edit details", exact: true }).click();
     await expect(attendee.getByRole("textbox", { name: "Organization", exact: true })).toHaveCount(0);

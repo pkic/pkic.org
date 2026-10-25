@@ -22,7 +22,6 @@ import {
   organizationCreateResponseSchema,
 } from "../../assets/shared/schemas/organization-management";
 import { identityCreateSchema, identityMutationResponseSchema } from "../../assets/shared/schemas/identity";
-import { REGISTRATION_IDENTITY_COPY } from "../../assets/shared/email-first-copy";
 import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-auth";
 import { myActiveIdentitySwitchSchema } from "../../assets/shared/schemas/me";
 import { myProfileUpdateSchema } from "../../assets/shared/schemas/me";
@@ -87,10 +86,7 @@ test("a signed-in user registers from event home without another email challenge
   const dialog = page.getByRole("dialog", { name: "Register for this event", exact: true });
   await expect(dialog.getByText(email, { exact: true })).toBeVisible();
   await expect(dialog.getByLabel("Work email", { exact: true })).toHaveCount(0);
-  await expect(
-    dialog.getByText(REGISTRATION_IDENTITY_COPY.representing(representations[0].name), { exact: true }),
-  ).toBeVisible();
-  await dialog.getByRole("button", { name: "Choose another identity", exact: true }).click();
+  await expect(dialog.getByRole("combobox", { name: "Event identity", exact: true })).toBeVisible();
   await dialog.getByRole("combobox", { name: "Event identity", exact: true }).click();
   const currentOption = page.getByRole("option").filter({ hasText: representations[0].name });
   const otherOption = page.getByRole("option").filter({ hasText: representations[1].name });
@@ -105,18 +101,14 @@ test("a signed-in user registers from event home without another email challenge
     await page.screenshot({ path: info.outputPath(`registration-identity-choices-${device}.png`) });
   }
   await otherOption.click();
-  await expect(
-    dialog.getByText(REGISTRATION_IDENTITY_COPY.representing(representations[1].name), { exact: true }),
-  ).toBeVisible();
+  await expect(dialog.getByRole("combobox", { name: "Event identity", exact: true })).toBeVisible();
   await dialog.getByRole("button", { name: "Add identity", exact: true }).click();
   const addIdentity = page.getByRole("dialog", { name: "Add identity", exact: true });
   await expect(addIdentity.getByRole("combobox", { name: /^Organization/ })).toBeVisible();
   await expect(addIdentity.getByRole("textbox", { name: /Job title/ })).toBeVisible();
   await addIdentity.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(addIdentity).not.toBeVisible();
-  await expect(
-    dialog.getByText(REGISTRATION_IDENTITY_COPY.representing(representations[1].name), { exact: true }),
-  ).toBeVisible();
+  await expect(dialog.getByRole("combobox", { name: "Event identity", exact: true })).toBeVisible();
 
   await page.keyboard.press("Escape");
   await expect(dialog).not.toBeVisible();
@@ -144,18 +136,44 @@ test("a signed-in user registers from event home without another email challenge
   await dialog.getByRole("button", { name: "Register", exact: true }).click();
   const response = await saved;
   expect(response.status(), await response.text()).toBe(200);
+  const result = registrationSubmissionResponseSchema.parse(await response.json());
   const body = registrationCreateSchema.parse(response.request().postDataJSON());
   expect(body.identityId).toBe(representations[0].id);
   expect(body.email).toBe(email);
   expect(body.emailProof).toBeUndefined();
   expect(body.dayAttendance).toEqual([{ dayDate, attendanceType: "in_person" }]);
-  expect(registrationSubmissionResponseSchema.parse(await response.json()).status).toBe("registered");
+  expect(result.status).toBe("registered");
   await expect(page).toHaveURL(new RegExp(`#/events/${event.slug}/ticket$`));
   await expect(dialog).not.toBeVisible();
   expect(challenged).toEqual([]);
   await page.reload();
   await expect(page.getByRole("heading", { name: "No ticket yet", exact: true })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Registration details", exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "Registration details", exact: true }).click();
+  await page.getByRole("button", { name: "Change representation", exact: true }).click();
+  const changeIdentity = page.getByRole("dialog", { name: "Change representation", exact: true });
+  await changeIdentity.getByRole("combobox", { name: "Event identity", exact: true }).click();
+  await page.getByRole("option").filter({ hasText: representations[1].name }).click();
+  for (const [width, height, device] of [
+    [1280, 900, "desktop"],
+    [375, 812, "phone"],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.screenshot({ path: info.outputPath(`portal-update-identity-${device}.png`) });
+  }
+  await changeIdentity.getByRole("button", { name: "Add identity", exact: true }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Add identity", exact: true }).getByRole("combobox", { name: /^Organization/ }),
+  ).toBeVisible();
+  await page
+    .getByRole("dialog", { name: "Add identity", exact: true })
+    .getByRole("button", { name: "Cancel", exact: true })
+    .click();
+  await changeIdentity.getByRole("button", { name: "Save changes", exact: true }).click();
+  await expect(changeIdentity).not.toBeVisible();
+  await expect(page.getByRole("definition").filter({ hasText: representations[1].name })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("definition").filter({ hasText: representations[1].name })).toBeVisible();
 });
 
 // Event-only identities deliberately have no staff or membership capacity.

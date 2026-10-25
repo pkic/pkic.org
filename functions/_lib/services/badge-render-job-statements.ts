@@ -33,15 +33,20 @@ export function prepareBadgeRenderJob(
 }
 
 /** Queues every registration badge whose rendered profile depends on this user. */
-export function prepareBadgeRenderJobsForUser(db: DatabaseLike, userId: string, createdAt = nowIso()): StatementLike {
+export function prepareBadgeRenderJobsForUser(
+  db: DatabaseLike,
+  userId: string,
+  createdAt = nowIso(),
+  registrationId?: string,
+): StatementLike {
   return db
     .prepare(
       `INSERT INTO badge_render_jobs (${BADGE_JOB_COLUMNS})
        SELECT 'badge:' || rc.code, rc.code, 'queued', 1, NULL, 0, ?, NULL, ?, ?, NULL, NULL, NULL
          FROM referral_codes rc
          JOIN registrations r ON r.id = rc.owner_id AND rc.owner_type = 'registration'
-        WHERE r.user_id = ?
+        WHERE r.user_id = ? ${registrationId ? "AND r.id = ?" : ""}
        ${BADGE_JOB_REQUEUE_ON_CONFLICT}`,
     )
-    .bind(createdAt, createdAt, createdAt, userId);
+    .bind(createdAt, createdAt, createdAt, userId, ...(registrationId ? [registrationId] : []));
 }

@@ -194,7 +194,14 @@ function RegistrationRecord({
               />
               <section class="pk-stack pk-stack--snug" aria-label="Your details">
                 <SectionHeading level={3}>Your details</SectionHeading>
-                <ParticipantRegistrationDetails data={data} form={forms.form} daysSummarized />
+                <ParticipantRegistrationDetails
+                  data={data}
+                  form={forms.form}
+                  daysSummarized
+                  onIdentityChanged={async () => {
+                    await reload();
+                  }}
+                />
                 {!cancelled && (
                   <div class="pk-cluster">
                     <Button

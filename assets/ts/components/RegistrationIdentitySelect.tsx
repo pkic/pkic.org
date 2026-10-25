@@ -1,6 +1,5 @@
 import type { SessionActingIdentity } from "../../shared/session-acting-identity";
 import { useState } from "preact/hooks";
-import { REGISTRATION_IDENTITY_COPY as copy } from "../../shared/email-first-copy";
 import { actingIdentityCatalog } from "../shared/acting-identity-catalog";
 import { userAuthSessionResponseSchema } from "../../shared/schemas/user-auth";
 import { getJson } from "../shared/api-client";
@@ -9,6 +8,7 @@ import { IconPlus } from "./icons";
 import { actingIdentityLabel } from "../shared/acting-identity-catalog";
 import { Button } from "../ui/Button";
 import { Field } from "../ui/Field";
+import { InputGroup } from "../ui/InputGroup";
 import { ServerSearchSelect } from "./ServerSearchSelect";
 
 const identityLabel = (identity: SessionActingIdentity) =>
@@ -33,44 +33,28 @@ export function RegistrationIdentityField({
   onSelect?: (identity: SessionActingIdentity | null) => void;
 }) {
   const [selected, setSelected] = useState<SessionActingIdentity | null>(preferred ?? null);
-  const [choosing, setChoosing] = useState(!preferred);
   const [identities, setIdentities] = useState(available);
   const [adding, setAdding] = useState(false);
   const canChange = identities.some((identity) => identity.id !== selected?.id);
   const hidden = <input type="hidden" name="identityId" value={selected?.id ?? ""} />;
+  const add = userId ? (
+    <Button
+      type="button"
+      variant="ghost"
+      icon
+      aria-label="Add identity"
+      title="Add identity"
+      onClick={() => setAdding(true)}
+    >
+      <IconPlus />
+    </Button>
+  ) : null;
   return (
     <div class="pk-stack pk-stack--snug">
-      {selected && (
-        <p>
-          {selected.organizationName ? copy.representing(selected.organizationName) : "Participating as an individual"}
-        </p>
-      )}
-      <div class="pk-cluster">
-        {canChange && (
-          <Button type="button" variant="link" onClick={() => setChoosing(!choosing)}>
-            {choosing ? "Keep this identity" : copy.chooseOther}
-          </Button>
-        )}
-        {userId && (
-          <Button
-            type="button"
-            variant="ghost"
-            icon
-            aria-label="Add identity"
-            title="Add identity"
-            onClick={() => setAdding(true)}
-          >
-            <IconPlus />
-          </Button>
-        )}
-      </div>
-      {choosing && canChange && (
-        <Field
-          label="Event identity"
-          help="Your registration uses the organization and job title of the identity you choose."
-        >
+      {canChange ? (
+        <Field label="Event identity">
           {(control) => (
-            <>
+            <InputGroup>
               <ServerSearchSelect
                 {...control}
                 catalog={catalog}
@@ -83,13 +67,18 @@ export function RegistrationIdentityField({
                 onChange={(identity) => {
                   if (!identity) return;
                   setSelected(identity);
-                  setChoosing(false);
                   onSelect?.(identity);
                 }}
               />
-            </>
+              {add}
+            </InputGroup>
           )}
         </Field>
+      ) : (
+        <div class="pk-cluster">
+          <p>{selected ? identityLabel(selected) : "Participating as an individual"}</p>
+          {add}
+        </div>
       )}
       {hidden}
       {userId && (
@@ -106,7 +95,6 @@ export function RegistrationIdentityField({
               );
             setIdentities(session.actingIdentities);
             setSelected(identity);
-            setChoosing(false);
             onSelect?.(identity);
           }}
         />

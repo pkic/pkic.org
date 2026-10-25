@@ -12,6 +12,7 @@ import { ORGANIZATION_JOB_TITLE_COPY } from "../../../shared/email-first-copy";
 import { currentUserIdentityCreateSchema, identityMutationResponseSchema } from "../../../shared/schemas/identity";
 import type { PublicMemberSummary } from "../../../shared/schemas/members-directory";
 import { ownEmailAddressesListResponseSchema } from "../../../shared/schemas/own-email-addresses";
+import { affiliationOfferResponseSchema } from "../../../shared/schemas/affiliation-offer";
 import { ServerSearchSelect } from "../ServerSearchSelect";
 import { useContractForm } from "../../hooks/useContractForm";
 import { useData } from "../../hooks/useData";
@@ -34,13 +35,26 @@ export function SelfIdentityCreateForm({
   /** Reports a save in flight so the dialog's confirm cannot double-submit. */
   onBusy?: (busy: boolean) => void;
 }) {
-  const [organization, setOrganization] = useState<PublicMemberSummary | null>(null);
+  // The same form can be hosted by independently mounted portal and public roots.
+  const [formId] = useState(() => `identity-${crypto.randomUUID()}`);
+  const [organization, setOrganization] = useState<Pick<PublicMemberSummary, "id" | "name"> | null>(null);
   const [emailId, setEmailId] = useState("");
   const [jobTitle, setJobTitle] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   useEffect(() => onBusy?.(saving), [saving]);
   const addresses = useData(() => getJson(OWN_EMAILS_ENDPOINT, ownEmailAddressesListResponseSchema), []);
+  const suggestion = useData(
+    () => getJson("/api/v1/users/current/identities/offer", affiliationOfferResponseSchema),
+    [],
+  );
+  useEffect(() => {
+    const offer = suggestion.data?.offer;
+    if (offer?.kind === "organization") {
+      setOrganization(offer.organization);
+      setEmailId(offer.emailId ?? "");
+    }
+  }, [suggestion.data]);
   const verified = (addresses.data?.emails ?? []).filter((address) => address.verifiedAt);
   const form = useContractForm(currentUserIdentityCreateSchema, {
     emailId: emailId || null,
@@ -76,7 +90,7 @@ export function SelfIdentityCreateForm({
       {...form.handlers}
       onSubmit={(event) => void submit(event)}
     >
-      <Field label="Organization" required {...form.of("organizationId")}>
+      <Field id={`${formId}-organization`} label="Organization" required {...form.of("organizationId")}>
         {(control) => (
           <ServerSearchSelect
             {...control}
@@ -91,6 +105,7 @@ export function SelfIdentityCreateForm({
         )}
       </Field>
       <Field
+        id={`${formId}-email`}
         label="Work email"
         help="Must be a verified address under the organization's email domain."
         {...form.of("emailId")}
@@ -112,6 +127,7 @@ export function SelfIdentityCreateForm({
         )}
       </Field>
       <Field
+        id={`${formId}-job-title`}
         label={ORGANIZATION_JOB_TITLE_COPY.label}
         help={ORGANIZATION_JOB_TITLE_COPY.help}
         required

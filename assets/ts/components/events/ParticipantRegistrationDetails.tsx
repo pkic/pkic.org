@@ -13,6 +13,7 @@ import { DescriptionList, type DescriptionListItem } from "../../ui/DescriptionL
 import { VerifiedValue } from "../../ui/VerifiedValue";
 import { buildFormAnswerRows } from "../forms/form-answers";
 import { isIdentityOwnedFormKey } from "../../../shared/schemas/form-answers";
+import { RegistrationIdentityChange } from "./RegistrationIdentityChange";
 
 type RegistrationForm = EventFormsResponse["form"];
 
@@ -49,27 +50,36 @@ export function ParticipantRegistrationDetails({
   data,
   form,
   daysSummarized,
+  onIdentityChanged,
 }: {
   data: RegistrationManageReadResponse;
   /** The event's registration questions, or null when it asks none (or they could not be read). */
   form: RegistrationForm;
   /** The page already states each day's confirmed attendance, so the list does not repeat it. */
   daysSummarized: boolean;
+  onIdentityChanged?: () => void | Promise<void>;
 }) {
   const name = [data.user.first_name, data.user.last_name].filter(Boolean).join(" ");
   return (
-    <DescriptionList
-      items={[
-        { term: "Name", value: name },
-        {
-          term: "Email address",
-          value: <VerifiedValue verified={data.registration.isEmailVerified}>{data.user.email}</VerifiedValue>,
-        },
-        { term: "Organization", value: data.user.organization_name },
-        { term: "Job title", value: data.user.job_title },
-        ...(daysSummarized ? [] : dayAttendanceItems(data)),
-        ...answerItems(data, form),
-      ]}
-    />
+    <div class="pk-stack pk-stack--snug">
+      <DescriptionList
+        items={[
+          { term: "Name", value: name },
+          {
+            term: "Email address",
+            value: <VerifiedValue verified={data.registration.isEmailVerified}>{data.user.email}</VerifiedValue>,
+          },
+          { term: "Organization", value: data.user.organization_name },
+          { term: "Job title", value: data.user.job_title },
+          ...(daysSummarized ? [] : dayAttendanceItems(data)),
+          ...answerItems(data, form),
+        ]}
+      />
+      {onIdentityChanged && data.registration.status !== "cancelled" && (
+        <div class="pk-cluster">
+          <RegistrationIdentityChange data={data} onChanged={onIdentityChanged} />
+        </div>
+      )}
+    </div>
   );
 }

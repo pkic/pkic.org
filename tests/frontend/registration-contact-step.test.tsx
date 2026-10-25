@@ -16,7 +16,6 @@ import { RegistrationContactStep } from "../../assets/ts/components/Registration
 import {
   EMAIL_FIRST_ADVISORY_COPY,
   EMAIL_FIRST_COPY,
-  REGISTRATION_IDENTITY_COPY,
   REGISTRATION_ORGANIZATION_COPY,
   WORK_EMAIL_STEER,
 } from "../../assets/shared/email-first-copy";
@@ -296,7 +295,7 @@ describe("registration contact step", () => {
     expect(named).toEqual({ refused: true });
   });
 
-  it("continues a known signed-in person without verifying again and shows their organization read-only", async () => {
+  it("continues a signed-in person without verifying again and selects their organization", async () => {
     window.history.replaceState({}, "", "/events/2026/pqc/register/");
     const recorded = installResponses("Example Corp");
     const form = await mount(contactStep());
@@ -306,11 +305,9 @@ describe("registration contact step", () => {
     expect(value(form, "firstName")).toBe("Ada");
     expect(value(form, "lastName")).toBe("Lovelace");
     expect(value(form, "emailProof")).toBeUndefined();
-    expect(form.textContent).toContain(REGISTRATION_IDENTITY_COPY.representing("Example Corp"));
+    expect(form.textContent).toContain("Example Corp");
     expect(value(form, "identityId")).toBe(IDENTITY_ID);
-    expect(recorded.some((request) => request.path === "/api/v1/users/current/identities")).toBe(false);
 
-    await act(async () => button(form, REGISTRATION_IDENTITY_COPY.chooseOther)!.click());
     expect(form.querySelector('[role="combobox"]')).not.toBeNull();
   });
 
@@ -392,8 +389,7 @@ describe("signed-in registration identity", () => {
       />,
     );
     expect(value(form, "identityId")).toBe(current.id);
-    expect(form.textContent).toContain(REGISTRATION_IDENTITY_COPY.representing("PKI Consortium"));
-    await act(() => button(form, REGISTRATION_IDENTITY_COPY.chooseOther)!.click());
+    expect(form.textContent).toContain("PKI Consortium");
     const chooser = form.querySelector<HTMLButtonElement>('[role="combobox"]')!;
     expect(chooser.tagName).toBe("BUTTON");
     await act(() => chooser.click());
@@ -404,8 +400,7 @@ describe("signed-in registration identity", () => {
     await act(() => digitorus.click());
     expect(value(form, "identityId")).toBe(alternative.id);
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: alternative.id }));
-    expect(form.querySelector('[role="combobox"]')).toBeNull();
-    expect(form.textContent).toContain(REGISTRATION_IDENTITY_COPY.representing("Digitorus"));
+    expect(form.querySelector('[role="combobox"]')?.textContent).toContain("Digitorus");
   });
 
   it("opens the existing creation form from the plus action without nesting forms", async () => {
@@ -417,7 +412,6 @@ describe("signed-in registration identity", () => {
     );
     const preferred = { id: IDENTITY_ID, organizationId: null, organizationName: null, jobTitle: null };
     const form = await mount(<RegistrationIdentityField preferred={preferred} userId={USER_ID} />);
-    expect(button(form, REGISTRATION_IDENTITY_COPY.chooseOther)).toBeUndefined();
     const add = form.querySelector<HTMLButtonElement>('button[aria-label="Add identity"]')!;
     await act(() => add.click());
     const dialog = document.querySelector<HTMLDialogElement>("dialog[open]")!;
@@ -437,6 +431,5 @@ describe("signed-in registration identity", () => {
     );
     expect(form.querySelector('[role="combobox"]')).toBeNull();
     expect(value(form, "identityId")).toBe(IDENTITY_ID);
-    expect(button(form, REGISTRATION_IDENTITY_COPY.chooseOther)).toBeUndefined();
   });
 });

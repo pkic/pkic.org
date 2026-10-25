@@ -28,13 +28,112 @@ import {
 } from "../functions/_lib/services/registrations/selected-identity";
 import { listSponsorAttendeesForExport } from "../functions/_lib/services/sponsorship/sponsor-access";
 import { nowIso, addHours } from "../functions/_lib/utils/time";
+import { preparePromotionSourceRead } from "../functions/_lib/services/event-agenda/promotion-source-read";
 import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
 import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
 import { findEligibleMemberById } from "../functions/_lib/auth/identity-capacities";
 import { mutateBeforeMatchingQuery } from "./helpers/database-races";
 import type { DatabaseLike, Env } from "../functions/_lib/types";
+import {
+  registrationIdentityChangeSchema,
+  registrationIdentityChangeResponseSchema,
+} from "../assets/shared/schemas/registration-identity";
 
 let registrationEnvironment: Env;
+
+describe("registration representation changes", () => {
+  async function setupChange() {
+    const f = await fixture(false);
+    const created = await register(f.body, f.token);
+    expect(created.status, await created.clone().text()).toBe(200);
+    const result = registrationSubmissionResponseSchema.parse(await created.json());
+    const personal = await buildCreateIdentityStatement(env.DB, {
+      userId: f.userId,
+      organizationId: null,
+      source: "account",
+      startImmediately: true,
+    });
+    await env.DB.batch([personal.statement]);
+    const path = `/api/v1/registrations/${result.registrationId}/identity`;
+    return { ...f, registrationId: result.registrationId, personalId: personal.identityId, path };
+  }
+  function change(
+    f: Awaited<ReturnType<typeof setupChange>>,
+    identityId = f.personalId,
+    token: string | null = f.token,
+    expectedIdentityId = f.identityId,
+  ) {
+    return callApi(
+      registrationEnvironment,
+      f.path,
+      {
+        method: "PUT",
+        headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify(registrationIdentityChangeSchema.parse({ identityId, expectedIdentityId })),
+      },
+      { maxRoundTrips: 1 },
+    );
+  }
+  it("changes only the owned registration representation and queues artwork in one complete batch", async () => {
+    const f = await setupChange();
+    const response = await change(f);
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(registrationIdentityChangeResponseSchema.parse(await response.json()).identity).toMatchObject({
+      id: f.personalId,
+      organizationName: null,
+    });
+    expect((await getRegistrationById(env.DB, f.registrationId)).registration_identity_id).toBe(f.personalId);
+    const read = await readAttribution(f.registrationId);
+    expect(read.user.organization_name).toBeNull();
+    const source = preparePromotionSourceRead(env.DB, { slug: read.event.slug }, f.userId, null, undefined, false);
+    const promotion = await source.decode(await env.DB.batch(source.statements));
+    expect(promotion.person?.organization_name).toBeNull();
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT action FROM audit_log WHERE entity_id=? AND action='registration_identity_changed'",
+        [f.registrationId],
+      ),
+    ).toHaveLength(1);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT job.id FROM badge_render_jobs job JOIN referral_codes rc ON rc.code=job.referral_code WHERE rc.owner_id=?",
+        [f.registrationId],
+      ),
+    ).toHaveLength(1);
+  });
+  it("rejects another user's identity and a stale selection without recording effects", async () => {
+    const f = await setupChange();
+    const otherId = await insertUser(env.DB, "other-representation@example.test");
+    const other = await buildCreateIdentityStatement(env.DB, {
+      userId: otherId,
+      organizationId: null,
+      source: "account",
+      startImmediately: true,
+    });
+    await env.DB.batch([other.statement]);
+    expect((await change(f, other.identityId)).status).toBe(403);
+    expect((await change(f, f.personalId, f.token, f.personalId)).status).toBe(409);
+    expect((await getRegistrationById(env.DB, f.registrationId)).registration_identity_id).toBe(f.identityId);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT action FROM audit_log WHERE entity_id=? AND action='registration_identity_changed'",
+        [f.registrationId],
+      ),
+    ).toHaveLength(0);
+  });
+  it("requires the owner's live session, including when the caller holds a public manage link", async () => {
+    const f = await setupChange();
+    expect((await change(f, f.personalId, null)).status).toBe(401);
+    const otherId = await insertUser(env.DB, "other-session@example.test");
+    const otherSession = await createMemberSession(env.DB, otherId, crypto.randomUUID());
+    expect((await change(f, f.personalId, otherSession)).status).toBe(403);
+    await env.DB.prepare("UPDATE sessions SET revoked_at=? WHERE user_id=?").bind(nowIso(), f.userId).run();
+    expect((await change(f)).status).toBe(403);
+  });
+});
 
 beforeEach(async () => {
   await resetDb();

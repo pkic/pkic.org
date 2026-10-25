@@ -2,7 +2,6 @@ import { expect, type Page } from "@playwright/test";
 import {
   EMAIL_FIRST_COPY,
   ORGANIZATION_JOB_TITLE_COPY,
-  REGISTRATION_IDENTITY_COPY,
   REGISTRATION_ORGANIZATION_COPY,
 } from "../../../assets/shared/email-first-copy";
 import {
@@ -125,13 +124,12 @@ export async function registerInBrowser(
     await contact.getByLabel(copy.work.label).fill(email);
     await contact.getByRole("button", { name: copy.work.action, exact: true }).click();
     await expect(contact).toContainText("Event");
-    const representing = contact.getByText(REGISTRATION_IDENTITY_COPY.representing(identityName), { exact: true });
-    if ((await representing.count()) === 0) {
-      const other = contact.getByRole("button", { name: REGISTRATION_IDENTITY_COPY.chooseOther, exact: true });
-      if ((await other.count()) > 0) await other.click();
-      const picker = page.getByRole("combobox", { name: "Event identity", exact: true });
+    const picker = page.getByRole("combobox", { name: "Event identity", exact: true });
+    if (await picker.count()) {
       await picker.click();
       await page.getByRole("option").filter({ hasText: identityName }).click();
+    } else {
+      await expect(contact).toContainText(identityName);
     }
     await page.locator("[data-event-registration] [data-step-next]").click();
   } else {

@@ -12,7 +12,7 @@ import { prepareAgendaSpeakers, decodeAgendaSpeakers, type AgendaSpeakerRow } fr
 import { storedAgendaSnapshotSchema } from "../../../../assets/shared/schemas/event-agenda-stored";
 import { batchFirst, batchRows } from "../../db/pagination";
 import { personDisplayNameSql } from "./speaker-name";
-import { primaryIdentityIdSql, identityJobTitleSql } from "../identities/affiliation-projection";
+import { REGISTRATION_ORGANIZATION_SQL, REGISTRATION_JOB_TITLE_SQL } from "../registrations/selected-identity";
 import { AppError } from "../../errors";
 
 /** A bounded, current source projection; no stored profile copy is used by the renderer. */
@@ -55,9 +55,9 @@ export function preparePromotionSourceRead(
       ? prepareAgendaSpeakers(db, event, [occurrenceId], "credit")
       : db
           .prepare(
-            `SELECT ${personDisplayNameSql("person", "Attendee")} AS display_name,${identityJobTitleSql("identity.id")} AS job_title,organization.name AS organization_name,person.headshot_r2_key FROM users person LEFT JOIN identities identity ON identity.id=${primaryIdentityIdSql("person.id")} LEFT JOIN organizations organization ON organization.id=identity.organization_id WHERE person.id=? AND person.active=1 AND person.pii_redacted_at IS NULL AND person.merged_into_user_id IS NULL`,
+            `SELECT ${personDisplayNameSql("person", "Attendee")} AS display_name,${REGISTRATION_JOB_TITLE_SQL} AS job_title,${REGISTRATION_ORGANIZATION_SQL} AS organization_name,person.headshot_r2_key FROM registrations r JOIN users person ON person.id=r.user_id WHERE r.event_id=${scope.sql} AND person.id=? AND r.status='registered' AND person.active=1 AND person.pii_redacted_at IS NULL AND person.merged_into_user_id IS NULL`,
           )
-          .bind(userId),
+          .bind(...scope.bindings, userId),
     db
       .prepare(
         `SELECT slug FROM session_page_slugs WHERE event_id=${scope.sql} AND occurrence_id=? AND retired_at IS NULL LIMIT 1`,
