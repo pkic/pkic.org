@@ -5,35 +5,32 @@
  * server checks that the chosen verified address belongs to the
  * organization's email domain and refuses anything else on its field.
  */
+import type { ComponentChildren } from "preact";
+import type { z } from "zod";
 import { useEffect, useState } from "preact/hooks";
-import { ORGANIZATION_JOB_TITLE_COPY } from "../../../../../shared/email-first-copy";
-import {
-  currentUserIdentityCreateSchema,
-  identityMutationResponseSchema,
-} from "../../../../../shared/schemas/identity";
-import type { PublicMemberSummary } from "../../../../../shared/schemas/members-directory";
-import { ownEmailAddressesListResponseSchema } from "../../../../../shared/schemas/own-email-addresses";
-import { ServerSearchSelect } from "../../../../components/ServerSearchSelect";
-import { useContractForm } from "../../../../hooks/useContractForm";
-import { useData } from "../../../../hooks/useData";
-import { getJson, postJson } from "../../../../shared/api-client";
-import { memberOrganizationCatalog } from "../../../../shared/member-organization-catalog";
-import { Alert } from "../../../../ui/Alert";
-import { Button } from "../../../../ui/Button";
-import { Field } from "../../../../ui/Field";
-import { Select, TextInput } from "../../../../ui/TextControl";
-import { toast } from "../../ui";
-import { OWN_EMAILS_ENDPOINT } from "../email-address-paths";
-import { EMAIL_ADDRESSES_ANCHOR } from "./EmailAddressesPanel";
+import { ORGANIZATION_JOB_TITLE_COPY } from "../../../shared/email-first-copy";
+import { currentUserIdentityCreateSchema, identityMutationResponseSchema } from "../../../shared/schemas/identity";
+import type { PublicMemberSummary } from "../../../shared/schemas/members-directory";
+import { ownEmailAddressesListResponseSchema } from "../../../shared/schemas/own-email-addresses";
+import { ServerSearchSelect } from "../ServerSearchSelect";
+import { useContractForm } from "../../hooks/useContractForm";
+import { useData } from "../../hooks/useData";
+import { getJson, postJson } from "../../shared/api-client";
+import { memberOrganizationCatalog } from "../../shared/member-organization-catalog";
+import { Alert } from "../../ui/Alert";
+import { Field } from "../../ui/Field";
+import { Select, TextInput } from "../../ui/TextControl";
+import { showToast } from "../../shared/toast";
+import { OWN_EMAILS_ENDPOINT } from "../../shared/email-address-paths";
 
 export function SelfIdentityCreateForm({
   onCreated,
-  onCancel,
+  emailAddressAction,
   onBusy,
 }: {
-  onCreated: () => void;
-  /** Closes the hosting dialog; used before leaving for the Email addresses panel. */
-  onCancel: () => void;
+  onCreated: (result: z.infer<typeof identityMutationResponseSchema>) => void | Promise<void>;
+  /** The host decides how to reach email management without losing its draft. */
+  emailAddressAction: ComponentChildren;
   /** Reports a save in flight so the dialog's confirm cannot double-submit. */
   onBusy?: (busy: boolean) => void;
 }) {
@@ -61,24 +58,14 @@ export function SelfIdentityCreateForm({
     }
     setSaving(true);
     try {
-      await postJson("/api/v1/users/current/identities", checked.data, identityMutationResponseSchema);
-      toast(`You represent ${organization?.name ?? "the organization"}`, "success");
-      onCreated();
+      const result = await postJson("/api/v1/users/current/identities", checked.data, identityMutationResponseSchema);
+      showToast("portal-toast-area", `You represent ${organization?.name ?? "the organization"}`, "success");
+      await onCreated(result);
     } catch (cause) {
       setError(form.refuse(cause));
     } finally {
       setSaving(false);
     }
-  }
-
-  function showEmailAddresses(): void {
-    // Leave the dialog first, then bring the panel into view once the page is reachable again.
-    onCancel();
-    requestAnimationFrame(() => {
-      const panel = document.getElementById(EMAIL_ADDRESSES_ANCHOR);
-      panel?.scrollIntoView({ block: "center" });
-      panel?.querySelector<HTMLElement>("button")?.focus({ preventScroll: true });
-    });
   }
 
   return (
@@ -141,10 +128,7 @@ export function SelfIdentityCreateForm({
         )}
       </Field>
       <p class="pk-small pk-muted">
-        An address that does not match the organization cannot link you to it.{" "}
-        <Button type="button" variant="link" onClick={showEmailAddresses}>
-          Add or verify an address
-        </Button>
+        An address that does not match the organization cannot link you to it. {emailAddressAction}
       </p>
       {error && <Alert tone="danger">{error}</Alert>}
     </form>

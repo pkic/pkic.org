@@ -10,7 +10,7 @@ import { getJson } from "../shared/api-client";
 import type { ServerCatalog } from "../shared/server-catalog";
 import { Alert } from "../ui/Alert";
 import type { FieldControlProps } from "../ui/Field";
-import { TextInput } from "../ui/TextControl";
+import { SelectTrigger, TextInput } from "../ui/TextControl";
 import { usePopupPlacement } from "../ui/popup-placement";
 // The matches float over whatever follows the field, so they borrow the
 // design system's popup surface rather than growing a second one. Nothing
@@ -168,7 +168,7 @@ export function ServerSearchSelect<Item, Response>({
   }, [optionCount]);
 
   /** One placement policy, and one lifetime for it — see `ui/popup-placement.ts`. */
-  usePopupPlacement({ open, anchorRef, popupRef, revision: `${optionCount}:${collection.loading}` });
+  usePopupPlacement({ open, anchorRef, popupRef, topLayer: true, revision: `${optionCount}:${collection.loading}` });
 
   // The highlight can sit past the listbox's scroll window; focus never
   // leaves the input, so the option is brought into view directly.
@@ -296,8 +296,9 @@ export function ServerSearchSelect<Item, Response>({
           onBlur={close}
         />
       ) : (
-        <Button
+        <SelectTrigger
           {...control}
+          title={displayLabel || placeholder}
           type="button"
           role="combobox"
           aria-haspopup="listbox"
@@ -309,7 +310,7 @@ export function ServerSearchSelect<Item, Response>({
           onClick={() => setOpen(!open)}
         >
           {displayLabel || placeholder}
-        </Button>
+        </SelectTrigger>
       )}
       {open && (
         // Pressing anywhere in the popup — an option, the scrollbar — must

@@ -17,7 +17,7 @@ import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
 import { TextInput } from "../../../ui/TextControl";
 import { usePortalHashLocation } from "../hash-location";
 import { toast } from "../ui";
-import { OWN_EMAILS_ENDPOINT } from "./email-address-paths";
+import { OWN_EMAILS_ENDPOINT } from "../../../shared/email-address-paths";
 
 export function EmailAddressAddForm({ userId, isSelf }: { userId: string; isSelf: boolean }) {
   const recordPath = `/users/${encodeURIComponent(userId)}`;

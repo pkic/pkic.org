@@ -45,6 +45,12 @@ function session(organizationName?: string | null) {
         ? []
         : [
             {
+              id: "00000000-0000-4000-8000-000000000099",
+              organizationId: null,
+              organizationName: null,
+              jobTitle: null,
+            },
+            {
               id: IDENTITY_ID,
               organizationId: organizationName ? ORGANIZATION_ID : null,
               organizationName,
@@ -339,24 +345,90 @@ describe("signed-in registration identity", () => {
   it("offers an existing organization identity", async () => {
     installResponses("Example Corp");
     const onSelect = vi.fn();
-    const form = await mount(<RegistrationIdentityField onSelect={onSelect} />);
+    const form = await mount(<RegistrationIdentityField available={[identity("Example Corp")]} onSelect={onSelect} />);
     const combobox = form.querySelector<HTMLInputElement>('[role="combobox"]');
     expect(combobox).not.toBeNull();
     await act(async () => {
       combobox!.click();
     });
     expect(
-      [...document.querySelectorAll('[role="option"]')].some((option) => option.textContent === "Example Corp"),
+      [...document.querySelectorAll('[role="option"]')].some((option) =>
+        option.textContent?.startsWith("Example Corp"),
+      ),
     ).toBe(true);
-    const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
-      (item) => item.textContent === "Example Corp",
+    const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find((item) =>
+      item.textContent?.startsWith("Example Corp"),
     )!;
     await act(() => option.click());
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: IDENTITY_ID }));
     expect(value(form, "identityId")).toBe(IDENTITY_ID);
   });
 
-  it("defaults to the selected individual identity and allows changing it", async () => {
+  it("keeps the sign-in representation visible while offering the other representation", async () => {
+    const current = { ...identity("PKI Consortium"), id: "00000000-0000-4000-8000-000000000088" };
+    const alternative = identity("Digitorus");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify(
+              identitiesListResponseSchema.parse({
+                identities: [alternative, current],
+                page: { limit: 25, offset: 0, total: 2, hasMore: false },
+              }),
+            ),
+            { headers: { "content-type": "application/json" } },
+          ),
+      ),
+    );
+    const onSelect = vi.fn();
+    const form = await mount(
+      <RegistrationIdentityField
+        preferred={current}
+        available={[current, alternative]}
+        onSelect={onSelect}
+        userId={USER_ID}
+      />,
+    );
+    expect(value(form, "identityId")).toBe(current.id);
+    expect(form.textContent).toContain(REGISTRATION_IDENTITY_COPY.representing("PKI Consortium"));
+    await act(() => button(form, REGISTRATION_IDENTITY_COPY.chooseOther)!.click());
+    const chooser = form.querySelector<HTMLButtonElement>('[role="combobox"]')!;
+    expect(chooser.tagName).toBe("BUTTON");
+    await act(() => chooser.click());
+    await settle();
+    const options = [...document.querySelectorAll<HTMLElement>('[role="option"]')];
+    expect(options.some((option) => option.textContent?.includes("PKI Consortium"))).toBe(true);
+    const digitorus = options.find((option) => option.textContent?.includes("Digitorus"))!;
+    await act(() => digitorus.click());
+    expect(value(form, "identityId")).toBe(alternative.id);
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: alternative.id }));
+    expect(form.querySelector('[role="combobox"]')).toBeNull();
+    expect(form.textContent).toContain(REGISTRATION_IDENTITY_COPY.representing("Digitorus"));
+  });
+
+  it("opens the existing creation form from the plus action without nesting forms", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () => new Response(JSON.stringify({ emails: [] }), { headers: { "content-type": "application/json" } }),
+      ),
+    );
+    const preferred = { id: IDENTITY_ID, organizationId: null, organizationName: null, jobTitle: null };
+    const form = await mount(<RegistrationIdentityField preferred={preferred} userId={USER_ID} />);
+    expect(button(form, REGISTRATION_IDENTITY_COPY.chooseOther)).toBeUndefined();
+    const add = form.querySelector<HTMLButtonElement>('button[aria-label="Add identity"]')!;
+    await act(() => add.click());
+    const dialog = document.querySelector<HTMLDialogElement>("dialog[open]")!;
+    expect(dialog).not.toBeNull();
+    expect(dialog.querySelector('form[aria-label="Add identity"]')).not.toBeNull();
+    expect(dialog.closest("form")).toBeNull();
+    expect(form.querySelector("form")).toBeNull();
+    expect(value(form, "identityId")).toBe(IDENTITY_ID);
+  });
+
+  it("keeps the only identity selected and hides an empty change action", async () => {
     installResponses(null);
     const form = await mount(
       <RegistrationIdentityField
@@ -365,6 +437,6 @@ describe("signed-in registration identity", () => {
     );
     expect(form.querySelector('[role="combobox"]')).toBeNull();
     expect(value(form, "identityId")).toBe(IDENTITY_ID);
-    expect(button(form, REGISTRATION_IDENTITY_COPY.chooseOther)).toBeDefined();
+    expect(button(form, REGISTRATION_IDENTITY_COPY.chooseOther)).toBeUndefined();
   });
 });

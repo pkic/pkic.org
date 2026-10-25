@@ -13,6 +13,7 @@
  */
 
 import type { JSX } from "preact";
+import { Button, type ButtonProps } from "./Button";
 
 import "./Field.css";
 
@@ -41,5 +42,12 @@ export function Select({ class: className, children, ...rest }: SelectProps) {
     <select {...rest} class={join("pk-input pk-input--select", className as string | undefined)}>
       {children}
     </select>
+  );
+}
+
+/** A non-editable select trigger; its popup and choices belong to the shared combobox. */
+export function SelectTrigger({ class: className, ...rest }: ButtonProps) {
+  return (
+    <Button {...rest} class={join("pk-input pk-input--select pk-input--trigger", className as string | undefined)} />
   );
 }

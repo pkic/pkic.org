@@ -1,3 +1,4 @@
+import { ServerSelectPreview } from "./ServerSelectPreview";
 import { ContentVersionNoticePreview } from "./ContentVersionNoticePreview";
 import { ModelNavigationPreview } from "./ModelNavigationPreview";
 import { contentContributionPreview } from "./ContentContributionPreview";
@@ -241,6 +242,12 @@ function RowListSpecimen() {
 const wallLogo = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="16" viewBox="0 0 100 40"><path fill="currentColor" d="M0 0h28v40H0zm36 0h28v40H36zm36 0h28v40H72z"/></svg>')}`;
 
 export const patternSections: PreviewSection[] = [
+  {
+    id: "server-select",
+    title: "Server identity picker",
+    note: "The current value remains visible, long labels stay inside the field, and choices use the top layer above dialogs.",
+    render: () => <ServerSelectPreview />,
+  },
   { id: "content-version-notice", title: "Content version notice", render: () => <ContentVersionNoticePreview /> },
   { id: "model-navigation", title: "Model navigation", render: () => <ModelNavigationPreview /> },
   {

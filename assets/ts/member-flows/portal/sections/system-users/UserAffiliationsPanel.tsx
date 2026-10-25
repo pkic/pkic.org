@@ -33,7 +33,8 @@ import { IconPlus } from "../../../../components/icons";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { usePortalHashLocation } from "../../hash-location";
 import { UserAffiliationRow } from "./UserAffiliationRow";
-import { SelfIdentityCreateForm } from "./SelfIdentityCreateForm";
+import { EMAIL_ADDRESSES_ANCHOR } from "./EmailAddressesPanel";
+import { SelfIdentityCreateForm } from "../../../../components/identities/SelfIdentityCreateForm";
 import { UserIdentityGrantForm } from "./UserIdentityGrantForm";
 import type { UserDetail } from "./model";
 import type { UserGroupParticipation } from "../../../../../shared/schemas/user-participation";
@@ -233,7 +234,22 @@ export function UserAffiliationsPanel({
                   setAdding(false);
                   void onChanged();
                 }}
-                onCancel={() => setAdding(false)}
+                emailAddressAction={
+                  <Button
+                    type="button"
+                    variant="link"
+                    onClick={() => {
+                      setAdding(false);
+                      requestAnimationFrame(() => {
+                        const panel = document.getElementById(EMAIL_ADDRESSES_ANCHOR);
+                        panel?.scrollIntoView({ block: "center" });
+                        panel?.querySelector<HTMLElement>("button")?.focus({ preventScroll: true });
+                      });
+                    }}
+                  >
+                    Add or verify an address
+                  </Button>
+                }
               />
             ))}
         </div>

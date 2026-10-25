@@ -175,6 +175,15 @@
     resize: vertical;
   }
 
+  .pk-input--trigger {
+    display: block;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-align: start;
+    text-overflow: ellipsis;
+  }
+
   .pk-input--select,
   .pk-input[role="combobox"] {
     appearance: none;

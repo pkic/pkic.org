@@ -28,7 +28,7 @@ import { RowActions } from "../../../../ui/RowActions";
 import { RowList, RowListItem } from "../../../../ui/RowList";
 import { usePortalHashLocation } from "../../hash-location";
 import { toast } from "../../ui";
-import { addEmailAddressPath, OWN_EMAILS_ENDPOINT } from "../email-address-paths";
+import { addEmailAddressPath, OWN_EMAILS_ENDPOINT } from "../../../../shared/email-address-paths";
 import "./EmailAddressesPanel.css";
 
 /** The panel's own address, so other forms on the record can lead the person to it. */

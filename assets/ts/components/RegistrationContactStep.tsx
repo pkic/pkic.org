@@ -28,7 +28,8 @@ interface KnownPerson {
   firstName: string;
   lastName: string;
   identity: SessionActingIdentity | null;
-  hasIdentities: boolean;
+  identities: SessionActingIdentity[];
+  userId: string;
 }
 
 type Stage =
@@ -52,7 +53,8 @@ async function readKnownPerson(session: Awaited<ReturnType<typeof readSession>>)
   return {
     firstName: detail.firstName ?? "",
     lastName: detail.lastName ?? "",
-    hasIdentities: session.actingIdentities.length > 0,
+    identities: session.actingIdentities,
+    userId: session.identity.id,
     identity: session.actingIdentities.find((identity) => identity.id === session.actingIdentityId) ?? null,
   };
 }
@@ -254,18 +256,18 @@ export function RegistrationContactStep({
         <AddressFields step={step} />
         <Details email={step.email} firstName={person.firstName} lastName={person.lastName} />
         <NameFields firstName={person.firstName} lastName={person.lastName} />
-        {person.hasIdentities && (
-          <RegistrationIdentityField
-            preferred={person.identity}
-            onSelect={(identity) => {
-              setStage({
-                kind: "known",
-                person: { ...person, identity },
-                step: { ...step, unaffiliatedAttestation: identity?.organizationId === null },
-              });
-            }}
-          />
-        )}
+        <RegistrationIdentityField
+          preferred={person.identity}
+          available={person.identities}
+          userId={person.userId}
+          onSelect={(identity) => {
+            setStage({
+              kind: "known",
+              person: { ...person, identity },
+              step: { ...step, unaffiliatedAttestation: identity?.organizationId === null },
+            });
+          }}
+        />
         {!autoSession && (
           <div>
             <Button type="button" variant="link" onClick={changeEmail}>

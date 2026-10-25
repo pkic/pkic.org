@@ -130,8 +130,8 @@ export async function registerInBrowser(
       const other = contact.getByRole("button", { name: REGISTRATION_IDENTITY_COPY.chooseOther, exact: true });
       if ((await other.count()) > 0) await other.click();
       const picker = page.getByRole("combobox", { name: "Event identity", exact: true });
-      await picker.fill(identityName);
-      await page.getByRole("option", { name: identityName, exact: true }).click();
+      await picker.click();
+      await page.getByRole("option").filter({ hasText: identityName }).click();
     }
     await page.locator("[data-event-registration] [data-step-next]").click();
   } else {

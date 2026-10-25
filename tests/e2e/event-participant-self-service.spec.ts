@@ -17,6 +17,14 @@ import { submitProposal, inviteCoSpeaker, PROPOSAL_EVENT_SLUG } from "./helpers/
 import { registerInBrowser } from "./helpers/registration";
 import { completeIndependentCapacityDisclosure } from "./helpers/independent-capacity";
 
+import {
+  organizationCreateSchema,
+  organizationCreateResponseSchema,
+} from "../../assets/shared/schemas/organization-management";
+import { identityCreateSchema, identityMutationResponseSchema } from "../../assets/shared/schemas/identity";
+import { REGISTRATION_IDENTITY_COPY } from "../../assets/shared/email-first-copy";
+import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-auth";
+import { myActiveIdentitySwitchSchema } from "../../assets/shared/schemas/me";
 import { myProfileUpdateSchema } from "../../assets/shared/schemas/me";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
@@ -31,6 +39,38 @@ test("a signed-in user registers from event home without another email challenge
     data: myProfileUpdateSchema.parse({ firstName: "Ada", lastName: "Example" }),
   });
   expect(profile.status(), await profile.text()).toBe(200);
+  const currentSession = userAuthSessionResponseSchema.parse(
+    await (await page.request.get("/api/v1/auth/session")).json(),
+  );
+  const representations = [];
+  for (const name of ["Synthetic current representation", "Synthetic other representation"]) {
+    const createdOrganization = await page.request.post("/api/v1/organizations", {
+      data: organizationCreateSchema.parse({
+        name: `${name} ${crypto.randomUUID()}`,
+        membershipCategory: "F",
+        memberSince: "2026-01-01",
+      }),
+    });
+    expect(createdOrganization.status(), await createdOrganization.text()).toBe(201);
+    const organization = organizationCreateResponseSchema.parse(await createdOrganization.json()).organization;
+    const createdIdentity = await page.request.post(`/api/v1/organizations/${organization.id}/identities`, {
+      data: identityCreateSchema.parse({
+        userReference: "existing_user",
+        userId: currentSession.identity.id,
+        jobTitle: "Conference representative",
+        activation: { mode: "immediate", reason: "Synthetic registration identity-selection regression fixture" },
+      }),
+    });
+    expect(createdIdentity.status(), await createdIdentity.text()).toBe(201);
+    representations.push({
+      name: organization.name,
+      id: identityMutationResponseSchema.parse(await createdIdentity.json()).identityId,
+    });
+  }
+  const selected = await page.request.put("/api/v1/users/current/identities/active", {
+    data: myActiveIdentitySwitchSchema.parse({ identityId: representations[0].id }),
+  });
+  expect(selected.status(), await selected.text()).toBe(200);
   const dayDate = new Date(Date.now() + 400 * 86_400_000).toISOString().slice(0, 10);
   const event = await createRegistrationEvent(page, "quick-registration", {
     date: dayDate,
@@ -47,6 +87,37 @@ test("a signed-in user registers from event home without another email challenge
   const dialog = page.getByRole("dialog", { name: "Register for this event", exact: true });
   await expect(dialog.getByText(email, { exact: true })).toBeVisible();
   await expect(dialog.getByLabel("Work email", { exact: true })).toHaveCount(0);
+  await expect(
+    dialog.getByText(REGISTRATION_IDENTITY_COPY.representing(representations[0].name), { exact: true }),
+  ).toBeVisible();
+  await dialog.getByRole("button", { name: "Choose another identity", exact: true }).click();
+  await dialog.getByRole("combobox", { name: "Event identity", exact: true }).click();
+  const currentOption = page.getByRole("option").filter({ hasText: representations[0].name });
+  const otherOption = page.getByRole("option").filter({ hasText: representations[1].name });
+  await expect(currentOption).toBeVisible();
+  await expect(currentOption).toHaveAttribute("aria-selected", "true");
+  await expect(otherOption).toBeVisible();
+  for (const [width, height, device] of [
+    [1280, 900, "desktop"],
+    [375, 812, "phone"],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.screenshot({ path: info.outputPath(`registration-identity-choices-${device}.png`) });
+  }
+  await otherOption.click();
+  await expect(
+    dialog.getByText(REGISTRATION_IDENTITY_COPY.representing(representations[1].name), { exact: true }),
+  ).toBeVisible();
+  await dialog.getByRole("button", { name: "Add identity", exact: true }).click();
+  const addIdentity = page.getByRole("dialog", { name: "Add identity", exact: true });
+  await expect(addIdentity.getByRole("combobox", { name: /^Organization/ })).toBeVisible();
+  await expect(addIdentity.getByRole("textbox", { name: /Job title/ })).toBeVisible();
+  await addIdentity.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(addIdentity).not.toBeVisible();
+  await expect(
+    dialog.getByText(REGISTRATION_IDENTITY_COPY.representing(representations[1].name), { exact: true }),
+  ).toBeVisible();
+
   await page.keyboard.press("Escape");
   await expect(dialog).not.toBeVisible();
   await expect(page.getByRole("button", { name: "Register", exact: true })).toBeFocused();
@@ -74,6 +145,7 @@ test("a signed-in user registers from event home without another email challenge
   const response = await saved;
   expect(response.status(), await response.text()).toBe(200);
   const body = registrationCreateSchema.parse(response.request().postDataJSON());
+  expect(body.identityId).toBe(representations[0].id);
   expect(body.email).toBe(email);
   expect(body.emailProof).toBeUndefined();
   expect(body.dayAttendance).toEqual([{ dayDate, attendanceType: "in_person" }]);
