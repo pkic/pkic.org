@@ -68,7 +68,7 @@ describe("personal promotion scenes", () => {
     expect(svg).toContain("https://pkic.org/r/example");
     expect(svg).not.toContain("01 / 01");
   });
-  it("retains long identity details on one measured social image and clears the portrait before event details", () => {
+  it("retains long identity details on one measured social image beside the portrait", () => {
     const name = "Synthetic Participant ".repeat(8).trim();
     const affiliation = "Organization and professional role ".repeat(10).trim();
     const personal = {
@@ -92,7 +92,9 @@ describe("personal promotion scenes", () => {
       expect(page.texts.map((line) => line.text).join(" ")).toContain(name);
       if (value.people[0].affiliation) expect(page.texts.map((line) => line.text).join(" ")).toContain(affiliation);
       const date = page.texts.find((line) => line.text.startsWith("December"))!;
-      expect(date.y - date.size).toBeGreaterThanOrEqual(page.pictures[0].y + page.pictures[0].height);
+      const portrait = page.pictures[0]!;
+      expect(date.x + date.text.length * date.size * 0.55).toBeLessThan(portrait.x);
+      expect(portrait.y + portrait.height).toBeLessThan(535);
       expect(page.texts.every((line) => line.y < 535)).toBe(true);
     }
   });

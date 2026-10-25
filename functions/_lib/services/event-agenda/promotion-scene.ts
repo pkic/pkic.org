@@ -60,6 +60,7 @@ export interface PromotionBlock {
   role?: PromotionText["role"];
   portrait?: { src: string; name: string };
   indent?: number;
+  width?: number;
 }
 /** A personal preview needs event and identity facts, not a fabricated session or agenda. */
 export interface PersonalPromotionRenderData {
@@ -173,8 +174,10 @@ export function buildPromotionPages(
         });
       }
       if (!block.portrait && indent === 0 && portraitBottom) y = Math.max(y, portraitBottom + block.size);
-      const lines = promotionMeasuredLines(plainText(block.text), maxWidth - indent, (line) =>
-        measure(line, block.size, Boolean(block.bold)),
+      const lines = promotionMeasuredLines(
+        plainText(block.text),
+        Math.min(maxWidth, block.width ?? maxWidth) - indent,
+        (line) => measure(line, block.size, Boolean(block.bold)),
       );
       for (const line of lines) {
         if (y + block.size * 1.25 > footer) {
@@ -203,21 +206,45 @@ export function buildPromotionPages(
           composition,
           scale,
           height,
-          data.portraits,
+          {},
           factor,
-        ),
+        ).map((block) => ({
+          ...block,
+          width:
+            block.role === "H1" || !data.portraits?.[data.personal.people[0]?.userId ?? ""]
+              ? usable
+              : usable - 300 * scale,
+        })),
         170 * scale,
-        usable * 0.68,
+        usable,
         146,
         12 * scale,
       );
-      if (pages.length === 1) break;
+      const titleBottom = Math.max(...pages[0]!.texts.filter((text) => text.role === "H1").map((text) => text.y));
+      if (
+        pages.length === 1 &&
+        (!data.portraits?.[data.personal.people[0]?.userId ?? ""] || titleBottom + 250 * scale < height - 95)
+      )
+        break;
     }
     if (pages.length !== 1) throw new Error("Personal promotion details do not fit the social image.");
     pages[0]!.total = 1;
     pages[0]!.title = data.personal.eventName;
     pages[0]!.still = true;
     const titleBottom = Math.max(...pages[0]!.texts.filter((text) => text.role === "H1").map((text) => text.y));
+    const person = data.personal.people[0];
+    const portrait = person && data.portraits?.[person.userId];
+    if (portrait) {
+      pages[0]!.pictures.push({
+        src: portrait,
+        x: width - margin - 210 * scale,
+        y: Math.max(260 * scale, titleBottom + 40 * scale),
+        width: 210 * scale,
+        height: 210 * scale,
+        circle: true,
+        alt: person.displayName,
+      });
+    }
     (pages[0]!.bars ??= []).push({
       x: margin,
       y: titleBottom + 18 * scale,

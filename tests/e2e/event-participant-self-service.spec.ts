@@ -205,7 +205,7 @@ test("a signed-in user registers from event home without another email challenge
   await expect(page.getByRole("heading", { name: "No ticket yet", exact: true })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Registration details", exact: true })).toBeVisible();
   const socialBadge = page.locator("[data-og-badge-img]");
-  await expect(socialBadge).toHaveAttribute("src", /layout=promotion-scene-v3/);
+  await expect(socialBadge).toHaveAttribute("src", /layout=promotion-scene-v4/);
   await expect
     .poll(() => socialBadge.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0))
     .toBe(true);

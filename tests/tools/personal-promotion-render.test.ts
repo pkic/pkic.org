@@ -34,15 +34,20 @@ describe("personal promotion typography", () => {
     const title = page.texts.filter((line) => line.role === "H1");
     const eyebrow = page.texts.find((line) => line.role === "H2")!;
     expect(title.map((line) => line.text).join(" ")).toBe("Post-Quantum Cryptography Conference");
-    expect(title).toHaveLength(2);
+    expect(title).toHaveLength(1);
     expect(title[0]!.size).toBeGreaterThan(eyebrow.size * 1.7);
     expect(eyebrow.y - eyebrow.size - 97).toBeGreaterThan(35);
     if (portrait) {
       const picture = page.pictures[0]!;
       expect(picture.circle).toBe(true);
       expect(picture.width).toBe(picture.height);
-      const details = page.texts.find((line) => line.text.startsWith("December"))!;
-      expect(details.y - details.size).toBeGreaterThanOrEqual(picture.y + picture.height);
+      expect(picture.x).toBeGreaterThan(page.width / 2);
+      expect(picture.width).toBeGreaterThan(200);
+      expect(picture.y + picture.height).toBeLessThan(page.height - 95);
+      for (const line of page.texts) {
+        if (line.y >= picture.y && line.y - line.size <= picture.y + picture.height)
+          expect(line.x + measure(line.text, line.size, Boolean(line.bold))).toBeLessThan(picture.x - 20);
+      }
     }
     expect(title[0]!.y - title[0]!.size - eyebrow.y).toBeGreaterThan(20);
     for (const line of page.texts) {
