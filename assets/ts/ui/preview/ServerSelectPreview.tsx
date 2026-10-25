@@ -8,8 +8,8 @@ import { Field } from "../Field";
 const item = z.object({ id: z.string(), name: z.string() });
 const schema = paginatedResponseSchema("items", item);
 const choices = [
-  { id: "current", name: "Current organization · Program lead" },
-  { id: "other", name: "Another organization with a deliberately long name · Engineering representative" },
+  { id: "current", name: "Northstar Trust Association · Program lead" },
+  { id: "other", name: "Harbor Security Labs · Engineering representative" },
 ];
 const catalog = {
   endpoint: "/gallery/identities",

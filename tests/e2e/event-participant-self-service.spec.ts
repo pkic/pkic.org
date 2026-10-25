@@ -43,10 +43,10 @@ test("a signed-in user registers from event home without another email challenge
     await (await page.request.get("/api/v1/auth/session")).json(),
   );
   const representations = [];
-  for (const name of ["Synthetic current representation", "Synthetic other representation"]) {
+  for (const name of ["Northstar Trust Association", "Harbor Security Labs"]) {
     const createdOrganization = await page.request.post("/api/v1/organizations", {
       data: organizationCreateSchema.parse({
-        name: `${name} ${crypto.randomUUID()}`,
+        name,
         membershipCategory: "F",
         memberSince: "2026-01-01",
       }),
