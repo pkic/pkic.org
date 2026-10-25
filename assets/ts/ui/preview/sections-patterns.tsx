@@ -14,6 +14,7 @@ import { contentContributionPreview } from "./ContentContributionPreview";
  */
 
 import { useState } from "preact/hooks";
+import "../Content.css";
 import "../../components/member-wall.css";
 import "../../components/site-footer.css";
 import { useHashQueryParam } from "../../hooks/useHashQueryParam";
@@ -243,6 +244,20 @@ function RowListSpecimen() {
 const wallLogo = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="16" viewBox="0 0 100 40"><path fill="currentColor" d="M0 0h28v40H0zm36 0h28v40H36zm36 0h28v40H72z"/></svg>')}`;
 
 export const patternSections: PreviewSection[] = [
+  {
+    id: "framed-image",
+    title: "Framed image",
+    note: "A framed image fills the available width and retains its original proportions.",
+    render: () => (
+      <img
+        class="pk-framed"
+        width={600}
+        height={315}
+        alt="A circle centered in a landscape image"
+        src={`data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630"><rect width="1200" height="630" fill="#f1f5f9"/><circle cx="600" cy="315" r="200" fill="#0c4b38"/></svg>')}`}
+      />
+    ),
+  },
   {
     id: "registration-fields",
     title: "Questionnaire fields",

@@ -102,6 +102,44 @@ describe("email outbox batch processing", () => {
     expect(rows.every((r) => r.status === "sent")).toBe(true);
   });
 
+  it("retries a required social badge until its current image exists, then sends it once", async () => {
+    const fetchMock = makeSendgridMock();
+    vi.stubGlobal("fetch", fetchMock);
+    const badge = buildBadgeAttachment({ badgeCode: crypto.randomUUID(), badgeType: "attendee" });
+    const bucket = env.ASSETS_BUCKET!;
+    const id = await queueEmail(env.DB, {
+      eventId,
+      templateKey: "attendee_invite",
+      recipientEmail: "badge-ready@example.test",
+      messageType: "transactional",
+      data: { firstName: "Example" },
+      attachments: [badge],
+    });
+    const due = () =>
+      env.DB.prepare("UPDATE email_outbox SET send_after=? WHERE id=?").bind("2000-01-01T00:00:00.000Z", id).run();
+    expect(await processPendingOutbox(env.DB, env, 10)).toEqual({ processed: 1, failed: 1 });
+    expect(fetchMock).not.toHaveBeenCalled();
+    await bucket.put(badge.r2Key, validPngBytes(), {
+      httpMetadata: { contentType: "image/png" },
+      customMetadata: { badgeRenderer: "previous-renderer" },
+    });
+    await due();
+    expect(await processPendingOutbox(env.DB, env, 10)).toEqual({ processed: 1, failed: 1 });
+    expect(fetchMock).not.toHaveBeenCalled();
+    await bucket.put(badge.r2Key, validPngBytes(), {
+      httpMetadata: { contentType: "image/png" },
+      customMetadata: { badgeRenderer: badge.renderer! },
+    });
+    await due();
+    expect(await processPendingOutbox(env.DB, env, 10)).toEqual({ processed: 1, failed: 0 });
+    await processOutboxById(env.DB, env, id);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body)).attachments).toEqual([
+      expect.objectContaining({ filename: "attendee-badge.png", type: "image/png", disposition: "attachment" }),
+    ]);
+  });
+
   it("leaves future mail unchanged without a timer and sends its cached badge once when due", async () => {
     const fetchMock = makeSendgridMock();
     vi.stubGlobal("fetch", fetchMock);
@@ -156,7 +194,10 @@ describe("email outbox batch processing", () => {
     expect(await processSelectedOutbox(env.DB, env, [outboxId])).toEqual({ processed: 0, failed: 0, skipped: 1 });
 
     const png = validPngBytes();
-    await assetsBucket.put(badge.r2Key, png, { httpMetadata: { contentType: "image/png" } });
+    await assetsBucket.put(badge.r2Key, png, {
+      httpMetadata: { contentType: "image/png" },
+      customMetadata: { badgeRenderer: badge.renderer! },
+    });
     await env.DB.prepare("UPDATE email_outbox SET send_after = ? WHERE id = ?")
       .bind("2000-01-01T00:00:00.000Z", outboxId)
       .run();

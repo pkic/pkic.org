@@ -23,6 +23,7 @@ import { eventPhase } from "./event-timing";
 import { RegistrationOfferNotice } from "./RegistrationOfferNotice";
 import { attendanceStanding, type AttendanceStanding } from "../../../../../shared/viewer-attendance";
 import { formatDayList } from "../../../../../../shared/format-date";
+import { SharePanel } from "../../../../../shared/widgets/share-panel";
 
 export function EventTicket({
   event,
@@ -93,6 +94,15 @@ function BadgeTicket({ event, details }: { event: ParticipantEventDetail; detail
         <ErrorAlert error={ticket.error ?? "Your badge is unavailable."} />
       )}
       {standing.holdsInPersonSeat && use}
+      {event.participation?.promotion && (
+        <SharePanel
+          options={{
+            shareUrl: new URL(event.participation.promotion.sharePath, window.location.origin).href,
+            badgeVersion: event.participation.promotion.badgeVersion,
+            eventName: event.name,
+          }}
+        />
+      )}
     </div>
   );
 }

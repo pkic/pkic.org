@@ -19,6 +19,7 @@ import { publicUserHeadshotUrl } from "../user-headshot";
 import { eventDayReadModels } from "../event-read-models";
 import { AppError } from "../../errors";
 import { registrationManageReadResponseSchema } from "../../../../assets/shared/schemas/registration";
+import { personalPromotionSharePath } from "../../../../assets/shared/personal-promotion-image";
 import {
   prepareRegistrationSponsorSharing,
   decodeRegistrationSponsorSharing,
@@ -106,7 +107,7 @@ export async function buildRegistrationManageView(
       job_title: user.job_title,
     },
     headshotUrl,
-    shareUrl: referral ? `${appBaseUrl}/r/${referral.code}` : null,
+    shareUrl: referral ? `${appBaseUrl}${personalPromotionSharePath(referral.code)}` : null,
     eventDays: eventDayReadModels(eventDays, registeredCounts),
     dayAttendance,
     dayWaitlist,

@@ -1,4 +1,7 @@
-import { personalPromotionImagePath } from "../../../../assets/shared/personal-promotion-image";
+import {
+  personalPromotionImagePath,
+  personalPromotionSharePath,
+} from "../../../../assets/shared/personal-promotion-image";
 import { REGISTRATION_ORGANIZATION_SQL, REGISTRATION_JOB_TITLE_SQL } from "./selected-identity";
 import type { CountryCode } from "../../../../assets/shared/countries";
 import { batchFirst, batchRows } from "../../db/pagination";
@@ -210,7 +213,9 @@ export async function prepareRegistrationConfirmedEmail(
     recipientEmail,
     params.internalSigningSecret,
   );
-  const shareUrl = params.referralCode ? `${params.appBaseUrl}/r/${params.referralCode}` : null;
+  const shareUrl = params.referralCode
+    ? `${params.appBaseUrl}${personalPromotionSharePath(params.referralCode)}`
+    : null;
   const prepared = prepareQueueEmailStatement(db, {
     outboxId: params.outboxId,
     idempotencyKey: params.idempotencyKey,

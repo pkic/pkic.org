@@ -1,7 +1,11 @@
+import { PERSONAL_PROMOTION_RENDERER } from "../../../assets/shared/personal-promotion-image";
+
 export interface QueuedBadgeAttachment {
   kind: "r2-badge-image";
   r2Key: string;
   filenameBase: string;
+  required?: boolean;
+  renderer?: string;
 }
 
 export type QueuedEmailAttachment = QueuedBadgeAttachment;
@@ -36,6 +40,7 @@ export function buildBadgeAttachment(payload: {
     kind: "r2-badge-image",
     r2Key: `og-badges/${payload.badgeCode}`,
     filenameBase: namePart ? `${filenamePrefix}-${namePart}` : filenamePrefix,
+    ...(payload.badgeType === "attendee" ? { required: true, renderer: PERSONAL_PROMOTION_RENDERER } : {}),
   };
 }
 
@@ -56,7 +61,9 @@ export function parseQueuedEmailAttachments(payload: Record<string, unknown>): Q
         typeof candidate.r2Key === "string" &&
         candidate.r2Key.length > 0 &&
         typeof candidate.filenameBase === "string" &&
-        candidate.filenameBase.length > 0
+        candidate.filenameBase.length > 0 &&
+        (candidate.required === undefined || typeof candidate.required === "boolean") &&
+        (candidate.renderer === undefined || typeof candidate.renderer === "string")
       );
     }
 

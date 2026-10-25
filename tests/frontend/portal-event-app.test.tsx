@@ -378,6 +378,22 @@ describe("event home", () => {
     expect(requests).toEqual(["/api/v1/events/summit/badges/current"]);
   });
 
+  it("shows the shared social badge after registration without another data request", async () => {
+    const detail = event(registered);
+    detail.participation!.promotion = {
+      sharePath: "/r/ownshare",
+      badgeVersion: "2026-12-01T10:00:00.000Z",
+    };
+    await act(() => render(<ParticipantEvent event={detail} tab="ticket" />, host));
+    await vi.waitFor(() => expect(host.querySelector("iframe.pk-badge-face__frame")).not.toBeNull());
+    expect(host.querySelector<HTMLImageElement>("[data-og-badge-img]")?.src).toContain(
+      "/api/v1/registrations/referrals/ownshare/badge?layout=promotion-scene-v1",
+    );
+    expect(host.textContent).toContain("Download badge");
+    expect(host.querySelector('a[aria-label="Share on LinkedIn"]')?.getAttribute("href")).toContain("ownshare");
+    expect(requests).toEqual(["/api/v1/events/summit/badges/current"]);
+  });
+
   describe("an attendee waiting for an in-person seat", () => {
     // In-person on Dec 1 and 2 (both waitlisted), online on Dec 3: the registration-level type is in_person.
     const waiting = {

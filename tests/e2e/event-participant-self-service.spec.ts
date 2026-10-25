@@ -187,6 +187,7 @@ test("a signed-in user registers from event home without another email challenge
       new URL(response.url()).pathname === `/api/v1/events/${event.slug}/registrations` &&
       response.request().method() === "POST",
   );
+  const beforeConfirmationEmail = await capturedEmailCount();
   await dialog.getByRole("button", { name: "Register", exact: true }).click();
   const response = await saved;
   expect(response.status(), await response.text()).toBe(200);
@@ -203,6 +204,36 @@ test("a signed-in user registers from event home without another email challenge
   await page.reload();
   await expect(page.getByRole("heading", { name: "No ticket yet", exact: true })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Registration details", exact: true })).toBeVisible();
+  const socialBadge = page.locator("[data-og-badge-img]");
+  await expect(socialBadge).toHaveAttribute("src", /layout=promotion-scene-v1/);
+  await expect
+    .poll(() => socialBadge.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0))
+    .toBe(true);
+  await expect(page.getByRole("link", { name: "Download badge", exact: true })).toBeVisible();
+  const confirmation = await waitForCapturedEmail(email, "confirmed", { since: beforeConfirmationEmail });
+  const attachments = confirmation.payload.attachments as Array<{ type: string; content: string }>;
+  const attachment = attachments.find((item) => item.type.startsWith("image/"));
+  expect(attachment).toBeDefined();
+  const renderedBadge = await page.request.get((await socialBadge.getAttribute("src"))!);
+  expect(renderedBadge.status()).toBe(200);
+  expect(Buffer.from(attachment!.content, "base64")).toEqual(await renderedBadge.body());
+  await info.attach("emailed-social-badge", {
+    body: Buffer.from(attachment!.content, "base64"),
+    contentType: attachment!.type,
+  });
+  for (const [width, height, device] of [
+    [1280, 900, "desktop"],
+    [375, 812, "phone"],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await socialBadge.scrollIntoViewIfNeeded();
+    const ratio = await socialBadge.evaluate((image: HTMLImageElement) => ({
+      displayed: image.clientWidth / image.clientHeight,
+      source: image.naturalWidth / image.naturalHeight,
+    }));
+    expect(ratio.displayed).toBeCloseTo(ratio.source, 1);
+    await page.screenshot({ path: info.outputPath(`registration-social-badge-${device}.png`) });
+  }
   await page.getByRole("link", { name: "Registration details", exact: true }).click();
   await page.getByRole("button", { name: "Change representation", exact: true }).click();
   const changeIdentity = page.getByRole("dialog", { name: "Change representation", exact: true });

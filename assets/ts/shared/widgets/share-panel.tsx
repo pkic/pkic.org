@@ -444,7 +444,7 @@ function InvitePanel({ manageToken, eventSlug }: { manageToken: string; eventSlu
 
 // ── Main share panel ────────────────────────────────────────────────────────
 
-function SharePanelInner({ options }: { options: SharePanelOptions }) {
+export function SharePanel({ options }: { options: SharePanelOptions }) {
   const { shareUrl, eventName, manageToken, eventSlug } = options;
 
   const shareText = `I just registered for ${eventName} — join me!`;
@@ -499,7 +499,7 @@ function SharePanelInner({ options }: { options: SharePanelOptions }) {
 }
 
 export function renderSharePanel(container: HTMLElement, options: SharePanelOptions): void {
-  render(<SharePanelInner options={options} />, container);
+  render(<SharePanel options={options} />, container);
 }
 
 /**

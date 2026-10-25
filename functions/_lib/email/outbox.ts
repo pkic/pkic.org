@@ -326,13 +326,19 @@ async function processOutboxRow(
     // content-type from the R2 object's httpMetadata to use the correct extension.
     const queuedAttachments = parseQueuedEmailAttachments(payload);
     const badgeAttachments = queuedAttachments.filter((a) => a.kind === "r2-badge-image");
+    if (badgeAttachments.some((attachment) => attachment.required) && !env.ASSETS_BUCKET)
+      throw new Error("Required badge attachment storage is unavailable");
     if (badgeAttachments.length > 0 && env.ASSETS_BUCKET) {
       try {
         for (const badgeAttachment of badgeAttachments) {
           const badgeObj = await env.ASSETS_BUCKET.get(badgeAttachment.r2Key);
           if (!badgeObj) {
+            if (badgeAttachment.required) throw new Error("Required badge attachment is not ready");
             continue;
           }
+
+          if (badgeAttachment.renderer && badgeObj.customMetadata?.badgeRenderer !== badgeAttachment.renderer)
+            throw new Error("Required badge attachment is waiting for the current renderer");
 
           const declaredType = badgeObj.httpMetadata?.contentType ?? "image/jpeg";
           const buf = await badgeObj.arrayBuffer();
@@ -345,8 +351,9 @@ async function processOutboxRow(
             { filename: badgeFilename, contentType: format.contentType, base64Content: base64 },
           ];
         }
-      } catch {
-        // Badge not yet rendered — send email without attachment (non-fatal)
+      } catch (error) {
+        if (badgeAttachments.some((attachment) => attachment.required)) throw error;
+        // Optional attachments do not hold up their email.
       }
     }
 

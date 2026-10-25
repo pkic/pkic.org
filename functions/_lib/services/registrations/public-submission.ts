@@ -1,4 +1,7 @@
-import { personalPromotionImagePath } from "../../../../assets/shared/personal-promotion-image";
+import {
+  personalPromotionImagePath,
+  personalPromotionSharePath,
+} from "../../../../assets/shared/personal-promotion-image";
 import type { z } from "zod";
 import type {
   RegistrationConfirmOrganization,
@@ -170,7 +173,7 @@ export async function submitEventRegistration(
   // unprivileged identity may keep the immediate correction link so a typo can
   // still be fixed before confirmation. A verified mailbox is that proof.
   const exposeManageCapability = prepared.identityWasCreated || Boolean(metadata.mailboxVerified);
-  const shareUrl = `${metadata.appBaseUrl}/r/${referralCode}`;
+  const shareUrl = `${metadata.appBaseUrl}${personalPromotionSharePath(referralCode)}`;
   const dayWaitlist = prepared.plannedDayWaitlist;
   const attendanceData = buildAttendanceEmailData(registration.attendance_type, prepared.dayAttendance, dayWaitlist);
   const statusData = buildRegistrationEmailStatusData(registration.status, dayWaitlist);
@@ -293,12 +296,11 @@ export async function submitEventRegistration(
       organizationOutcome,
     },
     backgroundTasks: [
-      processOutboxByIdBackground(db, env, queuedEmail.id),
       seedGravatarAndProcessBadgeRenderJob(db, env, {
         userId: user.id,
         email: user.email,
         jobId: badgeRenderJob.id,
-      }),
+      }).then(() => processOutboxByIdBackground(db, env, queuedEmail.id)),
     ],
   };
 }

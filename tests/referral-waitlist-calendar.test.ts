@@ -10,6 +10,7 @@ import {
 } from "../functions/_lib/services/referrals";
 import { createTemplateVersion, activateTemplateVersion } from "../functions/_lib/email/templates";
 import { buildBadgeAttachment } from "../functions/_lib/email/attachments";
+import { PERSONAL_PROMOTION_RENDERER } from "../assets/shared/personal-promotion-image";
 import { queueEmail, processOutboxById } from "../functions/_lib/email/outbox";
 import type { Env } from "../functions/_lib/types";
 
@@ -488,6 +489,7 @@ describe("referral, waitlist, and calendar flows", () => {
           arrayBuffer: vi
             .fn()
             .mockResolvedValue(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).buffer),
+          customMetadata: { badgeRenderer: PERSONAL_PROMOTION_RENDERER },
         }),
       },
     };
