@@ -110,9 +110,9 @@ export const currentUserIdentitiesListRouteSchema = {
 export const currentUserIdentityCreateRouteSchema = {
   ...requiresSession(),
   tags: ["Users"],
-  summary: "Activate a claimed-domain identity for the current user",
+  summary: "Activate a verified-domain identity for the current user",
   description:
-    "Requires an exact verified email-domain claim and explicit organization-join action. Only this explicit acceptance may activate the canonical Member group enrollments; verifying an account or event email never does so.",
+    "Accepts an explicit claimed-domain organization offer or a prepared representation based on an owned verified work address. The canonical domain policy resolves existing organizations, unclaimed-domain creation, and review. Only explicit acceptance may activate canonical Member group enrollments.",
   request: {
     body: { required: true, content: { "application/json": { schema: currentUserIdentityCreateSchema } } },
   },

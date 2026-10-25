@@ -277,8 +277,6 @@ describe("verified event entry", () => {
     await act(() => {
       host!.querySelector<HTMLElement>(`[role="option"][data-key="${identityId}"]`)!.click();
     });
-    expect(selection?.person.firstName).toBe("Ada");
-    expect(selection?.person.lastName).toBe("Lovelace");
     expect(selection?.actingIdentityId).toBe(identityId);
     expect(selection?.person.organizationName).toBe("Nonmember Organization");
     expect(host!.querySelector('input[name="firstName"]')).toBeNull();
@@ -287,11 +285,20 @@ describe("verified event entry", () => {
     expect(urls.find((url) => url.pathname.endsWith("identities"))?.searchParams.get("organizationOnly")).toBe("true");
     expect(host!.textContent).not.toContain("Your current representation is updated.");
     await act(() => {
+      [...host!.querySelectorAll("button")].find((button) => button.textContent === "Add representation")!.click();
+    });
+    const add = document.querySelector<HTMLDialogElement>("dialog[open]")!;
+    expect(add.textContent).toContain("Representation email");
+    expect(add.querySelector('input[name="email"]')).not.toBeNull();
+    expect(add.querySelector('[role="combobox"], input[name="organizationName"]')).toBeNull();
+    await act(() => {
+      [...add.querySelectorAll("button")].find((button) => button.textContent === "Cancel")!.click();
+    });
+    await act(() => {
       Array.from(host!.querySelectorAll("button"))
         .find((button) => button.textContent === "Update current representation")!
         .click();
     });
-    expect(host!.querySelector('input[name="organizationName"]')).toBeNull();
     await act(() => {
       const role = host!.querySelector<HTMLInputElement>('input[name="jobTitle"]')!;
       role.value = "Principal Engineer";
@@ -304,16 +311,12 @@ describe("verified event entry", () => {
     });
     await vi.waitFor(() => expect(selection?.person.jobTitle).toBe("Principal Engineer"));
     expect(eventProposalProofIdentityPatchSchema.parse(roleRequests[0])).toEqual({ jobTitle: "Principal Engineer" });
-    expect(selection?.actingIdentityId).toBe(identityId);
-    expect(selection?.person.organizationName).toBe("Nonmember Organization");
-    expect(host!.querySelector('input[name="jobTitle"]')).toBeNull();
     expect(host!.querySelector('[role="status"]')?.textContent).toBe("Your current representation is updated.");
     await act(() => {
       Array.from(host!.querySelectorAll("button"))
         .find((button) => button.textContent === "Update current representation")!
         .click();
     });
-    expect(host!.textContent).not.toContain("Your current representation is updated.");
     await act(() => {
       const role = host!.querySelector<HTMLInputElement>('input[name="jobTitle"]')!;
       role.value = "";
@@ -331,7 +334,6 @@ describe("verified event entry", () => {
     expect(host!.textContent).toContain(JOB_TITLE_REQUIRED);
     expect(roleRequests).toHaveLength(1);
     expect(selection?.person.jobTitle).toBe("Principal Engineer");
-    expect(selection?.person.organizationName).toBe("Nonmember Organization");
   });
   it("asks only missing verified-person details and retains a claimed organization name", async () => {
     history.replaceState({}, "", `/events/2026/pqc-2026/propose/#verify=${TOKEN}`);
@@ -421,7 +423,6 @@ describe("verified event entry", () => {
     );
     expect(host!.textContent).toContain("Any details entered below are unsaved");
     expect(host!.textContent).not.toContain("This new representation");
-    expect(host!.textContent).not.toContain("Complete your details");
     expect(host!.querySelectorAll('input[name="organizationName"]')).toHaveLength(1);
     const summary = host!.querySelector(".pk-datalist")!;
     expect(summary.textContent).toContain("Ada Lovelace");

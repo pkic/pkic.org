@@ -21,13 +21,17 @@ export interface IdentityEmailOwnershipInput {
 export async function requireIdentityEmailAssignable(
   db: DatabaseLike,
   input: IdentityEmailOwnershipInput,
+  observed?: { identity_id: string | null } | null,
 ): Promise<void> {
   if (!input.emailId) return;
-  const address = await first<{ identity_id: string | null }>(
-    db,
-    "SELECT identity_id FROM user_emails WHERE id = ? AND user_id = ?",
-    [input.emailId, input.userId],
-  );
+  const address =
+    observed === undefined
+      ? await first<{ identity_id: string | null }>(
+          db,
+          "SELECT identity_id FROM user_emails WHERE id = ? AND user_id = ?",
+          [input.emailId, input.userId],
+        )
+      : observed;
   // An unknown or foreign address is refused by the identities email trigger.
   if (!address?.identity_id) return;
   if (address.identity_id === input.identityId || address.identity_id === input.transferFromIdentityId) return;

@@ -242,14 +242,19 @@ export async function buildResolveOrganizationStatements(
   db: DatabaseLike,
   input: OrganizationRecordInput,
   now: string,
+  observed?: { existingOrganizationId: string | null; takenSlugs: readonly string[] },
 ): Promise<{ organizationId: string; organizationWasCreated: boolean; statements: StatementLike[] }> {
   const normalizedOrgName = normalizeOrgName(input.organizationName as string);
   // A merged organization's name keeps meaning the organization it was merged into.
-  const existingOrg = await first<{ id: string }>(
-    db,
-    "SELECT COALESCE(merged_into_organization_id, id) AS id FROM organizations WHERE normalized_name = ?",
-    [normalizedOrgName],
-  );
+  const existingOrg = observed
+    ? observed.existingOrganizationId
+      ? { id: observed.existingOrganizationId }
+      : null
+    : await first<{ id: string }>(
+        db,
+        "SELECT COALESCE(merged_into_organization_id, id) AS id FROM organizations WHERE normalized_name = ?",
+        [normalizedOrgName],
+      );
   if (existingOrg) {
     return { organizationId: existingOrg.id, organizationWasCreated: false, statements: [] };
   }
@@ -271,7 +276,9 @@ export async function buildResolveOrganizationStatements(
    * this read and the batch fails the insert rather than silently colliding.
    */
   const slug = await firstFreeSlug(slugifyOr(input.organizationName as string, "member"), async (candidate) =>
-    Boolean(await first<{ id: string }>(db, "SELECT id FROM organizations WHERE slug = ?", [candidate])),
+    observed
+      ? observed.takenSlugs.includes(candidate)
+      : Boolean(await first<{ id: string }>(db, "SELECT id FROM organizations WHERE slug = ?", [candidate])),
   );
   const statements: StatementLike[] = [
     db

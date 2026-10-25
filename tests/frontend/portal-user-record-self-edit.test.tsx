@@ -13,6 +13,7 @@ import { portalSession } from "../../assets/ts/member-flows/portal/state";
 import { portalSessionFixture } from "../helpers/portal-session";
 import { myProfileSchema } from "../../assets/shared/schemas/me";
 import { currentUserIdentityCreateSchema } from "../../assets/shared/schemas/identity";
+import { identityAffiliationPreviewSchema } from "../../assets/shared/schemas/identity-affiliation";
 
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["/users/self", vi.fn()] }));
 vi.mock("wouter", () => ({
@@ -116,7 +117,7 @@ function record(id: string) {
 }
 
 /** Answers the record and the account resources; anything else is an empty refusal the panels tolerate. */
-function stubApi(domainOffer = false): Array<{ method: string; path: string; body: unknown }> {
+function stubApi(): Array<{ method: string; path: string; body: unknown }> {
   const paths: Array<{ method: string; path: string; body: unknown }> = [];
   vi.stubGlobal(
     "fetch",
@@ -174,18 +175,15 @@ function stubApi(domainOffer = false): Array<{ method: string; path: string; bod
         });
       }
       if (url.pathname === "/api/v1/auth/passkeys") return json({ passkeys: [] });
-      if (url.pathname === "/api/v1/users/current/identities/offer")
+      if (url.pathname === "/api/v1/users/current/identities/preview") {
+        const request = identityAffiliationPreviewSchema.parse(init?.body ? JSON.parse(String(init.body)) : {});
         return json({
-          offer: domainOffer
-            ? {
-                kind: "organization",
-                organization: { id: ORGANIZATION_ID, name: "Example Org" },
-                emailId: null,
-                domain: "example.test",
-                writtenOrganizationName: null,
-              }
-            : null,
+          email: "person@example.test",
+          domain: "example.test",
+          organization: { id: ORGANIZATION_ID, name: "Example Org" },
+          ...(request.phase === "prepare" ? { contextToken: "synthetic-prepared-context-for-identity-creation" } : {}),
         });
+      }
       if (url.pathname === "/api/v1/users/current/identities") {
         if (init?.method === "POST") return json({ success: true, identityId: IDENTITY_ID, state: "active" }, 201);
         return json({ identities: [], page: page(0) });
@@ -313,35 +311,51 @@ describe("editing your own record", () => {
 });
 
 describe("who you are signed in as, and adding an identity", () => {
-  it("prefills the existing organization resolved from a verified work address and links to its ID", async () => {
+  it("resolves the verified representation email before showing its organization and never searches organizations", async () => {
     portalSession.value = portalSessionFixture({ member: true });
-    const requests = stubApi(true);
+    const requests = stubApi();
     await mount(SELF_ID, NO_PERMISSIONS);
     await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Add identity"]')!.click());
+    const dialog = document.querySelector<HTMLDialogElement>("dialog[open]")!;
+    expect(dialog.querySelector('[role="combobox"]')).toBeNull();
+    expect(dialog.querySelector('input[name="jobTitle"]')).toBeNull();
+    const email = dialog.querySelector<HTMLInputElement>('input[name="email"]')!;
+    await act(async () => {
+      email.value = "person@example.test";
+      email.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      dialog.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 20));
     });
-    const form = container.querySelector<HTMLFormElement>('form[aria-label="Add identity"]')!;
-    expect(form.querySelector<HTMLInputElement>('[role="combobox"]')?.value).toBe("Example Org");
-    const title = form.querySelector<HTMLInputElement>('input[name="jobTitle"]')!;
+    expect(dialog.textContent).toContain("Example Org");
+    expect(dialog.querySelector('[role="combobox"]')).toBeNull();
+    const title = dialog.querySelector<HTMLInputElement>('input[name="jobTitle"]')!;
     await act(async () => {
       title.value = "Engineer";
       title.dispatchEvent(new Event("input", { bubbles: true }));
     });
     await act(async () => {
-      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      dialog.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    await act(async () => {
+      await vi.waitFor(() =>
+        expect(
+          requests.some((request) => request.path === "/api/v1/users/current/identities" && request.method === "POST"),
+        ).toBe(true),
+      );
     });
     const sent = requests.find(
       (request) => request.path === "/api/v1/users/current/identities" && request.method === "POST",
     );
     expect(currentUserIdentityCreateSchema.parse(sent?.body)).toEqual({
-      organizationId: ORGANIZATION_ID,
-      emailId: null,
-      jobTitle: "Engineer",
+      contextToken: "synthetic-prepared-context-for-identity-creation",
     });
-    expect(requests.some((request) => request.path === "/api/v1/organizations" && request.method === "POST")).toBe(
-      false,
-    );
+    expect(
+      requests.some((request) => request.path === "/api/v1/members" || request.path === "/api/v1/organizations"),
+    ).toBe(false);
   });
   function twoIdentities() {
     const session = portalSessionFixture({ member: true });
@@ -384,16 +398,16 @@ describe("who you are signed in as, and adding an identity", () => {
     const add = container.querySelector<HTMLButtonElement>('button[aria-label="Add identity"]')!;
     expect(add.title).toBe("Add identity");
     await act(async () => add.click());
-    const dialog = container.querySelector<HTMLDialogElement>("dialog[open]")!;
+    const dialog = document.querySelector<HTMLDialogElement>("dialog[open]")!;
     expect(dialog).not.toBeNull();
     expect(dialog.textContent).toContain("Add identity");
-    const form = dialog.querySelector<HTMLFormElement>('form[aria-label="Add identity"]')!;
+    const form = dialog.querySelector<HTMLFormElement>('form[aria-label="Add email address"]')!;
     expect(form).not.toBeNull();
-    expect(form.textContent).toContain("Organization");
-    expect(form.textContent).toContain("Job title");
+    expect(form.textContent).toContain("Representation email");
+    expect(form.querySelector('[role="combobox"]')).toBeNull();
     // Nothing is sent until the contract accepts the draft.
     await act(async () => {
-      [...dialog.querySelectorAll("button")].find((button) => button.textContent === "Create")!.click();
+      [...dialog.querySelectorAll("button")].find((button) => button.textContent === "Continue")!.click();
       await new Promise((resolve) => setTimeout(resolve, 10));
     });
     expect(requests.some((request) => request.method === "POST")).toBe(false);
@@ -401,7 +415,7 @@ describe("who you are signed in as, and adding an identity", () => {
     await act(async () => {
       [...dialog.querySelectorAll("button")].find((button) => button.textContent === "Cancel")!.click();
     });
-    expect(container.querySelector('form[aria-label="Add identity"]')).toBeNull();
-    expect(container.querySelector("dialog[open]")).toBeNull();
+    expect(container.querySelector('form[aria-label="Add email address"]')).toBeNull();
+    expect(document.querySelector("dialog[open]")).toBeNull();
   });
 });

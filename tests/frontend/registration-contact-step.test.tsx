@@ -416,7 +416,7 @@ describe("signed-in registration identity", () => {
     await act(() => add.click());
     const dialog = document.querySelector<HTMLDialogElement>("dialog[open]")!;
     expect(dialog).not.toBeNull();
-    expect(dialog.querySelector('form[aria-label="Add identity"]')).not.toBeNull();
+    expect(dialog.querySelector('form[aria-label="Add email address"]')).not.toBeNull();
     expect(dialog.closest("form")).toBeNull();
     expect(form.querySelector("form")).toBeNull();
     expect(value(form, "identityId")).toBe(IDENTITY_ID);

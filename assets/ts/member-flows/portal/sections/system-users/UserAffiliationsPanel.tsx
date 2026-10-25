@@ -33,8 +33,7 @@ import { IconPlus } from "../../../../components/icons";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { usePortalHashLocation } from "../../hash-location";
 import { UserAffiliationRow } from "./UserAffiliationRow";
-import { EMAIL_ADDRESSES_ANCHOR } from "./EmailAddressesPanel";
-import { SelfIdentityCreateForm } from "../../../../components/identities/SelfIdentityCreateForm";
+import { IdentityCreateDialog } from "../../../../components/identities/IdentityCreateDialog";
 import { UserIdentityGrantForm } from "./UserIdentityGrantForm";
 import type { UserDetail } from "./model";
 import type { UserGroupParticipation } from "../../../../../shared/schemas/user-participation";
@@ -204,20 +203,20 @@ export function UserAffiliationsPanel({
       {/* Creating an identity is a quick action, so it is a dialog: a person creates their own,
           and staff grant one to somebody else. The form is mounted only while open, so a
           cancelled draft does not linger. */}
-      <Dialog
-        open={adding}
-        title="Add identity"
-        closeLabel="Close add identity"
-        confirmLabel={canManage ? "Grant" : "Create"}
-        confirmDisabled={busy}
-        onConfirm={() => addRoot.current?.querySelector("form")?.requestSubmit()}
-        onCancel={() => {
-          if (!busy) setAdding(false);
-        }}
-      >
-        <div ref={addRoot}>
-          {adding &&
-            (canManage ? (
+      {canManage && !viewerIsSubject ? (
+        <Dialog
+          open={adding}
+          title="Add identity"
+          closeLabel="Close add identity"
+          confirmLabel="Grant"
+          confirmDisabled={busy}
+          onConfirm={() => addRoot.current?.querySelector("form")?.requestSubmit()}
+          onCancel={() => {
+            if (!busy) setAdding(false);
+          }}
+        >
+          <div ref={addRoot}>
+            {adding && (
               <UserIdentityGrantForm
                 user={user}
                 canActivate={canActivateIdentity}
@@ -227,33 +226,18 @@ export function UserAffiliationsPanel({
                   void onChanged();
                 }}
               />
-            ) : (
-              <SelfIdentityCreateForm
-                onBusy={setBusy}
-                onCreated={() => {
-                  setAdding(false);
-                  void onChanged();
-                }}
-                emailAddressAction={
-                  <Button
-                    type="button"
-                    variant="link"
-                    onClick={() => {
-                      setAdding(false);
-                      requestAnimationFrame(() => {
-                        const panel = document.getElementById(EMAIL_ADDRESSES_ANCHOR);
-                        panel?.scrollIntoView({ block: "center" });
-                        panel?.querySelector<HTMLElement>("button")?.focus({ preventScroll: true });
-                      });
-                    }}
-                  >
-                    Add or verify an address
-                  </Button>
-                }
-              />
-            ))}
-        </div>
-      </Dialog>
+            )}
+          </div>
+        </Dialog>
+      ) : (
+        <IdentityCreateDialog
+          open={adding}
+          onClose={() => setAdding(false)}
+          onCreated={async () => {
+            await onChanged();
+          }}
+        />
+      )}
 
       {reinstating && (
         <ReinstateRepresentationDialog

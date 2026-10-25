@@ -12,7 +12,10 @@ import {
 } from "../../shared/schemas/event-proposal-proof";
 import type { CollectionLoader } from "../hooks/useServerCollection";
 import { actingIdentityCatalog, actingIdentityLabel } from "../shared/acting-identity-catalog";
-import { postJson, requestJson } from "../shared/api-client";
+import { getJson, postJson, requestJson } from "../shared/api-client";
+import { userAuthSessionResponseSchema } from "../../shared/schemas/user-auth";
+import { identitiesListResponseSchema } from "../../shared/schemas/identity";
+import { IdentityCreateDialog } from "./identities/IdentityCreateDialog";
 import { Alert } from "../ui/Alert";
 import { Button, ButtonLink } from "../ui/Button";
 import { Field } from "../ui/Field";
@@ -79,6 +82,7 @@ export function EventProposalIdentityStep({
   );
   const [sent, setSent] = useState(false);
   const [changing, setChanging] = useState(false);
+  const [adding, setAdding] = useState(false);
   const flow = speakerManagementToken || speakerProposalId ? "speaker" : "proposal";
   const proofBody = {
     consents: consents(),
@@ -129,6 +133,14 @@ export function EventProposalIdentityStep({
     identity.setError(undefined);
     await postJson(endpoint, proof, eventProposalProofStartResponseSchema);
     setSent(true);
+  }
+  function addRepresentation() {
+    if (identity.authenticated) setAdding(true);
+    else {
+      identity.useDifferentEmail();
+      setSent(false);
+      setChanging(false);
+    }
   }
   const person = identity.person;
   const knownPerson = identity.knownPerson;
@@ -184,15 +196,7 @@ export function EventProposalIdentityStep({
       <Button type="button" variant="secondary" onClick={() => setChanging(!changing)}>
         Choose another representation
       </Button>
-      <Button
-        type="button"
-        variant="secondary"
-        onClick={() => {
-          identity.useDifferentEmail();
-          setSent(false);
-          setChanging(false);
-        }}
-      >
+      <Button type="button" variant="secondary" onClick={addRepresentation}>
         Add representation
       </Button>
     </div>
@@ -215,14 +219,7 @@ export function EventProposalIdentityStep({
                       {EMAIL_FIRST_COPY[flow].individualSwitch}
                     </Button>
                     {identity.authenticated && identity.kind === "organization" && (
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        onClick={() => {
-                          identity.useDifferentEmail();
-                          setSent(false);
-                        }}
-                      >
+                      <Button type="button" variant="secondary" onClick={addRepresentation}>
                         Add representation
                       </Button>
                     )}
@@ -396,6 +393,28 @@ export function EventProposalIdentityStep({
         </Alert>
       )}
       {identity.error && <Alert tone="danger">{identity.error}</Alert>}
+      {identity.authenticated && (
+        <IdentityCreateDialog
+          open={adding}
+          onClose={() => setAdding(false)}
+          onCreated={async (identityId) => {
+            const session = await getJson("/api/v1/auth/session", userAuthSessionResponseSchema);
+            const summary = session.actingIdentities.find((item) => item.id === identityId);
+            if (!summary?.organizationId)
+              throw new Error("Your new identity is not available yet. Close and reopen this step to refresh it.");
+            const result = await getJson(
+              `/api/v1/users/current/identities?organizationId=${encodeURIComponent(summary.organizationId)}&active=true&limit=1`,
+              identitiesListResponseSchema,
+            );
+            const created = result.identities.find((item) => item.id === identityId);
+            if (!created)
+              throw new Error("Your new identity is not available yet. Close and reopen this step to refresh it.");
+            if (identity.kind !== "organization") identity.setKind("organization");
+            identity.choose(created);
+            setChanging(false);
+          }}
+        />
+      )}
     </div>
   );
 }

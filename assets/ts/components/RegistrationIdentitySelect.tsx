@@ -84,7 +84,6 @@ export function RegistrationIdentityField({
       {userId && (
         <IdentityCreateDialog
           open={adding}
-          userId={userId}
           onClose={() => setAdding(false)}
           onCreated={async (identityId) => {
             const session = await getJson("/api/v1/auth/session", userAuthSessionResponseSchema);

@@ -1,137 +1,198 @@
-/**
- * A person creating an identity of their own, in a dialog opened from the
- * Affiliations panel: the organization, the work address that links them to it, and what
- * they do there. It posts to `POST /api/v1/users/current/identities`; the
- * server checks that the chosen verified address belongs to the
- * organization's email domain and refuses anything else on its field.
- */
-import type { ComponentChildren } from "preact";
+/** Email-first representation onboarding: production mailbox proof, followed by the canonical domain rule. */
 import type { z } from "zod";
 import { useEffect, useState } from "preact/hooks";
 import { ORGANIZATION_JOB_TITLE_COPY } from "../../../shared/email-first-copy";
 import { currentUserIdentityCreateSchema, identityMutationResponseSchema } from "../../../shared/schemas/identity";
-import type { PublicMemberSummary } from "../../../shared/schemas/members-directory";
-import { ownEmailAddressesListResponseSchema } from "../../../shared/schemas/own-email-addresses";
-import { affiliationOfferResponseSchema } from "../../../shared/schemas/affiliation-offer";
-import { ServerSearchSelect } from "../ServerSearchSelect";
+import {
+  identityAffiliationPrepareSchema,
+  identityAffiliationPreviewSchema,
+  identityAffiliationPreviewResponseSchema,
+} from "../../../shared/schemas/identity-affiliation";
+import { ownEmailAddressesListResponseSchema, type OwnEmailAddress } from "../../../shared/schemas/own-email-addresses";
 import { useContractForm } from "../../hooks/useContractForm";
-import { useData } from "../../hooks/useData";
 import { getJson, postJson } from "../../shared/api-client";
-import { memberOrganizationCatalog } from "../../shared/member-organization-catalog";
+import { OWN_EMAILS_ENDPOINT } from "../../shared/email-address-paths";
 import { Alert } from "../../ui/Alert";
 import { Field } from "../../ui/Field";
-import { Select, TextInput } from "../../ui/TextControl";
-import { showToast } from "../../shared/toast";
-import { OWN_EMAILS_ENDPOINT } from "../../shared/email-address-paths";
+import { TextInput } from "../../ui/TextControl";
+import { Button } from "../../ui/Button";
+import { DescriptionList } from "../../ui/DescriptionList";
+import { EmailAddressCreateForm } from "./EmailAddressCreateForm";
 
+const PREVIEW_ENDPOINT = "/api/v1/users/current/identities/preview";
+type Resolved = z.infer<typeof identityAffiliationPreviewResponseSchema>;
 export function SelfIdentityCreateForm({
   onCreated,
-  emailAddressAction,
   onBusy,
+  onActionLabel,
 }: {
   onCreated: (result: z.infer<typeof identityMutationResponseSchema>) => void | Promise<void>;
-  /** The host decides how to reach email management without losing its draft. */
-  emailAddressAction: ComponentChildren;
-  /** Reports a save in flight so the dialog's confirm cannot double-submit. */
   onBusy?: (busy: boolean) => void;
+  onActionLabel?: (label: string) => void;
 }) {
-  // The same form can be hosted by independently mounted portal and public roots.
-  const [formId] = useState(() => `identity-${crypto.randomUUID()}`);
-  const [organization, setOrganization] = useState<Pick<PublicMemberSummary, "id" | "name"> | null>(null);
-  const [emailId, setEmailId] = useState("");
+  const [stage, setStage] = useState<"email" | "waiting" | "details">("email");
+  const [email, setEmail] = useState("");
+  const [address, setAddress] = useState<Pick<OwnEmailAddress, "id" | "email"> | null>(null);
+  const [resolved, setResolved] = useState<Resolved | null>(null);
+  const [organizationName, setOrganizationName] = useState("");
   const [jobTitle, setJobTitle] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  useEffect(() => onBusy?.(saving), [saving]);
-  const addresses = useData(() => getJson(OWN_EMAILS_ENDPOINT, ownEmailAddressesListResponseSchema), []);
-  const suggestion = useData(
-    () => getJson("/api/v1/users/current/identities/offer", affiliationOfferResponseSchema),
-    [],
+  const [formId] = useState(() => `identity-${crypto.randomUUID()}`);
+  useEffect(() => onBusy?.(busy), [busy]);
+  useEffect(
+    () =>
+      onActionLabel?.(
+        stage === "email" ? "Continue" : stage === "waiting" ? "Check verification" : "Add representation",
+      ),
+    [stage],
   );
-  useEffect(() => {
-    const offer = suggestion.data?.offer;
-    if (offer?.kind === "organization") {
-      setOrganization(offer.organization);
-      setEmailId(offer.emailId ?? "");
-    }
-  }, [suggestion.data]);
-  const verified = (addresses.data?.emails ?? []).filter((address) => address.verifiedAt);
-  const form = useContractForm(currentUserIdentityCreateSchema, {
-    emailId: emailId || null,
-    organizationId: organization?.id ?? "",
+  const proofForm = useContractForm(identityAffiliationPreviewSchema, {
+    phase: "resolve",
+    email,
+    emailId: address?.id ?? null,
+  });
+  const detailsForm = useContractForm(identityAffiliationPrepareSchema, {
+    phase: "prepare",
+    email,
+    emailId: address?.id ?? null,
+    organizationResolved: Boolean(resolved?.organization),
+    organizationName: resolved?.organization ? undefined : organizationName || undefined,
     jobTitle,
   });
-
-  async function submit(event: Event): Promise<void> {
-    event.preventDefault();
-    setError("");
-    const checked = form.submit();
-    if (!checked.data) {
-      setError(checked.message);
-      return;
-    }
-    setSaving(true);
-    try {
-      const result = await postJson("/api/v1/users/current/identities", checked.data, identityMutationResponseSchema);
-      showToast("portal-toast-area", `You represent ${organization?.name ?? "the organization"}`, "success");
-      await onCreated(result);
-    } catch (cause) {
-      setError(form.refuse(cause));
-    } finally {
-      setSaving(false);
-    }
+  async function ownAddresses() {
+    return (await getJson(OWN_EMAILS_ENDPOINT, ownEmailAddressesListResponseSchema)).emails;
   }
-
+  async function resolve(value: Pick<OwnEmailAddress, "id" | "email">, contract = proofForm) {
+    const result = await postJson(
+      PREVIEW_ENDPOINT,
+      identityAffiliationPreviewSchema.parse({ phase: "resolve", email: value.email, emailId: value.id }),
+      identityAffiliationPreviewResponseSchema,
+    );
+    setAddress(value);
+    setEmail(value.email);
+    setResolved(result);
+    setError("");
+    contract.reset();
+    if (result.identityId) await onCreated({ success: true, identityId: result.identityId, state: "active" });
+    else setStage("details");
+  }
+  if (stage === "email")
+    return (
+      <EmailAddressCreateForm
+        isSelf
+        embedded
+        onBusy={setBusy}
+        beforeAdd={async (value) => {
+          try {
+            const existing = (await ownAddresses()).find((item) => item.email.toLowerCase() === value.toLowerCase());
+            if (!existing) return false;
+            setAddress(existing);
+            setEmail(existing.email);
+            if (existing.verifiedAt) await resolve(existing);
+            else setStage("waiting");
+            return true;
+          } finally {
+            setBusy(false);
+          }
+        }}
+        onAdded={(value) => {
+          setEmail(value);
+          setStage("waiting");
+          setBusy(false);
+        }}
+      />
+    );
+  if (stage === "waiting")
+    return (
+      <form
+        noValidate
+        class="pk-stack"
+        {...proofForm.handlers}
+        onSubmit={async (event) => {
+          event.preventDefault();
+          if (busy) return;
+          const checked = proofForm.submit();
+          if (!checked.data) return setError(checked.message);
+          setBusy(true);
+          setError("");
+          try {
+            const current = (await ownAddresses()).find((item) => item.email.toLowerCase() === email.toLowerCase());
+            await resolve(current ?? { id: null, email });
+          } catch (cause) {
+            setError(proofForm.refuse(cause));
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        <p>
+          Open the verification email sent to <strong>{email}</strong> and confirm the address. Then return here.
+        </p>
+        {error && <Alert tone="danger">{error}</Alert>}
+        <Button
+          variant="link"
+          onClick={() => {
+            setStage("email");
+            setError("");
+          }}
+        >
+          Use another email
+        </Button>
+      </form>
+    );
   return (
     <form
       noValidate
-      class="pk-stack pk-stack--snug"
-      aria-label="Add identity"
-      {...form.handlers}
-      onSubmit={(event) => void submit(event)}
+      class="pk-stack"
+      {...detailsForm.handlers}
+      onSubmit={async (event) => {
+        event.preventDefault();
+        if (busy) return;
+        const checked = detailsForm.submit();
+        if (!checked.data) return setError(checked.message);
+        setBusy(true);
+        setError("");
+        try {
+          const prepared = await postJson(PREVIEW_ENDPOINT, checked.data, identityAffiliationPreviewResponseSchema);
+          const result = await postJson(
+            "/api/v1/users/current/identities",
+            currentUserIdentityCreateSchema.parse({ contextToken: prepared.contextToken }),
+            identityMutationResponseSchema,
+          );
+          await onCreated(result);
+        } catch (cause) {
+          setError(detailsForm.refuse(cause));
+        } finally {
+          setBusy(false);
+        }
+      }}
     >
-      <Field id={`${formId}-organization`} label="Organization" required {...form.of("organizationId")}>
-        {(control) => (
-          <ServerSearchSelect
-            {...control}
-            catalog={memberOrganizationCatalog}
-            searchLabel="Organization"
-            value={organization?.id ?? null}
-            selectedLabel={organization?.name}
-            placeholder="Search member organizations…"
-            allowEmpty
-            onChange={setOrganization}
-          />
-        )}
-      </Field>
+      <DescriptionList
+        items={[
+          { term: "Verified representation email", value: email },
+          ...(resolved?.organization ? [{ term: "Organization", value: resolved.organization.name }] : []),
+        ]}
+      />
+      {!resolved?.organization && (
+        <Field id={`${formId}-organization`} label="Organization name" required {...detailsForm.of("organizationName")}>
+          {(control) => (
+            <TextInput
+              {...control}
+              name="organizationName"
+              autoComplete="organization"
+              value={organizationName}
+              onInput={(event) => setOrganizationName(event.currentTarget.value)}
+            />
+          )}
+        </Field>
+      )}
       <Field
-        id={`${formId}-email`}
-        label="Work email"
-        help="Must be a verified address under the organization's email domain."
-        {...form.of("emailId")}
-      >
-        {(control) => (
-          <Select
-            {...control}
-            name="emailId"
-            value={emailId}
-            onChange={(event) => setEmailId(event.currentTarget.value)}
-          >
-            {verified.map((address) => (
-              <option key={address.id ?? "primary"} value={address.id ?? ""}>
-                {address.email}
-                {address.primary ? " (primary)" : ""}
-              </option>
-            ))}
-          </Select>
-        )}
-      </Field>
-      <Field
-        id={`${formId}-job-title`}
+        id={`${formId}-title`}
         label={ORGANIZATION_JOB_TITLE_COPY.label}
         help={ORGANIZATION_JOB_TITLE_COPY.help}
         required
-        {...form.of("jobTitle")}
+        {...detailsForm.of("jobTitle")}
       >
         {(control) => (
           <TextInput
@@ -143,10 +204,16 @@ export function SelfIdentityCreateForm({
           />
         )}
       </Field>
-      <p class="pk-small pk-muted">
-        An address that does not match the organization cannot link you to it. {emailAddressAction}
-      </p>
       {error && <Alert tone="danger">{error}</Alert>}
+      <Button
+        variant="link"
+        onClick={() => {
+          setStage("email");
+          setError("");
+        }}
+      >
+        Use another email
+      </Button>
     </form>
   );
 }

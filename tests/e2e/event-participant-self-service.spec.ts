@@ -28,6 +28,7 @@ import { myProfileUpdateSchema } from "../../assets/shared/schemas/me";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { createRegistrationEvent } from "./helpers/participation-state-fixture";
+import { capturedEmailCount, waitForCapturedEmail, extractEmailUrl } from "./helpers/sendgrid";
 
 test.use({ actionTimeout: 15_000 });
 
@@ -104,8 +105,8 @@ test("a signed-in user registers from event home without another email challenge
   await expect(dialog.getByRole("combobox", { name: "Event identity", exact: true })).toBeVisible();
   await dialog.getByRole("button", { name: "Add identity", exact: true }).click();
   const addIdentity = page.getByRole("dialog", { name: "Add identity", exact: true });
-  await expect(addIdentity.getByRole("combobox", { name: /^Organization/ })).toBeVisible();
-  await expect(addIdentity.getByRole("textbox", { name: /Job title/ })).toBeVisible();
+  await expect(addIdentity.getByRole("textbox", { name: /^Representation email/ })).toBeVisible();
+  await expect(addIdentity.getByRole("combobox")).toHaveCount(0);
   await addIdentity.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(addIdentity).not.toBeVisible();
   await expect(dialog.getByRole("combobox", { name: "Event identity", exact: true })).toBeVisible();
@@ -163,7 +164,9 @@ test("a signed-in user registers from event home without another email challenge
   }
   await changeIdentity.getByRole("button", { name: "Add identity", exact: true }).click();
   await expect(
-    page.getByRole("dialog", { name: "Add identity", exact: true }).getByRole("combobox", { name: /^Organization/ }),
+    page
+      .getByRole("dialog", { name: "Add identity", exact: true })
+      .getByRole("textbox", { name: /^Representation email/ }),
   ).toBeVisible();
   await page
     .getByRole("dialog", { name: "Add identity", exact: true })
@@ -174,6 +177,48 @@ test("a signed-in user registers from event home without another email challenge
   await expect(page.getByRole("definition").filter({ hasText: representations[1].name })).toBeVisible();
   await page.reload();
   await expect(page.getByRole("definition").filter({ hasText: representations[1].name })).toBeVisible();
+  await page.getByRole("button", { name: "Change representation", exact: true }).click();
+  await changeIdentity.getByRole("button", { name: "Add identity", exact: true }).click();
+  const addRepresentation = page.getByRole("dialog", { name: "Add identity", exact: true });
+  await addRepresentation.getByRole("textbox", { name: /^Representation email/ }).fill("ada@lighthouse-work.test");
+  for (const [width, height, device] of [
+    [1280, 900, "desktop"],
+    [375, 812, "phone"],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.screenshot({ path: info.outputPath(`representation-email-${device}.png`) });
+  }
+  const inboxStart = await capturedEmailCount();
+  await addRepresentation.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(addRepresentation.getByRole("button", { name: "Check verification", exact: true })).toBeVisible();
+  await expect(addRepresentation.getByRole("combobox")).toHaveCount(0);
+  await page.screenshot({ path: info.outputPath("representation-verification-phone.png") });
+  const verificationEmail = await waitForCapturedEmail("ada@lighthouse-work.test", "Verify", { since: inboxStart });
+  const verification = await page.context().newPage();
+  await verification.goto(extractEmailUrl(verificationEmail, "/portal/"));
+  await verification.getByRole("button", { name: "Verify this address", exact: true }).click();
+  await expect(verification.getByText("ada@lighthouse-work.test is verified", { exact: true })).toBeVisible();
+  await verification.close();
+  await addRepresentation.getByRole("button", { name: "Check verification", exact: true }).click();
+  await addRepresentation.getByRole("textbox", { name: /^Organization name/ }).fill("Lighthouse Research");
+  await addRepresentation.getByRole("textbox", { name: /^Job title/ }).fill("Security engineer");
+  await expect(addRepresentation.getByRole("combobox")).toHaveCount(0);
+  for (const [width, height, device] of [
+    [1280, 900, "desktop"],
+    [375, 812, "phone"],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.screenshot({ path: info.outputPath(`representation-verified-details-${device}.png`) });
+  }
+  await addRepresentation.getByRole("button", { name: "Add representation", exact: true }).click();
+  await expect(addRepresentation).not.toBeVisible();
+  await expect(changeIdentity.getByRole("combobox", { name: "Event identity", exact: true })).toContainText(
+    "Lighthouse Research",
+  );
+  await changeIdentity.getByRole("button", { name: "Save changes", exact: true }).click();
+  await expect(changeIdentity).not.toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("definition").filter({ hasText: "Lighthouse Research" })).toBeVisible();
 });
 
 // Event-only identities deliberately have no staff or membership capacity.

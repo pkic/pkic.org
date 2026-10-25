@@ -135,7 +135,7 @@ test("verified approved-domain registration affiliates once and an organization 
     }
     await changeIdentity.getByRole("button", { name: "Add identity", exact: true }).click();
     const addIdentity = attendee.getByRole("dialog", { name: "Add identity", exact: true });
-    await expect(addIdentity.getByRole("combobox", { name: /^Organization/ })).toBeVisible();
+    await expect(addIdentity.getByRole("textbox", { name: /^Representation email/ })).toBeVisible();
     await attendee.screenshot({ path: testInfo.outputPath("public-update-add-identity-phone.png") });
     await addIdentity.getByRole("button", { name: "Cancel", exact: true }).click();
     await changeIdentity.getByRole("button", { name: "Save changes", exact: true }).click();

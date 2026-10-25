@@ -13,6 +13,7 @@ import { EMAIL_AUTH_TOKEN_MAX_LENGTH } from "../constants/email-auth";
 import { linksSchema } from "./links";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { httpOrSameOriginUrlSchema } from "./urls";
+import { identityAffiliationContextSchema } from "./identity-affiliation";
 
 export const IDENTITY_SOURCES = [
   "membership_approval",
@@ -137,11 +138,16 @@ export const identityCreateSchema = z.discriminatedUnion("userReference", [
 ]);
 
 /** The current user explicitly activates one exact claimed-domain identity. */
-export const currentUserIdentityCreateSchema = z.object({
-  emailId: databaseIdSchema.nullable(),
-  organizationId: databaseIdSchema,
-  jobTitle: organizationIdentityJobTitleSchema,
-});
+export const currentUserIdentityCreateSchema = z.union([
+  z
+    .object({
+      emailId: databaseIdSchema.nullable(),
+      organizationId: databaseIdSchema,
+      jobTitle: organizationIdentityJobTitleSchema,
+    })
+    .strict(),
+  z.object({ contextToken: identityAffiliationContextSchema }).strict(),
+]);
 
 /**
  * When a representation ended: an instant no later than now. The portal

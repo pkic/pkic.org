@@ -15,6 +15,11 @@ function ineligibleDomain(): AppError {
   return new AppError(422, "IDENTITY_DOMAIN_INELIGIBLE", "This email domain cannot establish an organization identity");
 }
 
+export function requireWorkOrganizationDomain(domain: string | null): string {
+  if (!domain) throw ineligibleDomain();
+  return domain;
+}
+
 /**
  * The domain a verified work address links through — the most specific
  * claimed domain covering it, else its registrable domain — refusing free,
@@ -22,12 +27,11 @@ function ineligibleDomain(): AppError {
  */
 export async function requireOrganizationLinkDomain(db: DatabaseLike, email: string): Promise<string> {
   const domain = await organizationLinkDomain(db, email);
-  if (!domain) throw ineligibleDomain();
-  return domain;
+  return requireWorkOrganizationDomain(domain);
 }
 
 /** A fact at a merged organization speaks for the organization it was merged into. */
-const FACT_ORGANIZATION = `COALESCE((SELECT merged.merged_into_organization_id FROM organizations merged
+export const FACT_ORGANIZATION = `COALESCE((SELECT merged.merged_into_organization_id FROM organizations merged
   WHERE merged.id = fact.organization_id), fact.organization_id)`;
 
 /**
@@ -35,15 +39,16 @@ const FACT_ORGANIZATION = `COALESCE((SELECT merged.merged_into_organization_id F
  * establish historical ownership. An older fact recorded no domain, so its
  * address counts for the domain when its host is the domain or a subdomain.
  */
-const domainMatches = `(fact.verified_email_domain = ? OR (
+export const domainOwnershipFactMatchesSql = (domainSql = "?") => `(fact.verified_email_domain = ${domainSql} OR (
   fact.verified_email_domain IS NULL AND fact.source='verified_email' AND EXISTS (
     SELECT 1 FROM users person LEFT JOIN user_emails address ON address.id=fact.email_id AND address.user_id=person.id
     WHERE person.id=fact.user_id AND ${hostWithinDomainSql(
       "substr(CASE WHEN fact.email_id IS NULL THEN person.normalized_email ELSE address.normalized_email END, instr(CASE WHEN fact.email_id IS NULL THEN person.normalized_email ELSE address.normalized_email END,'@')+1)",
-      "?",
+      domainSql,
     )}
   )
 ))`;
+const domainMatches = domainOwnershipFactMatchesSql();
 
 /** Recheck observed organization resolution in the caller's final atomic command. This grants no domain ownership. */
 export function verifiedEmailDomainResolutionEvidence(
@@ -129,7 +134,17 @@ export async function resolveVerifiedEmailDomainOrganization(
   normalizedEmail: string,
 ): Promise<{ id: string; name: string } | null> {
   const { domain, resolution } = await resolveEmailDomainOrganization(db, normalizedEmail);
-  if (!domain) throw ineligibleDomain();
+  const organizationId = verifiedDomainOrganizationId(domain, resolution);
+  if (!organizationId) return null;
+  return first<{ id: string; name: string }>(db, "SELECT id,name FROM organizations WHERE id=?", [organizationId]);
+}
+
+/** The production domain policy, shared by loaded and prepared affiliation commands. */
+export function verifiedDomainOrganizationId(
+  domain: string | null,
+  resolution: DomainOrganizationResolution,
+): string | null {
+  requireWorkOrganizationDomain(domain);
   if (resolution.kind === "held")
     throw new AppError(
       409,
@@ -143,7 +158,5 @@ export async function resolveVerifiedEmailDomainOrganization(
       "This organization affiliation requires explicit review",
     );
   if (resolution.kind === "none") return null;
-  return first<{ id: string; name: string }>(db, "SELECT id,name FROM organizations WHERE id=?", [
-    resolution.organizationId,
-  ]);
+  return resolution.organizationId;
 }
