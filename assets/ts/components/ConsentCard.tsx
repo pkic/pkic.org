@@ -7,14 +7,23 @@ import { Panel, PanelBody } from "../ui/Panel";
 import { StateIcon } from "../ui/Field";
 import { IconExternalLink, IconInfoCircle } from "./icons";
 import type { RequiredTerm } from "../shared/types";
+import type { FieldPresentation } from "../hooks/useContractForm";
 
 /** `recorded` marks a term the person already agreed to in this flow, so they are not asked again. */
-export function ConsentCard({ term, recorded = false }: { term: RequiredTerm; recorded?: boolean }) {
+export function ConsentCard({
+  term,
+  recorded = false,
+  presentation,
+}: {
+  term: RequiredTerm;
+  recorded?: boolean;
+  presentation?: FieldPresentation;
+}) {
   // The person's own choice, once they make one; until then a recorded agreement stands.
   const [choice, setChoice] = useState<boolean>();
   const [invalidState, setInvalid] = useState(false);
   const checked = choice ?? recorded;
-  const invalid = invalidState && !checked;
+  const invalid = presentation ? presentation.state === "invalid" : invalidState && !checked;
   const id = `consent-${term.termKey}-${term.version}`.replace(/[^a-zA-Z0-9_-]/g, "-");
   const helpId = `${id}-help`;
   const messageId = `${id}-message`;
@@ -66,7 +75,7 @@ export function ConsentCard({ term, recorded = false }: { term: RequiredTerm; re
         {invalid && (
           <p class="pk-field__message" id={messageId} role="alert">
             <StateIcon state="invalid" class="pk-field__message-icon" />
-            You need to agree to this to continue.
+            {presentation?.message ?? "You need to agree to this to continue."}
           </p>
         )}
       </PanelBody>
@@ -77,9 +86,11 @@ export function ConsentCard({ term, recorded = false }: { term: RequiredTerm; re
 export function ConsentList({
   terms,
   recorded = [],
+  presentationOf,
 }: {
   terms: RequiredTerm[];
   recorded?: readonly { termKey: string; version: string }[];
+  presentationOf?: (termKey: string) => FieldPresentation;
 }) {
   return (
     <div class="pk pk-stack pk-stack--snug">
@@ -88,6 +99,7 @@ export function ConsentList({
           <ConsentCard
             key={`${term.termKey}:${term.version}`}
             term={term}
+            presentation={presentationOf?.(term.termKey)}
             recorded={recorded.some((item) => item.termKey === term.termKey && item.version === term.version)}
           />
         ))

@@ -158,7 +158,16 @@ it("uses the session address, validates event questions, and submits the shared 
   expect(host.querySelector('[data-custom-field-key="dietary_restrictions"]')?.getAttribute("aria-hidden")).toBe(
     "true",
   );
+  await act(() => {
+    host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  });
+  const privacy = host.querySelector<HTMLElement>('[data-term-key="privacy"]')!;
+  expect(privacy.querySelector("input")?.getAttribute("aria-invalid")).toBe("true");
+  expect(privacy.querySelector('[role="alert"]')?.textContent).toContain("Agree to this required term to continue.");
+  expect(host.textContent).not.toContain("Too small:");
+  expect(host.querySelector(".pk-field--group > .pk-field__control > .pk-field__state")).toBeNull();
   await act(() => host.querySelector<HTMLInputElement>('input[name="consents"]')!.click());
+  expect(privacy.querySelector("input")?.getAttribute("aria-invalid")).toBeNull();
   await act(() => {
     host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
   });

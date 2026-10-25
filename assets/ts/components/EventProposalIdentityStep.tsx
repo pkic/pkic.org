@@ -1,3 +1,4 @@
+import { useDialogQueryState } from "../hooks/useDialogQueryState";
 import type { ComponentChildren } from "preact";
 import type { z } from "zod";
 import { useEffect, useMemo, useState } from "preact/hooks";
@@ -82,7 +83,7 @@ export function EventProposalIdentityStep({
   );
   const [sent, setSent] = useState(false);
   const [changing, setChanging] = useState(false);
-  const [adding, setAdding] = useState(false);
+  const [adding, showAdding, closeAdding] = useDialogQueryState("identity");
   const flow = speakerManagementToken || speakerProposalId ? "speaker" : "proposal";
   const proofBody = {
     consents: consents(),
@@ -135,7 +136,7 @@ export function EventProposalIdentityStep({
     setSent(true);
   }
   function addRepresentation() {
-    if (identity.authenticated) setAdding(true);
+    if (identity.authenticated) showAdding();
     else {
       identity.useDifferentEmail();
       setSent(false);
@@ -396,7 +397,7 @@ export function EventProposalIdentityStep({
       {identity.authenticated && (
         <IdentityCreateDialog
           open={adding}
-          onClose={() => setAdding(false)}
+          onClose={() => closeAdding()}
           onCreated={async (identityId) => {
             const session = await getJson("/api/v1/auth/session", userAuthSessionResponseSchema);
             const summary = session.actingIdentities.find((item) => item.id === identityId);

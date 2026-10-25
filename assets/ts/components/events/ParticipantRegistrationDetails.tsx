@@ -14,6 +14,7 @@ import { VerifiedValue } from "../../ui/VerifiedValue";
 import { buildFormAnswerRows } from "../forms/form-answers";
 import { isIdentityOwnedFormKey } from "../../../shared/schemas/form-answers";
 import { RegistrationIdentityChange } from "./RegistrationIdentityChange";
+import { actingIdentityLabel } from "../../shared/acting-identity-catalog";
 
 type RegistrationForm = EventFormsResponse["form"];
 
@@ -69,17 +70,26 @@ export function ParticipantRegistrationDetails({
             term: "Email address",
             value: <VerifiedValue verified={data.registration.isEmailVerified}>{data.user.email}</VerifiedValue>,
           },
-          { term: "Organization", value: data.user.organization_name },
-          { term: "Job title", value: data.user.job_title },
+          {
+            term: "Representation",
+            value: (
+              <span class="pk-cluster pk-cluster--nowrap">
+                <span>
+                  {actingIdentityLabel({
+                    organizationName: data.user.organization_name,
+                    jobTitle: data.user.job_title,
+                  })}
+                </span>
+                {onIdentityChanged && data.registration.status !== "cancelled" && (
+                  <RegistrationIdentityChange data={data} onChanged={onIdentityChanged} />
+                )}
+              </span>
+            ),
+          },
           ...(daysSummarized ? [] : dayAttendanceItems(data)),
           ...answerItems(data, form),
         ]}
       />
-      {onIdentityChanged && data.registration.status !== "cancelled" && (
-        <div class="pk-cluster">
-          <RegistrationIdentityChange data={data} onChanged={onIdentityChanged} />
-        </div>
-      )}
     </div>
   );
 }

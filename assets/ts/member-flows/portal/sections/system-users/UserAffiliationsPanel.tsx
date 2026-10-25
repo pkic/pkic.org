@@ -1,3 +1,4 @@
+import { useDialogQueryState } from "../../../../hooks/useDialogQueryState";
 /**
  * Every identity a person holds or held — their experience — and the controls
  * that manage those ties. Laid out the way a résumé is: the position, where it
@@ -67,7 +68,7 @@ export function UserAffiliationsPanel({
   summarizedIdentityId?: string;
 }) {
   const [historyOpen, setHistoryOpen] = useState(true);
-  const [adding, setAdding] = useState(false);
+  const [adding, showAdding, closeAdding] = useDialogQueryState("identity");
   const [busy, setBusy] = useState(false);
   const [reinstating, setReinstating] = useState<FormerIdentity | null>(null);
   // An emailed reinstatement link lands here, on the owner's own record.
@@ -138,7 +139,7 @@ export function UserAffiliationsPanel({
       */}
       <PanelHeader title="Identity and experience">
         {(canManage || viewerIsSubject) && !hasIndividualMembership && (
-          <Button variant="ghost" icon aria-label="Add identity" title="Add identity" onClick={() => setAdding(true)}>
+          <Button variant="ghost" icon aria-label="Add identity" title="Add identity" onClick={() => showAdding()}>
             <IconPlus />
           </Button>
         )}
@@ -212,7 +213,7 @@ export function UserAffiliationsPanel({
           confirmDisabled={busy}
           onConfirm={() => addRoot.current?.querySelector("form")?.requestSubmit()}
           onCancel={() => {
-            if (!busy) setAdding(false);
+            if (!busy) void closeAdding();
           }}
         >
           <div ref={addRoot}>
@@ -221,9 +222,9 @@ export function UserAffiliationsPanel({
                 user={user}
                 canActivate={canActivateIdentity}
                 onBusy={setBusy}
-                onGranted={() => {
-                  setAdding(false);
-                  void onChanged();
+                onGranted={async () => {
+                  await closeAdding();
+                  await onChanged();
                 }}
               />
             )}
@@ -232,7 +233,7 @@ export function UserAffiliationsPanel({
       ) : (
         <IdentityCreateDialog
           open={adding}
-          onClose={() => setAdding(false)}
+          onClose={() => closeAdding()}
           onCreated={async () => {
             await onChanged();
           }}

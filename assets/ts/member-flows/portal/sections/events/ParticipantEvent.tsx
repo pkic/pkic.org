@@ -111,7 +111,9 @@ export function ParticipantEvent({
   const tabs = [
     { id: "overview", label: "Overview", href: href(base) },
     { id: "program", label: "Agenda", href: href(eventAgendaRoute(event.slug)) },
-    { id: "agenda", label: "My agenda", href: href(eventAgendaRoute(event.slug, { mine: true })) },
+    ...(eventRegistrationStanding(event).status === "registered"
+      ? [{ id: "agenda", label: "My agenda", href: href(eventAgendaRoute(event.slug, { mine: true })) }]
+      : []),
     ...(eventRegistrationStanding(event).registered
       ? [
           { id: "ticket", label: "Ticket", href: href(base + "/ticket") },
@@ -170,7 +172,13 @@ export function ParticipantEvent({
         <ParticipantProposal event={event} proposalId={resourceId} facet={tab} header={header} />
       ) : tab === "agenda" ? (
         <Suspense fallback={<Spinner />}>
-          <MyAgenda slug={event.slug} eventId={event.id} eventName={event.name} mine={mine} />
+          <MyAgenda
+            slug={event.slug}
+            eventId={event.id}
+            eventName={event.name}
+            mine={mine}
+            canPersonalize={eventRegistrationStanding(event).status === "registered"}
+          />
         </Suspense>
       ) : tab === "session-management" ? (
         <Suspense fallback={<Spinner />}>

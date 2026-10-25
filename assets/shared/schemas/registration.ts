@@ -1,4 +1,4 @@
-import { consentSelectionRefusal } from "../consent-selection";
+import { consentSelectionIssues } from "../consent-selection";
 import type { RequiredTerm } from "./event-read-models";
 import { z } from "zod";
 import { formAnswersSchema, submittedFormAnswersSchema } from "./form-answers";
@@ -230,8 +230,8 @@ function requireAttendance(
   if (!value.attendanceType && (!value.dayAttendance || value.dayAttendance.length === 0)) {
     context.addIssue({
       code: "custom",
-      path: ["attendanceType"],
-      message: "attendanceType or dayAttendance is required",
+      path: [value.dayAttendance === undefined ? "attendanceType" : "dayAttendance"],
+      message: "Choose how you'll attend the event.",
       input: value,
     });
   }
@@ -245,9 +245,18 @@ export const attendeeRegistrationFieldsSchema = z.object({
   attendanceType: attendanceTypeSchema.optional(),
   dayAttendance: z.array(dayAttendanceItemSchema).max(31).optional(),
   customAnswers: submittedFormAnswersSchema.optional(),
-  consents: z.array(consentItemSchema).min(1).max(20),
+  consents: z.array(consentItemSchema).min(1, "Review and accept the required terms to register.").max(20),
 });
 export type AttendeeRegistrationFields = z.infer<typeof attendeeRegistrationFieldsSchema>;
+/** Wizard steps use the same fields and attendance policy as the registration request. */
+export const registrationContactFieldsSchema = attendeeRegistrationFieldsSchema.pick({
+  firstName: true,
+  lastName: true,
+  email: true,
+});
+export const registrationAttendanceFieldsSchema = attendeeRegistrationFieldsSchema
+  .pick({ attendanceType: true, dayAttendance: true })
+  .superRefine(requireAttendance);
 
 /** Authenticated registration payload; identity and profile fields come from the verified session user. */
 export const attendeeRegistrationParticipationSchema = attendeeRegistrationFieldsSchema
@@ -292,8 +301,8 @@ export const registrationCreateSchema = attendeeRegistrationFieldsSchema
 /** The shared request contract resolved against the event's currently offered terms. */
 export function registrationCreateForTermsSchema(terms: readonly RequiredTerm[]) {
   return registrationCreateSchema.superRefine((body, context) => {
-    const refusal = consentSelectionRefusal(terms, body.consents);
-    if (refusal) context.addIssue({ code: "custom", path: ["consents"], message: refusal.message });
+    for (const issue of consentSelectionIssues(terms, body.consents))
+      context.addIssue({ code: "custom", path: ["consents", issue.termKey], message: issue.message });
   });
 }
 

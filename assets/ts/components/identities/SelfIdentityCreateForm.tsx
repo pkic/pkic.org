@@ -18,6 +18,7 @@ import { TextInput } from "../../ui/TextControl";
 import { Button } from "../../ui/Button";
 import { DescriptionList } from "../../ui/DescriptionList";
 import { EmailAddressCreateForm } from "./EmailAddressCreateForm";
+import { nextDomId } from "../../ui/dom-id";
 
 const PREVIEW_ENDPOINT = "/api/v1/users/current/identities/preview";
 type Resolved = z.infer<typeof identityAffiliationPreviewResponseSchema>;
@@ -38,7 +39,7 @@ export function SelfIdentityCreateForm({
   const [jobTitle, setJobTitle] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [formId] = useState(() => `identity-${crypto.randomUUID()}`);
+  const [formId] = useState(() => nextDomId("identity"));
   useEffect(() => onBusy?.(busy), [busy]);
   useEffect(
     () =>

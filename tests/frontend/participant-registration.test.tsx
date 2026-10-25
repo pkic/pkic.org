@@ -163,7 +163,11 @@ async function mount(): Promise<HTMLElement> {
 }
 
 function button(root: ParentNode, label: string): HTMLButtonElement | null {
-  return [...root.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.trim() === label) ?? null;
+  return (
+    [...root.querySelectorAll<HTMLButtonElement>("button")].find(
+      (b) => b.textContent?.trim() === label && !b.closest("[hidden]"),
+    ) ?? null
+  );
 }
 
 function facts(root: ParentNode): Record<string, string> {
@@ -183,6 +187,7 @@ afterEach(() => {
     container.remove();
   }
   vi.unstubAllGlobals();
+  history.replaceState(null, "", "/");
 });
 
 describe("ParticipantRegistration", () => {
@@ -196,8 +201,7 @@ describe("ParticipantRegistration", () => {
     expect(facts(container)).toMatchObject({
       Name: "Ada Lovelace",
       "Email address": expect.stringContaining("ada@example.test"),
-      Organization: "Analytical Engines",
-      "Job title": "Engineer",
+      Representation: "Analytical Engines · Engineer",
       "Dietary requirements": "Vegetarian",
     });
     // A confirmed address carries a tick after it instead of a separate "Email confirmed" line.
@@ -236,6 +240,7 @@ describe("ParticipantRegistration", () => {
     });
     await click(button(container, "Discard changes"));
 
+    await vi.waitFor(() => expect(button(container, "Edit details")).not.toBeNull());
     expect(container.querySelectorAll("input, select, textarea")).toHaveLength(0);
     expect(facts(container)["Name"]).toBe("Ada Lovelace");
     await click(button(container, "Edit details"));
@@ -249,9 +254,28 @@ describe("ParticipantRegistration", () => {
 
     await click(button(container, "Edit details"));
     expect(container.querySelector('input[name="organizationName"], input[name="jobTitle"]')).toBeNull();
-    expect(facts(container)).toMatchObject({ Organization: "Analytical Engines", "Job title": "Engineer" });
+    expect(facts(container)).toMatchObject({ Representation: "Analytical Engines · Engineer" });
     const manage = Array.from(container.querySelectorAll("a")).find((link) => link.textContent === "Manage identities");
     expect(manage?.getAttribute("href")).toBe("/portal/#/users/current");
+  });
+
+  it("preserves the registration update draft through browser Back and Forward", async () => {
+    const requests = installApi();
+    const container = await mount();
+    await click(button(container, "Edit details"));
+    const lastName = container.querySelector<HTMLInputElement>('input[name="lastName"]')!;
+    await act(() => {
+      lastName.value = "Draft name";
+      lastName.dispatchEvent(new Event("input", { bubbles: true }));
+      history.back();
+    });
+    await vi.waitFor(() => expect(button(container, "Edit details")).not.toBeNull());
+    await act(() => history.forward());
+    await vi.waitFor(() => expect(button(container, "Save changes")).not.toBeNull());
+    expect(container.querySelector<HTMLInputElement>('input[name="lastName"]')!.value).toBe("Draft name");
+    expect(requests.some(({ method }) => method === "PATCH")).toBe(false);
+    await click(button(container, "Discard changes"));
+    await vi.waitFor(() => expect(button(container, "Edit details")).not.toBeNull());
   });
 
   it("saves through the shared contract and returns to the read view with the outcome", async () => {
@@ -272,8 +296,8 @@ describe("ParticipantRegistration", () => {
 
     const patch = requests.find(({ method }) => method === "PATCH");
     expect(registrationManageSchema.parse(patch?.body)).toMatchObject({ action: "update", lastName: "Byron" });
+    await vi.waitFor(() => expect(container.textContent).toContain("Registration updated."));
     expect(container.querySelectorAll("input, select, textarea")).toHaveLength(0);
-    expect(container.textContent).toContain("Registration updated.");
   });
 
   it("cancels only after the confirmation, and Keep registration sends nothing", async () => {

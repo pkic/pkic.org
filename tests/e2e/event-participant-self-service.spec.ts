@@ -78,6 +78,16 @@ test("a signed-in user registers from event home without another email challenge
     endTime: "17:00",
   });
   await page.goto(`/portal/#/events/${event.slug}`);
+  await expect(page.getByRole("button", { name: "Register", exact: true })).toBeVisible();
+  await expect(page.getByText("Nothing on your agenda yet", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "My agenda", exact: true })).toHaveCount(0);
+  for (const [width, height, device] of [
+    [1280, 900, "desktop"],
+    [375, 812, "phone"],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.screenshot({ path: info.outputPath(`unregistered-event-home-${device}.png`) });
+  }
   const challenged: string[] = [];
   page.on("request", (request) => {
     if (request.method() === "POST" && /\/(?:proof|auth\/request)(?:\/|$)/.test(new URL(request.url()).pathname))
@@ -86,9 +96,24 @@ test("a signed-in user registers from event home without another email challenge
   await page.getByRole("button", { name: "Register", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Register for this event", exact: true });
   await expect(dialog.getByText(email, { exact: true })).toBeVisible();
+  await page.goBack();
+  await expect(dialog).not.toBeVisible();
+  await page.goForward();
+  await expect(dialog.getByText(email, { exact: true })).toBeVisible();
   await expect(dialog.getByLabel("Work email", { exact: true })).toHaveCount(0);
-  await expect(dialog.getByRole("combobox", { name: "Event identity", exact: true })).toBeVisible();
-  await dialog.getByRole("combobox", { name: "Event identity", exact: true }).click();
+  await expect(dialog.getByText("Representation", { exact: true })).toBeVisible();
+  await expect(dialog.getByRole("combobox")).toHaveCount(0);
+  await expect(dialog.locator('[data-step="1"]')).toHaveCSS("opacity", "1");
+  for (const [width, height, device] of [
+    [1280, 900, "desktop"],
+    [375, 812, "phone"],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.screenshot({ path: info.outputPath(`registration-representation-${device}.png`) });
+  }
+  await dialog.getByRole("button", { name: "Change representation", exact: true }).click();
+  const representationChooser = page.getByRole("dialog", { name: "Change representation", exact: true });
+  await representationChooser.getByRole("combobox", { name: "Representation", exact: true }).click();
   const currentOption = page.getByRole("option").filter({ hasText: representations[0].name });
   const otherOption = page.getByRole("option").filter({ hasText: representations[1].name });
   await expect(currentOption).toBeVisible();
@@ -102,15 +127,22 @@ test("a signed-in user registers from event home without another email challenge
     await page.screenshot({ path: info.outputPath(`registration-identity-choices-${device}.png`) });
   }
   await otherOption.click();
-  await expect(dialog.getByRole("combobox", { name: "Event identity", exact: true })).toBeVisible();
-  await dialog.getByRole("button", { name: "Add identity", exact: true }).click();
+  await expect(representationChooser.getByRole("combobox", { name: "Representation", exact: true })).toBeVisible();
+  await representationChooser.getByRole("button", { name: "Add identity", exact: true }).click();
   const addIdentity = page.getByRole("dialog", { name: "Add identity", exact: true });
   await expect(addIdentity.getByRole("textbox", { name: /^Representation email/ })).toBeVisible();
   await expect(addIdentity.getByRole("combobox")).toHaveCount(0);
+  await page.goBack();
+  await expect(addIdentity).not.toBeVisible();
+  await expect(representationChooser).toBeVisible();
+  await page.goForward();
+  await expect(addIdentity).toBeVisible();
   await addIdentity.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(addIdentity).not.toBeVisible();
-  await expect(dialog.getByRole("combobox", { name: "Event identity", exact: true })).toBeVisible();
+  await expect(representationChooser.getByRole("combobox", { name: "Representation", exact: true })).toBeVisible();
 
+  await representationChooser.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(representationChooser).not.toBeVisible();
   await page.keyboard.press("Escape");
   await expect(dialog).not.toBeVisible();
   await expect(page.getByRole("button", { name: "Register", exact: true })).toBeFocused();
@@ -125,8 +157,29 @@ test("a signed-in user registers from event home without another email challenge
   await dialog.getByRole("button", { name: "Continue", exact: true }).click();
   await dialog.locator(`label[for="dayAttendance-${dayDate}-in_person"]`).click();
   await expect(dialog.getByRole("radio", { name: "In person", exact: true })).toBeChecked();
+  await page.goBack();
+  await expect(dialog.getByText("Representation", { exact: true })).toBeVisible();
+  await page.goForward();
+  await expect(dialog.getByRole("radio", { name: "In person", exact: true })).toBeChecked();
   await dialog.getByRole("button", { name: "Continue", exact: true }).click();
   await dialog.getByRole("button", { name: "Continue", exact: true }).click();
+  await dialog.getByRole("button", { name: "Register", exact: true }).click();
+  await expect(dialog.getByRole("checkbox", { name: "I agree to the privacy policy", exact: true })).toHaveAttribute(
+    "aria-invalid",
+    "true",
+  );
+  await expect(dialog.getByText("Too small:", { exact: false })).toHaveCount(0);
+  await expect(dialog.locator('[data-step="4"]')).toHaveCSS("opacity", "1");
+  for (const [width, height, device] of [
+    [1280, 900, "desktop"],
+    [375, 812, "phone"],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.screenshot({ path: info.outputPath(`registration-consent-error-${device}.png`) });
+  }
+  await page.goBack();
+  await expect(dialog.getByText("No additional questions.", { exact: true })).toBeVisible();
+  await page.goForward();
   await dialog.getByRole("checkbox", { name: "I agree to the privacy policy", exact: true }).check();
   await dialog.getByRole("checkbox", { name: "I agree to the code of conduct", exact: true }).check();
   const saved = page.waitForResponse(
@@ -153,7 +206,7 @@ test("a signed-in user registers from event home without another email challenge
   await page.getByRole("link", { name: "Registration details", exact: true }).click();
   await page.getByRole("button", { name: "Change representation", exact: true }).click();
   const changeIdentity = page.getByRole("dialog", { name: "Change representation", exact: true });
-  await changeIdentity.getByRole("combobox", { name: "Event identity", exact: true }).click();
+  await changeIdentity.getByRole("combobox", { name: "Representation", exact: true }).click();
   await page.getByRole("option").filter({ hasText: representations[1].name }).click();
   for (const [width, height, device] of [
     [1280, 900, "desktop"],
@@ -212,7 +265,7 @@ test("a signed-in user registers from event home without another email challenge
   }
   await addRepresentation.getByRole("button", { name: "Add representation", exact: true }).click();
   await expect(addRepresentation).not.toBeVisible();
-  await expect(changeIdentity.getByRole("combobox", { name: "Event identity", exact: true })).toContainText(
+  await expect(changeIdentity.getByRole("combobox", { name: "Representation", exact: true })).toContainText(
     "Lighthouse Research",
   );
   await changeIdentity.getByRole("button", { name: "Save changes", exact: true }).click();
@@ -253,6 +306,10 @@ test("attendee manages a registration and downloads a personal event calendar", 
   await expect(page.getByLabel("Country", { exact: true })).toHaveValue("US");
   await expect(registration.getByRole("button", { name: "Registration actions" })).toHaveCount(0);
   await page.getByLabel("Last name", { exact: true }).fill("Updated-Attendee");
+  await page.goBack();
+  await expect(registration.getByRole("button", { name: "Edit details", exact: true })).toBeVisible();
+  await page.goForward();
+  await expect(page.getByLabel("Last name", { exact: true })).toHaveValue("Updated-Attendee");
   const savedResponse = page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname.startsWith("/api/v1/registrations/") && response.request().method() === "PATCH",

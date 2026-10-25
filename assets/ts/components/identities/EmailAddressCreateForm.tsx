@@ -10,6 +10,7 @@ import { Alert } from "../../ui/Alert";
 import { Field } from "../../ui/Field";
 import { TextInput } from "../../ui/TextControl";
 import { Button } from "../../ui/Button";
+import { nextDomId } from "../../ui/dom-id";
 
 export function EmailAddressCreateForm({
   userId,
@@ -31,7 +32,7 @@ export function EmailAddressCreateForm({
   const [email, setEmail] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [formId] = useState(() => `email-${crypto.randomUUID()}`);
+  const [formId] = useState(() => nextDomId("email"));
   const form = useContractForm(userEmailAddSchema, { email });
   useEffect(() => onBusy?.(saving), [saving]);
   return (

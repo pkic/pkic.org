@@ -50,7 +50,7 @@ test("a signed-in nonmember continues with saved details and no empty identity p
   await contact.getByRole("button", { name: copy.work.action, exact: true }).click();
   await expect(contact).toContainText("Ada Lovelace");
   await expect(contact.getByRole("textbox", { name: /First name/ })).toHaveCount(0);
-  await expect(page.getByRole("combobox", { name: "Event identity" })).toHaveCount(0);
+  await expect(page.getByRole("combobox", { name: "Representation" })).toHaveCount(0);
 });
 
 test("a signed-out visitor verifies the address first and is asked nothing else until the link is opened", async ({

@@ -92,7 +92,9 @@ async function type(label: string, value: string) {
 }
 async function leave(label: string) {
   await act(() => {
-    controlFor(host!, label).dispatchEvent(new FocusEvent("blur"));
+    const control = controlFor(host!, label);
+    control.focus();
+    control.blur();
   });
 }
 const buttonTexts = () => [...host!.querySelectorAll("button")].map((button) => button.textContent);

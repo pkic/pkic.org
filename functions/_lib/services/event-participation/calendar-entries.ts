@@ -15,9 +15,10 @@ import { publishedRoomsSql, publishedSessionsSql } from "./published-schedule";
  * stays starred). A feed of confirmed sessions only emits `released` as a cancellation, so the
  * calendar drops the seat; a feed with tentative sessions keeps it as tentative.
  */
-export function preparePersonalCalendarEntries(db: DatabaseLike, eventId: string, userId?: string) {
+export function preparePersonalCalendarEntries(db: DatabaseLike, selection: EventReadSelection, userId?: string) {
+  const event = eventReadIdSql(selection);
   const owner = userId ? " AND p.user_id=?" : "";
-  const values = userId ? [eventId, userId] : [eventId];
+  const values = userId ? [...event.bindings, userId] : event.bindings;
   const now = nowIso();
   return [
     db
@@ -34,7 +35,7 @@ export function preparePersonalCalendarEntries(db: DatabaseLike, eventId: string
     LEFT JOIN (${publishedRoomsSql}) room ON room.event_id=s.event_id AND p.attendance_mode='physical'
       AND room.id=s.room_id
     LEFT JOIN agenda_calendar_entries previous ON previous.event_id=p.event_id AND previous.occurrence_id=p.occurrence_id AND previous.user_id=p.user_id
-    WHERE p.event_id=?${owner} AND (p.status<>'canceled' OR p.saved=1 OR previous.status IS NOT NULL)
+    WHERE p.event_id=${event.sql}${owner} AND (p.status<>'canceled' OR p.saved=1 OR previous.status IS NOT NULL)
     ON CONFLICT(event_id,occurrence_id,user_id) DO UPDATE SET sequence=agenda_calendar_entries.sequence+1,
       revision=excluded.revision,status=excluded.status,title=CASE WHEN excluded.status='canceled' THEN agenda_calendar_entries.title ELSE excluded.title END,start_at=CASE WHEN excluded.status='canceled' THEN agenda_calendar_entries.start_at ELSE excluded.start_at END,end_at=CASE WHEN excluded.status='canceled' THEN agenda_calendar_entries.end_at ELSE excluded.end_at END,location=CASE WHEN excluded.status='canceled' THEN agenda_calendar_entries.location ELSE excluded.location END,updated_at=excluded.updated_at
     WHERE agenda_calendar_entries.status<>excluded.status OR (excluded.status<>'canceled' AND (agenda_calendar_entries.title<>excluded.title
@@ -44,7 +45,7 @@ export function preparePersonalCalendarEntries(db: DatabaseLike, eventId: string
     db
       .prepare(
         `UPDATE agenda_calendar_entries AS entry SET status='canceled',sequence=sequence+1,updated_at=?
-      WHERE event_id=? ${userId ? "AND user_id=?" : ""} AND status<>'canceled' AND NOT EXISTS(SELECT 1 FROM (${publishedSessionsSql}) s WHERE s.id=entry.occurrence_id AND s.event_id=entry.event_id)`,
+      WHERE event_id=${event.sql} ${userId ? "AND user_id=?" : ""} AND status<>'canceled' AND NOT EXISTS(SELECT 1 FROM (${publishedSessionsSql}) s WHERE s.id=entry.occurrence_id AND s.event_id=entry.event_id)`,
       )
       .bind(now, ...values),
   ];

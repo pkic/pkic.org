@@ -10,7 +10,8 @@ import { getJson } from "../shared/api-client";
 import type { ServerCatalog } from "../shared/server-catalog";
 import { Alert } from "../ui/Alert";
 import type { FieldControlProps } from "../ui/Field";
-import { SelectTrigger, TextInput } from "../ui/TextControl";
+import { TextInput } from "../ui/TextControl";
+import { SelectTrigger } from "../ui/SelectTrigger";
 import { usePopupPlacement } from "../ui/popup-placement";
 // The matches float over whatever follows the field, so they borrow the
 // design system's popup surface rather than growing a second one. Nothing

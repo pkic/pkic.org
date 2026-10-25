@@ -124,7 +124,7 @@ test("verified approved-domain registration affiliates once and an organization 
     await attendee.goto(extractEmailUrl(selectedEmail, "/register/manage/"));
     await attendee.getByRole("button", { name: "Change representation", exact: true }).click();
     const changeIdentity = attendee.getByRole("dialog", { name: "Change representation", exact: true });
-    await changeIdentity.getByRole("combobox", { name: "Event identity", exact: true }).click();
+    await changeIdentity.getByRole("combobox", { name: "Representation", exact: true }).click();
     await attendee.getByRole("option").filter({ hasText: "Personal" }).click();
     for (const [width, height, device] of [
       [1280, 900, "desktop"],
@@ -142,10 +142,10 @@ test("verified approved-domain registration affiliates once and an organization 
     await expect(changeIdentity).not.toBeVisible();
     await attendee.reload();
     await attendee.getByRole("button", { name: "Change representation", exact: true }).click();
-    await expect(changeIdentity.getByRole("combobox", { name: "Event identity", exact: true })).toContainText(
+    await expect(changeIdentity.getByRole("combobox", { name: "Representation", exact: true })).toContainText(
       "Personal",
     );
-    await changeIdentity.getByRole("combobox", { name: "Event identity", exact: true }).click();
+    await changeIdentity.getByRole("combobox", { name: "Representation", exact: true }).click();
     await attendee.getByRole("option").filter({ hasText: organizationName }).click();
     await changeIdentity.getByRole("button", { name: "Save changes", exact: true }).click();
     await expect(changeIdentity).not.toBeVisible();
@@ -156,6 +156,10 @@ test("verified approved-domain registration affiliates once and an organization 
     await expect(attendee.getByRole("link", { name: "Manage identities", exact: true })).toBeVisible();
     await expect(attendee.getByLabel("Country", { exact: true })).toHaveValue("US");
     await attendee.getByLabel("Country", { exact: true }).selectOption("CA");
+    await attendee.goBack();
+    await expect(attendee.getByRole("button", { name: "Edit details", exact: true })).toBeVisible();
+    await attendee.goForward();
+    await expect(attendee.getByLabel("Country", { exact: true })).toHaveValue("CA");
     const savedResponse = attendee.waitForResponse(
       (response) =>
         new URL(response.url()).pathname.startsWith("/api/v1/registrations/access/") &&

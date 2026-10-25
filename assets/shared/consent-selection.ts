@@ -6,21 +6,31 @@ export function consentSelectionRefusal(
   terms: readonly Pick<RequiredTerm, "termKey" | "version" | "required">[],
   accepted: readonly ConsentItem[],
 ): { code: "CONSENT_INVALID" | "CONSENT_REQUIRED"; message: string } | null {
+  return consentSelectionIssues(terms, accepted)[0] ?? null;
+}
+
+export function consentSelectionIssues(
+  terms: readonly Pick<RequiredTerm, "termKey" | "version" | "required">[],
+  accepted: readonly ConsentItem[],
+): Array<{ code: "CONSENT_INVALID" | "CONSENT_REQUIRED"; termKey: string; message: string }> {
+  const issues: Array<{ code: "CONSENT_INVALID" | "CONSENT_REQUIRED"; termKey: string; message: string }> = [];
   const active = new Set(terms.map((term) => `${term.termKey}:${term.version}`));
   const selected = new Set(accepted.map((item) => `${item.termKey}:${item.version}`));
   for (const item of accepted) {
     if (!active.has(`${item.termKey}:${item.version}`))
-      return {
+      issues.push({
         code: "CONSENT_INVALID",
-        message: `Consent for ${item.termKey} v${item.version} is not an active event term`,
-      };
+        termKey: item.termKey,
+        message: "This agreement has changed. Review it and agree again.",
+      });
   }
   for (const term of terms) {
     if (term.required && !selected.has(`${term.termKey}:${term.version}`))
-      return {
+      issues.push({
         code: "CONSENT_REQUIRED",
-        message: `Missing required consent for ${term.termKey} v${term.version}`,
-      };
+        termKey: term.termKey,
+        message: "Agree to this required term to continue.",
+      });
   }
-  return null;
+  return issues;
 }

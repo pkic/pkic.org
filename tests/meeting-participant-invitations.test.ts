@@ -155,13 +155,17 @@ describe("meeting participant invitations", () => {
     for (let index = 0; index < 450; index += 1) {
       const userId = crypto.randomUUID();
       const email = `bulk-${index}@example.test`;
-      const identity = await buildCreateIdentityStatement(env.DB, {
-        userId,
-        organizationId: null,
-        source: "staff",
-        startImmediately: true,
-        now,
-      });
+      const identity = await buildCreateIdentityStatement(
+        env.DB,
+        {
+          userId,
+          organizationId: null,
+          source: "staff",
+          startImmediately: true,
+          now,
+        },
+        { unresolved: null, latest: null, emailOwner: null },
+      );
       const member = buildCreateIndividualMemberStatements(env.DB, identity.identityId, "H5", now);
       statements.push(
         env.DB.prepare(

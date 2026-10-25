@@ -8,6 +8,8 @@ import {
   ATTENDANCE_TYPES,
   registrationCreateSchema,
   registrationCreateForTermsSchema,
+  registrationContactFieldsSchema,
+  registrationAttendanceFieldsSchema,
   registrationManageSchema,
   registrationSubmissionResponseSchema,
   type RegistrationManageReadResponse,
@@ -22,7 +24,9 @@ import { forgetRegistrationEmailProof } from "../useRegistrationEmailProof";
 import { useContractForm } from "../../hooks/useContractForm";
 import { postJson } from "../../shared/api-client";
 import { deriveEventAttendanceType, readField } from "../../shared/form/helpers";
-import { installStepNavigation } from "../../shared/form/step-navigation";
+import { installStepNavigation, REGISTRATION_STEP_PARAM } from "../../shared/form/step-navigation";
+import { CONTRACT_VALIDATION_ATTRIBUTE } from "../../shared/form/validation";
+import { splitHash } from "../../ui/url-query";
 import { CustomFieldList, readCustomFieldValues } from "../../shared/widgets/custom-fields";
 import { readConsentValues } from "../../shared/widgets/consents";
 import { readDayAttendance } from "../../shared/widgets/day-attendance";
@@ -104,7 +108,11 @@ export function RegistrationFlow(props: Props) {
       firstName: readField(form, "firstName"),
       lastName: readField(form, "lastName"),
     };
-    const shared = { ...personal, dayAttendance, customAnswers: forms.form ? readCustomFieldValues(form) : undefined };
+    const shared = {
+      ...personal,
+      dayAttendance: forms.eventDays.length ? dayAttendance : undefined,
+      customAnswers: forms.form ? readCustomFieldValues(form) : undefined,
+    };
     if (props.mode === "update")
       return {
         ...shared,
@@ -131,7 +139,12 @@ export function RegistrationFlow(props: Props) {
     () => (updating ? registrationManageSchema : registrationCreateForTermsSchema(forms.requiredTerms)),
     [updating, forms.requiredTerms],
   );
-  const contract = useContractForm(request, readBody);
+  const contract = useContractForm(request, readBody, {
+    fieldOf: (name, control) =>
+      name === "consents" ? `consents.${control.closest<HTMLElement>("[data-term-key]")?.dataset.termKey ?? ""}` : name,
+  });
+  const contactContract = useContractForm(registrationContactFieldsSchema, readBody);
+  const attendanceContract = useContractForm(registrationAttendanceFieldsSchema, readBody);
   const contactReady = useCallback((value: boolean) => setReady(value), []);
 
   useLayoutEffect(() => {
@@ -139,7 +152,7 @@ export function RegistrationFlow(props: Props) {
     const boot: FlowBoot = { ...props.context, root: root.current, form: element.current, statusEl: status.current };
     invitation.current = registrationInvitation(boot);
     void invitation.current.check(forms.registrationPolicy);
-    installStepNavigation(
+    const navigation = installStepNavigation(
       boot.root,
       boot.form,
       boot.statusEl,
@@ -148,6 +161,18 @@ export function RegistrationFlow(props: Props) {
           if (boot.form.dataset.contactReady !== "true") return false;
           const named = organization.current.read?.();
           if (named && "refused" in named) return false;
+          const checked = contactContract.submit();
+          if (!checked.data) {
+            setError(checked.message);
+            return false;
+          }
+        }
+        if (step === 2) {
+          const checked = attendanceContract.submit();
+          if (!checked.data) {
+            setError(checked.message);
+            return false;
+          }
         }
         if (step === 3) {
           const answered = currentQuestions.current.submit();
@@ -159,12 +184,19 @@ export function RegistrationFlow(props: Props) {
         }
       },
       (step) => {
+        setError("");
         if (step === 1)
           boot.root.querySelector<HTMLButtonElement>("[data-step-next]")!.hidden =
             boot.form.dataset.contactReady !== "true";
       },
+      {
+        source: props.autoSession ? "hash" : "search",
+        ownerPath: props.autoSession ? splitHash().path : location.pathname,
+        param: REGISTRATION_STEP_PARAM,
+      },
     );
     return () => {
+      navigation.dispose();
       if (review.current) render(null, review.current);
     };
   }, []);
@@ -190,6 +222,7 @@ export function RegistrationFlow(props: Props) {
         ref={element}
         class="pk-stack needs-validation"
         noValidate
+        {...{ [CONTRACT_VALIDATION_ATTRIBUTE]: "" }}
         data-contact-ready={String(ready)}
         onInput={(event) => {
           const target = event.target;
@@ -199,15 +232,21 @@ export function RegistrationFlow(props: Props) {
           )
             return;
           contract.handlers.onInput(event);
+          contactContract.handlers.onInput(event);
+          attendanceContract.handlers.onInput(event);
           questions.handlers.onInput(event);
         }}
         onChange={(event) => {
           syncAttendance(event);
           contract.handlers.onChange(event);
+          contactContract.handlers.onChange(event);
+          attendanceContract.handlers.onChange(event);
           questions.handlers.onChange(event);
         }}
         onFocusOut={(event) => {
           contract.handlers.onFocusOut(event);
+          contactContract.handlers.onFocusOut(event);
+          attendanceContract.handlers.onFocusOut(event);
           questions.handlers.onFocusOut(event);
         }}
         onClick={(event) => {
@@ -269,6 +308,10 @@ export function RegistrationFlow(props: Props) {
                     organization={organization.current}
                     onReadyChange={contactReady}
                     autoSession={props.autoSession}
+                    presentationOf={(name) => {
+                      const current = contract.of(name);
+                      return current.state === "invalid" ? current : contactContract.of(name);
+                    }}
                   />
                 )}
               </div>
@@ -306,7 +349,13 @@ export function RegistrationFlow(props: Props) {
             {!updating && (
               <p class="event-flow-step-intro">Choose how you'll follow each day — you can update this later.</p>
             )}
-            <Field group label="Attendance" {...contract.ofGroup("dayAttendance")}>
+            <Field
+              group
+              label="Attendance"
+              {...(contract.ofGroup(forms.eventDays.length ? "dayAttendance" : "attendanceType").state === "invalid"
+                ? contract.ofGroup(forms.eventDays.length ? "dayAttendance" : "attendanceType")
+                : attendanceContract.ofGroup(forms.eventDays.length ? "dayAttendance" : "attendanceType"))}
+            >
               {() =>
                 forms.eventDays.length ? (
                   <DayAttendancePicker
@@ -365,7 +414,7 @@ export function RegistrationFlow(props: Props) {
               <Field group label="Terms and conditions" {...contract.ofGroup("consents")}>
                 {() => (
                   <div data-consents>
-                    <ConsentList terms={forms.requiredTerms} />
+                    <ConsentList terms={forms.requiredTerms} presentationOf={(key) => contract.of(`consents.${key}`)} />
                   </div>
                 )}
               </Field>

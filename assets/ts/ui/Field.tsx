@@ -164,7 +164,7 @@ export function Field({
           // Only a blocking state is invalid. An advisory is not an error.
           "aria-invalid": state === "invalid" ? "true" : undefined,
         })}
-        {state && !statusId && <StateIcon state={state} class="pk-field__state" />}
+        {state && !statusId && !group && <StateIcon state={state} class="pk-field__state" />}
       </div>
 
       {showMessage && (

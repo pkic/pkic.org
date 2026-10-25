@@ -41,6 +41,7 @@ import {
 
 describe("UserAffiliationsPanel", () => {
   beforeEach(() => {
+    history.replaceState({}, "", "/");
     // jsdom has the element but not its modal behavior; mirror the platform's open state.
     HTMLDialogElement.prototype.showModal = function showModal(this: HTMLDialogElement) {
       this.setAttribute("open", "");
@@ -121,7 +122,7 @@ describe("UserAffiliationsPanel", () => {
     return container;
   }
 
-  it("opens the grant form in a dialog from the header button, and Cancel closes it", () => {
+  it("opens the grant form in a dialog from the header button, and Cancel closes it", async () => {
     const container = mount();
     void act(() =>
       render(<UserAffiliationsPanel user={userWith([])} onChanged={async () => {}} canManage />, container),
@@ -140,7 +141,7 @@ describe("UserAffiliationsPanel", () => {
     expect(dialog?.querySelector("form button[type=submit]")).toBeNull();
     expect(navigate).not.toHaveBeenCalled();
     void act(() => buttonNamed(container, "Cancel").click());
-    expect(container.querySelector("form")).toBeNull();
+    await vi.waitFor(() => expect(container.querySelector("form")).toBeNull());
     expect(container.querySelector("dialog")?.hasAttribute("open")).toBe(false);
   });
 

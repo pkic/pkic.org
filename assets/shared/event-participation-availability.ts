@@ -26,6 +26,8 @@ export function participationAvailability(evidence: AvailabilityEvidence, now: s
     message,
     bookingAction: null,
   });
+  if (!evidence.registered)
+    return deny("registration_required", "Register for the event before adding sessions to your agenda.");
   if (evidence.invitationRequired && !evidence.invited)
     return deny(
       "invitation_required",
@@ -37,11 +39,6 @@ export function participationAvailability(evidence: AvailabilityEvidence, now: s
     return deny(
       "closed",
       "Session registration is closed. Existing registrations and saved preferences remain separate.",
-    );
-  if (!evidence.registered)
-    return deny(
-      "registration_required",
-      "Register for the event before registering for this session. Saving a preference does not register you.",
     );
   const registrationMode = evidence.attendanceMode === "physical" ? "in_person" : "virtual";
   if (!evidence.attendanceMode || evidence.registrationMode !== registrationMode)

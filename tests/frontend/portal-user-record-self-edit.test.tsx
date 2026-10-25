@@ -204,6 +204,7 @@ async function mount(userId: string, permissions: UserPermissions): Promise<void
 }
 
 beforeEach(() => {
+  history.replaceState({}, "", "/");
   // jsdom has the element but not its modal behavior; mirror the platform's open state.
   HTMLDialogElement.prototype.showModal = function showModal(this: HTMLDialogElement) {
     this.setAttribute("open", "");
@@ -416,6 +417,6 @@ describe("who you are signed in as, and adding an identity", () => {
       [...dialog.querySelectorAll("button")].find((button) => button.textContent === "Cancel")!.click();
     });
     expect(container.querySelector('form[aria-label="Add email address"]')).toBeNull();
-    expect(document.querySelector("dialog[open]")).toBeNull();
+    await vi.waitFor(() => expect(document.querySelector("dialog[open]")).toBeNull());
   });
 });

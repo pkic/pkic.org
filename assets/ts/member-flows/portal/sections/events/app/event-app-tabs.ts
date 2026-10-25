@@ -90,9 +90,10 @@ export function eventAppDestinations(event: EventAppSubject, session: PortalSess
   const standing = eventRegistrationStanding(event);
   const scanners = participantScannerAccess(event.id, event.scannerAccess);
   const myAgenda = eventAgendaRoute(event.slug, { mine: true });
-  const destinations: EventAppDestination[] = [
-    { id: "agenda", label: "My agenda", href: href(myAgenda), icon: "my-agenda" },
-  ];
+  const destinations: EventAppDestination[] =
+    standing.status === "registered"
+      ? [{ id: "agenda", label: "My agenda", href: href(myAgenda), icon: "my-agenda" }]
+      : [];
   // On event days an attendee with an in-person place scans check-in codes at the venue and its rooms.
   if (standing.registered && event.inPerson !== false && eventPhase(event.startsAt, event.endsAt).kind === "live")
     destinations.push({
@@ -140,12 +141,13 @@ export function eventAppDestinations(event: EventAppSubject, session: PortalSess
       href: href(eventVirtualRoomRoute(event.slug)),
       icon: "virtual-room",
     });
-  destinations.push({
-    id: "calendar",
-    label: "Calendar and reminders",
-    href: href(`${myAgenda}&view=calendar`),
-    icon: "notifications",
-  });
+  if (standing.status === "registered")
+    destinations.push({
+      id: "calendar",
+      label: "Calendar and reminders",
+      href: href(`${myAgenda}&view=calendar`),
+      icon: "notifications",
+    });
   if (hasEventProposals(event))
     destinations.push(
       { id: "proposals", label: "Proposals", href: href(base + "/submissions"), icon: "proposals" },
@@ -185,8 +187,8 @@ export interface EventAppNavigation {
 export function eventAppNavigation(event: EventAppSubject, session: PortalSession | null): EventAppNavigation {
   const destinations = eventAppDestinations(event, session);
   const find = (id: string) => destinations.find((destination) => destination.id === id);
-  const primary = find("scanner") ?? find("lead-scanner") ?? find("check-in") ?? find("agenda")!;
-  const secondary = find("ticket") ?? (primary.id === "agenda" ? undefined : find("agenda"));
+  const primary = find("scanner") ?? find("lead-scanner") ?? find("check-in") ?? find("agenda");
+  const secondary = find("ticket") ?? (primary?.id === "agenda" ? undefined : find("agenda"));
   const promoted = [primary, secondary].filter((destination): destination is EventAppDestination =>
     Boolean(destination),
   );

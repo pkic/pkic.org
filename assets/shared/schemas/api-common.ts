@@ -82,8 +82,14 @@ export const normalizedEmailSchema = z
   .email({ error: "Please enter a valid email address (for example: name@example.com)." })
   .transform((value) => value.trim().toLowerCase());
 export const emailRecoveryRequestSchema = z.object({ email: normalizedEmailSchema });
-export const firstNameSchema = trimmedString(1, 80).regex(namePattern, "Contains unsupported characters");
-export const lastNameSchema = trimmedString(1, 120).regex(namePattern, "Contains unsupported characters");
+export const firstNameSchema = trimmedString(1, 80, "Enter your first name.").regex(
+  namePattern,
+  "Contains unsupported characters",
+);
+export const lastNameSchema = trimmedString(1, 120, "Enter your last name.").regex(
+  namePattern,
+  "Contains unsupported characters",
+);
 /** Said wherever an organization name is asked for and left empty. */
 export const ORGANIZATION_NAME_REQUIRED = "Enter your organization.";
 export const organizationNameSchema = z

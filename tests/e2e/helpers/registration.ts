@@ -124,10 +124,15 @@ export async function registerInBrowser(
     await contact.getByLabel(copy.work.label).fill(email);
     await contact.getByRole("button", { name: copy.work.action, exact: true }).click();
     await expect(contact).toContainText("Event");
-    const picker = page.getByRole("combobox", { name: "Event identity", exact: true });
-    if (await picker.count()) {
+    const change = contact.getByRole("button", { name: "Change representation", exact: true });
+    if (await change.count()) {
+      await change.click();
+      const chooser = page.getByRole("dialog", { name: "Change representation", exact: true });
+      const picker = chooser.getByRole("combobox", { name: "Representation", exact: true });
       await picker.click();
       await page.getByRole("option").filter({ hasText: identityName }).click();
+      await chooser.getByRole("button", { name: "Use representation", exact: true }).click();
+      await expect(chooser).not.toBeVisible();
     } else {
       await expect(contact).toContainText(identityName);
     }

@@ -6,12 +6,14 @@ import { instantToDateTimeLocal } from "../../../../assets/shared/timezone";
 import { publishedSessionsSql } from "./published-schedule";
 import { preparePersonalCalendarEntries } from "./calendar-entries";
 import { promoteSessionWaitlist } from "./waitlist";
-export function prepareParticipationWork(db: DatabaseLike, eventId: string) {
+import { eventReadIdSql, type EventReadSelection } from "../events/selection";
+export function prepareParticipationWork(db: DatabaseLike, selection: EventReadSelection) {
+  const event = eventReadIdSql(selection);
   return db
     .prepare(
-      "INSERT INTO agenda_participation_jobs(event_id,requested_at) VALUES(?,?) ON CONFLICT(event_id) DO UPDATE SET requested_at=excluded.requested_at",
+      `INSERT INTO agenda_participation_jobs(event_id,requested_at) VALUES(${event.sql},?) ON CONFLICT(event_id) DO UPDATE SET requested_at=excluded.requested_at`,
     )
-    .bind(eventId, nowIso());
+    .bind(...event.bindings, nowIso());
 }
 /** Revoke stale seat claims; physical attendance evidence and unsurrendered offline rights remain intact. */
 export async function reconcileEventParticipations(

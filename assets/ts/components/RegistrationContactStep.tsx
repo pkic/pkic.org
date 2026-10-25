@@ -1,4 +1,6 @@
 import { useEffect, useState } from "preact/hooks";
+import type { ComponentChildren } from "preact";
+import type { FieldPresentation } from "../hooks/useContractForm";
 import { EMAIL_FIRST_COPY } from "../../shared/email-first-copy";
 import { emailDomainOf, emailDomainResponseSchema, emailDomainUrl } from "../../shared/schemas/email-domains";
 import type { SessionActingIdentity } from "../../shared/session-acting-identity";
@@ -60,8 +62,15 @@ async function readKnownPerson(session: Awaited<ReturnType<typeof readSession>>)
 }
 
 /** Saved names are shown, not asked again; a missing one is asked for. */
-function NameFields({ firstName = "", lastName = "" }: { firstName?: string | null; lastName?: string | null }) {
-  const [draft, setDraft] = useState({ firstName: firstName ?? "", lastName: lastName ?? "" });
+function NameFields({
+  firstName = "",
+  lastName = "",
+  presentationOf,
+}: {
+  firstName?: string | null;
+  lastName?: string | null;
+  presentationOf?: (name: string) => FieldPresentation;
+}) {
   if (firstName && lastName)
     return (
       <>
@@ -71,34 +80,26 @@ function NameFields({ firstName = "", lastName = "" }: { firstName?: string | nu
     );
   return (
     <div class="pk-split">
-      <Field id="registration-first-name" label="First name" errorSlot="firstName" required>
+      <Field
+        id="registration-first-name"
+        label="First name"
+        errorSlot="firstName"
+        required
+        {...presentationOf?.("firstName")}
+      >
         {(control) => (
-          <TextInput
-            {...control}
-            name="firstName"
-            required
-            autoComplete="given-name"
-            value={draft.firstName}
-            onInput={(event) => {
-              const value = event.currentTarget.value;
-              setDraft((current) => ({ ...current, firstName: value }));
-            }}
-          />
+          <TextInput {...control} name="firstName" required autoComplete="given-name" defaultValue={firstName ?? ""} />
         )}
       </Field>
-      <Field id="registration-last-name" label="Last name" errorSlot="lastName" required>
+      <Field
+        id="registration-last-name"
+        label="Last name"
+        errorSlot="lastName"
+        required
+        {...presentationOf?.("lastName")}
+      >
         {(control) => (
-          <TextInput
-            {...control}
-            name="lastName"
-            required
-            autoComplete="family-name"
-            value={draft.lastName}
-            onInput={(event) => {
-              const value = event.currentTarget.value;
-              setDraft((current) => ({ ...current, lastName: value }));
-            }}
-          />
+          <TextInput {...control} name="lastName" required autoComplete="family-name" defaultValue={lastName ?? ""} />
         )}
       </Field>
     </div>
@@ -119,16 +120,19 @@ function Details({
   email,
   firstName,
   lastName,
+  representation,
 }: {
   email: string;
   firstName?: string | null;
   lastName?: string | null;
+  representation?: ComponentChildren;
 }) {
   return (
     <DescriptionList
       items={[
         ...(firstName && lastName ? [{ term: "Name", value: `${firstName} ${lastName}` }] : []),
         { term: "Email", value: email },
+        ...(representation ? [{ term: "Representation", value: representation }] : []),
       ]}
     />
   );
@@ -138,17 +142,19 @@ function VerifiedContact({
   verified,
   organization,
   changeEmail,
+  presentationOf,
 }: {
   verified: VerifiedRegistrationEmail;
   organization: ConfirmOrganizationController;
   changeEmail: () => void;
+  presentationOf?: (name: string) => FieldPresentation;
 }) {
   const { person } = verified;
   return (
     <div class="pk-stack">
       <AddressFields step={verified} emailProof={verified.token} />
       <Details email={verified.email} firstName={person?.firstName} lastName={person?.lastName} />
-      <NameFields firstName={person?.firstName} lastName={person?.lastName} />
+      <NameFields firstName={person?.firstName} lastName={person?.lastName} presentationOf={presentationOf} />
       {verified.asksOrganization && <RegistrationConfirmOrganization controller={organization} />}
       <div>
         <Button type="button" variant="link" onClick={changeEmail}>
@@ -174,6 +180,7 @@ export function RegistrationContactStep({
   organization,
   onReadyChange,
   autoSession = false,
+  presentationOf,
 }: {
   /** The event's registrations collection, under which the email proof lives. */
   endpoint: string;
@@ -183,6 +190,7 @@ export function RegistrationContactStep({
   onReadyChange: (ready: boolean) => void;
   /** An authenticated embedding starts with its current session, without a mailbox challenge. */
   autoSession?: boolean;
+  presentationOf?: (name: string) => FieldPresentation;
 }) {
   const [email, setEmail] = useState("");
   const [individual, setIndividual] = useState(false);
@@ -247,27 +255,41 @@ export function RegistrationContactStep({
 
   if (proof.verifying) return <p role="status">Verifying your email address…</p>;
 
-  if (verified) return <VerifiedContact verified={verified} organization={organization} changeEmail={changeEmail} />;
+  if (verified)
+    return (
+      <VerifiedContact
+        verified={verified}
+        organization={organization}
+        changeEmail={changeEmail}
+        presentationOf={presentationOf}
+      />
+    );
 
   if (stage.kind === "known") {
     const { person, step } = stage;
     return (
       <div class="pk-stack">
         <AddressFields step={step} />
-        <Details email={step.email} firstName={person.firstName} lastName={person.lastName} />
-        <NameFields firstName={person.firstName} lastName={person.lastName} />
-        <RegistrationIdentityField
-          preferred={person.identity}
-          available={person.identities}
-          userId={person.userId}
-          onSelect={(identity) => {
-            setStage({
-              kind: "known",
-              person: { ...person, identity },
-              step: { ...step, unaffiliatedAttestation: identity?.organizationId === null },
-            });
-          }}
+        <Details
+          email={step.email}
+          firstName={person.firstName}
+          lastName={person.lastName}
+          representation={
+            <RegistrationIdentityField
+              preferred={person.identity}
+              available={person.identities}
+              userId={person.userId}
+              onSelect={(identity) => {
+                setStage({
+                  kind: "known",
+                  person: { ...person, identity },
+                  step: { ...step, unaffiliatedAttestation: identity?.organizationId === null },
+                });
+              }}
+            />
+          }
         />
+        <NameFields firstName={person.firstName} lastName={person.lastName} presentationOf={presentationOf} />
         {!autoSession && (
           <div>
             <Button type="button" variant="link" onClick={changeEmail}>

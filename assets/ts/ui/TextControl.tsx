@@ -13,7 +13,7 @@
  */
 
 import type { JSX } from "preact";
-import { Button, type ButtonProps } from "./Button";
+import { forwardRef } from "preact/compat";
 
 import "./Field.css";
 
@@ -23,9 +23,11 @@ function join(base: string, extra?: string | null): string {
 
 export type TextInputProps = JSX.InputHTMLAttributes<HTMLInputElement>;
 
-export function TextInput({ class: className, type = "text", ...rest }: TextInputProps) {
-  return <input {...rest} type={type} class={join("pk-input", className as string | undefined)} />;
-}
+export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
+  ({ class: className, type = "text", ...rest }, ref) => (
+    <input {...rest} ref={ref} type={type} class={join("pk-input", className as string | undefined)} />
+  ),
+);
 
 export type TextareaProps = JSX.TextareaHTMLAttributes<HTMLTextAreaElement>;
 
@@ -42,12 +44,5 @@ export function Select({ class: className, children, ...rest }: SelectProps) {
     <select {...rest} class={join("pk-input pk-input--select", className as string | undefined)}>
       {children}
     </select>
-  );
-}
-
-/** A non-editable select trigger; its popup and choices belong to the shared combobox. */
-export function SelectTrigger({ class: className, ...rest }: ButtonProps) {
-  return (
-    <Button {...rest} class={join("pk-input pk-input--select pk-input--trigger", className as string | undefined)} />
   );
 }

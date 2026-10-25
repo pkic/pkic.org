@@ -254,6 +254,8 @@ describe("event home", () => {
     expect(card.querySelectorAll("p:not(.pk-event-card__eyebrow)")).toHaveLength(0);
     expect(host.textContent).not.toContain("Show ticket");
     expect(host.textContent).not.toContain("Your proposals");
+    expect(host.textContent).not.toContain("Your next session");
+    expect(tabLabels("Event app")).not.toContain("My agenda");
     expect(requests).toEqual([]);
   });
 

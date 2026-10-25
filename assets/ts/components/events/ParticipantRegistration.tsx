@@ -1,4 +1,4 @@
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import {
   registrationResendConfirmationSchema,
   okResponseSchema,
@@ -22,6 +22,7 @@ import { ParticipantRegistrationForm, type RegistrationChange } from "./Particip
 import { CopyLinkRow } from "../../shared/widgets/copy-link-row";
 import { RegistrationDays } from "./RegistrationDays";
 import { SectionHeading } from "../../ui/SectionHeading";
+import { useDialogQueryState } from "../../hooks/useDialogQueryState";
 
 export function ParticipantRegistration({
   registrationId,
@@ -83,7 +84,11 @@ function RegistrationRecord({
   reload: () => Promise<void>;
   focusDay: string | null;
 }) {
-  const [editing, setEditing] = useState(false);
+  const [editing, showEditor, closeEditor] = useDialogQueryState("editRegistration");
+  const [editorMounted, setEditorMounted] = useState(editing);
+  useEffect(() => {
+    if (editing) setEditorMounted(true);
+  }, [editing]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -100,7 +105,8 @@ function RegistrationRecord({
       registrationManageSchema.parse(change),
       registrationManageUpdateResponseSchema,
     );
-    setEditing(false);
+    await closeEditor();
+    setEditorMounted(false);
     setMessage(result.emailChanged ? outcomeOf(change, true) : (outcome ?? outcomeOf(change, false)));
     await reload();
   }
@@ -173,9 +179,20 @@ function RegistrationRecord({
                 : " Contact the organizer to review it."}
             </Alert>
           )}
-          {editing ? (
-            <ParticipantRegistrationForm data={data} forms={forms} save={save} onDiscard={() => setEditing(false)} />
-          ) : (
+          {editorMounted && (
+            <div hidden={!editing}>
+              <ParticipantRegistrationForm
+                data={data}
+                forms={forms}
+                save={save}
+                onDiscard={() => {
+                  setEditorMounted(false);
+                  void closeEditor();
+                }}
+              />
+            </div>
+          )}
+          {!editing && (
             <>
               <RecordCommands
                 busy={busy}
@@ -210,7 +227,8 @@ function RegistrationRecord({
                       onClick={() => {
                         setMessage("");
                         setError("");
-                        setEditing(true);
+                        setEditorMounted(true);
+                        showEditor();
                       }}
                     >
                       Edit details

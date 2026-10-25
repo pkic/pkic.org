@@ -3,6 +3,52 @@
  * Route-owned writes preserve unrelated parameters, notify mounted controls,
  * and use browser history for meaningful navigation.
  */
+import { nextDomId } from "./dom-id";
+
+/** A route-owned dialog or editor, shared by Preact and the public-page hosts. */
+export function createUrlDialogState(name: string, source: "hash" | "search", ownerPath: string) {
+  let pushed: string | null = null;
+  let closing: { marker: string; done: Promise<void> } | null = null;
+  const read = (href = location.href) => {
+    const url = new URL(href);
+    return source === "hash" ? splitHash(url.hash) : { path: url.pathname, params: url.searchParams };
+  };
+  return {
+    marker(href?: string): string | null {
+      const current = read(href);
+      return current.path === ownerPath ? current.params.get(name) : null;
+    },
+    show() {
+      const current = read();
+      if (current.path !== ownerPath) return;
+      pushed = nextDomId("dialog");
+      current.params.set(name, pushed);
+      writeUrlQuery({ source, ownerPath, params: current.params, mode: "push" });
+    },
+    async close(expected: string | null) {
+      const current = read();
+      if (current.path !== ownerPath || !expected || current.params.get(name) !== expected) return;
+      if (pushed === expected) {
+        if (closing?.marker === expected) return closing.done;
+        const done = new Promise<void>((resolve) => {
+          const stop = subscribeUrlQuery(() => {
+            const next = read();
+            if (next.path === ownerPath && next.params.get(name) === expected) return;
+            stop();
+            resolve();
+          });
+          history.back();
+        });
+        closing = { marker: expected, done };
+        await done;
+        if (closing?.done === done) closing = null;
+        return;
+      }
+      current.params.delete(name);
+      writeUrlQuery({ source, ownerPath, params: current.params, mode: "replace" });
+    },
+  };
+}
 
 export function splitHash(hash = window.location.hash): { path: string; params: URLSearchParams } {
   const raw = hash.replace(/^#/, "");

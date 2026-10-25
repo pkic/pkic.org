@@ -20,6 +20,10 @@ import { callApi } from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { resetDb } from "./helpers/reset-db";
+import {
+  sessionParticipationRequestSchema,
+  sessionParticipationResponseSchema,
+} from "../assets/shared/schemas/event-participation-scanning";
 
 const eventId = crypto.randomUUID(),
   occurrenceId = crypto.randomUUID(),
@@ -162,6 +166,39 @@ beforeEach(async () => {
 });
 
 describe("Canonical occurrence action routes", () => {
+  it("requires event registration before saving a session, in one complete authenticated batch", async () => {
+    for (const [userId, expected] of [
+      [unregisteredId, 403],
+      [attendeeId, 200],
+    ] as const) {
+      const token = await createAdminSession(env.DB, userId, crypto.randomUUID());
+      const response = await callApi(
+        env,
+        `/api/v1/events/${slug}/agenda/occurrences/${occurrenceId}/participation`,
+        {
+          method: "PUT",
+          headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+          body: JSON.stringify(sessionParticipationRequestSchema.parse({ action: "save" })),
+        },
+        { maxRoundTrips: 1 },
+      );
+      expect(response.status, await response.clone().text()).toBe(expected);
+      if (expected === 200)
+        expect(sessionParticipationResponseSchema.parse(await response.json())).toMatchObject({ status: "saved" });
+    }
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS n FROM agenda_session_participations WHERE user_id=?")
+        .bind(unregisteredId)
+        .first("n"),
+    ).toBe(0);
+    expect(
+      await env.DB.prepare(
+        "SELECT COUNT(*) AS n FROM audit_log WHERE actor_id=? AND action='session_preference_changed'",
+      )
+        .bind(unregisteredId)
+        .first("n"),
+    ).toBe(0);
+  });
   const actions = [
     ["GET", "holds"],
     ["POST", "holds"],

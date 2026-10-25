@@ -11,6 +11,7 @@ import { renderSharePanel, refreshSharePanelBadge } from "../shared/widgets/shar
 import { withLoadingButton, handleSubmitError } from "../shared/form/submit";
 import { eventFlowContext, setStatus } from "./boot";
 import { mountTokenHeadshot } from "./token-headshot";
+import { createUrlDialogState, subscribeUrlQuery } from "../ui/url-query";
 import {
   registrationManageReadResponseSchema,
   registrationManageSchema,
@@ -349,29 +350,43 @@ async function main(): Promise<void> {
   }
 
   // ── Read view, and the edit command that swaps it for the form ────────────
+  const editorNavigation = createUrlDialogState("editRegistration", "search", location.pathname);
+  let editorMounted = false;
   const showEditor = (editing: boolean) => {
+    if (editing && isCancelled) {
+      void editorNavigation.close(editorNavigation.marker());
+      return;
+    }
     if (summaryEl) summaryEl.hidden = editing;
     editorEl.hidden = !editing;
     if (!editing) {
-      render(null, editorEl);
       return;
     }
     if (!formsData) {
       setStatus(statusEl, "Could not load registration form details. Reload this page to try again.", true);
+      void editorNavigation.close(editorNavigation.marker());
       return;
     }
+    if (editorMounted) return;
+    editorMounted = true;
+    const marker = editorNavigation.marker();
     render(
       <RegistrationFlow
         mode="update"
         data={manageData}
         forms={formsData}
-        onDiscard={() => showEditor(false)}
+        onDiscard={() => {
+          render(null, editorEl);
+          editorMounted = false;
+          void editorNavigation.close(marker);
+        }}
         save={async (change) => {
           const result = await patchJson(
             `${apiBase}/registrations/access/${encodeURIComponent(token)}`,
             change,
             registrationManageUpdateResponseSchema,
           );
+          await editorNavigation.close(marker);
           if (manageFormEl)
             showPostAction(root, manageFormEl, {
               title: result.emailChanged ? "Email address updated" : "Changes saved",
@@ -384,6 +399,14 @@ async function main(): Promise<void> {
       editorEl,
     );
   };
+  const stopEditorNavigation = subscribeUrlQuery(() => {
+    if (!root.isConnected) {
+      stopEditorNavigation();
+      return;
+    }
+    showEditor(Boolean(editorNavigation.marker()));
+  });
+  showEditor(Boolean(editorNavigation.marker()));
   if (summaryEl) {
     render(
       <RegistrationManageSummary
@@ -395,7 +418,7 @@ async function main(): Promise<void> {
         dialogHost={isCancelled || !headshotSection?.querySelector("[data-headshot-tile]")}
         onEdit={() => {
           clearStatus(statusEl);
-          showEditor(true);
+          editorNavigation.show();
         }}
         onCancel={() => void cancelRegistration()}
         onReport={() => void reportUnauthorized()}

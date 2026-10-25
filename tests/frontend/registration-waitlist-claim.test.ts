@@ -313,10 +313,27 @@ describe("registration manage read view", () => {
     firstName.value = "Someone else";
     buttonReading("Discard changes")!.click();
 
-    expect(form.hidden).toBe(true);
+    await vi.waitFor(() => expect(form.hidden).toBe(true));
     buttonReading("Edit details")!.click();
     expect(form.querySelector<HTMLInputElement>('input[name="firstName"]')!.value).toBe("Casey");
     expect(patchBodies(fetchMock)).toEqual([]);
+  });
+
+  it("preserves an update draft through browser Back and Forward", async () => {
+    const fetchMock = okFetch();
+    const form = await bootReadView(fetchMock);
+    buttonReading("Edit details")!.click();
+    const firstName = form.querySelector<HTMLInputElement>('input[name="firstName"]')!;
+    firstName.value = "Draft name";
+    firstName.dispatchEvent(new Event("input", { bubbles: true }));
+    history.back();
+    await vi.waitFor(() => expect(form.hidden).toBe(true));
+    history.forward();
+    await vi.waitFor(() => expect(form.hidden).toBe(false));
+    expect(form.querySelector<HTMLInputElement>('input[name="firstName"]')!.value).toBe("Draft name");
+    expect(patchBodies(fetchMock)).toEqual([]);
+    buttonReading("Discard changes")!.click();
+    await vi.waitFor(() => expect(form.hidden).toBe(true));
   });
 
   it("cancels only after the shared confirmation, and Keep registration sends nothing", async () => {

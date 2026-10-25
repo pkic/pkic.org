@@ -21,6 +21,7 @@
  */
 
 import type { ComponentChildren } from "preact";
+import { nextDomId } from "./dom-id";
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 
 import { Button } from "./Button";
@@ -107,7 +108,7 @@ export function Dialog({
   children,
 }: DialogProps) {
   // Dialog portals share the document across independently rendered portal and site roots.
-  const [id] = useState(() => `dialog-${crypto.randomUUID()}`);
+  const [id] = useState(() => nextDomId("dialog"));
   const titleId = `${id}-title`;
   const descriptionId = `${id}-description`;
   const ref = useRef<HTMLDialogElement>(null);

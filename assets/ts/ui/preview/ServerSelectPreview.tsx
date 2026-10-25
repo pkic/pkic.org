@@ -25,7 +25,7 @@ export function ServerSelectPreview() {
   const [selected, setSelected] = useState<z.infer<typeof item> | null>(choices[0]);
   return (
     <div data-gallery-open>
-      <Field label="Event identity">
+      <Field label="Representation">
         {(control) => (
           <ServerSearchSelect
             {...control}

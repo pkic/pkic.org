@@ -93,7 +93,7 @@ export interface ContractFormOptions {
    * The contract field a control answers, when its `name` is not that field
    * itself — a respondent control is `custom.<key>` or `custom.<key>[]`.
    */
-  fieldOf?: (name: string) => string;
+  fieldOf?: (name: string, control: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement) => string;
 }
 
 export function useContractForm<Schema extends z.ZodType>(
@@ -115,7 +115,9 @@ export function useContractForm<Schema extends z.ZodType>(
   // on the page, and only then; retyping must not move the caret.
   useEffect(() => {
     if (focusAt === 0) return;
-    document.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+    Array.from(document.querySelectorAll<HTMLElement>('[aria-invalid="true"]'))
+      .find((control) => !control.closest("[hidden],dialog:not([open]),[aria-hidden='true']"))
+      ?.focus();
   }, [focusAt]);
 
   const touch = useCallback(
@@ -131,7 +133,7 @@ export function useContractForm<Schema extends z.ZodType>(
           (control instanceof HTMLInputElement && (control.type === "checkbox" || control.type === "radio")))
       )
         return;
-      const name = fieldOf ? fieldOf(control.name) : control.name;
+      const name = fieldOf ? fieldOf(control.name, control) : control.name;
       setTouched((current) => ({ ...current, [name]: { hasValue: hasValue(control) } }));
       // A field being retyped is no longer the field the server refused.
       setRefused((current) => {

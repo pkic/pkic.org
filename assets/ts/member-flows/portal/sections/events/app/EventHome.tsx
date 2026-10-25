@@ -246,7 +246,8 @@ export function EventHome({
 }) {
   const phase = eventPhase(event.startsAt, event.endsAt);
   const ended = phase.kind === "ended";
-  const current = phase.kind === "live" || phase.kind === "upcoming";
+  const current =
+    (phase.kind === "live" || phase.kind === "upcoming") && eventRegistrationStanding(event).status === "registered";
   const now = useEventNow(event.slug, current);
   // Online attendees are sent to the stream first; everyone else still reaches it from a session's Join online.
   const viewer = "viewer" in event ? event.viewer : null;
