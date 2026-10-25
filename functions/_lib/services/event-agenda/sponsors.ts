@@ -22,7 +22,11 @@ export interface AgendaSponsorRow extends SponsorRow {
 function source(eventId: EventReadSelection, occurrences?: AgendaOccurrenceSelection) {
   const scope = eventReadIdSql(eventId);
   const read = buildPublicSponsorReadModel(
-    typeof eventId === "string" ? { eventId } : { eventSlug: eventId.slug },
+    typeof eventId === "string"
+      ? { eventId }
+      : "slug" in eventId
+        ? { eventSlug: eventId.slug }
+        : { eventReferralCode: eventId.referralCode },
     occurrences
       ? { sql: `agenda_sponsor_page AS MATERIALIZED(${occurrences.sql})`, bindings: occurrences.bindings }
       : undefined,
@@ -241,7 +245,13 @@ export function prepareConfiguredSponsorBranding(db: DatabaseLike, eventId: Even
       [...read.bindings, ...scope.bindings, ...scope.bindings, "event"],
     );
   }
-  const read = buildPublicSponsorReadModel(typeof eventId === "string" ? { eventId } : { eventSlug: eventId.slug });
+  const read = buildPublicSponsorReadModel(
+    typeof eventId === "string"
+      ? { eventId }
+      : "slug" in eventId
+        ? { eventSlug: eventId.slug }
+        : { eventReferralCode: eventId.referralCode },
+  );
   return prepareSponsorBrandingSnapshot(
     db,
     `${read.sql} SELECT public.id,public.name,public.website,public.logo_r2_key,public.sponsorship_logo_r2_key,public.tier,public.event_tier,public.effective_tier,catalog.display_weight AS effective_weight, public.id AS sponsor_id,

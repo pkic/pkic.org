@@ -1,3 +1,5 @@
+import type { BadgeTemplateSponsorGroup } from "../../../../assets/shared/schemas/event-badge-template";
+import { personalPromotionRoleColors } from "../../../../assets/shared/badge-role-colors";
 /** A personal social preview is a compact still from the promotion scene system. */
 import { formatDateRange } from "../../../../assets/shared/format-date";
 import { SOCIAL_PROMOTION_HEADLINES, type SocialBadgeRole } from "../../../../assets/shared/schemas/participant-roles";
@@ -20,6 +22,8 @@ export interface PersonalPromotionData {
   organization?: string | null;
   jobTitle?: string | null;
   headshotDataUrl?: string | null;
+  heroImageDataUrl?: string | null;
+  sponsorGroups?: BadgeTemplateSponsorGroup[];
   registrationUrl: string;
   design: EventPromotionDesign;
   logoDataUrl?: string;
@@ -35,16 +39,19 @@ export function renderPersonalPromotionSvg(data: PersonalPromotionData): string 
     {
       personal: {
         eventName: data.eventName,
-        heading: SOCIAL_PROMOTION_HEADLINES[data.role],
+        firstName: data.firstName || person.displayName,
+        heading: SOCIAL_PROMOTION_HEADLINES[data.role].replace("I’m", "is").replace("I’ve", "has"),
         people: [person],
         details: [formatDateRange(data.startsAt, data.endsAt, data.timeZone), data.location]
           .filter(Boolean)
           .join(" · "),
       },
-      design: data.design,
+      design: { ...data.design, colors: personalPromotionRoleColors(data.role, data.design.colors) },
       registrationUrl: data.registrationUrl,
       logoDataUrl: data.logoDataUrl,
       measure: data.measure,
+      heroImageDataUrl: data.heroImageDataUrl,
+      sponsorGroups: data.sponsorGroups,
       composition: promotionCompositionSchema.parse({ panels: ["cover", "speakers", "details"], qrCode: false }),
       portraits: data.headshotDataUrl ? { participant: data.headshotDataUrl } : undefined,
     },

@@ -16,6 +16,7 @@ export { promotionDimensions, buildPromotionPages } from "./promotion-scene";
 export { promotionMeasuredLines } from "./promotion-text";
 export { renderPromotionPdf } from "./promotion-pdf";
 export interface PromotionRenderData {
+  heroImageDataUrl?: string | null;
   agenda: AgendaSnapshot;
   occurrence: AgendaOccurrence;
   copy: PromotionCopy;

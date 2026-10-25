@@ -14,7 +14,8 @@ describe("personal promotion typography", () => {
       {
         personal: {
           eventName: "Post-Quantum Cryptography Conference",
-          heading: "I’m attending",
+          firstName: "Alex",
+          heading: "is attending",
           people: [
             {
               userId: "person",
@@ -32,11 +33,13 @@ describe("personal promotion typography", () => {
       "landscape",
     )[0]!;
     const title = page.texts.filter((line) => line.role === "H1");
-    const eyebrow = page.texts.find((line) => line.role === "H2")!;
-    expect(title.map((line) => line.text).join(" ")).toBe("Post-Quantum Cryptography Conference");
+    const action = page.texts.find((line) => line.text === "is attending")!;
+    const eventTitle = page.texts.filter((line) => line.role === "H2" && line !== action);
+    expect(title.map((line) => line.text).join(" ")).toBe("ALEX");
+    expect(eventTitle.map((line) => line.text).join(" ")).toBe("Post-Quantum Cryptography Conference");
     expect(title).toHaveLength(1);
-    expect(title[0]!.size).toBeGreaterThan(eyebrow.size * 1.7);
-    expect(eyebrow.y - eyebrow.size - 97).toBeGreaterThan(35);
+    expect(title[0]!.size).toBeGreaterThan(action.size * 2.5);
+    expect(title[0]!.y - title[0]!.size - 97).toBeGreaterThan(30);
     if (portrait) {
       const picture = page.pictures[0]!;
       expect(picture.circle).toBe(true);
@@ -49,7 +52,7 @@ describe("personal promotion typography", () => {
           expect(line.x + measure(line.text, line.size, Boolean(line.bold))).toBeLessThan(picture.x - 20);
       }
     }
-    expect(title[0]!.y - title[0]!.size - eyebrow.y).toBeGreaterThan(20);
+    expect(action.y - action.size - title[0]!.y).toBeGreaterThan(20);
     for (const line of page.texts) {
       expect(line.x + measure(line.text, line.size, Boolean(line.bold))).toBeLessThan(page.width - 80);
       expect(line.y).toBeLessThan(page.height - 95);

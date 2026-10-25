@@ -108,7 +108,10 @@ function publicSponsorReadModelCte(
   )`;
 }
 
-export type PublicSponsorEventIdentity = Pick<SponsorsListQuery, "eventSlug" | "eventName"> & { eventId?: string };
+export type PublicSponsorEventIdentity = Pick<SponsorsListQuery, "eventSlug" | "eventName"> & {
+  eventId?: string;
+  eventReferralCode?: string;
+};
 
 const PUBLIC_SPONSOR_WEIGHT_SQL = "effective_weight > 0";
 
@@ -159,6 +162,15 @@ export function buildPublicSponsorReadModel(
   sql: string;
   bindings: unknown[];
 } {
+  if (identity.eventReferralCode) {
+    return {
+      sql: publicSponsorReadModelCte("sponsorships", cte?.sql).replace(
+        "__SELECTED_EVENT__",
+        "SELECT id,starts_at,ends_at FROM events WHERE id=(SELECT event_id FROM referral_codes WHERE code=?) LIMIT 1",
+      ),
+      bindings: [...(cte?.bindings ?? []), identity.eventReferralCode],
+    };
+  }
   if (identity.eventId) {
     return {
       sql: publicSponsorReadModelCte("sponsorships", cte?.sql).replace(

@@ -1,3 +1,4 @@
+import { personalPromotionRoleColors, BADGE_DISPLAY_ROLE_COLORS } from "../assets/shared/badge-role-colors";
 import { personalPromotionImagePath, PERSONAL_PROMOTION_RENDERER } from "../assets/shared/personal-promotion-image";
 import { describe, expect, it } from "vitest";
 import { STANDARD_HEADSHOT_MAX_BYTES } from "../assets/shared/schemas/images";
@@ -33,7 +34,7 @@ describe("OG sponsor badge rendering", () => {
     });
 
     expect(svg).toContain('width="1200" height="630"');
-    expect(svg).toContain("I’M SPONSORING");
+    expect(svg).toContain("is sponsoring");
     expect(svg).toContain('id="panorama"');
     expect(svg).toContain('id="grid-fade"');
     expect(svg).toContain("Synthetic Sponsor");
@@ -44,6 +45,17 @@ describe("OG sponsor badge rendering", () => {
 });
 
 describe("personal promotion scenes", () => {
+  it("reuses physical badge role colors while keeping related speaking and staff roles consistent", () => {
+    const colors = ["#112233", "#445566"];
+    expect(personalPromotionRoleColors("attendee", colors)).toEqual(colors);
+    expect(BADGE_DISPLAY_ROLE_COLORS.speaker).toBe("#ed7d31");
+    const speaking = personalPromotionRoleColors("speaker", colors);
+    expect(speaking).not.toEqual(personalPromotionRoleColors("sponsor", colors));
+    expect(speaking).not.toEqual(personalPromotionRoleColors("staff", colors));
+    expect(personalPromotionRoleColors("moderator", colors)).toEqual(speaking);
+    expect(personalPromotionRoleColors("panelist", colors)).toEqual(speaking);
+    expect(personalPromotionRoleColors("organizer", colors)).toEqual(personalPromotionRoleColors("staff", colors));
+  });
   it("versions the image design and profile without losing either query parameter", () => {
     const url = new URL(personalPromotionImagePath("synthetic", "profile:2"), "https://pkic.org");
     expect(url.searchParams.get("layout")).toBe(PERSONAL_PROMOTION_RENDERER);

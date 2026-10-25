@@ -52,6 +52,7 @@ export function preparePromotionDesign(db: DatabaseLike, selection: EventReadSel
       return {
         event,
         design,
+        populations,
         brandingRevision,
         place: [typeof settings.venue === "string" ? settings.venue : null, event.city].filter(Boolean).join(", "),
       };

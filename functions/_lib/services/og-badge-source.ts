@@ -1,3 +1,4 @@
+import { preparePromotionDesign } from "./event-agenda/promotion-design";
 /** Resolve personal promotion facts and cache freshness in one complete request batch. */
 import { PERSONAL_PROMOTION_RENDERER } from "../../../assets/shared/personal-promotion-image";
 import type { CountryCode } from "../../../assets/shared/countries";
@@ -26,10 +27,12 @@ export interface BadgeSource {
   role: string;
   requested_generation: number;
   event_revision: string;
+  promotion?: Awaited<ReturnType<ReturnType<typeof preparePromotionDesign>["decode"]>>;
 }
 
 export async function readBadgeSource(db: DatabaseLike, code: string): Promise<BadgeSource | null> {
-  const [result] = await db.batch([
+  const visual = preparePromotionDesign(db, { referralCode: code });
+  const [result, ...design] = await db.batch([
     db
       .prepare(`
     SELECT ${proposalSpeakerProfileColumns("u", "ps", "", ["firstName", "lastName"])},
@@ -57,8 +60,12 @@ export async function readBadgeSource(db: DatabaseLike, code: string): Promise<B
     WHERE rc.code=? AND (r.id IS NOT NULL OR sp.id IS NOT NULL)
     LIMIT 1`)
       .bind(code),
+    ...visual.statements,
   ]);
-  return batchFirst<BadgeSource>(result);
+  const source = batchFirst<BadgeSource>(result);
+  if (!source) return null;
+  source.promotion = await visual.decode(design);
+  return source;
 }
 
 /** Old-layout cache objects never satisfy the shared promotion renderer's identity. */
@@ -67,6 +74,6 @@ export function personalBadgeCacheMetadata(code: string, source: BadgeSource): R
     referralCode: code,
     badgeGeneration: String(source.requested_generation),
     badgeRenderer: PERSONAL_PROMOTION_RENDERER,
-    badgeDesignRevision: source.event_revision,
+    badgeDesignRevision: source.promotion?.brandingRevision ?? source.event_revision,
   };
 }

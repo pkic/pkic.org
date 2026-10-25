@@ -153,6 +153,21 @@ export async function getBadgePrintingContext(
   sponsorGroups?: z.infer<typeof badgeTemplateSponsorGroupSchema>[],
 ) {
   const basis = await prepareBadgePrintingBasis(db, eventId, sponsorGroups);
+  const context = await loadBadgePrintingArtwork(environment, basis);
+  await db.batch(basis.guards);
+  return { ...context, template: basis.template };
+}
+
+/** Load the same validated logo artwork from a snapshot already read by the owning request batch. */
+export async function loadBadgePrintingArtwork(
+  environment: Pick<Env, "ASSETS_BUCKET">,
+  basis: Pick<Awaited<ReturnType<typeof prepareBadgePrintingBasis>>, "revision" | "populations"> & {
+    template: Pick<
+      import("../../../../assets/shared/schemas/event-badge-template").EventBadgeTemplate,
+      "sponsorGroups"
+    > | null;
+  },
+) {
   const logos = new Map<string, { id: string; name: string; svg: string }>();
   const capturedObjects: { key: string; etag: string }[] = [];
   let totalBytes = 0;
@@ -225,7 +240,6 @@ export async function getBadgePrintingContext(
     if (!current || current.etag !== captured.etag)
       throw new AppError(409, "BADGE_SPONSOR_CHANGED", "Sponsor artwork changed. Reload the print document.");
   }
-  await db.batch(basis.guards);
   return { revision: basis.revision, template: basis.template, branding: checkedBranding.data };
 }
 

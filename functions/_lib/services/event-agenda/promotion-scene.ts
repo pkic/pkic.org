@@ -1,3 +1,4 @@
+import { layoutPersonalPromotion } from "./promotion-personal-scene";
 import { promotionStillBlocks, type PromotionStillContent } from "./promotion-still";
 import { layoutPromotionTakeaways, layoutPromotionDetails } from "./promotion-content-panels";
 import { layoutPromotionSponsors } from "./promotion-sponsors";
@@ -48,6 +49,7 @@ export interface PromotionPage {
   light?: boolean;
   qr?: boolean;
   still?: boolean;
+  footerPictures?: PromotionPicture[];
   bars?: { x: number; y: number; width: number; height: number; color: string; opacity?: number }[];
   sponsorBoard?: { x: number; y: number; width: number; height: number };
   markX?: number;
@@ -60,11 +62,10 @@ export interface PromotionBlock {
   role?: PromotionText["role"];
   portrait?: { src: string; name: string };
   indent?: number;
-  width?: number;
 }
 /** A personal preview needs event and identity facts, not a fabricated session or agenda. */
 export interface PersonalPromotionRenderData {
-  personal: PromotionStillContent & { eventName: string };
+  personal: PromotionStillContent & { eventName: string; firstName?: string };
   registrationUrl: string;
   design?: PromotionRenderData["design"];
   composition?: PromotionRenderData["composition"];
@@ -72,6 +73,8 @@ export interface PersonalPromotionRenderData {
   actorId?: string;
   portraits?: Record<string, string>;
   logoDataUrl?: string;
+  heroImageDataUrl?: string | null;
+  sponsorGroups?: import("../../../../assets/shared/schemas/event-badge-template").BadgeTemplateSponsorGroup[];
   scene?: PromotionPage;
   measure?: PromotionMeasure;
 }
@@ -138,7 +141,6 @@ export function buildPromotionPages(
     start = 200 * scale,
     maxWidth = usable - reservedRight,
     coverHeaderTop?: number,
-    blockGap = 24 * scale,
   ) {
     let page = add(title),
       y = start;
@@ -174,10 +176,8 @@ export function buildPromotionPages(
         });
       }
       if (!block.portrait && indent === 0 && portraitBottom) y = Math.max(y, portraitBottom + block.size);
-      const lines = promotionMeasuredLines(
-        plainText(block.text),
-        Math.min(maxWidth, block.width ?? maxWidth) - indent,
-        (line) => measure(line, block.size, Boolean(block.bold)),
+      const lines = promotionMeasuredLines(plainText(block.text), maxWidth - indent, (line) =>
+        measure(line, block.size, Boolean(block.bold)),
       );
       for (const line of lines) {
         if (y + block.size * 1.25 > footer) {
@@ -190,71 +190,11 @@ export function buildPromotionPages(
         page.texts.at(-1)!.group = group;
         y += block.size * 1.25;
       }
-      y += blockGap;
+      y += 24 * scale;
     }
     return page;
   }
-  if ("personal" in data) {
-    // One social image must retain the complete identity and event details. The same
-    // measured flow scales its text down when it would otherwise continue onto another page.
-    for (const factor of [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4]) {
-      pages.length = 0;
-      flow(
-        data.personal.heading,
-        promotionStillBlocks(
-          { ...data.personal, heading: data.personal.eventName },
-          composition,
-          scale,
-          height,
-          {},
-          factor,
-        ).map((block) => ({
-          ...block,
-          width:
-            block.role === "H1" || !data.portraits?.[data.personal.people[0]?.userId ?? ""]
-              ? usable
-              : usable - 300 * scale,
-        })),
-        170 * scale,
-        usable,
-        146,
-        12 * scale,
-      );
-      const titleBottom = Math.max(...pages[0]!.texts.filter((text) => text.role === "H1").map((text) => text.y));
-      if (
-        pages.length === 1 &&
-        (!data.portraits?.[data.personal.people[0]?.userId ?? ""] || titleBottom + 250 * scale < height - 95)
-      )
-        break;
-    }
-    if (pages.length !== 1) throw new Error("Personal promotion details do not fit the social image.");
-    pages[0]!.total = 1;
-    pages[0]!.title = data.personal.eventName;
-    pages[0]!.still = true;
-    const titleBottom = Math.max(...pages[0]!.texts.filter((text) => text.role === "H1").map((text) => text.y));
-    const person = data.personal.people[0];
-    const portrait = person && data.portraits?.[person.userId];
-    if (portrait) {
-      pages[0]!.pictures.push({
-        src: portrait,
-        x: width - margin - 210 * scale,
-        y: Math.max(260 * scale, titleBottom + 40 * scale),
-        width: 210 * scale,
-        height: 210 * scale,
-        circle: true,
-        alt: person.displayName,
-      });
-    }
-    (pages[0]!.bars ??= []).push({
-      x: margin,
-      y: titleBottom + 18 * scale,
-      width: 200 * scale,
-      height: 6 * scale,
-      color: "url(#accent)",
-    });
-    pages[0]!.markX = width - 460 * scale;
-    return pages;
-  }
+  if ("personal" in data) return [layoutPersonalPromotion(data, width, height, measure)];
   const people = promotionPeople(data);
   const clock = { timeZone: data.agenda.timeZone, city: data.agenda.clockCity ?? null };
   const time = data.occurrence.startAt

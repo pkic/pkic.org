@@ -1,3 +1,4 @@
+import { loadBadgePrintingArtwork } from "./event-participation/badge-print-branding";
 /**
  * OG badge pre-rendering service.
  *
@@ -19,7 +20,7 @@ import { renderDonationBadgeSvg } from "./og-badge";
 import { first, all } from "../db/queries";
 import { fetchGravatar } from "./gravatar";
 import type { Env } from "../types";
-import { fetchStaticAsset, uint8ToBase64 } from "./og-badge-hero-image";
+import { fetchHeroImage, fetchStaticAsset, uint8ToBase64 } from "./og-badge-hero-image";
 import { validateRasterImage } from "../utils/image-format";
 import { STANDARD_HEADSHOT_MAX_BYTES } from "../../../assets/shared/schemas/images";
 import { socialBadgeRoleSchema } from "../../../assets/shared/schemas/participant-roles";
@@ -30,10 +31,13 @@ import { promotionFontMeasure } from "./event-agenda/promotion-text";
 import { eventPromotionDesignFromSettings } from "../../../assets/shared/schemas/event-promotion-design";
 import { parseJsonSafe } from "../utils/json";
 
-type BadgeRenderEnv = Pick<Env, "SPEAKER_UPLOADS_BUCKET" | "ASSETS" | "ASSETS_PUBLIC">;
+type BadgeRenderEnv = Pick<
+  Env,
+  "SPEAKER_UPLOADS_BUCKET" | "ASSETS" | "ASSETS_PUBLIC" | "ASSETS_BUCKET" | "IMAGES" | "HERO_IMAGE_ALLOWED_HOSTS"
+>;
 type BadgeCacheEnv = Pick<
   Env,
-  "DB" | "ASSETS_BUCKET" | "IMAGES" | "SPEAKER_UPLOADS_BUCKET" | "ASSETS" | "ASSETS_PUBLIC"
+  "DB" | "ASSETS_BUCKET" | "IMAGES" | "SPEAKER_UPLOADS_BUCKET" | "ASSETS" | "ASSETS_PUBLIC" | "HERO_IMAGE_ALLOWED_HOSTS"
 >;
 type DonationRenderEnv = Pick<Env, "DB" | "ASSETS" | "ASSETS_PUBLIC">;
 
@@ -98,11 +102,19 @@ export async function renderBadgeSourcePng(
   env: BadgeRenderEnv,
   origin: string,
 ): Promise<Uint8Array> {
-  const [Resvg, fontBuffers, headshotDataUrl, logoResponse] = await Promise.all([
+  const [Resvg, fontBuffers, headshotDataUrl, logoResponse, heroImageDataUrl, sponsors] = await Promise.all([
     ensureWasm(),
     getFontBuffers(origin, env),
     loadValidatedHeadshotDataUrl(source.headshot_r2_key, env.SPEAKER_UPLOADS_BUCKET),
     fetchStaticAsset(env, origin, "/img/logo.svg"),
+    fetchHeroImage(source.settings_json, origin, env),
+    source.promotion
+      ? loadBadgePrintingArtwork(env, {
+          revision: source.promotion.brandingRevision,
+          template: { sponsorGroups: source.promotion.design.sponsorGroups },
+          populations: source.promotion.populations,
+        }).then((context) => context.branding)
+      : Promise.resolve([]),
   ]);
   const logoBytes = logoResponse.ok ? new Uint8Array(await logoResponse.arrayBuffer()) : null;
   const settings = parseJsonSafe<Record<string, unknown>>(source.settings_json, {});
@@ -118,8 +130,10 @@ export async function renderBadgeSourcePng(
     organization: source.organization_name,
     jobTitle: source.job_title,
     headshotDataUrl,
+    heroImageDataUrl,
+    sponsorGroups: sponsors,
     registrationUrl: new URL(`/r/${encodeURIComponent(code)}`, origin).href,
-    design: eventPromotionDesignFromSettings(source.event_name, settings),
+    design: source.promotion?.design ?? eventPromotionDesignFromSettings(source.event_name, settings),
     measure: promotionFontMeasure(fontBuffers),
     logoDataUrl: logoBytes ? `data:image/svg+xml;base64,${uint8ToBase64(logoBytes)}` : undefined,
   });

@@ -2,7 +2,8 @@ import { personalPromotionImagePath } from "../assets/shared/personal-promotion-
 import { env as workerEnv } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createReferralCode } from "../functions/_lib/services/referrals";
-import app from "./helpers/app";
+import app, { callApi } from "./helpers/app";
+import { readBadgeSource, personalBadgeCacheMetadata } from "../functions/_lib/services/og-badge-source";
 import { getEventBySlug } from "../functions/_lib/services/events";
 import {
   processBadgeRenderJobById,
@@ -65,6 +66,30 @@ async function seedRegistrationWithReferral(): Promise<{
 describe("registration badge regeneration", () => {
   beforeEach(async () => {
     await resetDb();
+  });
+
+  it("reads current sponsor branding and serves the personal badge in one request batch", async () => {
+    const fixture = await seedRegistrationWithReferral();
+    const sponsorId = crypto.randomUUID();
+    const at = new Date().toISOString();
+    await env.DB.prepare(
+      "INSERT INTO sponsorships(id,sponsor_type,non_member_name,non_member_logo_r2_key,event_id,tier,pipeline_stage,created_at,updated_at) VALUES(?,'event','Visible sponsor','sponsor-logos/example/logo.svg',?,'Leader','active',?,?)",
+    )
+      .bind(sponsorId, fixture.event!.id, at, at)
+      .run();
+    const before = (await readBadgeSource(env.DB, fixture.referralCode))!;
+    expect(before.promotion!.populations.event.map((row) => row.name)).toContain("Visible sponsor");
+    await env.ASSETS_BUCKET!.put(`og-badges/${fixture.referralCode}`, validJpegBytes(), {
+      httpMetadata: { contentType: "image/jpeg" },
+      customMetadata: personalBadgeCacheMetadata(fixture.referralCode, before),
+    });
+    const response = await callApi(env, personalPromotionImagePath(fixture.referralCode), {}, { maxRoundTrips: 1 });
+    expect(response.status).toBe(200);
+    await env.DB.prepare("UPDATE sponsorships SET non_member_name='Renamed sponsor' WHERE id=?").bind(sponsorId).run();
+    const after = (await readBadgeSource(env.DB, fixture.referralCode))!;
+    expect(personalBadgeCacheMetadata(fixture.referralCode, after).badgeDesignRevision).not.toBe(
+      personalBadgeCacheMetadata(fixture.referralCode, before).badgeDesignRevision,
+    );
   });
 
   afterEach(() => {
