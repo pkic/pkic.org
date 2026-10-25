@@ -1,3 +1,4 @@
+import { personalPromotionImagePath } from "../../../../assets/shared/personal-promotion-image";
 import { REGISTRATION_ORGANIZATION_SQL, REGISTRATION_JOB_TITLE_SQL } from "./selected-identity";
 import type { CountryCode } from "../../../../assets/shared/countries";
 import { batchFirst, batchRows } from "../../db/pagination";
@@ -249,9 +250,9 @@ export async function prepareRegistrationConfirmedEmail(
       manageUrl,
       myAgendaUrl: myAgendaPageUrl(params.appBaseUrl, params.event),
       shareUrl,
-      ...(shareUrl
+      ...(shareUrl && params.referralCode
         ? {
-            badgeImageUrl: `${params.appBaseUrl}/api/v1/registrations/referrals/${params.referralCode}/badge`,
+            badgeImageUrl: `${params.appBaseUrl}${personalPromotionImagePath(params.referralCode)}`,
             linkedinShareUrl: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`,
             twitterShareUrl: `https://twitter.com/intent/tweet?text=${encodeURIComponent(`I just registered for ${params.event.name} — join me! ${shareUrl}`)}`,
             blueskyShareUrl: `https://bsky.app/intent/compose?text=${encodeURIComponent(`I just registered for ${params.event.name} — join me!\n${shareUrl}`)}`,

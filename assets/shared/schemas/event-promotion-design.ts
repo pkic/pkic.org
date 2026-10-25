@@ -77,6 +77,7 @@ export const eventPromotionDesignSchema = z
   });
 export type PromotionComposition = z.infer<typeof promotionCompositionSchema>;
 export type EventPromotionDesign = z.infer<typeof eventPromotionDesignSchema>;
+export const DEFAULT_PROMOTION_COLORS = ["#0b2a1c", "#125c3c", "#20506e", "#b0581f"] as const;
 export const DEFAULT_PROMOTION_PANELS = ["cover", "speakers", "content", "details", "register", "sponsors"] as const;
 export function defaultPromotionComposition(attendee = false): PromotionComposition {
   return promotionCompositionSchema.parse({
@@ -92,7 +93,7 @@ export function defaultEventPromotionDesign(
   return eventPromotionDesignSchema.parse({
     version: 1,
     name: badge?.name ?? name,
-    colors: ["#0b2a1c", "#125c3c", "#20506e", "#b0581f"],
+    colors: [...DEFAULT_PROMOTION_COLORS],
     assets: {
       logo: badge?.assets.logo_white,
       mark: badge?.assets.mark,
@@ -102,4 +103,15 @@ export function defaultEventPromotionDesign(
     sponsorGroups: badge?.sponsorGroups ?? [],
     panels: [...DEFAULT_PROMOTION_PANELS],
   });
+}
+
+/** One artwork fallback for exports, social previews, and email attachments. */
+export function eventPromotionDesignFromSettings(
+  name: string,
+  settings: Record<string, unknown>,
+): EventPromotionDesign {
+  const badge = eventBadgeTemplateSchema
+    .nullable()
+    .parse(settings.promotionDesign ? null : (settings.badgeTemplate ?? null));
+  return eventPromotionDesignSchema.parse(settings.promotionDesign ?? defaultEventPromotionDesign(name, badge));
 }

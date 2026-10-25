@@ -147,7 +147,7 @@ test("verified approved-domain registration affiliates once and an organization 
     await attendee.getByRole("button", { name: "Edit details", exact: true }).click();
     await expect(attendee.getByLabel("Country", { exact: true })).toHaveValue("CA");
     const badge = attendee.locator("[data-og-badge-img]");
-    await expect(badge).toHaveAttribute("src", /[?]v=/);
+    await expect(badge).toHaveAttribute("src", /[?&]v=/);
     await expect
       .poll(() => badge.evaluate((element: HTMLImageElement) => element.complete && element.naturalWidth > 0))
       .toBe(true);

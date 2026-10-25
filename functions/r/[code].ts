@@ -1,3 +1,4 @@
+import { personalPromotionImagePath } from "../../assets/shared/personal-promotion-image";
 import { json } from "../_lib/http";
 import { recordReferralClick } from "../_lib/services/referrals";
 import { first } from "../_lib/db/queries";
@@ -228,7 +229,7 @@ function buildOgHtml(
   const ogDescription = escapeHtml(buildOgDescription(name, eventName, role, eventFormat));
   const ogImageAlt = escapeHtml(buildOgImageAlt(name, eventName, role, eventFormat));
 
-  const ogImage = `${appBaseUrl}/api/v1/registrations/referrals/${encodeURIComponent(code)}/badge`;
+  const ogImage = `${appBaseUrl}${personalPromotionImagePath(code)}`;
   const ogUrl = `${appBaseUrl}/r/${encodeURIComponent(code)}`;
   const canonical = escapeHtml(redirectUrl);
   const ogImageEsc = escapeHtml(ogImage);

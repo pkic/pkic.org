@@ -1,3 +1,4 @@
+import { promotionStillBlocks, type PromotionStillContent } from "./promotion-still";
 import { layoutPromotionTakeaways, layoutPromotionDetails } from "./promotion-content-panels";
 import { layoutPromotionSponsors } from "./promotion-sponsors";
 import { plainText } from "../../../../assets/shared/markdown-plain-text";
@@ -51,13 +52,26 @@ export interface PromotionPage {
   markX?: number;
   rules?: { x: number; y: number; width: number }[];
 }
-interface PromotionBlock {
+export interface PromotionBlock {
   text: string;
   size: number;
   bold?: boolean;
   role?: PromotionText["role"];
   portrait?: { src: string; name: string };
   indent?: number;
+}
+/** A personal preview needs event and identity facts, not a fabricated session or agenda. */
+export interface PersonalPromotionRenderData {
+  personal: PromotionStillContent & { eventName: string };
+  registrationUrl: string;
+  design?: PromotionRenderData["design"];
+  composition?: PromotionRenderData["composition"];
+  audience?: PromotionRenderData["audience"];
+  actorId?: string;
+  portraits?: Record<string, string>;
+  logoDataUrl?: string;
+  scene?: PromotionPage;
+  measure?: PromotionMeasure;
 }
 export type PromotionMeasure = (text: string, size: number, bold: boolean) => number;
 export const promotionDimensions = {
@@ -84,7 +98,7 @@ export function promotionPeople(data: PromotionRenderData) {
 }
 /** One measured layout drives the SVG and PDF adapters. Continuation never discards text or credits. */
 export function buildPromotionPages(
-  data: PromotionRenderData,
+  data: PromotionRenderData | PersonalPromotionRenderData,
   format: PromotionFormat,
   measure: PromotionMeasure = data.measure ?? ((text, size) => Array.from(text).length * size * 0.55),
 ): PromotionPage[] {
@@ -95,7 +109,6 @@ export function buildPromotionPages(
   const footer = height - (format === "landscape" || format === "panel" ? 95 : 210);
   const sponsorBottom = height < 800 ? height - (data.composition?.qrCode ? 180 : 130) : footer;
   const pages: PromotionPage[] = [];
-  const people = promotionPeople(data);
   const composition: PromotionComposition =
     data.composition ?? defaultPromotionComposition(data.audience === "attendee");
   const selected = composition.panels;
@@ -135,15 +148,18 @@ export function buildPromotionPages(
     y = Math.max(y, (headerTop + 50 + header.length * 28) * scale);
     if (coverHeaderTop !== undefined)
       y = Math.max(y, (headerTop + (header.length - 1) * 28 + 24) * scale + (blocks[0]?.size ?? 0));
+    let portraitBottom = 0;
     for (const block of blocks) {
       const group = `block-${blockSequence++}`;
       const indent = block.indent ?? (block.portrait ? 150 * scale : 0);
       if (block.portrait) {
+        if (portraitBottom) y = Math.max(y, portraitBottom + block.size + 24 * scale);
         if (y + 170 * scale > footer) {
           page = add(title);
           put(page, title.toUpperCase(), 100 * scale, 22 * scale, true, "H2");
           y = 180 * scale;
         }
+        portraitBottom = y - block.size + 120 * scale;
         page.pictures.push({
           src: block.portrait.src,
           x: margin,
@@ -154,6 +170,7 @@ export function buildPromotionPages(
           alt: block.portrait.name,
         });
       }
+      if (!block.portrait && indent === 0 && portraitBottom) y = Math.max(y, portraitBottom + block.size);
       const lines = promotionMeasuredLines(plainText(block.text), maxWidth - indent, (line) =>
         measure(line, block.size, Boolean(block.bold)),
       );
@@ -162,6 +179,7 @@ export function buildPromotionPages(
           page = add(title);
           put(page, title.toUpperCase(), 100 * scale, 22 * scale, true, "H2");
           y = 180 * scale;
+          portraitBottom = 0;
         }
         put(page, line, y, block.size, block.bold, block.role, margin + indent);
         page.texts.at(-1)!.group = group;
@@ -171,6 +189,24 @@ export function buildPromotionPages(
     }
     return page;
   }
+  if ("personal" in data) {
+    // One social image must retain the complete identity and event details. The same
+    // measured flow scales its text down when it would otherwise continue onto another page.
+    for (const factor of [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4]) {
+      pages.length = 0;
+      flow(
+        data.personal.eventName,
+        promotionStillBlocks(data.personal, composition, scale, height, data.portraits, factor),
+        170 * scale,
+      );
+      if (pages.length === 1) break;
+    }
+    if (pages.length !== 1) throw new Error("Personal promotion details do not fit the social image.");
+    pages[0]!.total = 1;
+    pages[0]!.markX = width - 460 * scale;
+    return pages;
+  }
+  const people = promotionPeople(data);
   const clock = { timeZone: data.agenda.timeZone, city: data.agenda.clockCity ?? null };
   const time = data.occurrence.startAt
     ? formatTimeRangeInZone(data.occurrence.startAt, data.occurrence.endAt ?? undefined, clock)
@@ -199,42 +235,27 @@ export function buildPromotionPages(
           : [people.find((person) => person.userId === data.actorId) ?? people[0]].filter(
               (person): person is NonNullable<typeof person> => Boolean(person),
             );
-    const blocks: PromotionBlock[] = [
-      {
-        text: heading,
-        size: (height < 800 ? 48 : composition.stillLayout === "expanded" ? 76 : 68) * scale,
-        bold: true,
-        role: "H1",
-      },
-    ];
-    if (selected.includes("speakers") || data.audience === "attendee")
-      for (const person of credits)
-        blocks.push(
-          {
-            text: person.displayName,
-            size: 32 * scale,
-            bold: true,
-            portrait: data.portraits?.[person.userId]
-              ? { src: data.portraits[person.userId]!, name: person.displayName }
-              : undefined,
-          },
-          { text: person.affiliation, size: 24 * scale, indent: data.portraits?.[person.userId] ? 150 * scale : 0 },
-        );
-    if (selected.includes("content")) {
-      const summary =
-        composition.summary ||
+    const summary = selected.includes("content")
+      ? composition.summary ||
         (composition.content === "abstract" ? data.occurrence.description : data.copy.whyAttend) ||
-        data.occurrence.description;
-      blocks.push({ text: summary, size: 28 * scale });
-    }
-    if (selected.includes("details"))
-      blocks.push({
-        text: [dates, time, location, data.place, data.mediaWording].filter(Boolean).join(" · "),
-        size: 23 * scale,
-      });
-    if (selected.includes("picks"))
-      for (const pick of data.picks ?? []) blocks.push({ text: pick.title, size: 30 * scale, bold: true });
-    blocks.push({ text: composition.callToAction, size: 30 * scale, bold: true });
+        data.occurrence.description
+      : undefined;
+    const blocks = promotionStillBlocks(
+      {
+        heading,
+        people: selected.includes("speakers") || data.audience === "attendee" ? credits : [],
+        summary,
+        details: selected.includes("details")
+          ? [dates, time, location, data.place, data.mediaWording].filter(Boolean).join(" · ")
+          : undefined,
+        picks: selected.includes("picks") ? data.picks : undefined,
+        callToAction: composition.callToAction,
+      },
+      composition,
+      scale,
+      height,
+      data.portraits,
+    );
     flow(data.agenda.eventName ?? "PKI Consortium", blocks, 220 * scale);
   }
   for (const panel of format === "carousel" ? selected : selected.filter((panel) => panel === "sponsors")) {

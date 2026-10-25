@@ -1,4 +1,4 @@
-import { badgeCacheMetadata } from "../../../../../_lib/services/badge-render-job-statements";
+import { readBadgeSource, personalBadgeCacheMetadata } from "../../../../../_lib/services/og-badge-source";
 /**
  * Registration referral badge image endpoint
  * GET /api/v1/registrations/referrals/:code/badge
@@ -11,10 +11,11 @@ import { badgeCacheMetadata } from "../../../../../_lib/services/badge-render-jo
  * on first render and served from cache on subsequent requests.
  */
 
+import { requestDb } from "../../../../../_lib/db/context";
 import { dispatchRequestMethod, json } from "../../../../../_lib/http";
 import { resolveAppBaseUrl } from "../../../../../_lib/config";
 import { readCachedBadge, serveGeneratedBadge } from "../../../../../_lib/services/og-badge-http";
-import { generateBadgePng } from "../../../../../_lib/services/og-badge-prerender";
+import { renderBadgeSourcePng } from "../../../../../_lib/services/og-badge-prerender";
 
 const R2_KEY_PREFIX = "og-badges/";
 
@@ -27,10 +28,13 @@ export async function onRequestGet(c: any): Promise<Response> {
   const isDownload = url.searchParams.get("download") === "1";
   const rawName = url.searchParams.get("name") ?? "";
 
+  const source = await readBadgeSource(requestDb(c), code);
+  if (!source) return json({ error: { code: "NOT_FOUND", message: "Unknown referral code" } }, 404);
+
   const responseOptions = {
     bucket,
     cacheKey: r2Key,
-    cacheMetadata: await badgeCacheMetadata(c.env.DB, code),
+    cacheMetadata: personalBadgeCacheMetadata(code, source),
     isDownload,
     downloadName: rawName,
     fallbackDownloadName: "attendee-badge",
@@ -38,10 +42,10 @@ export async function onRequestGet(c: any): Promise<Response> {
   const cached = await readCachedBadge(responseOptions);
   if (cached) return cached;
 
-  // 2. Generate PNG (wasm init + fonts + DB + render, all parallelised)
+  // Render the loaded source without another database roundtrip.
   let png: Uint8Array | null;
   try {
-    png = await generateBadgePng(code, c.env, origin);
+    png = await renderBadgeSourcePng(code, source, c.env, origin);
   } catch {
     return new Response("SVG rendering unavailable in this environment", {
       status: 503,

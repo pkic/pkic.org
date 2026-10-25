@@ -1,3 +1,4 @@
+import { personalPromotionImagePath } from "../assets/shared/personal-promotion-image";
 import { env as workerEnv } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createReferralCode } from "../functions/_lib/services/referrals";
@@ -203,7 +204,7 @@ describe("registration badge regeneration", () => {
       success: true,
       status: "queued",
       referralCode: seeded.referralCode,
-      badgeUrl: `https://app.test/api/v1/registrations/referrals/${seeded.referralCode}/badge`,
+      badgeUrl: `https://app.test${personalPromotionImagePath(seeded.referralCode)}`,
     });
     expect(background).toHaveLength(1);
     await Promise.allSettled(background);

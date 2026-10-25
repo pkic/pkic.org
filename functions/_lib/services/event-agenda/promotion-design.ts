@@ -1,9 +1,5 @@
 import { svgLogoDimensions } from "../../utils/svg-logo";
-import {
-  defaultEventPromotionDesign,
-  eventPromotionDesignSchema,
-} from "../../../../assets/shared/schemas/event-promotion-design";
-import { eventBadgeTemplateSchema } from "../../../../assets/shared/schemas/event-badge-template";
+import { eventPromotionDesignFromSettings } from "../../../../assets/shared/schemas/event-promotion-design";
 import type { DatabaseLike, Env } from "../../types";
 import { EVENT_COLUMNS, type EventRecord } from "../events";
 import { eventReadIdSql, type EventReadSelection } from "../events/selection";
@@ -33,12 +29,7 @@ export function preparePromotionDesign(db: DatabaseLike, selection: EventReadSel
       const event = batchFirst<EventRecord>(loaded[0]);
       if (!event) throw new AppError(404, "EVENT_NOT_FOUND", "Event unavailable.");
       const settings = parseJsonSafe<Record<string, unknown>>(event.settings_json, {});
-      const badge = eventBadgeTemplateSchema
-        .nullable()
-        .parse(settings.promotionDesign ? null : (settings.badgeTemplate ?? null));
-      const design = eventPromotionDesignSchema.parse(
-        settings.promotionDesign ?? defaultEventPromotionDesign(event.name, badge),
-      );
+      const design = eventPromotionDesignFromSettings(event.name, settings);
       if (design.sponsorSource === "event")
         design.sponsorGroups = batchRows<{ tier: string }>(loaded[1]).map((row, index) => ({
           key: `event_${index}`,

@@ -4,7 +4,13 @@ import type {
   EventPromotionDesign,
   PromotionComposition,
 } from "../../../../assets/shared/schemas/event-promotion-design";
-import { buildPromotionPages, promotionDimensions, type PromotionPage, type PromotionMeasure } from "./promotion-scene";
+import {
+  buildPromotionPages,
+  promotionDimensions,
+  type PromotionPage,
+  type PersonalPromotionRenderData,
+  type PromotionMeasure,
+} from "./promotion-scene";
 import { promotionSceneSvg } from "./promotion-svg";
 export { promotionDimensions, buildPromotionPages } from "./promotion-scene";
 export { promotionMeasuredLines } from "./promotion-text";
@@ -58,7 +64,7 @@ export function promotionCardPages(
   }));
 }
 export function renderPromotionSvg(
-  data: PromotionRenderData,
+  data: PromotionRenderData | PersonalPromotionRenderData,
   format: Exclude<keyof typeof promotionDimensions, "carousel">,
 ): string {
   return promotionSceneSvg(data, data.scene ?? buildPromotionPages(data, format)[0]!);

@@ -1,5 +1,7 @@
 import { env as workerEnv } from "cloudflare:workers";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { defaultEventPromotionDesign } from "../assets/shared/schemas/event-promotion-design";
+import { readBadgeSource, personalBadgeCacheMetadata } from "../functions/_lib/services/og-badge-source";
 import { createReferralCode } from "../functions/_lib/services/referrals";
 import { onRequestGet as donationBadgeImage } from "../functions/api/v1/donations/checkouts/[sessionId]/badge";
 import { onRequestGet as donationSharePage } from "../functions/donate/r/[code]";
@@ -11,13 +13,13 @@ import { resetDb } from "./helpers/reset-db";
 import type { Env } from "../functions/_lib/types";
 
 vi.mock("../functions/_lib/services/og-badge-prerender", () => ({
-  generateBadgePng: vi.fn(),
+  renderBadgeSourcePng: vi.fn(),
   generateDonationBadgePng: vi.fn(),
 }));
 
 import * as ogBadgePrerender from "../functions/_lib/services/og-badge-prerender";
 
-const mockedGenerateBadgePng = vi.mocked(ogBadgePrerender.generateBadgePng);
+const mockedRenderBadgeSourcePng = vi.mocked(ogBadgePrerender.renderBadgeSourcePng);
 const mockedGenerateDonationBadgePng = vi.mocked(ogBadgePrerender.generateDonationBadgePng);
 
 const baseEnv = {
@@ -146,7 +148,7 @@ describe("OG share links", () => {
   });
 
   it("downloads event badge fallbacks with a png filename", async () => {
-    mockedGenerateBadgePng.mockResolvedValue(pngBytes());
+    mockedRenderBadgeSourcePng.mockResolvedValue(pngBytes());
     const code = await seedEventReferral();
     const envWithoutImages = { ...baseEnv, IMAGES: undefined } as Env;
 
@@ -187,7 +189,10 @@ describe("OG share links", () => {
 
   it("preserves cached webp badge filenames for event and donation cards", async () => {
     const code = await seedEventReferral();
-    const cachedObject = { ...cachedImage("image/webp"), customMetadata: { badgeGeneration: "0" } };
+    const cachedObject = {
+      ...cachedImage("image/webp"),
+      customMetadata: personalBadgeCacheMetadata(code, (await readBadgeSource(baseEnv.DB, code))!),
+    };
     const envWithCachedWebp = {
       ...baseEnv,
       ASSETS_BUCKET: {
@@ -222,10 +227,57 @@ describe("OG share links", () => {
     expect(donationResponse.headers.get("content-disposition")).toBe('attachment; filename="donation-badge.webp"');
   });
 
+  it("loads current artwork and generation in one batch for a cache hit", async () => {
+    const code = await seedEventReferral();
+    const source = (await readBadgeSource(baseEnv.DB, code))!;
+    const cached = { ...cachedImage("image/png"), customMetadata: personalBadgeCacheMetadata(code, source) };
+    const environment = {
+      ...baseEnv,
+      ASSETS_BUCKET: { get: vi.fn().mockResolvedValue(cached) } as unknown as Env["ASSETS_BUCKET"],
+    } as Env;
+    const response = await callApi(environment, `/api/v1/registrations/referrals/${code}/badge`, undefined, {
+      maxRoundTrips: 1,
+    });
+    expect(response.status).toBe(200);
+    expect(response.headers.get("X-Cache")).toBe("HIT");
+    expect(mockedRenderBadgeSourcePng).not.toHaveBeenCalled();
+  });
+
+  it("regenerates a cached image after the event promotion design changes", async () => {
+    const code = await seedEventReferral();
+    const before = (await readBadgeSource(baseEnv.DB, code))!;
+    const cached = { ...cachedImage("image/png"), customMetadata: personalBadgeCacheMetadata(code, before) };
+    const settings = JSON.stringify({ promotionDesign: defaultEventPromotionDesign("Updated event artwork") });
+    await baseEnv.DB.prepare(
+      "UPDATE events SET settings_json=?,updated_at=? WHERE id=(SELECT event_id FROM referral_codes WHERE code=?)",
+    )
+      .bind(settings, "2027-01-01T00:00:00.000Z", code)
+      .run();
+    mockedRenderBadgeSourcePng.mockResolvedValue(pngBytes());
+    const environment = {
+      ...baseEnv,
+      IMAGES: undefined,
+      ASSETS_BUCKET: { get: vi.fn().mockResolvedValue(cached) } as unknown as Env["ASSETS_BUCKET"],
+    } as Env;
+    const response = await callApi(environment, `/api/v1/registrations/referrals/${code}/badge`, undefined, {
+      maxRoundTrips: 1,
+    });
+    expect(response.status).toBe(200);
+    expect(response.headers.get("X-Cache")).toBe("MISS");
+    expect(mockedRenderBadgeSourcePng).toHaveBeenCalledWith(
+      code,
+      expect.objectContaining({
+        settings_json: settings,
+      }),
+      expect.anything(),
+      expect.any(String),
+    );
+  });
+
   it("mounts badge images under their owning resources and retires the mixed OG API bucket", async () => {
     const code = await seedEventReferral();
     await seedCompletedDonation("cs_test_mounted_share");
-    mockedGenerateBadgePng.mockResolvedValue(pngBytes());
+    mockedRenderBadgeSourcePng.mockResolvedValue(pngBytes());
     mockedGenerateDonationBadgePng.mockResolvedValue(pngBytes());
     const envWithoutImages = { ...baseEnv, IMAGES: undefined } as Env;
     const executionCtx = {
@@ -233,11 +285,9 @@ describe("OG share links", () => {
       waitUntil: vi.fn(),
     } as unknown as ExecutionContext;
 
-    const eventResponse = await app.fetch(
-      new Request(`https://app.test/api/v1/registrations/referrals/${code}/badge`),
-      envWithoutImages,
-      executionCtx,
-    );
+    const eventResponse = await callApi(envWithoutImages, `/api/v1/registrations/referrals/${code}/badge`, undefined, {
+      maxRoundTrips: 1,
+    });
     expect(eventResponse.status).toBe(200);
     expect(eventResponse.headers.get("content-type")).toBe("image/png");
 

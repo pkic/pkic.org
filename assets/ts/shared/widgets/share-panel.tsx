@@ -1,3 +1,4 @@
+import { personalPromotionImagePath } from "../../../shared/personal-promotion-image";
 /**
  * Renders a personalized sharing panel into a container element.
  *
@@ -74,12 +75,12 @@ function nameSlug(firstName?: string | null, lastName?: string | null): string {
 
 const MAX_INVITES = 10;
 
-function extractOgBadgeUrl(shareUrl: string): string | null {
+function extractOgBadgeUrl(shareUrl: string, version?: string): string | null {
   try {
     const match = shareUrl.match(/\/r\/([A-Za-z0-9]+)(?:[?#]|$)/);
     if (!match) return null;
     const origin = new URL(shareUrl).origin;
-    return `${origin}/api/v1/registrations/referrals/${match[1]}/badge`;
+    return `${origin}${personalPromotionImagePath(match[1], version)}`;
   } catch {
     return null;
   }
@@ -455,11 +456,7 @@ function SharePanelInner({ options }: { options: SharePanelOptions }) {
   const twitterUrl = `https://twitter.com/intent/tweet?text=${twitterText}`;
   const blueskyUrl = `https://bsky.app/intent/compose?text=${blueskyText}`;
   const redditUrl = `https://www.reddit.com/submit?url=${encodeURIComponent(shareUrl)}&title=${redditTitle}`;
-  const baseBadgeUrl = extractOgBadgeUrl(shareUrl);
-  const ogBadgeUrl =
-    baseBadgeUrl && options.badgeVersion
-      ? `${baseBadgeUrl}?v=${encodeURIComponent(options.badgeVersion)}`
-      : baseBadgeUrl;
+  const ogBadgeUrl = extractOgBadgeUrl(shareUrl, options.badgeVersion);
   const badgeFilename = `attendee-badge-${nameSlug(options.firstName, options.lastName)}.png`;
 
   const canInvite = Boolean(manageToken && eventSlug);

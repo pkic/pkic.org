@@ -1,3 +1,4 @@
+import { personalPromotionImagePath } from "../../../assets/shared/personal-promotion-image";
 import { all, first, run } from "../db/queries";
 import { AppError } from "../errors";
 import { logError } from "../logging";
@@ -67,7 +68,7 @@ export async function requestRegistrationBadgeRegeneration(
   return {
     jobId: job.id,
     referralCode: referral.code,
-    badgeUrl: `${payload.appBaseUrl}/api/v1/registrations/referrals/${referral.code}/badge`,
+    badgeUrl: `${payload.appBaseUrl}${personalPromotionImagePath(referral.code)}`,
   };
 }
 
