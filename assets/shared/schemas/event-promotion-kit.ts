@@ -4,7 +4,7 @@ import { promotionCopySchema } from "./event-promotion-copy";
 import { agendaOccurrenceFieldsSchema, agendaPlannedMediaSchema, agendaOccurrenceQuerySchema } from "./event-agenda";
 export { promotionCopySchema } from "./event-promotion-copy";
 import { promotionCompositionSchema } from "./event-promotion-design";
-export const PROMOTION_TEMPLATE_VERSION = 6 as const;
+export const PROMOTION_TEMPLATE_VERSION = 7 as const;
 export const promotionRenderStateSchema = z.enum(["queued", "rendering", "retrying", "rendered", "failed", "obsolete"]);
 export const promotionFormatSchema = z.enum(["landscape", "square", "portrait", "panel", "carousel"]);
 export const promotionFingerprintSchema = z.string().regex(/^[a-f0-9]{64}$/);

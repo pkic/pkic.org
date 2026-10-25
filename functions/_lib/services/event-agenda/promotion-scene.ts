@@ -137,6 +137,7 @@ export function buildPromotionPages(
     start = 200 * scale,
     maxWidth = usable - reservedRight,
     coverHeaderTop?: number,
+    blockGap = 24 * scale,
   ) {
     let page = add(title),
       y = start;
@@ -155,7 +156,7 @@ export function buildPromotionPages(
       const indent = block.indent ?? (block.portrait ? 150 * scale : 0);
       if (block.portrait) {
         if (portraitBottom) y = Math.max(y, portraitBottom + block.size + 24 * scale);
-        if (y + 170 * scale > footer) {
+        if (y - block.size + 127 * scale > footer) {
           page = add(title);
           put(page, title.toUpperCase(), 100 * scale, 22 * scale, true, "H2");
           y = 180 * scale;
@@ -186,7 +187,7 @@ export function buildPromotionPages(
         page.texts.at(-1)!.group = group;
         y += block.size * 1.25;
       }
-      y += 24 * scale;
+      y += blockGap;
     }
     return page;
   }
@@ -207,6 +208,8 @@ export function buildPromotionPages(
         ),
         170 * scale,
         usable * 0.68,
+        146,
+        12 * scale,
       );
       if (pages.length === 1) break;
     }

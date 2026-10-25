@@ -1,5 +1,5 @@
 /** Renderer identity is shared by image links and stored-cache metadata. */
-export const PERSONAL_PROMOTION_RENDERER = "promotion-scene-v2";
+export const PERSONAL_PROMOTION_RENDERER = "promotion-scene-v3";
 
 export function personalPromotionSharePath(referralCode: string): string {
   return `/r/${encodeURIComponent(referralCode)}`;

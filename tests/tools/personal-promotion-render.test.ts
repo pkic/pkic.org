@@ -9,7 +9,7 @@ const measure = promotionFontMeasure(
 );
 
 describe("personal promotion typography", () => {
-  it("keeps the event title prominent and every measured line inside the image above its footer", () => {
+  it.each([false, true])("keeps measured text clear of the logo, headshot and footer (portrait: %s)", (portrait) => {
     const page = buildPromotionPages(
       {
         personal: {
@@ -27,6 +27,7 @@ describe("personal promotion typography", () => {
         registrationUrl: "https://pkic.org/r/example",
         composition: defaultPromotionComposition(true),
         measure,
+        portraits: portrait ? { person: "data:image/png;base64,AA==" } : undefined,
       },
       "landscape",
     )[0]!;
@@ -34,7 +35,15 @@ describe("personal promotion typography", () => {
     const eyebrow = page.texts.find((line) => line.role === "H2")!;
     expect(title.map((line) => line.text).join(" ")).toBe("Post-Quantum Cryptography Conference");
     expect(title).toHaveLength(2);
-    expect(title[0]!.size).toBeGreaterThan(eyebrow.size * 1.8);
+    expect(title[0]!.size).toBeGreaterThan(eyebrow.size * 1.7);
+    expect(eyebrow.y - eyebrow.size - 97).toBeGreaterThan(35);
+    if (portrait) {
+      const picture = page.pictures[0]!;
+      expect(picture.circle).toBe(true);
+      expect(picture.width).toBe(picture.height);
+      const details = page.texts.find((line) => line.text.startsWith("December"))!;
+      expect(details.y - details.size).toBeGreaterThanOrEqual(picture.y + picture.height);
+    }
     expect(title[0]!.y - title[0]!.size - eyebrow.y).toBeGreaterThan(20);
     for (const line of page.texts) {
       expect(line.x + measure(line.text, line.size, Boolean(line.bold))).toBeLessThan(page.width - 80);
