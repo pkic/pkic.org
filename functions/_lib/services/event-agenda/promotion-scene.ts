@@ -47,6 +47,7 @@ export interface PromotionPage {
   height: number;
   light?: boolean;
   qr?: boolean;
+  still?: boolean;
   bars?: { x: number; y: number; width: number; height: number; color: string; opacity?: number }[];
   sponsorBoard?: { x: number; y: number; width: number; height: number };
   markX?: number;
@@ -195,14 +196,32 @@ export function buildPromotionPages(
     for (const factor of [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4]) {
       pages.length = 0;
       flow(
-        data.personal.eventName,
-        promotionStillBlocks(data.personal, composition, scale, height, data.portraits, factor),
+        data.personal.heading,
+        promotionStillBlocks(
+          { ...data.personal, heading: data.personal.eventName },
+          composition,
+          scale,
+          height,
+          data.portraits,
+          factor,
+        ),
         170 * scale,
+        usable * 0.68,
       );
       if (pages.length === 1) break;
     }
     if (pages.length !== 1) throw new Error("Personal promotion details do not fit the social image.");
     pages[0]!.total = 1;
+    pages[0]!.title = data.personal.eventName;
+    pages[0]!.still = true;
+    const titleBottom = Math.max(...pages[0]!.texts.filter((text) => text.role === "H1").map((text) => text.y));
+    (pages[0]!.bars ??= []).push({
+      x: margin,
+      y: titleBottom + 18 * scale,
+      width: 200 * scale,
+      height: 6 * scale,
+      color: "url(#accent)",
+    });
     pages[0]!.markX = width - 460 * scale;
     return pages;
   }

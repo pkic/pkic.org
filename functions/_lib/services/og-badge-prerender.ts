@@ -26,6 +26,7 @@ import { socialBadgeRoleSchema } from "../../../assets/shared/schemas/participan
 import { formatEventPlace } from "../../../assets/shared/event-place";
 import { readBadgeSource, personalBadgeCacheMetadata, type BadgeSource } from "./og-badge-source";
 import { renderPersonalPromotionSvg } from "./event-agenda/promotion-personal";
+import { promotionFontMeasure } from "./event-agenda/promotion-text";
 import { eventPromotionDesignFromSettings } from "../../../assets/shared/schemas/event-promotion-design";
 import { parseJsonSafe } from "../utils/json";
 
@@ -119,6 +120,7 @@ export async function renderBadgeSourcePng(
     headshotDataUrl,
     registrationUrl: new URL(`/r/${encodeURIComponent(code)}`, origin).href,
     design: eventPromotionDesignFromSettings(source.event_name, settings),
+    measure: promotionFontMeasure(fontBuffers),
     logoDataUrl: logoBytes ? `data:image/svg+xml;base64,${uint8ToBase64(logoBytes)}` : undefined,
   });
 

@@ -6,6 +6,7 @@ import {
   type EventPromotionDesign,
 } from "../../../../assets/shared/schemas/event-promotion-design";
 import { renderPromotionSvg } from "./promotion-render";
+import type { PromotionMeasure } from "./promotion-scene";
 
 export interface PersonalPromotionData {
   firstName: string;
@@ -22,6 +23,7 @@ export interface PersonalPromotionData {
   registrationUrl: string;
   design: EventPromotionDesign;
   logoDataUrl?: string;
+  measure?: PromotionMeasure;
 }
 export function renderPersonalPromotionSvg(data: PersonalPromotionData): string {
   const person = {
@@ -42,6 +44,7 @@ export function renderPersonalPromotionSvg(data: PersonalPromotionData): string 
       design: data.design,
       registrationUrl: data.registrationUrl,
       logoDataUrl: data.logoDataUrl,
+      measure: data.measure,
       composition: promotionCompositionSchema.parse({ panels: ["cover", "speakers", "details"], qrCode: false }),
       portraits: data.headshotDataUrl ? { participant: data.headshotDataUrl } : undefined,
     },

@@ -33,7 +33,7 @@ describe("OG sponsor badge rendering", () => {
     });
 
     expect(svg).toContain('width="1200" height="630"');
-    expect(svg).toContain("I’m sponsoring");
+    expect(svg).toContain("I’M SPONSORING");
     expect(svg).toContain('id="panorama"');
     expect(svg).toContain('id="grid-fade"');
     expect(svg).toContain("Synthetic Sponsor");
