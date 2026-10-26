@@ -1,3 +1,4 @@
+import { refuseIneligibleWorkEmail } from "../email-domains/work-email-screen";
 import { prepareJobWake } from "./scheduled-jobs/dispatcher";
 import { prepareMailingListEmailChange } from "./mailing-list-subscriptions/queue-email-change";
 import { setOwnEmailSignInPermission } from "./own-email-sign-in";
@@ -68,8 +69,15 @@ export async function listOwnEmailAddresses(
 /** Request proof without reserving the address or associating its owner with this account. */
 export async function addOwnEmailAddress(
   db: DatabaseLike,
-  input: { userId: string; email: string } & OwnEmailVerificationDelivery,
+  input: {
+    userId: string;
+    email: string;
+    purpose?: "representation";
+    unaffiliatedAttestation?: boolean;
+  } & OwnEmailVerificationDelivery,
 ): Promise<{ status: "verification_sent"; email: string; requestId: string; outboxId: string }> {
+  if (input.purpose === "representation")
+    refuseIneligibleWorkEmail({ email: input.email, unaffiliatedAttestation: input.unaffiliatedAttestation ?? false });
   const id = uuid();
   const at = nowIso();
   const message = await prepareOwnEmailVerificationMessage(db, { ...input, emailId: id, addressRequest: true, at });

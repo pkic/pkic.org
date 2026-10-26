@@ -3,7 +3,7 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SelfIdentityCreateForm } from "../../assets/ts/components/identities/SelfIdentityCreateForm";
-import { ownEmailAddressParamsSchema } from "../../assets/shared/schemas/own-email-addresses";
+import { ownRepresentationEmailAddSchema } from "../../assets/shared/schemas/own-email-addresses";
 import { controlFor } from "./helpers/labeled-control";
 
 let host: HTMLDivElement;
@@ -26,13 +26,13 @@ describe("shared identity mailbox retry", () => {
         vi.fn(async (input, init) => {
           const path = String(input).split("?")[0];
           if (init?.method === "POST") {
-            const parsed = ownEmailAddressParamsSchema.parse({ emailId: path.split("/").at(-2) });
-            expect(parsed.emailId).toBe(emailId);
+            const parsed = ownRepresentationEmailAddSchema.parse(JSON.parse(String(init?.body)));
+            expect(parsed.email).toBe("person@work.example");
             requests.push(path);
             return new Response(
               JSON.stringify(
                 status === 202
-                  ? { success: true }
+                  ? { status: "verification_sent", email: "person@work.example", requestId: emailId }
                   : { error: { code: "RATE_LIMITED", message: "Please wait before requesting another link." } },
               ),
               { status, headers: { "content-type": "application/json" } },
@@ -61,7 +61,7 @@ describe("shared identity mailbox retry", () => {
       host = document.createElement("div");
       document.body.append(host);
       await act(() => render(<SelfIdentityCreateForm onCreated={vi.fn()} />, host));
-      const email = controlFor(host, "Representation email") as HTMLInputElement;
+      const email = controlFor(host, "Your work email address") as HTMLInputElement;
       await act(() => {
         email.value = "person@work.example";
         email.dispatchEvent(new Event("input", { bubbles: true }));

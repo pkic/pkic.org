@@ -3,7 +3,7 @@ import type { z } from "zod";
 import { batchFirst, batchRows } from "../../db/pagination";
 import type { DatabaseLike, D1StatementResult } from "../../types";
 import { AppError } from "../../errors";
-import { organizationDomainCandidates, workEmailDomain } from "../../email-domains/classification";
+import { emailHost, organizationDomainCandidates, workEmailDomain } from "../../email-domains/classification";
 import { normalizeOrgName } from "../../../../assets/shared/organization-name";
 import { slugifyOr } from "../../../../assets/shared/slug";
 import { OWN_ADDRESSES_SQL, OWN_ADDRESS_COLUMNS, type OwnAddressRow, toAddress } from "../own-email-address-read";
@@ -22,6 +22,7 @@ export function prepareVerifiedAffiliationRead(
     email: string;
     emailId: string | null;
     organizationName?: string;
+    unaffiliatedAttestation?: boolean;
   },
 ) {
   const candidates = organizationDomainCandidates(input.email);
@@ -48,7 +49,7 @@ export function prepareVerifiedAffiliationRead(
       FROM json_each(?) requested JOIN identities fact ON ${matches} JOIN users person ON person.id=fact.user_id
       WHERE fact.organization_id IS NOT NULL GROUP BY requested.value,${FACT_ORGANIZATION}
     ), ranked AS (SELECT domain,id,active,disputed,unknown,member,ROW_NUMBER() OVER(PARTITION BY domain ORDER BY id) AS position FROM facts)
-      SELECT domain,id,active,disputed,unknown,member FROM ranked WHERE position<=2`)
+      SELECT domain,id,active,disputed,unknown,member FROM ranked WHERE position<=257`)
       .bind(domains),
     db
       .prepare(`SELECT organization.id,organization.name,organization.normalized_name,organization.merged_into_organization_id,member.id AS member_id
@@ -85,7 +86,9 @@ export function prepareVerifiedAffiliationRead(
         member: number;
       }>(results[1]);
       const claim = claims[0] ?? null;
-      const domain = requireWorkOrganizationDomain(claim?.domain ?? workEmailDomain(address.email));
+      const domain = input.unaffiliatedAttestation
+        ? emailHost(address.email)!
+        : requireWorkOrganizationDomain(claim?.domain ?? workEmailDomain(address.email));
       const derived = batchRows<{
         domain: string;
         id: string;

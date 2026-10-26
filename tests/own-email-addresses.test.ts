@@ -518,6 +518,41 @@ describe("a person's own email addresses", () => {
     expect(await queryAll(env.DB, "SELECT id FROM identities WHERE user_id=?", [second.userId])).toHaveLength(1);
   });
 
+  it("verifies a representation address without creating its organization association before explicit confirmation", async () => {
+    const organizationId = await insertOrganization(env.DB, "Shared Work Domain Owner");
+    await claimDomain(organizationId, "representation-work.example");
+    const { userId, token } = await signedIn("ana@gmail.com");
+    const requested = await call(
+      token,
+      "",
+      "POST",
+      ownEmailAddressAddSchema.parse({
+        email: "ana@representation-work.example",
+        purpose: "representation",
+        unaffiliatedAttestation: false,
+      }),
+    );
+    expect(requested.status, await requested.clone().text()).toBe(202);
+    const link = await verificationToken("ana@representation-work.example");
+    const response = await verify(link);
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(ownEmailAddressVerificationResponseSchema.parse(await response.json())).toEqual({
+      email: "ana@representation-work.example",
+      joinedOrganization: null,
+      offeredOrganization: null,
+    });
+    expect(
+      await queryAll(env.DB, "SELECT id FROM identities WHERE user_id=? AND organization_id IS NOT NULL", [userId]),
+    ).toEqual([]);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT identity_id,verified_at IS NOT NULL AS verified FROM user_emails WHERE user_id=?",
+        [userId],
+      ),
+    ).toEqual([{ identity_id: null, verified: 1 }]);
+  });
+
   it("adds an address, verifies it through the emailed link once, and joins the organization its domain belongs to", async () => {
     const organizationId = await insertOrganization(env.DB, "Open Claimed Co");
     await claimDomain(organizationId, "open-claimed.example");

@@ -1,3 +1,5 @@
+import { removeOwnRepresentation } from "../../../../../_lib/services/identities/remove-own";
+import { currentUserIdentityRemoveRouteSchema } from "../../../../../../assets/shared/schemas/route-contracts-identities";
 import { identityMutationResponseSchema } from "../../../../../../assets/shared/schemas/identity";
 import { currentUserIdentityUpdateRouteSchema } from "../../../../../../assets/shared/schemas/route-contracts-identities";
 import { requireIdentityFromRequest } from "../../../../../_lib/auth/user-session";
@@ -19,4 +21,10 @@ export const CurrentUserIdentityPatch = openApiRoute(
         : await endOwnIdentity(db, { ...input, endedAt: transition.endedAt });
     return jsonPrivate(identityMutationResponseSchema.parse({ success: true, ...result }));
   },
+);
+
+export const CurrentUserIdentityDelete = openApiRoute(
+  currentUserIdentityRemoveRouteSchema,
+  async (c: AdminContext, data) =>
+    jsonPrivate(await removeOwnRepresentation(requestDb(c), c.req.raw, c.env, data.params.identityId)),
 );

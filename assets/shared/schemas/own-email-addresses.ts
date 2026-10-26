@@ -9,6 +9,7 @@
  * the organization its domain belongs to through the shared domain rule.
  */
 import { z } from "zod";
+import { workEmailStepSchema } from "./work-email";
 import { jsonErrorResponse, magicLinkVerifySchema, successResponseSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import { verifiedEmailIdentitySchema } from "./identity";
@@ -37,7 +38,8 @@ export type OwnEmailAddressesListQuery = z.infer<typeof ownEmailAddressesListQue
 export const ownEmailAddressesListResponseSchema = paginatedResponseSchema("emails", ownEmailAddressSchema);
 export const ownEmailAddressResponseSchema = z.object({ email: ownEmailAddressSchema });
 
-export const ownEmailAddressAddSchema = userEmailAddSchema;
+export const ownRepresentationEmailAddSchema = workEmailStepSchema.extend({ purpose: z.literal("representation") });
+export const ownEmailAddressAddSchema = z.union([ownRepresentationEmailAddSchema, userEmailAddSchema.strict()]);
 export const ownEmailVerificationRequestedResponseSchema = z.object({
   status: z.literal("verification_sent"),
   email: z.string(),

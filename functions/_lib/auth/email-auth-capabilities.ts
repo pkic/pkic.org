@@ -38,7 +38,14 @@ const emailAuthCapabilityPayloadSchema = z
   .object({
     subjectId: z.string().min(1).max(128),
     authorizationRevision: z.string().uuid().optional(),
-    addressRequest: z.object({ userId: databaseIdSchema, email: normalizedEmailSchema }).strict().optional(),
+    addressRequest: z
+      .object({
+        userId: databaseIdSchema,
+        email: normalizedEmailSchema,
+        purpose: z.literal("representation").optional(),
+      })
+      .strict()
+      .optional(),
     capabilityId: z.string().min(16).max(64),
     emailFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
     ipHash: z
@@ -69,7 +76,7 @@ export async function queueEmailAuthCapability(options: {
   subjectId: string;
   email: string;
   authorizationRevision?: string;
-  addressRequest?: { userId: string; email: string };
+  addressRequest?: { userId: string; email: string; purpose?: "representation" };
   ttlSeconds: number;
   ipHash?: string | null;
   userAgentHash?: string | null;

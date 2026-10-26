@@ -6,6 +6,7 @@ const criticalJourneys = [
   "covers unified user sign-in via magic link",
   "covers proposal submission, speaker invitation, confirmation, and profile updates",
   "verified approved-domain registration affiliates once and an organization identity can be selected for the event",
+  "a proved work address requires organization confirmation and an incorrect shared-domain representation can be removed",
   "a member uploads a headshot through the disclaimer and crop flow",
   "public search accepts focus and closes with Escape",
   "mobile navigation opens and closes with Escape",

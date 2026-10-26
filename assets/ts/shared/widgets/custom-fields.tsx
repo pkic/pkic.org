@@ -1,4 +1,7 @@
 import { render } from "preact";
+import { geolocationCountryResponseSchema } from "../../../shared/schemas/geolocation";
+import { getJson } from "../api-client";
+import { useData } from "../../hooks/useData";
 import { useLayoutEffect, useRef } from "preact/hooks";
 import type { FormField } from "../types";
 import type { AttendanceType } from "../../../shared/schemas/registration";
@@ -189,6 +192,14 @@ export function CustomFieldList({
   /** Each question's state from the answer contract, for a form validated through it. */
   presentationOf?: (key: string) => FieldPresentation;
 }) {
+  const needsCountryHint = geoHint === undefined && fields.some((field) => readRules(field).format === "iso_country");
+  const { data: location } = useData(
+    () =>
+      needsCountryHint
+        ? getJson("/api/v1/geolocation/country", geolocationCountryResponseSchema)
+        : Promise.resolve(null),
+    [needsCountryHint],
+  );
   if (fields.length === 0) {
     return <p>No additional questions.</p>;
   }
@@ -206,7 +217,7 @@ export function CustomFieldList({
             field={field}
             rules={rules}
             visible={visible}
-            geoHint={geoHint}
+            geoHint={geoHint ?? location?.country}
             initialValue={initialValues?.[field.key]}
             presentation={presentationOf?.(field.key)}
           />
@@ -244,7 +255,7 @@ export function renderCustomFields(container: HTMLElement, fields: FormField[]):
   container.textContent = "";
 
   let ctx: VisibilityContext = { dayAttendance: [] };
-  let geoHint: string | null = null;
+  let geoHint: string | null | undefined;
   let initialValues: Record<string, unknown> = {};
 
   function update() {

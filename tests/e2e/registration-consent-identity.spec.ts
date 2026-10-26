@@ -1,6 +1,10 @@
+import { geolocationCountryResponseSchema } from "../../assets/shared/schemas/geolocation";
+import { mkdir } from "node:fs/promises";
+import { ORGANIZATION_JOB_TITLE_COPY } from "../../assets/shared/email-first-copy";
+import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-auth";
 /** @covers event.3.2.b */
 import { expect, test } from "@playwright/test";
-import { registerInBrowser } from "./helpers/registration";
+import { continueRegistrationWithEmail, registerInBrowser } from "./helpers/registration";
 import {
   registrationManageSchema,
   registrationManageUpdateResponseSchema,
@@ -15,7 +19,7 @@ import {
 } from "../../assets/shared/schemas/mailing-lists";
 import { identitiesListResponseSchema } from "../../assets/shared/schemas/identity";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
-import { signInToPortal } from "./helpers/portal-auth";
+import { openMyProfile, signInToPortal } from "./helpers/portal-auth";
 import { createMember } from "./helpers/member-provisioning";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
 import { acceptConfirmDialog } from "./helpers/confirm-dialog";
@@ -135,7 +139,7 @@ test("verified approved-domain registration affiliates once and an organization 
     }
     await changeIdentity.getByRole("button", { name: "Add identity", exact: true }).click();
     const addIdentity = attendee.getByRole("dialog", { name: "Add identity", exact: true });
-    await expect(addIdentity.getByRole("textbox", { name: /^Representation email/ })).toBeVisible();
+    await expect(addIdentity.getByRole("textbox", { name: EMAIL_FIRST_COPY.representation.work.label })).toBeVisible();
     await attendee.screenshot({ path: testInfo.outputPath("public-update-add-identity-phone.png") });
     await addIdentity.getByRole("button", { name: "Cancel", exact: true }).click();
     await changeIdentity.getByRole("button", { name: "Save changes", exact: true }).click();
@@ -192,4 +196,106 @@ test("verified approved-domain registration affiliates once and an organization 
   } finally {
     await attendeeContext.close();
   }
+});
+
+test("a proved work address requires organization confirmation and an incorrect shared-domain representation can be removed", async ({
+  page,
+}, info) => {
+  test.setTimeout(180_000);
+  page.setDefaultTimeout(20_000);
+  await signInToPortal(page, e2eAdminEmail("representation-onboarding"));
+  await openMyProfile(page);
+  const stamp = Date.now();
+  const domain = `shared-representation-${stamp}.example`;
+  const names = [`Parent organization ${stamp}`, `Subsidiary organization ${stamp}`];
+  const directory = info.outputPath("representation-flow");
+  await mkdir(directory, { recursive: true });
+  for (const [index, name] of names.entries()) {
+    const email = `person-${index}@${domain}`;
+    await page.getByRole("button", { name: "Add identity", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Add identity", exact: true });
+    await expect(dialog.getByRole("radio", { name: /Use your work email/ })).toBeChecked();
+    await expect(dialog.getByRole("radio", { name: /Use a personal email/ })).not.toBeChecked();
+    await page.setViewportSize({ width: 1280, height: 900 });
+    if (index === 0) await page.screenshot({ path: `${directory}/email-choice-desktop.png` });
+    await page.setViewportSize({ width: 375, height: 812 });
+    if (index === 0) await page.screenshot({ path: `${directory}/email-choice-phone.png` });
+    await dialog.getByLabel(EMAIL_FIRST_COPY.representation.work.label, { exact: true }).fill(email);
+    const since = await capturedEmailCount();
+    await dialog.getByRole("button", { name: "Continue", exact: true }).click();
+    await expect(dialog).toContainText("Open the verification email");
+    const message = await waitForCapturedEmail(email, "Verify your email", { since });
+    const verificationPage = await page.context().newPage();
+    await verificationPage.goto(extractEmailUrl(message, "/email-verifications"));
+    await verificationPage.getByRole("button", { name: "Verify this address", exact: true }).click();
+    await expect(verificationPage.getByText(`${email} is verified`, { exact: true })).toBeVisible();
+    await verificationPage.close();
+    // Proof links the address; it does not silently assign the domain's organization.
+    const before = identitiesListResponseSchema.parse(
+      await (await page.request.get("/api/v1/users/current/identities?limit=100")).json(),
+    );
+    expect(before.identities.some((identity) => identity.email === email)).toBe(false);
+    await dialog.getByRole("button", { name: "Check verification", exact: true }).click();
+    if (index === 1) {
+      const organization = dialog.getByRole("combobox", { name: /^Organization/ });
+      await expect(organization).toHaveValue(
+        before.identities.find((identity) => identity.organizationName === names[0])!.organizationId!,
+      );
+      await organization.selectOption({ label: "Another organization" });
+    }
+    await dialog.getByRole("textbox", { name: /^Organization name/ }).fill(name);
+    await dialog
+      .getByRole("textbox", { name: new RegExp(`^${ORGANIZATION_JOB_TITLE_COPY.label}`) })
+      .fill("Research engineer");
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.screenshot({ path: `${directory}/organization-${index}-desktop.png` });
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.screenshot({ path: `${directory}/organization-${index}-phone.png` });
+    await dialog.getByRole("button", { name: "Add representation", exact: true }).click();
+    await expect(dialog).not.toBeVisible();
+    await expect(page.getByRole("article").filter({ has: page.getByText(name, { exact: true }) })).toBeVisible();
+  }
+  const identities = identitiesListResponseSchema.parse(
+    await (await page.request.get("/api/v1/users/current/identities?limit=100")).json(),
+  );
+  const incorrect = identities.identities.find((identity) => identity.organizationName === names[1])!;
+  await page.getByRole("button", { name: `Actions for ${names[1]}`, exact: true }).click();
+  await page.getByRole("menuitem", { name: "Remove incorrect representation…", exact: true }).click();
+  const confirmation = page.getByRole("alertdialog", { name: "Remove incorrect representation?", exact: true });
+  await expect(confirmation).toBeVisible();
+  await page.screenshot({ path: `${directory}/remove-confirmation-phone.png` });
+  await acceptConfirmDialog(page, "Remove representation");
+  await expect(page.getByRole("article").filter({ has: page.getByText(names[1], { exact: true }) })).toHaveCount(0);
+  const session = userAuthSessionResponseSchema.parse(await (await page.request.get("/api/v1/auth/session")).json());
+  const detail = userDetailResponseSchema.parse(
+    await (await page.request.get(`/api/v1/users/${session.identity.id}`)).json(),
+  );
+  expect(
+    [...detail.user.identities, ...detail.user.formerIdentities].some(
+      (identity) => identity.identityId === incorrect.id,
+    ),
+  ).toBe(false);
+  await expect(page.getByRole("article").filter({ has: page.getByText(names[0], { exact: true }) })).toBeVisible();
+  await page.route("**/api/v1/geolocation/country", (route) =>
+    route.fulfill({ json: geolocationCountryResponseSchema.parse({ country: "NL" }) }),
+  );
+  await page.goto("/events/2026/pqc-conference-amsterdam-nl/register/");
+  await continueRegistrationWithEmail(page, {
+    email: e2eAdminEmail("representation-onboarding"),
+    firstName: "Ada",
+    lastName: "Example",
+  });
+  for (const day of ["2026-12-01", "2026-12-02", "2026-12-03"])
+    await page.locator(`label[for="dayAttendance-${day}-on_demand"]`).click();
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  const country = page.getByRole("combobox", { name: /^Country/ });
+  await expect(country).toHaveValue("NL");
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.screenshot({ path: `${directory}/country-default-desktop.png` });
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.screenshot({ path: `${directory}/country-default-phone.png` });
+  await country.selectOption("CA");
+  await page.goBack();
+  await page.goForward();
+  await expect(country).toHaveValue("CA");
 });

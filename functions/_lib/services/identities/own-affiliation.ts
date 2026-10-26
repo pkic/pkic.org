@@ -43,6 +43,8 @@ function affiliationPlan(
       normalizedEmail: input.email,
       emailId: input.emailId,
       organizationName: input.organizationName,
+      organizationId: input.organizationId ?? undefined,
+      organizationChoice: { organizationId: input.organizationId },
       profile: { jobTitle: input.jobTitle },
       at,
       proofEvidence: {
@@ -65,21 +67,44 @@ export async function previewOwnAffiliation(
   const results = await db.batch([...actor.statements, ...source.statements]);
   await actor.decode(results.slice(0, actor.statements.length));
   const { basis, address } = source.decode(results.slice(actor.statements.length));
-  const organizationId = verifiedDomainOrganizationId(basis.domain, resolveDomainOrganization(basis.facts));
-  const organization = basis.organizations.find((item) => item.id === organizationId) ?? null;
-  let contextToken: string | undefined;
-  if (input.phase === "prepare") {
-    if (input.organizationResolved !== Boolean(organization))
+  if (input.phase === "resolve" && input.unaffiliatedAttestation) {
+    const identity = basis.identities.find(
+      (item) => item.organization_id === null && item.started_at && item.ended_at === null && item.blocked_at === null,
+    );
+    if (!identity)
       throw new AppError(
         409,
-        "IDENTITY_CONTEXT_CHANGED",
-        "The organization for this address changed. Confirm the address again.",
+        "PERSONAL_IDENTITY_REQUIRED",
+        "Refresh your profile before selecting your personal identity.",
       );
-    if (organization && input.organizationName !== undefined)
+    return identityAffiliationPreviewResponseSchema.parse({
+      email: address.email,
+      domain: basis.domain,
+      organization: null,
+      organizations: [],
+      identityId: identity.id,
+    });
+  }
+  const resolution = resolveDomainOrganization(basis.facts);
+  if (resolution.kind === "held") verifiedDomainOrganizationId(basis.domain, resolution);
+  const organizationId = resolution.kind === "organization" ? resolution.organizationId : null;
+  const organizations = basis.organizations.filter((organization) => {
+    return resolveDomainOrganization(basis.facts, { organizationId: organization.id }).kind === "organization";
+  });
+  const organization = organizations.find((item) => item.id === organizationId) ?? null;
+  let contextToken: string | undefined;
+  if (input.phase === "prepare") {
+    if (input.organizationId && !organizations.some((item) => item.id === input.organizationId))
+      throw new AppError(
+        422,
+        "IDENTITY_DOMAIN_MISMATCH",
+        "Choose an organization confirmed by your verified work domain.",
+      );
+    if (input.organizationId && input.organizationName !== undefined)
       throw new AppError(
         422,
         "IDENTITY_ORGANIZATION_RESOLVED",
-        "Use the organization resolved from your verified email address.",
+        "Choose an existing organization or enter a new organization name.",
       );
     await affiliationPlan(db, actor.claims, input, basis, nowIso());
     contextToken = await signJwt(
@@ -98,6 +123,12 @@ export async function previewOwnAffiliation(
     email: address.email,
     domain: basis.domain,
     organization: organization ? { id: organization.id, name: organization.name } : null,
+    organizations: organizations.map(({ id, name }) => {
+      const identity = basis.identities.find(
+        (item) => item.organization_id === id && item.started_at && item.ended_at === null && item.blocked_at === null,
+      );
+      return { id, name, identityId: identity?.id ?? null, jobTitle: identity?.job_title ?? null };
+    }),
     contextToken,
     identityId: organizationId
       ? basis.identities.find(

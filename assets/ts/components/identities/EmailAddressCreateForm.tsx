@@ -1,7 +1,11 @@
 /** The production address-add form, shared by account settings and representation onboarding. */
+import { EmailFirstStep, type EmailFirstController } from "../EmailFirstStep";
 import type { ComponentChildren } from "preact";
-import { useEffect, useState } from "preact/hooks";
-import { ownEmailVerificationRequestedResponseSchema } from "../../../shared/schemas/own-email-addresses";
+import { useEffect, useRef, useState } from "preact/hooks";
+import {
+  ownRepresentationEmailAddSchema,
+  ownEmailVerificationRequestedResponseSchema,
+} from "../../../shared/schemas/own-email-addresses";
 import { userEmailAddResponseSchema, userEmailAddSchema } from "../../../shared/schemas/user-emails";
 import { useContractForm } from "../../hooks/useContractForm";
 import { postJson } from "../../shared/api-client";
@@ -20,21 +24,56 @@ export function EmailAddressCreateForm({
   onBusy,
   actions,
   embedded = false,
+  onIndividualChange,
 }: {
   userId?: string;
   isSelf: boolean;
-  onAdded: (email: string) => void | Promise<void>;
-  beforeAdd?: (email: string) => Promise<boolean>;
+  onAdded: (email: string, individual?: boolean) => void | Promise<void>;
+  beforeAdd?: (email: string, individual?: boolean) => Promise<boolean>;
+  onIndividualChange?: (individual: boolean) => void;
   onBusy?: (busy: boolean) => void;
   actions?: ComponentChildren;
   embedded?: boolean;
 }) {
   const [email, setEmail] = useState("");
+  const [individual, setIndividual] = useState(false);
+  const controller = useRef<EmailFirstController>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [formId] = useState(() => nextDomId("email"));
   const form = useContractForm(userEmailAddSchema, { email });
   useEffect(() => onBusy?.(saving), [saving]);
+  if (embedded)
+    return (
+      <form
+        noValidate
+        class="pk-stack"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void controller.current.continue?.();
+        }}
+      >
+        <EmailFirstStep
+          flow="representation"
+          controller={controller.current}
+          onBusy={setSaving}
+          schema={ownRepresentationEmailAddSchema}
+          body={{ purpose: "representation" }}
+          email={email}
+          onEmailChange={setEmail}
+          individual={individual}
+          onIndividualChange={(value) => {
+            setIndividual(value);
+            onIndividualChange?.(value);
+          }}
+          onContinue={async (step) => {
+            if (beforeAdd && (await beforeAdd(step.email, step.unaffiliatedAttestation))) return;
+            const added = await postJson(OWN_EMAILS_ENDPOINT, step, ownEmailVerificationRequestedResponseSchema);
+            await onAdded(added.email, step.unaffiliatedAttestation);
+          }}
+        />
+      </form>
+    );
   return (
     <form
       noValidate
@@ -73,7 +112,7 @@ export function EmailAddressCreateForm({
     >
       <Field
         id={`${formId}-address`}
-        label={embedded ? "Representation email" : "Email address"}
+        label="Email address"
         required
         help={
           isSelf
@@ -94,14 +133,12 @@ export function EmailAddressCreateForm({
         )}
       </Field>
       {error && <Alert tone="danger">{error}</Alert>}
-      {!embedded && (
-        <div class="pk-cluster">
-          <Button type="submit" variant="primary" loading={saving}>
-            {isSelf ? "Send verification link" : "Add email address"}
-          </Button>
-          {actions}
-        </div>
-      )}
+      <div class="pk-cluster">
+        <Button type="submit" variant="primary" loading={saving}>
+          {isSelf ? "Send verification link" : "Add email address"}
+        </Button>
+        {actions}
+      </div>
     </form>
   );
 }

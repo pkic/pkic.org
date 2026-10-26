@@ -1,3 +1,4 @@
+import { removeIncorrectRepresentation } from "./remove-representation";
 import { useDialogQueryState } from "../../../../hooks/useDialogQueryState";
 /**
  * Every identity a person holds or held — their experience — and the controls
@@ -114,6 +115,14 @@ export function UserAffiliationsPanel({
     // The person reinstates their own only through an address at the organization; staff need none.
     if (viewerIsSubject ? entry.selfReinstatable : canManage && entry.reinstatable)
       items.push({ id: "reinstate", label: "Reinstate representation…", onSelect: () => setReinstating(entry) });
+    if (viewerIsSubject && entry.organizationId && entry.reinstatable)
+      items.push({
+        id: "remove-incorrect",
+        label: "Remove incorrect representation…",
+        danger: true,
+        disabled: busy,
+        onSelect: () => void removeIncorrectRepresentation(entry.identityId, onChanged, setBusy),
+      });
     return items;
   }
 

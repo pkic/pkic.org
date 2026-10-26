@@ -11,16 +11,16 @@ export const identityAffiliationPrepareSchema = z
     phase: z.literal("prepare"),
     ...address,
     organizationName: organizationNameSchema.optional(),
-    organizationResolved: z.boolean(),
+    organizationId: databaseIdSchema.nullable(),
     jobTitle: organizationIdentityJobTitleSchema,
   })
   .strict()
   .superRefine((value, context) => {
-    if (!value.organizationResolved && value.organizationName === undefined)
+    if (value.organizationId === null && value.organizationName === undefined)
       context.addIssue({ code: "custom", path: ["organizationName"], message: "Enter your organization name." });
   });
 export const identityAffiliationPreviewSchema = z.discriminatedUnion("phase", [
-  z.object({ phase: z.literal("resolve"), ...address }).strict(),
+  z.object({ phase: z.literal("resolve"), ...address, unaffiliatedAttestation: z.boolean().default(false) }).strict(),
   identityAffiliationPrepareSchema,
 ]);
 export const identityAffiliationContextSchema = z.string().min(32).max(262144);
@@ -28,6 +28,16 @@ export const identityAffiliationPreviewResponseSchema = z.object({
   email: normalizedEmailSchema,
   domain: z.string(),
   organization: z.object({ id: databaseIdSchema, name: z.string() }).nullable(),
+  organizations: z
+    .array(
+      z.object({
+        id: databaseIdSchema,
+        name: z.string(),
+        identityId: databaseIdSchema.nullable(),
+        jobTitle: organizationIdentityJobTitleSchema.nullable(),
+      }),
+    )
+    .max(256),
   contextToken: identityAffiliationContextSchema.optional(),
   identityId: databaseIdSchema.optional(),
 });

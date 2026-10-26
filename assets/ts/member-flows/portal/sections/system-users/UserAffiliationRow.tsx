@@ -1,3 +1,4 @@
+import { removeIncorrectRepresentation } from "./remove-representation";
 import { useMembershipCategoryCatalog } from "../../../../hooks/useMembershipCategoryCatalog";
 import { useMembershipCategoryLabels } from "../../../../hooks/useMembershipCategoryLabels";
 /**
@@ -332,6 +333,14 @@ export function UserAffiliationRow({
       onSelect: openMembershipEditor,
     });
   }
+  if (membership.organizationId && viewerIsSubject)
+    rowActions.push({
+      id: "remove-incorrect",
+      label: "Remove incorrect representation…",
+      danger: true,
+      disabled: busy,
+      onSelect: () => void removeIncorrectRepresentation(membership.identityId, onChanged, setBusy),
+    });
   // The person ends their own representation; staff end someone else's.
   if (membership.organizationId && (viewerIsSubject || canManage))
     rowActions.push({

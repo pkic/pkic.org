@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { jsonErrorResponse } from "./api-common";
+import { successResponseSchema, jsonErrorResponse } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import {
   currentUserIdentityCreateSchema,
@@ -243,5 +243,21 @@ export const currentUserIdentityReinstatementConfirmRouteSchema = {
     "404": jsonErrorResponse("The link is not valid, was replaced by a newer one, or the address changed."),
     "409": jsonErrorResponse("The link was used, or the identity can no longer be reinstated."),
     "410": jsonErrorResponse("The link expired."),
+  },
+};
+
+export const currentUserIdentityRemoveRouteSchema = {
+  ...requiresSession(),
+  tags: ["Users"],
+  summary: "Remove an incorrect representation owned by the current user",
+  request: { params: z.object({ identityId: databaseIdSchema }) },
+  responses: {
+    "200": {
+      description: "Representation removed.",
+      content: { "application/json": { schema: successResponseSchema } },
+    },
+    "409": jsonErrorResponse(
+      "The representation is blocked, not owned, or has participation records that must be corrected first.",
+    ),
   },
 };

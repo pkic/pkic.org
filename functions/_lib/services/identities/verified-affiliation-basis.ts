@@ -24,7 +24,7 @@ export const verifiedAffiliationBasisSchema = z.object({
           unknownProvenance: z.boolean(),
         }),
       )
-      .max(2),
+      .max(256),
   }),
   organizations: z
     .array(

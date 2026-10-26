@@ -16,7 +16,8 @@
  */
 
 import type { ComponentChildren } from "preact";
-import { useId } from "preact/hooks";
+import { useState } from "preact/hooks";
+import { nextDomId } from "./dom-id";
 
 import { FIELD_STATE_ICON, type FieldState } from "./field-state";
 import { StrokeIcon } from "./MediaIcons";
@@ -97,7 +98,7 @@ export function Field({
   group = false,
   children,
 }: FieldProps) {
-  const generated = useId();
+  const [generated] = useState(() => nextDomId("field"));
   const id = givenId ?? generated;
   const controlId = givenId ?? `${id}-control`;
   const messageId = `${id}-message`;

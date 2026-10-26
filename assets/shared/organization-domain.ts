@@ -1,7 +1,8 @@
 /**
  * The one rule for which organization a verified email address belongs to.
  *
- * A domain belongs to at most one organization. The organization that holds
+ * A verified work domain can support several explicitly confirmed organizations.
+ * Automatic resolution remains conservative. The organization that holds
  * an approved claim on the domain owns it; without a claim, the one
  * non-member organization people already reached through a verified address
  * on the domain (a derived domain) does. Free, consumer and disposable
@@ -54,8 +55,20 @@ export type DomainOrganizationResolution =
   | { kind: "ambiguous" };
 
 /** Which organization a verified work domain belongs to. */
-export function resolveDomainOrganization(facts: DomainOwnershipFacts): DomainOrganizationResolution {
+export function resolveDomainOrganization(
+  facts: DomainOwnershipFacts,
+  choice?: { organizationId: string | null },
+): DomainOrganizationResolution {
   if (facts.heldByApplication) return { kind: "held" };
+  if (choice) {
+    if (choice.organizationId === null) return { kind: "none" };
+    if (facts.claimed?.organizationId === choice.organizationId)
+      return { kind: "organization", ...facts.claimed, via: "claim" };
+    const selected = facts.derived.find((fact) => fact.organizationId === choice.organizationId);
+    return selected && selected.active && !selected.disputed && !selected.unknownProvenance && !selected.isMember
+      ? { kind: "organization", organizationId: selected.organizationId, isMember: false, via: "derived" }
+      : { kind: "ambiguous" };
+  }
   const claimed = facts.claimed;
   if (claimed) {
     const elsewhere = facts.derived.some((fact) => fact.organizationId !== claimed.organizationId);

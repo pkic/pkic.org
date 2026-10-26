@@ -4,6 +4,7 @@
 // `check-e2e-signin-budget.mjs` keeps it that way.
 export const E2E_ADMIN_SCOPES = Object.freeze([
   "default",
+  "representation-onboarding",
   "portal-agenda-fast-scanner-idle",
   "portal-agenda-fast-scanner-burst",
   "portal-live-session-participation",

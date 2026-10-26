@@ -17,7 +17,8 @@
  * sign-in methods, they are the one place a full-width choice is right.
  */
 import type { ComponentChildren, JSX } from "preact";
-import { useId } from "preact/hooks";
+import { useState } from "preact/hooks";
+import { nextDomId } from "./dom-id";
 
 import { StateIcon } from "./Field";
 import { IconCheckmark } from "./MediaIcons";
@@ -49,7 +50,7 @@ export function ChoiceCard({
   onInput,
   ...rest
 }: ChoiceCardProps) {
-  const id = useId();
+  const [id] = useState(() => nextDomId("choice"));
   const titleId = `${id}-title`;
   const detailId = `${id}-detail`;
   const hasDetail = Boolean(description) || points.length > 0;

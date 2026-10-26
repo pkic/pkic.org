@@ -59,7 +59,7 @@ export const OwnEmailAddressPost = openApiRoute(ownEmailAddressAddRouteSchema, a
   const added = await addOwnEmailAddress(http.db, {
     userId: claims.sub,
     authorizationEvidence: userSessionRequestAuthorizationEvidence(claims),
-    email: data.body.email,
+    ...data.body,
     signingSecret: http.secret,
     appBaseUrl: http.appBaseUrl,
   });

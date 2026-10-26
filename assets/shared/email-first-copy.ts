@@ -12,7 +12,7 @@
 export const WORK_EMAIL_STEER = "Please use your work address, so we can connect you to your organization.";
 export const DISPOSABLE_EMAIL_REFUSED = "Disposable email providers are not accepted.";
 
-export type EmailFirstFlow = "registration" | "proposal" | "speaker" | "join";
+export type EmailFirstFlow = "registration" | "proposal" | "speaker" | "join" | "representation";
 
 /** One of the two ways in: the card that explains it, then the field and action it leads to. */
 export interface EmailFirstChoiceCopy {
@@ -98,6 +98,17 @@ export const ORGANIZATION_CONTRIBUTION_RULE =
   "contributing on behalf of an organization requires that organization's representation";
 
 export const EMAIL_FIRST_COPY: Readonly<Record<EmailFirstFlow, EmailFirstCopy>> = {
+  representation: {
+    ...eventCopy,
+    work: {
+      ...eventWork,
+      points: [
+        "Connect to your organization after confirming your email",
+        "Use your organization and job title across the portal",
+      ],
+    },
+    personal: { ...eventPersonal, points: ["Use your personal identity without an organization"] },
+  },
   registration: {
     ...eventCopy,
     work: {

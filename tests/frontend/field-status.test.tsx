@@ -4,6 +4,7 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { useContractForm } from "../../assets/ts/hooks/useContractForm";
+import { ChoiceCard } from "../../assets/ts/ui/ChoiceCard";
 import { Field } from "../../assets/ts/ui/Field";
 import { FieldStatus } from "../../assets/ts/ui/FieldStatus";
 import { TextInput } from "../../assets/ts/ui/TextControl";
@@ -104,4 +105,27 @@ describe("a field reporting to a status line", () => {
     expect(message.textContent).toContain("Write your name.");
     expect(input.getAttribute("aria-describedby")).toBe(message.id);
   });
+});
+
+it("keeps field labels distinct across independently rendered dialog roots", () => {
+  const roots = [mount(), mount()];
+  const controls = roots.map((host) => host.querySelector("input")!);
+  expect(controls[0].id).not.toBe(controls[1].id);
+  for (const [index, host] of roots.entries()) {
+    expect(host.querySelector("label")!.control).toBe(controls[index]);
+  }
+});
+
+it("keeps choice titles distinct across independently rendered dialog roots", () => {
+  const roots = [document.createElement("div"), document.createElement("div")];
+  for (const [index, host] of roots.entries()) {
+    hosts.push(host);
+    document.body.append(host);
+    void act(() => render(<ChoiceCard icon={null} name={`choice-${index}`} title={`Choice ${index}`} />, host));
+  }
+  const titleIds = roots.map((host) => host.querySelector("input")!.getAttribute("aria-labelledby")!);
+  expect(titleIds[0]).not.toBe(titleIds[1]);
+  for (const [index, host] of roots.entries()) {
+    expect(host.contains(document.getElementById(titleIds[index]))).toBe(true);
+  }
 });

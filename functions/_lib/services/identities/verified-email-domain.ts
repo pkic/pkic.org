@@ -55,7 +55,29 @@ export function verifiedEmailDomainResolutionEvidence(
   domain: string,
   organizationId: string | null,
   hasAuthoritativeClaim = false,
+  confirmedSelection = false,
 ): AuthorizationEvidence {
+  if (confirmedSelection) {
+    if (!organizationId)
+      return {
+        sql: "SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM organization_domain_claims WHERE domain=? AND application_id IS NOT NULL)",
+        bindings: [domain],
+      };
+    if (hasAuthoritativeClaim)
+      return {
+        sql: "SELECT 1 FROM organization_domain_claims WHERE domain=? AND organization_id=? AND application_id IS NULL",
+        bindings: [domain, organizationId],
+      };
+    return {
+      sql: `SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM members WHERE organization_id=?)
+        AND EXISTS(SELECT 1 FROM identities fact JOIN users person ON person.id=fact.user_id
+          WHERE fact.verified_email_domain=? AND fact.organization_id=? AND fact.source='verified_email'
+            AND fact.started_at IS NOT NULL AND fact.ended_at IS NULL AND fact.blocked_at IS NULL AND person.active=1)
+        AND NOT EXISTS(SELECT 1 FROM identities fact WHERE ${domainMatches} AND ${FACT_ORGANIZATION}=?
+          AND (fact.verified_email_domain IS NULL OR fact.blocked_at IS NOT NULL))`,
+      bindings: [organizationId, domain, organizationId, domain, domain, organizationId],
+    };
+  }
   if (!organizationId)
     return {
       sql: `SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM identities fact WHERE ${domainMatches})`,

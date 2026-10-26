@@ -132,7 +132,7 @@ test("a signed-in user registers from event home without another email challenge
   await expect(representationChooser.getByRole("combobox", { name: "Representation", exact: true })).toBeVisible();
   await representationChooser.getByRole("button", { name: "Add identity", exact: true }).click();
   const addIdentity = page.getByRole("dialog", { name: "Add identity", exact: true });
-  await expect(addIdentity.getByRole("textbox", { name: /^Representation email/ })).toBeVisible();
+  await expect(addIdentity.getByRole("textbox", { name: EMAIL_FIRST_COPY.representation.work.label })).toBeVisible();
   await expect(addIdentity.getByRole("combobox")).toHaveCount(0);
   await page.goBack();
   await expect(addIdentity).not.toBeVisible();
@@ -260,7 +260,7 @@ test("a signed-in user registers from event home without another email challenge
   await expect(
     page
       .getByRole("dialog", { name: "Add identity", exact: true })
-      .getByRole("textbox", { name: /^Representation email/ }),
+      .getByRole("textbox", { name: EMAIL_FIRST_COPY.representation.work.label }),
   ).toBeVisible();
   await page
     .getByRole("dialog", { name: "Add identity", exact: true })
@@ -283,7 +283,9 @@ test("a signed-in user registers from event home without another email challenge
     }),
   });
   expect(placeholder.status()).toBe(201);
-  await addRepresentation.getByRole("textbox", { name: /^Representation email/ }).fill("ada@lighthouse-work.test");
+  await addRepresentation
+    .getByRole("textbox", { name: EMAIL_FIRST_COPY.representation.work.label })
+    .fill("ada@lighthouse-work.test");
   for (const [width, height, device] of [
     [1280, 900, "desktop"],
     [375, 812, "phone"],

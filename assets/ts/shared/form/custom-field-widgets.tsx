@@ -408,7 +408,10 @@ function CountrySelect({ field, rules, geoHint }: { field: FormField; rules: Fie
         class="pk-input pk-input--select"
         id={`custom-${field.key}`}
         required={field.required}
-        onChange={() => setHintVisible(false)}
+        onChange={() => {
+          hintApplied.current = true;
+          setHintVisible(false);
+        }}
       >
         <option value="">{rules.placeholder ?? "Select your country"}</option>
         {COUNTRIES.map((c) => (

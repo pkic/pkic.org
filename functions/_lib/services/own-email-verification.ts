@@ -60,6 +60,7 @@ export async function prepareOwnEmailVerificationMessage(
     emailId: string;
     email: string;
     addressRequest?: boolean;
+    purpose?: "representation";
     at: string;
   } & OwnEmailVerificationDelivery,
 ): Promise<{ outboxId: string; statements: StatementLike[] }> {
@@ -68,7 +69,15 @@ export async function prepareOwnEmailVerificationMessage(
     purpose: PURPOSE,
     subjectId: input.emailId,
     email: input.email,
-    ...(input.addressRequest ? { addressRequest: { userId: input.userId, email: normalizeEmail(input.email) } } : {}),
+    ...(input.addressRequest
+      ? {
+          addressRequest: {
+            userId: input.userId,
+            email: normalizeEmail(input.email),
+            ...(input.purpose ? { purpose: input.purpose } : {}),
+          },
+        }
+      : {}),
     ttlSeconds: EMAIL_ADDRESS_VERIFICATION_TTL_HOURS * 60 * 60,
   });
   const message = prepareQueueEmailStatement(
@@ -170,7 +179,7 @@ interface LinkedAddress extends UnverifiedAddress {
 async function resolveVerificationLink(
   db: DatabaseLike,
   input: { token: string; signingSecret: string },
-): Promise<{ address: LinkedAddress; capabilityId: string }> {
+): Promise<{ address: LinkedAddress; capabilityId: string; representationRequest: boolean }> {
   const capability = await verifyEmailAuthCapabilityToken({
     signingSecret: input.signingSecret,
     purpose: PURPOSE,
@@ -214,7 +223,11 @@ async function resolveVerificationLink(
     currentEmail: address.normalized_email,
   });
   if (address.verified_at) throw new AppError(409, "MAGIC_LINK_USED", "This email address is already verified.");
-  return { address, capabilityId: capability.capabilityId };
+  return {
+    address,
+    capabilityId: capability.capabilityId,
+    representationRequest: requested?.purpose === "representation",
+  };
 }
 
 /** Read-only: mail scanners may open the link, but only the explicit verification changes anything. */
@@ -252,7 +265,7 @@ export async function verifyOwnEmailAddress(
     actor: { userId: string; authorizationEvidence: AuthorizationEvidence };
   },
 ): Promise<OwnEmailVerificationResult> {
-  const { address, capabilityId } = await resolveVerificationLink(db, input);
+  const { address, capabilityId, representationRequest } = await resolveVerificationLink(db, input);
   const userId = address.user_id;
   if (input.actor.userId !== userId)
     throw new AppError(
@@ -279,12 +292,14 @@ export async function verifyOwnEmailAddress(
       })
     : [];
   const pendingRelease = prepareEmailOwnershipClaim(db, address.normalized_email, userId, ownership);
-  const joined = await prepareVerifiedAddressDomainOrganizationLink(db, {
-    userId,
-    normalizedEmail: address.normalized_email,
-    emailId: address.id,
-    at,
-  });
+  const joined = representationRequest
+    ? null
+    : await prepareVerifiedAddressDomainOrganizationLink(db, {
+        userId,
+        normalizedEmail: address.normalized_email,
+        emailId: address.id,
+        at,
+      });
   await commitEmailAuthRedemption(db, {
     purpose: PURPOSE,
     capabilityId,
@@ -351,7 +366,7 @@ export async function verifyOwnEmailAddress(
           joined.organizationId,
         ])
       : null,
-    joined ? null : readAffiliationOffer(db, userId),
+    joined || representationRequest ? null : readAffiliationOffer(db, userId),
   ]);
   return {
     email: address.email,

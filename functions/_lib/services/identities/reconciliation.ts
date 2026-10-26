@@ -1,3 +1,4 @@
+import { prepareIdentityProfileUpdateStatement } from "./profile-statement";
 import { prepareOrganizationIdentityPublication } from "./lifecycle-publication";
 import {
   requireOrganizationLinkDomain,
@@ -16,7 +17,11 @@ import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { nowIso } from "../../utils/time";
-import { isAuditChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "../audit";
+import {
+  isAuditChangeGuardFailure,
+  prepareAuditLogAfterOneChange,
+  prepareScopedAuditLogAfterOneChange,
+} from "../audit";
 import { prepareAutomaticGroupEnrollmentForUserStatements } from "../groups/automatic-enrollment";
 import { buildCreateIdentityStatement } from "../membership/identities";
 import { isConcurrentIdentityConflict } from "./conflicts";
@@ -222,6 +227,7 @@ export async function prepareVerifiedOrganizationAffiliation(
     emailId: string | null;
     organizationId?: string;
     organizationName?: string;
+    organizationChoice?: { organizationId: string | null };
     at: string;
     proofEvidence: AuthorizationEvidence;
     profile?: { jobTitle?: string | null; biography?: string | null; linksJson?: string | null };
@@ -234,6 +240,9 @@ export async function prepareVerifiedOrganizationAffiliation(
   statements: StatementLike[];
   representation: IdentityRepresentation;
 }> {
+  if (input.organizationChoice && !observed)
+    throw new AppError(409, "IDENTITY_CONTEXT_REQUIRED", "Confirm the organization details again.");
+  const confirmedSelection = Boolean(input.organizationChoice);
   const normalizedEmail = normalizeEmail(input.normalizedEmail);
   const domain = observed
     ? requireWorkOrganizationDomain(observed.domain)
@@ -245,11 +254,16 @@ export async function prepareVerifiedOrganizationAffiliation(
     bindings: [input.userId, ...address.bindings, ...input.proofEvidence.bindings],
   };
   const claim = observed ? observed.claim : await getOrganizationDomainClaim(db, domain);
-  if (claim?.organizationId && input.organizationId && claim.organizationId !== input.organizationId) {
+  if (
+    !confirmedSelection &&
+    claim?.organizationId &&
+    input.organizationId &&
+    claim.organizationId !== input.organizationId
+  ) {
     throw new AppError(422, "IDENTITY_DOMAIN_MISMATCH", "The verified domain does not match this organization");
   }
   const named =
-    !claim?.organizationId && !input.organizationId && input.organizationName
+    (!claim?.organizationId || confirmedSelection) && !input.organizationId && input.organizationName
       ? observed
         ? (observed.organizations.find(
             (organization) => organization.normalized_name === normalizeOrgName(input.organizationName!),
@@ -258,7 +272,9 @@ export async function prepareVerifiedOrganizationAffiliation(
             normalizeOrgName(input.organizationName),
           ])
       : null;
-  const selectedOrganizationId = claim?.organizationId ?? input.organizationId ?? named?.id;
+  const selectedOrganizationId = confirmedSelection
+    ? (input.organizationChoice!.organizationId ?? named?.id)
+    : (claim?.organizationId ?? input.organizationId ?? named?.id);
   const owned = selectedOrganizationId
     ? observed
       ? (observed.identities.find(
@@ -273,7 +289,7 @@ export async function prepareVerifiedOrganizationAffiliation(
   // Resolution must not revoke an already owned relationship or rewrite its selected email/profile.
   const resolvedId =
     observed && !owned && !claim?.applicationId
-      ? verifiedDomainOrganizationId(domain, resolveDomainOrganization(observed.facts))
+      ? verifiedDomainOrganizationId(domain, resolveDomainOrganization(observed.facts, input.organizationChoice))
       : null;
   const resolved =
     owned || claim?.applicationId
@@ -284,7 +300,7 @@ export async function prepareVerifiedOrganizationAffiliation(
   if (resolved && input.organizationId && resolved.id !== input.organizationId)
     throw new AppError(422, "IDENTITY_DOMAIN_MISMATCH", "The verified domain does not match this organization");
   let organizationId = resolved?.id ?? selectedOrganizationId;
-  const usesVerifiedEmailEvidence = !claim && resolved !== null;
+  const usesVerifiedEmailEvidence = resolved !== null && (!claim || resolved.id !== claim.organizationId);
   const existing = organizationId
     ? observed
       ? (() => {
@@ -324,11 +340,13 @@ export async function prepareVerifiedOrganizationAffiliation(
       ? (observed.organizations.find((organization) => organization.id === organizationId)?.member_id ?? null)
       : await resolveOrganizationMemberId(db, organizationId!);
     const enrichment = observedOrganizationMembershipEvidence(organizationId!, memberId);
+    const completingTitle = !existing.job_title?.trim() && Boolean(input.profile?.jobTitle?.trim());
+    const title = completingTitle ? input.profile!.jobTitle! : existing.job_title;
     return {
       identityId: existing.id,
       organizationId: organizationId!,
       memberId,
-      representation: { organizationName: existing.organization_name, jobTitle: existing.job_title },
+      representation: { organizationName: existing.organization_name, jobTitle: title },
       statements: [
         prepareAuthorizationGuard(db, {
           sql: `SELECT 1 WHERE EXISTS (${proof.sql}) AND EXISTS (${enrichment.sql}) AND EXISTS (
@@ -348,6 +366,27 @@ export async function prepareVerifiedOrganizationAffiliation(
             existing.organization_name,
           ],
         }),
+        ...(completingTitle
+          ? [
+              prepareIdentityProfileUpdateStatement(
+                db,
+                { ...existing, organization_id: organizationId! },
+                { jobTitle: title },
+                input.at,
+              ),
+              prepareAuditLogAfterOneChange(
+                db,
+                "user",
+                input.userId,
+                "identity_profile_completed",
+                "identity",
+                existing.id,
+                { jobTitle: { from: existing.job_title, to: title } },
+                input.at,
+              ),
+              prepareOrganizationIdentityPublication(db, existing.id, input.at),
+            ]
+          : []),
         ...prepareAutomaticGroupEnrollmentForUserStatements(db, input.userId, input.at),
       ],
     };
@@ -359,7 +398,11 @@ export async function prepareVerifiedOrganizationAffiliation(
       "This organization domain requires review before affiliation",
     );
   }
-  if (organizationId && !claim?.organizationId && !usesVerifiedEmailEvidence) {
+  if (
+    organizationId &&
+    (!claim?.organizationId || input.organizationChoice?.organizationId === null) &&
+    !usesVerifiedEmailEvidence
+  ) {
     throw new AppError(
       409,
       "ORGANIZATION_AFFILIATION_REVIEW_REQUIRED",
@@ -367,6 +410,15 @@ export async function prepareVerifiedOrganizationAffiliation(
     );
   }
   const statements: StatementLike[] = [];
+  if (confirmedSelection)
+    statements.push(
+      prepareAuthorizationGuard(db, {
+        sql: `SELECT 1 WHERE (SELECT id FROM organization_domain_claims WHERE domain=?) IS ?
+        AND (SELECT organization_id FROM organization_domain_claims WHERE domain=?) IS ?
+        AND NOT EXISTS(SELECT 1 FROM organization_domain_claims WHERE domain=? AND application_id IS NOT NULL)`,
+        bindings: [domain, claim?.id ?? null, domain, claim?.organizationId ?? null, domain],
+      }),
+    );
   let organizationWasCreated = false;
   if (!organizationId) {
     if (!input.organizationName?.trim())
@@ -394,13 +446,18 @@ export async function prepareVerifiedOrganizationAffiliation(
     }
     organizationId = record.organizationId;
     organizationWasCreated = true;
-    const absence = verifiedEmailDomainResolutionEvidence(domain, null);
+    const absence = verifiedEmailDomainResolutionEvidence(domain, null, false, confirmedSelection);
     statements.push(
       prepareAuthorizationGuard(db, {
         sql: `SELECT 1 WHERE EXISTS (${proof.sql}) AND EXISTS (${absence.sql})
               AND NOT EXISTS (SELECT 1 FROM organizations WHERE normalized_name = ?)
-              AND NOT EXISTS (SELECT 1 FROM organization_domain_claims WHERE domain = ?)`,
-        bindings: [...proof.bindings, ...absence.bindings, normalizeOrgName(input.organizationName), domain],
+              ${confirmedSelection ? "" : "AND NOT EXISTS (SELECT 1 FROM organization_domain_claims WHERE domain = ?)"}`,
+        bindings: [
+          ...proof.bindings,
+          ...absence.bindings,
+          normalizeOrgName(input.organizationName),
+          ...(confirmedSelection ? [] : [domain]),
+        ],
       }),
       ...record.statements,
     );
@@ -432,7 +489,8 @@ export async function prepareVerifiedOrganizationAffiliation(
   const resolutionEvidence = verifiedEmailDomainResolutionEvidence(
     domain,
     organizationWasCreated ? null : organizationId,
-    !!claim?.organizationId,
+    claim?.organizationId === organizationId,
+    confirmedSelection,
   );
   const isVerifiedEmail = organizationWasCreated || usesVerifiedEmailEvidence;
   // Adjacent guards keep the same atomic predicates within D1's expression-depth limit.
@@ -443,8 +501,14 @@ export async function prepareVerifiedOrganizationAffiliation(
     prepareAuthorizationGuard(db, {
       sql: `SELECT 1 FROM organizations WHERE id=? AND name=?
         AND NOT EXISTS (SELECT 1 FROM identities WHERE user_id=? AND organization_id=? AND blocked_at IS NOT NULL)
-        ${isVerifiedEmail ? "AND NOT EXISTS (SELECT 1 FROM organization_domain_claims WHERE domain=?)" : ""}`,
-      bindings: [organizationId, organizationName, input.userId, organizationId, ...(isVerifiedEmail ? [domain] : [])],
+        ${isVerifiedEmail && !confirmedSelection ? "AND NOT EXISTS (SELECT 1 FROM organization_domain_claims WHERE domain=?)" : ""}`,
+      bindings: [
+        organizationId,
+        organizationName,
+        input.userId,
+        organizationId,
+        ...(isVerifiedEmail && !confirmedSelection ? [domain] : []),
+      ],
     }),
   );
   if (!isVerifiedEmail)

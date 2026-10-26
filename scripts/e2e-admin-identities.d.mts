@@ -1,5 +1,6 @@
 export const E2E_ADMIN_SCOPES: readonly [
   "default",
+  "representation-onboarding",
   "portal-agenda-fast-scanner-idle",
   "portal-agenda-fast-scanner-burst",
   "portal-live-session-participation",
