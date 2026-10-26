@@ -133,6 +133,14 @@ export async function prepareProposalProofPerson(
         normalizedEmail: payload.email,
         method: "magic_link",
         verifiedAt: at,
+        // This exact invitation is independently bound into the verified continuation.
+        // Preserve its scoped flow while revoking the account's earlier access.
+        provedSpeakerId:
+          payload.operation === "speaker_profile" &&
+          payload.context?.kind === "speaker" &&
+          payload.context.userId === prepared.user.id
+            ? payload.context.speakerId
+            : undefined,
       }),
       // Verify and recheck only the exact address authorized by this same-person proof.
       prepareAuthorizationGuard(

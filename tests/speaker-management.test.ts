@@ -245,6 +245,22 @@ describe("speaker self-management endpoints", () => {
         coSpeakerUserId,
       ]),
     ).resolves.toEqual([{ status: "invited" }]);
+    const otherProposalId = crypto.randomUUID(),
+      otherSpeakerId = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(`INSERT INTO session_proposals(id,event_id,proposer_user_id,status,proposal_type,title,abstract,manage_link_secret,submitted_at,updated_at)
+        SELECT ?,event_id,proposer_user_id,'submitted','talk','Another invitation','Abstract','other-proposal-secret',submitted_at,updated_at FROM session_proposals WHERE id=?`).bind(
+        otherProposalId,
+        proposalId,
+      ),
+      env.DB.prepare(`INSERT INTO proposal_speakers(id,proposal_id,user_id,role,status,manage_link_secret,created_at)
+        SELECT ?,?,user_id,role,'invited','other-speaker-secret',created_at FROM proposal_speakers WHERE proposal_id=? AND user_id=?`).bind(
+        otherSpeakerId,
+        otherProposalId,
+        proposalId,
+        coSpeakerUserId,
+      ),
+    ]);
     await selectIndividualSpeakerRepresentation({
       environment: env,
       eventSlug: "pqc-2026",
@@ -252,6 +268,11 @@ describe("speaker self-management endpoints", () => {
       consents: [{ termKey: "speaker-terms", version: "v1" }],
       speakerManagementToken: speakerManageToken,
     });
+    expect(
+      await env.DB.prepare("SELECT manage_link_secret FROM proposal_speakers WHERE id=?")
+        .bind(otherSpeakerId)
+        .first("manage_link_secret"),
+    ).not.toBe("other-speaker-secret");
     // Choosing a representation is not acceptance: the speaker is still pending and has accepted nothing.
     expect((await consentHolders()).map((row) => row.user_id)).not.toContain(coSpeakerUserId);
     const confirmation = await speakerPost(

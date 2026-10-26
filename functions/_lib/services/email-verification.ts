@@ -19,6 +19,7 @@ function prepareVerifyPrimaryEmailStatement(
     method: EmailVerificationMethod;
     verifiedAt?: string;
     excludeRegistrationId?: string;
+    provedSpeakerId?: string;
   },
 ): StatementLike {
   const verifiedAt = input.verifiedAt ?? nowIso();
@@ -44,6 +45,7 @@ export function prepareVerifyOwnedEmailStatements(
     method: EmailVerificationMethod;
     verifiedAt?: string;
     excludeRegistrationId?: string;
+    provedSpeakerId?: string;
   },
 ): StatementLike[] {
   const verifiedAt = input.verifiedAt ?? nowIso();
@@ -68,6 +70,7 @@ export function prepareVerifyPrimaryEmailStatements(
     method: EmailVerificationMethod;
     verifiedAt?: string;
     excludeRegistrationId?: string;
+    provedSpeakerId?: string;
   },
 ): StatementLike[] {
   const at = input.verifiedAt ?? nowIso();
@@ -91,10 +94,15 @@ export function prepareVerifyPrimaryEmailStatements(
       sql: `SELECT 1 WHERE ${recovering}`,
       bindings: [input.userId, input.normalizedEmail],
     }),
-    prepareRotateUserProposalSpeakerManageSecrets(db, input.userId, {
-      sql: `SELECT 1 WHERE ${recovering}`,
-      bindings: [input.userId, input.normalizedEmail],
-    }),
+    prepareRotateUserProposalSpeakerManageSecrets(
+      db,
+      input.userId,
+      {
+        sql: `SELECT 1 WHERE ${recovering}`,
+        bindings: [input.userId, input.normalizedEmail],
+      },
+      input.provedSpeakerId,
+    ),
     db
       .prepare(`UPDATE users SET pending_email=NULL,pending_email_expires_at=NULL,pending_email_change_registration_id=NULL
       WHERE id=? AND ${recovering}`)

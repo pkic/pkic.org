@@ -29,7 +29,8 @@ export function prepareRotateUserRegistrationCapabilities(
 }
 
 /**
- * Rotates every proposal-speaker management capability owned by a user.
+ * Rotates proposal-speaker capabilities except the current invitation whose
+ * resource-scoped authority was just established by signed mailbox proof.
  * Incrementing invite_generation also invalidates presentation uploads that
  * were authorized before the canonical email changed but have not committed.
  */
@@ -37,15 +38,16 @@ export function prepareRotateUserProposalSpeakerManageSecrets(
   db: DatabaseLike,
   userId: string,
   condition?: AuthorizationEvidence,
+  provedSpeakerId?: string,
 ): StatementLike {
   return db
     .prepare(
       `UPDATE proposal_speakers
           SET manage_link_secret = lower(hex(randomblob(32))),
               invite_generation = invite_generation + 1
-        WHERE user_id = ?${condition ? ` AND EXISTS (${condition.sql})` : ""}`,
+        WHERE user_id = ? AND (? IS NULL OR id<>?)${condition ? ` AND EXISTS (${condition.sql})` : ""}`,
     )
-    .bind(userId, ...(condition?.bindings ?? []));
+    .bind(userId, provedSpeakerId ?? null, provedSpeakerId ?? null, ...(condition?.bindings ?? []));
 }
 
 /** Revoke proposal-level links as well as the separate speaker links. */
