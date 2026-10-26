@@ -35,7 +35,7 @@ const kit = promotionKitSchema.parse({
   formats: [],
   artifacts: [],
   stale: false,
-  metrics: { downloads: 0, clicks: 0, confirmedRegistrations: 0, sessionRsvps: 0 },
+  metrics: { clicks: 0, confirmedRegistrations: 0, sessionRsvps: 0 },
 });
 it("saves personal copy and ordered panels through the canonical contract without copying speaker facts", async () => {
   let captured: unknown;

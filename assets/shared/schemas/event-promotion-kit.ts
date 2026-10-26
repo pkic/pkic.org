@@ -53,7 +53,6 @@ export const promotionKitSchema = z.object({
     }),
   ),
   metrics: z.object({
-    downloads: z.number().int().nonnegative(),
     clicks: z.number().int().nonnegative(),
     confirmedRegistrations: z.number().int().nonnegative(),
     sessionRsvps: z.number().int().nonnegative(),
@@ -77,8 +76,3 @@ export const promotionSessionsQuerySchema = agendaOccurrenceQuerySchema
     if (query.day && !query.timeZone)
       ctx.addIssue({ code: "custom", path: ["timeZone"], message: "Include the event time zone when choosing a day." });
   });
-
-export const promotionDownloadRecordSchema = z.strictObject({
-  fingerprint: promotionFingerprintSchema,
-  format: promotionFormatSchema,
-});

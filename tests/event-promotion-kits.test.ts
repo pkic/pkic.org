@@ -308,7 +308,7 @@ describe("personal event promotion kits", () => {
     expect(repeat.status).toBe(200);
     expect(promotionKitSchema.parse(await repeat.json()).registrationUrl).toBe(kit.registrationUrl);
   });
-  it("keeps listing, queueing, delivery and completed-download recording within one batch each", async () => {
+  it("keeps listing, queueing and delivery within one batch each", async () => {
     const f = await fixture();
     const list = await callApi(
       env,
@@ -355,17 +355,6 @@ describe("personal event promotion kits", () => {
     expect(file.status, await file.clone().text()).toBe(200);
     expect(await file.text()).toContain("%PDF");
     expect(file.headers.get("content-disposition")).toContain(".pdf");
-    const record = await callApi(
-      env,
-      `${f.sessionBase}/downloads`,
-      {
-        method: "POST",
-        headers: f.headers,
-        body: JSON.stringify({ fingerprint: source.fingerprint, format: "carousel" }),
-      },
-      { maxRoundTrips: 1 },
-    );
-    expect(record.status, await record.clone().text()).toBe(200);
     expect((await callApi(env, url, { headers: f.attendeeHeaders }, { maxRoundTrips: 1 })).status).toBe(403);
     await env.DB.prepare("UPDATE sessions SET revoked_at=? WHERE user_id=?")
       .bind(new Date().toISOString(), f.admin.id)

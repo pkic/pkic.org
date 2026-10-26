@@ -81,7 +81,7 @@ export function prepareAgendaOccurrenceDetails(
       .bind(...selection.bindings),
     db
       .prepare(
-        `SELECT occurrence_id,copy_json FROM event_agenda_promotion_copy WHERE occurrence_id IN(${selection.sql}) LIMIT 2001`,
+        `SELECT id AS occurrence_id,promotion_copy_json AS copy_json FROM event_agenda_occurrences WHERE promotion_copy_json IS NOT NULL AND id IN(${selection.sql}) LIMIT 2001`,
       )
       .bind(...selection.bindings),
     db

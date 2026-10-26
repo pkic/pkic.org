@@ -7,7 +7,6 @@ import {
   promotionKitSaveSchema,
   promotionSessionsQuerySchema,
   promotionRenderRequestSchema,
-  promotionDownloadRecordSchema,
 } from "./event-promotion-kit";
 import { agendaSnapshotSchema, promotionSessionListSchema } from "./event-agenda";
 import { authErrors, ok, requiresPermissions, requiresSession } from "./route-contract";
@@ -130,19 +129,4 @@ export const promotionKitInitializeRouteSchema = {
 export const eventPromotionInitializeRouteSchema = {
   ...promotionKitInitializeRouteSchema,
   request: { ...promotionKitInitializeRouteSchema.request, params: eventSlugParamsSchema },
-};
-
-export const promotionDownloadsCreateRouteSchema = {
-  ...promotionKitGetRouteSchema,
-  "x-pkic-mcp": { expose: false },
-  summary: "Record a completed personal material download",
-  request: { params, body: { content: { "application/json": { schema: promotionDownloadRecordSchema } } } },
-  responses: {
-    ...ok("Promotion metrics", promotionKitSchema.shape.metrics),
-    ...authErrors({ notFound: "Prepared material not found" }),
-  },
-};
-export const eventPromotionDownloadsCreateRouteSchema = {
-  ...promotionDownloadsCreateRouteSchema,
-  request: { ...promotionDownloadsCreateRouteSchema.request, params: eventSlugParamsSchema },
 };

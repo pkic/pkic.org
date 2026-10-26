@@ -560,10 +560,8 @@ describe("agenda platform", () => {
     )
       .bind(excludedId, '{"sessionKey":null}', admin.id, "2026-10-03T10:00:00.000Z")
       .run();
-    await env.DB.prepare(
-      "INSERT INTO event_agenda_promotion_copy(occurrence_id,copy_json,updated_by,updated_at) VALUES(?,?,?,?)",
-    )
-      .bind(excludedId, '{"title":null}', admin.id, "2026-10-03T10:00:00.000Z")
+    await env.DB.prepare("UPDATE event_agenda_occurrences SET promotion_copy_json=? WHERE id=?")
+      .bind('{"title":null}', excludedId)
       .run();
     const page = await callApi(env, "/api/v1/events/pqc-2026/agenda/occurrences?q=Requested&limit=1", {
       headers: { authorization: `Bearer ${token}` },

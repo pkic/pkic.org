@@ -1,8 +1,3 @@
-import { recordOwnPromotionDownload } from "../../../../../_lib/services/event-agenda/promotion-download-command";
-import {
-  promotionDownloadsCreateRouteSchema,
-  eventPromotionDownloadsCreateRouteSchema,
-} from "../../../../../../assets/shared/schemas/route-contracts-event-promotion";
 import { downloadOwnPromotionArtifact } from "../../../../../_lib/services/event-agenda/promotion-artifact-download";
 import { queueOwnPromotionRenders } from "../../../../../_lib/services/event-agenda/promotion-render-command";
 import { readOwnPromotionSessions } from "../../../../../_lib/services/event-agenda/promotion-session-list";
@@ -167,32 +162,5 @@ export const EventPromotionInitialize = openApiRoute(eventPromotionInitializeRou
         true,
       )
     ).kit,
-  ),
-);
-
-export const PromotionDownloadsCreate = openApiRoute(promotionDownloadsCreateRouteSchema, async (c, data) =>
-  json(
-    await recordOwnPromotionDownload(
-      requestDb(c),
-      c.req.raw,
-      c.env,
-      data.params.eventSlug,
-      data.params.occurrenceId,
-      resolveAppBaseUrl(c.env, c.req.raw),
-      data.body,
-    ),
-  ),
-);
-export const EventPromotionDownloadsCreate = openApiRoute(eventPromotionDownloadsCreateRouteSchema, async (c, data) =>
-  json(
-    await recordOwnPromotionDownload(
-      requestDb(c),
-      c.req.raw,
-      c.env,
-      data.params.eventSlug,
-      null,
-      resolveAppBaseUrl(c.env, c.req.raw),
-      data.body,
-    ),
   ),
 );

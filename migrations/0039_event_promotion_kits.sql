@@ -1,3 +1,16 @@
+-- Shared promotion text is an attribute of the agenda session. Its approval
+-- and audit lifecycle already belongs to the agenda revision, not another entity.
+ALTER TABLE event_agenda_occurrences ADD COLUMN promotion_copy_json TEXT
+ CHECK(promotion_copy_json IS NULL OR json_valid(promotion_copy_json));
+UPDATE event_agenda_occurrences
+ SET promotion_copy_json=(SELECT copy_json FROM event_agenda_promotion_copy WHERE occurrence_id=event_agenda_occurrences.id)
+ WHERE EXISTS(SELECT 1 FROM event_agenda_promotion_copy WHERE occurrence_id=event_agenda_occurrences.id);
+DROP TABLE event_agenda_promotion_copy;
+
+-- Referral traffic and registrations already have canonical attribution.
+-- File-download counters are not needed to deliver or credit shared materials.
+DROP TABLE event_agenda_promotion_downloads;
+
 -- Personal presentation choices contain authored promotion text and resource
 -- references only. Names, affiliations, portraits, schedule and sponsor data
 -- continue to be resolved from their canonical records.
@@ -23,7 +36,7 @@ CREATE TABLE event_promotion_renders (
  revision INTEGER NOT NULL,
  fingerprint TEXT,
  format TEXT NOT NULL, origin TEXT NOT NULL, cache_key TEXT NOT NULL,
- status TEXT NOT NULL DEFAULT 'queued', attempts INTEGER NOT NULL DEFAULT 0, download_count INTEGER NOT NULL DEFAULT 0,
+ status TEXT NOT NULL DEFAULT 'queued', attempts INTEGER NOT NULL DEFAULT 0,
  next_attempt_at TEXT NOT NULL, processing_token TEXT, lease_expires_at TEXT,
  last_error TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, requested_at TEXT
 );
@@ -34,7 +47,7 @@ CREATE INDEX event_promotion_render_requested ON event_promotion_renders(event_i
 
 -- A migrated request resolves its fingerprint and artifact location under the
 -- normal worker lease. Completed cache entries are disposable; authored copy,
--- personal choices, and download metrics remain in their canonical tables.
+-- personal choices remain in their canonical records.
 INSERT INTO event_promotion_renders
  (id,event_id,occurrence_id,user_id,revision,fingerprint,format,origin,cache_key,
   status,attempts,next_attempt_at,created_at,updated_at,requested_at)

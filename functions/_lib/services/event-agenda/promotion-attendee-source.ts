@@ -79,7 +79,7 @@ export async function buildAttendeePromotionSource(basis: PromotionSourceBasis, 
     registrationUrl,
     stale,
     artifacts: [],
-    metrics: { downloads: 0, clicks: 0, confirmedRegistrations: 0, sessionRsvps: 0 },
+    metrics: { clicks: 0, confirmedRegistrations: 0, sessionRsvps: 0 },
   });
   kit.metrics = basis.metrics;
   kit.artifacts = stale ? [] : basis.artifacts(fingerprint);

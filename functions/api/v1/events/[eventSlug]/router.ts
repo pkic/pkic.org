@@ -1,4 +1,3 @@
-import { PromotionDownloadsCreate, EventPromotionDownloadsCreate } from "./agenda/promotion";
 import { PromotionKitInitialize, EventPromotionInitialize } from "./agenda/promotion";
 import { PromotionBatchesCreate, PromotionBatchGet } from "./agenda/promotion-batches";
 import { EventPromotionSessionsGet } from "./agenda/promotion";
@@ -223,7 +222,6 @@ openapi.get("/promotion/sessions", EventPromotionSessionsGet);
 openapi.post("/promotion/composition", EventPromotionCompositionSave);
 openapi.post("/promotion/renders", EventPromotionRendersCreate);
 openapi.get("/promotion/artifact", EventPromotionArtifactGet);
-openapi.post("/promotion/downloads", EventPromotionDownloadsCreate);
 openapi.post("/agenda/occurrences/:occurrenceId/promotion/composition", PromotionCompositionSave);
 openapi.get("/agenda/promotion", PromotionSessionsGet);
 openapi.get("/agenda/occurrences/:occurrenceId/promotion", PromotionKitGet);
@@ -231,7 +229,6 @@ openapi.post("/agenda/occurrences/:occurrenceId/promotion/referrals", PromotionK
 openapi.post("/agenda/occurrences/:occurrenceId/promotion", PromotionCopySave);
 openapi.post("/agenda/occurrences/:occurrenceId/promotion/renders", PromotionRendersCreate);
 openapi.get("/agenda/occurrences/:occurrenceId/promotion/artifact", PromotionArtifactGet);
-openapi.post("/agenda/occurrences/:occurrenceId/promotion/downloads", PromotionDownloadsCreate);
 openapi.get("/agenda/contents", AgendaContentsGet);
 openapi.post("/agenda/contents", AgendaContentCreate);
 openapi.post("/agenda/contents/copy", AgendaContentCopy);

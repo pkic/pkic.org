@@ -83,7 +83,7 @@ export async function buildSpeakerPromotionSource(basis: PromotionSourceBasis, a
     compositionRevision: personal.revision,
     stale: false,
     artifacts: [],
-    metrics: { downloads: 0, clicks: 0, confirmedRegistrations: 0, sessionRsvps: 0 },
+    metrics: { clicks: 0, confirmedRegistrations: 0, sessionRsvps: 0 },
   });
   const source = {
     kit,

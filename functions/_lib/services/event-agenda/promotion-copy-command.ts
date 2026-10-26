@@ -6,7 +6,6 @@ import { prepareAuthorizationGuard, isAuthorizationGuardFailure } from "../../db
 import { prepareAgendaRevisionCommit, throwAgendaRevisionError } from "./revision";
 import { prepareAgendaRead } from "./read";
 import { prepareAuditLogWhen } from "../audit";
-import { nowIso } from "../../utils/time";
 import { eventReadIdSql } from "../events/selection";
 import { AppError } from "../../errors";
 
@@ -57,10 +56,8 @@ export async function savePromotionCopyRequest(
         revision,
         [
           db
-            .prepare(
-              "INSERT INTO event_agenda_promotion_copy(occurrence_id,copy_json,updated_by,updated_at) VALUES(?,?,?,?) ON CONFLICT(occurrence_id) DO UPDATE SET copy_json=excluded.copy_json,updated_by=excluded.updated_by,updated_at=excluded.updated_at",
-            )
-            .bind(occurrenceId, JSON.stringify(copy), actor.subjectId, nowIso()),
+            .prepare("UPDATE event_agenda_occurrences SET promotion_copy_json=? WHERE id=?")
+            .bind(JSON.stringify(copy), occurrenceId),
         ],
         audit,
         read.statements,

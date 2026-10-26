@@ -35,7 +35,6 @@ export function preparePromotionMetrics(
         .prepare(`WITH target AS(SELECT ${scope.sql} AS event_id,? AS user_id,? AS occurrence_id),owner AS(${owner.sql})
     SELECT referral.code,COALESCE(referral.clicks,0) AS clicks,
       (SELECT COUNT(*) FROM referral_conversions conversion JOIN registrations converted ON converted.id=conversion.conversion_ref WHERE conversion.code=referral.code AND conversion.conversion_type='registration' AND converted.event_id=target.event_id AND converted.status='registered') AS confirmedRegistrations,
-      CASE WHEN target.occurrence_id IS NULL THEN (SELECT COALESCE(SUM(download_count),0) FROM event_promotion_renders WHERE event_id=target.event_id AND user_id=target.user_id AND occurrence_id IS NULL) ELSE (SELECT COALESCE(SUM(download_count),0) FROM event_agenda_promotion_downloads WHERE occurrence_id=target.occurrence_id AND user_id=target.user_id) END AS downloads,
       (SELECT COUNT(*) FROM agenda_session_participations WHERE occurrence_id=target.occurrence_id AND event_id=target.event_id AND status='reserved') AS sessionRsvps
     FROM target LEFT JOIN owner ON 1 LEFT JOIN referral_codes referral ON referral.code=owner.code`)
         .bind(...scope.bindings, userId, occurrenceId, ...owner.bindings),
@@ -45,13 +44,12 @@ export function preparePromotionMetrics(
         code: string | null;
         clicks: number;
         confirmedRegistrations: number;
-        downloads: number;
         sessionRsvps: number;
       }>(loaded[0]);
       return {
         code: row?.code ?? null,
         metrics: promotionKitSchema.shape.metrics.parse(
-          row ?? { clicks: 0, confirmedRegistrations: 0, downloads: 0, sessionRsvps: 0 },
+          row ?? { clicks: 0, confirmedRegistrations: 0, sessionRsvps: 0 },
         ),
       };
     },

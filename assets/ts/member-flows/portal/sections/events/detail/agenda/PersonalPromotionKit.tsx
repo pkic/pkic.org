@@ -81,12 +81,6 @@ export function PersonalPromotionKit({ base, title, onClose }: { base: string; t
       const extension = content.type === "application/zip" ? "zip" : format === "carousel" ? "pdf" : "png";
       downloadFile(content, content.type, `promotion-${format}.${extension}`);
       setError("");
-      // Metrics are best effort after successful delivery and never block the file itself.
-      void postJson(
-        `${base}/downloads`,
-        { fingerprint: kit.fingerprint, format },
-        promotionKitSchema.shape.metrics,
-      ).catch(() => undefined);
     } catch (error) {
       setError(error instanceof Error ? error.message : "Could not download these materials.");
     } finally {
