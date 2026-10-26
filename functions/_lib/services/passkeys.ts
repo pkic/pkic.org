@@ -176,7 +176,17 @@ export async function beginPasskeyRegistration(
     },
   });
 
-  const challengeToken = await issuePasskeyChallengeToken(signingSecret, "registration", options.challenge, actor.id);
+  const mailbox = await first<{ normalized_email: string; email_verified_at: string | null }>(
+    db,
+    "SELECT normalized_email, email_verified_at FROM users WHERE id=? AND active=1 AND pii_redacted_at IS NULL AND merged_into_user_id IS NULL",
+    [actor.id],
+  );
+  if (!mailbox?.email_verified_at)
+    throw new AppError(403, "PASSKEY_EMAIL_UNVERIFIED", "Confirm your sign-in email before adding a passkey.");
+  const challengeToken = await issuePasskeyChallengeToken(signingSecret, "registration", options.challenge, actor.id, {
+    email: mailbox.normalized_email,
+    verifiedAt: mailbox.email_verified_at,
+  });
 
   return { options: options as unknown as Record<string, unknown>, challengeToken };
 }
@@ -193,7 +203,7 @@ export async function completePasskeyRegistration(
   const signingSecret = requireEnvVar(env.INTERNAL_SIGNING_SECRET, "INTERNAL_SIGNING_SECRET");
 
   const claims = await verifyPasskeyChallengeToken(signingSecret, payload.challengeToken, "registration");
-  if (claims.userId !== actor.id) {
+  if (claims.userId !== actor.id || !claims.mailbox) {
     throw new AppError(400, "PASSKEY_CHALLENGE_INVALID", "Passkey challenge does not match the authenticated user");
   }
   if (await wasPasskeyChallengeConsumed(db, claims.challengeId)) {
@@ -259,6 +269,14 @@ export async function persistVerifiedPasskeyCredential(
 
   try {
     await db.batch([
+      ...(challenge?.mailbox
+        ? [
+            prepareAuthorizationGuard(db, {
+              sql: "SELECT 1 FROM users WHERE id=? AND normalized_email=? AND email_verified_at=? AND active=1 AND pii_redacted_at IS NULL AND merged_into_user_id IS NULL",
+              bindings: [actor.id, challenge.mailbox.email, challenge.mailbox.verifiedAt],
+            }),
+          ]
+        : []),
       ...(challenge ? [prepareConsumePasskeyChallenge(db, challenge, now)] : []),
       db
         .prepare(
@@ -299,6 +317,8 @@ export async function persistVerifiedPasskeyCredential(
       ...(challenge ? [prepareExpiredPasskeyChallengeCleanup(db, now)] : []),
     ]);
   } catch (error) {
+    if (isAuthorizationGuardFailure(error))
+      throw new AppError(409, "PASSKEY_ACCOUNT_CHANGED", "Your account changed. Start adding the passkey again.");
     if (challenge && (await wasPasskeyChallengeConsumed(db, challenge.challengeId))) {
       throw passkeyChallengeAlreadyUsedError();
     }

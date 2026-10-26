@@ -1,3 +1,4 @@
+import { findUserEmailOwner } from "./user-emails";
 import { first } from "../db/queries";
 import { AppError } from "../errors";
 import type { DatabaseLike, StatementLike } from "../types";
@@ -67,7 +68,15 @@ export async function prepareRegistrationSubmission(
     mailboxVerified?: boolean;
   },
 ): Promise<PreparedRegistrationSubmission> {
-  const preparedUser = await buildFindOrCreateUserStatement(db, payload.user);
+  if (!payload.mailboxVerified && !payload.verifiedIdentity) {
+    const claim = await findUserEmailOwner(db, normalizeEmail(payload.user.email));
+    if (claim?.kind === "pending" || (claim?.kind === "secondary" && !claim.verified))
+      throw new AppError(422, "REGISTRATION_EMAIL_PROOF_REQUIRED", "Verify your email before continuing registration.");
+  }
+  const preparedUser = await buildFindOrCreateUserStatement(db, {
+    ...payload.user,
+    mailboxVerified: payload.mailboxVerified,
+  });
   if (payload.verifiedIdentity && preparedUser.user.id !== payload.verifiedIdentity.userId) {
     throw new AppError(403, "REGISTRATION_IDENTITY_MISMATCH", "Registration identity does not match the session");
   }
@@ -127,6 +136,7 @@ export async function prepareRegistrationSubmission(
         userId: preparedUser.user.id,
         normalizedEmail: normalizeEmail(payload.user.email),
         method: "registration_confirmation",
+        excludeRegistrationId: builtRegistration.registration.id,
       }),
     );
   statements.push(

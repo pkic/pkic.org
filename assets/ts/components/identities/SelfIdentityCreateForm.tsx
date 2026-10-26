@@ -1,4 +1,5 @@
 /** Email-first representation onboarding: production mailbox proof, followed by the canonical domain rule. */
+import { successResponseSchema } from "../../../shared/schemas/api-common";
 import type { z } from "zod";
 import { useEffect, useState } from "preact/hooks";
 import { ORGANIZATION_JOB_TITLE_COPY } from "../../../shared/email-first-copy";
@@ -91,7 +92,16 @@ export function SelfIdentityCreateForm({
             setAddress(existing);
             setEmail(existing.email);
             if (existing.verifiedAt) await resolve(existing);
-            else setStage("waiting");
+            else {
+              if (!existing.id) await resolve(existing);
+              else
+                await postJson(
+                  `${OWN_EMAILS_ENDPOINT}/${encodeURIComponent(existing.id)}/verification`,
+                  {},
+                  successResponseSchema,
+                );
+              setStage("waiting");
+            }
             return true;
           } finally {
             setBusy(false);

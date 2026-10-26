@@ -20,7 +20,7 @@ import { first } from "../../db/queries";
 import { nowIso } from "../../utils/time";
 import { uuid } from "../../utils/ids";
 import { AppError } from "../../errors";
-import { buildFindOrCreateUserStatement, findUserByEmail, splitPersonName, type UserRecord } from "../users";
+import type { UserRecord } from "../users";
 import { normalizeOrgName } from "../../../../assets/shared/organization-name";
 import { buildGroupCapacityJoinStatements } from "../groups/membership";
 import { prepareAutomaticGroupEnrollmentForUserStatements } from "../groups/automatic-enrollment";
@@ -45,13 +45,8 @@ import { prepareSitePublicationRequest } from "../site-publication-requests";
 import { firstFreeSlug, slugifyOr } from "../../../../assets/shared/slug";
 import { prepareExistingOrganizationAffiliation } from "./affiliation-reuse";
 
-export interface ProvisionIdentityInput {
-  name: string;
-  email: string;
-  jobTitle?: string | null;
-  biography?: string | null;
-  links?: string[] | null;
-}
+import { buildProvisioningUser, findProvisioningUser, type ProvisionIdentityInput } from "./provisioning-users";
+export type { ProvisionIdentityInput } from "./provisioning-users";
 
 export interface ProvisionMembershipInput extends ProvisioningGroupSelection {
   organizationName?: string | null;
@@ -65,6 +60,8 @@ export interface ProvisionMembershipInput extends ProvisioningGroupSelection {
   /** Only applied when given; the organization-tied path never overwrites an already-set member_since. */
   memberSince?: string | null;
   identities: ProvisionIdentityInput[];
+  /** Only the verified application continuation may assert mailbox proof. */
+  mailboxVerified?: boolean;
   /** Provenance for the approved identity rows. */
   identitySource: IdentitySource;
   /** True only for an approved membership or a separately authorized staff activation. */
@@ -99,17 +96,6 @@ export interface ProvisionMembershipResult {
   groups: ProvisionedGroup[];
 }
 
-async function buildIdentityUserStatement(db: DatabaseLike, identityInput: ProvisionIdentityInput) {
-  const { firstName, lastName } = splitPersonName(identityInput.name);
-  return buildFindOrCreateUserStatement(db, {
-    email: identityInput.email,
-    firstName: firstName ?? undefined,
-    lastName: lastName ?? undefined,
-    // Provisioning creates the person's membership identity in its own batch.
-    identityInBatch: true,
-  });
-}
-
 export interface BuiltProvisioning {
   statements: StatementLike[];
   /**
@@ -134,7 +120,7 @@ async function buildProvisionIndividualMemberships(
 
   for (const rep of input.identities) {
     if (rejectExisting) {
-      const existingUser = await findUserByEmail(db, rep.email);
+      const existingUser = await findProvisioningUser(db, rep.email, input.mailboxVerified);
       if (existingUser) {
         const existingMember = await first<{ id: string }>(db, INDIVIDUAL_MEMBERSHIP_OF_USER_SQL, [existingUser.id]);
         if (existingMember) {
@@ -143,7 +129,7 @@ async function buildProvisionIndividualMemberships(
       }
     }
 
-    const { user, statements: userStatements } = await buildIdentityUserStatement(db, rep);
+    const { user, statements: userStatements } = await buildProvisioningUser(db, rep, input.mailboxVerified);
     statements.push(...userStatements);
 
     const { identityId, statement: identityStatement } = await buildCreateIdentityStatement(db, {
@@ -419,7 +405,7 @@ async function buildProvisionOrganizationTiedMemberships(
 
   if (rejectExisting) {
     for (const rep of input.identities) {
-      const existingUser = await findUserByEmail(db, rep.email);
+      const existingUser = await findProvisioningUser(db, rep.email, input.mailboxVerified);
       if (existingUser) {
         const alreadyRepresenting = await isActiveIdentityForMember(db, aggregateId, existingUser.id);
         if (alreadyRepresenting) {
@@ -438,7 +424,7 @@ async function buildProvisionOrganizationTiedMemberships(
     [];
 
   for (const rep of input.identities) {
-    const { user, statements: userStatements } = await buildIdentityUserStatement(db, rep);
+    const { user, statements: userStatements } = await buildProvisioningUser(db, rep, input.mailboxVerified);
     statements.push(...userStatements);
 
     const existingAffiliation = input.activateIdentities

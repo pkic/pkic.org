@@ -124,7 +124,10 @@ export async function buildCreateRegistration(
   const previousAttendance = batchRows<PreviousRegistrationDayAttendanceRow>(details[capacity.statements.length]);
   if (existing) {
     if (payload.acceptedProposalRoles) assertRegistrationRestorationAllowed(existing);
-    if (existing.status !== "cancelled") {
+    if (
+      existing.status !== "cancelled" &&
+      !(payload.mailboxVerified && existing.status === "pending_email_confirmation")
+    ) {
       throw new AppError(409, "REGISTRATION_EXISTS", "This user is already registered for the event");
     }
   }

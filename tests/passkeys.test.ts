@@ -60,8 +60,8 @@ async function call(path: string, init: RequestInit = {}, token?: string): Promi
 async function insertStaffUser(email: string): Promise<string> {
   const id = crypto.randomUUID();
   await env.DB.prepare(
-    `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
-     VALUES (?, ?, ?, 1, datetime('now'), datetime('now'))`,
+    `INSERT INTO users (id,email,normalized_email,active,email_verified_at,created_at,updated_at)
+     VALUES (?,?,?,1,strftime('%Y-%m-%dT%H:%M:%fZ','now'),strftime('%Y-%m-%dT%H:%M:%fZ','now'),strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
   )
     .bind(id, email, email)
     .run();
@@ -83,8 +83,8 @@ async function insertActiveMemberUser(email: string): Promise<string> {
   const { statements } = buildCreateIndividualMemberStatements(env.DB, identity.identityId, "H5", now);
   await env.DB.batch([
     env.DB.prepare(
-      `INSERT INTO users (id, email, normalized_email, first_name, active, created_at, updated_at)
-       VALUES (?, ?, ?, 'Test', 1, datetime('now'), datetime('now'))`,
+      `INSERT INTO users (id,email,normalized_email,first_name,active,email_verified_at,created_at,updated_at)
+       VALUES (?,?,?,'Test',1,strftime('%Y-%m-%dT%H:%M:%fZ','now'),strftime('%Y-%m-%dT%H:%M:%fZ','now'),strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
     ).bind(userId, email, email),
     identity.statement,
     ...statements,
@@ -122,6 +122,36 @@ describe("passkeys (WebAuthn)", () => {
     await resetDb();
     userId = await insertStaffUser("passkey-user@example.test");
     token = await createAdminSession(env.DB, userId, "passkey-user-token");
+  });
+
+  it("refuses passkey enrollment before the sign-in mailbox is verified", async () => {
+    await env.DB.prepare("UPDATE users SET email_verified_at=NULL WHERE id=?").bind(userId).run();
+    const response = await call("/api/v1/auth/passkeys/register/begin", { method: "POST" }, token);
+    expect(response.status).toBe(403);
+    expect(await queryAll(env.DB, "SELECT id FROM passkey_credentials WHERE user_id=?", [userId])).toEqual([]);
+  });
+
+  it("does not finish a ceremony after its verified mailbox changes", async () => {
+    const beginResponse = await call("/api/v1/auth/passkeys/register/begin", { method: "POST" }, token);
+    expect(beginResponse.status).toBe(200);
+    const begin = (await beginResponse.json()) as BeginResponse;
+    const authenticator = await createMockAuthenticator();
+    const response = await buildRegistrationResponse(authenticator, {
+      challenge: begin.options.challenge,
+      rpId: RP_ID,
+      origin: ORIGIN,
+    });
+    await env.DB.prepare("UPDATE users SET email_verified_at='2099-01-01T00:00:00.000Z' WHERE id=?").bind(userId).run();
+    const complete = await call(
+      "/api/v1/auth/passkeys/register/complete",
+      { method: "POST", body: JSON.stringify({ challengeToken: begin.challengeToken, response }) },
+      token,
+    );
+    expect(complete.status).toBe(409);
+    expect(await queryAll(env.DB, "SELECT id FROM passkey_credentials WHERE user_id=?", [userId])).toEqual([]);
+    expect(
+      await queryAll(env.DB, "SELECT challenge_id FROM passkey_challenge_uses WHERE purpose='registration'"),
+    ).toEqual([]);
   });
 
   async function registerPasskey(

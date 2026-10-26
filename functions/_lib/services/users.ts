@@ -1,3 +1,4 @@
+import { readEmailOwnership, provedMailboxUserId, prepareEmailOwnershipClaim } from "./email-ownership";
 import { first } from "../db/queries";
 import { normalizeEmail } from "../validation";
 import { nowIso } from "../utils/time";
@@ -87,6 +88,8 @@ export interface FindOrCreateUserPayload {
   /** Whether to merge submitted profile fields into an existing record.
    *  Default: false — public submissions do not update existing profiles. */
   allowProfileUpdate?: boolean;
+  /** Set only after a signed mailbox challenge has been verified. */
+  mailboxVerified?: boolean;
   /**
    * Every person holds an identity. A new account receives an individual
    * identity in the same batch, unless the caller creates an identity for
@@ -264,7 +267,13 @@ export function prepareIndividualIdentityStatement(db: DatabaseLike, userId: str
 
 async function resolveUserWrite(db: DatabaseLike, payload: FindOrCreateUserPayload): Promise<ResolvedUserWrite> {
   const normalized = normalizeEmail(payload.email);
-  const existing = await findExistingUserByAnyEmail(db, normalized);
+  const ownership = payload.mailboxVerified ? await readEmailOwnership(db, normalized) : null;
+  const provedUserId = provedMailboxUserId(ownership);
+  const existing = payload.mailboxVerified
+    ? provedUserId
+      ? await first<UserRecord>(db, `SELECT ${userRecordColumns()} FROM users WHERE id=?`, [provedUserId])
+      : null
+    : await findExistingUserByAnyEmail(db, normalized);
 
   if (!existing) {
     const user: UserRecord = {
@@ -299,13 +308,21 @@ async function resolveUserWrite(db: DatabaseLike, payload: FindOrCreateUserPaylo
     return {
       user,
       created: true,
-      statements: payload.identityInBatch ? [insert] : [insert, prepareAccountIdentityStatement(db, user.id, now)],
+      statements: [
+        ...(payload.mailboxVerified ? prepareEmailOwnershipClaim(db, normalized, user.id, ownership) : []),
+        insert,
+        ...(payload.identityInBatch ? [] : [prepareAccountIdentityStatement(db, user.id, now)]),
+      ],
     };
   }
 
   // Public submissions must not overwrite existing profile data.
   if (!payload.allowProfileUpdate) {
-    return { user: existing, created: false, statements: [] };
+    return {
+      user: existing,
+      created: false,
+      statements: payload.mailboxVerified ? prepareEmailOwnershipClaim(db, normalized, existing.id, ownership) : [],
+    };
   }
 
   const updatedFirstName = payload.firstName ?? existing.first_name;

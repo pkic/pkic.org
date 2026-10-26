@@ -1,5 +1,11 @@
 import type { AuthorizationEvidence } from "../db/authorization-guard";
 
+/** An unproved primary claim cannot unlock an account established through another verified mailbox. */
+export function primaryEmailProofMayAuthenticateSql(person: string): string {
+  return `(${person}.email_verified_at IS NOT NULL OR NOT EXISTS (SELECT 1 FROM user_emails verified
+    WHERE verified.user_id=${person}.id AND verified.verified_at IS NOT NULL))`;
+}
+
 /** Ownership of an address can outlive the representation that previously used it. */
 export function ownedEmailRepresentationActiveSql(address: string): string {
   return `(${address}.identity_id IS NULL OR EXISTS (
@@ -29,7 +35,7 @@ export function signInEmailAuthorizationEvidence(input: {
       AND person.pii_redacted_at IS NULL AND person.merged_into_user_id IS NULL
       AND ${
         input.emailId === null
-          ? "person.normalized_email = ?"
+          ? `person.normalized_email = ? AND ${primaryEmailProofMayAuthenticateSql("person")}`
           : `EXISTS (
         SELECT 1 FROM user_emails address JOIN user_email_sign_in_permissions permission ON permission.email_id = address.id
          WHERE address.user_id = person.id AND address.id = ? AND address.normalized_email = ?

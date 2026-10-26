@@ -35,6 +35,9 @@ import { requestOwnEmailVerification } from "../../../../../_lib/services/own-em
  * Verification mail is limited per person and per network through the
  * shared magic-link controls: the signed-in person is who asks for it.
  */
+import { verifyUserSessionRequest } from "../../../../../_lib/auth/user-session-request";
+import { userSessionRequestAuthorizationEvidence } from "../../../../../_lib/auth/user-session-evidence";
+
 const VERIFICATION_MAIL_RATE_LIMIT_NAMESPACE = "user-email-verification";
 
 async function currentUser(c: AdminContext) {
@@ -50,10 +53,11 @@ export const OwnEmailAddressesGet = openApiRoute(ownEmailAddressesListRouteSchem
 });
 
 export const OwnEmailAddressPost = openApiRoute(ownEmailAddressAddRouteSchema, async (c: AdminContext, data) => {
-  const { actor } = await currentUser(c);
-  const http = await prepareMagicLinkRequestHttp(c, actor.userId, VERIFICATION_MAIL_RATE_LIMIT_NAMESPACE);
+  const claims = await verifyUserSessionRequest(c.req.raw, c.env);
+  const http = await prepareMagicLinkRequestHttp(c, claims.sub, VERIFICATION_MAIL_RATE_LIMIT_NAMESPACE);
   const added = await addOwnEmailAddress(http.db, {
-    userId: actor.userId,
+    userId: claims.sub,
+    authorizationEvidence: userSessionRequestAuthorizationEvidence(claims),
     email: data.body.email,
     signingSecret: http.secret,
     appBaseUrl: http.appBaseUrl,
@@ -65,10 +69,11 @@ export const OwnEmailAddressPost = openApiRoute(ownEmailAddressAddRouteSchema, a
 export const OwnEmailAddressVerificationPost = openApiRoute(
   ownEmailAddressVerificationRequestRouteSchema,
   async (c: AdminContext, data) => {
-    const { actor } = await currentUser(c);
-    const http = await prepareMagicLinkRequestHttp(c, actor.userId, VERIFICATION_MAIL_RATE_LIMIT_NAMESPACE);
+    const claims = await verifyUserSessionRequest(c.req.raw, c.env);
+    const http = await prepareMagicLinkRequestHttp(c, claims.sub, VERIFICATION_MAIL_RATE_LIMIT_NAMESPACE);
     const sent = await requestOwnEmailVerification(http.db, {
-      userId: actor.userId,
+      userId: claims.sub,
+      authorizationEvidence: userSessionRequestAuthorizationEvidence(claims),
       emailId: data.params.emailId,
       signingSecret: http.secret,
       appBaseUrl: http.appBaseUrl,

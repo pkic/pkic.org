@@ -310,15 +310,13 @@ describe("verified-email-first membership join", () => {
     const response = await verifyJoin(testEnv, token);
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ status: "support_required" });
-    expect(await queryAll(testEnv.DB, "SELECT id FROM sessions")).toHaveLength(0);
+    const result = memberJoinVerifyResponseSchema.parse(await response.json());
+    expect(result.status).toBe("organization_access_ready");
+    if (result.status !== "organization_access_ready") throw new Error("Expected proved mailbox access");
+    expect(result.member.userId).not.toBe(userId);
+    expect(await queryAll(testEnv.DB, "SELECT id FROM sessions WHERE user_id=?", [userId])).toHaveLength(0);
     expect(await queryAll(testEnv.DB, "SELECT id FROM identities WHERE user_id = ?", [userId])).toHaveLength(0);
-    const [alias] = await queryAll<{ verified_at: string | null }>(
-      testEnv.DB,
-      "SELECT verified_at FROM user_emails WHERE user_id = ?",
-      [userId],
-    );
-    expect(alias.verified_at).toBeNull();
+    expect(await queryAll(testEnv.DB, "SELECT id FROM user_emails WHERE user_id=?", [userId])).toEqual([]);
   });
 
   it("binds a previously verified secondary alias to the same canonical applicant", async () => {

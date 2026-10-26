@@ -24,7 +24,9 @@ import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
 import type { EventRecord } from "../events";
 import { registrationPageUrl } from "../frontend-links";
-import { findUserByEmail } from "../users";
+import { userRecordColumns, type UserRecord } from "../users";
+import { first } from "../../db/queries";
+import { readEmailOwnership, provedMailboxUserId } from "../email-ownership";
 import { registrationAsksOrganization } from "./confirmation-organization";
 
 const PURPOSE = "registration_email_verify";
@@ -124,7 +126,10 @@ export async function verifyRegistrationEmailProof(
   input: { signingSecret: string; token: string; eventId: string },
 ): Promise<RegistrationEmailProofVerifyResponse> {
   const proof = await readRegistrationEmailProof(input.signingSecret, input.token, input.eventId);
-  const user = await findUserByEmail(db, proof.email);
+  const ownerId = provedMailboxUserId(await readEmailOwnership(db, proof.email));
+  const user = ownerId
+    ? await first<UserRecord>(db, `SELECT ${userRecordColumns()} FROM users WHERE id=?`, [ownerId])
+    : null;
   return {
     email: proof.email,
     unaffiliatedAttestation: proof.unaffiliatedAttestation,

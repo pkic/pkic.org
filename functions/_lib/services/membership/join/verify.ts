@@ -4,7 +4,8 @@ import { first } from "../../../db/queries";
 import type { DatabaseLike } from "../../../types";
 import { nowIso } from "../../../utils/time";
 import { buildFindOrCreateUserStatement } from "../../users";
-import { findUserEmailOwner, isEmailReservationConflict } from "../../user-emails";
+import { isEmailReservationConflict } from "../../user-emails";
+import { readEmailOwnership, provedMailboxUserId } from "../../email-ownership";
 import { prepareVerifyOwnedEmailStatements } from "../../email-verification";
 import { prepareExplicitVerifiedDomainIdentityStatements } from "../../identities";
 import { prepareAuditLog } from "../../audit";
@@ -63,14 +64,12 @@ export async function verifyMemberJoin(
   // The domain the address links through; free mail links through none.
   const linkDomain = await organizationLinkDomain(db, capability.email);
   const domain = linkDomain ?? emailDomainOf(capability.email);
-  const owner = await findUserEmailOwner(db, capability.email);
   // A previously verified alias is an authentication identity for the same
   // canonical user. An unverified admin-added alias is only a reservation:
   // this join link must not turn a potentially mistaken association into
   // access to that user's unrelated capacities.
-  if (owner?.kind === "pending" || (owner?.kind === "secondary" && owner.verified !== 1)) {
-    return { status: "support_required" };
-  }
+  const ownership = await readEmailOwnership(db, capability.email);
+  const provedUserId = provedMailboxUserId(ownership);
   const claimedMember = linkDomain
     ? await first<ClaimedMemberRow>(
         db,
@@ -86,26 +85,21 @@ export async function verifyMemberJoin(
     : null;
   if (!claimedMember) {
     if (capability.applicantKind === "individual") {
-      if (owner) {
+      if (provedUserId) {
         const activeIdentity = await first<{ id: string }>(
           db,
           `SELECT id FROM identities
             WHERE user_id = ? AND started_at IS NOT NULL AND ended_at IS NULL AND blocked_at IS NULL
             LIMIT 1`,
-          [owner.userId],
+          [provedUserId],
         );
         if (activeIdentity) return { status: "support_required" };
       }
     }
-    return issueApplicationContinuation(
-      input.signingSecret,
-      capability,
-      input.applicationTtlSeconds,
-      owner?.userId ?? null,
-    );
+    return issueApplicationContinuation(input.signingSecret, capability, input.applicationTtlSeconds, provedUserId);
   }
 
-  const preparedUser = await buildFindOrCreateUserStatement(db, { email: capability.email });
+  const preparedUser = await buildFindOrCreateUserStatement(db, { email: capability.email, mailboxVerified: true });
   const existingState = preparedUser.created
     ? null
     : await first<{ active: number }>(db, "SELECT active FROM users WHERE id = ?", [preparedUser.user.id]);

@@ -258,10 +258,10 @@ describe("email addresses on the user record", () => {
     expect(navigate).toHaveBeenCalledWith(`/users/${USER_ID}`);
   });
 
-  it("opens the link without a session, verifies only on an explicit click, and offers a member organization's sign-in", async () => {
+  it("previews the mailbox link, names its destination account, and confirms only on an explicit click", async () => {
     window.location.hash = "#/email-verifications?token=pkc1_verification-token";
     const responses: unknown[] = [
-      { email: "ana@member.example" },
+      { email: "ana@member.example", accountEmail: "ana@gmail.com", consolidatesUnverifiedAccount: false },
       { email: "ana@member.example", joinedOrganization: null, offeredOrganization: { id: workId, name: "Member Co" } },
     ];
     stub(() => json(responses.shift()));
@@ -279,5 +279,22 @@ describe("email addresses on the user record", () => {
     expect(signIn?.textContent).toBe("Sign in to join Member Co");
     // The spent link leaves the address bar.
     expect(window.location.hash).toBe("#/email-verifications");
+  });
+  it("requires an explicit consolidation confirmation for a wholly unverified account", async () => {
+    window.location.hash = "#/email-verifications?token=pkc1_consolidation-token";
+    const responses = [
+      { email: "ana@member.example", accountEmail: "ana@gmail.com", consolidatesUnverifiedAccount: true },
+      { email: "ana@member.example", joinedOrganization: null, offeredOrganization: null },
+    ];
+    stub(() => json(responses.shift()));
+    const host = mount(<EmailVerificationConfirmation />);
+    await settle();
+    expect(writes("POST")).toHaveLength(1);
+    expect(host.textContent).toContain("previous permissions will not be transferred");
+    await press(host, "Consolidate into my account");
+    expect(ownEmailAddressVerificationSchema.parse(writes("POST")[1]!.body)).toEqual({
+      token: "pkc1_consolidation-token",
+      consolidateUnverifiedAccount: true,
+    });
   });
 });

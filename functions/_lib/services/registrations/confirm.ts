@@ -12,11 +12,11 @@ import {
   prepareRevokeDuplicateInvitesStatement,
 } from "../invites";
 import { INVITE_COLUMNS, type InviteRecord } from "../invite-types";
-import { signCapabilityToken, verifyDatabaseCapability } from "../capability-links";
+import { newCapabilityLinkSecret, signCapabilityToken, verifyDatabaseCapability } from "../capability-links";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { REGISTRATION_COLUMNS, type RegistrationRecord } from "./types";
 import { isRegistrationTransitionConflict, prepareRegistrationTransitionGuard } from "./transition-guard";
-import { prepareVerifyPrimaryEmailStatement } from "../email-verification";
+import { prepareVerifyPrimaryEmailStatements } from "../email-verification";
 import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import { linkVerifiedAddressToDomainOrganization } from "../identities/email-domain-link";
 
@@ -184,15 +184,17 @@ export async function prepareConfirmRegistrationByToken(
     userId: registration.user_id,
   });
   const newStatus = "registered";
+  finalizedRegistration = { ...finalizedRegistration, manage_link_secret: newCapabilityLinkSecret() };
   const verifiedEmail = inviteEmail ?? user.normalized_email;
   const updateStatements: StatementLike[] = [
     prepareRegistrationTransitionGuard(db, registration),
     ...emailFinalizeStatements,
-    prepareVerifyPrimaryEmailStatement(db, {
+    ...prepareVerifyPrimaryEmailStatements(db, {
       userId: registration.user_id,
       normalizedEmail: verifiedEmail,
       method: ownsPendingEmailChange ? "email_change_confirmation" : "registration_confirmation",
       verifiedAt: now,
+      excludeRegistrationId: registration.id,
     }),
     db
       .prepare(

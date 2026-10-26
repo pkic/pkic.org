@@ -1,4 +1,5 @@
 import sharp from "sharp";
+import { userCreateSchema } from "../../assets/shared/schemas/user-create";
 import { EMAIL_FIRST_COPY } from "../../assets/shared/email-first-copy";
 import { expect, test } from "@playwright/test";
 import {
@@ -33,7 +34,7 @@ import { capturedEmailCount, waitForCapturedEmail, extractEmailUrl } from "./hel
 
 test.use({ actionTimeout: 15_000 });
 
-test("a signed-in user registers from event home without another email challenge", async ({ page }, info) => {
+test("a signed-in user registers from event home without another email challenge", async ({ page, browser }, info) => {
   const email = e2eAdminEmail("portal-agenda-preview");
   await signInAsE2eStaff(page, email);
   const profile = await page.request.patch("/api/v1/users/current", {
@@ -273,6 +274,15 @@ test("a signed-in user registers from event home without another email challenge
   await page.getByRole("button", { name: "Change representation", exact: true }).click();
   await changeIdentity.getByRole("button", { name: "Add identity", exact: true }).click();
   const addRepresentation = page.getByRole("dialog", { name: "Add identity", exact: true });
+  // A seconds-old unverified account must consolidate through proof into this signed-in account.
+  const placeholder = await page.request.post("/api/v1/users", {
+    data: userCreateSchema.parse({
+      email: "ada@lighthouse-work.test",
+      firstName: "Unverified",
+      lastName: "Placeholder",
+    }),
+  });
+  expect(placeholder.status()).toBe(201);
   await addRepresentation.getByRole("textbox", { name: /^Representation email/ }).fill("ada@lighthouse-work.test");
   for (const [width, height, device] of [
     [1280, 900, "desktop"],
@@ -287,9 +297,31 @@ test("a signed-in user registers from event home without another email challenge
   await expect(addRepresentation.getByRole("combobox")).toHaveCount(0);
   await page.screenshot({ path: info.outputPath("representation-verification-phone.png") });
   const verificationEmail = await waitForCapturedEmail("ada@lighthouse-work.test", "Verify", { since: inboxStart });
+  const verificationUrl = extractEmailUrl(verificationEmail, "/portal/");
+  const unrelated = await browser.newContext();
+  const foreignVerification = await unrelated.newPage();
+  await foreignVerification.goto(verificationUrl);
+  await foreignVerification.getByRole("button", { name: "Consolidate into my account", exact: true }).click();
+  await expect(foreignVerification.getByRole("alert")).toContainText(
+    "Sign in to the account that requested this address",
+  );
+  await expect(
+    foreignVerification
+      .getByRole("region", { name: "Email verification" })
+      .getByRole("link", { name: "Sign in", exact: true }),
+  ).toBeVisible();
+  await unrelated.close();
   const verification = await page.context().newPage();
-  await verification.goto(extractEmailUrl(verificationEmail, "/portal/"));
-  await verification.getByRole("button", { name: "Verify this address", exact: true }).click();
+  await verification.goto(verificationUrl);
+  await expect(verification.getByText(email, { exact: true })).toBeVisible();
+  for (const [width, height, device] of [
+    [1280, 900, "desktop"],
+    [375, 812, "phone"],
+  ] as const) {
+    await verification.setViewportSize({ width, height });
+    await verification.screenshot({ path: info.outputPath(`email-consolidation-confirmation-${device}.png`) });
+  }
+  await verification.getByRole("button", { name: "Consolidate into my account", exact: true }).click();
   await expect(verification.getByText("ada@lighthouse-work.test is verified", { exact: true })).toBeVisible();
   await verification.close();
   await addRepresentation.getByRole("button", { name: "Check verification", exact: true }).click();

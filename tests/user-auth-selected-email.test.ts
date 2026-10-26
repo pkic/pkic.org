@@ -80,8 +80,17 @@ describe("Selected sign-in email delivery", () => {
     [userId] = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email=?", primaryEmail)).map(
       (user) => user.id,
     );
+    await env.DB.prepare("UPDATE users SET email_verified_at=?,email_verification_method='magic_link' WHERE id=?")
+      .bind(nowIso(), userId)
+      .run();
     aliasId = await addEmail(userId, aliasEmail);
     environment = { ...env, EMAIL_RATE_LIMITER: createTestRateLimiter(50), IP_RATE_LIMITER: createTestRateLimiter(50) };
+  });
+
+  it("does not let an unverified primary claim unlock an account established through another mailbox", async () => {
+    await env.DB.prepare("UPDATE users SET email_verified_at=NULL WHERE id=?").bind(userId).run();
+    await requestLink(primaryEmail);
+    expect(await queryAll(env.DB, "SELECT id FROM email_outbox")).toEqual([]);
   });
 
   it("keeps a verified delivery-only address out of sign-in until the account owner explicitly enables it", async () => {

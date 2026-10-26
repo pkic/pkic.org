@@ -15,6 +15,7 @@ import { setOwnEmailSignInPermission } from "./own-email-sign-in";
  */
 import {
   OWN_EMAIL_ADDRESS_LIMIT,
+  EMAIL_ADDRESS_VERIFICATION_TTL_HOURS,
   type OwnEmailAddress,
   type OwnEmailAddressUpdate,
   type OwnEmailAddressesListQuery,
@@ -40,13 +41,7 @@ import {
   type OwnAddressRow,
 } from "./own-email-address-read";
 import { prepareOwnEmailVerificationMessage, type OwnEmailVerificationDelivery } from "./own-email-verification";
-import {
-  emailTakenError,
-  findUserEmailOwner,
-  isEmailReservationConflict,
-  prepareInsertUserEmail,
-  prepareRemoveUserEmailStatements,
-} from "./user-emails";
+import { isEmailReservationConflict, prepareRemoveUserEmailStatements } from "./user-emails";
 
 export async function listOwnEmailAddresses(
   db: DatabaseLike,
@@ -73,38 +68,37 @@ export async function listOwnEmailAddresses(
   return { emails, page: buildPageInfo(query.limit, query.offset, total, emails.length) };
 }
 
-/** Adds an unverified address and sends its verification link in one command. */
+/** Request proof without reserving the address or associating its owner with this account. */
 export async function addOwnEmailAddress(
   db: DatabaseLike,
   input: { userId: string; email: string } & OwnEmailVerificationDelivery,
 ): Promise<{ email: OwnEmailAddress; outboxId: string }> {
-  const [user, count] = await Promise.all([
-    first<{ updated_at: string }>(
-      db,
-      "SELECT updated_at FROM users WHERE id = ? AND active = 1 AND pii_redacted_at IS NULL AND merged_into_user_id IS NULL",
-      [input.userId],
-    ),
-    first<{ count: number }>(db, "SELECT COUNT(*) AS count FROM user_emails WHERE user_id = ?", [input.userId]),
-  ]);
-  if (!user) throw new AppError(404, "USER_NOT_FOUND", "User not found");
-  if (Number(count?.count ?? 0) >= OWN_EMAIL_ADDRESS_LIMIT)
-    throw new AppError(
-      409,
-      "USER_EMAIL_LIMIT_REACHED",
-      `You can keep up to ${OWN_EMAIL_ADDRESS_LIMIT} addresses besides your primary one; remove one first`,
-    );
-  if (await findUserEmailOwner(db, normalizeEmail(input.email))) throw emailTakenError();
   const id = uuid();
   const at = nowIso();
-  const message = await prepareOwnEmailVerificationMessage(db, { ...input, emailId: id, at });
+  const revision = uuid();
+  const expiresAt = new Date(Date.parse(at) + EMAIL_ADDRESS_VERIFICATION_TTL_HOURS * 60 * 60 * 1000).toISOString();
+  const message = await prepareOwnEmailVerificationMessage(db, { ...input, emailId: id, revision, at });
   try {
     await db.batch([
-      prepareInsertUserEmail(db, { id, userId: input.userId, email: input.email, at, userUpdatedAt: user.updated_at }),
+      ...(input.authorizationEvidence ? [prepareAuthorizationGuard(db, input.authorizationEvidence)] : []),
+      prepareAuthorizationGuard(db, {
+        sql: "SELECT 1 FROM users WHERE id=? AND active=1 AND email_verified_at IS NOT NULL AND pii_redacted_at IS NULL AND merged_into_user_id IS NULL",
+        bindings: [input.userId],
+      }),
+      prepareAuthorizationGuard(db, {
+        sql: `SELECT 1 WHERE (SELECT COUNT(*) FROM user_emails WHERE user_id=?) +
+          (SELECT COUNT(*) FROM user_email_claims WHERE user_id=? AND expires_at>?) < ?`,
+        bindings: [input.userId, input.userId, at, OWN_EMAIL_ADDRESS_LIMIT],
+      }),
+      db
+        .prepare(`INSERT INTO user_email_claims(id,user_id,email,normalized_email,revision,created_at,expires_at)
+        VALUES(?,?,?,?,?,?,?)`)
+        .bind(id, input.userId, input.email, normalizeEmail(input.email), revision, at, expiresAt),
       prepareAuditLogAfterOneChange(
         db,
         "user",
         input.userId,
-        "user_email_added",
+        "user_email_requested",
         "user",
         input.userId,
         { emailId: id, email: input.email },
@@ -113,12 +107,27 @@ export async function addOwnEmailAddress(
       ...message.statements,
     ]);
   } catch (error) {
-    if (isEmailReservationConflict(error)) throw emailTakenError();
-    if (isAuditChangeGuardFailure(error))
-      throw new AppError(409, "USER_LIFECYCLE_CHANGED", "Your account changed while the address was being added");
+    if (isAuthorizationGuardFailure(error))
+      throw new AppError(
+        409,
+        "EMAIL_REQUEST_NOT_ALLOWED",
+        "Confirm your sign-in email and check your saved email addresses before requesting another link.",
+      );
     throw error;
   }
-  return { email: await readOwnEmailAddress(db, input.userId, id), outboxId: message.outboxId };
+  return {
+    email: {
+      id,
+      email: input.email,
+      primary: false,
+      verifiedAt: null,
+      verificationMethod: null,
+      identityId: null,
+      createdAt: at,
+      signInEnabled: false,
+    },
+    outboxId: message.outboxId,
+  };
 }
 
 interface SwapParty {
@@ -156,7 +165,11 @@ export async function makeOwnEmailAddressPrimary(
       WHERE address.id = ? AND address.user_id = ? AND person.active = 1`,
     [input.emailId, input.userId],
   );
-  if (!party) throw new AppError(404, "EMAIL_NOT_FOUND", "Email address not found");
+  if (!party) {
+    if (await first(db, "SELECT id FROM user_email_claims WHERE id=? AND user_id=?", [input.emailId, input.userId]))
+      throw new AppError(409, "EMAIL_UNVERIFIED", "Verify this address before making it your primary address");
+    throw new AppError(404, "EMAIL_NOT_FOUND", "Email address not found");
+  }
   if (!party.verified_at)
     throw new AppError(409, "EMAIL_UNVERIFIED", "Verify this address before making it your primary address");
   if (party.pending_email)
@@ -242,6 +255,16 @@ export async function removeOwnEmailAddress(
   db: DatabaseLike,
   input: { userId: string; emailId: string },
 ): Promise<void> {
+  const claim = await first<{ id: string }>(db, "SELECT id FROM user_email_claims WHERE id=? AND user_id=?", [
+    input.emailId,
+    input.userId,
+  ]);
+  if (claim) {
+    await db.batch([
+      db.prepare("DELETE FROM user_email_claims WHERE id=? AND user_id=?").bind(input.emailId, input.userId),
+    ]);
+    return;
+  }
   const address = await first<{ email: string; organization_name: string | null }>(
     db,
     `SELECT address.email,

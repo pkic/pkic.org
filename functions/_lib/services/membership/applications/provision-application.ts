@@ -102,6 +102,7 @@ export async function buildApplicationApproval(
     membershipCategory: application.membership_category,
     identities: [{ name: application.applicant_name, email: application.applicant_email, jobTitle, links }],
     identitySource: "membership_approval",
+    mailboxVerified: Boolean(application.join_capability_id),
     activateIdentities: true,
     workingGroupSlugs: requestedWorkingGroupSlugs,
     allowManagedGroupEnrollment: false,

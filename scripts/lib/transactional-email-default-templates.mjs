@@ -20,7 +20,7 @@ export const DEFAULT_TRANSACTIONAL_EMAIL_TEMPLATES = [
     key: "user_email_verification",
     subjectTemplate: "Verify your email address",
     content:
-      'Please confirm that **{{email}}** is your address for the **PKI Consortium portal**.\n\n<div class="cta-navy"><a href="{{verificationUrl}}">Verify this address &rarr;</a></div>\n\nThe link works once, for {{expiresInHours}} hours, and you do not need to sign in to use it. A verified work address links you to your organization.\n\nIf you did not add this address, you can ignore this email.',
+      'Please confirm that **{{email}}** is your address for the **PKI Consortium portal**.\n\n<div class="cta-navy"><a href="{{verificationUrl}}">Verify this address &rarr;</a></div>\n\nThe link works once, for {{expiresInHours}} hours. Sign in to the account where you requested this address, then confirm linking it. Confirm only if both addresses belong to you. A verified work address links you to your organization.\n\nIf you did not add this address, you can ignore this email.',
     contentType: "markdown",
     messageType: "transactional",
   },

@@ -92,6 +92,76 @@ describe("registration verifies the email address first", () => {
     });
   });
 
+  it("lets proof reclaim a seconds-old unverified alias without adopting its requesting account", async () => {
+    const email = "casey@claimed.example";
+    const attacker = await insertUser(env.DB, "attacker@other.example");
+    const at = new Date().toISOString();
+    await env.DB.prepare("INSERT INTO user_emails(id,user_id,email,normalized_email,created_at) VALUES(?,?,?,?,?)")
+      .bind(crypto.randomUUID(), attacker, email, email, at)
+      .run();
+    const proof = tokenOf(await emailedLink(email));
+    const preview = await post("/proof/verify", { token: proof });
+    expect(registrationEmailProofVerifyResponseSchema.parse(await preview.json()).person).toBeNull();
+    const response = await post("", registration(email, proof));
+    expect(response.status, await response.clone().text()).toBe(200);
+    const [owner] = await queryAll<{ id: string; email_verified_at: string }>(
+      env.DB,
+      "SELECT id,email_verified_at FROM users WHERE normalized_email=?",
+      [email],
+    );
+    expect(owner.id).not.toBe(attacker);
+    expect(owner.email_verified_at).toMatch(/Z$/);
+    expect(await queryAll(env.DB, "SELECT id FROM users WHERE id=?", [attacker])).toHaveLength(1);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM user_emails WHERE user_id=? AND normalized_email=?", [attacker, email]),
+    ).toEqual([]);
+  });
+
+  it("recovers an unverified primary account without inheriting its passkey or browser session", async () => {
+    const email = "casey@unverified.example";
+    const userId = await insertUser(env.DB, email);
+    const at = new Date().toISOString();
+    await env.DB.batch([
+      prepareAccountIdentityStatement(env.DB, userId, at),
+      env.DB.prepare(
+        "INSERT INTO passkey_credentials(id,user_id,credential_id,public_key,created_at) VALUES(?,?,?,?,?)",
+      ).bind(crypto.randomUUID(), userId, "untrusted-old-passkey", "untrusted-key", at),
+    ]);
+    await createMemberSession(env.DB, userId, "untrusted-old-session");
+    const response = await post("", registration(email, tokenOf(await emailedLink(email))));
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM passkey_credentials WHERE user_id=? AND revoked_at IS NULL", [userId]),
+    ).toEqual([]);
+    expect(await queryAll(env.DB, "SELECT id FROM sessions WHERE user_id=? AND revoked_at IS NULL", [userId])).toEqual(
+      [],
+    );
+    expect(await queryAll(env.DB, "SELECT id FROM identities WHERE user_id=?", [userId])).toHaveLength(1);
+  });
+
+  it("preserves an already verified account under its owned address when its unverified primary is claimed", async () => {
+    const email = "casey@unproved-primary.example";
+    const established = await insertUser(env.DB, email);
+    const at = new Date().toISOString();
+    await env.DB.batch([
+      prepareAccountIdentityStatement(env.DB, established, at),
+      env.DB.prepare(
+        "INSERT INTO user_emails(id,user_id,email,normalized_email,verified_at,verification_method,created_at) VALUES(?,?,?,?,?,'magic_link',?)",
+      ).bind(crypto.randomUUID(), established, "owner@established.example", "owner@established.example", at, at),
+    ]);
+    const response = await post("", registration(email, tokenOf(await emailedLink(email))));
+    expect(response.status, await response.clone().text()).toBe(200);
+    const [original] = await queryAll<{ normalized_email: string }>(
+      env.DB,
+      "SELECT normalized_email FROM users WHERE id=?",
+      [established],
+    );
+    expect(original.normalized_email).toBe("owner@established.example");
+    const [newOwner] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE normalized_email=?", [email]);
+    expect(newOwner.id).not.toBe(established);
+    expect(await queryAll(env.DB, "SELECT id FROM identities WHERE user_id=?", [established])).toHaveLength(1);
+  });
+
   it("registers a verified address at once, verifies it, and links the organization the form named", async () => {
     const email = "casey@unknown-org.example";
     const response = await post(

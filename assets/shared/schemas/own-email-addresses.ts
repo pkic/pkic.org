@@ -3,7 +3,7 @@
  *
  * The primary address lives on the account; every other address is a
  * `user_emails` row, the same rows staff manage. A person adds an address,
- * proves it through an emailed link that works without signing in
+ * proves it through an emailed link and confirms linking while signed in to the same account
  * (`/api/v1/auth/email-verifications`), may make a verified one primary, and
  * removes one no organization identity uses. A verified work address joins
  * the organization its domain belongs to through the shared domain rule.
@@ -46,12 +46,18 @@ export const ownEmailAddressUpdateSchema = z.union([
 ]);
 export type OwnEmailAddressUpdate = z.infer<typeof ownEmailAddressUpdateSchema>;
 /** The emailed link's token, sent back by the page the link opens. */
-export const ownEmailAddressVerificationSchema = magicLinkVerifySchema;
+export const ownEmailAddressVerificationSchema = magicLinkVerifySchema.extend({
+  consolidateUnverifiedAccount: z.boolean().optional(),
+});
 
 const organizationReferenceSchema = z.object({ id: databaseIdSchema, name: z.string() });
 
 /** What an opened link names, before anything changes. */
-export const ownEmailAddressVerificationPreviewResponseSchema = z.object({ email: z.string() });
+export const ownEmailAddressVerificationPreviewResponseSchema = z.object({
+  email: z.string(),
+  accountEmail: z.string(),
+  consolidatesUnverifiedAccount: z.boolean(),
+});
 
 export const ownEmailAddressVerificationResponseSchema = z.object({
   email: z.string(),
@@ -126,10 +132,10 @@ export const ownEmailAddressVerificationPreviewRouteSchema = {
 
 export const ownEmailAddressVerificationRouteSchema = {
   tags: ["Authentication"],
-  ...publicOperation(),
+  ...requiresSession(),
   summary: "Verify an email address with its emailed link",
   description:
-    "The single-use, 24-hour link proves the mailbox without a session and marks the address verified. A work address then joins the organization its domain belongs to when that is automatic; a member organization is offered, and the person signs in only to answer it.",
+    "The single-use, 24-hour link proves the mailbox; the same signed-in account must explicitly confirm linking it. A work address then joins the organization its domain belongs to when that is automatic; a member organization is offered, and the person signs in only to answer it.",
   request: {
     body: { required: true, content: { "application/json": { schema: ownEmailAddressVerificationSchema } } },
   },

@@ -256,6 +256,26 @@ describe("individual membership alias preflight", () => {
     },
   );
 
+  it("does not grant an approved applicant's membership to an unverified alias holder", async () => {
+    const claimantId = await insertUser(env.DB);
+    const email = await addAlias(claimantId, false);
+    const result = await provisionOrganizationMembership(env.DB, {
+      ...input(email),
+      identitySource: "membership_approval",
+      mailboxVerified: true,
+    });
+    expect(result.identities[0].userId).not.toBe(claimantId);
+    expect(await queryAll(env.DB, "SELECT id FROM users WHERE id=?", claimantId)).toHaveLength(1);
+    expect(
+      await env.DB.prepare("SELECT email_verified_at FROM users WHERE id=?")
+        .bind(result.identities[0].userId)
+        .first("email_verified_at"),
+    ).not.toBeNull();
+    expect(
+      await queryAll(env.DB, "SELECT id FROM identities WHERE user_id=? AND started_at IS NOT NULL", claimantId),
+    ).toHaveLength(0);
+  });
+
   it.each([true, false])("reuses the canonical nonmember through a known alias (verified=%s)", async (verified) => {
     const userId = await insertUser(env.DB);
     const alias = await addAlias(userId, verified);

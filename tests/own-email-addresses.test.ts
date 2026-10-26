@@ -17,15 +17,21 @@ import {
   ownEmailAddressesListResponseSchema,
 } from "../assets/shared/schemas/own-email-addresses";
 import type { Env } from "../functions/_lib/types";
+import { findOrCreateUser } from "../functions/_lib/services/users";
+import { createRegistration, changeRegistrationEmail } from "../functions/_lib/services/registrations";
+import { getRegistrationByManageToken } from "../functions/_lib/services/registrations/queries";
 import { nowIso } from "../functions/_lib/utils/time";
 import { callApi } from "./helpers/app";
 import { createMemberSession } from "./helpers/auth";
-import { createTestRateLimiter, deliveredEmailPayload, queryAll } from "./helpers/context";
+import { createTestRateLimiter, deliveredEmailPayload, queryAll, seedEventAndAdmin } from "./helpers/context";
 import { insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
+import { gateNextBatch } from "./helpers/d1-batch-gate";
 import { resetDb } from "./helpers/reset-db";
 
 let environment: Env;
 let tokenCounter = 0;
+const accountTokens = new Map<string, string>();
+const linkAccounts = new Map<string, string>();
 
 async function signedIn(email: string): Promise<{ userId: string; token: string }> {
   const userId = await insertUser(env.DB, email);
@@ -41,7 +47,9 @@ async function signedIn(email: string): Promise<{ userId: string; token: string 
     ).bind(crypto.randomUUID(), userId, at, at, at, at),
   ]);
   tokenCounter += 1;
-  return { userId, token: await createMemberSession(env.DB, userId, `own-email-token-${tokenCounter}`) };
+  const token = await createMemberSession(env.DB, userId, `own-email-token-${tokenCounter}`);
+  accountTokens.set(userId, token);
+  return { userId, token };
 }
 
 async function claimDomain(organizationId: string, domain: string): Promise<void> {
@@ -72,9 +80,9 @@ async function add(token: string, email: string) {
 
 /** The verification link the outbox would deliver to `email`, as the token the page sends back. */
 async function verificationToken(email: string): Promise<string> {
-  const [outbox] = await queryAll<{ payload_json: string }>(
+  const [outbox] = await queryAll<{ payload_json: string; recipient_user_id: string }>(
     env.DB,
-    `SELECT payload_json FROM email_outbox WHERE template_key = 'user_email_verification' AND recipient_email = ?
+    `SELECT payload_json,recipient_user_id FROM email_outbox WHERE template_key = 'user_email_verification' AND recipient_email = ?
       ORDER BY rowid DESC LIMIT 1`,
     [email],
   );
@@ -82,6 +90,7 @@ async function verificationToken(email: string): Promise<string> {
   const payload = await deliveredEmailPayload<{ verificationUrl: string }>(env.DB, environment, outbox!.payload_json);
   const token = new URLSearchParams(new URL(payload.verificationUrl).hash.split("?", 2)[1]).get("token");
   if (!token) throw new Error("Missing verification capability");
+  linkAccounts.set(token, accountTokens.get(outbox.recipient_user_id)!);
   return token;
 }
 
@@ -89,7 +98,12 @@ async function verificationToken(email: string): Promise<string> {
 function publicLinkCall(path: string, linkToken: string): Promise<Response> {
   return callApi(environment, `/api/v1/auth/email-verifications${path}`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      ...(path === ""
+        ? { authorization: `Bearer ${linkAccounts.get(linkToken) ?? [...accountTokens.values()].at(-1)}` }
+        : {}),
+    },
     body: JSON.stringify(ownEmailAddressVerificationSchema.parse({ token: linkToken })),
   });
 }
@@ -102,6 +116,362 @@ describe("a person's own email addresses", () => {
   beforeEach(async () => {
     await resetDb();
     environment = { ...env, EMAIL_RATE_LIMITER: createTestRateLimiter(50), IP_RATE_LIMITER: createTestRateLimiter(50) };
+  });
+
+  it("explicitly consolidates a proved unverified primary into the current account without importing access", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const source = await findOrCreateUser(env.DB, {
+      email: "unverified@consolidation.example",
+      firstName: "Untrusted",
+    });
+    const originalSession = await createMemberSession(env.DB, source.id, "unverified-consolidation-session");
+    const account = await signedIn("current@consolidation.example");
+    const originalName = await env.DB.prepare("SELECT first_name FROM users WHERE id=?")
+      .bind(account.userId)
+      .first("first_name");
+    const at = nowIso();
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO passkey_credentials(id,user_id,credential_id,public_key,created_at) VALUES(?,?,?,?,?)",
+      ).bind(crypto.randomUUID(), source.id, "pre-proof-key", "untrusted-public-key", at),
+      env.DB.prepare(
+        "INSERT INTO permission_grants(id,user_id,permission,created_at) VALUES(?,?,'users:write',?)",
+      ).bind(crypto.randomUUID(), source.id, at),
+      env.DB.prepare("INSERT INTO user_emails(id,user_id,email,normalized_email,created_at) VALUES(?,?,?,?,?)").bind(
+        crypto.randomUUID(),
+        source.id,
+        "unproved@elsewhere.example",
+        "unproved@elsewhere.example",
+        at,
+      ),
+      env.DB.prepare(`INSERT INTO oauth_authorizations(id,user_id,session_id,client_id,client_name,status,expires_at,created_at,updated_at)
+        SELECT ?,user_id,id,'untrusted-client','Untrusted client','approved',?,?,? FROM sessions WHERE user_id=?`).bind(
+        crypto.randomUUID(),
+        "2099-01-01T00:00:00.000Z",
+        at,
+        at,
+        source.id,
+      ),
+    ]);
+    const registration = await createRegistration(env.DB, {
+      event: { id: eventId },
+      userId: source.id,
+      attendanceType: "virtual",
+      sourceType: "web",
+      confirmationTtlHours: 24,
+      signingSecret: environment.INTERNAL_SIGNING_SECRET!,
+    });
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO agenda_calendar_subscriptions(id,event_id,user_id,token_hash,created_at) VALUES(?,?,?,?,?)",
+      ).bind(crypto.randomUUID(), eventId, source.id, "pre-proof-calendar", at),
+      env.DB.prepare(
+        "INSERT INTO event_badge_credentials(id,event_id,user_id,credential_hash,created_at) VALUES(?,?,?,?,?)",
+      ).bind(crypto.randomUUID(), eventId, source.id, "pre-proof-badge", at),
+      env.DB.prepare(`INSERT INTO oauth_authorization_completions(authorization_id,status,request_ciphertext,attempt_until,next_attempt_at,created_at,updated_at)
+        SELECT id,'queued','untrusted-pending-request','2099-01-01T00:00:00.000Z',?,?,? FROM oauth_authorizations WHERE user_id=?`).bind(
+        at,
+        at,
+        at,
+        source.id,
+      ),
+    ]);
+    const ownRegistration = await createRegistration(env.DB, {
+      event: { id: eventId },
+      userId: account.userId,
+      attendanceType: "virtual",
+      sourceType: "web",
+      confirmationTtlHours: 24,
+      signingSecret: environment.INTERNAL_SIGNING_SECRET!,
+    });
+    const proposalId = crypto.randomUUID();
+    await env.DB.prepare(`INSERT INTO session_proposals(id,event_id,proposer_user_id,status,proposal_type,title,abstract,manage_link_secret,submitted_at,updated_at)
+      VALUES(?,?,?,'submitted','talk','Historical proposal','Abstract','old-proposal-secret',?,?)`)
+      .bind(proposalId, eventId, source.id, at, at)
+      .run();
+    const added = await add(account.token, source.email);
+    const link = await verificationToken(added.email);
+    const preview = await publicLinkCall("/preview", link);
+    expect(
+      ownEmailAddressVerificationPreviewResponseSchema.parse(await preview.json()).consolidatesUnverifiedAccount,
+    ).toBe(true);
+    expect((await verify(link)).status).toBe(409);
+    const confirmed = await callApi(environment, "/api/v1/auth/email-verifications", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${account.token}` },
+      body: JSON.stringify(
+        ownEmailAddressVerificationSchema.parse({ token: link, consolidateUnverifiedAccount: true }),
+      ),
+    });
+    expect(confirmed.status, await confirmed.clone().text()).toBe(200);
+    expect(await queryAll(env.DB, "SELECT active FROM users WHERE id=?", [source.id])).toEqual([{ active: 0 }]);
+    expect(
+      await queryAll(env.DB, "SELECT user_id FROM user_emails WHERE id=? AND verified_at IS NOT NULL", [added.id]),
+    ).toEqual([{ user_id: account.userId }]);
+    expect(
+      await env.DB.prepare("SELECT manage_link_secret FROM session_proposals WHERE id=?")
+        .bind(proposalId)
+        .first("manage_link_secret"),
+    ).not.toBe("old-proposal-secret");
+    expect((await call(originalSession, "")).status).toBe(401);
+    expect((await call(account.token, "")).status).toBe(200);
+    expect(
+      await env.DB.prepare("SELECT first_name FROM users WHERE id=?").bind(account.userId).first("first_name"),
+    ).toBe(originalName);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM agenda_calendar_subscriptions WHERE user_id=? AND revoked_at IS NULL", [
+        source.id,
+      ]),
+    ).toEqual([]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM event_badge_credentials WHERE user_id=? AND revoked_at IS NULL", [
+        source.id,
+      ]),
+    ).toEqual([]);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT authorization_id FROM oauth_authorization_completions WHERE status<>'failed' OR request_ciphertext IS NOT NULL",
+      ),
+    ).toEqual([]);
+    expect(
+      await env.DB.prepare("SELECT user_id FROM registrations WHERE id=?")
+        .bind(ownRegistration.registration.id)
+        .first("user_id"),
+    ).toBe(account.userId);
+
+    expect(
+      await queryAll(env.DB, "SELECT id FROM passkey_credentials WHERE user_id=? AND revoked_at IS NULL", [source.id]),
+    ).toEqual([]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM oauth_authorizations WHERE user_id=? AND status<>'revoked'", [source.id]),
+    ).toEqual([]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM permission_grants WHERE user_id IN(?,?) AND revoked_at IS NULL", [
+        source.id,
+        account.userId,
+      ]),
+    ).toEqual([]);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT id FROM user_emails WHERE user_id=? AND normalized_email='unproved@elsewhere.example'",
+        [account.userId],
+      ),
+    ).toEqual([]);
+    expect(
+      await queryAll(env.DB, "SELECT user_id FROM registrations WHERE id=?", [registration.registration.id]),
+    ).toEqual([{ user_id: source.id }]);
+    await expect(
+      getRegistrationByManageToken(env.DB, registration.manageToken, environment.INTERNAL_SIGNING_SECRET!),
+    ).rejects.toThrow();
+    expect(
+      await queryAll(env.DB, "SELECT id FROM identities WHERE user_id=? AND ended_at IS NULL", [source.id]),
+    ).toEqual([]);
+    expect(
+      await queryAll(env.DB, "SELECT entity_id,actor_id FROM audit_log WHERE action='unverified_account_consolidated'"),
+    ).toEqual([{ entity_id: source.id, actor_id: account.userId }]);
+    expect((await verify(link)).status).toBe(409);
+  });
+
+  it("does not consolidate another verified account even with consolidation consent", async () => {
+    const source = await signedIn("verified@consolidation.example");
+    const account = await signedIn("current@consolidation.example");
+    await add(account.token, "verified@consolidation.example");
+    const link = await verificationToken("verified@consolidation.example");
+    const refused = await callApi(environment, "/api/v1/auth/email-verifications", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${account.token}` },
+      body: JSON.stringify(
+        ownEmailAddressVerificationSchema.parse({ token: link, consolidateUnverifiedAccount: true }),
+      ),
+    });
+    expect(refused.status).toBe(404);
+    expect((await call(source.token, "")).status).toBe(200);
+    expect(await queryAll(env.DB, "SELECT id FROM audit_log WHERE action='unverified_account_consolidated'")).toEqual(
+      [],
+    );
+  });
+
+  it("releases an unverified primary without consolidating an account established by another mailbox", async () => {
+    const source = await findOrCreateUser(env.DB, { email: "unproved@consolidation.example" });
+    const account = await signedIn("current@consolidation.example");
+    await env.DB.prepare(
+      "INSERT INTO user_emails(id,user_id,email,normalized_email,verified_at,created_at) VALUES(?,?,?,?,?,?)",
+    )
+      .bind(
+        crypto.randomUUID(),
+        source.id,
+        "established@elsewhere.example",
+        "established@elsewhere.example",
+        nowIso(),
+        nowIso(),
+      )
+      .run();
+    const added = await add(account.token, source.email);
+    const link = await verificationToken(added.email);
+    expect((await verify(link)).status).toBe(200);
+    expect(await env.DB.prepare("SELECT email FROM users WHERE id=? AND active=1").bind(source.id).first("email")).toBe(
+      "established@elsewhere.example",
+    );
+    expect(await queryAll(env.DB, "SELECT id FROM audit_log WHERE action='unverified_account_consolidated'")).toEqual(
+      [],
+    );
+  });
+
+  it.each(["primary proof", "secondary proof", "revoked session", "changed claim", "expired claim", "retired source"])(
+    "rolls back consolidation after a concurrent %s",
+    async (change) => {
+      const source = await findOrCreateUser(env.DB, { email: "concurrent@consolidation.example" });
+      const account = await signedIn("current@consolidation.example");
+      const added = await add(account.token, source.email);
+      const link = await verificationToken(added.email);
+      const gate = gateNextBatch(env.DB);
+      const attempt = callApi({ ...environment, DB: gate.db as typeof env.DB }, "/api/v1/auth/email-verifications", {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${account.token}` },
+        body: JSON.stringify(
+          ownEmailAddressVerificationSchema.parse({ token: link, consolidateUnverifiedAccount: true }),
+        ),
+      });
+      await gate.reached;
+      try {
+        if (change === "primary proof")
+          await env.DB.prepare("UPDATE users SET email_verified_at=? WHERE id=?").bind(nowIso(), source.id).run();
+        if (change === "secondary proof")
+          await env.DB.prepare(
+            "INSERT INTO user_emails(id,user_id,email,normalized_email,verified_at,created_at) VALUES(?,?,?,?,?,?)",
+          )
+            .bind(
+              crypto.randomUUID(),
+              source.id,
+              "proved@elsewhere.example",
+              "proved@elsewhere.example",
+              nowIso(),
+              nowIso(),
+            )
+            .run();
+        if (change === "revoked session")
+          await env.DB.prepare("UPDATE sessions SET revoked_at=? WHERE user_id=?").bind(nowIso(), account.userId).run();
+        if (change === "changed claim")
+          await env.DB.prepare("UPDATE user_email_claims SET revision=? WHERE id=?")
+            .bind(crypto.randomUUID(), added.id)
+            .run();
+        if (change === "expired claim")
+          await env.DB.prepare("UPDATE user_email_claims SET expires_at='2000-01-01T00:00:00.000Z' WHERE id=?")
+            .bind(added.id)
+            .run();
+        if (change === "retired source")
+          await env.DB.prepare("UPDATE users SET active=0 WHERE id=?").bind(source.id).run();
+      } finally {
+        gate.release();
+      }
+      expect((await attempt).status).toBe(404);
+      expect(
+        await queryAll(env.DB, "SELECT id FROM user_emails WHERE user_id=? AND normalized_email=?", [
+          account.userId,
+          source.email,
+        ]),
+      ).toEqual([]);
+      expect(
+        await queryAll(
+          env.DB,
+          "SELECT id FROM audit_log WHERE action IN('unverified_account_consolidated','user_email_verified')",
+        ),
+      ).toEqual([]);
+      expect(await env.DB.prepare("SELECT email FROM users WHERE id=?").bind(source.id).first("email")).toBe(
+        source.email,
+      );
+    },
+  );
+
+  it("does not attach a mailbox to another account when its owner opens that account's verification link", async () => {
+    const attacker = await signedIn("attacker@elsewhere.example");
+    const victim = await signedIn("victim@owner.example");
+    const added = await add(attacker.token, "victim@work.example");
+    const link = await verificationToken(added.email);
+    const response = await callApi(environment, "/api/v1/auth/email-verifications", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${victim.token}` },
+      body: JSON.stringify(ownEmailAddressVerificationSchema.parse({ token: link })),
+    });
+    expect(response.status).toBe(403);
+    expect(await queryAll(env.DB, "SELECT verified_at FROM user_emails WHERE id=?", [added.id])).toEqual([]);
+  });
+
+  it("invalidates an old correction confirmation before releasing its pending address", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const bootstrap = await findOrCreateUser(env.DB, { email: "victim@original.example" });
+    const signingSecret = environment.INTERNAL_SIGNING_SECRET!;
+    const created = await createRegistration(env.DB, {
+      event: { id: eventId },
+      userId: bootstrap.id,
+      attendanceType: "virtual",
+      sourceType: "web",
+      confirmationTtlHours: 24,
+      signingSecret,
+    });
+    const change = await changeRegistrationEmail(env.DB, {
+      registrationId: created.registration.id,
+      newEmail: "proof@added.example",
+      authority: { kind: "event_manager", actorUserId: bootstrap.id },
+      confirmationTtlHours: 24,
+      signingSecret,
+    });
+    const owner = await signedIn("owner@established.example");
+    await add(owner.token, "proof@added.example");
+    expect((await verify(await verificationToken("proof@added.example"))).status).toBe(200);
+    const oldConfirmation = await callApi(environment, "/api/v1/events/pqc-2026/registrations/confirm-email", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token: change.confirmationToken }),
+    });
+    expect(oldConfirmation.status).toBe(404);
+    expect(await queryAll(env.DB, "SELECT email_verified_at FROM users WHERE id=?", [bootstrap.id])).toEqual([
+      { email_verified_at: null },
+    ]);
+  });
+
+  it("does not preserve an unverified creator's manage link after the mailbox owner confirms", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const bootstrap = await findOrCreateUser(env.DB, { email: "victim@confirmation.example" });
+    const signingSecret = environment.INTERNAL_SIGNING_SECRET!;
+    const created = await createRegistration(env.DB, {
+      event: { id: eventId },
+      userId: bootstrap.id,
+      attendanceType: "virtual",
+      sourceType: "web",
+      confirmationTtlHours: 24,
+      signingSecret,
+    });
+    await getRegistrationByManageToken(env.DB, created.manageToken, signingSecret);
+    const confirmed = await callApi(environment, "/api/v1/events/pqc-2026/registrations/confirm-email", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token: created.confirmationToken }),
+    });
+    expect(confirmed.status, await confirmed.clone().text()).toBe(200);
+    await expect(getRegistrationByManageToken(env.DB, created.manageToken, signingSecret)).rejects.toThrow();
+  });
+
+  it("allows competing pending requests but only one proved ownership transition", async () => {
+    const first = await signedIn("first@owner.example");
+    const second = await signedIn("second@owner.example");
+    const email = "same@work.example";
+    await add(first.token, email);
+    const firstLink = await verificationToken(email);
+    await add(second.token, email);
+    const secondLink = await verificationToken(email);
+    expect(await queryAll(env.DB, "SELECT id FROM user_email_claims WHERE normalized_email=?", [email])).toHaveLength(
+      2,
+    );
+    expect(await queryAll(env.DB, "SELECT id FROM user_emails WHERE normalized_email=?", [email])).toEqual([]);
+    expect((await verify(firstLink)).status).toBe(200);
+    expect((await verify(secondLink)).status).toBe(404);
+    expect(await queryAll(env.DB, "SELECT user_id FROM user_emails WHERE normalized_email=?", [email])).toEqual([
+      { user_id: first.userId },
+    ]);
+    expect(await queryAll(env.DB, "SELECT id FROM identities WHERE user_id=?", [second.userId])).toHaveLength(1);
   });
 
   it("adds an address, verifies it through the emailed link once, and joins the organization its domain belongs to", async () => {
@@ -120,9 +490,11 @@ describe("a person's own email addresses", () => {
     const link = await verificationToken("ana@open-claimed.example");
     const preview = await publicLinkCall("/preview", link);
     expect(ownEmailAddressVerificationPreviewResponseSchema.parse(await preview.json())).toEqual({
+      accountEmail: "ana@gmail.com",
+      consolidatesUnverifiedAccount: false,
       email: "ana@open-claimed.example",
     });
-    // Previewing changes nothing; verifying needs no session.
+    // Previewing changes nothing; linking requires the intended session.
     const verified = await verify(link);
     expect(verified.status, await verified.clone().text()).toBe(200);
     expect(ownEmailAddressVerificationResponseSchema.parse(await verified.json())).toEqual({
@@ -172,7 +544,7 @@ describe("a person's own email addresses", () => {
           await queryAll(env.DB, "SELECT verified_at, verification_method, identity_id FROM user_emails WHERE id = ?", [
             added.id,
           ]),
-        ).toEqual([{ verified_at: null, verification_method: null, identity_id: null }]);
+        ).toEqual([]);
         expect(
           await queryAll(env.DB, "SELECT id FROM identities WHERE user_id = ? AND organization_id = ?", [
             userId,
@@ -306,11 +678,11 @@ describe("a person's own email addresses", () => {
     ]);
   });
 
-  it("refuses an address already reserved and limits verification mail per person", async () => {
+  it("does not disclose an existing reservation before proof and limits verification mail per person", async () => {
     await insertUser(env.DB, "taken@example.test");
     const { token } = await signedIn("fay@gmail.com");
     const taken = await call(token, "", "POST", { email: "taken@example.test" });
-    expect(taken.status).toBe(409);
+    expect(taken.status).toBe(201);
 
     environment = { ...env, EMAIL_RATE_LIMITER: createTestRateLimiter(1), IP_RATE_LIMITER: createTestRateLimiter(50) };
     const first = await add(token, "fay@one.example");
@@ -318,6 +690,6 @@ describe("a person's own email addresses", () => {
     expect(resend.status).toBe(429);
     expect(
       await queryAll(env.DB, "SELECT recipient_email FROM email_outbox WHERE template_key = 'user_email_verification'"),
-    ).toEqual([{ recipient_email: "fay@one.example" }]);
+    ).toEqual([{ recipient_email: "taken@example.test" }, { recipient_email: "fay@one.example" }]);
   });
 });

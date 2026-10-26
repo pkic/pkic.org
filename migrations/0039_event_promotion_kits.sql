@@ -60,3 +60,23 @@ CREATE TABLE event_promotion_batch_recipients (
  PRIMARY KEY(batch_id,occurrence_id,user_id)
 );
 CREATE INDEX event_promotion_batch_due ON event_promotion_batch_recipients(status,next_attempt_at,lease_expires_at);
+
+
+-- Pending mailbox requests confer no ownership and may coexist across accounts.
+CREATE TABLE user_email_claims (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id),
+  email TEXT NOT NULL,
+  normalized_email TEXT NOT NULL,
+  revision TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL
+);
+CREATE INDEX user_email_claims_owner ON user_email_claims(user_id, created_at, id);
+CREATE INDEX user_email_claims_address ON user_email_claims(normalized_email, user_id);
+
+
+-- Pending email changes are requests, not ownership. Verified primary/alias uniqueness remains unchanged.
+DROP INDEX uq_users_pending_email;
+DROP INDEX idx_users_pending_email_unique;
+DROP TRIGGER trg_users_pending_email_reservation_update;
