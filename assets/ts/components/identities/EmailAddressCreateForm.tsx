@@ -1,7 +1,7 @@
 /** The production address-add form, shared by account settings and representation onboarding. */
 import type { ComponentChildren } from "preact";
 import { useEffect, useState } from "preact/hooks";
-import { ownEmailAddressResponseSchema } from "../../../shared/schemas/own-email-addresses";
+import { ownEmailVerificationRequestedResponseSchema } from "../../../shared/schemas/own-email-addresses";
 import { userEmailAddResponseSchema, userEmailAddSchema } from "../../../shared/schemas/user-emails";
 import { useContractForm } from "../../hooks/useContractForm";
 import { postJson } from "../../shared/api-client";
@@ -50,8 +50,12 @@ export function EmailAddressCreateForm({
         try {
           if (beforeAdd && (await beforeAdd(checked.data.email))) return;
           if (isSelf) {
-            const added = await postJson(OWN_EMAILS_ENDPOINT, checked.data, ownEmailAddressResponseSchema);
-            await onAdded(added.email.email);
+            const added = await postJson(
+              OWN_EMAILS_ENDPOINT,
+              checked.data,
+              ownEmailVerificationRequestedResponseSchema,
+            );
+            await onAdded(added.email);
           } else {
             const added = await postJson(
               `/api/v1/users/${encodeURIComponent(userId!)}/emails`,

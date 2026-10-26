@@ -4,18 +4,16 @@ import { setOwnEmailSignInPermission } from "./own-email-sign-in";
 /**
  * The signed-in person manages their own email addresses.
  *
- * Addresses are the same `user_emails` rows staff manage (user-emails.ts
- * builds the shared insert and removal statements), so one global
- * reservation, one identity-ownership rule and one audit trail cover both.
- * Adding an address sends its verification link in the same command
- * (own-email-verification.ts redeems it). Making an address primary swaps it
+ * Verification requests use the shared signed email challenge and outbox. No
+ * address is saved until mailbox proof and the intended account's explicit
+ * confirmation. Saved addresses are canonical user_emails records, shared
+ * with staff-managed addresses. Making a verified address primary swaps it
  * with the current primary address while every organization identity keeps
  * the address it follows. An address an active organization identity uses
  * cannot be removed: the identity would silently fall back to another one.
  */
 import {
   OWN_EMAIL_ADDRESS_LIMIT,
-  EMAIL_ADDRESS_VERIFICATION_TTL_HOURS,
   type OwnEmailAddress,
   type OwnEmailAddressUpdate,
   type OwnEmailAddressesListQuery,
@@ -30,8 +28,7 @@ import { AppError } from "../errors";
 import type { DatabaseLike } from "../types";
 import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
-import { normalizeEmail } from "../validation";
-import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "./audit";
+import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange, prepareAuditLog } from "./audit";
 import {
   ADDRESS_SORT_EXPRESSIONS,
   OWN_ADDRESSES_SQL,
@@ -72,12 +69,10 @@ export async function listOwnEmailAddresses(
 export async function addOwnEmailAddress(
   db: DatabaseLike,
   input: { userId: string; email: string } & OwnEmailVerificationDelivery,
-): Promise<{ email: OwnEmailAddress; outboxId: string }> {
+): Promise<{ status: "verification_sent"; email: string; requestId: string; outboxId: string }> {
   const id = uuid();
   const at = nowIso();
-  const revision = uuid();
-  const expiresAt = new Date(Date.parse(at) + EMAIL_ADDRESS_VERIFICATION_TTL_HOURS * 60 * 60 * 1000).toISOString();
-  const message = await prepareOwnEmailVerificationMessage(db, { ...input, emailId: id, revision, at });
+  const message = await prepareOwnEmailVerificationMessage(db, { ...input, emailId: id, addressRequest: true, at });
   try {
     await db.batch([
       ...(input.authorizationEvidence ? [prepareAuthorizationGuard(db, input.authorizationEvidence)] : []),
@@ -86,22 +81,17 @@ export async function addOwnEmailAddress(
         bindings: [input.userId],
       }),
       prepareAuthorizationGuard(db, {
-        sql: `SELECT 1 WHERE (SELECT COUNT(*) FROM user_emails WHERE user_id=?) +
-          (SELECT COUNT(*) FROM user_email_claims WHERE user_id=? AND expires_at>?) < ?`,
-        bindings: [input.userId, input.userId, at, OWN_EMAIL_ADDRESS_LIMIT],
+        sql: "SELECT 1 WHERE (SELECT COUNT(*) FROM user_emails WHERE user_id=?) < ?",
+        bindings: [input.userId, OWN_EMAIL_ADDRESS_LIMIT],
       }),
-      db
-        .prepare(`INSERT INTO user_email_claims(id,user_id,email,normalized_email,revision,created_at,expires_at)
-        VALUES(?,?,?,?,?,?,?)`)
-        .bind(id, input.userId, input.email, normalizeEmail(input.email), revision, at, expiresAt),
-      prepareAuditLogAfterOneChange(
+      prepareAuditLog(
         db,
         "user",
         input.userId,
         "user_email_requested",
         "user",
         input.userId,
-        { emailId: id, email: input.email },
+        { requestId: id, email: input.email },
         at,
       ),
       ...message.statements,
@@ -115,19 +105,7 @@ export async function addOwnEmailAddress(
       );
     throw error;
   }
-  return {
-    email: {
-      id,
-      email: input.email,
-      primary: false,
-      verifiedAt: null,
-      verificationMethod: null,
-      identityId: null,
-      createdAt: at,
-      signInEnabled: false,
-    },
-    outboxId: message.outboxId,
-  };
+  return { status: "verification_sent", email: input.email, requestId: id, outboxId: message.outboxId };
 }
 
 interface SwapParty {
@@ -166,8 +144,6 @@ export async function makeOwnEmailAddressPrimary(
     [input.emailId, input.userId],
   );
   if (!party) {
-    if (await first(db, "SELECT id FROM user_email_claims WHERE id=? AND user_id=?", [input.emailId, input.userId]))
-      throw new AppError(409, "EMAIL_UNVERIFIED", "Verify this address before making it your primary address");
     throw new AppError(404, "EMAIL_NOT_FOUND", "Email address not found");
   }
   if (!party.verified_at)
@@ -255,16 +231,6 @@ export async function removeOwnEmailAddress(
   db: DatabaseLike,
   input: { userId: string; emailId: string },
 ): Promise<void> {
-  const claim = await first<{ id: string }>(db, "SELECT id FROM user_email_claims WHERE id=? AND user_id=?", [
-    input.emailId,
-    input.userId,
-  ]);
-  if (claim) {
-    await db.batch([
-      db.prepare("DELETE FROM user_email_claims WHERE id=? AND user_id=?").bind(input.emailId, input.userId),
-    ]);
-    return;
-  }
   const address = await first<{ email: string; organization_name: string | null }>(
     db,
     `SELECT address.email,

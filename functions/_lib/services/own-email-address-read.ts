@@ -31,9 +31,7 @@ export const OWN_ADDRESSES_SQL = `WITH addresses AS (
     UNION ALL
     SELECT id, email, 0, verified_at, verification_method, identity_id, created_at,
       (${secondaryEmailSignInAllowedSql("user_emails")}) AS sign_in_enabled FROM user_emails WHERE user_id = ?
-    UNION ALL
-    SELECT id,email,0,NULL,NULL,NULL,created_at,0 FROM user_email_claims
-      WHERE user_id = (SELECT id FROM users WHERE id = ?1) AND expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now')
+
   )`;
 
 export const OWN_ADDRESS_COLUMNS =

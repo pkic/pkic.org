@@ -12,16 +12,16 @@ CREATE TABLE event_promotion_kits (
 );
 CREATE UNIQUE INDEX event_promotion_kit_owner ON event_promotion_kits(event_id,user_id,COALESCE(occurrence_id,''));
 
--- The existing durable renderer now handles both session and attendee kits.
--- This additive successor removes the old queue's mandatory session FK;
--- old derived render state is retained but is no longer drained.
+-- One render queue serves session and attendee kits. The old session-only
+-- queue cannot represent attendee work because its session reference is required.
+-- Carry unfinished work forward below; do not retain an unused cache archive.
 CREATE TABLE event_promotion_renders (
  id TEXT PRIMARY KEY,
  event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
  occurrence_id TEXT REFERENCES event_agenda_occurrences(id) ON DELETE CASCADE,
  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
  revision INTEGER NOT NULL,
- fingerprint TEXT NOT NULL,
+ fingerprint TEXT,
  format TEXT NOT NULL, origin TEXT NOT NULL, cache_key TEXT NOT NULL,
  status TEXT NOT NULL DEFAULT 'queued', attempts INTEGER NOT NULL DEFAULT 0, download_count INTEGER NOT NULL DEFAULT 0,
  next_attempt_at TEXT NOT NULL, processing_token TEXT, lease_expires_at TEXT,
@@ -31,6 +31,21 @@ CREATE INDEX event_promotion_render_due ON event_promotion_renders(status,next_a
 CREATE INDEX event_promotion_render_owner ON event_promotion_renders(event_id,user_id,occurrence_id,fingerprint,format);
 -- Keep current kit progress bounded independently of completed or obsolete render history.
 CREATE INDEX event_promotion_render_requested ON event_promotion_renders(event_id,user_id,occurrence_id,format,requested_at DESC);
+
+-- A migrated request resolves its fingerprint and artifact location under the
+-- normal worker lease. Completed cache entries are disposable; authored copy,
+-- personal choices, and download metrics remain in their canonical tables.
+INSERT INTO event_promotion_renders
+ (id,event_id,occurrence_id,user_id,revision,fingerprint,format,origin,cache_key,
+  status,attempts,next_attempt_at,created_at,updated_at,requested_at)
+SELECT id,event_id,occurrence_id,user_id,revision,NULL,format,origin,cache_key,
+ 'queued',attempts,
+ CASE WHEN status='rendering' THEN strftime('%Y-%m-%dT%H:%M:%fZ','now') ELSE next_attempt_at END,
+ created_at,strftime('%Y-%m-%dT%H:%M:%fZ','now'),created_at
+FROM event_agenda_promotion_render_jobs
+WHERE status IN ('queued','retrying','rendering');
+DROP TABLE event_agenda_promotion_render_jobs;
+
 
 -- A bulk request contains resource references only. The dispatcher prepares
 -- bounded recipients for the existing render queue; it never renders a full
@@ -60,20 +75,6 @@ CREATE TABLE event_promotion_batch_recipients (
  PRIMARY KEY(batch_id,occurrence_id,user_id)
 );
 CREATE INDEX event_promotion_batch_due ON event_promotion_batch_recipients(status,next_attempt_at,lease_expires_at);
-
-
--- Pending mailbox requests confer no ownership and may coexist across accounts.
-CREATE TABLE user_email_claims (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL REFERENCES users(id),
-  email TEXT NOT NULL,
-  normalized_email TEXT NOT NULL,
-  revision TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  expires_at TEXT NOT NULL
-);
-CREATE INDEX user_email_claims_owner ON user_email_claims(user_id, created_at, id);
-CREATE INDEX user_email_claims_address ON user_email_claims(normalized_email, user_id);
 
 
 -- Pending email changes are requests, not ownership. Verified primary/alias uniqueness remains unchanged.

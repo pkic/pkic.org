@@ -9,7 +9,12 @@ import {
   identityAffiliationPreviewSchema,
   identityAffiliationPreviewResponseSchema,
 } from "../../../shared/schemas/identity-affiliation";
-import { ownEmailAddressesListResponseSchema, type OwnEmailAddress } from "../../../shared/schemas/own-email-addresses";
+import {
+  ownEmailAddressAddSchema,
+  ownEmailVerificationRequestedResponseSchema,
+  ownEmailAddressesListResponseSchema,
+  type OwnEmailAddress,
+} from "../../../shared/schemas/own-email-addresses";
 import { useContractForm } from "../../hooks/useContractForm";
 import { getJson, postJson } from "../../shared/api-client";
 import { OWN_EMAILS_ENDPOINT } from "../../shared/email-address-paths";
@@ -141,6 +146,27 @@ export function SelfIdentityCreateForm({
           Open the verification email sent to <strong>{email}</strong> and confirm the address. Then return here.
         </p>
         {error && <Alert tone="danger">{error}</Alert>}
+        <Button
+          variant="link"
+          loading={busy}
+          onClick={async () => {
+            setBusy(true);
+            setError("");
+            try {
+              await postJson(
+                OWN_EMAILS_ENDPOINT,
+                ownEmailAddressAddSchema.parse({ email }),
+                ownEmailVerificationRequestedResponseSchema,
+              );
+            } catch (cause) {
+              setError(proofForm.refuse(cause));
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          Resend verification email
+        </Button>
         <Button
           variant="link"
           onClick={() => {

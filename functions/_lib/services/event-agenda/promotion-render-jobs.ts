@@ -1,5 +1,9 @@
 import { prepareJobWake } from "../scheduled-jobs/dispatcher";
-import { preparePromotionRenderRequests, type PromotionRenderJob as Job } from "./promotion-render-request";
+import {
+  promotionRenderLocation,
+  preparePromotionRenderRequests,
+  type PromotionRenderJob as Job,
+} from "./promotion-render-request";
 import { promotionSponsorArtwork } from "./promotion-design";
 import { permissionsAuthorizationEvidence } from "../../auth/permissions";
 import { createUserBackedAuthAdmin } from "../../auth/admin-identity";
@@ -90,6 +94,21 @@ export async function processPromotionRenderJob(
         ? assignedPromotionKit(db, job.event_id, job.occurrence_id, job.user_id, canManage, job.origin)
         : getAttendeePromotionKit(db, job.event_id, job.user_id, job.origin);
     const source = await resolveSource();
+    if (job.fingerprint === null && !source.kit.stale && source.kit.fingerprint) {
+      const location = await promotionRenderLocation(
+        job.user_id,
+        job.occurrence_id,
+        source.kit.fingerprint,
+        promotionFormatSchema.parse(job.format),
+      );
+      await run(
+        db,
+        "UPDATE event_promotion_renders SET fingerprint=?,cache_key=?,updated_at=? WHERE id=? AND processing_token=?",
+        [source.kit.fingerprint, location.key, nowIso(), job.id, lease.token],
+      );
+      job.fingerprint = source.kit.fingerprint;
+      job.cache_key = location.key;
+    }
     if (source.kit.stale || source.kit.fingerprint !== job.fingerprint)
       throw new AppError(409, "PROMOTION_SOURCE_CHANGED", "Promotion material changed. Prepare a new kit.");
     const branding = await promotionSponsorArtwork(db, env, job.event_id);

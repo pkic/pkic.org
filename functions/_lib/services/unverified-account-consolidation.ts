@@ -49,7 +49,6 @@ export async function prepareUnverifiedAccountConsolidation(
       causeKey: `mailbox-consolidation:${sourceUserId}`,
       at,
     })),
-    db.prepare("DELETE FROM user_email_claims WHERE user_id=?").bind(sourceUserId),
     db
       .prepare(`UPDATE users SET email=?,normalized_email=?,active=0,pending_email=NULL,
       pending_email_expires_at=NULL,pending_email_change_registration_id=NULL,updated_at=? WHERE id=?`)

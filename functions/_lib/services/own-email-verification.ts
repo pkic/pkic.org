@@ -11,7 +11,10 @@ import { prepareJobWake } from "./scheduled-jobs/dispatcher";
  * (`prepareVerifiedAddressDomainOrganizationLink`): automatically for a non-member
  * organization, and as the offer for a member organization.
  */
-import { EMAIL_ADDRESS_VERIFICATION_TTL_HOURS } from "../../../assets/shared/schemas/own-email-addresses";
+import {
+  OWN_EMAIL_ADDRESS_LIMIT,
+  EMAIL_ADDRESS_VERIFICATION_TTL_HOURS,
+} from "../../../assets/shared/schemas/own-email-addresses";
 import {
   assertEmailAuthCapabilityEmail,
   commitEmailAuthRedemption,
@@ -29,7 +32,7 @@ import {
 import type { DatabaseLike, StatementLike } from "../types";
 import { readEmailOwnership, prepareEmailOwnershipClaim } from "./email-ownership";
 import { prepareUnverifiedAccountConsolidation } from "./unverified-account-consolidation";
-import { uuid } from "../utils/ids";
+import { normalizeEmail } from "../validation";
 import { nowIso } from "../utils/time";
 import { prepareAuditLog } from "./audit";
 import { prepareVerifiedAddressDomainOrganizationLink } from "./identities/email-domain-link";
@@ -56,7 +59,7 @@ export async function prepareOwnEmailVerificationMessage(
     userId: string;
     emailId: string;
     email: string;
-    revision?: string;
+    addressRequest?: boolean;
     at: string;
   } & OwnEmailVerificationDelivery,
 ): Promise<{ outboxId: string; statements: StatementLike[] }> {
@@ -65,7 +68,7 @@ export async function prepareOwnEmailVerificationMessage(
     purpose: PURPOSE,
     subjectId: input.emailId,
     email: input.email,
-    ...(input.revision ? { authorizationRevision: input.revision } : {}),
+    ...(input.addressRequest ? { addressRequest: { userId: input.userId, email: normalizeEmail(input.email) } } : {}),
     ttlSeconds: EMAIL_ADDRESS_VERIFICATION_TTL_HOURS * 60 * 60,
   });
   const message = prepareQueueEmailStatement(
@@ -108,15 +111,14 @@ interface UnverifiedAddress {
   email: string;
   normalized_email: string;
   verified_at: string | null;
-  revision: string | null;
+  requested: boolean;
 }
 
 async function ownAddress(db: DatabaseLike, userId: string, emailId: string): Promise<UnverifiedAddress> {
   const address = await first<UnverifiedAddress>(
     db,
-    `SELECT id,email,normalized_email,verified_at,NULL AS revision FROM user_emails WHERE id=? AND user_id=?
-     UNION ALL SELECT id,email,normalized_email,NULL,revision FROM user_email_claims WHERE id=? AND user_id=?`,
-    [emailId, userId, emailId, userId],
+    `SELECT id,email,normalized_email,verified_at,0 AS requested FROM user_emails WHERE id=? AND user_id=?`,
+    [emailId, userId],
   );
   if (!address) throw new AppError(404, "EMAIL_NOT_FOUND", "Email address not found");
   return address;
@@ -130,12 +132,9 @@ export async function requestOwnEmailVerification(
   const address = await ownAddress(db, input.userId, input.emailId);
   if (address.verified_at) throw new AppError(409, "EMAIL_ALREADY_VERIFIED", "This address is already verified");
   const at = nowIso();
-  const revision = address.revision ? uuid() : undefined;
-  const expiresAt = new Date(Date.parse(at) + EMAIL_ADDRESS_VERIFICATION_TTL_HOURS * 60 * 60 * 1000).toISOString();
   const prepared = await prepareOwnEmailVerificationMessage(db, {
     ...input,
     email: address.email,
-    revision,
     at,
   });
   try {
@@ -143,25 +142,10 @@ export async function requestOwnEmailVerification(
       ...(input.authorizationEvidence ? [prepareAuthorizationGuard(db, input.authorizationEvidence)] : []),
       prepareAuthorizationGuard(db, {
         sql: `SELECT 1 FROM users person WHERE person.id=? AND person.email_verified_at IS NOT NULL AND person.active=1
-        AND (EXISTS(SELECT 1 FROM user_email_claims claim WHERE claim.id=? AND claim.user_id=person.id
-          AND claim.normalized_email=? AND claim.revision=?) OR EXISTS(SELECT 1 FROM user_emails address
-          WHERE address.id=? AND address.user_id=person.id AND address.normalized_email=? AND address.verified_at IS NULL))`,
-        bindings: [
-          input.userId,
-          address.id,
-          address.normalized_email,
-          address.revision,
-          address.id,
-          address.normalized_email,
-        ],
+        AND EXISTS(SELECT 1 FROM user_emails address WHERE address.id=? AND address.user_id=person.id
+          AND address.normalized_email=? AND address.verified_at IS NULL)`,
+        bindings: [input.userId, address.id, address.normalized_email],
       }),
-      ...(revision
-        ? [
-            db
-              .prepare("UPDATE user_email_claims SET revision=?,expires_at=? WHERE id=? AND user_id=? AND revision=?")
-              .bind(revision, expiresAt, address.id, input.userId, address.revision),
-          ]
-        : []),
       ...prepared.statements,
     ]);
   } catch (error) {
@@ -192,22 +176,36 @@ async function resolveVerificationLink(
     purpose: PURPOSE,
     token: input.token,
   });
-  const address = await first<LinkedAddress>(
-    db,
-    `WITH addresses AS (SELECT address.id,address.user_id,address.email,address.normalized_email,address.verified_at,NULL AS revision,person.email AS account_email
-       FROM user_emails address JOIN users person ON person.id=address.user_id AND person.active=1 WHERE address.id=?
-     UNION ALL SELECT claim.id,claim.user_id,claim.email,claim.normalized_email,NULL,claim.revision,person.email AS account_email
-       FROM user_email_claims claim JOIN users person ON person.id=claim.user_id AND person.active=1
-       WHERE claim.id=? AND claim.expires_at>?)
-     SELECT addresses.id,addresses.user_id,addresses.email,addresses.normalized_email,addresses.verified_at,
-       addresses.revision,addresses.account_email,
-       (SELECT source.id FROM users source WHERE source.normalized_email=addresses.normalized_email
-         AND source.id<>addresses.user_id AND source.active=1 AND source.email_verified_at IS NULL
-         AND source.pii_redacted_at IS NULL AND source.merged_into_user_id IS NULL
-         AND NOT EXISTS(SELECT 1 FROM user_emails owned WHERE owned.user_id=source.id AND owned.verified_at IS NOT NULL))
-       AS consolidation_source_id FROM addresses`,
-    [capability.subjectId, capability.subjectId, nowIso()],
-  );
+  const requested = capability.addressRequest;
+  const address = requested
+    ? await first<LinkedAddress>(
+        db,
+        `SELECT COALESCE(saved.id,?) AS id,person.id AS user_id,? AS email,? AS normalized_email,
+      CASE WHEN person.normalized_email=? THEN person.email_verified_at ELSE saved.verified_at END AS verified_at,
+      1 AS requested,person.email AS account_email,
+      (SELECT source.id FROM users source WHERE source.normalized_email=? AND source.id<>person.id
+        AND source.active=1 AND source.email_verified_at IS NULL AND source.pii_redacted_at IS NULL
+        AND source.merged_into_user_id IS NULL AND NOT EXISTS(SELECT 1 FROM user_emails owned
+          WHERE owned.user_id=source.id AND owned.verified_at IS NOT NULL)) AS consolidation_source_id
+      FROM users person LEFT JOIN user_emails saved ON saved.user_id=person.id AND saved.normalized_email=?
+      WHERE person.id=? AND person.active=1 AND person.pii_redacted_at IS NULL AND person.merged_into_user_id IS NULL`,
+        [
+          capability.subjectId,
+          requested.email,
+          normalizeEmail(requested.email),
+          normalizeEmail(requested.email),
+          normalizeEmail(requested.email),
+          normalizeEmail(requested.email),
+          requested.userId,
+        ],
+      )
+    : await first<LinkedAddress>(
+        db,
+        `SELECT address.id,address.user_id,address.email,address.normalized_email,address.verified_at,
+      0 AS requested,person.email AS account_email,NULL AS consolidation_source_id
+      FROM user_emails address JOIN users person ON person.id=address.user_id AND person.active=1 WHERE address.id=?`,
+        [capability.subjectId],
+      );
   if (!address)
     throw new AppError(404, "MAGIC_LINK_INVALID", "This verification link is not valid. Request a new one.");
   await assertEmailAuthCapabilityEmail({
@@ -215,8 +213,6 @@ async function resolveVerificationLink(
     capability,
     currentEmail: address.normalized_email,
   });
-  if (address.revision && capability.authorizationRevision !== address.revision)
-    throw new AppError(404, "MAGIC_LINK_INVALID", "Request a new verification link.");
   if (address.verified_at) throw new AppError(409, "MAGIC_LINK_USED", "This email address is already verified.");
   return { address, capabilityId: capability.capabilityId };
 }
@@ -304,22 +300,22 @@ export async function verifyOwnEmailAddress(
       input.actor.authorizationEvidence,
       {
         sql: `SELECT 1 FROM users person WHERE person.id=? AND person.active=1 AND person.email_verified_at IS NOT NULL
-        AND (EXISTS (SELECT 1 FROM user_email_claims claim WHERE claim.id=? AND claim.user_id=person.id
-          AND claim.normalized_email=? AND claim.revision=? AND claim.expires_at>?)
-          OR EXISTS (SELECT 1 FROM user_emails address WHERE address.id=? AND address.user_id=person.id
-            AND address.normalized_email=? AND address.verified_at IS NULL))
+        AND person.pii_redacted_at IS NULL AND person.merged_into_user_id IS NULL
+        AND (?=1 OR EXISTS(SELECT 1 FROM user_emails address WHERE address.id=? AND address.user_id=person.id
+          AND address.normalized_email=? AND address.verified_at IS NULL))
+        AND (EXISTS(SELECT 1 FROM user_emails saved WHERE saved.id=? AND saved.user_id=person.id)
+          OR (SELECT COUNT(*) FROM user_emails saved WHERE saved.user_id=person.id) < ?)
         AND NOT EXISTS (SELECT 1 FROM users owner WHERE owner.normalized_email=? AND owner.id<>person.id
           AND NOT (?=1 AND owner.email_verified_at IS NULL))
         AND NOT EXISTS (SELECT 1 FROM user_emails owner WHERE owner.normalized_email=?
           AND owner.user_id<>person.id AND owner.verified_at IS NOT NULL)`,
         bindings: [
           userId,
+          address.requested ? 1 : 0,
           address.id,
           address.normalized_email,
-          address.revision,
-          at,
           address.id,
-          address.normalized_email,
+          OWN_EMAIL_ADDRESS_LIMIT,
           address.normalized_email,
           (consolidating && input.consolidateUnverifiedAccount) ||
           (ownership?.kind === "primary" && !ownership.verifiedAt && ownership.alternateVerifiedAt)
@@ -332,15 +328,14 @@ export async function verifyOwnEmailAddress(
     statements: [
       ...pendingRelease,
       ...consolidation,
-      ...(address.revision
+      ...(address.requested
         ? [
             db
               .prepare(`INSERT INTO user_emails(id,user_id,email,normalized_email,created_at)
-        VALUES(?,?,?,?,?)`)
+        VALUES(?,?,?,?,?) ON CONFLICT(id) DO NOTHING`)
               .bind(address.id, userId, address.email, address.normalized_email, at),
           ]
         : []),
-      db.prepare("DELETE FROM user_email_claims WHERE normalized_email=?").bind(address.normalized_email),
       db
         .prepare(
           "UPDATE user_emails SET verified_at = ?, verification_method = 'magic_link' WHERE id = ? AND user_id = ?",

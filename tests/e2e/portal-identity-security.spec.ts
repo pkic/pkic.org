@@ -13,7 +13,7 @@
  */
 import { expect, test } from "@playwright/test";
 import {
-  ownEmailAddressResponseSchema,
+  ownEmailVerificationRequestedResponseSchema,
   ownEmailAddressUpdateSchema,
   ownEmailAddressesListResponseSchema,
 } from "../../assets/shared/schemas/own-email-addresses";
@@ -78,8 +78,12 @@ test("sign-in capabilities require address permission, revoke with it, and canno
       new URL(response.url()).pathname === "/api/v1/users/current/emails" && response.request().method() === "POST",
   );
   await page.getByRole("button", { name: "Send verification link", exact: true }).click();
-  const added = ownEmailAddressResponseSchema.parse(await (await addedResponse).json()).email;
-  expect(added.signInEnabled).toBe(false);
+  const requested = ownEmailVerificationRequestedResponseSchema.parse(await (await addedResponse).json());
+  expect(requested.status).toBe("verification_sent");
+  const pending = ownEmailAddressesListResponseSchema.parse(
+    await (await page.request.get("/api/v1/users/current/emails")).json(),
+  );
+  expect(pending.emails.some((address) => address.email === aliasEmail)).toBe(false);
   const verification = await waitForCapturedEmail(aliasEmail, "Verify your email address", { since });
   const proofPage = await context.newPage();
   await proofPage.goto(extractEmailUrl(verification, "/portal/"));
@@ -89,7 +93,8 @@ test("sign-in capabilities require address permission, revoke with it, and canno
   const addresses = ownEmailAddressesListResponseSchema.parse(
     await (await page.request.get("/api/v1/users/current/emails")).json(),
   );
-  expect(addresses.emails.find((address) => address.id === added.id)).toMatchObject({
+  const added = addresses.emails.find((address) => address.email === aliasEmail)!;
+  expect(added).toMatchObject({
     verifiedAt: expect.any(String),
     signInEnabled: false,
   });

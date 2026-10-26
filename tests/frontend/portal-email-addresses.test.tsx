@@ -227,23 +227,7 @@ describe("email addresses on the user record", () => {
   });
 
   it("adds an address through its own form and returns to the user record", async () => {
-    stub(() =>
-      json(
-        {
-          email: {
-            id: waitingId,
-            email: "ana@new.example",
-            primary: false,
-            signInEnabled: false,
-            verifiedAt: null,
-            verificationMethod: null,
-            identityId: null,
-            createdAt: "2026-10-10T00:00:00.000Z",
-          },
-        },
-        201,
-      ),
-    );
+    stub(() => json({ status: "verification_sent", email: "ana@new.example", requestId: waitingId }, 202));
     const host = mount(<EmailAddressAddForm userId={USER_ID} isSelf />);
     await settle();
     const input = host.querySelector<HTMLInputElement>('[name="email"]')!;

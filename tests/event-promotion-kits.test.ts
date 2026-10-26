@@ -122,6 +122,30 @@ async function fixture(withSecondSpeaker = false) {
 }
 describe("personal event promotion kits", () => {
   beforeEach(() => resetDb());
+  it("resumes an unfinished request migrated from the session-only queue", async () => {
+    const f = await fixture();
+    const source = await getPromotionKit(env.DB, f.eventId, f.sessionId, f.admin.id, "https://example.test");
+    const job = await requestPromotionRender(env.DB, f.eventId, source, "carousel", "https://example.test");
+    await env.DB.prepare("UPDATE event_promotion_renders SET fingerprint=NULL,cache_key='old-cache-key' WHERE id=?")
+      .bind(job.id)
+      .run();
+    expect(
+      await processPromotionRenderJob(env.DB, env, job.id, async () => ({
+        body: new Uint8Array([1, 2]),
+        contentType: "application/pdf",
+        count: 1,
+      })),
+    ).toBe(true);
+    expect(
+      await env.DB.prepare("SELECT status FROM event_promotion_renders WHERE id=?").bind(job.id).first("status"),
+    ).toBe("rendered");
+    expect(
+      await env.DB.prepare("SELECT fingerprint FROM event_promotion_renders WHERE id=?")
+        .bind(job.id)
+        .first("fingerprint"),
+    ).toBe(source.kit.fingerprint);
+  });
+
   it("prepares all published speaker kits durably, preserves attribution, and reports real render completion", async () => {
     const f = await fixture(true);
     const source = promotionKitSchema.parse(await (await callApi(env, f.sessionBase, { headers: f.headers })).json());

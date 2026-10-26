@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { affiliationOfferResponseSchema } from "../assets/shared/schemas/affiliation-offer";
 import {
   ownEmailAddressAddSchema,
+  ownEmailVerificationRequestedResponseSchema,
   ownEmailAddressResponseSchema,
   ownEmailAddressUpdateSchema,
   ownEmailAddressVerificationPreviewResponseSchema,
@@ -74,8 +75,9 @@ function call(token: string, path: string, method = "GET", body?: unknown): Prom
 
 async function add(token: string, email: string) {
   const response = await call(token, "", "POST", ownEmailAddressAddSchema.parse({ email }));
-  expect(response.status, await response.clone().text()).toBe(201);
-  return ownEmailAddressResponseSchema.parse(await response.json()).email;
+  expect(response.status, await response.clone().text()).toBe(202);
+  const requested = ownEmailVerificationRequestedResponseSchema.parse(await response.json());
+  return { id: requested.requestId, email: requested.email };
 }
 
 /** The verification link the outbox would deliver to `email`, as the token the page sends back. */
@@ -319,7 +321,7 @@ describe("a person's own email addresses", () => {
     );
   });
 
-  it.each(["primary proof", "secondary proof", "revoked session", "changed claim", "expired claim", "retired source"])(
+  it.each(["primary proof", "secondary proof", "revoked session", "retired source"])(
     "rolls back consolidation after a concurrent %s",
     async (change) => {
       const source = await findOrCreateUser(env.DB, { email: "concurrent@consolidation.example" });
@@ -353,14 +355,6 @@ describe("a person's own email addresses", () => {
             .run();
         if (change === "revoked session")
           await env.DB.prepare("UPDATE sessions SET revoked_at=? WHERE user_id=?").bind(nowIso(), account.userId).run();
-        if (change === "changed claim")
-          await env.DB.prepare("UPDATE user_email_claims SET revision=? WHERE id=?")
-            .bind(crypto.randomUUID(), added.id)
-            .run();
-        if (change === "expired claim")
-          await env.DB.prepare("UPDATE user_email_claims SET expires_at='2000-01-01T00:00:00.000Z' WHERE id=?")
-            .bind(added.id)
-            .run();
         if (change === "retired source")
           await env.DB.prepare("UPDATE users SET active=0 WHERE id=?").bind(source.id).run();
       } finally {
@@ -384,6 +378,59 @@ describe("a person's own email addresses", () => {
       );
     },
   );
+
+  it("resends without persisting requests and spends each proof only once", async () => {
+    const account = await signedIn("repeat@owner.example");
+    await add(account.token, "repeat@work.example");
+    const first = await verificationToken("repeat@work.example");
+    await add(account.token, "repeat@work.example");
+    const second = await verificationToken("repeat@work.example");
+    expect(await queryAll(env.DB, "SELECT id FROM user_emails WHERE user_id=?", [account.userId])).toEqual([]);
+    expect((await verify(first)).status).toBe(200);
+    expect((await verify(first)).status).toBe(409);
+    expect((await verify(second)).status).toBe(409);
+  });
+
+  it("checks address capacity again when proof is redeemed", async () => {
+    const account = await signedIn("capacity@owner.example");
+    await add(account.token, "capacity@work.example");
+    const link = await verificationToken("capacity@work.example");
+    await env.DB.batch(
+      Array.from({ length: 10 }, (_, index) =>
+        env.DB.prepare("INSERT INTO user_emails(id,user_id,email,normalized_email,created_at) VALUES(?,?,?,?,?)").bind(
+          crypto.randomUUID(),
+          account.userId,
+          `saved-${index}@elsewhere.example`,
+          `saved-${index}@elsewhere.example`,
+          nowIso(),
+        ),
+      ),
+    );
+    expect((await verify(link)).status).toBe(404);
+    expect(await queryAll(env.DB, "SELECT id FROM user_emails WHERE normalized_email='capacity@work.example'")).toEqual(
+      [],
+    );
+  });
+
+  it("resends and verifies an existing unverified address without creating another row", async () => {
+    const account = await signedIn("legacy@owner.example");
+    const id = crypto.randomUUID(),
+      email = "legacy@work.example";
+    await env.DB.prepare("INSERT INTO user_emails(id,user_id,email,normalized_email,created_at) VALUES(?,?,?,?,?)")
+      .bind(id, account.userId, email, email, nowIso())
+      .run();
+    expect((await call(account.token, `/${id}/verification`, "POST")).status).toBe(202);
+    const link = await verificationToken(email);
+    expect((await publicLinkCall("/preview", link)).status).toBe(200);
+    expect((await verify(link)).status).toBe(200);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT id FROM user_emails WHERE user_id=? AND normalized_email=? AND verified_at IS NOT NULL",
+        [account.userId, email],
+      ),
+    ).toEqual([{ id }]);
+  });
 
   it("does not attach a mailbox to another account when its owner opens that account's verification link", async () => {
     const attacker = await signedIn("attacker@elsewhere.example");
@@ -462,9 +509,6 @@ describe("a person's own email addresses", () => {
     const firstLink = await verificationToken(email);
     await add(second.token, email);
     const secondLink = await verificationToken(email);
-    expect(await queryAll(env.DB, "SELECT id FROM user_email_claims WHERE normalized_email=?", [email])).toHaveLength(
-      2,
-    );
     expect(await queryAll(env.DB, "SELECT id FROM user_emails WHERE normalized_email=?", [email])).toEqual([]);
     expect((await verify(firstLink)).status).toBe(200);
     expect((await verify(secondLink)).status).toBe(404);
@@ -480,12 +524,9 @@ describe("a person's own email addresses", () => {
     const { userId, token } = await signedIn("ana@gmail.com");
 
     const added = await add(token, "ana@open-claimed.example");
-    expect(added).toMatchObject({
-      email: "ana@open-claimed.example",
-      primary: false,
-      verifiedAt: null,
-      signInEnabled: false,
-    });
+    expect(added.email).toBe("ana@open-claimed.example");
+    const beforeProof = ownEmailAddressesListResponseSchema.parse(await (await call(token, "")).json());
+    expect(beforeProof.emails.map((entry) => entry.email)).toEqual(["ana@gmail.com"]);
 
     const link = await verificationToken("ana@open-claimed.example");
     const preview = await publicLinkCall("/preview", link);
@@ -627,7 +668,7 @@ describe("a person's own email addresses", () => {
       "PATCH",
       ownEmailAddressUpdateSchema.parse({ primary: true }),
     );
-    expect(refused.status).toBe(409);
+    expect(refused.status).toBe(404);
 
     const changed = await call(token, `/${added.id}`, "PATCH", ownEmailAddressUpdateSchema.parse({ primary: true }));
     expect(changed.status, await changed.clone().text()).toBe(200);
@@ -666,6 +707,7 @@ describe("a person's own email addresses", () => {
     const work = await add(token, "eva@work.example");
     await verify(await verificationToken("eva@work.example"));
     const spare = await add(token, "eva@spare.example");
+    await verify(await verificationToken(spare.email));
 
     const inUse = await call(token, `/${work.id}`, "DELETE");
     expect(inUse.status).toBe(409);
@@ -682,11 +724,11 @@ describe("a person's own email addresses", () => {
     await insertUser(env.DB, "taken@example.test");
     const { token } = await signedIn("fay@gmail.com");
     const taken = await call(token, "", "POST", { email: "taken@example.test" });
-    expect(taken.status).toBe(201);
+    expect(taken.status).toBe(202);
 
     environment = { ...env, EMAIL_RATE_LIMITER: createTestRateLimiter(1), IP_RATE_LIMITER: createTestRateLimiter(50) };
     const first = await add(token, "fay@one.example");
-    const resend = await call(token, `/${first.id}/verification`, "POST");
+    const resend = await call(token, "", "POST", { email: first.email });
     expect(resend.status).toBe(429);
     expect(
       await queryAll(env.DB, "SELECT recipient_email FROM email_outbox WHERE template_key = 'user_email_verification'"),

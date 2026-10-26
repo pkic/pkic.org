@@ -11,6 +11,7 @@ import {
   ownEmailAddressAddRouteSchema,
   ownEmailAddressRemoveRouteSchema,
   ownEmailAddressResponseSchema,
+  ownEmailVerificationRequestedResponseSchema,
   ownEmailAddressUpdateRouteSchema,
   ownEmailAddressVerificationRequestRouteSchema,
   ownEmailAddressesListResponseSchema,
@@ -63,7 +64,7 @@ export const OwnEmailAddressPost = openApiRoute(ownEmailAddressAddRouteSchema, a
     appBaseUrl: http.appBaseUrl,
   });
   c.executionCtx.waitUntil(processOutboxByIdBackground(http.db, c.env, added.outboxId));
-  return jsonPrivate(ownEmailAddressResponseSchema.parse({ email: added.email }), 201);
+  return jsonPrivate(ownEmailVerificationRequestedResponseSchema.parse(added), 202);
 });
 
 export const OwnEmailAddressVerificationPost = openApiRoute(

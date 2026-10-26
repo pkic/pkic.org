@@ -1,7 +1,7 @@
 /**
  * Adding an email address: a form of its own under the user record,
  * validated by the contract the route parses. The person's own address is
- * kept as waiting for verification and receives a link; staff add a
+ * saved only after verification; requesting it sends a link. Staff add a
  * secondary address to another user's record. The way back is the record.
  */
 import { EmailAddressCreateForm } from "../../../components/identities/EmailAddressCreateForm";

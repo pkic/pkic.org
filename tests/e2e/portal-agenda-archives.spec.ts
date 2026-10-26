@@ -456,7 +456,7 @@ test("approved archive corrections and promotion exports remain tied to a frozen
         `--persist-to=${state}`,
         "--json",
         "--command",
-        `SELECT format,status,attempts,next_attempt_at,last_error FROM event_agenda_promotion_render_jobs WHERE occurrence_id='${occurrence.id}' ORDER BY format`,
+        `SELECT format,status,attempts,next_attempt_at,last_error FROM event_promotion_renders WHERE occurrence_id='${occurrence.id}' ORDER BY format`,
       ],
       { maxBuffer: 1024 * 1024 },
     );

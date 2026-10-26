@@ -16,7 +16,7 @@ export interface PromotionRenderJob {
   id: string;
   event_id: string;
   occurrence_id: string | null;
-  fingerprint: string;
+  fingerprint: string | null;
   user_id: string;
   revision: number;
   format: z.infer<typeof promotionFormatSchema>;

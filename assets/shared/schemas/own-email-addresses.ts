@@ -13,7 +13,7 @@ import { jsonErrorResponse, magicLinkVerifySchema, successResponseSchema } from 
 import { databaseIdSchema } from "./identifiers";
 import { verifiedEmailIdentitySchema } from "./identity";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
-import { authErrors, capabilityErrors, created, ok, publicOperation, requiresSession } from "./route-contract";
+import { authErrors, capabilityErrors, ok, publicOperation, requiresSession } from "./route-contract";
 import { USER_EMAILS_SORT_COLUMNS, userEmailAddSchema } from "./user-emails";
 
 /** A person keeps at most this many addresses besides their primary one. */
@@ -38,6 +38,11 @@ export const ownEmailAddressesListResponseSchema = paginatedResponseSchema("emai
 export const ownEmailAddressResponseSchema = z.object({ email: ownEmailAddressSchema });
 
 export const ownEmailAddressAddSchema = userEmailAddSchema;
+export const ownEmailVerificationRequestedResponseSchema = z.object({
+  status: z.literal("verification_sent"),
+  email: z.string(),
+  requestId: databaseIdSchema,
+});
 export const ownEmailAddressParamsSchema = z.object({ emailId: databaseIdSchema });
 /** Account access requires a separate, explicit choice after mailbox verification. */
 export const ownEmailAddressUpdateSchema = z.union([
@@ -84,10 +89,13 @@ export const ownEmailAddressAddRouteSchema = {
   ...requiresSession(),
   summary: "Add an email address to the current user",
   description:
-    "Records the address unverified and emails it a verification link. Rate limited per address and network.",
+    "Sends a verification link. The address is saved only after mailbox proof and confirmation by this account. Rate limited per address and network.",
   request: { body: { required: true, content: { "application/json": { schema: ownEmailAddressAddSchema } } } },
   responses: {
-    ...created("Address added; a verification link was sent.", ownEmailAddressResponseSchema),
+    "202": {
+      description: "Verification requested; no address is saved before proof.",
+      content: { "application/json": { schema: ownEmailVerificationRequestedResponseSchema } },
+    },
     ...authErrors({
       badRequest: "Invalid email address.",
       conflict: "The address is already in use, or the address limit is reached.",
