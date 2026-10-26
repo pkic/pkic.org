@@ -45,7 +45,10 @@ export async function setupProposalSpeakerCapacityWorkflow(): Promise<{
   return { eventId, adminUserId: adminUser.id, adminSessionToken };
 }
 
-export async function inviteSpeakerAndSubmitCapacityProposal(adminSessionToken: string): Promise<{
+export async function inviteSpeakerAndSubmitCapacityProposal(
+  adminSessionToken: string,
+  { speakerEmailVerified = true }: { speakerEmailVerified?: boolean } = {},
+): Promise<{
   speakerManageToken: string;
   proposalId: string;
   coSpeakerUserId: string;
@@ -137,11 +140,12 @@ export async function inviteSpeakerAndSubmitCapacityProposal(adminSessionToken: 
         lastName: "Speaker",
       });
   // Capacity fixtures describe an established participant; issue their invitation after mailbox proof.
-  await env.DB.prepare(
-    "UPDATE users SET email_verified_at=COALESCE(email_verified_at,?),email_verification_method='magic_link' WHERE id=?",
-  )
-    .bind(nowIso(), user.id)
-    .run();
+  if (speakerEmailVerified)
+    await env.DB.prepare(
+      "UPDATE users SET email_verified_at=COALESCE(email_verified_at,?),email_verification_method='magic_link' WHERE id=?",
+    )
+      .bind(nowIso(), user.id)
+      .run();
   const { manageToken: speakerManageToken } = await addProposalSpeaker(env.DB, {
     proposalId,
     userId: user.id,

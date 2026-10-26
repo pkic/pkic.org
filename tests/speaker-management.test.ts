@@ -230,7 +230,10 @@ describe("speaker self-management endpoints", () => {
 
   it("records an added speaker's consent only when they accept for themselves", async () => {
     await setupWorkflow();
-    const { speakerManageToken, proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    const { speakerManageToken, proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitCapacityProposal(
+      adminSessionToken,
+      { speakerEmailVerified: false },
+    );
     const consentHolders = () =>
       queryAll<{ user_id: string }>(
         env.DB,
