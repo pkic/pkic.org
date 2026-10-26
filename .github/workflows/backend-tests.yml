@@ -108,6 +108,10 @@ jobs:
     name: Critical browser journeys
     needs: preflight
     runs-on: ubuntu-latest
+    # Match the locked Playwright version; avoid per-run apt downloads of browser dependencies.
+    container:
+      image: mcr.microsoft.com/playwright:v1.62.1-noble
+      options: --ipc=host
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v6
@@ -125,10 +129,6 @@ jobs:
       - name: Check the CSS budget
         timeout-minutes: 2
         run: pnpm run check:css-budget
-
-      - name: Install Playwright browser
-        timeout-minutes: 10
-        run: pnpm exec playwright install --with-deps chromium
 
       - name: Prepare dev vars
         run: cp .dev.vars.example .dev.vars

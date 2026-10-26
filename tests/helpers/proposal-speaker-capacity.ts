@@ -1,3 +1,4 @@
+import { nowIso } from "../../functions/_lib/utils/time";
 import type { DatabaseLike } from "../../functions/_lib/types";
 import { prepareProposalProof } from "./proposal-proof";
 import { ADMINISTRATOR_FIXTURE_USER_SQL, administratorGrants } from "./administrator";
@@ -135,6 +136,12 @@ export async function inviteSpeakerAndSubmitCapacityProposal(adminSessionToken: 
         firstName: "Co",
         lastName: "Speaker",
       });
+  // Capacity fixtures describe an established participant; issue their invitation after mailbox proof.
+  await env.DB.prepare(
+    "UPDATE users SET email_verified_at=COALESCE(email_verified_at,?),email_verification_method='magic_link' WHERE id=?",
+  )
+    .bind(nowIso(), user.id)
+    .run();
   const { manageToken: speakerManageToken } = await addProposalSpeaker(env.DB, {
     proposalId,
     userId: user.id,

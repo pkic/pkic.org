@@ -286,6 +286,7 @@ test("approved archive corrections and promotion exports remain tied to a frozen
   await expect(sessions).toBeVisible();
   await runRowAction(page, sessionRow, "Speaker promotion kit");
   await expect(page.getByRole("heading", { name: `Promotion kit · ${title}`, exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Edit shared promotion copy", exact: true }).click();
   await page
     .getByRole("textbox", { name: /^Why attend/ })
     .fill(
