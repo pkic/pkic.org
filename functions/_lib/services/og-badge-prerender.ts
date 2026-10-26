@@ -1,4 +1,4 @@
-import { loadBadgePrintingArtwork } from "./event-participation/badge-print-branding";
+import { personalPromotionImageCacheKey } from "../../../assets/shared/personal-promotion-image";
 /**
  * OG badge pre-rendering service.
  *
@@ -51,16 +51,14 @@ let fontBuffersCache: Promise<Uint8Array[]> | null = null;
 
 function getFontBuffers(origin: string, env: Pick<Env, "ASSETS" | "ASSETS_PUBLIC">): Promise<Uint8Array[]> {
   if (!fontBuffersCache) {
-    const p = Promise.all([
-      fetchStaticAsset(env, origin, "/fonts/Roboto-Regular.ttf")
-        .then((r) => (r.ok ? r.arrayBuffer() : new ArrayBuffer(0)))
-        .catch(() => new ArrayBuffer(0))
-        .then((b) => new Uint8Array(b)),
-      fetchStaticAsset(env, origin, "/fonts/Roboto-Bold.ttf")
-        .then((r) => (r.ok ? r.arrayBuffer() : new ArrayBuffer(0)))
-        .catch(() => new ArrayBuffer(0))
-        .then((b) => new Uint8Array(b)),
-    ]);
+    const p = Promise.all(
+      ["Roboto-Regular.ttf", "Roboto-Bold.ttf", "RobotoMono-Regular.ttf"].map((name) =>
+        fetchStaticAsset(env, origin, `/fonts/${name}`)
+          .then((response) => (response.ok ? response.arrayBuffer() : new ArrayBuffer(0)))
+          .catch(() => new ArrayBuffer(0))
+          .then((buffer) => new Uint8Array(buffer)),
+      ),
+    );
     fontBuffersCache = p.then((fonts) => {
       if (fonts.every((f) => f.length === 0)) fontBuffersCache = null;
       return fonts;
@@ -90,7 +88,6 @@ export async function loadValidatedHeadshotDataUrl(
 
 // ─── Core generation ─────────────────────────────────────────────────────────
 
-const R2_KEY_PREFIX = "og-badges/";
 interface CodeRow {
   code: string;
 }
@@ -101,20 +98,14 @@ export async function renderBadgeSourcePng(
   source: BadgeSource,
   env: BadgeRenderEnv,
   origin: string,
+  format: import("../../../assets/shared/personal-promotion-image").PersonalPromotionImageFormat = "landscape",
 ): Promise<Uint8Array> {
-  const [Resvg, fontBuffers, headshotDataUrl, logoResponse, heroImageDataUrl, sponsors] = await Promise.all([
+  const [Resvg, fontBuffers, headshotDataUrl, logoResponse, heroImageDataUrl] = await Promise.all([
     ensureWasm(),
     getFontBuffers(origin, env),
     loadValidatedHeadshotDataUrl(source.headshot_r2_key, env.SPEAKER_UPLOADS_BUCKET),
     fetchStaticAsset(env, origin, "/img/logo.svg"),
     fetchHeroImage(source.settings_json, origin, env),
-    source.promotion
-      ? loadBadgePrintingArtwork(env, {
-          revision: source.promotion.brandingRevision,
-          template: { sponsorGroups: source.promotion.design.sponsorGroups },
-          populations: source.promotion.populations,
-        }).then((context) => context.branding)
-      : Promise.resolve([]),
   ]);
   const logoBytes = logoResponse.ok ? new Uint8Array(await logoResponse.arrayBuffer()) : null;
   const settings = parseJsonSafe<Record<string, unknown>>(source.settings_json, {});
@@ -126,15 +117,19 @@ export async function renderBadgeSourcePng(
     startsAt: source.starts_at,
     endsAt: source.ends_at,
     timeZone: source.timezone,
-    location: formatEventPlace(source, "en"),
+    location: [typeof settings.venue === "string" ? settings.venue : null, formatEventPlace(source, "en")]
+      .filter(Boolean)
+      .join(" · "),
+    city: source.city,
     organization: source.organization_name,
     jobTitle: source.job_title,
     headshotDataUrl,
     heroImageDataUrl,
-    sponsorGroups: sponsors,
+    sessions: source.sessions,
+    format,
     registrationUrl: new URL(`/r/${encodeURIComponent(code)}`, origin).href,
-    design: source.promotion?.design ?? eventPromotionDesignFromSettings(source.event_name, settings),
-    measure: promotionFontMeasure(fontBuffers),
+    design: eventPromotionDesignFromSettings(source.event_name, settings),
+    measure: promotionFontMeasure(fontBuffers, fontBuffers[2]),
     logoDataUrl: logoBytes ? `data:image/svg+xml;base64,${uint8ToBase64(logoBytes)}` : undefined,
   });
 
@@ -196,7 +191,7 @@ export async function renderAndCacheBadge(code: string, env: BadgeCacheEnv, orig
   if (!source) throw new Error(`Badge source not found for referral code ${code}`);
   const metadata = personalBadgeCacheMetadata(code, source);
   const png = await renderBadgeSourcePng(code, source, env, origin);
-  await pngToR2(png, `${R2_KEY_PREFIX}${code}`, metadata, env);
+  await pngToR2(png, personalPromotionImageCacheKey(code), metadata, env);
 }
 
 /**

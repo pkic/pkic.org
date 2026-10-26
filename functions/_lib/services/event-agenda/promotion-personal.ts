@@ -1,8 +1,8 @@
-import type { BadgeTemplateSponsorGroup } from "../../../../assets/shared/schemas/event-badge-template";
-import { personalPromotionRoleColors } from "../../../../assets/shared/badge-role-colors";
+import type { PersonalPromotionImageFormat } from "../../../../assets/shared/personal-promotion-image";
+import { personalPromotionRoleStyle } from "../../../../assets/shared/badge-role-colors";
 /** A personal social preview is a compact still from the promotion scene system. */
 import { formatDateRange } from "../../../../assets/shared/format-date";
-import { SOCIAL_PROMOTION_HEADLINES, type SocialBadgeRole } from "../../../../assets/shared/schemas/participant-roles";
+import { type SocialBadgeRole } from "../../../../assets/shared/schemas/participant-roles";
 import {
   promotionCompositionSchema,
   type EventPromotionDesign,
@@ -19,11 +19,13 @@ export interface PersonalPromotionData {
   endsAt: string | null;
   timeZone: string;
   location?: string | null;
+  city?: string | null;
   organization?: string | null;
   jobTitle?: string | null;
   headshotDataUrl?: string | null;
   heroImageDataUrl?: string | null;
-  sponsorGroups?: BadgeTemplateSponsorGroup[];
+  sessions?: { title: string }[];
+  format?: PersonalPromotionImageFormat;
   registrationUrl: string;
   design: EventPromotionDesign;
   logoDataUrl?: string;
@@ -35,26 +37,31 @@ export function renderPersonalPromotionSvg(data: PersonalPromotionData): string 
     displayName: [data.firstName, data.lastName].filter(Boolean).join(" ") || "Event participant",
     affiliation: [data.jobTitle, data.organization].filter(Boolean).join(" · "),
   };
+  const style = personalPromotionRoleStyle(data.role);
   return renderPromotionSvg(
     {
       personal: {
         eventName: data.eventName,
         firstName: data.firstName || person.displayName,
-        heading: SOCIAL_PROMOTION_HEADLINES[data.role].replace("I’m", "is").replace("I’ve", "has"),
+        heading: style.label,
+        roleStyle: style,
+        dates: formatDateRange(data.startsAt, data.endsAt, data.timeZone),
+        location: data.location ?? "",
+        city: data.city ?? "",
+        sessions: style.speaking ? (data.sessions ?? []) : [],
         people: [person],
         details: [formatDateRange(data.startsAt, data.endsAt, data.timeZone), data.location]
           .filter(Boolean)
           .join(" · "),
       },
-      design: { ...data.design, colors: personalPromotionRoleColors(data.role, data.design.colors) },
+      design: data.design,
       registrationUrl: data.registrationUrl,
       logoDataUrl: data.logoDataUrl,
       measure: data.measure,
       heroImageDataUrl: data.heroImageDataUrl,
-      sponsorGroups: data.sponsorGroups,
       composition: promotionCompositionSchema.parse({ panels: ["cover", "speakers", "details"], qrCode: false }),
       portraits: data.headshotDataUrl ? { participant: data.headshotDataUrl } : undefined,
     },
-    "landscape",
+    data.format ?? "landscape",
   );
 }

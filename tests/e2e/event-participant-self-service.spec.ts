@@ -1,3 +1,4 @@
+import sharp from "sharp";
 import { EMAIL_FIRST_COPY } from "../../assets/shared/email-first-copy";
 import { expect, test } from "@playwright/test";
 import {
@@ -205,11 +206,19 @@ test("a signed-in user registers from event home without another email challenge
   await expect(page.getByRole("heading", { name: "No ticket yet", exact: true })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Registration details", exact: true })).toBeVisible();
   const socialBadge = page.locator("[data-og-badge-img]");
-  await expect(socialBadge).toHaveAttribute("src", /layout=promotion-scene-v5/);
+  await expect(socialBadge).toHaveAttribute("src", /layout=promotion-scene-v6/);
   await expect
     .poll(() => socialBadge.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0))
     .toBe(true);
   await expect(page.getByRole("link", { name: "Download badge", exact: true })).toBeVisible();
+  const squareDownload = page.getByRole("link", { name: "Download square badge", exact: true });
+  await expect(squareDownload).toBeVisible();
+  const squareImage = await page.request.get((await squareDownload.getAttribute("href"))!);
+  expect(squareImage.status()).toBe(200);
+  const squareBytes = await squareImage.body();
+  const squareMetadata = await sharp(squareBytes).metadata();
+  expect({ width: squareMetadata.width, height: squareMetadata.height }).toEqual({ width: 1080, height: 1080 });
+  await info.attach("square-social-badge", { body: squareBytes, contentType: squareImage.headers()["content-type"]! });
   const confirmation = await waitForCapturedEmail(email, "confirmed", { since: beforeConfirmationEmail });
   const attachments = confirmation.payload.attachments as Array<{ type: string; content: string }>;
   const attachment = attachments.find((item) => item.type.startsWith("image/"));

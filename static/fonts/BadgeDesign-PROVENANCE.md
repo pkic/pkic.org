@@ -16,3 +16,5 @@ License: Free for commercial use, per the author. Redistribution must include th
 Modification: converted from TrueType to WOFF2 with fontTools 4.60.2 and subset to Basic Latin, Latin-1 Supplement, Latin Extended-A, general punctuation dashes and quotes, the ellipsis, and the euro sign. Glyph outlines, layout features, and name table are unchanged.
 Bytes: 64804
 SHA-256: cb1da327736e7dff62ea6c6bd74cab370f02defe9cb05a96e682f5168300130d
+
+RobotoMono-Regular.ttf is the sfnt form of the existing RobotoMono-latin.woff2, converted without changing outlines using fontTools. Its license is RobotoMono-LICENSE.txt. It supplies the same badge typography to the server-side social-card renderer.

@@ -28,6 +28,8 @@ export interface PromotionText {
   bold: boolean;
   role: "H1" | "H2" | "P" | "LI";
   color?: string;
+  anchor?: "middle" | "end";
+  mono?: boolean;
 }
 export interface PromotionPicture {
   src: string;
@@ -36,6 +38,7 @@ export interface PromotionPicture {
   width: number;
   height: number;
   circle?: boolean;
+  ringColor?: string;
   alt: string;
 }
 export interface PromotionPage {
@@ -48,12 +51,12 @@ export interface PromotionPage {
   height: number;
   light?: boolean;
   qr?: boolean;
-  still?: boolean;
-  footerPictures?: PromotionPicture[];
+  social?: { bandTop: number };
   bars?: { x: number; y: number; width: number; height: number; color: string; opacity?: number }[];
   sponsorBoard?: { x: number; y: number; width: number; height: number };
   markX?: number;
   rules?: { x: number; y: number; width: number }[];
+  arrows?: { x: number; y: number; length: number; color: string }[];
 }
 export interface PromotionBlock {
   text: string;
@@ -65,7 +68,15 @@ export interface PromotionBlock {
 }
 /** A personal preview needs event and identity facts, not a fabricated session or agenda. */
 export interface PersonalPromotionRenderData {
-  personal: PromotionStillContent & { eventName: string; firstName?: string };
+  personal: PromotionStillContent & {
+    eventName: string;
+    firstName?: string;
+    dates?: string;
+    location?: string;
+    city?: string;
+    sessions?: { title: string }[];
+    roleStyle?: ReturnType<typeof import("../../../../assets/shared/badge-role-colors").personalPromotionRoleStyle>;
+  };
   registrationUrl: string;
   design?: PromotionRenderData["design"];
   composition?: PromotionRenderData["composition"];
@@ -74,11 +85,10 @@ export interface PersonalPromotionRenderData {
   portraits?: Record<string, string>;
   logoDataUrl?: string;
   heroImageDataUrl?: string | null;
-  sponsorGroups?: import("../../../../assets/shared/schemas/event-badge-template").BadgeTemplateSponsorGroup[];
   scene?: PromotionPage;
   measure?: PromotionMeasure;
 }
-export type PromotionMeasure = (text: string, size: number, bold: boolean) => number;
+export type PromotionMeasure = (text: string, size: number, bold: boolean, mono?: boolean) => number;
 export const promotionDimensions = {
   landscape: [1200, 630],
   square: [1080, 1080],

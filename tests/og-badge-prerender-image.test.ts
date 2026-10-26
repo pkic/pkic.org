@@ -1,4 +1,4 @@
-import { personalPromotionRoleColors, BADGE_DISPLAY_ROLE_COLORS } from "../assets/shared/badge-role-colors";
+import { personalPromotionRoleStyle, BADGE_DISPLAY_ROLE_COLORS } from "../assets/shared/badge-role-colors";
 import { personalPromotionImagePath, PERSONAL_PROMOTION_RENDERER } from "../assets/shared/personal-promotion-image";
 import { describe, expect, it } from "vitest";
 import { STANDARD_HEADSHOT_MAX_BYTES } from "../assets/shared/schemas/images";
@@ -34,27 +34,24 @@ describe("OG sponsor badge rendering", () => {
     });
 
     expect(svg).toContain('width="1200" height="630"');
-    expect(svg).toContain("is sponsoring");
+    expect(svg).toContain("SPONSOR");
     expect(svg).toContain('id="panorama"');
     expect(svg).toContain('id="grid-fade"');
     expect(svg).toContain("Synthetic Sponsor");
     expect(svg).toContain("Conference &amp; workshop");
     expect(svg).not.toContain(">Attendee</text>");
-    expect(svg).not.toContain("is attending");
+    expect(svg).not.toContain("SPONSORED BY");
   });
 });
 
 describe("personal promotion scenes", () => {
   it("reuses physical badge role colors while keeping related speaking and staff roles consistent", () => {
-    const colors = ["#112233", "#445566"];
-    expect(personalPromotionRoleColors("attendee", colors)).toEqual(colors);
-    expect(BADGE_DISPLAY_ROLE_COLORS.speaker).toBe("#ed7d31");
-    const speaking = personalPromotionRoleColors("speaker", colors);
-    expect(speaking).not.toEqual(personalPromotionRoleColors("sponsor", colors));
-    expect(speaking).not.toEqual(personalPromotionRoleColors("staff", colors));
-    expect(personalPromotionRoleColors("moderator", colors)).toEqual(speaking);
-    expect(personalPromotionRoleColors("panelist", colors)).toEqual(speaking);
-    expect(personalPromotionRoleColors("organizer", colors)).toEqual(personalPromotionRoleColors("staff", colors));
+    expect(personalPromotionRoleStyle("attendee").color).toBe("#ffffff");
+    expect(personalPromotionRoleStyle("speaker").color).toBe(BADGE_DISPLAY_ROLE_COLORS.speaker);
+    expect(personalPromotionRoleStyle("sponsor").color).toBe(BADGE_DISPLAY_ROLE_COLORS.sponsor);
+    expect(personalPromotionRoleStyle("staff").color).toBe(BADGE_DISPLAY_ROLE_COLORS.staff);
+    expect(personalPromotionRoleStyle("moderator").color).toBe(personalPromotionRoleStyle("speaker").color);
+    expect(personalPromotionRoleStyle("organizer").color).toBe(personalPromotionRoleStyle("staff").color);
   });
   it("versions the image design and profile without losing either query parameter", () => {
     const url = new URL(personalPromotionImagePath("synthetic", "profile:2"), "https://pkic.org");
@@ -103,11 +100,9 @@ describe("personal promotion scenes", () => {
       const page = pages[0];
       expect(page.texts.map((line) => line.text).join(" ")).toContain(name);
       if (value.people[0].affiliation) expect(page.texts.map((line) => line.text).join(" ")).toContain(affiliation);
-      const date = page.texts.find((line) => line.text.startsWith("December"))!;
       const portrait = page.pictures[0]!;
-      expect(date.x + date.text.length * date.size * 0.55).toBeLessThan(portrait.x);
-      expect(portrait.y + portrait.height).toBeLessThan(535);
-      expect(page.texts.every((line) => line.y < 535)).toBe(true);
+      expect(portrait.y + portrait.height).toBeLessThan(page.social!.bandTop);
+      expect(page.texts.every((line) => line.y < page.height)).toBe(true);
     }
   });
 });

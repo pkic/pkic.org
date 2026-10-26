@@ -113,6 +113,18 @@ describe("OG share links", () => {
     expect(metaContent(html, "og:image:type")).toBe("image/jpeg");
     expect(metaContent(html, "og:image:width")).toBe("1200");
     expect(metaContent(html, "og:image:height")).toBe("630");
+    const images = html
+      .split(/<meta property="og:image"\s+content=/u)
+      .slice(1)
+      .map((fragment) => `<meta property="og:image" content=${fragment}`);
+    expect(images).toHaveLength(2);
+    expect(metaContent(images[0]!, "og:image:width")).toBe("1200");
+    expect(metaContent(images[0]!, "og:image:height")).toBe("630");
+    expect(metaContent(images[1]!, "og:image:width")).toBe("1080");
+    expect(metaContent(images[1]!, "og:image:height")).toBe("1080");
+    expect(metaContent(images[1]!, "og:image")).toContain("format=square");
+    expect(metaContent(images[1]!, "og:image:type")).toBe("image/jpeg");
+    expect(metaContent(images[1]!, "og:image:alt")).toContain("Ada Lovelace");
     expect(metaContent(html, "og:image:alt")).toContain("Ada Lovelace");
     expect(metaNameContent(html, "twitter:image:alt")).toContain("Ada Lovelace");
     expect(metaContent(html, "og:description")?.length ?? 0).toBeGreaterThanOrEqual(100);
@@ -243,6 +255,35 @@ describe("OG share links", () => {
     expect(mockedRenderBadgeSourcePng).not.toHaveBeenCalled();
   });
 
+  it("renders the square composition independently of the cached landscape in one batch", async () => {
+    const code = await seedEventReferral();
+    const source = (await readBadgeSource(baseEnv.DB, code))!;
+    const cache = { ...cachedImage("image/jpeg"), customMetadata: personalBadgeCacheMetadata(code, source) };
+    const get = vi.fn(async (key: string) => (key === `og-badges/${code}` ? cache : null));
+    mockedRenderBadgeSourcePng.mockResolvedValue(pngBytes());
+    const environment = {
+      ...baseEnv,
+      IMAGES: undefined,
+      ASSETS_BUCKET: { get } as unknown as Env["ASSETS_BUCKET"],
+    } as Env;
+    const response = await callApi(
+      environment,
+      `/api/v1/registrations/referrals/${code}/badge?format=square`,
+      undefined,
+      { maxRoundTrips: 1 },
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get("X-Cache")).toBe("MISS");
+    expect(get).toHaveBeenCalledWith(`og-badges/${code}/square`);
+    expect(mockedRenderBadgeSourcePng).toHaveBeenCalledWith(
+      code,
+      expect.anything(),
+      expect.anything(),
+      expect.any(String),
+      "square",
+    );
+  });
+
   it("regenerates a cached image after the event promotion design changes", async () => {
     const code = await seedEventReferral();
     const before = (await readBadgeSource(baseEnv.DB, code))!;
@@ -271,6 +312,7 @@ describe("OG share links", () => {
       }),
       expect.anything(),
       expect.any(String),
+      "landscape",
     );
   });
 

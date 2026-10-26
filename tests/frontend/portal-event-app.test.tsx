@@ -387,7 +387,7 @@ describe("event home", () => {
     await act(() => render(<ParticipantEvent event={detail} tab="ticket" />, host));
     await vi.waitFor(() => expect(host.querySelector("iframe.pk-badge-face__frame")).not.toBeNull());
     expect(host.querySelector<HTMLImageElement>("[data-og-badge-img]")?.src).toContain(
-      "/api/v1/registrations/referrals/ownshare/badge?layout=promotion-scene-v5",
+      "/api/v1/registrations/referrals/ownshare/badge?layout=promotion-scene-v6",
     );
     expect(host.textContent).toContain("Download badge");
     expect(host.querySelector('a[aria-label="Share on LinkedIn"]')?.getAttribute("href")).toContain("ownshare");

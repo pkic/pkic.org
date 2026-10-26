@@ -1,4 +1,3 @@
-import { preparePromotionDesign } from "./event-agenda/promotion-design";
 /** Resolve personal promotion facts and cache freshness in one complete request batch. */
 import { PERSONAL_PROMOTION_RENDERER } from "../../../assets/shared/personal-promotion-image";
 import type { CountryCode } from "../../../assets/shared/countries";
@@ -27,12 +26,12 @@ export interface BadgeSource {
   role: string;
   requested_generation: number;
   event_revision: string;
-  promotion?: Awaited<ReturnType<ReturnType<typeof preparePromotionDesign>["decode"]>>;
+  agenda_revision: number;
+  sessions: { title: string }[];
 }
 
 export async function readBadgeSource(db: DatabaseLike, code: string): Promise<BadgeSource | null> {
-  const visual = preparePromotionDesign(db, { referralCode: code });
-  const [result, ...design] = await db.batch([
+  const [result, sessions] = await db.batch([
     db
       .prepare(`
     SELECT ${proposalSpeakerProfileColumns("u", "ps", "", ["firstName", "lastName"])},
@@ -42,6 +41,7 @@ export async function readBadgeSource(db: DatabaseLike, code: string): Promise<B
         ELSE ${selectedOrAffiliationJobTitleSql("ps.acting_identity_id", "u.id")} END AS job_title,
       u.headshot_r2_key, e.name AS event_name, e.starts_at, e.ends_at, e.timezone,
       e.settings_json, e.city, e.country, e.updated_at AS event_revision,
+      COALESCE((SELECT published_revision FROM event_agenda_state WHERE event_id=e.id),0) AS agenda_revision,
       CASE rc.owner_type WHEN 'proposal' THEN COALESCE(ps.role,'speaker')
         ELSE COALESCE(bro.role,(
           SELECT ep.role FROM event_participant_badge_roles ep
@@ -60,20 +60,36 @@ export async function readBadgeSource(db: DatabaseLike, code: string): Promise<B
     WHERE rc.code=? AND (r.id IS NOT NULL OR sp.id IS NOT NULL)
     LIMIT 1`)
       .bind(code),
-    ...visual.statements,
+    db
+      .prepare(`SELECT json_extract(entry.value,'$.title') AS title
+      FROM referral_codes rc
+      JOIN event_agenda_state state ON state.event_id=rc.event_id
+      JOIN event_agenda_publications publication ON publication.event_id=state.event_id AND publication.revision=state.published_revision
+      JOIN json_each(publication.snapshot_json,'$.occurrences') entry
+      LEFT JOIN registrations registration ON rc.owner_type='registration' AND registration.id=rc.owner_id
+      WHERE rc.code=? AND json_extract(entry.value,'$.visibility')='public' AND json_extract(entry.value,'$.kind')<>'break'
+      AND EXISTS(SELECT 1 FROM json_each(entry.value,'$.speakers') speaker
+        WHERE json_extract(speaker.value,'$.userId')=CASE rc.owner_type WHEN 'registration' THEN registration.user_id ELSE rc.created_by_user_id END)
+      ORDER BY json_extract(entry.value,'$.startAt'),json_extract(entry.value,'$.id') LIMIT 128`)
+      .bind(code),
   ]);
   const source = batchFirst<BadgeSource>(result);
   if (!source) return null;
-  source.promotion = await visual.decode(design);
+  source.sessions = (sessions.results ?? []) as { title: string }[];
   return source;
 }
 
 /** Old-layout cache objects never satisfy the shared promotion renderer's identity. */
-export function personalBadgeCacheMetadata(code: string, source: BadgeSource): Record<string, string> {
+export function personalBadgeCacheMetadata(
+  code: string,
+  source: BadgeSource,
+  format: import("../../../assets/shared/personal-promotion-image").PersonalPromotionImageFormat = "landscape",
+): Record<string, string> {
   return {
     referralCode: code,
     badgeGeneration: String(source.requested_generation),
+    badgeImageFormat: format,
     badgeRenderer: PERSONAL_PROMOTION_RENDERER,
-    badgeDesignRevision: source.promotion?.brandingRevision ?? source.event_revision,
+    badgeDesignRevision: `${source.event_revision}:${source.agenda_revision ?? 0}`,
   };
 }

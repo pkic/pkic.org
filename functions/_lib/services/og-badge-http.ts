@@ -35,7 +35,7 @@ function badgeHeaders(contentType: string, cacheStatus: "HIT" | "MISS", options:
 export async function readCachedBadge(options: BadgeResponseOptions): Promise<Response | null> {
   const cached = await options.bucket?.get(options.cacheKey);
   if (!cached) return null;
-  for (const key of ["badgeGeneration", "badgeRenderer", "badgeDesignRevision"]) {
+  for (const key of ["badgeGeneration", "badgeRenderer", "badgeDesignRevision", "badgeImageFormat"]) {
     if (options.cacheMetadata[key] !== undefined && cached.customMetadata?.[key] !== options.cacheMetadata[key])
       return null;
   }

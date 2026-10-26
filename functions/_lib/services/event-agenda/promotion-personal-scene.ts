@@ -1,94 +1,226 @@
-import { svgLogoDimensions } from "../../utils/svg-logo";
-import { bytesToBase64 } from "../../../../assets/shared/base64";
 import type { PersonalPromotionRenderData, PromotionMeasure, PromotionPage, PromotionText } from "./promotion-scene";
 import { promotionMeasuredLines } from "./promotion-text";
 
-/** The personal still uses the same scene primitives, artwork and export adapters as the carousel. */
+/** Claude's landscape and square social cards share the carousel's measured scene and export adapters. */
 export function layoutPersonalPromotion(
   data: PersonalPromotionRenderData,
   width: number,
   height: number,
   measure: PromotionMeasure,
 ): PromotionPage {
-  const scale = width / 1080;
-  const margin = 80 * scale;
-  const person = data.personal.people[0];
-  const portrait = person && data.portraits?.[person.userId];
-  const bodyWidth = width - margin * 2 - (portrait ? 320 * scale : 0);
+  const square = width === height;
+  const { personal } = data;
+  const person = personal.people[0];
+  const style = personal.roleStyle ?? { color: "#ffffff", ink: "#0b0d0c", label: personal.heading, speaking: false };
+  const bandTop = height - (square ? 190 : 140);
   const page: PromotionPage = {
-    title: data.personal.eventName,
+    title: personal.eventName,
     texts: [],
     pictures: [],
+    bars: [],
     index: 0,
     total: 1,
     width,
     height,
-    still: true,
-    markX: width - 460 * scale,
+    social: { bandTop },
   };
-  const text = (
+  const fit = (
     value: string,
+    x: number,
     top: number,
-    availableHeight: number,
+    boxWidth: number,
+    boxHeight: number,
     maximum: number,
-    bold: boolean,
-    role: PromotionText["role"],
-    singleLine = false,
+    bold = false,
+    color = "#fff",
+    role: PromotionText["role"] = "P",
+    centered = false,
+    mono = false,
   ) => {
-    if (!value) return;
-    for (let size = maximum; size >= 1; size -= 1) {
-      const lines = promotionMeasuredLines(value, bodyWidth, (line) => measure(line, size, bold));
-      if ((singleLine && lines.length !== 1) || lines.length * size * 1.18 > availableHeight) continue;
+    if (!value.trim()) return top;
+    for (let size = maximum; size >= 1; size--) {
+      const lines = value
+        .split("\n")
+        .flatMap((segment) => promotionMeasuredLines(segment, boxWidth, (line) => measure(line, size, bold, mono)));
+      if (lines.length * size * 1.18 > boxHeight) continue;
       lines.forEach((line, index) =>
-        page.texts.push({ text: line, x: margin, y: top + size + index * size * 1.18, size, bold, role }),
+        page.texts.push({
+          text: line,
+          x: centered ? x + boxWidth / 2 : x,
+          y: top + size + index * size * 1.18,
+          size,
+          bold,
+          color,
+          role,
+          mono,
+          ...(centered ? { anchor: "middle" as const } : {}),
+        }),
       );
-      return;
+      return top + size + (lines.length - 1) * size * 1.18;
     }
-    throw new Error("Personal promotion text does not fit the image.");
+    throw new Error("Personal promotion text does not fit the social card.");
   };
-  text(
-    (data.personal.firstName?.trim() || person?.displayName?.trim() || "Event participant").toLocaleUpperCase("en-US"),
-    130,
-    125,
-    115 * scale,
+  const bar = (x: number, y: number, w: number, h: number, color: string) =>
+    page.bars!.push({ x, y, width: w, height: h, color });
+  fit(
+    [personal.dates, personal.city || personal.location].filter(Boolean).join(" · "),
+    330,
+    square ? 70 : 66,
+    width - 402,
+    30,
+    square ? 24 : 22,
     true,
-    "H1",
+    "#ffffff",
+    "P",
+    false,
     true,
   );
-  text(data.personal.heading, 264, 42, 30 * scale, false, "H2");
-  text(person?.displayName ?? "", 323, 55, 29 * scale, true, "P");
-  text(person?.affiliation ?? "", 378, 51, 22 * scale, false, "P");
-  text(data.personal.eventName, 436, 61, 27 * scale, true, "H2");
-  text(data.personal.details ?? "", 502, height - 95 - 502, 18 * scale, false, "P");
-  page.bars = [{ x: margin, y: 308, width: 200 * scale, height: 6 * scale, color: "url(#accent)" }];
-  if (portrait)
-    page.pictures.push({
-      src: portrait,
-      x: width - margin - 260 * scale,
-      y: 175,
-      width: 260 * scale,
-      height: 260 * scale,
-      circle: true,
-      alt: person.displayName,
-    });
-  const sponsors = data.sponsorGroups?.find((group) => group.sponsors.length)?.sponsors ?? [];
-  if (sponsors.length) {
-    const shown = sponsors.slice(0, 6);
-    const cell = (width - margin * 2 - 110) / shown.length;
-    page.footerPictures = shown.map((sponsor, index) => {
-      const dimensions = svgLogoDimensions(sponsor.svg);
-      const aspect = dimensions ? dimensions.width / dimensions.height : 2.8;
-      const logoHeight = Math.min(22, (cell - 32) / aspect);
-      const logoWidth = logoHeight * aspect;
-      return {
-        src: `data:image/svg+xml;base64,${bytesToBase64(new TextEncoder().encode(sponsor.svg))}`,
-        x: margin + 110 + cell * index + (cell - logoWidth) / 2,
-        y: height - 34 + (22 - logoHeight) / 2,
-        width: logoWidth,
-        height: logoHeight,
-        alt: sponsor.name,
-      };
-    });
+  const portraitSize = square ? 340 : 320;
+  const portraitX = square ? (width - portraitSize) / 2 : 800;
+  const portraitY = square ? 184 : 136;
+  const portrait = person && data.portraits?.[person.userId];
+  page.pictures.push({
+    src: portrait ?? "",
+    x: portraitX,
+    y: portraitY,
+    width: portraitSize,
+    height: portraitSize,
+    circle: true,
+    ringColor: style.color === "#ffffff" ? "url(#accent)" : style.color,
+    alt: person?.displayName ?? "Event participant",
+  });
+  if (!portrait) {
+    const initials = (person?.displayName ?? "Event participant")
+      .split(/\s+/u)
+      .filter(Boolean)
+      .map((word) => Array.from(word)[0])
+      .filter(Boolean);
+    const monogram = (initials.length > 1 ? [initials[0], initials.at(-1)] : initials)
+      .join("")
+      .toLocaleUpperCase("en-US");
+    fit(
+      monogram,
+      portraitX,
+      portraitY + portraitSize * 0.3,
+      portraitSize,
+      portraitSize * 0.45,
+      portraitSize * 0.28,
+      true,
+      "#ffffff",
+      "P",
+      true,
+    );
   }
+  const chipWidth = Math.min(square ? 550 : 620, measure(style.label.toUpperCase(), square ? 24 : 22, true, true) + 36);
+  const chipX = square ? (width - chipWidth) / 2 : 72;
+  const chipY = square ? 514 : 158;
+  bar(chipX, chipY, chipWidth, 42, style.color);
+  fit(
+    style.label.toUpperCase(),
+    chipX + 14,
+    chipY + 7,
+    chipWidth - 28,
+    28,
+    square ? 24 : 22,
+    true,
+    style.ink,
+    "P",
+    false,
+    true,
+  );
+  const name = person?.displayName ?? "Event participant";
+  const nameBottom = fit(
+    name,
+    72,
+    square ? 580 : 216,
+    square ? width - 144 : 620,
+    square ? 115 : 102,
+    square ? 72 : name.length > 22 ? 60 : name.length > 14 ? 72 : 88,
+    true,
+    "#ffffff",
+    "H1",
+    square,
+  );
+  bar(square ? (width - 160) / 2 : 72, nameBottom + 16, 160, 8, "url(#accent)");
+  const affiliationTop = square ? 728 : Math.max(330, nameBottom + 42);
+  const affiliationBottom = fit(
+    person?.affiliation ?? "",
+    72,
+    affiliationTop,
+    square ? width - 144 : 620,
+    square ? 50 : Math.min(62, 400 - affiliationTop),
+    square ? 30 : 28,
+    false,
+    "#ffffff",
+    "P",
+    square,
+  );
+  const sessions = personal.sessions ?? [];
+  if (sessions.length) {
+    const lines =
+      sessions.length === 1
+        ? [sessions[0]!.title]
+        : sessions.length === 2
+          ? ["2 SESSIONS", ...sessions.map((session) => session.title)]
+          : [`${sessions.length} SESSIONS`, sessions[0]!.title, `+ ${sessions.length - 1} more on the agenda`];
+    const top = square ? 800 : Math.max(396, affiliationBottom + 18);
+    fit(
+      lines.join("\n"),
+      square ? 110 : 92,
+      top,
+      square ? width - 220 : 600,
+      bandTop - top - 16,
+      sessions.length > 1 ? 24 : 26,
+      false,
+      "#ffffff",
+      "P",
+      square,
+    );
+    if (!square) bar(72, top, 6, bandTop - top - 16, style.color);
+  }
+  bar(0, bandTop, width, height - bandTop, style.color);
+  fit(
+    personal.eventName,
+    72,
+    bandTop + (square ? 28 : 20),
+    square ? 630 : 620,
+    square ? 76 : 57,
+    square ? 28 : 26,
+    true,
+    style.ink,
+    "H2",
+  );
+  fit(
+    personal.location ?? "",
+    72,
+    height - (square ? 82 : 63),
+    square ? 630 : 620,
+    32,
+    square ? 22 : 20,
+    false,
+    style.ink,
+  );
+  const action =
+    style.speaking && sessions.length
+      ? sessions.length > 1
+        ? "Join my sessions"
+        : "Join my session"
+      : style.label === "Organizer" || style.label === "Staff" || style.label === "Sponsor"
+        ? "Join us"
+        : "Join me";
+  const ctaX = square ? width - 332 : width - 456;
+  const ctaY = bandTop + (square ? 40 : 26);
+  bar(ctaX, ctaY, square ? 260 : 384, square ? 90 : 58, "#0b0d0c");
+  const link = data.registrationUrl.replace(/^https?:\/\//u, "");
+  if (square) {
+    fit(action, ctaX + 20, ctaY + 12, 194, 32, 26, true);
+    fit(link, ctaX + 20, ctaY + 52, 220, 24, 20, true, "#ffffff", "P", false, true);
+  } else {
+    fit(action, ctaX + 20, ctaY + 15, 135, 30, 22, true);
+    fit(link, ctaX + 192, ctaY + 19, 172, 25, 18, true, "#ffffff", "P", false, true);
+  }
+  page.arrows = [
+    { x: ctaX + (square ? 224 : 165), y: ctaY + (square ? 30 : 31), length: square ? 16 : 12, color: "#ffffff" },
+  ];
   return page;
 }

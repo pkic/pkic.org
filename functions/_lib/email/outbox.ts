@@ -13,7 +13,7 @@ import { loadEmailRenderResources } from "./partials";
 import { sendViaSendgrid } from "./sendgrid";
 import { applyCampaignCustomText } from "./campaign-custom";
 import { readDirectEmailBody } from "./direct-body";
-import { parseQueuedEmailAttachments } from "./attachments";
+import { parseQueuedEmailAttachments, queuedBadgeRendererIsCurrent } from "./attachments";
 import { materializeQueuedCapabilityLinks } from "../auth/capability-links";
 import type { DatabaseLike, Env } from "../types";
 import type { EmailContentType, EmailMessageType } from "../../../assets/shared/schemas/email-templates";
@@ -337,7 +337,7 @@ async function processOutboxRow(
             continue;
           }
 
-          if (badgeAttachment.renderer && badgeObj.customMetadata?.badgeRenderer !== badgeAttachment.renderer)
+          if (!queuedBadgeRendererIsCurrent(badgeAttachment, badgeObj.customMetadata?.badgeRenderer))
             throw new Error("Required badge attachment is waiting for the current renderer");
 
           const declaredType = badgeObj.httpMetadata?.contentType ?? "image/jpeg";

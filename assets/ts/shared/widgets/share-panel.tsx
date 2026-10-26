@@ -97,6 +97,11 @@ function OgBadge({
   eventName: string;
   badgeFilename: string;
 }) {
+  const squareUrl = new URL(ogBadgeUrl);
+  squareUrl.searchParams.set("format", "square");
+  squareUrl.searchParams.set("download", "1");
+  const squareFilename = badgeFilename.replace(/\.png$/u, "-square.png");
+  squareUrl.searchParams.set("name", squareFilename);
   const [loading, setLoading] = useState(true);
   const imgRef = useRef<HTMLImageElement>(null);
 
@@ -140,6 +145,9 @@ function OgBadge({
           download={badgeFilename}
         >
           <span aria-hidden="true">⬇</span> Download badge
+        </ButtonLink>
+        <ButtonLink href={squareUrl.href} download={squareFilename}>
+          Download square badge
         </ButtonLink>
       </div>
     </div>

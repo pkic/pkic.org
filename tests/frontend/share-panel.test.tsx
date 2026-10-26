@@ -158,6 +158,17 @@ describe("share panel", () => {
     expect(badge?.alt).toBe("Your personal invite badge for PKI Summit");
   });
 
+  it("offers separately named square and landscape downloads with the same personal link", () => {
+    const container = mount();
+    const links = [...container.querySelectorAll<HTMLAnchorElement>("a[download]")];
+    expect(links).toHaveLength(2);
+    const square = links.find((link) => link.textContent?.includes("Download square badge"))!;
+    expect(new URL(square.href).searchParams.get("format")).toBe("square");
+    expect(new URL(square.href).searchParams.get("download")).toBe("1");
+    expect(square.download).toMatch(/-square\.png$/u);
+    expect(new URL(square.href).pathname).toContain("/referrals/AbC123/badge");
+  });
+
   it("sends invites the shared request contract accepts", async () => {
     const requests = installApi();
     const container = mount();

@@ -1,4 +1,7 @@
-import { personalPromotionImagePath } from "../../assets/shared/personal-promotion-image";
+import {
+  personalPromotionImagePath,
+  PERSONAL_PROMOTION_IMAGE_DIMENSIONS,
+} from "../../assets/shared/personal-promotion-image";
 import { json } from "../_lib/http";
 import { recordReferralClick } from "../_lib/services/referrals";
 import { first } from "../_lib/db/queries";
@@ -247,11 +250,18 @@ function buildOgHtml(
   <meta property="og:url"         content="${ogUrlEsc}">
   <meta property="og:title"       content="${ogTitle}">
   <meta property="og:description" content="${ogDescription}">
-  <meta property="og:image"       content="${ogImageEsc}">
-  <meta property="og:image:width" content="1200">
-  <meta property="og:image:height" content="630">
-  <meta property="og:image:type"  content="${ogImageType}">
-  <meta property="og:image:alt"   content="${ogImageAlt}">
+${Object.entries(PERSONAL_PROMOTION_IMAGE_DIMENSIONS)
+  .map(
+    ([
+      format,
+      size,
+    ]) => `  <meta property="og:image" content="${escapeHtml(`${appBaseUrl}${personalPromotionImagePath(code, undefined, format as keyof typeof PERSONAL_PROMOTION_IMAGE_DIMENSIONS)}`)}">
+  <meta property="og:image:width" content="${size.width}">
+  <meta property="og:image:height" content="${size.height}">
+  <meta property="og:image:type" content="${ogImageType}">
+  <meta property="og:image:alt" content="${ogImageAlt}">`,
+  )
+  .join("\n")}
   <meta property="og:site_name"   content="PKI Consortium">
 
   <!-- Twitter Card -->

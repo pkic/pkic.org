@@ -1,61 +1,104 @@
 import { readFileSync } from "node:fs";
+import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 import { buildPromotionPages } from "../../functions/_lib/services/event-agenda/promotion-scene";
 import { promotionFontMeasure } from "../../functions/_lib/services/event-agenda/promotion-text";
-import { defaultPromotionComposition } from "../../assets/shared/schemas/event-promotion-design";
-
+import { renderPersonalPromotionSvg } from "../../functions/_lib/services/event-agenda/promotion-personal";
+import { defaultEventPromotionDesign } from "../../assets/shared/schemas/event-promotion-design";
+import { personalPromotionRoleStyle } from "../../assets/shared/badge-role-colors";
+import {
+  PERSONAL_PROMOTION_IMAGE_DIMENSIONS,
+  type PersonalPromotionImageFormat,
+} from "../../assets/shared/personal-promotion-image";
 const measure = promotionFontMeasure(
   ["Roboto-Regular.ttf", "Roboto-Bold.ttf"].map((name) => readFileSync(`static/fonts/${name}`)),
+  readFileSync("static/fonts/RobotoMono-Regular.ttf"),
 );
-
-describe("personal promotion typography", () => {
-  it.each([false, true])("keeps measured text clear of the logo, headshot and footer (portrait: %s)", (portrait) => {
-    const page = buildPromotionPages(
-      {
-        personal: {
-          eventName: "Post-Quantum Cryptography Conference",
-          firstName: "Alex",
-          heading: "is attending",
-          people: [
-            {
-              userId: "person",
-              displayName: "Alex Morgan",
-              affiliation: "Security architect · Example Trust Services",
-            },
-          ],
-          details: "December 1–3, 2026 · Meervaart · Amsterdam",
-        },
+const eventName = "Post-Quantum Cryptography Conference";
+describe("automatic Open Graph cards", () => {
+  it.each(["landscape", "square"] as PersonalPromotionImageFormat[])(
+    "encodes a separate %s image without sponsors",
+    async (format) => {
+      const design = defaultEventPromotionDesign("Synthetic");
+      design.sponsorGroups = [{ key: "hidden", source: "event", tierName: "Never show this sponsor tier" }];
+      const svg = renderPersonalPromotionSvg({
+        firstName: "Paul",
+        lastName: "van Brouwershaven",
+        role: "speaker",
+        eventName,
+        startsAt: "2026-12-01T08:00:00.000Z",
+        endsAt: "2026-12-03T17:00:00.000Z",
+        timeZone: "Europe/Amsterdam",
         registrationUrl: "https://pkic.org/r/example",
-        composition: defaultPromotionComposition(true),
+        organization: "Example Trust Services",
+        jobTitle: "Security architect",
+        design,
         measure,
-        portraits: portrait ? { person: "data:image/png;base64,AA==" } : undefined,
-      },
-      "landscape",
-    )[0]!;
-    const title = page.texts.filter((line) => line.role === "H1");
-    const action = page.texts.find((line) => line.text === "is attending")!;
-    const eventTitle = page.texts.filter((line) => line.role === "H2" && line !== action);
-    expect(title.map((line) => line.text).join(" ")).toBe("ALEX");
-    expect(eventTitle.map((line) => line.text).join(" ")).toBe("Post-Quantum Cryptography Conference");
-    expect(title).toHaveLength(1);
-    expect(title[0]!.size).toBeGreaterThan(action.size * 2.5);
-    expect(title[0]!.y - title[0]!.size - 97).toBeGreaterThan(30);
-    if (portrait) {
-      const picture = page.pictures[0]!;
-      expect(picture.circle).toBe(true);
-      expect(picture.width).toBe(picture.height);
-      expect(picture.x).toBeGreaterThan(page.width / 2);
-      expect(picture.width).toBeGreaterThan(200);
-      expect(picture.y + picture.height).toBeLessThan(page.height - 95);
-      for (const line of page.texts) {
-        if (line.y >= picture.y && line.y - line.size <= picture.y + picture.height)
-          expect(line.x + measure(line.text, line.size, Boolean(line.bold))).toBeLessThan(picture.x - 20);
-      }
-    }
-    expect(action.y - action.size - title[0]!.y).toBeGreaterThan(20);
-    for (const line of page.texts) {
-      expect(line.x + measure(line.text, line.size, Boolean(line.bold))).toBeLessThan(page.width - 80);
-      expect(line.y).toBeLessThan(page.height - 95);
-    }
-  });
+        format,
+        sessions: [{ title: "Migrating before Q-Day" }, { title: "Deploying quantum-safe systems" }],
+      });
+      const image = await sharp(Buffer.from(svg)).png().toBuffer();
+      const metadata = await sharp(image).metadata();
+      expect({ width: metadata.width, height: metadata.height }).toEqual(PERSONAL_PROMOTION_IMAGE_DIMENSIONS[format]);
+      expect(svg).toContain("Paul van Brouwershaven");
+      expect(svg).toContain("2 SESSIONS");
+      expect(svg).not.toContain("Never show this sponsor tier");
+      expect(svg).not.toContain("SPONSORED BY");
+      expect(svg).not.toContain("sponsor-logos/");
+    },
+  );
+  it.each(["landscape", "square"] as const)(
+    "fits long names, missing portraits and public session summaries in %s",
+    (format) => {
+      for (const portrait of [false, true])
+        for (const longName of [false, true]) {
+          const name = longName ? "Alexandria van Brouwershaven-Winterbottom" : "Alex Morgan";
+          const pages = buildPromotionPages(
+            {
+              personal: {
+                eventName,
+                heading: "Speaker",
+                roleStyle: personalPromotionRoleStyle("speaker"),
+                dates: "December 1–3, 2026",
+                location: "Meervaart · Amsterdam",
+                people: [
+                  { userId: "person", displayName: name, affiliation: "Security architect · Example Trust Services" },
+                ],
+                sessions: [
+                  { title: "Migrating before Q-Day" },
+                  { title: "Protecting certificate lifecycles" },
+                  { title: "Deploying quantum-safe systems" },
+                ],
+              },
+              registrationUrl: "https://pkic.org/r/example",
+              measure,
+              portraits: portrait ? { person: "data:image/png;base64,AA==" } : undefined,
+            },
+            format,
+          );
+          expect(pages).toHaveLength(1);
+          const page = pages[0]!;
+          const nameLines = page.texts.filter((line) => line.role === "H1");
+          expect(nameLines.map((line) => line.text).join(" ")).toBe(name);
+          expect(page.texts.map((line) => line.text).join(" ")).toContain("+ 2 more on the agenda");
+          const picture = page.pictures[0]!;
+          expect(picture.width).toBe(picture.height);
+          expect(picture.y + picture.height).toBeLessThan(page.social!.bandTop);
+          if (format === "square") {
+            expect(picture.x + picture.width / 2).toBe(page.width / 2);
+            expect(nameLines[0]!.y - nameLines[0]!.size).toBeGreaterThan(picture.y + picture.height);
+          } else {
+            for (const line of nameLines)
+              expect(line.x + measure(line.text, line.size, line.bold, line.mono)).toBeLessThan(picture.x - 30);
+          }
+          for (const line of page.texts) {
+            const textWidth = measure(line.text, line.size, line.bold, line.mono);
+            const left = line.x - (line.anchor === "middle" ? textWidth / 2 : 0);
+            expect(left).toBeGreaterThanOrEqual(60);
+            expect(left + textWidth).toBeLessThanOrEqual(page.width - 60);
+            expect(line.y).toBeLessThan(page.height - 30);
+          }
+        }
+    },
+  );
 });

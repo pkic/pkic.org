@@ -8,25 +8,26 @@ export const BADGE_DISPLAY_ROLE_COLORS: Readonly<Record<BadgeDisplayRole, string
   sponsor: "#5a9bd5",
 };
 
-export function personalPromotionRoleColors(role: SocialBadgeRole, eventColors: readonly string[]): string[] {
-  const band: BadgeDisplayRole =
-    role === "sponsor"
-      ? "sponsor"
-      : role === "organizer" || role === "staff"
-        ? "staff"
-        : role === "speaker" || role === "co_speaker" || role === "moderator" || role === "panelist"
-          ? "speaker"
-          : "attendee";
-  if (band === "attendee") return [...eventColors];
-  const color = BADGE_DISPLAY_ROLE_COLORS[band];
-  const shade = (amount: number) =>
-    "#" +
-    [1, 3, 5]
-      .map((offset) =>
-        Math.round(parseInt(color.slice(offset, offset + 2), 16) * amount)
-          .toString(16)
-          .padStart(2, "0"),
-      )
-      .join("");
-  return [eventColors[0]!, shade(0.38), shade(0.62), shade(0.85)];
+export function personalPromotionRoleStyle(role: SocialBadgeRole) {
+  const speaking = ["speaker", "co_speaker", "moderator", "panelist"].includes(role);
+  const team = role === "organizer" || role === "staff";
+  const color = speaking
+    ? BADGE_DISPLAY_ROLE_COLORS.speaker
+    : team
+      ? BADGE_DISPLAY_ROLE_COLORS.staff
+      : role === "sponsor"
+        ? BADGE_DISPLAY_ROLE_COLORS.sponsor
+        : "#ffffff";
+  const labels: Record<SocialBadgeRole, string> = {
+    attendee: "Attending",
+    speaker: "Speaker",
+    co_speaker: "Speaker",
+    moderator: "Moderator",
+    panelist: "Panelist",
+    sponsor: "Sponsor",
+    organizer: "Organizer",
+    staff: "Staff",
+    proposer: "Proposal submitted",
+  };
+  return { color, ink: team ? "#ffffff" : "#0b0d0c", label: labels[role], speaking };
 }
