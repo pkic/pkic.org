@@ -7,6 +7,15 @@ description: Build, change, or review PKIC Worker routes, services, D1 queries, 
 
 Apply this skill during ordinary implementation, not only performance investigations. Read the scoped `AGENTS.md` first. Extend canonical domain queries and planners rather than adding a second persistence or authorization model.
 
+## Minimize stored data and independent state
+
+- Before adding a table or column, inspect the existing schema, canonical read/write paths, and shared flows. Reuse or evolve them when they already represent the same responsibility. A new screen, endpoint, or implementation version does not justify another data model.
+- Keep one authoritative source for each fact. Reference canonical records through keys and project values through joins or shared read models instead of copying data into feature tables, JSON, snapshots, or overrides that must be synchronized.
+- Every new stored value needs a concrete product, integrity, or reliable-execution requirement. Challenge whether it can be derived or carried through an existing signed challenge instead. Do not persist speculative features, convenient history, or archive copies by default.
+- Distinguish necessary state from duplication: an immutable publication, an artifact cache, or a durable retry request may be justified, but specify its owner, purpose, invalidation or expiry, and failure recovery. Do not introduce a second queue or lifecycle for the same work merely to support a new caller.
+- A storage replacement must account for unfinished work and remove superseded storage and callers in the coordinated cutover. Do not silently abandon an old queue or retain it as an archive. Preserve canonical business records and follow the migration approval and recovery rules.
+- Prefer the smallest coherent model, not the smallest table count. Do not hide independent entities in unrelated tables, unbounded JSON, audit logs, or delivery records to avoid a justified table. Explain why existing storage cannot satisfy each proposed addition before implementing it.
+
 ## Design the whole request
 
 - Target **at most one D1 binding round trip per complete HTTP request**, including authentication, authorization, resource resolution, response projection, and request-owned background work. A preflight batch followed by a mutation batch is two calls; one call per helper does not meet the request target.
