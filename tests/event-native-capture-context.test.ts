@@ -190,7 +190,12 @@ describe("Native meeting event-wide captured calendar context", () => {
     )
       .bind(registrationId, eventId, userId, crypto.randomUUID(), nowIso(), nowIso())
       .run();
-    const issued = await request("/api/v1/events/native-capture/badges", { operationId: crypto.randomUUID(), userId });
+    // This case deliberately captures a historical occurrence; its badge needs an explicit future expiry.
+    const issued = await request("/api/v1/events/native-capture/badges", {
+      operationId: crypto.randomUUID(),
+      userId,
+      expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
+    });
     expect(issued.status, await issued.clone().text()).toBe(200);
     const badge = badgeIssueResponseSchema.parse(await issued.json());
     if (badge.result !== "issued") throw new Error("Expected a fresh badge");
