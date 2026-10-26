@@ -45,13 +45,11 @@ describe("OG badge hero image boundary", () => {
     expect(fetchMock.mock.calls[0]?.[1]).not.toHaveProperty("cf");
   });
   it("normalizes WebP without imposing a landscape resize or crop", async () => {
-    const transform = vi
-      .fn()
-      .mockReturnValue({
-        output: async () => ({
-          response: async () => new Response(validJpegBytes(1600, 1200), { headers: { "content-type": "image/jpeg" } }),
-        }),
-      });
+    const transform = vi.fn().mockReturnValue({
+      output: async () => ({
+        response: async () => new Response(validJpegBytes(1600, 1200), { headers: { "content-type": "image/jpeg" } }),
+      }),
+    });
     const environment = {
       ASSETS: {
         fetch: async () => new Response(validWebpBytes(1600, 1200), { headers: { "content-type": "image/webp" } }),
