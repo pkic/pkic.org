@@ -23,7 +23,7 @@ export interface PersonalPromotionData {
   organization?: string | null;
   jobTitle?: string | null;
   headshotDataUrl?: string | null;
-  heroImageDataUrl?: string | null;
+  heroImage?: import("../../utils/image-format").EmbeddedRasterImage | null;
   sessions?: { title: string }[];
   format?: PersonalPromotionImageFormat;
   registrationUrl: string;
@@ -45,7 +45,7 @@ export function renderPersonalPromotionSvg(data: PersonalPromotionData): string 
         firstName: data.firstName || person.displayName,
         heading: style.label,
         roleStyle: style,
-        dates: formatDateRange(data.startsAt, data.endsAt, data.timeZone),
+        dates: formatDateRange(data.startsAt, data.endsAt, data.timeZone, { locale: "en-GB", month: "short" }),
         location: data.location ?? "",
         city: data.city ?? "",
         sessions: style.speaking ? (data.sessions ?? []) : [],
@@ -58,7 +58,7 @@ export function renderPersonalPromotionSvg(data: PersonalPromotionData): string 
       registrationUrl: data.registrationUrl,
       logoDataUrl: data.logoDataUrl,
       measure: data.measure,
-      heroImageDataUrl: data.heroImageDataUrl,
+      heroImage: data.heroImage,
       composition: promotionCompositionSchema.parse({ panels: ["cover", "speakers", "details"], qrCode: false }),
       portraits: data.headshotDataUrl ? { participant: data.headshotDataUrl } : undefined,
     },

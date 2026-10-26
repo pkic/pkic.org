@@ -2,7 +2,11 @@ import { bytesToBase64 as uint8ToBase64 } from "../../../assets/shared/base64";
 export { bytesToBase64 as uint8ToBase64 } from "../../../assets/shared/base64";
 import type { Env } from "../types";
 import { readBoundedStream } from "../utils/bounded-stream";
-import { SUPPORTED_RASTER_IMAGE_CONTENT_TYPES, validateRasterImage } from "../utils/image-format";
+import {
+  SUPPORTED_RASTER_IMAGE_CONTENT_TYPES,
+  validateRasterImage,
+  type EmbeddedRasterImage,
+} from "../utils/image-format";
 import { resolveHeroImageSource } from "../utils/hero-image-url";
 
 export { resolveHeroImageSource } from "../utils/hero-image-url";
@@ -30,10 +34,10 @@ export const HERO_IMAGE_FETCH_TIMEOUT_MS = 5_000;
 const HERO_IMAGE_CONTENT_TYPES = new Set<string>(SUPPORTED_RASTER_IMAGE_CONTENT_TYPES);
 
 /** Buffers only a small, explicitly supported image response for SVG embedding. */
-export async function imageResponseToDataUrl(
+async function readHeroImageResponse(
   response: Response,
   maxBytes = MAX_HERO_IMAGE_BYTES,
-): Promise<string | null> {
+): Promise<EmbeddedRasterImage | null> {
   if (!response.ok || !response.body) return null;
   const mime = (response.headers.get("content-type") ?? "").split(";", 1)[0].trim().toLowerCase();
   if (!HERO_IMAGE_CONTENT_TYPES.has(mime)) return null;
@@ -50,7 +54,14 @@ export async function imageResponseToDataUrl(
   const bytes = result.bytes;
   const validation = validateRasterImage(bytes);
   if (!validation.ok || validation.image.contentType !== mime) return null;
-  return `data:${validation.image.contentType};base64,${uint8ToBase64(bytes)}`;
+  return { ...validation.image, dataUrl: `data:${validation.image.contentType};base64,${uint8ToBase64(bytes)}` };
+}
+
+export async function imageResponseToDataUrl(
+  response: Response,
+  maxBytes = MAX_HERO_IMAGE_BYTES,
+): Promise<string | null> {
+  return (await readHeroImageResponse(response, maxBytes))?.dataUrl ?? null;
 }
 
 function extractHeroImageUrl(settingsJson: string): string | null {
@@ -67,7 +78,7 @@ export async function fetchHeroImage(
   origin: string,
   env: HeroImageEnv,
   timeoutMs = HERO_IMAGE_FETCH_TIMEOUT_MS,
-): Promise<string | null> {
+): Promise<EmbeddedRasterImage | null> {
   const raw = extractHeroImageUrl(settingsJson);
   if (!raw) return null;
   const source = resolveHeroImageSource(raw, origin, env.HERO_IMAGE_ALLOWED_HOSTS);
@@ -79,21 +90,21 @@ export async function fetchHeroImage(
     if (source.assetPath) {
       response = await fetchStaticAsset(env, origin, source.assetPath, signal);
       if (!response.ok) return null;
-      if (env.IMAGES && response.body) {
-        const transformed = await env.IMAGES.input(response.body)
-          .transform({ width: 1200, height: 630, fit: "cover" })
-          .output({ format: "jpeg", quality: 95 });
-        response = await transformed.response();
-      }
     } else {
-      const requestInit: RequestInit & { cf: { image: Record<string, string | number> } } = {
-        signal,
-        redirect: "manual",
-        cf: { image: { width: 1200, height: 630, fit: "cover", format: "jpeg", quality: 95 } },
-      };
+      const requestInit: RequestInit = { signal, redirect: "manual" };
       response = await fetch(source.url, requestInit);
     }
-    return imageResponseToDataUrl(response);
+    const original = await readHeroImageResponse(response);
+    if (!original || original.contentType !== "image/webp") return original;
+    // The SVG rasterizer cannot decode WebP. Normalize the format without a resize or crop.
+    if (!env.IMAGES) return null;
+    const bytes = Uint8Array.from(atob(original.dataUrl.slice(original.dataUrl.indexOf(",") + 1)), (character) =>
+      character.charCodeAt(0),
+    );
+    const normalized = await env.IMAGES.input(new Response(bytes).body!)
+      .transform({})
+      .output({ format: "jpeg", quality: 95 });
+    return readHeroImageResponse(await normalized.response());
   } catch {
     return null;
   }

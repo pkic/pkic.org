@@ -1,3 +1,5 @@
+import fontkit from "@pdf-lib/fontkit";
+import { promotionImageCover } from "../../functions/_lib/services/event-agenda/promotion-image";
 import { readFileSync } from "node:fs";
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
@@ -11,8 +13,12 @@ import {
   type PersonalPromotionImageFormat,
 } from "../../assets/shared/personal-promotion-image";
 const measure = promotionFontMeasure(
-  ["Roboto-Regular.ttf", "Roboto-Bold.ttf"].map((name) => readFileSync(`static/fonts/${name}`)),
-  readFileSync("static/fonts/RobotoMono-Regular.ttf"),
+  ["PromotionRoboto-Regular.ttf", "PromotionRoboto-Bold.ttf"].map((name) => readFileSync(`static/fonts/${name}`)),
+  {
+    mono: readFileSync("static/fonts/PromotionRobotoMono-Medium.ttf"),
+    monoBold: readFileSync("static/fonts/PromotionRobotoMono-SemiBold.ttf"),
+    medium: readFileSync("static/fonts/PromotionRoboto-Medium.ttf"),
+  },
 );
 const eventName = "Post-Quantum Cryptography Conference";
 describe("automatic Open Graph cards", () => {
@@ -40,7 +46,9 @@ describe("automatic Open Graph cards", () => {
       const image = await sharp(Buffer.from(svg)).png().toBuffer();
       const metadata = await sharp(image).metadata();
       expect({ width: metadata.width, height: metadata.height }).toEqual(PERSONAL_PROMOTION_IMAGE_DIMENSIONS[format]);
-      expect(svg).toContain("Paul van Brouwershaven");
+      expect([...svg.matchAll(/<text\b[^>]*>([^<]*)<\/text>/gu)].map((match) => match[1]).join(" ")).toContain(
+        "Paul van Brouwershaven",
+      );
       expect(svg).toContain("2 SESSIONS");
       expect(svg).not.toContain("Never show this sponsor tier");
       expect(svg).not.toContain("SPONSORED BY");
@@ -81,6 +89,7 @@ describe("automatic Open Graph cards", () => {
           const nameLines = page.texts.filter((line) => line.role === "H1");
           expect(nameLines.map((line) => line.text).join(" ")).toBe(name);
           expect(page.texts.map((line) => line.text).join(" ")).toContain("+ 2 more on the agenda");
+          expect(page.social!.focalPoint).toEqual(format === "square" ? { x: 0.62, y: 0.4 } : { x: 0.5, y: 0.55 });
           const picture = page.pictures[0]!;
           expect(picture.width).toBe(picture.height);
           expect(picture.y + picture.height).toBeLessThan(page.social!.bandTop);
@@ -89,10 +98,16 @@ describe("automatic Open Graph cards", () => {
             expect(nameLines[0]!.y - nameLines[0]!.size).toBeGreaterThan(picture.y + picture.height);
           } else {
             for (const line of nameLines)
-              expect(line.x + measure(line.text, line.size, line.bold, line.mono)).toBeLessThan(picture.x - 30);
+              expect(
+                line.x +
+                  measure(line.text, line.size, line.bold, line.mono, line.weight) +
+                  (line.letterSpacing ?? 0) * Array.from(line.text).length,
+              ).toBeLessThan(picture.x - 30);
           }
           for (const line of page.texts) {
-            const textWidth = measure(line.text, line.size, line.bold, line.mono);
+            const textWidth =
+              measure(line.text, line.size, line.bold, line.mono, line.weight) +
+              (line.letterSpacing ?? 0) * Array.from(line.text).length;
             const left = line.x - (line.anchor === "middle" ? textWidth / 2 : 0);
             expect(left).toBeGreaterThanOrEqual(60);
             expect(left + textWidth).toBeLessThanOrEqual(page.width - 60);
@@ -101,4 +116,22 @@ describe("automatic Open Graph cards", () => {
         }
     },
   );
+});
+
+it("preserves the source photo's aspect ratio and the handoff focal points", () => {
+  const original = { width: 1920, height: 1072 };
+  const landscape = promotionImageCover(original, 1200, 490, { x: 0.5, y: 0.55 });
+  expect(landscape).toMatchObject({ x: 0, width: 1200, height: 670, scale: 0.625 });
+  expect(landscape.y).toBeCloseTo(-99, 10);
+  const square = promotionImageCover(original, 1080, 890, { x: 0.62, y: 0.4 });
+  expect(square.x).toBeCloseTo(-318.698507, 5);
+  expect(square.y).toBeCloseTo(0, 10);
+  for (const frame of [landscape, square])
+    expect(frame.width / original.width).toBeCloseTo(frame.height / original.height, 12);
+});
+
+it("retains previously supported Greek and Cyrillic names in the pinned body font", () => {
+  const font = fontkit.create(readFileSync("static/fonts/PromotionRoboto-Regular.ttf"));
+  for (const glyph of Array.from("Александр Παύλος"))
+    expect(font.hasGlyphForCodePoint(glyph.codePointAt(0)!)).toBe(true);
 });

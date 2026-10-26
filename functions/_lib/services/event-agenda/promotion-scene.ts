@@ -30,6 +30,8 @@ export interface PromotionText {
   color?: string;
   anchor?: "middle" | "end";
   mono?: boolean;
+  weight?: 400 | 500 | 600 | 700;
+  letterSpacing?: number;
 }
 export interface PromotionPicture {
   src: string;
@@ -39,6 +41,7 @@ export interface PromotionPicture {
   height: number;
   circle?: boolean;
   ringColor?: string;
+  ringWidth?: number;
   alt: string;
 }
 export interface PromotionPage {
@@ -51,7 +54,7 @@ export interface PromotionPage {
   height: number;
   light?: boolean;
   qr?: boolean;
-  social?: { bandTop: number };
+  social?: { bandTop: number; focalPoint: { x: number; y: number } };
   bars?: { x: number; y: number; width: number; height: number; color: string; opacity?: number }[];
   sponsorBoard?: { x: number; y: number; width: number; height: number };
   markX?: number;
@@ -84,11 +87,24 @@ export interface PersonalPromotionRenderData {
   actorId?: string;
   portraits?: Record<string, string>;
   logoDataUrl?: string;
-  heroImageDataUrl?: string | null;
+  heroImage?: import("../../utils/image-format").EmbeddedRasterImage | null;
   scene?: PromotionPage;
   measure?: PromotionMeasure;
 }
-export type PromotionMeasure = (text: string, size: number, bold: boolean, mono?: boolean) => number;
+export type PromotionMeasure = ((
+  text: string,
+  size: number,
+  bold: boolean,
+  mono?: boolean,
+  weight?: number,
+) => number) & {
+  metrics?: (
+    size: number,
+    bold: boolean,
+    mono?: boolean,
+    weight?: number,
+  ) => { ascent: number; descent: number; lineGap: number };
+};
 export const promotionDimensions = {
   landscape: [1200, 630],
   square: [1080, 1080],

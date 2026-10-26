@@ -246,3 +246,12 @@ describe("friendly date formatting", () => {
     expect(spoken).not.toContain(",");
   });
 });
+
+it("formats the social-card header with the handoff's compact date range", () => {
+  expect(
+    formatDateRange("2026-12-01T08:00:00.000Z", "2026-12-03T17:00:00.000Z", "Europe/Amsterdam", {
+      locale: "en-GB",
+      month: "short",
+    }),
+  ).toMatch(/1.*3 Dec 2026/u);
+});

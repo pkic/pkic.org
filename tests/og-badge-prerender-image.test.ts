@@ -37,7 +37,9 @@ describe("OG sponsor badge rendering", () => {
     expect(svg).toContain("SPONSOR");
     expect(svg).toContain('id="panorama"');
     expect(svg).toContain('id="grid-fade"');
-    expect(svg).toContain("Synthetic Sponsor");
+    expect([...svg.matchAll(/<text\b[^>]*>([^<]*)<\/text>/gu)].map((match) => match[1]).join(" ")).toContain(
+      "Synthetic Sponsor",
+    );
     expect(svg).toContain("Conference &amp; workshop");
     expect(svg).not.toContain(">Attendee</text>");
     expect(svg).not.toContain("SPONSORED BY");

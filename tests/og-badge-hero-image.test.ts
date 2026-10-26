@@ -1,16 +1,71 @@
+import type { Env } from "../functions/_lib/types";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   fetchHeroImage,
   imageResponseToDataUrl,
   resolveHeroImageSource,
 } from "../functions/_lib/services/og-badge-hero-image";
-import { validPngBytes } from "./helpers/raster-images";
+import { validPngBytes, validJpegBytes, validWebpBytes } from "./helpers/raster-images";
 
 describe("OG badge hero image boundary", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
+  it("preserves the original raster instead of making a landscape crop before square rendering", async () => {
+    const bytes = validPngBytes(1600, 1200);
+    const input = vi.fn(() => {
+      throw new Error("A pre-crop changes the design perspective");
+    });
+    const environment = {
+      ASSETS: {
+        fetch: async () => new Response(bytes, { headers: { "content-type": "image/png" } }),
+      } as unknown as Env["ASSETS"],
+      IMAGES: { input },
+    };
+    const image = await fetchHeroImage(
+      JSON.stringify({ heroImageUrl: "/event-photo.png" }),
+      "https://pkic.org",
+      environment,
+    );
+    expect(image).toMatchObject({ width: 1600, height: 1200 });
+    expect(image?.dataUrl).toBe(`data:image/png;base64,${btoa(String.fromCharCode(...bytes))}`);
+    expect(input).not.toHaveBeenCalled();
+  });
+  it("does not ask an external image proxy to crop the source", async () => {
+    const bytes = validPngBytes(1600, 1200);
+    const fetchMock = vi.fn().mockResolvedValue(new Response(bytes, { headers: { "content-type": "image/png" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const image = await fetchHeroImage(
+      JSON.stringify({ heroImageUrl: "https://cdn.example.test/hero.png" }),
+      "https://pkic.org",
+      { HERO_IMAGE_ALLOWED_HOSTS: "cdn.example.test" },
+    );
+    expect(image).toMatchObject({ width: 1600, height: 1200 });
+    expect(fetchMock.mock.calls[0]?.[1]).not.toHaveProperty("cf");
+  });
+  it("normalizes WebP without imposing a landscape resize or crop", async () => {
+    const transform = vi
+      .fn()
+      .mockReturnValue({
+        output: async () => ({
+          response: async () => new Response(validJpegBytes(1600, 1200), { headers: { "content-type": "image/jpeg" } }),
+        }),
+      });
+    const environment = {
+      ASSETS: {
+        fetch: async () => new Response(validWebpBytes(1600, 1200), { headers: { "content-type": "image/webp" } }),
+      },
+      IMAGES: { input: () => ({ transform }) },
+    } as unknown as Env;
+    const image = await fetchHeroImage(
+      JSON.stringify({ heroImageUrl: "/event-photo.webp" }),
+      "https://pkic.org",
+      environment,
+    );
+    expect(transform).toHaveBeenCalledWith({});
+    expect(image).toMatchObject({ width: 1600, height: 1200, contentType: "image/jpeg" });
+  });
   it("allows same-origin assets by default and rejects unapproved external hosts", () => {
     expect(resolveHeroImageSource("javascript:alert(1)", "https://pkic.org")).toBeNull();
     expect(resolveHeroImageSource("//evil.test/image.png", "https://pkic.org")).toBeNull();

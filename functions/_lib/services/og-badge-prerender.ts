@@ -52,7 +52,13 @@ let fontBuffersCache: Promise<Uint8Array[]> | null = null;
 function getFontBuffers(origin: string, env: Pick<Env, "ASSETS" | "ASSETS_PUBLIC">): Promise<Uint8Array[]> {
   if (!fontBuffersCache) {
     const p = Promise.all(
-      ["Roboto-Regular.ttf", "Roboto-Bold.ttf", "RobotoMono-Regular.ttf"].map((name) =>
+      [
+        "PromotionRoboto-Regular.ttf",
+        "PromotionRoboto-Bold.ttf",
+        "PromotionRobotoMono-Medium.ttf",
+        "PromotionRobotoMono-SemiBold.ttf",
+        "PromotionRoboto-Medium.ttf",
+      ].map((name) =>
         fetchStaticAsset(env, origin, `/fonts/${name}`)
           .then((response) => (response.ok ? response.arrayBuffer() : new ArrayBuffer(0)))
           .catch(() => new ArrayBuffer(0))
@@ -100,7 +106,7 @@ export async function renderBadgeSourcePng(
   origin: string,
   format: import("../../../assets/shared/personal-promotion-image").PersonalPromotionImageFormat = "landscape",
 ): Promise<Uint8Array> {
-  const [Resvg, fontBuffers, headshotDataUrl, logoResponse, heroImageDataUrl] = await Promise.all([
+  const [Resvg, fontBuffers, headshotDataUrl, logoResponse, heroImage] = await Promise.all([
     ensureWasm(),
     getFontBuffers(origin, env),
     loadValidatedHeadshotDataUrl(source.headshot_r2_key, env.SPEAKER_UPLOADS_BUCKET),
@@ -124,12 +130,16 @@ export async function renderBadgeSourcePng(
     organization: source.organization_name,
     jobTitle: source.job_title,
     headshotDataUrl,
-    heroImageDataUrl,
+    heroImage,
     sessions: source.sessions,
     format,
     registrationUrl: new URL(`/r/${encodeURIComponent(code)}`, origin).href,
     design: eventPromotionDesignFromSettings(source.event_name, settings),
-    measure: promotionFontMeasure(fontBuffers, fontBuffers[2]),
+    measure: promotionFontMeasure(fontBuffers, {
+      mono: fontBuffers[2],
+      monoBold: fontBuffers[3],
+      medium: fontBuffers[4],
+    }),
     logoDataUrl: logoBytes ? `data:image/svg+xml;base64,${uint8ToBase64(logoBytes)}` : undefined,
   });
 

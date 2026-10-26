@@ -387,15 +387,16 @@ export function formatDateRange(
   startsAt: string | null | undefined,
   endsAt: string | null | undefined,
   timeZone?: string | null,
+  format?: { locale?: string; month?: "long" | "short" },
 ): string {
   if (!startsAt) return EMPTY;
   const options: Intl.DateTimeFormatOptions = {
     day: "numeric",
-    month: "long",
+    month: format?.month ?? "long",
     year: "numeric",
     ...(timeZone ? { timeZone } : {}),
   };
-  const formatter = new Intl.DateTimeFormat(undefined, options);
+  const formatter = new Intl.DateTimeFormat(format?.locale, options);
   // `Intl.DateTimeFormat.format` throws RangeError on an unreadable value
   // rather than writing "Invalid Date", which takes the whole surface down
   // instead of one line of it. Every other formatter here answers the empty

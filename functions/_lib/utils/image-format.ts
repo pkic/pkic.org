@@ -13,6 +13,10 @@ export interface ValidatedRasterImage extends DetectedImageFormat {
   height: number;
 }
 
+export interface EmbeddedRasterImage extends ValidatedRasterImage {
+  dataUrl: string;
+}
+
 export type RasterImageValidationResult =
   | { ok: true; image: ValidatedRasterImage }
   | { ok: false; reason: "invalid" | "dimensions" };
