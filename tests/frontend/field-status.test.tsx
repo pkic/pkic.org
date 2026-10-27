@@ -1,7 +1,7 @@
 import { render } from "preact";
 import { useState } from "preact/hooks";
 import { act } from "preact/test-utils";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { useContractForm } from "../../assets/ts/hooks/useContractForm";
 import { ChoiceCard } from "../../assets/ts/ui/ChoiceCard";
@@ -128,4 +128,19 @@ it("keeps choice titles distinct across independently rendered dialog roots", ()
   for (const [index, host] of roots.entries()) {
     expect(host.contains(document.getElementById(titleIds[index]))).toBe(true);
   }
+});
+
+it("keeps server template identifiers separate from a fresh browser runtime", async () => {
+  vi.resetModules();
+  vi.stubGlobal("document", undefined);
+  let serverId: string;
+  try {
+    const server = await import("../../assets/ts/ui/dom-id");
+    serverId = server.nextDomId("field");
+  } finally {
+    vi.unstubAllGlobals();
+  }
+  vi.resetModules();
+  const client = await import("../../assets/ts/ui/dom-id");
+  expect(client.nextDomId("field")).not.toBe(serverId!);
 });

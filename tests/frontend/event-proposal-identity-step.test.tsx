@@ -288,7 +288,7 @@ describe("verified event entry", () => {
       [...host!.querySelectorAll("button")].find((button) => button.textContent === "Add representation")!.click();
     });
     const add = document.querySelector<HTMLDialogElement>("dialog[open]")!;
-    expect(add.textContent).toContain("Representation email");
+    expect(add.textContent).toContain(EMAIL_FIRST_COPY.representation.work.label);
     expect(add.querySelector('input[name="email"]')).not.toBeNull();
     expect(add.querySelector('[role="combobox"], input[name="organizationName"]')).toBeNull();
     await act(() => {

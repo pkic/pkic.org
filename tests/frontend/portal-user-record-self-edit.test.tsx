@@ -4,6 +4,7 @@
  * panel, and each identity's job title, biography and links from its row
  * under Affiliations. The user has no profile of its own.
  */
+import { EMAIL_FIRST_COPY } from "../../assets/shared/email-first-copy";
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -181,6 +182,7 @@ function stubApi(): Array<{ method: string; path: string; body: unknown }> {
           email: "person@example.test",
           domain: "example.test",
           organization: { id: ORGANIZATION_ID, name: "Example Org" },
+          organizations: [{ id: ORGANIZATION_ID, name: "Example Org", identityId: null, jobTitle: null }],
           ...(request.phase === "prepare" ? { contextToken: "synthetic-prepared-context-for-identity-creation" } : {}),
         });
       }
@@ -328,11 +330,8 @@ describe("who you are signed in as, and adding an identity", () => {
     await act(async () => {
       dialog.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     });
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 20));
-    });
-    expect(dialog.textContent).toContain("Example Org");
-    expect(dialog.querySelector('[role="combobox"]')).toBeNull();
+    await vi.waitFor(() => expect(dialog.textContent).toContain("Example Org"));
+    expect(dialog.querySelector("select")?.value).toBe(ORGANIZATION_ID);
     const title = dialog.querySelector<HTMLInputElement>('input[name="jobTitle"]')!;
     await act(async () => {
       title.value = "Engineer";
@@ -404,7 +403,7 @@ describe("who you are signed in as, and adding an identity", () => {
     expect(dialog.textContent).toContain("Add identity");
     const form = dialog.querySelector<HTMLFormElement>('form[aria-label="Add email address"]')!;
     expect(form).not.toBeNull();
-    expect(form.textContent).toContain("Representation email");
+    expect(form.textContent).toContain(EMAIL_FIRST_COPY.representation.work.label);
     expect(form.querySelector('[role="combobox"]')).toBeNull();
     // Nothing is sent until the contract accepts the draft.
     await act(async () => {

@@ -47,6 +47,7 @@ export function EmailAddressCreateForm({
     return (
       <form
         noValidate
+        aria-label="Add email address"
         class="pk-stack"
         onSubmit={(event) => {
           event.preventDefault();
