@@ -102,7 +102,7 @@ test("a signed-in user registers from event home without another email challenge
   await expect(dialog).not.toBeVisible();
   await page.goForward();
   await expect(dialog.getByText(email, { exact: true })).toBeVisible();
-  await expect(dialog.getByLabel("Work email", { exact: true })).toHaveCount(0);
+  await expect(dialog.getByLabel("Email", { exact: true })).toHaveCount(0);
   await expect(dialog.getByText("Representation", { exact: true })).toBeVisible();
   await expect(dialog.getByRole("combobox")).toHaveCount(0);
   await expect(dialog.locator('[data-step="1"]')).toHaveCSS("opacity", "1");

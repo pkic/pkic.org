@@ -194,7 +194,7 @@ export function Login({
               void handleSubmit(e);
             }}
           >
-            <Field label="Work email" required {...form.of("email")}>
+            <Field label="Email" required {...form.of("email")}>
               {(control) => (
                 <TextInput
                   {...control}
@@ -202,7 +202,7 @@ export function Login({
                   name="email"
                   value={email}
                   onInput={(event) => setEmail(event.currentTarget.value)}
-                  placeholder="you@organization.org"
+                  placeholder="you@example.com"
                   autocomplete="email"
                 />
               )}

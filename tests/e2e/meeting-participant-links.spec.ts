@@ -220,7 +220,7 @@ for (const broadcast of [false, true]) {
       await forwardedPage.setExtraHTTPHeaders({ "cf-connecting-ip": clientIpForIdentity(participantEmail) });
       await forwardedPage.getByRole("button", { name: "Verify and continue" }).click();
       await openEmailSignIn(forwardedPage);
-      await forwardedPage.getByLabel("Work email").fill(participantEmail);
+      await forwardedPage.getByLabel("Email").fill(participantEmail);
       const signInSince = await capturedEmailCount();
       await forwardedPage.getByRole("button", { name: "Send sign-in link" }).click();
       const signInEmail = await waitForCapturedEmail(participantEmail, "sign-in link", { since: signInSince });

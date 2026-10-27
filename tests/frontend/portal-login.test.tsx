@@ -70,7 +70,7 @@ function submitForm(): Promise<void> {
 
 async function enterEmail(value: string): Promise<void> {
   await act(() => {
-    const control = controlLabeled("Work email");
+    const control = controlLabeled("Email");
     control.value = value;
     control.dispatchEvent(new Event("input", { bubbles: true }));
   });
@@ -102,7 +102,7 @@ describe("portal login", () => {
 
     await act(() => render(<Login onSignedIn={vi.fn()} />, container));
 
-    const email = controlLabeled("Work email");
+    const email = controlLabeled("Email");
     expect(email.type).toBe("email");
     expect(email.required).toBe(true);
     expect(email.getAttribute("autocomplete")).toBe("email");
@@ -175,7 +175,7 @@ describe("portal login", () => {
         (el.textContent ?? "").includes("Sign in with a passkey"),
       ),
     ).toBe(false);
-    expect(controlLabeled("Work email")).toBeTruthy();
+    expect(controlLabeled("Email")).toBeTruthy();
   });
 
   it("folds the email route behind the passkey, and opens it on request", async () => {
@@ -191,7 +191,7 @@ describe("portal login", () => {
       await Promise.resolve();
     });
 
-    expect(controlLabeled("Work email").type).toBe("email");
+    expect(controlLabeled("Email").type).toBe("email");
   });
 
   it("reopens a sent link with the same email and reports a refused second request", async () => {
@@ -214,7 +214,7 @@ describe("portal login", () => {
     await waitFor(() => container.textContent!.includes("Check your email"), "first request was not confirmed");
     await act(() => buttonLabeled("Request another link").click());
     expect(container.textContent).not.toContain("Check your email");
-    expect(controlLabeled("Work email").value).toBe("member@example.test");
+    expect(controlLabeled("Email").value).toBe("member@example.test");
     expect(bodies).toHaveLength(1);
     await submitForm();
     await waitFor(
@@ -224,7 +224,7 @@ describe("portal login", () => {
     expect(bodies).toHaveLength(2);
     expect(bodies[1]).toEqual(bodies[0]);
     expect(container.textContent).not.toContain("Check your email");
-    expect(controlLabeled("Work email").value).toBe("member@example.test");
+    expect(controlLabeled("Email").value).toBe("member@example.test");
     expect(buttonLabeled("Send sign-in link").disabled).toBe(false);
   });
 
@@ -250,7 +250,7 @@ describe("portal login", () => {
     await act(() => buttonLabeled("Back to passkey").click());
     expect(container.querySelector('[role="alert"]')).toBeNull();
     await act(() => buttonLabeled("Sign in with an email link").click());
-    expect(controlLabeled("Work email").value).toBe("member@example.test");
+    expect(controlLabeled("Email").value).toBe("member@example.test");
     expect(container.querySelector('[role="alert"]')).toBeNull();
     expect(authenticateWithPasskey).toHaveBeenCalledTimes(1);
   });
@@ -408,7 +408,7 @@ describe("portal login", () => {
     await act(() => render(<Login busy status="Checking your sign-in…" onSignedIn={vi.fn()} />, container));
     expect(container.querySelector(".pk-login__backdrop")).not.toBeNull();
     expect(container.querySelector(".pk-login__card [role='status']")?.textContent).toContain("Checking your sign-in…");
-    expect(controlLabeled("Work email").matches(":disabled")).toBe(true);
+    expect(controlLabeled("Email").matches(":disabled")).toBe(true);
     await enterEmail("synthetic@example.test");
     await submitForm();
     expect(fetcher).not.toHaveBeenCalled();
@@ -427,8 +427,8 @@ describe("portal login", () => {
       render(<Login notice={<p role="alert">The link has expired.</p>} onSignedIn={onSignedIn} />, container),
     );
     expect(container.querySelector(".pk-login__card [role='alert']")?.textContent).toBe("The link has expired.");
-    expect(controlLabeled("Work email").value).toBe("synthetic@example.test");
-    expect(controlLabeled("Work email").matches(":disabled")).toBe(false);
+    expect(controlLabeled("Email").value).toBe("synthetic@example.test");
+    expect(controlLabeled("Email").matches(":disabled")).toBe(false);
     expect(container.querySelector("[role='status']")).toBeNull();
   });
 });

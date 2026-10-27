@@ -313,7 +313,7 @@ test("the private portal checks its session and opens the existing sign-in form"
   await expect(page.getByRole("heading", { name: "Member portal", exact: true })).toHaveCount(0);
   const emailOption = page.getByRole("button", { name: "Sign in with an email link", exact: true });
   if (await emailOption.isVisible()) await emailOption.click();
-  await page.getByRole("textbox", { name: "Work email" }).fill("synthetic@example.test");
+  await page.getByRole("textbox", { name: "Email" }).fill("synthetic@example.test");
   await page.getByRole("button", { name: /Send.*link/i }).click();
   await expect(page.getByText("Check your email", { exact: true })).toBeVisible();
   expect(submittedEmail).toBe("synthetic@example.test");

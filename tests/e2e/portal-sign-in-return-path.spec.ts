@@ -18,7 +18,7 @@ test("a sign-in started on a working group page returns there from the emailed l
 
   await page.goto("/portal/#/groups/pqc");
   await openEmailSignIn(page);
-  await page.getByLabel("Work email").fill(email);
+  await page.getByLabel("Email").fill(email);
   const since = await capturedEmailCount();
   await page.getByRole("button", { name: "Send sign-in link" }).click();
   await expect(page.getByText("you'll receive a sign-in link shortly", { exact: false })).toBeVisible();

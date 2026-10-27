@@ -30,7 +30,7 @@ export async function openEmailSignIn(page: Page): Promise<void> {
   await expect(passkey).toBeVisible({ timeout: 15_000 });
   const disclosure = page.getByRole("button", { name: "Sign in with an email link", exact: true });
   if (await disclosure.isVisible().catch(() => false)) await disclosure.click();
-  await expect(page.getByLabel("Work email")).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByLabel("Email")).toBeVisible({ timeout: 10_000 });
 }
 
 /** Opens the signed-in person's own record through the account menu. */
@@ -66,7 +66,7 @@ export async function signInToPortal(page: Page, email: string, options: { conti
   await page.setExtraHTTPHeaders({ "cf-connecting-ip": clientIpForIdentity(email) });
   await page.goto("/portal/");
   await openEmailSignIn(page);
-  await page.getByLabel("Work email").fill(email);
+  await page.getByLabel("Email").fill(email);
   const since = await capturedEmailCount();
   await page.getByRole("button", { name: "Send sign-in link" }).click();
   await expect(page.getByText("you'll receive a sign-in link shortly", { exact: false })).toBeVisible();

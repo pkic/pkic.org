@@ -6,7 +6,7 @@ for (const viewport of [
   { width: 1440, height: 900 },
   { width: 1024, height: 1366 },
   { width: 1920, height: 1080 },
-  { width: 390, height: 844 },
+  { width: 375, height: 812 },
 ]) {
   test(`login fills the page without a gap below its side panel at ${viewport.width}px`, async ({ page }) => {
     await page.setViewportSize(viewport);
@@ -108,7 +108,7 @@ test("an expired administrator elevation keeps member access and offers a fresh 
   // canonical destination carried by the next sign-in request.
   await expect(page).toHaveURL(/\/portal\/#\/organizations$/);
   await openEmailSignIn(page);
-  await page.getByLabel("Work email").fill(email);
+  await page.getByLabel("Email").fill(email);
   const nextSignIn = page.waitForResponse(
     (result) => new URL(result.url()).pathname === "/api/v1/auth/request-link" && result.request().method() === "POST",
   );
@@ -164,7 +164,7 @@ test.describe("client release recovery", () => {
     await page.clock.install();
     await page.goto("/portal/");
     await openEmailSignIn(page);
-    await page.getByLabel("Work email").fill("release-recovery@example.test");
+    await page.getByLabel("Email").fill("release-recovery@example.test");
     await page.route("**/portal/", async (route) => {
       if (route.request().isNavigationRequest()) return route.continue();
       await route.fulfill({
@@ -174,7 +174,7 @@ test.describe("client release recovery", () => {
     });
     await page.evaluate(() => window.dispatchEvent(new Event("vite:preloadError")));
     await page.clock.fastForward(600_000);
-    await expect(page.getByLabel("Work email")).toHaveValue("release-recovery@example.test");
+    await expect(page.getByLabel("Email")).toHaveValue("release-recovery@example.test");
   });
 
   test("a missing lazy view offers recovery without removing portal navigation", async ({ page }) => {

@@ -28,7 +28,7 @@ async function requestSignInLink(page: import("@playwright/test").Page, email: s
   await page.goto("/portal/");
   await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toBeVisible({ timeout: 10_000 });
   await openEmailSignIn(page);
-  await page.getByLabel("Work email").fill(email);
+  await page.getByLabel("Email").fill(email);
   const since = await capturedEmailCount();
   await page.getByRole("button", { name: "Send sign-in link" }).click();
   const message = await waitForCapturedEmail(email, "sign-in link", { since });
