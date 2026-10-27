@@ -22,6 +22,7 @@ import { hmacSha256Hex } from "../functions/_lib/utils/crypto";
 import { calendarRsvpIngestSchema } from "../assets/shared/schemas/calendar-rsvp";
 import { calendarRsvpResponseSchema } from "../assets/shared/schemas/route-contracts-calendar";
 import { staffingFixture } from "./helpers/agenda-staffing";
+import { addHours, nowIso } from "../functions/_lib/utils/time";
 
 beforeEach(resetDb);
 it("joins native recurring agenda edits, publication, pinned event staffing and observation/lead reconciliation without conference bridges", async () => {
@@ -29,7 +30,7 @@ it("joins native recurring agenda edits, publication, pinned event staffing and 
   const group = "20000000-0000-4000-8000-000000000003";
   await ensureGroupMembershipCapacity(env.DB, group, pilot.person.userId);
   const slug = "joined-native-pilot",
-    startsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    startsAt = addHours(nowIso(), 7 * 24);
   const series = (
     await pilot.api(
       `/api/v1/groups/${group}/meetings/series`,

@@ -17,7 +17,7 @@
  */
 import { requireUserBackedAdminFromRequest } from "../../../../_lib/auth/admin";
 import { requireMemberFromRequest } from "../../../../_lib/auth/member";
-import { requireIdentityFromRequest } from "../../../../_lib/auth/user-session";
+import { resolveOptionalIdentityFromRequest } from "../../../../_lib/auth/user-session";
 import { hasPermission } from "../../../../_lib/auth/permissions";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
 import { AppError } from "../../../../_lib/errors";
@@ -48,10 +48,10 @@ export async function requireProfileReader(c: AdminContext): Promise<ProfileRead
   try {
     const member = await requireMemberFromRequest(db, c.req.raw, c.env);
     return { db, viewerUserId: member.userId, isStaff: false };
-  } catch {
-    // Not a member session — fall through to staff. The staff attempt below
-    // is what produces the refusal a caller sees, so an unauthenticated
-    // request still fails with the ordinary authorization error.
+  } catch (error) {
+    // Only an authentication or membership refusal can fall back to staff.
+    // Dependency and programming failures must reach the HTTP error adapter.
+    if (!(error instanceof AppError) || (error.status !== 401 && error.code !== "AUTH_FORBIDDEN")) throw error;
   }
 
   const staff = await requireUserBackedAdminFromRequest(db, c.req.raw, c.env);
@@ -72,12 +72,8 @@ export async function requireProfileReader(c: AdminContext): Promise<ProfileRead
  */
 export async function requireProfileReaderOrSubject(c: AdminContext, subjectUserId: string): Promise<ProfileReader> {
   const db = requestDb(c);
-  try {
-    const identity = await requireIdentityFromRequest(db, c.req.raw, c.env);
-    if (identity.userId === subjectUserId) return { db, viewerUserId: identity.userId, isStaff: false };
-  } catch {
-    // Not a live human session; the reader paths below produce the refusal.
-  }
+  const identity = await resolveOptionalIdentityFromRequest(db, c.req.raw, c.env);
+  if (identity?.userId === subjectUserId) return { db, viewerUserId: identity.userId, isStaff: false };
   return requireProfileReader(c);
 }
 
