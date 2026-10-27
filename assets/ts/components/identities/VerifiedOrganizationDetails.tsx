@@ -1,3 +1,4 @@
+import { VerifiedOrganizationNameField } from "./VerifiedOrganizationNameField";
 import { createPortal } from "preact/compat";
 import { useDialogQueryState } from "../../hooks/useDialogQueryState";
 import { InputGroup } from "../../ui/InputGroup";
@@ -88,7 +89,10 @@ export function VerifiedOrganizationDetails({
       setBusy(false);
     }
   };
-  async function changeDomain(domain: string, keepNewOrganization = organizationId === null) {
+  async function changeDomain(
+    domain: string,
+    keepNewOrganization = organizationId === null && Boolean(organizationName),
+  ) {
     setBusy(true);
     setError("");
     try {
@@ -139,19 +143,27 @@ export function VerifiedOrganizationDetails({
           )}
         </Field>
       )}
-      <Field
-        label="Organization"
-        required
-        help={
-          resolved.domain
-            ? `Only organizations linked to your verified email domain, ${resolved.domain}, are listed. Use + to add your organization if it is missing.`
-            : "Use + to add your organization."
-        }
-        {...detailsForm.of(organizationId ? "organizationId" : "organizationName")}
-      >
-        {(control) => (
-          <InputGroup>
-            {resolved.organizations.length > 0 ? (
+      {resolved.organizations.length === 0 ? (
+        <VerifiedOrganizationNameField
+          domain={resolved.domain}
+          value={organizationName}
+          disabled={busy}
+          onChange={setOrganizationName}
+          validation={detailsForm.of("organizationName")}
+        />
+      ) : (
+        <Field
+          label="Organization"
+          required
+          help={
+            resolved.domain
+              ? `Only organizations linked to your verified email domain, ${resolved.domain}, are listed. Use + to add your organization if it is missing.`
+              : "Use + to add your organization."
+          }
+          {...detailsForm.of(organizationId ? "organizationId" : "organizationName")}
+        >
+          {(control) => (
+            <InputGroup>
               <Select
                 {...control}
                 value={organizationId ?? ""}
@@ -167,37 +179,36 @@ export function VerifiedOrganizationDetails({
                   {organizationName || "Choose an organization"}
                 </option>
               </Select>
-            ) : (
-              <TextInput {...control} readOnly value={organizationName} placeholder="Add your organization" />
-            )}
-            <Button
-              type="button"
-              variant="ghost"
-              icon
-              aria-label="Add organization"
-              title="Add organization"
-              onClick={showAdding}
-            >
-              <IconPlus />
-            </Button>
-          </InputGroup>
-        )}
-      </Field>
-      {createPortal(
-        <VerifiedOrganizationCreateDialog
-          initial={resolved}
-          open={adding}
-          resolve={resolve}
-          onClose={() => void closeAdding()}
-          onUse={(organization) => {
-            setResolved(organization.resolved);
-            setOrganizationId(null);
-            setOrganizationName(organization.name);
-            void closeAdding();
-          }}
-        />,
-        document.body,
+              <Button
+                type="button"
+                variant="secondary"
+                icon
+                aria-label="Add organization"
+                title="Add organization"
+                onClick={showAdding}
+              >
+                <IconPlus />
+              </Button>
+            </InputGroup>
+          )}
+        </Field>
       )}
+      {resolved.organizations.length > 0 &&
+        createPortal(
+          <VerifiedOrganizationCreateDialog
+            initial={resolved}
+            open={adding}
+            resolve={resolve}
+            onClose={() => void closeAdding()}
+            onUse={(organization) => {
+              setResolved(organization.resolved);
+              setOrganizationId(null);
+              setOrganizationName(organization.name);
+              void closeAdding();
+            }}
+          />,
+          document.body,
+        )}
       {existingJobTitle ? (
         <DescriptionList items={[{ term: "Job title", value: existingJobTitle }]} />
       ) : (

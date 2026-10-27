@@ -29,7 +29,10 @@ async function answerOrganization(page: Page, values: RegistrationOrganization):
   const chooser = page.getByRole("combobox", { name: /^Organization/ });
   if (values.organization) {
     const matching = chooser.getByRole("option", { name: values.organization, exact: true });
-    if ((await chooser.count()) && (await matching.count())) await chooser.selectOption({ label: values.organization });
+    const name = page.getByRole("textbox", { name: /^Organization name/ });
+    if (await name.isVisible()) await name.fill(values.organization);
+    else if ((await chooser.count()) && (await matching.count()))
+      await chooser.selectOption({ label: values.organization });
     else {
       await page.getByRole("button", { name: "Add organization", exact: true }).click();
       const dialog = page.getByRole("dialog", { name: "Add organization", exact: true });

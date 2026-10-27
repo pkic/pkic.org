@@ -192,6 +192,16 @@ function InputGroupSpecimen() {
           </InputGroup>
         )}
       </Field>
+      <Field label="Organization" state="invalid" message="Choose an organization.">
+        {(control) => (
+          <InputGroup>
+            <TextInput {...control} placeholder="Organization" />
+            <Button variant="secondary" icon aria-label="Add organization" title="Add organization">
+              <IconPlus />
+            </Button>
+          </InputGroup>
+        )}
+      </Field>
       <Field label="Profile link" labelHidden>
         {(control) => (
           <InputGroup>

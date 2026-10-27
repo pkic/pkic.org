@@ -5,7 +5,7 @@ import { ORGANIZATION_JOB_TITLE_COPY } from "../../assets/shared/email-first-cop
 import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-auth";
 /** @covers event.3.2.b */
 import { expect, test } from "@playwright/test";
-import { continueRegistrationWithEmail, registerInBrowser } from "./helpers/registration";
+import { continueRegistrationWithEmail, ownDomainEmail, registerInBrowser } from "./helpers/registration";
 import {
   registrationManageSchema,
   registrationManageUpdateResponseSchema,
@@ -280,19 +280,30 @@ test("a proved work address requires organization confirmation and an incorrect 
         before.identities.find((identity) => identity.organizationName === names[0])!.organizationId!,
       );
     }
-    await dialog.getByRole("button", { name: "Add organization", exact: true }).click();
-    const addOrganization = page.getByRole("dialog", { name: "Add organization", exact: true });
-    await addOrganization.getByRole("textbox", { name: /^Organization name/ }).fill(name);
-    if (index === 1) {
+    if (index === 0) {
+      await expect(dialog.getByRole("combobox", { name: /^Organization/ })).toHaveCount(0);
+      await expect(dialog.getByRole("button", { name: "Add organization", exact: true })).toHaveCount(0);
+      await dialog.getByRole("button", { name: "Add representation", exact: true }).click();
+      const organizationName = dialog.getByRole("textbox", { name: /^Organization name/ });
+      await expect(organizationName).toHaveAttribute("aria-invalid", "true");
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await page.screenshot({ path: `${directory}/organization-required-desktop.png` });
+      await page.setViewportSize({ width: 375, height: 812 });
+      await page.screenshot({ path: `${directory}/organization-required-phone.png` });
+      await organizationName.fill(name);
+    } else {
+      await dialog.getByRole("button", { name: "Add organization", exact: true }).click();
+      const addOrganization = page.getByRole("dialog", { name: "Add organization", exact: true });
+      await addOrganization.getByRole("textbox", { name: /^Organization name/ }).fill(name);
       const scope = addOrganization.getByRole("combobox", { name: "Email domain", exact: true });
       await expect(scope).toHaveValue(`us.${domain}`);
       await scope.selectOption(domain);
       await expect(addOrganization.getByRole("textbox", { name: /^Organization name/ })).toHaveValue(name);
       await scope.selectOption(`us.${domain}`);
       await expect(addOrganization.getByRole("textbox", { name: /^Organization name/ })).toHaveValue(name);
+      await addOrganization.getByRole("button", { name: "Use organization", exact: true }).click();
+      await expect(addOrganization).not.toBeVisible();
     }
-    await addOrganization.getByRole("button", { name: "Use organization", exact: true }).click();
-    await expect(addOrganization).not.toBeVisible();
     await dialog
       .getByRole("textbox", { name: new RegExp(`^${ORGANIZATION_JOB_TITLE_COPY.label}`) })
       .fill("Research engineer");
@@ -399,4 +410,39 @@ test("a proved work address requires organization confirmation and an incorrect 
   await page.goBack();
   await page.goForward();
   await expect(country).toHaveValue("CA");
+});
+
+test("a verified new work domain shows organization fields directly in public registration", async ({
+  page,
+}, testInfo) => {
+  const name = "New Domain Research";
+  const result = await registerInBrowser(page, ownDomainEmail("new-organization"), undefined, undefined, {
+    organization: name,
+    onContactReady: async (formPage) => {
+      const organization = formPage.getByRole("textbox", { name: /^Organization name/ });
+      await expect(formPage.getByRole("combobox", { name: /^Organization/ })).toHaveCount(0);
+      await expect(formPage.getByRole("button", { name: "Add organization", exact: true })).toHaveCount(0);
+      await organization.fill("");
+      await formPage.locator("[data-event-registration] [data-step-next]").click();
+      await expect(organization).toHaveAttribute("aria-invalid", "true");
+      for (const [width, height, device] of [
+        [1280, 900, "desktop"],
+        [375, 812, "phone"],
+      ] as const) {
+        await formPage.setViewportSize({ width, height });
+        await organization.scrollIntoViewIfNeeded();
+        await formPage.screenshot({ path: testInfo.outputPath(`public-new-organization-${device}.png`) });
+      }
+      const field = organization.locator("..");
+      const inputBox = await organization.boundingBox();
+      const iconBox = await field.locator(".pk-field__state").boundingBox();
+      expect(inputBox).not.toBeNull();
+      expect(iconBox).not.toBeNull();
+      expect(iconBox!.x).toBeGreaterThan(inputBox!.x);
+      expect(iconBox!.x + iconBox!.width).toBeLessThan(inputBox!.x + inputBox!.width);
+      await organization.fill(name);
+    },
+  });
+  expect(result.result.status).toBe("registered");
+  await expect(page.getByRole("heading", { name: /You're registered/i })).toBeVisible();
 });

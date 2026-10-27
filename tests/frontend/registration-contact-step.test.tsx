@@ -290,14 +290,31 @@ describe("registration contact step", () => {
     installResponses(undefined, false, null, true);
     const organization: ConfirmOrganizationController = {};
     const form = await mount(contactStep(() => {}, organization));
-    expect(controlFor(form, "Organization")).not.toBeNull();
-    expect(buttonNamed(form, "Add organization")).not.toBeNull();
+    const name = controlFor(form, "Organization name");
+    expect(name.readOnly).toBe(false);
+    expect(form.querySelector("select")).toBeNull();
+    expect(form.querySelector('button[aria-label="Add organization"]')).toBeNull();
     expect(controlFor(form, "First name").value).toBe("");
     let named: ReturnType<NonNullable<ConfirmOrganizationController["read"]>> | undefined;
     await act(() => {
       named = organization.read?.();
     });
     expect(named).toEqual({ refused: true });
+    expect(name.getAttribute("aria-invalid")).toBe("true");
+    expect(name.parentElement?.querySelector(".pk-field__state")).not.toBeNull();
+    await act(() => {
+      name.value = "New Organization";
+      name.dispatchEvent(new Event("input", { bubbles: true }));
+      const title = controlFor(form, "Job title");
+      title.value = "Researcher";
+      title.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(() => {
+      named = organization.read?.();
+    });
+    expect(named).toMatchObject({
+      organization: { name: "New Organization", organizationId: null, jobTitle: "Researcher" },
+    });
   });
 
   it("embeds the shared chooser for a verified known domain and clears it when the address changes", async () => {

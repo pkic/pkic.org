@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { useContractForm } from "../../assets/ts/hooks/useContractForm";
 import { ChoiceCard } from "../../assets/ts/ui/ChoiceCard";
+import { Button } from "../../assets/ts/ui/Button";
+import { InputGroup } from "../../assets/ts/ui/InputGroup";
 import { Field } from "../../assets/ts/ui/Field";
 import { FieldStatus } from "../../assets/ts/ui/FieldStatus";
 import { TextInput } from "../../assets/ts/ui/TextControl";
@@ -143,4 +145,38 @@ it("keeps server template identifiers separate from a fresh browser runtime", as
   vi.resetModules();
   const client = await import("../../assets/ts/ui/dom-id");
   expect(client.nextDomId("field")).not.toBe(serverId!);
+});
+
+describe("a field with an input and action", () => {
+  it("keeps its validation mark inside the input and retains the control as validation changes", () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    hosts.push(host);
+    function specimen(state?: "invalid" | "ok") {
+      return (
+        <Field label="Organization" state={state} message={state ? "Choose an organization." : undefined}>
+          {(control) => (
+            <InputGroup>
+              <TextInput {...control} />
+              <Button aria-label="Add organization">+</Button>
+            </InputGroup>
+          )}
+        </Field>
+      );
+    }
+    void act(() => render(specimen(), host));
+    const input = host.querySelector("input")!;
+    input.focus();
+    for (const state of ["invalid", "ok", undefined] as const) {
+      void act(() => render(specimen(state), host));
+      expect(host.querySelector("input")).toBe(input);
+      expect(document.activeElement).toBe(input);
+      expect(input.getAttribute("aria-invalid")).toBe(state === "invalid" ? "true" : null);
+      const wrapper = host.querySelector(".pk-input-group__control")!;
+      expect(wrapper.contains(input)).toBe(true);
+      expect(wrapper.querySelector(".pk-field__state") !== null).toBe(Boolean(state));
+      expect(wrapper.querySelector("button")).toBeNull();
+      expect(host.querySelector(".pk-input-group > button")).not.toBeNull();
+    }
+  });
 });

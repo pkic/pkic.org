@@ -1,3 +1,4 @@
+import { VerifiedOrganizationNameField } from "./VerifiedOrganizationNameField";
 /** The existing verified name/domain step, opened from the shared select-and-add control. */
 import { useState, useEffect, useRef } from "preact/hooks";
 import type { z } from "zod";
@@ -8,7 +9,7 @@ import {
 import { useContractForm } from "../../hooks/useContractForm";
 import { Dialog } from "../../ui/Dialog";
 import { Field } from "../../ui/Field";
-import { TextInput, Select } from "../../ui/TextControl";
+import { Select } from "../../ui/TextControl";
 import { Alert } from "../../ui/Alert";
 
 type Resolved = z.infer<typeof identityAffiliationPreviewResponseSchema>;
@@ -112,27 +113,13 @@ export function VerifiedOrganizationCreateDialog({
             )}
           </Field>
         )}
-        <Field
-          label="Organization name"
-          required
-          help={
-            resolved.domain
-              ? `This organization will be associated with your verified email domain ${resolved.domain}.`
-              : undefined
-          }
-          {...form.of("organizationName")}
-        >
-          {(control) => (
-            <TextInput
-              {...control}
-              name="organizationName"
-              autoComplete="organization"
-              value={name}
-              disabled={busy}
-              onInput={(event) => setName(event.currentTarget.value)}
-            />
-          )}
-        </Field>
+        <VerifiedOrganizationNameField
+          domain={resolved.domain}
+          value={name}
+          disabled={busy}
+          onChange={setName}
+          validation={form.of("organizationName")}
+        />
         {error && <Alert tone="danger">{error}</Alert>}
       </form>
     </Dialog>

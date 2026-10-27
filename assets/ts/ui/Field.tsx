@@ -15,7 +15,8 @@
  * cannot separate the green and red by hue, so color alone is not a status.
  */
 
-import type { ComponentChildren } from "preact";
+import { cloneElement, isValidElement, type ComponentChildren, type VNode } from "preact";
+import { InputGroup, type InputGroupProps } from "./InputGroup";
 import { useState } from "preact/hooks";
 import { nextDomId } from "./dom-id";
 
@@ -118,6 +119,13 @@ export function Field({
           : undefined;
 
   const Frame = group ? "fieldset" : "div";
+  const control = children({
+    id: controlId,
+    required: required || undefined,
+    "aria-describedby": describedBy,
+    "aria-invalid": state === "invalid" ? "true" : undefined,
+  });
+  const status = state && !statusId && !group ? <StateIcon state={state} class="pk-field__state" /> : null;
 
   return (
     <Frame
@@ -158,14 +166,14 @@ export function Field({
       )}
 
       <div class="pk-field__control">
-        {children({
-          id: controlId,
-          required: required || undefined,
-          "aria-describedby": describedBy,
-          // Only a blocking state is invalid. An advisory is not an error.
-          "aria-invalid": state === "invalid" ? "true" : undefined,
-        })}
-        {state && !statusId && !group && <StateIcon state={state} class="pk-field__state" />}
+        {isValidElement(control) && control.type === InputGroup ? (
+          cloneElement(control as VNode<InputGroupProps>, { status })
+        ) : (
+          <>
+            {control}
+            {status}
+          </>
+        )}
       </div>
 
       {showMessage && (

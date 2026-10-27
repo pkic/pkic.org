@@ -382,7 +382,7 @@ describe("registration confirmation shell", () => {
     const form = root.querySelector<HTMLFormElement>("form")!;
     // The question says what confirming needs, in place of the one-click greeting.
     expect(root.querySelector<HTMLElement>("[data-confirm-intro]")?.hidden).toBe(true);
-    const organization = controlFor(root, "Organization");
+    const organization = controlFor(root, "Organization name");
     const submit = async () =>
       act(async () => {
         form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
@@ -394,15 +394,12 @@ describe("registration confirmation shell", () => {
     expect(root.textContent).toContain(ORGANIZATION_NAME_REQUIRED);
     expect(root.textContent).not.toContain("Invalid input");
 
-    await act(() => buttonNamed(root, "Add organization").click());
-    const dialog = document.querySelector<HTMLElement>("dialog")!;
-    const name = controlFor(dialog, "Organization name");
+    const name = organization;
+    expect(root.querySelector('button[aria-label="Add organization"]')).toBeNull();
     await act(() => {
       name.value = "Unknown Works";
       name.dispatchEvent(new Event("input", { bubbles: true }));
     });
-    await act(() => buttonNamed(dialog, "Use organization").click());
-    await settle();
     await submit();
     // Registering on behalf of the organization requires the job title, refused on its field before the network.
     const jobTitle = controlFor(root, ORGANIZATION_JOB_TITLE_COPY.label);

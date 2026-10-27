@@ -62,7 +62,14 @@ export function RepresentationSelect({
             }}
           />
           {onAdd && (
-            <Button type="button" variant="ghost" icon aria-label="Add identity" title="Add identity" onClick={onAdd}>
+            <Button
+              type="button"
+              variant="secondary"
+              icon
+              aria-label="Add identity"
+              title="Add identity"
+              onClick={onAdd}
+            >
               <IconPlus />
             </Button>
           )}
