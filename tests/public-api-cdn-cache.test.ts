@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
+import { createExecutionContext } from "cloudflare:test";
 import { isAnonymousReadRequest, markPublicRead, publicReadCacheResponse } from "../functions/_lib/cache/public-read";
 import worker from "./helpers/app";
 
@@ -42,6 +43,44 @@ describe("public API CDN cache gateway", () => {
     expect(response.headers.get("cf-cache-status")).toBe("HIT");
     expect(calls).toBe(1);
     expect(cacheKey).toBe("https://pkic.org/api/v1/members");
+  });
+
+  it.each(["GET", "HEAD"])("forwards an incoming %s with an empty body to the cache", async (method) => {
+    const url = "https://app.test/r/synthetic-referral?source=test";
+    // workerd accepts body-bearing reads from HTTP, but its Request constructor refuses them.
+    // Preserve a native empty body and expose the incoming read method to the gateway.
+    const request = new Request(url, {
+      method: "POST",
+      body: "",
+      headers: { "content-length": "0", "user-agent": "synthetic-preview" },
+      cf: { country: "NL" },
+    });
+    Object.defineProperty(request, "method", { value: method });
+    expect(request.body).not.toBeNull();
+
+    let forwarded = false;
+    const ctx = createExecutionContext();
+    Object.defineProperty(ctx, "exports", {
+      value: {
+        PublicRead: {
+          async fetch(cacheRequest: Request, init: { cf: { cacheKey: string } }) {
+            forwarded = true;
+            expect(cacheRequest.method).toBe("GET");
+            expect(cacheRequest.body).toBeNull();
+            expect(cacheRequest.url).toBe(url);
+            expect(cacheRequest.cf?.country).toBe("NL");
+            expect(cacheRequest.headers.get("user-agent")).toBe("synthetic-preview");
+            expect(init.cf.cacheKey).toBe(url);
+            return new Response("referral page");
+          },
+        },
+      },
+    });
+
+    const response = await worker.fetch(request, env, ctx);
+    expect(response.status).toBe(200);
+    expect(forwarded).toBe(true);
+    expect(await response.text()).toBe(method === "HEAD" ? "" : "referral page");
   });
 
   it.each(["GET", "HEAD"])("handles anonymous authentication %s directly without a cache hop", async (method) => {

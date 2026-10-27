@@ -15,7 +15,7 @@ import {
   attendanceAttemptsResponseSchema,
 } from "../assets/shared/schemas/event-attendance-reporting";
 import { getAgenda } from "../functions/_lib/services/event-agenda/read";
-import { nowIso } from "../functions/_lib/utils/time";
+import { addHours, nowIso } from "../functions/_lib/utils/time";
 import type { Env } from "../functions/_lib/types";
 import { callApi } from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
@@ -190,7 +190,12 @@ describe("Native meeting event-wide captured calendar context", () => {
     )
       .bind(registrationId, eventId, userId, crypto.randomUUID(), nowIso(), nowIso())
       .run();
-    const issued = await request("/api/v1/events/native-capture/badges", { operationId: crypto.randomUUID(), userId });
+    // Keep the badge valid while preserving the fixed calendar and DST observations.
+    const issued = await request("/api/v1/events/native-capture/badges", {
+      operationId: crypto.randomUUID(),
+      userId,
+      expiresAt: addHours(nowIso(), 24),
+    });
     expect(issued.status, await issued.clone().text()).toBe(200);
     const badge = badgeIssueResponseSchema.parse(await issued.json());
     if (badge.result !== "issued") throw new Error("Expected a fresh badge");
