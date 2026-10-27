@@ -1,3 +1,4 @@
+import { PERSONAL_PROMOTION_RENDERER } from "../../assets/shared/personal-promotion-image";
 import sharp from "sharp";
 import { userCreateSchema } from "../../assets/shared/schemas/user-create";
 import { EMAIL_FIRST_COPY } from "../../assets/shared/email-first-copy";
@@ -207,7 +208,7 @@ test("a signed-in user registers from event home without another email challenge
   await expect(page.getByRole("heading", { name: "No ticket yet", exact: true })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Registration details", exact: true })).toBeVisible();
   const socialBadge = page.locator("[data-og-badge-img]");
-  await expect(socialBadge).toHaveAttribute("src", /layout=promotion-scene-v7/);
+  await expect(socialBadge).toHaveAttribute("src", new RegExp(`layout=${PERSONAL_PROMOTION_RENDERER}`));
   await expect
     .poll(() => socialBadge.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0))
     .toBe(true);

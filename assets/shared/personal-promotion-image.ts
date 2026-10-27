@@ -1,6 +1,6 @@
 import { z } from "zod";
 /** Renderer identity is shared by image links and stored-cache metadata. */
-const PERSONAL_PROMOTION_RENDERER_REVISION = 7;
+const PERSONAL_PROMOTION_RENDERER_REVISION = 8;
 export const PERSONAL_PROMOTION_RENDERER = `promotion-scene-v${PERSONAL_PROMOTION_RENDERER_REVISION}`;
 
 /** A queued registration may survive a release; attach the current design, never an older cached card. */

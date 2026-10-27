@@ -1,3 +1,5 @@
+import { personalPromotionImagePath } from "../../assets/shared/personal-promotion-image";
+import { eventPlaceSummary } from "../../assets/shared/event-place";
 // @vitest-environment jsdom
 import { render, type JSX } from "preact";
 import { act } from "preact/test-utils";
@@ -14,7 +16,6 @@ import { pickEventNow } from "../../assets/ts/member-flows/portal/sections/event
 import { eventPhase } from "../../assets/ts/member-flows/portal/sections/events/app/event-timing";
 import { formatDateTimeInZone } from "../../assets/shared/format-date";
 import {
-  eventPlaceSummary,
   eventVenueLines,
   type ParticipantEventDetail,
 } from "../../assets/ts/member-flows/portal/sections/events/app/event-app-model";
@@ -387,7 +388,7 @@ describe("event home", () => {
     await act(() => render(<ParticipantEvent event={detail} tab="ticket" />, host));
     await vi.waitFor(() => expect(host.querySelector("iframe.pk-badge-face__frame")).not.toBeNull());
     expect(host.querySelector<HTMLImageElement>("[data-og-badge-img]")?.src).toContain(
-      "/api/v1/registrations/referrals/ownshare/badge?layout=promotion-scene-v7",
+      personalPromotionImagePath("ownshare"),
     );
     expect(host.textContent).toContain("Download badge");
     expect(host.querySelector('a[aria-label="Share on LinkedIn"]')?.getAttribute("href")).toContain("ownshare");

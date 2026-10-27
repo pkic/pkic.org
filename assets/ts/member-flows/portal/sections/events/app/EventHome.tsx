@@ -1,3 +1,4 @@
+import { eventPlaceSummary } from "../../../../../../shared/event-place";
 import { JoinPrompt } from "../../JoinPrompt";
 /**
  * The event app's home: the event's key visual, then one card per thing an
@@ -29,7 +30,6 @@ import { eventPhase, sessionPhase } from "./event-timing";
 import { attendanceStanding, attendanceStandingParts } from "../../../../../shared/viewer-attendance";
 import {
   eventManagementPath,
-  eventPlaceSummary,
   eventRegistrationStanding,
   registrationOffer,
   type ParticipantEventDetail,

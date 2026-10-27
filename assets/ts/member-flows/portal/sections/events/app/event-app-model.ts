@@ -66,24 +66,6 @@ export function eventManagementPath(event: ParticipantEventDetail): string | nul
   return `/groups/${encodeURIComponent(event.ownerGroupId)}/events/${encodeURIComponent(event.id)}`;
 }
 
-/** The first part of an address line: a venue's name. */
-function leadingPart(value: string | null | undefined): string | null {
-  return value?.split(",")[0]?.trim() || null;
-}
-
-/**
- * Where the event is, once: the venue's name and the city ("Meervaart ·
- * Amsterdam"), not the venue's postal address followed by the city again.
- * The full address belongs on the event's venue details (More).
- */
-export function eventPlaceSummary(event: ParticipantEventDetail): string | null {
-  const venue = "venue" in event ? event.venue : null;
-  const parts: string[] = [];
-  for (const part of [leadingPart(venue), event.city?.trim() || null])
-    if (part && !parts.some((seen) => seen.toLocaleLowerCase() === part.toLocaleLowerCase())) parts.push(part);
-  return parts.length ? parts.join(" · ") : null;
-}
-
 /** The full venue address and the city and country for the venue details, without repeating a line. */
 export function eventVenueLines(event: ParticipantEventDetail): string[] {
   const venue = "venue" in event ? event.venue : null;

@@ -1,3 +1,4 @@
+import { eventPlaceSummary } from "../../../../assets/shared/event-place";
 import { svgLogoDimensions } from "../../utils/svg-logo";
 import { eventPromotionDesignFromSettings } from "../../../../assets/shared/schemas/event-promotion-design";
 import type { DatabaseLike, Env } from "../../types";
@@ -53,7 +54,7 @@ export function preparePromotionDesign(db: DatabaseLike, selection: EventReadSel
         event,
         design,
         brandingRevision,
-        place: [typeof settings.venue === "string" ? settings.venue : null, event.city].filter(Boolean).join(", "),
+        place: eventPlaceSummary({ ...event, venue: typeof settings.venue === "string" ? settings.venue : null }) ?? "",
       };
     },
   };

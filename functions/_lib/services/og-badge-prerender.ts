@@ -25,7 +25,7 @@ import { fetchHeroImage, fetchStaticAsset, uint8ToBase64 } from "./og-badge-hero
 import { validateRasterImage } from "../utils/image-format";
 import { STANDARD_HEADSHOT_MAX_BYTES } from "../../../assets/shared/schemas/images";
 import { socialBadgeRoleSchema } from "../../../assets/shared/schemas/participant-roles";
-import { formatEventPlace } from "../../../assets/shared/event-place";
+import { eventPlaceSummary } from "../../../assets/shared/event-place";
 import { readBadgeSource, personalBadgeCacheMetadata, type BadgeSource } from "./og-badge-source";
 import { renderPersonalPromotionSvg } from "./event-agenda/promotion-personal";
 import { promotionFontMeasure } from "./event-agenda/promotion-text";
@@ -124,9 +124,7 @@ export async function renderBadgeSourcePng(
     startsAt: source.starts_at,
     endsAt: source.ends_at,
     timeZone: source.timezone,
-    location: [typeof settings.venue === "string" ? settings.venue : null, formatEventPlace(source, "en")]
-      .filter(Boolean)
-      .join(" · "),
+    location: eventPlaceSummary({ ...source, venue: typeof settings.venue === "string" ? settings.venue : null }),
     city: source.city,
     organization: source.organization_name,
     jobTitle: source.job_title,
