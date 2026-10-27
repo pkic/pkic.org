@@ -11,26 +11,34 @@ import { grantAdministrator } from "./helpers/administrator";
  * The user record itself answers a narrower question, tested at the bottom:
  * its own subject may read it, and everybody else still needs `users:read`.
  */
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
 
-import app from "./helpers/app";
+import { callApi } from "./helpers/app";
+import type { Env, StatementLike } from "../functions/_lib/types";
+import { dependencyFailureSchema } from "../assets/shared/schemas/dependency-failure";
 import { userDetailResponseSchema } from "../assets/shared/schemas/user-management";
-import { createMcpSession, createMemberSession } from "./helpers/auth";
+import { createAdminSession, createMcpSession, createMemberSession } from "./helpers/auth";
 import { insertIndividualMember, insertUser } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 
 const NOW = () => new Date().toISOString();
 
-function call(token: string | null, path: string, init: RequestInit = {}): Promise<Response> {
+function call(token: string | null, path: string, init: RequestInit = {}, environment: Env = env): Promise<Response> {
   const headers = new Headers(init.headers);
   if (token) headers.set("authorization", `Bearer ${token}`);
   if (init.body && !headers.has("content-type")) headers.set("content-type", "application/json");
-  return app.fetch(
-    new Request(`https://app.test${path}`, { ...init, headers }),
-    env as never,
-    { passThroughOnException: () => undefined, waitUntil: () => undefined } as never,
-  );
+  return callApi(environment, path, { ...init, headers });
+}
+
+/** Fail one live session batch, then let an erroneous fallback reach the real database. */
+function interruptSessionRead(error: Error) {
+  const read = vi.fn((statements: StatementLike[]) => env.DB.batch(statements)).mockRejectedValueOnce(error);
+  const db: Env["DB"] = {
+    prepare: env.DB.prepare.bind(env.DB),
+    batch: read,
+  };
+  return { db, read };
 }
 
 async function insertGroup(slug: string): Promise<string> {
@@ -69,6 +77,44 @@ async function claimSkill(userId: string, slug: string): Promise<string> {
 
 describe("community profile access", () => {
   beforeEach(resetDb);
+  afterEach(() => vi.restoreAllMocks());
+
+  it.each(["standing", "skills", "availability", "participation"])(
+    "preserves a transient session database failure on %s instead of trying staff access",
+    async (path) => {
+      const subject = await insertIndividualMember(env.DB, "H6", "outage-subject@example.test");
+      const reader = await insertIndividualMember(env.DB, "H6", "outage-reader@example.test");
+      const token = await createMemberSession(env.DB, reader.userId, "outage-reader-token");
+      const { db, read } = interruptSessionRead(new Error("D1_ERROR: Network connection lost."));
+      const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+      const response = await call(token, `/api/v1/users/${subject.userId}/${path}`, {}, { ...env, DB: db });
+      expect(response.status).toBe(503);
+      const body = await response.json<{ error: { code: string; details: unknown } }>();
+      expect(body.error.code).toBe("DEPENDENCY_UNAVAILABLE");
+      const details = dependencyFailureSchema.parse(body.error.details);
+      expect(details.capability).toBe("data");
+      expect(log).toHaveBeenCalledWith("DEPENDENCY_UNAVAILABLE", {
+        reference: details.reference,
+        dependency: "D1",
+        operation: "batch",
+        reason: "connection_lost",
+      });
+      expect(response.headers.get("cache-control")).toContain("no-store");
+      expect(read).toHaveBeenCalledOnce();
+    },
+  );
+
+  it("preserves an unexpected session database failure instead of retrying authentication", async () => {
+    const reader = await insertIndividualMember(env.DB, "H6", "broken-reader@example.test");
+    const token = await createMemberSession(env.DB, reader.userId, "broken-reader-token");
+    const { db, read } = interruptSessionRead(new Error("D1_ERROR: no such table: sessions"));
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const response = await call(token, `/api/v1/users/${reader.userId}/standing`, {}, { ...env, DB: db });
+    expect(response.status).toBe(500);
+    expect(read).toHaveBeenCalledOnce();
+  });
 
   it("lets an ordinary member read another member's profile without staff permission", async () => {
     const subject = await insertIndividualMember(env.DB, "H6", "subject@example.test");
@@ -80,6 +126,16 @@ describe("community profile access", () => {
       // A member holds no `users:read`; the directory is not administration.
       expect(response.status, `${path} should be readable by a member`).toBe(200);
     }
+  });
+
+  it("still lets authorized staff without a membership read a community profile", async () => {
+    const subject = await insertIndividualMember(env.DB, "H6", "staff-subject@example.test");
+    const staffId = await insertUser(env.DB, "staff-reader@example.test");
+    await grantAdministrator(env.DB, staffId);
+    const token = await createAdminSession(env.DB, staffId, "staff-reader-token");
+
+    const response = await call(token, `/api/v1/users/${subject.userId}/standing`);
+    expect(response.status).toBe(200);
   });
 
   it("refuses an unauthenticated reader", async () => {

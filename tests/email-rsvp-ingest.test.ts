@@ -307,7 +307,7 @@ describe("incoming RSVP email persistence", () => {
           },
           context,
         ),
-      ).rejects.toThrow("D1_ERROR: Network connection lost.");
+      ).rejects.toMatchObject({ status: 503, code: "DEPENDENCY_UNAVAILABLE" });
       expect(waitUntil).not.toHaveBeenCalled();
       expect(failed.setReject).not.toHaveBeenCalled();
       expect(await queryAll(env.DB, "SELECT id FROM calendar_rsvp_events")).toHaveLength(0);
