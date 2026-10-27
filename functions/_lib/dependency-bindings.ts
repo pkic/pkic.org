@@ -1,11 +1,15 @@
-import { dependencyFailure } from "./dependency-failure";
+import { dependencyFailure, type DependencyOperation } from "./dependency-failure";
 import type { DatabaseLike, Env, StatementLike } from "./types";
 
-async function execute<T>(provider: "D1" | "R2", operation: () => Promise<T>): Promise<T> {
+async function execute<T>(
+  provider: "D1" | "R2",
+  operationName: DependencyOperation,
+  operation: () => Promise<T>,
+): Promise<T> {
   try {
     return await operation();
   } catch (error) {
-    throw dependencyFailure(error, provider) ?? error;
+    throw dependencyFailure(error, provider, operationName) ?? error;
   }
 }
 
@@ -15,17 +19,24 @@ export function resilientDatabase(db: DatabaseLike): DatabaseLike {
   function wrap(statement: StatementLike): StatementLike {
     const wrapped: StatementLike = {
       bind: (...values) => wrap(statement.bind(...values)),
-      first: <T>(column?: string) => execute("D1", () => statement.first<T>(column)),
-      all: <T>() => execute("D1", () => statement.all<T>()),
-      run: <T>() => execute("D1", () => statement.run<T>()),
+      first: <T>(column?: string) => execute("D1", "first", () => statement.first<T>(column)),
+      all: <T>() => execute("D1", "all", () => statement.all<T>()),
+      run: <T>() => execute("D1", "run", () => statement.run<T>()),
     };
     statements.set(wrapped, statement);
     return wrapped;
   }
   return {
-    prepare: (query) => wrap(db.prepare(query)),
-    batch: (batch) => execute("D1", () => db.batch(batch.map((statement) => statements.get(statement) ?? statement))),
-    ...(db.exec ? { exec: (query: string) => execute("D1", () => db.exec!(query)) } : {}),
+    prepare: (query) => {
+      try {
+        return wrap(db.prepare(query));
+      } catch (error) {
+        throw dependencyFailure(error, "D1", "prepare") ?? error;
+      }
+    },
+    batch: (batch) =>
+      execute("D1", "batch", () => db.batch(batch.map((statement) => statements.get(statement) ?? statement))),
+    ...(db.exec ? { exec: (query: string) => execute("D1", "exec", () => db.exec!(query)) } : {}),
     ...(db.getBookmark ? { getBookmark: () => db.getBookmark?.() ?? null } : {}),
     ...(db.withSession
       ? {
@@ -43,9 +54,16 @@ function resilientBucket(bucket: R2Bucket): R2Bucket {
     get(target, property) {
       const value: unknown = Reflect.get(target, property, target);
       if (typeof value !== "function") return value;
-      if (!["get", "put", "head", "delete", "list", "createMultipartUpload"].includes(String(property)))
+      if (
+        property !== "get" &&
+        property !== "put" &&
+        property !== "head" &&
+        property !== "delete" &&
+        property !== "list" &&
+        property !== "createMultipartUpload"
+      )
         return value.bind(target);
-      return (...args: unknown[]) => execute("R2", async () => Reflect.apply(value, target, args) as unknown);
+      return (...args: unknown[]) => execute("R2", property, async () => Reflect.apply(value, target, args) as unknown);
     },
   });
 }

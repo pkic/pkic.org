@@ -1,11 +1,12 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
 import { env } from "cloudflare:workers";
 import { withDependencyHandling } from "../functions/_lib/dependency-bindings";
+import { dependencyFailure } from "../functions/_lib/dependency-failure";
 import { handleError } from "../functions/_lib/http";
 import { AppError } from "../functions/_lib/errors";
 import { dependencyFailureSchema } from "../assets/shared/schemas/dependency-failure";
-import type { Env } from "../functions/_lib/types";
+import type { Env, StatementLike } from "../functions/_lib/types";
 import { callApi } from "./helpers/app";
 
 function failingDatabase(message: string): Env["DB"] {
@@ -20,6 +21,87 @@ function failingDatabase(message: string): Env["DB"] {
 }
 
 describe("dependency availability", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it.each([
+    ["D1 DB is overloaded", "overloaded"],
+    ["Network connection lost.", "connection_lost"],
+    ["Replica disconnected from primary", "replica_disconnected"],
+    ["A transient issue occurred", "transient_issue"],
+    ["D1 DB exceeded timeout", "timeout"],
+    ["D1 request timed out", "timeout"],
+    ["D1 DB reset because its code was updated", "code_updated"],
+    ["Internal error while starting up D1 DB storage caused object to be reset", "reset"],
+    ["Service Unavailable", "service_unavailable"],
+    ["Internal Error", "internal_error"],
+    ["Response status 502", "http_5xx"],
+  ])("logs a bounded reason for %s", (message, reason) => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const failure = dependencyFailure(new Error(message), "D1");
+
+    expect(failure).toMatchObject({ status: 503, code: "DEPENDENCY_UNAVAILABLE" });
+    expect(log).toHaveBeenCalledExactlyOnceWith("DEPENDENCY_UNAVAILABLE", {
+      reference: dependencyFailureSchema.parse(failure?.details).reference,
+      dependency: "D1",
+      operation: "unknown",
+      reason,
+    });
+  });
+
+  it.each(["prepare", "first", "all", "run", "batch", "exec"] as const)(
+    "logs the D1 %s operation without leaking provider text",
+    async (operation) => {
+      const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      const fail = () => {
+        throw new Error("Network connection lost. SELECT email FROM private_users WHERE email='private@example.test'");
+      };
+      const statement: StatementLike = { bind: () => statement, first: fail, all: fail, run: fail };
+      const db = withDependencyHandling({
+        ...env,
+        DB: { prepare: operation === "prepare" ? fail : () => statement, batch: fail, exec: fail },
+      }).DB;
+      let failure: unknown;
+      try {
+        if (operation === "batch") await db.batch([]);
+        else if (operation === "exec") await db.exec!("SELECT 1");
+        else if (operation === "prepare") db.prepare("SELECT 1");
+        else await db.prepare("SELECT ?").bind("private@example.test")[operation]();
+      } catch (error) {
+        failure = error;
+      }
+
+      expect(failure).toMatchObject({ status: 503, code: "DEPENDENCY_UNAVAILABLE" });
+      expect(log).toHaveBeenCalledExactlyOnceWith("DEPENDENCY_UNAVAILABLE", {
+        reference: expect.any(String),
+        dependency: "D1",
+        operation,
+        reason: "connection_lost",
+      });
+      expect(JSON.stringify(log.mock.calls)).not.toMatch(/SELECT|private_users|private@example/);
+      expect(await handleError(failure).text()).not.toMatch(/SELECT|private_users|private@example/);
+    },
+  );
+
+  it("logs the R2 operation without leaking object keys", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const bucket = new Proxy(env.SPEAKER_UPLOADS_BUCKET!, {
+      get(target, property) {
+        if (property === "get")
+          return () => Promise.reject(new Error("private/person/file.pdf: Internal Error (10001)"));
+        return Reflect.get(target, property, target);
+      },
+    });
+    const scoped = withDependencyHandling({ ...env, SPEAKER_UPLOADS_BUCKET: bucket });
+    await expect(scoped.SPEAKER_UPLOADS_BUCKET!.get("private/person/file.pdf")).rejects.toMatchObject({ status: 503 });
+    expect(log).toHaveBeenCalledExactlyOnceWith("DEPENDENCY_UNAVAILABLE", {
+      reference: expect.any(String),
+      dependency: "R2",
+      operation: "get",
+      reason: "internal_error",
+      providerCode: "10001",
+    });
+  });
+
   it("returns a scoped unavailable error from the mounted application while configured mode is normal", async () => {
     const response = await callApi(
       { ...env, DB: failingDatabase("D1_ERROR: D1 DB is overloaded. Too many requests queued.") },
@@ -87,6 +169,14 @@ describe("dependency availability", () => {
   });
 
   it.each([10001, 10043, 10058])("recognizes R2 service error %s", (code) => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
     expect(handleError(new Error(`R2 get failed (${code})`)).status).toBe(503);
+    expect(log).toHaveBeenCalledExactlyOnceWith("DEPENDENCY_UNAVAILABLE", {
+      reference: expect.any(String),
+      dependency: "R2",
+      operation: "unknown",
+      reason: "provider_service_error",
+      providerCode: String(code),
+    });
   });
 });
