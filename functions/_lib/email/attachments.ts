@@ -4,6 +4,12 @@ import {
   personalPromotionRendererIsCurrent,
 } from "../../../assets/shared/personal-promotion-image";
 
+/** Durable outbox refusals consumed by the existing badge-render retry owner. */
+export const BADGE_ATTACHMENT_WAIT_REASONS = {
+  missing: "Required badge attachment is not ready",
+  stale: "Required badge attachment is waiting for the current renderer",
+} as const;
+
 export interface QueuedBadgeAttachment {
   kind: "r2-badge-image";
   r2Key: string;

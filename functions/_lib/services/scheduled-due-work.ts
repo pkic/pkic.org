@@ -16,9 +16,9 @@ type WaitlistPromotionResult = Awaited<ReturnType<typeof runWaitlistPromotionCyc
 
 // The notification drain is deliberately opportunistic in this shared pass.
 // Keep room for the normal outbox, storage-deletion, and badge-render
-// selection statements that follow it, even when the invocation-wide D1
+// recovery/selection statements that follow it, even when the invocation-wide D1
 // budget is nearly exhausted by the earlier reminder/RSVP/waitlist work.
-const NOTIFICATION_DRAIN_DOWNSTREAM_D1_RESERVE = 4;
+const NOTIFICATION_DRAIN_DOWNSTREAM_D1_RESERVE = 5;
 
 interface ReminderCycleTotals {
   inviteRemindersQueued: number;

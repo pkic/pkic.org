@@ -14,7 +14,11 @@ import { loadEmailRenderResources } from "./partials";
 import { sendViaSendgrid } from "./sendgrid";
 import { applyCampaignCustomText } from "./campaign-custom";
 import { readDirectEmailBody } from "./direct-body";
-import { parseQueuedEmailAttachments, queuedBadgeRendererIsCurrent } from "./attachments";
+import {
+  BADGE_ATTACHMENT_WAIT_REASONS,
+  parseQueuedEmailAttachments,
+  queuedBadgeRendererIsCurrent,
+} from "./attachments";
 import { materializeQueuedCapabilityLinks } from "../auth/capability-links";
 import type { DatabaseLike, Env } from "../types";
 import type { EmailContentType, EmailMessageType } from "../../../assets/shared/schemas/email-templates";
@@ -336,12 +340,12 @@ async function processOutboxRow(
         for (const badgeAttachment of badgeAttachments) {
           const badgeObj = await env.ASSETS_BUCKET.get(badgeAttachment.r2Key);
           if (!badgeObj) {
-            if (badgeAttachment.required) throw new Error("Required badge attachment is not ready");
+            if (badgeAttachment.required) throw new Error(BADGE_ATTACHMENT_WAIT_REASONS.missing);
             continue;
           }
 
           if (!queuedBadgeRendererIsCurrent(badgeAttachment, badgeObj.customMetadata?.badgeRenderer))
-            throw new Error("Required badge attachment is waiting for the current renderer");
+            throw new Error(BADGE_ATTACHMENT_WAIT_REASONS.stale);
 
           const declaredType = badgeObj.httpMetadata?.contentType ?? "image/jpeg";
           const buf = await badgeObj.arrayBuffer();

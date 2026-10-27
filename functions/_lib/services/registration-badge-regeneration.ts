@@ -1,5 +1,5 @@
 import { personalPromotionImagePath } from "../../../assets/shared/personal-promotion-image";
-import { all, first, run } from "../db/queries";
+import { first, run } from "../db/queries";
 import { AppError } from "../errors";
 import { logError } from "../logging";
 import type { AuthAdmin, DatabaseLike, Env } from "../types";
@@ -10,7 +10,8 @@ import { createDurableJobLease, durableRenderRetry } from "../jobs/lease";
 import type { EventRecord } from "./events";
 import { fetchGravatar } from "./gravatar";
 import { renderAndCacheBadge } from "./og-badge-prerender";
-import { prepareBadgeRenderJob } from "./badge-render-job-statements";
+import { batchRows } from "../db/pagination";
+import { prepareWaitingEmailBadgeRenders, prepareBadgeRenderJob } from "./badge-render-job-statements";
 import { firstReferralCodeQuerySql } from "./referral-code-projection";
 export { prepareBadgeRenderJobsForUser } from "./badge-render-job-statements";
 
@@ -187,7 +188,12 @@ export async function processPendingBadgeRenders(
   render: BadgeRenderer = renderAndCacheBadge,
 ): Promise<BadgeRenderResult> {
   if (limit <= 0) return { processed: 0, failed: 0 };
-  const jobs = await all<BadgeRenderJobRow>(db, BADGE_RENDER_DUE_QUERY, [nowIso(), nowIso(), limit]);
+  const at = nowIso();
+  const loaded = await db.batch([
+    prepareWaitingEmailBadgeRenders(db, limit, at),
+    db.prepare(BADGE_RENDER_DUE_QUERY).bind(at, at, limit),
+  ]);
+  const jobs = batchRows<BadgeRenderJobRow>(loaded[1]);
 
   let processed = 0;
   let failed = 0;
