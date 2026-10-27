@@ -1,71 +1,126 @@
-/** Remove an incorrect affiliation rather than listing it as former experience. */
+/** Remove an incorrect association, optionally preserving event work under a valid replacement. */
 import { prepareUserSessionRequest } from "../../auth/user-session-request";
 import { userSessionRequestAuthorizationEvidence } from "../../auth/user-session-evidence";
 import { prepareAuthorizationGuard, isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import { AppError } from "../../errors";
-import type { DatabaseLike, Env } from "../../types";
+import type { DatabaseLike, StatementLike } from "../../types";
 import { nowIso } from "../../utils/time";
 import { prepareAuditLogAfterOneChange } from "../audit";
+import { prepareAutomaticGroupEnrollmentForUserStatements } from "../groups/automatic-enrollment";
+import { ownedIdentityAtEvidence } from "./selection";
+import { prepareBadgeRenderJobsForUser } from "../badge-render-job-statements";
 import { prepareOrganizationIdentityPublication } from "./lifecycle-publication";
+
+export function prepareIncorrectRepresentationRemoval(
+  db: DatabaseLike,
+  input: {
+    identityId: string;
+    actorId: string;
+    ownerId: string;
+    at: string;
+    correction?: { replacementIdentityId: string; reason: string };
+  },
+): StatementLike[] {
+  const { identityId, actorId, ownerId, at, correction } = input;
+  const replacement = correction?.replacementIdentityId;
+  return [
+    prepareAuthorizationGuard(db, {
+      sql: "SELECT 1 FROM identities WHERE id=? AND organization_id IS NOT NULL AND blocked_at IS NULL AND user_id=?",
+      bindings: [identityId, ownerId],
+    }),
+    ...(replacement
+      ? [
+          prepareAuthorizationGuard(db, ownedIdentityAtEvidence({ userId: ownerId, identityId: replacement, at })),
+          prepareAuthorizationGuard(db, {
+            sql: `SELECT 1 FROM identities source JOIN identities target ON target.user_id=source.user_id
+          JOIN organizations organization ON organization.id=target.organization_id AND organization.merged_into_organization_id IS NULL
+        WHERE source.id=? AND target.id=? AND source.organization_id<>target.organization_id
+          AND target.organization_id IS NOT NULL AND target.started_at IS NOT NULL
+          AND target.ended_at IS NULL AND target.blocked_at IS NULL
+          AND (TRIM(COALESCE(target.job_title,''))<>'' OR NOT EXISTS(SELECT 1 FROM proposal_speakers WHERE acting_identity_id=source.id))`,
+            bindings: [identityId, replacement],
+          }),
+        ]
+      : []),
+    prepareOrganizationIdentityPublication(db, identityId, at),
+    ...(replacement
+      ? [
+          db
+            .prepare(`UPDATE registrations SET registration_identity_id=?,updated_at=?
+        WHERE registration_identity_id=? AND user_id=?`)
+            .bind(replacement, at, identityId, ownerId),
+          db
+            .prepare(`UPDATE proposal_speakers SET acting_identity_id=?,acting_identity_selected_at=?
+        WHERE acting_identity_id=? AND user_id=?`)
+            .bind(replacement, at, identityId, ownerId),
+          prepareOrganizationIdentityPublication(db, replacement, at),
+        ]
+      : []),
+    db.prepare("DELETE FROM organization_link_notices WHERE identity_id=? AND user_id=?").bind(identityId, ownerId),
+    db.prepare("DELETE FROM affiliation_reviews WHERE resolved_identity_id=? AND user_id=?").bind(identityId, ownerId),
+    // Incorrect organization grants are removed, never carried into the replacement organization.
+    db.prepare("DELETE FROM user_roles WHERE identity_id=? AND user_id=?").bind(identityId, ownerId),
+    db.prepare("DELETE FROM group_memberships WHERE identity_id=? AND user_id=?").bind(identityId, ownerId),
+    // Voting, membership, and successor references deliberately restrict deletion and roll back the whole correction.
+    db.prepare("DELETE FROM identities WHERE id=?").bind(identityId),
+    prepareAuditLogAfterOneChange(
+      db,
+      "user",
+      actorId,
+      correction ? "incorrect_representation_corrected" : "incorrect_representation_removed",
+      "identity",
+      identityId,
+      correction ?? {},
+      at,
+    ),
+    ...(correction
+      ? [
+          ...prepareAutomaticGroupEnrollmentForUserStatements(db, ownerId, at),
+          prepareBadgeRenderJobsForUser(db, ownerId, at),
+        ]
+      : []),
+  ];
+}
+
+export function incorrectRepresentationRemovalError(cause: unknown, correcting = false): never {
+  if (isAuthorizationGuardFailure(cause))
+    throw new AppError(
+      409,
+      "IDENTITY_REMOVAL_NOT_ALLOWED",
+      "This representation cannot be changed. Refresh your profile and try again.",
+    );
+  if (cause instanceof Error && /FOREIGN KEY constraint failed|SQLITE_CONSTRAINT_FOREIGNKEY/u.test(cause.message))
+    throw new AppError(
+      409,
+      "IDENTITY_HAS_PARTICIPATION",
+      correcting
+        ? "This representation has voting, membership, or succession records that require review before correction."
+        : "This representation has participation records. Correct those records first, or end the representation.",
+    );
+  throw cause;
+}
 
 export async function removeOwnRepresentation(
   db: DatabaseLike,
   request: Request,
-  env: Pick<Env, "INTERNAL_SIGNING_SECRET">,
+  env: Parameters<typeof prepareUserSessionRequest>[2],
   identityId: string,
 ) {
   const actor = await prepareUserSessionRequest(db, request, env);
-  const at = nowIso();
   try {
     const results = await db.batch([
       ...actor.statements,
       prepareAuthorizationGuard(db, userSessionRequestAuthorizationEvidence(actor.claims)),
-      prepareAuthorizationGuard(db, {
-        sql: "SELECT 1 FROM identities WHERE id=? AND user_id=? AND organization_id IS NOT NULL AND blocked_at IS NULL",
-        bindings: [identityId, actor.claims.sub],
-      }),
-      prepareOrganizationIdentityPublication(db, identityId, at),
-      db
-        .prepare("DELETE FROM organization_link_notices WHERE identity_id=? AND user_id=?")
-        .bind(identityId, actor.claims.sub),
-      db
-        .prepare("DELETE FROM affiliation_reviews WHERE resolved_identity_id=? AND user_id=?")
-        .bind(identityId, actor.claims.sub),
-      db.prepare("DELETE FROM user_roles WHERE identity_id=? AND user_id=?").bind(identityId, actor.claims.sub),
-      db.prepare("DELETE FROM group_memberships WHERE identity_id=? AND user_id=?").bind(identityId, actor.claims.sub),
-      // Registration and address references detach through their existing FK actions.
-      // Votes, accepted speaker records and successors deliberately restrict deletion.
-      db
-        .prepare(
-          "DELETE FROM identities WHERE id=? AND user_id=? AND organization_id IS NOT NULL AND blocked_at IS NULL",
-        )
-        .bind(identityId, actor.claims.sub),
-      prepareAuditLogAfterOneChange(
-        db,
-        "user",
-        actor.claims.sub,
-        "incorrect_representation_removed",
-        "identity",
+      ...prepareIncorrectRepresentationRemoval(db, {
         identityId,
-        {},
-        at,
-      ),
+        actorId: actor.claims.sub,
+        ownerId: actor.claims.sub,
+        at: nowIso(),
+      }),
     ]);
     await actor.decode(results.slice(0, actor.statements.length));
   } catch (cause) {
-    if (isAuthorizationGuardFailure(cause))
-      throw new AppError(
-        409,
-        "IDENTITY_REMOVAL_NOT_ALLOWED",
-        "This representation cannot be removed. Refresh your profile and try again.",
-      );
-    if (cause instanceof Error && /FOREIGN KEY constraint failed|SQLITE_CONSTRAINT_FOREIGNKEY/u.test(cause.message))
-      throw new AppError(
-        409,
-        "IDENTITY_HAS_PARTICIPATION",
-        "This representation has participation records. Correct those records first, or end the representation.",
-      );
-    throw cause;
+    incorrectRepresentationRemovalError(cause);
   }
   return { success: true as const };
 }

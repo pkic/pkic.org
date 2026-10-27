@@ -1,22 +1,18 @@
 import type { SessionActingIdentity } from "../../shared/session-acting-identity";
 import { useState } from "preact/hooks";
 import { createPortal } from "preact/compat";
-import { actingIdentityCatalog } from "../shared/acting-identity-catalog";
+import { RepresentationSelect } from "./identities/RepresentationSelect";
 import { userAuthSessionResponseSchema } from "../../shared/schemas/user-auth";
 import { getJson } from "../shared/api-client";
 import { IdentityCreateDialog } from "./identities/IdentityCreateDialog";
-import { IconPlus, IconPencil } from "./icons";
+import { IconPencil } from "./icons";
 import { actingIdentityLabel } from "../shared/acting-identity-catalog";
 import { Button } from "../ui/Button";
-import { Field } from "../ui/Field";
-import { InputGroup } from "../ui/InputGroup";
-import { ServerSearchSelect } from "./ServerSearchSelect";
 import { Dialog } from "../ui/Dialog";
 import { useDialogQueryState } from "../hooks/useDialogQueryState";
 
 const identityLabel = (identity: SessionActingIdentity) =>
   actingIdentityLabel({ organizationName: identity.organizationName, jobTitle: identity.jobTitle });
-const catalog = actingIdentityCatalog("/api/v1/users/current/identities", identityLabel);
 
 /**
  * The identity a registration is made as. An identity under the address the
@@ -93,35 +89,16 @@ export function RegistrationIdentityField({
           )}
       </>
     );
-  const add = userId ? (
-    <Button type="button" variant="ghost" icon aria-label="Add identity" title="Add identity" onClick={showAdding}>
-      <IconPlus />
-    </Button>
-  ) : null;
   return (
     <div class="pk-stack pk-stack--snug">
-      <Field label="Representation">
-        {(control) => (
-          <InputGroup>
-            <ServerSearchSelect
-              {...control}
-              catalog={catalog}
-              searchable={false}
-              allowEmpty={false}
-              searchLabel="Your identities"
-              value={selected?.id ?? null}
-              selectedLabel={selected ? identityLabel(selected) : undefined}
-              placeholder="Choose an existing identity"
-              onChange={(identity) => {
-                if (!identity) return;
-                setSelected(identity);
-                onSelect?.(identity);
-              }}
-            />
-            {add}
-          </InputGroup>
-        )}
-      </Field>
+      <RepresentationSelect
+        value={selected}
+        onAdd={userId ? showAdding : undefined}
+        onSelect={(identity) => {
+          setSelected(identity);
+          onSelect?.(identity);
+        }}
+      />
       {hidden}
       {userId && (
         <IdentityCreateDialog

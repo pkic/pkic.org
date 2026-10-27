@@ -7,6 +7,7 @@ import currentUserRouter from "./current/router";
 import publicUserHeadshotsRouter from "./[userId]/headshots/router";
 import communityProfileRouter from "./[userId]/community-profile-router";
 import userIdRouter from "./[userId]/router";
+import { UserIdentityCorrectionPost } from "./[userId]/identity-corrections";
 import { UserAuditLogGet } from "./[userId]/audit-log";
 
 const app = new Hono<RequestDbContext>();
@@ -23,6 +24,7 @@ openapi.route("/:userId/headshots", publicUserHeadshotsRouter);
 openapi.route("/:userId", communityProfileRouter);
 // This read composes its live staff authorization with the scoped audit page.
 openapi.get("/:userId/audit-log", UserAuditLogGet);
+openapi.post("/:userId/identities/:identityId/corrections", UserIdentityCorrectionPost);
 // The list also composes live authority with its bounded page and count.
 openapi.get("/", UsersList);
 app.use("*", createRequestScopedD1SessionMiddleware());

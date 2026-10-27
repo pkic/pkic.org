@@ -107,7 +107,7 @@ export function withPreparedRequestAdmin<T extends object>(env: T, request: Requ
   return { ...env, [requestAdminKey]: { request, read } };
 }
 /** Canonical transport selection; an explicit human credential takes precedence over machine headers. */
-async function readAdminCredential(
+export async function readAdminCredential(
   request: Request,
   env?: AdminEnvironment,
 ): Promise<{ kind: "api-key" | "user" } | { kind: "mcp"; token: string }> {

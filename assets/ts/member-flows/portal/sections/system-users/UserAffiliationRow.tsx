@@ -80,9 +80,11 @@ export function UserAffiliationRow({
   subjectName,
   seats = [],
   acting = false,
+  onCorrect,
 }: {
   /** The group seats held as this identity, current and past. */
   seats?: readonly UserGroupParticipation[];
+  onCorrect?: () => void;
   /** The signed-in person is acting as this identity right now. */
   acting?: boolean;
   /** The person the record is about. */
@@ -333,6 +335,13 @@ export function UserAffiliationRow({
       onSelect: openMembershipEditor,
     });
   }
+  if (membership.organizationId && onCorrect)
+    rowActions.push({
+      id: "correct-organization",
+      label: "Correct organization…",
+      disabled: busy,
+      onSelect: onCorrect,
+    });
   if (membership.organizationId && viewerIsSubject)
     rowActions.push({
       id: "remove-incorrect",

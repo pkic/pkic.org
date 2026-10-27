@@ -1,3 +1,4 @@
+import { RepresentationCorrectionDialog } from "../../../../components/identities/RepresentationCorrectionDialog";
 import { removeIncorrectRepresentation } from "./remove-representation";
 import { useDialogQueryState } from "../../../../hooks/useDialogQueryState";
 /**
@@ -68,6 +69,18 @@ export function UserAffiliationsPanel({
   /** The identity whose biography the record already states as its About. */
   summarizedIdentityId?: string;
 }) {
+  const [correcting, setCorrecting] = useState<{
+    identityId: string;
+    organizationId: string;
+    organizationName: string;
+  } | null>(null);
+  const [correctingOpen, showCorrecting, closeCorrecting] = useDialogQueryState("organization-correction");
+  const [createdIdentityId, setCreatedIdentityId] = useState<string | null>(null);
+  function correct(identityId: string, organizationId: string, organizationName: string) {
+    setCorrecting({ identityId, organizationId, organizationName });
+    setCreatedIdentityId(null);
+    showCorrecting();
+  }
   const [historyOpen, setHistoryOpen] = useState(true);
   const [adding, showAdding, closeAdding] = useDialogQueryState("identity");
   const [busy, setBusy] = useState(false);
@@ -115,6 +128,13 @@ export function UserAffiliationsPanel({
     // The person reinstates their own only through an address at the organization; staff need none.
     if (viewerIsSubject ? entry.selfReinstatable : canManage && entry.reinstatable)
       items.push({ id: "reinstate", label: "Reinstate representation…", onSelect: () => setReinstating(entry) });
+    if (entry.organizationId && entry.reinstatable && (viewerIsSubject || (canManage && canActivateIdentity)))
+      items.push({
+        id: "correct-organization",
+        label: "Correct organization…",
+        disabled: busy,
+        onSelect: () => correct(entry.identityId, entry.organizationId!, entry.organizationName ?? "Organization"),
+      });
     if (viewerIsSubject && entry.organizationId && entry.reinstatable)
       items.push({
         id: "remove-incorrect",
@@ -174,6 +194,16 @@ export function UserAffiliationsPanel({
             subjectName={[user.first_name, user.last_name].filter(Boolean).join(" ") || user.email}
             seats={seatsOf(membership.identityId)}
             acting={membership.identityId === actingIdentityId}
+            onCorrect={
+              membership.organizationId && (viewerIsSubject || (canManage && canActivateIdentity))
+                ? () =>
+                    correct(
+                      membership.identityId,
+                      membership.organizationId!,
+                      membership.organizationName ?? "Organization",
+                    )
+                : undefined
+            }
           />
         ))}
 
@@ -210,6 +240,20 @@ export function UserAffiliationsPanel({
           ))}
       </PanelBody>
 
+      {correcting && (
+        <RepresentationCorrectionDialog
+          key={correcting.identityId}
+          open={correctingOpen}
+          source={correcting}
+          userId={user.id}
+          isSelf={viewerIsSubject}
+          createdIdentityId={createdIdentityId}
+          onAdd={showAdding}
+          onClose={() => void closeCorrecting()}
+          onCorrected={onChanged}
+        />
+      )}
+
       {/* Creating an identity is a quick action, so it is a dialog: a person creates their own,
           and staff grant one to somebody else. The form is mounted only while open, so a
           cancelled draft does not linger. */}
@@ -231,7 +275,9 @@ export function UserAffiliationsPanel({
                 user={user}
                 canActivate={canActivateIdentity}
                 onBusy={setBusy}
-                onGranted={async () => {
+                preferImmediateActivation={correctingOpen}
+                onGranted={async (identityId) => {
+                  setCreatedIdentityId(identityId ?? null);
                   await closeAdding();
                   await onChanged();
                 }}
@@ -243,7 +289,8 @@ export function UserAffiliationsPanel({
         <IdentityCreateDialog
           open={adding}
           onClose={() => closeAdding()}
-          onCreated={async () => {
+          onCreated={async (identityId) => {
+            setCreatedIdentityId(identityId);
             await onChanged();
           }}
         />

@@ -129,7 +129,7 @@ test("verified approved-domain registration affiliates once and an organization 
     await attendee.goto(extractEmailUrl(selectedEmail, "/register/manage/"));
     await attendee.getByRole("button", { name: "Change representation", exact: true }).click();
     const changeIdentity = attendee.getByRole("dialog", { name: "Change representation", exact: true });
-    await changeIdentity.getByRole("combobox", { name: "Representation", exact: true }).click();
+    await changeIdentity.getByRole("combobox", { name: /^Representation/ }).click();
     await attendee.getByRole("option").filter({ hasText: "Personal" }).click();
     for (const [width, height, device] of [
       [1280, 900, "desktop"],
@@ -147,10 +147,8 @@ test("verified approved-domain registration affiliates once and an organization 
     await expect(changeIdentity).not.toBeVisible();
     await attendee.reload();
     await attendee.getByRole("button", { name: "Change representation", exact: true }).click();
-    await expect(changeIdentity.getByRole("combobox", { name: "Representation", exact: true })).toContainText(
-      "Personal",
-    );
-    await changeIdentity.getByRole("combobox", { name: "Representation", exact: true }).click();
+    await expect(changeIdentity.getByRole("combobox", { name: /^Representation/ })).toContainText("Personal");
+    await changeIdentity.getByRole("combobox", { name: /^Representation/ }).click();
     await attendee.getByRole("option").filter({ hasText: organizationName }).click();
     await changeIdentity.getByRole("button", { name: "Save changes", exact: true }).click();
     await expect(changeIdentity).not.toBeVisible();
@@ -208,7 +206,7 @@ test("a proved work address requires organization confirmation and an incorrect 
   await openMyProfile(page);
   const stamp = Date.now();
   const domain = `shared-representation-${stamp}.example`;
-  const names = [`Parent organization ${stamp}`, `Subsidiary organization ${stamp}`];
+  const names = [`Northstar Trust ${String(stamp).slice(-5)}`, `Northstar US ${String(stamp).slice(-5)}`];
   const directory = info.outputPath("representation-flow");
   await mkdir(directory, { recursive: true });
   for (const [index, name] of names.entries()) {
@@ -272,12 +270,37 @@ test("a proved work address requires organization confirmation and an incorrect 
     await (await page.request.get(`/api/v1/organizations/${incorrect.organizationId}/domains`)).json(),
   );
   expect(domains.domains).toContainEqual(expect.objectContaining({ domain: `us.${domain}`, status: "claimed" }));
+  await page.goto(`/portal/#/organizations/${incorrect.organizationId}`);
+  await expect(page.getByText("Organizations connected by email domain", { exact: true })).toBeVisible();
+  await expect(page.getByText(names[0], { exact: true })).toBeVisible();
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.getByRole("heading", { name: "Email domain connections", exact: true }).scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `${directory}/related-organizations-desktop.png` });
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.getByRole("heading", { name: "Email domain connections", exact: true }).scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `${directory}/related-organizations-phone.png` });
+  await openMyProfile(page);
   await page.getByRole("button", { name: `Actions for ${names[1]}`, exact: true }).click();
-  await page.getByRole("menuitem", { name: "Remove incorrect representation…", exact: true }).click();
-  const confirmation = page.getByRole("alertdialog", { name: "Remove incorrect representation?", exact: true });
-  await expect(confirmation).toBeVisible();
-  await page.screenshot({ path: `${directory}/remove-confirmation-phone.png` });
-  await acceptConfirmDialog(page, "Remove representation");
+  await page.getByRole("menuitem", { name: "Correct organization…", exact: true }).click();
+  const correction = page.getByRole("dialog", { name: "Correct organization", exact: true });
+  await correction.getByRole("combobox", { name: /^Representation/ }).click();
+  await page.getByRole("option", { name: new RegExp(names[0]) }).click();
+  await correction
+    .getByRole("textbox", { name: /^Reason for correction/ })
+    .fill("The subsidiary was selected by mistake.");
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.screenshot({ path: `${directory}/correct-organization-desktop.png` });
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.screenshot({ path: `${directory}/correct-organization-phone.png` });
+  await page.goBack();
+  await expect(correction).not.toBeVisible();
+  await page.goForward();
+  await expect(correction).toBeVisible();
+  await expect(correction.getByRole("textbox", { name: /^Reason for correction/ })).toHaveValue(
+    "The subsidiary was selected by mistake.",
+  );
+  await correction.getByRole("button", { name: "Correct organization", exact: true }).click();
+  await expect(correction).not.toBeVisible();
   await expect(page.getByRole("article").filter({ has: page.getByText(names[1], { exact: true }) })).toHaveCount(0);
   const session = userAuthSessionResponseSchema.parse(await (await page.request.get("/api/v1/auth/session")).json());
   const detail = userDetailResponseSchema.parse(

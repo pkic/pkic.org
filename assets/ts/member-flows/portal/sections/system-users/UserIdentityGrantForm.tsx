@@ -43,10 +43,12 @@ export function UserIdentityGrantForm({
   canActivate,
   onGranted,
   onBusy,
+  preferImmediateActivation = false,
 }: {
   user: UserDetail;
   canActivate: boolean;
-  onGranted: () => void;
+  onGranted: (identityId?: string) => void;
+  preferImmediateActivation?: boolean;
   /** Reports a save in flight so the dialog's confirm cannot double-submit. */
   onBusy?: (busy: boolean) => void;
 }) {
@@ -56,7 +58,7 @@ export function UserIdentityGrantForm({
   const [selectedOrg, setSelectedOrg] = useState<OrganizationSummary | null>(null);
   const [activationReason, setActivationReason] = useState("");
   const [jobTitle, setJobTitle] = useState("");
-  const [activateImmediately, setActivateImmediately] = useState(false);
+  const [activateImmediately, setActivateImmediately] = useState(canActivate && preferImmediateActivation);
   const [saving, setSaving] = useState(false);
   useEffect(() => onBusy?.(saving), [saving]);
   const selectedOrgId = selectedOrg?.id ?? "";
@@ -95,6 +97,7 @@ export function UserIdentityGrantForm({
     setError("");
     try {
       // Nothing leaves the page until the contract accepts the whole draft.
+      let grantedIdentityId: string | undefined;
       if (isIndividual) {
         const checked = individualGrant.submit();
         if (!checked.data) {
@@ -111,14 +114,15 @@ export function UserIdentityGrantForm({
         }
         setSaving(true);
         const { organizationId, ...identity } = checked.data;
-        await postJson(
+        const created = await postJson(
           `/api/v1/organizations/${encodeURIComponent(organizationId)}/identities`,
           identity,
           identityMutationResponseSchema,
         );
+        grantedIdentityId = created.identityId;
       }
       toast("Membership granted", "success");
-      onGranted();
+      onGranted(grantedIdentityId);
     } catch (submitError) {
       // A server refusal names its fields the same way the contract does.
       const message = form.refuse(submitError);

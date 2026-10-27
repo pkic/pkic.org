@@ -222,6 +222,14 @@ export const identityUpdateSchema = z
     message: "Provide exactly one profile update or lifecycle transition",
   });
 
+/** An incorrect association is replaced, not retained as a former role. */
+export const identityCorrectionSchema = z
+  .object({
+    replacementIdentityId: databaseIdSchema,
+    reason: trimmedString(3, 500, "Explain what was incorrect."),
+  })
+  .strict();
+
 export const identityMutationResponseSchema = successResponseSchema.extend({
   identityId: databaseIdSchema,
   state: identityStateSchema,
@@ -232,6 +240,9 @@ export const identitiesListQuerySchema = listQuerySchema(IDENTITY_SORT_COLUMNS).
   memberId: databaseIdSchema.optional(),
   organizationId: databaseIdSchema.optional(),
   organizationOnly: booleanQueryFlagSchema.optional(),
+  identityId: databaseIdSchema.optional(),
+  excludeIdentityId: databaseIdSchema.optional(),
+  excludeOrganizationId: databaseIdSchema.optional(),
   userId: databaseIdSchema.optional(),
   active: booleanQueryFlagSchema.optional(),
   blocked: booleanQueryFlagSchema.optional(),

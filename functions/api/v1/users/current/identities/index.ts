@@ -7,15 +7,15 @@ import { requireIdentityFromRequest } from "../../../../../_lib/auth/user-sessio
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 import { jsonPrivate } from "../../../../../_lib/http";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
-import { createCurrentUserIdentityFromDomain, listUserIdentities } from "../../../../../_lib/services/identities";
+import { createCurrentUserIdentityFromDomain } from "../../../../../_lib/services/identities";
+import { listOwnIdentitiesRequest } from "../../../../../_lib/services/identities/list-request";
 import { commitOwnAffiliation } from "../../../../../_lib/services/identities/own-affiliation";
 
 export const CurrentUserIdentitiesGet = openApiRoute(
   currentUserIdentitiesListRouteSchema,
   async (c: AdminContext, data) => {
     const db = requestDb(c);
-    const actor = await requireIdentityFromRequest(db, c.req.raw, c.env);
-    return jsonPrivate(await listUserIdentities(db, actor.userId, data.query));
+    return jsonPrivate(await listOwnIdentitiesRequest(db, c.req.raw, c.env, data.query));
   },
 );
 

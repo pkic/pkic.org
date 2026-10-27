@@ -8,10 +8,10 @@ import {
 } from "../../../../assets/shared/schemas/identity";
 import { parseLinksJson } from "../../../../assets/shared/schemas/links";
 import { buildPageInfo, type PageInfo } from "../../../../assets/shared/schemas/pagination";
-import { queryPage } from "../../db/pagination";
+import { buildOffsetPageStatements, decodeOffsetPageResults } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
-import type { DatabaseLike } from "../../types";
+import type { DatabaseLike, D1StatementResult } from "../../types";
 import { publicUserHeadshotPath } from "../user-headshot";
 import { identityJobTitleSql } from "./affiliation-projection";
 
@@ -88,11 +88,11 @@ function mapIdentity(row: IdentityReadRow): ActingIdentity {
 
 type OrganizationContactUserIds = readonly [string | null, string | null, string | null];
 
-async function queryIdentities(
+export function prepareIdentitiesList(
   db: DatabaseLike,
   query: IdentitiesListQuery,
   scope: { organizationId?: string; userId?: string; contactUserIds?: OrganizationContactUserIds },
-): Promise<{ identities: ActingIdentity[]; page: PageInfo }> {
+) {
   const conditions: string[] = [];
   const bindings: unknown[] = [];
   if (scope.organizationId) {
@@ -129,6 +129,18 @@ async function queryIdentities(
     bindings.push(query.organizationId);
   }
   if (query.organizationOnly) conditions.push("identity.organization_id IS NOT NULL");
+  if (query.identityId) {
+    conditions.push("identity.id=?");
+    bindings.push(query.identityId);
+  }
+  if (query.excludeOrganizationId) {
+    conditions.push("identity.organization_id<>?");
+    bindings.push(query.excludeOrganizationId);
+  }
+  if (query.excludeIdentityId) {
+    conditions.push("identity.id<>?");
+    bindings.push(query.excludeIdentityId);
+  }
   if (query.userId) {
     conditions.push("identity.user_id = ?");
     bindings.push(query.userId);
@@ -162,7 +174,7 @@ async function queryIdentities(
      AND selected_email.user_id = identity.user_id
      AND selected_email.verified_at IS NOT NULL
    ${conditions.length ? `WHERE ${conditions.join(" AND ")}` : ""}`;
-  const { rows, total } = await queryPage<IdentityReadRow>(db, {
+  const statements = buildOffsetPageStatements(db, {
     source: {
       selectSql: `SELECT identity.id, capacity.member_id,
         identity.organization_id, organization.name AS organization_name,
@@ -180,8 +192,23 @@ async function queryIdentities(
     limit: query.limit,
     offset: query.offset,
   });
-  const identities = rows.map(mapIdentity);
-  return { identities, page: buildPageInfo(query.limit, query.offset, total, identities.length) };
+  return {
+    statements,
+    decode(loaded: D1StatementResult[]) {
+      const { rows, total } = decodeOffsetPageResults<IdentityReadRow>(loaded[0]!, loaded[1]!);
+      const identities = rows.map(mapIdentity);
+      return { identities, page: buildPageInfo(query.limit, query.offset, total, identities.length) };
+    },
+  };
+}
+
+async function queryIdentities(
+  db: DatabaseLike,
+  query: IdentitiesListQuery,
+  scope: { organizationId?: string; userId?: string; contactUserIds?: OrganizationContactUserIds },
+) {
+  const read = prepareIdentitiesList(db, query, scope);
+  return read.decode(await db.batch(read.statements));
 }
 
 export function listOrganizationIdentities(

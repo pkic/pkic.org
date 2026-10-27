@@ -8,6 +8,7 @@ import {
   identitiesListResponseSchema,
   identityCreateSchema,
   identityMutationResponseSchema,
+  identityCorrectionSchema,
   identityInvitationLinkRequestSchema,
   identityInvitationPreviewResponseSchema,
   identityReinstatementLinkRequestSchema,
@@ -15,7 +16,7 @@ import {
   identityReinstatementRequestResponseSchema,
   identityUpdateSchema,
 } from "./identity";
-import { requiresSession } from "./route-contract";
+import { authErrors, requiresPermissions, requiresSession } from "./route-contract";
 
 export const organizationIdentityCollectionParamsSchema = z.object({ organizationId: databaseIdSchema });
 export const organizationIdentityParamsSchema = organizationIdentityCollectionParamsSchema.extend({
@@ -259,5 +260,44 @@ export const currentUserIdentityRemoveRouteSchema = {
     "409": jsonErrorResponse(
       "The representation is blocked, not owned, or has participation records that must be corrected first.",
     ),
+  },
+};
+
+export const identitiesListRouteSchema = {
+  ...requiresPermissions("membership:read"),
+  tags: ["Identities"],
+  summary: "List identities",
+  request: { query: identitiesListQuerySchema },
+  responses: {
+    "200": {
+      description: "A bounded identity page.",
+      content: { "application/json": { schema: identitiesListResponseSchema } },
+    },
+    ...authErrors({ forbidden: "Membership read permission is required." }),
+  },
+};
+
+export const identityCorrectionRouteSchema = {
+  ...requiresSession(),
+  // Owners use their human session; delegated corrections require both staff permissions.
+  "x-pkic-mcp": { expose: true, scopes: ["membership:write", "identities:activate"], readonly: false },
+  tags: ["Identities"],
+  summary: "Correct an identity's organization association",
+  description:
+    "Replace an incorrect association with another active representation of the same person, move registration and speaker references, and remove the incorrect association without former-role history. Owners correct their own associations; correcting another person requires membership:write and identities:activate. Voting, membership, and succession records require review instead.",
+  request: {
+    params: z.object({ userId: databaseIdSchema, identityId: databaseIdSchema }),
+    body: { required: true, content: { "application/json": { schema: identityCorrectionSchema } } },
+  },
+  responses: {
+    "200": {
+      description: "Representation corrected.",
+      content: { "application/json": { schema: identityMutationResponseSchema } },
+    },
+    ...authErrors({
+      badRequest: "Invalid correction request.",
+      forbidden: "You cannot correct this representation.",
+      conflict: "The representation changed or has protected records requiring review.",
+    }),
   },
 };

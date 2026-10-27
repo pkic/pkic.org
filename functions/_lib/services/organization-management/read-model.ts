@@ -1,3 +1,4 @@
+import { hostWithinDomainSql } from "../../email-domains/sql";
 /**
  * Organization-management read model — list/detail projections over the
  * post-approval organization profile (data-bearing columns, pulled forward
@@ -103,11 +104,30 @@ function toOrgSummary(row: OrgSummaryRow) {
   };
 }
 
+/** Current domain connections, without inferring a corporate hierarchy. Trusted SQL expressions only. */
+function organizationConnectionDomainsSql(organizationIdSql: string) {
+  return `SELECT domain FROM organization_domain_claims WHERE organization_id=${organizationIdSql} AND application_id IS NULL
+    UNION SELECT identity.verified_email_domain FROM identities identity JOIN users person ON person.id=identity.user_id
+      WHERE identity.organization_id=${organizationIdSql} AND person.active=1
+        AND identity.verified_email_domain IS NOT NULL AND identity.source='verified_email'
+        AND identity.started_at IS NOT NULL AND identity.ended_at IS NULL AND identity.blocked_at IS NULL`;
+}
+
 export function buildOrganizationsPageQuery(params: OrganizationsListQuery) {
   const search = params.q ? buildD1TextSearchFilter(params.q, ["o.name"]) : null;
   // A merged organization lives on only as the record of its merge; the directory lists the one it joined.
-  const where = `WHERE o.merged_into_organization_id IS NULL${search ? ` AND ${search.sql}` : ""}`;
-  const whereArgs = search?.bindings ?? [];
+  const conditions = ["o.merged_into_organization_id IS NULL", ...(search ? [search.sql] : [])];
+  const whereArgs: unknown[] = [...(search?.bindings ?? [])];
+  if (params.relatedToOrganizationId) {
+    conditions.push(`o.id<>? AND EXISTS (
+      WITH source_domains(domain) AS (${organizationConnectionDomainsSql("?")}),
+      related_domains(domain) AS (${organizationConnectionDomainsSql("o.id")})
+      SELECT 1 FROM source_domains source JOIN related_domains related
+        ON ${hostWithinDomainSql("source.domain", "related.domain")} OR ${hostWithinDomainSql("related.domain", "source.domain")}
+    )`);
+    whereArgs.push(params.relatedToOrganizationId, params.relatedToOrganizationId, params.relatedToOrganizationId);
+  }
+  const where = `WHERE ${conditions.join(" AND ")}`;
   const orderBy = resolveMappedOrderBy(
     params.sort,
     {
