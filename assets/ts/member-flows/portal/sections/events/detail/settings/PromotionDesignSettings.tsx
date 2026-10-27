@@ -1,11 +1,9 @@
 import { useState } from "preact/hooks";
 import { eventSettingsUpdateSchema, type EventDetail } from "../../../../../../../shared/schemas/event-management";
 import {
-  eventPromotionDesignSchema,
-  defaultEventPromotionDesign,
+  eventPromotionDesignFromSettings,
   type EventPromotionDesign,
 } from "../../../../../../../shared/schemas/event-promotion-design";
-import { eventBadgeTemplateSchema } from "../../../../../../../shared/schemas/event-badge-template";
 import { bytesToBase64 } from "../../../../../../../shared/base64";
 import { useContractForm } from "../../../../../../hooks/useContractForm";
 import { useEventSettingsSave } from "./useEventSettingsSave";
@@ -22,12 +20,6 @@ const artworkLabels = {
   motif: "Decorative artwork",
   texture: "Background texture",
 } as const;
-function initialDesign(event: EventDetail): EventPromotionDesign {
-  const saved = eventPromotionDesignSchema.safeParse(event.settings.promotionDesign);
-  if (saved.success) return saved.data;
-  const badge = eventBadgeTemplateSchema.safeParse(event.settings.badgeTemplate);
-  return defaultEventPromotionDesign(event.name, badge.success ? badge.data : null);
-}
 export function PromotionDesignSettings({
   event,
   onUpdated,
@@ -35,14 +27,14 @@ export function PromotionDesignSettings({
   event: EventDetail;
   onUpdated: (event: EventDetail) => void;
 }) {
-  const [design, setDesign] = useState(() => initialDesign(event));
+  const [design, setDesign] = useState(() => eventPromotionDesignFromSettings(event.name, event.settings));
   const form = useContractForm(eventSettingsUpdateSchema, {
     expectedUpdatedAt: event.updatedAt,
     promotionDesign: design,
   });
   const { editing, setEditing, saving, error, setError, save } = useEventSettingsSave(event.slug, form, onUpdated);
   function reset() {
-    setDesign(initialDesign(event));
+    setDesign(eventPromotionDesignFromSettings(event.name, event.settings));
     form.reset();
     setError("");
   }

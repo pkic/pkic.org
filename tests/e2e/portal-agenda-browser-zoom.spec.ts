@@ -1,7 +1,7 @@
 import { writeFile } from "node:fs/promises";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
-import { initialsFrom } from "../../assets/ts/shared/initials";
+import { initialsFrom } from "../../assets/shared/initials";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
 import { matrixTitle, prepareAgendaInteractionFixture } from "./helpers/agenda-interaction-fixture";
 import { captureBrowserZoomViewport, openBrowserZoomContext, setBrowserZoom } from "./helpers/browser-zoom";

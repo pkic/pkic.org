@@ -1,3 +1,4 @@
+import { useDialogQueryState } from "../../../../../../hooks/useDialogQueryState";
 import { Alert } from "../../../../../../ui/Alert";
 import { downloadFile } from "../../../../../../shared/download-file";
 import { loadPromotionKit } from "./promotion-kit-client";
@@ -19,8 +20,8 @@ type Kit = z.infer<typeof promotionKitSchema>;
 export function PersonalPromotionKit({ base, title, onClose }: { base: string; title: string; onClose?: () => void }) {
   const [kit, setKit] = useState<Kit | null>(null),
     [error, setError] = useState(""),
-    [busy, setBusy] = useState(false),
-    [editing, setEditing] = useState(false);
+    [busy, setBusy] = useState(false);
+  const [editing, showEditing, closeEditing] = useDialogQueryState(`promotionComposition:${base}`);
   useEffect(() => {
     let cancelled = false;
     setKit(null);
@@ -97,7 +98,7 @@ export function PersonalPromotionKit({ base, title, onClose }: { base: string; t
             icon
             aria-label="Personalize promotion materials"
             title="Personalize promotion materials"
-            onClick={() => setEditing(true)}
+            onClick={showEditing}
           >
             <IconPlus />
           </Button>
@@ -132,18 +133,17 @@ export function PersonalPromotionKit({ base, title, onClose }: { base: string; t
                 Copy post and registration link
               </Button>
             </div>
-            {editing && (
-              <PromotionCompositionEditor
-                key={kit.compositionRevision}
-                kit={kit}
-                base={base}
-                onCancel={() => setEditing(false)}
-                onSaved={(value) => {
-                  setKit(value);
-                  setEditing(false);
-                }}
-              />
-            )}
+            <PromotionCompositionEditor
+              open={editing}
+              key={kit.compositionRevision}
+              kit={kit}
+              base={base}
+              onCancel={closeEditing}
+              onSaved={(value) => {
+                setKit(value);
+                void closeEditing();
+              }}
+            />
             <ul>
               {promotionFormatSchema.options.map((format) => {
                 const state = kit.artifacts.find((item) => item.format === format);

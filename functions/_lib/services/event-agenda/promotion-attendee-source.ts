@@ -1,3 +1,4 @@
+import { personalPromotionSharePath } from "../../../../assets/shared/personal-promotion-image";
 import type { PromotionSourceBasis } from "./promotion-source-read";
 import { agendaOccurrenceSchema } from "../../../../assets/shared/schemas/event-agenda";
 import {
@@ -28,7 +29,7 @@ export async function buildAttendeePromotionSource(basis: PromotionSourceBasis, 
       "PROMOTION_REFERRAL_REQUIRED",
       "Prepare your personal promotion link before loading these materials.",
     );
-  const registrationUrl = new URL(`/r/${encodeURIComponent(code)}`, origin).href;
+  const registrationUrl = new URL(personalPromotionSharePath(code), origin).href;
   const occurrence = agendaOccurrenceSchema.parse({
     id: `event:${visual.event.id}`,
     title: visual.event.name,

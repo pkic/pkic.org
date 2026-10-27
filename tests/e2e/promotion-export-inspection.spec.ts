@@ -190,8 +190,34 @@ test("every delivered long-panel promotion export has complete evidence and refu
     .getByRole("row")
     .filter({ has: page.getByText(title, { exact: true }) });
   await runRowAction(page, row, "Speaker promotion kit");
+  await page.getByRole("button", { name: "Prepare kits for all speakers", exact: true }).click();
+  const bulk = page.getByRole("dialog", { name: "Prepare speaker promotion kits", exact: true });
+  await expect(bulk).toBeVisible();
+  await page.goBack();
+  await expect(bulk).not.toBeVisible();
+  await page.goForward();
+  await expect(bulk).toBeVisible();
+  await bulk.getByRole("button", { name: "Close bulk promotion preparation", exact: true }).click();
+  await expect(bulk).not.toBeVisible();
+  await page.getByRole("button", { name: "Edit shared promotion copy", exact: true }).click();
+  const sharedCopy = page.getByRole("dialog", { name: "Shared promotion copy", exact: true });
+  await expect(sharedCopy).toBeVisible();
+  await page.goBack();
+  await expect(sharedCopy).not.toBeVisible();
+  await page.goForward();
+  await expect(sharedCopy).toBeVisible();
+  await sharedCopy.getByRole("button", { name: "Close shared promotion copy", exact: true }).click();
+  await expect(sharedCopy).not.toBeVisible();
   await page.getByRole("button", { name: "Personalize promotion materials", exact: true }).click();
   const editor = page.getByRole("dialog", { name: "Personalize promotion materials", exact: true });
+  const shortDescription = editor.getByRole("textbox", { name: "Your short description", exact: true });
+  const previousDescription = await shortDescription.inputValue();
+  await shortDescription.fill("Keep the personal draft through browser Back and Forward.");
+  await page.goBack();
+  await expect(editor).not.toBeVisible();
+  await page.goForward();
+  await expect(shortDescription).toHaveValue("Keep the personal draft through browser Back and Forward.");
+  await shortDescription.fill(previousDescription);
   for (const [device, width, height] of [
     ["desktop", 1280, 900],
     ["phone", 375, 812],

@@ -1,26 +1,17 @@
 /** Bounded observations used by the canonical affiliation planner; never an independent policy. */
 import { z } from "zod";
 
+const observedDomainClaimSchema = z.object({
+  id: z.string(),
+  domain: z.string(),
+  applicationId: z.string().nullable(),
+  organizationId: z.string().nullable(),
+});
+
 export const verifiedAffiliationBasisSchema = z.object({
   domain: z.string(),
-  claim: z
-    .object({
-      id: z.string(),
-      domain: z.string(),
-      applicationId: z.string().nullable(),
-      organizationId: z.string().nullable(),
-    })
-    .nullable(),
-  claims: z
-    .array(
-      z.object({
-        id: z.string(),
-        domain: z.string(),
-        applicationId: z.string().nullable(),
-        organizationId: z.string().nullable(),
-      }),
-    )
-    .max(128),
+  claim: observedDomainClaimSchema.nullable(),
+  claims: z.array(observedDomainClaimSchema).max(128),
   facts: z.object({
     claimed: z.object({ organizationId: z.string(), isMember: z.boolean() }).nullable(),
     heldByApplication: z.boolean(),

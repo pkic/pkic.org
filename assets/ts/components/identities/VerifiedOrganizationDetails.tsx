@@ -1,3 +1,9 @@
+import { createPortal } from "preact/compat";
+import { useDialogQueryState } from "../../hooks/useDialogQueryState";
+import { InputGroup } from "../../ui/InputGroup";
+import { Button } from "../../ui/Button";
+import { IconPlus } from "../icons";
+import { VerifiedOrganizationCreateDialog } from "./VerifiedOrganizationCreateDialog";
 import { actingIdentityLabel } from "../../shared/acting-identity-catalog";
 import type { z } from "zod";
 import { useState, useRef } from "preact/hooks";
@@ -36,6 +42,7 @@ export function VerifiedOrganizationDetails({
   const [resolved, setResolved] = useState(initial);
   const [organizationId, setOrganizationId] = useState<string | null>(initial.organization?.id ?? null);
   const [organizationName, setOrganizationName] = useState("");
+  const [adding, showAdding, closeAdding] = useDialogQueryState("organization");
   const [jobTitle, setJobTitle] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -132,58 +139,64 @@ export function VerifiedOrganizationDetails({
           )}
         </Field>
       )}
-      {Boolean(resolved?.organizations.length) && (
-        <Field
-          label="Organization"
-          help="Choose the organization you represent."
-          required
-          {...detailsForm.of("organizationId")}
-        >
-          {(control) => (
-            <Select
-              {...control}
-              value={organizationId ?? ""}
-              disabled={busy}
-              onChange={(event) => {
-                const id = event.currentTarget.value || null;
-                const suggested = resolved?.domains.find((item) => item.canLink);
-                if (!id && suggested && suggested.domain !== resolved!.domain)
-                  void changeDomain(suggested.domain, true);
-                else setOrganizationId(id);
-              }}
-            >
-              {resolved!.organizations.map((organization) => (
-                <option key={organization.id} value={organization.id}>
-                  {organization.name}
+      <Field
+        label="Organization"
+        required
+        help={
+          resolved.domain
+            ? `Only organizations linked to your verified email domain, ${resolved.domain}, are listed. Use + to add your organization if it is missing.`
+            : "Use + to add your organization."
+        }
+        {...detailsForm.of(organizationId ? "organizationId" : "organizationName")}
+      >
+        {(control) => (
+          <InputGroup>
+            {resolved.organizations.length > 0 ? (
+              <Select
+                {...control}
+                value={organizationId ?? ""}
+                disabled={busy}
+                onChange={(event) => setOrganizationId(event.currentTarget.value || null)}
+              >
+                {resolved.organizations.map((organization) => (
+                  <option key={organization.id} value={organization.id}>
+                    {organization.name}
+                  </option>
+                ))}
+                <option value="" disabled={!organizationName}>
+                  {organizationName || "Choose an organization"}
                 </option>
-              ))}
-              <option value="">Another organization</option>
-            </Select>
-          )}
-        </Field>
-      )}
-      {!organizationId && (
-        <Field
-          id={`${formId}-organization`}
-          label="Organization name"
-          help={
-            resolved && resolved.domains.length === 1
-              ? `This organization will be associated with your verified email domain ${resolved.domain}.`
-              : undefined
-          }
-          required
-          {...detailsForm.of("organizationName")}
-        >
-          {(control) => (
-            <TextInput
-              {...control}
-              name="organizationName"
-              autoComplete="organization"
-              value={organizationName}
-              onInput={(event) => setOrganizationName(event.currentTarget.value)}
-            />
-          )}
-        </Field>
+              </Select>
+            ) : (
+              <TextInput {...control} readOnly value={organizationName} placeholder="Add your organization" />
+            )}
+            <Button
+              type="button"
+              variant="ghost"
+              icon
+              aria-label="Add organization"
+              title="Add organization"
+              onClick={showAdding}
+            >
+              <IconPlus />
+            </Button>
+          </InputGroup>
+        )}
+      </Field>
+      {createPortal(
+        <VerifiedOrganizationCreateDialog
+          initial={resolved}
+          open={adding}
+          resolve={resolve}
+          onClose={() => void closeAdding()}
+          onUse={(organization) => {
+            setResolved(organization.resolved);
+            setOrganizationId(null);
+            setOrganizationName(organization.name);
+            void closeAdding();
+          }}
+        />,
+        document.body,
       )}
       {existingJobTitle ? (
         <DescriptionList items={[{ term: "Job title", value: existingJobTitle }]} />

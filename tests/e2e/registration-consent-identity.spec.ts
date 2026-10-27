@@ -62,6 +62,16 @@ test("verified approved-domain registration affiliates once and an organization 
   try {
     const since = await capturedEmailCount();
     const initial = await registerInBrowser(attendee, email, undefined, undefined, {
+      onReviewReady: async (formPage) => {
+        const review = formPage.getByRole("region", { name: "Registration review", exact: true });
+        await expect(review.getByRole("button", { name: "Edit contact", exact: true })).toBeVisible();
+        await formPage.setViewportSize({ width: 1280, height: 900 });
+        await review.scrollIntoViewIfNeeded();
+        await formPage.screenshot({ path: testInfo.outputPath("registration-review-desktop.png") });
+        await formPage.setViewportSize({ width: 375, height: 812 });
+        await review.scrollIntoViewIfNeeded();
+        await formPage.screenshot({ path: testInfo.outputPath("registration-review-phone.png") });
+      },
       onContactReady: async (formPage) => {
         const chooser = formPage.getByRole("combobox", { name: /^Organization/ });
         await expect(chooser).toHaveValue(owner.user.identities[0].organizationId!);
@@ -69,9 +79,20 @@ test("verified approved-domain registration affiliates once and an organization 
         await formPage.screenshot({ path: testInfo.outputPath("public-organization-choice-desktop.png") });
         await formPage.setViewportSize({ width: 375, height: 812 });
         await formPage.screenshot({ path: testInfo.outputPath("public-organization-choice-phone.png") });
-        await chooser.selectOption("");
-        await expect(formPage.getByRole("textbox", { name: /^Organization name/ })).toBeVisible();
-        await chooser.selectOption(owner.user.identities[0].organizationId!);
+        await formPage.getByRole("button", { name: "Add organization", exact: true }).click();
+        const addOrganization = formPage.getByRole("dialog", { name: "Add organization", exact: true });
+        await expect(addOrganization.getByRole("textbox", { name: /^Organization name/ })).toBeVisible();
+        await formPage.setViewportSize({ width: 1280, height: 900 });
+        await formPage.screenshot({ path: testInfo.outputPath("public-add-organization-desktop.png") });
+        await formPage.setViewportSize({ width: 375, height: 812 });
+        await formPage.screenshot({ path: testInfo.outputPath("public-add-organization-phone.png") });
+        await formPage.goBack();
+        await expect(addOrganization).not.toBeVisible();
+        await formPage.goForward();
+        await expect(addOrganization).toBeVisible();
+        await addOrganization.getByRole("button", { name: "Close add organization", exact: true }).click();
+        await expect(addOrganization).not.toBeVisible();
+        await expect(chooser).toHaveValue(owner.user.identities[0].organizationId!);
       },
     });
     expect(initial.request.identityId).toBeUndefined();
@@ -258,17 +279,20 @@ test("a proved work address requires organization confirmation and an incorrect 
       await expect(organization).toHaveValue(
         before.identities.find((identity) => identity.organizationName === names[0])!.organizationId!,
       );
-      await organization.selectOption({ label: "Another organization" });
-      await expect(dialog.getByRole("combobox", { name: "Email domain", exact: true })).toHaveValue(`us.${domain}`);
     }
-    await dialog.getByRole("textbox", { name: /^Organization name/ }).fill(name);
+    await dialog.getByRole("button", { name: "Add organization", exact: true }).click();
+    const addOrganization = page.getByRole("dialog", { name: "Add organization", exact: true });
+    await addOrganization.getByRole("textbox", { name: /^Organization name/ }).fill(name);
     if (index === 1) {
-      const scope = dialog.getByRole("combobox", { name: "Email domain", exact: true });
+      const scope = addOrganization.getByRole("combobox", { name: "Email domain", exact: true });
+      await expect(scope).toHaveValue(`us.${domain}`);
       await scope.selectOption(domain);
-      await expect(dialog.getByRole("textbox", { name: /^Organization name/ })).toHaveValue(name);
+      await expect(addOrganization.getByRole("textbox", { name: /^Organization name/ })).toHaveValue(name);
       await scope.selectOption(`us.${domain}`);
-      await expect(dialog.getByRole("textbox", { name: /^Organization name/ })).toHaveValue(name);
+      await expect(addOrganization.getByRole("textbox", { name: /^Organization name/ })).toHaveValue(name);
     }
+    await addOrganization.getByRole("button", { name: "Use organization", exact: true }).click();
+    await expect(addOrganization).not.toBeVisible();
     await dialog
       .getByRole("textbox", { name: new RegExp(`^${ORGANIZATION_JOB_TITLE_COPY.label}`) })
       .fill("Research engineer");

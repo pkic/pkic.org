@@ -136,3 +136,32 @@ it("keeps a stale attendee draft editable while disabling exports", async () => 
   expect(root.querySelector("dialog form")).not.toBeNull();
   expect(root.querySelector("a[download]")).toBeNull();
 });
+
+it("keeps a personal editor draft through browser Back and Forward using shared dialog navigation", async () => {
+  window.history.replaceState({}, "", "/portal/#/events/example/promotion");
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response(JSON.stringify(kit), { headers: { "content-type": "application/json" } })),
+  );
+  root = document.createElement("div");
+  document.body.append(root);
+  await act(() =>
+    render(<PersonalPromotionKit base="/api/v1/events/example/promotion" title="Your materials" />, root),
+  );
+  await vi.waitFor(() => expect(root.querySelector("dialog")).not.toBeNull());
+  await act(() => root.querySelector<HTMLButtonElement>('[aria-label="Personalize promotion materials"]')!.click());
+  const dialog = root.querySelector<HTMLDialogElement>("dialog")!;
+  expect(dialog.open).toBe(true);
+  await typeInto(controlFor(dialog, "Your short description"), "Keep this personal draft while navigating.");
+  await act(async () => {
+    history.back();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  });
+  expect(dialog.open).toBe(false);
+  await act(async () => {
+    history.forward();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  });
+  expect(dialog.open).toBe(true);
+  expect(controlFor(dialog, "Your short description").value).toBe("Keep this personal draft while navigating.");
+});

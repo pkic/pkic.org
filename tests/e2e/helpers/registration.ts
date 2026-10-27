@@ -17,6 +17,7 @@ export interface RegistrationOrganization {
   organization?: string;
   jobTitle?: string;
   onContactReady?: (page: Page) => Promise<void>;
+  onReviewReady?: (page: Page) => Promise<void>;
 }
 
 /**
@@ -25,14 +26,18 @@ export interface RegistrationOrganization {
  * form must ask nothing.
  */
 async function answerOrganization(page: Page, values: RegistrationOrganization): Promise<void> {
-  const asked = page.getByRole("textbox", { name: /^Organization name/ });
   const chooser = page.getByRole("combobox", { name: /^Organization/ });
-  if (values.organization && (await chooser.count())) {
+  if (values.organization) {
     const matching = chooser.getByRole("option", { name: values.organization, exact: true });
-    await chooser.selectOption((await matching.count()) ? { label: values.organization } : "");
+    if ((await chooser.count()) && (await matching.count())) await chooser.selectOption({ label: values.organization });
+    else {
+      await page.getByRole("button", { name: "Add organization", exact: true }).click();
+      const dialog = page.getByRole("dialog", { name: "Add organization", exact: true });
+      await dialog.getByRole("textbox", { name: /^Organization name/ }).fill(values.organization);
+      await dialog.getByRole("button", { name: "Use organization", exact: true }).click();
+      await expect(dialog).not.toBeVisible();
+    }
   }
-  if (values.organization && (await asked.count())) await asked.fill(values.organization);
-  else await expect(asked).toHaveCount(0);
   const title = page.getByRole("textbox", { name: ORGANIZATION_JOB_TITLE_COPY.label });
   if (await title.count()) await title.fill(values.jobTitle ?? "Conference attendee");
 }
@@ -94,11 +99,7 @@ export async function confirmRegistration(
 ): Promise<void> {
   const confirm = page.getByRole("button", { name: /Confirm my registration/i });
   await expect(confirm).toBeVisible();
-  const asked = page.getByRole("textbox", { name: "Organization name" });
-  if (organization) {
-    await asked.fill(organization);
-    await page.getByRole("textbox", { name: ORGANIZATION_JOB_TITLE_COPY.label }).fill(jobTitle);
-  } else await expect(asked).toHaveCount(0);
+  await answerOrganization(page, { organization, jobTitle });
   await confirm.click();
 }
 
@@ -145,6 +146,7 @@ export async function registerInBrowser(
   // Organization belongs to the shared contact/representation flow, not the additional profile questions.
   await expect(page.locator('[data-step-panel="3"]').getByLabel("Organization", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await options.onReviewReady?.(page);
   for (const term of [/privacy policy/i, /code of conduct/i, /photos and videos/i]) {
     await page.getByRole("checkbox", { name: term }).check();
   }

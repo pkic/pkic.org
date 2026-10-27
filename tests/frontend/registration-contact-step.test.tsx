@@ -15,7 +15,7 @@ import { RegistrationIdentityField } from "../../assets/ts/components/Registrati
 import { RegistrationContactStep } from "../../assets/ts/components/RegistrationContactStep";
 import { EMAIL_FIRST_ADVISORY_COPY, EMAIL_FIRST_COPY, WORK_EMAIL_STEER } from "../../assets/shared/email-first-copy";
 import { emailDomainResponseSchema } from "../../assets/shared/schemas/email-domains";
-import { controlFor } from "./helpers/labeled-control";
+import { controlFor, buttonNamed } from "./helpers/labeled-control";
 
 const USER_ID = "00000000-0000-4000-8000-000000000041";
 const IDENTITY_ID = "00000000-0000-4000-8000-000000000042";
@@ -225,9 +225,6 @@ function contactStep(
   );
 }
 
-const button = (form: HTMLFormElement, label: string) =>
-  [...form.querySelectorAll("button")].find((candidate) => candidate.textContent === label);
-
 describe("registration contact step", () => {
   it("asks nothing until the visitor continues, then verifies the address before anything else", async () => {
     window.history.replaceState({}, "", "/events/2026/pqc/register/?ref=AB12CD");
@@ -250,7 +247,7 @@ describe("registration contact step", () => {
     expect(form.querySelector('input[name="firstName"]')).toBeNull();
     expect(ready).toBe(false);
 
-    await act(async () => button(form, copy.changeEmail)!.click());
+    await act(async () => buttonNamed(form, copy.changeEmail)!.click());
     expect(controlFor(form, copy.work.label)).not.toBeNull();
   });
 
@@ -293,7 +290,8 @@ describe("registration contact step", () => {
     installResponses(undefined, false, null, true);
     const organization: ConfirmOrganizationController = {};
     const form = await mount(contactStep(() => {}, organization));
-    expect(controlFor(form, "Organization name")).not.toBeNull();
+    expect(controlFor(form, "Organization")).not.toBeNull();
+    expect(buttonNamed(form, "Add organization")).not.toBeNull();
     expect(controlFor(form, "First name").value).toBe("");
     let named: ReturnType<NonNullable<ConfirmOrganizationController["read"]>> | undefined;
     await act(() => {
@@ -321,22 +319,27 @@ describe("registration contact step", () => {
     expect(selected).toMatchObject({
       organization: { name: "Example Corp", organizationId: ORGANIZATION_ID, jobTitle: "Researcher" },
     });
-    await act(() => {
-      choice.value = "";
-      choice.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    const name = controlFor(form, "Organization name");
+    expect([...choice.options].some((option) => option.textContent === "Another organization")).toBe(false);
+    await act(() => buttonNamed(form, "Add organization").click());
+    const dialog = document.querySelector<HTMLElement>("dialog")!;
+    expect(dialog).not.toBeNull();
+    const name = controlFor(dialog, "Organization name");
     await act(() => {
       name.value = "Another Organization";
       name.dispatchEvent(new Event("input", { bubbles: true }));
     });
+    await act(() => buttonNamed(dialog, "Use organization").click());
+    await settle();
     await act(() => {
       selected = organization.read?.();
     });
     expect(selected).toMatchObject({
       organization: { name: "Another Organization", organizationId: null, jobTitle: "Researcher" },
     });
-    await act(() => button(form, "Change email address")!.click());
+    const editEmail = buttonNamed(form, "Change email address");
+    expect(editEmail.closest("dd")?.textContent).toContain("ada@example.test");
+    expect(form.querySelectorAll('button[aria-label="Change email address"]')).toHaveLength(1);
+    await act(() => editEmail.click());
     await settle();
     expect(organization.read).toBeUndefined();
   });
@@ -367,8 +370,8 @@ describe("registration contact step", () => {
     expect(field.textContent).toContain(WORK_EMAIL_STEER);
     expect(field.classList.contains("pk-field--advisory")).toBe(true);
 
-    await act(async () => button(form, EMAIL_FIRST_ADVISORY_COPY.usePersonal)!.click());
-    await act(async () => button(form, copy.personal.action)!.click());
+    await act(async () => buttonNamed(form, EMAIL_FIRST_ADVISORY_COPY.usePersonal)!.click());
+    await act(async () => buttonNamed(form, copy.personal.action)!.click());
     await settle();
     const proof = recorded.find((request) => request.path === `${ENDPOINT}/proof`);
     expect(registrationEmailProofStartSchema.parse(proof!.body).unaffiliatedAttestation).toBe(true);

@@ -25,7 +25,7 @@ import { classifyDonationPollResult } from "../../assets/ts/shared/donation/sess
 import { uploadFile } from "../../assets/ts/shared/file-upload";
 import { emailFromSubmitEvent } from "../../assets/ts/shared/form/helpers";
 import { replaceFormWithSuccess } from "../../assets/ts/shared/form/success-panel";
-import { initialsFrom, monogramFrom } from "../../assets/ts/shared/initials";
+import { initialsFrom, monogramFrom } from "../../assets/shared/initials";
 import { ORGANIZATION_CONTENT_FIELD_LABELS } from "../../assets/ts/shared/organization-content";
 import { handleFormInviteSubmitError } from "../../assets/ts/shared/widgets/invite-recovery";
 import { showManageLinkRecoveryForm } from "../../assets/ts/shared/widgets/link-recovery";

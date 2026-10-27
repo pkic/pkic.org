@@ -6,9 +6,9 @@ import { useState } from "preact/hooks";
 import "./Avatar.css";
 // The ring and label only portal surfaces wear; kept out of the entry stylesheet public pages link.
 import "./AvatarStanding.css";
-import { initialsFrom, monogramFrom } from "../shared/initials";
+import { initialsFrom, monogramFrom } from "../../shared/initials";
 
-export { initialsFrom, monogramFrom } from "../shared/initials";
+export { initialsFrom, monogramFrom } from "../../shared/initials";
 
 export type AvatarSize = "sm" | "md" | "lg" | "xl";
 

@@ -1,3 +1,4 @@
+import { initialsFrom } from "../../../../assets/shared/initials";
 import type { PersonalPromotionRenderData, PromotionMeasure, PromotionPage, PromotionText } from "./promotion-scene";
 import { promotionBalancedLines, promotionMeasuredLines } from "./promotion-text";
 
@@ -188,13 +189,7 @@ export function layoutPersonalPromotion(
     alt: name,
   });
   if (!portrait) {
-    const initials = name
-      .split(/\s+/u)
-      .filter(Boolean)
-      .map((word) => Array.from(word)[0]);
-    const monogram = (initials.length > 1 ? [initials[0], initials.at(-1)] : initials)
-      .join("")
-      .toLocaleUpperCase("en-US");
+    const monogram = initialsFrom(name);
     const monogramBlock = block(monogram, { size: portraitSize * 0.28, weight: 700, lineHeight: 1 }, portraitSize);
     put(
       monogramBlock,

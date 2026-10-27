@@ -1,12 +1,15 @@
-import { render, type ComponentChildren } from "preact";
+import { render } from "preact";
+import { Button } from "../../ui/Button";
+import { Panel, PanelHeader, PanelBody } from "../../ui/Panel";
+import { DescriptionList, type DescriptionListItem } from "../../ui/DescriptionList";
 import type { FormField } from "../../shared/types";
 import { attendanceTypeLabel } from "../../shared/attendance";
 import { readField } from "../../shared/form/helpers";
 import { readCustomFieldValues } from "../../shared/widgets/custom-fields";
 import { ATTENDANCE_WAITLIST_COPY } from "../DayAttendancePicker";
-import { optionsFor } from "../../shared/form/custom-field-rules";
+import { formatFormAnswerValue } from "../forms/form-answers";
 
-type CustomAnswerValue = string | number | boolean | string[] | { start: string; end: string };
+import type { FormAnswers } from "../../../shared/schemas/form-answers";
 
 function readAttendanceReview(form: HTMLFormElement): Array<{ label: string; value: string }> {
   const selected = Array.from(form.querySelectorAll<HTMLInputElement>("input[name^='dayAttendance.']:checked"));
@@ -33,42 +36,9 @@ function readAttendanceReview(form: HTMLFormElement): Array<{ label: string; val
     .filter((entry) => entry.label || entry.value);
 }
 
-function resolveCustomFieldValue(
-  form: HTMLFormElement,
-  field: FormField,
-  answers: Record<string, CustomAnswerValue>,
-): { value: string; empty: boolean } {
-  const raw = answers[field.key];
-  const options = optionsFor(field);
-  const optionLabel = (value: string): string => options.find((option) => option.value === value)?.label ?? value;
-
-  if (Array.isArray(raw)) {
-    return raw.length > 0
-      ? { value: raw.map(optionLabel).join(", "), empty: false }
-      : { value: "None provided", empty: true };
-  }
-
-  if (typeof raw === "object" && raw !== null) {
-    const start = raw.start?.trim();
-    const end = raw.end?.trim();
-    return start && end ? { value: `${start} to ${end}`, empty: false } : { value: "None provided", empty: true };
-  }
-
-  if (typeof raw === "boolean") {
-    return { value: raw ? "Yes" : "No", empty: false };
-  }
-
-  if (typeof raw === "number") {
-    return { value: String(raw), empty: false };
-  }
-
-  if (typeof raw === "string" && raw.trim()) {
-    const select = form.querySelector<HTMLSelectElement>(`select[name='custom.${field.key}']`);
-    const selectedLabel = select?.selectedOptions[0]?.textContent?.trim();
-    return { value: selectedLabel || optionLabel(raw.trim()), empty: false };
-  }
-
-  return { value: "None provided", empty: true };
+function resolveCustomFieldValue(field: FormField, answers: FormAnswers): string {
+  const values = formatFormAnswerValue(answers[field.key], field).filter((value) => value !== "-");
+  return values.length ? values.join(", ") : "None provided";
 }
 
 function visibleCustomFields(root: HTMLElement, fields: FormField[]): FormField[] {
@@ -84,46 +54,22 @@ function visibleCustomFields(root: HTMLElement, fields: FormField[]): FormField[
 
 function ReviewEditButton({ step, label }: { step: number; label: string }) {
   return (
-    <button type="button" class="event-flow-review-edit" data-step-jump={step} aria-label={`Edit ${label}`}>
+    <Button type="button" variant="link" data-step-jump={step} aria-label={`Edit ${label}`}>
       Edit
-    </button>
+    </Button>
   );
 }
 
-function ReviewSection({ title, step, children }: { title: string; step: number; children: ComponentChildren }) {
+function ReviewSection({ title, step, items }: { title: string; step: number; items: DescriptionListItem[] }) {
   return (
-    <section class="event-flow-review-section" aria-labelledby={`registration-review-${step}`}>
-      <div class="event-flow-review-section-heading">
-        <div>
-          <p class="event-flow-review-section-title" id={`registration-review-${step}`}>
-            {title}
-          </p>
-        </div>
+    <Panel>
+      <PanelHeader title={title}>
         <ReviewEditButton step={step} label={title.toLowerCase()} />
-      </div>
-      <dl class="event-flow-review-list">{children}</dl>
-    </section>
-  );
-}
-
-function ReviewRow({
-  label,
-  value,
-  empty = false,
-  valueClass,
-}: {
-  label: string;
-  value: string;
-  empty?: boolean;
-  valueClass?: string;
-}) {
-  const className = [empty ? "text-muted" : "", valueClass ?? ""].filter(Boolean).join(" ") || undefined;
-
-  return (
-    <div class="event-flow-review-row">
-      <dt>{label}</dt>
-      <dd class={className}>{value}</dd>
-    </div>
+      </PanelHeader>
+      <PanelBody>
+        <DescriptionList items={items} />
+      </PanelBody>
+    </Panel>
   );
 }
 
@@ -139,37 +85,36 @@ function RegistrationReview({
   email: string;
   attendance: Array<{ label: string; value: string }>;
   customFields: FormField[];
-  customAnswers: Record<string, CustomAnswerValue>;
+  customAnswers: FormAnswers;
   form: HTMLFormElement;
 }) {
   return (
-    <section class="event-flow-review" aria-label="Registration review">
-      <ReviewSection title="Contact" step={1}>
-        <ReviewRow label="Name" value={fullName || "Not provided yet"} empty={!fullName} />
-        <ReviewRow
-          label="Email"
-          value={email || "Not provided yet"}
-          empty={!email}
-          valueClass="event-flow-review-email-inline"
-        />
-        {readField(form, "representationLabel") && (
-          <ReviewRow label="Representation" value={readField(form, "representationLabel")} />
-        )}
-      </ReviewSection>
-
-      <ReviewSection title="Attendance" step={2}>
-        {attendance.map((entry) => (
-          <ReviewRow key={`${entry.label}-${entry.value}`} label={entry.label} value={entry.value} />
-        ))}
-      </ReviewSection>
-
+    <section class="pk-stack" aria-label="Registration review">
+      <ReviewSection
+        title="Contact"
+        step={1}
+        items={[
+          { term: "Name", value: fullName },
+          { term: "Email", value: <span class="pk-break">{email}</span> },
+          ...(readField(form, "representationLabel")
+            ? [{ term: "Representation", value: readField(form, "representationLabel") }]
+            : []),
+        ]}
+      />
+      <ReviewSection
+        title="Attendance"
+        step={2}
+        items={attendance.map((entry) => ({ term: entry.label, value: entry.value }))}
+      />
       {customFields.length > 0 && (
-        <ReviewSection title="Profile details" step={3}>
-          {customFields.map((field) => {
-            const resolved = resolveCustomFieldValue(form, field, customAnswers);
-            return <ReviewRow key={field.key} label={field.label} value={resolved.value} empty={resolved.empty} />;
-          })}
-        </ReviewSection>
+        <ReviewSection
+          title="Profile details"
+          step={3}
+          items={customFields.map((field) => ({
+            term: field.label,
+            value: resolveCustomFieldValue(field, customAnswers),
+          }))}
+        />
       )}
     </section>
   );
@@ -194,7 +139,7 @@ export function updateRegistrationReview(root: HTMLElement, form: HTMLFormElemen
         email={email}
         attendance={readAttendanceReview(form)}
         customFields={visibleCustomFields(root, customFieldDefs)}
-        customAnswers={readCustomFieldValues(form) as Record<string, CustomAnswerValue>}
+        customAnswers={readCustomFieldValues(form) as FormAnswers}
         form={form}
       />,
       reviewEl,

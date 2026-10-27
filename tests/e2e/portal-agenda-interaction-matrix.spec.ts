@@ -18,7 +18,7 @@ import {
 } from "../../assets/shared/schemas/event-agenda-schedule";
 import { formatTimeRangeInZone } from "../../assets/shared/format-date";
 import { runAgendaAction } from "./helpers/agenda-actions";
-import { initialsFrom } from "../../assets/ts/shared/initials";
+import { initialsFrom } from "../../assets/shared/initials";
 
 async function expectReadingBounds(content: Locator) {
   const bounds = await content.evaluate((element) => {

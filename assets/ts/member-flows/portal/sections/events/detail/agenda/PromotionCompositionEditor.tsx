@@ -44,11 +44,13 @@ const stillLayoutLabels: Record<PromotionComposition["stillLayout"], string> = {
 
 export function PromotionCompositionEditor({
   kit,
+  open = true,
   base,
   onSaved,
   onCancel,
 }: {
   kit: Kit;
+  open?: boolean;
   base: string;
   onSaved: (kit: Kit) => void;
   onCancel: () => void;
@@ -81,7 +83,7 @@ export function PromotionCompositionEditor({
   }
   return (
     <Dialog
-      open
+      open={open}
       title="Personalize promotion materials"
       closeLabel="Close promotion editor"
       confirmLabel="Save my materials"
@@ -91,6 +93,7 @@ export function PromotionCompositionEditor({
     >
       <form
         noValidate
+        {...form.handlers}
         onSubmit={(event) => {
           event.preventDefault();
           void save();

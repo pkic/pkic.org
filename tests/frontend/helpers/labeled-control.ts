@@ -126,9 +126,11 @@ export async function submitForm(root: ParentNode): Promise<void> {
   });
 }
 
-/** The button whose visible text is exactly `label`. */
+/** The button named by its accessible label or visible text. */
 export function buttonNamed(root: ParentNode, label: string): HTMLButtonElement {
-  const match = [...root.querySelectorAll("button")].find((candidate) => candidate.textContent === label);
+  const match = [...root.querySelectorAll("button")].find(
+    (candidate) => (candidate.getAttribute("aria-label") ?? candidate.textContent) === label,
+  );
   if (!match) throw new Error(`no button reads "${label}"`);
   return match;
 }

@@ -1,3 +1,4 @@
+import { personalPromotionSharePath } from "../../../assets/shared/personal-promotion-image";
 import { personalPromotionImageCacheKey } from "../../../assets/shared/personal-promotion-image";
 /**
  * OG badge pre-rendering service.
@@ -133,7 +134,7 @@ export async function renderBadgeSourcePng(
     heroImage,
     sessions: source.sessions,
     format,
-    registrationUrl: new URL(`/r/${encodeURIComponent(code)}`, origin).href,
+    registrationUrl: new URL(personalPromotionSharePath(code), origin).href,
     design: eventPromotionDesignFromSettings(source.event_name, settings),
     measure: promotionFontMeasure(fontBuffers, {
       mono: fontBuffers[2],

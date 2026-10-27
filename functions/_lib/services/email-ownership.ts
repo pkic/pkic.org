@@ -1,4 +1,5 @@
 /** A pending claim is not ownership. Resolve only after the caller has proved this mailbox. */
+import { primaryEmailProofMayAuthenticateSql } from "../auth/email-sign-in-policy";
 import { nowIso } from "../utils/time";
 import { normalizeEmail } from "../validation";
 import { first } from "../db/queries";
@@ -19,11 +20,14 @@ export interface EmailOwnership {
 function emailOwnershipSelection(email: string) {
   return {
     sql: `WITH owner AS (
-    SELECT id AS userId,'primary' AS kind,NULL AS emailId,email_verified_at AS verifiedAt FROM users WHERE normalized_email=?
-    UNION ALL SELECT user_id,'secondary',id,verified_at FROM user_emails WHERE normalized_email=?
+    SELECT person.id AS userId,'primary' AS kind,NULL AS emailId,person.email_verified_at AS verifiedAt,
+      CASE WHEN ${primaryEmailProofMayAuthenticateSql("person")} THEN person.id ELSE NULL END AS provedUserId
+      FROM users person WHERE person.normalized_email=?
+    UNION ALL SELECT user_id,'secondary',id,verified_at,CASE WHEN verified_at IS NOT NULL THEN user_id ELSE NULL END
+      FROM user_emails WHERE normalized_email=?
   ) SELECT owner.userId,owner.kind,owner.emailId,owner.verifiedAt,alternate.id AS alternateId,
     alternate.email AS alternateEmail,alternate.verified_at AS alternateVerifiedAt,
-    CASE WHEN owner.verifiedAt IS NOT NULL OR (owner.kind='primary' AND alternate.id IS NULL) THEN owner.userId ELSE NULL END AS provedUserId
+    owner.provedUserId
     FROM owner LEFT JOIN user_emails alternate ON alternate.id=(SELECT id FROM user_emails
       WHERE user_id=owner.userId AND verified_at IS NOT NULL ORDER BY created_at,id LIMIT 1) LIMIT 1`,
     bindings: [email, email],

@@ -1,3 +1,4 @@
+import { useDialogQueryState } from "../../../../../../hooks/useDialogQueryState";
 import "./SessionPromotionKit.css";
 import { useState } from "preact/hooks";
 import { promotionKitSaveSchema } from "../../../../../../../shared/schemas/event-promotion-kit";
@@ -37,7 +38,7 @@ export function SessionPromotionKit({
   const [campaign, setCampaign] = useState(occurrence.promotionCopy?.campaign ?? "speaker-kit");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [editing, setEditing] = useState(false);
+  const [editing, showEditing, closeEditing] = useDialogQueryState("promotionCopy");
   const base = `/api/v1/events/${encodeURIComponent(slug)}/agenda/occurrences/${encodeURIComponent(occurrence.id)}/promotion`;
   const body = {
     expectedRevision: snapshot?.revision ?? 0,
@@ -63,7 +64,7 @@ export function SessionPromotionKit({
     try {
       onSaved?.(await postJson(base, checked.data, agendaSnapshotSchema));
       setError("");
-      setEditing(false);
+      await closeEditing();
     } catch (e) {
       setError(form.refuse(e));
     } finally {
@@ -80,7 +81,7 @@ export function SessionPromotionKit({
               icon
               aria-label="Edit shared promotion copy"
               title="Edit shared promotion copy"
-              onClick={() => setEditing(true)}
+              onClick={showEditing}
             >
               <IconPlus />
             </Button>
@@ -97,10 +98,11 @@ export function SessionPromotionKit({
             confirmLabel="Approve promotion copy"
             confirmDisabled={busy}
             onConfirm={() => void approve()}
-            onCancel={() => setEditing(false)}
+            onCancel={closeEditing}
           >
             <form
               noValidate
+              {...form.handlers}
               onSubmit={(event) => {
                 event.preventDefault();
                 void approve();

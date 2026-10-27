@@ -1,3 +1,4 @@
+import { IconPencil } from "./icons";
 import { useEffect, useState } from "preact/hooks";
 import type { ComponentChildren } from "preact";
 import type { FieldPresentation } from "../hooks/useContractForm";
@@ -121,17 +122,38 @@ function Details({
   firstName,
   lastName,
   representation,
+  onChangeEmail,
 }: {
   email: string;
   firstName?: string | null;
   lastName?: string | null;
   representation?: ComponentChildren;
+  onChangeEmail?: () => void;
 }) {
   return (
     <DescriptionList
       items={[
         ...(firstName && lastName ? [{ term: "Name", value: `${firstName} ${lastName}` }] : []),
-        { term: "Email", value: email },
+        {
+          term: "Email",
+          value: (
+            <span class="pk-cluster pk-cluster--nowrap">
+              <span class="pk-break">{email}</span>
+              {onChangeEmail && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  icon
+                  aria-label={copy.changeEmail}
+                  title={copy.changeEmail}
+                  onClick={onChangeEmail}
+                >
+                  <IconPencil />
+                </Button>
+              )}
+            </span>
+          ),
+        },
         ...(representation ? [{ term: "Representation", value: representation }] : []),
       ]}
     />
@@ -155,7 +177,12 @@ function VerifiedContact({
   return (
     <div class="pk-stack">
       <AddressFields step={verified} emailProof={verified.token} />
-      <Details email={verified.email} firstName={person?.firstName} lastName={person?.lastName} />
+      <Details
+        email={verified.email}
+        firstName={person?.firstName}
+        lastName={person?.lastName}
+        onChangeEmail={changeEmail}
+      />
       <NameFields firstName={person?.firstName} lastName={person?.lastName} presentationOf={presentationOf} />
       {verified.affiliation && (
         <RegistrationConfirmOrganization
@@ -165,11 +192,6 @@ function VerifiedContact({
           proof={{ token: verified.token, endpoint: `${endpoint}/proof/verify`, affiliation: verified.affiliation }}
         />
       )}
-      <div>
-        <Button type="button" variant="link" onClick={changeEmail}>
-          {copy.changeEmail}
-        </Button>
-      </div>
     </div>
   );
 }
@@ -282,6 +304,7 @@ export function RegistrationContactStep({
         <AddressFields step={step} />
         <Details
           email={step.email}
+          onChangeEmail={!autoSession ? changeEmail : undefined}
           firstName={person.firstName}
           lastName={person.lastName}
           representation={
@@ -300,13 +323,6 @@ export function RegistrationContactStep({
           }
         />
         <NameFields firstName={person.firstName} lastName={person.lastName} presentationOf={presentationOf} />
-        {!autoSession && (
-          <div>
-            <Button type="button" variant="link" onClick={changeEmail}>
-              {copy.changeEmail}
-            </Button>
-          </div>
-        )}
       </div>
     );
   }

@@ -1,3 +1,4 @@
+import { useDialogQueryState } from "../../../../../../hooks/useDialogQueryState";
 import { useEffect, useState } from "preact/hooks";
 import {
   promotionBatchCreateSchema,
@@ -31,8 +32,8 @@ export function PromotionBulkPreparation({
   publishedRevision: number | null;
 }) {
   const [batchId, setBatchId] = useHashQueryParam("promotionBatch", "");
-  const [creating, setCreating] = useState(false),
-    [busy, setBusy] = useState(false),
+  const [creating, showCreating, closeCreating] = useDialogQueryState("promotionBatchCreate");
+  const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const [requestId, setRequestId] = useState(crypto.randomUUID());
   const [formats, setFormats] = useState<z.infer<typeof promotionFormatSchema>[]>([...promotionFormatSchema.options]);
@@ -43,9 +44,9 @@ export function PromotionBulkPreparation({
     publishedRevision: publishedRevision ?? 0,
     formats,
   });
-  function close() {
-    setCreating(false);
-    setBatchId("");
+  async function close() {
+    if (creating) await closeCreating();
+    if (batchId) setBatchId("");
     setError("");
   }
   useEffect(() => {
@@ -79,8 +80,8 @@ export function PromotionBulkPreparation({
     try {
       const value = await postJson(base, checked.data, promotionBatchSchema);
       setBatch(value);
+      await closeCreating();
       setBatchId(value.id);
-      setCreating(false);
       setError("");
     } catch (cause) {
       setError(form.refuse(cause));
@@ -94,7 +95,7 @@ export function PromotionBulkPreparation({
         onClick={() => {
           setRequestId(crypto.randomUUID());
           setBatch(null);
-          setCreating(true);
+          showCreating();
           setError("");
         }}
         disabled={!publishedRevision}
@@ -116,6 +117,7 @@ export function PromotionBulkPreparation({
           {creating && (
             <form
               noValidate
+              {...form.handlers}
               class="pk-form"
               onSubmit={(event) => {
                 event.preventDefault();

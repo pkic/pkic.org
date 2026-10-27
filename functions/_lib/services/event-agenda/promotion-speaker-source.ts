@@ -1,3 +1,4 @@
+import { personalPromotionSharePath } from "../../../../assets/shared/personal-promotion-image";
 import type { PromotionSourceBasis } from "./promotion-source-read";
 import { promotionMediaWording } from "../../../../assets/shared/promotion-media";
 import { agendaOccurrenceMedia } from "../../../../assets/shared/event-agenda-media";
@@ -54,7 +55,7 @@ export async function buildSpeakerPromotionSource(basis: PromotionSourceBasis, a
   const media = agendaOccurrenceMedia(agenda.rooms, occurrence);
   const mediaWording = promotionMediaWording(visual.design, media, occurrence.recordingUrl);
 
-  const registrationUrl = new URL(`/r/${encodeURIComponent(code)}`, origin).href;
+  const registrationUrl = new URL(personalPromotionSharePath(code), origin).href;
   // The same page rule as every other link: only a session page the site renders is promoted.
   const sessionPage = publishedSessionRoute(
     { ...agenda, publicPages: eventPublishesPages(event.visibility) },

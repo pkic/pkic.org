@@ -18,7 +18,7 @@ import {
 } from "../../assets/shared/schemas/registration";
 import { ORGANIZATION_JOB_TITLE_COPY, REGISTRATION_ORGANIZATION_COPY } from "../../assets/shared/email-first-copy";
 import { JOB_TITLE_REQUIRED, ORGANIZATION_NAME_REQUIRED } from "../../assets/shared/schemas/api-common";
-import { controlFor } from "./helpers/labeled-control";
+import { controlFor, buttonNamed } from "./helpers/labeled-control";
 
 const CONFIRM_INFO = "/api/v1/events/pqc-2026/registrations/confirm-info";
 const RESEND = "/api/v1/events/pqc-2026/registrations/resend-confirmation";
@@ -101,12 +101,6 @@ async function settle(): Promise<void> {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
-}
-
-function buttonNamed(root: ParentNode, name: string): HTMLButtonElement {
-  const match = [...root.querySelectorAll("button")].find((candidate) => candidate.textContent?.trim() === name);
-  if (!match) throw new Error(`no button reads "${name}"`);
-  return match;
 }
 
 async function click(target: HTMLElement): Promise<void> {
@@ -388,8 +382,7 @@ describe("registration confirmation shell", () => {
     const form = root.querySelector<HTMLFormElement>("form")!;
     // The question says what confirming needs, in place of the one-click greeting.
     expect(root.querySelector<HTMLElement>("[data-confirm-intro]")?.hidden).toBe(true);
-    expect(controlFor(root, "Organization name")).not.toBeNull();
-    const name = controlFor(root, "Organization name");
+    const organization = controlFor(root, "Organization");
     const submit = async () =>
       act(async () => {
         form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
@@ -397,14 +390,19 @@ describe("registration confirmation shell", () => {
       });
     await submit();
     expect(requests.some((request) => request.method === "POST")).toBe(false);
-    expect(name.getAttribute("aria-invalid")).toBe("true");
+    expect(organization.getAttribute("aria-invalid")).toBe("true");
     expect(root.textContent).toContain(ORGANIZATION_NAME_REQUIRED);
     expect(root.textContent).not.toContain("Invalid input");
 
+    await act(() => buttonNamed(root, "Add organization").click());
+    const dialog = document.querySelector<HTMLElement>("dialog")!;
+    const name = controlFor(dialog, "Organization name");
     await act(() => {
       name.value = "Unknown Works";
       name.dispatchEvent(new Event("input", { bubbles: true }));
     });
+    await act(() => buttonNamed(dialog, "Use organization").click());
+    await settle();
     await submit();
     // Registering on behalf of the organization requires the job title, refused on its field before the network.
     const jobTitle = controlFor(root, ORGANIZATION_JOB_TITLE_COPY.label);
