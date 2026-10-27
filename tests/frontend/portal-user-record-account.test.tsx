@@ -175,7 +175,8 @@ async function mount(userId: string, permissions: UserPermissions): Promise<void
 }
 
 function panel(name: string): Element | null {
-  return container.querySelector(`.pk-panel[aria-label="${name}"]`);
+  const element = container.querySelector(`.pk-panel[aria-label="${name}"]`);
+  return element?.closest("[hidden]") ? null : element;
 }
 
 function panelNames(): string[] {

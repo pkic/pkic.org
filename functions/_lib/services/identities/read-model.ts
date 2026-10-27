@@ -16,6 +16,7 @@ import { publicUserHeadshotPath } from "../user-headshot";
 import { identityJobTitleSql } from "./affiliation-projection";
 
 interface IdentityReadRow {
+  state: ActingIdentity["state"];
   id: string;
   member_id: string | null;
   organization_id: string | null;
@@ -50,12 +51,9 @@ const SORT_EXPRESSIONS = {
   updated_at: "identity.updated_at",
 } satisfies Record<(typeof IDENTITY_SORT_COLUMNS)[number], string>;
 
-function identityState(row: IdentityReadRow): ActingIdentity["state"] {
-  if (row.blocked_at) return "blocked";
-  if (row.ended_at) return "ended";
-  if (row.started_at) return "active";
-  return "pending";
-}
+const IDENTITY_STATE_SQL = `CASE WHEN identity.blocked_at IS NOT NULL THEN 'blocked'
+  WHEN identity.ended_at IS NOT NULL THEN 'ended'
+  WHEN identity.started_at IS NOT NULL THEN 'active' ELSE 'pending' END`;
 
 function mapIdentity(row: IdentityReadRow): ActingIdentity {
   return actingIdentitySchema.parse({
@@ -73,7 +71,7 @@ function mapIdentity(row: IdentityReadRow): ActingIdentity {
     links: parseLinksJson(row.links_json),
     headshotUrl: publicUserHeadshotPath(row.user_id, row.headshot_r2_key),
     source: row.source,
-    state: identityState(row),
+    state: row.state,
     showOnOrganizationProfile: row.show_on_organization_profile === 1,
     invitedAt: persistedUtcInstant(row.invited_at),
     startedAt: persistedUtcInstant(row.started_at),
@@ -128,6 +126,10 @@ export function prepareIdentitiesList(
     conditions.push("identity.organization_id = ?");
     bindings.push(query.organizationId);
   }
+  if (query.state) {
+    conditions.push(`(${IDENTITY_STATE_SQL}) = ?`);
+    bindings.push(query.state);
+  }
   if (query.organizationOnly) conditions.push("identity.organization_id IS NOT NULL");
   if (query.identityId) {
     conditions.push("identity.id=?");
@@ -176,7 +178,7 @@ export function prepareIdentitiesList(
    ${conditions.length ? `WHERE ${conditions.join(" AND ")}` : ""}`;
   const statements = buildOffsetPageStatements(db, {
     source: {
-      selectSql: `SELECT identity.id, capacity.member_id,
+      selectSql: `SELECT identity.id, ${IDENTITY_STATE_SQL} AS state, capacity.member_id,
         identity.organization_id, organization.name AS organization_name,
         capacity.membership_category, identity.user_id, user.first_name, user.last_name,
         COALESCE(selected_email.email, user.email) AS email,

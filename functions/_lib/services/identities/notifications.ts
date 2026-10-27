@@ -1,3 +1,4 @@
+import { IDENTITY_NOTIFICATION_EMAIL_TEMPLATE } from "../../../../assets/shared/email-template-actions";
 import { first } from "../../db/queries";
 import { prepareQueueEmailStatement } from "../../email/outbox";
 import { AppError } from "../../errors";
@@ -70,7 +71,7 @@ export function prepareIdentityNotification(
     {
       outboxId: input.outboxId ?? uuid(),
       idempotencyKey: `organization-identity:${input.identityId}:${input.action}:${input.at}`,
-      templateKey: "organization-identity-changed",
+      templateKey: IDENTITY_NOTIFICATION_EMAIL_TEMPLATE.key,
       recipientUserId: input.userId,
       recipientEmail: input.context.email,
       subject: subjects[input.action],

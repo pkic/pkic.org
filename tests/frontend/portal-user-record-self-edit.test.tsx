@@ -13,7 +13,7 @@ import type { UserPermissions } from "../../assets/ts/member-flows/portal/sectio
 import { portalSession } from "../../assets/ts/member-flows/portal/state";
 import { portalSessionFixture } from "../helpers/portal-session";
 import { myProfileSchema } from "../../assets/shared/schemas/me";
-import { currentUserIdentityCreateSchema } from "../../assets/shared/schemas/identity";
+import { identitiesListResponseSchema, currentUserIdentityCreateSchema } from "../../assets/shared/schemas/identity";
 import { identityAffiliationPreviewSchema } from "../../assets/shared/schemas/identity-affiliation";
 
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["/users/self", vi.fn()] }));
@@ -118,7 +118,7 @@ function record(id: string) {
 }
 
 /** Answers the record and the account resources; anything else is an empty refusal the panels tolerate. */
-function stubApi(): Array<{ method: string; path: string; body: unknown }> {
+function stubApi(pending = false): Array<{ method: string; path: string; body: unknown }> {
   const paths: Array<{ method: string; path: string; body: unknown }> = [];
   vi.stubGlobal(
     "fetch",
@@ -132,6 +132,44 @@ function stubApi(): Array<{ method: string; path: string; body: unknown }> {
         path: url.pathname,
         body: init?.body ? JSON.parse(String(init.body)) : undefined,
       });
+      if (url.pathname === "/api/v1/users/current/identities" && url.searchParams.get("state") === "pending") {
+        const at = "2026-01-01T00:00:00.000Z";
+        return json(
+          identitiesListResponseSchema.parse({
+            identities: pending
+              ? [
+                  {
+                    id: OTHER_ID,
+                    memberId: null,
+                    organizationId: ORGANIZATION_ID,
+                    organizationName: "Invited organization",
+                    membershipCategory: null,
+                    userId: SELF_ID,
+                    userName: "Pat Person",
+                    emailId: null,
+                    email: "person@example.test",
+                    jobTitle: "Representative",
+                    biography: null,
+                    links: [],
+                    headshotUrl: null,
+                    source: "staff",
+                    state: "pending",
+                    showOnOrganizationProfile: true,
+                    invitedAt: at,
+                    startedAt: null,
+                    endedAt: null,
+                    blockedAt: null,
+                    blockedByUserId: null,
+                    predecessorIdentityId: null,
+                    createdAt: at,
+                    updatedAt: at,
+                  },
+                ]
+              : [],
+            page: { limit: 25, offset: 0, total: pending ? 1 : 0, hasMore: false },
+          }),
+        );
+      }
       if (url.pathname === "/api/v1/users/current") {
         return json(selfProfile());
       }
@@ -231,6 +269,21 @@ afterEach(async () => {
 });
 
 describe("editing your own record", () => {
+  it("shows newly pending invitations even when the session's count is zero", async () => {
+    portalSession.value = portalSessionFixture({ staff: true, member: true, pendingIdentityCount: 0 });
+    stubApi(true);
+    await mount(SELF_ID, NO_PERMISSIONS);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    const panel = container.querySelector('section[aria-label="Identity invitations"]');
+    expect(panel?.textContent).toContain("Invited organization");
+    const action = panel!.querySelector<HTMLButtonElement>('button[aria-label="Actions for Invited organization"]');
+    expect(action).not.toBeNull();
+    await act(async () => action!.click());
+    expect(panel!.querySelector('[role="menuitem"]')?.textContent).toBe("Accept identity");
+  });
+
   it("has no profile panel; the names are account facts shown in the Account panel", async () => {
     portalSession.value = portalSessionFixture({ staff: true, member: true });
     stubApi();

@@ -1,3 +1,4 @@
+import { RepresentationEmailGet, RepresentationEmailPut } from "./[userId]/identity-email";
 import { Hono } from "hono";
 import { fromHono } from "chanfana";
 import type { RequestDbContext } from "../../../_lib/db/context";
@@ -25,6 +26,8 @@ openapi.route("/:userId", communityProfileRouter);
 // This read composes its live staff authorization with the scoped audit page.
 openapi.get("/:userId/audit-log", UserAuditLogGet);
 openapi.post("/:userId/identities/:identityId/corrections", UserIdentityCorrectionPost);
+openapi.get("/:userId/identities/:identityId/email", RepresentationEmailGet);
+openapi.put("/:userId/identities/:identityId/email", RepresentationEmailPut);
 // The list also composes live authority with its bounded page and count.
 openapi.get("/", UsersList);
 app.use("*", createRequestScopedD1SessionMiddleware());

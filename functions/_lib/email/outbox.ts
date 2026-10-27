@@ -1,3 +1,4 @@
+import { assertRequiredEmailActions } from "./required-actions";
 import { validateEmailDeliveryGuard } from "./delivery-guard";
 import { getAvailability } from "../availability";
 import { all, first, run } from "../db/queries";
@@ -306,6 +307,8 @@ async function processOutboxRow(
       resolvedContentType,
       emailBaseUrl,
     );
+
+    assertRequiredEmailActions(row.template_key, payload, rendered);
 
     let attachments: Array<{ filename: string; contentType: string; base64Content: string }> | undefined;
     const calendar = payload.__calendarInvite as CalendarPayload | undefined;

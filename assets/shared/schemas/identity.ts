@@ -237,6 +237,7 @@ export const identityMutationResponseSchema = successResponseSchema.extend({
 
 export const IDENTITY_SORT_COLUMNS = ["user_name", "email", "organization_name", "started_at", "updated_at"] as const;
 export const identitiesListQuerySchema = listQuerySchema(IDENTITY_SORT_COLUMNS).extend({
+  state: identityStateSchema.optional(),
   memberId: databaseIdSchema.optional(),
   organizationId: databaseIdSchema.optional(),
   organizationOnly: booleanQueryFlagSchema.optional(),

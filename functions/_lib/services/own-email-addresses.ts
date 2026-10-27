@@ -22,11 +22,11 @@ import {
 import { buildPageInfo, type PageInfo } from "../../../assets/shared/schemas/pagination";
 import { prepareAuthorizationGuard, isAuthorizationGuardFailure } from "../db/authorization-guard";
 import { first } from "../db/queries";
-import { queryPage } from "../db/pagination";
+import { buildOffsetPageStatements, decodeOffsetPageResults } from "../db/pagination";
 import { buildD1TextSearchFilter } from "../db/search";
 import { resolveMappedOrderBy } from "../db/sort";
 import { AppError } from "../errors";
-import type { DatabaseLike } from "../types";
+import type { DatabaseLike, D1StatementResult } from "../types";
 import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
 import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange, prepareAuditLog } from "./audit";
@@ -41,18 +41,25 @@ import {
 import { prepareOwnEmailVerificationMessage, type OwnEmailVerificationDelivery } from "./own-email-verification";
 import { isEmailReservationConflict, prepareRemoveUserEmailStatements } from "./user-emails";
 
-export async function listOwnEmailAddresses(
+export function prepareOwnEmailAddressesList(
   db: DatabaseLike,
   userId: string,
   query: OwnEmailAddressesListQuery,
-): Promise<{ emails: OwnEmailAddress[]; page: PageInfo }> {
+  availableToIdentityId?: string,
+) {
   const search = query.q ? buildD1TextSearchFilter(query.q, ["email"]) : null;
-  const { rows, total } = await queryPage<OwnAddressRow>(db, {
+  const conditions = [...(search ? [search.sql] : [])];
+  const bindings: unknown[] = [userId, userId, ...(search?.bindings ?? [])];
+  if (availableToIdentityId) {
+    conditions.push("verified_at IS NOT NULL AND (identity_id IS NULL OR identity_id=?)");
+    bindings.push(availableToIdentityId);
+  }
+  const statements = buildOffsetPageStatements(db, {
     source: {
       withSql: OWN_ADDRESSES_SQL,
       selectSql: `SELECT ${OWN_ADDRESS_COLUMNS}`,
-      fromSql: `FROM addresses${search ? ` WHERE ${search.sql}` : ""}`,
-      bindings: [userId, userId, ...(search?.bindings ?? [])],
+      fromSql: `FROM addresses${conditions.length ? ` WHERE ${conditions.join(" AND ")}` : ""}`,
+      bindings,
     },
     // The primary address leads whatever order the reader picks.
     orderBy: resolveMappedOrderBy(query.sort, ADDRESS_SORT_EXPRESSIONS, "created_at ASC", "id ASC").replace(
@@ -62,8 +69,23 @@ export async function listOwnEmailAddresses(
     limit: query.limit,
     offset: query.offset,
   });
-  const emails = rows.map(toAddress);
-  return { emails, page: buildPageInfo(query.limit, query.offset, total, emails.length) };
+  return {
+    statements,
+    decode(loaded: D1StatementResult[]) {
+      const { rows, total } = decodeOffsetPageResults<OwnAddressRow>(loaded[0]!, loaded[1]!);
+      const emails = rows.map(toAddress);
+      return { emails, page: buildPageInfo(query.limit, query.offset, total, emails.length) };
+    },
+  };
+}
+
+export async function listOwnEmailAddresses(
+  db: DatabaseLike,
+  userId: string,
+  query: OwnEmailAddressesListQuery,
+): Promise<{ emails: OwnEmailAddress[]; page: PageInfo }> {
+  const read = prepareOwnEmailAddressesList(db, userId, query);
+  return read.decode(await db.batch(read.statements));
 }
 
 /** Request proof without reserving the address or associating its owner with this account. */

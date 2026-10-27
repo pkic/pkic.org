@@ -36,6 +36,7 @@ const EXPECTED_BASELINE_TEMPLATE_KEYS = [
   "msg_dear_firstname",
   "msg_message_only",
   "org-content-review-digest",
+  "organization-identity-changed",
   "organization_identity_reinstatement",
   "partial_about_pkic",
   "partial_donation_request",
@@ -263,7 +264,7 @@ describe("buildTemplateSqlStatements", () => {
     expect(sql).toContain("strftime('%Y-%m-%dT%H:%M:%fZ', 'now')");
   });
 
-  it("refreshes untouched migration placeholders and seeds one idempotent canonical baseline", () => {
+  it("refreshes untouched migration placeholders and seeds one idempotent canonical baseline", async () => {
     const db = new DatabaseSync(":memory:");
     db.exec(`
       CREATE TABLE users (
@@ -297,6 +298,8 @@ describe("buildTemplateSqlStatements", () => {
          'markdown', NULL, '', 'active', NULL, '2025-01-01T00:00:00.000Z');
     `);
 
+    db.exec(`INSERT INTO email_template_versions (id,template_key,version,subject_template,body,content_type,r2_object_key,checksum_sha256,status,created_by_user_id,created_at)
+      VALUES('legacy-identity','organization-identity-changed',1,'Identity changed','Hi {{recipientName}}, {{changeMessage}}','markdown',NULL,'','active',NULL,'2025-01-01T00:00:00.000Z')`);
     const sql = buildTemplateSqlStatements({ adminEmail: "admin@example.test", ifMissing: true }, DEFAULT_TEMPLATES);
     db.exec(sql);
     db.exec(sql);
@@ -335,6 +338,25 @@ describe("buildTemplateSqlStatements", () => {
       { body: DEFAULT_TEMPLATES.find((item) => item.key === "user_magic_link")!.content },
     );
 
+    const invitation = db
+      .prepare("SELECT body FROM email_template_versions WHERE template_key='organization-identity-changed'")
+      .get() as { body: string };
+    const rendered = await renderEmail(
+      invitation.body,
+      {
+        recipientName: "Test person",
+        organizationName: "Example Organization",
+        changeMessage: "You are invited.",
+        invitationToken: "synthetic-proof",
+      },
+      DEFAULT_LAYOUT_HTML,
+      "markdown",
+      "https://preview.example.test",
+    );
+    expect(rendered.html).toContain(
+      'href="https://preview.example.test/portal/#/identity-invitations?token=synthetic-proof"',
+    );
+    expect(rendered.text).toContain("https://preview.example.test/portal/#/identity-invitations?token=synthetic-proof");
     db.close();
   });
 });

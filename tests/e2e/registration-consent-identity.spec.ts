@@ -30,7 +30,9 @@ test("verified approved-domain registration affiliates once and an organization 
   browser,
 }, testInfo) => {
   await signInToPortal(page, e2eAdminEmail("portal-event-management"));
-  const representative = await createMember(page, { organizationName: "Summit Trust Services" });
+  const representative = await createMember(page, {
+    organizationName: `Summit Trust Services ${crypto.randomUUID().slice(0, 6)}`,
+  });
   const owner = userDetailResponseSchema.parse(
     await (await page.request.get(`/api/v1/users/${representative.userId}`)).json(),
   );
@@ -143,15 +145,20 @@ test("verified approved-domain registration affiliates once and an organization 
     await expect(addIdentity.getByRole("textbox", { name: EMAIL_FIRST_COPY.representation.work.label })).toBeVisible();
     await attendee.screenshot({ path: testInfo.outputPath("public-update-add-identity-phone.png") });
     await addIdentity.getByRole("button", { name: "Cancel", exact: true }).click();
-    await changeIdentity.getByRole("button", { name: "Save changes", exact: true }).click();
-    await expect(changeIdentity).not.toBeVisible();
-    await attendee.reload();
+    // The page reloads itself after saving. Wait for that document instead of
+    // racing it with a second reload, which aborts navigation in CI.
+    const saveRepresentation = async () => {
+      const reloaded = attendee.waitForEvent("domcontentloaded");
+      await changeIdentity.getByRole("button", { name: "Save changes", exact: true }).click();
+      await reloaded;
+      await expect(changeIdentity).not.toBeVisible();
+    };
+    await saveRepresentation();
     await attendee.getByRole("button", { name: "Change representation", exact: true }).click();
     await expect(changeIdentity.getByRole("combobox", { name: /^Representation/ })).toContainText("Personal");
     await changeIdentity.getByRole("combobox", { name: /^Representation/ }).click();
     await attendee.getByRole("option").filter({ hasText: organizationName }).click();
-    await changeIdentity.getByRole("button", { name: "Save changes", exact: true }).click();
-    await expect(changeIdentity).not.toBeVisible();
+    await saveRepresentation();
     // Profile edits preserve the independently selected registration representation.
     await expect(attendee.getByRole("definition").filter({ hasText: organizationName })).toBeVisible();
     await attendee.getByRole("button", { name: "Edit details", exact: true }).click();
@@ -265,6 +272,29 @@ test("a proved work address requires organization confirmation and an incorrect 
   const identities = identitiesListResponseSchema.parse(
     await (await page.request.get("/api/v1/users/current/identities?limit=100")).json(),
   );
+  const original = identities.identities.find((identity) => identity.organizationName === names[0])!;
+  await page.getByRole("button", { name: `Actions for ${names[0]}`, exact: true }).click();
+  await page.getByRole("menuitem", { name: "Change representation email…", exact: true }).click();
+  const emailDialog = page.getByRole("dialog", { name: "Change representation email", exact: true });
+  await emailDialog.getByRole("combobox", { name: /^Representation email/ }).click();
+  await page.getByRole("option", { name: e2eAdminEmail("representation-onboarding"), exact: true }).click();
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.screenshot({ path: `${directory}/representation-email-desktop.png` });
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.screenshot({ path: `${directory}/representation-email-phone.png` });
+  await page.goBack();
+  await expect(emailDialog).not.toBeVisible();
+  await page.goForward();
+  await expect(emailDialog).toBeVisible();
+  await emailDialog.getByRole("button", { name: "Save email", exact: true }).click();
+  await expect(emailDialog).not.toBeVisible();
+  const corrected = identitiesListResponseSchema
+    .parse(await (await page.request.get("/api/v1/users/current/identities?limit=100")).json())
+    .identities.find((identity) => identity.id === original.id)!;
+  expect(corrected.organizationId).toBe(original.organizationId);
+  expect(corrected.jobTitle).toBe(original.jobTitle);
+  expect(corrected.emailId).toBeNull();
+  expect(corrected.email).toBe(e2eAdminEmail("representation-onboarding"));
   const incorrect = identities.identities.find((identity) => identity.organizationName === names[1])!;
   const domains = organizationDomainsListResponseSchema.parse(
     await (await page.request.get(`/api/v1/organizations/${incorrect.organizationId}/domains`)).json(),

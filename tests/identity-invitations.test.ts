@@ -1,5 +1,10 @@
+import { processOutboxById } from "../functions/_lib/email/outbox";
+import { createTemplateVersion, activateTemplateVersion } from "../functions/_lib/email/templates";
+import { seedWorkflowEmailTemplates } from "./helpers/event-workflow";
+import { IDENTITY_NOTIFICATION_EMAIL_TEMPLATE } from "../assets/shared/email-template-actions";
+import { nowIso } from "../functions/_lib/utils/time";
 import { env } from "cloudflare:workers";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { acceptPendingIdentity } from "../functions/_lib/services/identities";
 import { deliveredEmailPayload } from "./helpers/context";
 import { callApi } from "./helpers/app";
@@ -85,8 +90,91 @@ async function deliveredInvitationToken(identityId: string): Promise<string> {
 }
 
 beforeEach(resetDb);
+afterEach(() => vi.unstubAllGlobals());
 
 describe("identity invitation acceptance", () => {
+  it("refuses to send an invitation using an old linkless template, then delivers a usable link after the template is repaired", async () => {
+    const provider = vi.fn<typeof fetch>(
+      async () => new Response(null, { status: 202, headers: { "x-message-id": "synthetic-invitation" } }),
+    );
+    vi.stubGlobal("fetch", provider);
+    const f = await inviteIdentity();
+    await seedWorkflowEmailTemplates(env.DB, f.invitedUserId);
+    const key = "organization-identity-changed";
+    const legacy = await createTemplateVersion(env.DB, {
+      templateKey: key,
+      subjectTemplate: "Invitation",
+      content:
+        "Hi {{recipientName}},\n\n{{changeMessage}}\n\nInvitations require the recipient to sign in and accept them.",
+      contentType: "markdown",
+      createdByUserId: f.invitedUserId,
+    });
+    await activateTemplateVersion(env.DB, { templateKey: key, version: legacy.version });
+    const row = await env.DB.prepare(
+      "SELECT id FROM email_outbox WHERE template_key=? AND substr(idempotency_key,1,length(?))=? LIMIT 1",
+    )
+      .bind(key, `organization-identity:${f.identityId}:invited:`, `organization-identity:${f.identityId}:invited:`)
+      .first<{ id: string }>();
+    const retry = () =>
+      env.DB.prepare("UPDATE email_outbox SET status='queued',send_after=? WHERE id=?").bind(nowIso(), row!.id).run();
+    await retry();
+    provider.mockClear();
+    await expect(processOutboxById(env.DB, env, row!.id)).rejects.toThrow("required action link");
+    expect(provider).not.toHaveBeenCalled();
+    expect(await env.DB.prepare("SELECT status FROM email_outbox WHERE id=?").bind(row!.id).first("status")).toBe(
+      "retrying",
+    );
+    const correct = IDENTITY_NOTIFICATION_EMAIL_TEMPLATE;
+    const version = await createTemplateVersion(env.DB, {
+      templateKey: key,
+      subjectTemplate: correct.subjectTemplate,
+      content: correct.content,
+      contentType: "markdown",
+      createdByUserId: f.invitedUserId,
+    });
+    await activateTemplateVersion(env.DB, { templateKey: key, version: version.version });
+    await retry();
+    await processOutboxById(env.DB, env, row!.id);
+    expect(provider).toHaveBeenCalledTimes(1);
+    const delivery = JSON.parse(String(provider.mock.calls[0]![1]?.body)) as {
+      personalizations: Array<{ to: Array<{ email: string }> }>;
+      content: Array<{ type: string; value: string }>;
+    };
+    expect(delivery.personalizations[0]!.to[0]!.email).toBe("invited@invitation-lifecycle.example");
+    const html = delivery.content.find((part) => part.type === "text/html")!.value;
+    const text = delivery.content.find((part) => part.type === "text/plain")!.value;
+    const url = html.match(/href="([^"]*\/portal\/#\/identity-invitations\?token=[^"]+)"/)?.[1];
+    expect(url).toBeTruthy();
+    expect(text).toContain(url!);
+    const token = new URL(url!).hash.split("token=")[1]!;
+    const preview = await callApi(env, "/api/v1/identities/invitations/preview", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token: decodeURIComponent(token) }),
+    });
+    expect(preview.status, await preview.clone().text()).toBe(200);
+    expect(
+      await env.DB.prepare("SELECT started_at FROM identities WHERE id=?").bind(f.identityId).first("started_at"),
+    ).toBeNull();
+  });
+
+  it("lists pending invitations directly in one complete request", async () => {
+    const f = await inviteIdentity();
+    const response = await callApi(
+      env,
+      "/api/v1/users/current/identities?state=pending",
+      { headers: { authorization: `Bearer ${f.invitedToken}` } },
+      { maxRoundTrips: 1 },
+    );
+    expect(response.status, await response.clone().text()).toBe(200);
+    const body = (await response.json()) as {
+      identities: Array<{ id: string; state: string }>;
+      page: { total: number };
+    };
+    expect(body.identities).toMatchObject([{ id: f.identityId, state: "pending" }]);
+    expect(body.page.total).toBe(1);
+  });
+
   it("reviews and accepts an emailed invitation without signing in, only after an explicit POST", async () => {
     const { identityId, invitedUserId } = await inviteIdentity();
     const token = await deliveredInvitationToken(identityId);

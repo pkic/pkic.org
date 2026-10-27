@@ -1,5 +1,7 @@
+import { IDENTITY_NOTIFICATION_EMAIL_TEMPLATE } from "../../assets/shared/email-template-actions.ts";
 // Operational messages seeded separately from schema migrations.
 export const DEFAULT_TRANSACTIONAL_EMAIL_TEMPLATES = [
+  IDENTITY_NOTIFICATION_EMAIL_TEMPLATE,
   {
     key: "event_proposal_verify",
     subjectTemplate: "Verify your email for {{eventName}}",

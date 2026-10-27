@@ -1,3 +1,4 @@
+import { RepresentationEmailDialog } from "../../../../components/identities/RepresentationEmailDialog";
 import { RepresentationCorrectionDialog } from "../../../../components/identities/RepresentationCorrectionDialog";
 import { removeIncorrectRepresentation } from "./remove-representation";
 import { useDialogQueryState } from "../../../../hooks/useDialogQueryState";
@@ -81,6 +82,8 @@ export function UserAffiliationsPanel({
     setCreatedIdentityId(null);
     showCorrecting();
   }
+  const [editingEmail, setEditingEmail] = useState<UserDetail["identities"][number] | null>(null);
+  const [emailOpen, showEmail, closeEmail] = useDialogQueryState("representation-email");
   const [historyOpen, setHistoryOpen] = useState(true);
   const [adding, showAdding, closeAdding] = useDialogQueryState("identity");
   const [busy, setBusy] = useState(false);
@@ -194,6 +197,14 @@ export function UserAffiliationsPanel({
             subjectName={[user.first_name, user.last_name].filter(Boolean).join(" ") || user.email}
             seats={seatsOf(membership.identityId)}
             acting={membership.identityId === actingIdentityId}
+            onEditEmail={
+              membership.organizationId && (viewerIsSubject || canManage)
+                ? () => {
+                    setEditingEmail(membership);
+                    showEmail();
+                  }
+                : undefined
+            }
             onCorrect={
               membership.organizationId && (viewerIsSubject || (canManage && canActivateIdentity))
                 ? () =>
@@ -240,6 +251,16 @@ export function UserAffiliationsPanel({
           ))}
       </PanelBody>
 
+      {editingEmail && (
+        <RepresentationEmailDialog
+          key={editingEmail.identityId}
+          userId={user.id}
+          source={editingEmail}
+          open={emailOpen}
+          onClose={() => void closeEmail()}
+          onChanged={onChanged}
+        />
+      )}
       {correcting && (
         <RepresentationCorrectionDialog
           key={correcting.identityId}

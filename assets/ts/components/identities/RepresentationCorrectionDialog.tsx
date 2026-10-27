@@ -83,7 +83,7 @@ export function RepresentationCorrectionDialog({
       open={open}
       title="Correct organization"
       closeLabel="Close organization correction"
-      description={`Remove the incorrect association with ${source.organizationName} from experience history. Registration and speaker records will use the representation you choose. Access granted through the incorrect association will be removed.`}
+      description={`Remove the incorrect association with ${source.organizationName} from experience history. Registration and speaker records will use the representation you choose. Access granted through the incorrect association will be removed. Accept the other representation’s invitation or add it first if it is not listed.`}
       confirmLabel="Correct organization"
       confirmDisabled={busy}
       onConfirm={() => void submit()}

@@ -1,3 +1,7 @@
+import {
+  representationEmailChangeSchema,
+  representationEmailOptionsResponseSchema,
+} from "../../assets/shared/schemas/representation-email";
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { exampleMembershipCategories } from "./helpers/membership-category-catalog";
@@ -35,6 +39,7 @@ import {
   stubFetch,
   toastArea,
   userWith,
+  runRowMenuAction,
   organizationDetail,
   organizationList,
 } from "./helpers/affiliation-fixtures";
@@ -107,6 +112,52 @@ describe("UserAffiliationsPanel", () => {
       ),
     );
     expect(container.textContent).toContain("Personal profile content");
+  });
+
+  it("changes the address on the selected representation through the shared verified-email form", async () => {
+    const selected = "00000000-0000-4000-8000-000000000088";
+    const at = "2026-01-01T00:00:00.000Z";
+    const transport = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "PUT") return jsonResponse({ success: true });
+      return jsonResponse(
+        representationEmailOptionsResponseSchema.parse({
+          emailId: null,
+          emails: [
+            {
+              id: selected,
+              email: "person@organization-a.example",
+              primary: false,
+              identityId: null,
+              verifiedAt: at,
+              verificationMethod: "magic_link",
+              signInEnabled: false,
+              createdAt: at,
+            },
+          ],
+          page: { limit: 25, offset: 0, total: 1, hasMore: false },
+        }),
+      );
+    });
+    vi.stubGlobal("fetch", transport);
+    const changed = vi.fn();
+    const container = mount();
+    await act(async () =>
+      render(
+        <UserAffiliationsPanel user={userWith([membership()])} onChanged={changed} canManage={false} viewerIsSubject />,
+        container,
+      ),
+    );
+    runRowMenuAction(container, "Organization A", "Change representation email…");
+    await settle();
+    await chooseComboboxOption(container, "Representation email", selected);
+    await press(container, "Save email");
+    const write = transport.mock.calls.find(([, init]) => init?.method === "PUT")!;
+    expect(String(write[0])).toBe(`/api/v1/users/${USER_ID}/identities/${membership().identityId}/email`);
+    expect(representationEmailChangeSchema.parse(JSON.parse(String(write[1]!.body)))).toMatchObject({
+      previousEmailId: null,
+      emailId: selected,
+    });
+    expect(changed).toHaveBeenCalledTimes(1);
   });
 
   // The grant form is the body of the dialog the panel's header button opens.

@@ -81,10 +81,12 @@ export function UserAffiliationRow({
   seats = [],
   acting = false,
   onCorrect,
+  onEditEmail,
 }: {
   /** The group seats held as this identity, current and past. */
   seats?: readonly UserGroupParticipation[];
   onCorrect?: () => void;
+  onEditEmail?: () => void;
   /** The signed-in person is acting as this identity right now. */
   acting?: boolean;
   /** The person the record is about. */
@@ -335,6 +337,8 @@ export function UserAffiliationRow({
       onSelect: openMembershipEditor,
     });
   }
+  if (membership.organizationId && onEditEmail)
+    rowActions.push({ id: "change-email", label: "Change representation email…", onSelect: onEditEmail });
   if (membership.organizationId && onCorrect)
     rowActions.push({
       id: "correct-organization",

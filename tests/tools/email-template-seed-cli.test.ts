@@ -17,7 +17,7 @@ describe.skipIf(process.platform === "win32")("email template seed CLI", () => {
     writeFileSync(
       executable,
       `#!${process.execPath}
-const fs = require("node:fs");
+import fs from "node:fs";
 const args = process.argv.slice(2);
 if (args.includes("--json")) {
   console.log(JSON.stringify([{ results: [{ id: "synthetic-admin" }] }]));

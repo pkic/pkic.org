@@ -335,7 +335,7 @@ export function UserDetail({
       */}
       <div class="pk-record pk-user-record">
         <div class="pk-stack pk-user-record__main">
-          {isSelf && session?.pendingIdentityCount ? <IdentityInvitationsPanel /> : null}
+          {isSelf ? <IdentityInvitationsPanel /> : null}
 
           {/* A personal introduction spans roles; otherwise About attributes the primary role's bio.
               Only the identity supplying About suppresses its repeated paragraph below. */}
@@ -389,7 +389,7 @@ export function UserDetail({
         {/* Your own record says who you are acting as, with the switch beside it:
             at the head of the aside on a wide screen, and first of all on a
             narrow one, where the aside would otherwise put it below everything. */}
-        {isSelf && session && (
+        {isSelf && session && session.actingIdentities.some((identity) => identity.id === session.actingIdentityId) && (
           <div class="pk-user-record__acting">
             <ActingIdentityPanel
               session={session}

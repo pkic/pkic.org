@@ -13,7 +13,7 @@
 import { runRowAction } from "./helpers/data-table";
 import { expect, test, type Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
-import { openMyOrganization, signInToPortal } from "./helpers/portal-auth";
+import { openMyOrganization, openMyProfile, signInToPortal } from "./helpers/portal-auth";
 import { acceptConfirmDialog } from "./helpers/confirm-dialog";
 import { approveMemberThroughReview, readActiveIdentities, uniqueSuffix } from "./helpers/membership";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
@@ -89,6 +89,19 @@ test("an organization contact adds a colleague and can take the access away agai
   // confirm, and merely following the URL does not activate the identity.
   const invitationEmail = await waitForCapturedEmail(colleagueEmail, "Invitation to act for", { since: emailCount });
   const invitationUrl = extractEmailUrl(invitationEmail, "/portal/#/identity-invitations?token=");
+  await page.context().clearCookies();
+  await signInToPortal(page, colleagueEmail);
+  await openMyProfile(page);
+  await expect(page.getByRole("button", { name: `Actions for ${organizationName}`, exact: true })).toBeVisible();
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.getByRole("heading", { name: "Identity invitations", exact: true }).scrollIntoViewIfNeeded();
+  const recordBox = await page.locator(".pk-record.pk-user-record").boundingBox();
+  const mainBox = await page.locator(".pk-user-record__main").boundingBox();
+  expect(Math.abs(recordBox!.width - mainBox!.width)).toBeLessThan(2);
+  await page.screenshot({ path: test.info().outputPath("pending-invitation-desktop.png") });
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.getByRole("heading", { name: "Identity invitations", exact: true }).scrollIntoViewIfNeeded();
+  await page.screenshot({ path: test.info().outputPath("pending-invitation-phone.png") });
   await page.context().clearCookies();
   await page.goto(invitationUrl);
   await expect(page.getByRole("heading", { name: "Identity invitation" })).toBeVisible();
