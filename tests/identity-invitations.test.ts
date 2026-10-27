@@ -6,9 +6,9 @@ import { nowIso } from "../functions/_lib/utils/time";
 import { env } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { acceptPendingIdentity } from "../functions/_lib/services/identities";
-import { deliveredEmailPayload } from "./helpers/context";
+import { deliveredEmailPayload, seedEventAndAdmin } from "./helpers/context";
 import { callApi } from "./helpers/app";
-import { createMemberSession } from "./helpers/auth";
+import { createMemberSession, createAdminSession } from "./helpers/auth";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import {
   REPRESENTATIVE_ROLE_IDS,
@@ -512,5 +512,109 @@ describe("identity invitation acceptance", () => {
         .first<{ total: number }>();
       expect(Number(open?.total)).toBe(0);
     });
+  });
+});
+
+describe("pending invitation management", () => {
+  async function command(
+    f: Awaited<ReturnType<typeof inviteIdentity>>,
+    token: string,
+    action: "cancel" | "activate",
+    options: { userId?: string; organizationId?: string; reason?: string } = {},
+  ) {
+    return callApi(
+      env,
+      `/api/v1/organizations/${options.organizationId ?? f.organizationId}/identities/${f.identityId}/invitation`,
+      {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({
+          action,
+          userId: options.userId ?? f.invitedUserId,
+          ...(action === "activate"
+            ? { reason: options.reason ?? "Verified the representative through the organization contact." }
+            : {}),
+        }),
+      },
+      { maxRoundTrips: 1 },
+    );
+  }
+  it("lets the organization contact cancel an unaccepted invitation without former experience", async () => {
+    const f = await inviteIdentity();
+    const token = await deliveredInvitationToken(f.identityId);
+    const response = await command(f, f.contactToken, "cancel");
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(await env.DB.prepare("SELECT id FROM identities WHERE id=?").bind(f.identityId).first()).toBeNull();
+    expect(await env.DB.prepare("SELECT id FROM users WHERE id=?").bind(f.invitedUserId).first()).not.toBeNull();
+    expect(
+      (
+        await callApi(env, "/api/v1/identities/invitations/preview", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ token }),
+        })
+      ).status,
+    ).not.toBe(200);
+    expect(
+      await env.DB.prepare(
+        "SELECT COUNT(*) AS count FROM email_outbox WHERE recipient_user_id=? AND status IN ('queued','retrying')",
+      )
+        .bind(f.invitedUserId)
+        .first("count"),
+    ).toBe(0);
+  });
+  it("lets authorized staff activate the same invitation and queues the canonical activation notice", async () => {
+    const f = await inviteIdentity();
+    const { admin: staff } = await seedEventAndAdmin(env.DB);
+    const adminId = staff.id;
+    const admin = await createAdminSession(env.DB, adminId, crypto.randomUUID());
+    const response = await command(f, admin, "activate");
+    expect(response.status, await response.clone().text()).toBe(200);
+    const row = await env.DB.prepare("SELECT id,organization_id,user_id,started_at,ended_at FROM identities WHERE id=?")
+      .bind(f.identityId)
+      .first();
+    expect(row).toMatchObject({
+      id: f.identityId,
+      organization_id: f.organizationId,
+      user_id: f.invitedUserId,
+      ended_at: null,
+    });
+    expect(row?.started_at).toBeTruthy();
+    const notice = await env.DB.prepare("SELECT recipient_email,payload_json FROM email_outbox WHERE idempotency_key=?")
+      .bind(`organization-identity:${f.identityId}:activated:${row!.started_at}`)
+      .first<{ recipient_email: string; payload_json: string }>();
+    expect(notice?.recipient_email).toBe("invited@invitation-lifecycle.example");
+    expect(JSON.parse(notice!.payload_json)).toMatchObject({ organizationName: "Invitation Lifecycle Organization" });
+    const audit = await env.DB.prepare(
+      "SELECT details_json FROM audit_log WHERE entity_id=? AND action='organization_identity_activated'",
+    )
+      .bind(f.identityId)
+      .first<string>("details_json");
+    expect(JSON.parse(audit!)).toMatchObject({
+      reason: { from: null, to: "Verified the representative through the organization contact." },
+    });
+    expect((await command(f, admin, "cancel")).status).toBe(409);
+  });
+  it("refuses activation by an organization contact and requires the staff reason", async () => {
+    const f = await inviteIdentity();
+    expect((await command(f, f.contactToken, "activate")).status).toBe(409);
+    const { admin: staff } = await seedEventAndAdmin(env.DB);
+    const adminId = staff.id;
+    const admin = await createAdminSession(env.DB, adminId, crypto.randomUUID());
+    expect((await command(f, admin, "activate", { reason: "" })).status).toBe(400);
+    expect(
+      await env.DB.prepare("SELECT started_at FROM identities WHERE id=?").bind(f.identityId).first("started_at"),
+    ).toBeNull();
+  });
+  it("refuses foreign callers, wrong owner snapshots, and a different organization atomically", async () => {
+    const f = await inviteIdentity();
+    for (const [token, options] of [
+      [f.invitedToken, {}],
+      [f.contactToken, { userId: crypto.randomUUID() }],
+      [f.contactToken, { organizationId: crypto.randomUUID() }],
+    ] as const) {
+      expect((await command(f, token, "cancel", options)).status).toBe(409);
+    }
+    expect(await env.DB.prepare("SELECT id FROM identities WHERE id=?").bind(f.identityId).first()).not.toBeNull();
   });
 });

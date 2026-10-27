@@ -85,6 +85,20 @@ test("an organization contact adds a colleague and can take the access away agai
   await expect(page).toHaveURL(/#\/organizations\/[^/]+$/);
   await expect(page.getByRole("row").filter({ hasText: `Colleague ${suffix}` })).toBeVisible({ timeout: 15_000 });
 
+  const organizationId = new URL((await added).url()).pathname.split("/")[4]!;
+  const createPending = async (email: string, name: string) => {
+    const response = await page.request.post(`/api/v1/organizations/${organizationId}/identities`, {
+      data: { userReference: "email", email, name, jobTitle: "Representative", activation: { mode: "invitation" } },
+    });
+    expect(response.status(), await response.text()).toBe(201);
+  };
+  await createPending(`cancel-${suffix}@contact-${suffix}.test`, "Cancel Example");
+  await page.reload();
+  const cancelRow = page.getByRole("row").filter({ hasText: "Cancel Example" });
+  await runRowAction(page, cancelRow, "Cancel invitation…");
+  await acceptConfirmDialog(page, "Cancel invitation");
+  await expect(cancelRow).toHaveCount(0);
+
   // The email opens a read-only review page. No portal session is needed to
   // confirm, and merely following the URL does not activate the identity.
   const invitationEmail = await waitForCapturedEmail(colleagueEmail, "Invitation to act for", { since: emailCount });
@@ -137,6 +151,25 @@ test("an organization contact adds a colleague and can take the access away agai
 
   // Ending representation removes its organization-derived membership.
   await expect.poll(async () => await activeIdentityEmails(page)).not.toContain(colleagueEmail);
+  await page.context().clearCookies();
+  await signInToPortal(page, e2eAdminEmail("portal-colleague-self-service"));
+  await createPending(`activate-${suffix}@contact-${suffix}.test`, "Activate Example");
+  await page.goto(`/portal/#/organizations/${organizationId}`);
+  const activateRow = page.getByRole("row").filter({ hasText: "Activate Example" });
+  await runRowAction(page, activateRow, "Activate representation…");
+  const activateDialog = page.getByRole("dialog", { name: "Activate representation", exact: true });
+  await activateDialog.getByRole("button", { name: "Activate representation", exact: true }).click();
+  await expect(activateDialog.getByRole("textbox", { name: /^Reason/ })).toHaveAttribute("aria-invalid", "true");
+  await activateDialog
+    .getByRole("textbox", { name: /^Reason/ })
+    .fill("Confirmed directly with the organization contact.");
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.screenshot({ path: test.info().outputPath("pending-activation-desktop.png") });
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.screenshot({ path: test.info().outputPath("pending-activation-phone.png") });
+  await activateDialog.getByRole("button", { name: "Activate representation", exact: true }).click();
+  await expect(activateDialog).not.toBeVisible();
+  await expect(activateRow).toContainText("Active");
 });
 
 test("a member joins an open working group, sets their mail preference, and leaves again", async ({ page }) => {

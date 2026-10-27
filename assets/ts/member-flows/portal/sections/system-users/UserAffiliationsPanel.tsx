@@ -94,14 +94,6 @@ export function UserAffiliationsPanel({
   );
   const addRoot = useRef<HTMLDivElement>(null);
 
-  /*
-   * An individual capacity is the end of the line: someone who is a member in
-   * their own right holds no further identities, so the grant is withdrawn
-   * rather than offered and refused.
-   */
-  const hasIndividualMembership = user.identities.some(
-    (identity) => identity.organizationId === null && identity.memberId !== null,
-  );
   // An account identity keeps sign-in and existing references valid; it is not
   // professional experience. Show it only when it is the person's sole identity
   // or carries membership, participation, or their current/default choice.
@@ -170,7 +162,7 @@ export function UserAffiliationsPanel({
         the header and opens its form in a dialog.
       */}
       <PanelHeader title="Identity and experience">
-        {(canManage || viewerIsSubject) && !hasIndividualMembership && (
+        {(canManage || viewerIsSubject) && (
           <Button variant="ghost" icon aria-label="Add identity" title="Add identity" onClick={() => showAdding()}>
             <IconPlus />
           </Button>

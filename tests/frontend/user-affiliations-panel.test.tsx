@@ -63,6 +63,23 @@ describe("UserAffiliationsPanel", () => {
     expect(container.querySelector('[role="status"]')?.textContent).toContain("No active identities.");
   });
 
+  it.each([true, false])("keeps Add identity available for an individual member (self: %s)", (self) => {
+    const container = mount();
+    const individual = membership({ organizationId: null, organizationName: null, memberId: MEMBER_ID });
+    void act(() =>
+      render(
+        <UserAffiliationsPanel
+          user={userWith([individual])}
+          onChanged={vi.fn()}
+          canManage={!self}
+          viewerIsSubject={self}
+        />,
+        container,
+      ),
+    );
+    expect(container.querySelector('button[aria-label="Add identity"]')).not.toBeNull();
+  });
+
   it("shows organization experience without an unused personal account profile", () => {
     const personal = membership({
       identityId: "00000000-0000-4000-8000-000000000099",

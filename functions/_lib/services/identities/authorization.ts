@@ -72,7 +72,7 @@ function organizationIdentityRoleEvidence(input: IdentityManagementInput): Autho
              AND role.role_id IN (?, ?)
              AND role.revoked_at IS NULL
              AND (role.expires_at IS NULL OR role.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-           WHERE member.id = ?
+           WHERE member.id = COALESCE(?, (SELECT id FROM members WHERE organization_id = ?))
              AND (? IS NULL OR member.organization_id = ?)
              AND member.organization_id IS NOT NULL
              AND member.status = 'active'
@@ -82,6 +82,7 @@ function organizationIdentityRoleEvidence(input: IdentityManagementInput): Autho
       REPRESENTATIVE_ROLE_IDS.primaryContact,
       REPRESENTATIVE_ROLE_IDS.secondaryContact,
       input.memberId,
+      input.organizationId ?? null,
       input.organizationId ?? null,
       input.organizationId ?? null,
     ],
