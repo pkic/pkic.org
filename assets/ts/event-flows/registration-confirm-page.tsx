@@ -448,7 +448,7 @@ async function main(): Promise<void> {
     const intro = boot.root.querySelector<HTMLElement>("[data-confirm-intro]");
     if (intro) intro.hidden = true;
     organizationMount.hidden = false;
-    render(<RegistrationConfirmOrganization controller={organization} />, organizationMount);
+    render(<RegistrationConfirmOrganization controller={organization} email={email} />, organizationMount);
   }
 
   boot.form.addEventListener("submit", async (event) => {

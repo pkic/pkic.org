@@ -367,7 +367,8 @@ describe("registration confirmation shell", () => {
     window.history.replaceState({}, "", "/events/2026/pqc-2026/register/confirm/?token=live-token-0123456789");
     const root = mountShell();
     const requests = installApi({
-      [CONFIRM_INFO]: () => json(confirmInfo({ firstName: "Ada", asksOrganization: true })),
+      [CONFIRM_INFO]: () =>
+        json(confirmInfo({ firstName: "Ada", email: "ada@unknown-works.example", asksOrganization: true })),
       "/api/v1/events/pqc-2026/registrations/confirm-email": () =>
         json({
           success: true,
@@ -387,8 +388,8 @@ describe("registration confirmation shell", () => {
     const form = root.querySelector<HTMLFormElement>("form")!;
     // The question says what confirming needs, in place of the one-click greeting.
     expect(root.querySelector<HTMLElement>("[data-confirm-intro]")?.hidden).toBe(true);
-    expect(root.textContent).toContain(REGISTRATION_ORGANIZATION_COPY.question);
-    const name = controlFor(root, REGISTRATION_ORGANIZATION_COPY.nameLabel);
+    expect(controlFor(root, "Organization name")).not.toBeNull();
+    const name = controlFor(root, "Organization name");
     const submit = async () =>
       act(async () => {
         form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));

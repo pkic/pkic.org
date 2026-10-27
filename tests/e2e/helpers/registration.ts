@@ -1,9 +1,5 @@
 import { expect, type Page } from "@playwright/test";
-import {
-  EMAIL_FIRST_COPY,
-  ORGANIZATION_JOB_TITLE_COPY,
-  REGISTRATION_ORGANIZATION_COPY,
-} from "../../../assets/shared/email-first-copy";
+import { EMAIL_FIRST_COPY, ORGANIZATION_JOB_TITLE_COPY } from "../../../assets/shared/email-first-copy";
 import {
   registrationCreateSchema,
   registrationSubmissionResponseSchema,
@@ -20,6 +16,7 @@ const copy = EMAIL_FIRST_COPY.registration;
 export interface RegistrationOrganization {
   organization?: string;
   jobTitle?: string;
+  onContactReady?: (page: Page) => Promise<void>;
 }
 
 /**
@@ -28,17 +25,16 @@ export interface RegistrationOrganization {
  * form must ask nothing.
  */
 async function answerOrganization(page: Page, values: RegistrationOrganization): Promise<void> {
-  const asked = page.getByRole("textbox", { name: REGISTRATION_ORGANIZATION_COPY.nameLabel });
-  if (!values.organization) {
-    await expect(asked).toHaveCount(0);
-    return;
+  const asked = page.getByRole("textbox", { name: /^Organization name/ });
+  const chooser = page.getByRole("combobox", { name: /^Organization/ });
+  if (values.organization && (await chooser.count())) {
+    const matching = chooser.getByRole("option", { name: values.organization, exact: true });
+    await chooser.selectOption((await matching.count()) ? { label: values.organization } : "");
   }
-  if ((await asked.count()) === 0) return;
-  await expect(page.getByText(REGISTRATION_ORGANIZATION_COPY.question, { exact: true })).toBeVisible();
-  await asked.fill(values.organization);
-  await page
-    .getByRole("textbox", { name: ORGANIZATION_JOB_TITLE_COPY.label })
-    .fill(values.jobTitle ?? "Conference attendee");
+  if (values.organization && (await asked.count())) await asked.fill(values.organization);
+  else await expect(asked).toHaveCount(0);
+  const title = page.getByRole("textbox", { name: ORGANIZATION_JOB_TITLE_COPY.label });
+  if (await title.count()) await title.fill(values.jobTitle ?? "Conference attendee");
 }
 
 /**
@@ -71,6 +67,7 @@ export async function continueRegistrationWithEmail(
     await contact.getByLabel("Last name").fill(values.lastName ?? "Attendee");
   }
   await answerOrganization(page, values);
+  await values.onContactReady?.(page);
   await next.click();
 }
 
@@ -97,7 +94,7 @@ export async function confirmRegistration(
 ): Promise<void> {
   const confirm = page.getByRole("button", { name: /Confirm my registration/i });
   await expect(confirm).toBeVisible();
-  const asked = page.getByRole("textbox", { name: REGISTRATION_ORGANIZATION_COPY.nameLabel });
+  const asked = page.getByRole("textbox", { name: "Organization name" });
   if (organization) {
     await asked.fill(organization);
     await page.getByRole("textbox", { name: ORGANIZATION_JOB_TITLE_COPY.label }).fill(jobTitle);
@@ -145,8 +142,8 @@ export async function registerInBrowser(
   }
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   await page.getByLabel("Country", { exact: true }).selectOption("US");
-  // A registration carries no organization of its own: it shows the chosen identity, else the affiliation.
-  await expect(page.getByLabel("Organization", { exact: true })).toHaveCount(0);
+  // Organization belongs to the shared contact/representation flow, not the additional profile questions.
+  await expect(page.locator('[data-step-panel="3"]').getByLabel("Organization", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   for (const term of [/privacy policy/i, /code of conduct/i, /photos and videos/i]) {
     await page.getByRole("checkbox", { name: term }).check();

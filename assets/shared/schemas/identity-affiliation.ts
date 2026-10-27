@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { normalizedEmailSchema, organizationNameSchema } from "./api-common";
+import { normalizedEmailSchema, organizationNameSchema, ORGANIZATION_NAME_REQUIRED } from "./api-common";
 import { emailDomainNameSchema } from "./email-domains";
 import { databaseIdSchema } from "./identifiers";
 import { organizationIdentityJobTitleSchema } from "./identity-job-title";
@@ -12,7 +12,7 @@ const address = {
   /** Selected suffix of the verified work address; defaults to the server suggestion. */
   domain: emailDomainNameSchema.optional(),
 };
-export const identityAffiliationPrepareSchema = z
+export const identityAffiliationPrepareBaseSchema = z
   .object({
     phase: z.literal("prepare"),
     ...address,
@@ -20,11 +20,11 @@ export const identityAffiliationPrepareSchema = z
     organizationId: databaseIdSchema.nullable(),
     jobTitle: organizationIdentityJobTitleSchema,
   })
-  .strict()
-  .superRefine((value, context) => {
-    if (value.organizationId === null && value.organizationName === undefined)
-      context.addIssue({ code: "custom", path: ["organizationName"], message: "Enter your organization name." });
-  });
+  .strict();
+export const identityAffiliationPrepareSchema = identityAffiliationPrepareBaseSchema.superRefine((value, context) => {
+  if (value.organizationId === null && value.organizationName === undefined)
+    context.addIssue({ code: "custom", path: ["organizationName"], message: ORGANIZATION_NAME_REQUIRED });
+});
 export const identityAffiliationPreviewSchema = z.discriminatedUnion("phase", [
   z.object({ phase: z.literal("resolve"), ...address, unaffiliatedAttestation: z.boolean().default(false) }).strict(),
   identityAffiliationPrepareSchema,

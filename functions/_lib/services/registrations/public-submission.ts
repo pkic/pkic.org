@@ -1,3 +1,4 @@
+import { readRegistrationAffiliationContext } from "./affiliation-context";
 import {
   personalPromotionImagePath,
   personalPromotionSharePath,
@@ -144,6 +145,21 @@ export async function submitEventRegistration(
     }
   }
 
+  const affiliationContext =
+    body.organization?.contextToken && metadata.mailboxVerified
+      ? await readRegistrationAffiliationContext(
+          metadata.signingSecret,
+          body.organization.contextToken,
+          event.id,
+          body.email,
+        )
+      : undefined;
+  if (body.organization?.contextToken && !affiliationContext)
+    throw new AppError(
+      422,
+      "REGISTRATION_EMAIL_PROOF_REQUIRED",
+      "Verify your email before confirming the organization.",
+    );
   const { prepared, requiredTerms, formResponse } = await prepareValidatedAttendeeRegistration(db, body, {
     sourceType: invite ? "invite" : body.sourceType,
     sourceRef: body.sourceRef,
@@ -161,6 +177,7 @@ export async function submitEventRegistration(
     authorizationGuards: metadata.authorizationGuards,
     event: { id: event.id, source_mode: event.source_mode },
     verifiedIdentity: metadata.verifiedIdentity,
+    affiliationContext,
     mailboxVerified: metadata.mailboxVerified,
   });
   const { user, referralCode } = prepared;
@@ -179,10 +196,12 @@ export async function submitEventRegistration(
   const statusData = buildRegistrationEmailStatusData(registration.status, dayWaitlist);
   const customAnswerRows = buildCustomAnswerRows(formResponse.answers, formResponse.form?.fields);
   const acceptedTermsText = buildAcceptedTermsText(body.consents, requiredTerms);
-  const affiliation = await readRegistrationAffiliation(db, {
-    identityId: registration.registration_identity_id,
-    userId: user.id,
-  });
+  const affiliation =
+    prepared.representation ??
+    (await readRegistrationAffiliation(db, {
+      identityId: registration.registration_identity_id,
+      userId: user.id,
+    }));
   const commonData = {
     ...buildEventEmailVariables(event, metadata.appBaseUrl),
     firstName: user.first_name ?? "",
@@ -275,14 +294,16 @@ export async function submitEventRegistration(
 
   const badgeRenderJob = prepareBadgeRenderJob(db, referralCode);
   await commitRegistrationSubmission(db, prepared, [queuedEmail.statement, badgeRenderJob.statement]);
-  const organizationOutcome = metadata.mailboxVerified
-    ? await linkVerifiedRegistrant(db, {
-        registrationId: registration.id,
-        userId: user.id,
-        normalizedEmail: body.email,
-        organization: body.organization,
-      })
-    : null;
+  const organizationOutcome = affiliationContext
+    ? "linked"
+    : metadata.mailboxVerified
+      ? await linkVerifiedRegistrant(db, {
+          registrationId: registration.id,
+          userId: user.id,
+          normalizedEmail: body.email,
+          organization: body.organization,
+        })
+      : null;
   return {
     response: {
       success: true,

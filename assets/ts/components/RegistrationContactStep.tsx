@@ -142,11 +142,13 @@ function VerifiedContact({
   verified,
   organization,
   changeEmail,
+  endpoint,
   presentationOf,
 }: {
   verified: VerifiedRegistrationEmail;
   organization: ConfirmOrganizationController;
   changeEmail: () => void;
+  endpoint: string;
   presentationOf?: (name: string) => FieldPresentation;
 }) {
   const { person } = verified;
@@ -155,7 +157,14 @@ function VerifiedContact({
       <AddressFields step={verified} emailProof={verified.token} />
       <Details email={verified.email} firstName={person?.firstName} lastName={person?.lastName} />
       <NameFields firstName={person?.firstName} lastName={person?.lastName} presentationOf={presentationOf} />
-      {verified.asksOrganization && <RegistrationConfirmOrganization controller={organization} />}
+      {verified.affiliation && (
+        <RegistrationConfirmOrganization
+          key={verified.email}
+          controller={organization}
+          email={verified.email}
+          proof={{ token: verified.token, endpoint: `${endpoint}/proof/verify`, affiliation: verified.affiliation }}
+        />
+      )}
       <div>
         <Button type="button" variant="link" onClick={changeEmail}>
           {copy.changeEmail}
@@ -169,8 +178,8 @@ function VerifiedContact({
  * The registration's first step: the shared work-email step, verified before
  * anything else is asked. Continuing emails a verification link; opening it
  * returns the person to this form — in this tab or a new one — with the
- * address verified, their saved names filled in, and, for a work domain that
- * names no organization yet, the organization and job title asked once. A
+ * address verified, their saved names filled in, and the shared organization
+ * confirmation flow for a work address. A
  * person signed in with the same address has nothing to verify and continues
  * with their saved details and organization identity.
  */
@@ -259,6 +268,7 @@ export function RegistrationContactStep({
     return (
       <VerifiedContact
         verified={verified}
+        endpoint={endpoint}
         organization={organization}
         changeEmail={changeEmail}
         presentationOf={presentationOf}

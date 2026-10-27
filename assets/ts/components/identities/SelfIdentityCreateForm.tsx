@@ -1,10 +1,10 @@
+import { VerifiedOrganizationDetails, type VerifiedOrganizationController } from "./VerifiedOrganizationDetails";
+import { useRef } from "preact/hooks";
 /** Email-first representation onboarding: production mailbox proof, followed by the canonical domain rule. */
 import type { z } from "zod";
 import { useEffect, useState } from "preact/hooks";
-import { ORGANIZATION_JOB_TITLE_COPY } from "../../../shared/email-first-copy";
 import { currentUserIdentityCreateSchema, identityMutationResponseSchema } from "../../../shared/schemas/identity";
 import {
-  identityAffiliationPrepareSchema,
   identityAffiliationPreviewSchema,
   identityAffiliationPreviewResponseSchema,
 } from "../../../shared/schemas/identity-affiliation";
@@ -18,12 +18,9 @@ import { useContractForm } from "../../hooks/useContractForm";
 import { getJson, postJson } from "../../shared/api-client";
 import { OWN_EMAILS_ENDPOINT } from "../../shared/email-address-paths";
 import { Alert } from "../../ui/Alert";
-import { Field } from "../../ui/Field";
-import { Select, TextInput } from "../../ui/TextControl";
 import { Button } from "../../ui/Button";
 import { DescriptionList } from "../../ui/DescriptionList";
 import { EmailAddressCreateForm } from "./EmailAddressCreateForm";
-import { nextDomId } from "../../ui/dom-id";
 
 const PREVIEW_ENDPOINT = "/api/v1/users/current/identities/preview";
 type Resolved = z.infer<typeof identityAffiliationPreviewResponseSchema>;
@@ -41,12 +38,8 @@ export function SelfIdentityCreateForm({
   const [individual, setIndividual] = useState(false);
   const [address, setAddress] = useState<Pick<OwnEmailAddress, "id" | "email"> | null>(null);
   const [resolved, setResolved] = useState<Resolved | null>(null);
-  const [organizationName, setOrganizationName] = useState("");
-  const [organizationId, setOrganizationId] = useState<string | null>(null);
-  const [jobTitle, setJobTitle] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [formId] = useState(() => nextDomId("identity"));
   useEffect(() => onBusy?.(busy), [busy]);
   useEffect(
     () =>
@@ -61,18 +54,7 @@ export function SelfIdentityCreateForm({
     emailId: address?.id ?? null,
     unaffiliatedAttestation: individual,
   });
-  const selectedOrganization = resolved?.organizations.find((item) => item.id === organizationId);
-  const selectedDomain = resolved?.domains.find((item) => item.domain === resolved.domain);
-  const existingJobTitle = selectedOrganization?.identityId ? selectedOrganization.jobTitle : null;
-  const detailsForm = useContractForm(identityAffiliationPrepareSchema, {
-    phase: "prepare",
-    email,
-    emailId: address?.id ?? null,
-    domain: resolved?.domain,
-    organizationId,
-    organizationName: organizationId ? undefined : organizationName || undefined,
-    jobTitle: existingJobTitle ?? jobTitle,
-  });
+  const details = useRef<VerifiedOrganizationController>({});
   async function ownAddresses() {
     return (await getJson(OWN_EMAILS_ENDPOINT, ownEmailAddressesListResponseSchema)).emails;
   }
@@ -91,24 +73,11 @@ export function SelfIdentityCreateForm({
     setAddress(value);
     setEmail(value.email);
     setResolved(result);
-    setOrganizationId(result.organization?.id ?? null);
     setError("");
     contract.reset();
     if (individual && result.identityId)
       await onCreated({ success: true, identityId: result.identityId, state: "active" });
     else setStage("details");
-  }
-  async function changeDomain(domain: string, keepNewOrganization = organizationId === null) {
-    setBusy(true);
-    setError("");
-    try {
-      await resolve(address!, detailsForm, domain);
-      if (keepNewOrganization) setOrganizationId(null);
-    } catch (cause) {
-      setError(detailsForm.refuse(cause));
-    } finally {
-      setBusy(false);
-    }
   }
   if (stage === "email")
     return (
@@ -217,131 +186,43 @@ export function SelfIdentityCreateForm({
     <form
       noValidate
       class="pk-stack"
-      {...detailsForm.handlers}
       onSubmit={async (event) => {
         event.preventDefault();
         if (busy) return;
-        const checked = detailsForm.submit();
-        if (!checked.data) return setError(checked.message);
         setBusy(true);
         setError("");
         try {
-          const prepared = await postJson(PREVIEW_ENDPOINT, checked.data, identityAffiliationPreviewResponseSchema);
+          if (!(await details.current.prepare?.())) return;
+          const checked = details.current.read?.();
+          if (!checked || "refused" in checked) return;
           const result = await postJson(
             "/api/v1/users/current/identities",
-            currentUserIdentityCreateSchema.parse({ contextToken: prepared.contextToken }),
+            currentUserIdentityCreateSchema.parse({ contextToken: checked.contextToken }),
             identityMutationResponseSchema,
           );
           await onCreated(result);
         } catch (cause) {
-          setError(detailsForm.refuse(cause));
+          setError(cause instanceof Error ? cause.message : "Could not add the representation.");
         } finally {
           setBusy(false);
         }
       }}
     >
       <DescriptionList items={[{ term: "Verified representation email", value: email }]} />
-      {resolved && resolved.domains.length > 1 && (
-        <Field
-          label="Email domain"
-          help={
-            selectedDomain?.canLink
-              ? `Future verified email addresses at ${resolved.domain} will link to this organization.`
-              : selectedDomain?.organizationName
-                ? `Already linked to ${selectedDomain.organizationName}.`
-                : `Your work email was verified for ${resolved.domain}.`
+      {resolved && (
+        <VerifiedOrganizationDetails
+          initial={resolved}
+          emailId={address?.id ?? null}
+          controller={details.current}
+          resolve={(domain) =>
+            postJson(
+              PREVIEW_ENDPOINT,
+              identityAffiliationPreviewSchema.parse({ phase: "resolve", email, emailId: address?.id ?? null, domain }),
+              identityAffiliationPreviewResponseSchema,
+            )
           }
-          {...detailsForm.of("domain")}
-        >
-          {(control) => (
-            <Select
-              {...control}
-              value={resolved.domain}
-              disabled={busy}
-              onChange={(event) => void changeDomain(event.currentTarget.value)}
-            >
-              {resolved.domains.map((item) => (
-                <option key={item.domain} value={item.domain}>
-                  {item.domain}
-                </option>
-              ))}
-            </Select>
-          )}
-        </Field>
-      )}
-      {Boolean(resolved?.organizations.length) && (
-        <Field
-          label="Organization"
-          help="Choose the organization you represent."
-          required
-          {...detailsForm.of("organizationId")}
-        >
-          {(control) => (
-            <Select
-              {...control}
-              value={organizationId ?? ""}
-              disabled={busy}
-              onChange={(event) => {
-                const id = event.currentTarget.value || null;
-                const suggested = resolved?.domains.find((item) => item.canLink);
-                if (!id && suggested && suggested.domain !== resolved!.domain)
-                  void changeDomain(suggested.domain, true);
-                else setOrganizationId(id);
-              }}
-            >
-              {resolved!.organizations.map((organization) => (
-                <option key={organization.id} value={organization.id}>
-                  {organization.name}
-                </option>
-              ))}
-              <option value="">Another organization</option>
-            </Select>
-          )}
-        </Field>
-      )}
-      {!organizationId && (
-        <Field
-          id={`${formId}-organization`}
-          label="Organization name"
-          help={
-            resolved && resolved.domains.length === 1
-              ? `This organization will be associated with your verified email domain ${resolved.domain}.`
-              : undefined
-          }
-          required
-          {...detailsForm.of("organizationName")}
-        >
-          {(control) => (
-            <TextInput
-              {...control}
-              name="organizationName"
-              autoComplete="organization"
-              value={organizationName}
-              onInput={(event) => setOrganizationName(event.currentTarget.value)}
-            />
-          )}
-        </Field>
-      )}
-      {existingJobTitle ? (
-        <DescriptionList items={[{ term: "Job title", value: existingJobTitle }]} />
-      ) : (
-        <Field
-          id={`${formId}-title`}
-          label={ORGANIZATION_JOB_TITLE_COPY.label}
-          help={ORGANIZATION_JOB_TITLE_COPY.help}
-          required
-          {...detailsForm.of("jobTitle")}
-        >
-          {(control) => (
-            <TextInput
-              {...control}
-              name="jobTitle"
-              autoComplete="organization-title"
-              value={jobTitle}
-              onInput={(event) => setJobTitle(event.currentTarget.value)}
-            />
-          )}
-        </Field>
+          prepare={(input) => postJson(PREVIEW_ENDPOINT, input, identityAffiliationPreviewResponseSchema)}
+        />
       )}
       {error && <Alert tone="danger">{error}</Alert>}
       <Button

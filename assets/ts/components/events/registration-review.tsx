@@ -152,6 +152,9 @@ function RegistrationReview({
           empty={!email}
           valueClass="event-flow-review-email-inline"
         />
+        {readField(form, "representationLabel") && (
+          <ReviewRow label="Representation" value={readField(form, "representationLabel")} />
+        )}
       </ReviewSection>
 
       <ReviewSection title="Attendance" step={2}>

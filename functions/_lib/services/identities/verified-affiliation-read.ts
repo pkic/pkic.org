@@ -19,7 +19,7 @@ import { verifiedAffiliationBasisSchema } from "./verified-affiliation-basis";
 type Basis = z.infer<typeof verifiedAffiliationBasisSchema>;
 export function prepareVerifiedAffiliationRead(
   db: DatabaseLike,
-  userId: string,
+  userId: string | { sql: string; bindings: unknown[] },
   input: {
     email: string;
     emailId: string | null;
@@ -27,15 +27,22 @@ export function prepareVerifiedAffiliationRead(
     domain?: string;
     unaffiliatedAttestation?: boolean;
   },
+  mailboxProof?: { verifiedAt: string },
 ) {
+  const subject = typeof userId === "string" ? { sql: "?", bindings: [userId] } : userId;
   const candidates = organizationDomainCandidates(input.email);
   const domains = JSON.stringify(candidates);
   const matches = domainOwnershipFactMatchesSql("requested.value");
   const slug = slugifyOr(input.organizationName ?? "", "member");
   const statements = [
-    db
-      .prepare(`${OWN_ADDRESSES_SQL} SELECT ${OWN_ADDRESS_COLUMNS} FROM addresses WHERE id IS ? LIMIT 1`)
-      .bind(userId, userId, input.emailId),
+    mailboxProof
+      ? db
+          .prepare(`SELECT (SELECT address.id FROM user_emails address WHERE address.normalized_email=? AND address.verified_at IS NOT NULL AND address.user_id=(${subject.sql})) AS id,
+            ? AS email,1 AS is_primary,? AS verified_at,'registration_confirmation' AS verification_method,NULL AS identity_id,? AS created_at,0 AS sign_in_enabled`)
+          .bind(input.email, ...subject.bindings, input.email, mailboxProof.verifiedAt, mailboxProof.verifiedAt)
+      : db
+          .prepare(`${OWN_ADDRESSES_SQL} SELECT ${OWN_ADDRESS_COLUMNS} FROM addresses WHERE id IS ? LIMIT 1`)
+          .bind(userId, userId, input.emailId),
     db
       .prepare(`SELECT claim.id,claim.domain,claim.application_id AS applicationId,claim.organization_id AS organizationId,
       EXISTS(SELECT 1 FROM members member WHERE member.organization_id=claim.organization_id) AS member
@@ -64,9 +71,11 @@ export function prepareVerifiedAffiliationRead(
       .bind(normalizeOrgName(input.organizationName ?? ""), domains, domains),
     db
       .prepare(`SELECT id,organization_id,email_id,updated_at,invited_at,started_at,ended_at,blocked_at,job_title
-      FROM identities WHERE user_id=? ORDER BY id LIMIT 501`)
-      .bind(userId),
-    db.prepare(`SELECT identity_id FROM user_emails WHERE id=? AND user_id=?`).bind(input.emailId, userId),
+      FROM identities WHERE user_id=(${subject.sql}) ORDER BY id LIMIT 501`)
+      .bind(...subject.bindings),
+    db
+      .prepare(`SELECT identity_id FROM user_emails WHERE id=? AND user_id=(${subject.sql})`)
+      .bind(input.emailId, ...subject.bindings),
     db
       .prepare(`SELECT slug FROM organizations WHERE ?=1 AND (slug=? OR slug GLOB ?) ORDER BY slug LIMIT 1001`)
       .bind(input.organizationName ? 1 : 0, slug, `${slug}-[0-9]*`),

@@ -7,6 +7,7 @@ import type { DatabaseLike, StatementLike } from "../types";
 
 export interface EmailOwnership {
   userId: string;
+  provedUserId: string | null;
   kind: "primary" | "secondary";
   emailId: string | null;
   verifiedAt: string | null;
@@ -15,25 +16,30 @@ export interface EmailOwnership {
   alternateVerifiedAt: string | null;
 }
 
-export function readEmailOwnership(db: DatabaseLike, email: string): Promise<EmailOwnership | null> {
-  return first<EmailOwnership>(
-    db,
-    `WITH owner AS (
+function emailOwnershipSelection(email: string) {
+  return {
+    sql: `WITH owner AS (
     SELECT id AS userId,'primary' AS kind,NULL AS emailId,email_verified_at AS verifiedAt FROM users WHERE normalized_email=?
     UNION ALL SELECT user_id,'secondary',id,verified_at FROM user_emails WHERE normalized_email=?
   ) SELECT owner.userId,owner.kind,owner.emailId,owner.verifiedAt,alternate.id AS alternateId,
-    alternate.email AS alternateEmail,alternate.verified_at AS alternateVerifiedAt
+    alternate.email AS alternateEmail,alternate.verified_at AS alternateVerifiedAt,
+    CASE WHEN owner.verifiedAt IS NOT NULL OR (owner.kind='primary' AND alternate.id IS NULL) THEN owner.userId ELSE NULL END AS provedUserId
     FROM owner LEFT JOIN user_emails alternate ON alternate.id=(SELECT id FROM user_emails
       WHERE user_id=owner.userId AND verified_at IS NOT NULL ORDER BY created_at,id LIMIT 1) LIMIT 1`,
-    [email, email],
-  );
+    bindings: [email, email],
+  };
 }
-
-/** A primary-only unverified account is recovered in place; its old access is revoked when proof commits. */
+export function readEmailOwnership(db: DatabaseLike, email: string): Promise<EmailOwnership | null> {
+  const read = emailOwnershipSelection(email);
+  return first<EmailOwnership>(db, read.sql, read.bindings);
+}
+/** A proved mailbox may resolve a verified owner or an unverified primary without other verified addresses. */
+export function provedMailboxUserIdSelection(email: string) {
+  const read = emailOwnershipSelection(email);
+  return { sql: `SELECT ownership.provedUserId FROM (${read.sql}) ownership`, bindings: read.bindings };
+}
 export function provedMailboxUserId(owner: EmailOwnership | null): string | null {
-  if (!owner) return null;
-  if (owner.verifiedAt) return owner.userId;
-  return owner.kind === "primary" && !owner.alternateId ? owner.userId : null;
+  return owner?.provedUserId ?? null;
 }
 
 /** Release only the exact unverified claim observed before the atomic proof command. Never remove an account or identity. */

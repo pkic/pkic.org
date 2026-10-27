@@ -20,11 +20,12 @@ const consents = [
 ];
 
 const post = (path: string, body: unknown) =>
-  callApi(env, `${API}${path}`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  callApi(
+    env,
+    `${API}${path}`,
+    { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) },
+    path === "/proof/verify" ? { maxRoundTrips: 1 } : undefined,
+  );
 
 /** Starts verification and returns the link the email carries. */
 async function emailedLink(email: string, body: Record<string, unknown> = {}): Promise<URL> {
@@ -75,7 +76,7 @@ describe("registration verifies the email address first", () => {
     await insertUser(env.DB, "known@new-org.example");
     const response = await post("/proof/verify", { token: tokenOf(await emailedLink("known@new-org.example")) });
     expect(response.status, await response.clone().text()).toBe(200);
-    expect(registrationEmailProofVerifyResponseSchema.parse(await response.json())).toEqual({
+    expect(registrationEmailProofVerifyResponseSchema.parse(await response.json())).toMatchObject({
       email: "known@new-org.example",
       unaffiliatedAttestation: false,
       person: { firstName: "Test", lastName: null },
@@ -208,7 +209,10 @@ describe("registration verifies the email address first", () => {
       .run();
     const email = "casey@open-domain.test";
     const verified = await post("/proof/verify", { token: tokenOf(await emailedLink(email)) });
-    expect(registrationEmailProofVerifyResponseSchema.parse(await verified.json()).asksOrganization).toBe(false);
+    expect(registrationEmailProofVerifyResponseSchema.parse(await verified.json())).toMatchObject({
+      asksOrganization: true,
+      affiliation: { organization: { id: organizationId, name: "Open Domain Co" } },
+    });
     const response = await post("", registration(email, tokenOf(await emailedLink(email))));
     expect(response.status, await response.clone().text()).toBe(200);
     expect(registrationSubmissionResponseSchema.parse(await response.json()).status).toBe("registered");
@@ -254,5 +258,108 @@ describe("registration verifies the email address first", () => {
     const response = await post("", registration("casey@new-org.example", undefined));
     expect(response.status, await response.clone().text()).toBe(200);
     expect(registrationSubmissionResponseSchema.parse(await response.json()).status).toBe("pending_email_confirmation");
+  });
+  it("shows the domain default but honors another organization through the same affiliation flow", async () => {
+    const original = await insertOrganization(env.DB, "Default Domain Organization");
+    await env.DB.prepare(
+      "INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at) VALUES(?,'shared-choice.test',?,?,?)",
+    )
+      .bind(crypto.randomUUID(), original, new Date().toISOString(), new Date().toISOString())
+      .run();
+    const email = "first@shared-choice.test";
+    const proof = tokenOf(await emailedLink(email));
+    const preview = registrationEmailProofVerifyResponseSchema.parse(
+      await (await post("/proof/verify", { token: proof })).json(),
+    );
+    expect(preview.affiliation?.organization).toEqual({ id: original, name: "Default Domain Organization" });
+    const prepared = await post("/proof/verify", {
+      token: proof,
+      affiliation: {
+        organizationId: null,
+        organizationName: "Chosen Domain Organization",
+        jobTitle: "Engineer",
+        domain: "shared-choice.test",
+      },
+    });
+    expect(prepared.status, await prepared.clone().text()).toBe(200);
+    const contextToken = registrationEmailProofVerifyResponseSchema.parse(await prepared.json()).affiliation!
+      .contextToken!;
+    const result = await post(
+      "",
+      registration(email, proof, {
+        organization: { name: "Chosen Domain Organization", jobTitle: "Engineer", contextToken },
+      }),
+    );
+    expect(result.status, await result.clone().text()).toBe(200);
+    const [stored] = await queryAll<{ registration_identity_id: string; organization_id: string; name: string }>(
+      env.DB,
+      `SELECT registration.registration_identity_id,identity.organization_id,organization.name FROM registrations registration JOIN users person ON person.id=registration.user_id JOIN identities identity ON identity.id=registration.registration_identity_id JOIN organizations organization ON organization.id=identity.organization_id WHERE person.normalized_email=?`,
+      [email],
+    );
+    expect(stored.name).toBe("Chosen Domain Organization");
+    expect(stored.organization_id).not.toBe(original);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT id FROM identities WHERE organization_id=? AND user_id=(SELECT id FROM users WHERE normalized_email=?)",
+        [original, email],
+      ),
+    ).toEqual([]);
+    const secondEmail = "second@shared-choice.test";
+    const secondProof = tokenOf(await emailedLink(secondEmail));
+    const choices = registrationEmailProofVerifyResponseSchema.parse(
+      await (await post("/proof/verify", { token: secondProof })).json(),
+    ).affiliation!;
+    expect(choices.organization?.id).toBe(original);
+    expect(choices.organizations.map((x) => x.name)).toContain("Chosen Domain Organization");
+    const selected = registrationEmailProofVerifyResponseSchema.parse(
+      await (
+        await post("/proof/verify", {
+          token: secondProof,
+          affiliation: { organizationId: stored.organization_id, jobTitle: "Researcher", domain: "shared-choice.test" },
+        })
+      ).json(),
+    ).affiliation!;
+    const second = await post(
+      "",
+      registration(secondEmail, secondProof, {
+        organization: {
+          name: "Chosen Domain Organization",
+          jobTitle: "Researcher",
+          contextToken: selected.contextToken,
+        },
+      }),
+    );
+    expect(second.status, await second.clone().text()).toBe(200);
+  });
+  it("does not let a mailbox proof enumerate unrelated organizations or reuse another address's prepared choice", async () => {
+    const email = "proof@private-choice.test";
+    const proof = tokenOf(await emailedLink(email));
+    expect(
+      (
+        await post("/proof/verify", {
+          token: proof,
+          affiliation: { organizationId: crypto.randomUUID(), jobTitle: "Engineer" },
+        })
+      ).status,
+    ).toBe(422);
+    const prepared = registrationEmailProofVerifyResponseSchema.parse(
+      await (
+        await post("/proof/verify", {
+          token: proof,
+          affiliation: { organizationId: null, organizationName: "Private Choice", jobTitle: "Engineer" },
+        })
+      ).json(),
+    ).affiliation!;
+    const other = "other@private-choice.test";
+    const otherProof = tokenOf(await emailedLink(other));
+    const result = await post(
+      "",
+      registration(other, otherProof, {
+        organization: { name: "Private Choice", jobTitle: "Engineer", contextToken: prepared.contextToken },
+      }),
+    );
+    expect(result.status).toBe(409);
+    expect(await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email=?", [other])).toEqual([]);
   });
 });

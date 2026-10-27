@@ -172,9 +172,6 @@ export const ORGANIZATION_JOB_TITLE_COPY = {
 
 /** The organization a verified work address names when its domain resolves to none. */
 export const REGISTRATION_ORGANIZATION_COPY = {
-  question: "Add your organization and job title to confirm your registration.",
-  nameLabel: "Your organization",
-  help: "We'll connect you to it once, so next time we know.",
   reviewRequired:
     "Our team will check the organization you named before it appears on your registration. You don't need to do anything.",
 } as const;

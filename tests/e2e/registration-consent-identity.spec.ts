@@ -61,10 +61,21 @@ test("verified approved-domain registration affiliates once and an organization 
   const attendee = await attendeeContext.newPage();
   try {
     const since = await capturedEmailCount();
-    const initial = await registerInBrowser(attendee, email);
+    const initial = await registerInBrowser(attendee, email, undefined, undefined, {
+      onContactReady: async (formPage) => {
+        const chooser = formPage.getByRole("combobox", { name: /^Organization/ });
+        await expect(chooser).toHaveValue(owner.user.identities[0].organizationId!);
+        await formPage.setViewportSize({ width: 1280, height: 900 });
+        await formPage.screenshot({ path: testInfo.outputPath("public-organization-choice-desktop.png") });
+        await formPage.setViewportSize({ width: 375, height: 812 });
+        await formPage.screenshot({ path: testInfo.outputPath("public-organization-choice-phone.png") });
+        await chooser.selectOption("");
+        await expect(formPage.getByRole("textbox", { name: /^Organization name/ })).toBeVisible();
+        await chooser.selectOption(owner.user.identities[0].organizationId!);
+      },
+    });
     expect(initial.request.identityId).toBeUndefined();
-    // Verified first, so the registration is final when submitted. The address is on the representative
-    // organization's own domain, which already decides: no organization is asked.
+    // The verified domain supplies the default; the registrant sees and confirms the organization.
     expect(initial.result.status).toBe("registered");
     await expect(attendee.getByRole("heading", { name: /You're registered/i })).toBeVisible();
     const confirmedEmail = await waitForCapturedEmail(email, "registration is confirmed", { since });
@@ -162,7 +173,7 @@ test("verified approved-domain registration affiliates once and an organization 
     // Profile edits preserve the independently selected registration representation.
     await expect(attendee.getByRole("definition").filter({ hasText: organizationName })).toBeVisible();
     await attendee.getByRole("button", { name: "Edit details", exact: true }).click();
-    await expect(attendee.getByRole("textbox", { name: "Organization", exact: true })).toHaveCount(0);
+    await expect(attendee.getByRole("textbox", { name: /^Organization/ })).toHaveCount(0);
     await expect(attendee.getByRole("link", { name: "Manage identities", exact: true })).toBeVisible();
     await expect(attendee.getByLabel("Country", { exact: true })).toHaveValue("US");
     await attendee.getByLabel("Country", { exact: true }).selectOption("CA");

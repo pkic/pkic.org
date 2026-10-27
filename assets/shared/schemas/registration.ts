@@ -1,3 +1,4 @@
+import { identityAffiliationContextSchema, identityAffiliationPrepareBaseSchema } from "./identity-affiliation";
 import { consentSelectionIssues } from "../consent-selection";
 import type { RequiredTerm } from "./event-read-models";
 import { z } from "zod";
@@ -276,7 +277,12 @@ export type AttendeeRegistrationParticipation = z.infer<typeof attendeeRegistrat
  * none — asked once, after the mailbox is proved.
  */
 export const registrationConfirmOrganizationSchema = z
-  .object({ name: organizationNameSchema, jobTitle: jobTitleSchema })
+  .object({
+    name: organizationNameSchema,
+    jobTitle: jobTitleSchema,
+    contextToken: identityAffiliationContextSchema.optional(),
+    ...identityAffiliationPrepareBaseSchema.pick({ organizationId: true, domain: true }).partial().shape,
+  })
   .strict();
 export type RegistrationConfirmOrganization = z.infer<typeof registrationConfirmOrganizationSchema>;
 

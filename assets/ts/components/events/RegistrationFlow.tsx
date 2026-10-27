@@ -261,11 +261,16 @@ export function RegistrationFlow(props: Props) {
             if (named && "refused" in named) return;
           }
           const answered = currentQuestions.current.submit();
-          const checked = contract.submit();
+          let checked = contract.submit();
           if (!answered.data) return setError(answered.message);
           if (!checked.data) return setError(checked.message);
           setBusy(true);
           try {
+            if (!updating && organization.current.prepare) {
+              if (!(await organization.current.prepare())) return;
+              checked = contract.submit();
+              if (!checked.data) return setError(checked.message);
+            }
             if (props.mode === "update") await props.save(registrationManageSchema.parse(checked.data));
             else {
               const body = registrationCreateSchema.parse(checked.data);

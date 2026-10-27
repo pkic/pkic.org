@@ -1,3 +1,12 @@
+import { prepareVerifiedAffiliationRead } from "../identities/verified-affiliation-read";
+import { verifiedAffiliationPreview } from "../identities/verified-affiliation-preview";
+import { planVerifiedAffiliation } from "../identities/verified-affiliation-plan";
+import { identityAffiliationPrepareSchema } from "../../../../assets/shared/schemas/identity-affiliation";
+import type { registrationEmailProofVerifySchema } from "../../../../assets/shared/schemas/registration-email-proof";
+import { provedMailboxUserIdSelection } from "../email-ownership";
+import { signRegistrationAffiliationContext } from "./affiliation-context";
+import { nowIso } from "../../utils/time";
+import { batchFirst } from "../../db/pagination";
 /**
  * Registration verifies the address first. The email-first step queues a
  * signed, short-lived link through the durable outbox; opening it brings the
@@ -24,10 +33,6 @@ import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
 import type { EventRecord } from "../events";
 import { registrationPageUrl } from "../frontend-links";
-import { userRecordColumns, type UserRecord } from "../users";
-import { first } from "../../db/queries";
-import { readEmailOwnership, provedMailboxUserId } from "../email-ownership";
-import { registrationAsksOrganization } from "./confirmation-organization";
 
 const PURPOSE = "registration_email_verify";
 
@@ -99,7 +104,7 @@ export async function startRegistrationEmailProof(
 export async function readRegistrationEmailProof(
   signingSecret: string,
   token: string,
-  eventId: string,
+  eventId?: string,
 ): Promise<RegistrationEmailProof> {
   const verified = await verifyStatelessCapabilityToken({ signingSecret, purpose: PURPOSE, token });
   if (!verified.ok)
@@ -111,7 +116,7 @@ export async function readRegistrationEmailProof(
         : "This verification link is not valid. Enter your email again to get a new one.",
     );
   const payload = decodeCapabilityPayload(verified.resourceId, proofPayloadSchema);
-  if (!payload || payload.eventId !== eventId)
+  if (!payload || (eventId !== undefined && payload.eventId !== eventId))
     throw new AppError(
       404,
       "REGISTRATION_EMAIL_PROOF_INVALID",
@@ -123,20 +128,70 @@ export async function readRegistrationEmailProof(
 /** What the form continues with once the link is opened. */
 export async function verifyRegistrationEmailProof(
   db: DatabaseLike,
-  input: { signingSecret: string; token: string; eventId: string },
+  input: {
+    signingSecret: string;
+    token: string;
+    eventSlug: string;
+    domain?: string;
+    affiliation?: z.infer<typeof registrationEmailProofVerifySchema>["affiliation"];
+  },
 ): Promise<RegistrationEmailProofVerifyResponse> {
-  const proof = await readRegistrationEmailProof(input.signingSecret, input.token, input.eventId);
-  const ownerId = provedMailboxUserId(await readEmailOwnership(db, proof.email));
-  const user = ownerId
-    ? await first<UserRecord>(db, `SELECT ${userRecordColumns()} FROM users WHERE id=?`, [ownerId])
-    : null;
+  const proof = await readRegistrationEmailProof(input.signingSecret, input.token);
+  const owner = provedMailboxUserIdSelection(proof.email);
+  const affiliation = proof.unaffiliatedAttestation
+    ? null
+    : prepareVerifiedAffiliationRead(
+        db,
+        owner,
+        {
+          email: proof.email,
+          emailId: null,
+          domain: input.affiliation?.domain ?? input.domain,
+          organizationName: input.affiliation?.organizationName,
+        },
+        { verifiedAt: nowIso() },
+      );
+  const results = await db.batch([
+    db.prepare("SELECT id FROM events WHERE id=? AND slug=?").bind(proof.eventId, input.eventSlug),
+    db.prepare(`SELECT first_name,last_name FROM users WHERE id=(${owner.sql})`).bind(...owner.bindings),
+    ...(affiliation?.statements ?? []),
+  ]);
+  if (!batchFirst(results[0])) throw new AppError(404, "EVENT_NOT_FOUND", "Event not found");
+  const person = batchFirst<{ first_name: string | null; last_name: string | null }>(results[1]);
+  const observed = affiliation?.decode(results.slice(2));
+  const preview = observed ? verifiedAffiliationPreview(observed.basis, observed.address) : null;
+  if (input.affiliation && observed && preview) {
+    const selection = identityAffiliationPrepareSchema.parse({
+      ...input.affiliation,
+      phase: "prepare",
+      email: proof.email,
+      emailId: observed.address.id,
+    });
+    if (selection.organizationId && !preview.organizations.some((item) => item.id === selection.organizationId))
+      throw new AppError(
+        422,
+        "IDENTITY_DOMAIN_MISMATCH",
+        "Choose an organization confirmed by your verified work domain.",
+      );
+    await planVerifiedAffiliation(
+      db,
+      { userId: crypto.randomUUID(), proofEvidence: { sql: "SELECT 1", bindings: [] } },
+      selection,
+      { ...observed.basis, identities: [], emailOwner: null },
+      nowIso(),
+    );
+    preview.contextToken = await signRegistrationAffiliationContext(input.signingSecret, {
+      eventId: proof.eventId,
+      input: selection,
+      basis: observed.basis,
+    });
+  }
   return {
     email: proof.email,
     unaffiliatedAttestation: proof.unaffiliatedAttestation,
-    person: user ? { firstName: user.first_name, lastName: user.last_name } : null,
-    asksOrganization:
-      !proof.unaffiliatedAttestation &&
-      (await registrationAsksOrganization(db, { userId: user?.id ?? null, normalizedEmail: proof.email })),
+    person: person ? { firstName: person.first_name, lastName: person.last_name } : null,
+    asksOrganization: !proof.unaffiliatedAttestation,
+    affiliation: preview,
   };
 }
 

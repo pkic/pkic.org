@@ -13,12 +13,7 @@ import type { ConfirmOrganizationController } from "../../assets/ts/components/R
 import { portalProfileFixture, portalSessionFixture } from "../helpers/portal-session";
 import { RegistrationIdentityField } from "../../assets/ts/components/RegistrationIdentitySelect";
 import { RegistrationContactStep } from "../../assets/ts/components/RegistrationContactStep";
-import {
-  EMAIL_FIRST_ADVISORY_COPY,
-  EMAIL_FIRST_COPY,
-  REGISTRATION_ORGANIZATION_COPY,
-  WORK_EMAIL_STEER,
-} from "../../assets/shared/email-first-copy";
+import { EMAIL_FIRST_ADVISORY_COPY, EMAIL_FIRST_COPY, WORK_EMAIL_STEER } from "../../assets/shared/email-first-copy";
 import { emailDomainResponseSchema } from "../../assets/shared/schemas/email-domains";
 import { controlFor } from "./helpers/labeled-control";
 
@@ -130,6 +125,17 @@ function installResponses(
           unaffiliatedAttestation: false,
           person: verifiedPerson,
           asksOrganization,
+          affiliation: asksOrganization
+            ? {
+                email: "ada@example.test",
+                domain: "example.test",
+                domains: [{ domain: "example.test", canLink: false, organizationName: null }],
+                organization: organizationName ? { id: ORGANIZATION_ID, name: organizationName } : null,
+                organizations: organizationName
+                  ? [{ id: ORGANIZATION_ID, name: organizationName, identityId: null, jobTitle: null }]
+                  : [],
+              }
+            : null,
         });
       else if (url.pathname === "/api/v1/users/current") body = profile();
       else if (url.pathname.startsWith("/api/v1/email/domains/")) {
@@ -287,13 +293,52 @@ describe("registration contact step", () => {
     installResponses(undefined, false, null, true);
     const organization: ConfirmOrganizationController = {};
     const form = await mount(contactStep(() => {}, organization));
-    expect(form.textContent).toContain(REGISTRATION_ORGANIZATION_COPY.question);
+    expect(controlFor(form, "Organization name")).not.toBeNull();
     expect(controlFor(form, "First name").value).toBe("");
     let named: ReturnType<NonNullable<ConfirmOrganizationController["read"]>> | undefined;
     await act(() => {
       named = organization.read?.();
     });
     expect(named).toEqual({ refused: true });
+  });
+
+  it("embeds the shared chooser for a verified known domain and clears it when the address changes", async () => {
+    window.history.replaceState({}, "", `/events/2026/pqc/register/#verify=${PROOF_TOKEN}`);
+    installResponses("Example Corp", false, null, true);
+    const organization: ConfirmOrganizationController = {};
+    const form = await mount(contactStep(() => {}, organization));
+    const choice = controlFor(form, "Organization") as HTMLSelectElement;
+    expect(choice.value).toBe(ORGANIZATION_ID);
+    const title = controlFor(form, "Job title");
+    await act(() => {
+      title.value = "Researcher";
+      title.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    let selected: ReturnType<NonNullable<ConfirmOrganizationController["read"]>> | undefined;
+    await act(() => {
+      selected = organization.read?.();
+    });
+    expect(selected).toMatchObject({
+      organization: { name: "Example Corp", organizationId: ORGANIZATION_ID, jobTitle: "Researcher" },
+    });
+    await act(() => {
+      choice.value = "";
+      choice.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    const name = controlFor(form, "Organization name");
+    await act(() => {
+      name.value = "Another Organization";
+      name.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(() => {
+      selected = organization.read?.();
+    });
+    expect(selected).toMatchObject({
+      organization: { name: "Another Organization", organizationId: null, jobTitle: "Researcher" },
+    });
+    await act(() => button(form, "Change email address")!.click());
+    await settle();
+    expect(organization.read).toBeUndefined();
   });
 
   it("continues a signed-in person without verifying again and selects their organization", async () => {

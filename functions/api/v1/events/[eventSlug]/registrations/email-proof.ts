@@ -1,3 +1,4 @@
+import { requestDb } from "../../../../../_lib/db/context";
 import {
   registrationEmailProofStartResponseSchema,
   registrationEmailProofVerifyResponseSchema,
@@ -40,13 +41,14 @@ export const RegistrationEmailProofPost = openApiRoute(registrationEmailProofSta
 export const RegistrationEmailProofVerifyPost = openApiRoute(
   registrationEmailProofVerifyRouteSchema,
   async (c, data) => {
-    const event = await getEventBySlug(c.env.DB, data.params.eventSlug);
     return jsonPrivate(
       registrationEmailProofVerifyResponseSchema.parse(
-        await verifyRegistrationEmailProof(c.env.DB, {
+        await verifyRegistrationEmailProof(requestDb(c), {
           signingSecret: requireInternalSecret(c.env),
           token: data.body.token,
-          eventId: event.id,
+          eventSlug: data.params.eventSlug,
+          domain: data.body.domain,
+          affiliation: data.body.affiliation,
         }),
       ),
     );

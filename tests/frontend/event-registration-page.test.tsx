@@ -69,6 +69,7 @@ function installApi(): Captured[] {
               unaffiliatedAttestation: true,
               person: null,
               asksOrganization: false,
+              affiliation: null,
             }),
           ),
         );

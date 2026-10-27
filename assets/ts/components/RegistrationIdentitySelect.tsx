@@ -39,7 +39,12 @@ export function RegistrationIdentityField({
   const [choosing, showChoosing, closeChoosing] = useDialogQueryState("representation");
   const [draft, setDraft] = useState<SessionActingIdentity | null>(selected);
   const canChange = identities.some((identity) => identity.id !== selected?.id);
-  const hidden = <input type="hidden" name="identityId" value={selected?.id ?? ""} />;
+  const hidden = (
+    <>
+      <input type="hidden" name="identityId" value={selected?.id ?? ""} />
+      <input type="hidden" name="representationLabel" value={selected ? identityLabel(selected) : "Personal"} />
+    </>
+  );
   if (presentation === "summary")
     return (
       <>
