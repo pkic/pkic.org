@@ -62,11 +62,13 @@ export function SelfIdentityCreateForm({
     unaffiliatedAttestation: individual,
   });
   const selectedOrganization = resolved?.organizations.find((item) => item.id === organizationId);
+  const selectedDomain = resolved?.domains.find((item) => item.domain === resolved.domain);
   const existingJobTitle = selectedOrganization?.identityId ? selectedOrganization.jobTitle : null;
   const detailsForm = useContractForm(identityAffiliationPrepareSchema, {
     phase: "prepare",
     email,
     emailId: address?.id ?? null,
+    domain: resolved?.domain,
     organizationId,
     organizationName: organizationId ? undefined : organizationName || undefined,
     jobTitle: existingJobTitle ?? jobTitle,
@@ -74,13 +76,14 @@ export function SelfIdentityCreateForm({
   async function ownAddresses() {
     return (await getJson(OWN_EMAILS_ENDPOINT, ownEmailAddressesListResponseSchema)).emails;
   }
-  async function resolve(value: Pick<OwnEmailAddress, "id" | "email">, contract = proofForm) {
+  async function resolve(value: Pick<OwnEmailAddress, "id" | "email">, contract = proofForm, domain?: string) {
     const result = await postJson(
       PREVIEW_ENDPOINT,
       identityAffiliationPreviewSchema.parse({
         phase: "resolve",
         email: value.email,
         emailId: value.id,
+        domain,
         unaffiliatedAttestation: individual,
       }),
       identityAffiliationPreviewResponseSchema,
@@ -94,6 +97,18 @@ export function SelfIdentityCreateForm({
     if (individual && result.identityId)
       await onCreated({ success: true, identityId: result.identityId, state: "active" });
     else setStage("details");
+  }
+  async function changeDomain(domain: string, keepNewOrganization = organizationId === null) {
+    setBusy(true);
+    setError("");
+    try {
+      await resolve(address!, detailsForm, domain);
+      if (keepNewOrganization) setOrganizationId(null);
+    } catch (cause) {
+      setError(detailsForm.refuse(cause));
+    } finally {
+      setBusy(false);
+    }
   }
   if (stage === "email")
     return (
@@ -226,6 +241,34 @@ export function SelfIdentityCreateForm({
       }}
     >
       <DescriptionList items={[{ term: "Verified representation email", value: email }]} />
+      {resolved && resolved.domains.length > 1 && (
+        <Field
+          label="Email domain"
+          help={
+            selectedDomain?.canLink
+              ? `Future verified email addresses at ${resolved.domain} will link to this organization.`
+              : selectedDomain?.organizationName
+                ? `Already linked to ${selectedDomain.organizationName}.`
+                : `Your work email was verified for ${resolved.domain}.`
+          }
+          {...detailsForm.of("domain")}
+        >
+          {(control) => (
+            <Select
+              {...control}
+              value={resolved.domain}
+              disabled={busy}
+              onChange={(event) => void changeDomain(event.currentTarget.value)}
+            >
+              {resolved.domains.map((item) => (
+                <option key={item.domain} value={item.domain}>
+                  {item.domain}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+      )}
       {Boolean(resolved?.organizations.length) && (
         <Field
           label="Organization"
@@ -237,7 +280,14 @@ export function SelfIdentityCreateForm({
             <Select
               {...control}
               value={organizationId ?? ""}
-              onChange={(event) => setOrganizationId(event.currentTarget.value || null)}
+              disabled={busy}
+              onChange={(event) => {
+                const id = event.currentTarget.value || null;
+                const suggested = resolved?.domains.find((item) => item.canLink);
+                if (!id && suggested && suggested.domain !== resolved!.domain)
+                  void changeDomain(suggested.domain, true);
+                else setOrganizationId(id);
+              }}
             >
               {resolved!.organizations.map((organization) => (
                 <option key={organization.id} value={organization.id}>
@@ -250,7 +300,17 @@ export function SelfIdentityCreateForm({
         </Field>
       )}
       {!organizationId && (
-        <Field id={`${formId}-organization`} label="Organization name" required {...detailsForm.of("organizationName")}>
+        <Field
+          id={`${formId}-organization`}
+          label="Organization name"
+          help={
+            resolved && resolved.domains.length === 1
+              ? `This organization will be associated with your verified email domain ${resolved.domain}.`
+              : undefined
+          }
+          required
+          {...detailsForm.of("organizationName")}
+        >
           {(control) => (
             <TextInput
               {...control}

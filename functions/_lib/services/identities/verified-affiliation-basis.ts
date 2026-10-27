@@ -11,6 +11,16 @@ export const verifiedAffiliationBasisSchema = z.object({
       organizationId: z.string().nullable(),
     })
     .nullable(),
+  claims: z
+    .array(
+      z.object({
+        id: z.string(),
+        domain: z.string(),
+        applicationId: z.string().nullable(),
+        organizationId: z.string().nullable(),
+      }),
+    )
+    .max(128),
   facts: z.object({
     claimed: z.object({ organizationId: z.string(), isMember: z.boolean() }).nullable(),
     heldByApplication: z.boolean(),

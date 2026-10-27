@@ -181,6 +181,7 @@ function stubApi(): Array<{ method: string; path: string; body: unknown }> {
         return json({
           email: "person@example.test",
           domain: "example.test",
+          domains: [{ domain: "example.test", canLink: false, organizationName: "Example Org" }],
           organization: { id: ORGANIZATION_ID, name: "Example Org" },
           organizations: [{ id: ORGANIZATION_ID, name: "Example Org", identityId: null, jobTitle: null }],
           ...(request.phase === "prepare" ? { contextToken: "synthetic-prepared-context-for-identity-creation" } : {}),

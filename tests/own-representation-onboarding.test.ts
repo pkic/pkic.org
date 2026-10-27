@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { callApi } from "./helpers/app";
 import { createMemberSession } from "./helpers/auth";
 import { insertOrganization, insertUser } from "./helpers/membership";
+import { seedMemberApplication } from "./helpers/member-applications";
 import { resetDb } from "./helpers/reset-db";
 import { nowIso } from "../functions/_lib/utils/time";
 import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
@@ -59,6 +60,7 @@ async function prepare(
   p: Awaited<ReturnType<typeof person>>,
   organizationResolved: boolean,
   organizationName?: string,
+  domain?: string,
 ) {
   const resolved = organizationResolved
     ? identityAffiliationPreviewResponseSchema.parse(
@@ -67,6 +69,7 @@ async function prepare(
     : null;
   const response = await preview(p, {
     phase: "prepare",
+    domain,
     email: p.email,
     emailId: null,
     organizationId: resolved?.organization?.id ?? null,
@@ -332,5 +335,215 @@ describe("removing an incorrect representation", () => {
       .bind(nowIso(), nowIso(), identityId)
       .run();
     expect((await removeRepresentation(p, identityId)).status).toBe(409);
+  });
+});
+
+describe("verified subdomain organization mappings", () => {
+  it("lets a verified user map an unclaimed subdomain while preserving the parent and more specific claims", async () => {
+    const parent = await insertOrganization(env.DB, "IBM");
+    const lab = await insertOrganization(env.DB, "IBM Laboratory");
+    await claim("ibm-work.test", parent);
+    await claim("lab.us.ibm-work.test", lab);
+    const p = await person("person@us.ibm-work.test");
+    const choicesResponse = await preview(p, { phase: "resolve", email: p.email, emailId: null });
+    const choices = identityAffiliationPreviewResponseSchema.parse(await choicesResponse.json());
+    expect(choices.domain).toBe("ibm-work.test");
+    expect(choices.domains).toContainEqual({ domain: "us.ibm-work.test", canLink: true, organizationName: null });
+    const created = await create(p, await prepare(p, false, "IBM US", "us.ibm-work.test"));
+    expect(created.status, await created.clone().text()).toBe(201);
+    const identity = identityMutationResponseSchema.parse(await created.json());
+    const childOrganization = await env.DB.prepare("SELECT organization_id FROM identities WHERE id=?")
+      .bind(identity.identityId)
+      .first("organization_id");
+    expect(
+      await env.DB.prepare(
+        "SELECT organization_id FROM organization_domain_claims WHERE domain='us.ibm-work.test'",
+      ).first("organization_id"),
+    ).toBe(childOrganization);
+    expect(
+      await env.DB.prepare("SELECT organization_id FROM organization_domain_claims WHERE domain='ibm-work.test'").first(
+        "organization_id",
+      ),
+    ).toBe(parent);
+    for (const [email, expected] of [
+      ["colleague@a.us.ibm-work.test", "IBM US"],
+      ["colleague@uk.ibm-work.test", "IBM"],
+      ["colleague@lab.us.ibm-work.test", "IBM Laboratory"],
+    ]) {
+      const colleague = await person(email);
+      const response = await preview(colleague, { phase: "resolve", email, emailId: null });
+      expect(response.status, await response.clone().text()).toBe(200);
+      expect(identityAffiliationPreviewResponseSchema.parse(await response.json()).organization?.name).toBe(expected);
+    }
+  });
+  it("suggests the exact unclaimed work subdomain when no organization is known", async () => {
+    const p = await person("person@division.new-company.test");
+    const response = await preview(p, { phase: "resolve", email: p.email, emailId: null });
+    const body = identityAffiliationPreviewResponseSchema.parse(await response.json());
+    expect(body.domain).toBe("division.new-company.test");
+    expect((await create(p, await prepare(p, false, "New Division", body.domain))).status).toBe(201);
+    expect(await env.DB.prepare("SELECT domain FROM organization_domain_claims").first("domain")).toBe(body.domain);
+  });
+  it("rolls back a new organization when the subdomain is claimed after preparation", async () => {
+    const p = await person("person@us.work-company.test");
+    const token = await prepare(p, false, "New US Company", "us.work-company.test");
+    const owner = await insertOrganization(env.DB, "Existing US Company");
+    await claim("us.work-company.test", owner);
+    const result = await create(p, token);
+    expect(result.status, await result.clone().text()).toBe(409);
+    expect(await env.DB.prepare("SELECT id FROM organizations WHERE name='New US Company'").first("id")).toBeNull();
+    expect(
+      await env.DB.prepare(
+        "SELECT organization_id FROM organization_domain_claims WHERE domain='us.work-company.test'",
+      ).first("organization_id"),
+    ).toBe(owner);
+  });
+  it.each([
+    ["person@us.work-company.test", "uk.work-company.test"],
+    ["person@us.work-company.test", "company.test"],
+    ["person@us.gmail.com", "us.gmail.com"],
+  ])("refuses a domain outside the proved eligible work address: %s / %s", async (email, domain) => {
+    const p = await person(email);
+    const response = await preview(p, { phase: "resolve", email, emailId: null, domain });
+    expect(response.status).toBe(422);
+    expect(await env.DB.prepare("SELECT count(*) AS count FROM organization_domain_claims").first("count")).toBe(0);
+  });
+  it("refuses a subdomain mapping if the proved mailbox is no longer verified", async () => {
+    const p = await person("person@division.revoked-company.test");
+    const token = await prepare(p, false, "Revoked Division", "division.revoked-company.test");
+    await env.DB.prepare("UPDATE users SET email_verified_at=NULL WHERE id=?").bind(p.userId).run();
+    expect((await create(p, token)).status).toBe(409);
+    expect(await env.DB.prepare("SELECT count(*) AS count FROM organization_domain_claims").first("count")).toBe(0);
+    expect(await env.DB.prepare("SELECT id FROM organizations WHERE name='Revoked Division'").first("id")).toBeNull();
+  });
+  it("does not let a subdomain bypass a pending parent application", async () => {
+    await seedMemberApplication({
+      applicantEmail: "applicant@held-company.test",
+      organizationDomain: "held-company.test",
+    });
+    const p = await person("person@us.held-company.test");
+    const response = await preview(p, {
+      phase: "prepare",
+      email: p.email,
+      emailId: null,
+      domain: "us.held-company.test",
+      organizationId: null,
+      organizationName: "Held Subsidiary",
+      jobTitle: "Engineer",
+    });
+    expect(response.status, await response.clone().text()).toBe(409);
+    expect(await env.DB.prepare("SELECT id FROM organizations WHERE name='Held Subsidiary'").first("id")).toBeNull();
+  });
+  it("rolls back a prepared mapping if a parent application holds the domain before commit", async () => {
+    const p = await person("person@us.held-company.test");
+    const token = await prepare(p, false, "Held Subsidiary", "us.held-company.test");
+    await seedMemberApplication({
+      applicantEmail: "applicant@held-company.test",
+      organizationDomain: "held-company.test",
+    });
+    expect((await create(p, token)).status).toBe(409);
+    expect(
+      await env.DB.prepare("SELECT domain FROM organization_domain_claims WHERE domain='us.held-company.test'").first(
+        "domain",
+      ),
+    ).toBeNull();
+    expect(await env.DB.prepare("SELECT id FROM organizations WHERE name='Held Subsidiary'").first("id")).toBeNull();
+  });
+  it("does not recreate a subdomain mapping on an organization merged during confirmation", async () => {
+    const p = await person("person@us.merge-company.test");
+    const first = identityMutationResponseSchema.parse(
+      await (await create(p, await prepare(p, false, "US Company", "us.merge-company.test"))).json(),
+    );
+    const organizationId = await env.DB.prepare("SELECT organization_id FROM identities WHERE id=?")
+      .bind(first.identityId)
+      .first("organization_id");
+    await env.DB.prepare("DELETE FROM organization_domain_claims WHERE domain='us.merge-company.test'").run();
+    const token = await prepare(p, true, undefined, "us.merge-company.test");
+    const target = await insertOrganization(env.DB, "Merged Company");
+    await env.DB.prepare("UPDATE organizations SET merged_into_organization_id=? WHERE id=?")
+      .bind(target, organizationId)
+      .run();
+    expect((await create(p, token)).status).toBe(409);
+    expect(
+      await env.DB.prepare("SELECT domain FROM organization_domain_claims WHERE domain='us.merge-company.test'").first(
+        "domain",
+      ),
+    ).toBeNull();
+  });
+  it("does not broaden a verified address past its existing more specific mapping", async () => {
+    const parent = await insertOrganization(env.DB, "Parent Company");
+    const child = await insertOrganization(env.DB, "US Company");
+    await claim("scoped-company.test", parent);
+    await claim("us.scoped-company.test", child);
+    const p = await person("person@us.scoped-company.test");
+    const response = await preview(p, { phase: "resolve", email: p.email, emailId: null });
+    expect(
+      identityAffiliationPreviewResponseSchema.parse(await response.json()).domains.map((item) => item.domain),
+    ).toEqual(["us.scoped-company.test"]);
+    expect(
+      (await preview(p, { phase: "resolve", email: p.email, emailId: null, domain: "scoped-company.test" })).status,
+    ).toBe(422);
+  });
+  it("refuses a broader mapping when a more specific claim is established after preparation", async () => {
+    const parent = await insertOrganization(env.DB, "Parent Company");
+    await claim("scoped-company.test", parent);
+    const p = await person("person@us.scoped-company.test");
+    const token = await prepare(p, true, undefined, "scoped-company.test");
+    const child = await insertOrganization(env.DB, "US Company");
+    await claim("us.scoped-company.test", child);
+    expect((await create(p, token)).status).toBe(409);
+    expect(
+      await env.DB.prepare("SELECT id FROM identities WHERE user_id=? AND organization_id=?")
+        .bind(p.userId, parent)
+        .first("id"),
+    ).toBeNull();
+  });
+  it("does not establish a future mapping without an explicit domain selection", async () => {
+    const p = await person("person@us.explicit-company.test");
+    const result = await create(p, await prepare(p, false, "Explicit Company"));
+    expect(result.status, await result.clone().text()).toBe(201);
+    expect(
+      await env.DB.prepare(
+        "SELECT domain FROM organization_domain_claims WHERE domain='us.explicit-company.test'",
+      ).first("domain"),
+    ).toBeNull();
+  });
+  it("keeps the mapped organization as the default while offering other organizations on that exact subdomain", async () => {
+    const first = await person("first@us.choice-company.test");
+    const created = identityMutationResponseSchema.parse(
+      await (await create(first, await prepare(first, false, "Default US Company", "us.choice-company.test"))).json(),
+    );
+    const defaultId = await env.DB.prepare("SELECT organization_id FROM identities WHERE id=?")
+      .bind(created.identityId)
+      .first("organization_id");
+    const second = await person("second@us.choice-company.test");
+    expect(
+      (await create(second, await prepare(second, false, "Other US Company", "us.choice-company.test"))).status,
+    ).toBe(201);
+    const third = await person("third@us.choice-company.test");
+    const response = await preview(third, { phase: "resolve", email: third.email, emailId: null });
+    const choices = identityAffiliationPreviewResponseSchema.parse(await response.json());
+    expect(choices.organization).toEqual({ id: defaultId, name: "Default US Company" });
+    expect(choices.organizations.map((organization) => organization.name).sort()).toEqual([
+      "Default US Company",
+      "Other US Company",
+    ]);
+    const alternate = choices.organizations.find((organization) => organization.name === "Other US Company")!;
+    const prepared = await preview(third, {
+      phase: "prepare",
+      email: third.email,
+      emailId: null,
+      domain: "us.choice-company.test",
+      organizationId: alternate.id,
+      jobTitle: "Engineer",
+    });
+    expect(
+      (await create(third, identityAffiliationPreviewResponseSchema.parse(await prepared.json()).contextToken!)).status,
+    ).toBe(201);
+    expect(
+      await env.DB.prepare(
+        "SELECT organization_id FROM organization_domain_claims WHERE domain='us.choice-company.test'",
+      ).first("organization_id"),
+    ).toBe(defaultId);
   });
 });

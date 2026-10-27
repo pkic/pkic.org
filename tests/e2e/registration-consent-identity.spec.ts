@@ -1,3 +1,4 @@
+import { organizationDomainsListResponseSchema } from "../../assets/shared/schemas/organization-domains";
 import { geolocationCountryResponseSchema } from "../../assets/shared/schemas/geolocation";
 import { mkdir } from "node:fs/promises";
 import { ORGANIZATION_JOB_TITLE_COPY } from "../../assets/shared/email-first-copy";
@@ -211,7 +212,7 @@ test("a proved work address requires organization confirmation and an incorrect 
   const directory = info.outputPath("representation-flow");
   await mkdir(directory, { recursive: true });
   for (const [index, name] of names.entries()) {
-    const email = `person-${index}@${domain}`;
+    const email = `person-${index}@${index === 1 ? `us.${domain}` : domain}`;
     await page.getByRole("button", { name: "Add identity", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Add identity", exact: true });
     await expect(dialog.getByRole("radio", { name: /Use your work email/ })).toBeChecked();
@@ -242,8 +243,16 @@ test("a proved work address requires organization confirmation and an incorrect 
         before.identities.find((identity) => identity.organizationName === names[0])!.organizationId!,
       );
       await organization.selectOption({ label: "Another organization" });
+      await expect(dialog.getByRole("combobox", { name: "Email domain", exact: true })).toHaveValue(`us.${domain}`);
     }
     await dialog.getByRole("textbox", { name: /^Organization name/ }).fill(name);
+    if (index === 1) {
+      const scope = dialog.getByRole("combobox", { name: "Email domain", exact: true });
+      await scope.selectOption(domain);
+      await expect(dialog.getByRole("textbox", { name: /^Organization name/ })).toHaveValue(name);
+      await scope.selectOption(`us.${domain}`);
+      await expect(dialog.getByRole("textbox", { name: /^Organization name/ })).toHaveValue(name);
+    }
     await dialog
       .getByRole("textbox", { name: new RegExp(`^${ORGANIZATION_JOB_TITLE_COPY.label}`) })
       .fill("Research engineer");
@@ -259,6 +268,10 @@ test("a proved work address requires organization confirmation and an incorrect 
     await (await page.request.get("/api/v1/users/current/identities?limit=100")).json(),
   );
   const incorrect = identities.identities.find((identity) => identity.organizationName === names[1])!;
+  const domains = organizationDomainsListResponseSchema.parse(
+    await (await page.request.get(`/api/v1/organizations/${incorrect.organizationId}/domains`)).json(),
+  );
+  expect(domains.domains).toContainEqual(expect.objectContaining({ domain: `us.${domain}`, status: "claimed" }));
   await page.getByRole("button", { name: `Actions for ${names[1]}`, exact: true }).click();
   await page.getByRole("menuitem", { name: "Remove incorrect representation…", exact: true }).click();
   const confirmation = page.getByRole("alertdialog", { name: "Remove incorrect representation?", exact: true });

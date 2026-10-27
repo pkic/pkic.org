@@ -120,8 +120,10 @@ export async function prepareTransferApplicationDomainClaim(
 export async function prepareClaimDomainForOrganization(
   db: DatabaseLike,
   params: { domain: string; organizationId: string; now: string },
+  /** The caller must guard this observation in its atomic write when supplied. */
+  observedClaim?: OrganizationDomainClaim | null,
 ): Promise<StatementLike | null> {
-  const claim = await getOrganizationDomainClaim(db, params.domain);
+  const claim = observedClaim === undefined ? await getOrganizationDomainClaim(db, params.domain) : observedClaim;
   if (claim) {
     if (claim.organizationId === params.organizationId) return null;
     throw new AppError(409, "ORGANIZATION_DOMAIN_IN_USE", "This organization domain is already claimed");

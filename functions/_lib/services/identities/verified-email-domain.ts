@@ -5,11 +5,18 @@ import {
 } from "../../../../assets/shared/organization-domain";
 import type { AuthorizationEvidence } from "../../db/authorization-guard";
 import { all, first } from "../../db/queries";
+import { organizationDomainCandidates } from "../../email-domains/classification";
 import { hostWithinDomainSql } from "../../email-domains/sql";
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
 import { normalizeEmail } from "../../validation";
 import { getOrganizationDomainClaim, organizationLinkDomain } from "../membership/organization-domain-claims";
+
+/** A verified address cannot broaden past an existing more specific organization mapping. */
+export function verifiedRepresentationDomainCandidates(email: string, claims: readonly { domain: string }[]): string[] {
+  const boundary = Math.max(0, ...claims.map((claim) => claim.domain.length));
+  return organizationDomainCandidates(email).filter((domain) => domain.length >= boundary);
+}
 
 function ineligibleDomain(): AppError {
   return new AppError(422, "IDENTITY_DOMAIN_INELIGIBLE", "This email domain cannot establish an organization identity");

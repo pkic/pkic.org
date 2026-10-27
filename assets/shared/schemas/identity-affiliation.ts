@@ -1,11 +1,17 @@
 import { z } from "zod";
 import { normalizedEmailSchema, organizationNameSchema } from "./api-common";
+import { emailDomainNameSchema } from "./email-domains";
 import { databaseIdSchema } from "./identifiers";
 import { organizationIdentityJobTitleSchema } from "./identity-job-title";
 import { requiresSession, ok, authErrors } from "./route-contract";
 import { requiredJsonBody } from "./openapi";
 
-const address = { email: normalizedEmailSchema, emailId: databaseIdSchema.nullable() };
+const address = {
+  email: normalizedEmailSchema,
+  emailId: databaseIdSchema.nullable(),
+  /** Selected suffix of the verified work address; defaults to the server suggestion. */
+  domain: emailDomainNameSchema.optional(),
+};
 export const identityAffiliationPrepareSchema = z
   .object({
     phase: z.literal("prepare"),
@@ -27,6 +33,9 @@ export const identityAffiliationContextSchema = z.string().min(32).max(262144);
 export const identityAffiliationPreviewResponseSchema = z.object({
   email: normalizedEmailSchema,
   domain: z.string(),
+  domains: z
+    .array(z.object({ domain: emailDomainNameSchema, canLink: z.boolean(), organizationName: z.string().nullable() }))
+    .max(128),
   organization: z.object({ id: databaseIdSchema, name: z.string() }).nullable(),
   organizations: z
     .array(

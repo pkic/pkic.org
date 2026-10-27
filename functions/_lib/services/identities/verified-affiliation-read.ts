@@ -11,6 +11,8 @@ import {
   domainOwnershipFactMatchesSql,
   FACT_ORGANIZATION,
   requireWorkOrganizationDomain,
+  verifiedDomainOrganizationId,
+  verifiedRepresentationDomainCandidates,
 } from "./verified-email-domain";
 import { verifiedAffiliationBasisSchema } from "./verified-affiliation-basis";
 
@@ -22,6 +24,7 @@ export function prepareVerifiedAffiliationRead(
     email: string;
     emailId: string | null;
     organizationName?: string;
+    domain?: string;
     unaffiliatedAttestation?: boolean;
   },
 ) {
@@ -85,10 +88,17 @@ export function prepareVerifiedAffiliationRead(
         organizationId: string | null;
         member: number;
       }>(results[1]);
-      const claim = claims[0] ?? null;
+      if (!input.unaffiliatedAttestation && claims.some((claim) => claim.applicationId))
+        verifiedDomainOrganizationId(input.domain ?? claims[0]!.domain, { kind: "held" });
+      if (input.domain && !verifiedRepresentationDomainCandidates(address.email, claims).includes(input.domain))
+        throw new AppError(422, "IDENTITY_DOMAIN_MISMATCH", "Choose a domain of your verified work email address.");
+      const rootDomain = workEmailDomain(address.email);
+      const knownRoot = batchRows<{ domain: string }>(results[2]).some((fact) => fact.domain === rootDomain);
+      const suggested = knownRoot ? rootDomain : (candidates[0] ?? rootDomain);
       const domain = input.unaffiliatedAttestation
         ? emailHost(address.email)!
-        : requireWorkOrganizationDomain(claim?.domain ?? workEmailDomain(address.email));
+        : requireWorkOrganizationDomain(input.domain ?? claims[0]?.domain ?? suggested);
+      const claim = claims.find((item) => item.domain === domain) ?? null;
       const derived = batchRows<{
         domain: string;
         id: string;
@@ -100,6 +110,7 @@ export function prepareVerifiedAffiliationRead(
       const basis: Basis = verifiedAffiliationBasisSchema.parse({
         domain,
         claim,
+        claims,
         facts: {
           claimed: claim?.organizationId
             ? { organizationId: claim.organizationId, isMember: Boolean(claim.member) }
