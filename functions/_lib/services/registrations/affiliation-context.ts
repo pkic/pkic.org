@@ -1,3 +1,4 @@
+import type { RegistrationConfirmOrganization } from "../../../../assets/shared/schemas/registration";
 /** A short-lived, signed observation feeds the same affiliation planner used by the portal. */
 import { z } from "zod";
 import { identityAffiliationPrepareSchema } from "../../../../assets/shared/schemas/identity-affiliation";
@@ -30,10 +31,28 @@ export async function readRegistrationAffiliationContext(
   token: string,
   eventId: string,
   email: string,
+  selection?: RegistrationConfirmOrganization,
 ) {
   const verified = await verifyJwt(secret, token);
   const parsed = verified.ok ? registrationAffiliationContextSchema.safeParse(verified.claims) : null;
   if (!parsed?.success || parsed.data.eventId !== eventId || parsed.data.input.email !== email)
     throw new AppError(409, "IDENTITY_CONTEXT_CHANGED", "Confirm your organization details again before registering.");
+  if (selection) {
+    const chosen = parsed.data.input;
+    const name = chosen.organizationId
+      ? parsed.data.basis.organizations.find((item) => item.id === chosen.organizationId)?.name
+      : chosen.organizationName;
+    if (
+      selection.name !== name ||
+      selection.jobTitle !== chosen.jobTitle ||
+      (selection.organizationId !== undefined && selection.organizationId !== chosen.organizationId) ||
+      (selection.domain !== undefined && selection.domain !== (chosen.domain ?? parsed.data.basis.domain))
+    )
+      throw new AppError(
+        409,
+        "IDENTITY_CONTEXT_CHANGED",
+        "Confirm your organization details again before registering.",
+      );
+  }
   return parsed.data;
 }

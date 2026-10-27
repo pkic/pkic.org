@@ -351,6 +351,26 @@ describe("registration verifies the email address first", () => {
         })
       ).json(),
     ).affiliation!;
+    const missing = await post(
+      "",
+      registration(email, proof, {
+        organization: { name: "Private Choice", jobTitle: "Engineer", organizationId: null },
+      }),
+    );
+    expect(missing.status).toBe(409);
+    const mismatch = await post(
+      "",
+      registration(email, proof, {
+        organization: {
+          name: "Different Choice",
+          jobTitle: "Engineer",
+          organizationId: null,
+          contextToken: prepared.contextToken,
+        },
+      }),
+    );
+    expect(mismatch.status).toBe(409);
+    expect(await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email=?", [email])).toEqual([]);
     const other = "other@private-choice.test";
     const otherProof = tokenOf(await emailedLink(other));
     const result = await post(

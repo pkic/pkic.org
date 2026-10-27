@@ -145,6 +145,8 @@ export async function submitEventRegistration(
     }
   }
 
+  if (body.organization?.organizationId !== undefined && !body.organization.contextToken)
+    throw new AppError(409, "IDENTITY_CONTEXT_REQUIRED", "Confirm your organization details again before registering.");
   const affiliationContext =
     body.organization?.contextToken && metadata.mailboxVerified
       ? await readRegistrationAffiliationContext(
@@ -152,6 +154,7 @@ export async function submitEventRegistration(
           body.organization.contextToken,
           event.id,
           body.email,
+          body.organization,
         )
       : undefined;
   if (body.organization?.contextToken && !affiliationContext)
