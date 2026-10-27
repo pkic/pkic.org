@@ -18,6 +18,7 @@ export interface RegistrationOrganization {
   jobTitle?: string;
   onContactReady?: (page: Page) => Promise<void>;
   onReviewReady?: (page: Page) => Promise<void>;
+  onProfileReady?: (page: Page) => Promise<void>;
 }
 
 /**
@@ -145,6 +146,7 @@ export async function registerInBrowser(
     await page.locator(`label[for="dayAttendance-${day}-on_demand"]`).click();
   }
   await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await options.onProfileReady?.(page);
   await page.getByLabel("Country", { exact: true }).selectOption("US");
   // Organization belongs to the shared contact/representation flow, not the additional profile questions.
   await expect(page.locator('[data-step-panel="3"]').getByLabel("Organization", { exact: true })).toHaveCount(0);

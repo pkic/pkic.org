@@ -416,8 +416,29 @@ test("a verified new work domain shows organization fields directly in public re
   page,
 }, testInfo) => {
   const name = "New Domain Research";
+  const detected = geolocationCountryResponseSchema.parse(
+    await (await page.request.get("/api/v1/geolocation/country")).json(),
+  ).country;
+  expect(detected).toMatch(/^[A-Z]{2}$/);
   const result = await registerInBrowser(page, ownDomainEmail("new-organization"), undefined, undefined, {
     organization: name,
+    onProfileReady: async (formPage) => {
+      const country = formPage.getByLabel("Country", { exact: true });
+      await expect(country).toHaveValue(detected!);
+      for (const [width, height, device] of [
+        [1280, 900, "desktop"],
+        [375, 812, "phone"],
+      ] as const) {
+        await formPage.setViewportSize({ width, height });
+        await country.scrollIntoViewIfNeeded();
+        await formPage.screenshot({ path: testInfo.outputPath(`public-detected-country-${device}.png`) });
+      }
+      await country.selectOption("CA");
+      await formPage.goBack();
+      await expect(country).not.toBeVisible();
+      await formPage.goForward();
+      await expect(country).toHaveValue("CA");
+    },
     onContactReady: async (formPage) => {
       const organization = formPage.getByRole("textbox", { name: /^Organization name/ });
       await expect(formPage.getByRole("combobox", { name: /^Organization/ })).toHaveCount(0);

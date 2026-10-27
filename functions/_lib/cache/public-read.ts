@@ -15,11 +15,15 @@ export function isAnonymousReadRequest(request: Request): boolean {
   return (request.method === "GET" || request.method === "HEAD") && !hasAuthenticationCredential(request);
 }
 
-/** Authentication responses cannot be shared, so avoid the cache entrypoint round trip. */
+/** Caller-dependent reads keep the original request and never enter the shared cache. */
 export function isPublicReadCacheRequest(request: Request): boolean {
   if (!isAnonymousReadRequest(request)) return false;
   const pathname = new URL(request.url).pathname;
-  return pathname !== "/api/v1/auth" && !pathname.startsWith("/api/v1/auth/");
+  // The cache entrypoint's cf.cacheKey options replace incoming Cloudflare metadata.
+  // Geolocation needs the visitor's original cf.country, including for anonymous requests.
+  return (
+    pathname !== "/api/v1/geolocation/country" && pathname !== "/api/v1/auth" && !pathname.startsWith("/api/v1/auth/")
+  );
 }
 
 /** Route registration opts a successful, caller-independent read into the shared policy. */
