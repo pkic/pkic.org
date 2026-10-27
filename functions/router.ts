@@ -104,7 +104,8 @@ export default {
           const headers = new Headers(request.headers);
           headers.delete("if-none-match");
           headers.delete("if-modified-since");
-          const cacheRequest = new Request(request, { method: "GET", headers });
+          // Incoming GET/HEAD requests can carry an empty native body (Content-Length: 0).
+          const cacheRequest = new Request(request, { method: "GET", headers, body: null });
           const response = await tracing.enterSpan("http.public_read.cache", () =>
             publicRead.fetch(cacheRequest, { cf: { cacheKey: request.url } }),
           );
