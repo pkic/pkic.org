@@ -1,4 +1,5 @@
 import fontkit from "@pdf-lib/fontkit";
+import { fetchHeroImage } from "../../functions/_lib/services/og-badge-hero-image";
 import { promotionImageCover } from "../../functions/_lib/services/event-agenda/promotion-image";
 import { readFileSync } from "node:fs";
 import sharp from "sharp";
@@ -22,6 +23,68 @@ const measure = promotionFontMeasure(
 );
 const eventName = "Post-Quantum Cryptography Conference";
 describe("automatic Open Graph cards", () => {
+  it("loads the large event photo before rendering both aspect ratios", async () => {
+    const source = readFileSync("content/events/2026/pqc-conference-amsterdam-nl/amsterdam-nl.png");
+    const original = await sharp(source).metadata();
+    const heroImage = await fetchHeroImage(
+      JSON.stringify({ heroImageUrl: "/events/2026/pqc-conference-amsterdam-nl/amsterdam-nl.png" }),
+      "https://pkic.org",
+      {
+        ASSETS: {
+          fetch: async (request) => {
+            expect(new URL(request.url).pathname).toBe(
+              "/content-media/events/2026/pqc-conference-amsterdam-nl/amsterdam-nl.png",
+            );
+            return new Response(new Uint8Array(source), {
+              headers: { "content-type": "image/png", "content-length": String(source.length) },
+            });
+          },
+        },
+        IMAGES: {
+          input: (stream) => ({
+            transform: (options) => {
+              expect(options).toEqual({});
+              return {
+                output: async (output) => {
+                  expect(output).toEqual({ format: "image/jpeg", quality: 95 });
+                  const bytes = await sharp(Buffer.from(await new Response(stream).arrayBuffer()))
+                    .jpeg({ quality: 95 })
+                    .toBuffer();
+                  return {
+                    response: () => new Response(new Uint8Array(bytes), { headers: { "content-type": "image/jpeg" } }),
+                  };
+                },
+              };
+            },
+          }),
+        },
+      },
+    );
+    expect(heroImage).toMatchObject({ width: original.width, height: original.height, contentType: "image/jpeg" });
+    for (const format of ["landscape", "square"] as const) {
+      const svg = renderPersonalPromotionSvg({
+        firstName: "Alex",
+        lastName: "Morgan",
+        role: "attendee",
+        eventName,
+        startsAt: "2026-12-01T08:00:00.000Z",
+        endsAt: "2026-12-03T17:00:00.000Z",
+        timeZone: "Europe/Amsterdam",
+        registrationUrl: "https://pkic.org/r/example",
+        city: "Amsterdam",
+        location: "Meervaart · Amsterdam",
+        design: defaultEventPromotionDesign("Synthetic"),
+        measure,
+        format,
+        heroImage,
+        logoDataUrl: `data:image/svg+xml;base64,${readFileSync("static/img/logo.svg").toString("base64")}`,
+      });
+      expect(svg).toContain(heroImage!.dataUrl);
+      const image = await sharp(Buffer.from(svg)).png().toBuffer();
+      const metadata = await sharp(image).metadata();
+      expect({ width: metadata.width, height: metadata.height }).toEqual(PERSONAL_PROMOTION_IMAGE_DIMENSIONS[format]);
+    }
+  });
   it.each(["landscape", "square"] as PersonalPromotionImageFormat[])(
     "encodes a separate %s image without sponsors",
     async (format) => {

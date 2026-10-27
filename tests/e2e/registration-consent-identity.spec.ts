@@ -224,6 +224,24 @@ test("verified approved-domain registration affiliates once and an organization 
     await expect
       .poll(() => badge.evaluate((element: HTMLImageElement) => element.complete && element.naturalWidth > 0))
       .toBe(true);
+    // This quiet strip between the name and portrait must contain photo detail, not just a smooth fallback gradient.
+    const photoDetail = await badge.evaluate((element: HTMLImageElement) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 1200;
+      canvas.height = 630;
+      const context = canvas.getContext("2d")!;
+      context.drawImage(element, 0, 0, 1200, 630);
+      const { data } = context.getImageData(740, 140, 1, 300);
+      let detail = 0;
+      let samples = 0;
+      for (let y = 5; y < 295; y += 5)
+        for (let channel = 0; channel < 3; channel++) {
+          detail += Math.abs(data[(y - 5) * 4 + channel] - 2 * data[y * 4 + channel] + data[(y + 5) * 4 + channel]);
+          samples++;
+        }
+      return detail / samples;
+    });
+    expect(photoDetail, "The delivered badge must include the configured event photo").toBeGreaterThan(5);
     await badge.screenshot({ path: testInfo.outputPath("selected-identity-badge.png") });
     await attendee.screenshot({ path: testInfo.outputPath("registration-selected-identity.png"), fullPage: true });
     await attendee.setViewportSize({ width: 375, height: 812 });

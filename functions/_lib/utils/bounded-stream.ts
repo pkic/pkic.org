@@ -1,4 +1,4 @@
-export type BoundedStreamReadResult = { ok: true; bytes: Uint8Array } | { ok: false; reason: "too_large" };
+export type BoundedStreamReadResult = { ok: true; bytes: Uint8Array<ArrayBuffer> } | { ok: false; reason: "too_large" };
 
 /** Reads a byte stream up to an inclusive limit without retaining an oversized body. */
 export async function readBoundedStream(
