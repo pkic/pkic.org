@@ -229,7 +229,7 @@ export function SelfIdentityCreateForm({
       {Boolean(resolved?.organizations.length) && (
         <Field
           label="Organization"
-          help="Confirm which organization you represent. Organizations can share an email domain."
+          help="Choose the organization you represent."
           required
           {...detailsForm.of("organizationId")}
         >
