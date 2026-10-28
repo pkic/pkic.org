@@ -457,10 +457,12 @@ describe("registration confirmation shell", () => {
     expect(root.querySelector<HTMLElement>("[data-confirm-content]")?.hidden).toBe(true);
   });
 
-  it("asks nothing when the address already names an organization", async () => {
+  it("does not ask a consumer address for an organization", async () => {
     window.history.replaceState({}, "", "/events/2026/pqc-2026/register/confirm/?token=live-token");
     const root = mountShell();
-    installApi({ [CONFIRM_INFO]: () => json(confirmInfo({ firstName: "Ada", asksOrganization: false })) });
+    installApi({
+      [CONFIRM_INFO]: () => json(confirmInfo({ firstName: "Ada", email: "ada@gmail.com", asksOrganization: false })),
+    });
     await boot();
     expect(root.querySelector<HTMLElement>("[data-confirm-organization]")?.hidden).toBe(true);
     expect(root.querySelectorAll("input")).toHaveLength(0);
