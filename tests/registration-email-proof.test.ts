@@ -1,3 +1,7 @@
+import {
+  registrationProofPersonPatchSchema,
+  registrationProofPersonPatchResponseSchema,
+} from "../assets/shared/schemas/registration-email-proof";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
@@ -381,5 +385,76 @@ describe("registration verifies the email address first", () => {
     );
     expect(result.status).toBe(409);
     expect(await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email=?", [other])).toEqual([]);
+  });
+});
+
+describe("verified registration personal-name corrections", () => {
+  beforeEach(async () => {
+    await resetDb();
+    stubSuccessfulMxLookup();
+    await seedEventAndAdmin(env.DB);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+  const patchNames = (body: unknown, slug = "pqc-2026") =>
+    callApi(
+      env,
+      `/api/v1/events/${slug}/registrations/proof/person`,
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      },
+      { maxRoundTrips: 1 },
+    );
+  it("corrects legacy data on the canonical user in one complete request batch", async () => {
+    const userId = await insertUser(env.DB, "correction@names.example");
+    await env.DB.prepare("UPDATE users SET first_name=?,last_name=? WHERE id=?").bind("ZoÃ«", "Example", userId).run();
+    const token = tokenOf(await emailedLink("correction@names.example"));
+    const response = await patchNames(
+      registrationProofPersonPatchSchema.parse({ userId, token, firstName: "Zoë", lastName: "Cafe\u0301" }),
+    );
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(registrationProofPersonPatchResponseSchema.parse(await response.json()).person).toEqual({
+      userId,
+      firstName: "Zoë",
+      lastName: "Café",
+    });
+    expect(await queryAll(env.DB, "SELECT first_name,last_name FROM users WHERE id=?", userId)).toEqual([
+      { first_name: "Zoë", last_name: "Café" },
+    ]);
+    expect(await queryAll(env.DB, "SELECT action FROM audit_log WHERE entity_id=?", userId)).toContainEqual({
+      action: "user_profile_updated",
+    });
+  });
+  it("rejects an expired proof before any profile or audit write", async () => {
+    const userId = await insertUser(env.DB, "expired@names.example");
+    const token = tokenOf(await emailedLink("expired@names.example"));
+    const clock = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 365 * 86400 * 1000);
+    try {
+      expect((await patchNames({ userId, token, firstName: "Wrong" })).status).toBe(410);
+    } finally {
+      clock.mockRestore();
+    }
+    expect(await queryAll(env.DB, "SELECT first_name FROM users WHERE id=?", userId)).toEqual([{ first_name: "Test" }]);
+    expect(await queryAll(env.DB, "SELECT action FROM audit_log WHERE action='user_profile_updated'")).toEqual([]);
+  });
+  it("refuses a different user, another event, stale ownership, and an invalid proof without changing names", async () => {
+    const userId = await insertUser(env.DB, "owner@names.example");
+    const otherId = await insertUser(env.DB, "other@names.example");
+    const token = tokenOf(await emailedLink("owner@names.example"));
+    expect((await patchNames({ userId: otherId, token, firstName: "Wrong" })).status).toBe(403);
+    expect((await patchNames({ userId, token, firstName: "Wrong" }, "another-event")).status).toBe(403);
+    expect(
+      (await patchNames({ userId, token: "invalid-proof-012345678901234567890123456789", firstName: "Wrong" })).status,
+    ).toBe(404);
+    await env.DB.prepare("UPDATE users SET email=?,normalized_email=? WHERE id=?")
+      .bind("moved@names.example", "moved@names.example", userId)
+      .run();
+    expect((await patchNames({ userId, token, firstName: "Wrong" })).status).toBe(403);
+    expect(await queryAll(env.DB, "SELECT first_name FROM users WHERE id IN(?,?)", userId, otherId)).toEqual([
+      { first_name: "Test" },
+      { first_name: "Test" },
+    ]);
+    expect(await queryAll(env.DB, "SELECT action FROM audit_log WHERE action='user_profile_updated'")).toEqual([]);
   });
 });

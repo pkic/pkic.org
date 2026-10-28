@@ -156,19 +156,19 @@ describe("verified event entry", () => {
         .click();
     });
     await act(() => {
-      const first = host!.querySelector<HTMLInputElement>('input[name="firstName"]')!;
+      const first = document.querySelector<HTMLInputElement>('input[name="firstName"]')!;
       first.value = "Augusta";
       first.dispatchEvent(new Event("input", { bubbles: true }));
     });
     await act(async () => {
-      Array.from(host!.querySelectorAll("button"))
+      Array.from(document.querySelectorAll("button"))
         .find((button) => button.textContent === "Save my details")!
         .click();
     });
-    await vi.waitFor(() => expect(host!.textContent).toContain("Please retry saving your name."));
-    expect(host!.querySelector<HTMLInputElement>('input[name="firstName"]')!.value).toBe("Augusta");
+    await vi.waitFor(() => expect(document.body.textContent).toContain("Please retry saving your name."));
+    expect(document.querySelector<HTMLInputElement>('input[name="firstName"]')!.value).toBe("Augusta");
     await act(async () => {
-      Array.from(host!.querySelectorAll("button"))
+      Array.from(document.querySelectorAll("button"))
         .find((button) => button.textContent === "Save my details")!
         .click();
     });

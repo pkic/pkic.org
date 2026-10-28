@@ -1,3 +1,4 @@
+import { personNamePatchSchema } from "../../shared/schemas/api-common";
 import { useDialogQueryState } from "../hooks/useDialogQueryState";
 import type { ComponentChildren } from "preact";
 import type { z } from "zod";
@@ -7,7 +8,6 @@ import type { ProposalEntryContext } from "../../shared/schemas/proposal-entry";
 import type { ConsentItem } from "../../shared/schemas/registration";
 import {
   eventProposalProofStartSchema,
-  eventProposalPersonNamePatchSchema,
   eventProposalProofStartResponseSchema,
   eventProposalProofIdentitiesSchema,
 } from "../../shared/schemas/event-proposal-proof";
@@ -68,7 +68,7 @@ export function EventProposalIdentityStep({
   speakerProposalId?: string;
   expectedSpeakerUserId?: string | null;
   entryContext?: ProposalEntryContext;
-  onSavePersonalDetails?: (names: z.infer<typeof eventProposalPersonNamePatchSchema>) => Promise<ParticipationPerson>;
+  onSavePersonalDetails?: (names: z.infer<typeof personNamePatchSchema>) => Promise<ParticipationPerson>;
 }) {
   const endpoint = `/api/v1/events/${encodeURIComponent(eventSlug)}/proposals/proof`;
   const identity = useProposalEntryIdentity(

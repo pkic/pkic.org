@@ -1,12 +1,7 @@
+import { personNamePatchSchema } from "./api-common";
 import { z } from "zod";
 import { EMAIL_AUTH_TOKEN_MAX_LENGTH } from "../constants/email-auth";
-import {
-  eventSlugParamsSchema,
-  normalizedEmailSchema,
-  firstNameSchema,
-  jobTitleSchema,
-  lastNameSchema,
-} from "./api-common";
+import { eventSlugParamsSchema, normalizedEmailSchema, jobTitleSchema } from "./api-common";
 import { consentItemSchema } from "./registration";
 import { memberJoinApplicantKindSchema } from "./member-join";
 import { linksSchema } from "./links";
@@ -58,16 +53,7 @@ export const eventProposalProofPersonSchema = z.object({
   bio: z.string().nullable(),
   links: linksSchema,
 });
-export const eventProposalPersonNamePatchSchema = z
-  .object({
-    firstName: firstNameSchema.optional(),
-    lastName: lastNameSchema.optional(),
-  })
-  .strict()
-  .refine((body) => body.firstName !== undefined || body.lastName !== undefined, {
-    message: "Enter a first or last name.",
-  });
-export const eventProposalProofPersonPatchSchema = eventProposalPersonNamePatchSchema.safeExtend({
+export const eventProposalProofPersonPatchSchema = personNamePatchSchema.safeExtend({
   continuationToken: eventProposalContinuationTokenSchema.optional(),
 });
 export const eventProposalProofPersonPatchResponseSchema = z.object({ person: eventProposalProofPersonSchema });

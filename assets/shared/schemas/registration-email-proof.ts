@@ -2,7 +2,7 @@ import { identityAffiliationPreviewResponseSchema, identityAffiliationPrepareBas
 import { emailDomainNameSchema } from "./email-domains";
 import { z } from "zod";
 import { EMAIL_AUTH_TOKEN_MAX_LENGTH } from "../constants/email-auth";
-import { normalizedEmailSchema, tokenSchema } from "./api-common";
+import { normalizedEmailSchema, tokenSchema, personNamePatchSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import { sourceTypeSchema } from "./source";
 import { workEmailStepSchema } from "./work-email";
@@ -48,10 +48,21 @@ export const registrationEmailProofVerifySchema = z
  * this, so the saved names of a person already known by the address, and
  * whether its domain names an organization, are theirs to see.
  */
+export const registrationProvedPersonSchema = z.object({
+  userId: databaseIdSchema,
+  firstName: z.string().nullable(),
+  lastName: z.string().nullable(),
+});
+export const registrationProofPersonPatchSchema = personNamePatchSchema.safeExtend({
+  token: registrationEmailProofTokenSchema,
+  userId: databaseIdSchema,
+});
+export const registrationProofPersonPatchResponseSchema = z.object({ person: registrationProvedPersonSchema });
+
 export const registrationEmailProofVerifyResponseSchema = z.object({
   email: normalizedEmailSchema,
   unaffiliatedAttestation: z.boolean(),
-  person: z.object({ firstName: z.string().nullable(), lastName: z.string().nullable() }).nullable(),
+  person: registrationProvedPersonSchema.nullable(),
   /** Every proved work address confirms its organization through the shared chooser. */
   asksOrganization: z.boolean(),
   affiliation: identityAffiliationPreviewResponseSchema.nullable(),

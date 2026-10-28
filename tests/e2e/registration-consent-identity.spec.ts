@@ -1,3 +1,4 @@
+import { userCreateSchema } from "../../assets/shared/schemas/user-create";
 import { organizationDomainsListResponseSchema } from "../../assets/shared/schemas/organization-domains";
 import { geolocationCountryResponseSchema } from "../../assets/shared/schemas/geolocation";
 import { mkdir } from "node:fs/promises";
@@ -484,4 +485,61 @@ test("a verified new work domain shows organization fields directly in public re
   });
   expect(result.result.status).toBe("registered");
   await expect(page.getByRole("heading", { name: /You're registered/i })).toBeVisible();
+});
+
+test("a legacy saved name can be corrected before completing public registration", async ({ page, browser }, info) => {
+  await signInToPortal(page, e2eAdminEmail("portal-event-management"));
+  const email = ownDomainEmail("unicode-name");
+  const created = await page.request.post("/api/v1/users", {
+    data: userCreateSchema.parse({ email, firstName: "Ada", lastName: "Fixture" }),
+  });
+  expect(created.status(), await created.text()).toBe(201);
+  const context = await browser.newContext({ baseURL: new URL(page.url()).origin });
+  const attendee = await context.newPage();
+  // Simulate legacy stored text at the tolerant read boundary; the save and registration use the real Worker.
+  await attendee.route("**/registrations/proof/verify", async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    body.person.firstName = "ZoÃ«";
+    await route.fulfill({ response, json: body });
+  });
+  try {
+    await registerInBrowser(attendee, email, undefined, undefined, {
+      organization: "Unicode Trust Services",
+      onContactReady: async (current) => {
+        await current.getByRole("button", { name: "Continue", exact: true }).click();
+        const editor = current.getByRole("dialog", { name: "Edit my details", exact: true });
+        await expect(editor).toBeVisible();
+        await expect(editor).toContainText("Check your first name");
+        for (const [width, height, device] of [
+          [1280, 900, "desktop"],
+          [375, 812, "phone"],
+        ] as const) {
+          await current.setViewportSize({ width, height });
+          await current.screenshot({ path: info.outputPath(`name-correction-${device}.png`) });
+        }
+        // Browser Back dismisses the editor without abandoning the registration.
+        await current.goBack();
+        await expect(editor).not.toBeVisible();
+        await current.goForward();
+        await expect(editor).toBeVisible();
+        await editor.getByRole("textbox", { name: /^First name/ }).fill("Zoë");
+        await editor.getByRole("button", { name: "Save my details", exact: true }).click();
+        await expect(editor).not.toBeVisible();
+        await expect(current.locator("[data-registration-contact]")).toContainText("Zoë Fixture");
+      },
+      onReviewReady: async (current) => {
+        await expect(current.getByRole("region", { name: "Registration review", exact: true })).toContainText(
+          "Zoë Fixture",
+        );
+        await current.screenshot({ path: info.outputPath("corrected-name-review.png"), animations: "disabled" });
+      },
+    });
+    const users = usersListResponseSchema.parse(
+      await (await page.request.get(`/api/v1/users?q=${encodeURIComponent(email)}`)).json(),
+    );
+    expect(users.users.find((user) => user.email === email)?.first_name).toBe("Zoë");
+  } finally {
+    await context.close();
+  }
 });

@@ -1,7 +1,7 @@
 import type { z } from "zod";
 
 const encoder = new TextEncoder();
-const decoder = new TextDecoder();
+const decoder = new TextDecoder("utf-8", { fatal: true });
 
 export function bytesToBase64Url(bytes: Uint8Array): string {
   let binary = "";

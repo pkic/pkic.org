@@ -89,12 +89,12 @@ describe("speaker current representation", () => {
         .click();
     });
     await act(() => {
-      const first = root.querySelector<HTMLInputElement>('input[name="firstName"]')!;
+      const first = document.querySelector<HTMLInputElement>('dialog[open] input[name="firstName"]')!;
       first.value = "Augusta";
       first.dispatchEvent(new Event("input", { bubbles: true }));
     });
     await act(async () => {
-      Array.from(root.querySelectorAll("button"))
+      Array.from(document.querySelectorAll<HTMLButtonElement>("dialog[open] button"))
         .find((button) => button.textContent === "Save my details")!
         .click();
     });

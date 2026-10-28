@@ -1,3 +1,6 @@
+import { updateRegistrationProofPerson } from "../../../../../_lib/services/registrations/proof-person";
+import { registrationProofPersonPatchResponseSchema } from "../../../../../../assets/shared/schemas/registration-email-proof";
+import { registrationProofPersonPatchRouteSchema } from "../../../../../../assets/shared/schemas/route-contracts-registrations";
 import { requestDb } from "../../../../../_lib/db/context";
 import {
   registrationEmailProofStartResponseSchema,
@@ -53,4 +56,16 @@ export const RegistrationEmailProofVerifyPost = openApiRoute(
       ),
     );
   },
+);
+
+export const RegistrationProofPersonPatch = openApiRoute(registrationProofPersonPatchRouteSchema, async (c, data) =>
+  jsonPrivate(
+    registrationProofPersonPatchResponseSchema.parse(
+      await updateRegistrationProofPerson(requestDb(c), {
+        eventSlug: data.params.eventSlug,
+        signingSecret: requireInternalSecret(c.env),
+        body: data.body,
+      }),
+    ),
+  ),
 );

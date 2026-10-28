@@ -52,3 +52,10 @@ The design system (tokens in `assets/design`, components in `assets/ts/ui`, the 
 - Screen change: hot-reload server (`pnpm dev:test`), screenshot desktop and 375px.
 - Built server (`--build`): only before a push.
 - Inspect every screenshot yourself against the catalog entry: shape, placement, dismissal, spacing, pill density, copy. A UI change without a screenshot is not done.
+
+## Saved values and actionable validation
+
+- A saved value is not proof that it satisfies the current write contract. Keep reads tolerant of legacy values and provide a usable, authorized correction action beside a read-only summary; never hide an invalid saved field behind a generic form error.
+- Reuse `ParticipationPersonalDetails` for personal-name corrections in participation flows. Its caller supplies the existing session or verified-capability adapter; do not build another name editor or store per-registration names.
+- Keep validation on the canonical request schemas. A failed step must identify the relevant field and expose its correction path, including fields on earlier steps or in dialogs. Do not say only “correct highlighted fields” when no visible, editable field is marked.
+- Exercise valid non-ASCII names, canonically equivalent Unicode spellings, and a pre-existing invalid saved name. Verify correction, persistence, and continuation through the complete flow, including browser Back/Forward. A successful PNG, request mock, or happy-path form test does not establish that a failed field can be corrected.

@@ -214,7 +214,7 @@ describe("portal group statistics", () => {
     // The refused control takes focus, and the form says the window was not
     // applied.
     expect(document.activeElement).toBe(to);
-    expect(container.querySelector(".pk-alert--danger")?.textContent).toContain("Please correct");
+    expect(container.querySelector(".pk-alert--danger")?.textContent).toContain("to must be later than from");
     // The rejected window never reached the server.
     expect(fetchMock).toHaveBeenCalledTimes(1);
 

@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { identitiesListResponseSchema } from "../../assets/shared/schemas/identity";
 import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-auth";
 import {
+  registrationProofPersonPatchSchema,
   registrationEmailProofStartSchema,
   registrationEmailProofVerifyResponseSchema,
   registrationEmailProofVerifySchema,
@@ -123,7 +124,7 @@ function installResponses(
         body = registrationEmailProofVerifyResponseSchema.parse({
           email: "ada@example.test",
           unaffiliatedAttestation: false,
-          person: verifiedPerson,
+          person: verifiedPerson ? { userId: USER_ID, ...verifiedPerson } : null,
           asksOrganization,
           affiliation: asksOrganization
             ? {
@@ -137,7 +138,10 @@ function installResponses(
               }
             : null,
         });
-      else if (url.pathname === "/api/v1/users/current") body = profile();
+      else if (url.pathname.endsWith("/registrations/proof/person")) {
+        const patch = registrationProofPersonPatchSchema.parse(JSON.parse(String(init.body)));
+        body = { person: { userId: USER_ID, firstName: patch.firstName, lastName: patch.lastName } };
+      } else if (url.pathname === "/api/v1/users/current") body = profile();
       else if (url.pathname.startsWith("/api/v1/email/domains/")) {
         // The server's lists; the browser only ever sees this answer.
         const domain = decodeURIComponent(url.pathname.slice("/api/v1/email/domains/".length));
@@ -267,6 +271,33 @@ describe("registration contact step", () => {
     expect(form.querySelector('input[name="firstName"]')?.getAttribute("type")).toBe("hidden");
     expect(form.textContent).toContain("Ada Lovelace");
     expect(ready).toBe(true);
+  });
+
+  it("corrects an invalid saved name through the shared editor without adding names to the registration", async () => {
+    history.replaceState({}, "", `/events/2026/pqc/register/#verify=${PROOF_TOKEN}`);
+    const requests = installResponses(undefined, false, { firstName: "ZoÃ«", lastName: "Fixture" });
+    const form = await mount(contactStep());
+    await act(() => form.querySelector<HTMLButtonElement>('button[aria-label="Edit personal details"]')!.click());
+    const dialog = document.querySelector<HTMLDialogElement>("dialog[open]")!;
+    expect(dialog).not.toBeNull();
+    expect(form.contains(dialog)).toBe(false);
+    await act(() => {
+      const first = controlFor(dialog, "First name");
+      first.value = "Zoë";
+      first.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => buttonNamed(dialog, "Save my details")!.click());
+    await settle();
+    expect(value(form, "firstName")).toBe("Zoë");
+    expect(value(form, "lastName")).toBe("Fixture");
+    expect(form.textContent).toContain("Zoë Fixture");
+    expect(requests.find((request) => request.path.endsWith("/proof/person"))?.body).toEqual({
+      token: PROOF_TOKEN,
+      userId: USER_ID,
+      firstName: "Zoë",
+      lastName: "Fixture",
+    });
+    expect(document.querySelector("dialog[open]")).toBeNull();
   });
 
   it("continues when the link opens in the tab already showing the form", async () => {

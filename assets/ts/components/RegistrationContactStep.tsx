@@ -1,3 +1,8 @@
+import { ParticipationPersonalDetails, type PersonalNamePatch } from "./ParticipationPersonalDetails";
+import {
+  registrationProofPersonPatchSchema,
+  registrationProofPersonPatchResponseSchema,
+} from "../../shared/schemas/registration-email-proof";
 import { IconPencil } from "./icons";
 import { useEffect, useState } from "preact/hooks";
 import type { ComponentChildren } from "preact";
@@ -11,9 +16,9 @@ import {
   type RegistrationEntry,
 } from "../../shared/schemas/registration-email-proof";
 import { userAuthSessionResponseSchema } from "../../shared/schemas/user-auth";
-import { myProfileSchema } from "../../shared/schemas/me";
+import { myProfileSchema, myProfileUpdateSchema } from "../../shared/schemas/me";
 import { workEmailStepForKindSchema, type WorkEmailStep } from "../../shared/schemas/work-email";
-import { getJson, postJson } from "../shared/api-client";
+import { getJson, postJson, patchJson } from "../shared/api-client";
 import { Alert } from "../ui/Alert";
 import { Button } from "../ui/Button";
 import { DescriptionList } from "../ui/DescriptionList";
@@ -123,40 +128,78 @@ function Details({
   lastName,
   representation,
   onChangeEmail,
+  saveNames,
+  presentationOf,
 }: {
   email: string;
   firstName?: string | null;
   lastName?: string | null;
   representation?: ComponentChildren;
   onChangeEmail?: () => void;
+  saveNames?: (names: PersonalNamePatch) => Promise<void>;
+  presentationOf?: (name: string) => FieldPresentation;
 }) {
+  const refusal = presentationOf?.("firstName").message ?? presentationOf?.("lastName").message;
   return (
-    <DescriptionList
-      items={[
-        ...(firstName && lastName ? [{ term: "Name", value: `${firstName} ${lastName}` }] : []),
-        {
-          term: "Email",
-          value: (
-            <span class="pk-cluster pk-cluster--nowrap">
-              <span class="pk-break">{email}</span>
-              {onChangeEmail && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  icon
-                  aria-label={copy.changeEmail}
-                  title={copy.changeEmail}
-                  onClick={onChangeEmail}
-                >
-                  <IconPencil />
-                </Button>
-              )}
-            </span>
-          ),
-        },
-        ...(representation ? [{ term: "Representation", value: representation }] : []),
-      ]}
-    />
+    <>
+      <ParticipationPersonalDetails
+        person={{ firstName: firstName ?? null, lastName: lastName ?? null }}
+        save={saveNames}
+        refusal={refusal}
+        summary={(edit) => (
+          <DescriptionList
+            items={[
+              ...(firstName && lastName
+                ? [
+                    {
+                      term: "Name",
+                      value: (
+                        <span class="pk-cluster pk-cluster--nowrap">
+                          <span>{`${firstName} ${lastName}`}</span>
+                          {edit && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              icon
+                              aria-label="Edit personal details"
+                              title="Edit personal details"
+                              onClick={edit}
+                            >
+                              <IconPencil />
+                            </Button>
+                          )}
+                        </span>
+                      ),
+                    },
+                  ]
+                : []),
+              {
+                term: "Email",
+                value: (
+                  <span class="pk-cluster pk-cluster--nowrap">
+                    <span class="pk-break">{email}</span>
+                    {onChangeEmail && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        icon
+                        aria-label={copy.changeEmail}
+                        title={copy.changeEmail}
+                        onClick={onChangeEmail}
+                      >
+                        <IconPencil />
+                      </Button>
+                    )}
+                  </span>
+                ),
+              },
+              ...(representation ? [{ term: "Representation", value: representation }] : []),
+            ]}
+          />
+        )}
+      />
+      <NameFields firstName={firstName} lastName={lastName} presentationOf={presentationOf} />
+    </>
   );
 }
 
@@ -173,7 +216,8 @@ function VerifiedContact({
   endpoint: string;
   presentationOf?: (name: string) => FieldPresentation;
 }) {
-  const { person } = verified;
+  const [savedPerson, setSavedPerson] = useState(verified.person);
+  const person = savedPerson;
   return (
     <div class="pk-stack">
       <AddressFields step={verified} emailProof={verified.token} />
@@ -182,8 +226,20 @@ function VerifiedContact({
         firstName={person?.firstName}
         lastName={person?.lastName}
         onChangeEmail={changeEmail}
+        presentationOf={presentationOf}
+        saveNames={
+          person
+            ? async (names) => {
+                const saved = await patchJson(
+                  `${endpoint}/proof/person`,
+                  registrationProofPersonPatchSchema.parse({ token: verified.token, userId: person.userId, ...names }),
+                  registrationProofPersonPatchResponseSchema,
+                );
+                setSavedPerson(saved.person);
+              }
+            : undefined
+        }
       />
-      <NameFields firstName={person?.firstName} lastName={person?.lastName} presentationOf={presentationOf} />
       {verified.affiliation && (
         <RegistrationConfirmOrganization
           key={verified.email}
@@ -307,6 +363,15 @@ export function RegistrationContactStep({
           onChangeEmail={!autoSession ? changeEmail : undefined}
           firstName={person.firstName}
           lastName={person.lastName}
+          presentationOf={presentationOf}
+          saveNames={async (names) => {
+            const saved = await patchJson("/api/v1/users/current", myProfileUpdateSchema.parse(names), myProfileSchema);
+            setStage({
+              kind: "known",
+              person: { ...person, firstName: saved.firstName ?? "", lastName: saved.lastName ?? "" },
+              step,
+            });
+          }}
           representation={
             <RegistrationIdentityField
               preferred={person.identity}
@@ -322,7 +387,6 @@ export function RegistrationContactStep({
             />
           }
         />
-        <NameFields firstName={person.firstName} lastName={person.lastName} presentationOf={presentationOf} />
       </div>
     );
   }

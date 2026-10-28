@@ -12,7 +12,7 @@ import { Field } from "../../assets/ts/ui/Field";
 import { TextInput } from "../../assets/ts/ui/TextControl";
 import { controlFor, typeInto } from "./helpers/labeled-control";
 
-const contract = z.object({ name: z.string().trim().min(1), website: httpUrlSchema.nullable() });
+const contract = z.object({ name: z.string().trim().min(1, "Enter a name."), website: httpUrlSchema.nullable() });
 
 let outcome = "";
 let container: HTMLDivElement | null = null;
@@ -115,7 +115,7 @@ describe("useContractForm", () => {
     document.body.append(container);
     await act(() => render(<GetterHarness />, container!));
     await act(() => container!.querySelector("button")!.click());
-    expect(outcome).toBe("Please correct the highlighted fields.");
+    expect(outcome).toBe("Enter a name.");
     value = "  Updated without a render  ";
     await act(() => container!.querySelector("button")!.click());
     expect(outcome).toBe("Updated without a render");
@@ -157,7 +157,7 @@ describe("useContractForm", () => {
     const root = mount();
     await typeInto(controlFor(root, "Website"), "https://example.test");
     await act(async () => root.querySelector<HTMLButtonElement>("button")!.click());
-    expect(outcome).toBe("Please correct the highlighted fields.");
+    expect(outcome).toBe("Enter a name.");
     const name = controlFor(root, "Name");
     expect(fieldOf(name).classList.contains("pk-field--invalid")).toBe(true);
     expect(document.activeElement).toBe(name);

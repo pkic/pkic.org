@@ -1,3 +1,4 @@
+import { personNamePatchSchema } from "../../shared/schemas/api-common";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { z } from "zod";
 import type { MemberJoinApplicantKind } from "../../shared/schemas/member-join";
@@ -8,7 +9,6 @@ import {
   eventProposalProofVerifySchema,
   eventProposalProofVerifyResponseSchema,
   eventProposalProofPersonPatchSchema,
-  eventProposalPersonNamePatchSchema,
   eventProposalIdentityJobTitlePatchSchema,
   eventProposalProofIdentityPatchSchema,
   eventProposalProofIdentityPatchResponseSchema,
@@ -59,7 +59,7 @@ export function useProposalEntryIdentity(
   endpoint: string,
   speakerManagementToken?: string,
   expectedSpeakerUserId?: string | null,
-  saveNames?: (names: z.infer<typeof eventProposalPersonNamePatchSchema>) => Promise<ParticipationPerson>,
+  saveNames?: (names: z.infer<typeof personNamePatchSchema>) => Promise<ParticipationPerson>,
   startWithEmailProof = false,
   speakerProposalId?: string,
   initialProof?: VerifiedProposalEntry,
@@ -174,7 +174,7 @@ export function useProposalEntryIdentity(
     setSelected((current) => (current ? { ...current, jobTitle: result.jobTitle } : current));
     setPerson((current) => (current ? { ...current, jobTitle: result.jobTitle } : current));
   }
-  async function savePersonalDetails(names: z.infer<typeof eventProposalPersonNamePatchSchema>): Promise<void> {
+  async function savePersonalDetails(names: z.infer<typeof personNamePatchSchema>): Promise<void> {
     const currentGeneration = generation.current;
     const savedPerson = saveNames
       ? await saveNames(names)

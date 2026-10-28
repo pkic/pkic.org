@@ -153,11 +153,11 @@ export async function verifyRegistrationEmailProof(
       );
   const results = await db.batch([
     db.prepare("SELECT id FROM events WHERE id=? AND slug=?").bind(proof.eventId, input.eventSlug),
-    db.prepare(`SELECT first_name,last_name FROM users WHERE id=(${owner.sql})`).bind(...owner.bindings),
+    db.prepare(`SELECT id,first_name,last_name FROM users WHERE id=(${owner.sql})`).bind(...owner.bindings),
     ...(affiliation?.statements ?? []),
   ]);
   if (!batchFirst(results[0])) throw new AppError(404, "EVENT_NOT_FOUND", "Event not found");
-  const person = batchFirst<{ first_name: string | null; last_name: string | null }>(results[1]);
+  const person = batchFirst<{ id: string; first_name: string | null; last_name: string | null }>(results[1]);
   const observed = affiliation?.decode(results.slice(2));
   const preview = observed ? verifiedAffiliationPreview(observed.basis, observed.address) : null;
   if (input.affiliation && observed && preview) {
@@ -189,7 +189,7 @@ export async function verifyRegistrationEmailProof(
   return {
     email: proof.email,
     unaffiliatedAttestation: proof.unaffiliatedAttestation,
-    person: person ? { firstName: person.first_name, lastName: person.last_name } : null,
+    person: person ? { userId: person.id, firstName: person.first_name, lastName: person.last_name } : null,
     asksOrganization: !proof.unaffiliatedAttestation,
     affiliation: preview,
   };

@@ -46,7 +46,7 @@ export type EmailContentType = z.infer<typeof emailContentTypeSchema>;
 export const emailMessageTypeSchema = z.enum(["transactional", "promotional"]);
 export type EmailMessageType = z.infer<typeof emailMessageTypeSchema>;
 
-export const namePattern = /^[\p{L}\p{N} .,'’\-()&/]+$/u;
+export const namePattern = /^[\p{L}\p{M}\p{N} .,'’\p{Pd}()&/\u200c\u200d]+$/u;
 export const slugPattern = /^[a-z0-9]+(?:[a-z0-9-]*[a-z0-9])?$/;
 export const termKeyPattern = /^[a-z0-9][a-z0-9._-]{1,127}$/;
 export const versionPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
@@ -82,14 +82,24 @@ export const normalizedEmailSchema = z
   .email({ error: "Please enter a valid email address (for example: name@example.com)." })
   .transform((value) => value.trim().toLowerCase());
 export const emailRecoveryRequestSchema = z.object({ email: normalizedEmailSchema });
-export const firstNameSchema = trimmedString(1, 80, "Enter your first name.").regex(
-  namePattern,
-  "Contains unsupported characters",
-);
-export const lastNameSchema = trimmedString(1, 120, "Enter your last name.").regex(
-  namePattern,
-  "Contains unsupported characters",
-);
+/** Canonically equivalent Unicode spellings share one representation; never guess a different encoding. */
+function personName(max: number, field: string) {
+  return z
+    .string()
+    .trim()
+    .normalize("NFC")
+    .min(1, `Enter your ${field}.`)
+    .max(max, `Keep your ${field} to ${max} characters or fewer.`)
+    .regex(namePattern, `Check your ${field} and remove unsupported characters.`);
+}
+export const firstNameSchema = personName(80, "first name");
+export const lastNameSchema = personName(120, "last name");
+export const personNamePatchSchema = z
+  .object({ firstName: firstNameSchema.optional(), lastName: lastNameSchema.optional() })
+  .strict()
+  .refine((body) => body.firstName !== undefined || body.lastName !== undefined, {
+    message: "Enter a first or last name.",
+  });
 /** Said wherever an organization name is asked for and left empty. */
 export const ORGANIZATION_NAME_REQUIRED = "Enter your organization.";
 export const organizationNameSchema = z

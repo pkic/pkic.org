@@ -1,3 +1,4 @@
+import { firstNameSchema, lastNameSchema } from "../../../assets/shared/schemas/api-common";
 import { readEmailOwnership, provedMailboxUserId, prepareEmailOwnershipClaim } from "./email-ownership";
 import { first } from "../db/queries";
 import { normalizeEmail } from "../validation";
@@ -160,8 +161,8 @@ export function prepareUserProfileStatements(
       memberValues.push(value);
     }
   };
-  add("first_name", payload.firstName);
-  add("last_name", payload.lastName);
+  add("first_name", payload.firstName == null ? payload.firstName : firstNameSchema.parse(payload.firstName));
+  add("last_name", payload.lastName == null ? payload.lastName : lastNameSchema.parse(payload.lastName));
   add("preferred_name", payload.preferredName, false);
   if (payload.headshotR2Key !== undefined) {
     add("headshot_r2_key", payload.headshotR2Key);
@@ -280,8 +281,8 @@ async function resolveUserWrite(db: DatabaseLike, payload: FindOrCreateUserPaylo
       id: uuid(),
       email: payload.email,
       normalized_email: normalized,
-      first_name: payload.firstName ?? null,
-      last_name: payload.lastName ?? null,
+      first_name: payload.firstName === undefined ? null : firstNameSchema.parse(payload.firstName),
+      last_name: payload.lastName === undefined ? null : lastNameSchema.parse(payload.lastName),
       preferred_name: payload.preferredName ?? null,
       data_json: payload.dataJson ?? null,
     };
@@ -325,8 +326,9 @@ async function resolveUserWrite(db: DatabaseLike, payload: FindOrCreateUserPaylo
     };
   }
 
-  const updatedFirstName = payload.firstName ?? existing.first_name;
-  const updatedLastName = payload.lastName ?? existing.last_name;
+  const updatedFirstName =
+    payload.firstName === undefined ? existing.first_name : firstNameSchema.parse(payload.firstName);
+  const updatedLastName = payload.lastName === undefined ? existing.last_name : lastNameSchema.parse(payload.lastName);
   const updatedPreferredName = payload.preferredName ?? existing.preferred_name;
   const updatedDataJson = payload.dataJson ?? existing.data_json;
 
