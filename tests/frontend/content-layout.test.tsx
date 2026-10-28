@@ -227,3 +227,16 @@ it("wraps selected prose in the chosen text-column count and inserts tables at t
   expect(table.state.doc.firstChild!.firstChild!.childCount).toBe(3);
   expect(markdownLayoutChoiceSchema.safeParse({ kind: "table", columns: 9, rows: 2 }).success).toBe(false);
 });
+
+it("never removes an existing columns layout when inserting another with the same count", () => {
+  const editor = open(":::columns count=2\nKeep this text.\n:::");
+  editor.commands.setTextSelection(3);
+  applyEditorLayout(editor, { kind: "columns", count: "2" }, false);
+  let count = 0;
+  editor.state.doc.descendants((node) => {
+    if (node.type.name === "columns") count++;
+  });
+  expect(count).toBe(2);
+  expect(editor.state.doc.textContent).toBe("Keep this text.");
+  expect(open(editor.getMarkdown()).getJSON()).toEqual(editor.getJSON());
+});

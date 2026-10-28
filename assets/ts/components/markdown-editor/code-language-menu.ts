@@ -29,7 +29,7 @@ export function codeLanguageItems(editor: Editor | null, disabled = false): Menu
     ? languages
     : [[current, current], ...languages];
   return choices.map(([language, label]) => ({
-    id: `code-${language || "plain"}`,
+    id: language ? `code-language-${language}` : "code-plain",
     label,
     checked: Boolean(editor?.isActive("codeBlock")) && current === language,
     disabled,

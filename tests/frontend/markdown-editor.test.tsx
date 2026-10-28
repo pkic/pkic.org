@@ -217,11 +217,22 @@ it("changes fenced-code languages without changing code and preserves unknown so
   const instance = editor("```custom-lang\nconst answer = 42;\n```");
   instance.commands.setTextSelection(2);
   expect(codeLanguageItems(instance).find((item) => item.checked)?.label).toBe("custom-lang");
-  codeLanguageItems(instance).find((item) => item.id === "code-yaml")!.onSelect!();
+  codeLanguageItems(instance).find((item) => item.id === "code-language-yaml")!.onSelect!();
   expect(instance.state.doc.textContent).toBe("const answer = 42;");
   expect(instance.getMarkdown()).toContain("```yaml\n");
   expect(editor(instance.getMarkdown()).getJSON()).toEqual(instance.getJSON());
   codeLanguageItems(instance).find((item) => item.id === "code-plain")!.onSelect!();
   expect(instance.getMarkdown()).not.toContain("```yaml");
   expect(instance.state.doc.textContent).toBe("const answer = 42;");
+});
+
+it("keeps an authored plain language distinct from the Plain text menu choice", () => {
+  const instance = editor("```plain\nPreserve this text.\n```");
+  instance.commands.setTextSelection(2);
+  const choices = codeLanguageItems(instance);
+  expect(new Set(choices.map((item) => item.id)).size).toBe(choices.length);
+  expect(choices.find((item) => item.checked)?.id).toBe("code-language-plain");
+  choices.find((item) => item.id === "code-plain")!.onSelect!();
+  expect(instance.getMarkdown()).not.toContain("```plain");
+  expect(instance.state.doc.textContent).toBe("Preserve this text.");
 });

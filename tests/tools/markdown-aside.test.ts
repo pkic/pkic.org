@@ -48,3 +48,16 @@ it("reports readable schema errors at both the authoring and serialization bound
     "count is not supported on card",
   );
 });
+
+it("rejects orphan card and item blocks at every depth while accepting their owning collections", () => {
+  const contract = markdownContentSchema(20000);
+  for (const type of ["card", "item"] as const) {
+    const child = serializeMarkdownContainer({ type, markdown: "Body." });
+    const aside = serializeMarkdownContainer({ type: "aside", markdown: child });
+    const nested = serializeMarkdownContainer({ type: "columns", markdown: aside });
+    for (const source of [child, aside, nested]) expect(contract.safeParse(source).success).toBe(false);
+    const parent = serializeMarkdownContainer({ type: type === "card" ? "cards" : "grid", markdown: child });
+    expect(contract.safeParse(parent).success).toBe(true);
+    expect(contract.safeParse(serializeMarkdownContainer({ type: "aside", markdown: parent })).success).toBe(true);
+  }
+});

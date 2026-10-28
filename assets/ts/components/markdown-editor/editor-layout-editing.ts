@@ -22,7 +22,7 @@ export function applyEditorLayout(editor: Editor, input: MarkdownLayoutChoice, e
   const target = editing ? selectedEditorLayout(editor) : null;
   if (!target) {
     if (choice.kind === "columns" && !editor.isActive("table")) {
-      editor.chain().focus().toggleWrap("columns", { count: choice.count }).run();
+      editor.chain().focus().wrapIn("columns", { count: choice.count }).run();
     } else insertEditorBlock(editor, choice.kind, editor.state.selection.from, choice);
     return;
   }

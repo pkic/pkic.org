@@ -38,9 +38,17 @@ function parseContentContainer(value: unknown): ContentContainer {
   return result.data;
 }
 
+/** Card and item blocks belong directly to their owning collection. */
+function validateContainerParent(block: ContentContainer, parent?: ContentContainer["type"]): void {
+  const expected = block.type === "card" ? "cards" : block.type === "item" ? "grid" : null;
+  if (expected && parent !== expected) throw new Error(`A ${block.type} block must be inside a ${expected} block.`);
+}
+
 /** Validate nested blocks and enforce the permitted direct children of each layout. */
 function validateContainerChildren(block: ContentContainer): void {
+  // Reading each child validates its descendants before the parent is returned.
   const children = splitMarkdownContainers(block.markdown);
+  for (const child of children) if (typeof child !== "string") validateContainerParent(child, block.type);
   if (block.type !== "grid" && block.type !== "cards") return;
   const expected = block.type === "grid" ? "item" : "card";
   if (!children.some((child) => typeof child !== "string")) throw new Error("Add at least one layout item.");
@@ -148,5 +156,5 @@ export function serializeMarkdownAside(markdown: string): string {
 
 /** Validate boundaries, attributes and structural children before replacing editor state. */
 export function validateMarkdownAsides(source: string): void {
-  splitMarkdownContainers(source);
+  for (const block of splitMarkdownContainers(source)) if (typeof block !== "string") validateContainerParent(block);
 }
