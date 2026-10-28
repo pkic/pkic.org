@@ -38,6 +38,16 @@ function parseContentContainer(value: unknown): ContentContainer {
   return result.data;
 }
 
+/** Validate nested blocks and enforce the permitted direct children of each layout. */
+function validateContainerChildren(block: ContentContainer): void {
+  const children = splitMarkdownContainers(block.markdown);
+  if (block.type !== "grid" && block.type !== "cards") return;
+  const expected = block.type === "grid" ? "item" : "card";
+  if (!children.some((child) => typeof child !== "string")) throw new Error("Add at least one layout item.");
+  if (children.some((child) => (typeof child === "string" ? Boolean(child.trim()) : child.type !== expected)))
+    throw new Error(`A ${block.type} block contains only ${expected} blocks.`);
+}
+
 /** Read one balanced container. Code examples never close the surrounding content block. */
 export function readMarkdownContainer(source: string): { raw: string; block: ContentContainer } | null {
   const opening = CONTAINER_OPEN.exec(source);
@@ -62,15 +72,15 @@ export function readMarkdownContainer(source: string): { raw: string; block: Con
       if (nested) fences.push(nested[1].length);
       if (closing && closing[1].length === fences.at(-1)) {
         fences.pop();
-        if (!fences.length)
-          return {
-            raw: source.slice(0, offset + line.length),
-            block: parseContentContainer({
-              type: opening[2],
-              ...attributes,
-              markdown: trimBlankLines(source.slice(opening[0].length, offset)),
-            }),
-          };
+        if (!fences.length) {
+          const block = parseContentContainer({
+            type: opening[2],
+            ...attributes,
+            markdown: trimBlankLines(source.slice(opening[0].length, offset)),
+          });
+          validateContainerChildren(block);
+          return { raw: source.slice(0, offset + line.length), block };
+        }
       }
     }
     offset += line.length;
@@ -138,15 +148,5 @@ export function serializeMarkdownAside(markdown: string): string {
 
 /** Validate boundaries, attributes and structural children before replacing editor state. */
 export function validateMarkdownAsides(source: string): void {
-  for (const part of splitMarkdownContainers(source)) {
-    if (typeof part === "string") continue;
-    if (part.type === "grid" || part.type === "cards") {
-      const children = splitMarkdownContainers(part.markdown);
-      const expected = part.type === "grid" ? "item" : "card";
-      if (!children.some((child) => typeof child !== "string")) throw new Error("Add at least one layout item.");
-      if (children.some((child) => (typeof child === "string" ? Boolean(child.trim()) : child.type !== expected)))
-        throw new Error(`A ${part.type} block contains only ${expected} blocks.`);
-    }
-    validateMarkdownAsides(part.markdown);
-  }
+  splitMarkdownContainers(source);
 }

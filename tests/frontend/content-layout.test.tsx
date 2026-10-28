@@ -167,3 +167,26 @@ it("keeps malformed container input renderable while the save contract refuses i
     expect(markdownContentSchema(20000).safeParse(source).success).toBe(false);
   }
 });
+
+it("keeps invalid layout children editable as plain Markdown through splitting and reopening", () => {
+  for (const [type, source] of [
+    ["cards", "::::cards\nA paragraph to split.\n::::"],
+    ["cards", "::::cards\n:::card variant=custom\nA paragraph to split.\n:::\n::::"],
+    ["grid", "::::grid\n:::card\nA paragraph to split.\n:::\n::::"],
+    ["columns", ":::::columns count=2\n::::cards\n:::card variant=custom\nA paragraph to split.\n:::\n::::\n:::::"],
+  ]) {
+    const editor = open(source);
+    expect(editor.view.dom.querySelector(`.pk-content-${type}`), source).toBeNull();
+    expect(() => editor.state.doc.check()).not.toThrow();
+    let position = 0;
+    editor.state.doc.descendants((node, offset) => {
+      if (node.isText && node.text?.includes("to split")) position = offset + node.text.indexOf("to split");
+    });
+    expect(position).toBeGreaterThan(0);
+    editor.commands.setTextSelection(position);
+    expect(editor.commands.splitBlock()).toBe(true);
+    expect(() => editor.state.doc.check()).not.toThrow();
+    expect(open(editor.getMarkdown()).getJSON()).toEqual(editor.getJSON());
+    expect(markdownContentSchema(20000).safeParse(source).success).toBe(false);
+  }
+});
