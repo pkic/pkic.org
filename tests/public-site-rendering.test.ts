@@ -1,3 +1,4 @@
+import { contentLayoutExample } from "../assets/ts/ui/preview/content-layout-example";
 import "./helpers/app";
 import { SELF } from "cloudflare:test";
 import { publicPageImages } from "./helpers/public-page-images";
@@ -14,7 +15,7 @@ import {
 } from "../functions/_lib/services/site-content";
 import { compileContentIgnorePatterns, contentSourceIsIncluded } from "../functions/_lib/services/site-markdown";
 import { siteContentSlug } from "../assets/shared/site-content-slug";
-import { renderContentMarkdown } from "../functions/_lib/services/site-components";
+import { renderContentMarkdown, stripContentComponentSyntax } from "../functions/_lib/services/site-components";
 import fixturePublication from "./fixtures/site-publication.json";
 import { sitePublicationSnapshotSchema } from "../assets/shared/schemas/site-publication";
 
@@ -168,6 +169,69 @@ describe("Vite public-site rendering", () => {
     expect(audit.discovered).toContain("figure");
     expect(audit.discovered).toContain("event-registration");
     expect(audit.unresolved).toEqual([]);
+  });
+
+  it("publishes responsive layouts with direct children and inherited card variants", async () => {
+    const html = await renderContentMarkdown(contentLayoutExample, {
+      assetUrl: () => undefined,
+      assetUrls: () => [],
+      data: {},
+      listing: () => ({ heading: "Test", items: [], page: 1, pageCount: 1 }),
+      route: "/test/",
+      sourcePath: "content/test.md",
+    });
+    expect(html).toMatch(
+      /<div(?=[^>]*class="pk pk-content-columns")(?=[^>]*data-count="2")[^>]*>\s*<div class="pk-content-prose pk-content-columns__body">/,
+    );
+    expect(html).toContain('data-count="4"');
+    expect(html).toContain('data-layout="bento"');
+    expect(html).toContain('data-span="2"');
+    expect(html).toContain('data-icon="shield-check"');
+    expect(html).toContain('data-media="logo"');
+    expect(html).toContain('alt="PKI Consortium"');
+    expect(html).toMatch(
+      /<div(?=[^>]*class="pk pk-content-cards")(?=[^>]*data-variant="muted")[^>]*>\s*<div class="pk pk-content-card"/,
+    );
+    expect(html).toContain('data-variant="accent"');
+    expect(html).toContain("Reference library");
+    expect(html).not.toContain("PKICCONTENTCOMPONENT");
+    expect(stripContentComponentSyntax(contentLayoutExample)).not.toContain(":::cards");
+  });
+
+  it("keeps native grid and card examples literal inside fenced code", async () => {
+    const example = "::::cards\n:::card\nExample card.\n:::\n::::";
+    const html = await renderContentMarkdown("```markdown\n" + example + "\n```", {
+      assetUrl: () => undefined,
+      assetUrls: () => [],
+      data: {},
+      listing: () => ({ heading: "Test", items: [], page: 1, pageCount: 1 }),
+      route: "/test/",
+      sourcePath: "content/test.md",
+    });
+    expect(html).toContain(example);
+    expect(html).not.toContain('class="pk pk-content-card"');
+  });
+
+  it("publishes editable Markdown asides while leaving literal examples untouched", async () => {
+    const html = await renderContentMarkdown(
+      "Before.\n\n::::aside\n### Context\n\nA [guide](https://example.org/).\n\n- First\n  - Nested\n\n:::aside\nAdditional context.\n:::\n::::\n\n```markdown\n:::aside\nExample.\n:::\n```\n\nAfter.",
+      {
+        assetUrl: (name) => `/content-media/test/${name}`,
+        assetUrls: () => [],
+        data: {},
+        eventData: undefined,
+        listing: () => ({ heading: "Test", items: [], page: 1, pageCount: 1 }),
+        route: "/test/",
+        sourcePath: "content/test.md",
+      },
+    );
+    expect(html.match(/<aside /g)).toHaveLength(2);
+    expect(html).toContain('class="pk pk-content-aside"');
+    expect(html).toContain("Additional context.");
+    expect(html).toMatch(/<li>Nested<\/li>/);
+    expect(html).toContain(":::aside\nExample.\n:::");
+    expect(html).not.toContain("PKICCONTENTCOMPONENT");
+    expect(stripContentComponentSyntax(":::aside\nSupporting text.\n:::")).toBe("Supporting text.");
   });
 
   it("renders new Markdown directives through SSR-safe Preact components", async () => {

@@ -1,6 +1,16 @@
 import type { Editor, JSONContent } from "@tiptap/core";
 
-export const EDITOR_BLOCKS = ["callout", "table", "image", "video"] as const;
+export const EDITOR_BLOCKS = [
+  "callout",
+  "aside",
+  "columns",
+  "grid",
+  "cards",
+  "bento",
+  "table",
+  "image",
+  "video",
+] as const;
 export type EditorBlock = (typeof EDITOR_BLOCKS)[number];
 export const BLOCK_TRANSFER_TYPE = "application/x-pkic-markdown-block";
 
@@ -18,8 +28,48 @@ export function insertEditorBlock(editor: Editor, kind: Exclude<EditorBlock, "im
     return;
   }
   const paragraph = (text: string): JSONContent => ({ type: "paragraph", content: [{ type: "text", text }] });
+  if (kind === "columns") {
+    editor
+      .chain()
+      .focus()
+      .insertContentAt(position, {
+        type: "columns",
+        attrs: { count: "2" },
+        content: [paragraph("Write your text here. Paragraphs flow from one column to the next.")],
+      })
+      .run();
+    return;
+  }
+  if (kind === "grid" || kind === "cards" || kind === "bento") {
+    const item = kind === "grid" ? "item" : "card";
+    editor
+      .chain()
+      .focus()
+      .insertContentAt(position, {
+        type: kind === "bento" ? "cards" : kind,
+        attrs: kind === "bento" ? { layout: "bento", count: "3" } : undefined,
+        content: ["First topic", "Second topic", "Third topic"].map((text, index) => ({
+          type: item,
+          attrs: kind === "bento" && index === 0 ? { span: "2", rows: "2" } : undefined,
+          content: [
+            { type: "heading", attrs: { level: 3 }, content: [{ type: "text", text }] },
+            paragraph("Add your content."),
+          ],
+        })),
+      })
+      .run();
+    return;
+  }
   const content: JSONContent[] = [
-    { type: "blockquote", content: [paragraph("Write your callout here.")] },
+    kind === "aside"
+      ? {
+          type: "aside",
+          content: [
+            { type: "heading", attrs: { level: 3 }, content: [{ type: "text", text: "Additional context" }] },
+            paragraph("Add supporting information."),
+          ],
+        }
+      : { type: "blockquote", content: [paragraph("Write your callout here.")] },
     { type: "paragraph" },
   ];
   editor.chain().focus().insertContentAt(position, content).run();

@@ -1,3 +1,5 @@
+import { lazy, Suspense } from "preact/compat";
+import { CONTENT_PROSE_CLASS } from "../../site/ContentProse";
 import type { JSX, RefObject } from "preact";
 import { TemplateHighlighting } from "./template-highlighting";
 import { restoreTemplateMarkdown } from "./template-markdown";
@@ -11,6 +13,9 @@ import {
   IconBold,
   IconBraces,
   IconLayers,
+  IconTextColumns,
+  IconContentGrid,
+  IconBentoGrid,
   IconBulletList,
   IconCode,
   IconHeading,
@@ -39,6 +44,10 @@ import { useToolbarOverflow } from "./use-toolbar-overflow";
 import { EditorMediaFields } from "./EditorMediaFields";
 import "./markdown-editor.scss";
 import "./markdown-content.scss";
+
+const ContentLayoutControls = lazy(() =>
+  import("./ContentLayoutControls").then((module) => ({ default: module.ContentLayoutControls })),
+);
 
 export interface MarkdownEditorHandle {
   insertText: (text: string) => void;
@@ -78,6 +87,7 @@ export function MarkdownEditor({
   ...control
 }: MarkdownEditorProps) {
   const compact = variant === "compact";
+  const canvasClass = compact ? "pk-markdown-editor__canvas" : `${CONTENT_PROSE_CLASS} pk-markdown-editor__canvas`;
   // One document owns an edit session. Parent renders must never reparse a
   // previous serialized draft while ProseMirror is applying the next input.
   const [value, setValue] = useState(initialValue);
@@ -110,7 +120,7 @@ export function MarkdownEditor({
       contentType: "markdown",
       editorProps: {
         attributes: {
-          class: "pk-markdown-editor__canvas",
+          class: canvasClass,
           role: "textbox",
           "aria-multiline": "true",
           "aria-label": label,
@@ -155,7 +165,7 @@ export function MarkdownEditor({
       editorProps: {
         ...editor.options.editorProps,
         attributes: {
-          class: "pk-markdown-editor__canvas",
+          class: canvasClass,
           id: source ? `${control.id}-visual` : control.id,
           role: "textbox",
           "aria-label": label,
@@ -168,6 +178,7 @@ export function MarkdownEditor({
       },
     });
   }, [
+    canvasClass,
     editor,
     disabled,
     source,
@@ -279,6 +290,24 @@ export function MarkdownEditor({
         block: "callout",
         run: () => runFocused((focused) => focused.commands.toggleBlockquote()),
       },
+      {
+        label: "Aside",
+        icon: <IconLayers />,
+        active: "aside",
+        block: "aside",
+        run: () => runFocused((focused) => focused.commands.toggleWrap("aside")),
+      },
+      ...(["columns", "grid", "cards", "bento"] as const).map((kind) => ({
+        label:
+          kind === "columns" ? "Text columns" : kind === "grid" ? "Grid" : kind === "bento" ? "Bento grid" : "Cards",
+        icon: kind === "columns" ? <IconTextColumns /> : kind === "bento" ? <IconBentoGrid /> : <IconContentGrid />,
+        active: kind === "bento" ? "cards" : kind,
+        block: kind,
+        run: () =>
+          kind === "columns" && !editor?.isActive("table")
+            ? runFocused((focused) => focused.commands.toggleWrap("columns", { count: "2" }))
+            : editor && insertEditorBlock(editor, kind, position()),
+      })),
       { label: "Code", icon: <IconCode />, active: "code", run: () => editor?.chain().focus().toggleCode().run() },
       {
         label: "Link",
@@ -423,6 +452,11 @@ export function MarkdownEditor({
           </Button>
         </div>
       </div>
+      {!source && editor && ["columns", "grid", "cards"].some((name) => editor.isActive(name)) && (
+        <Suspense fallback={null}>
+          <ContentLayoutControls editor={editor} />
+        </Suspense>
+      )}
       {!source && editor?.isActive("table") && (
         <div class="pk-markdown-editor__toolbar" data-density="compact" role="group" aria-label="Table editing">
           <Button variant="ghost" disabled={locked} onClick={() => editor.chain().focus().addRowAfter().run()}>

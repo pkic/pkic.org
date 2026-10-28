@@ -66,6 +66,66 @@ describe("visual Markdown round trips", () => {
     expect(saved).not.toMatch(/<(?:table|iframe|img|div)/);
   });
 
+  it("edits an aside's heading and body and preserves them through save, reopen, and publication", () => {
+    const source =
+      "Before.\n\n:::aside\n### Context\n\nRead the [guide](https://example.test/guide).\n\n- First\n  - Nested\n\n**Supporting** material.\n:::\n\nAfter.";
+    const first = editor(source);
+    expect(first.state.doc.child(1).type.name).toBe("aside");
+    expect(first.view.dom.querySelector("aside h3")?.textContent).toBe("Context");
+    let headingPosition = 0;
+    first.state.doc.descendants((node, position) => {
+      if (node.type.name === "heading") headingPosition = position + 1;
+    });
+    first.commands.insertContentAt(
+      { from: headingPosition, to: headingPosition + "Context".length },
+      "Updated context",
+    );
+    let bodyPosition = 0;
+    first.state.doc.descendants((node, position) => {
+      if (node.type.name === "paragraph" && node.textContent === "Supporting material.")
+        bodyPosition = position + node.nodeSize - 1;
+    });
+    first.commands.insertContentAt(bodyPosition, " Added in the visual editor.");
+    const saved = first.getMarkdown();
+    const reopened = editor(saved);
+    expect(reopened.getJSON()).toEqual(first.getJSON());
+    const page = publicContent(saved);
+    expect(page.querySelector("aside")?.textContent).toContain("Added in the visual editor.");
+    expect(page.querySelector("aside h3")?.textContent).toBe("Updated context");
+    expect(page.querySelector("aside ul ul li")?.textContent).toBe("Nested");
+    expect(page.querySelector("aside a")?.getAttribute("href")).toBe("https://example.test/guide");
+    expect(page.querySelector("aside strong")?.textContent).toBe("Supporting");
+    expect(page.querySelector("[role=alert], [role=status]")).toBeNull();
+    expect(saved).toContain(":::aside");
+    expect(saved).not.toContain("<aside");
+  });
+
+  it("preserves nested asides and literal directive examples on another edit", () => {
+    const instance = editor(
+      "::::aside\n### Outer\n\n:::aside\nNested text.\n:::\n\n```markdown\n:::aside\nExample.\n:::\n```\n::::",
+    );
+    const saved = instance.getMarkdown();
+    expect(editor(saved).getJSON()).toEqual(instance.getJSON());
+    const page = publicContent(saved);
+    expect(page.querySelectorAll("aside")).toHaveLength(2);
+    expect(page.querySelector("pre code")?.textContent).toContain(":::aside");
+  });
+
+  it("keeps table content editable inside the shared scrolling table presentation", () => {
+    const instance = editor("| Material | Audience |\n| --- | --- |\n| Methodology | Contributors |");
+    expect(instance.view.dom.querySelector(".pk-table__scroll table.pk-table")).not.toBeNull();
+    let cellPosition = 0;
+    instance.state.doc.descendants((node, position) => {
+      if (node.isText && node.text === "Contributors") cellPosition = position;
+    });
+    instance.commands.insertContentAt({ from: cellPosition, to: cellPosition + "Contributors".length }, "Reviewers");
+    const saved = instance.getMarkdown();
+    expect(editor(saved).getJSON()).toEqual(instance.getJSON());
+    const page = publicContent(saved);
+    expect(page.querySelector(".pk-table__scroll table.pk-table td:last-child")?.textContent).toBe("Reviewers");
+    expect(saved).not.toContain("<table");
+  });
+
   it("inserts a page block after the selected table instead of losing it inside a Markdown cell", () => {
     const instance = editor("| Capability | Status |\n| --- | --- |\n| Certificates | Ready |");
     insertEditorBlock(instance, "callout", 4);

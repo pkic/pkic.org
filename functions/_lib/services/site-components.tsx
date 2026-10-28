@@ -1,3 +1,5 @@
+import { splitMarkdownContainers } from "../../../assets/shared/markdown-aside";
+import { ContentLayout } from "../../../assets/ts/site/ContentLayout";
 import { SiteImage, prepareSiteImage } from "../../../assets/ts/site/SiteImage";
 import { DonationForm } from "../../../assets/ts/site/DonationForm";
 import { ApplicationStatusView } from "../../../assets/ts/site/ApplicationStatusView";
@@ -518,8 +520,21 @@ async function renderCall(
 }
 
 export async function renderContentMarkdown(markdown: string, context: ContentComponentContext): Promise<string> {
-  let source = normalizeDirectives(markdown);
   const calls: Array<RenderedCall & { token: string }> = [];
+  let source = "";
+  for (const part of splitMarkdownContainers(markdown)) {
+    if (typeof part === "string") {
+      source += part;
+      continue;
+    }
+    const html = await render(
+      <ContentLayout block={part} html={await renderContentMarkdown(part.markdown, context)} />,
+    );
+    const token = `PKICCONTENTCOMPONENT${calls.length}TOKEN`;
+    calls.push({ html, block: true, token });
+    source += `\n\n${token}\n\n`;
+  }
+  source = normalizeDirectives(source);
   for (let match = SHORTCODE_BLOCK.exec(source); match; match = SHORTCODE_BLOCK.exec(source)) {
     const rendered = await renderCall(match[1], match[2], match[3], context);
     const token = `PKICCONTENTCOMPONENT${calls.length}TOKEN`;
@@ -554,7 +569,10 @@ export async function renderContentMarkdown(markdown: string, context: ContentCo
 }
 
 export function stripContentComponentSyntax(markdown: string): string {
-  let value = normalizeDirectives(markdown);
+  const content = splitMarkdownContainers(markdown)
+    .map((part) => (typeof part === "string" ? part : stripContentComponentSyntax(part.markdown)))
+    .join("\n\n");
+  let value = normalizeDirectives(content);
   for (let pass = 0; pass < 8; pass += 1) {
     const next = value.replace(SHORTCODE_BLOCK, "$3");
     if (next === value) break;

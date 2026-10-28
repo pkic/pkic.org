@@ -1,0 +1,37 @@
+@layer components {
+  .pk-content-aside {
+    margin-block: var(--pk-5);
+    padding: var(--pk-5);
+    border: 1px solid var(--pk-line);
+    border-inline-start: 3px solid var(--pk-accent);
+    border-radius: var(--pk-radius);
+    background: var(--pk-surface-sunk);
+    color: var(--pk-ink);
+    font-size: var(--pk-text-lg);
+    line-height: 1.65;
+  }
+  .pk-content-aside p {
+    margin-block: var(--pk-2);
+  }
+  .pk-content-aside :is(ul, ol) {
+    margin-block: var(--pk-3);
+    padding-inline-start: var(--pk-6);
+  }
+  .pk-content-aside li + li {
+    margin-block-start: var(--pk-1);
+  }
+  .pk-content-aside > :first-child,
+  .pk-content-aside > div > :first-child {
+    margin-block-start: 0;
+  }
+  .pk-content-aside > :last-child,
+  .pk-content-aside > div > :last-child {
+    margin-block-end: 0;
+  }
+  .pk-content-aside :is(h2, h3, h4) {
+    margin-block: var(--pk-4) var(--pk-2);
+    color: var(--pk-ink);
+    font-size: var(--pk-text-xl);
+    line-height: 1.35;
+  }
+}
