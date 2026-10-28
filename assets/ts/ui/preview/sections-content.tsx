@@ -64,6 +64,14 @@ function EditableContentSpecimen({ initialValue }: { initialValue: string }) {
 
 export const contentSections: PreviewSection[] = [
   {
+    id: "content-code",
+    title: "Editable code blocks",
+    note: "Choose Code → Code block to insert a language, or select an existing block to change its language. Plain text removes the fence language without changing the code.",
+    render: () => (
+      <EditableContentSpecimen initialValue={'```json\n{ "name": "PKI Consortium", "enabled": true }\n```'} />
+    ),
+  },
+  {
     id: "content-layout",
     title: "Editable columns and card grids",
     note: "Use Layout to choose text columns, size a grid or cards, or select a bento preset. Edit layout changes the arrangement while preserving content.",

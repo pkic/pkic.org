@@ -9,6 +9,7 @@ import { editorExtensions } from "../../assets/ts/components/markdown-editor/edi
 import { insertEditorBlock, moveEditorBlock } from "../../assets/ts/components/markdown-editor/editor-blocks";
 import { Markdown } from "../../assets/ts/ui/Markdown";
 import { markdownMediaInsertSchema } from "../../assets/shared/schemas/markdown-editor";
+import { codeLanguageItems } from "../../assets/ts/components/markdown-editor/code-language-menu";
 import { markdownVideoEmbed } from "../../assets/shared/markdown-media";
 
 const editors: Editor[] = [];
@@ -210,4 +211,17 @@ describe("visual template highlighting", () => {
     expect(instance.getMarkdown()).toBe(content);
     expect(instance.getHTML()).not.toContain("adm-template-token");
   });
+});
+
+it("changes fenced-code languages without changing code and preserves unknown source languages", () => {
+  const instance = editor("```custom-lang\nconst answer = 42;\n```");
+  instance.commands.setTextSelection(2);
+  expect(codeLanguageItems(instance).find((item) => item.checked)?.label).toBe("custom-lang");
+  codeLanguageItems(instance).find((item) => item.id === "code-yaml")!.onSelect!();
+  expect(instance.state.doc.textContent).toBe("const answer = 42;");
+  expect(instance.getMarkdown()).toContain("```yaml\n");
+  expect(editor(instance.getMarkdown()).getJSON()).toEqual(instance.getJSON());
+  codeLanguageItems(instance).find((item) => item.id === "code-plain")!.onSelect!();
+  expect(instance.getMarkdown()).not.toContain("```yaml");
+  expect(instance.state.doc.textContent).toBe("const answer = 42;");
 });

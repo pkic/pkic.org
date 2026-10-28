@@ -1,6 +1,7 @@
 import { lazy, Suspense } from "preact/compat";
 import { CONTENT_PROSE_CLASS } from "../../site/ContentProse";
 import type { JSX, RefObject } from "preact";
+import { codeLanguageItems } from "./code-language-menu";
 import { TemplateHighlighting } from "./template-highlighting";
 import { restoreTemplateMarkdown } from "./template-markdown";
 import { Editor } from "@tiptap/core";
@@ -42,6 +43,10 @@ import { useToolbarOverflow } from "./use-toolbar-overflow";
 import { EditorMediaFields } from "./EditorMediaFields";
 import "./markdown-editor.scss";
 import "./markdown-content.scss";
+
+const CodeBlockControls = lazy(() =>
+  import("./CodeBlockControls").then((module) => ({ default: module.CodeBlockControls })),
+);
 
 const ContentLayoutControls = lazy(() =>
   import("./ContentLayoutControls").then((module) => ({ default: module.ContentLayoutControls })),
@@ -316,7 +321,21 @@ export function MarkdownEditor({
         picker: "layout",
         run: () => openLayoutPicker(false, false),
       },
-      { label: "Code", icon: <IconCode />, active: "code", run: () => editor?.chain().focus().toggleCode().run() },
+      {
+        label: "Code",
+        icon: <IconCode />,
+        run: () => {},
+        choices: [
+          {
+            id: "inline-code",
+            label: "Inline code",
+            checked: Boolean(editor?.isActive("code")),
+            disabled: locked,
+            onSelect: () => runFocused((focused) => focused.commands.toggleCode()),
+          },
+          { id: "code-block", label: "Code block", disabled: locked, children: codeLanguageItems(editor, locked) },
+        ],
+      },
       {
         label: "Link",
         icon: <IconLink width="16" height="16" />,
@@ -484,6 +503,11 @@ export function MarkdownEditor({
       {!source && editor && ["columns", "grid", "cards"].some((name) => editor.isActive(name)) && (
         <Suspense fallback={null}>
           <ContentLayoutControls editor={editor} onEditLayout={(anchor) => openLayoutPicker(true, false, anchor)} />
+        </Suspense>
+      )}
+      {!source && editor?.isActive("codeBlock") && (
+        <Suspense fallback={null}>
+          <CodeBlockControls editor={editor} disabled={locked} />
         </Suspense>
       )}
       {!source && editor?.isActive("table") && (
