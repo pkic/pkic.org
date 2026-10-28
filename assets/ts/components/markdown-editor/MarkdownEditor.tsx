@@ -40,9 +40,21 @@ import {
   type EditorBlock,
 } from "./editor-blocks";
 import { useToolbarOverflow } from "./use-toolbar-overflow";
-import { EditorMediaFields } from "./EditorMediaFields";
+import type { EditorMediaDraft } from "./EditorMediaInsertion";
 import "./markdown-editor.scss";
 import "./markdown-content.scss";
+
+const TableEditingControls = lazy(() =>
+  import("./TableEditingControls").then((module) => ({ default: module.TableEditingControls })),
+);
+
+const EditorMediaInsertion = lazy(() =>
+  import("./EditorMediaInsertion").then((module) => ({ default: module.EditorMediaInsertion })),
+);
+
+const ContentButtonControls = lazy(() =>
+  import("./ContentButtonControls").then((module) => ({ default: module.ContentButtonControls })),
+);
 
 const CodeBlockControls = lazy(() =>
   import("./CodeBlockControls").then((module) => ({ default: module.CodeBlockControls })),
@@ -109,7 +121,7 @@ export function MarkdownEditor({
   // How many of the bar's commands fit beside the source button; the rest
   // fold into one `…` menu rather than wrapping onto a second line (#114).
   const toolbar = useRef<HTMLDivElement>(null);
-  const [media, setMedia] = useState<{ kind: "image" | "video" | "link"; position: number } | null>(null);
+  const [media, setMedia] = useState<EditorMediaDraft | null>(null);
   const pickerAnchor = useRef<HTMLElement>(null);
   const [layoutPicker, setLayoutPicker] = useState<{ editing: boolean; table: boolean } | null>(null);
   const closeLayoutPicker = useCallback((returnFocus: boolean) => {
@@ -339,7 +351,21 @@ export function MarkdownEditor({
       {
         label: "Link",
         icon: <IconLink width="16" height="16" />,
-        run: () => setMedia({ kind: "link", position: position() }),
+        run: () => {},
+        choices: [
+          {
+            id: "text-link",
+            label: "Text link",
+            disabled: locked,
+            onSelect: () => setMedia({ kind: "link", position: position() }),
+          },
+          {
+            id: "button-link",
+            label: "Button",
+            disabled: locked,
+            onSelect: () => setMedia({ kind: "button", position: position() }),
+          },
+        ],
       },
     ],
     [
@@ -505,55 +531,30 @@ export function MarkdownEditor({
           <ContentLayoutControls editor={editor} onEditLayout={(anchor) => openLayoutPicker(true, false, anchor)} />
         </Suspense>
       )}
+      {!source && editor?.isActive("button") && (
+        <Suspense fallback={null}>
+          <ContentButtonControls editor={editor} onEdit={(button) => setMedia({ kind: "button", ...button })} />
+        </Suspense>
+      )}
       {!source && editor?.isActive("codeBlock") && (
         <Suspense fallback={null}>
           <CodeBlockControls editor={editor} disabled={locked} />
         </Suspense>
       )}
       {!source && editor?.isActive("table") && (
-        <div class="pk-markdown-editor__toolbar" data-density="compact" role="group" aria-label="Table editing">
-          <Button variant="ghost" disabled={locked} onClick={() => editor.chain().focus().addRowAfter().run()}>
-            Add row
-          </Button>
-          <Button variant="ghost" disabled={locked} onClick={() => editor.chain().focus().addColumnAfter().run()}>
-            Add column
-          </Button>
-          <Button variant="ghost" disabled={locked} onClick={() => editor.chain().focus().deleteRow().run()}>
-            Delete row
-          </Button>
-          <Button variant="ghost" disabled={locked} onClick={() => editor.chain().focus().deleteColumn().run()}>
-            Delete column
-          </Button>
-          <Button variant="ghost" disabled={locked} onClick={() => editor.chain().focus().deleteTable().run()}>
-            Remove table
-          </Button>
-        </div>
+        <Suspense fallback={null}>
+          <TableEditingControls editor={editor} disabled={locked} />
+        </Suspense>
       )}
-      {media && !source && (
-        <EditorMediaFields
-          key={`${media.kind}-${media.position}`}
-          kind={media.kind}
-          onCancel={() => setMedia(null)}
-          onInsert={(insert) => {
-            if (!editor) return;
-            const node =
-              insert.kind === "video"
-                ? { type: "memberVideo", attrs: { url: insert.url } }
-                : insert.kind === "image"
-                  ? { type: "image", attrs: { src: insert.url, alt: insert.description } }
-                  : {
-                      type: "text",
-                      text: insert.description || insert.url,
-                      marks: [{ type: "link", attrs: { href: insert.url } }],
-                    };
-            editor
-              .chain()
-              .focus()
-              .insertContentAt(media.position, insert.kind === "link" ? node : [node, { type: "paragraph" }])
-              .run();
-            setMedia(null);
-          }}
-        />
+      {media && editor && !source && (
+        <Suspense fallback={null}>
+          <EditorMediaInsertion
+            key={`${media.kind}-${media.position}`}
+            editor={editor}
+            draft={media}
+            onClose={() => setMedia(null)}
+          />
+        </Suspense>
       )}
       <div ref={host} hidden={source} />
       {source && (

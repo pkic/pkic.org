@@ -73,6 +73,10 @@ function renderTokens(tokens: Token[]): ComponentChildren {
       case "item":
       case "cards":
       case "card":
+      case "actions":
+      case "button":
+      case "card-header":
+      case "card-footer":
         return (
           <ContentLayout key={index} block={(token as Token & { block: ContentContainer }).block}>
             {children}

@@ -16,7 +16,7 @@ Read the [contribution guide](../contributing/).
 :::
 ```
 
-Asides have no presentation attributes. Write the heading inside the block so it is editable with the other content. The portal editor's **Aside** control wraps or unwraps the selected content; headings, paragraphs, links, and lists remain editable. Saving writes the directive back to Markdown. This does not add a page-management or publication workflow to the portal.
+Asides have no presentation attributes. Write the heading inside the block so it is editable with the other content. The portal editor's **Supporting note** control wraps or unwraps the selected content; headings, paragraphs, links, and lists remain editable. Saving writes the directive back to Markdown. This does not add a page-management or publication workflow to the portal.
 
 The publication renderer and portal Markdown renderer use the same aside boundary codec and the same PKIC component presentation. Asides are complementary content, without live alert announcements. Nested asides are supported; the editor uses a longer outer colon fence when saving nested content. Fenced code examples remain literal. An unclosed aside or unsupported aside attributes fail content validation rather than being silently discarded.
 
@@ -63,6 +63,27 @@ Keep the logo and explanation editable.
 ::::
 `````
 
-The editor provides Text columns, Grid, Cards, and Bento grid insertion commands. Select a block to open Layout options: set count/width, card styles, spans, icon, or image treatment. Grid items can be added, removed, or reordered. Text columns keep one editable body; their toolbar command wraps or unwraps the selected paragraphs without replacing them. Gallery entries: `content-columns`, `content-bento`, and the combined `content-layout`.
+The editor's Layout picker offers text-column choices, grid/card sizing, and bento presets. Edit layout changes the selected arrangement while preserving its contents. Contextual options retain preferred width, card styles, spans, icons, image treatment, and item ordering. Gallery entries: `content-columns`, `content-bento`, and the combined `content-layout`.
+
+## Destination buttons and card sections
+
+Use a button for a clear next step, retaining a normal Markdown link as its editable contents:
+
+`````markdown
+::::actions
+:::button
+[Join the consortium](/join/)
+:::
+:::button variant=secondary
+[Explore our work](/wg/)
+:::
+::::
+`````
+
+Button variants are `primary` (the default), `secondary`, `ghost`, and `link`. These use the existing PKIC `ButtonLink`; ordinary prose links keep their normal presentation. Labels are plain text. Unsafe destinations, extra paragraphs, images, and formatted labels inside a button are rejected. The Link toolbar menu inserts a text link or button; select an existing button for Edit button and Button style. Its text is editable directly, while Edit button updates its destination through the shared form contract.
+
+Cards can contain one `:::card-header` and one `:::card-footer`. Keep the header near the start and the footer after the body; footer content may include notes or an actions group. Both sections contain ordinary editable Markdown. Card options can add missing sections. Footers align at the bottom of equal-height cards without changing reading order. Native images remain editable; `media=image` presents the leading image as a cover and `media=logo` preserves logo proportions and artwork colors.
+
+The `content-actions` gallery entry shows icon, image, and logo cards, headers and footers, primary/secondary actions, and their complete editable source.
 
 Use the parent skill for the component implementation map and verification requirements.

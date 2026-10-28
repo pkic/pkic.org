@@ -1,9 +1,22 @@
 import { z } from "zod";
+import { buttonVariantSchema } from "./button";
 
-export const contentContainerNames = ["aside", "columns", "grid", "item", "cards", "card"] as const;
+export const contentContainerNames = [
+  "aside",
+  "columns",
+  "grid",
+  "item",
+  "cards",
+  "card",
+  "actions",
+  "button",
+  "card-header",
+  "card-footer",
+] as const;
 export const contentLayoutSchema = z.enum(["auto", "1", "2", "3", "4"]);
 export const contentColumnWidthSchema = z.enum(["auto", "16rem", "18rem", "20rem", "24rem", "32rem"]);
 export const contentCardVariantSchema = z.enum(["default", "muted", "accent", "plain"]);
+export const contentButtonVariantSchema = buttonVariantSchema.extract(["primary", "secondary", "ghost", "link"]);
 export const contentGridLayoutSchema = z.enum(["grid", "bento"]);
 export const contentSpanSchema = z.enum(["1", "2"]);
 export const contentMediaSchema = z.enum(["image", "logo"]);
@@ -47,7 +60,7 @@ export const contentContainerSchema = z
     markdown: z.string(),
     count: contentLayoutSchema.optional(),
     width: contentColumnWidthSchema.optional(),
-    variant: contentCardVariantSchema.optional(),
+    variant: z.union([contentCardVariantSchema, contentButtonVariantSchema]).optional(),
     layout: contentGridLayoutSchema.optional(),
     span: contentSpanSchema.optional(),
     rows: contentSpanSchema.optional(),
@@ -59,13 +72,18 @@ export const contentContainerSchema = z
     const allowed: Record<string, readonly string[]> = {
       count: ["columns", "grid", "cards"],
       width: ["columns"],
-      variant: ["cards", "card"],
+      variant: ["cards", "card", "button"],
       layout: ["cards"],
       span: ["card", "item"],
       rows: ["card", "item"],
       icon: ["card"],
       media: ["card"],
     };
+    if (block.variant !== undefined) {
+      const allowedVariant = block.type === "button" ? contentButtonVariantSchema : contentCardVariantSchema;
+      if (!allowedVariant.safeParse(block.variant).success)
+        context.addIssue({ code: "custom", path: ["variant"], message: `Use a supported ${block.type} variant.` });
+    }
     for (const [attribute, types] of Object.entries(allowed))
       if (block[attribute as keyof typeof block] !== undefined && !types.includes(block.type))
         context.addIssue({

@@ -1,3 +1,5 @@
+import { buttonClasses } from "../../ui/button-classes";
+import { contentButtonVariantSchema } from "../../../shared/schemas/content-layout";
 import { contentIconMarkup } from "../../site/ContentIcon";
 import { Node } from "@tiptap/core";
 import {
@@ -12,7 +14,16 @@ function layoutExtension(name: ContentContainerName) {
   return Node.create({
     name,
     group: "block",
-    content: name === "grid" ? "item+" : name === "cards" ? "card+" : "block+",
+    content:
+      name === "grid"
+        ? "item+"
+        : name === "cards"
+          ? "card+"
+          : name === "actions"
+            ? "button+"
+            : name === "button"
+              ? "paragraph"
+              : "block+",
     defining: true,
     addAttributes() {
       return Object.fromEntries(
@@ -37,6 +48,13 @@ function layoutExtension(name: ContentContainerName) {
     },
     renderHTML({ node }) {
       const attributes = contentLayoutAttributes({ type: name, ...node.attrs });
+      if (name === "button") {
+        attributes.class = buttonClasses(
+          { variant: contentButtonVariantSchema.parse(node.attrs.variant ?? "primary") },
+          attributes.class,
+        );
+        return ["div", attributes, 0];
+      }
       if (name === "columns")
         return ["div", attributes, ["div", { class: "pk-content-prose pk-content-columns__body" }, 0]];
       if (name === "card") return ["div", attributes, ["div", { class: "pk-content-card__content" }, 0]];

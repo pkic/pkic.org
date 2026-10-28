@@ -46,7 +46,37 @@ export function ContentLayoutControls({
       })),
     });
   if (layout === "cards") {
-    if (item) {
+    if (item && itemPosition !== null) {
+      for (const section of ["card-header", "card-footer"] as const) {
+        let exists = false;
+        item.forEach((child) => {
+          if (child.type.name === section) exists = true;
+        });
+        choices.push({
+          id: section,
+          label: section === "card-header" ? "Add card header" : "Add card footer",
+          disabled: exists,
+          onSelect: () =>
+            editor
+              .chain()
+              .focus()
+              .insertContentAt(section === "card-header" ? itemPosition + 1 : itemPosition + item.nodeSize - 1, {
+                type: section,
+                content: [
+                  {
+                    type: "paragraph",
+                    content: [
+                      {
+                        type: "text",
+                        text: section === "card-header" ? "Card heading" : "Supporting details or actions.",
+                      },
+                    ],
+                  },
+                ],
+              })
+              .run(),
+        });
+      }
       choices.push({
         id: "card-icon",
         label: "Card icon",

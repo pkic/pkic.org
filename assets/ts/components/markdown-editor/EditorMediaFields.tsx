@@ -1,28 +1,42 @@
 import { useState } from "preact/hooks";
-import { markdownMediaInsertSchema } from "../../../shared/schemas/markdown-editor";
+import { markdownMediaInsertSchema, type MarkdownMediaInsert } from "../../../shared/schemas/markdown-editor";
 import { useContractForm } from "../../hooks/useContractForm";
 import { Button } from "../../ui/Button";
 import { Field } from "../../ui/Field";
 import { TextInput } from "../../ui/TextControl";
-import type { z } from "zod";
 
-type Media = z.output<typeof markdownMediaInsertSchema>;
+type Media = MarkdownMediaInsert;
 export function EditorMediaFields({
   kind,
   onInsert,
   onCancel,
+  initialValue,
 }: {
   kind: Media["kind"];
+  initialValue?: { url: string; description: string };
   onInsert: (media: Media) => void;
   onCancel: () => void;
 }) {
-  const [url, setUrl] = useState("");
-  const [description, setDescription] = useState("");
+  const [url, setUrl] = useState(initialValue?.url ?? "");
+  const [description, setDescription] = useState(initialValue?.description ?? "");
   const form = useContractForm(markdownMediaInsertSchema, { kind, url, description });
   return (
-    <div class="pk-markdown-editor__media pk-stack" {...form.handlers} role="group" aria-label={`Insert ${kind}`}>
+    <div
+      class="pk-markdown-editor__media pk-stack"
+      {...form.handlers}
+      role="group"
+      aria-label={`${initialValue ? "Edit" : "Insert"} ${kind}`}
+    >
       <Field
-        label={kind === "video" ? "Video URL" : kind === "image" ? "Image URL" : "Link URL"}
+        label={
+          kind === "video"
+            ? "Video URL"
+            : kind === "image"
+              ? "Image URL"
+              : kind === "button"
+                ? "Button destination"
+                : "Link URL"
+        }
         required
         {...form.of("url")}
       >
@@ -38,8 +52,8 @@ export function EditorMediaFields({
       </Field>
       {kind !== "video" && (
         <Field
-          label={kind === "image" ? "Image description" : "Link text"}
-          required={kind === "image"}
+          label={kind === "image" ? "Image description" : kind === "button" ? "Button text" : "Link text"}
+          required={kind === "image" || kind === "button"}
           {...form.of("description")}
         >
           {(control) => (
@@ -60,10 +74,10 @@ export function EditorMediaFields({
             if (result.data) onInsert(result.data);
           }}
         >
-          Insert {kind}
+          {initialValue ? "Update" : "Insert"} {kind}
         </Button>
         <Button variant="ghost" onClick={onCancel}>
-          Cancel insertion
+          Cancel {initialValue ? "editing" : "insertion"}
         </Button>
       </div>
     </div>

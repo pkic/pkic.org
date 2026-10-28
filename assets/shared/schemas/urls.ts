@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { markdownSafeUrl } from "../markdown-media";
 
 export const MAX_URL_LENGTH = 500;
 export const MAX_CAPABILITY_URL_LENGTH = 4096;
@@ -117,3 +118,14 @@ export function normalizeHttpOrSameOriginUrl(value: string, siteBaseUrl: string)
   }
   return url.toString();
 }
+
+/** Authored Markdown destinations include web, email, telephone, and relative links. */
+export const markdownLinkUrlSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(MAX_URL_LENGTH)
+  .refine(
+    (value) => markdownSafeUrl(value),
+    "Use a web address, an email or telephone link, or a relative destination.",
+  );

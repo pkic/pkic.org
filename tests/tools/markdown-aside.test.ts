@@ -61,3 +61,15 @@ it("rejects orphan card and item blocks at every depth while accepting their own
     expect(contract.safeParse(serializeMarkdownContainer({ type: "aside", markdown: parent })).success).toBe(true);
   }
 });
+
+it("validates destination buttons and card-section ownership before publishing", () => {
+  const contract = markdownContentSchema(30000);
+  for (const body of ["Just text", "[Unsafe](javascript:alert)", "[First](/one/) [Second](/two/)", "[**Bold**](/one/)"])
+    expect(contract.safeParse(serializeMarkdownContainer({ type: "button", markdown: body })).success).toBe(false);
+  const header = serializeMarkdownContainer({ type: "card-header", markdown: "### A title" });
+  expect(contract.safeParse(header).success).toBe(false);
+  const duplicate = serializeMarkdownContainer({ type: "card", markdown: header + "\n" + header });
+  expect(contract.safeParse(serializeMarkdownContainer({ type: "cards", markdown: duplicate })).success).toBe(false);
+  expect(contract.safeParse(":::button variant=secondary\n[Read more](/about/)\n:::").success).toBe(true);
+  expect(contract.safeParse(":::button variant=accent\n[Read more](/about/)\n:::").success).toBe(false);
+});
