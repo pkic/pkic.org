@@ -41,7 +41,7 @@ export function EditorMediaInsertion({
       .focus()
       .insertContentAt(
         draft.replaceTo ? { from: draft.position, to: draft.replaceTo } : draft.position,
-        media.kind === "link" || media.kind === "button" ? node : [node, { type: "paragraph" }],
+        draft.replaceTo || media.kind === "link" || media.kind === "button" ? node : [node, { type: "paragraph" }],
       )
       .run();
     onClose();

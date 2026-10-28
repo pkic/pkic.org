@@ -1,6 +1,8 @@
 import { lazy, Suspense } from "preact/compat";
 import { CONTENT_PROSE_CLASS } from "../../site/ContentProse";
 import type { JSX, RefObject } from "preact";
+import { useStickyToolbar } from "../../ui/use-sticky-toolbar";
+import { formatNumber } from "../../../shared/format-number";
 import { codeLanguageItems } from "./code-language-menu";
 import { TemplateHighlighting } from "./template-highlighting";
 import { restoreTemplateMarkdown } from "./template-markdown";
@@ -36,7 +38,6 @@ import {
   EDITOR_BLOCKS,
   insertEditorBlock,
   editorBlockPosition,
-  moveEditorBlock,
   type EditorBlock,
 } from "./editor-blocks";
 import { useToolbarOverflow } from "./use-toolbar-overflow";
@@ -44,24 +45,11 @@ import type { EditorMediaDraft } from "./EditorMediaInsertion";
 import "./markdown-editor.scss";
 import "./markdown-content.scss";
 
-const TableEditingControls = lazy(() =>
-  import("./TableEditingControls").then((module) => ({ default: module.TableEditingControls })),
-);
-
 const EditorMediaInsertion = lazy(() =>
   import("./EditorMediaInsertion").then((module) => ({ default: module.EditorMediaInsertion })),
 );
-
-const ContentButtonControls = lazy(() =>
-  import("./ContentButtonControls").then((module) => ({ default: module.ContentButtonControls })),
-);
-
-const CodeBlockControls = lazy(() =>
-  import("./CodeBlockControls").then((module) => ({ default: module.CodeBlockControls })),
-);
-
-const ContentLayoutControls = lazy(() =>
-  import("./ContentLayoutControls").then((module) => ({ default: module.ContentLayoutControls })),
+const EditorContextMenu = lazy(() =>
+  import("./EditorContextMenu").then((module) => ({ default: module.EditorContextMenu })),
 );
 
 const ContentLayoutPicker = lazy(() =>
@@ -118,6 +106,7 @@ export function MarkdownEditor({
   const [, refresh] = useState(0);
   const [source, setSource] = useState(initialMode === "source");
   const root = useRef<HTMLDivElement>(null);
+  useStickyToolbar(root);
   // How many of the bar's commands fit beside the source button; the rest
   // fold into one `…` menu rather than wrapping onto a second line (#114).
   const toolbar = useRef<HTMLDivElement>(null);
@@ -129,7 +118,10 @@ export function MarkdownEditor({
     if (returnFocus) pickerAnchor.current?.focus({ preventScroll: true });
   }, []);
   const openLayoutPicker = (editing: boolean, table: boolean, anchor?: HTMLElement) => {
-    pickerAnchor.current = anchor ?? toolbar.current?.querySelector<HTMLElement>("[data-overflow] button") ?? null;
+    pickerAnchor.current =
+      anchor ??
+      toolbar.current?.querySelector<HTMLElement>("[data-content-actions] button, [data-overflow] button") ??
+      null;
     setLayoutPicker({ editing, table });
   };
   const addBlock = useRef<(kind: EditorBlock, position: number) => void>(() => {});
@@ -410,7 +402,7 @@ export function MarkdownEditor({
   ];
   const commands = groups.flat();
   const visibleCommands = useToolbarOverflow(toolbar, commands.length);
-  const foldedCommands: MenuItem[] = commands.slice(visibleCommands).map((command) => ({
+  const menuCommands: MenuItem[] = commands.map((command) => ({
     id: command.label,
     label: command.label,
     icon: command.icon,
@@ -419,6 +411,7 @@ export function MarkdownEditor({
     onSelect: command.run,
     children: command.choices,
   }));
+  const foldedCommands = menuCommands.slice(visibleCommands);
   return (
     <div ref={root} class="pk-markdown-editor" data-variant={variant} onFocusIn={onFocus}>
       <div
@@ -478,6 +471,18 @@ export function MarkdownEditor({
           </div>
         ))}
         <div class="pk-markdown-editor__group pk-markdown-editor__group--end" role="presentation" data-end>
+          {editor && (
+            <Suspense fallback={null}>
+              <EditorContextMenu
+                editor={editor}
+                disabled={locked}
+                formatting={menuCommands}
+                editLayout={() => openLayoutPicker(true, false)}
+                editMedia={setMedia}
+                allowMove={!compact}
+              />
+            </Suspense>
+          )}
           {templateInsertions && (
             <>
               <Menu
@@ -526,26 +531,6 @@ export function MarkdownEditor({
           />
         </Suspense>
       )}
-      {!source && editor && ["columns", "grid", "cards"].some((name) => editor.isActive(name)) && (
-        <Suspense fallback={null}>
-          <ContentLayoutControls editor={editor} onEditLayout={(anchor) => openLayoutPicker(true, false, anchor)} />
-        </Suspense>
-      )}
-      {!source && editor?.isActive("button") && (
-        <Suspense fallback={null}>
-          <ContentButtonControls editor={editor} onEdit={(button) => setMedia({ kind: "button", ...button })} />
-        </Suspense>
-      )}
-      {!source && editor?.isActive("codeBlock") && (
-        <Suspense fallback={null}>
-          <CodeBlockControls editor={editor} disabled={locked} />
-        </Suspense>
-      )}
-      {!source && editor?.isActive("table") && (
-        <Suspense fallback={null}>
-          <TableEditingControls editor={editor} disabled={locked} />
-        </Suspense>
-      )}
       {media && editor && !source && (
         <Suspense fallback={null}>
           <EditorMediaInsertion
@@ -575,17 +560,7 @@ export function MarkdownEditor({
       )}
       <input ref={input} type="hidden" name={source ? undefined : name} value={value} />
       <div class="pk-markdown-editor__footer">
-        <span class="pk-small pk-muted">{value.length.toLocaleString()} characters · Saved as Markdown</span>
-        {!source && !compact && (
-          <div class="pk-cluster" role="group" aria-label="Move selected block">
-            <Button variant="ghost" disabled={locked} onClick={() => editor && moveEditorBlock(editor, -1)}>
-              Move up
-            </Button>
-            <Button variant="ghost" disabled={locked} onClick={() => editor && moveEditorBlock(editor, 1)}>
-              Move down
-            </Button>
-          </div>
-        )}
+        <span class="pk-small pk-muted">{formatNumber(value.length)} characters · Saved as Markdown</span>
       </div>
     </div>
   );

@@ -63,7 +63,7 @@ Keep the logo and explanation editable.
 ::::
 `````
 
-The editor's Layout picker offers text-column choices, grid/card sizing, and bento presets. Edit layout changes the selected arrangement while preserving its contents. Contextual options retain preferred width, card styles, spans, icons, image treatment, and item ordering. Gallery entries: `content-columns`, `content-bento`, and the combined `content-layout`.
+The editor's Layout picker offers text-column choices, grid/card sizing, and bento presets. Edit layout changes the selected arrangement while preserving its contents. The sticky toolbar’s Actions menu retains preferred width, card styles, spans, icons, image treatment, and item ordering; the same actions are available by right-click or Shift+F10. Mobile authors use the visible Actions button while native long-press text selection remains available. Shift+right-click opens the browser menu. Gallery entries: `content-columns`, `content-bento`, and the combined `content-layout`.
 
 ## Destination buttons and card sections
 
@@ -80,9 +80,9 @@ Use a button for a clear next step, retaining a normal Markdown link as its edit
 ::::
 `````
 
-Button variants are `primary` (the default), `secondary`, `ghost`, and `link`. These use the existing PKIC `ButtonLink`; ordinary prose links keep their normal presentation. Labels are plain text. Unsafe destinations, extra paragraphs, images, and formatted labels inside a button are rejected. The Link toolbar menu inserts a text link or button; select an existing button for Edit button and Button style. Its text is editable directly, while Edit button updates its destination through the shared form contract.
+Button variants are `primary` (the default), `secondary`, `ghost`, and `link`. These use the existing PKIC `ButtonLink`; ordinary prose links keep their normal presentation. Labels are plain text. Unsafe destinations, extra paragraphs, images, and formatted labels inside a button are rejected. The Link toolbar menu inserts a text link or button; select an existing button and open Actions for Edit button and Button style. Its text is editable directly, while Edit button updates its destination through the shared form contract.
 
-Cards can contain one `:::card-header` and one `:::card-footer`. Keep the header near the start and the footer after the body; footer content may include notes or an actions group. Both sections contain ordinary editable Markdown. Card options can add missing sections. Footers align at the bottom of equal-height cards without changing reading order. Native images remain editable; `media=image` presents the leading image as a cover and `media=logo` preserves logo proportions and artwork colors.
+Cards can contain one `:::card-header` and one `:::card-footer`. Keep the header near the start and the footer after the body; footer content may include notes or an actions group. Both sections contain ordinary editable Markdown. Actions → Card options can add missing sections. Footers align at the bottom of equal-height cards without changing reading order. Native images remain editable; `media=image` presents the leading image as a cover and `media=logo` preserves logo proportions and artwork colors.
 
 The `content-actions` gallery entry shows icon, image, and logo cards, headers and footers, primary/secondary actions, and their complete editable source.
 

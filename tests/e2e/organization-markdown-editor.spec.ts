@@ -56,7 +56,10 @@ for (const publish of [false, true]) {
       }
       await canvas.fill("Security begins with clear information.");
       await canvas.press("ControlOrMeta+a");
-      await contentEditor.getByRole("button", { name: "Bold", exact: true }).click();
+      await expect(contentEditor.locator(".pk-markdown-editor__toolbar")).toHaveCount(1);
+      await canvas.click({ button: "right", position: { x: 30, y: 30 } });
+      await page.getByRole("menuitem", { name: "Formatting and insertion", exact: true }).click();
+      await page.getByRole("menuitemradio", { name: "Bold", exact: true }).click();
       await expect(canvas.locator("strong")).toHaveText("Security begins with clear information.");
       await canvas.press("ControlOrMeta+End");
       await canvas.press("Enter");
@@ -80,10 +83,12 @@ for (const publish of [false, true]) {
       await page.keyboard.type("Certificate automation");
       await page.keyboard.press("Tab");
       await page.keyboard.type("Available");
-      await page.getByRole("button", { name: "Add column", exact: true }).click();
+      await contentEditor.getByRole("button", { name: "Content actions", exact: true }).click();
+      await page.getByRole("menuitem", { name: "Add column", exact: true }).click();
       await expect(canvas.locator("th")).toHaveCount(3);
       await canvas.locator("th").nth(2).click();
-      await page.getByRole("button", { name: "Delete column", exact: true }).click();
+      await contentEditor.getByRole("button", { name: "Content actions", exact: true }).click();
+      await page.getByRole("menuitem", { name: "Delete column", exact: true }).click();
       await expect(canvas.locator("th")).toHaveCount(2);
       await canvas.press("ControlOrMeta+End");
       await canvas.press("Enter");
@@ -117,14 +122,18 @@ for (const publish of [false, true]) {
       await page.setViewportSize({ width: 375, height: 844 });
       await canvas.scrollIntoViewIfNeeded();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-      await contentEditor.getByRole("button", { name: "More formatting", exact: true }).click();
+      await contentEditor.getByRole("button", { name: "Content actions", exact: true }).click();
+      await page.getByRole("menuitem", { name: "Formatting and insertion", exact: true }).click();
       for (const label of ["Table", "Image", "Video"]) {
         await expect(page.getByRole("menuitem", { name: label, exact: true })).toBeVisible();
       }
       await page.getByRole("menuitem", { name: "Image", exact: true }).focus();
       await page.keyboard.press("Enter");
       await expect(contentEditor.getByLabel("Image URL")).toBeVisible();
-      await contentEditor.getByRole("button", { name: "Cancel insertion", exact: true }).click();
+      await page
+        .getByRole("dialog", { name: "Insert image", exact: true })
+        .getByRole("button", { name: "Cancel", exact: true })
+        .click();
       await contentEditor.screenshot({ path: testInfo.outputPath("visual-editor-phone.png") });
       await page.setViewportSize({ width: 1440, height: 1100 });
       const saved = page.waitForResponse(

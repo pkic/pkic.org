@@ -118,6 +118,7 @@ export function usePopupPlacement({
   revision,
   side = "bottom",
   topLayer = false,
+  anchorPoint,
 }: {
   open: boolean;
   anchorRef: RefObject<HTMLElement>;
@@ -133,15 +134,17 @@ export function usePopupPlacement({
    * stays where it is in the document, so focus, keyboard handling and outside clicks are unchanged.
    */
   topLayer?: boolean;
+  /** A pointer or caret position for a context menu, using the same viewport placement policy. */
+  anchorPoint?: { x: number; y: number } | null;
 }): void {
   const place = useCallback((): void => {
     const anchor = anchorRef.current;
     const popup = popupRef.current;
-    if (!anchor || !popup) return;
-    const anchorRect = anchor.getBoundingClientRect();
+    if ((!anchor && !anchorPoint) || !popup) return;
+    const anchorRect = anchorPoint ? new DOMRect(anchorPoint.x, anchorPoint.y, 0, 0) : anchor!.getBoundingClientRect();
     popup.style.setProperty("min-width", `${side === "right" ? 0 : anchorRect.width}px`);
     applyPopupPosition(popup, measurePopupPosition(anchorRect, popup.getBoundingClientRect(), align, side));
-  }, [align, anchorRef, popupRef, side]);
+  }, [align, anchorRef, popupRef, side, anchorPoint]);
 
   useLayoutEffect(() => {
     if (!open) return;
