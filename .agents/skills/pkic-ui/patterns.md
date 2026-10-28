@@ -10,6 +10,14 @@ Each entry is the full anatomy of a control. The gallery id renders it (`pnpm ga
 - Dismissal: Escape (focus back to the trigger), outside click, Tab, or choosing a reaction.
 - Keyboard: focus moves to the first emoji on open; Left/Right wrap, Home/End.
 
+## Layout picker (`content-layout`)
+
+- Use: `ContentLayoutPicker` in the Markdown editor, with `LayoutSizeGrid` for card/grid/table dimensions. Reference: the insertion palettes in Word and Google Docs.
+- Shape: one labeled Layout toolbar trigger opens a compact, nonmodal palette. Text columns offer illustrated 1–4 choices and Automatic. Grid and Cards use a size matrix; Bento offers illustrated presets. Table opens the same matrix with table limits. Do not add separate toolbar buttons per layout type or put sizing cells in a Menu.
+- Placement: below the trigger, aligned to its start, through `usePopupPlacement` with top-layer placement; flip and clamp to the phone viewport.
+- Dismissal: choosing a size applies immediately; Escape and Close return focus to the trigger; outside click or focus leaving closes without stealing focus.
+- Keyboard: focus enters the first choice. Matrix arrows move by cell, Home/End move to row edges, Ctrl+Home/End move to matrix corners; Enter/Space select. Tab follows normal controls. Edit layout reuses this palette, marks the current choice, and preserves all authored children.
+
 ## Menu (`menu`)
 
 - Use: `assets/ts/ui/Menu.tsx` (`MenuItem`: `danger`, `disabled`, `checked`, `multiple`, `keepOpen`, `separatorBefore`, `children` for a submenu). Row ends: `RowActions`. Create command: `SplitButton`.

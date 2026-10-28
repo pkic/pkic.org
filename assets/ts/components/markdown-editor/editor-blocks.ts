@@ -1,6 +1,22 @@
+import {
+  defaultMarkdownLayouts,
+  markdownLayoutChoiceSchema,
+  type MarkdownLayoutChoice,
+} from "../../../shared/schemas/markdown-layout";
+import { editorLayoutNode } from "./editor-layout-nodes";
 import type { Editor, JSONContent } from "@tiptap/core";
 
-export const EDITOR_BLOCKS = ["callout", "table", "image", "video"] as const;
+export const EDITOR_BLOCKS = [
+  "callout",
+  "aside",
+  "columns",
+  "grid",
+  "cards",
+  "bento",
+  "table",
+  "image",
+  "video",
+] as const;
 export type EditorBlock = (typeof EDITOR_BLOCKS)[number];
 export const BLOCK_TRANSFER_TYPE = "application/x-pkic-markdown-block";
 
@@ -10,16 +26,38 @@ export function editorBlockPosition(editor: Editor, position: number): number {
   return resolved.depth > 1 ? resolved.after(1) : position;
 }
 
-export function insertEditorBlock(editor: Editor, kind: Exclude<EditorBlock, "image" | "video">, position: number) {
+export function insertEditorBlock(
+  editor: Editor,
+  kind: Exclude<EditorBlock, "image" | "video">,
+  position: number,
+  choice?: MarkdownLayoutChoice,
+) {
   position = editorBlockPosition(editor, position);
   editor.commands.setTextSelection(position);
-  if (kind === "table") {
-    editor.chain().focus().insertTable({ rows: 3, cols: 2, withHeaderRow: true }).run();
+  if (kind === "table" || kind === "columns" || kind === "grid" || kind === "cards" || kind === "bento") {
+    const selected = markdownLayoutChoiceSchema.parse(choice ?? defaultMarkdownLayouts[kind]);
+    if (selected.kind === "table")
+      editor.chain().focus().insertTable({ rows: selected.rows, cols: selected.columns, withHeaderRow: true }).run();
+    else
+      editor
+        .chain()
+        .focus()
+        .insertContentAt(position, editorLayoutNode(selected))
+        .setTextSelection(position + (selected.kind === "columns" ? 2 : 3))
+        .run();
     return;
   }
   const paragraph = (text: string): JSONContent => ({ type: "paragraph", content: [{ type: "text", text }] });
   const content: JSONContent[] = [
-    { type: "blockquote", content: [paragraph("Write your callout here.")] },
+    kind === "aside"
+      ? {
+          type: "aside",
+          content: [
+            { type: "heading", attrs: { level: 3 }, content: [{ type: "text", text: "Additional context" }] },
+            paragraph("Add supporting information."),
+          ],
+        }
+      : { type: "blockquote", content: [paragraph("Write your callout here.")] },
     { type: "paragraph" },
   ];
   editor.chain().focus().insertContentAt(position, content).run();

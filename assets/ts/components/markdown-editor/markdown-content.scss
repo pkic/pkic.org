@@ -1,5 +1,5 @@
 @layer components {
-  .pk-markdown, .pk-markdown-editor__canvas {
+  .pk-markdown:not(.pk-content-prose), .pk-markdown-editor__canvas:not(.pk-content-prose) {
     overflow-wrap: anywhere;
     > * + * { margin-top: var(--pk-3); }
     > :first-child { margin-top: 0; }
@@ -22,9 +22,5 @@
       p { color: inherit; }
     }
     ul, ol { padding-inline-start: var(--pk-6); }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { padding: var(--pk-2); border: 1px solid var(--pk-line); text-align: start; vertical-align: top; }
-    th { background: var(--pk-surface-sunk); }
   }
-  .pk-markdown__table { overflow-x: auto; }
 }

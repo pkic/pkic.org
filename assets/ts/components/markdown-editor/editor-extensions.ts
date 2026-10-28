@@ -1,3 +1,6 @@
+import { layoutExtensions } from "./layout-extensions";
+import "../../ui/Table.css";
+import { AsideExtension } from "./aside-extension";
 import { Node } from "@tiptap/core";
 import { StarterKit } from "@tiptap/starter-kit";
 import { Markdown } from "@tiptap/markdown";
@@ -84,7 +87,17 @@ export function editorExtensions() {
     }),
     Table.extend({
       renderHTML() {
-        return ["table", {}, ["tbody", 0]];
+        return ["table", { class: "pk-table" }, ["tbody", 0]];
+      },
+      addNodeView() {
+        return () => {
+          const dom = document.createElement("div");
+          dom.className = "pk-table__scroll pk-table__scroll--prose";
+          const table = dom.appendChild(document.createElement("table"));
+          table.className = "pk-table";
+          const contentDOM = table.appendChild(document.createElement("tbody"));
+          return { dom, contentDOM };
+        };
       },
     }).configure({ resizable: false, View: null }),
     TableCell.extend({
@@ -99,6 +112,8 @@ export function editorExtensions() {
         return ["th", {}, 0];
       },
     }),
+    AsideExtension,
+    ...layoutExtensions,
     TableRow,
     Video,
     Markdown,

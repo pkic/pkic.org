@@ -21,13 +21,18 @@ menu:
 
 The Public Key Infrastructure Consortium is comprised of leading organizations that are committed to improve, create and collaborate on generic, industry or use-case specific policies, procedures, best practices, standards and tools that advance trust in assets and communication for everyone and everything using Public Key Infrastructure (PKI) as well as the security of the internet in general. By engaging with users, regulators, supervisory bodies and other interested or relying parties the consortium can address actual issues. 
 
+::::grid count=2
+:::item
 ### Vision of the Public Key Infrastructure Consortium:
 
 > Trusted **digital assets** and **communication** for **everyone** and **everything**
-
+:::
+:::item
 ### Mission statement of the Public Key Infrastructure Consortium:
 
 > Advance Trust in assets and communication for everyone and everything using Public Key Infrastructure (PKI) as well as the security of the internet in general, by engaging with users, regulators, supervisory bodies and other interested or relying parties
+:::
+::::
 
 ## History
 
@@ -43,18 +48,24 @@ The Public Key Infrastructure Consortium is comprised of leading organizations t
 
 {{< /leadership >}}
 
+## Governance and participation
+
+::::cards count=3
+:::card icon=landmark
 ### Board of Directors and Executive Council
 
 The PKI Consortium is guided by a dedicated Board of Directors and an Executive Council, composed of industry leaders and experts. Their leadership ensures the consortium remains focused on its mission and vision.
 
 For more information, visit the [Board of Directors]({{< ref "board/" >}}) and [Executive Council]({{< ref "executive-council/" >}}) pages.
-
-## Members
-
+:::
+:::card icon=users
+### Members
 Membership in the PKI Consortium is open to organizations and individuals who are committed to advancing trust in digital assets and communication through Public Key Infrastructure (PKI). This includes Certificate Authorities, regulators, supervisory bodies, industry experts, and other stakeholders. Members collaborate on policies, best practices, and standards to enhance the security and trustworthiness of the internet. 
 
 For more information on how to become a member, visit [Join Us]({{< ref "/join/" >}}).
-
-## Sponsors
-
+:::
+:::card icon=award
+### Sponsors
 To support the activities of the PKI Consortium we accept sponsors and donations. Sponsors will be listed on the website but do not gain any other special treatment or rights. Sponsors can support the development of specific projects but will never be permitted to influence the outcome or a policy. More information on how to become a sponsor can be found at [here]({{< ref "/sponsors/" >}}).
+:::
+::::

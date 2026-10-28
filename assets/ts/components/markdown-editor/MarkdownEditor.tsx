@@ -1,8 +1,11 @@
+import { lazy, Suspense } from "preact/compat";
+import { CONTENT_PROSE_CLASS } from "../../site/ContentProse";
 import type { JSX, RefObject } from "preact";
+import { codeLanguageItems } from "./code-language-menu";
 import { TemplateHighlighting } from "./template-highlighting";
 import { restoreTemplateMarkdown } from "./template-markdown";
 import { Editor } from "@tiptap/core";
-import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { Menu, type MenuItem } from "../../ui/Menu";
 import { resolveMarkdownShortcodes } from "../../../shared/markdown-shortcodes";
 import { Button } from "../../ui/Button";
@@ -11,6 +14,7 @@ import {
   IconBold,
   IconBraces,
   IconLayers,
+  IconContentGrid,
   IconBulletList,
   IconCode,
   IconHeading,
@@ -39,6 +43,18 @@ import { useToolbarOverflow } from "./use-toolbar-overflow";
 import { EditorMediaFields } from "./EditorMediaFields";
 import "./markdown-editor.scss";
 import "./markdown-content.scss";
+
+const CodeBlockControls = lazy(() =>
+  import("./CodeBlockControls").then((module) => ({ default: module.CodeBlockControls })),
+);
+
+const ContentLayoutControls = lazy(() =>
+  import("./ContentLayoutControls").then((module) => ({ default: module.ContentLayoutControls })),
+);
+
+const ContentLayoutPicker = lazy(() =>
+  import("./ContentLayoutPicker").then((module) => ({ default: module.ContentLayoutPicker })),
+);
 
 export interface MarkdownEditorHandle {
   insertText: (text: string) => void;
@@ -78,6 +94,7 @@ export function MarkdownEditor({
   ...control
 }: MarkdownEditorProps) {
   const compact = variant === "compact";
+  const canvasClass = compact ? "pk-markdown-editor__canvas" : `${CONTENT_PROSE_CLASS} pk-markdown-editor__canvas`;
   // One document owns an edit session. Parent renders must never reparse a
   // previous serialized draft while ProseMirror is applying the next input.
   const [value, setValue] = useState(initialValue);
@@ -93,6 +110,16 @@ export function MarkdownEditor({
   // fold into one `…` menu rather than wrapping onto a second line (#114).
   const toolbar = useRef<HTMLDivElement>(null);
   const [media, setMedia] = useState<{ kind: "image" | "video" | "link"; position: number } | null>(null);
+  const pickerAnchor = useRef<HTMLElement>(null);
+  const [layoutPicker, setLayoutPicker] = useState<{ editing: boolean; table: boolean } | null>(null);
+  const closeLayoutPicker = useCallback((returnFocus: boolean) => {
+    setLayoutPicker(null);
+    if (returnFocus) pickerAnchor.current?.focus({ preventScroll: true });
+  }, []);
+  const openLayoutPicker = (editing: boolean, table: boolean, anchor?: HTMLElement) => {
+    pickerAnchor.current = anchor ?? toolbar.current?.querySelector<HTMLElement>("[data-overflow] button") ?? null;
+    setLayoutPicker({ editing, table });
+  };
   const addBlock = useRef<(kind: EditorBlock, position: number) => void>(() => {});
   addBlock.current = (kind, position) => {
     if (!editor || disabled) return;
@@ -110,7 +137,7 @@ export function MarkdownEditor({
       contentType: "markdown",
       editorProps: {
         attributes: {
-          class: "pk-markdown-editor__canvas",
+          class: canvasClass,
           role: "textbox",
           "aria-multiline": "true",
           "aria-label": label,
@@ -155,7 +182,7 @@ export function MarkdownEditor({
       editorProps: {
         ...editor.options.editorProps,
         attributes: {
-          class: "pk-markdown-editor__canvas",
+          class: canvasClass,
           id: source ? `${control.id}-visual` : control.id,
           role: "textbox",
           "aria-label": label,
@@ -168,6 +195,7 @@ export function MarkdownEditor({
       },
     });
   }, [
+    canvasClass,
     editor,
     disabled,
     source,
@@ -236,6 +264,7 @@ export function MarkdownEditor({
     run: () => void;
     choices?: MenuItem[];
     block?: EditorBlock;
+    picker?: "layout" | "table";
   };
   const groups: ToolbarCommand[][] = [
     [
@@ -279,7 +308,34 @@ export function MarkdownEditor({
         block: "callout",
         run: () => runFocused((focused) => focused.commands.toggleBlockquote()),
       },
-      { label: "Code", icon: <IconCode />, active: "code", run: () => editor?.chain().focus().toggleCode().run() },
+      {
+        label: "Supporting note",
+        icon: <IconLayers />,
+        active: "aside",
+        block: "aside",
+        run: () => runFocused((focused) => focused.commands.toggleWrap("aside")),
+      },
+      {
+        label: "Insert layout",
+        icon: <IconContentGrid />,
+        picker: "layout",
+        run: () => openLayoutPicker(false, false),
+      },
+      {
+        label: "Code",
+        icon: <IconCode />,
+        run: () => {},
+        choices: [
+          {
+            id: "inline-code",
+            label: "Inline code",
+            checked: Boolean(editor?.isActive("code")),
+            disabled: locked,
+            onSelect: () => runFocused((focused) => focused.commands.toggleCode()),
+          },
+          { id: "code-block", label: "Code block", disabled: locked, children: codeLanguageItems(editor, locked) },
+        ],
+      },
       {
         label: "Link",
         icon: <IconLink width="16" height="16" />,
@@ -301,7 +357,13 @@ export function MarkdownEditor({
       },
     ],
     [
-      { label: "Table", icon: <IconTable />, block: "table", run: () => addBlock.current("table", position()) },
+      {
+        label: "Table",
+        icon: <IconTable />,
+        block: "table",
+        picker: "table",
+        run: () => openLayoutPicker(false, true),
+      },
       { label: "Image", icon: <IconImage />, block: "image", run: () => addBlock.current("image", position()) },
       { label: "Video", icon: <IconVideo />, block: "video", run: () => addBlock.current("video", position()) },
     ],
@@ -365,10 +427,11 @@ export function MarkdownEditor({
                     icon
                     aria-label={command.label}
                     title={command.label}
+                    aria-haspopup={command.picker ? "dialog" : undefined}
                     disabled={locked || command.disabled}
                     aria-pressed={command.active ? Boolean(editor?.isActive(command.active)) : undefined}
                     onMouseDown={(event) => {
-                      if (!command.block) event.preventDefault();
+                      if (!command.block && !command.picker) event.preventDefault();
                     }}
                     draggable={Boolean(command.block) && !locked}
                     onDragStart={(event) => {
@@ -376,7 +439,10 @@ export function MarkdownEditor({
                       event.dataTransfer?.setData(BLOCK_TRANSFER_TYPE, command.block);
                       if (event.dataTransfer) event.dataTransfer.effectAllowed = "copy";
                     }}
-                    onClick={command.run}
+                    onClick={(event) => {
+                      if (command.picker) openLayoutPicker(false, command.picker === "table", event.currentTarget);
+                      else command.run();
+                    }}
                   >
                     {command.icon}
                   </Button>
@@ -423,6 +489,27 @@ export function MarkdownEditor({
           </Button>
         </div>
       </div>
+      {layoutPicker && editor && (
+        <Suspense fallback={null}>
+          <ContentLayoutPicker
+            editor={editor}
+            anchorRef={pickerAnchor}
+            editing={layoutPicker.editing}
+            table={layoutPicker.table}
+            onClose={closeLayoutPicker}
+          />
+        </Suspense>
+      )}
+      {!source && editor && ["columns", "grid", "cards"].some((name) => editor.isActive(name)) && (
+        <Suspense fallback={null}>
+          <ContentLayoutControls editor={editor} onEditLayout={(anchor) => openLayoutPicker(true, false, anchor)} />
+        </Suspense>
+      )}
+      {!source && editor?.isActive("codeBlock") && (
+        <Suspense fallback={null}>
+          <CodeBlockControls editor={editor} disabled={locked} />
+        </Suspense>
+      )}
       {!source && editor?.isActive("table") && (
         <div class="pk-markdown-editor__toolbar" data-density="compact" role="group" aria-label="Table editing">
           <Button variant="ghost" disabled={locked} onClick={() => editor.chain().focus().addRowAfter().run()}>

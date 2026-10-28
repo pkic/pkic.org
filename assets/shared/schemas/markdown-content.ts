@@ -1,3 +1,4 @@
+import { validateMarkdownAsides } from "../markdown-aside";
 import { z } from "zod";
 import { supportedMarkdownShortcodeList, unsupportedMarkdownShortcodeNames } from "../markdown-shortcodes";
 
@@ -18,6 +19,11 @@ export function markdownContentSchema(maxLength: number) {
     .trim()
     .max(maxLength)
     .superRefine((value, ctx) => {
+      try {
+        validateMarkdownAsides(value);
+      } catch (error) {
+        ctx.addIssue({ code: "custom", message: error instanceof Error ? error.message : "Invalid aside." });
+      }
       const unsupported = unsupportedMarkdownShortcodeNames(value);
       if (unsupported.length === 0) return;
       ctx.addIssue({

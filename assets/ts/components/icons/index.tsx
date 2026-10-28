@@ -306,3 +306,33 @@ export function IconSource(props: SvgProps) {
     </StrokeIcon>
   );
 }
+
+/** Continuous text flowing down two columns. */
+export function IconTextColumns(props: SvgProps) {
+  return (
+    <StrokeIcon {...props}>
+      <path d="M2 3h4M2 6h4M2 9h4M2 12h4M10 3h4M10 6h4M10 9h4M10 12h4M8 2v12" />
+    </StrokeIcon>
+  );
+}
+/** Independent cells, unlike flowing text. */
+export function IconContentGrid(props: SvgProps) {
+  return (
+    <StrokeIcon {...props}>
+      <rect x="2" y="2" width="4.5" height="4.5" rx=".5" />
+      <rect x="9.5" y="2" width="4.5" height="4.5" rx=".5" />
+      <rect x="2" y="9.5" width="4.5" height="4.5" rx=".5" />
+      <rect x="9.5" y="9.5" width="4.5" height="4.5" rx=".5" />
+    </StrokeIcon>
+  );
+}
+/** A featured tile beside smaller cards. */
+export function IconBentoGrid(props: SvgProps) {
+  return (
+    <StrokeIcon {...props}>
+      <rect x="2" y="2" width="7" height="12" rx=".5" />
+      <rect x="11" y="2" width="3" height="5" rx=".5" />
+      <rect x="11" y="9" width="3" height="5" rx=".5" />
+    </StrokeIcon>
+  );
+}
