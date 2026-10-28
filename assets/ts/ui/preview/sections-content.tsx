@@ -66,7 +66,7 @@ export const contentSections: PreviewSection[] = [
   {
     id: "content-layout",
     title: "Editable columns and card grids",
-    note: "Flowing text columns, separate grid items, and bento cards. Contents and layout choices remain editable Markdown.",
+    note: "Use Layout to choose text columns, size a grid or cards, or select a bento preset. Edit layout changes the arrangement while preserving content.",
     render: () => <EditableContentSpecimen initialValue={contentLayoutExample} />,
   },
   {

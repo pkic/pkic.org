@@ -4,7 +4,7 @@ import type { JSX, RefObject } from "preact";
 import { TemplateHighlighting } from "./template-highlighting";
 import { restoreTemplateMarkdown } from "./template-markdown";
 import { Editor } from "@tiptap/core";
-import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { Menu, type MenuItem } from "../../ui/Menu";
 import { resolveMarkdownShortcodes } from "../../../shared/markdown-shortcodes";
 import { Button } from "../../ui/Button";
@@ -13,9 +13,7 @@ import {
   IconBold,
   IconBraces,
   IconLayers,
-  IconTextColumns,
   IconContentGrid,
-  IconBentoGrid,
   IconBulletList,
   IconCode,
   IconHeading,
@@ -47,6 +45,10 @@ import "./markdown-content.scss";
 
 const ContentLayoutControls = lazy(() =>
   import("./ContentLayoutControls").then((module) => ({ default: module.ContentLayoutControls })),
+);
+
+const ContentLayoutPicker = lazy(() =>
+  import("./ContentLayoutPicker").then((module) => ({ default: module.ContentLayoutPicker })),
 );
 
 export interface MarkdownEditorHandle {
@@ -103,6 +105,16 @@ export function MarkdownEditor({
   // fold into one `…` menu rather than wrapping onto a second line (#114).
   const toolbar = useRef<HTMLDivElement>(null);
   const [media, setMedia] = useState<{ kind: "image" | "video" | "link"; position: number } | null>(null);
+  const pickerAnchor = useRef<HTMLElement>(null);
+  const [layoutPicker, setLayoutPicker] = useState<{ editing: boolean; table: boolean } | null>(null);
+  const closeLayoutPicker = useCallback((returnFocus: boolean) => {
+    setLayoutPicker(null);
+    if (returnFocus) pickerAnchor.current?.focus({ preventScroll: true });
+  }, []);
+  const openLayoutPicker = (editing: boolean, table: boolean, anchor?: HTMLElement) => {
+    pickerAnchor.current = anchor ?? toolbar.current?.querySelector<HTMLElement>("[data-overflow] button") ?? null;
+    setLayoutPicker({ editing, table });
+  };
   const addBlock = useRef<(kind: EditorBlock, position: number) => void>(() => {});
   addBlock.current = (kind, position) => {
     if (!editor || disabled) return;
@@ -247,6 +259,7 @@ export function MarkdownEditor({
     run: () => void;
     choices?: MenuItem[];
     block?: EditorBlock;
+    picker?: "layout" | "table";
   };
   const groups: ToolbarCommand[][] = [
     [
@@ -291,23 +304,18 @@ export function MarkdownEditor({
         run: () => runFocused((focused) => focused.commands.toggleBlockquote()),
       },
       {
-        label: "Aside",
+        label: "Supporting note",
         icon: <IconLayers />,
         active: "aside",
         block: "aside",
         run: () => runFocused((focused) => focused.commands.toggleWrap("aside")),
       },
-      ...(["columns", "grid", "cards", "bento"] as const).map((kind) => ({
-        label:
-          kind === "columns" ? "Text columns" : kind === "grid" ? "Grid" : kind === "bento" ? "Bento grid" : "Cards",
-        icon: kind === "columns" ? <IconTextColumns /> : kind === "bento" ? <IconBentoGrid /> : <IconContentGrid />,
-        active: kind === "bento" ? "cards" : kind,
-        block: kind,
-        run: () =>
-          kind === "columns" && !editor?.isActive("table")
-            ? runFocused((focused) => focused.commands.toggleWrap("columns", { count: "2" }))
-            : editor && insertEditorBlock(editor, kind, position()),
-      })),
+      {
+        label: "Insert layout",
+        icon: <IconContentGrid />,
+        picker: "layout",
+        run: () => openLayoutPicker(false, false),
+      },
       { label: "Code", icon: <IconCode />, active: "code", run: () => editor?.chain().focus().toggleCode().run() },
       {
         label: "Link",
@@ -330,7 +338,13 @@ export function MarkdownEditor({
       },
     ],
     [
-      { label: "Table", icon: <IconTable />, block: "table", run: () => addBlock.current("table", position()) },
+      {
+        label: "Table",
+        icon: <IconTable />,
+        block: "table",
+        picker: "table",
+        run: () => openLayoutPicker(false, true),
+      },
       { label: "Image", icon: <IconImage />, block: "image", run: () => addBlock.current("image", position()) },
       { label: "Video", icon: <IconVideo />, block: "video", run: () => addBlock.current("video", position()) },
     ],
@@ -394,10 +408,11 @@ export function MarkdownEditor({
                     icon
                     aria-label={command.label}
                     title={command.label}
+                    aria-haspopup={command.picker ? "dialog" : undefined}
                     disabled={locked || command.disabled}
                     aria-pressed={command.active ? Boolean(editor?.isActive(command.active)) : undefined}
                     onMouseDown={(event) => {
-                      if (!command.block) event.preventDefault();
+                      if (!command.block && !command.picker) event.preventDefault();
                     }}
                     draggable={Boolean(command.block) && !locked}
                     onDragStart={(event) => {
@@ -405,7 +420,10 @@ export function MarkdownEditor({
                       event.dataTransfer?.setData(BLOCK_TRANSFER_TYPE, command.block);
                       if (event.dataTransfer) event.dataTransfer.effectAllowed = "copy";
                     }}
-                    onClick={command.run}
+                    onClick={(event) => {
+                      if (command.picker) openLayoutPicker(false, command.picker === "table", event.currentTarget);
+                      else command.run();
+                    }}
                   >
                     {command.icon}
                   </Button>
@@ -452,9 +470,20 @@ export function MarkdownEditor({
           </Button>
         </div>
       </div>
+      {layoutPicker && editor && (
+        <Suspense fallback={null}>
+          <ContentLayoutPicker
+            editor={editor}
+            anchorRef={pickerAnchor}
+            editing={layoutPicker.editing}
+            table={layoutPicker.table}
+            onClose={closeLayoutPicker}
+          />
+        </Suspense>
+      )}
       {!source && editor && ["columns", "grid", "cards"].some((name) => editor.isActive(name)) && (
         <Suspense fallback={null}>
-          <ContentLayoutControls editor={editor} />
+          <ContentLayoutControls editor={editor} onEditLayout={(anchor) => openLayoutPicker(true, false, anchor)} />
         </Suspense>
       )}
       {!source && editor?.isActive("table") && (

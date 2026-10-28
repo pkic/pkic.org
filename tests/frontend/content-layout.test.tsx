@@ -13,6 +13,8 @@ import {
 import { Markdown } from "../../assets/ts/ui/Markdown";
 import { markdownContentSchema } from "../../assets/shared/schemas/markdown-content";
 import { contentIconSchema } from "../../assets/shared/schemas/content-layout";
+import { applyEditorLayout } from "../../assets/ts/components/markdown-editor/editor-layout-editing";
+import { markdownLayoutChoiceSchema } from "../../assets/shared/schemas/markdown-layout";
 import { contentIconMarkup } from "../../assets/ts/site/ContentIcon";
 
 const instances: Editor[] = [];
@@ -189,4 +191,39 @@ it("keeps invalid layout children editable as plain Markdown through splitting a
     expect(open(editor.getMarkdown()).getJSON()).toEqual(editor.getJSON());
     expect(markdownContentSchema(20000).safeParse(source).success).toBe(false);
   }
+});
+
+it("sizes new cards directly and preserves all content when changing count and bento arrangements", () => {
+  const editor = open("Start here.");
+  applyEditorLayout(editor, { kind: "cards", count: "3", rows: 2 }, false);
+  const cards = () => editor.state.doc.firstChild!;
+  expect(cards().type.name).toBe("cards");
+  expect(cards().childCount).toBe(6);
+  const contents = cards().textContent;
+  applyEditorLayout(editor, { kind: "cards", count: "2" }, true);
+  expect(cards().attrs.count).toBe("2");
+  expect(cards().childCount).toBe(6);
+  applyEditorLayout(editor, { kind: "bento", preset: "feature-left" }, true);
+  expect(cards().firstChild!.attrs.rows).toBe("2");
+  applyEditorLayout(editor, { kind: "bento", preset: "feature-top" }, true);
+  expect(cards().attrs.count).toBe("2");
+  expect(cards().firstChild!.attrs.rows).toBe("1");
+  applyEditorLayout(editor, { kind: "cards", count: "auto" }, true);
+  expect(cards().attrs.layout).toBe("grid");
+  expect(cards().firstChild!.attrs.span).toBeNull();
+  expect(cards().textContent).toBe(contents);
+  expect(open(editor.getMarkdown()).getJSON()).toEqual(editor.getJSON());
+});
+
+it("wraps selected prose in the chosen text-column count and inserts tables at the selected size", () => {
+  const editor = open("Selected prose.");
+  editor.commands.selectAll();
+  applyEditorLayout(editor, { kind: "columns", count: "4" }, false);
+  expect(editor.state.doc.firstChild!.attrs.count).toBe("4");
+  expect(editor.state.doc.textContent).toBe("Selected prose.");
+  const table = open("");
+  applyEditorLayout(table, { kind: "table", columns: 3, rows: 2 }, false);
+  expect(table.state.doc.firstChild!.childCount).toBe(2);
+  expect(table.state.doc.firstChild!.firstChild!.childCount).toBe(3);
+  expect(markdownLayoutChoiceSchema.safeParse({ kind: "table", columns: 9, rows: 2 }).success).toBe(false);
 });

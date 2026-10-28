@@ -3,16 +3,21 @@ import {
   contentCardVariantSchema,
   contentColumnWidthSchema,
   contentIconSchema,
-  contentGridLayoutSchema,
   contentMediaSchema,
   contentSpanSchema,
-  contentLayoutSchema,
 } from "../../../shared/schemas/content-layout";
+import { Button } from "../../ui/Button";
 import { Menu, type MenuItem } from "../../ui/Menu";
 import { IconTextColumns, IconContentGrid } from "../icons";
 
 /** Layout choices live beside the selected authored block, not in a separate form. */
-export function ContentLayoutControls({ editor }: { editor: Editor }) {
+export function ContentLayoutControls({
+  editor,
+  onEditLayout,
+}: {
+  editor: Editor;
+  onEditLayout: (anchor: HTMLElement) => void;
+}) {
   const selection = editor.state.selection.$from;
   let layoutDepth = selection.depth;
   while (layoutDepth > 0 && !["cards", "columns", "grid"].includes(selection.node(layoutDepth).type.name))
@@ -26,20 +31,7 @@ export function ContentLayoutControls({ editor }: { editor: Editor }) {
   const itemPosition = itemDepth ? selection.before(itemDepth) : null;
   const item = itemDepth ? selection.node(itemDepth) : null;
   const parent = itemDepth ? selection.node(itemDepth - 1) : null;
-  const choices: MenuItem[] = [
-    {
-      id: "columns",
-      label: "Column count",
-      children: contentLayoutSchema.options.map((value) => ({
-        id: `columns-${value}`,
-        label: value === "auto" ? "Automatic" : `${value} column${value === "1" ? "" : "s"}`,
-        checked: (editor.getAttributes(layout).count ?? "auto") === value,
-        onSelect: () => {
-          editor.chain().focus().updateAttributes(layout, { count: value }).run();
-        },
-      })),
-    },
-  ];
+  const choices: MenuItem[] = [];
   if (layout === "columns")
     choices.push({
       id: "column-width",
@@ -54,18 +46,6 @@ export function ContentLayoutControls({ editor }: { editor: Editor }) {
       })),
     });
   if (layout === "cards") {
-    choices.push({
-      id: "card-layout",
-      label: "Arrangement",
-      children: contentGridLayoutSchema.options.map((value) => ({
-        id: `layout-${value}`,
-        label: value === "bento" ? "Bento" : "Grid",
-        checked: (editor.getAttributes("cards").layout ?? "grid") === value,
-        onSelect: () => {
-          editor.chain().focus().updateAttributes("cards", { layout: value }).run();
-        },
-      })),
-    });
     if (item) {
       choices.push({
         id: "card-icon",
@@ -197,9 +177,17 @@ export function ContentLayoutControls({ editor }: { editor: Editor }) {
   }
   return (
     <div class="pk-markdown-editor__toolbar" data-density="compact" role="group" aria-label="Layout editing">
-      <Menu label="Layout options" items={choices}>
-        {layout === "columns" ? <IconTextColumns /> : <IconContentGrid />}
-      </Menu>
+      <Button variant="ghost" aria-haspopup="dialog" onClick={(event) => onEditLayout(event.currentTarget)}>
+        Edit layout
+      </Button>
+      {choices.length > 0 && (
+        <Menu
+          label={layout === "cards" ? "Card options" : layout === "columns" ? "Column options" : "Grid item options"}
+          items={choices}
+        >
+          {layout === "columns" ? <IconTextColumns /> : <IconContentGrid />}
+        </Menu>
+      )}
     </div>
   );
 }

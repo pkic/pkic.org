@@ -19,7 +19,7 @@ Read the repository guidance and the relevant scoped instructions. Use the sibli
 - Cards inherit their grid's `variant`. A card can override it with `variant=default`, `muted`, `accent`, or `plain`. These are presentation choices, not approval/status indicators.
 - Use a longer outer colon fence when nesting; the serializer chooses safe lengths. Do not introduce arbitrary CSS classes, inline styles, raw HTML requirements, or working-group-specific options.
 
-All new components inherit the page's theme and working-group accent. Use semantic tokens, not a component-specific palette or a hardcoded green. Verify multiple accents in both themes. Use the distinct Text columns, Grid, and Bento grid icons from the existing icon library.
+All new components inherit the page's theme and working-group accent. Use semantic tokens, not a component-specific palette or a hardcoded green. Verify multiple accents in both themes. Use one labeled Layout toolbar trigger and the shared visual layout picker. Keep text-flow choices, grid/card sizing, and bento presets distinct within the picker; reuse it for content-preserving layout edits.
 
 For interactive components, use the [Component Gallery](https://component.gallery/components/) as a reference for established behavior and naming. Keep text-bearing child nodes editable, reuse shared interaction primitives, and define keyboard/state behavior before adding syntax. Do not add arbitrary scripts to Markdown.
 

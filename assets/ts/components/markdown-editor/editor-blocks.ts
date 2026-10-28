@@ -1,3 +1,9 @@
+import {
+  defaultMarkdownLayouts,
+  markdownLayoutChoiceSchema,
+  type MarkdownLayoutChoice,
+} from "../../../shared/schemas/markdown-layout";
+import { editorLayoutNode } from "./editor-layout-nodes";
 import type { Editor, JSONContent } from "@tiptap/core";
 
 export const EDITOR_BLOCKS = [
@@ -20,46 +26,28 @@ export function editorBlockPosition(editor: Editor, position: number): number {
   return resolved.depth > 1 ? resolved.after(1) : position;
 }
 
-export function insertEditorBlock(editor: Editor, kind: Exclude<EditorBlock, "image" | "video">, position: number) {
+export function insertEditorBlock(
+  editor: Editor,
+  kind: Exclude<EditorBlock, "image" | "video">,
+  position: number,
+  choice?: MarkdownLayoutChoice,
+) {
   position = editorBlockPosition(editor, position);
   editor.commands.setTextSelection(position);
-  if (kind === "table") {
-    editor.chain().focus().insertTable({ rows: 3, cols: 2, withHeaderRow: true }).run();
+  if (kind === "table" || kind === "columns" || kind === "grid" || kind === "cards" || kind === "bento") {
+    const selected = markdownLayoutChoiceSchema.parse(choice ?? defaultMarkdownLayouts[kind]);
+    if (selected.kind === "table")
+      editor.chain().focus().insertTable({ rows: selected.rows, cols: selected.columns, withHeaderRow: true }).run();
+    else
+      editor
+        .chain()
+        .focus()
+        .insertContentAt(position, editorLayoutNode(selected))
+        .setTextSelection(position + (selected.kind === "columns" ? 2 : 3))
+        .run();
     return;
   }
   const paragraph = (text: string): JSONContent => ({ type: "paragraph", content: [{ type: "text", text }] });
-  if (kind === "columns") {
-    editor
-      .chain()
-      .focus()
-      .insertContentAt(position, {
-        type: "columns",
-        attrs: { count: "2" },
-        content: [paragraph("Write your text here. Paragraphs flow from one column to the next.")],
-      })
-      .run();
-    return;
-  }
-  if (kind === "grid" || kind === "cards" || kind === "bento") {
-    const item = kind === "grid" ? "item" : "card";
-    editor
-      .chain()
-      .focus()
-      .insertContentAt(position, {
-        type: kind === "bento" ? "cards" : kind,
-        attrs: kind === "bento" ? { layout: "bento", count: "3" } : undefined,
-        content: ["First topic", "Second topic", "Third topic"].map((text, index) => ({
-          type: item,
-          attrs: kind === "bento" && index === 0 ? { span: "2", rows: "2" } : undefined,
-          content: [
-            { type: "heading", attrs: { level: 3 }, content: [{ type: "text", text }] },
-            paragraph("Add your content."),
-          ],
-        })),
-      })
-      .run();
-    return;
-  }
   const content: JSONContent[] = [
     kind === "aside"
       ? {
