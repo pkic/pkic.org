@@ -319,6 +319,7 @@ export const registrationConfirmSchema = registrationConfirmQuerySchema.extend({
 });
 /** Linked through the canonical affiliation rule, or queued for staff review; null when nothing was asked. */
 export const registrationOrganizationOutcomeSchema = z.enum(["linked", "review_required"]).nullable();
+export type RegistrationOrganizationOutcome = NonNullable<z.infer<typeof registrationOrganizationOutcomeSchema>>;
 
 const registrationCompletionResponseBaseSchema = successResponseSchema.merge(registrationDayStateSchema).extend({
   status: registrationLifecycleStatusSchema,

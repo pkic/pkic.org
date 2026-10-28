@@ -172,6 +172,8 @@ export const ORGANIZATION_JOB_TITLE_COPY = {
 
 /** The organization a verified work address names when its domain resolves to none. */
 export const REGISTRATION_ORGANIZATION_COPY = {
+  pendingReviewHelp:
+    "You can register while our team reviews your organization affiliation. Your organization will appear on your registration after approval.",
   reviewRequired:
     "Our team will check the organization you named before it appears on your registration. You don't need to do anything.",
 } as const;

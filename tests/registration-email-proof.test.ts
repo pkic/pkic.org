@@ -5,6 +5,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
+import { seedMemberApplication } from "./helpers/member-applications";
 import { deliveredEmailPayload, queryAll, seedEventAndAdmin } from "./helpers/context";
 import { callApi } from "./helpers/app";
 import { insertOrganization, insertUser } from "./helpers/membership";
@@ -263,6 +264,65 @@ describe("registration verifies the email address first", () => {
     expect(response.status, await response.clone().text()).toBe(200);
     expect(registrationSubmissionResponseSchema.parse(await response.json()).status).toBe("pending_email_confirmation");
   });
+  it.each([false, true])("registers a reserved work domain with affiliation review; stale claim: %s", async (stale) => {
+    const email = "attendee@reserved-work.example";
+    const applicationId = await seedMemberApplication({
+      applicantEmail: "applicant@reserved-work.example",
+      organizationDomain: "reserved-work.example",
+    });
+    const proof = tokenOf(await emailedLink(email));
+    const verified = await post("/proof/verify", { token: proof });
+    expect(verified.status, await verified.clone().text()).toBe(200);
+    expect(registrationEmailProofVerifyResponseSchema.parse(await verified.json()).affiliation).toMatchObject({
+      organization: null,
+      organizations: [],
+      reviewRequired: true,
+    });
+    const prepared = await post("/proof/verify", {
+      token: proof,
+      affiliation: { organizationId: null, organizationName: "Pending Work Organization", jobTitle: "Engineer" },
+    });
+    expect(prepared.status, await prepared.clone().text()).toBe(200);
+    const contextToken = registrationEmailProofVerifyResponseSchema.parse(await prepared.json()).affiliation!
+      .contextToken!;
+    if (stale)
+      await env.DB.prepare("DELETE FROM organization_domain_claims WHERE application_id=?").bind(applicationId).run();
+    const response = await post(
+      "",
+      registration(email, proof, {
+        organization: { name: "Pending Work Organization", jobTitle: "Engineer", contextToken },
+      }),
+    );
+    if (stale) {
+      expect(response.status).toBe(409);
+      expect(await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email=?", [email])).toEqual([]);
+      expect(await queryAll(env.DB, "SELECT id FROM registrations")).toEqual([]);
+      expect(await queryAll(env.DB, "SELECT id FROM affiliation_reviews")).toEqual([]);
+      expect(
+        await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key='registration_confirmation'"),
+      ).toEqual([]);
+      return;
+    }
+    expect(response.status, await response.clone().text()).toBe(200);
+    const result = registrationSubmissionResponseSchema.parse(await response.json());
+    expect(result).toMatchObject({ status: "registered", organizationOutcome: "review_required" });
+    const [stored] = await queryAll<{ registration_identity_id: string | null; email_verified_at: string | null }>(
+      env.DB,
+      "SELECT registration.registration_identity_id,person.email_verified_at FROM registrations registration JOIN users person ON person.id=registration.user_id WHERE registration.id=?",
+      [result.registrationId],
+    );
+    expect(stored.registration_identity_id).toBeNull();
+    expect(stored.email_verified_at).toBeTruthy();
+    expect(await queryAll(env.DB, "SELECT organization_name,job_title,source_id FROM affiliation_reviews")).toEqual([
+      { organization_name: "Pending Work Organization", job_title: "Engineer", source_id: result.registrationId },
+    ]);
+    expect(await queryAll(env.DB, "SELECT id FROM identities WHERE organization_id IS NOT NULL")).toEqual([]);
+    expect(await queryAll(env.DB, "SELECT id FROM organizations")).toEqual([]);
+    expect(await queryAll(env.DB, "SELECT application_id,organization_id FROM organization_domain_claims")).toEqual([
+      { application_id: applicationId, organization_id: null },
+    ]);
+  });
+
   it("shows the domain default but honors another organization through the same affiliation flow", async () => {
     const original = await insertOrganization(env.DB, "Default Domain Organization");
     await env.DB.prepare(

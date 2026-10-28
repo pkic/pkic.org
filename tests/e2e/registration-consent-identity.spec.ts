@@ -1,3 +1,4 @@
+import { submitMembershipApplication } from "./helpers/membership";
 import { userCreateSchema } from "../../assets/shared/schemas/user-create";
 import { organizationDomainsListResponseSchema } from "../../assets/shared/schemas/organization-domains";
 import { geolocationCountryResponseSchema } from "../../assets/shared/schemas/geolocation";
@@ -11,7 +12,7 @@ import {
   registrationManageSchema,
   registrationManageUpdateResponseSchema,
 } from "../../assets/shared/schemas/registration";
-import { EMAIL_FIRST_COPY } from "../../assets/shared/email-first-copy";
+import { EMAIL_FIRST_COPY, REGISTRATION_ORGANIZATION_COPY } from "../../assets/shared/email-first-copy";
 import { userDetailResponseSchema, usersListResponseSchema } from "../../assets/shared/schemas/user-management";
 import { userParticipationResponseSchema } from "../../assets/shared/schemas/user-participation";
 import {
@@ -438,6 +439,44 @@ test("a proved work address requires organization confirmation and an incorrect 
   await page.goBack();
   await page.goForward();
   await expect(country).toHaveValue("CA");
+});
+
+test("a pending membership domain can register while affiliation awaits review", async ({ page }, info) => {
+  const applicant = ownDomainEmail("pending-membership");
+  const name = "Pending Membership Research";
+  await submitMembershipApplication(page, {
+    email: applicant,
+    name: "Casey Applicant",
+    category: "A",
+    organizationName: name,
+  });
+  const email = `attendee@${applicant.split("@")[1]}`;
+  const registration = await registerInBrowser(page, email, undefined, undefined, {
+    organization: name,
+    onContactReady: async (contact) => {
+      await expect(contact.getByRole("textbox", { name: /^Organization name/ })).toHaveAccessibleDescription(
+        REGISTRATION_ORGANIZATION_COPY.pendingReviewHelp,
+      );
+      for (const [width, height, device] of [
+        [1280, 900, "desktop"],
+        [375, 812, "phone"],
+      ] as const) {
+        await contact.setViewportSize({ width, height });
+        await contact.getByRole("textbox", { name: /^Organization name/ }).scrollIntoViewIfNeeded();
+        await contact.screenshot({ path: info.outputPath(`pending-affiliation-contact-${device}.png`) });
+      }
+    },
+  });
+  expect(registration.result).toMatchObject({ status: "registered", organizationOutcome: "review_required" });
+  await expect(page.getByRole("heading", { name: /You're registered/i })).toBeVisible();
+  for (const [width, height, device] of [
+    [1280, 900, "desktop"],
+    [375, 812, "phone"],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.getByText(REGISTRATION_ORGANIZATION_COPY.reviewRequired, { exact: true }).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: info.outputPath(`pending-affiliation-success-${device}.png`) });
+  }
 });
 
 test("a verified new work domain shows organization fields directly in public registration", async ({

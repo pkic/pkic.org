@@ -1,3 +1,4 @@
+import type { RegistrationOrganizationOutcome } from "../../../../assets/shared/schemas/registration";
 import { readRegistrationAffiliationContext } from "./affiliation-context";
 import {
   personalPromotionImagePath,
@@ -30,10 +31,7 @@ import { readRegistrationAffiliation } from "./selected-identity";
 import type { VerifiedRegistrationIdentityContext } from "./types";
 import { nowIso } from "../../utils/time";
 import { linkVerifiedAddressToDomainOrganization } from "../identities/email-domain-link";
-import {
-  linkConfirmedRegistrationOrganization,
-  type RegistrationOrganizationOutcome,
-} from "./confirmation-organization";
+import { linkConfirmedRegistrationOrganization } from "./confirmation-organization";
 import { eventTakesRegistrations } from "./email-proof";
 
 /** The individual capacity only gates the public contract's work-email policy; the use case does not read it. */
@@ -298,7 +296,7 @@ export async function submitEventRegistration(
   const badgeRenderJob = prepareBadgeRenderJob(db, referralCode);
   await commitRegistrationSubmission(db, prepared, [queuedEmail.statement, badgeRenderJob.statement]);
   const organizationOutcome = affiliationContext
-    ? "linked"
+    ? (prepared.organizationOutcome ?? null)
     : metadata.mailboxVerified
       ? await linkVerifiedRegistrant(db, {
           registrationId: registration.id,

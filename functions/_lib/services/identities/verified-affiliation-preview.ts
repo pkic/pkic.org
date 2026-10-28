@@ -5,21 +5,27 @@ import { workEmailDomain } from "../../email-domains/classification";
 import type { VerifiedAffiliationBasis } from "./verified-affiliation-basis";
 import { nowIso } from "../../utils/time";
 /** The single organization chooser projection for every verified-mailbox embedding. */
-export function verifiedAffiliationPreview(basis: VerifiedAffiliationBasis, address: { email: string }) {
+export function verifiedAffiliationPreview(
+  basis: VerifiedAffiliationBasis,
+  address: { email: string },
+  options: { pendingApplicationReview?: boolean } = {},
+) {
   // The mapping supplies the chooser's default without excluding other proved organizations.
   const resolution = resolveDomainOrganization(
     basis.facts,
     basis.facts.claimed ? { organizationId: basis.facts.claimed.organizationId } : undefined,
   );
-  if (resolution.kind === "held") verifiedDomainOrganizationId(basis.domain, resolution);
-  const organizationId = resolution.kind === "organization" ? resolution.organizationId : null;
-  const organizations = basis.organizations.filter((organization) => {
+  const pendingClaim = resolution.kind === "held" || basis.claims.some((claim) => claim.applicationId);
+  if (pendingClaim && !options.pendingApplicationReview) verifiedDomainOrganizationId(basis.domain, { kind: "held" });
+  const organizationId = !pendingClaim && resolution.kind === "organization" ? resolution.organizationId : null;
+  const organizations = (pendingClaim ? [] : basis.organizations).filter((organization) => {
     return resolveDomainOrganization(basis.facts, { organizationId: organization.id }).kind === "organization";
   });
   const organization = organizations.find((item) => item.id === organizationId) ?? null;
   const rootDomain = workEmailDomain(address.email);
   const mayLinkSubdomains = !basis.claims.some((item) => item.applicationId);
   return identityAffiliationPreviewResponseSchema.parse({
+    reviewRequired: pendingClaim ? true : undefined,
     email: address.email,
     domain: basis.domain,
     organization: organization ? { id: organization.id, name: organization.name } : null,

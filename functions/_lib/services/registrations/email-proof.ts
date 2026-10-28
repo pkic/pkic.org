@@ -1,6 +1,6 @@
 import { prepareVerifiedAffiliationRead } from "../identities/verified-affiliation-read";
 import { verifiedAffiliationPreview } from "../identities/verified-affiliation-preview";
-import { planVerifiedAffiliation } from "../identities/verified-affiliation-plan";
+import { planRegistrationAffiliation } from "./affiliation-plan";
 import { identityAffiliationPrepareSchema } from "../../../../assets/shared/schemas/identity-affiliation";
 import type { registrationEmailProofVerifySchema } from "../../../../assets/shared/schemas/registration-email-proof";
 import { provedMailboxUserIdSelection } from "../email-ownership";
@@ -183,7 +183,7 @@ export async function verifyRegistrationEmailProof(
           domain: input.affiliation?.domain ?? input.domain,
           organizationName: input.affiliation?.organizationName,
         },
-        { verifiedAt: nowIso() },
+        { verifiedAt: nowIso(), pendingApplicationReview: true },
       );
   const results = await db.batch([
     db.prepare("SELECT id FROM events WHERE id=? AND slug=?").bind(proof.eventId, input.eventSlug),
@@ -195,7 +195,9 @@ export async function verifyRegistrationEmailProof(
   if (proof.binding && !person)
     throw new AppError(409, "REGISTRATION_CHANGED", "Your registration changed. Open the latest confirmation email.");
   const observed = affiliation?.decode(results.slice(2));
-  const preview = observed ? verifiedAffiliationPreview(observed.basis, observed.address) : null;
+  const preview = observed
+    ? verifiedAffiliationPreview(observed.basis, observed.address, { pendingApplicationReview: true })
+    : null;
   if (input.affiliation && observed && preview) {
     const selection = identityAffiliationPrepareSchema.parse({
       ...input.affiliation,
@@ -209,7 +211,7 @@ export async function verifyRegistrationEmailProof(
         "IDENTITY_DOMAIN_MISMATCH",
         "Choose an organization confirmed by your verified work domain.",
       );
-    await planVerifiedAffiliation(
+    await planRegistrationAffiliation(
       db,
       { userId: crypto.randomUUID(), proofEvidence: { sql: "SELECT 1", bindings: [] } },
       selection,

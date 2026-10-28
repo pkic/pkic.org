@@ -12,19 +12,18 @@
  * name without the domain, a domain under review — is not linked here but
  * queued for the staff affiliation review. Free mail is never asked.
  */
-import { normalizeOrgName } from "../../../../assets/shared/organization-name";
+import { prepareRegistrationOrganizationReview } from "./organization-review";
 import { workEmailDomain } from "../../email-domains/classification";
-import type { RegistrationConfirmOrganization } from "../../../../assets/shared/schemas/registration";
+import type {
+  RegistrationConfirmOrganization,
+  RegistrationOrganizationOutcome,
+} from "../../../../assets/shared/schemas/registration";
 import { first } from "../../db/queries";
 import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
-import { uuid } from "../../utils/ids";
-import { prepareAuditLog } from "../audit";
 import { prepareVerifiedOrganizationAffiliation } from "../identities";
 import { resolveEmailDomainOrganization } from "../identities/verified-email-domain";
-
-export type RegistrationOrganizationOutcome = "linked" | "review_required";
 
 /** Refusals of the canonical rule that mean "a person must decide", not "the request is wrong". */
 const REVIEW_CODES = new Set([
@@ -103,37 +102,12 @@ export async function linkConfirmedRegistrationOrganization(
       (error instanceof AppError && REVIEW_CODES.has(error.code)) || isAuthorizationGuardFailure(error);
     if (!needsReview) throw error;
   }
-  const reviewId = uuid();
-  await db.batch([
-    db
-      .prepare(
-        `INSERT INTO affiliation_reviews (id, user_id, organization_name, normalized_name, job_title, email_domain,
-           group_key, source_type, source_id, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'registration', ?, ?)
-         ON CONFLICT(source_type, source_id) DO NOTHING`,
-      )
-      .bind(
-        reviewId,
-        confirmed.user_id,
-        input.organization.name,
-        normalizeOrgName(input.organization.name),
-        input.organization.jobTitle ?? null,
-        workEmailDomain(confirmed.normalized_email),
-        normalizeOrgName(input.organization.name),
-        input.registrationId,
-        input.at,
-      ),
-    prepareAuditLog(
-      db,
-      "user",
-      confirmed.user_id,
-      "affiliation_review_requested",
-      "registration",
-      input.registrationId,
-      {
-        organizationName: input.organization.name,
-      },
-    ),
-  ]);
+  await db.batch(
+    prepareRegistrationOrganizationReview(db, {
+      ...input,
+      userId: confirmed.user_id,
+      domain: workEmailDomain(confirmed.normalized_email),
+    }),
+  );
   return "review_required";
 }

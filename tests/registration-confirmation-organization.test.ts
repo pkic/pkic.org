@@ -6,6 +6,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
+import { seedMemberApplication } from "./helpers/member-applications";
 import { deliveredEmailPayload, queryAll, seedEventAndAdmin } from "./helpers/context";
 import { callApi } from "./helpers/app";
 import { insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
@@ -123,6 +124,38 @@ describe("organization named on registration confirmation", () => {
     expect(response.status).toBe(400);
     expect(JSON.stringify(await response.json())).toContain("Enter your job title at this organization.");
     expect(await affiliations("person@unknown-works.example")).toEqual([]);
+  });
+
+  it("confirms a reserved work domain and queues its affiliation for review", async () => {
+    const email = "registrant@pending-confirmation.example";
+    await seedMemberApplication({ organizationDomain: "pending-confirmation.example" });
+    const token = await register(email);
+    const confirmation = await info(token);
+    expect(confirmation.asksOrganization).toBe(true);
+    const prepared = await verifyOrganization(confirmation.organizationProof!, {
+      organizationId: null,
+      organizationName: "Pending Confirmation Organization",
+      jobTitle: "Engineer",
+    });
+    const result = await confirm({
+      token,
+      organization: {
+        name: "Pending Confirmation Organization",
+        jobTitle: "Engineer",
+        contextToken: prepared.contextToken,
+      },
+    });
+    expect(result.organizationOutcome).toBe("review_required");
+    expect(await affiliations(email)).toEqual([]);
+    expect(
+      await queryAll(
+        env.DB,
+        `SELECT review.organization_name FROM affiliation_reviews review
+      JOIN registrations registration ON registration.id=review.source_id
+      JOIN users person ON person.id=registration.user_id WHERE person.normalized_email=?`,
+        [email],
+      ),
+    ).toEqual([{ organization_name: "Pending Confirmation Organization" }]);
   });
 
   it("does not ask a consumer address for an organization", async () => {

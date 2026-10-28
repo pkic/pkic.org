@@ -27,7 +27,7 @@ export function prepareVerifiedAffiliationRead(
     domain?: string;
     unaffiliatedAttestation?: boolean;
   },
-  mailboxProof?: { verifiedAt: string },
+  mailboxProof?: { verifiedAt: string; pendingApplicationReview?: boolean },
 ) {
   const subject = typeof userId === "string" ? { sql: "?", bindings: [userId] } : userId;
   const candidates = organizationDomainCandidates(input.email);
@@ -97,7 +97,11 @@ export function prepareVerifiedAffiliationRead(
         organizationId: string | null;
         member: number;
       }>(results[1]);
-      if (!input.unaffiliatedAttestation && claims.some((claim) => claim.applicationId))
+      if (
+        !input.unaffiliatedAttestation &&
+        !mailboxProof?.pendingApplicationReview &&
+        claims.some((claim) => claim.applicationId)
+      )
         verifiedDomainOrganizationId(input.domain ?? claims[0]!.domain, { kind: "held" });
       if (input.domain && !verifiedRepresentationDomainCandidates(address.email, claims).includes(input.domain))
         throw new AppError(422, "IDENTITY_DOMAIN_MISMATCH", "Choose a domain of your verified work email address.");

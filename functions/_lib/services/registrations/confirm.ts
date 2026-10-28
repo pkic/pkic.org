@@ -1,10 +1,13 @@
-import type { RegistrationConfirmOrganization } from "../../../../assets/shared/schemas/registration";
+import type {
+  RegistrationConfirmOrganization,
+  RegistrationOrganizationOutcome,
+} from "../../../../assets/shared/schemas/registration";
 import { emailDomainOf } from "../../../../assets/shared/schemas/email-domains";
 import { workEmailDomain } from "../../email-domains/classification";
 import { individualIdentityIdSql } from "../identities/affiliation-projection";
 import { prepareIndividualIdentityStatement } from "../users";
 import { readRegistrationAffiliationContext } from "./affiliation-context";
-import { planVerifiedAffiliation } from "../identities/verified-affiliation-plan";
+import { planRegistrationAffiliation } from "./affiliation-plan";
 import { AppError } from "../../errors";
 import { first } from "../../db/queries";
 import { nowIso } from "../../utils/time";
@@ -36,6 +39,7 @@ export interface PreparedRegistrationConfirmation {
   /** The address this confirmation proves, for the organization link that follows the commit. */
   verifiedAddress: { userId: string; normalizedEmail: string };
   affiliationConfirmed: boolean;
+  organizationOutcome?: RegistrationOrganizationOutcome;
 }
 
 export function isStaleRegistrationTransition(error: unknown): boolean {
@@ -180,6 +184,7 @@ export async function prepareConfirmRegistrationByToken(
     ownsPendingEmailChange && inviteEmail && emailDomainOf(inviteEmail) !== emailDomainOf(user.normalized_email);
   const affiliationStatements: StatementLike[] = [];
   let affiliationConfirmed = false;
+  let organizationOutcome: RegistrationOrganizationOutcome | undefined;
   if (payload.organization?.contextToken) {
     const context = await readRegistrationAffiliationContext(
       payload.signingSecret,
@@ -188,7 +193,7 @@ export async function prepareConfirmRegistrationByToken(
       inviteEmail ?? user.normalized_email,
       payload.organization,
     );
-    const plan = await planVerifiedAffiliation(
+    const plan = await planRegistrationAffiliation(
       db,
       {
         userId: registration.user_id,
@@ -201,7 +206,8 @@ export async function prepareConfirmRegistrationByToken(
       context.basis,
       now,
     );
-    affiliationStatements.push(...plan.statements);
+    affiliationStatements.push(...plan.statements, ...(plan.prepareReview?.(registration.id) ?? []));
+    organizationOutcome = plan.outcome;
     finalizedRegistration = { ...finalizedRegistration, registration_identity_id: plan.identityId };
     affiliationConfirmed = true;
   } else if (domainChanged) {
@@ -347,6 +353,7 @@ export async function prepareConfirmRegistrationByToken(
   return {
     stage: "confirmed",
     affiliationConfirmed,
+    organizationOutcome,
     registration: updated,
     manageToken,
     recipientEmail: inviteEmail ?? user.normalized_email,

@@ -148,6 +148,7 @@ export function VerifiedOrganizationDetails({
       {resolved.organizations.length === 0 ? (
         <VerifiedOrganizationNameField
           domain={resolved.domain}
+          reviewRequired={resolved.reviewRequired}
           value={organizationName}
           disabled={busy}
           onChange={setOrganizationName}

@@ -1,3 +1,4 @@
+import type { RegistrationOrganizationOutcome } from "../../../../assets/shared/schemas/registration";
 import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
@@ -11,10 +12,7 @@ import { prepareRegistrationConfirmedEmail } from "./status-notifications";
 import { firstReferralCodeQuerySql } from "../referral-code-projection";
 import { nowIso } from "../../utils/time";
 import type { RegistrationConfirmOrganization } from "../../../../assets/shared/schemas/registration";
-import {
-  linkConfirmedRegistrationOrganization,
-  type RegistrationOrganizationOutcome,
-} from "./confirmation-organization";
+import { linkConfirmedRegistrationOrganization } from "./confirmation-organization";
 import { linkVerifiedAddressToDomainOrganization } from "../identities/email-domain-link";
 
 export interface ConfirmRegistrationWorkflowPayload {
@@ -135,7 +133,7 @@ async function confirmRegistrationWithNotificationOnce(
   // Its own atomic command after the confirmation: the committed confirmation is the mailbox proof,
   // and an organization that needs review never undoes the confirmation itself.
   const organizationOutcome = prepared.affiliationConfirmed
-    ? "linked"
+    ? (prepared.organizationOutcome ?? "linked")
     : payload.organization
       ? await linkConfirmedRegistrationOrganization(db, {
           registrationId: prepared.registration.id,

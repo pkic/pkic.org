@@ -1,12 +1,12 @@
 import { nowIso } from "../utils/time";
 import type { RegistrationAffiliationContext } from "./registrations/affiliation-context";
-import { planVerifiedAffiliation } from "./identities/verified-affiliation-plan";
+import { planRegistrationAffiliation } from "./registrations/affiliation-plan";
 import type { IdentityRepresentation } from "./identities/selection";
 import { findUserEmailOwner } from "./user-emails";
 import { first } from "../db/queries";
 import { AppError } from "../errors";
 import type { DatabaseLike, StatementLike } from "../types";
-import type { AttendanceType } from "../../../assets/shared/schemas/registration";
+import type { AttendanceType, RegistrationOrganizationOutcome } from "../../../assets/shared/schemas/registration";
 import { prepareAuditLog } from "./audit";
 import { prepareConsentStatements } from "./consent";
 import { prepareAcceptInviteStatements, prepareRevokeDuplicateInvitesStatement, type InviteRecord } from "./invites";
@@ -31,6 +31,7 @@ import { normalizeEmail } from "../validation";
 export interface PreparedRegistrationSubmission {
   user: UserRecord;
   representation?: IdentityRepresentation;
+  organizationOutcome?: RegistrationOrganizationOutcome;
   /** True only when this submission created a new, unprivileged identity. */
   identityWasCreated: boolean;
   registration: RegistrationRecord;
@@ -87,7 +88,7 @@ export async function prepareRegistrationSubmission(
     throw new AppError(403, "REGISTRATION_IDENTITY_MISMATCH", "Registration identity does not match the session");
   }
   const affiliation = payload.affiliationContext
-    ? await planVerifiedAffiliation(
+    ? await planRegistrationAffiliation(
         db,
         {
           userId: preparedUser.user.id,
@@ -101,7 +102,7 @@ export async function prepareRegistrationSubmission(
         nowIso(),
       )
     : null;
-  const verifiedIdentity = affiliation
+  const verifiedIdentity = affiliation?.identityId
     ? { ...payload.verifiedIdentity, userId: preparedUser.user.id, selectedIdentity: { id: affiliation.identityId } }
     : payload.verifiedIdentity;
   const builtRegistration = await buildCreateRegistration(db, {
@@ -166,6 +167,7 @@ export async function prepareRegistrationSubmission(
   statements.push(
     ...(affiliation?.statements ?? []),
     ...builtRegistration.statements,
+    ...(affiliation?.prepareReview?.(builtRegistration.registration.id) ?? []),
     ...(formSubmission?.statements ?? []),
     ...(await prepareConsentStatements(db, {
       registrationId: builtRegistration.registration.id,
@@ -214,6 +216,7 @@ export async function prepareRegistrationSubmission(
   return {
     user: preparedUser.user,
     representation: affiliation?.representation,
+    organizationOutcome: affiliation?.outcome,
     identityWasCreated: preparedUser.created,
     registration: builtRegistration.registration,
     manageToken: builtRegistration.manageToken,

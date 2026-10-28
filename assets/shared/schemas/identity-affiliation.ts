@@ -47,6 +47,8 @@ export const identityAffiliationPreviewResponseSchema = z.object({
       }),
     )
     .max(256),
+  /** The selected work domain is reserved by a pending membership application. */
+  reviewRequired: z.boolean().optional(),
   contextToken: identityAffiliationContextSchema.optional(),
   identityId: databaseIdSchema.optional(),
 });
