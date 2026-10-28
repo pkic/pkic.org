@@ -2,7 +2,7 @@ import { ContentProse } from "../site/ContentProse";
 import "./Table.css";
 import { ContentLayout } from "../site/ContentLayout";
 import { contentContainerNames, type ContentContainer } from "../../shared/schemas/content-layout";
-import { CONTAINER_START, readMarkdownContainer } from "../../shared/markdown-aside";
+import { CONTAINER_START, tryReadMarkdownContainer } from "../../shared/markdown-aside";
 import { SiteImage } from "../site/SiteImage";
 import type { ComponentChildren } from "preact";
 import { Marked, type Token, type Tokens } from "marked";
@@ -22,7 +22,7 @@ const parser = new Marked({
       return source.search(CONTAINER_START);
     },
     tokenizer(source) {
-      const aside = readMarkdownContainer(source);
+      const aside = tryReadMarkdownContainer(source);
       return aside?.block.type === name
         ? { type: name, block: aside.block, raw: aside.raw, tokens: this.lexer.blockTokens(aside.block.markdown) }
         : undefined;

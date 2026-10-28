@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { readMarkdownAside, serializeMarkdownAside, splitMarkdownAsides } from "../../assets/shared/markdown-aside";
+import {
+  readMarkdownAside,
+  serializeMarkdownAside,
+  splitMarkdownAsides,
+  serializeMarkdownContainer,
+} from "../../assets/shared/markdown-aside";
 import { markdownContentSchema } from "../../assets/shared/schemas/markdown-content";
 
 describe("shared aside Markdown boundaries", () => {
@@ -30,4 +35,16 @@ describe("shared aside Markdown boundaries", () => {
     expect(contract.safeParse('::::aside\n:::aside{class="custom"}\nText.\n:::\n::::').success).toBe(false);
     expect(contract.safeParse(":::aside\n### Context\n\nEditable text.\n:::").success).toBe(true);
   });
+});
+
+it("reports readable schema errors at both the authoring and serialization boundaries", () => {
+  const result = markdownContentSchema(20000).safeParse(":::cards variant=custom\nText.\n:::");
+  expect(result.success).toBe(false);
+  if (result.success) throw new Error("Invalid card variant was accepted");
+  const message = result.error.issues[0].message;
+  expect(message).toContain("variant");
+  expect(message).not.toMatch(/\[|"code"|"path"/);
+  expect(() => serializeMarkdownContainer({ type: "card", markdown: "Body", count: "2" })).toThrow(
+    "count is not supported on card",
+  );
 });

@@ -153,3 +153,17 @@ it("wraps selected existing paragraphs in text columns without replacing their c
   editor.commands.toggleWrap("columns");
   expect(editor.state.doc.firstChild?.type.name).toBe("paragraph");
 });
+
+it("keeps malformed container input renderable while the save contract refuses it", () => {
+  for (const source of [
+    ":::aside foo\nSupporting text.\n:::",
+    ":::columns count=9\nArticle text.\n:::",
+    ":::cards variant=custom\nCard text.\n:::",
+    ":::card icon=missing\nCard text.\n:::",
+  ]) {
+    const editor = open(source);
+    expect(editor.view.dom.textContent).toContain(source.split("\n")[0]);
+    expect(published(source).textContent).toContain(source.split("\n")[0]);
+    expect(markdownContentSchema(20000).safeParse(source).success).toBe(false);
+  }
+});

@@ -5,7 +5,7 @@ import {
   contentContainerNames,
   type ContentContainerName,
 } from "../../../shared/schemas/content-layout";
-import { CONTAINER_START, readMarkdownContainer, serializeMarkdownContainer } from "../../../shared/markdown-aside";
+import { CONTAINER_START, tryReadMarkdownContainer, serializeMarkdownContainer } from "../../../shared/markdown-aside";
 import { contentLayoutAttributes } from "../../site/ContentLayout";
 
 function layoutExtension(name: ContentContainerName) {
@@ -85,7 +85,7 @@ function layoutExtension(name: ContentContainerName) {
         return source.search(CONTAINER_START);
       },
       tokenize(source, _tokens, lexer) {
-        const result = readMarkdownContainer(source);
+        const result = tryReadMarkdownContainer(source);
         return result?.block.type === name
           ? { type: name, raw: result.raw, block: result.block, tokens: lexer.blockTokens(result.block.markdown) }
           : undefined;

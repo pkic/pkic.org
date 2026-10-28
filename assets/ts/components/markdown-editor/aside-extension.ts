@@ -1,6 +1,6 @@
 import { Node } from "@tiptap/core";
 import { CONTENT_ASIDE_NAME } from "../../../shared/schemas/content-aside";
-import { ASIDE_START, readMarkdownAside, serializeMarkdownAside } from "../../../shared/markdown-aside";
+import { ASIDE_START, tryReadMarkdownContainer, serializeMarkdownAside } from "../../../shared/markdown-aside";
 import { CONTENT_ASIDE_ATTRIBUTES } from "../../site/ContentAside";
 
 /** The body is editable block content, rather than an opaque embedded widget. */
@@ -23,8 +23,8 @@ export const AsideExtension = Node.create({
       return source.search(ASIDE_START);
     },
     tokenize(source, _tokens, lexer) {
-      const aside = readMarkdownAside(source);
-      return aside
+      const aside = tryReadMarkdownContainer(source);
+      return aside?.block.type === CONTENT_ASIDE_NAME
         ? { type: CONTENT_ASIDE_NAME, raw: aside.raw, tokens: lexer.blockTokens(aside.block.markdown) }
         : undefined;
     },

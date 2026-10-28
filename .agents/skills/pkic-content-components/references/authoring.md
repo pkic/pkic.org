@@ -63,6 +63,6 @@ Keep the logo and explanation editable.
 ::::
 `````
 
-The editor's Text columns, Grid, Cards, and Bento grid commands have distinct layout icons. Select a block to open Layout options: set count/width, card styles, spans, icon, or image treatment. Grid items can be added, removed, or reordered. Text columns keep one editable body; their toolbar command wraps or unwraps the selected paragraphs without replacing them. Gallery entries: `content-columns`, `content-bento`, and the combined `content-layout`.
+The editor provides Text columns, Grid, Cards, and Bento grid insertion commands. Select a block to open Layout options: set count/width, card styles, spans, icon, or image treatment. Grid items can be added, removed, or reordered. Text columns keep one editable body; their toolbar command wraps or unwraps the selected paragraphs without replacing them. Gallery entries: `content-columns`, `content-bento`, and the combined `content-layout`.
 
 Use the parent skill for the component implementation map and verification requirements.

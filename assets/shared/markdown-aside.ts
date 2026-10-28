@@ -14,16 +14,28 @@ export const ASIDE_START = /^:{3,}aside[ \t]*(?:\r?\n|$)/m;
 
 type CodeFence = { marker: string; length: number };
 
+/** Preserve meaningful indentation while removing empty lines at the block edges. */
 function trimBlankLines(markdown: string): string {
   return markdown.replace(/^(?:[ \t]*\r?\n)+|(?:\r?\n[ \t]*)+$/g, "");
 }
 
+/** Track literal code examples independently from the surrounding colon containers. */
 function codeFence(line: string, current: CodeFence | null): CodeFence | null {
   const match = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
   if (!match) return current;
   const marker = match[1][0];
   if (!current) return { marker, length: match[1].length };
   return marker === current.marker && match[1].length >= current.length && !match[2].trim() ? null : current;
+}
+
+/** Validate a container at strict publication/save boundaries with readable author feedback. */
+function parseContentContainer(value: unknown): ContentContainer {
+  const result = contentContainerSchema.safeParse(value);
+  if (!result.success)
+    throw new Error(
+      result.error.issues.map((issue) => `${issue.path.join(".") || "Content block"}: ${issue.message}`).join("; "),
+    );
+  return result.data;
 }
 
 /** Read one balanced container. Code examples never close the surrounding content block. */
@@ -53,7 +65,7 @@ export function readMarkdownContainer(source: string): { raw: string; block: Con
         if (!fences.length)
           return {
             raw: source.slice(0, offset + line.length),
-            block: contentContainerSchema.parse({
+            block: parseContentContainer({
               type: opening[2],
               ...attributes,
               markdown: trimBlankLines(source.slice(opening[0].length, offset)),
@@ -64,6 +76,15 @@ export function readMarkdownContainer(source: string): { raw: string; block: Con
     offset += line.length;
   }
   return null;
+}
+
+/** Tokenizers preserve malformed author input as ordinary Markdown instead of interrupting rendering. */
+export function tryReadMarkdownContainer(source: string): ReturnType<typeof readMarkdownContainer> {
+  try {
+    return readMarkdownContainer(source);
+  } catch {
+    return null;
+  }
 }
 
 /** Share the same boundaries with publication without interpreting ordinary Markdown. */
@@ -95,7 +116,7 @@ export function splitMarkdownContainers(source: string): Array<string | ContentC
 
 /** A longer outer fence preserves nested containers when the visual editor saves. */
 export function serializeMarkdownContainer(block: ContentContainer): string {
-  contentContainerSchema.parse(block);
+  parseContentContainer(block);
   const lengths = [...block.markdown.matchAll(/^(:{3,})[ \t]*$/gm)].map((match) => match[1].length + 1);
   const fence = ":".repeat(Math.max(3, ...lengths));
   const attributes = contentAttributeNames
@@ -104,11 +125,13 @@ export function serializeMarkdownContainer(block: ContentContainer): string {
   return `${fence}${block.type}${attributes.length ? " " + attributes.join(" ") : ""}\n${trimBlankLines(block.markdown)}\n${fence}`;
 }
 
+/** Strict aside adapter; invalid attributes retain the shared readable validation errors. */
 export function readMarkdownAside(source: string): { raw: string; block: ContentAside } | null {
   const result = readMarkdownContainer(source);
   return result?.block.type === "aside" ? { ...result, block: contentAsideSchema.parse(result.block) } : null;
 }
 export const splitMarkdownAsides = splitMarkdownContainers;
+/** Serialize editable aside children through the canonical container codec. */
 export function serializeMarkdownAside(markdown: string): string {
   return serializeMarkdownContainer({ type: CONTENT_ASIDE_NAME, markdown });
 }
