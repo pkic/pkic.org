@@ -154,7 +154,7 @@ export function eventAppDestinations(event: EventAppSubject, session: PortalSess
       { id: "session-management", label: "My sessions", href: href(base + "/session-management"), icon: "sessions" },
     );
   if (hasEventPromotionMaterials(event))
-    destinations.push({ id: "promotion", label: "Promotion kits", href: href(base + "/promotion"), icon: "promotion" });
+    destinations.push({ id: "promotion", label: "Share", href: href(base + "/promotion"), icon: "promotion" });
   if (event.hasDetails)
     destinations.push({ id: "venue", label: "Venue & links", href: href(base + "/more"), icon: "venue" });
   if (event.basePath)

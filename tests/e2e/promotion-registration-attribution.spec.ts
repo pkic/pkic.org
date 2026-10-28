@@ -45,7 +45,7 @@ async function capture(page: Page, info: TestInfo, label: string) {
     if (device === "phone" && label === "attendee-promotion-menu")
       await page
         .getByRole("list", { name: "More event pages" })
-        .getByRole("link", { name: "Promotion kits", exact: true })
+        .getByRole("link", { name: "Share", exact: true })
         .scrollIntoViewIfNeeded();
     await page.screenshot({
       path: info.outputPath(`${label}-${device}.png`),
@@ -252,6 +252,7 @@ test("a rendered promotion QR preserves its referral through email sign-in and c
     });
     expect(detail.registration.id).not.toBe(ownerRegistrationId);
     await visitor.goto(`/portal/#/events/${slug}/promotion`);
+    await visitor.getByRole("button", { name: "Create promotion materials", exact: true }).click();
     await expect(
       visitor.getByRole("heading", { name: "Your attendee promotion materials", exact: true }),
     ).toBeVisible();
@@ -335,10 +336,11 @@ test("attendees can recover promotion materials after a selected session is with
   await page.goto(`/portal/#/events/${slug}/more`);
   const promotionLink = page
     .getByRole("list", { name: "More event pages" })
-    .getByRole("link", { name: "Promotion kits", exact: true });
+    .getByRole("link", { name: "Share", exact: true });
   await expect(promotionLink).toBeVisible();
   await capture(page, info, "attendee-promotion-menu");
   await promotionLink.click();
+  await page.getByRole("button", { name: "Create promotion materials", exact: true }).click();
   await expect(page.getByRole("alert").filter({ hasText: "Unavailable sessions" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Prepare downloads", exact: true })).toBeDisabled();
   await capture(page, info, "attendee-recovery");

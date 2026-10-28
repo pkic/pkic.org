@@ -1,3 +1,6 @@
+import { DownloadAction } from "../../ui/DownloadAction";
+import { downloadFile } from "../download-file";
+import { getBlob } from "../api-client";
 import { personalPromotionImagePath } from "../../../shared/personal-promotion-image";
 /**
  * Renders a personalized sharing panel into a container element.
@@ -102,6 +105,16 @@ function OgBadge({
   squareUrl.searchParams.set("download", "1");
   const squareFilename = badgeFilename.replace(/\.png$/u, "-square.png");
   squareUrl.searchParams.set("name", squareFilename);
+  const [error, setError] = useState("");
+  async function download(url: string, filename: string) {
+    setError("");
+    try {
+      const blob = await getBlob(url);
+      downloadFile(blob, blob.type, filename);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not download your badge. Try again.");
+    }
+  }
   const [loading, setLoading] = useState(true);
   const imgRef = useRef<HTMLImageElement>(null);
 
@@ -140,16 +153,16 @@ function OgBadge({
         height={315}
       />
       <div class="pk-cluster pk-cluster--center">
-        <ButtonLink
-          href={`${ogBadgeUrl}${ogBadgeUrl.includes("?") ? "&" : "?"}download=1&name=${encodeURIComponent(badgeFilename)}`}
-          download={badgeFilename}
-        >
-          <span aria-hidden="true">⬇</span> Download badge
-        </ButtonLink>
-        <ButtonLink href={squareUrl.href} download={squareFilename}>
-          Download square badge
-        </ButtonLink>
+        <DownloadAction
+          label="Download badge (PNG)"
+          menuLabel="Download badge formats"
+          options={[
+            { id: "landscape", label: "Landscape badge (PNG)", onDownload: () => download(ogBadgeUrl, badgeFilename) },
+            { id: "square", label: "Square badge (PNG)", onDownload: () => download(squareUrl.href, squareFilename) },
+          ]}
+        />
       </div>
+      {error && <Alert tone="danger">{error}</Alert>}
     </div>
   );
 }

@@ -125,7 +125,7 @@ export async function registerInBrowser(
     const contact = page.locator("[data-registration-contact]");
     await contact.getByLabel(copy.work.label).fill(email);
     await contact.getByRole("button", { name: copy.work.action, exact: true }).click();
-    await expect(contact).toContainText("Event");
+    await expect(contact.getByText("Representation", { exact: true })).toBeVisible();
     const change = contact.getByRole("button", { name: "Change representation", exact: true });
     if (await change.count()) {
       await change.click();

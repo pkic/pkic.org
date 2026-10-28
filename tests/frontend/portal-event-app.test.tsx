@@ -1,4 +1,3 @@
-import { personalPromotionImagePath } from "../../assets/shared/personal-promotion-image";
 import { eventPlaceSummary } from "../../assets/shared/event-place";
 // @vitest-environment jsdom
 import { render, type JSX } from "preact";
@@ -227,7 +226,7 @@ describe("event bottom tabs", () => {
       "Ticket",
       "Virtual room",
       "Registration",
-      "Promotion kits",
+      "Share",
     ]);
     expect(host.querySelector('[data-event-more="promotion"]')?.getAttribute("href")).toBe("#/events/summit/promotion");
     // The desktop tabs remain the page's one "Event" navigation.
@@ -379,19 +378,14 @@ describe("event home", () => {
     expect(requests).toEqual(["/api/v1/events/summit/badges/current"]);
   });
 
-  it("shows the shared social badge after registration without another data request", async () => {
+  it("keeps sharing and promotion materials out of Ticket", async () => {
     const detail = event(registered);
-    detail.participation!.promotion = {
-      sharePath: "/r/ownshare",
-      badgeVersion: "2026-12-01T10:00:00.000Z",
-    };
+    detail.participation!.promotion = { sharePath: "/r/ownshare", badgeVersion: "2026-12-01T10:00:00.000Z" };
     await act(() => render(<ParticipantEvent event={detail} tab="ticket" />, host));
     await vi.waitFor(() => expect(host.querySelector("iframe.pk-badge-face__frame")).not.toBeNull());
-    expect(host.querySelector<HTMLImageElement>("[data-og-badge-img]")?.src).toContain(
-      personalPromotionImagePath("ownshare"),
-    );
-    expect(host.textContent).toContain("Download badge");
-    expect(host.querySelector('a[aria-label="Share on LinkedIn"]')?.getAttribute("href")).toContain("ownshare");
+    expect(host.querySelector("[data-og-badge-img]")).toBeNull();
+    expect(host.textContent).not.toContain("Invite a colleague");
+    expect(host.textContent).not.toContain("Prepare downloads");
     expect(requests).toEqual(["/api/v1/events/summit/badges/current"]);
   });
 

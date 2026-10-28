@@ -113,6 +113,7 @@ export function VirtualRoomPanels({
               startAt={interactionSession.startAt}
               endAt={interactionSession.endAt}
               labelledBy="virtual-room-tab-chat"
+              showClosedControls
               closed={
                 <EmptyState
                   title="Chat opens when the session is live"

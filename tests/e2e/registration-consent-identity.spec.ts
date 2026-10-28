@@ -74,6 +74,15 @@ test("verified approved-domain registration affiliates once and an organization 
         await formPage.screenshot({ path: testInfo.outputPath("registration-review-phone.png") });
       },
       onContactReady: async (formPage) => {
+        await expect(formPage.locator('[aria-invalid="true"]')).toHaveCount(0);
+        const first = formPage.getByRole("textbox", { name: /^First name/ });
+        const last = formPage.getByRole("textbox", { name: /^Last name/ });
+        await first.fill("");
+        await last.fill("");
+        await formPage.getByRole("button", { name: "Continue", exact: true }).click();
+        await expect(first).toBeFocused();
+        await first.fill("Synthetic");
+        await last.fill("Attendee");
         const chooser = formPage.getByRole("combobox", { name: /^Organization/ });
         await expect(chooser).toHaveValue(owner.user.identities[0].organizationId!);
         await formPage.setViewportSize({ width: 1280, height: 900 });

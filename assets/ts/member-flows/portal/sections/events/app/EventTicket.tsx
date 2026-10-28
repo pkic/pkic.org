@@ -1,3 +1,7 @@
+import { splitBadgePrintSvg } from "../../../../../../shared/badge-print-svg";
+import { createPortal } from "preact/compat";
+import { Dialog } from "../../../../../ui/Dialog";
+import { useDialogQueryState } from "../../../../../hooks/useDialogQueryState";
 /**
  * The attendee's ticket is their badge: the organizers' print renderer draws
  * the same front — template, sponsor artwork, role band, the QR code and the
@@ -23,7 +27,6 @@ import { eventPhase } from "./event-timing";
 import { RegistrationOfferNotice } from "./RegistrationOfferNotice";
 import { attendanceStanding, type AttendanceStanding } from "../../../../../shared/viewer-attendance";
 import { formatDayList } from "../../../../../../shared/format-date";
-import { SharePanel } from "../../../../../shared/widgets/share-panel";
 
 export function EventTicket({
   event,
@@ -66,6 +69,7 @@ export function EventTicket({
 }
 
 function BadgeTicket({ event, details }: { event: ParticipantEventDetail; details: ComponentChildren }) {
+  const [enlarged, showCode, closeCode] = useDialogQueryState("ticket-code");
   const ticket = useData(async () => {
     const current = await putJson(
       `/api/v1/events/${encodeURIComponent(event.slug)}/badges/current`,
@@ -75,6 +79,7 @@ function BadgeTicket({ event, details }: { event: ParticipantEventDetail; detail
     // A label withheld by contact retention prints blank, as it does on paper.
     return { ...current, badge: { ...current.badge, displayName: current.badge.displayName ?? "" } };
   }, [event.slug]);
+  const qr = ticket.data ? splitBadgePrintSvg(ticket.data.badge.svg) : null;
   const viewer = "viewer" in event ? event.viewer : null;
   const standing = viewer ? attendanceStanding(viewer) : UNDATED_SEAT;
   const use = (
@@ -89,20 +94,37 @@ function BadgeTicket({ event, details }: { event: ParticipantEventDetail; detail
       {ticket.loading ? (
         <Spinner label="Loading your badge…" />
       ) : ticket.data ? (
-        <BadgeFace badge={ticket.data.badge} printing={ticket.data.printing} title={`Your badge for ${event.name}`} />
+        <BadgeFace
+          badge={ticket.data.badge}
+          printing={ticket.data.printing}
+          title={`Your badge for ${event.name}`}
+          onQrClick={showCode}
+        />
       ) : (
         <ErrorAlert error={ticket.error ?? "Your badge is unavailable."} />
       )}
       {standing.holdsInPersonSeat && use}
-      {event.participation?.promotion && (
-        <SharePanel
-          options={{
-            shareUrl: new URL(event.participation.promotion.sharePath, window.location.origin).href,
-            badgeVersion: event.participation.promotion.badgeVersion,
-            eventName: event.name,
-          }}
-        />
-      )}
+      {ticket.data &&
+        createPortal(
+          <Dialog
+            open={enlarged}
+            title="Check-in code"
+            confirmLabel="Close"
+            closeLabel="Close check-in code"
+            onCancel={() => void closeCode()}
+            onConfirm={() => void closeCode()}
+            viewer
+            size="wide"
+          >
+            <img
+              class="pk-badge-qr-expanded"
+              src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(qr?.qr ?? ticket.data.badge.svg)}`}
+              alt="Your check-in QR code"
+            />
+            {qr && <p class="pk-center pk-mono">{qr.code}</p>}
+          </Dialog>,
+          document.body,
+        )}
     </div>
   );
 }

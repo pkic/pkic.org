@@ -20,7 +20,7 @@ type Kit = z.infer<typeof promotionKitSchema>;
 export function PersonalPromotionKit({ base, title, onClose }: { base: string; title: string; onClose?: () => void }) {
   const [kit, setKit] = useState<Kit | null>(null),
     [error, setError] = useState(""),
-    [busy, setBusy] = useState(false);
+    [busy, setBusy] = useState<"prepare" | "download" | null>(null);
   const [editing, showEditing, closeEditing] = useDialogQueryState(`promotionComposition:${base}`);
   useEffect(() => {
     let cancelled = false;
@@ -54,7 +54,7 @@ export function PersonalPromotionKit({ base, title, onClose }: { base: string; t
     };
   }, [kit, base]);
   async function prepare() {
-    setBusy(true);
+    setBusy("prepare");
     try {
       setKit(
         await postJson(
@@ -71,12 +71,12 @@ export function PersonalPromotionKit({ base, title, onClose }: { base: string; t
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not prepare your materials.");
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   }
   async function download(format: string) {
     if (!kit) return;
-    setBusy(true);
+    setBusy("download");
     try {
       const content = await getBlob(artifact(format));
       const extension = content.type === "application/zip" ? "zip" : format === "carousel" ? "pdf" : "png";
@@ -85,7 +85,7 @@ export function PersonalPromotionKit({ base, title, onClose }: { base: string; t
     } catch (error) {
       setError(error instanceof Error ? error.message : "Could not download these materials.");
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   }
   const artifact = (format: string, preview = false) =>
@@ -118,7 +118,7 @@ export function PersonalPromotionKit({ base, title, onClose }: { base: string; t
             <p>Your downloads and registration link credit referrals to you.</p>
             <ExternalLink href={kit.registrationUrl}>Your registration referral link</ExternalLink>
             <div class="pk-promotion-kit__actions">
-              <Button onClick={prepare} disabled={busy || kit.stale}>
+              <Button onClick={prepare} loading={busy === "prepare"} disabled={kit.stale || busy === "download"}>
                 Prepare downloads
               </Button>
               <Button
@@ -153,7 +153,7 @@ export function PersonalPromotionKit({ base, title, onClose }: { base: string; t
                       <a
                         href={artifact(format)}
                         download
-                        aria-disabled={busy}
+                        aria-disabled={Boolean(busy)}
                         onClick={(event) => {
                           if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
                             return;

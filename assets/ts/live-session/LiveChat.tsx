@@ -17,7 +17,7 @@ import "./LiveChat.css";
 /** How close to the end of the feed still counts as reading the latest message. */
 const FOLLOW_SLACK = 48;
 
-function ChatComposer({
+export function ChatComposer({
   channel,
   compact,
   disabled,

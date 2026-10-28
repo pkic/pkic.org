@@ -221,7 +221,7 @@ describe("event app More sheet", () => {
       "Registration",
       "Virtual room",
       "Calendar and reminders",
-      "Promotion kits",
+      "Share",
       "Venue & links",
       "Event website",
     ]);

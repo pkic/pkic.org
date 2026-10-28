@@ -6,6 +6,15 @@
     border-radius: var(--pk-radius-lg);
   }
 
+  .pk-badge-qr-expanded {
+    display: block;
+    inline-size: min(100%, 36rem, calc(100dvh - 12rem));
+    flex: 0 0 auto;
+    block-size: auto;
+    margin-inline: auto;
+    background: var(--pk-on-solid);
+  }
+
   .pk-badge-qr-preview {
     width: min(100%, 18rem);
     height: auto;

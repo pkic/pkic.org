@@ -57,7 +57,7 @@ const PAGE_LABELS: Record<string, string> = {
   registration: "Registration",
   program: "Agenda",
   agenda: "My agenda",
-  promotion: "Promotion kits",
+  promotion: "Share",
   "lead-scanner": "Lead scanner",
   "session-management": "My sessions",
   ticket: "Ticket",
@@ -130,7 +130,7 @@ export function ParticipantEvent({
         ]
       : []),
     ...(hasEventPromotionMaterials(event)
-      ? [{ id: "promotion", label: "Promotion kits", href: href(base + "/promotion") }]
+      ? [{ id: "promotion", label: "Share", href: href(base + "/promotion") }]
       : []),
     ...(hasProposals
       ? [
@@ -186,7 +186,21 @@ export function ParticipantEvent({
         </Suspense>
       ) : tab === "promotion" ? (
         <Suspense fallback={<Spinner />}>
-          <MyPromotionKits slug={event.slug} attendeeEligible={eventRegistrationStanding(event).registered} />
+          <MyPromotionKits
+            slug={event.slug}
+            attendeeEligible={eventRegistrationStanding(event).status === "registered"}
+            speakerEligible={hasProposals}
+            share={
+              event.participation?.promotion
+                ? {
+                    shareUrl: new URL(event.participation.promotion.sharePath, window.location.origin).href,
+                    badgeVersion: event.participation.promotion.badgeVersion,
+                    eventName: event.name,
+                    eventSlug: event.slug,
+                  }
+                : undefined
+            }
+          />
         </Suspense>
       ) : tab === "lead-scanner" ? (
         <ParticipantLeadScanner eventId={event.id} slug={event.slug} scannerAccess={event.scannerAccess} />
