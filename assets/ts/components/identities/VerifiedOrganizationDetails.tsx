@@ -24,6 +24,7 @@ type Resolved = z.infer<typeof identityAffiliationPreviewResponseSchema>;
 type Input = z.infer<typeof identityAffiliationPrepareSchema>;
 export interface VerifiedOrganizationController {
   read?: () => { input: Input; contextToken?: string; organizationName: string } | { refused: true };
+  validate?: () => boolean;
   prepare?: () => Promise<boolean>;
 }
 /** One organization confirmation flow, embedded after either session or registration mailbox proof. */
@@ -62,9 +63,10 @@ export function VerifiedOrganizationDetails({
   };
   const detailsForm = useContractForm(identityAffiliationPrepareSchema, body);
   const key = JSON.stringify(body);
+  controller.validate = () => Boolean(detailsForm.submit().data);
   controller.read = () => {
-    const checked = detailsForm.submit();
-    return checked.data
+    const checked = identityAffiliationPrepareSchema.safeParse(body);
+    return checked.success
       ? {
           input: checked.data,
           organizationName: resolved.organizations.find((item) => item.id === organizationId)?.name ?? organizationName,

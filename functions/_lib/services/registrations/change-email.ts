@@ -1,3 +1,4 @@
+import { preparePrimaryEmailDomainChange } from "../identities/primary-email-domain-change";
 import { readEmailOwnership, prepareEmailOwnershipClaim } from "../email-ownership";
 import { prepareMailingListEmailChange } from "../mailing-list-subscriptions/queue-email-change";
 /**
@@ -480,6 +481,14 @@ export async function prepareFinalizeEmailChange(
   }
 
   stmts.push(...prepareMailingListEmailChange(db, user.id, now));
+  stmts.push(
+    ...preparePrimaryEmailDomainChange(db, {
+      userId: user.id,
+      previousEmail: user.email,
+      nextEmail: user.pending_email,
+      at: now,
+    }),
+  );
   return {
     registration: finalizedRegistration,
     finalEmail: user.pending_email,

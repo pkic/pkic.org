@@ -1,3 +1,4 @@
+import { registrationEmailProofVerifySchema } from "../../assets/shared/schemas/registration-email-proof";
 // @vitest-environment jsdom
 /**
  * The confirmation shell, driven the way a browser drives it.
@@ -362,7 +363,29 @@ describe("registration confirmation shell", () => {
     const root = mountShell();
     const requests = installApi({
       [CONFIRM_INFO]: () =>
-        json(confirmInfo({ firstName: "Ada", email: "ada@unknown-works.example", asksOrganization: true })),
+        json(
+          confirmInfo({
+            firstName: "Ada",
+            email: "ada@unknown-works.example",
+            asksOrganization: true,
+            organizationProof: "synthetic-mailbox-proof-01234567890123456789",
+          }),
+        ),
+      "/api/v1/events/pqc-2026/registrations/proof/verify": () =>
+        json({
+          email: "ada@unknown-works.example",
+          unaffiliatedAttestation: false,
+          person: null,
+          asksOrganization: true,
+          affiliation: {
+            email: "ada@unknown-works.example",
+            domain: "unknown-works.example",
+            domains: [],
+            organization: null,
+            organizations: [],
+            contextToken: "synthetic-affiliation-context-0123456789",
+          },
+        }),
       "/api/v1/events/pqc-2026/registrations/confirm-email": () =>
         json({
           success: true,
@@ -389,7 +412,7 @@ describe("registration confirmation shell", () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
       });
     await submit();
-    expect(requests.some((request) => request.method === "POST")).toBe(false);
+    expect(requests.some((request) => request.path.endsWith("/confirm-email"))).toBe(false);
     expect(organization.getAttribute("aria-invalid")).toBe("true");
     expect(root.textContent).toContain(ORGANIZATION_NAME_REQUIRED);
     expect(root.textContent).not.toContain("Invalid input");
@@ -406,7 +429,7 @@ describe("registration confirmation shell", () => {
     expect(jobTitle.required).toBe(true);
     expect(jobTitle.getAttribute("aria-invalid")).toBe("true");
     expect(root.textContent).toContain(JOB_TITLE_REQUIRED);
-    expect(requests.some((request) => request.method === "POST")).toBe(false);
+    expect(requests.some((request) => request.path.endsWith("/confirm-email"))).toBe(false);
 
     await act(() => {
       jobTitle.value = "Security Architect";
@@ -414,10 +437,20 @@ describe("registration confirmation shell", () => {
     });
     await submit();
     await settle();
-    const posted = requests.find((request) => request.method === "POST");
-    expect(registrationConfirmSchema.parse(posted?.body)).toEqual({
+    const preparation = requests.filter((request) => request.path.endsWith("/proof/verify")).at(-1);
+    expect(registrationEmailProofVerifySchema.parse(preparation?.body).affiliation).toMatchObject({
+      organizationName: "Unknown Works",
+      jobTitle: "Security Architect",
+      organizationId: null,
+    });
+    const posted = requests.find((request) => request.path.endsWith("/confirm-email"));
+    expect(registrationConfirmSchema.parse(posted?.body)).toMatchObject({
       token: "live-token-0123456789",
-      organization: { name: "Unknown Works", jobTitle: "Security Architect" },
+      organization: {
+        name: "Unknown Works",
+        jobTitle: "Security Architect",
+        contextToken: "synthetic-affiliation-context-0123456789",
+      },
     });
     expect(root.textContent).toContain(REGISTRATION_ORGANIZATION_COPY.reviewRequired);
     // Once confirmed, only the outcome stays: the invitation to confirm is gone.

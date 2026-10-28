@@ -331,6 +331,10 @@ describe("registration contact step", () => {
       named = organization.read?.();
     });
     expect(named).toEqual({ refused: true });
+    expect(name.getAttribute("aria-invalid")).not.toBe("true");
+    await act(() => {
+      organization.validate?.();
+    });
     expect(name.getAttribute("aria-invalid")).toBe("true");
     expect(name.parentElement?.querySelector(".pk-field__state")).not.toBeNull();
     await act(() => {

@@ -345,8 +345,9 @@ export const registrationConfirmInfoResponseSchema = z.object({
   lastName: z.string().nullable(),
   email: normalizedEmailSchema.nullable(),
   organizationName: z.string().nullable(),
-  /** A work address whose domain resolves to no organization: the page asks for it once. */
+  /** A verified work address confirms its organization through the shared chooser. */
   asksOrganization: z.boolean().default(false),
+  organizationProof: registrationEmailProofTokenSchema.optional(),
   eventName: z.string().nullable(),
   expired: z.boolean(),
   recoverable: z.boolean(),

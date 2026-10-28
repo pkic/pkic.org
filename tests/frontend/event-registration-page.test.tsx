@@ -30,7 +30,7 @@ function json(value: unknown, status = 200): Response {
   return new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
 }
 
-function installApi(): Captured[] {
+function installApi(workEmail = false): Captured[] {
   const requests: Captured[] = [];
   vi.stubGlobal(
     "fetch",
@@ -65,11 +65,26 @@ function installApi(): Captured[] {
         return Promise.resolve(
           json(
             registrationEmailProofVerifyResponseSchema.parse({
-              email: "ada@gmail.com",
-              unaffiliatedAttestation: true,
+              email: workEmail ? "attendee@example.test" : "ada@gmail.com",
+              unaffiliatedAttestation: !workEmail,
               person: null,
-              asksOrganization: false,
-              affiliation: null,
+              asksOrganization: workEmail,
+              affiliation: workEmail
+                ? {
+                    email: "attendee@example.test",
+                    domain: "example.test",
+                    domains: [{ domain: "example.test", canLink: false, organizationName: "Example organization" }],
+                    organization: { id: "00000000-0000-4000-8000-000000000044", name: "Example organization" },
+                    organizations: [
+                      {
+                        id: "00000000-0000-4000-8000-000000000044",
+                        name: "Example organization",
+                        identityId: null,
+                        jobTitle: null,
+                      },
+                    ],
+                  }
+                : null,
             }),
           ),
         );
@@ -117,10 +132,10 @@ afterEach(() => {
   window.history.replaceState({}, "", "/");
 });
 
-async function loadPage(): Promise<Captured[]> {
+async function loadPage(workEmail = false): Promise<Captured[]> {
   document.body.innerHTML = renderToString(<EventRegistrationForm />);
   document.querySelector<HTMLElement>("[data-event-registration]")!.dataset.eventSlug = "pqc-2026";
-  const requests = installApi();
+  const requests = installApi(workEmail);
   await act(async () => {
     await import("../../assets/ts/event-flows/registration-page");
   });
@@ -151,6 +166,34 @@ describe("registration email-first entry", () => {
     });
     expect(step.textContent).toContain(copy.sent("ada@gmail.com"));
     expect(next.hidden).toBe(true);
+  });
+
+  it("does not validate on arrival and focuses missing contact fields before the job title", async () => {
+    history.replaceState({}, "", "/events/2026/pqc-2026/register/#verify=synthetic-proof-0123456789abcdefghijklmnop");
+    await loadPage(true);
+    const first = controlFor(document.body, "First name");
+    const last = controlFor(document.body, "Last name");
+    const title = controlFor(document.body, "Job title");
+    expect(document.querySelector('[aria-invalid="true"]')).toBeNull();
+    expect(document.activeElement).not.toBe(title);
+    const next = document.querySelector<HTMLButtonElement>("[data-step-next]")!;
+    await act(() => next.click());
+    await settle();
+    expect(document.activeElement).toBe(first);
+    expect(title.getAttribute("aria-invalid")).not.toBe("true");
+    for (const [control, value] of [
+      [first, "Test"],
+      [last, "Attendee"],
+    ] as const) {
+      await act(() => {
+        control.value = value;
+        control.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    }
+    await act(() => next.click());
+    await settle();
+    expect(document.activeElement).toBe(title);
+    expect(title.getAttribute("aria-invalid")).toBe("true");
   });
 
   it("continues from the opened link and registers with the proof and the chosen capacity", async () => {

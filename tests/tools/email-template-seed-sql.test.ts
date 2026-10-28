@@ -71,6 +71,23 @@ const EXPECTED_BASELINE_TEMPLATE_KEYS = [
 ] as const;
 
 describe("buildTemplateSqlStatements", () => {
+  it("renders registration verification as the shared email CTA with a usable plain-text link", async () => {
+    const template = DEFAULT_TEMPLATES.find((item) => item.key === "registration_email_verify")!;
+    const url = "https://example.test/register/#verify=synthetic-proof";
+    const rendered = await renderEmail(
+      template.content,
+      { verificationUrl: url, eventName: "Example conference" },
+      DEFAULT_LAYOUT_HTML,
+      template.contentType,
+      "https://example.test",
+    );
+    expect(template.contentType).toBe("markdown");
+    expect(rendered.html).toContain('href="' + url + '"');
+    expect(rendered.html).toContain("Verify email and continue");
+    expect(rendered.html).toContain("cta-navy");
+    expect(rendered.text).toContain(url);
+  });
+
   it.each([1, 2, 51])("renders the bounded organization digest with %s pending profiles", async (pendingCount) => {
     const digest = DEFAULT_TEMPLATES.find((item) => item.key === "org-content-review-digest")!;
     const rendered = await renderEmail(

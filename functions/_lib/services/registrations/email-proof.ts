@@ -25,7 +25,11 @@ import type {
   registrationEmailProofStartSchema,
 } from "../../../../assets/shared/schemas/registration-email-proof";
 import { decodeCapabilityPayload, encodeCapabilityPayload } from "../../auth/capability-payload";
-import { queuedCapabilityToken, verifyStatelessCapabilityToken } from "../../auth/capability-links";
+import {
+  signStatelessCapabilityToken,
+  queuedCapabilityToken,
+  verifyStatelessCapabilityToken,
+} from "../../auth/capability-links";
 import { checkEmailDomainMx } from "../../email/mx-check";
 import { prepareQueueEmailStatement } from "../../email/outbox-queue";
 import { emailPlainText } from "../../email/plain-text";
@@ -37,9 +41,39 @@ import { registrationPageUrl } from "../frontend-links";
 const PURPOSE = "registration_email_verify";
 
 const proofPayloadSchema = z
-  .object({ eventId: databaseIdSchema, email: normalizedEmailSchema, unaffiliatedAttestation: z.boolean() })
+  .object({
+    eventId: databaseIdSchema,
+    email: normalizedEmailSchema,
+    unaffiliatedAttestation: z.boolean(),
+    binding: z
+      .object({ userId: databaseIdSchema, registrationId: databaseIdSchema, revision: z.number().int().nonnegative() })
+      .optional(),
+  })
   .strict();
 export type RegistrationEmailProof = z.infer<typeof proofPayloadSchema>;
+
+/** Exchange an already verified confirmation capability without another email challenge. */
+export function registrationConfirmationMailboxProof(secret: string, proof: RegistrationEmailProof, expiresAt: number) {
+  return signStatelessCapabilityToken({
+    signingSecret: secret,
+    purpose: PURPOSE,
+    resourceId: encodeCapabilityPayload(proofPayloadSchema.parse(proof)),
+    ttlSeconds: Math.max(1, Math.min(600, expiresAt - Math.floor(Date.now() / 1000))),
+  });
+}
+
+/** A confirmation's mailbox proof remains bound to the same pending registration and account. */
+export function registrationProofOwner(proof: RegistrationEmailProof) {
+  if (!proof.binding) return provedMailboxUserIdSelection(proof.email);
+  return {
+    sql: `SELECT person.id FROM users person JOIN registrations registration ON registration.user_id=person.id
+      WHERE person.id=? AND registration.id=? AND registration.transition_revision=?
+        AND registration.status='pending_email_confirmation' AND person.active=1
+        AND person.merged_into_user_id IS NULL AND person.pii_redacted_at IS NULL
+        AND (person.normalized_email=? OR (person.pending_email=? AND person.pending_email_change_registration_id=registration.id))`,
+    bindings: [proof.binding.userId, proof.binding.registrationId, proof.binding.revision, proof.email, proof.email],
+  };
+}
 
 /** Whether an event takes registrations at all; an automatic meeting invites its group itself. */
 export function eventTakesRegistrations(registrationMode: string): boolean {
@@ -137,7 +171,7 @@ export async function verifyRegistrationEmailProof(
   },
 ): Promise<RegistrationEmailProofVerifyResponse> {
   const proof = await readRegistrationEmailProof(input.signingSecret, input.token);
-  const owner = provedMailboxUserIdSelection(proof.email);
+  const owner = registrationProofOwner(proof);
   const affiliation = proof.unaffiliatedAttestation
     ? null
     : prepareVerifiedAffiliationRead(
@@ -158,6 +192,8 @@ export async function verifyRegistrationEmailProof(
   ]);
   if (!batchFirst(results[0])) throw new AppError(404, "EVENT_NOT_FOUND", "Event not found");
   const person = batchFirst<{ id: string; first_name: string | null; last_name: string | null }>(results[1]);
+  if (proof.binding && !person)
+    throw new AppError(409, "REGISTRATION_CHANGED", "Your registration changed. Open the latest confirmation email.");
   const observed = affiliation?.decode(results.slice(2));
   const preview = observed ? verifiedAffiliationPreview(observed.basis, observed.address) : null;
   if (input.affiliation && observed && preview) {

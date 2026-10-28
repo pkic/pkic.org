@@ -1,7 +1,7 @@
 import type { IdentityDomainAssessment } from "../../../../assets/shared/schemas/identity";
 import { emailDomainOf } from "../../../../assets/shared/schemas/email-domains";
 import { mailboxKind, organizationDomainCandidates } from "../../email-domains/classification";
-import { hostWithinDomainSql } from "../../email-domains/sql";
+import { governingDomainClaimSql } from "../../email-domains/sql";
 import { all, first } from "../../db/queries";
 import { organizationLinkDomain } from "../membership/organization-domain-claims";
 import { normalizeEmail } from "../../validation";
@@ -152,14 +152,11 @@ export async function listVerifiedIdentityDomainMatches(
      )
      SELECT verified.email, claim.domain, claim.organization_id, claim.application_id
        FROM verified_emails verified
-       JOIN organization_domain_claims claim ON ${hostWithinDomainSql("verified.domain", "claim.domain")}
+       JOIN organization_domain_claims claim ON ${governingDomainClaimSql("verified.domain")}
       ORDER BY verified.email, length(claim.domain) DESC`,
     [userId, userId],
   );
-  // Each address follows the most specific claim covering it, and only an organization's approved one.
-  const governing = new Map<string, (typeof rows)[number]>();
-  for (const row of rows) if (!governing.has(row.email)) governing.set(row.email, row);
-  return [...governing.values()]
+  return rows
     .filter((row) => row.organization_id !== null && row.application_id === null)
     .filter((row) => organizationDomainCandidates(row.email).includes(row.domain))
     .sort(

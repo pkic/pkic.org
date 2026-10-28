@@ -5,8 +5,7 @@ import type {
   registrationProvedPersonSchema,
 } from "../../../../assets/shared/schemas/registration-email-proof";
 import type { DatabaseLike } from "../../types";
-import { readRegistrationEmailProof } from "./email-proof";
-import { provedMailboxUserIdSelection } from "../email-ownership";
+import { registrationProofOwner, readRegistrationEmailProof } from "./email-proof";
 import { prepareAuthorizationGuard, isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import { prepareUserProfileStatements } from "../users";
 import { prepareScopedAuditLogAfterOneChange, isAuditChangeGuardFailure } from "../audit";
@@ -24,7 +23,7 @@ export async function updateRegistrationProofPerson(
   },
 ) {
   const proof = await readRegistrationEmailProof(input.signingSecret, input.body.token);
-  const owner = provedMailboxUserIdSelection(proof.email);
+  const owner = registrationProofOwner(proof);
   const names = { firstName: input.body.firstName, lastName: input.body.lastName };
   const at = nowIso();
   try {

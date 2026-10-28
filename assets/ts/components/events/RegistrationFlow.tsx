@@ -159,13 +159,12 @@ export function RegistrationFlow(props: Props) {
       (step) => {
         if (step === 1) {
           if (boot.form.dataset.contactReady !== "true") return false;
-          const named = organization.current.read?.();
-          if (named && "refused" in named) return false;
           const checked = contactContract.submit();
           if (!checked.data) {
             setError(checked.message);
             return false;
           }
+          if (organization.current.validate?.() === false) return false;
         }
         if (step === 2) {
           const checked = attendanceContract.submit();
@@ -257,8 +256,9 @@ export function RegistrationFlow(props: Props) {
           if (busy || !available || (props.mode === "create" && !invitation.current?.canSubmit())) return;
           setError("");
           if (!updating) {
-            const named = organization.current.read?.();
-            if (named && "refused" in named) return;
+            const contact = contactContract.submit();
+            if (!contact.data) return setError(contact.message);
+            if (organization.current.validate?.() === false) return;
           }
           const answered = currentQuestions.current.submit();
           let checked = contract.submit();

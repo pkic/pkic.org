@@ -250,7 +250,12 @@ export function prepareAccountIdentityStatement(db: DatabaseLike, userId: string
  * example one who only held organization identities and now takes part as an
  * individual. Inserts nothing when they already hold an active one.
  */
-export function prepareIndividualIdentityStatement(db: DatabaseLike, userId: string, at: string): StatementLike {
+export function prepareIndividualIdentityStatement(
+  db: DatabaseLike,
+  userId: string,
+  at: string,
+  identityId = uuid(),
+): StatementLike {
   return db
     .prepare(
       `INSERT INTO identities (
@@ -263,7 +268,7 @@ export function prepareIndividualIdentityStatement(db: DatabaseLike, userId: str
           WHERE held.user_id = ? AND held.organization_id IS NULL
             AND held.started_at IS NOT NULL AND held.ended_at IS NULL AND held.blocked_at IS NULL)`,
     )
-    .bind(uuid(), userId, at, at, at, at, userId);
+    .bind(identityId, userId, at, at, at, at, userId);
 }
 
 async function resolveUserWrite(db: DatabaseLike, payload: FindOrCreateUserPayload): Promise<ResolvedUserWrite> {

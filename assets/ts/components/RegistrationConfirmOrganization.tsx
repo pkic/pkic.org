@@ -14,6 +14,7 @@ import {
 
 export interface ConfirmOrganizationController {
   read?: () => { organization: Organization } | { refused: true };
+  validate?: () => boolean;
   prepare?: () => Promise<boolean>;
 }
 /** Registration embeds the same verified organization flow; only its mailbox-proof adapter differs. */
@@ -30,11 +31,13 @@ export function RegistrationConfirmOrganization({
   useEffect(
     () => () => {
       delete controller.read;
+      delete controller.validate;
       delete controller.prepare;
     },
     [controller],
   );
   const initial = proof?.affiliation ?? { email, domain: "", domains: [], organization: null, organizations: [] };
+  controller.validate = () => details.current.validate?.() ?? false;
   controller.read = () => {
     const selected = details.current.read?.();
     if (!selected || "refused" in selected) return { refused: true };

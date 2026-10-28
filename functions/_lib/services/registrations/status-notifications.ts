@@ -1,8 +1,11 @@
 import {
+  selectedOrAffiliationOrganizationNameSql,
+  selectedOrAffiliationJobTitleSql,
+} from "../identities/affiliation-projection";
+import {
   personalPromotionImagePath,
   personalPromotionSharePath,
 } from "../../../../assets/shared/personal-promotion-image";
-import { REGISTRATION_ORGANIZATION_SQL, REGISTRATION_JOB_TITLE_SQL } from "./selected-identity";
 import type { CountryCode } from "../../../../assets/shared/countries";
 import { batchFirst, batchRows } from "../../db/pagination";
 import { AppError } from "../../errors";
@@ -75,14 +78,15 @@ async function loadRegistrationEmailContext(
   customAnswerRows: Awaited<ReturnType<typeof getCustomAnswerRows>>;
   acceptedTermsText: string;
 }> {
+  const selectedIdentity = overrides.registration ? "(SELECT id FROM email_identity)" : "r.registration_identity_id";
   const [registrationResult, userResult, attendanceResult, waitlistResult, termsResult] = await db.batch([
     prepareRegistrationByIdForEvent(db, event.id, registrationId),
     db
-      .prepare(`SELECT u.id, ${REGISTRATION_RECIPIENT_EMAIL_SQL} AS email,
-            u.first_name, u.last_name, ${REGISTRATION_ORGANIZATION_SQL} AS organization_name, ${REGISTRATION_JOB_TITLE_SQL} AS job_title
+      .prepare(`WITH email_identity AS (SELECT ? AS id) SELECT u.id, ${REGISTRATION_RECIPIENT_EMAIL_SQL} AS email,
+            u.first_name, u.last_name, ${selectedOrAffiliationOrganizationNameSql(selectedIdentity, "u.id")} AS organization_name, ${selectedOrAffiliationJobTitleSql(selectedIdentity, "u.id")} AS job_title
        FROM registrations r JOIN users u ON u.id = r.user_id
        WHERE r.id = ? AND r.event_id = ?`)
-      .bind(registrationId, event.id),
+      .bind(overrides.registration?.registration_identity_id ?? null, registrationId, event.id),
     prepareRegistrationDayAttendance(db, registrationId),
     prepareRegistrationDayWaitlist(db, registrationId),
     prepareAcceptedRegistrationTerms(db, registrationId),

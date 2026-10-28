@@ -14,8 +14,8 @@ export const DEFAULT_TRANSACTIONAL_EMAIL_TEMPLATES = [
     key: "registration_email_verify",
     subjectTemplate: "Verify your email for {{eventName}}",
     content:
-      "Open this link to verify your email address and continue your registration for {{eventName}}.\n\n{{verificationUrl}}\n\nIf you did not start a registration, you can ignore this email.",
-    contentType: "text",
+      'Verify your email address to continue your registration for **{{eventName}}**.\n\n<div class="cta-navy"><a href="{{verificationUrl}}">Verify email and continue &rarr;</a></div>\n\nIf you did not start a registration, you can ignore this email.',
+    contentType: "markdown",
     messageType: "transactional",
   },
   {
