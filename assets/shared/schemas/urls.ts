@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { markdownSafeUrl } from "../markdown-media";
+import { markdownSafeUrl } from "../markdown-media.ts";
 
 export const MAX_URL_LENGTH = 500;
 export const MAX_CAPABILITY_URL_LENGTH = 4096;

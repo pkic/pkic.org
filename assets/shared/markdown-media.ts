@@ -1,4 +1,4 @@
-import { youtubeVideoUrlSegment } from "./youtube-video";
+import { youtubeVideoUrlSegment } from "./youtube-video.ts";
 
 /** Canonical legacy start offsets are nonnegative decimal seconds of at most ten digits. */
 export function youtubeStartOffset(value: string): number | null {
