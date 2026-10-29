@@ -47,6 +47,20 @@ export async function editMyProfile(page: Page): Promise<void> {
 }
 
 /**
+ * Opens the profile page of one identity the person holds, from that
+ * identity's row menu on their record ("Edit profile…"). The identity's job
+ * title, biography and links are edited there, not on the record's edit view.
+ */
+export async function editMyIdentityProfile(page: Page, identityName: string): Promise<void> {
+  await page.getByRole("button", { name: `Actions for ${identityName}`, exact: true }).click();
+  await page.getByRole("menuitem", { name: "Edit profile…", exact: true }).click();
+  await expect(page).toHaveURL(/\/portal\/#\/users\/[^/?#]+\/affiliations\/[^/?#]+\/profile$/, {
+    timeout: 15_000,
+  });
+  await expect(page.getByRole("textbox", { name: /^Job title for this organization/ })).toBeVisible();
+}
+
+/**
  * Opens one of the identity's represented organizations from the same menu.
  *
  * The representatives roster lives on the organization's own page, so this is
