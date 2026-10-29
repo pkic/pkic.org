@@ -68,6 +68,7 @@
   .pk-content-card p { margin-block: var(--pk-3); }
   .pk-content-card__icon {
     display: block;
+    white-space: normal;
     color: var(--pk-accent-ink);
     font-size: var(--pk-6);
     line-height: 1;

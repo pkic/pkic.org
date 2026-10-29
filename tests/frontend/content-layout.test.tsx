@@ -250,6 +250,14 @@ it("preserves editable resource-card sections and shared button links through sa
   expect(open(editor.getMarkdown()).getJSON()).toEqual(editor.getJSON());
   expect(markdownContentSchema(30000).safeParse(editor.getMarkdown()).success).toBe(true);
   const result = published(editor.getMarkdown());
+  for (const surface of [editor.view.dom, result]) {
+    expect(
+      surface.querySelector('.pk-content-card[data-media="image"] .pk-content-card__content > p:first-child > img'),
+    ).not.toBeNull();
+    expect(
+      surface.querySelector('.pk-content-card[data-media="logo"] .pk-content-card__content > p > img'),
+    ).not.toBeNull();
+  }
   expect(result.querySelectorAll("a.pk-content-button.pk-btn")).toHaveLength(5);
   expect(result.querySelector(".pk-content-button.pk-btn--secondary")?.getAttribute("href")).toBe("/sponsors/sponsor/");
 });

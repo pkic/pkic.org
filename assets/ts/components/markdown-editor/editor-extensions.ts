@@ -78,10 +78,28 @@ export function editorExtensions() {
       trailingNode: false,
     }),
     Image.extend({
+      parseHTML() {
+        return [
+          {
+            tag: "p:has(> img:only-child)",
+            priority: 100,
+            getAttrs: (element) => {
+              if (element.textContent?.trim()) return false;
+              const image = element.querySelector("img")!;
+              return {
+                src: image.getAttribute("src"),
+                alt: image.getAttribute("alt"),
+                title: image.getAttribute("title"),
+              };
+            },
+          },
+          ...(this.parent?.() ?? []),
+        ];
+      },
       renderHTML({ node }) {
         const src = String(node.attrs.src);
         return markdownSafeUrl(src, true)
-          ? ["img", { src, alt: node.attrs.alt ?? "", title: node.attrs.title }]
+          ? ["p", {}, ["img", { src, alt: node.attrs.alt ?? "", title: node.attrs.title }]]
           : ["span", {}, node.attrs.alt ?? "Image unavailable"];
       },
     }),
