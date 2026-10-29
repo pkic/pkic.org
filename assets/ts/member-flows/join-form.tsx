@@ -267,7 +267,7 @@ function showSuccessPanel(
           stack the gap comes from the parent and the tone from a token. */}
       <p class="pk-muted">
         Your membership application has been received. We&rsquo;ve emailed you a confirmation with a link to check its
-        status at any time.
+        status at any time. You can also sign in to the member portal with this email address to follow it.
       </p>
       <p>
         <ButtonLink href={statusUrl}>Check application status →</ButtonLink>

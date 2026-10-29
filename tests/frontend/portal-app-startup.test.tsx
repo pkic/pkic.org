@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { render } from "preact";
 import { act } from "preact/test-utils";
+import axe from "axe-core";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { serviceAvailability } from "../../assets/ts/shared/availability-state";
 import { clearAuth, portalSession, logoutNotice, savePortalSession } from "../../assets/ts/member-flows/portal/state";
@@ -428,6 +429,21 @@ it("asks a person with several identities which one to continue as, then remembe
   expect(server.selections).toEqual([INDIVIDUAL_IDENTITY.id]);
   expect(portalSession.value?.actingIdentityId).toBe(INDIVIDUAL_IDENTITY.id);
   expect(rememberedActingIdentityId(portalSession.value!.identity.id)).toBe(INDIVIDUAL_IDENTITY.id);
+});
+
+it("offers the identity choices as named buttons with no accessibility defects", async () => {
+  clearRememberedIdentity();
+  serveSeveralIdentities();
+  await mount();
+  await vi.waitFor(() => expect(card().textContent).toContain("Choose how you take part"));
+  // Each choice is a button named by what it holds: the name and its role, not the decorative tile.
+  const names = [...card().querySelectorAll("button")].map(
+    (button) => button.getAttribute("aria-label") ?? button.textContent,
+  );
+  expect(names[0]).toContain("Alpha Org");
+  expect(names[0]).toContain("Delegate");
+  const results = await axe.run(card(), { rules: { "color-contrast": { enabled: false } } });
+  expect(results.violations.map((violation) => `${violation.id}: ${violation.help}`)).toEqual([]);
 });
 
 it("continues silently as the identity remembered on this device while it is still held", async () => {
