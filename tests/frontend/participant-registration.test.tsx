@@ -259,6 +259,18 @@ describe("ParticipantRegistration", () => {
     expect(manage?.getAttribute("href")).toBe("/portal/#/users/current");
   });
 
+  it("names an organization awaiting staff review instead of showing Personal", async () => {
+    installApi(
+      readResponse({
+        user: { ...readResponse().user, organization_name: null, job_title: "Engineer" },
+        pendingOrganizationName: "Analytical Engines",
+      }),
+    );
+    const container = await mount();
+
+    expect(facts(container)).toMatchObject({ Representation: "Analytical Engines · Engineer · awaiting review" });
+  });
+
   it("preserves the registration update draft through browser Back and Forward", async () => {
     const requests = installApi();
     const container = await mount();

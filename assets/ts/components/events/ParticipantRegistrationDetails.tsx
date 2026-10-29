@@ -14,7 +14,7 @@ import { VerifiedValue } from "../../ui/VerifiedValue";
 import { buildFormAnswerRows } from "../forms/form-answers";
 import { isIdentityOwnedFormKey } from "../../../shared/schemas/form-answers";
 import { RegistrationIdentityChange } from "./RegistrationIdentityChange";
-import { actingIdentityLabel } from "../../shared/acting-identity-catalog";
+import { registrationRepresentationLabel } from "../../shared/acting-identity-catalog";
 
 type RegistrationForm = EventFormsResponse["form"];
 
@@ -75,10 +75,10 @@ export function ParticipantRegistrationDetails({
             value: (
               <span class="pk-cluster pk-cluster--nowrap">
                 <span>
-                  {actingIdentityLabel({
-                    organizationName: data.user.organization_name,
-                    jobTitle: data.user.job_title,
-                  })}
+                  {registrationRepresentationLabel(
+                    { organizationName: data.user.organization_name, jobTitle: data.user.job_title },
+                    data.pendingOrganizationName,
+                  )}
                 </span>
                 {onIdentityChanged && data.registration.status !== "cancelled" && (
                   <RegistrationIdentityChange data={data} onChanged={onIdentityChanged} />

@@ -17,6 +17,16 @@ export function actingIdentityLabel(
     .join(" · ");
 }
 
+/** What a registration names as its representation: an organization still in staff review reads as such, not as Personal. */
+export function registrationRepresentationLabel(
+  identity: Pick<ActingIdentity, "organizationName" | "jobTitle">,
+  pendingOrganizationName: string | null,
+): string {
+  return !identity.organizationName && pendingOrganizationName
+    ? [pendingOrganizationName, identity.jobTitle, "awaiting review"].filter(Boolean).join(" · ")
+    : actingIdentityLabel(identity);
+}
+
 /** The caller supplies an endpoint whose authority owns the identity collection. */
 export function actingIdentityCatalog(
   endpoint: string,

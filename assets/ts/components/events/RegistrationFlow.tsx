@@ -359,6 +359,7 @@ export function RegistrationFlow(props: Props) {
                 <RegistrationAffiliation
                   organizationName={props.data.user.organization_name}
                   jobTitle={props.data.user.job_title}
+                  pendingOrganizationName={props.data.pendingOrganizationName}
                 />
               </>
             )}

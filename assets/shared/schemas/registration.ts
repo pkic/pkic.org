@@ -448,6 +448,8 @@ export const registrationManageReadResponseSchema = successResponseSchema.extend
   dayWaitlist: registrationDayStateSchema.shape.dayWaitlist,
   /** The registrant holds no verified work address, so their waiting days are handled last. */
   waitlistHandledLast: z.boolean(),
+  /** The organization the registrant named that staff have not yet linked to their identity. */
+  pendingOrganizationName: z.string().nullable().default(null),
   shareUrl: httpUrlSchema.nullable(),
   headshotUrl: httpUrlSchema.nullable(),
 });

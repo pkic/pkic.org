@@ -9,6 +9,8 @@ import { resetDb } from "./helpers/reset-db";
 import { seedMemberApplication } from "./helpers/member-applications";
 import { deliveredEmailPayload, queryAll, seedEventAndAdmin } from "./helpers/context";
 import { callApi } from "./helpers/app";
+import { buildRegistrationManageView } from "../functions/_lib/services/registrations/manage-view";
+import type { RegistrationRecord } from "../functions/_lib/services/registrations/types";
 import { insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
 import { stubSuccessfulMxLookup } from "./helpers/mx-lookup";
 import {
@@ -156,6 +158,17 @@ describe("organization named on registration confirmation", () => {
         [email],
       ),
     ).toEqual([{ organization_name: "Pending Confirmation Organization" }]);
+    const [registration] = await queryAll<RegistrationRecord>(
+      env.DB,
+      `SELECT registration.* FROM registrations registration
+      JOIN users person ON person.id=registration.user_id WHERE person.normalized_email=?`,
+      [email],
+    );
+    // The manage page names the organization awaiting review rather than showing the registrant as Personal.
+    expect(await buildRegistrationManageView(env.DB, registration, "https://app.test")).toMatchObject({
+      user: { organization_name: null },
+      pendingOrganizationName: "Pending Confirmation Organization",
+    });
   });
 
   it("does not ask a consumer address for an organization", async () => {
