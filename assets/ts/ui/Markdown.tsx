@@ -10,6 +10,7 @@ import { resolveMarkdownShortcodes } from "../../shared/markdown-shortcodes";
 import { markdownSafeUrl, markdownVideoEmbed } from "../../shared/markdown-media";
 import { liveChatSafeLink } from "../../shared/live-chat-policy";
 import { NEW_TAB_ATTRIBUTES, NEW_TAB_HINT, isExternalHref } from "./new-tab";
+import { decodeCharacterReferences } from "../../shared/html-entities";
 import "../ui/Content.css";
 import "../components/markdown-editor/markdown-content.scss";
 
@@ -174,6 +175,9 @@ function renderTokens(tokens: Token[]): ComponentChildren {
       // Raw HTML remains visible text. It is never interpreted or inserted.
       case "html":
         return token.text;
+      // The editor writes a typed `&` as `&amp;`; read it as the character it stands for.
+      case "text":
+        return "tokens" in token && token.tokens ? children : decodeCharacterReferences(token.text);
       default:
         return children;
     }

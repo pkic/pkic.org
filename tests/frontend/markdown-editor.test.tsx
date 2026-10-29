@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from "vitest";
-import { restoreTemplateMarkdown } from "../../assets/ts/components/markdown-editor/template-markdown";
+import { plainAmpersands, restoreTemplateMarkdown } from "../../assets/ts/components/markdown-editor/template-markdown";
 import { TemplateHighlighting } from "../../assets/ts/components/markdown-editor/template-highlighting";
 import { Editor } from "@tiptap/core";
 import { render } from "preact";
@@ -200,6 +200,20 @@ describe("visual template highlighting", () => {
     expect(saved).toContain("{{#if user_name}}Hello {{user_name}}{{/if}}");
     expect(saved).toContain("{{> about_pkic}}");
     expect(restoreTemplateMarkdown(editor(saved).getMarkdown())).toBe(saved);
+  });
+
+  it("saves a typed ampersand as itself, leaving code and deliberate entities alone", () => {
+    const instance = editor("Q");
+    instance.commands.insertContentAt(2, "&A at R&D");
+    expect(instance.getMarkdown()).toContain("&amp;");
+    expect(plainAmpersands(instance.getMarkdown())).toBe("Q&A at R&D");
+    expect(plainAmpersands("`a &amp;&amp; b` and &amp;lt; and &amp;")).toBe("`a &amp;&amp; b` and &amp;lt; and &");
+  });
+
+  it("reads the ampersand the editor encodes as the character it stands for", () => {
+    const host = document.createElement("div");
+    render(<Markdown markdown={"R&amp;D and **Q&amp;A** &amp;lt; `a &amp; b`"} />, host);
+    expect(host.textContent).toBe("R&D and Q&A &lt; a &amp; b");
   });
 
   it("highlights nested conditions and variables without serializing decorations", () => {

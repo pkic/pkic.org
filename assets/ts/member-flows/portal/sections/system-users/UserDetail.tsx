@@ -1,3 +1,4 @@
+import { Markdown } from "../../../../ui/Markdown";
 import { RefreshNotice } from "../../../../components/RefreshNotice";
 import { useData } from "../../../../hooks/useData";
 import { useEffect, useState } from "preact/hooks";
@@ -350,7 +351,7 @@ export function UserDetail({
                   <p class="pk-small pk-muted">From the {aboutIdentity.organizationName} profile.</p>
                 )}
                 {aboutIdentity?.biography ? (
-                  <p class="pk-affiliation__summary">{aboutIdentity.biography}</p>
+                  <Markdown markdown={aboutIdentity.biography} className="pk-affiliation__summary" />
                 ) : (
                   <p class="pk-muted">Add a general introduction covering your interests and roles.</p>
                 )}
