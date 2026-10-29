@@ -79,6 +79,14 @@ describe("sign-in for someone whose membership application is pending", () => {
     ["an individual", "applicant@individual.test", "H6", undefined],
   ] as const)("lets %s applicant sign in and see their application", async (_kind, email, category, organization) => {
     await apply(email, category, organization);
+    // The membership identity comes at approval, so a new member is not asked to choose between identities.
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT identity.id FROM identities identity JOIN users person ON person.id = identity.user_id WHERE person.normalized_email = ?",
+        [email],
+      ),
+    ).toEqual([]);
     const cookie = await signIn(email);
     const response = await callApi(apiEnv(), "/api/v1/users/current/applications", { headers: { cookie } });
     expect(response.status).toBe(200);

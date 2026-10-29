@@ -103,6 +103,8 @@ async function prepareApplicantAccount(
     firstName: firstName ?? undefined,
     lastName: lastName ?? undefined,
     mailboxVerified: true,
+    // The membership identity is created at approval; until then the account only follows the application.
+    identityInBatch: true,
   });
   account.statements.push(
     ...prepareVerifyOwnedEmailStatements(db, {

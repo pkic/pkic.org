@@ -91,16 +91,13 @@ export async function createMember(
   const approved = await completeSyntheticMembershipReview(page.request, stringProperty(application, "applicationId"));
   const userId = stringProperty(approved, "userId");
   const userDetail = recordProperty(await jsonResponse(page.request, "GET", `/api/v1/users/${userId}`), "user");
-  const identities = arrayProperty(userDetail, "identities") as JsonRecord[];
-  // An applicant already holds their personal identity; an organization's applicant adds the one that carries
-  // the membership.
-  expect(identities).toHaveLength(options.individual ? 1 : 2);
-  const membershipIdentity = identities.find((item) => item.memberId !== null)!;
+  const identities = arrayProperty(userDetail, "identities");
+  expect(identities).toHaveLength(1);
   return {
     email,
     userId,
     memberId: stringProperty(approved, "memberId"),
-    identityId: stringProperty(membershipIdentity, "identityId"),
+    identityId: stringProperty(identities[0] as JsonRecord, "identityId"),
   };
 }
 
@@ -167,9 +164,7 @@ export async function completeSyntheticMembershipReview(request: APIRequestConte
   expect(user).toBeTruthy();
   const userId = stringProperty(user, "id");
   const detail = recordProperty(await jsonResponse(request, "GET", `/api/v1/users/${userId}`), "user");
-  // An applicant already holds a personal identity from applying; the membership is the identity that carries it.
-  const identity = (arrayProperty(detail, "identities") as JsonRecord[]).find((item) => item.memberId !== null)!;
-  expect(identity).toBeTruthy();
+  const identity = arrayProperty(detail, "identities")[0] as JsonRecord;
   return {
     userId,
     memberId: stringProperty(identity, "memberId"),
