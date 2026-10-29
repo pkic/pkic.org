@@ -487,9 +487,12 @@ it("takes an accepted identity invitation straight to sign-in without a second p
   expect(portalSession.value).toBe(previousSession);
   await act(async () => host.querySelector<HTMLButtonElement>("button")!.click());
   await vi.waitFor(() => expect(window.location.hash).toBe("#/users/current"));
-  await vi.waitFor(() => expect(card().textContent).toContain("Sign in"));
+  await vi.waitFor(() => {
+    expect(portalSession.value).toBeNull();
+    expect(card().textContent).toContain("Sign in");
+    expect(card().querySelector<HTMLInputElement>("input")!.matches(":disabled")).toBe(false);
+  });
   expect(host.textContent).not.toContain("Identity accepted");
   expect(host.textContent).not.toContain("Open portal");
-  expect(portalSession.value).toBeNull();
   expect(mocks.renderShell).not.toHaveBeenCalled();
 });
