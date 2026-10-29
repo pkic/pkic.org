@@ -1,3 +1,4 @@
+import { IdentityProfileForm } from "../../assets/ts/components/identities/IdentityProfileForm";
 // @vitest-environment jsdom
 /**
  * Editing one identity from the professional profile: the view loads that
@@ -207,3 +208,33 @@ it("refreshes the canonical representation summary even when its selection dialo
   expect(container.querySelector<HTMLInputElement>('input[name="identityId"]')?.value).toBe(identityId);
   expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: identityId, jobTitle: "Coordinator" }));
 });
+
+it.each(["owner", "staff"] as const)(
+  "omits a personal job title from the shared %s editor and saved contract",
+  async (editor) => {
+    const save = vi.fn(async (body) => identityProfileUpdateSchema.parse(body));
+    await act(() =>
+      render(
+        <IdentityProfileForm
+          identity={{
+            organizationId: null,
+            jobTitle: "Legacy personal text",
+            biography: "About this person",
+            links: [],
+          }}
+          editor={editor}
+          save={save}
+          cancel={null}
+          onSaved={() => {}}
+        />,
+        container,
+      ),
+    );
+    expect(container.querySelector('[name="jobTitle"]')).toBeNull();
+    await act(async () => {
+      container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(identityProfileUpdateSchema.parse(save.mock.calls[0]![0]).jobTitle).toBeUndefined();
+  },
+);

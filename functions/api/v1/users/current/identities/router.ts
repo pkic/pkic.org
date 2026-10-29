@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import type { RequestDbContext } from "../../../../../_lib/db/context";
 import { CurrentUserActiveIdentityPut } from "./active";
 import { CurrentUserIdentitiesGet, CurrentUserIdentityPost } from "./index";
-import { CurrentUserIdentityPatch, CurrentUserIdentityDelete } from "./[identityId]";
+import { CurrentUserIdentityPatch } from "./[identityId]";
 import { CurrentUserIdentityProfileGet, CurrentUserIdentityProfilePatch } from "./profile";
 import { CurrentUserIdentityPreviewPost } from "./preview";
 import {
@@ -30,7 +30,6 @@ openapi.post("/offer/confirmations", CurrentUserAffiliationLinkKeptPost);
 openapi.post("/reinstatement/preview", CurrentUserIdentityReinstatementPreviewPost);
 openapi.post("/reinstatement/confirmation", CurrentUserIdentityReinstatementConfirmationPost);
 openapi.patch("/:identityId", CurrentUserIdentityPatch);
-openapi.delete("/:identityId", CurrentUserIdentityDelete);
 openapi.post("/:identityId/reinstatement", CurrentUserIdentityReinstatementPost);
 openapi.get("/:identityId/profile", CurrentUserIdentityProfileGet);
 openapi.patch("/:identityId/profile", CurrentUserIdentityProfilePatch);

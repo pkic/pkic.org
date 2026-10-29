@@ -1,6 +1,12 @@
 import { scopedAuditLogResponseSchema } from "../../assets/shared/schemas/audit-log";
 import { eventRegistrationsListResponseSchema } from "../../assets/shared/schemas/event-registrations";
-import { userUpdateSchema } from "../../assets/shared/schemas/user-management";
+import {
+  organizationCreateSchema,
+  organizationCreateResponseSchema,
+} from "../../assets/shared/schemas/organization-management";
+import { identityMutationResponseSchema } from "../../assets/shared/schemas/identity";
+import { acceptConfirmDialog } from "./helpers/confirm-dialog";
+import { userUpdateSchema, userDetailResponseSchema } from "../../assets/shared/schemas/user-management";
 import { createRegistrationEvent, registerStateAttendee } from "./helpers/participation-state-fixture";
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
@@ -160,6 +166,65 @@ test("staff read registration and account changes through the shared audit table
     await expect(registrationHistory).toBeVisible();
 
     await page.goto(`/portal/#/users/${record!.user_id}`);
+    await page.getByRole("button", { name: "Actions for Personal", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Edit identity profile…", exact: true }).click();
+    await expect(page.getByRole("heading", { name: /Edit profile:/ })).toBeVisible();
+    await expect(page.locator('[name="jobTitle"]')).toHaveCount(0);
+    for (const width of [1280, 375]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.screenshot({ path: info.outputPath(`personal-editor-${width}.png`), fullPage: true });
+    }
+    await page.goto(`/portal/#/users/${record!.user_id}`);
+    const organizationName = `Identity-only organization ${crypto.randomUUID()}`;
+    const organizationResponse = await page.request.post("/api/v1/organizations", {
+      data: organizationCreateSchema.parse({ name: organizationName }),
+    });
+    expect(organizationResponse.status()).toBe(201);
+    const organization = organizationCreateResponseSchema.parse(await organizationResponse.json()).organization;
+    const original = userDetailResponseSchema.parse(
+      await (await page.request.get(`/api/v1/users/${record!.user_id}`)).json(),
+    ).user;
+    await page.getByRole("button", { name: "Add identity", exact: true }).click();
+    const addIdentity = page.getByRole("dialog", { name: "Add identity", exact: true });
+    await expect(addIdentity.getByLabel("Category", { exact: true })).toHaveCount(0);
+    await addIdentity.getByRole("combobox", { name: /^Organization(?:\s*\(required\))?$/ }).fill(organizationName);
+    await page.getByRole("option").filter({ hasText: organizationName }).click();
+    await addIdentity.getByRole("textbox", { name: /^Job title(?:\s*\(required\))?$/ }).fill("Researcher");
+    await addIdentity.getByRole("checkbox", { name: /^Activate immediately/ }).check();
+    await addIdentity
+      .getByRole("textbox", { name: /^Activation reason(?:\s*\(required\))?$/ })
+      .fill("An omitted organization identity was reviewed.");
+    for (const width of [1280, 375]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.screenshot({ path: info.outputPath(`add-identity-${width}.png`) });
+    }
+    const identityCreated = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname === `/api/v1/organizations/${organization.id}/identities`,
+    );
+    await addIdentity.getByRole("button", { name: "Add identity", exact: true }).click();
+    const identityResponse = await identityCreated;
+    expect(identityResponse.status()).toBe(201);
+    const identity = identityMutationResponseSchema.parse(await identityResponse.json());
+    await expect(addIdentity).not.toBeVisible();
+    const after = userDetailResponseSchema.parse(
+      await (await page.request.get(`/api/v1/users/${record!.user_id}`)).json(),
+    ).user;
+    expect(after.identities.find((entry) => entry.identityId === identity.identityId)?.memberId).toBeNull();
+    expect(after.identities.flatMap((entry) => (entry.memberId ? [entry.memberId] : []))).toEqual(
+      original.identities.flatMap((entry) => (entry.memberId ? [entry.memberId] : [])),
+    );
+    await page.getByRole("button", { name: `Actions for ${organizationName}`, exact: true }).click();
+    await page.getByRole("menuitem", { name: "Delete identity…", exact: true }).click();
+    const deleted = page.waitForResponse(
+      (response) =>
+        response.request().method() === "DELETE" &&
+        new URL(response.url()).pathname === `/api/v1/users/${record!.user_id}/identities/${identity.identityId}`,
+    );
+    await acceptConfirmDialog(page, "Delete identity");
+    expect((await deleted).status()).toBe(200);
+    await expect(page.getByRole("button", { name: `Actions for ${organizationName}`, exact: true })).toHaveCount(0);
     await expect(page.getByRole("table", { name: "Audit log", exact: true })).toHaveCount(0);
     const auditLoaded = page.waitForResponse((response) =>
       new URL(response.url()).pathname.endsWith(`/users/${record!.user_id}/audit-log`),

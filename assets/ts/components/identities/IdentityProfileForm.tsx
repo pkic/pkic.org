@@ -58,7 +58,7 @@ export function IdentityProfileForm({
       organization: identity.organizationId !== null,
       jobTitle: identity.jobTitle,
     }),
-    identityProfileBody(draft),
+    identityProfileBody(draft, identity.organizationId !== null),
   );
 
   async function submit(event: Event) {

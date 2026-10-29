@@ -1,3 +1,4 @@
+import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
 import { env } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { identityCorrectionSchema, identitiesListResponseSchema } from "../assets/shared/schemas/identity";
@@ -218,5 +219,83 @@ describe("organization association correction", () => {
     expect(identitiesListResponseSchema.parse(await page.json()).identities.map((identity) => identity.id)).toEqual([
       f.secondIdentityId,
     ]);
+  });
+});
+
+describe("identity deletion", () => {
+  async function remove(f: Fixture, token: string, identityId = f.identityId, machine = false) {
+    return callApi(
+      env,
+      `/api/v1/users/${f.userId}/identities/${identityId}`,
+      {
+        method: "DELETE",
+        headers: { authorization: `Bearer ${token}`, ...(machine ? { "x-pkic-machine-auth": "mcp" } : {}) },
+      },
+      { maxRoundTrips: 1 },
+    );
+  }
+  it.each(["owner", "staff"])(
+    "lets the %s delete an unused organization identity through the same endpoint",
+    async (mode) => {
+      const f = await proposalIdentityFixture();
+      const token = mode === "owner" ? f.token : (await staff()).token;
+      const response = await remove(f, token);
+      expect(response.status, await response.clone().text()).toBe(200);
+      expect(await env.DB.prepare("SELECT id FROM identities WHERE id=?").bind(f.identityId).first("id")).toBeNull();
+      expect(await env.DB.prepare("SELECT id FROM identities WHERE id=?").bind(f.secondIdentityId).first("id")).toBe(
+        f.secondIdentityId,
+      );
+    },
+  );
+  it("refuses deletion with participation references and rolls back the removal", async () => {
+    const f = await proposalIdentityFixture();
+    const id = await registration(f);
+    const response = await remove(f, (await staff()).token);
+    expect(response.status).toBe(409);
+    expect(
+      await env.DB.prepare("SELECT registration_identity_id FROM registrations WHERE id=?")
+        .bind(id)
+        .first("registration_identity_id"),
+    ).toBe(f.identityId);
+    expect(await env.DB.prepare("SELECT id FROM identities WHERE id=?").bind(f.identityId).first("id")).toBe(
+      f.identityId,
+    );
+    expect(
+      await env.DB.prepare(
+        "SELECT count(*) AS count FROM audit_log WHERE action='incorrect_representation_removed'",
+      ).first("count"),
+    ).toBe(0);
+  });
+  it("protects the personal account identity", async () => {
+    const f = await proposalIdentityFixture();
+    const existing = await env.DB.prepare("SELECT id FROM identities WHERE user_id=? AND organization_id IS NULL")
+      .bind(f.userId)
+      .first<string>("id");
+    let personalId = existing;
+    if (!personalId) {
+      const prepared = await buildCreateIdentityStatement(env.DB, {
+        userId: f.userId,
+        organizationId: null,
+        source: "account",
+        startImmediately: true,
+      });
+      await env.DB.batch([prepared.statement]);
+      personalId = prepared.identityId;
+    }
+    expect((await remove(f, (await staff()).token, personalId)).status).toBe(409);
+    expect(await env.DB.prepare("SELECT id FROM identities WHERE id=?").bind(personalId).first("id")).toBe(personalId);
+  });
+  it("refuses another account and an insufficient delegated scope", async () => {
+    const f = await proposalIdentityFixture();
+    const outsider = await insertUser(env.DB, "deletion-outsider@example.test");
+    expect((await remove(f, await createAdminSession(env.DB, outsider, crypto.randomUUID()))).status).toBe(409);
+    const actor = await staff();
+    const token = await createMcpSession(env.DB, { id: actor.id, email: "admin@pkic.org" }, crypto.randomUUID(), [
+      "membership:write",
+    ]);
+    expect((await remove(f, token, f.identityId, true)).status).toBe(409);
+    expect(await env.DB.prepare("SELECT id FROM identities WHERE id=?").bind(f.identityId).first("id")).toBe(
+      f.identityId,
+    );
   });
 });

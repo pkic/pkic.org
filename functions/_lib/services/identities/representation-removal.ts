@@ -1,11 +1,10 @@
 /** Remove an incorrect association, optionally preserving event work under a valid replacement. */
-import { prepareUserSessionRequest } from "../../auth/user-session-request";
-import { userSessionRequestAuthorizationEvidence } from "../../auth/user-session-evidence";
+import { prepareRepresentationAuthority } from "./representation-authority";
 import { prepareAuthorizationGuard, isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { nowIso } from "../../utils/time";
-import { prepareAuditLogAfterOneChange } from "../audit";
+import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
 import { prepareAutomaticGroupEnrollmentForUserStatements } from "../groups/automatic-enrollment";
 import { ownedIdentityAtEvidence } from "./selection";
 import { prepareBadgeRenderJobsForUser } from "../badge-render-job-statements";
@@ -62,7 +61,11 @@ export function prepareIncorrectRepresentationRemoval(
     db.prepare("DELETE FROM user_roles WHERE identity_id=? AND user_id=?").bind(identityId, ownerId),
     db.prepare("DELETE FROM group_memberships WHERE identity_id=? AND user_id=?").bind(identityId, ownerId),
     // Voting, membership, and successor references deliberately restrict deletion and roll back the whole correction.
-    db.prepare("DELETE FROM identities WHERE id=?").bind(identityId),
+    db
+      .prepare(`DELETE FROM identities WHERE id=?
+      AND NOT EXISTS(SELECT 1 FROM registrations WHERE registration_identity_id=?)
+      AND NOT EXISTS(SELECT 1 FROM proposal_speakers WHERE acting_identity_id=?)`)
+      .bind(identityId, identityId, identityId),
     prepareAuditLogAfterOneChange(
       db,
       "user",
@@ -89,7 +92,10 @@ export function incorrectRepresentationRemovalError(cause: unknown, correcting =
       "IDENTITY_REMOVAL_NOT_ALLOWED",
       "This representation cannot be changed. Refresh your profile and try again.",
     );
-  if (cause instanceof Error && /FOREIGN KEY constraint failed|SQLITE_CONSTRAINT_FOREIGNKEY/u.test(cause.message))
+  if (
+    isAuditChangeGuardFailure(cause) ||
+    (cause instanceof Error && /FOREIGN KEY constraint failed|SQLITE_CONSTRAINT_FOREIGNKEY/u.test(cause.message))
+  )
     throw new AppError(
       409,
       "IDENTITY_HAS_PARTICIPATION",
@@ -100,21 +106,25 @@ export function incorrectRepresentationRemovalError(cause: unknown, correcting =
   throw cause;
 }
 
-export async function removeOwnRepresentation(
+export async function removeRepresentation(
   db: DatabaseLike,
   request: Request,
-  env: Parameters<typeof prepareUserSessionRequest>[2],
+  env: Parameters<typeof prepareRepresentationAuthority>[2],
+  userId: string,
   identityId: string,
 ) {
-  const actor = await prepareUserSessionRequest(db, request, env);
+  const actor = await prepareRepresentationAuthority(db, request, env, userId, [
+    { permission: "membership:write" },
+    { permission: "identities:activate" },
+  ]);
   try {
     const results = await db.batch([
       ...actor.statements,
-      prepareAuthorizationGuard(db, userSessionRequestAuthorizationEvidence(actor.claims)),
+      ...actor.evidence.map((evidence) => prepareAuthorizationGuard(db, evidence)),
       ...prepareIncorrectRepresentationRemoval(db, {
         identityId,
-        actorId: actor.claims.sub,
-        ownerId: actor.claims.sub,
+        actorId: actor.actorId,
+        ownerId: userId,
         at: nowIso(),
       }),
     ]);

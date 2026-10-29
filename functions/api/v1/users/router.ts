@@ -1,3 +1,4 @@
+import { UserIdentityDelete } from "./[userId]/identity-removal";
 import { RepresentationEmailGet, RepresentationEmailPut } from "./[userId]/identity-email";
 import { Hono } from "hono";
 import { fromHono } from "chanfana";
@@ -26,6 +27,7 @@ openapi.route("/:userId", communityProfileRouter);
 // This read composes its live staff authorization with the scoped audit page.
 openapi.get("/:userId/audit-log", UserAuditLogGet);
 openapi.post("/:userId/identities/:identityId/corrections", UserIdentityCorrectionPost);
+openapi.delete("/:userId/identities/:identityId", UserIdentityDelete);
 openapi.get("/:userId/identities/:identityId/email", RepresentationEmailGet);
 openapi.put("/:userId/identities/:identityId/email", RepresentationEmailPut);
 // The list also composes live authority with its bounded page and count.

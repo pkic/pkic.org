@@ -5,7 +5,7 @@ import type { DatabaseLike, Env } from "../../types";
 import { prepareAuthorizationGuard } from "../../db/authorization-guard";
 import { prepareRepresentationAuthority } from "./representation-authority";
 import { nowIso } from "../../utils/time";
-import { prepareIncorrectRepresentationRemoval, incorrectRepresentationRemovalError } from "./remove-own";
+import { prepareIncorrectRepresentationRemoval, incorrectRepresentationRemovalError } from "./representation-removal";
 
 export async function correctRepresentation(
   db: DatabaseLike,

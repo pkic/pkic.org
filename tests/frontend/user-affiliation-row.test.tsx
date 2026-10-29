@@ -470,3 +470,30 @@ describe("UserAffiliationRow", () => {
     expect(menuItemNamed(container, "End representation…")).toBeNull();
   });
 });
+
+it.each([true, false])("exposes Delete identity to its authorized owner or staff (owner: %s)", async (owner) => {
+  const requests = stubFetch(() => jsonResponse({ success: true }));
+  const container = mount();
+  await act(() =>
+    render(
+      <>
+        <ConfirmDialogHost />
+        <UserAffiliationRow
+          userId="00000000-0000-4000-8000-000000000001"
+          membership={membership()}
+          onChanged={async () => {}}
+          canManage={!owner}
+          viewerIsSubject={owner}
+          canRemoveIdentity={!owner}
+        />
+      </>,
+      container,
+    ),
+  );
+  runRowMenuAction(container, "Organization A", "Delete identity…");
+  await settle();
+  await press(document.body, "Delete identity");
+  const mutations = requests.filter((request) => request.method === "DELETE");
+  expect(mutations).toHaveLength(1);
+  expect(mutations[0]!.pathname).toBe(`/api/v1/users/00000000-0000-4000-8000-000000000001/identities/${IDENTITY_ID}`);
+});

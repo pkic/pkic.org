@@ -11,7 +11,7 @@ import { AppError } from "../../errors";
 import { nowIso } from "../../utils/time";
 import { prepareAuditLogAfterOneChange } from "../audit";
 import { organizationIdentityManagementEvidence } from "./authorization";
-import { prepareIncorrectRepresentationRemoval, incorrectRepresentationRemovalError } from "./remove-own";
+import { prepareIncorrectRepresentationRemoval, incorrectRepresentationRemovalError } from "./representation-removal";
 import { preparePendingIdentityActivation } from "./pending-activation";
 
 /** A pending invitation has no experience to end; activate it explicitly or remove it. */

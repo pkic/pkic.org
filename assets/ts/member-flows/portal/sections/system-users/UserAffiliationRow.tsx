@@ -75,6 +75,7 @@ export function UserAffiliationRow({
   membership,
   onChanged,
   canManage,
+  canRemoveIdentity = false,
   summarized = false,
   viewerIsSubject = false,
   subjectName,
@@ -96,6 +97,7 @@ export function UserAffiliationRow({
   membership: UserMembership;
   onChanged: () => Promise<void> | void;
   canManage: boolean;
+  canRemoveIdentity?: boolean;
   /** The person reading the record is the person it is about. */
   viewerIsSubject?: boolean;
   /**
@@ -346,13 +348,13 @@ export function UserAffiliationRow({
       disabled: busy,
       onSelect: onCorrect,
     });
-  if (membership.organizationId && viewerIsSubject)
+  if (canManage || viewerIsSubject)
     rowActions.push({
       id: "remove-incorrect",
-      label: "Remove incorrect representation…",
+      label: membership.organizationId ? "Delete identity…" : "Delete identity (account identity is protected)",
       danger: true,
-      disabled: busy,
-      onSelect: () => void removeIncorrectRepresentation(membership.identityId, onChanged, setBusy),
+      disabled: busy || !membership.organizationId || !(viewerIsSubject || canRemoveIdentity),
+      onSelect: () => void removeIncorrectRepresentation(membership.identityId, userId, onChanged, setBusy),
     });
   // The person ends their own representation; staff end someone else's.
   if (membership.organizationId && (viewerIsSubject || canManage))

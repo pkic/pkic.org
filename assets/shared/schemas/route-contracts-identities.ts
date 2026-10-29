@@ -247,11 +247,14 @@ export const currentUserIdentityReinstatementConfirmRouteSchema = {
   },
 };
 
-export const currentUserIdentityRemoveRouteSchema = {
+export const identityRemoveRouteSchema = {
   ...requiresSession(),
   tags: ["Users"],
-  summary: "Remove an incorrect representation owned by the current user",
-  request: { params: z.object({ identityId: databaseIdSchema }) },
+  summary: "Delete an incorrect organization identity",
+  description:
+    "Owners delete their own incorrect associations. Staff require membership:write and identities:activate. Personal account identities and participation references are protected.",
+  "x-pkic-mcp": { expose: true, scopes: ["membership:write", "identities:activate"], readonly: false },
+  request: { params: z.object({ userId: databaseIdSchema, identityId: databaseIdSchema }) },
   responses: {
     "200": {
       description: "Representation removed.",
