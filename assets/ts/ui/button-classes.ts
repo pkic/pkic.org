@@ -2,7 +2,8 @@
  * The class names of a button look, kept apart from the Button component so a plain DOM
  * control (a script-built dialog) can wear the same look without bundling the component.
  */
-export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "danger-quiet" | "link";
+import type { ButtonVariant } from "../../shared/schemas/button";
+export type { ButtonVariant } from "../../shared/schemas/button";
 /**
  * The one size a caller may ask for: `lg`, for a hero or landing call to action.
  * Every other button is the default size, and a dense surface shrinks it by

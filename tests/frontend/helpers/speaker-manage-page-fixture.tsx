@@ -175,6 +175,9 @@ export function mountShell(): HTMLElement {
 }
 
 export async function boot(): Promise<void> {
+  // Settle the real lazy editor dependency before a case can unmount or reset modules.
+  // The loading indicator below tracks the page request, not this component import.
+  await import("../../../assets/ts/components/markdown-editor/MarkdownEditor");
   await act(async () => {
     await import("../../../assets/ts/event-flows/speaker-manage-page");
     await new Promise((resolve) => setTimeout(resolve, 0));

@@ -4,6 +4,7 @@ import { ButtonLink, type ButtonVariant } from "../ui/Button";
 import { ContentIcon } from "./ContentIcon";
 import { SupportBanner } from "./SupportBanner";
 import "./ContentComponents.css";
+import "./ContentLayout.css";
 import "./ContentGrid.scss";
 
 export type ContentFrameKind = "cards" | "columns" | "criteria" | "donation" | "generic" | "sidebar" | "sub";

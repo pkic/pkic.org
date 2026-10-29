@@ -67,6 +67,7 @@ types/
 /.agents/skills/*
 !/.agents/skills/pkic-ui/
 !/.agents/skills/pkic-backend/
+!/.agents/skills/pkic-content-components/
 
 # Synthetic local test environment created by `pnpm dev:test`
 /.local-test/

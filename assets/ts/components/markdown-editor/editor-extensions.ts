@@ -1,3 +1,6 @@
+import { layoutExtensions } from "./layout-extensions";
+import "../../ui/Table.css";
+import { AsideExtension } from "./aside-extension";
 import { Node } from "@tiptap/core";
 import { StarterKit } from "@tiptap/starter-kit";
 import { Markdown } from "@tiptap/markdown";
@@ -75,16 +78,44 @@ export function editorExtensions() {
       trailingNode: false,
     }),
     Image.extend({
+      parseHTML() {
+        return [
+          {
+            tag: "p:has(> img:only-child)",
+            priority: 100,
+            getAttrs: (element) => {
+              if (element.textContent?.trim()) return false;
+              const image = element.querySelector("img")!;
+              return {
+                src: image.getAttribute("src"),
+                alt: image.getAttribute("alt"),
+                title: image.getAttribute("title"),
+              };
+            },
+          },
+          ...(this.parent?.() ?? []),
+        ];
+      },
       renderHTML({ node }) {
         const src = String(node.attrs.src);
         return markdownSafeUrl(src, true)
-          ? ["img", { src, alt: node.attrs.alt ?? "", title: node.attrs.title }]
+          ? ["p", {}, ["img", { src, alt: node.attrs.alt ?? "", title: node.attrs.title }]]
           : ["span", {}, node.attrs.alt ?? "Image unavailable"];
       },
     }),
     Table.extend({
       renderHTML() {
-        return ["table", {}, ["tbody", 0]];
+        return ["table", { class: "pk-table" }, ["tbody", 0]];
+      },
+      addNodeView() {
+        return () => {
+          const dom = document.createElement("div");
+          dom.className = "pk-table__scroll pk-table__scroll--prose";
+          const table = dom.appendChild(document.createElement("table"));
+          table.className = "pk-table";
+          const contentDOM = table.appendChild(document.createElement("tbody"));
+          return { dom, contentDOM };
+        };
       },
     }).configure({ resizable: false, View: null }),
     TableCell.extend({
@@ -99,6 +130,8 @@ export function editorExtensions() {
         return ["th", {}, 0];
       },
     }),
+    AsideExtension,
+    ...layoutExtensions,
     TableRow,
     Video,
     Markdown,

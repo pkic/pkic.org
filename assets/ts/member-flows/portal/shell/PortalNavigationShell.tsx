@@ -142,7 +142,7 @@ export function PortalNavigationShell({ children, displayName, headshotUrl, sess
           />,
           document.getElementById("pkic-account-menu")!,
         )}
-      <div id="portal-topbar">
+      <div id="portal-topbar" data-sticky-header>
         <button
           id="portal-sidebar-toggle"
           type="button"

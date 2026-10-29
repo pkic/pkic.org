@@ -1,3 +1,8 @@
+import { ContentProse } from "../site/ContentProse";
+import "./Table.css";
+import { ContentLayout } from "../site/ContentLayout";
+import { contentContainerNames, type ContentContainer } from "../../shared/schemas/content-layout";
+import { CONTAINER_START, tryReadMarkdownContainer } from "../../shared/markdown-aside";
 import { SiteImage } from "../site/SiteImage";
 import type { ComponentChildren } from "preact";
 import { Marked, type Token, type Tokens } from "marked";
@@ -9,7 +14,21 @@ import "../ui/Content.css";
 import "../components/markdown-editor/markdown-content.scss";
 
 // Keep editor-specific tokenizer registrations out of the public renderer.
-const parser = new Marked();
+const parser = new Marked({
+  extensions: contentContainerNames.map((name) => ({
+    name,
+    level: "block",
+    start(source) {
+      return source.search(CONTAINER_START);
+    },
+    tokenizer(source) {
+      const aside = tryReadMarkdownContainer(source);
+      return aside?.block.type === name
+        ? { type: name, block: aside.block, raw: aside.raw, tokens: this.lexer.blockTokens(aside.block.markdown) }
+        : undefined;
+    },
+  })),
+});
 
 /**
  * The one anchor every rendered Markdown link goes through: a destination
@@ -48,6 +67,21 @@ function renderTokens(tokens: Token[]): ComponentChildren {
   return tokens.map((token, index) => {
     const children = "tokens" in token && token.tokens ? renderTokens(token.tokens) : "text" in token ? token.text : "";
     switch (token.type) {
+      case "aside":
+      case "columns":
+      case "grid":
+      case "item":
+      case "cards":
+      case "card":
+      case "actions":
+      case "button":
+      case "card-header":
+      case "card-footer":
+        return (
+          <ContentLayout key={index} block={(token as Token & { block: ContentContainer }).block}>
+            {children}
+          </ContentLayout>
+        );
       case "space":
         return null;
       case "paragraph": {
@@ -116,8 +150,8 @@ function renderTokens(tokens: Token[]): ComponentChildren {
       }
       case "table":
         return (
-          <div key={index} class="pk-markdown__table">
-            <table>
+          <div key={index} class="pk-table__scroll pk-table__scroll--prose">
+            <table class="pk-table">
               <thead>
                 <tr>
                   {(token as Tokens.Table).header.map((cell, i) => (
@@ -206,17 +240,20 @@ export function Markdown({
   markdown = "",
   className,
   profile = "content",
+  layout = "compact",
 }: {
   markdown?: string | null;
   className?: string;
   /** `chat` reads the inline subset participants may use in a live chat. */
   profile?: "content" | "chat";
+  /** Reading typography for a complete page; compact content keeps its application's scale. */
+  layout?: "compact" | "reading";
 }) {
-  return (
-    <div class={["pk-markdown", className].filter(Boolean).join(" ")}>
-      {profile === "chat"
-        ? renderChatTokens(chatParser.lexer(markdown ?? ""))
-        : renderTokens(parser.lexer(resolveMarkdownShortcodes(markdown ?? "")))}
-    </div>
-  );
+  const children =
+    profile === "chat"
+      ? renderChatTokens(chatParser.lexer(markdown ?? ""))
+      : renderTokens(parser.lexer(resolveMarkdownShortcodes(markdown ?? "")));
+  const classes = ["pk-markdown", className].filter(Boolean).join(" ");
+  if (profile === "content" && layout === "reading") return <ContentProse class={classes}>{children}</ContentProse>;
+  return <div class={classes}>{children}</div>;
 }

@@ -7,6 +7,8 @@ description: Build or change PKIC portal, site, or studio UI with the shared com
 
 The design system (tokens in `assets/design`, components in `assets/ts/ui`, the session details dialog as the reference screen) is the brief. Extend a shared component; never add a parallel variant. Read `assets/ts/AGENTS.md` first.
 
+For authored Markdown blocks and editable page layouts, also read [PKIC content components](../pkic-content-components/SKILL.md).
+
 ## Before you build
 
 1. Name the control and the pattern widely used apps follow for it. Open its entry in [patterns.md](patterns.md) and follow the whole anatomy: shape, placement relative to the trigger, dismissal, keyboard.

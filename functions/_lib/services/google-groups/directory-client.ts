@@ -247,9 +247,20 @@ export async function createGoogleGroupsDeliveryProvider(
       const collection = `${GOOGLE_DIRECTORY_GROUPS_URL}/${encodeURIComponent(listEmail)}/members`;
       const memberUrl = `${collection}/${encodeURIComponent(change.email)}`;
       const response = await fetchImpl(memberUrl, { headers });
-      if (!response.ok && response.status !== 404)
-        throw new Error(`Provider member read failed: HTTP ${response.status}`);
-      const current = response.ok ? ((await response.json()) as DirectoryMemberRow) : null;
+      let current: DirectoryMemberRow | null;
+      if (response.ok) current = (await response.json()) as DirectoryMemberRow;
+      else if (response.status === 404) current = null;
+      else {
+        const body = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
+        if (response.status !== 400 || body?.error?.message !== "Missing required field: memberKey")
+          throw new Error(`Provider member read failed: HTTP ${response.status}`);
+        // Google can reject an email lookup for a non-member with this 400 rather
+        // than 404. Establish absence independently before allowing an addition.
+        const roster = await listDirectoryMembers(fetchImpl, token, listEmail, 25);
+        if (!roster.complete || roster.emails.includes(change.email.toLowerCase()))
+          throw new Error("Provider member lookup failed; complete roster did not confirm absence");
+        current = null;
+      }
       if (current && isProtectedDirectoryMember(current)) return;
       if (change.action === "unsubscribe") {
         if (!current) return;

@@ -48,6 +48,8 @@ export function useToolbarOverflow(toolbar: RefObject<HTMLDivElement>, commandCo
     window.addEventListener("resize", fit);
     const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(fit);
     observer?.observe(bar);
+    const end = bar.querySelector<HTMLElement>("[data-end]");
+    if (end) observer?.observe(end);
     return () => {
       window.removeEventListener("resize", fit);
       observer?.disconnect();

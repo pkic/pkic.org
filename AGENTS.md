@@ -10,6 +10,7 @@
 - Keep changes focused. Use descriptive domain and use-case names; do not introduce vague buckets such as `commands`, `management`, or `repository` without a real interface boundary.
 - Member onboarding and profile changes use the portal. Treat `data/members/*.yaml` as legacy import material, not an ongoing member edit path.
 - Before proposing a public `pkic/pkic.org` PR, compare with its current `main` and review every new commit and tracked file for internal plans, personal data, and one-time tooling.
+- Project documentation and roadmaps belong in the GitHub wiki. Keep reusable agent guidance in `.agents/skills/`; do not introduce a `docs/` directory or task-status notes into the public repository.
 - Use the product terms in `GLOSSARY.md` in code, copy, and documentation. One thing has one name across flows.
 - For a new screen or a large redesign, show the owner one desktop and one phone screenshot of the bare layout first. Build every state and the polish only after the layout is approved.
 - Keep authored files cohesive and reasonably small. A line-count check is only a warning signal; separate responsibilities instead of moving unrelated code into another large file.

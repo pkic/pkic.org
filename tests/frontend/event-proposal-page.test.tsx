@@ -284,7 +284,6 @@ describe("proposal submission gate", () => {
       title: "Post-quantum migration",
       abstract:
         "A walk through migrating a working certificate authority to post-quantum algorithms, with the rollbacks we needed.",
-      proposerBio: "A speaker biography with enough detail to satisfy the canonical submission contract.",
       committeeNotes: "Happy to adapt this into a panel.",
     });
     await act(() => {
@@ -295,6 +294,15 @@ describe("proposal submission gate", () => {
       abstract.value =
         "A walk through migrating a working certificate authority to post-quantum algorithms, with the rollbacks we needed.";
       abstract.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    const bioEditor = form.querySelector('[name="proposerBio"]')!.closest(".pk-markdown-editor")!;
+    await act(() => {
+      bioEditor.querySelector<HTMLButtonElement>('[aria-label="Markdown source"]')!.click();
+    });
+    await act(() => {
+      const bio = bioEditor.querySelector<HTMLTextAreaElement>('textarea[name="proposerBio"]')!;
+      bio.value = "A speaker biography with enough detail to satisfy the canonical submission contract.";
+      bio.dispatchEvent(new Event("input", { bubbles: true }));
     });
     await submit(form);
     const submitted = requests.find(({ path, method }) => path === PROPOSALS && method === "POST");

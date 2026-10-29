@@ -9,11 +9,11 @@
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render } from "preact";
+import { render, createRef } from "preact";
 import type { ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 
-import { Menu, type MenuItem } from "../../assets/ts/ui/Menu";
+import { Menu, type MenuItem, type MenuHandle } from "../../assets/ts/ui/Menu";
 
 const mounted: HTMLElement[] = [];
 
@@ -401,4 +401,49 @@ describe("Menu", () => {
       delete (HTMLElement.prototype as { showPopover?: unknown }).showPopover;
     }
   });
+});
+
+it("opens the same menu at a content point, ignores queued scroll, and restores content focus", async () => {
+  const handle = createRef<MenuHandle>();
+  const root = mount(
+    <>
+      <div data-scroller>
+        <div tabIndex={0} data-content>
+          Editable content
+        </div>
+      </div>
+      <Menu label="Content actions" items={items()} menuRef={handle} />
+    </>,
+  );
+  const content = root.querySelector<HTMLElement>("[data-content]")!;
+  const scroller = root.querySelector<HTMLElement>("[data-scroller]")!;
+  await act(() => {
+    handle.current!.openAt({ x: 150, y: 200 }, content);
+  });
+  expect(root.querySelector('[role="menu"]')).not.toBeNull();
+  expect(root.querySelector<HTMLElement>('[role="menu"]')!.style.minWidth).toBe("0px");
+  await act(() => {
+    scroller.dispatchEvent(new Event("scroll"));
+  });
+  expect(root.querySelector('[role="menu"]')).not.toBeNull();
+  press(menuItems(root)[0], "Escape");
+  expect(document.activeElement).toBe(content);
+  await act(() => {
+    handle.current!.openAt({ x: 150, y: 200 }, content);
+  });
+  await act(() => {
+    scroller.scrollTop = 40;
+    scroller.dispatchEvent(new Event("scroll"));
+  });
+  expect(root.querySelector('[role="menu"]')).toBeNull();
+});
+
+it("does not open a disabled menu through either activation path", async () => {
+  const handle = createRef<MenuHandle>();
+  const root = mount(<Menu label="Unavailable actions" items={items()} menuRef={handle} disabled />);
+  expect(trigger(root).disabled).toBe(true);
+  await act(() => {
+    handle.current!.openAt({ x: 20, y: 30 }, root);
+  });
+  expect(root.querySelector('[role="menu"]')).toBeNull();
 });

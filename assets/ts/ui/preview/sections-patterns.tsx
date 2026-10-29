@@ -4,6 +4,7 @@ import { VerifiedOrganizationPreview, ProposalIdentityPreview } from "./Verified
 import { ContentVersionNoticePreview } from "./ContentVersionNoticePreview";
 import { ModelNavigationPreview } from "./ModelNavigationPreview";
 import { contentContributionPreview } from "./ContentContributionPreview";
+import { contentSections } from "./sections-content";
 /**
  * Pattern catalog specimens.
  *
@@ -357,6 +358,7 @@ export const patternSections: PreviewSection[] = [
     title: "Agenda",
     render: () => <AgendaExample />,
   },
+  ...contentSections,
   {
     id: "row-list",
     title: "Row list",

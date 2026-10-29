@@ -14,7 +14,7 @@ describe.skipIf(process.platform === "win32")("email template seed CLI", () => {
     const capture = join(directory, "capture.json");
     const payload = join(directory, "payload.sql");
     const executable = join(directory, "pnpm");
-    // The generated executable must not inherit a temp directory's module policy.
+    // Isolate the extensionless executable from any ancestor package module type.
     writeFileSync(join(directory, "package.json"), JSON.stringify({ type: "commonjs" }));
     writeFileSync(
       executable,

@@ -28,8 +28,8 @@
  * focus continue naturally.
  */
 
-import type { ComponentChildren } from "preact";
-import { useCallback, useEffect, useId, useRef, useState } from "preact/hooks";
+import type { ComponentChildren, RefObject } from "preact";
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "preact/hooks";
 
 import { MenuLevel } from "./MenuLevel";
 import "./Menu.css";
@@ -67,6 +67,11 @@ interface MenuItemBase {
 
 export type MenuItem = MenuItemBase;
 
+/** Optional alternate activation for a menu that also retains its visible menu button. */
+export interface MenuHandle {
+  openAt: (point: { x: number; y: number }, returnFocusTo: HTMLElement) => void;
+}
+
 export interface MenuProps {
   /** Accessible name for the trigger. */
   label: string;
@@ -91,6 +96,8 @@ export interface MenuProps {
   triggerClass?: string;
   /** A tooltip for the trigger. */
   title?: string;
+  disabled?: boolean;
+  menuRef?: RefObject<MenuHandle>;
 }
 
 export function Menu({
@@ -102,16 +109,55 @@ export function Menu({
   children,
   triggerClass,
   title,
+  disabled = false,
+  menuRef,
 }: MenuProps) {
   const menuId = useId();
   const [open, setOpen] = useState(false);
   const [initialLast, setInitialLast] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const focusTarget = useRef<HTMLElement>(null);
+  const scrollOrigin = useRef(new Map<Element, { left: number; top: number }>());
+  const [anchorPoint, setAnchorPoint] = useState<{ x: number; y: number } | null>(null);
   const close = useCallback((returnFocus: boolean) => {
     setOpen(false);
-    if (returnFocus) triggerRef.current?.focus({ preventScroll: true });
+    if (returnFocus) (focusTarget.current ?? triggerRef.current)?.focus({ preventScroll: true });
   }, []);
+  useLayoutEffect(() => {
+    if (!menuRef) return;
+    menuRef.current = {
+      openAt: (point, target) => {
+        if (disabled) return;
+        focusTarget.current = target;
+        scrollOrigin.current.clear();
+        for (let element: HTMLElement | null = target; element; element = element.parentElement)
+          scrollOrigin.current.set(element, { left: element.scrollLeft, top: element.scrollTop });
+        setAnchorPoint(point);
+        setInitialLast(false);
+        setOpen(true);
+      },
+    };
+    return () => {
+      menuRef.current = null;
+    };
+  }, [menuRef, disabled]);
+  useEffect(() => {
+    if (disabled) close(false);
+  }, [disabled, close]);
+  useEffect(() => {
+    if (!open || !anchorPoint) return;
+    const scroll = (event: Event) => {
+      if (event.target instanceof Node && rootRef.current?.contains(event.target)) return;
+      const target = event.target === document ? document.scrollingElement : event.target;
+      const origin = target instanceof Element ? scrollOrigin.current.get(target) : undefined;
+      // Ignore a queued scroll event from bringing the invocation point into view before opening.
+      if (origin && target instanceof Element && (target.scrollLeft !== origin.left || target.scrollTop !== origin.top))
+        close(false);
+    };
+    window.addEventListener("scroll", scroll, true);
+    return () => window.removeEventListener("scroll", scroll, true);
+  }, [open, anchorPoint, close]);
   useEffect(() => {
     if (!open) return;
     const outside = (event: PointerEvent) => {
@@ -125,6 +171,7 @@ export function Menu({
       <button
         ref={triggerRef}
         type="button"
+        disabled={disabled}
         class={["pk-menu__trigger", variant === "plain" ? "pk-menu__trigger--plain" : null, triggerClass]
           .filter(Boolean)
           .join(" ")}
@@ -134,6 +181,8 @@ export function Menu({
         aria-expanded={open ? "true" : "false"}
         aria-controls={open ? menuId : undefined}
         onClick={() => {
+          focusTarget.current = triggerRef.current;
+          setAnchorPoint(null);
           setInitialLast(false);
           if (open) close(true);
           else setOpen(true);
@@ -141,6 +190,8 @@ export function Menu({
         onKeyDown={(event) => {
           if (["Enter", " ", "ArrowDown", "ArrowUp"].includes(event.key)) {
             event.preventDefault();
+            focusTarget.current = triggerRef.current;
+            setAnchorPoint(null);
             setInitialLast(event.key === "ArrowUp");
             setOpen(true);
           }
@@ -155,7 +206,8 @@ export function Menu({
           items={items}
           heading={heading}
           anchorRef={triggerRef}
-          align={align}
+          anchorPoint={anchorPoint}
+          align={anchorPoint ? "start" : align}
           initialLast={initialLast}
           close={close}
         />

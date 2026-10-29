@@ -123,15 +123,14 @@
     border: 0;
   }
 
-  .pk-content-cards,
   .pk-content-stats {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(15rem, 100%), 1fr));
     gap: var(--pk-4);
     margin-block: var(--pk-6);
+    margin-inline: 0;
   }
 
-  .pk-content-card,
   .pk-content-stats > div {
     border: 1px solid var(--pk-line-soft);
     border-radius: var(--pk-radius-card);
@@ -167,10 +166,6 @@
     flex-wrap: wrap;
     gap: var(--pk-3);
     margin-top: var(--pk-4);
-  }
-
-  .pk-content-stats {
-    margin-inline: 0;
   }
 
   .pk-content-stats dt {

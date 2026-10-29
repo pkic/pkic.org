@@ -13,13 +13,23 @@ heroButton:
 
 ## Become a sponsor or request more information
 
+:::aside
+### Sponsorship principles
 To support the activities of the PKI Consortium we accept sponsors and donations from members and third parties. Sponsors will be listed on the website, events and other activities, but do not gain any special treatment or rights in the consortium. Sponsors and donors can support the development of specific projects but will never be permitted to influence the outcome or a policy.
+:::
 
+::::cards count=2
+:::card icon=award
+### Sponsorship levels
 The consortium has established various [levels of sponsorship](../pkic-sponsors.pdf), and sponsors have the freedom to donate any amount they wish. However, to be recognized as a sponsor, a minimum donation matching the level of sponsorship for at least one year is required.
-
+:::
+:::card icon=users
+### Donate through GitHub
 You can also sponsor the PKI Consortium directly though [GitHub Sponsors](https://github.com/sponsors/pkic), with a monthly or one-time donation.
 
-{{< button link="https://github.com/sponsors/pkic" target="_blank" label="Donate via GitHub Sponsors" type="success" >}}
+[Donate via GitHub Sponsors](https://github.com/sponsors/pkic)
+:::
+::::
 
 Please complete the form below if you would like more information about sponsoring the PKI Consortium.
 

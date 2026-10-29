@@ -10,6 +10,14 @@ Each entry is the full anatomy of a control. The gallery id renders it (`pnpm ga
 - Dismissal: Escape (focus back to the trigger), outside click, Tab, or choosing a reaction.
 - Keyboard: focus moves to the first emoji on open; Left/Right wrap, Home/End.
 
+## Layout picker (`content-layout`)
+
+- Use: `ContentLayoutPicker` in the Markdown editor, with `LayoutSizeGrid` for card/grid/table dimensions. Reference: the insertion palettes in Word and Google Docs.
+- Shape: one labeled Layout toolbar trigger opens a compact, nonmodal palette. Text columns offer illustrated 1–4 choices and Automatic. Grid and Cards use a size matrix; Bento offers illustrated presets. Table opens the same matrix with table limits. Do not add separate toolbar buttons per layout type or put sizing cells in a Menu.
+- Placement: below the trigger, aligned to its start, through `usePopupPlacement` with top-layer placement; flip and clamp to the phone viewport.
+- Dismissal: choosing a size applies immediately; Escape and Close return focus to the trigger; outside click or focus leaving closes without stealing focus.
+- Keyboard: focus enters the first choice. Matrix arrows move by cell, Home/End move to row edges, Ctrl+Home/End move to matrix corners; Enter/Space select. Tab follows normal controls. Edit layout reuses this palette, marks the current choice, and preserves all authored children.
+
 ## Menu (`menu`)
 
 - Use: `assets/ts/ui/Menu.tsx` (`MenuItem`: `danger`, `disabled`, `checked`, `multiple`, `keepOpen`, `separatorBefore`, `children` for a submenu). Row ends: `RowActions`. Create command: `SplitButton`.
@@ -17,6 +25,15 @@ Each entry is the full anatomy of a control. The gallery id renders it (`pnpm ga
 - Placement: below the trigger; `align="end"` at a row or panel end; submenus open to the right and flip left.
 - Dismissal: Escape (focus back to the trigger; in a submenu one level back), outside click, Tab, or selecting an item (unless `keepOpen`).
 - Keyboard: Enter/Space/ArrowDown open on the first item, ArrowUp on the last; arrows wrap and skip disabled items; Home/End; ArrowRight opens a submenu, ArrowLeft returns.
+
+## Authored-content editor (`content-editor`)
+
+- Use: one sticky formatting toolbar in `MarkdownEditor`, `EditorContextMenu`, and the canonical builders in `editor-context-actions.ts`. Reference: document-editor toolbars and context menus in Word and Google Docs.
+- Shape: one row; formatting commands that fit stay visible, with overflow in More formatting. An always-visible Actions button exposes commands for the current text, layout, button, media, code block, or table. Never stack selection-specific toolbar rows.
+- Placement: the toolbar remains inside the editor and below pinned semantic headers, including nested scroll surfaces. The Actions menu anchors to its button; right-click anchors the same shared Menu at the invocation point with viewport clamping. Popups use the shared top layer.
+- Dismissal: Escape restores the invoking content or button focus, outside click dismisses, and actual scrolling closes a pointer menu. A queued scroll that preceded invocation must not close it.
+- Keyboard/touch: Shift+F10 or the Context Menu key opens the same actions at the selection. Preserve existing selected text when invoked within it; otherwise target the clicked content. Shift+right-click and disabled/source mode keep the browser menu. Touch keeps native long-press selection and uses the visible Actions button.
+- Editing destinations/media opens the shared Dialog, so its fields remain visible on long pages. Keep command implementations shared across all entry points, and preserve editor selection through menu focus changes.
 
 ## Dialog (`dialogs`)
 

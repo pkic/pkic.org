@@ -52,4 +52,30 @@ describe("mailing-list provider adapter", () => {
     );
     expect(fetch.mock.calls).toHaveLength(1);
   });
+  it.each(["absent", "present", "incomplete", "other-error"])(
+    "only tolerates memberKey errors when a complete roster confirms absence: %s",
+    async (state) => {
+      const email = "123456@example.test";
+      const fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+        if (String(url).includes("oauth2.googleapis.com")) return Response.json({ access_token: "synthetic-token" });
+        if (init?.method === "POST") return Response.json({});
+        if (String(url).includes("/members?"))
+          return Response.json({
+            members: state === "present" ? [{ email, role: "OWNER", type: "USER" }] : [],
+            ...(state === "incomplete" ? { nextPageToken: "more" } : {}),
+          });
+        return Response.json(
+          { error: { message: state === "other-error" ? "Invalid Input" : "Missing required field: memberKey" } },
+          { status: 400 },
+        );
+      });
+      const provider = await createGoogleGroupsDeliveryProvider(env, false, fetch);
+      const change = provider.applyChange(list, { email, action: "subscribe" });
+      if (state === "absent") await change;
+      else await expect(change).rejects.toThrow();
+      expect(
+        fetch.mock.calls.filter(([url, request]) => String(url).includes("/members") && request?.method === "POST"),
+      ).toHaveLength(state === "absent" ? 1 : 0);
+    },
+  );
 });

@@ -1,3 +1,4 @@
+import { contentContainerNames } from "../../../assets/shared/schemas/content-layout";
 import { parse as parseYaml } from "yaml";
 
 /**
@@ -5,7 +6,8 @@ import { parse as parseYaml } from "yaml";
  *
  * Hugo's `{{< name … >}}` and the Markdown directive form `:::name` say the
  * same thing, so the directives are normalized into shortcodes first and only
- * one grammar has to be parsed after that.
+ * one grammar has to be parsed after that. Native content containers are handled
+ * by the shared Markdown codec, including literal examples in code fences.
  */
 export interface ContentCall {
   inner?: string;
@@ -25,10 +27,10 @@ function attributesSource(value: string): string {
 export function normalizeDirectives(markdown: string): string {
   let value = markdown;
   for (let pass = 0; pass < 8; pass += 1) {
-    const next = value.replace(
-      BLOCK_DIRECTIVE,
-      (_whole, name: string, attributes: string | undefined, inner: string) =>
-        `{{< ${name} ${attributesSource(attributes ?? "")} >}}\n${inner}\n{{< /${name} >}}`,
+    const next = value.replace(BLOCK_DIRECTIVE, (whole, name: string, attributes: string | undefined, inner: string) =>
+      contentContainerNames.some((container) => container === name)
+        ? whole
+        : `{{< ${name} ${attributesSource(attributes ?? "")} >}}\n${inner}\n{{< /${name} >}}`,
     );
     if (next === value) break;
     value = next;
