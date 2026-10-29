@@ -14,10 +14,12 @@ describe.skipIf(process.platform === "win32")("email template seed CLI", () => {
     const capture = join(directory, "capture.json");
     const payload = join(directory, "payload.sql");
     const executable = join(directory, "pnpm");
+    // The generated executable must not inherit a temp directory's module policy.
+    writeFileSync(join(directory, "package.json"), JSON.stringify({ type: "commonjs" }));
     writeFileSync(
       executable,
       `#!${process.execPath}
-import fs from "node:fs";
+const fs = require("node:fs");
 const args = process.argv.slice(2);
 if (args.includes("--json")) {
   fs.writeSync(1, JSON.stringify([{ results: [{ id: "synthetic-admin" }] }]));
