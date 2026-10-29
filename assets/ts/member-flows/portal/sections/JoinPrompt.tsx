@@ -21,17 +21,19 @@ function NonMemberJoinPrompt({ userId }: { userId: string }) {
   if (status.loading || status.error || !status.data || status.data.person.userId !== userId) return null;
   // Someone who has applied comes here to follow it, so it is the first thing their home offers.
   const application = status.data.applications.applications[0];
-  if (application)
+  if (application || status.data.applications.page.total > 0)
     return (
       <Panel>
         <PanelHeader title="Your membership application">
           <ButtonLink href={usePortalHashLocation.hrefs("/application")}>View application</ButtonLink>
         </PanelHeader>
-        <PanelBody>
-          <p>
-            Status: {statusLabel(application.stage)}. Applied {fmtDate(application.createdAt)}.
-          </p>
-        </PanelBody>
+        {application && (
+          <PanelBody>
+            <p>
+              Status: {statusLabel(application.stage)}. Applied {fmtDate(application.createdAt)}.
+            </p>
+          </PanelBody>
+        )}
       </Panel>
     );
   if (status.data.person.activeIdentities.length) return null;
