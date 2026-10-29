@@ -6,23 +6,15 @@ import {
   contentMediaSchema,
   contentSpanSchema,
 } from "../../../shared/schemas/content-layout";
-import { Button } from "../../ui/Button";
-import { Menu, type MenuItem } from "../../ui/Menu";
-import { IconTextColumns, IconContentGrid } from "../icons";
+import type { MenuItem } from "../../ui/Menu";
 
 /** Layout choices live beside the selected authored block, not in a separate form. */
-export function ContentLayoutControls({
-  editor,
-  onEditLayout,
-}: {
-  editor: Editor;
-  onEditLayout: (anchor: HTMLElement) => void;
-}) {
+export function contentLayoutActions(editor: Editor, onEditLayout: () => void): MenuItem[] {
   const selection = editor.state.selection.$from;
   let layoutDepth = selection.depth;
   while (layoutDepth > 0 && !["cards", "columns", "grid"].includes(selection.node(layoutDepth).type.name))
     layoutDepth--;
-  if (!layoutDepth) return null;
+  if (!layoutDepth) return [];
   const layout = selection.node(layoutDepth).type.name;
   const itemName = layout === "cards" ? "card" : "item";
   let itemDepth = selection.depth;
@@ -46,7 +38,37 @@ export function ContentLayoutControls({
       })),
     });
   if (layout === "cards") {
-    if (item) {
+    if (item && itemPosition !== null) {
+      for (const section of ["card-header", "card-footer"] as const) {
+        let exists = false;
+        item.forEach((child) => {
+          if (child.type.name === section) exists = true;
+        });
+        choices.push({
+          id: section,
+          label: section === "card-header" ? "Add card header" : "Add card footer",
+          disabled: exists,
+          onSelect: () =>
+            editor
+              .chain()
+              .focus()
+              .insertContentAt(section === "card-header" ? itemPosition + 1 : itemPosition + item.nodeSize - 1, {
+                type: section,
+                content: [
+                  {
+                    type: "paragraph",
+                    content: [
+                      {
+                        type: "text",
+                        text: section === "card-header" ? "Card heading" : "Supporting details or actions.",
+                      },
+                    ],
+                  },
+                ],
+              })
+              .run(),
+        });
+      }
       choices.push({
         id: "card-icon",
         label: "Card icon",
@@ -175,19 +197,16 @@ export function ContentLayoutControls({
         },
       });
   }
-  return (
-    <div class="pk-markdown-editor__toolbar" data-density="compact" role="group" aria-label="Layout editing">
-      <Button variant="ghost" aria-haspopup="dialog" onClick={(event) => onEditLayout(event.currentTarget)}>
-        Edit layout
-      </Button>
-      {choices.length > 0 && (
-        <Menu
-          label={layout === "cards" ? "Card options" : layout === "columns" ? "Column options" : "Grid item options"}
-          items={choices}
-        >
-          {layout === "columns" ? <IconTextColumns /> : <IconContentGrid />}
-        </Menu>
-      )}
-    </div>
-  );
+  return [
+    { id: "edit-layout", label: "Edit layout", onSelect: onEditLayout },
+    ...(choices.length
+      ? [
+          {
+            id: "layout-options",
+            label: layout === "cards" ? "Card options" : layout === "columns" ? "Column options" : "Grid item options",
+            children: choices,
+          },
+        ]
+      : []),
+  ];
 }

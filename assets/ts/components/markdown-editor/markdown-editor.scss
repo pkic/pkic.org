@@ -1,10 +1,11 @@
 @layer components {
-  .pk-markdown-editor { min-width: 0; border: 1px solid var(--pk-line); border-radius: var(--pk-radius); background: var(--pk-surface); overflow: hidden; }
+  .pk-markdown-editor { min-width: 0; border: 1px solid var(--pk-line); border-radius: var(--pk-radius); background: var(--pk-surface); overflow: clip; }
+  .pk-panel:has(.pk-markdown-editor) { overflow: clip; }
   /* A field's state draws on the editor's frame, as it does on any control's border; the message carries the mark. */
   .pk-field:is(.pk-field--ok, .pk-field--advisory, .pk-field--invalid) .pk-markdown-editor { border-color: var(--state); }
   .pk-field__control:has(> .pk-markdown-editor) > .pk-field__state { display: none; }
   .pk-markdown-editor__toolbar, .pk-markdown-editor__footer { display: flex; align-items: center; flex-wrap: wrap; gap: var(--pk-1); padding: var(--pk-2); }
-  .pk-markdown-editor__toolbar { border-bottom: 1px solid var(--pk-line); gap: var(--pk-2); }
+  .pk-markdown-editor__toolbar { position: sticky; top: var(--pk-editor-sticky-top, 0rem); z-index: 30; background: var(--pk-surface); flex-wrap: nowrap; border-bottom: 1px solid var(--pk-line); gap: var(--pk-2); }
   .pk-markdown-editor__toolbar [aria-pressed="true"] { background: var(--pk-surface-sunk); color: var(--pk-ink); }
   /* The bar's groups: the text's shape, its structure, the session, and the
      source view at the far end. A hairline between groups is the only

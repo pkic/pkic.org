@@ -1,6 +1,8 @@
 import { lazy, Suspense } from "preact/compat";
 import { CONTENT_PROSE_CLASS } from "../../site/ContentProse";
 import type { JSX, RefObject } from "preact";
+import { useStickyToolbar } from "../../ui/use-sticky-toolbar";
+import { formatNumber } from "../../../shared/format-number";
 import { codeLanguageItems } from "./code-language-menu";
 import { TemplateHighlighting } from "./template-highlighting";
 import { restoreTemplateMarkdown } from "./template-markdown";
@@ -36,20 +38,18 @@ import {
   EDITOR_BLOCKS,
   insertEditorBlock,
   editorBlockPosition,
-  moveEditorBlock,
   type EditorBlock,
 } from "./editor-blocks";
 import { useToolbarOverflow } from "./use-toolbar-overflow";
-import { EditorMediaFields } from "./EditorMediaFields";
+import type { EditorMediaDraft } from "./EditorMediaInsertion";
 import "./markdown-editor.scss";
 import "./markdown-content.scss";
 
-const CodeBlockControls = lazy(() =>
-  import("./CodeBlockControls").then((module) => ({ default: module.CodeBlockControls })),
+const EditorMediaInsertion = lazy(() =>
+  import("./EditorMediaInsertion").then((module) => ({ default: module.EditorMediaInsertion })),
 );
-
-const ContentLayoutControls = lazy(() =>
-  import("./ContentLayoutControls").then((module) => ({ default: module.ContentLayoutControls })),
+const EditorContextMenu = lazy(() =>
+  import("./EditorContextMenu").then((module) => ({ default: module.EditorContextMenu })),
 );
 
 const ContentLayoutPicker = lazy(() =>
@@ -106,10 +106,11 @@ export function MarkdownEditor({
   const [, refresh] = useState(0);
   const [source, setSource] = useState(initialMode === "source");
   const root = useRef<HTMLDivElement>(null);
+  useStickyToolbar(root);
   // How many of the bar's commands fit beside the source button; the rest
   // fold into one `…` menu rather than wrapping onto a second line (#114).
   const toolbar = useRef<HTMLDivElement>(null);
-  const [media, setMedia] = useState<{ kind: "image" | "video" | "link"; position: number } | null>(null);
+  const [media, setMedia] = useState<EditorMediaDraft | null>(null);
   const pickerAnchor = useRef<HTMLElement>(null);
   const [layoutPicker, setLayoutPicker] = useState<{ editing: boolean; table: boolean } | null>(null);
   const closeLayoutPicker = useCallback((returnFocus: boolean) => {
@@ -117,7 +118,10 @@ export function MarkdownEditor({
     if (returnFocus) pickerAnchor.current?.focus({ preventScroll: true });
   }, []);
   const openLayoutPicker = (editing: boolean, table: boolean, anchor?: HTMLElement) => {
-    pickerAnchor.current = anchor ?? toolbar.current?.querySelector<HTMLElement>("[data-overflow] button") ?? null;
+    pickerAnchor.current =
+      anchor ??
+      toolbar.current?.querySelector<HTMLElement>("[data-content-actions] button, [data-overflow] button") ??
+      null;
     setLayoutPicker({ editing, table });
   };
   const addBlock = useRef<(kind: EditorBlock, position: number) => void>(() => {});
@@ -339,7 +343,21 @@ export function MarkdownEditor({
       {
         label: "Link",
         icon: <IconLink width="16" height="16" />,
-        run: () => setMedia({ kind: "link", position: position() }),
+        run: () => {},
+        choices: [
+          {
+            id: "text-link",
+            label: "Text link",
+            disabled: locked,
+            onSelect: () => setMedia({ kind: "link", position: position() }),
+          },
+          {
+            id: "button-link",
+            label: "Button",
+            disabled: locked,
+            onSelect: () => setMedia({ kind: "button", position: position() }),
+          },
+        ],
       },
     ],
     [
@@ -384,7 +402,7 @@ export function MarkdownEditor({
   ];
   const commands = groups.flat();
   const visibleCommands = useToolbarOverflow(toolbar, commands.length);
-  const foldedCommands: MenuItem[] = commands.slice(visibleCommands).map((command) => ({
+  const menuCommands: MenuItem[] = commands.map((command) => ({
     id: command.label,
     label: command.label,
     icon: command.icon,
@@ -393,6 +411,7 @@ export function MarkdownEditor({
     onSelect: command.run,
     children: command.choices,
   }));
+  const foldedCommands = menuCommands.slice(visibleCommands);
   return (
     <div ref={root} class="pk-markdown-editor" data-variant={variant} onFocusIn={onFocus}>
       <div
@@ -452,6 +471,18 @@ export function MarkdownEditor({
           </div>
         ))}
         <div class="pk-markdown-editor__group pk-markdown-editor__group--end" role="presentation" data-end>
+          {editor && (
+            <Suspense fallback={null}>
+              <EditorContextMenu
+                editor={editor}
+                disabled={locked}
+                formatting={menuCommands}
+                editLayout={() => openLayoutPicker(true, false)}
+                editMedia={setMedia}
+                allowMove={!compact}
+              />
+            </Suspense>
+          )}
           {templateInsertions && (
             <>
               <Menu
@@ -500,60 +531,15 @@ export function MarkdownEditor({
           />
         </Suspense>
       )}
-      {!source && editor && ["columns", "grid", "cards"].some((name) => editor.isActive(name)) && (
+      {media && editor && !source && (
         <Suspense fallback={null}>
-          <ContentLayoutControls editor={editor} onEditLayout={(anchor) => openLayoutPicker(true, false, anchor)} />
+          <EditorMediaInsertion
+            key={`${media.kind}-${media.position}`}
+            editor={editor}
+            draft={media}
+            onClose={() => setMedia(null)}
+          />
         </Suspense>
-      )}
-      {!source && editor?.isActive("codeBlock") && (
-        <Suspense fallback={null}>
-          <CodeBlockControls editor={editor} disabled={locked} />
-        </Suspense>
-      )}
-      {!source && editor?.isActive("table") && (
-        <div class="pk-markdown-editor__toolbar" data-density="compact" role="group" aria-label="Table editing">
-          <Button variant="ghost" disabled={locked} onClick={() => editor.chain().focus().addRowAfter().run()}>
-            Add row
-          </Button>
-          <Button variant="ghost" disabled={locked} onClick={() => editor.chain().focus().addColumnAfter().run()}>
-            Add column
-          </Button>
-          <Button variant="ghost" disabled={locked} onClick={() => editor.chain().focus().deleteRow().run()}>
-            Delete row
-          </Button>
-          <Button variant="ghost" disabled={locked} onClick={() => editor.chain().focus().deleteColumn().run()}>
-            Delete column
-          </Button>
-          <Button variant="ghost" disabled={locked} onClick={() => editor.chain().focus().deleteTable().run()}>
-            Remove table
-          </Button>
-        </div>
-      )}
-      {media && !source && (
-        <EditorMediaFields
-          key={`${media.kind}-${media.position}`}
-          kind={media.kind}
-          onCancel={() => setMedia(null)}
-          onInsert={(insert) => {
-            if (!editor) return;
-            const node =
-              insert.kind === "video"
-                ? { type: "memberVideo", attrs: { url: insert.url } }
-                : insert.kind === "image"
-                  ? { type: "image", attrs: { src: insert.url, alt: insert.description } }
-                  : {
-                      type: "text",
-                      text: insert.description || insert.url,
-                      marks: [{ type: "link", attrs: { href: insert.url } }],
-                    };
-            editor
-              .chain()
-              .focus()
-              .insertContentAt(media.position, insert.kind === "link" ? node : [node, { type: "paragraph" }])
-              .run();
-            setMedia(null);
-          }}
-        />
       )}
       <div ref={host} hidden={source} />
       {source && (
@@ -574,17 +560,7 @@ export function MarkdownEditor({
       )}
       <input ref={input} type="hidden" name={source ? undefined : name} value={value} />
       <div class="pk-markdown-editor__footer">
-        <span class="pk-small pk-muted">{value.length.toLocaleString()} characters · Saved as Markdown</span>
-        {!source && !compact && (
-          <div class="pk-cluster" role="group" aria-label="Move selected block">
-            <Button variant="ghost" disabled={locked} onClick={() => editor && moveEditorBlock(editor, -1)}>
-              Move up
-            </Button>
-            <Button variant="ghost" disabled={locked} onClick={() => editor && moveEditorBlock(editor, 1)}>
-              Move down
-            </Button>
-          </div>
-        )}
+        <span class="pk-small pk-muted">{formatNumber(value.length)} characters · Saved as Markdown</span>
       </div>
     </div>
   );

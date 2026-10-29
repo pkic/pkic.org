@@ -15,6 +15,7 @@ import { markdownContentSchema } from "../../assets/shared/schemas/markdown-cont
 import { contentIconSchema } from "../../assets/shared/schemas/content-layout";
 import { applyEditorLayout } from "../../assets/ts/components/markdown-editor/editor-layout-editing";
 import { markdownLayoutChoiceSchema } from "../../assets/shared/schemas/markdown-layout";
+import { contentActionsExample } from "../../assets/ts/ui/preview/content-actions-example";
 import { contentIconMarkup } from "../../assets/ts/site/ContentIcon";
 
 const instances: Editor[] = [];
@@ -239,4 +240,24 @@ it("never removes an existing columns layout when inserting another with the sam
   expect(count).toBe(2);
   expect(editor.state.doc.textContent).toBe("Keep this text.");
   expect(open(editor.getMarkdown()).getJSON()).toEqual(editor.getJSON());
+});
+
+it("preserves editable resource-card sections and shared button links through saving and reopening", () => {
+  const editor = open(contentActionsExample);
+  expect(editor.view.dom.querySelectorAll(".pk-content-card-header")).toHaveLength(3);
+  expect(editor.view.dom.querySelectorAll(".pk-content-card-footer")).toHaveLength(3);
+  expect(editor.view.dom.querySelectorAll(".pk-content-button")).toHaveLength(5);
+  expect(open(editor.getMarkdown()).getJSON()).toEqual(editor.getJSON());
+  expect(markdownContentSchema(30000).safeParse(editor.getMarkdown()).success).toBe(true);
+  const result = published(editor.getMarkdown());
+  for (const surface of [editor.view.dom, result]) {
+    expect(
+      surface.querySelector('.pk-content-card[data-media="image"] .pk-content-card__content > p:first-child > img'),
+    ).not.toBeNull();
+    expect(
+      surface.querySelector('.pk-content-card[data-media="logo"] .pk-content-card__content > p > img'),
+    ).not.toBeNull();
+  }
+  expect(result.querySelectorAll("a.pk-content-button.pk-btn")).toHaveLength(5);
+  expect(result.querySelector(".pk-content-button.pk-btn--secondary")?.getAttribute("href")).toBe("/sponsors/sponsor/");
 });

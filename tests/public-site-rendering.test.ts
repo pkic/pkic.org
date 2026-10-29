@@ -1,3 +1,4 @@
+import { contentActionsExample } from "../assets/ts/ui/preview/content-actions-example";
 import { contentLayoutExample } from "../assets/ts/ui/preview/content-layout-example";
 import "./helpers/app";
 import { SELF } from "cloudflare:test";
@@ -196,6 +197,24 @@ describe("Vite public-site rendering", () => {
     expect(html).toContain("Reference library");
     expect(html).not.toContain("PKICCONTENTCOMPONENT");
     expect(stripContentComponentSyntax(contentLayoutExample)).not.toContain(":::cards");
+  });
+
+  it("publishes shared destination buttons and editable card sections", async () => {
+    const html = await renderContentMarkdown(contentActionsExample, {
+      assetUrl: () => undefined,
+      assetUrls: () => [],
+      data: {},
+      listing: () => ({ heading: "Test", items: [], page: 1, pageCount: 1 }),
+      route: "/test/",
+      sourcePath: "content/test.md",
+    });
+    expect(html.match(/class="pk pk-content-card-header"/g)).toHaveLength(3);
+    expect(html.match(/class="pk pk-content-card-footer"/g)).toHaveLength(3);
+    expect(html.match(/pk-content-button/g)).toHaveLength(5);
+    expect(html).toContain("pk-btn--primary");
+    expect(html).toContain("pk-btn--secondary");
+    expect(html).toContain('href="/sponsors/sponsor/"');
+    expect(html).not.toContain("PKICCONTENTCOMPONENT");
   });
 
   it("keeps native grid and card examples literal inside fenced code", async () => {

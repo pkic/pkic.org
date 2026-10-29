@@ -12,6 +12,7 @@ export function MenuLevel({
   anchorRef,
   align = "start",
   initialLast = false,
+  anchorPoint,
   close,
   back,
 }: {
@@ -22,6 +23,7 @@ export function MenuLevel({
   anchorRef: RefObject<HTMLElement>;
   align?: "start" | "end";
   initialLast?: boolean;
+  anchorPoint?: { x: number; y: number } | null;
   close: (returnFocus: boolean) => void;
   back?: () => void;
 }) {
@@ -42,6 +44,7 @@ export function MenuLevel({
     side: back ? "right" : "bottom",
     revision,
     topLayer: true,
+    anchorPoint,
   });
   useLayoutEffect(() => {
     if (childItem) return;

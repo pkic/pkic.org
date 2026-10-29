@@ -164,6 +164,13 @@ describe("author content remains data", () => {
       expect(markdownVideoEmbed(url)).toBeNull();
     },
   );
+  it("preserves standalone images when editor HTML is copied back into the editor", () => {
+    const first = editor("![Accessible description](https://example.test/image.png)");
+    const pasted = new Editor({ injectCSS: false, extensions: editorExtensions(), content: first.getHTML() });
+    editors.push(pasted);
+    expect(pasted.getJSON()).toEqual(first.getJSON());
+  });
+
   it("requires an image description and reports media errors against their fields", () => {
     const result = markdownMediaInsertSchema.safeParse({
       kind: "image",

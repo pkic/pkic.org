@@ -1,4 +1,5 @@
 import { contentColumnExample, contentBentoExample, contentLayoutExample } from "./content-layout-example";
+import { contentActionsExample } from "./content-actions-example";
 import { contentReadingExample } from "./content-reading-example";
 import { useState } from "preact/hooks";
 import { MarkdownEditor } from "../../components/markdown-editor/MarkdownInput";
@@ -63,6 +64,18 @@ function EditableContentSpecimen({ initialValue }: { initialValue: string }) {
 }
 
 export const contentSections: PreviewSection[] = [
+  {
+    id: "content-editor",
+    title: "Editing a long page",
+    note: "One toolbar follows the page. Use Actions, right-click, or Shift+F10 for the selected content. On phones use Actions; Shift+right-click keeps the browser menu.",
+    render: () => <EditableContentSpecimen initialValue={`${contentActionsExample}\n\n${contentReadingExample}`} />,
+  },
+  {
+    id: "content-actions",
+    title: "Calls to action and resource cards",
+    note: "Shared PKIC buttons, editable card headers and footers, cover images, and proportional logos. Compare the visual editor, published result, and Markdown below.",
+    render: () => <EditableContentSpecimen initialValue={contentActionsExample} />,
+  },
   {
     id: "content-code",
     title: "Editable code blocks",

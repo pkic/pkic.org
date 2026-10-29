@@ -40,3 +40,19 @@ export function codeLanguageItems(editor: Editor | null, disabled = false): Menu
 export function codeLanguageLabel(language: string) {
   return languages.find(([value]) => value === language)?.[1] ?? language;
 }
+
+export function codeBlockActions(editor: Editor): MenuItem[] {
+  if (!editor.isActive("codeBlock")) return [];
+  return [
+    {
+      id: "code-language",
+      label: `Code language: ${codeLanguageLabel(String(editor.getAttributes("codeBlock").language ?? ""))}`,
+      children: codeLanguageItems(editor),
+    },
+    {
+      id: "code-paragraph",
+      label: "Convert to paragraph",
+      onSelect: () => editor.chain().focus().toggleCodeBlock().run(),
+    },
+  ];
+}

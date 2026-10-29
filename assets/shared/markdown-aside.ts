@@ -1,3 +1,4 @@
+import { readMarkdownButton } from "./markdown-button";
 import {
   contentAttributeNames,
   contentContainerNames,
@@ -6,7 +7,7 @@ import {
 } from "./schemas/content-layout";
 import { CONTENT_ASIDE_NAME, contentAsideSchema, type ContentAside } from "./schemas/content-aside";
 
-const containerPattern = contentContainerNames.join("|");
+const containerPattern = [...contentContainerNames].sort((left, right) => right.length - left.length).join("|");
 export const CONTAINER_START = new RegExp(`^:{3,}(?:${containerPattern})\\b`, "m");
 const CONTAINER_OPEN = new RegExp(`^(:{3,})(${containerPattern})\\b([^\\n]*)\\r?\\n`);
 const NESTED_CONTAINER = new RegExp(`^(:{3,})(?:${containerPattern})\\b`);
@@ -40,17 +41,36 @@ function parseContentContainer(value: unknown): ContentContainer {
 
 /** Card and item blocks belong directly to their owning collection. */
 function validateContainerParent(block: ContentContainer, parent?: ContentContainer["type"]): void {
-  const expected = block.type === "card" ? "cards" : block.type === "item" ? "grid" : null;
+  const expected =
+    block.type === "card"
+      ? "cards"
+      : block.type === "item"
+        ? "grid"
+        : block.type === "card-header" || block.type === "card-footer"
+          ? "card"
+          : null;
   if (expected && parent !== expected) throw new Error(`A ${block.type} block must be inside a ${expected} block.`);
 }
 
 /** Validate nested blocks and enforce the permitted direct children of each layout. */
 function validateContainerChildren(block: ContentContainer): void {
+  if (block.type === "button") {
+    readMarkdownButton(block.markdown);
+    return;
+  }
   // Reading each child validates its descendants before the parent is returned.
   const children = splitMarkdownContainers(block.markdown);
   for (const child of children) if (typeof child !== "string") validateContainerParent(child, block.type);
-  if (block.type !== "grid" && block.type !== "cards") return;
-  const expected = block.type === "grid" ? "item" : "card";
+  if (block.type === "card") {
+    for (const section of ["card-header", "card-footer"])
+      if (children.filter((child) => typeof child !== "string" && child.type === section).length > 1)
+        throw new Error(`A card has at most one ${section} block.`);
+    const footer = children.findIndex((child) => typeof child !== "string" && child.type === "card-footer");
+    if (footer >= 0 && children.slice(footer + 1).some((child) => typeof child !== "string" || child.trim()))
+      throw new Error("Place the card footer after its body.");
+  }
+  if (block.type !== "grid" && block.type !== "cards" && block.type !== "actions") return;
+  const expected = block.type === "grid" ? "item" : block.type === "cards" ? "card" : "button";
   if (!children.some((child) => typeof child !== "string")) throw new Error("Add at least one layout item.");
   if (children.some((child) => (typeof child === "string" ? Boolean(child.trim()) : child.type !== expected)))
     throw new Error(`A ${block.type} block contains only ${expected} blocks.`);

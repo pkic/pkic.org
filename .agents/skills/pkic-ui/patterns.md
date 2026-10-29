@@ -26,6 +26,15 @@ Each entry is the full anatomy of a control. The gallery id renders it (`pnpm ga
 - Dismissal: Escape (focus back to the trigger; in a submenu one level back), outside click, Tab, or selecting an item (unless `keepOpen`).
 - Keyboard: Enter/Space/ArrowDown open on the first item, ArrowUp on the last; arrows wrap and skip disabled items; Home/End; ArrowRight opens a submenu, ArrowLeft returns.
 
+## Authored-content editor (`content-editor`)
+
+- Use: one sticky formatting toolbar in `MarkdownEditor`, `EditorContextMenu`, and the canonical builders in `editor-context-actions.ts`. Reference: document-editor toolbars and context menus in Word and Google Docs.
+- Shape: one row; formatting commands that fit stay visible, with overflow in More formatting. An always-visible Actions button exposes commands for the current text, layout, button, media, code block, or table. Never stack selection-specific toolbar rows.
+- Placement: the toolbar remains inside the editor and below pinned semantic headers, including nested scroll surfaces. The Actions menu anchors to its button; right-click anchors the same shared Menu at the invocation point with viewport clamping. Popups use the shared top layer.
+- Dismissal: Escape restores the invoking content or button focus, outside click dismisses, and actual scrolling closes a pointer menu. A queued scroll that preceded invocation must not close it.
+- Keyboard/touch: Shift+F10 or the Context Menu key opens the same actions at the selection. Preserve existing selected text when invoked within it; otherwise target the clicked content. Shift+right-click and disabled/source mode keep the browser menu. Touch keeps native long-press selection and uses the visible Actions button.
+- Editing destinations/media opens the shared Dialog, so its fields remain visible on long pages. Keep command implementations shared across all entry points, and preserve editor selection through menu focus changes.
+
 ## Dialog (`dialogs`)
 
 - Use: `confirmAction({ title, body, consequences, confirmLabel, tone })` for a yes/no decision; `assets/ts/ui/Dialog.tsx` for modal content; `BottomSheet` for a phone sheet.

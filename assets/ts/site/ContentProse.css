@@ -54,7 +54,7 @@
   .pk-content-prose :where(li > p) {
     margin-block: var(--pk-2);
   }
-  .pk-content-prose a {
+  .pk-content-prose a:not(.pk-btn) {
     color: var(--pk-accent-ink);
     text-decoration: underline;
     text-underline-offset: 0.2em;
