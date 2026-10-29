@@ -20,7 +20,12 @@ import {
 } from "./identity-capacities";
 import { prepareUserGrantCandidates, selectUserGrantCandidates, type ContextGrantRow } from "./permissions";
 import type { PlainSessionRow } from "./session-engine";
-import { MAX_ACTING_IDENTITIES, SESSION_ACTING_IDENTITY_ORDER_SQL } from "./session-acting-identities";
+import {
+  MAX_ACTING_IDENTITIES,
+  SESSION_ACTING_IDENTITY_MEMBERSHIP_LABEL_SQL,
+  SESSION_ACTING_IDENTITY_MEMBERSHIP_SQL,
+  SESSION_ACTING_IDENTITY_ORDER_SQL,
+} from "./session-acting-identities";
 import { ACTIVE_EVENT_SPONSORSHIP_SQL, toSponsorCapacity, type SponsorshipCapacityRow } from "./sponsor-capacity";
 import { resolveUserSessionClaims } from "./user-session-claims";
 import type { UserSessionResult } from "./user-session-result";
@@ -56,6 +61,8 @@ interface ActingRow {
   organization_id: string | null;
   organization_name: string | null;
   job_title: string | null;
+  membership_category: string | null;
+  membership_label: string | null;
 }
 function group<T>(rows: T[], key: (row: T) => string): Map<string, T[]> {
   const result = new Map<string, T[]>();
@@ -114,8 +121,8 @@ export function prepareUserSessionClaimsBatch(db: DatabaseLike, slice: readonly 
       .bind(userIds, userIds),
     db
       .prepare(
-        `SELECT user_id,id,organization_id,organization_name,job_title FROM (
-        SELECT identity.user_id,identity.id,identity.organization_id,organization.name AS organization_name,identity.job_title,
+        `SELECT user_id,id,organization_id,organization_name,job_title,membership_category,membership_label FROM (
+        SELECT identity.user_id,identity.id,identity.organization_id,organization.name AS organization_name,identity.job_title,${SESSION_ACTING_IDENTITY_MEMBERSHIP_SQL} AS membership_category,${SESSION_ACTING_IDENTITY_MEMBERSHIP_LABEL_SQL} AS membership_label,
         row_number() OVER (PARTITION BY identity.user_id ORDER BY ${SESSION_ACTING_IDENTITY_ORDER_SQL}) AS ordinal
         FROM identities identity JOIN json_each(?) requested ON requested.value=identity.user_id LEFT JOIN organizations organization ON organization.id=identity.organization_id
         WHERE identity.started_at IS NOT NULL AND identity.ended_at IS NULL AND identity.blocked_at IS NULL)
@@ -162,6 +169,8 @@ export function prepareUserSessionClaimsBatch(db: DatabaseLike, slice: readonly 
             organizationId: row.organization_id,
             organizationName: row.organization_name,
             jobTitle: row.job_title,
+            membershipCategory: row.membership_category,
+            membershipLabel: row.membership_label,
           })),
           grants: [],
         };

@@ -242,4 +242,45 @@
     overflow-wrap: anywhere;
     text-align: center;
   }
+
+  /*
+   * An identity to continue as: the consortium's mark for a membership, the name, and what the
+   * membership is. It reads left to right so the names line up down the card, whatever each holds.
+   */
+  .pk-login__controls .pk-btn:has(.pk-identity-choice) {
+    block-size: auto;
+    padding-block: var(--pk-3);
+    text-align: start;
+  }
+  .pk-identity-choice {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-3);
+    inline-size: 100%;
+  }
+  .pk-identity-choice__mark {
+    display: grid;
+    flex: none;
+    inline-size: 2rem;
+    place-items: center;
+  }
+  .pk-identity-choice__text {
+    display: grid;
+    justify-items: start;
+    gap: var(--pk-1);
+    min-inline-size: 0;
+    text-align: start;
+  }
+  /* The name leads: what the person is choosing. What it brings follows, quieter. */
+  .pk-identity-choice__name {
+    font-size: var(--pk-text-xl);
+    font-weight: 600;
+    line-height: 1.2;
+  }
+  .pk-identity-choice__membership {
+    font-size: var(--pk-text-sm);
+    font-weight: 400;
+    line-height: 1.35;
+    opacity: 0.78;
+  }
 }

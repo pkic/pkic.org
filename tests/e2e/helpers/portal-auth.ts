@@ -115,7 +115,15 @@ export async function signInToPortal(page: Page, email: string, options: { conti
     // A long identity name wraps inside its choice, on a phone as on a desktop.
     for (const choice of await choices.all())
       expect(await choice.evaluate((button) => button.scrollWidth <= button.clientWidth)).toBe(true);
-    await (options.continueAs ? choices.filter({ hasText: options.continueAs }) : choices.first()).click();
+    // Without a named identity the helper continues personally, as it did when that choice was listed first.
+    const personal = choices.filter({ hasText: "Personal" });
+    await (
+      options.continueAs
+        ? choices.filter({ hasText: options.continueAs })
+        : (await personal.count()) > 0
+          ? personal.first()
+          : choices.first()
+    ).click();
   }
   // Email sign-in can offer enrollment before the shell mounts. Follow its visible opt-out.
   const passkeyOffer = page.getByRole("region", { name: "You're signed in", exact: true });

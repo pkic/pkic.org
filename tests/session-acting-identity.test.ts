@@ -126,6 +126,8 @@ describe("session acting identity", () => {
         organizationId: expect.any(String),
         organizationName: "Solo Org",
         jobTitle: "Solo Org delegate",
+        membershipCategory: expect.any(String),
+        membershipLabel: expect.any(String),
       },
     ]);
     expect(session.actingIdentityId).toBe(identityIds[0]);
@@ -302,6 +304,15 @@ async function ownUserRecord(token: string): Promise<number> {
 
 describe("member context follows the acting identity", () => {
   beforeEach(resetDb);
+
+  it("tells each identity whether it brings a membership", async () => {
+    const person = await individualMemberWithNonmemberEmployer();
+    const token = await createMemberSession(env.DB, person.userId, "membership-notes", undefined, null);
+
+    const byId = new Map((await currentSession(token)).actingIdentities.map((identity) => [identity.id, identity]));
+    expect(byId.get(person.identityId)?.membershipCategory).toEqual(expect.any(String));
+    expect(byId.get(person.affiliationId)?.membershipCategory).toBeNull();
+  });
 
   it("gives no member context while acting as an identity that holds no membership", async () => {
     const person = await individualMemberWithNonmemberEmployer();

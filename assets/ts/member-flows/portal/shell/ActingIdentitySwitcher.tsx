@@ -11,10 +11,16 @@
  */
 import { useState } from "preact/hooks";
 import { ApiClientError } from "../../../shared/api-client";
-import { actingIdentityLabel, PERSONAL_IDENTITY_LABEL } from "../../../shared/acting-identity-catalog";
+import {
+  actingIdentityLabel,
+  membershipNote,
+  orderedForChoice,
+  PERSONAL_IDENTITY_LABEL,
+} from "../../../shared/acting-identity-catalog";
 import { friendlyErrorMessage } from "../../../components/ErrorAlert";
 import { Alert } from "../../../ui/Alert";
 import { Button } from "../../../ui/Button";
+import { PkicMark } from "../../../ui/PkicMark";
 import type { MenuItem } from "../../../ui/Menu";
 import { selectActingIdentity } from "../acting-identity";
 import type { PortalSession } from "../types";
@@ -57,6 +63,9 @@ export function ActingIdentitySwitcher({
 }) {
   const [choosing, setChoosing] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const choices = orderedForChoice(session.actingIdentities);
+  // Only an organization is suggested; with just a personal identity there is nothing to recommend.
+  const suggested = Boolean(choices[0]?.organizationId);
 
   async function choose(identityId: string): Promise<void> {
     setError(null);
@@ -73,18 +82,26 @@ export function ActingIdentitySwitcher({
     <LoginFrame
       label="Choose how you take part"
       title="Choose how you take part"
-      lede="Take part personally or for your organization. You can switch at any time from the account menu."
+      lede="Take part for your organization where you can. You can switch at any time from the account menu."
       busy={choosing !== null}
     >
       <fieldset class="pk-login__controls pk-stack" disabled={choosing !== null}>
-        {session.actingIdentities.map((identity) => (
+        {choices.map((identity, index) => (
           <Button
             key={identity.id}
-            variant="secondary"
+            variant={index === 0 && suggested ? "primary" : "secondary"}
             loading={choosing === identity.id}
             onClick={() => void choose(identity.id)}
           >
-            {choiceLabel(identity, session.actingIdentities)}
+            <span class="pk-identity-choice">
+              <span class="pk-identity-choice__mark" aria-hidden="true">
+                {identity.membershipCategory && <PkicMark width="32" height="32" />}
+              </span>
+              <span class="pk-identity-choice__text">
+                <span class="pk-identity-choice__name">{choiceLabel(identity, session.actingIdentities)}</span>
+                <span class="pk-identity-choice__membership">{membershipNote(identity)}</span>
+              </span>
+            </span>
           </Button>
         ))}
       </fieldset>
