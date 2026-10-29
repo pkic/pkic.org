@@ -67,6 +67,15 @@ export async function anonymizeUser(db: DatabaseLike, actor: UserBackedAuthAdmin
       )
       .bind(at, user.id),
     prepareRotateUserProposalSpeakerManageSecrets(authorizedDb, user.id),
+    // An application the person made keeps its stage and history, but not who they were: the status link dies with the name.
+    authorizedDb
+      .prepare(
+        `UPDATE member_applications
+            SET applicant_email = ?, applicant_name = 'Redacted',
+                manage_token_hash = lower(hex(randomblob(32))), updated_at = ?
+          WHERE applicant_user_id = ?`,
+      )
+      .bind(redactedEmail, at, user.id),
     ...prepareAffiliationRedaction(authorizedDb, user.id, at),
     ...prepareLiveSessionAnonymization(authorizedDb, user.id, at),
     authorizedDb

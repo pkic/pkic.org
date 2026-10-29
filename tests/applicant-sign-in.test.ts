@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
-import { createTestRateLimiter, deliveredEmailPayload, queryAll } from "./helpers/context";
+import { createTestRateLimiter, deliveredEmailPayload, queryAll, seedEventAndAdmin } from "./helpers/context";
+import { createAdminSession } from "./helpers/auth";
 import { callApi } from "./helpers/app";
 import { findOrCreateUser } from "../functions/_lib/services/users";
 import {
@@ -129,6 +130,32 @@ describe("sign-in for someone whose membership application is pending", () => {
     expect(
       await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email = ?", ["single@individual.test"]),
     ).toHaveLength(1);
+  });
+
+  it("redacts an applicant's application, and kills its status link, when the account is anonymized", async () => {
+    const email = "erase-me@individual.test";
+    await apply(email, "H6");
+    const [{ id: userId }] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE normalized_email = ?", [
+      email,
+    ]);
+    const [before] = await queryAll<{ manage_token_hash: string }>(
+      env.DB,
+      "SELECT manage_token_hash FROM member_applications",
+    );
+    const { admin } = await seedEventAndAdmin(env.DB);
+    const token = await createAdminSession(env.DB, admin.id, "erase-applicant-admin");
+    const response = await callApi(apiEnv(), `/api/v1/users/${userId}/anonymize`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(response.status, await response.clone().text()).toBe(200);
+    const [after] = await queryAll<{ applicant_email: string; applicant_name: string; manage_token_hash: string }>(
+      env.DB,
+      "SELECT applicant_email, applicant_name, manage_token_hash FROM member_applications",
+    );
+    expect(after.applicant_email).toMatch(/^redacted-.*@anonymized\.invalid$/);
+    expect(after.applicant_name).toBe("Redacted");
+    expect(after.manage_token_hash).not.toBe(before.manage_token_hash);
   });
 
   it("keeps one account when the same address applies again", async () => {
