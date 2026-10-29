@@ -159,6 +159,8 @@ it("refreshes the canonical representation summary even when its selection dialo
     organizationId: identity.organizationId,
     organizationName: identity.organizationName,
     jobTitle: identity.jobTitle,
+    membershipCategory: null,
+    membershipLabel: null,
   };
   const writes: unknown[] = [];
   vi.stubGlobal(

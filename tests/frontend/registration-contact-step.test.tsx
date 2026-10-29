@@ -71,6 +71,7 @@ function identity(organizationName: string | null) {
     organizationId: organizationName ? ORGANIZATION_ID : null,
     organizationName,
     membershipCategory: "full",
+    membershipLabel: null,
     userId: USER_ID,
     userName: "Ada Lovelace",
     emailId: null,
@@ -539,7 +540,14 @@ describe("signed-in registration identity", () => {
         async () => new Response(JSON.stringify({ emails: [] }), { headers: { "content-type": "application/json" } }),
       ),
     );
-    const preferred = { id: IDENTITY_ID, organizationId: null, organizationName: null, jobTitle: null };
+    const preferred = {
+      id: IDENTITY_ID,
+      organizationId: null,
+      organizationName: null,
+      jobTitle: null,
+      membershipCategory: null,
+      membershipLabel: null,
+    };
     const form = await mount(
       <RegistrationIdentityField presentation="picker" preferred={preferred} userId={USER_ID} />,
     );
@@ -557,7 +565,14 @@ describe("signed-in registration identity", () => {
     installResponses(null);
     const form = await mount(
       <RegistrationIdentityField
-        preferred={{ id: IDENTITY_ID, organizationId: null, organizationName: null, jobTitle: null }}
+        preferred={{
+          id: IDENTITY_ID,
+          organizationId: null,
+          organizationName: null,
+          jobTitle: null,
+          membershipCategory: null,
+          membershipLabel: null,
+        }}
       />,
     );
     expect(form.querySelector('[role="combobox"]')).toBeNull();

@@ -420,6 +420,8 @@ describe("who you are signed in as, and adding an identity", () => {
         organizationId: ORGANIZATION_ID,
         organizationName: "Example Org",
         jobTitle: "CTO",
+        membershipCategory: null,
+        membershipLabel: null,
       },
     ];
     session.actingIdentityId = "00000000-0000-4000-8000-000000000099";

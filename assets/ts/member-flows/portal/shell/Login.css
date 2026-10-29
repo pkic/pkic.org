@@ -273,7 +273,7 @@
   .pk-identity-choice__mark {
     position: absolute;
     inset-block-start: 50%;
-    inset-inline-end: -1rem;
+    inset-inline-end: 0;
     inline-size: 6rem;
     block-size: 6rem;
     transform: translateY(-50%);
@@ -282,6 +282,7 @@
   }
   .pk-identity-choice__body {
     display: grid;
+    min-inline-size: 0;
     flex: 1;
     grid-template-columns: minmax(0, 1fr);
     gap: 0.125rem;

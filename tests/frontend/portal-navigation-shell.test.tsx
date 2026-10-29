@@ -262,12 +262,16 @@ describe("portal navigation shell", () => {
       organizationId: "00000000-0000-4000-8000-0000000000b1",
       organizationName: "Alpha Org",
       jobTitle: "Delegate",
+      membershipCategory: null,
+      membershipLabel: null,
     };
     const individual = {
       id: "00000000-0000-4000-8000-0000000000a2",
       organizationId: null,
       organizationName: null,
       jobTitle: null,
+      membershipCategory: null,
+      membershipLabel: null,
     };
     const session = {
       ...portalSessionFixture({ staff: true }),

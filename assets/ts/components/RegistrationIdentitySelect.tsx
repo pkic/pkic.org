@@ -1,7 +1,7 @@
 import { EMAIL_FIRST_COPY, WORK_EMAIL_STEER, PERSONAL_ADDRESS_WAITLIST } from "../../shared/email-first-copy";
 import { StateIcon } from "../ui/Field";
 import "./RegistrationIdentitySelect.css";
-import type { SessionActingIdentity } from "../../shared/session-acting-identity";
+import { sessionActingIdentitySchema, type SessionActingIdentity } from "../../shared/session-acting-identity";
 import { useState } from "preact/hooks";
 import { createPortal } from "preact/compat";
 import { RepresentationSelect } from "./identities/RepresentationSelect";
@@ -150,8 +150,9 @@ export function RegistrationIdentityField({
             : undefined
         }
         onSelect={(identity) => {
-          setSelected(identity);
-          onSelect?.(identity);
+          const selectedIdentity = sessionActingIdentitySchema.parse(identity);
+          setSelected(selectedIdentity);
+          onSelect?.(selectedIdentity);
         }}
       />
       {hidden}
