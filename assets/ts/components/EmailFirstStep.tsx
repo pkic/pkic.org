@@ -96,6 +96,8 @@ export function EmailFirstStep<Schema extends WorkEmailContract>({
     unaffiliatedAttestation: individual,
   });
   const [busy, setBusy] = useState(false);
+  // State lags a render behind, so two clicks, or Enter and a click, in one tick would both send.
+  const sending = useRef(false);
   useEffect(() => onBusy?.(busy), [busy]);
   if (controller) controller.continue = proceed;
   useEffect(
@@ -112,12 +114,13 @@ export function EmailFirstStep<Schema extends WorkEmailContract>({
   const kind = useMailboxKind(individual && settled === email.trim() ? settled : null);
 
   async function proceed(): Promise<void> {
-    if (busy) return;
+    if (sending.current) return;
     const checked = form.submit();
     if (!checked.data) {
       setError(null);
       return;
     }
+    sending.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -127,6 +130,7 @@ export function EmailFirstStep<Schema extends WorkEmailContract>({
       const message = form.refuse(caught);
       setError(Object.keys(normalizeValidation(caught).fields).length > 0 ? null : message);
     } finally {
+      sending.current = false;
       setBusy(false);
     }
   }
