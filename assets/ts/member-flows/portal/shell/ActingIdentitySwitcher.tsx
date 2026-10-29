@@ -155,7 +155,7 @@ export function useActingIdentityMenu(session: PortalSession | null): {
     }
   }
 
-  const choices: MenuItem[] = session.actingIdentities.map((identity) => ({
+  const choices: MenuItem[] = orderedForChoice(session.actingIdentities).map((identity) => ({
     id: `acting-identity-${identity.id}`,
     label: actingIdentityLabel(identity),
     checked: identity.id === session.actingIdentityId,
