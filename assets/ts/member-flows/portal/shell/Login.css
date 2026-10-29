@@ -269,8 +269,14 @@
   .pk-identity-choice .pk-avatar {
     flex: none;
   }
-  /* A membership is felt, not read: the consortium's mark, barely there, behind the card's far edge. */
+  /* A membership is felt, not read: the consortium's mark, barely there, clipped inside the card's far edge. */
   .pk-identity-choice__mark {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  .pk-identity-choice__mark svg {
     position: absolute;
     inset-block-start: 50%;
     inset-inline-end: 0;
@@ -278,14 +284,15 @@
     block-size: 6rem;
     transform: translateY(-50%);
     opacity: 0.045;
-    pointer-events: none;
   }
   .pk-identity-choice__body {
     display: grid;
     min-inline-size: 0;
     flex: 1;
     grid-template-columns: minmax(0, 1fr);
+    justify-items: start;
     gap: 0.125rem;
+    text-align: start;
   }
   /* The name leads; what the person does there and what the membership is follow, quieter and on one line. */
   .pk-identity-choice__name {
@@ -294,10 +301,11 @@
     line-height: 1.2;
   }
   .pk-identity-choice__detail {
+    display: -webkit-box;
     overflow: hidden;
     font-size: var(--pk-text-md);
     opacity: 0.8;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
   }
 }

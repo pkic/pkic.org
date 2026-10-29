@@ -110,7 +110,11 @@ export function ActingIdentitySwitcher({
                 <span class="pk-identity-choice__name">{choiceLabel(identity, session.actingIdentities)}</span>
                 <span class="pk-identity-choice__detail">{choiceDetail(identity)}</span>
               </span>
-              {identity.membershipCategory && <PkicMark class="pk-identity-choice__mark" aria-hidden="true" />}
+              {identity.membershipCategory && (
+                <span class="pk-identity-choice__mark" aria-hidden="true">
+                  <PkicMark />
+                </span>
+              )}
             </span>
           </Button>
         ))}
