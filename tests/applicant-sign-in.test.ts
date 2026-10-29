@@ -22,6 +22,7 @@ async function apply(
   category: string,
   organizationName?: string,
   applicantUserId: string | null = null,
+  applicantName = "Alice Applicant",
 ) {
   const response = await callApi(apiEnv(), "/api/v1/members/applications", {
     method: "POST",
@@ -30,7 +31,7 @@ async function apply(
       await verifiedMemberApplicationPayload(
         {
           applicantEmail: email,
-          applicantName: "Alice Applicant",
+          applicantName,
           membershipCategory: category,
           organizationName,
           answers: { reason: "We want to contribute.", ...requiredMembershipApplicationAnswers },
@@ -105,6 +106,21 @@ describe("sign-in for someone whose membership application is pending", () => {
     const cookie = await signIn(email);
     const response = await callApi(apiEnv(), "/api/v1/users/current/applications", { headers: { cookie } });
     expect(response.status).toBe(200);
+  });
+
+  it("still accepts a name the account rules refuse, without creating an account", async () => {
+    await apply("odd-name@individual.test", "H6", undefined, null, "Dr. Alice+Test: Applicant");
+    expect(await queryAll(env.DB, "SELECT id FROM member_applications")).toHaveLength(1);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email = ?", ["odd-name@individual.test"]),
+    ).toEqual([]);
+  });
+
+  it("gives an applicant with a single name an account too", async () => {
+    await apply("single@individual.test", "H6", undefined, null, "Madonna");
+    expect(
+      await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email = ?", ["single@individual.test"]),
+    ).toHaveLength(1);
   });
 
   it("keeps one account when the same address applies again", async () => {

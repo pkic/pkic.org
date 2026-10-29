@@ -40,6 +40,7 @@ import { first } from "../../../db/queries";
 import { buildFindOrCreateUserStatement, findUserByEmail, splitPersonName } from "../../users";
 import { prepareVerifyOwnedEmailStatements } from "../../email-verification";
 import { normalizeEmail } from "../../../validation";
+import { firstNameSchema, lastNameSchema } from "../../../../../assets/shared/schemas/api-common";
 import type { DatabaseLike, StatementLike } from "../../../types";
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../../db/authorization-guard";
 
@@ -91,6 +92,12 @@ async function prepareApplicantAccount(
 ) {
   if (input.applicantUserId || (await findUserByEmail(db, input.applicantEmail))) return null;
   const { firstName, lastName } = splitPersonName(input.applicantName);
+  // An application accepts any name up to its length; one the account rules refuse waits for approval, as before.
+  if (
+    (firstName !== null && !firstNameSchema.safeParse(firstName).success) ||
+    (lastName !== null && !lastNameSchema.safeParse(lastName).success)
+  )
+    return null;
   const account = await buildFindOrCreateUserStatement(db, {
     email: input.applicantEmail,
     firstName: firstName ?? undefined,
@@ -290,6 +297,7 @@ export async function createMemberApplication(
       {
         applicantEmail: input.applicantEmail,
         membershipCategory: input.membershipCategory,
+        ...(applicantAccount ? { accountCreated: true, userId: applicantAccount.user.id } : {}),
       },
       now,
     ),
