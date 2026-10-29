@@ -238,7 +238,7 @@ export function DayAttendancePicker({
                           ? `Full on ${formatNumber(unavailable.length)} days`
                           : `Full on ${formatDayList(
                               unavailable.map((day) => day.dayDate),
-                              { includeDates: days.length > 7 },
+                              { includeDates: days.length > 7, weekday: "long" },
                             )}`}
                     </p>
                   )}
@@ -308,7 +308,7 @@ export function DayAttendancePicker({
               ? `Waitlist for ${formatNumber(waiting.length)} selected days`
               : `Waitlist: ${formatDayList(
                   waiting.map((day) => day.dayDate),
-                  { includeDates: days.length > 7 },
+                  { includeDates: days.length > 7, weekday: "long" },
                 )}`
           }
         >

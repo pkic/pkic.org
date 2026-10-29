@@ -371,6 +371,37 @@ describe("ServerSearchSelect", () => {
     expect(status?.textContent).toBe("No matches for “zzz”.");
   });
 
+  it("refreshes the selected label after the same record is edited", async () => {
+    vi.useFakeTimers();
+    stubFetch((url) => json(pagedItems(url, 2)));
+    function Harness() {
+      const [label, setLabel] = useState<string>();
+      return (
+        <>
+          <button onClick={() => setLabel("Updated record")}>Refresh record</button>
+          <Field label="Record">
+            {(control) => (
+              <ServerSearchSelect
+                {...control}
+                catalog={catalog}
+                searchable={false}
+                searchLabel="Record"
+                value="item-0"
+                selectedLabel={label}
+                onChange={(item) => setLabel(item?.name)}
+              />
+            )}
+          </Field>
+        </>
+      );
+    }
+    const container = mount(<Harness />);
+    await elapse(0);
+    await chooseComboboxOption(container, "Record", "item-0");
+    await act(() => container.querySelector<HTMLButtonElement>("button")!.click());
+    expect(controlFor(container, "Record").textContent).toBe("Updated record");
+  });
+
   it("preserves a selected value that is outside the current server page", async () => {
     vi.useFakeTimers();
     stubFetch((url) => json(pagedItems(url, 201)));

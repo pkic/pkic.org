@@ -94,11 +94,11 @@ export function calendarDateParts(value: string): { weekday: string; day: string
  */
 export function formatDayList(
   values: readonly string[],
-  { includeDates = true }: { includeDates?: boolean } = {},
+  { includeDates = true, weekday = "short" }: { includeDates?: boolean; weekday?: "short" | "long" } = {},
 ): string {
   const days = values.map((value) => {
-    const parts = calendarDateParts(value);
-    return includeDates ? `${parts.weekday} ${formatDayAndMonth(value)}` : parts.weekday;
+    const label = weekday === "long" ? formatWeekday(value) : calendarDateParts(value).weekday;
+    return includeDates ? `${label} ${formatDayAndMonth(value)}` : label;
   });
   return new Intl.ListFormat(undefined, { style: "long", type: "conjunction" }).format(days);
 }

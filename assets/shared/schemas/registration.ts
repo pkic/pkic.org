@@ -255,6 +255,22 @@ export const registrationContactFieldsSchema = attendeeRegistrationFieldsSchema.
   lastName: true,
   email: true,
 });
+/** A rendered day must be answered explicitly; Not attending is an answer but creates no attendance row. */
+export function withRequiredDayAttendanceChoices<Schema extends z.ZodType>(
+  schema: Schema,
+  choices: () => readonly { dayLabel: string; answered: boolean }[],
+) {
+  return schema.superRefine((_value, context) => {
+    const missing = choices().find((day) => !day.answered);
+    if (missing)
+      context.addIssue({
+        code: "custom",
+        path: ["dayAttendance"],
+        message: `Choose an option for ${missing.dayLabel}. Select Not attending if you will skip this day.`,
+      });
+  });
+}
+
 export const registrationAttendanceFieldsSchema = attendeeRegistrationFieldsSchema
   .pick({ attendanceType: true, dayAttendance: true })
   .superRefine(requireAttendance);

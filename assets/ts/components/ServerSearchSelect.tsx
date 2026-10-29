@@ -259,7 +259,7 @@ export function ServerSearchSelect<Item, Response>({
   }
 
   const picked = pickedRef.current;
-  const displayLabel = value ? (picked?.key === value ? picked.label : (selectedLabel ?? value)) : "";
+  const displayLabel = value ? (selectedLabel ?? (picked?.key === value ? picked.label : value)) : "";
   const status = collection.loading
     ? "Loading…"
     : collection.error

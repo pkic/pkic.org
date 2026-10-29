@@ -5,7 +5,7 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { eventDayReadModelSchema, type EventDayReadModel } from "../../assets/shared/schemas/event-read-models";
 import { ATTENDANCE_WAITLIST_COPY, DayAttendancePicker } from "../../assets/ts/components/DayAttendancePicker";
-import { readDayAttendance } from "../../assets/ts/shared/widgets/day-attendance";
+import { readDayAttendance, readDayAttendanceChoices } from "../../assets/ts/shared/widgets/day-attendance";
 import { axeViolations } from "./helpers/axe";
 
 function day(overrides: Record<string, unknown> = {}): EventDayReadModel {
@@ -57,12 +57,20 @@ describe("day attendance matrix", () => {
   });
   it("changes just the chosen day and clears it through Not attending", async () => {
     const picker = mount(<DayAttendancePicker days={[day(), day({ dayDate: "2027-09-02" })]} />);
+    const form = picker.querySelector("form")!;
+    expect(readDayAttendanceChoices(form).map((day) => day.answered)).toEqual([false, false]);
     await click(input(picker, "2027-09-01", "virtual"));
     expect(readDayAttendance(picker.querySelector("form")!)).toEqual([
       { dayDate: "2027-09-01", attendanceType: "virtual" },
     ]);
     await click(input(picker, "2027-09-01", ""));
-    expect(readDayAttendance(picker.querySelector("form")!)).toEqual([]);
+    expect(readDayAttendance(form)).toEqual([]);
+    expect(
+      readDayAttendanceChoices(form).map((day) => ({ answered: day.answered, value: day.attendanceType })),
+    ).toEqual([
+      { answered: true, value: "" },
+      { answered: false, value: "" },
+    ]);
   });
   it("applies a row to every offered day and preserves the choice on an unavailable day", async () => {
     const days = [
@@ -113,14 +121,14 @@ describe("day attendance matrix", () => {
     );
     expect(picker.querySelector('[role="alert"]')).toBeNull();
     await click(full);
-    expect(picker.querySelector('[role="alert"]')?.textContent).toContain("Wed");
+    expect(picker.querySelector('[role="alert"]')?.textContent).toContain("Waitlist: Wednesday");
     expect(picker.querySelectorAll('[role="alert"]')).toHaveLength(1);
     expect(full.closest("label")?.textContent).toContain("joins waitlist");
     await click(input(picker, "2027-09-01", ""));
     expect(picker.querySelector('[role="alert"]')).toBeNull();
   });
   it.each([
-    [2, "Full on Wed and Thu"],
+    [2, "Full on Wednesday and Thursday"],
     [3, "Full on all days"],
   ] as const)("summarizes %s full days without duplicating warning panels", async (count, summary) => {
     const days = Array.from({ length: 3 }, (_, index) =>

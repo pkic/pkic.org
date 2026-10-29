@@ -10,6 +10,7 @@ import {
   registrationCreateForTermsSchema,
   registrationContactFieldsSchema,
   registrationAttendanceFieldsSchema,
+  withRequiredDayAttendanceChoices,
   registrationManageSchema,
   registrationSubmissionResponseSchema,
   type RegistrationManageReadResponse,
@@ -29,7 +30,7 @@ import { CONTRACT_VALIDATION_ATTRIBUTE } from "../../shared/form/validation";
 import { splitHash } from "../../ui/url-query";
 import { CustomFieldList, readCustomFieldValues } from "../../shared/widgets/custom-fields";
 import { readConsentValues } from "../../shared/widgets/consents";
-import { readDayAttendance } from "../../shared/widgets/day-attendance";
+import { readDayAttendance, readDayAttendanceChoices } from "../../shared/widgets/day-attendance";
 import { EventFlowProgress } from "../../site/EventFlowProgress";
 import { Alert } from "../../ui/Alert";
 import { Button } from "../../ui/Button";
@@ -135,8 +136,13 @@ export function RegistrationFlow(props: Props) {
       organization: named && !("refused" in named) ? named.organization : undefined,
     };
   };
+  const choices = () => (element.current ? readDayAttendanceChoices(element.current) : []);
   const request = useMemo(
-    () => (updating ? registrationManageSchema : registrationCreateForTermsSchema(forms.requiredTerms)),
+    () =>
+      withRequiredDayAttendanceChoices(
+        updating ? registrationManageSchema : registrationCreateForTermsSchema(forms.requiredTerms),
+        choices,
+      ),
     [updating, forms.requiredTerms],
   );
   const contract = useContractForm(request, readBody, {
@@ -144,7 +150,10 @@ export function RegistrationFlow(props: Props) {
       name === "consents" ? `consents.${control.closest<HTMLElement>("[data-term-key]")?.dataset.termKey ?? ""}` : name,
   });
   const contactContract = useContractForm(registrationContactFieldsSchema, readBody);
-  const attendanceContract = useContractForm(registrationAttendanceFieldsSchema, readBody);
+  const attendanceContract = useContractForm(
+    withRequiredDayAttendanceChoices(registrationAttendanceFieldsSchema, choices),
+    readBody,
+  );
   const contactReady = useCallback((value: boolean) => setReady(value), []);
 
   useLayoutEffect(() => {
@@ -209,7 +218,11 @@ export function RegistrationFlow(props: Props) {
   function syncAttendance(event: Event) {
     const target = event.target;
     if (target instanceof HTMLInputElement && target.name.startsWith("dayAttendance.") && element.current)
-      setAttendance(readDayAttendance(element.current).map((day) => ({ ...day, label: null })));
+      setAttendance(
+        readDayAttendanceChoices(element.current)
+          .filter((day) => day.answered)
+          .map((day) => ({ dayDate: day.dayDate, attendanceType: day.attendanceType, label: null })),
+      );
   }
 
   return (
@@ -370,7 +383,7 @@ export function RegistrationFlow(props: Props) {
                           onChange: (dayDate: string, attendanceType: string) =>
                             setAttendance((current) => [
                               ...current.filter((day) => day.dayDate !== dayDate),
-                              ...(attendanceType ? [{ dayDate, attendanceType, label: null }] : []),
+                              { dayDate, attendanceType, label: null },
                             ]),
                         }
                       : {})}

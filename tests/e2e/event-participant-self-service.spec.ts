@@ -232,6 +232,20 @@ test("a signed-in user registers from event home without another email challenge
     registrationPage.getByRole("group", { name: "Attendance choices", exact: true }),
   ).toHaveAccessibleDescription("Choose how you'll attend the event.");
   await expect(registrationPage.getByRole("group", { name: "Attendance choices", exact: true })).toBeFocused();
+  await matrix.getByRole("radio", { name: "In person — Workshop day 1", exact: true }).check();
+  await registrationPage.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(registrationPage.locator('[data-step="2"]')).toBeVisible();
+  await expect(
+    registrationPage.getByRole("group", { name: "Attendance choices", exact: true }),
+  ).toHaveAccessibleDescription(/Workshop day 2.*Not attending/);
+  for (const [width, height, device] of [
+    [1280, 900, "desktop"],
+    [375, 812, "phone"],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await registrationPage.getByRole("group", { name: "Attendance choices", exact: true }).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: info.outputPath(`attendance-unanswered-day-${device}.png`) });
+  }
   await matrix.getByRole("button", { name: "Choose Virtual for every available day", exact: true }).click();
   for (const radio of await matrix.getByRole("radio", { name: /^Virtual — / }).all()) await expect(radio).toBeChecked();
   await matrix.getByRole("button", { name: "Choose Not attending for every available day", exact: true }).click();

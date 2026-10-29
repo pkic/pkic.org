@@ -26,6 +26,7 @@ export function readDayAttendanceChoices(form: HTMLFormElement) {
   return Array.from(days).map((day) => {
     const field = selected.find((field) => field.name === day.name);
     return {
+      answered: Boolean(field),
       dayDate: day.name.replace(/^dayAttendance\./, ""),
       dayLabel: day.dataset.dayLabel || day.name.replace(/^dayAttendance\./, ""),
       attendanceType: field?.value || "",
