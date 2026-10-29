@@ -391,6 +391,7 @@ export function TemplateEditor({
                     <MarkdownEditor
                       {...control}
                       key={bodyRevision}
+                      profile="content"
                       name="content"
                       label="Body"
                       initialValue={body}

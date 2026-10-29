@@ -123,6 +123,7 @@ export function OrganizationAbout(props: OrganizationCardProps) {
             {(control) => (
               <MarkdownEditor
                 {...control}
+                profile="content"
                 name="contentMarkdown"
                 label="Member page content"
                 initialValue={draft.contentMarkdown}
