@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { openValue, sealValue, encodeBase64Url } from "../functions/_lib/utils/sealed-value";
+import { openValue, sealValue, encodeBase64Url, decodeBase64Url } from "../functions/_lib/utils/sealed-value";
 import { openProviderJoinUrl, sealProviderJoinUrl } from "../functions/_lib/services/event-series/provider-url";
 const secret = "test-only-existing-meeting-secret-at-least32characters";
 describe("Purpose-bound versioned protected capability envelopes", () => {
@@ -19,8 +19,11 @@ describe("Purpose-bound versioned protected capability envelopes", () => {
     expect(await openValue(value, secret, "pkic-web-push-subscription", "device:user")).toBe("subscription");
     await expect(openValue(value, secret, "pkic-web-push-subscription", "other:user")).rejects.toThrow();
     await expect(openValue(value, secret, "pkic-meeting-provider", "device:user")).rejects.toThrow();
+    const [version, iv, encoded] = value.split(".");
+    const corrupted = new Uint8Array(decodeBase64Url(encoded!));
+    corrupted[0] = corrupted[0]! ^ 1;
     await expect(
-      openValue(value.slice(0, -2) + "AA", secret, "pkic-web-push-subscription", "device:user"),
+      openValue(`${version}.${iv}.${encodeBase64Url(corrupted)}`, secret, "pkic-web-push-subscription", "device:user"),
     ).rejects.toThrow();
   });
 });

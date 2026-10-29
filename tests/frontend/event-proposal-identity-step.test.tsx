@@ -33,8 +33,9 @@ async function mount(enabled = true, entryContext?: ProposalEntryContext) {
     },
   });
 }
-afterEach(() => {
-  if (host) render(null, host);
+afterEach(async () => {
+  const mounted = host;
+  if (mounted) await act(() => render(null, mounted));
   document.body.innerHTML = "";
   host = undefined;
   selection = null;

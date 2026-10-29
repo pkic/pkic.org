@@ -1,3 +1,5 @@
+import { afterAll } from "vitest";
+
 /**
  * The layout methods jsdom leaves unimplemented.
  *
@@ -12,6 +14,13 @@
  * in node and have no DOM at all, so there is nothing to patch there.
  */
 if (typeof globalThis.window !== "undefined") {
+  if (typeof window.requestAnimationFrame === "function") {
+    // Preact's after-paint scheduler races a frame against a fallback timer.
+    // Finish its queued frame while jsdom's cancelAnimationFrame still exists.
+    // Capture the real scheduler before individual tests install fake clocks.
+    const paint = window.requestAnimationFrame.bind(window);
+    afterAll(() => new Promise<void>((resolve) => paint(() => resolve())));
+  }
   if (typeof Element.prototype.scrollIntoView !== "function") {
     Element.prototype.scrollIntoView = function scrollIntoView() {};
   }

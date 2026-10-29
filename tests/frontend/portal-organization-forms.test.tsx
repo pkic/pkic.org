@@ -126,8 +126,6 @@ afterEach(async () => {
     await act(() => render(null, container));
     container.remove();
   }
-  // Let pending paint callbacks cancel their fallback timers before jsdom removes the frame APIs.
-  await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
   vi.unstubAllGlobals();
 });
 
