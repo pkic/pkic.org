@@ -314,6 +314,33 @@ describe("member context follows the acting identity", () => {
     expect(byId.get(person.affiliationId)?.membershipCategory).toBeNull();
   });
 
+  it("gives a person who is a member only through an organization no membership of their own", async () => {
+    const userId = await insertUser(env.DB);
+    const personal = await buildCreateIdentityStatement(env.DB, {
+      userId,
+      organizationId: null,
+      source: "staff",
+      startImmediately: true,
+    });
+    await personal.statement.run();
+    const organizationId = await insertOrganization(env.DB, "Member Employer");
+    const memberId = await seedOrganizationAggregate(env.DB, organizationId);
+    const represented = await addRepresentative(env.DB, memberId, userId, { jobTitle: "Delegate" });
+
+    const token = await createMemberSession(env.DB, userId, "org-only-member", undefined, personal.identityId);
+    const session = await currentSession(token);
+    const byId = new Map(session.actingIdentities.map((identity) => [identity.id, identity]));
+    // The personal identity states no membership, and acting as it carries no member context or permission.
+    expect(byId.get(personal.identityId)?.membershipCategory).toBeNull();
+    expect(byId.get(represented)?.membershipCategory).toEqual(expect.any(String));
+    expect(session.actingIdentityId).toBe(personal.identityId);
+    expect(session.member).toBeUndefined();
+
+    // Representing the member organization is what brings the membership.
+    const asMember = await selectIdentity(token, represented);
+    expect(userAuthSessionResponseSchema.parse(await asMember.json()).member).toMatchObject({ memberId });
+  });
+
   it("gives no member context while acting as an identity that holds no membership", async () => {
     const person = await individualMemberWithNonmemberEmployer();
     const token = await createMemberSession(
