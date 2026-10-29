@@ -14,15 +14,23 @@ import {
   type AttendanceSettingsDraft,
 } from "./event-attendance-draft";
 
-export interface AttendanceOptionsProps {
+interface AttendanceOptionsBase {
   draft: AttendanceSettingsDraft;
   phone: boolean;
   expanded: string | null;
   onExpand: (id: string | null) => void;
-  field: (name: string) => FieldPresentation;
-  onChange: (id: string, patch: Partial<AttendanceDefinition["option"]>) => void;
-  onRemove: (id: string) => void;
 }
+
+export type AttendanceOptionsProps = AttendanceOptionsBase &
+  (
+    | { readOnly: true }
+    | {
+        readOnly?: false;
+        field: (name: string) => FieldPresentation;
+        onChange: (id: string, patch: Partial<AttendanceDefinition["option"]>) => void;
+        onRemove: (id: string) => void;
+      }
+  );
 
 function DefinitionField({
   definition,
@@ -35,6 +43,16 @@ function DefinitionField({
 }) {
   const name = `${optionFieldPrefix(props.draft, definition.id)}.${property}`;
   const labels = { value: "Key", label: "Label", description: "Description", icon: "Icon" };
+  if (props.readOnly)
+    return (
+      <span class={property === "value" ? "pk-mono" : undefined}>
+        {property === "icon"
+          ? definition.option.icon
+            ? ATTENDANCE_ICON_LABELS[definition.option.icon]
+            : "Automatic"
+          : definition.option[property] || "—"}
+      </span>
+    );
   return (
     <Field
       {...props.field(name)}
@@ -77,6 +95,7 @@ function DefinitionField({
 }
 
 function RemoveOption({ definition, props }: { definition: AttendanceDefinition; props: AttendanceOptionsProps }) {
+  if (props.readOnly) return null;
   const inUse = optionInUse(props.draft, definition);
   const label = inUse ? "In use by existing registrations" : `Remove ${definition.option.label || "attendance option"}`;
   return (
@@ -127,12 +146,16 @@ export function EventAttendanceOptions(props: AttendanceOptionsProps) {
             header: "Description",
             cell: (definition) => <DefinitionField definition={definition} property="description" props={props} />,
           },
-          {
-            id: "remove",
-            header: "Actions",
-            headerHidden: true,
-            cell: (definition) => <RemoveOption definition={definition} props={props} />,
-          },
+          ...(!props.readOnly
+            ? [
+                {
+                  id: "remove",
+                  header: "Actions",
+                  headerHidden: true,
+                  cell: (definition: AttendanceDefinition) => <RemoveOption definition={definition} props={props} />,
+                },
+              ]
+            : []),
         ]}
       />
     );
@@ -162,9 +185,18 @@ export function EventAttendanceOptions(props: AttendanceOptionsProps) {
               </span>
             </summary>
             <div class="pk-stack pk-attendance-settings__definition-fields">
-              {(["label", "value", "description", "icon"] as const).map((property) => (
-                <DefinitionField key={property} definition={definition} property={property} props={props} />
-              ))}
+              {(["label", "value", "description", "icon"] as const).map((property) =>
+                props.readOnly ? (
+                  <div key={property} class="pk-stack pk-stack--tight">
+                    <span class="pk-small pk-muted">
+                      {{ label: "Label", value: "Key", description: "Description", icon: "Icon" }[property]}
+                    </span>
+                    <DefinitionField definition={definition} property={property} props={props} />
+                  </div>
+                ) : (
+                  <DefinitionField key={property} definition={definition} property={property} props={props} />
+                ),
+              )}
               <RemoveOption definition={definition} props={props} />
             </div>
           </details>

@@ -8,6 +8,11 @@ import "../../../design/tokens.public.generated.css";
 import "../../member-flows/portal/sections/DiscoveryView.css";
 
 export const eventParticipationSections: PreviewSection[] = [
+  {
+    id: "attendance-settings-view",
+    title: "Attendance settings view",
+    render: () => <AttendanceSettingsPreview readOnly />,
+  },
   { id: "attendance-settings", title: "Attendance settings", render: () => <AttendanceSettingsPreview /> },
   {
     id: "event-cards",

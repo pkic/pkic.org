@@ -101,6 +101,26 @@ test("a manager configures a missing website CFP form and sees the saved selecti
   }
   await page.getByRole("button", { name: "Save days", exact: true }).click();
   await expect(page.getByText("Days saved.", { exact: true })).toBeVisible();
+  for (const [width, height, device] of [
+    [1280, 900, "desktop"],
+    [375, 812, "phone"],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await expect(page.getByRole("button", { name: "Save days", exact: true })).toHaveCount(0);
+    await expect(page.getByText("800 places").first()).toBeVisible();
+    await page.screenshot({ path: info.outputPath(`attendance-view-schedule-${device}.png`), fullPage: true });
+    await page.getByRole("tab", { name: /^Options/ }).click();
+    if (device === "phone")
+      await page
+        .locator("summary")
+        .filter({ hasText: /In[- ]person/ })
+        .click();
+    await expect(page.getByText("People", { exact: true })).toBeVisible();
+    await page.screenshot({ path: info.outputPath(`attendance-view-options-${device}.png`), fullPage: true });
+    await page.getByRole("tab", { name: "Schedule", exact: true }).click();
+  }
+  await page.reload();
+  await expect(page.getByText("800 places").first()).toBeVisible();
   const configuration = await page.request.get(`/api/v1/events/${slug}/forms/placements/event_registration`);
   expect(configuration.status()).toBe(200);
   expect(eventFormsResponseSchema.parse(await configuration.json()).eventDays[0].attendanceOptions[0].icon).toBe(

@@ -1,4 +1,5 @@
 import { eventDaysManagementResponseSchema } from "../../../shared/schemas/event-configuration";
+import { EventDaysView } from "../../member-flows/portal/sections/management/EventDaysView";
 import { EventDaysForm } from "../../member-flows/portal/sections/management/EventDaysForm";
 
 const response = eventDaysManagementResponseSchema.parse({
@@ -32,7 +33,8 @@ const response = eventDaysManagementResponseSchema.parse({
   })),
 });
 
-export function AttendanceSettingsPreview() {
+export function AttendanceSettingsPreview({ readOnly = false }: { readOnly?: boolean }) {
+  if (readOnly) return <EventDaysView response={response} zone="Europe/Amsterdam" />;
   return (
     <EventDaysForm
       endpoint="/api/v1/events/preview/days"

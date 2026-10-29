@@ -146,6 +146,45 @@ async function openOptions(container: HTMLElement): Promise<void> {
 }
 
 describe("event attendance days editor", () => {
+  it.each([false, true])("shows the saved schedule and option details without editing (phone=%s)", async (phone) => {
+    vi.stubGlobal("matchMedia", () => ({ matches: phone, addEventListener() {}, removeEventListener() {} }));
+    const listed = {
+      ...oneDay,
+      days: [
+        {
+          ...oneDay.days[0],
+          attendanceOptions: [
+            { value: "in_person", label: "In person", description: "At the venue", capacity: 40 },
+            { value: "virtual", label: "Virtual", description: "Live stream", enabled: false },
+          ],
+          attendanceCounts: { in_person: 40 },
+        },
+      ],
+    };
+    const captured = stubDays(listed, () => json({}));
+    const container = mount(
+      <EventDaysEditor groupId={GROUP_ID} event={event} expectedUpdatedAt={event.updatedAt} onRevision={vi.fn()} />,
+    );
+    await settle();
+    expect(container.querySelector("form, input, select")).toBeNull();
+    expect(container.textContent).toContain("40 places");
+    expect(container.textContent).toContain("40 / 40 registered");
+    expect(container.textContent).toContain("Full · waitlist");
+    expect(container.textContent).toContain("Not offered");
+    expect(container.textContent).toContain("09:00 – 17:00");
+    expect(container.textContent).toContain("Europe/Amsterdam");
+    await openOptions(container);
+    if (phone) await act(() => container.querySelector<HTMLElement>("summary")!.click());
+    expect(container.textContent).toContain("At the venue");
+    expect(container.textContent).toContain("in_person");
+    expect(container.querySelector("form, input, select")).toBeNull();
+    expect(await axeViolations(container)).toEqual([]);
+    expect(captured.every((item) => item.method === "GET")).toBe(true);
+    await beginRecordEdit(container, "Attendance days actions", "Edit attendance days");
+    expect(container.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toContain("Options");
+    expect(container.querySelector("form")).not.toBeNull();
+  });
+
   it("edits an option once for every day while preserving each capacity", async () => {
     const listed = {
       ...oneDay,

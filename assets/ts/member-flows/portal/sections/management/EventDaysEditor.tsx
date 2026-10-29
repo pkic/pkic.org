@@ -5,9 +5,8 @@ import { getJson } from "../../../../shared/api-client";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
 import { Alert } from "../../../../ui/Alert";
-import { DescriptionList } from "../../../../ui/DescriptionList";
 import { Menu } from "../../../../ui/Menu";
-import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
+import { EventDaysView } from "./EventDaysView";
 import { EventDaysForm } from "./EventDaysForm";
 
 export function EventDaysEditor({
@@ -49,43 +48,26 @@ export function EventDaysEditor({
       />
     );
   return (
-    <Panel aria-label="Attendance days">
-      <PanelHeader
-        title="Attendance days"
-        menu={
-          <Menu
-            label="Attendance days actions"
-            align="end"
-            items={[
-              {
-                id: "edit",
-                label: "Edit attendance days",
-                onSelect: () => {
-                  setSaved(false);
-                  setEditing(true);
-                },
+    <EventDaysView
+      response={resource.data}
+      zone={event.timezone}
+      feedback={saved && <Alert tone="ok">Days saved.</Alert>}
+      menu={
+        <Menu
+          label="Attendance days actions"
+          align="end"
+          items={[
+            {
+              id: "edit",
+              label: "Edit attendance days",
+              onSelect: () => {
+                setSaved(false);
+                setEditing(true);
               },
-            ]}
-          />
-        }
-      />
-      <PanelBody class="pk-stack">
-        {saved && <Alert tone="ok">Days saved.</Alert>}
-        {resource.data.days.length ? (
-          <DescriptionList
-            items={resource.data.days.map((day) => ({
-              term: day.label ? `${day.date} · ${day.label}` : day.date,
-              value:
-                day.attendanceOptions
-                  .filter((option) => option.enabled !== false)
-                  .map((option) => option.label)
-                  .join(", ") || "No attendance options",
-            }))}
-          />
-        ) : (
-          <p class="pk-muted">No attendance days configured.</p>
-        )}
-      </PanelBody>
-    </Panel>
+            },
+          ]}
+        />
+      }
+    />
   );
 }

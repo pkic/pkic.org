@@ -17,24 +17,48 @@ import {
   type AttendanceSettingsDraft,
 } from "./event-attendance-draft";
 
-export interface AttendanceScheduleProps {
+interface AttendanceScheduleBase {
   draft: AttendanceSettingsDraft;
   phone: boolean;
   zone: string;
   selectedDay: string;
   onSelectDay: (id: string) => void;
-  onAddDay: () => void;
-  field: (name: string) => FieldPresentation;
-  onDayChange: (id: string, patch: Partial<AttendanceDayDraft>) => void;
-  onDayRemove: (id: string) => void;
-  onChoiceChange: (dayId: string, definitionId: string, patch: Partial<AttendanceDayDraft["choices"][string]>) => void;
 }
 
+export type AttendanceScheduleProps = AttendanceScheduleBase &
+  (
+    | { readOnly: true }
+    | {
+        readOnly?: false;
+        onAddDay: () => void;
+        field: (name: string) => FieldPresentation;
+        onDayChange: (id: string, patch: Partial<AttendanceDayDraft>) => void;
+        onDayRemove: (id: string) => void;
+        onChoiceChange: (
+          dayId: string,
+          definitionId: string,
+          patch: Partial<AttendanceDayDraft["choices"][string]>,
+        ) => void;
+      }
+  );
+
 function DayFields({ day, index, props }: { day: AttendanceDayDraft; index: number; props: AttendanceScheduleProps }) {
+  if (props.readOnly)
+    return (
+      <div class="pk-stack pk-stack--tight pk-attendance-settings__day-fields">
+        <strong>{formatCalendarDate(day.date, "full")}</strong>
+        {day.label && <span>{day.label}</span>}
+        {(day.startTime || day.endTime) && (
+          <span class="pk-small">{[day.startTime, day.endTime].filter(Boolean).join(" – ")}</span>
+        )}
+        {props.phone && <span class="pk-small pk-muted">Local time: {props.zone}</span>}
+      </div>
+    );
+  const edit = props;
   function input(property: "date" | "label" | "startTime" | "endTime", label: string, type = "text") {
     const name = `configuration.days.${index}.${property}`;
     return (
-      <Field {...props.field(name)} label={label} labelHidden={!props.phone} required={property === "date"}>
+      <Field {...edit.field(name)} label={label} labelHidden={!props.phone} required={property === "date"}>
         {(control) => (
           <TextInput
             {...control}
@@ -47,7 +71,7 @@ function DayFields({ day, index, props }: { day: AttendanceDayDraft; index: numb
                 ? [control["aria-describedby"], "attendance-times-zone"].filter(Boolean).join(" ")
                 : control["aria-describedby"]
             }
-            onInput={(event) => props.onDayChange(day.id, { [property]: event.currentTarget.value })}
+            onInput={(event) => edit.onDayChange(day.id, { [property]: event.currentTarget.value })}
           />
         )}
       </Field>
@@ -114,7 +138,9 @@ function CapacityCell({
         ) : (
           <span class="pk-small pk-muted">Not offered</span>
         )}
-        {props.phone ? (
+        {props.readOnly ? (
+          props.phone && <span class="pk-small pk-muted">{enabled ? "Offered" : "Not offered"}</span>
+        ) : props.phone ? (
           <Checkbox
             role="switch"
             checked={enabled}
@@ -135,27 +161,35 @@ function CapacityCell({
         <>
           {props.phone && <span class="pk-small pk-attendance-settings__capacity-status">{status}</span>}
           <div class="pk-attendance-settings__capacity-controls">
-            <Field
-              {...props.field(name)}
-              label={`Capacity for ${definition.option.label || "this option"} on ${day.date || "this day"}`}
-              labelHidden
-            >
-              {(control) => (
-                <TextInput
-                  {...control}
-                  name={name}
-                  type="number"
-                  min="1"
-                  value={choice.capacity ?? ""}
-                  placeholder="Unlimited"
-                  onInput={(event) =>
-                    props.onChoiceChange(day.id, definition.id, {
-                      capacity: event.currentTarget.value === "" ? null : event.currentTarget.valueAsNumber,
-                    })
-                  }
-                />
-              )}
-            </Field>
+            {props.readOnly ? (
+              <span class="pk-small">
+                {choice.capacity == null
+                  ? "Unlimited places"
+                  : `${formatNumber(choice.capacity)} ${choice.capacity === 1 ? "place" : "places"}`}
+              </span>
+            ) : (
+              <Field
+                {...props.field(name)}
+                label={`Capacity for ${definition.option.label || "this option"} on ${day.date || "this day"}`}
+                labelHidden
+              >
+                {(control) => (
+                  <TextInput
+                    {...control}
+                    name={name}
+                    type="number"
+                    min="1"
+                    value={choice.capacity ?? ""}
+                    placeholder="Unlimited"
+                    onInput={(event) =>
+                      props.onChoiceChange(day.id, definition.id, {
+                        capacity: event.currentTarget.value === "" ? null : event.currentTarget.valueAsNumber,
+                      })
+                    }
+                  />
+                )}
+              </Field>
+            )}
             <div class="pk-stack pk-stack--tight">
               {choice.capacity != null && (
                 <Meter
@@ -231,9 +265,11 @@ export function EventAttendanceSchedule(props: AttendanceScheduleProps) {
             ),
           }))}
         />
-        <Button icon aria-label="Add day" title="Add day" onClick={props.onAddDay}>
-          <IconPlus width="16" height="16" />
-        </Button>
+        {!props.readOnly && (
+          <Button icon aria-label="Add day" title="Add day" onClick={props.onAddDay}>
+            <IconPlus width="16" height="16" />
+          </Button>
+        )}
       </div>
       {day && (
         <>

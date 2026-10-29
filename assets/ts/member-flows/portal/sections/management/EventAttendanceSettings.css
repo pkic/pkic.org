@@ -2,6 +2,12 @@
   .pk-attendance-settings {
     min-inline-size: 0;
   }
+  .pk-attendance-settings[data-read-only] {
+    padding-block-end: 0;
+  }
+  .pk-attendance-settings[data-read-only] .pk-attendance-settings__options .pk-table th:last-child {
+    width: auto;
+  }
   .pk-attendance-settings .pk-table {
     table-layout: fixed;
   }
