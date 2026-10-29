@@ -244,7 +244,7 @@ describe("event home", () => {
     await act(() => render(<ParticipantEvent event={event()} />, host));
     expect(host.querySelector(".pk-event-hero__title")?.textContent).toBe("Summit");
     expect(host.textContent).toContain("Amsterdam");
-    const register = [...host.querySelectorAll("button")].find((button) => button.textContent === "Register");
+    const register = host.querySelector<HTMLAnchorElement>('a[href="#/events/summit/register/"]');
     expect(register).toBeTruthy();
     expect(host.querySelector('a[href="/events/summit/register/"]')).toBeNull();
     const card = register!.closest(".pk-event-card")!;
@@ -460,7 +460,7 @@ describe("event home", () => {
   it("offers registration on the ticket tab to a reader without one", async () => {
     await act(() => render(<ParticipantEvent event={event()} tab="ticket" />, host));
     expect(host.textContent).toContain("No ticket yet");
-    expect([...host.querySelectorAll("button")].some((button) => button.textContent === "Register")).toBe(true);
+    expect(host.querySelector('a[href="#/events/summit/register/"]')).not.toBeNull();
     expect(requests).toEqual([]);
   });
 });

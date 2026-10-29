@@ -153,15 +153,7 @@ function LiveNowCard({ slug, sessions }: { slug: string; sessions: readonly Agen
   );
 }
 
-function TicketCard({
-  event,
-  ended,
-  onRegistered,
-}: {
-  event: ParticipantEventDetail;
-  ended: boolean;
-  onRegistered?: () => Promise<void>;
-}) {
+function TicketCard({ event, ended }: { event: ParticipantEventDetail; ended: boolean }) {
   const standing = eventRegistrationStanding(event);
   const base = `/events/${encodeURIComponent(event.slug)}`;
   if (!standing.registered) {
@@ -173,7 +165,7 @@ function TicketCard({
         eyebrow="Registration"
         title={offer.kind === "closed" ? "Not registered" : "You're not registered yet"}
       >
-        <RegistrationOfferNotice offer={offer} slug={event.slug} onRegistered={onRegistered} />
+        <RegistrationOfferNotice offer={offer} slug={event.slug} />
       </EventCard>
     );
   }
@@ -237,13 +229,7 @@ function ProposalsCard({ event }: { event: ParticipantEventDetail }) {
   );
 }
 
-export function EventHome({
-  event,
-  onRegistered,
-}: {
-  event: ParticipantEventDetail;
-  onRegistered?: () => Promise<void>;
-}) {
+export function EventHome({ event }: { event: ParticipantEventDetail }) {
   const phase = eventPhase(event.startsAt, event.endsAt);
   const ended = phase.kind === "ended";
   const current =
@@ -272,7 +258,7 @@ export function EventHome({
             <LiveNowCard slug={event.slug} sessions={now.data?.live ?? []} />
           </>
         ))}
-      <TicketCard event={event} ended={ended} onRegistered={onRegistered} />
+      <TicketCard event={event} ended={ended} />
       <ProposalsCard event={event} />
       <SupportCard source={`event:${event.slug}`} />
       <JoinPrompt />

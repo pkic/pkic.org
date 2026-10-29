@@ -64,8 +64,6 @@ export function installStepNavigation(
         const { path, params } = readHistory();
         if (path !== stepHistory.ownerPath) return;
         const raw = params.get(stepHistory.param);
-        // Closing the portal modal keeps its mounted draft for browser Forward.
-        if (raw === null && stepHistory.source === "hash") return;
         const step = raw === null ? 1 : Number(raw);
         if (!Number.isInteger(step) || step < 1 || step > completed) return;
         if (step === current) return;

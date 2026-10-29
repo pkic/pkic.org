@@ -33,6 +33,7 @@ import { EventMore } from "./app/EventMore";
 import { eventRegistrationStanding } from "./app/event-app-model";
 import { hasEventProposals, hasEventPromotionMaterials, participantEventAppSubject } from "./app/event-app-tabs";
 
+const EventRegister = lazy(() => import("./app/EventRegister").then((module) => ({ default: module.EventRegister })));
 const MyAgenda = lazy(() => import("./detail/participation/MyAgenda").then((module) => ({ default: module.MyAgenda })));
 const EventCheckIn = lazy(() => import("./app/EventCheckIn").then((module) => ({ default: module.EventCheckIn })));
 const VirtualRoom = lazy(() =>
@@ -54,6 +55,7 @@ type Selection = {
 const href = usePortalHashLocation.hrefs;
 /** The compact header's title for each participant page other than the event home. */
 const PAGE_LABELS: Record<string, string> = {
+  register: "Register for this event",
   registration: "Registration",
   program: "Agenda",
   agenda: "My agenda",
@@ -95,22 +97,25 @@ export function ParticipantEvent({
       ? "registration"
       : kind === "proposal" || tab === "submissions"
         ? "proposals"
-        : tab === "agenda"
-          ? mine
-            ? "agenda"
-            : "program"
-          : tab === "promotion"
-            ? "promotion"
-            : tab === "lead-scanner"
-              ? "lead-scanner"
-              : tab === "session-management"
-                ? "session-management"
-                : tab === "ticket" || tab === "more" || tab === "virtual" || tab === "check-in"
-                  ? tab
-                  : "overview";
+        : tab === "register"
+          ? "register"
+          : tab === "agenda"
+            ? mine
+              ? "agenda"
+              : "program"
+            : tab === "promotion"
+              ? "promotion"
+              : tab === "lead-scanner"
+                ? "lead-scanner"
+                : tab === "session-management"
+                  ? "session-management"
+                  : tab === "ticket" || tab === "more" || tab === "virtual" || tab === "check-in"
+                    ? tab
+                    : "overview";
   const tabs = [
     { id: "overview", label: "Overview", href: href(base) },
     { id: "program", label: "Agenda", href: href(eventAgendaRoute(event.slug)) },
+    ...(tab === "register" ? [{ id: "register", label: "Register", href: href(base + "/register/") }] : []),
     ...(eventRegistrationStanding(event).status === "registered"
       ? [{ id: "agenda", label: "My agenda", href: href(eventAgendaRoute(event.slug, { mine: true })) }]
       : []),
@@ -170,6 +175,10 @@ export function ParticipantEvent({
         />
       ) : kind === "proposal" && resourceId ? (
         <ParticipantProposal event={event} proposalId={resourceId} facet={tab} header={header} />
+      ) : tab === "register" ? (
+        <Suspense fallback={<Spinner label="Loading registration…" />}>
+          <EventRegister event={event} onRegistered={onRegistered} />
+        </Suspense>
       ) : tab === "agenda" ? (
         <Suspense fallback={<Spinner />}>
           <MyAgenda
@@ -211,7 +220,7 @@ export function ParticipantEvent({
           <VirtualRoom slug={event.slug} eventName={event.name} />
         </Suspense>
       ) : tab === "ticket" ? (
-        <EventTicket event={event} onRegistered={onRegistered} />
+        <EventTicket event={event} />
       ) : tab === "check-in" ? (
         <Suspense fallback={<Spinner />}>
           <EventCheckIn slug={event.slug} pointToken={pointToken} />
@@ -219,7 +228,7 @@ export function ParticipantEvent({
       ) : tab === "more" ? (
         <EventMore event={event} />
       ) : (
-        <EventHome event={event} onRegistered={onRegistered} />
+        <EventHome event={event} />
       )}
     </div>
   );

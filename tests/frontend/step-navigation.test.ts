@@ -53,11 +53,11 @@ it("activates identity work only after required terms allow the next step", () =
 it.each(["hash", "search"] as const)(
   "uses browser Back and Forward without discarding registration answers (%s)",
   async (source) => {
-    const ownerPath = source === "hash" ? "/events/summit" : "/events/2027/summit/register/";
+    const ownerPath = source === "hash" ? "/events/summit/register/" : "/events/2027/summit/register/";
     history.replaceState(
       {},
       "",
-      source === "hash" ? "/portal/#/events/summit?registrationStep=1" : `${ownerPath}?ref=example&registrationStep=1`,
+      source === "hash" ? "/portal/#/events/summit/register/" : `${ownerPath}?ref=example&registrationStep=1`,
     );
     document.body.innerHTML =
       '<section><form><div data-step="1"></div><div data-step="2" hidden><input name="answer"></div><div data-step="3" hidden></div><button data-step-next type="button">Next</button><button data-step-back type="button">Back</button><button type="submit">Submit</button><p role="status"></p></form></section>';
@@ -83,6 +83,11 @@ it.each(["hash", "search"] as const)(
       history.forward();
       await vi.waitFor(() => expect(root.querySelector<HTMLElement>('[data-step="3"]')!.hidden).toBe(false));
       root.querySelector<HTMLButtonElement>("[data-step-back]")!.click();
+      await vi.waitFor(() => expect(root.querySelector<HTMLElement>('[data-step="2"]')!.hidden).toBe(false));
+      expect(answer.value).toBe("Keep this answer");
+      history.back();
+      await vi.waitFor(() => expect(root.querySelector<HTMLElement>('[data-step="1"]')!.hidden).toBe(false));
+      history.forward();
       await vi.waitFor(() => expect(root.querySelector<HTMLElement>('[data-step="2"]')!.hidden).toBe(false));
       expect(answer.value).toBe("Keep this answer");
     } finally {

@@ -103,7 +103,7 @@ test("a signed-in user registers from event home without another email challenge
     })),
   );
   await page.goto(`/portal/#/events/${event.slug}`);
-  await expect(page.getByRole("button", { name: "Register", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Register", exact: true })).toBeVisible();
   await expect(page.getByText("Nothing on your agenda yet", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "My agenda", exact: true })).toHaveCount(0);
   for (const [width, height, device] of [
@@ -118,17 +118,20 @@ test("a signed-in user registers from event home without another email challenge
     if (request.method() === "POST" && /\/(?:proof|auth\/request)(?:\/|$)/.test(new URL(request.url()).pathname))
       challenged.push(request.url());
   });
-  await page.getByRole("button", { name: "Register", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Register for this event", exact: true });
-  await expect(dialog.getByText(email, { exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "Register", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`#/events/${event.slug}/register/$`));
+  await expect(page.getByRole("heading", { name: "Register for this event", exact: true })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Register for this event", exact: true })).toHaveCount(0);
+  const registrationPage = page.locator("[data-registration-flow='create']");
+  await expect(registrationPage.getByText(email, { exact: true })).toBeVisible();
   await page.goBack();
-  await expect(dialog).not.toBeVisible();
+  await expect(registrationPage).not.toBeVisible();
   await page.goForward();
-  await expect(dialog.getByText(email, { exact: true })).toBeVisible();
-  await expect(dialog.getByLabel("Email", { exact: true })).toHaveCount(0);
-  await expect(dialog.getByText("Representation", { exact: true })).toBeVisible();
-  await expect(dialog.getByRole("combobox")).toHaveCount(0);
-  await expect(dialog.locator('[data-step="1"]')).toHaveCSS("opacity", "1");
+  await expect(registrationPage.getByText(email, { exact: true })).toBeVisible();
+  await expect(registrationPage.getByLabel("Email", { exact: true })).toHaveCount(0);
+  await expect(registrationPage.getByText("Representation", { exact: true })).toBeVisible();
+  await expect(registrationPage.getByRole("combobox")).toHaveCount(0);
+  await expect(registrationPage.locator('[data-step="1"]')).toHaveCSS("opacity", "1");
   for (const [width, height, device] of [
     [1280, 900, "desktop"],
     [375, 812, "phone"],
@@ -136,7 +139,7 @@ test("a signed-in user registers from event home without another email challenge
     await page.setViewportSize({ width, height });
     await page.screenshot({ path: info.outputPath(`registration-representation-${device}.png`) });
   }
-  await dialog.getByRole("button", { name: "Change representation", exact: true }).click();
+  await registrationPage.getByRole("button", { name: "Change representation", exact: true }).click();
   const representationChooser = page.getByRole("dialog", { name: "Change representation", exact: true });
   await representationChooser.getByRole("combobox", { name: "Representation", exact: true }).click();
   const currentOption = page.getByRole("option").filter({ hasText: representations[0].name });
@@ -169,19 +172,19 @@ test("a signed-in user registers from event home without another email challenge
   await representationChooser.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(representationChooser).not.toBeVisible();
   await page.keyboard.press("Escape");
-  await expect(dialog).not.toBeVisible();
-  await expect(page.getByRole("button", { name: "Register", exact: true })).toBeFocused();
-  await page.getByRole("button", { name: "Register", exact: true }).click();
-  await expect(dialog.getByText(email, { exact: true })).toBeVisible();
+  await expect(registrationPage).toBeVisible();
+  await page.reload();
+  await expect(page).toHaveURL(new RegExp(`#/events/${event.slug}/register/$`));
+  await expect(registrationPage.getByText(email, { exact: true })).toBeVisible();
   await page.setViewportSize({ width: 1280, height: 900 });
-  await expect(dialog.locator('[data-step="1"]')).toHaveCSS("opacity", "1");
-  expect((await dialog.boundingBox())!.width).toBeGreaterThan(800);
+  await expect(registrationPage.locator('[data-step="1"]')).toHaveCSS("opacity", "1");
+  expect((await registrationPage.boundingBox())!.width).toBeGreaterThan(800);
   await page.screenshot({ path: info.outputPath("quick-registration-desktop.png"), fullPage: true });
   await page.setViewportSize({ width: 375, height: 812 });
   await page.screenshot({ path: info.outputPath("quick-registration-phone.png"), fullPage: true });
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await dialog.getByRole("button", { name: "Continue", exact: true }).click();
-  await expect(dialog.locator('[data-step="2"]')).toHaveCSS("opacity", "1");
+  await registrationPage.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(registrationPage.locator('[data-step="2"]')).toHaveCSS("opacity", "1");
   for (const [width, height, device] of [
     [1280, 900, "desktop"],
     [375, 812, "phone"],
@@ -189,12 +192,12 @@ test("a signed-in user registers from event home without another email challenge
     await page.setViewportSize({ width, height });
     await page.screenshot({ path: info.outputPath(`registration-attendance-${device}.png`) });
   }
-  const matrix = dialog.getByRole("table", { name: "Attendance by day" });
-  await dialog.getByRole("button", { name: "Continue", exact: true }).click();
-  await expect(dialog.getByRole("group", { name: "Attendance choices", exact: true })).toHaveAccessibleDescription(
-    "Choose how you'll attend the event.",
-  );
-  await expect(dialog.getByRole("group", { name: "Attendance choices", exact: true })).toBeFocused();
+  const matrix = registrationPage.getByRole("table", { name: "Attendance by day" });
+  await registrationPage.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(
+    registrationPage.getByRole("group", { name: "Attendance choices", exact: true }),
+  ).toHaveAccessibleDescription("Choose how you'll attend the event.");
+  await expect(registrationPage.getByRole("group", { name: "Attendance choices", exact: true })).toBeFocused();
   await matrix.getByRole("button", { name: "Choose Virtual for every available day", exact: true }).click();
   for (const radio of await matrix.getByRole("radio", { name: /^Virtual — / }).all()) await expect(radio).toBeChecked();
   await matrix.getByRole("button", { name: "Choose Not attending for every available day", exact: true }).click();
@@ -211,19 +214,20 @@ test("a signed-in user registers from event home without another email challenge
     .filter({ has: page.getByRole("radio", { name: "In person — Workshop day 1", exact: true }) })
     .click({ position: { x: 4, y: 4 } });
   await page.goBack();
-  await expect(dialog.getByText("Representation", { exact: true })).toBeVisible();
+  await expect(registrationPage.getByText("Representation", { exact: true })).toBeVisible();
   await page.goForward();
   await expect(firstDay).toBeChecked();
-  await dialog.getByRole("button", { name: "Continue", exact: true }).click();
-  await dialog.getByRole("button", { name: "Continue", exact: true }).click();
-  await expect(dialog.locator("[data-registration-review]").getByText("Not attending", { exact: true })).toHaveCount(6);
-  await dialog.getByRole("button", { name: "Register", exact: true }).click();
-  await expect(dialog.getByRole("checkbox", { name: "I agree to the privacy policy", exact: true })).toHaveAttribute(
-    "aria-invalid",
-    "true",
-  );
-  await expect(dialog.getByText("Too small:", { exact: false })).toHaveCount(0);
-  await expect(dialog.locator('[data-step="4"]')).toHaveCSS("opacity", "1");
+  await registrationPage.getByRole("button", { name: "Continue", exact: true }).click();
+  await registrationPage.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(
+    registrationPage.locator("[data-registration-review]").getByText("Not attending", { exact: true }),
+  ).toHaveCount(6);
+  await registrationPage.getByRole("button", { name: "Register", exact: true }).click();
+  await expect(
+    registrationPage.getByRole("checkbox", { name: "I agree to the privacy policy", exact: true }),
+  ).toHaveAttribute("aria-invalid", "true");
+  await expect(registrationPage.getByText("Too small:", { exact: false })).toHaveCount(0);
+  await expect(registrationPage.locator('[data-step="4"]')).toHaveCSS("opacity", "1");
   for (const [width, height, device] of [
     [1280, 900, "desktop"],
     [375, 812, "phone"],
@@ -232,17 +236,17 @@ test("a signed-in user registers from event home without another email challenge
     await page.screenshot({ path: info.outputPath(`registration-consent-error-${device}.png`) });
   }
   await page.goBack();
-  await expect(dialog.getByText("No additional questions.", { exact: true })).toBeVisible();
+  await expect(registrationPage.getByText("No additional questions.", { exact: true })).toBeVisible();
   await page.goForward();
-  await dialog.getByRole("checkbox", { name: "I agree to the privacy policy", exact: true }).check();
-  await dialog.getByRole("checkbox", { name: "I agree to the code of conduct", exact: true }).check();
+  await registrationPage.getByRole("checkbox", { name: "I agree to the privacy policy", exact: true }).check();
+  await registrationPage.getByRole("checkbox", { name: "I agree to the code of conduct", exact: true }).check();
   const saved = page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname === `/api/v1/events/${event.slug}/registrations` &&
       response.request().method() === "POST",
   );
   const beforeConfirmationEmail = await capturedEmailCount();
-  await dialog.getByRole("button", { name: "Register", exact: true }).click();
+  await registrationPage.getByRole("button", { name: "Register", exact: true }).click();
   const response = await saved;
   expect(response.status(), await response.text()).toBe(200);
   const result = registrationSubmissionResponseSchema.parse(await response.json());
@@ -253,7 +257,7 @@ test("a signed-in user registers from event home without another email challenge
   expect(body.dayAttendance).toEqual([{ dayDate, attendanceType: "in_person" }]);
   expect(result.status).toBe("registered");
   await expect(page).toHaveURL(new RegExp(`#/events/${event.slug}/ticket$`));
-  await expect(dialog).not.toBeVisible();
+  await expect(registrationPage).not.toBeVisible();
   expect(challenged).toEqual([]);
   await page.reload();
   await expect(page.getByRole("heading", { name: "No ticket yet", exact: true })).toHaveCount(0);
