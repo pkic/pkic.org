@@ -294,7 +294,7 @@ describe("confirmed organizations sharing a work domain", () => {
 function removeRepresentation(p: Awaited<ReturnType<typeof person>>, identityId: string) {
   return callApi(
     env,
-    `${CREATE}/${identityId}`,
+    `/api/v1/users/${p.userId}/identities/${identityId}`,
     { method: "DELETE", headers: { authorization: `Bearer ${p.token}` } },
     { maxRoundTrips: 1 },
   );
@@ -310,7 +310,7 @@ describe("removing an incorrect representation", () => {
       .run();
     const response = await removeRepresentation(p, identityId);
     expect(response.status, await response.clone().text()).toBe(409);
-    expect(await response.text()).toContain("IDENTITY_HAS_PARTICIPATION");
+    expect(await response.text()).toContain("IDENTITY_HAS_PROTECTED_HISTORY");
     expect(await env.DB.prepare("SELECT id FROM identities WHERE id=?").bind(identityId).first("id")).toBe(identityId);
   });
   it("deletes the association instead of retaining a former-identity row", async () => {
@@ -321,7 +321,7 @@ describe("removing an incorrect representation", () => {
     expect(result.status, await result.clone().text()).toBe(200);
     expect(await env.DB.prepare("SELECT id FROM identities WHERE id=?").bind(identityId).first()).toBeNull();
   });
-  it("refuses another person's association, the personal identity, and a blocked relationship", async () => {
+  it("refuses another person's association and a blocked relationship while allowing unused personal deletion", async () => {
     const p = await person();
     const made = await create(p, await prepare(p, false, "Representation"));
     const { identityId } = identityMutationResponseSchema.parse(await made.json());
@@ -330,7 +330,7 @@ describe("removing an incorrect representation", () => {
     const personal = await env.DB.prepare("SELECT id FROM identities WHERE user_id=? AND organization_id IS NULL")
       .bind(p.userId)
       .first<string>("id");
-    expect((await removeRepresentation(p, personal!)).status).toBe(409);
+    expect((await removeRepresentation(p, personal!)).status).toBe(200);
     await env.DB.prepare("UPDATE identities SET ended_at=?,blocked_at=? WHERE id=?")
       .bind(nowIso(), nowIso(), identityId)
       .run();

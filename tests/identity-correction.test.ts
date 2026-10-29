@@ -1,3 +1,5 @@
+import { userAuthSessionResponseSchema } from "../assets/shared/schemas/user-auth";
+import { proposalSpeakerIdentityIdSql } from "../functions/_lib/services/proposal-speaker-profile-projection";
 import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
 import { env } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -56,64 +58,136 @@ async function staff() {
   return { id, token: await createAdminSession(env.DB, id, crypto.randomUUID()) };
 }
 
+async function personalIdentity(userId: string) {
+  const existing = await env.DB.prepare(
+    "SELECT id FROM identities WHERE user_id=? AND organization_id IS NULL AND ended_at IS NULL",
+  )
+    .bind(userId)
+    .first<string>("id");
+  if (existing) return existing;
+  const prepared = await buildCreateIdentityStatement(env.DB, {
+    userId,
+    organizationId: null,
+    source: "account",
+    startImmediately: true,
+  });
+  await env.DB.batch([prepared.statement]);
+  return prepared.identityId;
+}
+
 describe("organization association correction", () => {
-  it("moves registration and speaker references, removes incorrect access, and retains no former role", async () => {
+  it.each([
+    ["organization", "organization"],
+    ["organization", "personal"],
+    ["personal", "organization"],
+  ] as const)(
+    "corrects a %s identity to the %s identity without losing linked participation",
+    async (sourceKind, kind) => {
+      const f = await proposalIdentityFixture();
+      if (sourceKind === "personal") {
+        f.identityId = await personalIdentity(f.userId);
+        f.body.proposer.actingIdentityId = null;
+        f.body.unaffiliatedAttestation = true;
+        await env.DB.prepare("UPDATE identities SET is_default=0 WHERE user_id=?").bind(f.userId).run();
+        await env.DB.prepare("UPDATE identities SET is_default=1 WHERE id=?").bind(f.identityId).run();
+      }
+      const replacement = kind === "personal" ? await personalIdentity(f.userId) : f.secondIdentityId;
+      // Transport fake: this fixture never sends real mail or fetches remote artwork.
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => new Response(null, { status: 202 })),
+      );
+      await seedWorkflowEmailTemplates(env.DB, (await staff()).id);
+      const submitted = await submitIdentityProposal(f.body, f.token);
+      expect(submitted.status, await submitted.clone().text()).toBe(200);
+      const { proposalId } = proposalCreateResponseSchema.parse(await submitted.json());
+      const registrationId = await registration(f);
+      if (sourceKind === "personal") {
+        await env.DB.prepare("UPDATE registrations SET registration_identity_id=NULL WHERE id=?")
+          .bind(registrationId)
+          .run();
+        const blocked = await callApi(
+          env,
+          `/api/v1/users/${f.userId}/identities/${f.identityId}`,
+          { method: "DELETE", headers: { authorization: `Bearer ${f.token}` } },
+          { maxRoundTrips: 1 },
+        );
+        expect(blocked.status).toBe(409);
+      }
+      const sourceMember = await env.DB.prepare("SELECT member_id FROM identity_member_capacities WHERE identity_id=?")
+        .bind(f.identityId)
+        .first<string>("member_id");
+      if (sourceMember)
+        await assignRepresentativeRole(env.DB, sourceMember, f.userId, REPRESENTATIVE_ROLE_IDS.secondaryContact);
+      if (sourceMember)
+        expect(
+          await env.DB.prepare("SELECT count(*) AS count FROM user_roles WHERE identity_id=?")
+            .bind(f.identityId)
+            .first("count"),
+        ).toBeGreaterThan(0);
+      if (kind === "organization") {
+        const title = await env.DB.prepare("SELECT job_title FROM identities WHERE id=?")
+          .bind(replacement)
+          .first<string>("job_title");
+        await env.DB.prepare("UPDATE identities SET job_title=NULL WHERE id=?").bind(replacement).run();
+        expect((await correct(f, f.token, replacement)).status).toBe(409);
+        expect(await env.DB.prepare("SELECT id FROM identities WHERE id=?").bind(f.identityId).first("id")).toBe(
+          f.identityId,
+        );
+        await env.DB.prepare("UPDATE identities SET job_title=? WHERE id=?").bind(title, replacement).run();
+      }
+      const response = await correct(f, f.token, replacement);
+      expect(response.status, await response.clone().text()).toBe(200);
+      const sessionResponse = await callApi(
+        env,
+        "/api/v1/users/current/identities",
+        { headers: { authorization: `Bearer ${f.token}` } },
+        { maxRoundTrips: 1 },
+      );
+      expect(sessionResponse.status).toBe(200);
+      const accessible = identitiesListResponseSchema.parse(await sessionResponse.json());
+      expect(accessible.identities.some((identity) => identity.id === replacement)).toBe(true);
+      expect(accessible.identities.some((identity) => identity.id === f.identityId)).toBe(false);
+      expect(
+        await env.DB.prepare("SELECT registration_identity_id FROM registrations WHERE id=?")
+          .bind(registrationId)
+          .first("registration_identity_id"),
+      ).toBe(replacement);
+      expect(
+        await env.DB.prepare("SELECT acting_identity_id FROM proposal_speakers WHERE proposal_id=? AND user_id=?")
+          .bind(proposalId, f.userId)
+          .first("acting_identity_id"),
+      ).toBe(kind === "personal" ? null : replacement);
+      expect(
+        await env.DB.prepare(
+          `SELECT ${proposalSpeakerIdentityIdSql("speaker")} AS identity_id FROM proposal_speakers speaker WHERE speaker.proposal_id=? AND speaker.user_id=?`,
+        )
+          .bind(proposalId, f.userId)
+          .first("identity_id"),
+      ).toBe(replacement);
+      expect(await env.DB.prepare("SELECT id FROM identities WHERE id=?").bind(f.identityId).first("id")).toBeNull();
+      expect(
+        await env.DB.prepare("SELECT count(*) AS count FROM user_roles WHERE identity_id=?")
+          .bind(f.identityId)
+          .first("count"),
+      ).toBe(0);
+      expect(
+        await env.DB.prepare("SELECT count(*) AS count FROM user_roles WHERE identity_id=? AND role_id=?")
+          .bind(replacement, REPRESENTATIVE_ROLE_IDS.secondaryContact)
+          .first("count"),
+      ).toBe(0);
+      expect(
+        await env.DB.prepare("SELECT ended_at FROM identities WHERE id=?").bind(replacement).first("ended_at"),
+      ).toBeNull();
+    },
+  );
+  it.each(["organization", "personal"])("refuses correcting a %s identity to itself", async (kind) => {
     const f = await proposalIdentityFixture();
-    // Transport fake: this fixture never sends real mail or fetches remote artwork.
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => new Response(null, { status: 202 })),
+    if (kind === "personal") f.identityId = await personalIdentity(f.userId);
+    expect((await correct(f, f.token, f.identityId)).status).toBe(409);
+    expect(await env.DB.prepare("SELECT id FROM identities WHERE id=?").bind(f.identityId).first("id")).toBe(
+      f.identityId,
     );
-    await seedWorkflowEmailTemplates(env.DB, (await staff()).id);
-    const submitted = await submitIdentityProposal(f.body, f.token);
-    expect(submitted.status, await submitted.clone().text()).toBe(200);
-    const { proposalId } = proposalCreateResponseSchema.parse(await submitted.json());
-    const registrationId = await registration(f);
-    const sourceMember = await env.DB.prepare("SELECT member_id FROM identity_member_capacities WHERE identity_id=?")
-      .bind(f.identityId)
-      .first<string>("member_id");
-    await assignRepresentativeRole(env.DB, sourceMember!, f.userId, REPRESENTATIVE_ROLE_IDS.secondaryContact);
-    expect(
-      await env.DB.prepare("SELECT count(*) AS count FROM user_roles WHERE identity_id=?")
-        .bind(f.identityId)
-        .first("count"),
-    ).toBeGreaterThan(0);
-    const response = await correct(f);
-    expect(response.status, await response.clone().text()).toBe(200);
-    const sessionResponse = await callApi(
-      env,
-      "/api/v1/users/current/identities",
-      { headers: { authorization: `Bearer ${f.token}` } },
-      { maxRoundTrips: 1 },
-    );
-    expect(sessionResponse.status).toBe(200);
-    const accessible = identitiesListResponseSchema.parse(await sessionResponse.json());
-    expect(accessible.identities.some((identity) => identity.id === f.secondIdentityId)).toBe(true);
-    expect(accessible.identities.some((identity) => identity.id === f.identityId)).toBe(false);
-    expect(
-      await env.DB.prepare("SELECT registration_identity_id FROM registrations WHERE id=?")
-        .bind(registrationId)
-        .first("registration_identity_id"),
-    ).toBe(f.secondIdentityId);
-    expect(
-      await env.DB.prepare("SELECT acting_identity_id FROM proposal_speakers WHERE proposal_id=? AND user_id=?")
-        .bind(proposalId, f.userId)
-        .first("acting_identity_id"),
-    ).toBe(f.secondIdentityId);
-    expect(await env.DB.prepare("SELECT id FROM identities WHERE id=?").bind(f.identityId).first("id")).toBeNull();
-    expect(
-      await env.DB.prepare("SELECT count(*) AS count FROM user_roles WHERE identity_id=?")
-        .bind(f.identityId)
-        .first("count"),
-    ).toBe(0);
-    expect(
-      await env.DB.prepare("SELECT count(*) AS count FROM user_roles WHERE identity_id=? AND role_id=?")
-        .bind(f.secondIdentityId, REPRESENTATIVE_ROLE_IDS.secondaryContact)
-        .first("count"),
-    ).toBe(0);
-    expect(
-      await env.DB.prepare("SELECT ended_at FROM identities WHERE id=?").bind(f.secondIdentityId).first("ended_at"),
-    ).toBeNull();
   });
   it("allows authorized staff to correct another person's association", async () => {
     const f = await proposalIdentityFixture();
@@ -266,24 +340,21 @@ describe("identity deletion", () => {
       ).first("count"),
     ).toBe(0);
   });
-  it("protects the personal account identity", async () => {
+  it("deletes an unused personal identity without deleting its user account", async () => {
     const f = await proposalIdentityFixture();
-    const existing = await env.DB.prepare("SELECT id FROM identities WHERE user_id=? AND organization_id IS NULL")
-      .bind(f.userId)
-      .first<string>("id");
-    let personalId = existing;
-    if (!personalId) {
-      const prepared = await buildCreateIdentityStatement(env.DB, {
-        userId: f.userId,
-        organizationId: null,
-        source: "account",
-        startImmediately: true,
-      });
-      await env.DB.batch([prepared.statement]);
-      personalId = prepared.identityId;
-    }
-    expect((await remove(f, (await staff()).token, personalId)).status).toBe(409);
-    expect(await env.DB.prepare("SELECT id FROM identities WHERE id=?").bind(personalId).first("id")).toBe(personalId);
+    f.userId = await insertUser(env.DB, "personal-only@example.test");
+    f.token = await createAdminSession(env.DB, f.userId, crypto.randomUUID());
+    const personalId = await personalIdentity(f.userId);
+    expect((await remove(f, (await staff()).token, personalId)).status).toBe(200);
+    expect(await env.DB.prepare("SELECT id FROM identities WHERE id=?").bind(personalId).first("id")).toBeNull();
+    expect(await env.DB.prepare("SELECT id FROM users WHERE id=?").bind(f.userId).first("id")).toBe(f.userId);
+    const session = await callApi(env, "/api/v1/auth/session", {
+      headers: { authorization: `Bearer ${f.token}` },
+    });
+    expect(session.status, await session.clone().text()).toBe(200);
+    const account = userAuthSessionResponseSchema.parse(await session.json());
+    expect(account.identity.id).toBe(f.userId);
+    expect(account.actingIdentities).toHaveLength(0);
   });
   it("refuses another account and an insufficient delegated scope", async () => {
     const f = await proposalIdentityFixture();

@@ -341,20 +341,20 @@ export function UserAffiliationRow({
   }
   if (membership.organizationId && onEditEmail)
     rowActions.push({ id: "change-email", label: "Change representation email…", onSelect: onEditEmail });
-  if (membership.organizationId && onCorrect)
+  if (onCorrect)
     rowActions.push({
       id: "correct-organization",
-      label: "Correct organization…",
+      label: "Correct identity…",
       disabled: busy,
       onSelect: onCorrect,
     });
   if (canManage || viewerIsSubject)
     rowActions.push({
       id: "remove-incorrect",
-      label: membership.organizationId ? "Delete identity…" : "Delete identity (account identity is protected)",
+      label: "Delete identity…",
       danger: true,
-      disabled: busy || !membership.organizationId || !(viewerIsSubject || canRemoveIdentity),
-      onSelect: () => void removeIncorrectRepresentation(membership.identityId, userId, onChanged, setBusy),
+      disabled: busy || !(viewerIsSubject || canRemoveIdentity),
+      onSelect: () => void removeIncorrectRepresentation(membership.identityId, userId, onChanged, setBusy, onCorrect),
     });
   // The person ends their own representation; staff end someone else's.
   if (membership.organizationId && (viewerIsSubject || canManage))

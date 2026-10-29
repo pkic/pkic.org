@@ -24,7 +24,7 @@ export function RepresentationCorrectionDialog({
   onCorrected,
 }: {
   open: boolean;
-  source: { identityId: string; organizationId: string; organizationName: string };
+  source: { identityId: string; organizationId: string | null; organizationName: string };
   userId: string;
   isSelf: boolean;
   createdIdentityId?: string | null;
@@ -45,7 +45,6 @@ export function RepresentationCorrectionDialog({
       identityId: createdIdentityId,
       userId,
       active: "true",
-      organizationOnly: "true",
       limit: "1",
     });
     void getJson(`${endpoint}?${query}`, identitiesListResponseSchema)
@@ -81,10 +80,10 @@ export function RepresentationCorrectionDialog({
   return (
     <Dialog
       open={open}
-      title="Correct organization"
-      closeLabel="Close organization correction"
-      description={`Remove the incorrect association with ${source.organizationName} from experience history. Registration and speaker records will use the representation you choose. Access granted through the incorrect association will be removed. Accept the other representation’s invitation or add it first if it is not listed.`}
-      confirmLabel="Correct organization"
+      title="Correct identity"
+      closeLabel="Close identity correction"
+      description={`${source.organizationId ? "Choose Personal or the correct organization." : "Choose the correct organization."} Linked registrations and speaker records move with the correction. The incorrect ${source.organizationName} identity and its access are removed; the user account remains.`}
+      confirmLabel="Correct identity"
       confirmDisabled={busy}
       onConfirm={() => void submit()}
       onCancel={() => {
@@ -106,10 +105,9 @@ export function RepresentationCorrectionDialog({
           value={selected}
           onSelect={setSelected}
           onAdd={onAdd}
-          organizationOnly
           required
           excludeIdentityId={source.identityId}
-          excludeOrganizationId={source.organizationId}
+          excludeOrganizationId={source.organizationId ?? undefined}
           validation={form.of("replacementIdentityId")}
         />
         <Field label="Reason for correction" required {...form.of("reason")}>

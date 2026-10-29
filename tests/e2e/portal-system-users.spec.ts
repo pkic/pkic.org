@@ -1,3 +1,4 @@
+import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-auth";
 import { scopedAuditLogResponseSchema } from "../../assets/shared/schemas/audit-log";
 import { eventRegistrationsListResponseSchema } from "../../assets/shared/schemas/event-registrations";
 import {
@@ -5,7 +6,8 @@ import {
   organizationCreateResponseSchema,
 } from "../../assets/shared/schemas/organization-management";
 import { identityMutationResponseSchema } from "../../assets/shared/schemas/identity";
-import { acceptConfirmDialog } from "./helpers/confirm-dialog";
+import { registrationIdentityChangeSchema } from "../../assets/shared/schemas/registration-identity";
+import { registrationManageReadResponseSchema } from "../../assets/shared/schemas/registration";
 import { userUpdateSchema, userDetailResponseSchema } from "../../assets/shared/schemas/user-management";
 import { createRegistrationEvent, registerStateAttendee } from "./helpers/participation-state-fixture";
 import { expect, test } from "@playwright/test";
@@ -215,6 +217,17 @@ test("staff read registration and account changes through the shared audit table
     expect(after.identities.flatMap((entry) => (entry.memberId ? [entry.memberId] : []))).toEqual(
       original.identities.flatMap((entry) => (entry.memberId ? [entry.memberId] : [])),
     );
+    await signInToPortal(attendee, email);
+    const beforeCorrection = registrationManageReadResponseSchema.parse(
+      await (await attendee.request.get(`/api/v1/registrations/${record!.id}`)).json(),
+    );
+    const linked = await attendee.request.put(`/api/v1/registrations/${record!.id}/identity`, {
+      data: registrationIdentityChangeSchema.parse({
+        identityId: identity.identityId,
+        expectedIdentityId: beforeCorrection.identityId ?? null,
+      }),
+    });
+    expect(linked.status()).toBe(200);
     await page.getByRole("button", { name: `Actions for ${organizationName}`, exact: true }).click();
     await page.getByRole("menuitem", { name: "Delete identity…", exact: true }).click();
     const deleted = page.waitForResponse(
@@ -222,9 +235,100 @@ test("staff read registration and account changes through the shared audit table
         response.request().method() === "DELETE" &&
         new URL(response.url()).pathname === `/api/v1/users/${record!.user_id}/identities/${identity.identityId}`,
     );
-    await acceptConfirmDialog(page, "Delete identity");
-    expect((await deleted).status()).toBe(200);
+    const deletionConfirmation = page.getByRole("alertdialog", { name: "Delete identity?", exact: true });
+    await deletionConfirmation.getByRole("button", { name: "Delete identity", exact: true }).click();
+    expect((await deleted).status()).toBe(409);
+    const correction = page.getByRole("dialog", { name: "Correct identity", exact: true });
+    await expect(correction).toBeVisible();
+    await correction.getByRole("combobox", { name: /^Representation/ }).click();
+    await page
+      .getByRole("option")
+      .filter({ hasText: /^Personal(?: ·|$)/ })
+      .click();
+    await correction
+      .getByRole("textbox", { name: /^Reason for correction/ })
+      .fill("The organization was linked incorrectly.");
+    for (const width of [1280, 375]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.screenshot({ path: info.outputPath(`correct-to-personal-${width}.png`) });
+    }
+    const corrected = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname.endsWith(`/identities/${identity.identityId}/corrections`),
+    );
+    await correction.getByRole("button", { name: "Correct identity", exact: true }).click();
+    expect((await corrected).status()).toBe(200);
+    await expect(correction).not.toBeVisible();
     await expect(page.getByRole("button", { name: `Actions for ${organizationName}`, exact: true })).toHaveCount(0);
+    const registrationAfter = registrationManageReadResponseSchema.parse(
+      await (await attendee.request.get(`/api/v1/registrations/${record!.id}`)).json(),
+    );
+    expect(registrationAfter.identityId).toBe(
+      original.identities.find((entry) => entry.organizationId === null)!.identityId,
+    );
+    expect(registrationAfter.registration.id).toBe(record!.id);
+    const personalId = registrationAfter.identityId!;
+    const replacementName = `Staff-approved organization ${crypto.randomUUID()}`;
+    const replacementResponse = await page.request.post("/api/v1/organizations", {
+      data: organizationCreateSchema.parse({ name: replacementName }),
+    });
+    expect(replacementResponse.status()).toBe(201);
+    const replacementOrganization = organizationCreateResponseSchema.parse(
+      await replacementResponse.json(),
+    ).organization;
+    await page.getByRole("button", { name: "Actions for Personal", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Delete identity…", exact: true }).click();
+    const personalConfirmation = page.getByRole("alertdialog", { name: "Delete identity?", exact: true });
+    await personalConfirmation.getByRole("button", { name: "Delete identity", exact: true }).click();
+    const personalCorrection = page.getByRole("dialog", { name: "Correct identity", exact: true });
+    await expect(personalCorrection).toBeVisible();
+    await personalCorrection.getByRole("button", { name: "Add identity", exact: true }).click();
+    await expect(addIdentity).toBeVisible();
+    await addIdentity.getByRole("combobox", { name: /^Organization/ }).fill(replacementName);
+    await page.getByRole("option").filter({ hasText: replacementName }).click();
+    await addIdentity.getByRole("textbox", { name: /^Job title/ }).fill("Research lead");
+    await expect(addIdentity.getByRole("checkbox", { name: /^Activate immediately/ })).toBeChecked();
+    await expect(addIdentity.getByRole("alert")).toContainText("even if their email domain differs");
+    await addIdentity
+      .getByRole("textbox", { name: /^Activation reason/ })
+      .fill("The association was independently verified despite the different email domain.");
+    const replacementCreated = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname === `/api/v1/organizations/${replacementOrganization.id}/identities`,
+    );
+    await addIdentity.getByRole("button", { name: "Add identity", exact: true }).click();
+    const replacementResult = await replacementCreated;
+    expect(replacementResult.status()).toBe(201);
+    const replacement = identityMutationResponseSchema.parse(await replacementResult.json());
+    await expect(addIdentity).not.toBeVisible();
+    await expect(personalCorrection.getByRole("combobox", { name: /^Representation/ })).toContainText(replacementName);
+    await personalCorrection
+      .getByRole("textbox", { name: /^Reason for correction/ })
+      .fill("Participation belongs to the verified organization identity.");
+    for (const width of [1280, 375]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.screenshot({ path: info.outputPath(`correct-personal-to-organization-${width}.png`) });
+    }
+    const personalCorrected = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname.endsWith(`/identities/${personalId}/corrections`),
+    );
+    await personalCorrection.getByRole("button", { name: "Correct identity", exact: true }).click();
+    expect((await personalCorrected).status()).toBe(200);
+    await expect(personalCorrection).not.toBeVisible();
+    const finalRegistration = registrationManageReadResponseSchema.parse(
+      await (await attendee.request.get(`/api/v1/registrations/${record!.id}`)).json(),
+    );
+    expect(finalRegistration.identityId).toBe(replacement.identityId);
+    const preservedAccount = userAuthSessionResponseSchema.parse(
+      await (await attendee.request.get("/api/v1/auth/session")).json(),
+    );
+    expect(preservedAccount.identity.id).toBe(record!.user_id);
+    expect(preservedAccount.actingIdentities.some((entry) => entry.id === personalId)).toBe(false);
+
     await expect(page.getByRole("table", { name: "Audit log", exact: true })).toHaveCount(0);
     const auditLoaded = page.waitForResponse((response) =>
       new URL(response.url()).pathname.endsWith(`/users/${record!.user_id}/audit-log`),

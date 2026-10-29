@@ -106,6 +106,11 @@ export function ManagedIdentityCreateForm({
             hint="Otherwise, the user must accept the invitation."
           />
         )}
+        {immediate && organization && (
+          <Alert tone="warn">
+            Confirm that this person represents {organization.name}, even if their email domain differs.
+          </Alert>
+        )}
         {immediate && (
           <Field label="Activation reason" required {...form.of("activation")}>
             {(control) => (

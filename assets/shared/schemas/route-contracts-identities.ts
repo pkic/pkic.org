@@ -250,9 +250,9 @@ export const currentUserIdentityReinstatementConfirmRouteSchema = {
 export const identityRemoveRouteSchema = {
   ...requiresSession(),
   tags: ["Users"],
-  summary: "Delete an incorrect organization identity",
+  summary: "Delete an incorrect identity",
   description:
-    "Owners delete their own incorrect associations. Staff require membership:write and identities:activate. Personal account identities and participation references are protected.",
+    "Owners delete their own incorrect associations. Staff require membership:write and identities:activate. The user account remains. Linked participation must be reassigned before deletion.",
   "x-pkic-mcp": { expose: true, scopes: ["membership:write", "identities:activate"], readonly: false },
   request: { params: z.object({ userId: databaseIdSchema, identityId: databaseIdSchema }) },
   responses: {

@@ -321,6 +321,7 @@ describe("UserAffiliationsPanel", () => {
     // Whitespace clears the browser's own `required` check, so the surface's
     // trim is the only thing standing between this and an undocumented
     // immediate activation.
+    expect(container.textContent).toContain("even if their email domain differs");
     const reason = controlFor(container, "Activation reason");
     expect(reason.getAttribute("required")).not.toBeNull();
     await typeInto(reason, "   ");

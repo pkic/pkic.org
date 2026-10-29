@@ -70,12 +70,12 @@ export function UserAffiliationsPanel({
 }) {
   const [correcting, setCorrecting] = useState<{
     identityId: string;
-    organizationId: string;
+    organizationId: string | null;
     organizationName: string;
   } | null>(null);
   const [correctingOpen, showCorrecting, closeCorrecting] = useDialogQueryState("organization-correction");
   const [createdIdentityId, setCreatedIdentityId] = useState<string | null>(null);
-  function correct(identityId: string, organizationId: string, organizationName: string) {
+  function correct(identityId: string, organizationId: string | null, organizationName: string) {
     setCorrecting({ identityId, organizationId, organizationName });
     setCreatedIdentityId(null);
     showCorrecting();
@@ -120,20 +120,23 @@ export function UserAffiliationsPanel({
     // The person reinstates their own only through an address at the organization; staff need none.
     if (viewerIsSubject ? entry.selfReinstatable : canManage && entry.reinstatable)
       items.push({ id: "reinstate", label: "Reinstate representation…", onSelect: () => setReinstating(entry) });
-    if (entry.organizationId && entry.reinstatable && (viewerIsSubject || (canManage && canActivateIdentity)))
+    if (entry.reinstatable && (viewerIsSubject || (canManage && canActivateIdentity)))
       items.push({
         id: "correct-organization",
-        label: "Correct organization…",
+        label: "Correct identity…",
         disabled: busy,
-        onSelect: () => correct(entry.identityId, entry.organizationId!, entry.organizationName ?? "Organization"),
+        onSelect: () => correct(entry.identityId, entry.organizationId, entry.organizationName ?? "Personal"),
       });
-    if ((viewerIsSubject || (canManage && canActivateIdentity)) && entry.organizationId && entry.reinstatable)
+    if ((viewerIsSubject || (canManage && canActivateIdentity)) && entry.reinstatable)
       items.push({
         id: "remove-incorrect",
         label: "Delete identity…",
         danger: true,
         disabled: busy,
-        onSelect: () => void removeIncorrectRepresentation(entry.identityId, user.id, onChanged, setBusy),
+        onSelect: () =>
+          void removeIncorrectRepresentation(entry.identityId, user.id, onChanged, setBusy, () =>
+            correct(entry.identityId, entry.organizationId, entry.organizationName ?? "Personal"),
+          ),
       });
     return items;
   }
@@ -196,13 +199,9 @@ export function UserAffiliationsPanel({
                 : undefined
             }
             onCorrect={
-              membership.organizationId && (viewerIsSubject || (canManage && canActivateIdentity))
+              viewerIsSubject || (canManage && canActivateIdentity)
                 ? () =>
-                    correct(
-                      membership.identityId,
-                      membership.organizationId!,
-                      membership.organizationName ?? "Organization",
-                    )
+                    correct(membership.identityId, membership.organizationId, membership.organizationName ?? "Personal")
                 : undefined
             }
           />
@@ -223,7 +222,7 @@ export function UserAffiliationsPanel({
                   />
                 ) : undefined;
               })()}
-              media={<Avatar name={entry.organizationName ?? "Organization"} shape="square" size="lg" />}
+              media={<Avatar name={entry.organizationName ?? "Personal"} shape="square" size="lg" />}
               title={entry.jobTitle ?? entry.organizationName ?? "Individual member"}
               subtitle={entry.jobTitle ? (entry.organizationName ?? "Individual member") : undefined}
               href={

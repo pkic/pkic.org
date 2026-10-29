@@ -136,7 +136,7 @@ export function prepareIdentitiesList(
     bindings.push(query.identityId);
   }
   if (query.excludeOrganizationId) {
-    conditions.push("identity.organization_id<>?");
+    conditions.push("(identity.organization_id IS NULL OR identity.organization_id<>?)");
     bindings.push(query.excludeOrganizationId);
   }
   if (query.excludeIdentityId) {
