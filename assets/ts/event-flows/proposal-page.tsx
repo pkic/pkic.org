@@ -103,6 +103,7 @@ function createProposerCard(
 } {
   render(
     <SpeakerFormCard
+      key={entry.actingIdentityId ?? "personal"}
       title="You — as a speaker"
       personSummary={<ParticipationIdentitySummary person={entry.person} />}
       idPrefix="pspk"

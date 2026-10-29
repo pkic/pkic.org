@@ -73,9 +73,10 @@ export async function buildRegistrationManageView(
     db
       .prepare(
         `SELECT organization_name FROM affiliation_reviews
-          WHERE source_type = 'registration' AND source_id = ? AND resolved_at IS NULL`,
+          WHERE user_id = ? AND source_type = 'registration' AND source_id = ? AND resolved_at IS NULL
+          ORDER BY created_at DESC LIMIT 1`,
       )
-      .bind(registration.id),
+      .bind(registration.user_id, registration.id),
   ]);
   const event = batchFirst<EventRecord>(eventResult);
   if (!event) throw new AppError(404, "EVENT_NOT_FOUND", "Event not found");

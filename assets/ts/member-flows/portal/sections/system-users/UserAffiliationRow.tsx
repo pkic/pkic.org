@@ -31,6 +31,7 @@ import { formatTenure } from "../../../../shared/ui";
 import { Badge, statusLabel } from "../../../../components/Badge";
 import { AffiliationRow } from "../../../../ui/AffiliationRow";
 import { Avatar } from "../../../../ui/Avatar";
+import { Markdown } from "../../../../ui/Markdown";
 import { Field } from "../../../../ui/Field";
 import { Menu, type MenuItem } from "../../../../ui/Menu";
 import { Select } from "../../../../ui/TextControl";
@@ -440,7 +441,7 @@ export function UserAffiliationRow({
           ) : undefined
         }
       >
-        {summarized ? undefined : (membership.biography ?? undefined)}
+        {summarized || !membership.biography ? undefined : <Markdown markdown={membership.biography} />}
       </AffiliationRow>
       <Dialog
         open={editingMembership && (categoryEditable || statusEditable)}

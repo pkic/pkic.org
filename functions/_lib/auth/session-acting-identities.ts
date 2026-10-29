@@ -12,16 +12,18 @@ export const SESSION_ACTING_IDENTITY_ORDER_SQL =
   "identity.organization_id IS NOT NULL, organization.name COLLATE NOCASE, identity.id";
 
 /** The active membership an identity holds, if any; an identity of a lapsed or absent membership reads as none. */
-export const SESSION_ACTING_IDENTITY_MEMBERSHIP_SQL = `(SELECT MIN(capacity.membership_category)
+export const SESSION_ACTING_IDENTITY_MEMBERSHIP_SQL = `(SELECT capacity.membership_category
     FROM identity_member_capacities capacity
-   WHERE capacity.identity_id = identity.id AND capacity.member_status = 'active')`;
+    JOIN membership_categories category ON category.code = capacity.membership_category
+   WHERE capacity.identity_id = identity.id AND capacity.member_status = 'active'
+   ORDER BY category.display_order, category.code LIMIT 1)`;
 
 /** The consortium's name for that membership category. */
 export const SESSION_ACTING_IDENTITY_MEMBERSHIP_LABEL_SQL = `(SELECT category.label
     FROM identity_member_capacities capacity
     JOIN membership_categories category ON category.code = capacity.membership_category
    WHERE capacity.identity_id = identity.id AND capacity.member_status = 'active'
-   ORDER BY capacity.membership_category LIMIT 1)`;
+   ORDER BY category.display_order, category.code LIMIT 1)`;
 
 interface ActingIdentityRow {
   id: string;

@@ -44,9 +44,10 @@ function choiceLabel(identity: ActingIdentityChoice, all: readonly ActingIdentit
   return ambiguous ? actingIdentityLabel(identity) : short;
 }
 
-/** What the identity does, and the membership it holds, on one line; empty when it states neither. */
-function choiceDetail(identity: ActingIdentityChoice): string {
-  return [identity.jobTitle, identity.membershipLabel ?? identity.membershipCategory].filter(Boolean).join(" \u00b7 ");
+/** What the identity does, and the membership it holds, on one line; the title is left out when the name already carries it. */
+function choiceDetail(identity: ActingIdentityChoice, shownName: string): string {
+  const title = identity.jobTitle && !shownName.includes(identity.jobTitle) ? identity.jobTitle : null;
+  return [title, identity.membershipLabel ?? identity.membershipCategory].filter(Boolean).join(" \u00b7 ");
 }
 
 /** The account menu's heading: "Acting as Northwind Review Labs", or "Acting personally". */
@@ -100,15 +101,20 @@ export function ActingIdentitySwitcher({
           >
             <span class="pk-identity-choice">
               <Avatar
-                key={identity.organizationId ?? "personal"}
                 name={identity.organizationName ?? session.identity.email}
-                src={identity.organizationId ? `/api/v1/members/${identity.organizationId}/logo` : undefined}
+                src={
+                  identity.organizationId
+                    ? `/api/v1/members/${encodeURIComponent(identity.organizationId)}/logo`
+                    : undefined
+                }
                 shape={identity.organizationName || identity.membershipCategory ? "square" : "round"}
                 size="lg"
               />
               <span class="pk-identity-choice__body">
                 <span class="pk-identity-choice__name">{choiceLabel(identity, session.actingIdentities)}</span>
-                <span class="pk-identity-choice__detail">{choiceDetail(identity)}</span>
+                <span class="pk-identity-choice__detail">
+                  {choiceDetail(identity, choiceLabel(identity, session.actingIdentities))}
+                </span>
               </span>
               {identity.membershipCategory && (
                 <span class="pk-identity-choice__mark" aria-hidden="true">
