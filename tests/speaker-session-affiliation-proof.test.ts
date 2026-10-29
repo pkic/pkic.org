@@ -234,6 +234,37 @@ describe("authenticated speaker resource mailbox proof", () => {
     expect(saved.currentRepresentation?.actingIdentityId).toBeTruthy();
   });
 
+  it("treats a session the server no longer accepts as no session for an invited guest", async () => {
+    const f = await fixture();
+    const token = await issueDatabaseCapability({
+      db: env.DB,
+      signingSecret: env.INTERNAL_SIGNING_SECRET!,
+      purpose: "speaker_manage",
+      resourceId: f.speakerId,
+    });
+    const proof = await prepareProposalProof({
+      environment: env,
+      eventSlug: "pqc-2026",
+      email: "speaker@official.example",
+      consents,
+      unaffiliatedAttestation: false,
+      speakerManagementToken: token,
+    });
+    const response = await request(
+      `/api/v1/proposals/speakers/access/${proof.speakerManagementToken}/profile`,
+      speakerSelfProfilePatchSchema.parse({
+        continuationToken: proof.continuationToken,
+        unaffiliatedAttestation: false,
+        consents,
+        jobTitle: "Invited role",
+      }),
+      "expired-or-unknown-session",
+      env.DB,
+      "PATCH",
+    );
+    expect(response.status, await response.clone().text()).toBe(200);
+  });
+
   it.each(["anonymous", "other_owner", "other_event", "ambiguous"] as const)(
     "refuses %s resource proof before queuing email",
     async (kind) => {

@@ -19,8 +19,7 @@ import { assertInvitedSpeakerClaimSelection } from "../../../../../_lib/services
  */
 import { declineSpeakerParticipation } from "../../../../../_lib/services/proposal-speaker-decline";
 import { AppError } from "../../../../../_lib/errors";
-import { requireIdentityFromRequest } from "../../../../../_lib/auth/user-session";
-import { getUserSessionToken } from "../../../../../_lib/auth/user-session-token";
+import { requireIdentityFromRequest, resolveOptionalIdentityFromRequest } from "../../../../../_lib/auth/user-session";
 import { handleError, json } from "../../../../../_lib/http";
 import type { ParticipantRouteData } from "../../../../../_lib/routes/participant-authority";
 import { getSpeakerByManageToken } from "../../../../../_lib/services/proposals";
@@ -159,11 +158,14 @@ export async function onRequestProfilePatch(
       );
     }
 
+    // An invited guest proves their address with the confirmation token, so a session the server no
+    // longer accepts is the same as none; selecting an identity without that proof needs a live one.
     const selectionAuthority =
-      (body.continuationToken !== undefined && getUserSessionToken(c.req.raw)) ||
-      (body.continuationToken === undefined && body.actingIdentityId !== undefined)
-        ? await requireIdentityFromRequest(requestDb(c), c.req.raw, c.env)
-        : undefined;
+      body.continuationToken !== undefined
+        ? await resolveOptionalIdentityFromRequest(requestDb(c), c.req.raw, c.env)
+        : body.actingIdentityId !== undefined
+          ? await requireIdentityFromRequest(requestDb(c), c.req.raw, c.env)
+          : undefined;
     if (selectionAuthority && selectionAuthority.userId !== speaker.user_id) {
       if (!body.continuationToken)
         throw new AppError(403, "PROPOSAL_IDENTITY_AUTHORITY_REQUIRED", "Select only your own speaker representation.");
