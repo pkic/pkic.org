@@ -103,25 +103,16 @@ test("staff view a user's participation history and upload a photograph", async 
   expect(Math.abs(imageBox.width - imageBox.height), "photo stays square").toBeLessThan(1);
   expect(Math.abs(frameBox.width - imageBox.width), "photo fills its circular frame").toBeLessThanOrEqual(2);
   await expect(portrait).toHaveCSS("object-fit", "cover");
-  // #85: the standing must surround only the photo, never editor actions.
+  // #85: the editor's actions never sit in a ring of their own. The record
+  // carries no account standing on its portrait, so there is no ring at all;
+  // the remove action appears with focus, at the portrait's own corner.
   for (const width of [1280, 390]) {
     await page.setViewportSize({ width, height: 900 });
-    const ring = page.locator(".pk-avatar-standing__ring").filter({ has: frame });
-    const ringBox = (await ring.boundingBox())!;
+    await expect(page.locator(".pk-avatar-standing")).toHaveCount(0);
     const pictureBox = (await frame.boundingBox())!;
-    expect(Math.abs(ringBox.width - ringBox.height), "standing stays circular").toBeLessThan(1);
-    expect(ringBox.width - pictureBox.width, "ring hugs the photo").toBeCloseTo(6, 0);
-    await expect(ring.getByRole("button", { name: /^Remove photo of / })).toHaveCount(0);
+    expect(Math.abs(pictureBox.width - pictureBox.height), "photo frame stays circular").toBeLessThan(1);
     await frame.focus();
     await expect(page.getByRole("button", { name: /^Remove photo of / })).toBeVisible();
-    const badge = page.locator(".pk-avatar-standing").filter({ has: frame }).locator(".pk-avatar-standing__label");
-    expect(
-      await badge.evaluate((label) => {
-        const box = label.getBoundingClientRect();
-        return label.contains(document.elementFromPoint(box.x + box.width / 2, box.y + 2));
-      }),
-      "badge paints above the photo where they overlap",
-    ).toBe(true);
     const removeBox = (await page.getByRole("button", { name: /^Remove photo of / }).boundingBox())!;
     expect(removeBox.y, "remove is at the portrait corner, not a separate row").toBeLessThan(pictureBox.y + 10);
     await page.screenshot({ path: `test-results/issue-85-portrait-${width}.png` });
