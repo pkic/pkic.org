@@ -23,6 +23,8 @@ Read the repository guidance and the relevant scoped instructions. Use the sibli
 
 All new components inherit the page's theme and working-group accent. Use semantic tokens, not a component-specific palette or a hardcoded green. Verify multiple accents in both themes. Use one labeled Layout toolbar trigger and the shared visual layout picker. Keep text-flow choices, grid/card sizing, and bento presets distinct within the picker; reuse it for content-preserving layout edits.
 
+Editor capabilities are independent of canvas size. Use the default `basic` profile for biographies, short descriptions, abstracts, and notes (bold, italic, links, and lists). Request `profile="content"` explicitly for authored page and template bodies. Keep the schema, shortcuts, insertion controls, and contextual menus consistent with that profile; preserve unsupported existing Markdown as visible literal text.
+
 The visual editor has one sticky toolbar. Selection-specific operations come from the shared Actions command builders and are available through its visible menu, right-click, and Shift+F10. Preserve native mobile text selection and Shift+right-click browser actions; never add another contextual toolbar row.
 
 For interactive components, use the [Component Gallery](https://component.gallery/components/) as a reference for established behavior and naming. Keep text-bearing child nodes editable, reuse shared interaction primitives, and define keyboard/state behavior before adding syntax. Do not add arbitrary scripts to Markdown.

@@ -32,7 +32,8 @@ import {
   IconUndo,
 } from "../icons";
 import type { FieldControlProps } from "../../ui/Field";
-import { editorExtensions } from "./editor-extensions";
+import type { MarkdownEditorProfile } from "./basic-editor-extensions";
+import { useEditorExtensions } from "./use-editor-extensions";
 import {
   BLOCK_TRANSFER_TYPE,
   EDITOR_BLOCKS,
@@ -67,11 +68,12 @@ export interface MarkdownEditorProps extends FieldControlProps {
   disabled?: boolean;
   onChange: (markdown: string) => void;
   /**
-   * `full` is the page-content editor with a tall canvas and block movement.
-   * `compact` uses the same formatting and insertion controls with a canvas
-   * a few lines tall for a biography, a note or a message.
+   * `full` provides a tall canvas; `compact` keeps a field a few lines high.
+   * The profile determines formatting capabilities independently of this size.
    */
   variant?: "full" | "compact";
+  /** Authoring capabilities are independent of the canvas size. */
+  profile?: MarkdownEditorProfile;
   /** Choose the initial editing view; template tokens are preserved in either view. */
   initialMode?: "visual" | "source";
   /** Template source highlights variables and blocks and exposes insertion commands. */
@@ -87,6 +89,7 @@ export function MarkdownEditor({
   name,
   label,
   variant = "full",
+  profile = "basic",
   initialMode = "visual",
   templateInsertions,
   editorRef,
@@ -94,6 +97,8 @@ export function MarkdownEditor({
   ...control
 }: MarkdownEditorProps) {
   const compact = variant === "compact";
+  const extensions = useEditorExtensions(profile);
+  const activeExtensions = useRef(extensions);
   const canvasClass = compact ? "pk-markdown-editor__canvas" : `${CONTENT_PROSE_CLASS} pk-markdown-editor__canvas`;
   // One document owns an edit session. Parent renders must never reparse a
   // previous serialized draft while ProseMirror is applying the next input.
@@ -126,17 +131,17 @@ export function MarkdownEditor({
   };
   const addBlock = useRef<(kind: EditorBlock, position: number) => void>(() => {});
   addBlock.current = (kind, position) => {
-    if (!editor || disabled) return;
+    if (!editor || disabled || profile !== "content") return;
     if (kind === "image" || kind === "video") setMedia({ kind, position: editorBlockPosition(editor, position) });
     else insertEditorBlock(editor, kind, position);
   };
 
   useEffect(() => {
-    if (!host.current) return;
+    if (!host.current?.isConnected || !extensions) return;
     const instance = new Editor({
       element: host.current,
       injectCSS: false,
-      extensions: [...editorExtensions(), ...(templateInsertions ? [TemplateHighlighting] : [])],
+      extensions: [...extensions, ...(templateInsertions ? [TemplateHighlighting] : [])],
       content: resolveMarkdownShortcodes(current.current.value),
       contentType: "markdown",
       editorProps: {
@@ -173,11 +178,12 @@ export function MarkdownEditor({
         refresh((revision) => revision + 1);
       },
     });
+    activeExtensions.current = extensions;
     setEditor(instance);
     return () => {
       instance.destroy();
     };
-  }, []);
+  }, [extensions]);
 
   useLayoutEffect(() => {
     if (!editor) return;
@@ -236,7 +242,7 @@ export function MarkdownEditor({
     };
   }, [editor, editorRef, source, disabled]);
 
-  const locked = disabled || !editor || source;
+  const locked = disabled || !editor || source || activeExtensions.current !== extensions;
   const runFocused = (run: (focused: Editor) => void) => {
     if (!editor) return;
     editor.view.focus();
@@ -261,6 +267,7 @@ export function MarkdownEditor({
    */
   type ToolbarCommand = {
     label: string;
+    contentOnly?: boolean;
     icon: JSX.Element;
     active?: string;
     disabled?: boolean;
@@ -274,6 +281,7 @@ export function MarkdownEditor({
     [
       {
         label: "Heading",
+        contentOnly: true,
         icon: <IconHeading />,
         active: "heading",
         run: () => {},
@@ -307,6 +315,7 @@ export function MarkdownEditor({
       },
       {
         label: "Callout",
+        contentOnly: true,
         icon: <IconQuote />,
         active: "blockquote",
         block: "callout",
@@ -314,6 +323,7 @@ export function MarkdownEditor({
       },
       {
         label: "Supporting note",
+        contentOnly: true,
         icon: <IconLayers />,
         active: "aside",
         block: "aside",
@@ -321,12 +331,14 @@ export function MarkdownEditor({
       },
       {
         label: "Insert layout",
+        contentOnly: true,
         icon: <IconContentGrid />,
         picker: "layout",
         run: () => openLayoutPicker(false, false),
       },
       {
         label: "Code",
+        contentOnly: true,
         icon: <IconCode />,
         run: () => {},
         choices: [
@@ -343,21 +355,24 @@ export function MarkdownEditor({
       {
         label: "Link",
         icon: <IconLink width="16" height="16" />,
-        run: () => {},
-        choices: [
-          {
-            id: "text-link",
-            label: "Text link",
-            disabled: locked,
-            onSelect: () => setMedia({ kind: "link", position: position() }),
-          },
-          {
-            id: "button-link",
-            label: "Button",
-            disabled: locked,
-            onSelect: () => setMedia({ kind: "button", position: position() }),
-          },
-        ],
+        run: () => setMedia({ kind: "link", position: position() }),
+        choices:
+          profile === "content"
+            ? [
+                {
+                  id: "text-link",
+                  label: "Text link",
+                  disabled: locked,
+                  onSelect: () => setMedia({ kind: "link", position: position() }),
+                },
+                {
+                  id: "button-link",
+                  label: "Button",
+                  disabled: locked,
+                  onSelect: () => setMedia({ kind: "button", position: position() }),
+                },
+              ]
+            : undefined,
       },
     ],
     [
@@ -377,13 +392,26 @@ export function MarkdownEditor({
     [
       {
         label: "Table",
+        contentOnly: true,
         icon: <IconTable />,
         block: "table",
         picker: "table",
         run: () => openLayoutPicker(false, true),
       },
-      { label: "Image", icon: <IconImage />, block: "image", run: () => addBlock.current("image", position()) },
-      { label: "Video", icon: <IconVideo />, block: "video", run: () => addBlock.current("video", position()) },
+      {
+        label: "Image",
+        contentOnly: true,
+        icon: <IconImage />,
+        block: "image",
+        run: () => addBlock.current("image", position()),
+      },
+      {
+        label: "Video",
+        contentOnly: true,
+        icon: <IconVideo />,
+        block: "video",
+        run: () => addBlock.current("video", position()),
+      },
     ],
     [
       {
@@ -400,7 +428,10 @@ export function MarkdownEditor({
       },
     ],
   ];
-  const commands = groups.flat();
+  const activeGroups = groups
+    .map((group) => group.filter((command) => profile === "content" || !command.contentOnly))
+    .filter((group) => group.length);
+  const commands = activeGroups.flat();
   const visibleCommands = useToolbarOverflow(toolbar, commands.length);
   const menuCommands: MenuItem[] = commands.map((command) => ({
     id: command.label,
@@ -421,20 +452,20 @@ export function MarkdownEditor({
         role="group"
         aria-label="Text formatting"
       >
-        {groups.map((group, index) => (
+        {activeGroups.map((group, index) => (
           <div
             key={index}
             class="pk-markdown-editor__group"
             role="presentation"
             data-group={index}
-            hidden={groups.slice(0, index).flat().length >= visibleCommands}
+            hidden={activeGroups.slice(0, index).flat().length >= visibleCommands}
           >
             {group.map((command, commandIndex) => (
               <span
                 key={command.label}
-                data-command={groups.slice(0, index).flat().length + commandIndex}
+                data-command={activeGroups.slice(0, index).flat().length + commandIndex}
                 data-section-start={commandIndex === 0}
-                hidden={groups.slice(0, index).flat().length + commandIndex >= visibleCommands}
+                hidden={activeGroups.slice(0, index).flat().length + commandIndex >= visibleCommands}
               >
                 {command.choices ? (
                   <Menu label={command.label} items={command.choices}>
@@ -479,7 +510,7 @@ export function MarkdownEditor({
                 formatting={menuCommands}
                 editLayout={() => openLayoutPicker(true, false)}
                 editMedia={setMedia}
-                allowMove={!compact}
+                allowMove={profile === "content" && !compact}
               />
             </Suspense>
           )}

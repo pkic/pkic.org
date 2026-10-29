@@ -38,6 +38,12 @@ for (const publish of [false, true]) {
       };
       await expect(page.getByRole("textbox", { name: "Member page content", exact: true })).toHaveCount(0);
       await edit();
+      const descriptionEditor = page
+        .locator(".pk-markdown-editor")
+        .filter({ has: page.locator('[name="description"]') });
+      await expect(descriptionEditor.getByRole("button", { name: "Bold", exact: true })).toBeEnabled();
+      for (const label of ["Heading", "Insert layout", "Image", "Video", "Table"])
+        await expect(descriptionEditor.getByRole("button", { name: label, exact: true })).toHaveCount(0);
       const canvas = page.getByRole("textbox", { name: "Member page content", exact: true });
       // Two editors share the page since the description became one too (#114);
       // the bar's commands are scoped to the content editor's own bar.

@@ -166,6 +166,7 @@ export function SpeakerFormCard({
                 server's, reported against the field. */}
             {(control) => (
               <MarkdownEditor
+                profile="basic"
                 variant="compact"
                 {...control}
                 required

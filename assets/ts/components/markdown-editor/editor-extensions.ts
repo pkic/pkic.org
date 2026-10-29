@@ -1,8 +1,8 @@
 import { layoutExtensions } from "./layout-extensions";
 import "../../ui/Table.css";
 import { AsideExtension } from "./aside-extension";
+import { basicEditorExtensions, starterExtension, type MarkdownEditorProfile } from "./basic-editor-extensions";
 import { Node } from "@tiptap/core";
-import { StarterKit } from "@tiptap/starter-kit";
 import { Markdown } from "@tiptap/markdown";
 import { Image } from "@tiptap/extension-image";
 import { Table, TableCell, TableHeader, TableRow } from "@tiptap/extension-table";
@@ -50,33 +50,11 @@ const Video = Node.create({
 });
 
 /** Native table sizing uses inline styles; this portal uses stylesheet sizing. */
-export function editorExtensions() {
+export function editorExtensions(profile: MarkdownEditorProfile = "content") {
+  if (profile === "basic") return basicEditorExtensions();
+  const starter = starterExtension("content");
   return [
-    StarterKit.extend({
-      addExtensions() {
-        return (this.parent?.() ?? []).map((extension) =>
-          extension.name === "orderedList"
-            ? extension.extend({
-                // Use Markdown's numeric list grammar. The extended alphabetical
-                // tokenizer mistakes ordinary titles such as Ir. and Dr. for lists.
-                markdownTokenizer: {
-                  name: "orderedList",
-                  level: "block",
-                  start: () => -1,
-                  tokenize: () => undefined,
-                },
-              })
-            : extension,
-        );
-      },
-    }).configure({
-      underline: false,
-      heading: { levels: [2, 3, 4] },
-      link: { openOnClick: false },
-      dropcursor: false,
-      gapcursor: false,
-      trailingNode: false,
-    }),
+    starter,
     Image.extend({
       parseHTML() {
         return [
