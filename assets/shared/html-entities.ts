@@ -18,6 +18,7 @@ const NAMED_ENTITIES: Record<string, string> = {
   ndash: character(0x2013),
   hellip: character(0x2026),
   copy: character(0xa9),
+  times: character(0xd7),
   lsquo: character(0x2018),
   rsquo: character(0x2019),
   ldquo: character(0x201c),
