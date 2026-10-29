@@ -52,12 +52,15 @@ export function formatDate(value: string | null | undefined): string {
  * instant and localizing would shift the day for viewers west of UTC. A
  * value that is not date-only falls back to `formatDate`.
  */
-export function formatCalendarDate(value: string | null | undefined): string {
+export function formatCalendarDate(
+  value: string | null | undefined,
+  dateStyle: Intl.DateTimeFormatOptions["dateStyle"] = "medium",
+): string {
   if (!value) return EMPTY;
   if (!DATE_ONLY.test(value)) return formatDate(value);
   const date = toDate(`${value}T00:00:00Z`);
   if (!date) return EMPTY;
-  return date.toLocaleString(undefined, { dateStyle: "medium", timeZone: "UTC" });
+  return date.toLocaleString(undefined, { dateStyle, timeZone: "UTC" });
 }
 
 /**

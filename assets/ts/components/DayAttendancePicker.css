@@ -86,16 +86,16 @@
   .pk-attendance-matrix__cell[data-selected][data-waitlist] {
     background: var(--pk-warn-soft);
   }
-  .pk-attendance-matrix__cell[data-waitlist] .pk-check__input {
-    border-color: var(--pk-warn-ink);
+  .pk-attendance-matrix__cell[data-waitlist] {
+    --pk-radio-color: var(--pk-warn-ink);
   }
-  .pk-attendance-matrix__cell[data-waitlist] .pk-check__input:checked {
-    background: var(--pk-warn-ink);
+  .pk-attendance-matrix__cell[data-waitlist] .pk-check__input {
+    border-color: var(--pk-radio-color);
   }
   .pk-attendance-matrix__full-marker {
     position: absolute;
-    inset-block-start: calc(50% - 1.25rem);
-    inset-inline-start: calc(50% + 0.35rem);
+    inset-block-start: var(--pk-2);
+    inset-inline-end: var(--pk-2);
     display: grid;
     place-items: center;
     inline-size: var(--pk-4);

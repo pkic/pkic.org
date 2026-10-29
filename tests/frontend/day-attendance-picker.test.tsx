@@ -200,6 +200,8 @@ describe("day attendance matrix", () => {
       day({ dayDate: `2027-09-0${index + 1}`, label: `Day ${index + 1}` }),
     );
     const picker = mount(<DayAttendancePicker days={days} />);
+    expect(picker.querySelector("thead .pk-attendance-matrix__date strong")?.textContent).toBe("Wednesday");
+    expect(picker.querySelector("thead .pk-attendance-matrix__date")?.textContent).toContain("2027");
     await click(picker.querySelector<HTMLButtonElement>('[aria-label="Choose Virtual for every available day"]')!);
     expect(readDayAttendance(picker.querySelector("form")!)).toHaveLength(7);
     await act(() => {
@@ -207,6 +209,7 @@ describe("day attendance matrix", () => {
       for (const listener of listeners) listener();
     });
     expect(picker.querySelector('[data-transposed="true"]')).not.toBeNull();
+    expect(picker.querySelector("tbody .pk-attendance-matrix__date strong")?.textContent).toBe("Wed");
     expect(await axeViolations(picker)).toEqual([]);
     expect(picker.querySelectorAll("th")).toHaveLength(4);
     expect(readDayAttendance(picker.querySelector("form")!)).toHaveLength(7);

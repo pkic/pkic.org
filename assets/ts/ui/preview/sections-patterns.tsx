@@ -29,6 +29,7 @@ import { Avatar } from "../Avatar";
 import { Badge } from "../Badge";
 import { DataTable } from "../DataTable";
 import { Button } from "../Button";
+import { Checkbox, Radio } from "../Checkbox";
 import { EmptyState } from "../EmptyState";
 import { Field } from "../Field";
 import { InputGroup } from "../InputGroup";
@@ -255,6 +256,19 @@ function RowListSpecimen() {
 const wallLogo = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="16" viewBox="0 0 100 40"><path fill="currentColor" d="M0 0h28v40H0zm36 0h28v40H36zm36 0h28v40H72z"/></svg>')}`;
 
 export const patternSections: PreviewSection[] = [
+  {
+    id: "choice-controls",
+    title: "Choice controls",
+    render: () => (
+      <div class="pk-stack">
+        <Radio name="preview-choice" value="selected" label="Selected option" defaultChecked />
+        <Radio name="preview-choice" value="available" label="Available option" />
+        <Radio name="preview-disabled-choice" label="Unavailable option" disabled />
+        <Checkbox label="Selected checkbox" defaultChecked />
+        <Checkbox label="Enabled switch" role="switch" defaultChecked />
+      </div>
+    ),
+  },
   {
     id: "framed-image",
     title: "Framed image",

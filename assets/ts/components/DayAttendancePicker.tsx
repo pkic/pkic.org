@@ -5,7 +5,13 @@ import { Button } from "../ui/Button";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { Alert } from "../ui/Alert";
 import "./DayAttendancePicker.css";
-import { calendarDateParts, formatDayAndMonth, formatDayList } from "../../shared/format-date";
+import {
+  calendarDateParts,
+  formatCalendarDate,
+  formatWeekday,
+  formatDayAndMonth,
+  formatDayList,
+} from "../../shared/format-date";
 import { formatNumber } from "../../shared/format-number";
 import type { EventFormsResponse } from "../shared/types";
 import { IconClock } from "../ui/MediaIcons";
@@ -36,11 +42,11 @@ type MatrixRow = { option: AttendanceOptionRead } | { day: EventDay };
 const full = (option: AttendanceOptionRead) =>
   option.spotsRemainingPercent != null && option.spotsRemainingPercent <= 0;
 
-function DayHeading({ day }: { day: EventDay }) {
+function DayHeading({ day, compact }: { day: EventDay; compact: boolean }) {
   return (
     <span class="pk-attendance-matrix__date">
-      <strong>{calendarDateParts(day.dayDate).weekday}</strong>
-      <span>{formatDayAndMonth(day.dayDate)}</span>
+      <strong>{compact ? calendarDateParts(day.dayDate).weekday : formatWeekday(day.dayDate)}</strong>
+      <span>{compact ? formatDayAndMonth(day.dayDate) : formatCalendarDate(day.dayDate, "long")}</span>
     </span>
   );
 }
@@ -186,7 +192,7 @@ export function DayAttendancePicker({
           id: "day",
           header: "Day",
           headerHidden: true,
-          cell: (row) => ("day" in row ? <DayHeading day={row.day} /> : null),
+          cell: (row) => ("day" in row ? <DayHeading day={row.day} compact={phone} /> : null),
         },
         ...options.map((option): DataTableColumn<MatrixRow> => ({
           id: `method:${option.value}`,
@@ -244,7 +250,7 @@ export function DayAttendancePicker({
         ...days.map((day): DataTableColumn<MatrixRow> => ({
           id: day.dayDate,
           header: day.label?.trim() || formatDayAndMonth(day.dayDate),
-          headerContent: <DayHeading day={day} />,
+          headerContent: <DayHeading day={day} compact={phone} />,
           align: "center",
           cell: (row) => ("option" in row ? cell(day, row.option) : null),
         })),

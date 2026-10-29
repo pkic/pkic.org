@@ -253,12 +253,17 @@
     transform: rotate(45deg);
   }
 
+  .pk-check__input[type="radio"]:not([role="switch"]):checked {
+    background: transparent;
+    border-color: var(--pk-radio-color, var(--pk-accent-ink));
+  }
+
   .pk-check__input[type="radio"]:not([role="switch"]):checked::after {
     content: "";
     position: absolute;
-    inset: 0.22rem;
+    inset: 18%;
     border-radius: 50%;
-    background: var(--pk-on-solid);
+    background: var(--pk-radio-color, var(--pk-accent-ink));
   }
 
   .pk-check__input:disabled {
