@@ -32,6 +32,10 @@ interface SpeakerFormCardProps {
   linksRef: Ref<ProfileLinksHandle>;
   emailHelp: string;
   bioHelp: string;
+  /** The speaker completes their own bio, so the proposer may leave it empty. */
+  bioOptional?: boolean;
+  /** The bio the person already has as the identity they take part as. */
+  initialBio?: string;
   autocomplete?: boolean;
   /** A verified person's summary replaces the duplicate editable personal fields. */
   personSummary?: ComponentChildren;
@@ -84,6 +88,8 @@ export function SpeakerFormCard({
   linksRef,
   emailHelp,
   bioHelp,
+  bioOptional = false,
+  initialBio = "",
   autocomplete,
   personSummary,
   defaultRole = "speaker",
@@ -159,7 +165,13 @@ export function SpeakerFormCard({
               </SpeakerField>
             </>
           )}
-          <SpeakerField id={`${idPrefix}-bio`} label="Bio" help={bioHelp} errorPath={errorPaths?.bio}>
+          <SpeakerField
+            id={`${idPrefix}-bio`}
+            label="Bio"
+            optional={bioOptional}
+            help={bioHelp}
+            errorPath={errorPaths?.bio}
+          >
             {/* The shared Markdown editor (#114). It posts the Markdown through
                 a hidden input under the field's name, so the form still reads
                 it the way it reads every other field; the length rule is the
@@ -168,10 +180,10 @@ export function SpeakerFormCard({
               <MarkdownEditor
                 variant="compact"
                 {...control}
-                required
+                required={!bioOptional}
                 name={fields.bio}
                 label="Bio"
-                initialValue=""
+                initialValue={initialBio}
                 onChange={() => {}}
               />
             )}

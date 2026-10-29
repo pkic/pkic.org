@@ -203,7 +203,8 @@ export const userProfileSchema = z.object({
   email: normalizedEmailSchema,
 });
 
-const speakerBioSchema = trimmedString(40, 5000);
+export const SPEAKER_BIO_TOO_SHORT = "Write at least 40 characters so attendees know who is speaking.";
+const speakerBioSchema = trimmedString(40, 5000, SPEAKER_BIO_TOO_SHORT);
 export const speakerRoleSchema = proposalSpeakerRoleSchema;
 export type SpeakerRole = z.infer<typeof speakerRoleSchema>;
 

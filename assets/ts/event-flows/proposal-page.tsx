@@ -118,6 +118,7 @@ function createProposerCard(
       linksRef={linksRef}
       emailHelp="Your management link is sent here. You will also receive a personal link to confirm your participation once the proposal is submitted."
       bioHelp="A short professional biography as you would like it to appear on the event website if your proposal is accepted."
+      initialBio={entry.person.bio ?? ""}
       autocomplete
       errorPaths={{ bio: "proposer.bio" }}
     />,
@@ -156,7 +157,8 @@ function createSpeakerCard(index: number): {
       linksFieldName={`speaker.${index}.links`}
       linksRef={linksRef}
       emailHelp="This person will receive a personal link to confirm their participation and complete their speaker profile."
-      bioHelp="A short professional biography as it would appear on the event website if accepted."
+      bioHelp="This person can write or change their own bio when they confirm their participation."
+      bioOptional
       errorPaths={{
         firstName: `speakers.${index}.firstName`,
         lastName: `speakers.${index}.lastName`,
@@ -186,7 +188,7 @@ function readAdditionalSpeakers(form: HTMLFormElement) {
         firstName: readField(form, `speaker.${index}.firstName`),
         lastName: readField(form, `speaker.${index}.lastName`),
         email,
-        bio: readField(form, `speaker.${index}.bio`),
+        bio: readField(form, `speaker.${index}.bio`) || undefined,
         links: linksRef.current?.getLinks() ?? [],
       };
     })

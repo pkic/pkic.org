@@ -147,6 +147,8 @@ export const proposalCreateSchema = boundedJsonObject(
     speakers: z
       .array(
         participantProfileSchema.extend({
+          /** A co-speaker completes their own bio when they confirm; the proposer may leave it out. */
+          bio: participantProfileSchema.shape.bio.optional(),
           role: speakerRoleSchema.default("speaker"),
         }),
       )
