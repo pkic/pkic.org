@@ -37,6 +37,9 @@ import { membershipApplicantPolicySchema } from "../../../../../assets/shared/sc
 import { mailboxKind } from "../../../email-domains/classification";
 import { normalizeOrgName } from "../../../../../assets/shared/organization-name";
 import { first } from "../../../db/queries";
+import { buildFindOrCreateUserStatement, findUserByEmail, splitPersonName } from "../../users";
+import { prepareVerifyOwnedEmailStatements } from "../../email-verification";
+import { normalizeEmail } from "../../../validation";
 import type { DatabaseLike, StatementLike } from "../../../types";
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../../db/authorization-guard";
 
@@ -75,6 +78,33 @@ async function refuseIfAlreadyAMember(db: DatabaseLike, organizationName: string
     formErrors: [message],
     fieldErrors: { organizationName: [`The consortium already has ${existing.name} as a member.`] },
   });
+}
+
+/**
+ * The account a verified applicant signs in with to follow their application. The join link proved the
+ * mailbox, so an address nobody holds yet gets its account now rather than at approval; an address that
+ * already belongs to a person keeps its existing path.
+ */
+async function prepareApplicantAccount(
+  db: DatabaseLike,
+  input: Pick<CreateMemberApplicationInput, "applicantEmail" | "applicantName" | "applicantUserId">,
+) {
+  if (input.applicantUserId || (await findUserByEmail(db, input.applicantEmail))) return null;
+  const { firstName, lastName } = splitPersonName(input.applicantName);
+  const account = await buildFindOrCreateUserStatement(db, {
+    email: input.applicantEmail,
+    firstName: firstName ?? undefined,
+    lastName: lastName ?? undefined,
+    mailboxVerified: true,
+  });
+  account.statements.push(
+    ...prepareVerifyOwnedEmailStatements(db, {
+      userId: account.user.id,
+      normalizedEmail: normalizeEmail(input.applicantEmail),
+      method: "magic_link",
+    }),
+  );
+  return account;
 }
 
 export interface CreateMemberApplicationInput {
@@ -172,7 +202,10 @@ export async function createMemberApplication(
   const organizationDomain = isIndividual ? null : await organizationLinkDomain(db, input.applicantEmail);
   const statusUrl = `${input.appBaseUrl}/application-status/?id=${encodeURIComponent(id)}&token=${encodeURIComponent(manageToken)}`;
 
+  const applicantAccount = await prepareApplicantAccount(db, input);
+  const applicantUserId = input.applicantUserId ?? applicantAccount?.user.id ?? null;
   const statements: StatementLike[] = [
+    ...(applicantAccount?.statements ?? []),
     ...(input.applicantUserId
       ? [
           prepareAuthorizationGuard(db, {
@@ -203,7 +236,7 @@ export async function createMemberApplication(
       )
       .bind(
         id,
-        input.applicantUserId,
+        applicantUserId,
         input.applicantEmail,
         input.applicantName,
         isIndividual ? null : (input.organizationName ?? null),

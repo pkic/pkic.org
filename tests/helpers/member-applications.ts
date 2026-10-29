@@ -47,6 +47,8 @@ export function membershipApplicationDescriptionAnswers(membershipCategory: stri
 export async function verifiedMemberApplicationPayload<T extends Record<string, unknown>>(
   payload: T,
   signingSecret = env.INTERNAL_SIGNING_SECRET ?? "test-signing-secret",
+  /** The existing account the join step resolved for the verified mailbox, if any. */
+  applicantUserId: string | null = null,
 ): Promise<T & { joinToken: string }> {
   const membershipCategory = String(payload.membershipCategory ?? "");
   const capability = newMemberJoinCapabilityPayload(
@@ -58,7 +60,7 @@ export async function verifiedMemberApplicationPayload<T extends Record<string, 
   return {
     ...payload,
     answers: { ...membershipApplicationDescriptionAnswers(membershipCategory), ...answers },
-    joinToken: await issueMemberJoinApplicationToken(signingSecret, { ...capability, applicantUserId: null }, 15 * 60),
+    joinToken: await issueMemberJoinApplicationToken(signingSecret, { ...capability, applicantUserId }, 15 * 60),
   };
 }
 

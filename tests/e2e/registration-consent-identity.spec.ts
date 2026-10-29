@@ -39,7 +39,8 @@ test("verified approved-domain registration affiliates once and an organization 
   const owner = userDetailResponseSchema.parse(
     await (await page.request.get(`/api/v1/users/${representative.userId}`)).json(),
   );
-  const organizationName = owner.user.identities[0].organizationName!;
+  const ownerIdentity = owner.user.identities.find((identity) => identity.organizationId !== null)!;
+  const organizationName = ownerIdentity.organizationName!;
   const email = `event-${Date.now()}@${representative.email.split("@")[1]}`;
   const listResponse = await page.request.post("/api/v1/groups/pkic/mailing-lists", {
     data: groupMailingListCreateSchema.parse({
@@ -111,7 +112,7 @@ test("verified approved-domain registration affiliates once and an organization 
         await first.fill("Synthetic");
         await last.fill("Attendee");
         const chooser = formPage.getByRole("combobox", { name: /^Organization/ });
-        await expect(chooser).toHaveValue(owner.user.identities[0].organizationId!);
+        await expect(chooser).toHaveValue(ownerIdentity.organizationId!);
         await formPage.setViewportSize({ width: 1280, height: 900 });
         await formPage.screenshot({ path: testInfo.outputPath("public-organization-choice-desktop.png") });
         await formPage.setViewportSize({ width: 375, height: 812 });
@@ -129,7 +130,7 @@ test("verified approved-domain registration affiliates once and an organization 
         await expect(addOrganization).toBeVisible();
         await addOrganization.getByRole("button", { name: "Close add organization", exact: true }).click();
         await expect(addOrganization).not.toBeVisible();
-        await expect(chooser).toHaveValue(owner.user.identities[0].organizationId!);
+        await expect(chooser).toHaveValue(ownerIdentity.organizationId!);
       },
     });
     expect(initial.request.identityId).toBeUndefined();
@@ -429,8 +430,8 @@ test("a proved work address requires organization confirmation and an incorrect 
   await page.screenshot({ path: `${directory}/related-organizations-phone.png` });
   await openMyProfile(page);
   await page.getByRole("button", { name: `Actions for ${names[1]}`, exact: true }).click();
-  await page.getByRole("menuitem", { name: "Correct organization…", exact: true }).click();
-  const correction = page.getByRole("dialog", { name: "Correct organization", exact: true });
+  await page.getByRole("menuitem", { name: "Correct identity…", exact: true }).click();
+  const correction = page.getByRole("dialog", { name: "Correct identity", exact: true });
   await correction.getByRole("combobox", { name: /^Representation/ }).click();
   await page.getByRole("option", { name: new RegExp(names[0]) }).click();
   await correction
@@ -447,7 +448,7 @@ test("a proved work address requires organization confirmation and an incorrect 
   await expect(correction.getByRole("textbox", { name: /^Reason for correction/ })).toHaveValue(
     "The subsidiary was selected by mistake.",
   );
-  await correction.getByRole("button", { name: "Correct organization", exact: true }).click();
+  await correction.getByRole("button", { name: "Correct identity", exact: true }).click();
   await expect(correction).not.toBeVisible();
   await expect(page.getByRole("article").filter({ has: page.getByText(names[1], { exact: true }) })).toHaveCount(0);
   const session = userAuthSessionResponseSchema.parse(await (await page.request.get("/api/v1/auth/session")).json());
