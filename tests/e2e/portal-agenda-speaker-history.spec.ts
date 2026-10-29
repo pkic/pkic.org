@@ -182,7 +182,8 @@ test("public repeats retain event-specific employer credits through profile edit
     const document = agendaTransferSchema.parse({
       format: "pkic-agenda",
       version: 1,
-      source: { kind: "hugo", eventRef: slug, exportedAt: new Date().toISOString(), sourceDigest },
+      // A Hugo source is past evidence and is refused for a future interval; a portable export is not.
+      source: { kind: "portable", eventRef: slug, exportedAt: new Date().toISOString(), sourceDigest },
       people: [
         {
           ref: authored.personRef,
@@ -292,9 +293,14 @@ test("public repeats retain event-specific employer credits through profile edit
   });
   const creditB = sessionAppearanceSchema.parse({
     ...creditA,
-    actingIdentityId: secondIdentity.identityId,
-    jobTitle: roleB,
-    organizationName: organizationB.name,
+    affiliations: [
+      {
+        identityId: secondIdentity.identityId,
+        title: roleB,
+        organizationId: null,
+        organizationName: organizationB.name,
+      },
+    ],
     biography: biographyB,
   });
   const saveCredit = async (event: typeof eventA, id: string, credit: SessionAppearance, expectedRevision?: number) => {
@@ -329,8 +335,11 @@ test("public repeats retain event-specific employer credits through profile edit
   expect(personSlug).toBeDefined();
   expect(frozenB.speakerProfileSlugs?.[userId]).toBe(personSlug);
   const personPath = `/people/${personSlug}/`;
-  const paths = [eventA.originalId, repeatedId].map((id) => `/events/${eventA.slug}/sessions/${id}/`);
-  paths.push(`/events/${eventB.slug}/sessions/${eventB.originalId}/`);
+  // A session page lives at its current readable address, not its id.
+  const sessionPath = (event: typeof eventA, frozen: typeof frozenA, id: string) =>
+    `/events/${event.slug}/sessions/${frozen.sessionSlugs?.[id] ?? id}/`;
+  const paths = [eventA.originalId, repeatedId].map((id) => sessionPath(eventA, frozenA, id));
+  paths.push(sessionPath(eventB, frozenB, eventB.originalId));
   expect(new Set(paths).size).toBe(3);
   const publicContext = await browser.newContext({
     baseURL: new URL(page.url()).origin,
@@ -351,8 +360,12 @@ test("public repeats retain event-specific employer credits through profile edit
     const appearances = publicPage.locator("[data-pagefind-body]");
     await expect(appearances.getByRole("heading", { level: 1 })).toHaveText(personName);
     await expect(appearances.locator(".pk-agenda-speaker-profile__sessions")).toHaveCount(2);
-    await expect(appearances.locator(".pk-agenda-speaker-profile__sessions li")).toHaveCount(3);
-    await expect(appearances).not.toContainText("Later current profile");
+    await expect(appearances.locator(".pk-agenda-speaker-profile__sessions .pk-agenda-session-row")).toHaveCount(3);
+    // The profile shows the person's current experience; the listed appearances stay as approved.
+    for (const section of [0, 1])
+      await expect(appearances.locator(".pk-agenda-speaker-profile__sessions").nth(section)).not.toContainText(
+        "Later current profile",
+      );
     for (const [index, path] of paths.entries()) {
       const link = appearances.locator(`a[href="${path}"]`);
       await expect(link).toHaveCount(1);
@@ -447,7 +460,10 @@ test("public repeats retain event-specific employer credits through profile edit
     const current = await read(eventA.slug);
     const correctedCredit = sessionAppearanceSchema.parse({
       ...creditA,
-      jobTitle: "Reviewed occurrence correction",
+      affiliations: creditA.affiliations.map((affiliation) => ({
+        ...affiliation,
+        title: "Reviewed occurrence correction",
+      })),
       biography: "Explicitly reviewed correction for this occurrence only.",
       approvedAt: new Date().toISOString(),
     });
