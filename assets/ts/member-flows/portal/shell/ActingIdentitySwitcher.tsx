@@ -13,12 +13,12 @@ import { useState } from "preact/hooks";
 import { ApiClientError } from "../../../shared/api-client";
 import {
   actingIdentityLabel,
-  membershipNote,
   orderedForChoice,
   PERSONAL_IDENTITY_LABEL,
 } from "../../../shared/acting-identity-catalog";
 import { friendlyErrorMessage } from "../../../components/ErrorAlert";
 import { Alert } from "../../../ui/Alert";
+import { Avatar } from "../../../ui/Avatar";
 import { Button } from "../../../ui/Button";
 import { PkicMark } from "../../../ui/PkicMark";
 import type { MenuItem } from "../../../ui/Menu";
@@ -42,6 +42,11 @@ function choiceLabel(identity: ActingIdentityChoice, all: readonly ActingIdentit
     (other) => other.id !== identity.id && (other.organizationName ?? PERSONAL_IDENTITY_LABEL) === short,
   );
   return ambiguous ? actingIdentityLabel(identity) : short;
+}
+
+/** What the identity does, and the membership it holds, on one line; empty when it states neither. */
+function choiceDetail(identity: ActingIdentityChoice): string {
+  return [identity.jobTitle, identity.membershipLabel ?? identity.membershipCategory].filter(Boolean).join(" \u00b7 ");
 }
 
 /** The account menu's heading: "Acting as Northwind Review Labs", or "Acting personally". */
@@ -85,7 +90,7 @@ export function ActingIdentitySwitcher({
       lede="Take part for your organization where you can. You can switch at any time from the account menu."
       busy={choosing !== null}
     >
-      <fieldset class="pk-login__controls pk-stack" disabled={choosing !== null}>
+      <fieldset class="pk-login__controls pk-identity-choices" disabled={choosing !== null}>
         {choices.map((identity, index) => (
           <Button
             key={identity.id}
@@ -94,13 +99,18 @@ export function ActingIdentitySwitcher({
             onClick={() => void choose(identity.id)}
           >
             <span class="pk-identity-choice">
-              <span class="pk-identity-choice__mark" aria-hidden="true">
-                {identity.membershipCategory && <PkicMark width="32" height="32" />}
-              </span>
-              <span class="pk-identity-choice__text">
+              <Avatar
+                key={identity.organizationId ?? "personal"}
+                name={identity.organizationName ?? session.identity.email}
+                src={identity.organizationId ? `/api/v1/members/${identity.organizationId}/logo` : undefined}
+                shape={identity.organizationName || identity.membershipCategory ? "square" : "round"}
+                size="lg"
+              />
+              <span class="pk-identity-choice__body">
                 <span class="pk-identity-choice__name">{choiceLabel(identity, session.actingIdentities)}</span>
-                <span class="pk-identity-choice__membership">{membershipNote(identity)}</span>
+                <span class="pk-identity-choice__detail">{choiceDetail(identity)}</span>
               </span>
+              {identity.membershipCategory && <PkicMark class="pk-identity-choice__mark" aria-hidden="true" />}
             </span>
           </Button>
         ))}

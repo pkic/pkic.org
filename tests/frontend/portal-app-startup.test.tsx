@@ -413,15 +413,16 @@ it("asks a person with several identities which one to continue as, then remembe
   const server = serveSeveralIdentities();
   await mount();
   await vi.waitFor(() => expect(card().textContent).toContain("Choose how you take part"));
-  const choices = [...card().querySelectorAll("button")].map((button) => button.textContent);
+  const choices = [...card().querySelectorAll("button")].map(
+    (button) => button.querySelector(".pk-identity-choice__name")?.textContent,
+  );
   // A first-time attendee chooses between themself and their employer by name.
-  // An organization is offered first, and green; the personal identity comes last. Each says whether
-  // it brings a membership.
-  expect(choices).toEqual(["Alpha OrgNo membership", "PersonalNo membership"]);
+  // An organization is offered first, and green; the personal identity comes last.
+  expect(choices).toEqual(["Alpha Org", "Personal"]);
   expect(mocks.renderShell).not.toHaveBeenCalled();
 
   await act(async () => {
-    [...card().querySelectorAll("button")].find((button) => button.textContent?.startsWith("Personal"))!.click();
+    [...card().querySelectorAll("button")].find((button) => button.textContent?.includes("Personal"))!.click();
   });
   await vi.waitFor(() => expect(host.textContent).toContain("Authenticated portal content"));
   expect(server.selections).toEqual([INDIVIDUAL_IDENTITY.id]);

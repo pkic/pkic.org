@@ -17,15 +17,6 @@ export function actingIdentityLabel(
     .join(" · ");
 }
 
-/** What membership choosing an identity brings, said the same way wherever identities are offered. */
-export function membershipNote(identity: {
-  membershipCategory?: string | null;
-  membershipLabel?: string | null;
-}): string {
-  if (!identity.membershipCategory) return "No membership";
-  return `PKI Consortium Member \u00b7 ${identity.membershipLabel ?? identity.membershipCategory}`;
-}
-
 /**
  * The order identities are offered in: an organization that holds a membership first, then other
  * organizations, and the personal identity last, because taking part for an organization is the norm.
