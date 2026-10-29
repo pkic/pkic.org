@@ -108,7 +108,11 @@ export async function buildRegistrationManageView(
     },
     headshotUrl,
     shareUrl: referral ? `${appBaseUrl}${personalPromotionSharePath(referral.code)}` : null,
-    eventDays: eventDayReadModels(eventDays, registeredCounts),
+    eventDays: eventDayReadModels(
+      eventDays,
+      registeredCounts,
+      registration.status === "cancelled" ? [] : dayAttendance,
+    ),
     dayAttendance,
     dayWaitlist,
     waitlistHandledLast: !holdsWorkAddress(parseVerifiedAddresses(user.verified_addresses)),

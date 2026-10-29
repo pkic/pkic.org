@@ -64,6 +64,7 @@ export const eventAttendanceOptionSchema = z.object({
   label: trimmedString(1, 80),
   description: z.string().trim().max(240).optional(),
   icon: attendanceIconSchema.optional(),
+  enabled: z.boolean().optional(),
   capacity: z.number().int().positive().nullable().optional(),
 });
 export type EventAttendanceOption = z.infer<typeof eventAttendanceOptionSchema>;

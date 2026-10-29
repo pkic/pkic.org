@@ -48,7 +48,11 @@ vi.mock("../../assets/ts/member-flows/portal/sections/management/EventFormPlacem
 vi.mock("../../assets/ts/member-flows/portal/sections/management/EventDaysEditor", () => ({
   EventDaysEditor: (props: EditorProps) => {
     days.push(props);
-    return <p>days editor</p>;
+    return (
+      <section class="pk-panel" aria-label="Attendance days">
+        <p>days editor</p>
+      </section>
+    );
   },
 }));
 

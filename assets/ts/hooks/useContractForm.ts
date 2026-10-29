@@ -81,6 +81,8 @@ function hasValue(control: HTMLInputElement | HTMLSelectElement | HTMLTextAreaEl
 }
 
 export interface ContractFormOptions {
+  /** Reveal a refused control behind a tab or disclosure before the hook focuses it. */
+  revealField?: (name: string) => void;
   /**
    * A composer that sends on content (a chat message, a question): a field
    * the reader left empty says nothing, because empty is the resting state,
@@ -101,7 +103,7 @@ export function useContractForm<Schema extends z.ZodType>(
   body: unknown,
   options: ContractFormOptions = {},
 ): ContractForm<z.output<Schema>> {
-  const { fieldOf, quietWhenEmpty = false } = options;
+  const { fieldOf, quietWhenEmpty = false, revealField } = options;
   const [touched, setTouched] = useState<Record<string, Touch>>({});
   const [refused, setRefused] = useState<Record<string, string>>({});
   const [showAll, setShowAll] = useState(false);
@@ -159,6 +161,8 @@ export function useContractForm<Schema extends z.ZodType>(
   const submit = () => {
     const result = schema.safeParse(readBody());
     if (result.success) return { data: result.data as z.output<Schema>, message: null };
+    const first = result.error.issues.find((issue) => issue.path.length > 0);
+    if (first) revealField?.(first.path.map(String).join("."));
     setShowAll(true);
     setFocusAt(Date.now());
     return { data: null, message: normalizeValidation(result.error).globalMessage };
@@ -167,6 +171,9 @@ export function useContractForm<Schema extends z.ZodType>(
   const refuse = (error: unknown): string => {
     const refusal = normalizeValidation(error);
     if (Object.keys(refusal.fields).length > 0) {
+      const names = Object.keys(refusal.fields);
+      const first = names.find((name) => !names.some((other) => other.startsWith(`${name}.`)));
+      if (first) revealField?.(first);
       setRefused(refusal.fields);
       setFocusAt(Date.now());
     }

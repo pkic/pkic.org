@@ -1,4 +1,5 @@
 import type { PreviewSection } from "./PreviewShell";
+import { AttendanceSettingsPreview } from "./AttendanceSettingsPreview";
 import { EventCard } from "../../site/EventCard";
 import { DayAttendancePicker } from "../../components/DayAttendancePicker";
 import { eventDayReadModelSchema } from "../../../shared/schemas/event-read-models";
@@ -7,6 +8,7 @@ import "../../../design/tokens.public.generated.css";
 import "../../member-flows/portal/sections/DiscoveryView.css";
 
 export const eventParticipationSections: PreviewSection[] = [
+  { id: "attendance-settings", title: "Attendance settings", render: () => <AttendanceSettingsPreview /> },
   {
     id: "event-cards",
     title: "Event cards",
