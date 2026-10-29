@@ -1,5 +1,6 @@
 import { parseDateTimeLocal } from "../timezone";
 import { z } from "zod";
+import { attendanceIconSchema } from "../event-attendance-icons";
 import { eventIdSchema, termKeyPattern, versionPattern } from "./api-common";
 
 /** Canonical public event identity embedded in event workflow responses. */
@@ -42,6 +43,7 @@ export const eventAttendanceTypeValueSchema = z
 export const eventAttendanceOptionSchema = z.object({
   value: eventAttendanceTypeValueSchema,
   label: z.string(),
+  icon: attendanceIconSchema.optional(),
   spotsRemainingPercent: z.number().nullable().optional(),
 });
 

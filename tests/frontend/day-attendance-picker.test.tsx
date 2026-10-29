@@ -16,6 +16,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { eventDayReadModelSchema, type EventDayReadModel } from "../../assets/shared/schemas/event-read-models";
 import { ATTENDANCE_WAITLIST_COPY, DayAttendancePicker } from "../../assets/ts/components/DayAttendancePicker";
 import { groupNames } from "./helpers/labeled-control";
+import { readDayAttendance } from "../../assets/ts/shared/widgets/day-attendance";
 
 /** Parsed through the shared read model, so a fixture cannot drift from it. */
 function day(overrides: Record<string, unknown> = {}): EventDayReadModel {
@@ -50,6 +51,27 @@ afterEach(() => {
 });
 
 describe("day attendance picker", () => {
+  it("uses a configured icon for a custom option and no misleading fallback when none is configured", () => {
+    const picker = mount(
+      <DayAttendancePicker
+        days={[
+          day({
+            attendanceOptions: [
+              { value: "lounge", label: "Lounge", icon: "video" },
+              { value: "virtual", label: "Virtual" },
+              { value: "workshop", label: "Workshop" },
+              { value: "in_person", label: "In person", icon: "none" },
+            ],
+          }),
+        ]}
+      />,
+    );
+    const labels = [...picker.querySelectorAll("label")];
+    expect(labels[0].querySelector("svg")?.outerHTML).toBe(labels[1].querySelector("svg")?.outerHTML);
+    expect(labels[2].querySelector("svg")).toBeNull();
+    expect(labels[3].querySelector("svg")).toBeNull();
+  });
+
   it("names every day's radios as a group, so an option says which day it belongs to", () => {
     const picker = mount(
       <DayAttendancePicker
@@ -62,7 +84,7 @@ describe("day attendance picker", () => {
     expect(groupNames(picker)).toEqual(["Day one", "Day two"]);
     // Every option is inside the group named after its day, not loose beside it.
     const firstGroup = picker.querySelector("fieldset")!;
-    expect(firstGroup.querySelectorAll('input[type="radio"]')).toHaveLength(2);
+    expect(firstGroup.querySelectorAll('input[type="radio"]')).toHaveLength(3);
   });
 
   it("ties every option's label to its own control through for/id", () => {
@@ -75,7 +97,7 @@ describe("day attendance picker", () => {
     }
     expect(
       [...picker.querySelectorAll('input[type="radio"]')].map((input) => (input as HTMLInputElement).name),
-    ).toEqual(["dayAttendance.2026-10-03", "dayAttendance.2026-10-03"]);
+    ).toEqual(["dayAttendance.2026-10-03", "dayAttendance.2026-10-03", "dayAttendance.2026-10-03"]);
   });
 
   it("falls back to the calendar date when a day carries no label of its own", () => {
@@ -84,11 +106,18 @@ describe("day attendance picker", () => {
     expect(groupNames(picker)).toEqual(["2026-10-03"]);
   });
 
-  it("marks only the first option of a day required, so a group is answered once", () => {
-    const picker = mount(<DayAttendancePicker days={[day()]} />);
-
-    const radios = [...picker.querySelectorAll<HTMLInputElement>('input[type="radio"]')];
-    expect(radios.map((radio) => radio.required)).toEqual([true, false]);
+  it("lets an attendee clear a day and omits that day from the submitted attendance", async () => {
+    const picker = mount(
+      <form>
+        <DayAttendancePicker days={[day()]} />
+      </form>,
+    );
+    const form = picker.querySelector("form")!;
+    await act(() => form.querySelector<HTMLInputElement>('input[value="virtual"]')!.click());
+    expect(readDayAttendance(form)).toEqual([{ dayDate: "2026-10-03", attendanceType: "virtual" }]);
+    await act(() => form.querySelector<HTMLInputElement>('input[value=""]')!.click());
+    expect(readDayAttendance(form)).toEqual([]);
+    expect([...form.querySelectorAll<HTMLInputElement>("input")].some((radio) => radio.required)).toBe(false);
   });
 
   it("names the low-capacity marker rather than leaving it to a tint", () => {
@@ -133,6 +162,6 @@ describe("day attendance picker", () => {
     const picker = mount(<DayAttendancePicker days={[day({ attendanceOptions: [] })]} />);
 
     expect(groupNames(picker)).toEqual(["Day one"]);
-    expect(picker.querySelectorAll('input[type="radio"]')).toHaveLength(0);
+    expect(picker.querySelectorAll('input[type="radio"]')).toHaveLength(1);
   });
 });

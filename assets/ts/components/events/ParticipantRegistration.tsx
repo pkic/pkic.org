@@ -98,6 +98,8 @@ function RegistrationRecord({
 
   /** Sends one change and returns to the read view on success; rejects with the refusal. */
   async function save(change: RegistrationChange, outcome?: string): Promise<void> {
+    // Giving up every day uses the same explicit cancellation confirmation from either editor.
+    if (change.action === "update" && change.dayAttendance?.length === 0) return cancelRegistration();
     setError("");
     setMessage("");
     const result = await patchJson(
@@ -147,8 +149,6 @@ function RegistrationRecord({
   }
 
   async function saveDays(dayAttendance: Array<{ dayDate: string; attendanceType: string }>): Promise<void> {
-    // Leaving no day at all is a cancellation, with its own confirmation.
-    if (dayAttendance.length === 0) return cancelRegistration();
     await run(() => save({ action: "update", dayAttendance }, "Your days are updated. Thank you for letting us know."));
   }
 

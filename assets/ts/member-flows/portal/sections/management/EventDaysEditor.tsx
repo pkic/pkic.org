@@ -2,6 +2,7 @@ import { useCallback, useState } from "preact/hooks";
 import type { z } from "zod";
 import { zonedClock } from "../../../../../shared/timezone";
 import type { EventAttendanceOption } from "../../../../../shared/schemas/event-configuration";
+import { attendanceIconSchema, ATTENDANCE_ICON_LABELS } from "../../../../../shared/event-attendance-icons";
 import {
   groupEventDaysReplaceResponseSchema,
   groupEventDaysReplaceSchema,
@@ -18,7 +19,7 @@ import { Button } from "../../../../ui/Button";
 import { EmptyState } from "../../../../ui/EmptyState";
 import { Field } from "../../../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
-import { TextInput } from "../../../../ui/TextControl";
+import { TextInput, Select } from "../../../../ui/TextControl";
 import { useData } from "../../../../hooks/useData";
 import { getJson, putJson } from "../../../../shared/api-client";
 import "../../../../ui/Content.css";
@@ -110,6 +111,28 @@ function AttendanceOptionRow({
               onInput={(event) => onChange({ ...option, capacity: event.currentTarget.valueAsNumber || null })}
               placeholder="Unlimited"
             />
+          )}
+        </Field>
+        <Field {...field(`${prefix}.icon`)} label="Icon">
+          {(control) => (
+            <Select
+              {...control}
+              name={`${prefix}.icon`}
+              value={option.icon ?? ""}
+              onChange={(event) =>
+                onChange({
+                  ...option,
+                  icon: event.currentTarget.value ? attendanceIconSchema.parse(event.currentTarget.value) : undefined,
+                })
+              }
+            >
+              <option value="">Automatic</option>
+              {attendanceIconSchema.options.map((icon) => (
+                <option key={icon} value={icon}>
+                  {ATTENDANCE_ICON_LABELS[icon]}
+                </option>
+              ))}
+            </Select>
           )}
         </Field>
       </div>

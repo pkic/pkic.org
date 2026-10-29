@@ -7,7 +7,7 @@ import {
   type EventSettingsInput,
   type EventSettingsUpdateInput,
 } from "../../../../assets/shared/schemas/event-management";
-import { prepareDirectEventFormSelectionRead } from "./direct-form-selection";
+import { prepareEventFormSettingsRead } from "./direct-form-selection";
 import { BADGE_TEMPLATE_SETTINGS_MAX_BYTES } from "../../../../assets/shared/schemas/event-badge-template";
 import type { DatabaseLike, StatementLike, UserBackedAuthAdmin } from "../../types";
 import { AppError } from "../../errors";
@@ -190,7 +190,7 @@ export function buildEventSettingsMutationStatements(
                 country = IIF(? = 1, country, ?),
                 invite_limit_attendee = COALESCE(?, invite_limit_attendee),
                 settings_json = ?, updated_at = ?
-          WHERE id = ? AND (? IS NULL OR updated_at = ?)`,
+          WHERE id = ? AND (? IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at) = strftime('%Y-%m-%dT%H:%M:%fZ', ?))`,
       )
       .bind(
         input.settings.slug ?? null,
@@ -300,32 +300,8 @@ export async function updateDirectEventSettings(
   const { expectedUpdatedAt, ...settings } = input.settings;
   const context = { type: "event", id: event.id };
   const updatedAt = nowIso();
-  const formReads = [
-    ...(settings.registrationFormKey === undefined
-      ? []
-      : [
-          prepareDirectEventFormSelectionRead(db, event, "event_registration", updatedAt, settings.registrationFormKey),
-        ]),
-    ...(settings.proposalSubmissionWindow === undefined && settings.proposalFormKey === undefined
-      ? []
-      : [
-          prepareDirectEventFormSelectionRead(
-            db,
-            event,
-            "proposal_submission",
-            updatedAt,
-            settings.proposalFormKey,
-            settings.proposalSubmissionWindow,
-          ),
-        ]),
-  ];
-  const formResults = formReads.length ? await db.batch(formReads.flatMap((read) => read.statements)) : [];
-  let offset = 0;
-  const formStatements = formReads.flatMap((read) => {
-    const statements = read.decode(formResults.slice(offset, offset + read.statements.length));
-    offset += read.statements.length;
-    return statements;
-  });
+  const formRead = prepareEventFormSettingsRead(db, event, settings, updatedAt);
+  const formStatements = formRead.decode(formRead.statements.length ? await db.batch(formRead.statements) : []);
   try {
     await db.batch([
       ...buildEventSettingsMutationStatements(db, {

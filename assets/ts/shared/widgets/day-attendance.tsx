@@ -21,10 +21,12 @@ export function renderDayAttendance(container: HTMLElement, days: EventFormsResp
 
 export function readDayAttendance(form: HTMLFormElement): DayAttendanceValue[] {
   const fields = form.querySelectorAll<HTMLInputElement>("input[name^='dayAttendance.']:checked");
-  return Array.from(fields).map((field) => ({
-    dayDate: field.name.replace(/^dayAttendance\./, ""),
-    attendanceType: field.value,
-  }));
+  return Array.from(fields)
+    .filter((field) => field.value !== "")
+    .map((field) => ({
+      dayDate: field.name.replace(/^dayAttendance\./, ""),
+      attendanceType: field.value,
+    }));
 }
 
 export function writeDayAttendance(form: HTMLFormElement, values: DayAttendanceValue[]): void {

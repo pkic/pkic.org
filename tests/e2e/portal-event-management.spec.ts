@@ -9,7 +9,11 @@ import {
   groupEventRegistrationSettingsResponseSchema,
   groupEventTermsResponseSchema,
   groupEventsListResponseSchema,
+  groupEventSettingsUpdateSchema,
 } from "../../assets/shared/schemas/group-events";
+import { eventManagementDetailResponseSchema } from "../../assets/shared/schemas/event-management";
+import { formsListResponseSchema } from "../../assets/shared/schemas/form-management";
+import { eventFormsResponseSchema } from "../../assets/shared/schemas/forms";
 import { eventInvitePreviewResponseSchema } from "../../assets/shared/schemas/event-invite-bulk";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { openRow } from "./helpers/data-table";
@@ -21,6 +25,63 @@ import { tab } from "./helpers/tabs";
 test.use({ timezoneId: "Europe/Amsterdam" });
 
 const GROUP_ID = "20000000-0000-4000-8000-000000000003";
+
+test("a manager configures a missing website CFP form and sees the saved selection in both settings views", async ({
+  page,
+}, info) => {
+  await signInToPortal(page, e2eAdminEmail("portal-event-management"));
+  const slug = "pqc-conference-amsterdam-nl";
+  const detail = await page.request.get(`/api/v1/events/${slug}`);
+  expect(detail.status()).toBe(200);
+  const event = eventManagementDetailResponseSchema.parse(await detail.json()).event;
+  expect(event.sourceMode).toBe("hugo");
+  expect(event.ownerGroupId).toBeTruthy();
+  const catalog = await page.request.get(
+    `/api/v1/events/${slug}/forms?purpose=proposal_submission&status=active&limit=1`,
+  );
+  expect(catalog.status()).toBe(200);
+  const form = formsListResponseSchema.parse(await catalog.json()).forms[0];
+  expect(form).toBeDefined();
+  const cleared = await page.request.patch(`/api/v1/groups/${event.ownerGroupId}/events/${event.id}/settings`, {
+    data: groupEventSettingsUpdateSchema.parse({ expectedUpdatedAt: event.updatedAt, proposalFormKey: null }),
+  });
+  expect(cleared.status(), await cleared.text()).toBe(200);
+  const base = `/portal/#/groups/${event.ownerGroupId}/events/${event.id}/settings`;
+  await page.goto(`${base}/cfp`);
+  await expect(page.getByText("No proposal form", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Call for proposals actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Edit CFP settings", exact: true }).click();
+  await page.getByRole("combobox", { name: "Proposal form", exact: true }).click();
+  await page.getByRole("option").filter({ hasText: form.title }).click();
+  await page.screenshot({ path: info.outputPath("cfp-editor-desktop.png"), fullPage: true });
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.screenshot({ path: info.outputPath("cfp-editor-phone.png"), fullPage: true });
+  await page.getByRole("button", { name: "Save call for proposals", exact: true }).click();
+  await expect(page.getByText("No proposal form", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("definition").filter({ hasText: form.title })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("definition").filter({ hasText: form.title })).toBeVisible();
+  await page.goto(`${base}/access`);
+  await expect(page.getByRole("definition").filter({ hasText: form.key })).toBeVisible();
+  await page.goto(`${base}/attendance-days`);
+  await page.getByRole("button", { name: "Attendance days actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Edit attendance days", exact: true }).click();
+  await page.getByRole("combobox", { name: "Icon", exact: true }).first().selectOption("people");
+  for (const [width, height, device] of [
+    [1280, 900, "desktop"],
+    [375, 812, "phone"],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.screenshot({ path: info.outputPath(`attendance-icon-editor-${device}.png`), fullPage: true });
+  }
+  await page.getByRole("button", { name: "Save days", exact: true }).click();
+  await expect(page.getByText("Days saved.", { exact: true })).toBeVisible();
+  const configuration = await page.request.get(`/api/v1/events/${slug}/forms/placements/event_registration`);
+  expect(configuration.status()).toBe(200);
+  expect(eventFormsResponseSchema.parse(await configuration.json()).eventDays[0].attendanceOptions[0].icon).toBe(
+    "people",
+  );
+});
 
 test("a portal manager creates and edits a group-owned standalone event", async ({ page }) => {
   // The journey ends with a real Astro site release, which alone takes most of the default budget.

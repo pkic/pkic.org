@@ -206,6 +206,11 @@ describe("event attendance days editor", () => {
     await settle();
     expect(container.querySelectorAll("input, select")).toHaveLength(0);
     await beginRecordEdit(container, "Attendance days actions", "Edit attendance days");
+    const icon = container.querySelector<HTMLSelectElement>('select[name$=".icon"]')!;
+    await act(() => {
+      icon.value = "people";
+      icon.dispatchEvent(new Event("change", { bubbles: true }));
+    });
     await submit(container);
 
     const put = captured.find(({ method }) => method === "PUT");
@@ -222,7 +227,7 @@ describe("event attendance days editor", () => {
             startTime: "09:00",
             endTime: "17:00",
             sortOrder: 10,
-            attendanceOptions: [{ value: "in_person", label: "In person", capacity: 40 }],
+            attendanceOptions: [{ value: "in_person", label: "In person", capacity: 40, icon: "people" }],
           },
         ],
       },

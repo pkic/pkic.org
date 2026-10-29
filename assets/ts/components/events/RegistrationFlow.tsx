@@ -118,13 +118,13 @@ export function RegistrationFlow(props: Props) {
         ...shared,
         action: "update",
         email: personal.email === props.data.user.email ? undefined : personal.email,
-        attendanceType: dayAttendance.length ? undefined : readField(form, "attendanceType"),
+        attendanceType: dayAttendance.length ? undefined : readField(form, "attendanceType") || undefined,
       };
     const named = organization.current.read?.();
     const liveEntry = registrationEntry(props.context.query);
     return {
       ...shared,
-      attendanceType: dayAttendance.length ? undefined : readField(form, "attendanceType"),
+      attendanceType: dayAttendance.length ? undefined : readField(form, "attendanceType") || undefined,
       identityId: readField(form, "identityId") || undefined,
       unaffiliatedAttestation: readField(form, "unaffiliatedAttestation") === "true",
       consents: readConsentValues(form),
@@ -371,7 +371,7 @@ export function RegistrationFlow(props: Props) {
                           onChange: (dayDate: string, attendanceType: string) =>
                             setAttendance((current) => [
                               ...current.filter((day) => day.dayDate !== dayDate),
-                              { dayDate, attendanceType, label: null },
+                              ...(attendanceType ? [{ dayDate, attendanceType, label: null }] : []),
                             ]),
                         }
                       : {})}

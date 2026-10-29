@@ -6,7 +6,16 @@ import type {
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../db/authorization-guard";
 import { isAuditChangeGuardFailure, prepareScopedAuditLog } from "../audit";
 import { getGroup, prepareGroupManagementAuthorizationGuard, requireGroupManagement } from "../groups";
-import { deriveEventBasePath, getEventById, prepareEventCreateStatement } from "../events";
+import {
+  deriveEventBasePath,
+  getEventById,
+  prepareEventById,
+  prepareEventCreateStatement,
+  type EventRecord,
+} from "../events";
+import { prepareEventFormSettingsRead } from "./direct-form-selection";
+import { batchFirst } from "../../db/pagination";
+import { nowIso } from "../../utils/time";
 import {
   listEventAttendanceRegistrations,
   type EventAttendanceRegistrationsListResult,
@@ -104,8 +113,22 @@ export async function updateGroupManagedEventSettings(
   input: GroupEventSettingsUpdateInput,
   appBaseUrl: string,
 ): Promise<void> {
-  const event = await getEventById(db, eventId);
+  const at = nowIso();
+  const formRead = prepareEventFormSettingsRead(db, { id: eventId }, input, at);
+  const snapshot = formRead.statements.length
+    ? await db.batch([prepareEventById(db, eventId), ...formRead.statements])
+    : null;
+  const event = snapshot ? batchFirst<EventRecord>(snapshot[0]) : await getEventById(db, eventId);
+  if (!event) throw new AppError(404, "EVENT_NOT_FOUND", "Event not found");
   const context = await requireEventResourceManagementContext(db, actor, groupIdOrSlug, event.id, "manage");
+  if (event.source_mode === "portal" && formRead.statements.length) {
+    throw new AppError(
+      409,
+      "EVENT_FORM_PLACEMENT_REQUIRED",
+      "Configure portal event forms through the event form settings",
+    );
+  }
+  const formStatements = formRead.decode(snapshot?.slice(1) ?? []);
   const seriesManaged = await db
     .prepare(
       `SELECT 1
@@ -130,6 +153,7 @@ export async function updateGroupManagedEventSettings(
         sql: `SELECT 1
                   FROM events guarded_event
                  WHERE guarded_event.id = ?
+                   ${formStatements.length ? "AND COALESCE(guarded_event.source_mode, '') <> 'portal'" : ""}
                    AND COALESCE(guarded_event.profile_key, '') NOT IN ('meeting', 'board_meeting')
                    AND NOT EXISTS (
                      SELECT 1 FROM event_series guarded_series WHERE guarded_series.event_id = guarded_event.id
@@ -142,6 +166,7 @@ export async function updateGroupManagedEventSettings(
         settings,
         links,
         expectedUpdatedAt,
+        updatedAt: at,
         auditScope: { type: "group", id: context.groupId },
         auditDetails: {
           ...settings,
@@ -149,6 +174,7 @@ export async function updateGroupManagedEventSettings(
         },
         appBaseUrl,
       }),
+      ...formStatements,
     ]);
   } catch (error) {
     if (isAuthorizationGuardFailure(error)) {

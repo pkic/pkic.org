@@ -70,7 +70,6 @@ function DaysForm({
         days={data.eventDays}
         value={draft}
         onChange={(dayDate, attendanceType) => setDraft({ ...draft, [dayDate]: attendanceType })}
-        allowNotAttending
       />
       {joining && (
         <p class="pk-small">

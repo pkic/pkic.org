@@ -14,6 +14,7 @@ import { EVENT_FORM_PURPOSES } from "../../../../assets/shared/schemas/forms";
 import { placedEventFormSelection } from "../forms/event-placement-read";
 import { readEventAudienceAccess } from "./scanner-access";
 import type { EventAudienceViewer } from "./visibility";
+import { persistedUtcInstant } from "../../utils/time";
 
 export interface EventDetailRow extends EventRecord {
   user_retention_days: number | null;
@@ -92,8 +93,8 @@ export function decodeEventDetail(
     slug: event.slug,
     name: event.name,
     timezone: event.timezone,
-    startsAt: event.starts_at,
-    endsAt: event.ends_at,
+    startsAt: persistedUtcInstant(event.starts_at),
+    endsAt: persistedUtcInstant(event.ends_at),
     profileKey: event.profile_key ?? null,
     sourceMode: event.source_mode ?? null,
     registrationPolicy: normalizeEventRegistrationPolicy(event.registration_mode),
@@ -101,7 +102,7 @@ export function decodeEventDetail(
     inviteLimitAttendee: event.invite_limit_attendee,
     city: event.city,
     country: event.country,
-    updatedAt: event.updated_at,
+    updatedAt: persistedUtcInstant(event.updated_at),
     ownerGroupId: event.owner_group_id ?? null,
     seriesId: event.series_id,
     basePath: event.base_path,

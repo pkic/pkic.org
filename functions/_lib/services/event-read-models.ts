@@ -34,6 +34,7 @@ export function eventDayReadModels(
       return {
         value: option.value,
         label: option.label,
+        ...(option.icon ? { icon: option.icon } : {}),
         spotsRemainingPercent:
           capacity != null && capacity > 0 ? Math.round(((capacity - registered) / capacity) * 100) : null,
       };

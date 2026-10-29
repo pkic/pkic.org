@@ -441,19 +441,33 @@ describe("ParticipantRegistration", () => {
     });
   });
 
-  it("treats giving up the only day as cancelling, behind the cancellation confirmation", async () => {
-    const requests = installApi();
-    const container = await mount();
+  it.each(["release", "details"])(
+    "treats giving up the only day as cancelling from the %s editor, behind the same confirmation",
+    async (editor) => {
+      const data = readResponse();
+      const requests = installApi(data, {
+        forms: eventFormsResponseSchema.parse({ ...FORMS, eventDays: data.eventDays }),
+      });
+      const container = await mount();
 
-    await click(button(container, "Can't make it in person?"));
-    const dialog = openConfirmation()!;
-    await click(dialog.querySelector<HTMLInputElement>('input[name="joinInstead"][value=""]'));
-    await click([...dialog.querySelectorAll("button")].find((b) => b.textContent?.startsWith("Release"))!);
-    await settle();
-    expect(openConfirmation()?.textContent).toContain("Cancel your registration?");
-    await click(confirmationButton("Keep registration"));
-    expect(requests.some(({ method }) => method === "PATCH")).toBe(false);
-  });
+      if (editor === "release") {
+        await click(button(container, "Can't make it in person?"));
+        const dialog = openConfirmation()!;
+        await click(dialog.querySelector<HTMLInputElement>('input[name="joinInstead"][value=""]'));
+        await click([...dialog.querySelectorAll("button")].find((b) => b.textContent?.startsWith("Release"))!);
+      } else {
+        await click(button(container, "Edit details"));
+        await click(container.querySelector<HTMLInputElement>('input[name^="dayAttendance."][value=""]'));
+        await act(() => {
+          container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+        });
+      }
+      await settle();
+      expect(openConfirmation()?.textContent).toContain("Cancel your registration?");
+      await click(confirmationButton("Keep registration"));
+      expect(requests.some(({ method }) => method === "PATCH")).toBe(false);
+    },
+  );
 
   // A speaker whose registration the talk's acceptance created has answered
   // none of the event's questions. Saving the details asks them, on the

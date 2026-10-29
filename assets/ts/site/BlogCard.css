@@ -8,6 +8,30 @@
  */
 
 @layer components {
+  .blog-card .blog-card-title {
+    font-size: var(--pk-public-listing-title-text);
+    font-weight: 700;
+    line-height: 1.35;
+    margin: 0 0 0.35rem;
+    background: none;
+    -webkit-background-clip: unset;
+    background-clip: unset;
+    -webkit-text-fill-color: var(--pk-on-solid);
+    color: var(--pk-on-solid);
+  }
+
+  .blog-card .blog-card-title a {
+    color: var(--pk-on-solid);
+    text-decoration: none;
+  }
+
+  .blog-card .blog-card-title a::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+  }
+
   .blog-sidebar-topics .pk-badge {
     text-decoration: none;
     transition: border-color var(--pk-dur-fast);

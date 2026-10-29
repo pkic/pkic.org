@@ -1,15 +1,20 @@
 import type { ComponentType, JSX } from "preact";
 import type { EventFormsResponse } from "../shared/types";
 import { IconMapPin, IconVirtual, IconOnDemand, IconCalendarCheck, IconRemove } from "./icons";
+import { IconPeople, IconRoundtable } from "../ui/MediaIcons";
+import { attendanceIconName, type AttendanceIconName } from "../../shared/event-attendance-icons";
 
 type EventDay = EventFormsResponse["eventDays"][number];
 type AttendanceOptionRead = EventDay["attendanceOptions"][number];
 type AttendanceIconComponent = ComponentType<Omit<JSX.SVGAttributes<SVGSVGElement>, "xmlns" | "viewBox" | "fill">>;
 
-const OPTION_ICONS: Record<string, AttendanceIconComponent> = {
-  in_person: IconMapPin,
-  virtual: IconVirtual,
-  on_demand: IconOnDemand,
+const OPTION_ICONS: Record<Exclude<AttendanceIconName, "none">, AttendanceIconComponent> = {
+  location: IconMapPin,
+  video: IconVirtual,
+  play: IconOnDemand,
+  calendar: IconCalendarCheck,
+  people: IconPeople,
+  roundtable: IconRoundtable,
 };
 
 /** The value a controlled picker reports for "not attending this day". */
@@ -22,14 +27,16 @@ export const ATTENDANCE_WAITLIST_COPY = {
     `${option} is full on this day. You'll join the waitlist and can watch live online in the meantime.`,
 } as const;
 
-function iconFor(type: string | null): AttendanceIconComponent {
-  return type === null || type === NOT_ATTENDING ? IconRemove : (OPTION_ICONS[type] ?? IconCalendarCheck);
+function iconFor(type: string | null, configured?: AttendanceIconName): AttendanceIconComponent | null {
+  if (type === null || type === NOT_ATTENDING) return IconRemove;
+  const name = attendanceIconName(type, configured);
+  return name === "none" ? null : OPTION_ICONS[name];
 }
 
 /** The icon a way of attending is shown with, wherever attendance is shown. */
-export function AttendanceIcon({ type }: { type: string | null }) {
-  const Icon = iconFor(type);
-  return <Icon width="18" height="18" aria-hidden="true" />;
+export function AttendanceIcon({ type, icon }: { type: string | null; icon?: AttendanceIconName }) {
+  const Icon = iconFor(type, icon);
+  return Icon ? <Icon width="18" height="18" aria-hidden="true" /> : null;
 }
 
 /** An option with a capacity and no spot left: choosing it joins the waitlist. */
@@ -44,7 +51,6 @@ function labelForDay(day: EventDay): string {
 interface AttendanceOptionProps {
   day: EventDay;
   option: AttendanceOptionRead;
-  index: number;
   lowCapacityThreshold: number;
   /** Controlled use: whether this option is the day's current choice, and how to choose it. */
   checked?: boolean;
@@ -52,8 +58,8 @@ interface AttendanceOptionProps {
 }
 
 /** One segment of a day's choice: the radio, then its label (the label's sibling selectors depend on that order). */
-function AttendanceOption({ day, option, index, lowCapacityThreshold, checked, onSelect }: AttendanceOptionProps) {
-  const Icon = iconFor(option.value);
+function AttendanceOption({ day, option, lowCapacityThreshold, checked, onSelect }: AttendanceOptionProps) {
+  const Icon = iconFor(option.value, option.icon);
   const inputId = `dayAttendance-${day.dayDate}-${option.value || "none"}`;
   const full = isFull(option);
   const limited =
@@ -70,7 +76,6 @@ function AttendanceOption({ day, option, index, lowCapacityThreshold, checked, o
         name={`dayAttendance.${day.dayDate}`}
         value={option.value}
         id={inputId}
-        required={!onSelect && index === 0}
         data-waitlist={full ? "" : undefined}
         aria-describedby={full ? `${inputId}-waitlist` : undefined}
         {...(onSelect ? { checked: Boolean(checked), onChange: onSelect } : {})}
@@ -79,7 +84,7 @@ function AttendanceOption({ day, option, index, lowCapacityThreshold, checked, o
         class={full ? "event-flow-attendance-card event-flow-attendance-card--waitlist" : "event-flow-attendance-card"}
         htmlFor={inputId}
       >
-        <Icon class="event-flow-attendance-icon" width="16" height="16" aria-hidden="true" />
+        {Icon && <Icon class="event-flow-attendance-icon" width="16" height="16" aria-hidden="true" />}
         <span class="event-flow-attendance-title">{option.label}</span>
         {full && <span class="event-flow-attendance-badge">{ATTENDANCE_WAITLIST_COPY.badge}</span>}
         {limited && (
@@ -102,8 +107,6 @@ interface DayAttendancePickerProps {
    */
   value?: Readonly<Record<string, string>>;
   onChange?: (dayDate: string, attendanceType: string) => void;
-  /** Adds a "Not attending" choice per day; a registration may drop a day. */
-  allowNotAttending?: boolean;
 }
 
 /**
@@ -115,13 +118,7 @@ interface DayAttendancePickerProps {
  * Each day is a `fieldset` named by its `legend`, so a screen reader says
  * which day an option belongs to.
  */
-export function DayAttendancePicker({
-  days,
-  lowCapacityThreshold = 0,
-  value,
-  onChange,
-  allowNotAttending = false,
-}: DayAttendancePickerProps) {
+export function DayAttendancePicker({ days, lowCapacityThreshold = 0, value, onChange }: DayAttendancePickerProps) {
   if (days.length === 0) {
     return <p class="pk-small">No per-day attendance required for this event.</p>;
   }
@@ -132,15 +129,11 @@ export function DayAttendancePicker({
         <fieldset key={day.dayDate} class="pk-fieldset event-flow-day">
           <legend class="event-flow-day-label">{labelForDay(day)}</legend>
           <div class="event-flow-attendance-options">
-            {[
-              ...day.attendanceOptions,
-              ...(allowNotAttending ? [{ value: NOT_ATTENDING, label: "Not attending" }] : []),
-            ].map((option, i) => (
+            {[...day.attendanceOptions, { value: NOT_ATTENDING, label: "Not attending" }].map((option) => (
               <AttendanceOption
                 key={option.value}
                 day={day}
                 option={option}
-                index={i}
                 lowCapacityThreshold={lowCapacityThreshold}
                 {...(onChange
                   ? {

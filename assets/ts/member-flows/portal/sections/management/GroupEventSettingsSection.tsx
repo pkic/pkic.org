@@ -50,6 +50,7 @@ export function GroupEventSettingsSection({
   return (
     <ProposalCallSettings
       event={detail.data.event}
+      groupSettings={groupSettings ? { ...groupSettings, onSaved: updated } : undefined}
       onUpdated={() => {
         void detail.reload();
         void onUpdated?.();

@@ -45,6 +45,7 @@ export function RegistrationOfferNotice({
       {mounted && (
         <Dialog
           open={open}
+          size="wide"
           title="Register for this event"
           closeLabel="Close registration"
           viewer

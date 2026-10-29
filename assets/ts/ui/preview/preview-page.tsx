@@ -15,6 +15,7 @@ import { densitySections } from "./sections-density";
 import { overlaySections } from "./sections-overlays";
 import { patternSections } from "./sections-patterns";
 import { agendaPickerSections } from "./sections-agenda-picker";
+import { eventParticipationSections } from "./sections-event-participation";
 import { speakerProfileReviewSections } from "./sections-speaker-profile-review";
 
 function main(): void {
@@ -28,6 +29,7 @@ function main(): void {
     ...patternSections,
     ...agendaPickerSections,
     ...speakerProfileReviewSections,
+    ...eventParticipationSections,
   ];
   // `?only=<id>` renders one section alone, for a tight screenshot of one control.
   const only = new URLSearchParams(window.location.search).get("only");

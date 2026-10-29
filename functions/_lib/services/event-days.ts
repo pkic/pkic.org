@@ -8,17 +8,13 @@ import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
 import type { DatabaseLike, StatementLike } from "../types";
 import type { AttendanceType } from "../../../assets/shared/schemas/registration";
+import type { EventAttendanceOption } from "../../../assets/shared/schemas/event-configuration";
 
 // Open-ended: any string that matches a configured attendance option value.
 export type DayAttendanceType = string;
 
 /** A single configurable attendance option for an event day. */
-export interface AttendanceOption {
-  value: string;
-  label: string;
-  /** null / absent means unlimited capacity for this option. */
-  capacity?: number | null;
-}
+export type AttendanceOption = EventAttendanceOption;
 
 export interface EventDayRecord {
   id: string;

@@ -82,11 +82,21 @@ test("a signed-in user registers from event home without another email challenge
   });
   expect(selected.status(), await selected.text()).toBe(200);
   const dayDate = new Date(Date.now() + 400 * 86_400_000).toISOString().slice(0, 10);
-  const event = await createRegistrationEvent(page, "quick-registration", {
-    date: dayDate,
-    startTime: "09:00",
-    endTime: "17:00",
-  });
+  const event = await createRegistrationEvent(
+    page,
+    "quick-registration",
+    [0, 1, 2].map((offset) => ({
+      date: new Date(Date.parse(dayDate) + offset * 86_400_000).toISOString().slice(0, 10),
+      startTime: "09:00",
+      endTime: "17:00",
+      attendanceOptions: [
+        { value: "in_person", label: "In person" },
+        { value: "virtual", label: "Virtual" },
+        { value: "on_demand", label: "On demand" },
+        { value: "lounge", label: "Livestream Lounge", icon: "people" as const },
+      ],
+    })),
+  );
   await page.goto(`/portal/#/events/${event.slug}`);
   await expect(page.getByRole("button", { name: "Register", exact: true })).toBeVisible();
   await expect(page.getByText("Nothing on your agenda yet", { exact: true })).toHaveCount(0);
@@ -160,19 +170,33 @@ test("a signed-in user registers from event home without another email challenge
   await expect(dialog.getByText(email, { exact: true })).toBeVisible();
   await page.setViewportSize({ width: 1280, height: 900 });
   await expect(dialog.locator('[data-step="1"]')).toHaveCSS("opacity", "1");
+  expect((await dialog.boundingBox())!.width).toBeGreaterThan(800);
   await page.screenshot({ path: info.outputPath("quick-registration-desktop.png"), fullPage: true });
   await page.setViewportSize({ width: 375, height: 812 });
   await page.screenshot({ path: info.outputPath("quick-registration-phone.png"), fullPage: true });
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await dialog.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(dialog.locator('[data-step="2"]')).toHaveCSS("opacity", "1");
+  for (const [width, height, device] of [
+    [1280, 900, "desktop"],
+    [375, 812, "phone"],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.screenshot({ path: info.outputPath(`registration-attendance-${device}.png`) });
+  }
   await dialog.locator(`label[for="dayAttendance-${dayDate}-in_person"]`).click();
-  await expect(dialog.getByRole("radio", { name: "In person", exact: true })).toBeChecked();
+  const firstDay = dialog.getByRole("group", { name: "Workshop day 1", exact: true });
+  await expect(firstDay.getByRole("radio", { name: "In person", exact: true })).toBeChecked();
+  await firstDay.getByText("Not attending", { exact: true }).click();
+  await expect(firstDay.getByRole("radio", { name: "In person", exact: true })).not.toBeChecked();
+  await firstDay.getByText("In person", { exact: true }).click();
   await page.goBack();
   await expect(dialog.getByText("Representation", { exact: true })).toBeVisible();
   await page.goForward();
-  await expect(dialog.getByRole("radio", { name: "In person", exact: true })).toBeChecked();
+  await expect(firstDay.getByRole("radio", { name: "In person", exact: true })).toBeChecked();
   await dialog.getByRole("button", { name: "Continue", exact: true }).click();
   await dialog.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(dialog.locator("[data-registration-review]").getByText("Not attending", { exact: true })).toHaveCount(2);
   await dialog.getByRole("button", { name: "Register", exact: true }).click();
   await expect(dialog.getByRole("checkbox", { name: "I agree to the privacy policy", exact: true })).toHaveAttribute(
     "aria-invalid",
@@ -459,10 +483,13 @@ test("attendee manages a registration and downloads a personal event calendar", 
   expect(calendarResponse.status()).toBe(200);
   expect(await calendarResponse.text()).toContain("BEGIN:VCALENDAR");
   await page.goto("/portal/#/events");
-  await page
+  const eventLink = page
     .getByRole("heading", { name: "Post-Quantum Cryptography Conference", exact: true })
-    .getByRole("link", { name: "Post-Quantum Cryptography Conference", exact: true })
-    .click();
+    .getByRole("link", { name: "Post-Quantum Cryptography Conference", exact: true });
+  await expect(eventLink).toHaveCSS("color", "rgb(255, 255, 255)");
+  await eventLink.hover();
+  await expect(eventLink).toHaveCSS("color", "rgb(255, 255, 255)");
+  await eventLink.click();
   await page.getByRole("link", { name: "Manage registration", exact: true }).click();
   // The registration opens read-only: its details are facts, not fields (the invitation link is a read-only copy field).
   const registration = page.getByRole("region", { name: "Registration", exact: true });

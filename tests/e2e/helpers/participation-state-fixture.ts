@@ -35,12 +35,20 @@ interface FixtureEventDay {
   date: string;
   startTime: string;
   endTime: string;
+  attendanceOptions?: import("../../../assets/shared/schemas/event-configuration").EventAttendanceOption[];
 }
 
 const WORKSHOP_DAY: FixtureEventDay = { date: "2027-09-10", startTime: "09:00", endTime: "17:00" };
 
 /** A fresh public event with open registration, independent from other agenda tests. */
-export async function createRegistrationEvent(staff: Page, prefix: string, day: FixtureEventDay = WORKSHOP_DAY) {
+export async function createRegistrationEvent(
+  staff: Page,
+  prefix: string,
+  day: FixtureEventDay | FixtureEventDay[] = WORKSHOP_DAY,
+) {
+  const days = Array.isArray(day) ? day : [day];
+  const firstDay = days[0];
+  const lastDay = days[days.length - 1];
   const ownerResponse = await staff.request.get("/api/v1/events/pqc-conference-amsterdam-nl");
   expect(ownerResponse.status()).toBe(200);
   const owner = eventDetailResponseSchema.parse(await ownerResponse.json()).event;
@@ -55,8 +63,8 @@ export async function createRegistrationEvent(staff: Page, prefix: string, day: 
       timezone: "UTC",
       visibility: "public",
       registrationPolicy: "no_registration",
-      startsAt: `${day.date}T${day.startTime}:00.000Z`,
-      endsAt: `${day.date}T${day.endTime}:00.000Z`,
+      startsAt: `${firstDay.date}T${firstDay.startTime}:00.000Z`,
+      endsAt: `${lastDay.date}T${lastDay.endTime}:00.000Z`,
     }),
   });
   expect(created.status()).toBe(201);
@@ -76,25 +84,23 @@ export async function createRegistrationEvent(staff: Page, prefix: string, day: 
   });
   expect(terms.status()).toBe(200);
   const configuredTerms = groupEventTermsReplaceResponseSchema.parse(await terms.json());
-  const days = await staff.request.put(`${groupEvent}/days`, {
+  const daysResponse = await staff.request.put(`${groupEvent}/days`, {
     data: groupEventDaysReplaceSchema.parse({
       expectedUpdatedAt: configuredTerms.eventUpdatedAt,
       configuration: {
-        days: [
-          {
-            date: day.date,
-            label: "Workshop day",
-            startTime: day.startTime,
-            endTime: day.endTime,
-            sortOrder: 0,
-            attendanceOptions: [{ value: "in_person", label: "In person" }],
-          },
-        ],
+        days: days.map((day, index) => ({
+          date: day.date,
+          label: days.length === 1 ? "Workshop day" : `Workshop day ${index + 1}`,
+          startTime: day.startTime,
+          endTime: day.endTime,
+          sortOrder: index,
+          attendanceOptions: day.attendanceOptions ?? [{ value: "in_person", label: "In person" }],
+        })),
       },
     }),
   });
-  expect(days.status()).toBe(200);
-  const configuredDays = groupEventDaysReplaceResponseSchema.parse(await days.json());
+  expect(daysResponse.status()).toBe(200);
+  const configuredDays = groupEventDaysReplaceResponseSchema.parse(await daysResponse.json());
   const registration = await staff.request.put(`${groupEvent}/registration-settings`, {
     data: groupEventRegistrationSettingsUpdateSchema.parse({
       expectedUpdatedAt: configuredDays.eventUpdatedAt,

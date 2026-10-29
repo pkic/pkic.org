@@ -10,33 +10,44 @@ import {
   localFromInstant,
 } from "../../../../../../components/forms/SubmissionWindowFields";
 import { useContractForm } from "../../../../../../hooks/useContractForm";
-import { useEventSettingsSave } from "./useEventSettingsSave";
+import { useEventSettingsSave, type EventSettingsGroupTarget } from "./useEventSettingsSave";
 import { getJson } from "../../../../../../shared/api-client";
 import { Panel, PanelBody, PanelHeader } from "../../../../../../ui/Panel";
 import { EditActions } from "../../../../../../ui/EditActions";
 import { DescriptionList } from "../../../../../../ui/DescriptionList";
 import { Alert } from "../../../../../../ui/Alert";
 import { Spinner } from "../../../../../../components/Spinner";
+import { EventFormLinkSelect } from "./EventFormLinkSelect";
 
 export function ProposalCallSettings({
   event,
   onUpdated,
+  groupSettings,
 }: {
   event: EventDetail;
   onUpdated: (event: EventDetail) => void;
+  groupSettings?: EventSettingsGroupTarget;
 }) {
   const [configuration, setConfiguration] = useState<EventFormsResponse | null>(null);
-  const [draft, setDraft] = useState({ opensAt: "", closesAt: "" });
+  const [draft, setDraft] = useState({ opensAt: "", closesAt: "", formKey: "" });
   const [loading, setLoading] = useState(true);
   const window = configuration?.form?.placement;
   const form = useContractForm(eventSettingsUpdateSchema, {
     expectedUpdatedAt: event.updatedAt,
-    proposalSubmissionWindow: {
-      opensAt: instantFromLocal(draft.opensAt, event.timezone),
-      closesAt: instantFromLocal(draft.closesAt, event.timezone),
-    },
+    proposalFormKey: draft.formKey || null,
+    proposalSubmissionWindow: draft.formKey
+      ? {
+          opensAt: instantFromLocal(draft.opensAt, event.timezone),
+          closesAt: instantFromLocal(draft.closesAt, event.timezone),
+        }
+      : undefined,
   });
-  const { editing, setEditing, saving, error, setError, save } = useEventSettingsSave(event.slug, form, onUpdated);
+  const { editing, setEditing, saving, error, setError, save } = useEventSettingsSave(
+    event.slug,
+    form,
+    onUpdated,
+    groupSettings,
+  );
   useEffect(() => {
     let current = true;
     setLoading(true);
@@ -61,6 +72,7 @@ export function ProposalCallSettings({
     setDraft({
       opensAt: localFromInstant(window?.opensAt ?? null, event.timezone),
       closesAt: localFromInstant(window?.closesAt ?? null, event.timezone),
+      formKey: configuration?.form?.key ?? "",
     });
     form.reset();
     setError("");
@@ -79,12 +91,13 @@ export function ProposalCallSettings({
     <Panel aria-label="Call for proposals">
       <form noValidate {...form.handlers} onSubmit={(submitEvent) => void save(submitEvent)}>
         <PanelHeader title="Call for proposals">
-          {event.capabilities.includes("write") && configuration?.form && (
+          {(groupSettings ? groupSettings.canEdit : event.capabilities.includes("write")) && !loading && (
             <EditActions
               label="Call for proposals actions"
               editing={editing}
               saving={saving}
               saveLabel="Save call for proposals"
+              editLabel="Edit CFP settings"
               onEdit={() => {
                 reset();
                 setEditing(true);
@@ -100,17 +113,31 @@ export function ProposalCallSettings({
           {loading ? (
             <Spinner />
           ) : editing ? (
-            <SubmissionWindowFields
-              timeZone={event.timezone}
-              zoneOwner="Event time"
-              opensAt={draft.opensAt}
-              closesAt={draft.closesAt}
-              onChange={(patch) => setDraft((current) => ({ ...current, ...patch }))}
-              fieldProps={{
-                opensAt: form.of("proposalSubmissionWindow.opensAt"),
-                closesAt: form.of("proposalSubmissionWindow.closesAt"),
-              }}
-            />
+            <>
+              <EventFormLinkSelect
+                eventSlug={event.slug}
+                purpose="proposal_submission"
+                label="Proposal form"
+                value={draft.formKey}
+                disabled={saving}
+                help="Choose the form this event should use for proposals."
+                presentation={form.of("proposalFormKey")}
+                onChange={(formKey) => setDraft((current) => ({ ...current, formKey }))}
+              />
+              {draft.formKey && (
+                <SubmissionWindowFields
+                  timeZone={event.timezone}
+                  zoneOwner="Event time"
+                  opensAt={draft.opensAt}
+                  closesAt={draft.closesAt}
+                  onChange={(patch) => setDraft((current) => ({ ...current, ...patch }))}
+                  fieldProps={{
+                    opensAt: form.of("proposalSubmissionWindow.opensAt"),
+                    closesAt: form.of("proposalSubmissionWindow.closesAt"),
+                  }}
+                />
+              )}
+            </>
           ) : (
             <DescriptionList
               items={[

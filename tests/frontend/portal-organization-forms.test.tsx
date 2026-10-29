@@ -121,11 +121,13 @@ function json(body: unknown): Response {
   return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
 }
 
-afterEach(() => {
+afterEach(async () => {
   for (const container of mounted.splice(0)) {
-    void act(() => render(null, container));
+    await act(() => render(null, container));
     container.remove();
   }
+  // Let pending paint callbacks cancel their fallback timers before jsdom removes the frame APIs.
+  await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
   vi.unstubAllGlobals();
 });
 

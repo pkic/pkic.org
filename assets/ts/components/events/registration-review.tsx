@@ -12,15 +12,16 @@ import { formatFormAnswerValue } from "../forms/form-answers";
 import type { FormAnswers } from "../../../shared/schemas/form-answers";
 
 function readAttendanceReview(form: HTMLFormElement): Array<{ label: string; value: string }> {
-  const selected = Array.from(form.querySelectorAll<HTMLInputElement>("input[name^='dayAttendance.']:checked"));
-  if (selected.length === 0) {
+  const days = Array.from(form.querySelectorAll<HTMLElement>(".event-flow-day"));
+  if (days.length === 0) {
     return [{ label: "Event attendance", value: attendanceTypeLabel(readField(form, "attendanceType")) }];
   }
 
-  return selected
-    .map((field) => {
-      const day = field.closest<HTMLElement>(".event-flow-day");
-      const dayLabel = day?.querySelector<HTMLElement>(".event-flow-day-label")?.textContent?.trim();
+  return days
+    .map((day) => {
+      const field = day.querySelector<HTMLInputElement>("input[name^='dayAttendance.']:checked");
+      const dayLabel = day.querySelector<HTMLElement>(".event-flow-day-label")?.textContent?.trim();
+      if (!field || !field.value) return { label: dayLabel ?? "", value: "Not attending" };
       const optionLabel = field.nextElementSibling
         ?.querySelector<HTMLElement>(".event-flow-attendance-title")
         ?.textContent?.trim();
