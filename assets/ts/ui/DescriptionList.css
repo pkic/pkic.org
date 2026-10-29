@@ -9,6 +9,10 @@
  */
 
 @layer components {
+  .pk-datalist--baseline {
+    align-items: first baseline;
+  }
+
   .pk-datalist--status {
     grid-template-columns: minmax(0, 1fr) max-content;
     align-items: center;

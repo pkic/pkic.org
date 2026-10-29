@@ -148,6 +148,7 @@ function Details({
         refusal={refusal}
         summary={(edit) => (
           <DescriptionList
+            align="baseline"
             items={[
               ...(firstName && lastName
                 ? [

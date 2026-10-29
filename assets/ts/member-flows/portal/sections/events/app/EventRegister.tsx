@@ -1,5 +1,6 @@
 /** Page host for the canonical public/portal registration form. */
 import { EventRegistrationCreate } from "../../../../../components/events/EventRegistrationCreate";
+import { Panel, PanelBody } from "../../../../../ui/Panel";
 import { ButtonLink } from "../../../../../ui/Button";
 import { usePortalHashLocation } from "../../../hash-location";
 import { eventParticipantRecordPath } from "../event-participant-paths";
@@ -33,12 +34,16 @@ export function EventRegister({
   const offer = registrationOffer(event, eventPhase(event.startsAt, event.endsAt).kind === "ended");
   if (offer.kind === "closed") return <p class="pk-muted">{offer.reason}</p>;
   return (
-    <EventRegistrationCreate
-      slug={event.slug}
-      onRegistered={async () => {
-        await onRegistered?.();
-        navigate(`/events/${encodeURIComponent(event.slug)}/ticket`);
-      }}
-    />
+    <Panel aria-label="Event registration">
+      <PanelBody>
+        <EventRegistrationCreate
+          slug={event.slug}
+          onRegistered={async () => {
+            await onRegistered?.();
+            navigate(`/events/${encodeURIComponent(event.slug)}/ticket`);
+          }}
+        />
+      </PanelBody>
+    </Panel>
   );
 }

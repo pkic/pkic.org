@@ -14,7 +14,12 @@ import type { ConfirmOrganizationController } from "../../assets/ts/components/R
 import { portalProfileFixture, portalSessionFixture } from "../helpers/portal-session";
 import { RegistrationIdentityField } from "../../assets/ts/components/RegistrationIdentitySelect";
 import { RegistrationContactStep } from "../../assets/ts/components/RegistrationContactStep";
-import { EMAIL_FIRST_ADVISORY_COPY, EMAIL_FIRST_COPY, WORK_EMAIL_STEER } from "../../assets/shared/email-first-copy";
+import {
+  PERSONAL_ADDRESS_WAITLIST,
+  EMAIL_FIRST_ADVISORY_COPY,
+  EMAIL_FIRST_COPY,
+  WORK_EMAIL_STEER,
+} from "../../assets/shared/email-first-copy";
 import { emailDomainResponseSchema } from "../../assets/shared/schemas/email-domains";
 import { controlFor, buttonNamed } from "./helpers/labeled-control";
 
@@ -440,6 +445,17 @@ describe("registration contact step", () => {
 });
 
 describe("signed-in registration identity", () => {
+  it.each([null, "Example Corp"])("warns only for a personal representation (%s)", async (organization) => {
+    const form = await mount(<RegistrationIdentityField preferred={identity(organization)} />);
+    const warning = form.querySelector<HTMLElement>('[role="img"]');
+    if (organization) expect(warning).toBeNull();
+    else {
+      expect(warning?.title).toContain(WORK_EMAIL_STEER);
+      expect(warning?.title).toContain(PERSONAL_ADDRESS_WAITLIST);
+      expect(warning?.getAttribute("aria-label")).toBe(warning?.title);
+      expect(warning?.tabIndex).toBe(0);
+    }
+  });
   it("offers an existing organization identity", async () => {
     installResponses("Example Corp");
     const onSelect = vi.fn();

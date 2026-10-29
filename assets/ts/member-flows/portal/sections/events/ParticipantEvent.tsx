@@ -55,7 +55,6 @@ type Selection = {
 const href = usePortalHashLocation.hrefs;
 /** The compact header's title for each participant page other than the event home. */
 const PAGE_LABELS: Record<string, string> = {
-  register: "Register for this event",
   registration: "Registration",
   program: "Agenda",
   agenda: "My agenda",
@@ -156,7 +155,7 @@ export function ParticipantEvent({
     <>
       <EventAppHero event={event} />
       {navigation}
-      {active !== "overview" && (
+      {active !== "overview" && active !== "register" && (
         <SectionHeading level={3}>
           {kind === "proposal" ? (recordTitle ?? "Proposal") : (PAGE_LABELS[active] ?? "Proposals")}
         </SectionHeading>

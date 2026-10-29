@@ -1,3 +1,6 @@
+import { EMAIL_FIRST_COPY, WORK_EMAIL_STEER, PERSONAL_ADDRESS_WAITLIST } from "../../shared/email-first-copy";
+import { StateIcon } from "../ui/Field";
+import "./RegistrationIdentitySelect.css";
 import type { SessionActingIdentity } from "../../shared/session-acting-identity";
 import { useState } from "preact/hooks";
 import { createPortal } from "preact/compat";
@@ -5,11 +8,16 @@ import { RepresentationSelect } from "./identities/RepresentationSelect";
 import { userAuthSessionResponseSchema } from "../../shared/schemas/user-auth";
 import { getJson } from "../shared/api-client";
 import { IdentityCreateDialog } from "./identities/IdentityCreateDialog";
+import { OwnIdentityProfileEditor } from "./identities/OwnIdentityProfileEditor";
+import { Alert } from "../ui/Alert";
+import { friendlyErrorMessage } from "./ErrorAlert";
 import { IconPencil } from "./icons";
 import { actingIdentityLabel } from "../shared/acting-identity-catalog";
 import { Button } from "../ui/Button";
 import { Dialog } from "../ui/Dialog";
 import { useDialogQueryState } from "../hooks/useDialogQueryState";
+
+const personalNotice = `${EMAIL_FIRST_COPY.registration.personal.points[0]}. ${WORK_EMAIL_STEER} ${PERSONAL_ADDRESS_WAITLIST}`;
 
 const identityLabel = (identity: SessionActingIdentity) =>
   actingIdentityLabel({ organizationName: identity.organizationName, jobTitle: identity.jobTitle });
@@ -26,19 +34,34 @@ export function RegistrationIdentityField({
   userId,
   onSelect,
   presentation = "summary",
+  onUpdated,
 }: {
   preferred?: SessionActingIdentity | null;
   available?: readonly SessionActingIdentity[];
   userId?: string;
   onSelect?: (identity: SessionActingIdentity | null) => void;
   presentation?: "summary" | "picker";
+  onUpdated?: (identity: SessionActingIdentity) => void;
 }) {
   const [selected, setSelected] = useState<SessionActingIdentity | null>(preferred ?? null);
   const [identities, setIdentities] = useState(available);
+  const [editing, showEditing, closeEditing] = useDialogQueryState("identity-profile");
+  const [refreshError, setRefreshError] = useState("");
   const [adding, showAdding, closeAdding] = useDialogQueryState("identity");
   const [choosing, showChoosing, closeChoosing] = useDialogQueryState("representation");
   const [draft, setDraft] = useState<SessionActingIdentity | null>(selected);
   const canChange = identities.some((identity) => identity.id !== selected?.id);
+  async function refreshIdentity(identityId: string) {
+    const session = await getJson("/api/v1/auth/session", userAuthSessionResponseSchema);
+    const identity = session.actingIdentities.find((item) => item.id === identityId);
+    if (!identity)
+      throw new Error("Your representation is not available. Close this dialog and reopen registration to refresh it.");
+    setIdentities(session.actingIdentities);
+    setSelected(identity);
+    onSelect?.(identity);
+    return identity;
+  }
+
   const hidden = (
     <>
       <input type="hidden" name="identityId" value={selected?.id ?? ""} />
@@ -50,6 +73,17 @@ export function RegistrationIdentityField({
       <>
         <span class="pk-cluster pk-cluster--nowrap">
           <span>{selected ? identityLabel(selected) : "Participating as an individual"}</span>
+          {selected?.organizationId == null && (
+            <span
+              class="pk-representation-warning"
+              role="img"
+              tabIndex={0}
+              aria-label={personalNotice}
+              title={personalNotice}
+            >
+              <StateIcon state="advisory" />
+            </span>
+          )}
           {(userId || canChange) && (
             <Button
               type="button"
@@ -88,6 +122,14 @@ export function RegistrationIdentityField({
                 available={identities}
                 userId={userId}
                 onSelect={setDraft}
+                onUpdated={(identity) => {
+                  setIdentities((current) => current.map((item) => (item.id === identity.id ? identity : item)));
+                  if (selected?.id === identity.id) {
+                    setSelected(identity);
+                    onSelect?.(identity);
+                  }
+                  onUpdated?.(identity);
+                }}
               />
             </Dialog>,
             document.body,
@@ -99,26 +141,62 @@ export function RegistrationIdentityField({
       <RepresentationSelect
         value={selected}
         onAdd={userId ? showAdding : undefined}
+        onEdit={
+          userId && selected
+            ? () => {
+                setRefreshError("");
+                showEditing();
+              }
+            : undefined
+        }
         onSelect={(identity) => {
           setSelected(identity);
           onSelect?.(identity);
         }}
       />
       {hidden}
+      {userId &&
+        selected &&
+        editing &&
+        createPortal(
+          <Dialog
+            open
+            viewer
+            title="Edit representation"
+            closeLabel="Close edit representation"
+            confirmLabel="Close"
+            onConfirm={closeEditing}
+            onCancel={closeEditing}
+          >
+            <div class="pk-stack" onSubmit={(event) => event.stopPropagation()}>
+              {refreshError && <Alert tone="danger">{refreshError}</Alert>}
+              <OwnIdentityProfileEditor
+                identityId={selected.id}
+                onCancel={closeEditing}
+                onSaved={async () => {
+                  try {
+                    const identity = await refreshIdentity(selected.id);
+                    onUpdated?.(identity);
+                    await closeEditing();
+                  } catch (cause) {
+                    setRefreshError(
+                      friendlyErrorMessage(
+                        cause instanceof Error ? cause.message : "Could not refresh your representation.",
+                      ),
+                    );
+                  }
+                }}
+              />
+            </div>
+          </Dialog>,
+          document.body,
+        )}
       {userId && (
         <IdentityCreateDialog
           open={adding}
           onClose={closeAdding}
           onCreated={async (identityId) => {
-            const session = await getJson("/api/v1/auth/session", userAuthSessionResponseSchema);
-            const identity = session.actingIdentities.find((item) => item.id === identityId);
-            if (!identity)
-              throw new Error(
-                "Your new identity is not available yet. Close this dialog and reopen registration to refresh it.",
-              );
-            setIdentities(session.actingIdentities);
-            setSelected(identity);
-            onSelect?.(identity);
+            await refreshIdentity(identityId);
           }}
         />
       )}

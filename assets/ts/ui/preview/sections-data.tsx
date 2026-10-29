@@ -2,6 +2,7 @@ import { useState } from "preact/hooks";
 import type { PreviewSection } from "./PreviewShell";
 import { Badge } from "../Badge";
 import { Breadcrumb } from "../Breadcrumb";
+import { IconPencil } from "../../components/icons";
 import { Button } from "../Button";
 import { DataTable } from "../DataTable";
 import { DescriptionList } from "../DescriptionList";
@@ -143,6 +144,40 @@ export const dataSections: PreviewSection[] = [
                 },
                 { term: "Slogan" },
                 { term: "Headquarters", value: "Trondheim, Norway" },
+              ]}
+            />
+          </PanelBody>
+        </Panel>
+
+        <Panel>
+          <PanelHeader title="Inline actions" />
+          <PanelBody>
+            <DescriptionList
+              align="baseline"
+              items={[
+                {
+                  term: "Name",
+                  value: (
+                    <span class="pk-cluster pk-cluster--nowrap">
+                      <span>Example Participant</span>
+                      <Button icon variant="ghost" aria-label="Edit name" title="Edit name">
+                        <IconPencil />
+                      </Button>
+                    </span>
+                  ),
+                },
+                { term: "Email", value: "person@example.test" },
+                {
+                  term: "Representation",
+                  value: (
+                    <span class="pk-cluster pk-cluster--nowrap">
+                      <span>Example organization · Coordinator</span>
+                      <Button icon variant="ghost" aria-label="Change representation" title="Change representation">
+                        <IconPencil />
+                      </Button>
+                    </span>
+                  ),
+                },
               ]}
             />
           </PanelBody>

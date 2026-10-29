@@ -5,7 +5,7 @@ import type { FieldPresentation } from "../../hooks/useContractForm";
 import { Field } from "../../ui/Field";
 import { InputGroup } from "../../ui/InputGroup";
 import { Button } from "../../ui/Button";
-import { IconPlus } from "../icons";
+import { IconPlus, IconPencil } from "../icons";
 import { ServerSearchSelect } from "../ServerSearchSelect";
 import type { CollectionLoader } from "../../hooks/useServerCollection";
 
@@ -20,6 +20,7 @@ export function RepresentationSelect({
   value,
   onSelect,
   onAdd,
+  onEdit,
   validation,
   excludeIdentityId,
   excludeOrganizationId,
@@ -32,6 +33,7 @@ export function RepresentationSelect({
   value: RepresentationValue | null;
   onSelect: (identity: ActingIdentity) => void;
   onAdd?: () => void;
+  onEdit?: () => void;
   validation?: FieldPresentation;
   excludeIdentityId?: string;
   excludeOrganizationId?: string;
@@ -65,6 +67,18 @@ export function RepresentationSelect({
               if (identity) onSelect(identity);
             }}
           />
+          {onEdit && value && (
+            <Button
+              type="button"
+              variant="secondary"
+              icon
+              aria-label="Edit representation"
+              title="Edit representation"
+              onClick={onEdit}
+            >
+              <IconPencil />
+            </Button>
+          )}
           {onAdd && (
             <Button
               type="button"

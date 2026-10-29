@@ -33,12 +33,14 @@ export function RegistrationIdentityChange({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const form = useRef<HTMLFormElement>(null);
+  const profileEdited = useRef(false);
   const contract = useContractForm(registrationIdentityChangeSchema, {
     identityId: selected?.id,
     expectedIdentityId: data.identityId ?? null,
   });
   useEffect(() => {
     if (!open) return;
+    profileEdited.current = false;
     let active = true;
     setLoading(true);
     setError("");
@@ -82,8 +84,10 @@ export function RegistrationIdentityChange({
           cancelLabel={session ? "Cancel" : null}
           confirmDisabled={busy || loading}
           onConfirm={() => (session ? form.current?.requestSubmit() : close())}
-          onCancel={() => {
-            if (!busy) void close();
+          onCancel={async () => {
+            if (busy) return;
+            await close();
+            if (profileEdited.current) await onChanged();
           }}
         >
           {loading ? (
@@ -124,6 +128,9 @@ export function RegistrationIdentityChange({
                   available={session.actingIdentities}
                   userId={session.identity.id}
                   onSelect={setSelected}
+                  onUpdated={() => {
+                    profileEdited.current = true;
+                  }}
                 />
               )}
             </form>
