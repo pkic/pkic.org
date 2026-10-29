@@ -361,9 +361,10 @@ export function RegistrationFlow(props: Props) {
                 ? contract.ofGroup(forms.eventDays.length ? "dayAttendance" : "attendanceType")
                 : attendanceContract.ofGroup(forms.eventDays.length ? "dayAttendance" : "attendanceType"))}
             >
-              {() =>
+              {(control) =>
                 forms.eventDays.length ? (
                   <DayAttendancePicker
+                    control={control}
                     days={forms.eventDays}
                     {...(initial
                       ? {

@@ -194,49 +194,70 @@ describe("event attendance days editor", () => {
     expect(container.querySelector(".text-muted")).toBeNull();
   });
 
-  it("sends the shared replace contract and announces the saved revision", async () => {
-    const onRevision = vi.fn();
-    const captured = stubDays(oneDay, () =>
-      json({ success: true, eventUpdatedAt: "2026-08-02T00:00:00.000Z", skipped: ["2026-09-02"] }),
-    );
+  it.each(["people", "video_location", "video_people", "cocktail", "coffee", "dining"])(
+    "sends the shared replace contract with %s and announces the saved revision",
+    async (selectedIcon) => {
+      const onRevision = vi.fn();
+      const captured = stubDays(oneDay, () =>
+        json({ success: true, eventUpdatedAt: "2026-08-02T00:00:00.000Z", skipped: ["2026-09-02"] }),
+      );
 
-    const container = mount(
-      <EventDaysEditor groupId={GROUP_ID} event={event} expectedUpdatedAt={event.updatedAt} onRevision={onRevision} />,
-    );
-    await settle();
-    expect(container.querySelectorAll("input, select")).toHaveLength(0);
-    await beginRecordEdit(container, "Attendance days actions", "Edit attendance days");
-    const icon = container.querySelector<HTMLSelectElement>('select[name$=".icon"]')!;
-    await act(() => {
-      icon.value = "people";
-      icon.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    await submit(container);
+      const container = mount(
+        <EventDaysEditor
+          groupId={GROUP_ID}
+          event={event}
+          expectedUpdatedAt={event.updatedAt}
+          onRevision={onRevision}
+        />,
+      );
+      await settle();
+      expect(container.querySelectorAll("input, select")).toHaveLength(0);
+      await beginRecordEdit(container, "Attendance days actions", "Edit attendance days");
+      const icon = container.querySelector<HTMLSelectElement>('select[name$=".icon"]')!;
+      await act(() => {
+        icon.value = selectedIcon;
+        icon.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+      const description = container.querySelector<HTMLInputElement>('input[name$=".description"]')!;
+      await act(() => {
+        description.value = "Watch together at a partner venue";
+        description.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      await submit(container);
 
-    const put = captured.find(({ method }) => method === "PUT");
-    expect(put).toBeDefined();
-    // Parsed through the shared request schema, so a body that drifts from the
-    // contract fails here rather than at the endpoint.
-    expect(groupEventDaysReplaceSchema.parse(JSON.parse(put!.body!))).toEqual({
-      expectedUpdatedAt: event.updatedAt,
-      configuration: {
-        days: [
-          {
-            date: "2026-09-01",
-            label: "Workshop day",
-            startTime: "09:00",
-            endTime: "17:00",
-            sortOrder: 10,
-            attendanceOptions: [{ value: "in_person", label: "In person", capacity: 40, icon: "people" }],
-          },
-        ],
-      },
-    });
+      const put = captured.find(({ method }) => method === "PUT");
+      expect(put).toBeDefined();
+      // Parsed through the shared request schema, so a body that drifts from the
+      // contract fails here rather than at the endpoint.
+      expect(groupEventDaysReplaceSchema.parse(JSON.parse(put!.body!))).toEqual({
+        expectedUpdatedAt: event.updatedAt,
+        configuration: {
+          days: [
+            {
+              date: "2026-09-01",
+              label: "Workshop day",
+              startTime: "09:00",
+              endTime: "17:00",
+              sortOrder: 10,
+              attendanceOptions: [
+                {
+                  value: "in_person",
+                  label: "In person",
+                  capacity: 40,
+                  icon: selectedIcon,
+                  description: "Watch together at a partner venue",
+                },
+              ],
+            },
+          ],
+        },
+      });
 
-    expect(onRevision).toHaveBeenCalledWith("2026-08-02T00:00:00.000Z");
-    const announced = container.querySelector('[role="status"].pk-alert');
-    expect(announced?.textContent).toContain("retained dates in use: 2026-09-02");
-  });
+      expect(onRevision).toHaveBeenCalledWith("2026-08-02T00:00:00.000Z");
+      const announced = container.querySelector('[role="status"].pk-alert');
+      expect(announced?.textContent).toContain("retained dates in use: 2026-09-02");
+    },
+  );
 
   it("interrupts with a rejected save and leaves the form usable", async () => {
     const onRevision = vi.fn();

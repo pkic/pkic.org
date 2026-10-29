@@ -72,6 +72,56 @@ export function IconVirtual(props: SvgProps) {
   );
 }
 
+/** A location pin with a camera: watching a stream at a venue. */
+export function IconVideoLocation(props: SvgProps) {
+  return (
+    <StrokeIcon {...props}>
+      <path d="M8.5 7.5 5 12S1.5 8 1.5 5.5a3.5 3.5 0 0 1 7 0" />
+      <circle cx="5" cy="5" r="1" />
+      <rect x="8" y="9" width="4.5" height="4.5" rx=".7" />
+      <path d="m12.5 10.5 2-1v3.5l-2-1" />
+    </StrokeIcon>
+  );
+}
+
+/** A screen above two people: watching together. */
+export function IconVideoPeople(props: SvgProps) {
+  return (
+    <StrokeIcon {...props}>
+      <rect x="2" y="1.5" width="12" height="6" rx="1" />
+      <path d="m7 3 2.5 1.5L7 6z" />
+      <circle cx="4.5" cy="10" r="1.25" />
+      <circle cx="11.5" cy="10" r="1.25" />
+      <path d="M1.5 14c.3-1.5 1.3-2 3-2s2.7.5 3 2M8.5 14c.3-1.5 1.3-2 3-2s2.7.5 3 2" />
+    </StrokeIcon>
+  );
+}
+
+/** A stemmed glass for a reception or networking drinks. */
+export function IconCocktail(props: SvgProps) {
+  return (
+    <StrokeIcon {...props}>
+      <path d="M2 3h12L8 9 2 3ZM8 9v5M5 14h6M9 5l3-4" />
+    </StrokeIcon>
+  );
+}
+
+export function IconCoffee(props: SvgProps) {
+  return (
+    <StrokeIcon {...props}>
+      <path d="M2 6h9v4a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3V6ZM11 6h1.5a2 2 0 0 1 0 4H11M1.5 15h11M4 1v2M8 1v2" />
+    </StrokeIcon>
+  );
+}
+
+export function IconDining(props: SvgProps) {
+  return (
+    <StrokeIcon {...props}>
+      <path d="M2 1.5v4a2 2 0 0 0 4 0v-4M4 1.5V14M12 1.5c-2 2-2 5-2 6.5h3M13 1.5V14" />
+    </StrokeIcon>
+  );
+}
+
 /** A play button in a circle: watching later, on demand. */
 export function IconOnDemand(props: SvgProps) {
   return (

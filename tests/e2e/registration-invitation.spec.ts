@@ -62,9 +62,7 @@ test("checks invitation access before signup and preserves the review on late ex
     organization: "Signup Review Org",
   });
   await captureStep(page, info, 2, "attendance");
-  for (const date of ["2026-12-01", "2026-12-02", "2026-12-03"]) {
-    await page.locator(`label[for='dayAttendance-${date}-on_demand']`).click();
-  }
+  await page.getByRole("button", { name: /^Choose On[- ]demand for every available day$/ }).click();
   await page.getByRole("button", { name: /Continue/ }).click();
   await page.getByLabel("Country").selectOption("US");
   await captureStep(page, info, 3, "questions");

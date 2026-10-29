@@ -556,7 +556,12 @@ describe("group event management routes", () => {
                 sortOrder: 10,
                 attendanceOptions: [
                   { value: "in_person", label: "In person", capacity: 25 },
-                  { value: "virtual", label: "Virtual", icon: "people" },
+                  {
+                    value: "virtual",
+                    label: "Virtual",
+                    icon: "video_people",
+                    description: "Watch together at a partner venue",
+                  },
                 ],
               },
             ],
@@ -582,7 +587,12 @@ describe("group event management routes", () => {
           sortOrder: 10,
           attendanceOptions: [
             { value: "in_person", label: "In person", capacity: 25 },
-            { value: "virtual", label: "Virtual", icon: "people" },
+            {
+              value: "virtual",
+              label: "Virtual",
+              icon: "video_people",
+              description: "Watch together at a partner venue",
+            },
           ],
           attendanceCounts: {},
         },
@@ -597,7 +607,8 @@ describe("group event management routes", () => {
     expect(registrationConfiguration.eventDays[0].attendanceOptions).toContainEqual({
       value: "virtual",
       label: "Virtual",
-      icon: "people",
+      icon: "video_people",
+      description: "Watch together at a partner venue",
       spotsRemainingPercent: null,
     });
 

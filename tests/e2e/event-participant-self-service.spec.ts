@@ -85,7 +85,7 @@ test("a signed-in user registers from event home without another email challenge
   const event = await createRegistrationEvent(
     page,
     "quick-registration",
-    [0, 1, 2].map((offset) => ({
+    [0, 1, 2, 3, 4, 5, 6].map((offset) => ({
       date: new Date(Date.parse(dayDate) + offset * 86_400_000).toISOString().slice(0, 10),
       startTime: "09:00",
       endTime: "17:00",
@@ -93,7 +93,12 @@ test("a signed-in user registers from event home without another email challenge
         { value: "in_person", label: "In person" },
         { value: "virtual", label: "Virtual" },
         { value: "on_demand", label: "On demand" },
-        { value: "lounge", label: "Livestream Lounge", icon: "people" as const },
+        {
+          value: "lounge",
+          label: "Livestream Lounge",
+          icon: "video_people" as const,
+          description: "Watch together at a partner venue",
+        },
       ],
     })),
   );
@@ -184,19 +189,34 @@ test("a signed-in user registers from event home without another email challenge
     await page.setViewportSize({ width, height });
     await page.screenshot({ path: info.outputPath(`registration-attendance-${device}.png`) });
   }
-  await dialog.locator(`label[for="dayAttendance-${dayDate}-in_person"]`).click();
-  const firstDay = dialog.getByRole("group", { name: "Workshop day 1", exact: true });
-  await expect(firstDay.getByRole("radio", { name: "In person", exact: true })).toBeChecked();
-  await firstDay.getByText("Not attending", { exact: true }).click();
-  await expect(firstDay.getByRole("radio", { name: "In person", exact: true })).not.toBeChecked();
-  await firstDay.getByText("In person", { exact: true }).click();
+  const matrix = dialog.getByRole("table", { name: "Attendance by day" });
+  await dialog.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(dialog.getByRole("group", { name: "Attendance choices", exact: true })).toHaveAccessibleDescription(
+    "Choose how you'll attend the event.",
+  );
+  await expect(dialog.getByRole("group", { name: "Attendance choices", exact: true })).toBeFocused();
+  await matrix.getByRole("button", { name: "Choose Virtual for every available day", exact: true }).click();
+  for (const radio of await matrix.getByRole("radio", { name: /^Virtual — / }).all()) await expect(radio).toBeChecked();
+  await matrix.getByRole("button", { name: "Choose Not attending for every available day", exact: true }).click();
+  const firstDay = matrix.getByRole("radio", { name: "In person — Workshop day 1", exact: true });
+  await matrix
+    .locator("label")
+    .filter({ has: page.getByRole("radio", { name: "In person — Workshop day 1", exact: true }) })
+    .click({ position: { x: 4, y: 4 } });
+  await expect(firstDay).toBeChecked();
+  await matrix.getByRole("radio", { name: "Not attending — Workshop day 1", exact: true }).check();
+  await expect(firstDay).not.toBeChecked();
+  await matrix
+    .locator("label")
+    .filter({ has: page.getByRole("radio", { name: "In person — Workshop day 1", exact: true }) })
+    .click({ position: { x: 4, y: 4 } });
   await page.goBack();
   await expect(dialog.getByText("Representation", { exact: true })).toBeVisible();
   await page.goForward();
-  await expect(firstDay.getByRole("radio", { name: "In person", exact: true })).toBeChecked();
+  await expect(firstDay).toBeChecked();
   await dialog.getByRole("button", { name: "Continue", exact: true }).click();
   await dialog.getByRole("button", { name: "Continue", exact: true }).click();
-  await expect(dialog.locator("[data-registration-review]").getByText("Not attending", { exact: true })).toHaveCount(2);
+  await expect(dialog.locator("[data-registration-review]").getByText("Not attending", { exact: true })).toHaveCount(6);
   await dialog.getByRole("button", { name: "Register", exact: true }).click();
   await expect(dialog.getByRole("checkbox", { name: "I agree to the privacy policy", exact: true })).toHaveAttribute(
     "aria-invalid",

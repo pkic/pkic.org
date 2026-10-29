@@ -54,6 +54,8 @@ export type DataTableColumnWidth = "content" | "fit" | "compact" | "primary";
 export interface DataTableColumn<Row> {
   id: string;
   header: string;
+  /** Rich visible header content; `header` remains the column's plain-text name. */
+  headerContent?: ComponentChildren;
   /** Optional visible symbol with the unchanged text name retained for assistive technology. */
   headerIcon?: ComponentChildren;
   /** Omit to render nothing for this column. */
@@ -380,7 +382,7 @@ export function DataTable<Row>({
                     </span>
                   )}
                   <span class={column.headerHidden || column.headerIcon ? "pk-table__sr" : undefined}>
-                    {column.header}
+                    {column.headerContent ?? column.header}
                   </span>
                 </>
               );
@@ -408,6 +410,7 @@ export function DataTable<Row>({
                 <th
                   key={column.id}
                   scope="col"
+                  aria-label={column.headerContent !== undefined ? column.header : undefined}
                   class={classList(alignClass(column.align), widthClass(column.width))}
                   aria-sort={sorted ? (sort.direction === "asc" ? "ascending" : "descending") : undefined}
                 >

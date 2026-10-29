@@ -31,12 +31,18 @@ export function eventDayReadModels(
     attendanceOptions: resolveAttendanceOptions(day).map((option) => {
       const capacity = option.capacity ?? null;
       const registered = registeredCounts.get(day.id)?.get(option.value) ?? 0;
+      const remaining = capacity == null ? null : capacity - registered;
       return {
         value: option.value,
         label: option.label,
         ...(option.icon ? { icon: option.icon } : {}),
+        ...(option.description ? { description: option.description } : {}),
         spotsRemainingPercent:
-          capacity != null && capacity > 0 ? Math.round(((capacity - registered) / capacity) * 100) : null,
+          capacity != null && capacity > 0 && remaining != null
+            ? remaining <= 0
+              ? 0
+              : Math.max(1, Math.round((remaining / capacity) * 100))
+            : null,
       };
     }),
   }));

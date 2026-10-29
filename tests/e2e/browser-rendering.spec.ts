@@ -298,9 +298,9 @@ async function fillRegistrationStep1(
 }
 
 async function fillRegistrationStep2(page: Page): Promise<void> {
-  await setNativeChecked(page, "input#dayAttendance-2026-12-01-in_person");
-  await setNativeChecked(page, "input#dayAttendance-2026-12-02-on_demand");
-  await setNativeChecked(page, "input#dayAttendance-2026-12-03-on_demand");
+  await setNativeChecked(page, "input[name='dayAttendance.2026-12-01'][value='in_person']");
+  await setNativeChecked(page, "input[name='dayAttendance.2026-12-02'][value='on_demand']");
+  await setNativeChecked(page, "input[name='dayAttendance.2026-12-03'][value='on_demand']");
   await page.getByRole("button", { name: /Continue/i }).click();
 }
 
@@ -334,9 +334,9 @@ async function fillInviteRegistration(
   values: { firstName: string; lastName: string; email: string; organization?: string },
 ): Promise<void> {
   await fillRegistrationStep1(page, values);
-  await setNativeChecked(page, "input#dayAttendance-2026-12-01-on_demand");
-  await setNativeChecked(page, "input#dayAttendance-2026-12-02-on_demand");
-  await setNativeChecked(page, "input#dayAttendance-2026-12-03-on_demand");
+  await setNativeChecked(page, "input[name='dayAttendance.2026-12-01'][value='on_demand']");
+  await setNativeChecked(page, "input[name='dayAttendance.2026-12-02'][value='on_demand']");
+  await setNativeChecked(page, "input[name='dayAttendance.2026-12-03'][value='on_demand']");
   await page.getByRole("button", { name: /Continue/i }).click();
   await page.getByLabel("Country").selectOption("US");
   await page.getByRole("button", { name: /Continue/i }).click();

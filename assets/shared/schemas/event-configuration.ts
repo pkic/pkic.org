@@ -62,6 +62,7 @@ export const eventAttendanceOptionSchema = z.object({
     .max(64)
     .regex(/^[a-z_][a-z0-9_]*$/),
   label: trimmedString(1, 80),
+  description: z.string().trim().max(240).optional(),
   icon: attendanceIconSchema.optional(),
   capacity: z.number().int().positive().nullable().optional(),
 });

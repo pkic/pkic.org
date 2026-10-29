@@ -295,11 +295,12 @@ describe("registration manage read view", () => {
     expect(form.hidden).toBe(false);
     expect(summary?.hidden).toBe(true);
     expect(buttonReading("Save changes")?.type).toBe("submit");
-    // The edit view offers no way to cancel the registration: its commands are Save and Discard only.
-    expect([...form.querySelectorAll("button")].map((b) => b.textContent?.trim())).toEqual([
-      "Save changes",
-      "Discard changes",
-    ]);
+    // Record commands stay Save and Discard; the attendance table has its own selection shortcuts.
+    expect(
+      [...form.querySelectorAll("button")]
+        .filter((button) => !button.closest("table"))
+        .map((b) => b.textContent?.trim()),
+    ).toEqual(["Save changes", "Discard changes"]);
     expect(buttonReading("Cancel my registration…")?.closest("[hidden]")).toBe(summary);
   });
 

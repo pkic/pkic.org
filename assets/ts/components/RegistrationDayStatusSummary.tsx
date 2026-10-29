@@ -12,7 +12,7 @@ import { formatDateTime, formatDayList } from "../../shared/format-date";
 import { attendanceTypeLabel } from "../shared/attendance";
 import { groupRegistrationDays, hasWaitingDays, type DayStatusGroup } from "../shared/registration-day-status";
 import { Button } from "../ui/Button";
-import { AttendanceIcon } from "./DayAttendancePicker";
+import { AttendanceIcon } from "./AttendanceIcon";
 import { IconRemove } from "./icons";
 import "./RegistrationDayStatusSummary.css";
 

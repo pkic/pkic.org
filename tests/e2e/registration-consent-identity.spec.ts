@@ -444,8 +444,7 @@ test("a proved work address requires organization confirmation and an incorrect 
     firstName: "Ada",
     lastName: "Example",
   });
-  for (const day of ["2026-12-01", "2026-12-02", "2026-12-03"])
-    await page.locator(`label[for="dayAttendance-${day}-on_demand"]`).click();
+  await page.getByRole("button", { name: /^Choose On[- ]demand for every available day$/ }).click();
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   const country = page.getByRole("combobox", { name: /^Country/ });
   await expect(country).toHaveValue("NL");

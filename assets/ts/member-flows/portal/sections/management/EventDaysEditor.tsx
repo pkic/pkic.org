@@ -135,6 +135,16 @@ function AttendanceOptionRow({
             </Select>
           )}
         </Field>
+        <Field {...field(`${prefix}.description`)} label="Description">
+          {(control) => (
+            <TextInput
+              {...control}
+              name={`${prefix}.description`}
+              value={option.description ?? ""}
+              onInput={(event) => onChange({ ...option, description: event.currentTarget.value })}
+            />
+          )}
+        </Field>
       </div>
       <div class="pk-cluster">
         <Button variant="danger-quiet" onClick={onRemove}>

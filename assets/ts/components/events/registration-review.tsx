@@ -6,35 +6,21 @@ import type { FormField } from "../../shared/types";
 import { attendanceTypeLabel } from "../../shared/attendance";
 import { readField } from "../../shared/form/helpers";
 import { readCustomFieldValues } from "../../shared/widgets/custom-fields";
+import { readDayAttendanceChoices } from "../../shared/widgets/day-attendance";
 import { ATTENDANCE_WAITLIST_COPY } from "../DayAttendancePicker";
 import { formatFormAnswerValue } from "../forms/form-answers";
 
 import type { FormAnswers } from "../../../shared/schemas/form-answers";
 
 function readAttendanceReview(form: HTMLFormElement): Array<{ label: string; value: string }> {
-  const days = Array.from(form.querySelectorAll<HTMLElement>(".event-flow-day"));
+  const days = readDayAttendanceChoices(form);
   if (days.length === 0) {
     return [{ label: "Event attendance", value: attendanceTypeLabel(readField(form, "attendanceType")) }];
   }
-
-  return days
-    .map((day) => {
-      const field = day.querySelector<HTMLInputElement>("input[name^='dayAttendance.']:checked");
-      const dayLabel = day.querySelector<HTMLElement>(".event-flow-day-label")?.textContent?.trim();
-      if (!field || !field.value) return { label: dayLabel ?? "", value: "Not attending" };
-      const optionLabel = field.nextElementSibling
-        ?.querySelector<HTMLElement>(".event-flow-attendance-title")
-        ?.textContent?.trim();
-      const value = optionLabel || field.value;
-      // A full option joins the waitlist; the review says so where the choice is checked.
-      return {
-        label: dayLabel || field.name.replace(/^dayAttendance\./, ""),
-        value: field.hasAttribute("data-waitlist")
-          ? `${value} (${ATTENDANCE_WAITLIST_COPY.badge.toLowerCase()})`
-          : value,
-      };
-    })
-    .filter((entry) => entry.label || entry.value);
+  return days.map((day) => ({
+    label: day.dayLabel,
+    value: day.waitlisted ? `${day.optionLabel} (${ATTENDANCE_WAITLIST_COPY.badge.toLowerCase()})` : day.optionLabel,
+  }));
 }
 
 function resolveCustomFieldValue(field: FormField, answers: FormAnswers): string {
