@@ -1,5 +1,5 @@
 import { nowIso } from "../utils/time";
-import type { RegistrationAffiliationContext } from "./registrations/affiliation-context";
+import type { EventAffiliationContext } from "./identities/event-affiliation-context";
 import { planRegistrationAffiliation } from "./registrations/affiliation-plan";
 import type { IdentityRepresentation } from "./identities/selection";
 import { findUserEmailOwner } from "./user-emails";
@@ -70,7 +70,7 @@ export async function prepareRegistrationSubmission(
     authorizationGuards?: readonly StatementLike[];
     termsSnapshotGuard?: StatementLike | null;
     verifiedIdentity?: VerifiedRegistrationIdentityContext;
-    affiliationContext?: RegistrationAffiliationContext;
+    affiliationContext?: EventAffiliationContext;
     /** The registrant opened the verification link for this address; it is recorded as verified with the registration. */
     mailboxVerified?: boolean;
   },

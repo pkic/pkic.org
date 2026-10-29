@@ -17,6 +17,7 @@ import {
 import type { proposalCreateSchema } from "../../shared/schemas/proposal-management";
 import type { ProposalEntryContext } from "../../shared/schemas/proposal-entry";
 import type { ConsentItem } from "../../shared/schemas/registration";
+import type { identityAffiliationPreviewResponseSchema } from "../../shared/schemas/identity-affiliation";
 import { userAuthSessionResponseSchema } from "../../shared/schemas/user-auth";
 import { userDetailResponseSchema } from "../../shared/schemas/user-management";
 import { ApiClientError, getJson, patchJson, postJson } from "../shared/api-client";
@@ -29,7 +30,7 @@ export type VerifiedProposalEntry = {
 export type ParticipationPerson = z.infer<typeof eventProposalProofPersonSchema>;
 type Proposer = z.infer<typeof proposalCreateSchema>["proposer"];
 type NameDrafts = Pick<Proposer, "firstName" | "lastName">;
-type AffiliationDrafts = Pick<Proposer, "organizationName" | "jobTitle">;
+type AffiliationDrafts = Pick<Proposer, "organizationName" | "jobTitle" | "organizationContextToken">;
 export interface ProposalEntrySelection {
   authenticated: boolean;
   continuationToken?: string;
@@ -39,7 +40,16 @@ export interface ProposalEntrySelection {
   independentCapacity?: IndependentCapacityDisclosure;
   actingIdentityId: ActingIdentity["id"] | null | undefined;
   person: ParticipationPerson;
-  missingDetails: Pick<Proposer, "firstName" | "lastName" | "organizationName" | "jobTitle">;
+  missingDetails: NameDrafts & AffiliationDrafts;
+  prepareAffiliation?: () => Promise<AffiliationDrafts>;
+  validateAffiliation?: () => boolean;
+}
+
+/** Explicit submission prepares the same shared organization controller in every embedding. */
+export async function prepareProposalEntry(entry: ProposalEntrySelection): Promise<ProposalEntrySelection> {
+  return entry.prepareAffiliation
+    ? { ...entry, missingDetails: { ...entry.missingDetails, ...(await entry.prepareAffiliation()) } }
+    : entry;
 }
 
 /**
@@ -74,6 +84,8 @@ export function useProposalEntryIdentity(
   const [proofOwnerToken, setProofOwnerToken] = useState<string>();
   const [entryContext, setEntryContext] = useState<ProposalEntryContext>();
   const [selected, setSelected] = useState<ActingIdentity | null | undefined>();
+  const [affiliation, setAffiliation] = useState<z.infer<typeof identityAffiliationPreviewResponseSchema>>();
+  const [verificationToken, setVerificationToken] = useState<string>();
   /** Details for a new affiliation; they belong to the representation and go with it. */
   const [missingDetails, setMissingDetails] = useState<AffiliationDrafts>({});
   /**
@@ -102,6 +114,8 @@ export function useProposalEntryIdentity(
     setSelected(undefined);
     setMissingDetails({});
     setContinuationToken(undefined);
+    setAffiliation(undefined);
+    setVerificationToken(undefined);
     setLoading(false);
   }
   function setKind(value: MemberJoinApplicantKind): void {
@@ -149,7 +163,12 @@ export function useProposalEntryIdentity(
   function complete(field: keyof ProposalEntrySelection["missingDetails"], value: string): void {
     if (field === "firstName" || field === "lastName") setNameDrafts((current) => ({ ...current, [field]: value }));
     else {
-      setMissingDetails((current) => ({ ...current, [field]: value }));
+      setMissingDetails((current) => {
+        const next = { ...current };
+        if (value === "") delete next[field];
+        else next[field] = value;
+        return next;
+      });
       setPerson((current) => (current ? { ...current, [field]: value } : null));
     }
   }
@@ -263,6 +282,8 @@ export function useProposalEntryIdentity(
       setEntryContext(result.entryContext);
       setRecordedConsents(result.consents);
       setSelected(result.applicantKind === "individual" ? null : undefined);
+      setAffiliation(result.affiliation);
+      setVerificationToken(token);
       if (!speakerManagementToken && !speakerProposalId)
         history.replaceState({}, "", `${location.pathname}${location.search}`);
     } catch (caught) {
@@ -406,6 +427,8 @@ export function useProposalEntryIdentity(
     entryContext,
     recordedConsents,
     selected,
+    affiliation,
+    verificationToken,
     choose,
     email,
     setEmail,

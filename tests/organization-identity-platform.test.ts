@@ -5,7 +5,7 @@ import {
   assessIdentityDomain,
   listVerifiedIdentityDomainMatches,
   organizationIdentityManagementEvidence,
-  prepareExplicitVerifiedDomainIdentityStatements,
+  prepareExplicitVerifiedDomainIdentity,
 } from "../functions/_lib/services/identities";
 import { queryAll } from "./helpers/context";
 import {
@@ -181,7 +181,7 @@ describe("acting identity domain evidence", () => {
     const f = await secondaryWorkFixture();
     const identityId = await addRepresentative(env.DB, f.memberId, f.userId);
     await expect(
-      prepareExplicitVerifiedDomainIdentityStatements(env.DB, {
+      prepareExplicitVerifiedDomainIdentity(env.DB, {
         userId: f.userId,
         organizationId: f.organizationId,
         normalizedEmail: f.email,
@@ -195,7 +195,7 @@ describe("acting identity domain evidence", () => {
 
   it("publishes the legacy verified-domain join's new public identity", async () => {
     const f = await secondaryWorkFixture();
-    const statements = await prepareExplicitVerifiedDomainIdentityStatements(env.DB, {
+    const { statements } = await prepareExplicitVerifiedDomainIdentity(env.DB, {
       userId: f.userId,
       organizationId: f.organizationId,
       normalizedEmail: f.email,
@@ -224,7 +224,7 @@ describe("acting identity domain evidence", () => {
   ] as const)("rolls back prepared work identity enrollment when %s changes before commit", async (race) => {
     const f = await secondaryWorkFixture();
     const at = nowIso();
-    const statements = await prepareExplicitVerifiedDomainIdentityStatements(env.DB, {
+    const { statements } = await prepareExplicitVerifiedDomainIdentity(env.DB, {
       userId: f.userId,
       organizationId: f.organizationId,
       normalizedEmail: f.email,

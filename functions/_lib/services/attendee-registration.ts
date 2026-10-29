@@ -1,4 +1,4 @@
-import type { RegistrationAffiliationContext } from "./registrations/affiliation-context";
+import type { EventAffiliationContext } from "./identities/event-affiliation-context";
 import type { AttendeeRegistrationFields } from "../../../assets/shared/schemas/registration";
 import type { DatabaseLike, StatementLike } from "../types";
 import { AppError } from "../errors";
@@ -31,7 +31,7 @@ export async function prepareValidatedAttendeeRegistration(
     confirmationTtlHours: number;
     referralCodeLength: number;
     verifiedIdentity?: VerifiedRegistrationIdentityContext;
-    affiliationContext?: RegistrationAffiliationContext;
+    affiliationContext?: EventAffiliationContext;
     mailboxVerified?: boolean;
     authorizationGuards?: readonly StatementLike[];
     /** Every registration flow supplies the loaded event so portal isolation cannot be skipped. */

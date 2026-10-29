@@ -12,6 +12,7 @@ import { prepareOrganizationIdentityPublication } from "./lifecycle-publication"
 import type { DatabaseLike, Env } from "../../types";
 import { AppError } from "../../errors";
 import { nowIso } from "../../utils/time";
+import { representationEmailDomainEvidence } from "./email-domain-support";
 
 function sourceEvidence(userId: string, identityId: string) {
   return {
@@ -64,6 +65,7 @@ export async function changeRepresentationEmail(
         sql: "SELECT 1 FROM identities WHERE id=? AND email_id IS ?",
         bindings: [identityId, input.previousEmailId],
       }),
+      prepareAuthorizationGuard(db, representationEmailDomainEvidence(identityId, input.emailId)),
       prepareAuthorizationGuard(
         db,
         input.emailId === null
@@ -109,7 +111,7 @@ function refuse(cause: unknown): never {
     throw new AppError(
       409,
       "REPRESENTATION_EMAIL_UNAVAILABLE",
-      "Choose a verified address on this account that is not used by another representation, or refresh and try again.",
+      "Choose an available verified address that supports this organization, or refresh and try again.",
     );
   throw cause;
 }

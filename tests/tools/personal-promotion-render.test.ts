@@ -91,8 +91,8 @@ describe("automatic Open Graph cards", () => {
       const design = defaultEventPromotionDesign("Synthetic");
       design.sponsorGroups = [{ key: "hidden", source: "event", tierName: "Never show this sponsor tier" }];
       const svg = renderPersonalPromotionSvg({
-        firstName: "Paul",
-        lastName: "van Brouwershaven",
+        firstName: "Alex",
+        lastName: "Somerville",
         role: "speaker",
         eventName,
         startsAt: "2026-12-01T08:00:00.000Z",
@@ -110,7 +110,7 @@ describe("automatic Open Graph cards", () => {
       const metadata = await sharp(image).metadata();
       expect({ width: metadata.width, height: metadata.height }).toEqual(PERSONAL_PROMOTION_IMAGE_DIMENSIONS[format]);
       expect([...svg.matchAll(/<text\b[^>]*>([^<]*)<\/text>/gu)].map((match) => match[1]).join(" ")).toContain(
-        "Paul van Brouwershaven",
+        "Alex Somerville",
       );
       expect(svg).toContain("2 SESSIONS");
       expect(svg).not.toContain("Never show this sponsor tier");
@@ -123,7 +123,7 @@ describe("automatic Open Graph cards", () => {
     (format) => {
       for (const portrait of [false, true])
         for (const longName of [false, true]) {
-          const name = longName ? "Alexandria van Brouwershaven-Winterbottom" : "Alex Morgan";
+          const name = longName ? "Alexandria Somerville-Winterbottom" : "Alex Morgan";
           const pages = buildPromotionPages(
             {
               personal: {

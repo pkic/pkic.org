@@ -6,6 +6,8 @@ import { AppError } from "../errors";
 import { nowIso } from "../utils/time";
 import { isAuditChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "./audit";
 import { validateRequiredConsents } from "./consent";
+import { readEventAffiliationContext } from "./identities/event-affiliation-context";
+import { planVerifiedAffiliation } from "./identities/verified-affiliation-plan";
 import { prepareUserProfileStatements, type UserProfilePatch } from "./users";
 import { prepareProposalSpeakerWriteGuard, type ProposalSpeakerWriteContext } from "./proposal-speaker-authority";
 import { proposalSpeakerProfileColumns } from "./proposal-speakers";
@@ -113,6 +115,7 @@ export async function updateSpeakerProfile(
       | "consents"
       | "organizationName"
       | "jobTitle"
+      | "organizationContextToken"
     >,
   context: ProposalSpeakerWriteContext & {
     selectionAuthority?: { userId: string; sessionId: string };
@@ -192,15 +195,40 @@ export async function updateSpeakerProfile(
         at,
       });
     } else {
-      const affiliation = await prepareVerifiedOrganizationAffiliation(db, {
-        userId: profileUserId,
-        normalizedEmail: proof.normalizedEmail,
-        emailId: proof.emailId,
-        organizationName: payload.organizationName || undefined,
-        at,
-        proofEvidence: proof.proofEvidence,
-        profile: { ...payload, jobTitle: payload.jobTitle || null },
-      });
+      const observed = payload.organizationContextToken
+        ? await readEventAffiliationContext(
+            context.signingSecret!,
+            payload.organizationContextToken,
+            proof.eventId,
+            proof.normalizedEmail,
+            "proposal-affiliation",
+            {
+              name: payload.organizationName ?? "",
+              jobTitle: payload.jobTitle ?? "",
+            },
+          )
+        : null;
+      const affiliation = observed
+        ? await planVerifiedAffiliation(
+            db,
+            {
+              userId: profileUserId,
+              proofEvidence: proof.proofEvidence,
+              profile: { ...payload, jobTitle: payload.jobTitle || null },
+            },
+            observed.input,
+            observed.basis,
+            at,
+          )
+        : await prepareVerifiedOrganizationAffiliation(db, {
+            userId: profileUserId,
+            normalizedEmail: proof.normalizedEmail,
+            emailId: proof.emailId,
+            organizationName: payload.organizationName || undefined,
+            at,
+            proofEvidence: proof.proofEvidence,
+            profile: { ...payload, jobTitle: payload.jobTitle || null },
+          });
       affiliationStatements.push(...affiliation.statements);
       selected = {
         identityId: affiliation.identityId,

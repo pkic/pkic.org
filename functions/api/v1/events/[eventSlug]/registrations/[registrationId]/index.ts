@@ -93,6 +93,7 @@ async function handleEventRegistrationPatch(
     customAnswersJson: body.customAnswers !== undefined ? JSON.stringify(customAnswers) : undefined,
     formPlacementId: validatedForm?.form?.placement?.id ?? null,
     sourceRef: body.sourceRef,
+    profileActor: actor,
     profilePatch:
       body.action === "update"
         ? {

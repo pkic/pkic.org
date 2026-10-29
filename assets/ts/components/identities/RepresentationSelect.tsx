@@ -7,6 +7,7 @@ import { InputGroup } from "../../ui/InputGroup";
 import { Button } from "../../ui/Button";
 import { IconPlus } from "../icons";
 import { ServerSearchSelect } from "../ServerSearchSelect";
+import type { CollectionLoader } from "../../hooks/useServerCollection";
 
 type RepresentationValue = Pick<ActingIdentity, "id" | "organizationName" | "jobTitle">;
 const label = (identity: RepresentationValue) =>
@@ -24,6 +25,7 @@ export function RepresentationSelect({
   excludeOrganizationId,
   organizationOnly = false,
   required = false,
+  load,
 }: {
   endpoint?: string;
   userId?: string;
@@ -35,6 +37,7 @@ export function RepresentationSelect({
   excludeOrganizationId?: string;
   organizationOnly?: boolean;
   required?: boolean;
+  load?: CollectionLoader;
 }) {
   const catalog = useMemo(() => {
     const params: Record<string, string> = { active: "true" };
@@ -51,6 +54,7 @@ export function RepresentationSelect({
           <ServerSearchSelect
             {...control}
             catalog={catalog}
+            load={load}
             searchable={false}
             allowEmpty={false}
             searchLabel="Your identities"

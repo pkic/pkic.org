@@ -26,6 +26,7 @@ import {
 import type { PersonalNamePatch } from "../components/ParticipationPersonalDetails";
 import {
   newAffiliationDetails,
+  prepareProposalEntry,
   type ParticipationPerson,
   type ProposalEntrySelection,
 } from "../components/useProposalEntryIdentity";
@@ -339,10 +340,11 @@ async function main(): Promise<void> {
       setStatus(boot.statusEl, "Confirm your identity and email before saving your profile.", true);
       return;
     }
-    const submittedEntry = identityChanged ? entry : null;
+    const selectedEntry = identityChanged ? entry : null;
     await withLoadingButton(findSubmitButton(profileForm), async () => {
       const submittedIdentityRevision = identityRevision;
       try {
+        const submittedEntry = selectedEntry ? await prepareProposalEntry(selectedEntry) : null;
         const saved = await patchJson(
           proposalSpeakerAccessPath(boot.apiBase, token, "profile"),
           speakerSelfProfilePatchSchema.parse({

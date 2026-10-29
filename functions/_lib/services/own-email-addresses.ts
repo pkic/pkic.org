@@ -40,6 +40,8 @@ import {
 } from "./own-email-address-read";
 import { prepareOwnEmailVerificationMessage, type OwnEmailVerificationDelivery } from "./own-email-verification";
 import { isEmailReservationConflict, prepareRemoveUserEmailStatements } from "./user-emails";
+import { domainBackedIdentitySql, identityEmailDomainSupportSql } from "./identities/email-domain-support";
+import { identityOrganizationEmailDomainSql } from "./identities/affiliation-projection";
 
 export function prepareOwnEmailAddressesList(
   db: DatabaseLike,
@@ -52,6 +54,13 @@ export function prepareOwnEmailAddressesList(
   const bindings: unknown[] = [userId, userId, ...(search?.bindings ?? [])];
   if (availableToIdentityId) {
     conditions.push("verified_at IS NOT NULL AND (identity_id IS NULL OR identity_id=?)");
+    bindings.push(availableToIdentityId);
+    conditions.push(`EXISTS (SELECT 1 FROM identities identity WHERE identity.id=? AND
+      (NOT ${domainBackedIdentitySql()} OR ${identityEmailDomainSupportSql(
+        "lower(addresses.email)",
+        "identity",
+        identityOrganizationEmailDomainSql("identity.id"),
+      )}))`);
     bindings.push(availableToIdentityId);
   }
   const statements = buildOffsetPageStatements(db, {

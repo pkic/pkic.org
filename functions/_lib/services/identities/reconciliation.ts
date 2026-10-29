@@ -142,29 +142,44 @@ export async function createCurrentUserIdentityFromDomain(
  * Same explicit organization-join activation, prepared for a transaction that
  * records the email proof immediately before these statements.
  */
-export async function prepareExplicitVerifiedDomainIdentityStatements(
+export async function prepareExplicitVerifiedDomainIdentity(
   db: DatabaseLike,
   input: { userId: string; organizationId: string; normalizedEmail: string; at: string },
-): Promise<StatementLike[]> {
-  const domain = await requireOrganizationLinkDomain(db, input.normalizedEmail);
-  const member = await first<{ id: string }>(
-    db,
-    `SELECT member.id
+  observed?: {
+    domain: string;
+    member: { id: string } | null;
+    person: { email: string } | null;
+    address: { id: string; identity_id: string | null } | null;
+    creation: NonNullable<Parameters<typeof buildCreateIdentityStatement>[2]>;
+  },
+): Promise<{ identityId: string; statements: StatementLike[] }> {
+  const domain = observed ? observed.domain : await requireOrganizationLinkDomain(db, input.normalizedEmail);
+  const member = observed
+    ? observed.member
+    : await first<{ id: string }>(
+        db,
+        `SELECT member.id
        FROM organization_domain_claims claim
        JOIN members member
          ON member.organization_id = claim.organization_id
         AND member.status = 'active'
       WHERE claim.domain = ? AND claim.organization_id = ? AND claim.application_id IS NULL`,
-    [domain, input.organizationId],
-  );
+        [domain, input.organizationId],
+      );
   if (!member)
     throw new AppError(422, "IDENTITY_DOMAIN_MISMATCH", "The verified domain does not match this organization");
-  const person = await first<{ email: string }>(db, "SELECT email FROM users WHERE id = ?", [input.userId]);
+  const person = observed
+    ? observed.person
+    : await first<{ email: string }>(db, "SELECT email FROM users WHERE id = ?", [input.userId]);
   // A new join person is inserted earlier in this same batch; exact primary proof is still rechecked at commit.
-  const address = await resolveOwnedIdentityEmail(db, {
-    user: { id: input.userId, email: person?.email ?? input.normalizedEmail },
-    email: input.normalizedEmail,
-  });
+  const address = await resolveOwnedIdentityEmail(
+    db,
+    {
+      user: { id: input.userId, email: person?.email ?? input.normalizedEmail },
+      email: input.normalizedEmail,
+    },
+    observed?.address,
+  );
   // The legacy membership-join adapter retains its active member prerequisite; affiliation itself does not.
   const authority = verifiedDomainIdentityEvidence({
     userId: input.userId,
@@ -173,37 +188,44 @@ export async function prepareExplicitVerifiedDomainIdentityStatements(
     domain,
     organizationId: input.organizationId,
   });
-  const prepared = await buildCreateIdentityStatement(db, {
-    userId: input.userId,
-    organizationId: input.organizationId,
-    emailId: address.emailId,
-    source: "verified_domain",
-    startImmediately: true,
-    now: input.at,
-    condition: {
-      sql: `SELECT 1 WHERE EXISTS (${authority.sql}) AND EXISTS (
+  const prepared = await buildCreateIdentityStatement(
+    db,
+    {
+      userId: input.userId,
+      organizationId: input.organizationId,
+      emailId: address.emailId,
+      source: "verified_domain",
+      startImmediately: true,
+      now: input.at,
+      condition: {
+        sql: `SELECT 1 WHERE EXISTS (${authority.sql}) AND EXISTS (
               SELECT 1 FROM members WHERE id = ? AND organization_id = ? AND status = 'active'
             )`,
-      bindings: [...authority.bindings, member.id, input.organizationId],
+        bindings: [...authority.bindings, member.id, input.organizationId],
+      },
     },
-  });
-  return [
-    prepared.statement,
-    prepareScopedAuditLogAfterOneChange(
-      db,
-      { type: "organization", id: member.id },
-      "member",
-      input.userId,
-      "organization_identity_activated",
-      "identity",
-      prepared.identityId,
-      { organizationId: input.organizationId, emailId: address.emailId, domain, source: "verified_domain" },
-      input.at,
-    ),
-    prepareOrganizationIdentityPublication(db, prepared.identityId, input.at),
-    ...prepared.emailOwnership,
-    ...prepareAutomaticGroupEnrollmentForUserStatements(db, input.userId, input.at),
-  ];
+    observed?.creation,
+  );
+  return {
+    identityId: prepared.identityId,
+    statements: [
+      prepared.statement,
+      prepareScopedAuditLogAfterOneChange(
+        db,
+        { type: "organization", id: member.id },
+        "member",
+        input.userId,
+        "organization_identity_activated",
+        "identity",
+        prepared.identityId,
+        { organizationId: input.organizationId, emailId: address.emailId, domain, source: "verified_domain" },
+        input.at,
+      ),
+      prepareOrganizationIdentityPublication(db, prepared.identityId, input.at),
+      ...prepared.emailOwnership,
+      ...prepareAutomaticGroupEnrollmentForUserStatements(db, input.userId, input.at),
+    ],
+  };
 }
 
 /** Freezes nullable membership enrichment for this command's audit scope, without changing affiliation eligibility. */

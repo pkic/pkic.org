@@ -7,7 +7,7 @@ import { IconPlus } from "../icons";
 import { VerifiedOrganizationCreateDialog } from "./VerifiedOrganizationCreateDialog";
 import { actingIdentityLabel } from "../../shared/acting-identity-catalog";
 import type { z } from "zod";
-import { useState, useRef } from "preact/hooks";
+import { useState, useRef, useEffect } from "preact/hooks";
 import {
   identityAffiliationPrepareSchema,
   type identityAffiliationPreviewResponseSchema,
@@ -34,12 +34,14 @@ export function VerifiedOrganizationDetails({
   resolve,
   prepare,
   controller,
+  onDraftChange,
 }: {
   initial: Resolved;
   emailId: string | null;
   resolve: (domain?: string) => Promise<Resolved>;
   prepare: (input: Input) => Promise<Resolved>;
   controller: VerifiedOrganizationController;
+  onDraftChange?: (draft: { organizationName: string; jobTitle: string }) => void;
 }) {
   const [resolved, setResolved] = useState(initial);
   const [organizationId, setOrganizationId] = useState<string | null>(initial.organization?.id ?? null);
@@ -63,6 +65,12 @@ export function VerifiedOrganizationDetails({
   };
   const detailsForm = useContractForm(identityAffiliationPrepareSchema, body);
   const key = JSON.stringify(body);
+  useEffect(() => {
+    onDraftChange?.({
+      organizationName: resolved.organizations.find((item) => item.id === organizationId)?.name ?? organizationName,
+      jobTitle: existingJobTitle ?? jobTitle,
+    });
+  }, [key]);
   controller.validate = () => Boolean(detailsForm.submit().data);
   controller.read = () => {
     const checked = identityAffiliationPrepareSchema.safeParse(body);
@@ -160,7 +168,7 @@ export function VerifiedOrganizationDetails({
           required
           help={
             resolved.domain
-              ? `Only organizations linked to your verified email domain, ${resolved.domain}, are listed. Use + to add your organization if it is missing.`
+              ? `Organizations linked to your verified email domain, ${resolved.domain}, and organizations you already represent using this address are listed. Use + to add your organization if it is missing.`
               : "Use + to add your organization."
           }
           {...detailsForm.of(organizationId ? "organizationId" : "organizationName")}

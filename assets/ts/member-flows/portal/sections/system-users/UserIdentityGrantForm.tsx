@@ -67,7 +67,7 @@ export function UserIdentityGrantForm({
   const [error, setError] = useState("");
 
   const isIndividual = mode !== GRANT_MODE_ORG_TIED;
-  const mayGrantIndividual = canActivate && user.identities.length === 0;
+  const mayGrantIndividual = canActivate && user.identities.every((identity) => identity.memberId === null);
   const needsReason = isIndividual || activateImmediately;
 
   // Two routes, two contracts: an individual capacity is granted on the
@@ -151,10 +151,7 @@ export function UserIdentityGrantForm({
           onSubmit={(event) => void handleSubmit(event)}
         >
           <div class="pk-grid pk-grid--tight">
-            {/* Only a person with no capacity at all can be given an individual
-            one; everyone else is tied to an organization, and the category
-            select — which then only said "set by the organization" — has
-            nothing to ask (#96). */}
+            {/* An account or event identity can acquire membership; an existing Member capacity cannot. */}
             {mayGrantIndividual && (
               <Field label="Category" {...form.of("membershipCategory")}>
                 {(control) => (

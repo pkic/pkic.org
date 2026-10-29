@@ -11,7 +11,6 @@ import {
   domainOwnershipFactMatchesSql,
   FACT_ORGANIZATION,
   requireWorkOrganizationDomain,
-  verifiedDomainOrganizationId,
   verifiedRepresentationDomainCandidates,
 } from "./verified-email-domain";
 import { verifiedAffiliationBasisSchema } from "./verified-affiliation-basis";
@@ -67,8 +66,10 @@ export function prepareVerifiedAffiliationRead(
       WHERE organization.normalized_name=? OR organization.id IN (
         SELECT claim.organization_id FROM organization_domain_claims claim JOIN json_each(?) requested ON claim.domain=requested.value
         UNION SELECT ${FACT_ORGANIZATION} FROM identities fact JOIN json_each(?) requested ON ${matches}
+        UNION SELECT organization_id FROM identities WHERE user_id=(${subject.sql})
+          AND started_at IS NOT NULL AND ended_at IS NULL AND blocked_at IS NULL
       ) LIMIT 257`)
-      .bind(normalizeOrgName(input.organizationName ?? ""), domains, domains),
+      .bind(normalizeOrgName(input.organizationName ?? ""), domains, domains, ...subject.bindings),
     db
       .prepare(`SELECT id,organization_id,email_id,updated_at,invited_at,started_at,ended_at,blocked_at,job_title
       FROM identities WHERE user_id=(${subject.sql}) ORDER BY id LIMIT 501`)
@@ -97,12 +98,7 @@ export function prepareVerifiedAffiliationRead(
         organizationId: string | null;
         member: number;
       }>(results[1]);
-      if (
-        !input.unaffiliatedAttestation &&
-        !mailboxProof?.pendingApplicationReview &&
-        claims.some((claim) => claim.applicationId)
-      )
-        verifiedDomainOrganizationId(input.domain ?? claims[0]!.domain, { kind: "held" });
+
       if (input.domain && !verifiedRepresentationDomainCandidates(address.email, claims).includes(input.domain))
         throw new AppError(422, "IDENTITY_DOMAIN_MISMATCH", "Choose a domain of your verified work email address.");
       const rootDomain = workEmailDomain(address.email);

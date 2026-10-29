@@ -6,6 +6,8 @@ import { proposalIdentityFixture } from "./helpers/proposal-identity";
 import { assignRepresentativeRole, REPRESENTATIVE_ROLE_IDS, insertUser } from "./helpers/membership";
 import { createAdminSession, createMcpSession } from "./helpers/auth";
 import { nowIso } from "../functions/_lib/utils/time";
+import { identityUpdateSchema } from "../assets/shared/schemas/identity";
+import { preparePrimaryEmailDomainChange } from "../functions/_lib/services/identities/primary-email-domain-change";
 import {
   representationEmailChangeSchema,
   representationEmailOptionsResponseSchema,
@@ -13,6 +15,18 @@ import {
 beforeEach(resetDb);
 type Fixture = Awaited<ReturnType<typeof proposalIdentityFixture>>;
 const path = (f: Fixture) => `/api/v1/users/${f.userId}/identities/${f.identityId}/email`;
+async function domainIdentityFixture() {
+  const f = await proposalIdentityFixture();
+  const id = crypto.randomUUID();
+  const at = nowIso();
+  await env.DB.prepare("UPDATE identities SET ended_at=? WHERE id=?").bind(at, f.identityId).run();
+  await env.DB.prepare(`INSERT INTO identities(id,user_id,organization_id,source,verified_email_domain,job_title,
+    invited_at,started_at,created_at,updated_at) SELECT ?,user_id,organization_id,'verified_email','example.test',job_title,?,?,?,?
+    FROM identities WHERE id=?`)
+    .bind(id, at, at, at, at, f.identityId)
+    .run();
+  return { ...f, identityId: id };
+}
 async function secondary(f: Fixture, verified = true, owner: string | null = f.identityId) {
   const id = crypto.randomUUID();
   const email = `address-${id}@other-work.example`;
@@ -41,6 +55,81 @@ function change(f: Fixture, previousEmailId: string | null, emailId: string | nu
   );
 }
 describe("representation email correction", () => {
+  it("enforces the same domain guard through organization-managed profile edits", async () => {
+    const f = await domainIdentityFixture();
+    const unrelated = await secondary(f, true, null);
+    const organizationId = await env.DB.prepare("SELECT organization_id FROM identities WHERE id=?")
+      .bind(f.identityId)
+      .first<string>("organization_id");
+    const adminId = await env.DB.prepare("SELECT id FROM users WHERE normalized_email='admin@pkic.org'").first<string>(
+      "id",
+    );
+    const token = await createAdminSession(env.DB, adminId!, crypto.randomUUID());
+    const result = await callApi(env, `/api/v1/organizations/${organizationId}/identities/${f.identityId}`, {
+      method: "PATCH",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify(identityUpdateSchema.parse({ profile: { emailId: unrelated } })),
+    });
+    expect(result.status, await result.clone().text()).toBe(409);
+    expect(
+      await env.DB.prepare("SELECT email_id FROM identities WHERE id=?").bind(f.identityId).first("email_id"),
+    ).toBeNull();
+  });
+  it("refuses an unrelated verified mailbox for a domain-backed identity and omits it from choices", async () => {
+    const f = await domainIdentityFixture();
+    const unrelated = await secondary(f, true, null);
+    const before = await env.DB.prepare("SELECT email_id,organization_id,ended_at FROM identities WHERE id=?")
+      .bind(f.identityId)
+      .first();
+    const response = await change(f, null, unrelated);
+    expect(response.status, await response.clone().text()).toBe(409);
+    expect(
+      await env.DB.prepare("SELECT email_id,organization_id,ended_at FROM identities WHERE id=?")
+        .bind(f.identityId)
+        .first(),
+    ).toEqual(before);
+    const listed = await callApi(
+      env,
+      path(f),
+      { headers: { authorization: `Bearer ${f.token}` } },
+      { maxRoundTrips: 1 },
+    );
+    expect(listed.status, await listed.clone().text()).toBe(200);
+    const choices = representationEmailOptionsResponseSchema.parse(await listed.json());
+    expect(choices.emails.some((email) => email.id === unrelated)).toBe(false);
+    expect(choices.emails.some((email) => email.primary)).toBe(true);
+  });
+
+  it("allows another verified mailbox in the supporting domain", async () => {
+    const f = await domainIdentityFixture();
+    const related = await secondary(f, true, null);
+    const email = `replacement-${related}@example.test`;
+    await env.DB.prepare("UPDATE user_emails SET email=?,normalized_email=? WHERE id=?")
+      .bind(email, email, related)
+      .run();
+    const response = await change(f, null, related);
+    expect(response.status, await response.clone().text()).toBe(200);
+  });
+
+  it("does not count an unrelated reverse email association as domain support", async () => {
+    const f = await domainIdentityFixture();
+    await secondary(f);
+    const nextEmail = `personal-${crypto.randomUUID()}@gmail.com`;
+    await env.DB.prepare("UPDATE users SET email=?,normalized_email=? WHERE id=?")
+      .bind(nextEmail, nextEmail, f.userId)
+      .run();
+    await env.DB.batch(
+      preparePrimaryEmailDomainChange(env.DB, {
+        userId: f.userId,
+        previousEmail: f.email,
+        nextEmail,
+        at: nowIso(),
+      }),
+    );
+    expect(
+      await env.DB.prepare("SELECT ended_at FROM identities WHERE id=?").bind(f.identityId).first("ended_at"),
+    ).not.toBeNull();
+  });
   it("changes only the selected address, preserves roles and records, and releases the incorrect reverse link", async () => {
     const f = await proposalIdentityFixture();
     const wrong = await secondary(f);

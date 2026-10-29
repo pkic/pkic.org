@@ -4,7 +4,7 @@ import { planRegistrationAffiliation } from "./affiliation-plan";
 import { identityAffiliationPrepareSchema } from "../../../../assets/shared/schemas/identity-affiliation";
 import type { registrationEmailProofVerifySchema } from "../../../../assets/shared/schemas/registration-email-proof";
 import { provedMailboxUserIdSelection } from "../email-ownership";
-import { signRegistrationAffiliationContext } from "./affiliation-context";
+import { signEventAffiliationContext } from "../identities/event-affiliation-context";
 import { nowIso } from "../../utils/time";
 import { batchFirst } from "../../db/pagination";
 /**
@@ -218,11 +218,15 @@ export async function verifyRegistrationEmailProof(
       { ...observed.basis, identities: [], emailOwner: null },
       nowIso(),
     );
-    preview.contextToken = await signRegistrationAffiliationContext(input.signingSecret, {
-      eventId: proof.eventId,
-      input: selection,
-      basis: observed.basis,
-    });
+    preview.contextToken = await signEventAffiliationContext(
+      input.signingSecret,
+      {
+        eventId: proof.eventId,
+        input: selection,
+        basis: observed.basis,
+      },
+      "registration-affiliation",
+    );
   }
   return {
     email: proof.email,

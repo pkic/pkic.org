@@ -1,5 +1,6 @@
 import { ServerSelectPreview } from "./ServerSelectPreview";
 import { RegistrationFieldsPreview } from "./RegistrationFieldsPreview";
+import { VerifiedOrganizationPreview, ProposalIdentityPreview } from "./VerifiedOrganizationPreview";
 import { ContentVersionNoticePreview } from "./ContentVersionNoticePreview";
 import { ModelNavigationPreview } from "./ModelNavigationPreview";
 import { contentContributionPreview } from "./ContentContributionPreview";
@@ -273,6 +274,18 @@ export const patternSections: PreviewSection[] = [
     title: "Questionnaire fields",
     note: "Configured dietary and topic controls, shared by public and portal registration.",
     render: () => <RegistrationFieldsPreview />,
+  },
+  {
+    id: "verified-organization",
+    title: "Verified organization",
+    note: "One chooser for registration, identities, and speaker affiliations.",
+    render: () => <VerifiedOrganizationPreview />,
+  },
+  {
+    id: "proposal-identity",
+    title: "Proposal identity",
+    note: "The actual public proposal identity step embeds the shared verified-domain chooser.",
+    render: () => <ProposalIdentityPreview />,
   },
   {
     id: "server-select",

@@ -14,7 +14,11 @@ import { prepareVerifiedOrganizationAffiliation } from "./reconciliation";
 import { verifiedRepresentationDomainCandidates } from "./verified-email-domain";
 export async function planVerifiedAffiliation(
   db: DatabaseLike,
-  authority: { userId: string; proofEvidence: AuthorizationEvidence },
+  authority: {
+    userId: string;
+    proofEvidence: AuthorizationEvidence;
+    profile?: Parameters<typeof prepareVerifiedOrganizationAffiliation>[1]["profile"];
+  },
   input: z.infer<typeof identityAffiliationPrepareSchema>,
   basis: z.infer<typeof verifiedAffiliationBasisSchema>,
   at: string,
@@ -24,6 +28,15 @@ export async function planVerifiedAffiliation(
       422,
       "IDENTITY_ORGANIZATION_RESOLVED",
       "Choose an existing organization or enter a new organization name.",
+    );
+  const owned =
+    input.organizationId &&
+    basis.identities.some(
+      (identity) =>
+        identity.organization_id === input.organizationId &&
+        identity.started_at &&
+        identity.ended_at === null &&
+        identity.blocked_at === null,
     );
   const domainToLink =
     input.domain && basis.domain !== workEmailDomain(input.email) && !basis.claim ? basis.domain : null;
@@ -46,7 +59,7 @@ export async function planVerifiedAffiliation(
       organizationName: input.organizationName,
       organizationId: input.organizationId ?? undefined,
       organizationChoice: { organizationId: input.organizationId },
-      profile: { jobTitle: input.jobTitle },
+      profile: { ...authority.profile, jobTitle: input.jobTitle },
       at,
       proofEvidence: authority.proofEvidence,
     },
@@ -79,11 +92,15 @@ export async function planVerifiedAffiliation(
     ...plan,
     domainToLink,
     statements: [
-      prepareAuthorizationGuard(db, {
-        sql: `SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM organization_domain_claims
+      ...(!owned || domainToLink
+        ? [
+            prepareAuthorizationGuard(db, {
+              sql: `SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM organization_domain_claims
           WHERE domain IN (SELECT value FROM json_each(?)) AND (application_id IS NOT NULL OR length(domain)>?))`,
-        bindings: [JSON.stringify(organizationDomainCandidates(input.email)), basis.domain.length],
-      }),
+              bindings: [JSON.stringify(organizationDomainCandidates(input.email)), basis.domain.length],
+            }),
+          ]
+        : []),
       ...plan.statements,
       ...domainStatements,
     ],

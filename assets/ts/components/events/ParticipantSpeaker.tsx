@@ -37,7 +37,7 @@ import { normalizeProfileLinks } from "../../shared/widgets/profile-links";
 import { Markdown } from "../../ui/Markdown";
 import { Menu } from "../../ui/Menu";
 import { SpeakerParticipationIdentity } from "../SpeakerParticipationIdentity";
-import { newAffiliationDetails, type ProposalEntrySelection } from "../useProposalEntryIdentity";
+import { newAffiliationDetails, prepareProposalEntry, type ProposalEntrySelection } from "../useProposalEntryIdentity";
 import {
   eventProposalProofIdentityPatchSchema,
   eventProposalProofIdentityPatchResponseSchema,
@@ -240,18 +240,19 @@ export function ParticipantSpeaker({
                   return;
                 }
                 void perform(async () => {
+                  const submittedEntry = identityChanged && entry ? await prepareProposalEntry(entry) : null;
                   await patchJson(
                     path("profile"),
                     speakerSelfProfilePatchSchema.parse({
                       ...checked.data,
-                      ...(identityChanged && entry
+                      ...(submittedEntry
                         ? {
-                            actingIdentityId: entry.actingIdentityId,
-                            continuationToken: entry.continuationToken,
-                            unaffiliatedAttestation: entry.unaffiliatedAttestation,
-                            independentCapacity: entry.independentCapacity,
+                            actingIdentityId: submittedEntry.actingIdentityId,
+                            continuationToken: submittedEntry.continuationToken,
+                            unaffiliatedAttestation: submittedEntry.unaffiliatedAttestation,
+                            independentCapacity: submittedEntry.independentCapacity,
                             consents: acceptedConsents(),
-                            ...newAffiliationDetails(entry),
+                            ...newAffiliationDetails(submittedEntry),
                           }
                         : {}),
                     }),

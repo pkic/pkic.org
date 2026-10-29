@@ -287,6 +287,23 @@ describe("individual membership alias preflight", () => {
     ).toEqual([{ user_id: userId }]);
   });
 
+  it("adds approved membership to an attendee's existing personal identity without replacing its profile", async () => {
+    const userId = await insertUser(env.DB);
+    const alias = await addAlias(userId, true);
+    const identityId = crypto.randomUUID();
+    const at = "2026-10-17T00:00:00.000Z";
+    await env.DB.prepare(`INSERT INTO identities(id,user_id,source,biography,show_on_organization_profile,invited_at,started_at,created_at,updated_at)
+      VALUES(?,?,'staff','Existing attendee profile',0,?,?,?,?)`)
+      .bind(identityId, userId, at, at, at, at)
+      .run();
+    const result = await provisionOrganizationMembership(env.DB, input(alias));
+    expect(result.identities[0].identityId).toBe(identityId);
+    expect(
+      await env.DB.prepare("SELECT biography FROM identities WHERE id=?").bind(identityId).first("biography"),
+    ).toBe("Existing attendee profile");
+    expect(await queryAll(env.DB, "SELECT id FROM identities WHERE user_id=?", userId)).toEqual([{ id: identityId }]);
+  });
+
   it("preserves rejection-disabled reuse and the existing active-identity refusal", async () => {
     const userId = await insertUser(env.DB);
     const alias = await addAlias(userId, false);

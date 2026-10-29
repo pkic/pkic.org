@@ -1,5 +1,6 @@
 import { submitMembershipApplication } from "./helpers/membership";
 import { userCreateSchema } from "../../assets/shared/schemas/user-create";
+import { ownEmailAddressAddSchema } from "../../assets/shared/schemas/own-email-addresses";
 import { organizationDomainsListResponseSchema } from "../../assets/shared/schemas/organization-domains";
 import { geolocationCountryResponseSchema } from "../../assets/shared/schemas/geolocation";
 import { mkdir } from "node:fs/promises";
@@ -348,11 +349,28 @@ test("a proved work address requires organization confirmation and an incorrect 
     await (await page.request.get("/api/v1/users/current/identities?limit=100")).json(),
   );
   const original = identities.identities.find((identity) => identity.organizationName === names[0])!;
+  const replacementEmail = `corrected@${domain}`;
+  const sinceReplacement = await capturedEmailCount();
+  const requestedEmail = await page.request.post("/api/v1/users/current/emails", {
+    data: ownEmailAddressAddSchema.parse({ email: replacementEmail }),
+  });
+  expect(requestedEmail.status(), await requestedEmail.text()).toBe(202);
+  const replacementMessage = await waitForCapturedEmail(replacementEmail, "Verify your email", {
+    since: sinceReplacement,
+  });
+  const replacementPage = await page.context().newPage();
+  await replacementPage.goto(extractEmailUrl(replacementMessage, "/email-verifications"));
+  await replacementPage.getByRole("button", { name: "Verify this address", exact: true }).click();
+  await expect(replacementPage.getByText(`${replacementEmail} is verified`, { exact: true })).toBeVisible();
+  await replacementPage.close();
   await page.getByRole("button", { name: `Actions for ${names[0]}`, exact: true }).click();
   await page.getByRole("menuitem", { name: "Change representation email…", exact: true }).click();
   const emailDialog = page.getByRole("dialog", { name: "Change representation email", exact: true });
   await emailDialog.getByRole("combobox", { name: /^Representation email/ }).click();
-  await page.getByRole("option", { name: e2eAdminEmail("representation-onboarding"), exact: true }).click();
+  await expect(page.getByRole("option", { name: e2eAdminEmail("representation-onboarding"), exact: true })).toHaveCount(
+    0,
+  );
+  await page.getByRole("option", { name: replacementEmail, exact: true }).click();
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.screenshot({ path: `${directory}/representation-email-desktop.png` });
   await page.setViewportSize({ width: 375, height: 812 });
@@ -368,8 +386,8 @@ test("a proved work address requires organization confirmation and an incorrect 
     .identities.find((identity) => identity.id === original.id)!;
   expect(corrected.organizationId).toBe(original.organizationId);
   expect(corrected.jobTitle).toBe(original.jobTitle);
-  expect(corrected.emailId).toBeNull();
-  expect(corrected.email).toBe(e2eAdminEmail("representation-onboarding"));
+  expect(corrected.emailId).not.toBeNull();
+  expect(corrected.email).toBe(replacementEmail);
   const incorrect = identities.identities.find((identity) => identity.organizationName === names[1])!;
   const domains = organizationDomainsListResponseSchema.parse(
     await (await page.request.get(`/api/v1/organizations/${incorrect.organizationId}/domains`)).json(),

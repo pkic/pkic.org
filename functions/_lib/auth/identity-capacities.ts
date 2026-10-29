@@ -14,6 +14,10 @@ import {
 } from "../../../assets/shared/session-acting-identity";
 import { executiveCouncilSeatSql } from "./executive-council";
 import { activeOrganizationMemberRepresentationPredicate } from "../services/membership/capacity-query";
+import { sqlValue, type SqlId } from "../db/sql-value";
+import { batchRows } from "../db/pagination";
+import { actingIdentitiesSelection, decodeActingIdentities } from "./session-acting-identities";
+import type { D1StatementResult } from "../types";
 
 export const STAFF_ACCESS_CONDITION = `(
   EXISTS (
@@ -231,14 +235,36 @@ export async function resolveEligibleMembershipRows(
   db: DatabaseLike,
   userId: string,
 ): Promise<MemberEligibleUserRow[]> {
-  return all<MemberEligibleUserRow>(
-    db,
-    `SELECT ${MEMBER_ELIGIBLE_USER_COLUMNS}
+  const read = eligibleMembershipSelection(userId);
+  return all<MemberEligibleUserRow>(db, read.sql, read.bindings);
+}
+
+export function eligibleMembershipSelection(userId: SqlId) {
+  const user = sqlValue(userId);
+  return {
+    sql: `SELECT ${MEMBER_ELIGIBLE_USER_COLUMNS}
      FROM (${MEMBER_ELIGIBLE_USER_SELECT}) combined
-     WHERE id = ? AND active = 1
+     WHERE id = ${user.sql} AND active = 1
      ORDER BY sort_key ASC`,
-    [userId],
-  );
+    bindings: user.bindings,
+  };
+}
+
+/** Project the session's exact member and acting identities inside its existing write batch. */
+export function prepareEligibleMemberRead(db: DatabaseLike, userId: SqlId, identityId: string) {
+  const memberships = eligibleMembershipSelection(userId);
+  const identities = actingIdentitiesSelection(userId);
+  return {
+    statements: [
+      db.prepare(memberships.sql).bind(...memberships.bindings),
+      db.prepare(identities.sql).bind(...identities.bindings),
+    ],
+    decode: (results: D1StatementResult[]) =>
+      selectActingMember(
+        batchRows<MemberEligibleUserRow>(results[0]),
+        resolveSessionActingIdentityId(decodeActingIdentities(results[1]), identityId),
+      ),
+  };
 }
 
 /**

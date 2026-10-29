@@ -6,7 +6,7 @@ import { emailDomainOf } from "../../../../assets/shared/schemas/email-domains";
 import { workEmailDomain } from "../../email-domains/classification";
 import { individualIdentityIdSql } from "../identities/affiliation-projection";
 import { prepareIndividualIdentityStatement } from "../users";
-import { readRegistrationAffiliationContext } from "./affiliation-context";
+import { readEventAffiliationContext } from "../identities/event-affiliation-context";
 import { planRegistrationAffiliation } from "./affiliation-plan";
 import { AppError } from "../../errors";
 import { first } from "../../db/queries";
@@ -186,11 +186,12 @@ export async function prepareConfirmRegistrationByToken(
   let affiliationConfirmed = false;
   let organizationOutcome: RegistrationOrganizationOutcome | undefined;
   if (payload.organization?.contextToken) {
-    const context = await readRegistrationAffiliationContext(
+    const context = await readEventAffiliationContext(
       payload.signingSecret,
       payload.organization.contextToken,
       registration.event_id,
       inviteEmail ?? user.normalized_email,
+      "registration-affiliation",
       payload.organization,
     );
     const plan = await planRegistrationAffiliation(

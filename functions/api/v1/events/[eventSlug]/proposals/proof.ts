@@ -46,6 +46,8 @@ export const EventProposalProofVerifyPost = openApiRoute(eventProposalProofVerif
       await verifyEventProposalProof(c.env.DB, {
         eventId: event.id,
         token: data.body.token,
+        domain: data.body.domain,
+        affiliation: data.body.affiliation,
         event,
         appBaseUrl: resolveAppBaseUrl(c.env, c.req.raw),
         signingSecret: requireInternalSecret(c.env),

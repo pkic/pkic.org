@@ -18,6 +18,7 @@ import {
  */
 import { first } from "../../db/queries";
 import { nowIso } from "../../utils/time";
+import { buildIndividualMembershipIdentity } from "./individual-identity";
 import { uuid } from "../../utils/ids";
 import { AppError } from "../../errors";
 import type { UserRecord } from "../users";
@@ -132,16 +133,15 @@ async function buildProvisionIndividualMemberships(
     const { user, statements: userStatements } = await buildProvisioningUser(db, rep, input.mailboxVerified);
     statements.push(...userStatements);
 
-    const { identityId, statement: identityStatement } = await buildCreateIdentityStatement(db, {
+    const { identityId, statements: identityStatements } = await buildIndividualMembershipIdentity(db, {
       userId: user.id,
-      organizationId: null,
       biography: rep.biography ?? null,
       linksJson: rep.links ? serializeLinks(rep.links) : null,
       source: input.identitySource,
       startImmediately: input.activateIdentities,
       now,
     });
-    statements.push(identityStatement);
+    statements.push(...identityStatements);
 
     const { memberId, statements: memberStatements } = buildCreateIndividualMemberStatements(
       db,

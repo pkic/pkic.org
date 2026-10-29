@@ -1,40 +1,36 @@
 /** End only domain-backed representations that lose their last verified supporting mailbox. */
 import type { DatabaseLike, StatementLike } from "../../types";
 import { emailDomainOf } from "../../../../assets/shared/schemas/email-domains";
-import { governingDomainClaimSql, hostWithinDomainSql } from "../../email-domains/sql";
+import { hostWithinDomainSql } from "../../email-domains/sql";
 import { prepareSitePublicationRequestSelection } from "../site-publication-requests";
 import { prepareAutomaticGroupEnrollmentForUserStatements } from "../groups/automatic-enrollment";
+import { domainBackedIdentitySql, identityEmailDomainSupportSql } from "./email-domain-support";
 
 export function preparePrimaryEmailDomainChange(
   db: DatabaseLike,
   input: { userId: string; previousEmail: string; nextEmail: string; at: string },
 ): StatementLike[] {
   if (emailDomainOf(input.previousEmail) === emailDomainOf(input.nextEmail)) return [];
-  const host = (mail: string) => `substr(${mail},instr(${mail},'@')+1)`;
-  const supports = (
-    address: string,
-  ) => `(${hostWithinDomainSql(host(address), "COALESCE(identity.verified_email_domain,?)")} OR EXISTS (
-    SELECT 1 FROM organization_domain_claims claim WHERE claim.organization_id=identity.organization_id
-      AND claim.application_id IS NULL AND ${governingDomainClaimSql(host(address))}))`;
+  const supports = (address: string) => identityEmailDomainSupportSql(address, "identity", "?");
   const oldDomain = emailDomainOf(input.previousEmail);
   const affected = {
     sql: `SELECT identity.id AS resource_id FROM identities identity WHERE identity.user_id=?
       AND identity.organization_id IS NOT NULL AND identity.started_at IS NOT NULL AND identity.ended_at IS NULL
       AND identity.blocked_at IS NULL AND identity.email_id IS NULL
-      AND (identity.source IN ('verified_email','verified_domain') OR identity.verified_email_domain IS NOT NULL)
+      AND ${domainBackedIdentitySql()}
       AND ${hostWithinDomainSql("?", "COALESCE(identity.verified_email_domain,?)")}
       AND NOT EXISTS (SELECT 1 FROM users person WHERE person.id=identity.user_id AND person.active=1 AND person.email_verified_at IS NOT NULL AND ${supports("person.normalized_email")})`,
     bindings: [input.userId, oldDomain, oldDomain, oldDomain],
   };
   const selection = {
     sql: `${affected.sql} AND NOT EXISTS (SELECT 1 FROM user_emails address WHERE address.user_id=identity.user_id AND address.verified_at IS NOT NULL
-        AND (address.identity_id=identity.id OR ${supports("address.normalized_email")}))`,
+        AND ${supports("address.normalized_email")})`,
     bindings: [...affected.bindings, oldDomain],
   };
   const supportingAddress = `SELECT address.id FROM user_emails address
     WHERE address.user_id=identity.user_id AND address.verified_at IS NOT NULL
       AND (address.identity_id IS NULL OR address.identity_id=identity.id)
-      AND (address.identity_id=identity.id OR ${supports("address.normalized_email")})
+      AND ${supports("address.normalized_email")}
     ORDER BY CASE WHEN address.identity_id=identity.id THEN 0 ELSE 1 END,address.created_at,address.id LIMIT 1`;
   return [
     prepareSitePublicationRequestSelection(

@@ -17,7 +17,7 @@ export interface EmailOwnership {
   alternateVerifiedAt: string | null;
 }
 
-function emailOwnershipSelection(email: string) {
+export function emailOwnershipSelection(email: string) {
   return {
     sql: `WITH owner AS (
     SELECT person.id AS userId,'primary' AS kind,NULL AS emailId,person.email_verified_at AS verifiedAt,

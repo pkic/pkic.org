@@ -1,5 +1,5 @@
 import type { RegistrationOrganizationOutcome } from "../../../../assets/shared/schemas/registration";
-import { readRegistrationAffiliationContext } from "./affiliation-context";
+import { readEventAffiliationContext } from "../identities/event-affiliation-context";
 import {
   personalPromotionImagePath,
   personalPromotionSharePath,
@@ -147,11 +147,12 @@ export async function submitEventRegistration(
     throw new AppError(409, "IDENTITY_CONTEXT_REQUIRED", "Confirm your organization details again before registering.");
   const affiliationContext =
     body.organization?.contextToken && metadata.mailboxVerified
-      ? await readRegistrationAffiliationContext(
+      ? await readEventAffiliationContext(
           metadata.signingSecret,
           body.organization.contextToken,
           event.id,
           body.email,
+          "registration-affiliation",
           body.organization,
         )
       : undefined;

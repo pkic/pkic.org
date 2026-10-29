@@ -18,9 +18,179 @@ import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { seedOrganizationAggregate, insertOrganization, insertUser } from "./helpers/membership";
 import { prepareProposalProof } from "./helpers/proposal-proof";
 import { resetDb } from "./helpers/reset-db";
+import { readEventAffiliationContext } from "../functions/_lib/services/identities/event-affiliation-context";
+import { seedMemberApplication } from "./helpers/member-applications";
 
 beforeEach(resetDb);
 const consents = [{ termKey: "speaker-terms", version: "v1" }];
+
+describe("shared verified organization choice in a public proposal", () => {
+  it("reuses an approved owned representation while a domain application prevents new affiliations", async () => {
+    await seedEventAndAdmin(env.DB);
+    const email = "speaker@held-company.test";
+    const userId = await insertUser(env.DB, email);
+    const organizationId = await insertOrganization(env.DB, "Approved organization");
+    const identity = await buildCreateIdentityStatement(env.DB, {
+      userId,
+      organizationId,
+      source: "staff",
+      startImmediately: true,
+      jobTitle: "Researcher",
+    });
+    await identity.statement.run();
+    await seedMemberApplication({
+      applicantEmail: "applicant@held-company.test",
+      organizationDomain: "held-company.test",
+    });
+    const proof = await prepareProposalProof({
+      environment: env,
+      eventSlug: "pqc-2026",
+      email,
+      consents,
+      unaffiliatedAttestation: false,
+    });
+    const queued = await env.DB.prepare(
+      "SELECT payload_json FROM email_outbox WHERE recipient_email=? AND template_key='event_proposal_verify'",
+    )
+      .bind(email)
+      .first<{ payload_json: string }>();
+    const delivered = await deliveredEmailPayload<{ verificationUrl: string }>(env.DB, env, queued!.payload_json);
+    const token = new URLSearchParams(new URL(delivered.verificationUrl).hash.slice(1)).get("verify");
+    const result = await callApi(env, "/api/v1/events/pqc-2026/proposals/proof/verify", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token, affiliation: { organizationId, jobTitle: "Researcher" } }),
+    });
+    expect(result.status, await result.clone().text()).toBe(200);
+    const prepared = eventProposalProofVerifyResponseSchema.parse(await result.json());
+    if (prepared.status !== "ready") throw new Error("Expected the existing approved representation");
+    expect(prepared.affiliation?.identityId).toBe(identity.identityId);
+    expect(prepared.affiliation?.contextToken).toBeTruthy();
+    expect(proof.continuationToken).toBeTruthy();
+    const saved = await callApi(env, "/api/v1/events/pqc-2026/proposals", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(
+        proposalCreateSchema.parse({
+          ...proof,
+          proposer: {
+            email,
+            firstName: "Casey",
+            lastName: "Example",
+            organizationName: "Approved organization",
+            jobTitle: "Researcher",
+            organizationContextToken: prepared.affiliation!.contextToken,
+          },
+          proposal: {
+            type: "talk",
+            title: "Reusing an approved representation",
+            abstract:
+              "A synthetic proposal demonstrating that an approved representation remains reusable while a pending membership application prevents new domain-based affiliations.",
+          },
+          consents,
+        }),
+      ),
+    });
+    expect(saved.status, await saved.clone().text()).toBe(200);
+    expect(await queryAll(env.DB, "SELECT id FROM identities WHERE user_id=?", userId)).toEqual([
+      { id: identity.identityId },
+    ]);
+  });
+  it.each([false, true])(
+    "confirms an unclaimed subdomain with the shared planner (concurrent claim: %s)",
+    async (race) => {
+      const { eventId } = await seedEventAndAdmin(env.DB);
+      const parentId = await insertOrganization(env.DB, "Parent organization");
+      const at = nowIso();
+      await env.DB.prepare(`INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at)
+      VALUES(?,'parent.example',?,?,?)`)
+        .bind(crypto.randomUUID(), parentId, at, at)
+        .run();
+      const email = "new-person@division.parent.example";
+      const proof = await prepareProposalProof({
+        environment: env,
+        eventSlug: "pqc-2026",
+        email,
+        consents,
+        unaffiliatedAttestation: false,
+      });
+      const queued = await env.DB.prepare(
+        "SELECT payload_json FROM email_outbox WHERE template_key='event_proposal_verify' AND recipient_email=?",
+      )
+        .bind(email)
+        .first<{ payload_json: string }>();
+      const delivered = await deliveredEmailPayload<{ verificationUrl: string }>(env.DB, env, queued!.payload_json);
+      const token = new URLSearchParams(new URL(delivered.verificationUrl).hash.slice(1)).get("verify");
+      const prepared = await callApi(env, "/api/v1/events/pqc-2026/proposals/proof/verify", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          token,
+          affiliation: {
+            domain: "division.parent.example",
+            organizationId: null,
+            organizationName: "Division organization",
+            jobTitle: "Researcher",
+          },
+        }),
+      });
+      expect(prepared.status, await prepared.clone().text()).toBe(200);
+      const selected = eventProposalProofVerifyResponseSchema.parse(await prepared.json());
+      if (selected.status !== "ready" || !selected.affiliation?.contextToken)
+        throw new Error("Expected a prepared organization choice");
+      await expect(
+        readEventAffiliationContext(
+          env.INTERNAL_SIGNING_SECRET!,
+          selected.affiliation.contextToken,
+          eventId,
+          email,
+          "registration-affiliation",
+        ),
+      ).rejects.toMatchObject({ code: "IDENTITY_CONTEXT_CHANGED" });
+      if (race)
+        await env.DB.prepare(`INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at)
+      VALUES(?,'division.parent.example',?,?,?)`)
+          .bind(crypto.randomUUID(), parentId, at, at)
+          .run();
+      const saved = await callApi(env, "/api/v1/events/pqc-2026/proposals", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(
+          proposalCreateSchema.parse({
+            ...proof,
+            proposer: {
+              email,
+              firstName: "Casey",
+              lastName: "Example",
+              organizationName: "Division organization",
+              jobTitle: "Researcher",
+              organizationContextToken: selected.affiliation.contextToken,
+            },
+            proposal: {
+              type: "talk",
+              title: "A shared organization selection",
+              abstract:
+                "A synthetic proposal that verifies the shared organization chooser, subdomain selection, mailbox evidence, and guarded canonical identity creation across public event flows.",
+            },
+            consents,
+          }),
+        ),
+      });
+      expect(saved.status, await saved.clone().text()).toBe(race ? 409 : 200);
+      const created = await queryAll<{ id: string }>(
+        env.DB,
+        "SELECT id FROM organizations WHERE name='Division organization'",
+      );
+      expect(created).toHaveLength(race ? 0 : 1);
+      if (!race)
+        expect(
+          await env.DB.prepare(
+            "SELECT organization_id FROM organization_domain_claims WHERE domain='division.parent.example'",
+          ).first("organization_id"),
+        ).toBe(created[0].id);
+    },
+  );
+});
 const patch = (identityId: string, body: unknown, session?: string) =>
   callApi(env, `/api/v1/events/pqc-2026/proposals/proof/identities/${identityId}`, {
     method: "PATCH",

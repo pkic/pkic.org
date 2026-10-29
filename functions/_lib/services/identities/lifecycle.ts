@@ -8,7 +8,7 @@ import {
 } from "./profile-statement";
 import type { IdentityTransition } from "../../../../assets/shared/schemas/identity";
 import { preparePermissionsAuthorizationGuard } from "../../auth/permissions";
-import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
+import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../db/authorization-guard";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
@@ -29,6 +29,7 @@ import {
   type IdentityNotificationContext,
 } from "./notifications";
 import { loadReinstatementCandidate, planReinstatement, prepareReinstatementStatements } from "./reinstate";
+import { representationEmailDomainEvidence } from "./email-domain-support";
 import type { IdentityManagerActor } from "./types";
 
 interface IdentityStateRow {
@@ -180,6 +181,9 @@ export async function updateOrganizationIdentityProfile(
       sessionExpiresAt: actor.sessionExpiresAt,
       staffAuthorized: actor.staffAuthorized,
     }),
+    ...(input.emailId === undefined
+      ? []
+      : [prepareAuthorizationGuard(db, representationEmailDomainEvidence(identity.id, input.emailId))]),
     ...(publication ? [publication] : []),
     prepareIdentityProfileUpdateStatement(db, identity, input, at),
     prepareScopedAuditLogAfterOneChange(

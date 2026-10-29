@@ -21,7 +21,11 @@ import {
 } from "../../shared/schemas/proposal-management";
 import { readField, findSubmitButton } from "../shared/form/helpers";
 import { EventProposalIdentityStep } from "../components/EventProposalIdentityStep";
-import { newAffiliationDetails, type ProposalEntrySelection } from "../components/useProposalEntryIdentity";
+import {
+  newAffiliationDetails,
+  prepareProposalEntry,
+  type ProposalEntrySelection,
+} from "../components/useProposalEntryIdentity";
 import { ParticipationIdentitySummary } from "../components/ParticipationIdentitySummary";
 import { SpeakerFormCard } from "../components/SpeakerFormCard";
 import { ConfirmDialogHost } from "../components/ConfirmDialog";
@@ -400,6 +404,7 @@ async function main(): Promise<void> {
         return false;
       }
       if (step === CONTACT_STEP && entry) {
+        if (entry.validateAffiliation?.() === false) return false;
         // The contract's own rule for who the contact takes part as, checked where it is asked.
         const contact = proposalContactSchema.safeParse(contactOf(entry));
         if (!contact.success) {
@@ -496,9 +501,9 @@ async function main(): Promise<void> {
       setStatus(statusEl, "Confirm your participation details and email before submitting.", true);
       return;
     }
-    const submittedEntry = entry;
     await withLoadingButton(findSubmitButton(form), async () => {
       try {
+        const submittedEntry = await prepareProposalEntry(entry!);
         const isPresenting = isPresentingCheckbox?.checked ?? false;
         const firstName = submittedEntry.person.firstName ?? "";
 

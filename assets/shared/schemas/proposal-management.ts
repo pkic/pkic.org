@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { identityAffiliationContextSchema } from "./identity-affiliation";
 import { databaseIdSchema } from "./identifiers";
 import { linksSchema } from "./links";
 import {
@@ -67,6 +68,7 @@ export const MAX_PROPOSAL_PARTICIPANTS = MAX_PROPOSAL_ADDITIONAL_SPEAKERS + 1;
 export const proposalNewAffiliationShape = {
   organizationName: optionalNullableOrEmpty(organizationNameSchema),
   jobTitle: optionalNullableOrEmpty(jobTitleSchema),
+  organizationContextToken: identityAffiliationContextSchema.optional(),
 };
 
 /**

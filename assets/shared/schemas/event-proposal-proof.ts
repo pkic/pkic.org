@@ -17,6 +17,7 @@ import { databaseIdSchema } from "./identifiers";
 import { httpCapabilityUrlSchema } from "./urls";
 import { proposalEntryContextSchema } from "./proposal-entry";
 import { screensWorkEmailDomain, workEmailStepSchema } from "./work-email";
+import { identityAffiliationPrepareBaseSchema, identityAffiliationPreviewResponseSchema } from "./identity-affiliation";
 
 export const eventProposalContinuationTokenSchema = z.string().min(32).max(EMAIL_AUTH_TOKEN_MAX_LENGTH);
 
@@ -42,6 +43,8 @@ export const eventProposalProofVerifySchema = z
     token: eventProposalContinuationTokenSchema,
     speakerManagementToken: eventProposalContinuationTokenSchema.optional(),
     speakerProposalId: databaseIdSchema.optional(),
+    ...identityAffiliationPrepareBaseSchema.pick({ domain: true }).shape,
+    affiliation: identityAffiliationPrepareBaseSchema.omit({ phase: true, email: true, emailId: true }).optional(),
   })
   .strict();
 export const eventProposalProofPersonSchema = z.object({
@@ -108,6 +111,7 @@ export const eventProposalProofVerifyResponseSchema = z.discriminatedUnion("stat
     consents: z.array(consentItemSchema).max(20),
     person: eventProposalProofPersonSchema.nullable(),
     email: normalizedEmailSchema,
+    affiliation: identityAffiliationPreviewResponseSchema.optional(),
     organization: z
       .object({
         id: databaseIdSchema,

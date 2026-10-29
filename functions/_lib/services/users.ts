@@ -1,5 +1,11 @@
 import { firstNameSchema, lastNameSchema } from "../../../assets/shared/schemas/api-common";
-import { readEmailOwnership, provedMailboxUserId, prepareEmailOwnershipClaim } from "./email-ownership";
+import {
+  readEmailOwnership,
+  provedMailboxUserId,
+  provedMailboxUserIdSelection,
+  prepareEmailOwnershipClaim,
+  type EmailOwnership,
+} from "./email-ownership";
 import { first } from "../db/queries";
 import { normalizeEmail } from "../validation";
 import { nowIso } from "../utils/time";
@@ -233,6 +239,17 @@ interface ResolvedUserWrite {
   statements: StatementLike[];
 }
 
+/** Request-owned database observations, never client-supplied authority. */
+export interface VerifiedUserWriteObservation {
+  ownership: EmailOwnership | null;
+  existing: UserRecord | null;
+}
+
+export function provedMailboxUserSelection(email: string) {
+  const owner = provedMailboxUserIdSelection(email);
+  return { sql: `SELECT ${userRecordColumns()} FROM users WHERE id=(${owner.sql})`, bindings: owner.bindings };
+}
+
 /** The individual identity a new account starts with: no organization, no title, not on any profile. */
 export function prepareAccountIdentityStatement(db: DatabaseLike, userId: string, at: string): StatementLike {
   return db
@@ -271,15 +288,26 @@ export function prepareIndividualIdentityStatement(
     .bind(identityId, userId, at, at, at, at, userId);
 }
 
-async function resolveUserWrite(db: DatabaseLike, payload: FindOrCreateUserPayload): Promise<ResolvedUserWrite> {
+async function resolveUserWrite(
+  db: DatabaseLike,
+  payload: FindOrCreateUserPayload,
+  observed?: VerifiedUserWriteObservation,
+): Promise<ResolvedUserWrite> {
   const normalized = normalizeEmail(payload.email);
-  const ownership = payload.mailboxVerified ? await readEmailOwnership(db, normalized) : null;
+  const ownership = payload.mailboxVerified
+    ? observed
+      ? observed.ownership
+      : await readEmailOwnership(db, normalized)
+    : null;
   const provedUserId = provedMailboxUserId(ownership);
-  const existing = payload.mailboxVerified
-    ? provedUserId
-      ? await first<UserRecord>(db, `SELECT ${userRecordColumns()} FROM users WHERE id=?`, [provedUserId])
-      : null
-    : await findExistingUserByAnyEmail(db, normalized);
+  const existing =
+    payload.mailboxVerified && observed
+      ? observed.existing
+      : payload.mailboxVerified
+        ? provedUserId
+          ? await first<UserRecord>(db, `SELECT ${userRecordColumns()} FROM users WHERE id=?`, [provedUserId])
+          : null
+        : await findExistingUserByAnyEmail(db, normalized);
 
   if (!existing) {
     const user: UserRecord = {
@@ -385,6 +413,7 @@ export async function findOrCreateUser(db: DatabaseLike, payload: FindOrCreateUs
 export async function buildFindOrCreateUserStatement(
   db: DatabaseLike,
   payload: FindOrCreateUserPayload,
+  observed?: VerifiedUserWriteObservation,
 ): Promise<ResolvedUserWrite> {
-  return resolveUserWrite(db, payload);
+  return resolveUserWrite(db, payload, observed);
 }
