@@ -478,7 +478,7 @@ function stripHtmlToText(input: string): string {
         const text = stripHtmlToText(label);
         if (!href) return text;
         const placeholder = `__PKIC_EMAIL_LINK_${links.length}__`;
-        links.push(`${text} <${href}>`);
+        links.push(`${text} <${decodeCharacterReferences(href)}>`);
         return placeholder;
       })
       .replace(/<br\s*\/?>/gi, "\n")

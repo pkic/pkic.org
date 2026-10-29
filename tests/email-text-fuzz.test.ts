@@ -26,8 +26,12 @@ const WORDS = [
   "&hellip;",
   "&times;",
   "&copy;",
+  "&constructor;",
+  "&toString;",
+  "&hasOwnProperty;",
 ];
 const SPACES = new Set(["&nbsp;", "&zwnj;"]);
+const LINKS = ["https://app.test/status/?id=1&amp;token=a", "https://app.test/x?a=1&amp;b=2&amp;c=3"];
 const INLINE = ["strong", "b", "em", "i", "u", "span", "code"];
 const PUNCTUATION = [".", ",", ";", ":", "!", "?", ")"];
 
@@ -40,7 +44,8 @@ function fragment(random: () => number): string {
       WORDS.filter((word) => !SPACES.has(word)),
     );
     const marked = `<${tag}>${content}</${tag}>${pick(random, PUNCTUATION)}`;
-    return `<p>${words} ${marked} ${pieces(random, WORDS, 1, 3, " ")}</p>`;
+    const link = random() < 0.4 ? ` <a href="${pick(random, LINKS)}">open</a>` : "";
+    return `<p>${words} ${marked} ${pieces(random, WORDS, 1, 3, " ")}${link}</p>`;
   });
   return paragraphs.join("");
 }
@@ -61,6 +66,7 @@ describe.each([101, 202, 303])("plain-text fallback (seed %i)", (seed) => {
       )
         problems.push("space before punctuation");
       if (/^[ \t]+\S/m.test(text)) problems.push("indented line");
+      if (/&amp;|function /.test(text)) problems.push("encoded or leaked text");
       if (/\S {2,}\S/.test(text)) problems.push("double space");
       if (problems.length)
         failures.push(`#${index} ${problems.join(", ")}: ${JSON.stringify(source)} -> ${JSON.stringify(text)}`);

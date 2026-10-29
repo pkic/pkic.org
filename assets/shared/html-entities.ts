@@ -33,8 +33,14 @@ const NAMED_ENTITIES: Record<string, string> = {
  */
 export function decodeCharacterReferences(text: string): string {
   return text.replace(/&(?:#(\d{1,7})|#[xX]([0-9a-fA-F]{1,6})|([a-zA-Z]+));/g, (match, decimal, hex, name) => {
-    if (name) return NAMED_ENTITIES[name] ?? match;
+    if (name) return Object.hasOwn(NAMED_ENTITIES, name) ? NAMED_ENTITIES[name]! : match;
     const code = decimal ? Number.parseInt(decimal, 10) : Number.parseInt(hex, 16);
     return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : match;
   });
+}
+
+/** Whether `reference` (such as `amp;` or `#39;`, without the ampersand) is one this module decodes. */
+export function isKnownCharacterReference(reference: string): boolean {
+  const body = reference.endsWith(";") ? reference.slice(0, -1) : reference;
+  return /^#(?:\d{1,7}|[xX][0-9a-fA-F]{1,6})$/.test(body) || Object.hasOwn(NAMED_ENTITIES, body);
 }
