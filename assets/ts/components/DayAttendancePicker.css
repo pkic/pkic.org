@@ -1,4 +1,12 @@
 @layer components {
+  .pk-attendance-matrix {
+    --pk-gap: var(--pk-3);
+  }
+  .pk-attendance-matrix > p,
+  .pk-attendance-matrix .pk-alert__body > p {
+    margin: 0;
+  }
+
   .pk-attendance-matrix .pk-table {
     table-layout: fixed;
     background: var(--pk-surface);
@@ -11,7 +19,7 @@
     text-transform: none;
     letter-spacing: normal;
     white-space: normal;
-    padding: var(--pk-3) var(--pk-1);
+    padding: var(--pk-2) var(--pk-1);
   }
   .pk-attendance-matrix .pk-table__head-content {
     white-space: normal;
@@ -62,7 +70,7 @@
   }
   .pk-attendance-matrix__cell {
     min-inline-size: 3.25rem;
-    min-block-size: 4.5rem;
+    min-block-size: 4rem;
   }
   .pk-attendance-matrix td label.pk-attendance-matrix__choice {
     position: absolute;
@@ -72,7 +80,7 @@
     align-items: center;
     justify-content: center;
     gap: 0;
-    min-block-size: 4.5rem;
+    min-block-size: 4rem;
     inline-size: 100%;
   }
   .pk-attendance-matrix__choice .pk-check__input {
@@ -80,10 +88,10 @@
     inline-size: var(--pk-5);
     block-size: var(--pk-5);
   }
-  .pk-attendance-matrix__cell[data-selected] {
+  .pk-attendance-matrix td:has(.pk-attendance-matrix__cell[data-selected]) {
     background: var(--pk-accent-soft);
   }
-  .pk-attendance-matrix__cell[data-selected][data-waitlist] {
+  .pk-attendance-matrix td:has(.pk-attendance-matrix__cell[data-selected][data-waitlist]) {
     background: var(--pk-warn-soft);
   }
   .pk-attendance-matrix__cell[data-waitlist] {
@@ -110,7 +118,7 @@
     z-index: 1;
     display: grid;
     place-items: center;
-    min-block-size: 4.5rem;
+    min-block-size: 4rem;
     padding: var(--pk-1);
     color: var(--pk-ink-muted);
     font-size: var(--pk-text-xs);
@@ -123,7 +131,7 @@
     gap: var(--pk-1);
     inline-size: 100%;
     min-inline-size: 2.75rem;
-    min-block-size: 4.5rem;
+    min-block-size: 4rem;
     padding: var(--pk-1) 0;
     font-size: var(--pk-text-2xs);
     white-space: normal;

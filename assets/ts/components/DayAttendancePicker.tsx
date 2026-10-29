@@ -312,12 +312,12 @@ export function DayAttendancePicker({
                 )}`
           }
         >
-          Your selected options are full on these days. Choosing them joins the waitlist.
+          We’ll email you when a seat opens.
           {waiting.every(
             (day) =>
               selected[day.dayDate] === "in_person" &&
               day.attendanceOptions.some((option) => option.value === "virtual"),
-          ) && <p>You can watch live online while waiting for an in-person seat.</p>}
+          ) && " You can watch live online while you wait."}
         </Alert>
       )}
     </div>

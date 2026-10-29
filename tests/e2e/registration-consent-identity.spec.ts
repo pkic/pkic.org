@@ -65,6 +65,31 @@ test("verified approved-domain registration affiliates once and an organization 
   try {
     const since = await capturedEmailCount();
     const initial = await registerInBrowser(attendee, email, undefined, undefined, {
+      onAttendanceReady: async (formPage) => {
+        const choices = formPage.getByRole("group", { name: "Attendance choices", exact: true });
+        await formPage.getByRole("button", { name: /^Choose On[- ]demand for every available day$/ }).click();
+        for (const [width, height, device] of [
+          [1280, 900, "desktop"],
+          [375, 812, "phone"],
+        ] as const) {
+          await formPage.setViewportSize({ width, height });
+          await choices.scrollIntoViewIfNeeded();
+          const target = choices
+            .locator("label")
+            .filter({ has: formPage.getByRole("radio", { checked: true }) })
+            .first();
+          const bounds = await target.boundingBox();
+          expect(bounds!.width).toBeGreaterThanOrEqual(44);
+          expect(bounds!.height).toBeGreaterThanOrEqual(44);
+          expect(await target.evaluate((element) => getComputedStyle(element.closest("td")!).backgroundColor)).not.toBe(
+            "rgba(0, 0, 0, 0)",
+          );
+          await formPage.screenshot({
+            path: testInfo.outputPath(`public-attendance-spacing-${device}.png`),
+            animations: "disabled",
+          });
+        }
+      },
       onReviewReady: async (formPage) => {
         const review = formPage.getByRole("region", { name: "Registration review", exact: true });
         await expect(review.getByRole("button", { name: "Edit contact", exact: true })).toBeVisible();

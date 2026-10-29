@@ -351,12 +351,10 @@ export function RegistrationFlow(props: Props) {
             )}
           </section>
           <section data-step={updating ? undefined : "2"} class="event-flow-step pk-stack" hidden={!updating}>
-            {!updating && (
-              <p class="event-flow-step-intro">Choose how you'll follow each day — you can update this later.</p>
-            )}
             <Field
               group
               label="Attendance"
+              labelHidden={forms.eventDays.length > 0}
               {...(contract.ofGroup(forms.eventDays.length ? "dayAttendance" : "attendanceType").state === "invalid"
                 ? contract.ofGroup(forms.eventDays.length ? "dayAttendance" : "attendanceType")
                 : attendanceContract.ofGroup(forms.eventDays.length ? "dayAttendance" : "attendanceType"))}

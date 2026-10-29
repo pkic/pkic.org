@@ -18,6 +18,7 @@ export interface RegistrationOrganization {
   jobTitle?: string;
   onContactReady?: (page: Page) => Promise<void>;
   onReviewReady?: (page: Page) => Promise<void>;
+  onAttendanceReady?: (page: Page) => Promise<void>;
   onProfileReady?: (page: Page) => Promise<void>;
 }
 
@@ -142,6 +143,7 @@ export async function registerInBrowser(
   } else {
     await continueRegistrationWithEmail(page, { email, ...options });
   }
+  await options.onAttendanceReady?.(page);
   await page.getByRole("button", { name: /^Choose On[- ]demand for every available day$/ }).click();
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   await options.onProfileReady?.(page);
