@@ -8,10 +8,15 @@ import { nowIso } from "../../utils/time";
 export function verifiedAffiliationPreview(
   basis: VerifiedAffiliationBasis,
   address: { email: string; id?: string | null },
-  options: { pendingApplicationReview?: boolean } = {},
+  options: {
+    pendingApplicationReview?: boolean;
+    /** The mailbox is not recorded for the person yet, so no identity can already use it. */
+    unrecordedAddress?: boolean;
+  } = {},
 ) {
   const owned = basis.identities.filter(
     (identity) =>
+      !options.unrecordedAddress &&
       identity.organization_id !== null &&
       identity.started_at &&
       identity.started_at <= nowIso() &&

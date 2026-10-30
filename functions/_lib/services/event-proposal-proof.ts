@@ -296,7 +296,13 @@ export async function verifyEventProposalProof(
         )
       : null;
   const observed = affiliationRead?.decode(await db.batch(affiliationRead.statements));
-  const affiliation = observed ? verifiedAffiliationPreview(observed.basis, observed.address) : undefined;
+  // A new mailbox has no recorded address; that is not the person's primary one, whose identities carry no address id.
+  const affiliation = observed
+    ? verifiedAffiliationPreview(observed.basis, observed.address, {
+        unrecordedAddress:
+          observed.address.id === null && Boolean(resolved.user) && resolved.user?.normalized_email !== payload.email,
+      })
+    : undefined;
   if (input.affiliation && observed && affiliation) {
     const selection = identityAffiliationPrepareSchema.parse({
       ...input.affiliation,

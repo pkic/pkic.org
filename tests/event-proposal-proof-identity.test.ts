@@ -191,6 +191,98 @@ describe("shared verified organization choice in a public proposal", () => {
     },
   );
 });
+describe("a mailbox the person has not proved before", () => {
+  /** Confirms a mailbox for the person who confirmed `source` (or for whoever owns it, without one). */
+  async function proveMailbox(email: string, options: { source?: string; affiliation?: unknown } = {}) {
+    const { source, affiliation } = options;
+    const started = await callApi(env, "/api/v1/events/pqc-2026/proposals/proof", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email, consents, unaffiliatedAttestation: false, continuationToken: source }),
+    });
+    expect(started.status, await started.clone().text()).toBe(200);
+    const queued = await env.DB.prepare(
+      "SELECT payload_json FROM email_outbox WHERE template_key='event_proposal_verify' AND recipient_email=? ORDER BY rowid DESC LIMIT 1",
+    )
+      .bind(email)
+      .first<{ payload_json: string }>();
+    const delivered = await deliveredEmailPayload<{ verificationUrl: string }>(env.DB, env, queued!.payload_json);
+    const token = new URLSearchParams(new URL(delivered.verificationUrl).hash.slice(1)).get("verify");
+    const response = await callApi(env, "/api/v1/events/pqc-2026/proposals/proof/verify", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token, ...(affiliation ? { affiliation } : {}) }),
+    });
+    expect(response.status, await response.clone().text()).toBe(200);
+    const ready = eventProposalProofVerifyResponseSchema.parse(await response.json());
+    if (ready.status !== "ready") throw new Error("Expected a confirmed mailbox");
+    return ready;
+  }
+  async function personWithApprovedRepresentation() {
+    await seedEventAndAdmin(env.DB);
+    const userId = await insertUser(env.DB, "speaker@first-company.test");
+    await env.DB.prepare(
+      "UPDATE users SET first_name='Casey',last_name='Example',email_verified_at=updated_at WHERE id=?",
+    )
+      .bind(userId)
+      .run();
+    const organizationId = await insertOrganization(env.DB, "First organization");
+    const identity = await buildCreateIdentityStatement(env.DB, {
+      userId,
+      organizationId,
+      source: "verified_email",
+      verifiedEmailDomain: "first-company.test",
+      startImmediately: true,
+      jobTitle: "Researcher",
+    });
+    await identity.statement.run();
+    return { userId, organizationId, identityId: identity.identityId };
+  }
+  it("does not present the organization of the primary mailbox for an unrelated domain", async () => {
+    await personWithApprovedRepresentation();
+    const source = (await proveMailbox("speaker@first-company.test")).continuationToken;
+    // The proof for a known person's other address names the person, not one of their organizations.
+    const other = await proveMailbox("speaker@unrelated.test", { source });
+    expect(other.organization).toBeNull();
+  });
+  it("submits a proposal through a second mailbox at the domain of an organization the person represents", async () => {
+    const { userId, organizationId, identityId } = await personWithApprovedRepresentation();
+    const email = "second@first-company.test";
+    const source = (await proveMailbox("speaker@first-company.test")).continuationToken;
+    const prepared = await proveMailbox(email, { source, affiliation: { organizationId, jobTitle: "Researcher" } });
+    expect(prepared.organization).toMatchObject({ id: organizationId });
+    const saved = await callApi(env, "/api/v1/events/pqc-2026/proposals", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(
+        proposalCreateSchema.parse({
+          continuationToken: prepared.continuationToken,
+          unaffiliatedAttestation: false,
+          consents,
+          proposer: {
+            email,
+            firstName: "Casey",
+            lastName: "Example",
+            organizationName: "First organization",
+            jobTitle: "Researcher",
+            organizationContextToken: prepared.affiliation!.contextToken,
+          },
+          proposal: {
+            type: "talk",
+            title: "A second mailbox of the same organization",
+            abstract:
+              "A synthetic proposal showing that a newly proved mailbox is recorded with the same submission and reuses the representation the person already holds for that organization.",
+          },
+        }),
+      ),
+    });
+    expect(saved.status, await saved.clone().text()).toBe(200);
+    expect(await queryAll(env.DB, "SELECT id FROM identities WHERE user_id=?", userId)).toEqual([{ id: identityId }]);
+    expect(await queryAll(env.DB, "SELECT user_id FROM user_emails WHERE normalized_email=?", email)).toEqual([
+      { user_id: userId },
+    ]);
+  });
+});
 const patch = (identityId: string, body: unknown, session?: string) =>
   callApi(env, `/api/v1/events/pqc-2026/proposals/proof/identities/${identityId}`, {
     method: "PATCH",

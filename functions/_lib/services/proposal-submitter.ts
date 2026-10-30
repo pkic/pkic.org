@@ -134,7 +134,9 @@ export async function prepareProposalSubmitter(
                 proofEvidence: person.proofEvidence,
                 profile: { biography: profile.bio, linksJson: serializeLinks(profile.links) },
               },
-              observed.input,
+              // A mailbox the person has not proved before is recorded in this same batch, so the
+              // address the token observed has no row yet; the proof's own address is the owned one.
+              { ...observed.input, emailId: person.emailId },
               observed.basis,
               input.at,
             )
