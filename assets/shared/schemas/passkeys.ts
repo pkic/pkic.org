@@ -160,5 +160,6 @@ export const passkeyDeleteRouteSchema = {
     "401": { description: "Authentication required." },
     "403": { description: "Cannot remove another user's passkey." },
     "404": { description: "Passkey not found." },
+    "409": { description: "The passkey is the account's last way to sign in." },
   },
 };

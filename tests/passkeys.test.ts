@@ -18,6 +18,7 @@ import { queryAll } from "./helpers/context";
 import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
 import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
 import { MAX_PASSKEY_CREDENTIALS_PER_USER } from "../assets/shared/constants/passkeys";
+import { LAST_SIGN_IN_METHOD, LAST_SIGN_IN_METHOD_MESSAGE } from "../assets/shared/auth-errors";
 import { completePasskeyAuthentication, persistVerifiedPasskeyCredential } from "../functions/_lib/services/passkeys";
 import {
   passkeyAuthenticateCompleteSchema,
@@ -798,6 +799,38 @@ describe("passkeys (WebAuthn)", () => {
       passkeyId,
     );
     expect(rows[0].revoked_at).not.toBeNull();
+  });
+
+  it("refuses removing the last way to sign in, and allows it once another remains", async () => {
+    const { passkeyId } = await registerPasskey();
+    // An unproved primary stops unlocking the account once another mailbox is verified;
+    // that mailbox may not sign in until its owner allows it.
+    const emailId = crypto.randomUUID();
+    const at = new Date().toISOString();
+    await env.DB.batch([
+      env.DB.prepare("UPDATE users SET email_verified_at = NULL WHERE id = ?").bind(userId),
+      env.DB.prepare(
+        "INSERT INTO user_emails (id,user_id,email,normalized_email,verified_at,created_at) VALUES (?,?,?,?,?,?)",
+      ).bind(emailId, userId, "added@example.test", "added@example.test", at, at),
+    ]);
+
+    const refused = await call(`/api/v1/auth/passkeys/${passkeyId}`, { method: "DELETE" }, token);
+    expect(refused.status).toBe(409);
+    expect(await refused.json()).toMatchObject({
+      error: { code: LAST_SIGN_IN_METHOD, message: LAST_SIGN_IN_METHOD_MESSAGE },
+    });
+    const kept = await queryAll<{ revoked_at: string | null }>(
+      env.DB,
+      "SELECT revoked_at FROM passkey_credentials WHERE id = ?",
+      passkeyId,
+    );
+    expect(kept[0].revoked_at).toBeNull();
+
+    await env.DB.prepare("INSERT INTO user_email_sign_in_permissions (email_id, revision, enabled_at) VALUES (?,?,?)")
+      .bind(emailId, crypto.randomUUID(), at)
+      .run();
+    const allowed = await call(`/api/v1/auth/passkeys/${passkeyId}`, { method: "DELETE" }, token);
+    expect(allowed.status).toBe(200);
   });
 
   it("a user cannot authenticate with a revoked passkey", async () => {

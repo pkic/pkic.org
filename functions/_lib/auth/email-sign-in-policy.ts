@@ -1,9 +1,14 @@
 import type { AuthorizationEvidence } from "../db/authorization-guard";
 
-/** An unproved primary claim cannot unlock an account established through another verified mailbox. */
-export function primaryEmailProofMayAuthenticateSql(person: string): string {
+/**
+ * An unproved primary claim cannot unlock an account established through another verified mailbox.
+ * `ignoredEmailId` is a SQL expression for an address to leave out, one about to be removed.
+ */
+export function primaryEmailProofMayAuthenticateSql(person: string, ignoredEmailId?: string): string {
   return `(${person}.email_verified_at IS NOT NULL OR NOT EXISTS (SELECT 1 FROM user_emails verified
-    WHERE verified.user_id=${person}.id AND verified.verified_at IS NOT NULL))`;
+    WHERE verified.user_id=${person}.id AND verified.verified_at IS NOT NULL${
+      ignoredEmailId ? ` AND verified.id IS NOT ${ignoredEmailId}` : ""
+    }))`;
 }
 
 /** Ownership of an address can outlive the representation that previously used it. */

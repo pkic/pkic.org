@@ -23,6 +23,7 @@ import {
   ownEmailAddressesListResponseSchema,
 } from "../assets/shared/schemas/own-email-addresses";
 import type { Env } from "../functions/_lib/types";
+import { LAST_SIGN_IN_METHOD, LAST_SIGN_IN_METHOD_MESSAGE } from "../assets/shared/auth-errors";
 import { activateTemplateVersion, createTemplateVersion } from "../functions/_lib/email/templates";
 import { findOrCreateUser } from "../functions/_lib/services/users";
 import { createRegistration, changeRegistrationEmail } from "../functions/_lib/services/registrations";
@@ -793,6 +794,49 @@ describe("a person's own email addresses", () => {
     expect(await queryAll(env.DB, "SELECT email FROM user_emails ORDER BY email")).toEqual([
       { email: "eva@work.example" },
     ]);
+  });
+
+  it("keeps a way to sign in when the person withdraws or removes the address they sign in with", async () => {
+    const { userId, token } = await signedIn("lee@gmail.com");
+    const signIn = await add(token, "lee@signin.example");
+    await verify(await verificationToken(signIn.email));
+    const other = await add(token, "lee@other.example");
+    await verify(await verificationToken(other.email));
+    // The primary was never proved, so the verified mailboxes keep it from unlocking the account;
+    // only the address the person allowed to sign in still can.
+    const at = nowIso();
+    await env.DB.batch([
+      env.DB.prepare("UPDATE users SET email_verified_at = NULL WHERE id = ?").bind(userId),
+      env.DB.prepare(
+        "INSERT INTO user_email_sign_in_permissions (email_id, revision, enabled_at) VALUES (?, ?, ?)",
+      ).bind(signIn.id, crypto.randomUUID(), at),
+    ]);
+    const lastMethod = { error: { code: LAST_SIGN_IN_METHOD, message: LAST_SIGN_IN_METHOD_MESSAGE } };
+
+    const withdrawn = await call(
+      token,
+      `/${signIn.id}`,
+      "PATCH",
+      ownEmailAddressUpdateSchema.parse({ signInEnabled: false }),
+    );
+    expect(withdrawn.status).toBe(409);
+    expect(await withdrawn.json()).toMatchObject(lastMethod);
+
+    const removed = await call(token, `/${signIn.id}`, "DELETE");
+    expect(removed.status).toBe(409);
+    expect(await removed.json()).toMatchObject(lastMethod);
+    expect(await queryAll(env.DB, "SELECT revoked_at FROM user_email_sign_in_permissions")).toEqual([
+      { revoked_at: null },
+    ]);
+
+    // A passkey is another way in, so the address may go.
+    await env.DB.prepare(
+      "INSERT INTO passkey_credentials(id,user_id,credential_id,public_key,sign_count,created_at) VALUES(?,?,?,'AQ',0,?)",
+    )
+      .bind(crypto.randomUUID(), userId, crypto.randomUUID(), at)
+      .run();
+    const allowed = await call(token, `/${signIn.id}`, "DELETE");
+    expect(allowed.status, await allowed.clone().text()).toBe(200);
   });
 
   it("does not disclose an existing reservation before proof and limits verification mail per person", async () => {

@@ -32,6 +32,7 @@ import { resolveMemberSessionTtlHours } from "../auth/session-policy";
 import { signInCapacityAuthorizationEvidence } from "../auth/sign-in-capacity-authorization";
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../db/authorization-guard";
 import { sessionExpiresAtToExp } from "../auth/session-engine";
+import { lastSignInMethodError, refuseRemovingLastSignInMethod } from "../auth/sign-in-methods";
 import { isAuditChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange } from "./audit";
 import { MAX_PASSKEY_CREDENTIALS_PER_USER } from "../../../assets/shared/constants/passkeys";
 import type { authenticationResponseSchema, registrationResponseSchema } from "../../../assets/shared/schemas/passkeys";
@@ -570,8 +571,15 @@ export async function revokePasskey(
     throw new AppError(403, "PERMISSION_REQUIRED", "Cannot remove another user's passkey");
   }
 
-  await db.batch([
-    db.prepare("UPDATE passkey_credentials SET revoked_at = ? WHERE id = ?").bind(nowIso(), passkeyId),
-    prepareAuditLog(db, actor.kind, actor.id, "passkey_removed", "passkey_credential", passkeyId, {}),
-  ]);
+  const remains = await refuseRemovingLastSignInMethod(db, actor.id, { revokedPasskeyId: passkeyId });
+  try {
+    await db.batch([
+      prepareAuthorizationGuard(db, remains),
+      db.prepare("UPDATE passkey_credentials SET revoked_at = ? WHERE id = ?").bind(nowIso(), passkeyId),
+      prepareAuditLog(db, actor.kind, actor.id, "passkey_removed", "passkey_credential", passkeyId, {}),
+    ]);
+  } catch (error) {
+    if (isAuthorizationGuardFailure(error)) throw lastSignInMethodError();
+    throw error;
+  }
 }

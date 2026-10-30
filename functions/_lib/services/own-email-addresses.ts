@@ -2,6 +2,7 @@ import { refuseIneligibleWorkEmail } from "../email-domains/work-email-screen";
 import { prepareJobWake } from "./scheduled-jobs/dispatcher";
 import { prepareMailingListEmailChange } from "./mailing-list-subscriptions/queue-email-change";
 import { setOwnEmailSignInPermission } from "./own-email-sign-in";
+import { refuseRemovingLastSignInMethod } from "../auth/sign-in-methods";
 /**
  * The signed-in person manages their own email addresses.
  *
@@ -312,9 +313,11 @@ export async function removeOwnEmailAddress(
   const usedBy = decodeAddressUsedBy(address.used_by_json);
   if (usedBy.length)
     throw new AppError(409, "USER_EMAIL_IN_USE", ownEmailInUseMessage(usedBy.map((organization) => organization.name)));
+  const remains = await refuseRemovingLastSignInMethod(db, input.userId, { removedEmailId: input.emailId });
   const at = nowIso();
   try {
     await db.batch([
+      prepareAuthorizationGuard(db, remains),
       prepareAuthorizationGuard(db, {
         sql: `SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM identities identity WHERE identity.user_id = ?
                 AND identity.email_id = ? AND identity.ended_at IS NULL)`,
@@ -334,8 +337,11 @@ export async function removeOwnEmailAddress(
       prepareJobWake(db, "google_groups_sync"),
     ]);
   } catch (error) {
-    if (isAuthorizationGuardFailure(error))
+    if (isAuthorizationGuardFailure(error)) {
+      // The batch rolled back; asking again names the guard that refused.
+      await refuseRemovingLastSignInMethod(db, input.userId, { removedEmailId: input.emailId });
       throw new AppError(409, "USER_EMAIL_IN_USE", "An organization identity started using this address meanwhile");
+    }
     if (isAuditChangeGuardFailure(error)) throw new AppError(404, "EMAIL_NOT_FOUND", "Email address not found");
     throw error;
   }
