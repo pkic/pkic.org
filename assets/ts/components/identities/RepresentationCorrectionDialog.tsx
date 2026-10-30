@@ -18,7 +18,7 @@ export function RepresentationCorrectionDialog({
   source,
   userId,
   isSelf,
-  createdIdentityId,
+  preselectIdentityId,
   onAdd,
   onClose,
   onCorrected,
@@ -27,10 +27,15 @@ export function RepresentationCorrectionDialog({
   source: { identityId: string; organizationId: string | null; organizationName: string };
   userId: string;
   isSelf: boolean;
-  createdIdentityId?: string | null;
+  /**
+   * The identity the correction most likely moves to: one just added for it,
+   * otherwise the one the person acts as. Ignored when it is the identity
+   * being corrected or belongs to the same organization.
+   */
+  preselectIdentityId?: string | null;
   onAdd: () => void;
   onClose: () => void;
-  onCorrected: () => void | Promise<void>;
+  onCorrected: (replacement: ActingIdentity) => void | Promise<void>;
 }) {
   const [selected, setSelected] = useState<ActingIdentity | null>(null);
   const [reason, setReason] = useState("");
@@ -39,17 +44,19 @@ export function RepresentationCorrectionDialog({
   const endpoint = isSelf ? "/api/v1/users/current/identities" : "/api/v1/identities";
   const form = useContractForm(identityCorrectionSchema, { replacementIdentityId: selected?.id, reason });
   useEffect(() => {
-    if (!open || !createdIdentityId) return;
+    if (!open || !preselectIdentityId || preselectIdentityId === source.identityId) return;
     let cancelled = false;
     const query = new URLSearchParams({
-      identityId: createdIdentityId,
+      identityId: preselectIdentityId,
       userId,
       active: "true",
       limit: "1",
     });
     void getJson(`${endpoint}?${query}`, identitiesListResponseSchema)
       .then((result) => {
-        if (!cancelled && result.identities[0]) setSelected(result.identities[0]);
+        const candidate = result.identities[0];
+        const sameOrganization = Boolean(source.organizationId) && candidate?.organizationId === source.organizationId;
+        if (!cancelled && candidate && !sameOrganization) setSelected(candidate);
       })
       .catch((cause) => {
         if (!cancelled) setError(cause instanceof Error ? cause.message : "Could not load the representation.");
@@ -57,10 +64,11 @@ export function RepresentationCorrectionDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, createdIdentityId, userId, endpoint]);
+  }, [open, preselectIdentityId, source.identityId, source.organizationId, userId, endpoint]);
   async function submit() {
     const checked = form.submit();
-    if (!checked.data) return;
+    if (!checked.data || !selected) return;
+    const replacement = selected;
     setBusy(true);
     setError("");
     try {
@@ -69,7 +77,7 @@ export function RepresentationCorrectionDialog({
         checked.data,
         identityMutationResponseSchema,
       );
-      await onCorrected();
+      await onCorrected(replacement);
       onClose();
     } catch (cause) {
       setError(form.refuse(cause));

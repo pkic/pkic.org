@@ -18,7 +18,11 @@ import { act } from "preact/test-utils";
 const navigate = vi.fn();
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", navigate] }));
 import { UserAffiliationsPanel } from "../../assets/ts/member-flows/portal/sections/system-users/UserAffiliationsPanel";
-import { identityCreateSchema } from "../../assets/shared/schemas/identity";
+import {
+  actingIdentitySchema,
+  identitiesListResponseSchema,
+  identityCreateSchema,
+} from "../../assets/shared/schemas/identity";
 import { organizationIdentityCreateRequestSchema } from "../../assets/shared/schemas/route-contracts-identities";
 import { normalizeValidation } from "../../assets/ts/shared/form/validation-map";
 import { buttonNamed, chooseComboboxOption, controlFor, typeInto } from "./helpers/labeled-control";
@@ -31,6 +35,7 @@ import {
   errorResponse,
   fieldOf,
   fieldRefusal,
+  identityMutation,
   jsonResponse,
   mount,
   press,
@@ -173,6 +178,79 @@ describe("UserAffiliationsPanel", () => {
       previousEmailId: null,
       emailId: selected,
     });
+    expect(changed).toHaveBeenCalledTimes(1);
+  });
+
+  it("preselects the identity the person acts as when correcting another, and confirms the correction", async () => {
+    const acting = "00000000-0000-4000-8000-000000000077";
+    const at = "2026-01-01T00:00:00.000Z";
+    const actingIdentity = actingIdentitySchema.parse({
+      id: acting,
+      userId: USER_ID,
+      userName: "Person",
+      memberId: null,
+      organizationId: PICKED_ORGANIZATION_ID,
+      organizationName: "Organization B",
+      membershipCategory: null,
+      emailId: null,
+      email: "person@organization-b.example",
+      jobTitle: null,
+      biography: null,
+      links: [],
+      headshotUrl: null,
+      source: "verified_email",
+      state: "active",
+      showOnOrganizationProfile: true,
+      invitedAt: at,
+      startedAt: at,
+      endedAt: null,
+      blockedAt: null,
+      blockedByUserId: null,
+      predecessorIdentityId: null,
+      createdAt: at,
+      updatedAt: at,
+    });
+    const requests = stubFetch((url) =>
+      url.pathname.endsWith("/corrections")
+        ? identityMutation("active")
+        : jsonResponse(
+            identitiesListResponseSchema.parse({
+              identities: [actingIdentity],
+              page: { limit: 25, offset: 0, total: 1, hasMore: false },
+            }),
+          ),
+    );
+    const area = toastArea();
+    const changed = vi.fn();
+    const container = mount();
+    const wrong = membership();
+    const other = membership({
+      identityId: acting,
+      organizationId: PICKED_ORGANIZATION_ID,
+      organizationName: "Organization B",
+    });
+    await act(async () =>
+      render(
+        <UserAffiliationsPanel
+          user={userWith([wrong, other])}
+          onChanged={changed}
+          canManage={false}
+          viewerIsSubject
+          actingIdentityId={acting}
+        />,
+        container,
+      ),
+    );
+    runRowMenuAction(container, "Organization A", "Correct identity…");
+    await settle();
+    await settle();
+    const dialog = document.querySelector<HTMLDialogElement>("dialog[open]")!;
+    await typeInto(controlFor<HTMLTextAreaElement>(dialog, "Reason for correction"), "Joined the wrong organization");
+    await press(document.body, "Correct identity");
+    const write = requests.find((request) => request.method === "POST")!;
+    expect(write.pathname).toBe(`/api/v1/users/${USER_ID}/identities/${wrong.identityId}/corrections`);
+    expect(write.body).toMatchObject({ replacementIdentityId: acting });
+    expect(area.textContent).toContain("Identity corrected to Organization B");
     expect(changed).toHaveBeenCalledTimes(1);
   });
 

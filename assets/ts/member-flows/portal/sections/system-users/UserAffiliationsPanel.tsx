@@ -257,10 +257,13 @@ export function UserAffiliationsPanel({
           source={correcting}
           userId={user.id}
           isSelf={viewerIsSubject}
-          createdIdentityId={createdIdentityId}
+          preselectIdentityId={createdIdentityId ?? actingIdentityId}
           onAdd={showAdding}
           onClose={() => void closeCorrecting()}
-          onCorrected={onChanged}
+          onCorrected={async (replacement) => {
+            toast(`Identity corrected to ${replacement.organizationName ?? "Personal"}`, "success");
+            await onChanged();
+          }}
         />
       )}
 
