@@ -10,6 +10,8 @@ export const E2E_ADMIN_SCOPES = Object.freeze([
   "portal-live-session-participation",
   "scanner-recovery-owner",
   "scanner-recovery-other",
+  "scanner-termination-operator",
+  "scanner-measurement-operator",
   "portal-agenda-accepted-placement",
   "portal-agenda-preview",
   "portal-agenda-list-readonly",

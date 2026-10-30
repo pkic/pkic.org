@@ -6,6 +6,8 @@ export const E2E_ADMIN_SCOPES: readonly [
   "portal-live-session-participation",
   "scanner-recovery-owner",
   "scanner-recovery-other",
+  "scanner-termination-operator",
+  "scanner-measurement-operator",
   "portal-agenda-accepted-placement",
   "portal-agenda-preview",
   "portal-agenda-list-readonly",

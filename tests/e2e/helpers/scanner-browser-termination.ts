@@ -32,7 +32,7 @@ type Receipt = ReturnType<typeof eventScanResponseSchema.parse>;
 
 /** A unique configured event and real mailbox-confirmed attendee, independent from shared agenda edits. */
 export async function prepareScannerTermination(page: Page) {
-  const operatorEmail = e2eAdminEmail("scanner-recovery-owner");
+  const operatorEmail = e2eAdminEmail("scanner-termination-operator");
   await signInAsE2eStaff(page, operatorEmail);
   const owner = userAuthSessionResponseSchema.parse(await (await page.request.get("/api/v1/auth/session")).json());
   const slug = `scanner-termination-${randomUUID()}`;

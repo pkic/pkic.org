@@ -55,7 +55,7 @@ export async function prepareScannerMeasurement(page: Page) {
   await page.goto(extractEmailUrl(mail, "/register/confirm"));
   await confirmRegistration(page, "Scanner Measurement Org");
   await waitForCapturedEmail(email, "registration is confirmed", { since });
-  const operatorEmail = e2eAdminEmail("scanner-recovery-owner");
+  const operatorEmail = e2eAdminEmail("scanner-measurement-operator");
   await signInAsE2eStaff(page, operatorEmail);
   const session = userAuthSessionResponseSchema.parse(await (await page.request.get("/api/v1/auth/session")).json());
   const draft = agendaSnapshotSchema.parse(await (await page.request.get(`${measurementApi}/agenda`)).json());
