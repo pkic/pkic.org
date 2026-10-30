@@ -67,7 +67,6 @@ import {
   readPilotAgenda,
   capturePilot,
   preparePilotMeeting,
-  preparePilotSpeaker,
   preparePilotConference,
   editAndSwapPilot,
   staffPilot,
@@ -75,6 +74,7 @@ import {
   approvePilotAppearance,
   releasePilotArchive,
 } from "./helpers/agenda-integrated-pilot";
+import { preparePilotSpeaker } from "./helpers/agenda-integrated-pilot-speaker";
 
 test.use({ actionTimeout: 30_000 });
 
