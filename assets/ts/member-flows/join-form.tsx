@@ -214,7 +214,7 @@ export function renderMembershipCategories(container: HTMLElement, categories: M
       input.className = "pk-check__input";
       input.type = "radio";
       input.id = id;
-      input.name = "category";
+      input.name = "membershipCategory";
       input.value = category.code;
       input.required = true;
       input.dataset.individual = String(category.isIndividual);
@@ -246,7 +246,7 @@ export function renderMembershipCategories(container: HTMLElement, categories: M
 // ── Main ──────────────────────────────────────────────────────────────────
 
 function readSelectedCategory(form: HTMLFormElement): string {
-  return form.querySelector<HTMLInputElement>('input[name="category"]:checked')?.value ?? "";
+  return form.querySelector<HTMLInputElement>('input[name="membershipCategory"]:checked')?.value ?? "";
 }
 
 function showSuccessPanel(
@@ -387,7 +387,7 @@ async function main(): Promise<void> {
       }
       applyCategoryUI(applicationForm, categories[0]);
       showSection(applicationForm);
-      const firstControl = applicationForm.querySelector<HTMLElement>('input[name="category"]');
+      const firstControl = applicationForm.querySelector<HTMLElement>('input[name="membershipCategory"]');
       firstControl?.focus();
     } catch {
       setStatus(statusEl, "Could not load the membership application. Please refresh and try again.", true);
@@ -407,7 +407,7 @@ async function main(): Promise<void> {
 
   applicationForm.addEventListener("change", (event) => {
     const target = event.target;
-    if (!(target instanceof HTMLInputElement) || target.name !== "category") return;
+    if (!(target instanceof HTMLInputElement) || target.name !== "membershipCategory") return;
     const selected = categories.find((category) => category.code === target.value);
     if (selected && customFieldsContainer) {
       const answers = readCustomFieldValues(applicationForm);

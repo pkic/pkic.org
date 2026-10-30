@@ -150,7 +150,7 @@ describe("join-form helpers", () => {
 
     const container = document.createElement("div");
     renderMembershipCategories(container, filterCategoriesForApplicantKind(categories, "individual"));
-    expect(container.querySelectorAll('input[name="category"]')).toHaveLength(1);
+    expect(container.querySelectorAll('input[name="membershipCategory"]')).toHaveLength(1);
     expect(container.textContent).toContain("Independent consultant");
     expect(container.textContent).not.toContain("Certification authority");
     expect(container.textContent).toContain("Required fee: $125.00");
@@ -176,6 +176,23 @@ describe("join-form helpers", () => {
       expect(input?.id).not.toBe("");
     }
     expect(container.querySelector(".pk-check__hint")?.textContent).toBe("An organization category.");
+  });
+
+  it("takes the applicant to an unanswered category on submit and reports it in the category's own slot", () => {
+    document.body.innerHTML = renderToString(<JoinFlow documents={[]} />);
+    const form = document.querySelector<HTMLFormElement>("form[data-join-application-form]")!;
+    renderMembershipCategories(form.querySelector<HTMLElement>("[data-membership-categories]")!, categories);
+    form.querySelector<HTMLInputElement>('input[name="firstName"]')!.value = "Ada";
+    form.querySelector<HTMLInputElement>('input[name="lastName"]')!.value = "Lovelace";
+
+    expect(validateBeforeSubmit(form, document.createElement("p"))).toBe(false);
+
+    const firstCategory = form.querySelector<HTMLInputElement>('input[type="radio"]')!;
+    // The control name is the request contract's field, so a server refusal
+    // and the browser's own check land in the same message slot.
+    expect(firstCategory.name).toBe("membershipCategory");
+    expect(document.activeElement).toBe(firstCategory);
+    expect(form.querySelector('[data-field-error="membershipCategory"]')?.textContent).not.toBe("");
   });
 
   it("defaults participation to active and preserves an applicant's choice when questions are rendered again", () => {

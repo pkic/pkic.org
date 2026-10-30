@@ -195,7 +195,18 @@ export function validateBeforeSubmit(form: HTMLFormElement, _statusEl: HTMLEleme
 
   form.classList.add("was-validated");
   validateNativeFields(form);
-  // Inline [data-field-error] messages handle per-field feedback;
-  // the global banner is reserved for success states only.
+  // Inline [data-field-error] messages handle per-field feedback; the first
+  // one may be far above the submit button, so take the person to it.
+  focusFirstInvalidControl(form);
   return false;
+}
+
+/** Moves focus, and with it the viewport, to the first invalid control in visible order. */
+function focusFirstInvalidControl(form: HTMLFormElement): void {
+  const controls = form.querySelectorAll<FormControl>("input[name], select[name], textarea[name]");
+  const first = Array.from(controls).find(
+    (control) => !control.disabled && isNativelyValidated(control) && !control.checkValidity(),
+  );
+  // Focusing scrolls the control into view.
+  first?.focus();
 }

@@ -36,7 +36,7 @@ async function openVerifiedApplicationForm(
   const verification = await waitForCapturedEmail(email, "Verify your email address", { since });
   await openMembershipVerificationLink(page, extractEmailUrl(verification, "#verify="));
   await expect(page.locator("[data-verified-application-email]")).toHaveText(email);
-  await expect(page.locator('[data-membership-categories] input[name="category"]').first()).toBeVisible();
+  await expect(page.locator('[data-membership-categories] input[name="membershipCategory"]').first()).toBeVisible();
 }
 
 test("an organization applicant is offered only organization-tied categories", async ({ page }) => {
@@ -46,7 +46,7 @@ test("an organization applicant is offered only organization-tied categories", a
   await openVerifiedApplicationForm(page, email);
 
   const offered = await page
-    .locator('[data-membership-categories] input[name="category"]')
+    .locator('[data-membership-categories] input[name="membershipCategory"]')
     .evaluateAll((inputs) => inputs.map((input) => (input as HTMLInputElement).value));
 
   expect(offered.length, "the catalog must offer organization categories").toBeGreaterThan(0);
@@ -65,7 +65,7 @@ test("an individual applicant is offered only the org-less categories", async ({
   await openVerifiedApplicationForm(page, email, { unaffiliated: true });
 
   const offered = await page
-    .locator('[data-membership-categories] input[name="category"]')
+    .locator('[data-membership-categories] input[name="membershipCategory"]')
     .evaluateAll((inputs) => inputs.map((input) => (input as HTMLInputElement).value));
 
   expect(offered.length).toBeGreaterThan(0);
@@ -83,7 +83,7 @@ test("an organization applicant submits in a category other than the default", a
   // organization category proves the choice is carried through rather than
   // the one well-trodden value happening to work.
   const offered = await page
-    .locator('[data-membership-categories] input[name="category"]')
+    .locator('[data-membership-categories] input[name="membershipCategory"]')
     .evaluateAll((inputs) => inputs.map((input) => (input as HTMLInputElement).value));
   const chosen = offered.find((code) => code !== "F") ?? offered[0];
 
