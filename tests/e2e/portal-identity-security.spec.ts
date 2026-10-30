@@ -35,6 +35,23 @@ async function requestSignInLink(page: import("@playwright/test").Page, email: s
   return extractEmailUrl(message, "/portal/");
 }
 
+/**
+ * Opens a sign-in capability the way a person opens it from their mail: as a fresh page load.
+ *
+ * From the portal itself, the link is a hash-only navigation that does not rerun the one-time verifier, and a reload
+ * on top of it can cancel the first redemption so that the second is refused as already used. Leaving the document
+ * first loads the link once, and the redemption's own response is the condition to wait for.
+ */
+async function openSignInLink(page: import("@playwright/test").Page, link: string) {
+  await page.goto("about:blank");
+  const redeemed = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/api/v1/auth/verify-link" && response.request().method() === "POST",
+  );
+  await page.goto(link);
+  return redeemed;
+}
+
 test("sign-in capabilities require address permission, revoke with it, and cannot be replayed", async ({
   page,
   context,
@@ -44,8 +61,8 @@ test("sign-in capabilities require address permission, revoke with it, and canno
 
   const link = await requestSignInLink(page, email);
 
-  await page.goto(link);
-  await page.reload();
+  const redeemed = await openSignInLink(page, link);
+  expect(redeemed.status(), await redeemed.text()).toBe(200);
   await declinePasskeyOffer(page);
   await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toHaveCount(0);
 
@@ -55,8 +72,8 @@ test("sign-in capabilities require address permission, revoke with it, and canno
     .browser()!
     .newContext()
     .then((c) => c.newPage());
-  await replayPage.goto(link);
-  await replayPage.reload();
+  const replayed = await openSignInLink(replayPage, link);
+  expect(replayed.ok(), "a used capability must be refused").toBe(false);
   await expect(replayPage.getByRole("button", { name: "Sign in with a passkey" })).toBeVisible({ timeout: 15_000 });
   const replaySession = await replayPage.evaluate(async () => {
     const response = await fetch("/api/v1/auth/session", { credentials: "same-origin" });
@@ -132,8 +149,8 @@ test("the capability is removed from the address bar and not left in history", a
   const capability = new URL(link).hash;
   expect(capability, "the sign-in mail must carry a capability fragment").toContain("verify");
 
-  await page.goto(link);
-  await page.reload();
+  const redeemed = await openSignInLink(page, link);
+  expect(redeemed.status(), await redeemed.text()).toBe(200);
   await declinePasskeyOffer(page);
 
   // The token must not survive in the address bar, where it would be shoulder
@@ -170,6 +187,8 @@ for (const withoutRandomUUID of [false, true]) {
     await page.getByRole("button", { name: "Account menu" }).click();
     await page.getByRole("menuitem", { name: "Sign out" }).click();
     await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toBeVisible({ timeout: 15_000 });
+    // The device signs out first and then ends the session on the server; the notice changes once the server has.
+    await expect(page.getByText("You are signed out.", { exact: true })).toBeVisible({ timeout: 15_000 });
 
     // Replay the original cookie to prove server revocation. The request context
     // survives the sign-out navigation and does not confuse a cleared cookie with revocation.
@@ -201,8 +220,8 @@ test("a membership join capability cannot be redeemed as a portal sign-in", asyn
   expect(joinToken).toBeTruthy();
 
   // Present it where a portal sign-in capability is expected.
-  await page.goto(`/portal/#verify=${encodeURIComponent(joinToken!)}`);
-  await page.reload();
+  const presented = await openSignInLink(page, `/portal/#verify=${encodeURIComponent(joinToken!)}`);
+  expect(presented.ok(), "a join capability must be refused as a sign-in").toBe(false);
   await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toBeVisible({ timeout: 15_000 });
   const session = await page.evaluate(async () => {
     const response = await fetch("/api/v1/auth/session", { credentials: "same-origin" });
