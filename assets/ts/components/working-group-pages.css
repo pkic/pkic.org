@@ -984,13 +984,16 @@
     --pk-accent-lift: var(--pk-accent-ink);
   }
 
+  /* The soft tint darkens with the ink lightening, or the ink lands on a pale tile it cannot be read on. */
   :root[data-theme="dark"] .pk-site.pk-site--working-group {
     --pk-accent-ink: color-mix(in oklab, var(--pk-accent) 70%, #fff);
+    --pk-accent-soft: color-mix(in oklab, var(--pk-accent) 20%, #000);
   }
 
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) .pk-site.pk-site--working-group {
       --pk-accent-ink: color-mix(in oklab, var(--pk-accent) 70%, #fff);
+      --pk-accent-soft: color-mix(in oklab, var(--pk-accent) 20%, #000);
     }
   }
 }
