@@ -28,6 +28,10 @@ export async function openEmailSignIn(page: Page): Promise<void> {
   // click is skipped, and the wait that follows is for a field still folded
   // away — which is a ten-second timeout rather than a useful failure.
   await expect(passkey).toBeVisible({ timeout: 15_000 });
+  // The busy "Checking your sign-in…" card shows the same buttons disabled,
+  // then loses its status line. Clicking through that settling makes the
+  // browser scroll a moved target into view; wait until the card is ready.
+  await expect(passkey).toBeEnabled({ timeout: 15_000 });
   const disclosure = page.getByRole("button", { name: "Sign in with an email link", exact: true });
   if (await disclosure.isVisible().catch(() => false)) await disclosure.click();
   await expect(page.getByLabel("Email")).toBeVisible({ timeout: 10_000 });
