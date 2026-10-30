@@ -29,6 +29,10 @@ export const apiValidationErrorDetailsSchema = z.object({
   fieldErrors: z.record(z.string(), z.array(z.string())).optional(),
 });
 
+/** Details of a `RATE_LIMITED` (429) refusal: whole seconds until another request may succeed. */
+export const rateLimitErrorDetailsSchema = z.object({ retryAfter: z.number().int().positive() });
+export type RateLimitErrorDetails = z.infer<typeof rateLimitErrorDetailsSchema>;
+
 /**
  * Boolean query parameters arrive as strings. `z.coerce.boolean()` follows
  * JavaScript truthiness and therefore turns the non-empty string `"false"`

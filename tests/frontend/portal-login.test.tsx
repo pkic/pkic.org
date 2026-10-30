@@ -11,6 +11,7 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { RateLimitErrorDetails } from "../../assets/shared/schemas/api-common";
 
 const authenticateWithPasskey = vi.fn<() => Promise<unknown>>();
 const browserSupportsWebAuthn = vi.fn<() => boolean>();
@@ -141,6 +142,34 @@ describe("portal login", () => {
     expect(alert!.textContent).toContain("Sign-in failed: Too many sign-in attempts.");
     // The form stays put so the address can be corrected and retried.
     expect(container.querySelector("form")).not.toBeNull();
+  });
+
+  it("tells a throttled request how long to wait and keeps the address it sent", async () => {
+    const details: RateLimitErrorDetails = { retryAfter: 90 };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json(
+          { error: { code: "RATE_LIMITED", message: "Too many requests. Please try again later.", details } },
+          { status: 429 },
+        ),
+      ),
+    );
+
+    await act(() => render(<Login onSignedIn={vi.fn()} />, container));
+    await enterEmail("member@example.test");
+    await submitForm();
+    await waitFor(() => container.querySelector('[role="alert"]') !== null, "the throttle was never announced");
+
+    expect(container.querySelector('[role="alert"]')!.textContent).toBe(
+      "Sign-in failed: Too many links requested. Try again in about 2 minutes.",
+    );
+    // Nothing was sent, so there is no "check your email" confirmation.
+    expect(container.querySelector('[role="status"]')).toBeNull();
+    const email = controlLabeled("Email");
+    expect(email.value).toBe("member@example.test");
+    // The address was not at fault; the field must not be marked invalid.
+    expect(email.getAttribute("aria-invalid")).toBeNull();
   });
 
   it("offers the passkey ceremony as a real button and reports its failure", async () => {

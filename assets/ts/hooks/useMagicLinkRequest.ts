@@ -1,6 +1,19 @@
 import { useEffect, useState } from "preact/hooks";
+import { rateLimitErrorDetailsSchema } from "../../shared/schemas/api-common";
 import { ApiClientError } from "../shared/api-client";
 import { useAsyncSubmission } from "./useAsyncSubmission";
+
+/**
+ * A throttled request sent nothing, so the reader is told how long to wait
+ * instead of the generic refusal; the wait comes from the 429's `retryAfter`.
+ */
+function magicLinkRequestErrorMessage(error: unknown, fallbackError: string): string {
+  if (!(error instanceof ApiClientError)) return fallbackError;
+  const throttle = error.status === 429 ? rateLimitErrorDetailsSchema.safeParse(error.details) : null;
+  if (!throttle?.success) return error.message;
+  const minutes = Math.max(1, Math.ceil(throttle.data.retryAfter / 60));
+  return `Too many links requested. Try again in about ${minutes} ${minutes === 1 ? "minute" : "minutes"}.`;
+}
 
 /**
  * Owns the enumeration-safe request state shared by magic-link forms.
@@ -30,7 +43,7 @@ export function useMagicLinkRequest(fallbackError: string, { resendCooldownSecon
       setSecondsUntilResend(resendCooldownSeconds);
       return true;
     } catch (error) {
-      submission.setError(error instanceof ApiClientError ? error.message : fallbackError);
+      submission.setError(magicLinkRequestErrorMessage(error, fallbackError));
       return false;
     } finally {
       submission.finish();
