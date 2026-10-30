@@ -36,7 +36,8 @@ vi.mock("wouter", () => ({
   ),
 }));
 const currentLocation = { value: "/home" };
-vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => [currentLocation.value, vi.fn()] }));
+const navigateHash = vi.fn();
+vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => [currentLocation.value, navigateHash] }));
 
 const eventId = participantEventId;
 const registrationId = participantRegistrationId;
@@ -70,6 +71,7 @@ function json(value: unknown): Response {
 
 beforeEach(() => {
   currentLocation.value = "/home";
+  navigateHash.mockReset();
   host = document.createElement("div");
   document.body.append(host);
   requests = [];
@@ -457,9 +459,11 @@ describe("event home", () => {
     expect(requests).toEqual([]);
   });
 
-  it("offers registration on the ticket tab to a reader without one", async () => {
+  it("sends a reader without a registration from the ticket page to the event home, where no Ticket tab is listed", async () => {
     await act(() => render(<ParticipantEvent event={event()} tab="ticket" />, host));
-    expect(host.textContent).toContain("No ticket yet");
+    expect(navigateHash).toHaveBeenCalledWith("/events/summit", { replace: true });
+    expect(host.textContent).not.toContain("No ticket yet");
+    expect(host.querySelector('a[href="#/events/summit/ticket"]')).toBeNull();
     expect(host.querySelector('a[href="#/events/summit/register/"]')).not.toBeNull();
     expect(requests).toEqual([]);
   });

@@ -1,4 +1,5 @@
 import { lazy, Suspense } from "preact/compat";
+import { useEffect } from "preact/hooks";
 import { useHashLocation } from "wouter/use-hash-location";
 import {
   eventAgendaRoute,
@@ -85,10 +86,16 @@ export function ParticipantEvent({
   pointToken,
   onRegistered,
 }: Selection & { event: EventDetail; onRegistered?: () => Promise<void> }) {
-  const [location] = useHashLocation();
+  const [location, navigate] = useHashLocation();
   // One agenda route: the whole program, or with `?mine=1` the same view filtered to the reader's sessions.
   const mine = isMyAgendaQuery(new URLSearchParams(location.split("?", 2)[1] ?? ""));
   const base = `/events/${encodeURIComponent(event.slug)}`;
+  // The ticket page follows the rule that lists its tab. A reader without a
+  // registration lands on the event home, which offers registration instead.
+  const ticketless = tab === "ticket" && !eventRegistrationStanding(event).registered;
+  useEffect(() => {
+    if (ticketless) navigate(base, { replace: true });
+  }, [ticketless, base, navigate]);
   const registrationId = event.participation?.registrationId;
   const hasProposals = hasEventProposals(event);
   const active =
@@ -108,7 +115,7 @@ export function ParticipantEvent({
                 ? "lead-scanner"
                 : tab === "session-management"
                   ? "session-management"
-                  : tab === "ticket" || tab === "more" || tab === "virtual" || tab === "check-in"
+                  : (tab === "ticket" && !ticketless) || tab === "more" || tab === "virtual" || tab === "check-in"
                     ? tab
                     : "overview";
   const tabs = [
@@ -218,7 +225,7 @@ export function ParticipantEvent({
         <Suspense fallback={<Spinner />}>
           <VirtualRoom slug={event.slug} eventName={event.name} />
         </Suspense>
-      ) : tab === "ticket" ? (
+      ) : tab === "ticket" && !ticketless ? (
         <EventTicket event={event} />
       ) : tab === "check-in" ? (
         <Suspense fallback={<Spinner />}>
