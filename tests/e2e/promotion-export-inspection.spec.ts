@@ -57,7 +57,7 @@ test("every delivered long-panel promotion export has complete evidence and refu
   const names = [
     "Alexandra Catherine van Example-Rivera, certificate lifecycle and migration engineering",
     "Benjamin Christopher Example-MacKenzie, cryptographic governance and assurance research",
-    "Charlotte Dominique Example-Hernandez, infrastructure architecture and operational resilience",
+    "Charlotte Dominique Example-Hernandez, infrastructure architecture, operational resilience",
   ];
   const affiliations = [
     `Synthetic Infrastructure Research Consortium and Independent Certificate Operations Laboratory ${randomUUID()}`,

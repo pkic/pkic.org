@@ -36,6 +36,7 @@ import {
   eventScanResponseSchema,
 } from "../../../assets/shared/schemas/event-participation-scanning";
 import { enrolledOfflineEligibilityResponseSchema } from "../../../assets/shared/schemas/event-offline-eligibility";
+import { WITHHELD_CONTACT_VALUE } from "../../../assets/shared/schemas/scanner-attempt-capture";
 import {
   scannerStorage,
   scrollScannerToTop,
@@ -375,6 +376,8 @@ export async function startNextDoorScannerContext(
   occurrence: Pick<AgendaOccurrence, "id" | "roomId">,
   previous: ReturnType<typeof enrolledOfflineEligibilityResponseSchema.parse>,
 ) {
+  // The scan mode belongs to the Setup tab; a closed session leaves the Diagnostics tab open.
+  await closeScannerDiagnostics(page);
   await page.getByLabel("Scan mode", { exact: true }).selectOption("attendance");
   const preparing = page
     .waitForResponse((response) => {
@@ -401,6 +404,8 @@ export async function startNextDoorScannerContext(
     publishedRevision: previous.publishedRevision,
   });
   expect(manifest.epochId).not.toBe(previous.epochId);
+  // The confirmation is shown on the Setup tab, while the restart was requested from Diagnostics.
+  await closeScannerDiagnostics(page);
   await expect(page.getByText("New scanner session prepared. Ready to scan.", { exact: true })).toBeVisible();
   await expectDoorScannerReady(page);
   await openManualBadgeEntry(page);
@@ -422,7 +427,19 @@ export async function expectContactBadgeRejected(page: Page, email: string, free
     await page.getByRole("button", { name: "Admission decision", exact: true }).click();
     await expect(page.getByLabel("Badge code", { exact: true })).toHaveAttribute("aria-invalid", "true");
     expect(submissions).toEqual([]);
-    expect(await scannerStorage(page)).toEqual(before);
+    // The refusal is audited locally as a failure that never carries the contact content, and keeps no scan.
+    const after = await scannerStorage(page);
+    expect(after.pending).toEqual(before.pending);
+    const known = new Set(before.history.map((row) => row.scan.operationId));
+    expect(after.history.filter((row) => known.has(row.scan.operationId))).toEqual(before.history);
+    const added = after.history.filter((row) => !known.has(row.scan.operationId));
+    expect(added).toHaveLength(1);
+    expect(added[0]).toMatchObject({
+      kind: "failure",
+      scan: { reason: "malformed_credential", scannedValue: WITHHELD_CONTACT_VALUE, scannedValueTruncated: false },
+    });
+    expect(JSON.stringify(added)).not.toContain(email);
+    expect(JSON.stringify(added)).not.toContain(freeText);
   } finally {
     page.off("request", observe);
   }

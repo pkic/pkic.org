@@ -234,11 +234,10 @@ export async function preparePilotSpeaker(staff: Page, speaker: Page, info: Test
   const verifying = speaker.waitForResponse(
     (response) =>
       new URL(response.url()).pathname === `/api/v1/events/${sponsorEventSlug}/proposals/proof/verify` &&
-      response.request().method() === "POST" &&
-      Boolean(response.request().postDataJSON()?.speakerManagementToken),
+      response.request().method() === "POST",
   );
   await speaker.goto(extractEmailUrl(proofMail, "/propose/"));
-  await expect(speaker.getByRole("button", { name: "Save profile", exact: true })).toBeVisible();
+  await expect(speaker.getByRole("button", { name: "Save speaker identity", exact: true })).toBeVisible();
   const returnedToken = new URL(speaker.url()).searchParams.get("token");
   if (!returnedToken) throw new Error("Verified invitation must resume its own speaker capability");
   path = `/api/v1/proposals/speakers/access/${encodeURIComponent(returnedToken)}`;
@@ -250,13 +249,10 @@ export async function preparePilotSpeaker(staff: Page, speaker: Page, info: Test
     applicantKind: "individual",
   });
   await completeIndependentCapacityDisclosure(speaker.locator("[data-speaker-identity]"));
-  await speaker
-    .getByRole("textbox", { name: "Biography", exact: true })
-    .fill("An invited synthetic speaker reviewing the integrated publication and participation rehearsal.");
   const saving = speaker.waitForResponse(
     (response) => new URL(response.url()).pathname === `${path}/profile` && response.request().method() === "PATCH",
   );
-  await speaker.getByRole("button", { name: "Save profile", exact: true }).click();
+  await speaker.getByRole("button", { name: "Save speaker identity", exact: true }).click();
   const saved = await saving;
   expect(saved.status(), await saved.text()).toBe(200);
   expect(speakerSelfProfilePatchSchema.parse(saved.request().postDataJSON())).toMatchObject({
@@ -273,6 +269,18 @@ export async function preparePilotSpeaker(staff: Page, speaker: Page, info: Test
   expect(after.speaker.status).toBe("confirmed");
   expect(after.speaker.userId).toBe(before.speaker.userId);
   expect(after.currentRepresentation).toEqual(selected.currentRepresentation);
+  // The biography belongs to the identity the speaker speaks as and is edited on that identity once it is chosen.
+  const identityProfile = speaker.locator("[data-identity-profile-form]");
+  const profileSaving = speaker.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname.includes("/proposals/proof/identities/") &&
+      response.request().method() === "PATCH",
+  );
+  await identityProfile
+    .getByRole("textbox", { name: "Your speaker bio", exact: true })
+    .fill("An invited synthetic speaker reviewing the integrated publication and participation rehearsal.");
+  await identityProfile.getByRole("button", { name: "Save changes", exact: true }).click();
+  expect((await profileSaving).status()).toBe(200);
   await capturePilot(speaker, info, "pilot-confirmed-speaker");
   expect(await decideProposal(staff, proposal.proposalId, "accepted")).toBe(200);
   if (!after.speaker.userId) throw new Error("The confirmed speaker needs a canonical person");
@@ -563,10 +571,10 @@ export async function approvePilotAppearance(staff: Page, occurrence: AgendaOccu
   await openPilotAgenda(staff);
   await staff.getByRole("tab", { name: "Schedule", exact: true }).click();
   await runRowAction(staff, staff.getByRole("row").filter({ hasText: occurrence.title }), "Materials and archive");
-  expect(occurrence.history?.proposalRepresentations.find((choice) => choice.userId === userId)).toMatchObject({
-    actingIdentityId: null,
-    snapshot: { organizationName: null, jobTitle: null },
-  });
+  // The proposal keeps only the selection; the organization and title stay on the identity, never copied here.
+  const selection = occurrence.history?.proposalRepresentations.find((choice) => choice.userId === userId);
+  expect(selection).toMatchObject({ actingIdentityId: null, selectedAt: expect.any(String) });
+  expect(selection).not.toHaveProperty("snapshot");
   // The archive editor groups representation review in its own section tab.
   await staff
     .getByRole("tablist", { name: "Session archive sections", exact: true })

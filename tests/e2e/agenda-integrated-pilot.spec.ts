@@ -84,6 +84,15 @@ async function closePilotScanner(page: Page, scan: ReturnType<typeof enrolledEve
   const manual = page.getByRole("dialog", { name: /^(Enter badge code|Review sponsor lead)$/ });
   if (await manual.isVisible()) await manual.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(manual).not.toBeVisible();
+  // A refused entry is audited under its own device sequence, so the session closes at the highest one retained.
+  const stored = await scannerStorage(page);
+  const highWater = Math.max(
+    scan.scannerSession.sequence,
+    ...[...stored.pending, ...stored.history].flatMap((row) => {
+      const session = row.scan.scannerSession;
+      return session?.epochId === scan.scannerSession.epochId ? [session.sequence] : [];
+    }),
+  );
   const diagnostics = await openScannerDiagnostics(page);
   const closing = page
     .waitForResponse(
@@ -97,7 +106,7 @@ async function closePilotScanner(page: Page, scan: ReturnType<typeof enrolledEve
       expect(response.status()).toBe(200);
       const input = scannerDeviceSessionClosingSchema.parse(response.request().postDataJSON());
       const status = scannerDeviceSessionStatusSchema.parse(await response.json());
-      expect(input.highWaterSequence).toBe(scan.scannerSession.sequence);
+      expect(input.highWaterSequence).toBe(highWater);
       expect(input.sponsorId).toBe(scan.sponsorId ?? undefined);
       expect(status).toMatchObject({
         epochId: scan.scannerSession.epochId,
@@ -220,9 +229,9 @@ test("one recurring meeting and conference retain the same actors through organi
     await capturePilot(publicPage, info, "pilot-approved-public-agenda");
 
     const managePath = `/api/v1/registrations/access/${encodeURIComponent(fixture.manageToken)}`;
-    const beforeRegistration = registrationManageReadResponseSchema.parse(
-      await (await attendee.request.get(managePath)).json(),
-    );
+    const beforeResponse = await attendee.request.get(managePath);
+    expect(beforeResponse.status(), await beforeResponse.text()).toBe(200);
+    const beforeRegistration = registrationManageReadResponseSchema.parse(await beforeResponse.json());
     expect(beforeRegistration.registration).toMatchObject({
       event_id: event.id,
       status: "registered",
@@ -540,7 +549,7 @@ test("one recurring meeting and conference retain the same actors through organi
     );
     const identityProfile = speakerPage.locator("[data-identity-profile-form]");
     await identityProfile
-      .getByRole("textbox", { name: "Biography", exact: true })
+      .getByRole("textbox", { name: "Your speaker bio", exact: true })
       .fill(
         "The same synthetic speaker updated their live biography after the rehearsal; their recorded appearance remains independently approved.",
       );
