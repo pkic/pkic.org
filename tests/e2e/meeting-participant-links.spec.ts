@@ -228,8 +228,11 @@ for (const broadcast of [false, true]) {
       const signInSince = await capturedEmailCount();
       await forwardedPage.getByRole("button", { name: "Send sign-in link" }).click();
       const signInEmail = await waitForCapturedEmail(participantEmail, "sign-in link", { since: signInSince });
+      // Open the link as a fresh load, as from the email. Reloading after a
+      // hash-only navigation instead cancels the first redemption's response,
+      // loses its session cookie, and leaves the second redemption refused.
+      await forwardedPage.goto("about:blank");
       await forwardedPage.goto(extractEmailUrl(signInEmail, "/portal/"));
-      await forwardedPage.reload();
       await expect(forwardedPage).toHaveURL(/\/m\/#token=m2(?:\.[A-Za-z0-9_-]{22}){4}$/);
       await expect(forwardedPage.getByRole("heading", { name: eventName })).toBeVisible();
       await expect(forwardedPage.getByText("Preparing secure meeting entry…", { exact: true })).toHaveCount(0);
