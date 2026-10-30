@@ -59,8 +59,11 @@ export function EventProposalIdentityStep({
   personalDetails,
   startWithEmailProof,
   initialProof,
+  invitedEmail,
 }: {
   enabled: boolean;
+  /** The address a speaker was invited at, offered first; their invitation link may already have proved it. */
+  invitedEmail?: string;
   personalDetails?: ComponentChildren;
   startWithEmailProof?: boolean;
   initialProof?: VerifiedProposalEntry;
@@ -85,6 +88,7 @@ export function EventProposalIdentityStep({
     startWithEmailProof,
     speakerProposalId,
     initialProof,
+    invitedEmail,
   );
   const [sent, setSent] = useState(false);
   const [changing, setChanging] = useState(false);
@@ -137,6 +141,11 @@ export function EventProposalIdentityStep({
   useEffect(() => {
     if (identity.recordedConsents) onTermsRecorded?.(identity.recordedConsents);
   }, [identity.recordedConsents, onTermsRecorded]);
+  // The banner sits below the step; bring a new error into view instead of leaving it off screen.
+  const errorBanner = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (identity.error) errorBanner.current?.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
+  }, [identity.error]);
   const load = useMemo<CollectionLoader | undefined>(
     () =>
       identity.continuationToken
@@ -158,8 +167,10 @@ export function EventProposalIdentityStep({
   if (!enabled) return null;
   async function sendProof(proof: z.output<typeof eventProposalProofStartSchema>): Promise<void> {
     identity.setError(undefined);
-    await postJson(endpoint, proof, eventProposalProofStartResponseSchema);
-    setSent(true);
+    const started = await postJson(endpoint, proof, eventProposalProofStartResponseSchema);
+    // The speaker's own invitation link already proved this address: continue without a second email.
+    if (started.status === "verified") await identity.verify(started.token);
+    else setSent(true);
   }
   function addRepresentation() {
     if (identity.authenticated) showAdding();
@@ -419,7 +430,11 @@ export function EventProposalIdentityStep({
           </ButtonLink>
         </Alert>
       )}
-      {identity.error && <Alert tone="danger">{identity.error}</Alert>}
+      {identity.error && (
+        <div ref={errorBanner}>
+          <Alert tone="danger">{identity.error}</Alert>
+        </div>
+      )}
       {identity.authenticated && (
         <IdentityCreateDialog
           open={adding}

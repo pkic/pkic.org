@@ -4,6 +4,7 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { EventProposalIdentityStep } from "../../assets/ts/components/EventProposalIdentityStep";
 import {
+  eventProposalProofStartResponseSchema,
   eventProposalProofVerifySchema,
   eventProposalProofVerifyResponseSchema,
 } from "../../assets/shared/schemas/event-proposal-proof";
@@ -166,5 +167,75 @@ describe("proposal mailbox proof lifecycle", () => {
     });
     expect(selection).toBeNull();
     expect(host!.textContent).toBe("");
+  });
+
+  it("offers the invited address and continues at once when the speaker link already proved it", async () => {
+    const requests: Array<{ url: string; body: unknown }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url, init) => {
+        if (String(url) === "/api/v1/auth/session")
+          return Response.json({ error: { code: "AUTH_REQUIRED", message: "Sign in" } }, { status: 401 });
+        requests.push({ url: String(url), body: JSON.parse(init.body) });
+        return String(url).endsWith("/verify")
+          ? ready("invited@speaker.example")
+          : Response.json(eventProposalProofStartResponseSchema.parse({ status: "verified", token: "v".repeat(40) }));
+      }),
+    );
+    host = document.createElement("div");
+    document.body.append(host);
+    await act(() => {
+      render(
+        <EventProposalIdentityStep
+          enabled
+          eventSlug="proof-lifecycle"
+          speakerManagementToken={"s".repeat(40)}
+          expectedSpeakerUserId="speaker-1"
+          invitedEmail="invited@speaker.example"
+          consents={() => []}
+          onChange={(value) => {
+            selection = value;
+          }}
+        />,
+        host!,
+      );
+    });
+    await vi.waitFor(() =>
+      expect(host!.querySelector<HTMLInputElement>('input[name="email"]')?.value).toBe("invited@speaker.example"),
+    );
+    await act(async () => {
+      [...host!.querySelectorAll("button")].find((button) => button.textContent === "Verify your work email")!.click();
+    });
+    await vi.waitFor(() => expect(selection?.person.email).toBe("invited@speaker.example"));
+    expect(requests.map((request) => request.url)).toEqual([
+      "/api/v1/events/proof-lifecycle/proposals/proof",
+      "/api/v1/events/proof-lifecycle/proposals/proof/verify",
+    ]);
+    expect(eventProposalProofVerifySchema.parse(requests[1].body).token).toBe("v".repeat(40));
+    expect(host!.textContent).not.toContain("Check your email");
+  });
+
+  it("brings a proof error into view and clears it once an address is confirmed", async () => {
+    const scrolled = vi.fn();
+    Element.prototype.scrollIntoView = scrolled;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url, init) =>
+        eventProposalProofVerifySchema.parse(JSON.parse(init.body)).token === "a".repeat(40)
+          ? Response.json(
+              { error: { code: "PROPOSAL_PROOF_INVALID", message: "This confirmation link has expired." } },
+              { status: 410 },
+            )
+          : ready("confirmed@example.test"),
+      ),
+    );
+    history.replaceState({}, "", `/#verify=${"a".repeat(40)}`);
+    await mount(true);
+    await vi.waitFor(() => expect(host!.textContent).toContain("This confirmation link has expired."));
+    expect(scrolled).toHaveBeenCalled();
+    await followProof("b".repeat(40));
+    await vi.waitFor(() => expect(selection?.person.email).toBe("confirmed@example.test"));
+    expect(host!.textContent).not.toContain("This confirmation link has expired.");
+    Reflect.deleteProperty(Element.prototype, "scrollIntoView");
   });
 });

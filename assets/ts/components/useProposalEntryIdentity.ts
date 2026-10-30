@@ -73,6 +73,8 @@ export function useProposalEntryIdentity(
   startWithEmailProof = false,
   speakerProposalId?: string,
   initialProof?: VerifiedProposalEntry,
+  /** The address a speaker was invited at; their invitation link may already have proved it. */
+  invitedEmail = "",
 ) {
   // Email-first: a person takes part on behalf of their organization unless they explicitly choose otherwise.
   const [kind, setKindState] = useState<MemberJoinApplicantKind>("organization");
@@ -101,7 +103,7 @@ export function useProposalEntryIdentity(
   const [error, setError] = useState<string>();
   /** A proved address that signs in to another account; nothing was linked. */
   const [signInEmail, setSignInEmail] = useState<string>();
-  const [email, setEmailState] = useState("");
+  const [email, setEmailState] = useState(invitedEmail);
   /** The terms a confirmed email already recorded: the flow does not ask for them again. */
   const [recordedConsents, setRecordedConsents] = useState<ConsentItem[]>();
   const initialized = useRef(false);
@@ -271,6 +273,8 @@ export function useProposalEntryIdentity(
         resolved.jobTitle = result.organization.jobTitle;
       }
       proofAttempt.current = { scope: proofScope, token, state: "verified" };
+      // A confirmed address answers whatever went wrong before it.
+      setError(undefined);
       setKindState(result.applicantKind);
       setEmailState(result.email);
       setPerson(resolved);

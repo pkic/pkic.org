@@ -31,6 +31,7 @@ import {
   resumeEventProposalSpeakerProof,
 } from "./event-proposal-proof-context";
 import { listUserIdentities } from "./identities/read-model";
+import { isInvitationOnlyAddress } from "./proposal-speaker-account-authority";
 import {
   prepareInvitedSpeakerAccountClaim,
   isProposalProofAddressOwnedElsewhere,
@@ -43,6 +44,7 @@ import {
 } from "./event-proposal-proof-entry";
 import {
   issueEventProposalContinuation,
+  issueEventProposalProofToken,
   proposalTermsDigest,
   queuedEventProposalProofToken,
   verifyEventProposalCapability,
@@ -169,20 +171,28 @@ export async function startEventProposalProof(
   const proofTtl = entryContext?.invite
     ? Math.min(contextTtl, entryContext.invite.expiresAt - Math.floor(Date.now() / 1000))
     : contextTtl;
+  // A speaker link reaches only the mailbox it was sent to. When that can only be this address,
+  // opening the link proved it: the speaker continues at once instead of confirming it twice.
+  const invitationMailbox =
+    context?.kind === "speaker" &&
+    !context.sessionId &&
+    (await isInvitationOnlyAddress(db, context.userId, input.body.email));
   const verificationToken = encodeURIComponent(queuedEventProposalProofToken(payload, proofTtl));
   const verificationUrl = input.body.speakerProposalId
     ? `${speakerParticipationPageUrl(input.appBaseUrl, input.event, input.body.speakerProposalId)}?verify=${verificationToken}`
     : `${context?.kind === "speaker" ? speakerManagePageUrl(input.appBaseUrl, input.event, "") : proposalPageUrl(input.appBaseUrl, input.event)}#verify=${verificationToken}`;
-  const email = prepareQueueEmailStatement(db, {
-    eventId: input.event.id,
-    templateKey: "event_proposal_verify",
-    recipientEmail: payload.email,
-    recipientUserId: null,
-    messageType: "transactional",
-    subject: `Verify your email for ${input.event.name}`,
-    capabilityLinkValues: [verificationUrl],
-    data: { verificationUrl, eventName: emailPlainText(input.event.name) },
-  });
+  const email = invitationMailbox
+    ? null
+    : prepareQueueEmailStatement(db, {
+        eventId: input.event.id,
+        templateKey: "event_proposal_verify",
+        recipientEmail: payload.email,
+        recipientUserId: null,
+        messageType: "transactional",
+        subject: `Verify your email for ${input.event.name}`,
+        capabilityLinkValues: [verificationUrl],
+        data: { verificationUrl, eventName: emailPlainText(input.event.name) },
+      });
   try {
     await db.batch([
       ...sourceGuards,
@@ -198,7 +208,7 @@ export async function startEventProposalProof(
           })
         : []),
       prepareActiveTermsSnapshotGuard(db, input.event.id, terms, audience),
-      email.statement,
+      ...(email ? [email.statement] : []),
     ]);
   } catch (error) {
     if (source && isAuthorizationGuardFailure(error))
@@ -216,6 +226,12 @@ export async function startEventProposalProof(
       );
     throw error;
   }
+  if (!email)
+    return {
+      status: "verified" as const,
+      token: await issueEventProposalProofToken(input.signingSecret, payload, proofTtl),
+      outboxId: null,
+    };
   return { status: "verification_sent" as const, outboxId: email.id };
 }
 

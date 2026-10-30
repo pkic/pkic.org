@@ -132,6 +132,7 @@ export function SpeakerParticipationIdentity({
               onSavePersonalDetails={saveNames}
               personalDetails={personalDetails}
               startWithEmailProof={adding}
+              invitedEmail={adding ? undefined : data.profile.email}
             />
           ) : (
             <p class="pk-muted">Please accept the speaker terms before confirming your identity.</p>

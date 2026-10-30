@@ -8,6 +8,7 @@
  */
 import { resolveOptionalIdentityFromRequest, type AuthenticatedIdentity } from "../auth/user-session";
 import type { AuthorizationEvidence } from "../db/authorization-guard";
+import { first } from "../db/queries";
 import { AppError } from "../errors";
 import type { DatabaseLike, Env } from "../types";
 import type { ParticipantAuthority } from "./participant-authority";
@@ -16,6 +17,24 @@ import type { ParticipantAuthority } from "./participant-authority";
 export function unclaimedAccountSql(person: string): string {
   return `(${person}.email_verified_at IS NULL AND NOT EXISTS (
     SELECT 1 FROM user_emails claimed WHERE claimed.user_id = ${person}.id AND claimed.verified_at IS NOT NULL))`;
+}
+
+/**
+ * Whether the speaker link could only ever have been mailed to `email`: the
+ * account is unclaimed and holds that one address, with no alias an invitation
+ * could have been sent to instead. Opening the link then proved that mailbox.
+ */
+export async function isInvitationOnlyAddress(db: DatabaseLike, userId: string, email: string): Promise<boolean> {
+  return Boolean(
+    await first(
+      db,
+      `SELECT 1 FROM users person
+        WHERE person.id = ? AND person.normalized_email = ? AND ${unclaimedAccountSql("person")}
+          AND NOT EXISTS (SELECT 1 FROM user_emails alias
+            WHERE alias.user_id = person.id AND alias.normalized_email <> person.normalized_email)`,
+      [userId, email],
+    ),
+  );
 }
 
 /** What lets a speaker page change the person's own name or headshot. */

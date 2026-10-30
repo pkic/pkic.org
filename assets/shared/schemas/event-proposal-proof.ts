@@ -37,7 +37,15 @@ export const eventProposalProofStartSchema = workEmailStepSchema
     consents: z.array(consentItemSchema).max(20),
   })
   .strict();
-export const eventProposalProofStartResponseSchema = z.object({ status: z.literal("verification_sent") });
+/**
+ * `verified` answers a speaker who opened their own invitation link and gave the
+ * address it was mailed to: that link already proved the mailbox, so no second
+ * email is sent and the token continues exactly as the emailed one would.
+ */
+export const eventProposalProofStartResponseSchema = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("verification_sent") }),
+  z.object({ status: z.literal("verified"), token: eventProposalContinuationTokenSchema }),
+]);
 export const eventProposalProofVerifySchema = z
   .object({
     token: eventProposalContinuationTokenSchema,

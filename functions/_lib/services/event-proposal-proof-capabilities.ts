@@ -106,6 +106,20 @@ export function queuedEventProposalProofToken(payload: EventProposalProofPayload
   );
 }
 
+/** The same proof the verification email carries, for a mailbox that is already proved. */
+export function issueEventProposalProofToken(
+  signingSecret: string,
+  payload: EventProposalProofPayload,
+  ttlSeconds: number,
+): Promise<string> {
+  return signStatelessCapabilityToken({
+    signingSecret,
+    purpose: "event_proposal_verify",
+    resourceId: encodeCapabilityPayload(payload),
+    ttlSeconds: Math.max(1, Math.floor(ttlSeconds)),
+  });
+}
+
 export function issueEventProposalContinuation(
   signingSecret: string,
   payload: EventProposalContinuationPayload,
