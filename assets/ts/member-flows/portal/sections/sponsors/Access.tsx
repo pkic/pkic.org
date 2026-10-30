@@ -106,7 +106,7 @@ export function SponsorAccess() {
               <MagicLinkSubmitButton submitting={magicLink.submitting} />
             </form>
           )}
-          <SignInError error={magicLink.error} includePrefix={false} />
+          <SignInError error={magicLink.error} waitHint={magicLink.waitHint} includePrefix={false} />
         </PanelBody>
       </Panel>
     </div>

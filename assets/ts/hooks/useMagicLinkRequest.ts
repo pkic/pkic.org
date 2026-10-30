@@ -4,13 +4,14 @@ import { ApiClientError } from "../shared/api-client";
 import { useAsyncSubmission } from "./useAsyncSubmission";
 
 /**
- * A throttled request sent nothing, so the reader is told how long to wait
- * instead of the generic refusal; the wait comes from the 429's `retryAfter`.
+ * A throttled request sent nothing and nothing failed, so the reader is told
+ * how long to wait instead of a refusal; the wait comes from the 429's
+ * `retryAfter`. Null when the error is not a throttle.
  */
-function magicLinkRequestErrorMessage(error: unknown, fallbackError: string): string {
-  if (!(error instanceof ApiClientError)) return fallbackError;
-  const throttle = error.status === 429 ? rateLimitErrorDetailsSchema.safeParse(error.details) : null;
-  if (!throttle?.success) return error.message;
+function magicLinkWaitHint(error: unknown): string | null {
+  if (!(error instanceof ApiClientError) || error.status !== 429) return null;
+  const throttle = rateLimitErrorDetailsSchema.safeParse(error.details);
+  if (!throttle.success) return null;
   const minutes = Math.max(1, Math.ceil(throttle.data.retryAfter / 60));
   return `Too many links requested. Try again in about ${minutes} ${minutes === 1 ? "minute" : "minutes"}.`;
 }
@@ -26,6 +27,7 @@ function magicLinkRequestErrorMessage(error: unknown, fallbackError: string): st
 export function useMagicLinkRequest(fallbackError: string, { resendCooldownSeconds = 0 } = {}) {
   const [sent, setSent] = useState(false);
   const [secondsUntilResend, setSecondsUntilResend] = useState(0);
+  const [waitHint, setWaitHint] = useState<string | null>(null);
   const submission = useAsyncSubmission();
 
   useEffect(() => {
@@ -37,13 +39,16 @@ export function useMagicLinkRequest(fallbackError: string, { resendCooldownSecon
   async function request(action: () => Promise<void>): Promise<boolean> {
     if (secondsUntilResend > 0) return false;
     submission.begin();
+    setWaitHint(null);
     try {
       await action();
       setSent(true);
       setSecondsUntilResend(resendCooldownSeconds);
       return true;
     } catch (error) {
-      submission.setError(magicLinkRequestErrorMessage(error, fallbackError));
+      const hint = magicLinkWaitHint(error);
+      if (hint) setWaitHint(hint);
+      else submission.setError(error instanceof ApiClientError ? error.message : fallbackError);
       return false;
     } finally {
       submission.finish();
@@ -53,8 +58,9 @@ export function useMagicLinkRequest(fallbackError: string, { resendCooldownSecon
   function clearFeedback(): void {
     setSent(false);
     setSecondsUntilResend(0);
+    setWaitHint(null);
     submission.setError(null);
   }
 
-  return { sent, secondsUntilResend, request, clearFeedback, ...submission };
+  return { sent, secondsUntilResend, waitHint, request, clearFeedback, ...submission };
 }

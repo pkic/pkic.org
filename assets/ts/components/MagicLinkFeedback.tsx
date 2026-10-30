@@ -26,7 +26,17 @@ export function MagicLinkSubmitButton({ submitting }: { submitting: boolean }) {
  * reader this was a failure at all. The Alert's danger tone and `role="alert"`
  * do that job, and the sentence still says "Sign-in failed".
  */
-export function SignInError({ error, includePrefix = true }: { error: string | null; includePrefix?: boolean }) {
+export function SignInError({
+  error,
+  waitHint = null,
+  includePrefix = true,
+}: {
+  error: string | null;
+  /** A throttled request: nothing failed, so it reads as a wait, not "Sign-in failed". */
+  waitHint?: string | null;
+  includePrefix?: boolean;
+}) {
+  if (waitHint) return <Alert tone="warn">{waitHint}</Alert>;
   if (!error) return null;
   return <Alert tone="danger">{includePrefix ? `Sign-in failed: ${error}` : error}</Alert>;
 }

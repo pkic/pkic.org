@@ -162,8 +162,10 @@ describe("portal login", () => {
     await waitFor(() => container.querySelector('[role="alert"]') !== null, "the throttle was never announced");
 
     expect(container.querySelector('[role="alert"]')!.textContent).toBe(
-      "Sign-in failed: Too many links requested. Try again in about 2 minutes.",
+      "Too many links requested. Try again in about 2 minutes.",
     );
+    // Nothing failed: the wait reads as a warning, not a "Sign-in failed" error.
+    expect(container.querySelector('[role="alert"]')!.classList.contains("pk-alert--warn")).toBe(true);
     // Nothing was sent, so there is no "check your email" confirmation.
     expect(container.querySelector('[role="status"]')).toBeNull();
     const email = controlLabeled("Email");

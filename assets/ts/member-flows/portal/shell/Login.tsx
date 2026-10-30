@@ -225,7 +225,7 @@ export function Login({
         )}
       </fieldset>
 
-      <SignInError error={magicLink.error} />
+      <SignInError error={magicLink.error} waitHint={magicLink.waitHint} />
       <p class="pk-small pk-muted pk-login__note">
         Trouble signing in? <a href="mailto:contact@pkic.org">Ask the secretariat</a>.
       </p>
