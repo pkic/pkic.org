@@ -43,6 +43,7 @@ import {
 import { dateTimeLocalToIso } from "../../assets/shared/timezone";
 import { canonicalSessionCredits } from "../../assets/shared/session-public-credits";
 import { agendaSessionContent } from "../../assets/shared/public-agenda-content";
+import { personDisplayName } from "../../assets/shared/person-display";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
 import { publishE2eSite } from "./helpers/site-publication";
@@ -367,12 +368,11 @@ test("public repeats retain event-specific employer credits through profile edit
         "Later current profile",
       );
     for (const [index, path] of paths.entries()) {
-      const link = appearances.locator(`a[href="${path}"]`);
-      await expect(link).toHaveCount(1);
-      await expect(appearances.getByRole("listitem").filter({ has: link })).toContainText(
-        index === 2 ? organizationB.name : organizationA.name,
-      );
-      await expect(appearances.getByRole("listitem").filter({ has: link })).toContainText(
+      await expect(appearances.locator(`a[href="${path}"]`)).toHaveCount(1);
+      // A `has` locator is matched inside each list item, so it names the link alone, not its page ancestors.
+      const appearance = appearances.getByRole("listitem").filter({ has: publicPage.locator(`a[href="${path}"]`) });
+      await expect(appearance).toContainText(index === 2 ? organizationB.name : organizationA.name);
+      await expect(appearance).toContainText(
         index === 2 ? roleB : corrected && index === 0 ? "Reviewed occurrence correction" : roleA,
       );
     }
@@ -449,6 +449,15 @@ test("public repeats retain event-specific employer credits through profile edit
     ).user;
     expect(currentPerson.id).toBe(userId);
     expect(currentPerson.preferred_name).toBe("Later current profile name");
+    // The agenda names the person by the one rule: the preferred name, then the last name.
+    const laterDisplayName = personDisplayName(
+      {
+        preferredName: currentPerson.preferred_name,
+        firstName: currentPerson.first_name,
+        lastName: currentPerson.last_name,
+      },
+      null,
+    );
     const currentIdentity = currentPerson.identities.find((identity) => identity.identityId === identityA);
     expect(currentIdentity?.jobTitle).toBe("Later current profile role");
     expect(await read(eventA.slug, true)).toEqual(frozenA);
@@ -489,11 +498,11 @@ test("public repeats retain event-specific employer credits through profile edit
     const repeated = occurrence(newlyApproved, repeatedId);
     const originalRepeat = occurrence(frozenA, repeatedId);
     expect(repeated.publicationStatus).toBe("changed");
-    expect(repeated.speakers).toEqual([{ userId, role: "speaker", displayName: "Later current profile name" }]);
+    expect(repeated.speakers).toEqual([{ userId, role: "speaker", displayName: laterDisplayName }]);
     expect(repeated).toEqual({
       ...originalRepeat,
       publicationStatus: "changed",
-      speakers: originalRepeat.speakers.map((speaker) => ({ ...speaker, displayName: "Later current profile name" })),
+      speakers: originalRepeat.speakers.map((speaker) => ({ ...speaker, displayName: laterDisplayName })),
     });
     expect(repeated.history).toEqual(originalRepeat.history);
     expect(canonicalSessionCredits(repeated)).toEqual(canonicalSessionCredits(originalRepeat));
