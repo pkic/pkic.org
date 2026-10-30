@@ -444,9 +444,6 @@ async function main(): Promise<void> {
   if (eventName) fills["eventName"] = eventName;
   fillPlaceholders(boot.root, fills);
 
-  if (loadingEl) loadingEl.hidden = true;
-  revealContent();
-
   // Reuse the verified organization chooser after confirmation proves the mailbox.
   const organizationMount = boot.form.querySelector<HTMLElement>("[data-confirm-organization]");
   const organization: ConfirmOrganizationController = {};
@@ -466,6 +463,7 @@ async function main(): Promise<void> {
           )
         : null;
     } catch (error) {
+      if (loadingEl) loadingEl.hidden = true;
       setStatus(boot.statusEl, normalizeValidation(error).globalMessage, true);
       return;
     }
@@ -539,6 +537,10 @@ async function main(): Promise<void> {
       }
     });
   });
+
+  // Offer the confirmation only once its organization question and submit handling are in place.
+  if (loadingEl) loadingEl.hidden = true;
+  revealContent();
 }
 
 void main();
