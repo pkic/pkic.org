@@ -61,6 +61,9 @@ vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/Offl
     </div>
   ),
 }));
+vi.mock("../../assets/ts/member-flows/portal/shell/MeetingEntryReturn", () => ({
+  MeetingEntryReturn: ({ destination }: { destination: string }) => <div data-meeting-return={destination} />,
+}));
 import { App } from "../../assets/ts/member-flows/portal/App";
 import { rememberedActingIdentityId } from "../../assets/ts/member-flows/portal/acting-identity";
 import { myActiveIdentitySwitchSchema } from "../../assets/shared/schemas/me";
@@ -190,6 +193,25 @@ it("opens the portal when a link opened twice is refused but the first opening s
   expect(host.textContent).not.toContain("Magic link already used");
   expect(portalSession.value?.sessionId).toBe(session.sessionId);
   expect(window.location.hash).toBe("#/groups/synthetic");
+});
+
+it("returns to a personal meeting link when its sign-in link opened twice already signed this browser in", async () => {
+  const meetingToken = `m2.${"A".repeat(22)}.${"B".repeat(22)}.0.${"C".repeat(22)}`;
+  window.location.hash = `#/verify?token=synthetic-used-link&next=${encodeURIComponent(`/meeting-link/${meetingToken}`)}`;
+  const session = portalSessionFixture({ pendingIdentityCount: 1 });
+  fetchMock.mockImplementation(async (input: RequestInfo | URL) =>
+    String(input).endsWith("/verify-link")
+      ? refusal(409, "Magic link already used")
+      : Response.json(String(input) === "/api/v1/users/current" ? portalProfileFixture(session) : session),
+  );
+  await mount();
+  await vi.waitFor(() =>
+    expect(host.querySelector("[data-meeting-return]")?.getAttribute("data-meeting-return")).toBe(
+      `/m/#token=${meetingToken}`,
+    ),
+  );
+  expect(mocks.renderShell).not.toHaveBeenCalled();
+  expect(host.textContent).not.toContain("Magic link already used");
 });
 
 it("keeps online failure and retry in the card without entering the offline scanner", async () => {
