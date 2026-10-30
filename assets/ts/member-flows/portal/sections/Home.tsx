@@ -236,13 +236,24 @@ function MeetingsPanel() {
   );
 }
 
+/** Events shown on Home: the ones under way, then the next ones, in the order they take place. */
+const HOME_EVENT_COUNT = 4;
+
 function EventsPanel() {
   const events = useData(async () => {
     const [current, next] = await Promise.all([
-      getJson("/api/v1/events?kind=standalone&phase=now&sort=starts_at&limit=1", eventsListResponseSchema),
-      getJson("/api/v1/events?kind=standalone&phase=upcoming&sort=starts_at&limit=1", eventsListResponseSchema),
+      getJson(
+        `/api/v1/events?kind=standalone&phase=now&sort=starts_at&limit=${HOME_EVENT_COUNT}`,
+        eventsListResponseSchema,
+      ),
+      getJson(
+        `/api/v1/events?kind=standalone&phase=upcoming&sort=starts_at&limit=${HOME_EVENT_COUNT}`,
+        eventsListResponseSchema,
+      ),
     ]);
-    return { events: [...current.events, ...next.events] };
+    const distinct = new Map([...current.events, ...next.events].map((event) => [event.id, event]));
+    const inOrder = [...distinct.values()].sort((a, b) => (a.startsAt ?? "").localeCompare(b.startsAt ?? ""));
+    return { events: inOrder.slice(0, HOME_EVENT_COUNT) };
   }, []);
   const rows = events.data?.events ?? [];
   const now = useBoundaryClock((at) => {

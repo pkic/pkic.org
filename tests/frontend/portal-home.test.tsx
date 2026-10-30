@@ -294,6 +294,25 @@ describe("portal landing", () => {
     expect(events.textContent).not.toContain("No current or upcoming events right now.");
   });
 
+  it("lists several events in the order they take place, each once", async () => {
+    portalSession.value = { ...portalSessionFixture({ member: false }), eventParticipation: true };
+    const later = audienceEventRow({
+      id: "10000000-0000-4000-8000-000000000003",
+      slug: "later-2027",
+      name: "Later Summit",
+      startsAt: "2027-03-01T09:00:00.000Z",
+      endsAt: "2027-03-01T17:00:00.000Z",
+    });
+    const soon = audienceEventRow();
+    stubFeeds(feeds({ "/api/v1/events": { events: [later, soon], page: onePage } }));
+
+    const container = mount();
+    await settle();
+
+    const links = [...panelNamed(container, "Events").querySelectorAll("li a[href^='#/events/']")];
+    expect(links.map((link) => link.textContent)).toEqual(["PQC Conference 2026", "Later Summit"]);
+  });
+
   it("renders upcoming events using the shared discovery card", async () => {
     portalSession.value = { ...portalSessionFixture({ member: false }), eventParticipation: true };
     stubFeeds(feeds({ "/api/v1/events": { events: [audienceEventRow()], page: onePage } }));
