@@ -48,6 +48,7 @@ function managedSpeaker(
     headshotUrl: null,
     confirmedAt: "2026-08-01T00:00:00.000Z",
     declinedAt: null,
+    declineReason: null,
     bio: null,
     headshotUploaded: false,
     ...overrides,
@@ -92,6 +93,26 @@ describe("proposer-managed speaker roster", () => {
     expect(optionValues(controlFor<HTMLSelectElement>(root, "Role"))).toEqual(
       expect.arrayContaining(["proposer", "moderator", "speaker"]),
     );
+  });
+
+  it("tells the proposer why a speaker declined", async () => {
+    const root = mount(
+      <SpeakerList
+        speakers={[
+          managedSpeaker({
+            status: "declined",
+            declinedAt: "2026-08-02T00:00:00.000Z",
+            declineReason: "I am traveling that week.",
+          }),
+        ]}
+        token="manage-token"
+        apiBase="/api/v1"
+        proposerUserId="proposer-1"
+        onReload={async () => {}}
+        onStatus={() => {}}
+      />,
+    );
+    expect(root.textContent).toContain("Reason for declining: I am traveling that week.");
   });
 
   it("shows the speaker's identity read-only and edits only their role", async () => {

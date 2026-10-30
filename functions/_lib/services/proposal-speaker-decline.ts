@@ -2,15 +2,75 @@ import type { ParticipantAuthority } from "./participant-authority";
 import { first } from "../db/queries";
 import { AppError } from "../errors";
 import { nowIso } from "../utils/time";
-import type { DatabaseLike } from "../types";
+import type { DatabaseLike, StatementLike } from "../types";
+import { prepareQueueEmailStatement } from "../email/outbox";
+import { emailPlainText } from "../email/plain-text";
+import { sha256Hex } from "../utils/crypto";
 import { isAuditChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "./audit";
-import { getEventById } from "./events";
+import { buildEventEmailVariables, getEventById, type EventRecord } from "./events";
+import { queuedCapabilityToken } from "./capability-links";
+import { proposalManagePageUrl } from "./frontend-links";
 import { getSpeakerByManageToken } from "./proposals";
 import { prepareProposalRoleCapacityForSpeakerRemoval } from "./proposal-role-capacity";
 import { isRegistrationTransitionConflict, registrationChangedError } from "./registrations/transition-guard";
 import { isEventParticipantSourceConflict } from "./event-participant-source-revision";
 import { isProposalSpeakerRosterEditableStatus } from "../../../assets/shared/schemas/proposal-status";
 import { prepareDeclinedSpeakerAgendaRemoval } from "./event-agenda/declined-speaker-removal";
+
+/**
+ * Tells the proposer, through the outbox and in the decline's own batch, that a speaker declined and why.
+ * A speaker who never accepted is named by the address the proposer invited, not by their account's profile.
+ */
+async function prepareProposerDeclineNotice(
+  db: DatabaseLike,
+  input: {
+    event: EventRecord;
+    proposal: { id: string; title: string; proposer_user_id: string };
+    speaker: { id: string; user_id: string; status: string; invite_generation: number };
+    speakerName: string;
+    speakerEmail: string;
+    reason: string | null;
+    appBaseUrl: string;
+  },
+): Promise<StatementLike[]> {
+  if (input.speaker.user_id === input.proposal.proposer_user_id) return [];
+  const proposer = await first<{ email: string; first_name: string | null }>(
+    db,
+    "SELECT email, first_name FROM users WHERE id = ? AND active = 1 AND pii_redacted_at IS NULL",
+    [input.proposal.proposer_user_id],
+  );
+  if (!proposer) return [];
+  const manageUrl = proposalManagePageUrl(
+    input.appBaseUrl,
+    input.event,
+    queuedCapabilityToken("proposal_manage", input.proposal.id),
+  );
+  const key = `proposal_speaker_declined:${input.speaker.id}:${input.speaker.invite_generation}`;
+  const speakerName = (input.speaker.status === "confirmed" && input.speakerName) || input.speakerEmail;
+  return [
+    prepareQueueEmailStatement(db, {
+      outboxId: (await sha256Hex(key)).slice(0, 32),
+      idempotencyKey: key,
+      eventId: input.event.id,
+      baseUrl: input.appBaseUrl,
+      templateKey: "proposal_speaker_declined",
+      recipientEmail: proposer.email,
+      recipientUserId: input.proposal.proposer_user_id,
+      messageType: "transactional",
+      subject: `A speaker declined your proposal — ${input.event.name}`,
+      capabilityLinkValues: [manageUrl],
+      data: {
+        ...buildEventEmailVariables(input.event, input.appBaseUrl),
+        proposalId: input.proposal.id,
+        firstName: emailPlainText(proposer.first_name ?? ""),
+        speakerName: emailPlainText(speakerName),
+        proposalTitle: emailPlainText(input.proposal.title),
+        declineReason: emailPlainText(input.reason ?? ""),
+        manageUrl,
+      },
+    }).statement,
+  ];
+}
 
 /**
  * A speaker declines their own participation. The decline, the roster's
@@ -58,6 +118,15 @@ export async function declineSpeakerParticipation(
     appBaseUrl: payload.appBaseUrl,
     at: now,
   });
+  const proposerNotice = await prepareProposerDeclineNotice(db, {
+    event,
+    proposal,
+    speaker,
+    speakerName: [user.first_name, user.last_name].filter(Boolean).join(" "),
+    speakerEmail: user.email,
+    reason: payload.reason ?? null,
+    appBaseUrl: payload.appBaseUrl,
+  });
   try {
     await db.batch([
       db
@@ -103,6 +172,7 @@ export async function declineSpeakerParticipation(
         sourceRef: proposal.id,
       })),
       ...agendaRemoval,
+      ...proposerNotice,
     ]);
   } catch (error) {
     if (isRegistrationTransitionConflict(error)) {

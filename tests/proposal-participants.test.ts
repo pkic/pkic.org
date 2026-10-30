@@ -473,10 +473,21 @@ describe("proposal participants", () => {
     await env.DB.prepare("UPDATE proposal_speakers SET status='confirmed', confirmed_at=? WHERE user_id=?")
       .bind(new Date().toISOString(), existingId)
       .run();
-    expect((await read()).find((speaker) => speaker.email === "private-invitee@example.test")).toMatchObject({
+    await env.DB.prepare(
+      "UPDATE proposal_speakers SET status='declined', declined_at=?, decline_reason='Traveling that week' WHERE user_id=(SELECT id FROM users WHERE normalized_email='fresh-invitee@example.test')",
+    )
+      .bind(new Date().toISOString())
+      .run();
+    const answered = await read();
+    expect(answered.find((speaker) => speaker.email === "private-invitee@example.test")).toMatchObject({
       status: "confirmed",
       firstName: "Private",
       lastName: "Stored",
+      declineReason: null,
+    });
+    expect(answered.find((speaker) => speaker.email === "fresh-invitee@example.test")).toMatchObject({
+      status: "declined",
+      declineReason: "Traveling that week",
     });
   });
 

@@ -1322,6 +1322,18 @@ describe("speaker self-management endpoints", () => {
     const body = (await response.json()) as { success: boolean; status: string };
     expect(body.success).toBe(true);
     expect(body.status).toBe("declined");
+
+    // The proposer is told in the same commit, by the address they invited and with the reason.
+    const notices = await queryAll<{ recipient_email: string; speaker: string; reason: string }>(
+      env.DB,
+      `SELECT recipient_email,
+              json_extract(payload_json, '$.speakerName.__pkicEmailPlainText') AS speaker,
+              json_extract(payload_json, '$.declineReason.__pkicEmailPlainText') AS reason
+         FROM email_outbox WHERE template_key = 'proposal_speaker_declined'`,
+    );
+    expect(notices).toEqual([
+      { recipient_email: "speaker@example.test", speaker: "cospeaker@example.test", reason: "Schedule conflict" },
+    ]);
   });
 
   it("POST decline — rejects a capability after the proposal closes", async () => {
@@ -1631,6 +1643,9 @@ describe("speaker self-management endpoints", () => {
         coSpeakerUserId,
       ]),
     ).resolves.toEqual([{ status: "invited" }]);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key = 'proposal_speaker_declined'"),
+    ).resolves.toEqual([]);
   });
 
   it("rolls back reminder preferences when canonical-email revocation wins the commit race", async () => {

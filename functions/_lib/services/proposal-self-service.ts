@@ -55,6 +55,7 @@ export async function loadProposalAccessView(
         status: speaker.status,
         confirmedAt: speaker.confirmed_at,
         declinedAt: speaker.declined_at,
+        declineReason: speaker.status === "declined" ? speaker.decline_reason : null,
         email: speaker.email,
       };
       if (speaker.status === "invited") return invitedSpeakerView(status, speaker);

@@ -115,6 +115,7 @@ export function ProposalManageSpeakerCard({
           <Badge tone="neutral">{roleLabel}</Badge>
           <Badge tone={statusTone(speaker.status)}>{formatStatusLabel(speaker.status)}</Badge>
         </div>
+        {speaker.declineReason && <p class="pk-small">Reason for declining: {speaker.declineReason}</p>}
         {(speaker.organizationName || speaker.jobTitle) && (
           <p class="pk-small">{[speaker.jobTitle, speaker.organizationName].filter(Boolean).join(" · ")}</p>
         )}

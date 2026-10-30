@@ -852,6 +852,24 @@ Speaker identity: {{speakerName}}{{#if organizationName}}, {{organizationName}}{
 `,
   },
   {
+    key: "proposal_speaker_declined",
+    subjectTemplate: "A speaker declined your proposal — {{eventName}}",
+    content: `{{#if firstName}}Hello {{firstName}},{{else}}Hello,{{/if}}
+
+{{speakerName}} declined to speak on your proposal **{{proposalTitle}}** for **{{eventName}}**.
+
+{{#if declineReason}}
+They gave this reason:
+
+> {{declineReason}}
+{{/if}}
+
+You can invite another speaker or change the proposal on its page.
+
+[Manage my proposal]({{manageUrl}})
+`,
+  },
+  {
     key: "proposal_organizational_representation_request",
     subjectTemplate: "Please speak on behalf of your organization — {{eventName}}",
     content: `Hello {{firstName}},

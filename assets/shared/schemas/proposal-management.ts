@@ -268,6 +268,8 @@ export const proposalSpeakerProfileSchema = proposalActingIdentitySchema.extend(
 export const proposalAccessSpeakerSchema = proposalSpeakerProfileSchema.extend({
   confirmedAt: z.string().nullable(),
   declinedAt: z.string().nullable(),
+  /** What a speaker who declined told the proposer, if anything. */
+  declineReason: z.string().nullable(),
   bio: z.string().nullable(),
   headshotUploaded: z.boolean(),
 });
