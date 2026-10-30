@@ -148,7 +148,14 @@ test("applicant opens status emails and staff record an attributed consensus obj
   await expect(card.getByRole("cell", { name: /Sam Reviewer/ })).toBeVisible();
   await expect(card.getByRole("cell", { name: designated.id, exact: true })).toHaveCount(0);
 
+  // The objections load after the review itself; wait for the server's list rather than for an assertion's default.
+  const listed = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === `/api/v1/members/applications/${application.applicationId}/objections` &&
+      response.request().method() === "GET",
+  );
   await page.reload();
+  expect((await listed).status()).toBe(200);
   await expect(card.getByRole("cell", { name: /Sam Reviewer/ })).toBeVisible();
 
   await page.getByRole("row").filter({ hasText: "Awaiting eligibility evidence." }).click();
