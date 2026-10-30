@@ -1,6 +1,7 @@
 /** Mailbox proof is previewed read-only; linking requires the intended signed-in account. */
 import { useEffect, useState } from "preact/hooks";
 import {
+  EMAIL_VERIFIED_ELSEWHERE,
   ownEmailAddressVerificationPreviewResponseSchema,
   ownEmailAddressVerificationResponseSchema,
   ownEmailAddressVerificationSchema,
@@ -22,6 +23,8 @@ type Verified = {
 };
 
 function linkError(error: unknown): string {
+  // The mailbox is proved but belongs to another account: say so, and what to do next.
+  if (error instanceof ApiClientError && error.code === EMAIL_VERIFIED_ELSEWHERE.code) return error.message;
   if (error instanceof ApiClientError && [404, 409, 410].includes(error.status)) {
     return "This link has expired, was already used, or no longer matches an address on your account. Send a new link from your profile.";
   }

@@ -10,6 +10,7 @@ import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  EMAIL_VERIFIED_ELSEWHERE,
   ownEmailAddressUpdateSchema,
   ownEmailAddressVerificationSchema,
   ownEmailAddressesListResponseSchema,
@@ -280,5 +281,13 @@ describe("email addresses on the user record", () => {
       token: "pkc1_consolidation-token",
       consolidateUnverifiedAccount: true,
     });
+  });
+  it("says an address verified on another account can be used there or combined, without naming that account", async () => {
+    window.location.hash = "#/email-verifications?token=pkc1_elsewhere-token";
+    stub(() => json({ error: EMAIL_VERIFIED_ELSEWHERE }, 409));
+    const host = mount(<EmailVerificationConfirmation />);
+    await settle();
+    expect(host.textContent).toContain(EMAIL_VERIFIED_ELSEWHERE.message);
+    expect(host.textContent).not.toContain("expired");
   });
 });

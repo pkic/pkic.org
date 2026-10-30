@@ -8,6 +8,7 @@ import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { affiliationOfferResponseSchema } from "../assets/shared/schemas/affiliation-offer";
 import {
+  EMAIL_VERIFIED_ELSEWHERE,
   ownEmailAddressAddSchema,
   ownEmailVerificationRequestedResponseSchema,
   ownEmailAddressResponseSchema,
@@ -276,7 +277,7 @@ describe("a person's own email addresses", () => {
     expect((await verify(link)).status).toBe(409);
   });
 
-  it("does not consolidate another verified account even with consolidation consent", async () => {
+  it("refuses an address verified on another account with a specific next step, even with consolidation consent", async () => {
     const source = await signedIn("verified@consolidation.example");
     const account = await signedIn("current@consolidation.example");
     await add(account.token, "verified@consolidation.example");
@@ -288,7 +289,14 @@ describe("a person's own email addresses", () => {
         ownEmailAddressVerificationSchema.parse({ token: link, consolidateUnverifiedAccount: true }),
       ),
     });
-    expect(refused.status).toBe(404);
+    expect(refused.status).toBe(409);
+    expect(await refused.json()).toMatchObject({ error: EMAIL_VERIFIED_ELSEWHERE });
+    // The page the link opens says so before anything is confirmed, and names neither account.
+    const preview = await publicLinkCall("/preview", link);
+    expect(preview.status).toBe(409);
+    const previewBody = JSON.stringify(await preview.json());
+    expect(previewBody).toContain(EMAIL_VERIFIED_ELSEWHERE.code);
+    expect(previewBody).not.toContain(source.userId);
     expect((await call(source.token, "")).status).toBe(200);
     expect(await queryAll(env.DB, "SELECT id FROM audit_log WHERE action='unverified_account_consolidated'")).toEqual(
       [],
@@ -511,7 +519,12 @@ describe("a person's own email addresses", () => {
     const secondLink = await verificationToken(email);
     expect(await queryAll(env.DB, "SELECT id FROM user_emails WHERE normalized_email=?", [email])).toEqual([]);
     expect((await verify(firstLink)).status).toBe(200);
-    expect((await verify(secondLink)).status).toBe(404);
+    // The second claimant proved the mailbox too, so it learns why and what to do, but not whose account holds it.
+    const refused = await verify(secondLink);
+    expect(refused.status).toBe(409);
+    const refusal = await refused.json();
+    expect(refusal).toMatchObject({ error: EMAIL_VERIFIED_ELSEWHERE });
+    expect(JSON.stringify(refusal)).not.toContain("first@owner.example");
     expect(await queryAll(env.DB, "SELECT user_id FROM user_emails WHERE normalized_email=?", [email])).toEqual([
       { user_id: first.userId },
     ]);

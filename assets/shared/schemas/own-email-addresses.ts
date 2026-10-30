@@ -21,6 +21,16 @@ import { USER_EMAILS_SORT_COLUMNS, userEmailAddSchema } from "./user-emails";
 export const OWN_EMAIL_ADDRESS_LIMIT = 10;
 /** A verification link proves the mailbox only; it stays usable for this long. */
 export const EMAIL_ADDRESS_VERIFICATION_TTL_HOURS = 24;
+/**
+ * The refusal when a mailbox the link holder proved is already verified on another
+ * account. It names neither that account nor its owner; the link holder receives
+ * mail there, so the next step is to sign in with it or to ask for the accounts to be combined.
+ */
+export const EMAIL_VERIFIED_ELSEWHERE = {
+  code: "EMAIL_VERIFIED_ELSEWHERE",
+  message:
+    "This address is already verified on another PKI Consortium account. To use that account, sign in with this address. To combine the two accounts, contact us.",
+} as const;
 
 /**
  * One of the signed-in person's addresses: the profile's address shape (the

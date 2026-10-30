@@ -14,6 +14,7 @@ import { prepareJobWake } from "./scheduled-jobs/dispatcher";
 import {
   OWN_EMAIL_ADDRESS_LIMIT,
   EMAIL_ADDRESS_VERIFICATION_TTL_HOURS,
+  EMAIL_VERIFIED_ELSEWHERE,
 } from "../../../assets/shared/schemas/own-email-addresses";
 import {
   assertEmailAuthCapabilityEmail,
@@ -173,6 +174,15 @@ interface LinkedAddress extends UnverifiedAddress {
   user_id: string;
   account_email: string;
   consolidation_source_id: string | null;
+  verified_elsewhere: number;
+}
+
+/** Whether an account other than `person` already holds the address `normalizedEmail` (an SQL expression) as verified. */
+function verifiedElsewhereColumn(normalizedEmail: string): string {
+  return `(EXISTS(SELECT 1 FROM users owner WHERE owner.normalized_email=${normalizedEmail}
+        AND owner.id<>person.id AND owner.email_verified_at IS NOT NULL)
+      OR EXISTS(SELECT 1 FROM user_emails owner WHERE owner.normalized_email=${normalizedEmail}
+        AND owner.user_id<>person.id AND owner.verified_at IS NOT NULL)) AS verified_elsewhere`;
 }
 
 /** The address an emailed link names, when the link is genuine and still matches the address text. */
@@ -195,12 +205,15 @@ async function resolveVerificationLink(
       (SELECT source.id FROM users source WHERE source.normalized_email=? AND source.id<>person.id
         AND source.active=1 AND source.email_verified_at IS NULL AND source.pii_redacted_at IS NULL
         AND source.merged_into_user_id IS NULL AND NOT EXISTS(SELECT 1 FROM user_emails owned
-          WHERE owned.user_id=source.id AND owned.verified_at IS NOT NULL)) AS consolidation_source_id
+          WHERE owned.user_id=source.id AND owned.verified_at IS NOT NULL)) AS consolidation_source_id,
+      ${verifiedElsewhereColumn("?")}
       FROM users person LEFT JOIN user_emails saved ON saved.user_id=person.id AND saved.normalized_email=?
       WHERE person.id=? AND person.active=1 AND person.pii_redacted_at IS NULL AND person.merged_into_user_id IS NULL`,
         [
           capability.subjectId,
           requested.email,
+          normalizeEmail(requested.email),
+          normalizeEmail(requested.email),
           normalizeEmail(requested.email),
           normalizeEmail(requested.email),
           normalizeEmail(requested.email),
@@ -211,7 +224,8 @@ async function resolveVerificationLink(
     : await first<LinkedAddress>(
         db,
         `SELECT address.id,address.user_id,address.email,address.normalized_email,address.verified_at,
-      0 AS requested,person.email AS account_email,NULL AS consolidation_source_id
+      0 AS requested,person.email AS account_email,NULL AS consolidation_source_id,
+      ${verifiedElsewhereColumn("address.normalized_email")}
       FROM user_emails address JOIN users person ON person.id=address.user_id AND person.active=1 WHERE address.id=?`,
         [capability.subjectId],
       );
@@ -223,6 +237,8 @@ async function resolveVerificationLink(
     currentEmail: address.normalized_email,
   });
   if (address.verified_at) throw new AppError(409, "MAGIC_LINK_USED", "This email address is already verified.");
+  if (address.verified_elsewhere)
+    throw new AppError(409, EMAIL_VERIFIED_ELSEWHERE.code, EMAIL_VERIFIED_ELSEWHERE.message);
   return {
     address,
     capabilityId: capability.capabilityId,
