@@ -7,6 +7,7 @@ import type { AuthenticatedIdentity } from "../auth/user-session";
 import { prepareProposalSubmitter } from "./proposal-submitter";
 import { prepareIdentityProfileCompletion } from "./identities/profile-completion";
 import { buildFindOrCreateUserStatement } from "./users";
+import { normalizeEmail } from "../validation";
 import { buildAddProposalSpeaker, buildCreateProposal, formatInvitePerson } from "./proposals";
 import { prepareConsentStatements, prepareActiveTermsSnapshotGuard, validateRequiredConsents } from "./consent";
 import { prepareAcceptInviteStatements, type InviteRecord } from "./invites";
@@ -194,6 +195,7 @@ export async function submitProposal(
       proposalId: created.proposal.id,
       userId: userWrite.user.id,
       role: speaker.role,
+      invitedEmail: normalizeEmail(speaker.email),
       inviteExpiresAt: coSpeakerExpiresAt,
       proposalContext,
       actingIdentity,

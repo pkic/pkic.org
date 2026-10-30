@@ -1336,6 +1336,35 @@ describe("speaker self-management endpoints", () => {
     ]);
   });
 
+  it("POST decline — names the speaker to the proposer by the invited address, not the account's primary one", async () => {
+    await setupWorkflow();
+    const { speakerManageToken, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    // The invited address is an alias of an account whose primary address the proposer never typed.
+    await env.DB.prepare("UPDATE users SET email = ?, normalized_email = ? WHERE id = ?")
+      .bind("cospeaker-primary@example.test", "cospeaker-primary@example.test", coSpeakerUserId)
+      .run();
+
+    const response = await speakerPost(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerManageToken}/participation`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ status: "declined" }),
+        }),
+        { token: speakerManageToken },
+      ),
+    );
+    expect(response.status, await response.clone().text()).toBe(200);
+
+    const notices = await queryAll<{ speaker: string }>(
+      env.DB,
+      `SELECT json_extract(payload_json, '$.speakerName.__pkicEmailPlainText') AS speaker
+         FROM email_outbox WHERE template_key = 'proposal_speaker_declined'`,
+    );
+    expect(notices).toEqual([{ speaker: "cospeaker@example.test" }]);
+  });
+
   it("POST decline — rejects a capability after the proposal closes", async () => {
     await setupWorkflow();
     const { speakerManageToken, proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();

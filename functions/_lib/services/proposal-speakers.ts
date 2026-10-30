@@ -39,6 +39,8 @@ export interface ProposalSpeakerRecord extends ProposalActingIdentityRow {
   created_at: string;
   invite_generation: number;
   invite_expires_at: string | null;
+  /** The normalized address the invitation was mailed to; null on rows that predate it and on a proposer's own row. */
+  invited_email: string | null;
 }
 
 /**
@@ -101,6 +103,8 @@ export async function buildAddProposalSpeaker(
     proposalContext?: { event_id: string; status: string; updated_at?: string };
     actingIdentity?: PreparedProposalActingIdentity;
     requireRepresentationReview?: boolean;
+    /** The normalized address this invitation is mailed to. */
+    invitedEmail?: string;
   },
 ): Promise<{
   manageToken: string;
@@ -214,8 +218,8 @@ export async function buildAddProposalSpeaker(
       .prepare(
         `INSERT INTO proposal_speakers
            (id, proposal_id, user_id, role, status, manage_link_secret, confirmed_at, created_at, invite_generation,
-            invite_expires_at, acting_identity_id, acting_identity_selected_at)
-         SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            invite_expires_at, acting_identity_id, acting_identity_selected_at, invited_email)
+         SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
          ${proposalWriteGuard.sql}
          ON CONFLICT(proposal_id, user_id) DO UPDATE SET
            role = excluded.role,
@@ -239,6 +243,11 @@ export async function buildAddProposalSpeaker(
              WHEN proposal_speakers.status = 'declined'
                OR excluded.invite_generation > proposal_speakers.invite_generation THEN excluded.invite_expires_at
              ELSE proposal_speakers.invite_expires_at
+           END,
+           invited_email = CASE
+             WHEN proposal_speakers.status = 'declined'
+               OR excluded.invite_generation > proposal_speakers.invite_generation THEN excluded.invited_email
+             ELSE proposal_speakers.invited_email
            END,
            declined_at = CASE
              WHEN proposal_speakers.status = 'declined'
@@ -279,6 +288,7 @@ export async function buildAddProposalSpeaker(
         inviteExpiresAt,
         payload.actingIdentity?.identityId ?? null,
         payload.actingIdentity?.selectedAt ?? null,
+        payload.invitedEmail ?? null,
         ...proposalWriteGuard.bindings,
       ),
   ];
@@ -510,6 +520,7 @@ export interface ProposalSpeakerWithUser extends ProposalSpeakerUserProfile, Pro
   invite_expires_at: string | null;
   decline_reason: string | null;
   created_at: string;
+  invited_email: string | null;
   /** 1 once the person has proved a mailbox; 0 for an account no one has claimed yet. */
   account_claimed: 0 | 1;
 }
@@ -525,7 +536,7 @@ export {
 export const PROPOSAL_SPEAKER_WITH_USER_COLUMNS = `ps.id AS speaker_id, ps.user_id, ps.role, ps.status,
   ps.acting_identity_id, ps.acting_identity_selected_at,
   ps.manage_link_secret, ps.confirmed_at, ps.declined_at, ps.terms_accepted_at, ps.invite_expires_at,
-  ps.decline_reason, ps.created_at,
+  ps.decline_reason, ps.created_at, ps.invited_email,
   CASE WHEN ${unclaimedAccountSql("u")} THEN 0 ELSE 1 END AS account_claimed,
   u.email,
   ${proposalSpeakerProfileColumns()},

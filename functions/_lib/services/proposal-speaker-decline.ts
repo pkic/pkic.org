@@ -123,7 +123,7 @@ export async function declineSpeakerParticipation(
     proposal,
     speaker,
     speakerName: [user.first_name, user.last_name].filter(Boolean).join(" "),
-    speakerEmail: user.email,
+    speakerEmail: speaker.invited_email ?? user.email,
     reason: payload.reason ?? null,
     appBaseUrl: payload.appBaseUrl,
   });

@@ -94,3 +94,8 @@ CREATE INDEX event_promotion_batch_due ON event_promotion_batch_recipients(statu
 DROP INDEX uq_users_pending_email;
 DROP INDEX idx_users_pending_email_unique;
 DROP TRIGGER trg_users_pending_email_reservation_update;
+
+-- A speaker invitation is mailed to one address, which may be an alias of an existing account.
+-- Until the speaker accepts, the proposer sees that address rather than the account's primary one,
+-- and only that mailbox may continue from the link without another proof. NULL on rows that predate it.
+ALTER TABLE proposal_speakers ADD COLUMN invited_email TEXT;

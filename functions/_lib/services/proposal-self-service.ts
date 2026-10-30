@@ -56,7 +56,7 @@ export async function loadProposalAccessView(
         confirmedAt: speaker.confirmed_at,
         declinedAt: speaker.declined_at,
         declineReason: speaker.status === "declined" ? speaker.decline_reason : null,
-        email: speaker.email,
+        email: speaker.status === "confirmed" ? speaker.email : (speaker.invited_email ?? speaker.email),
       };
       if (speaker.status !== "confirmed") return invitedSpeakerView(status, speaker);
       return {
@@ -78,9 +78,9 @@ export async function loadProposalAccessView(
 }
 
 /**
- * Until a speaker accepts, the proposer sees only who they invited: the address, and the name only on an
- * account no one has claimed (the name a proposer typed). An existing person's profile stays theirs, also
- * after they decline.
+ * Until a speaker accepts, the proposer sees only who they invited: the address they typed, and the name only
+ * on an account no one has claimed (the name a proposer typed). An existing person's profile and primary
+ * address stay theirs, also after they decline.
  */
 function invitedSpeakerView<T extends object>(status: T, speaker: ProposalSpeakerWithUser) {
   const typedName = !speaker.account_claimed;

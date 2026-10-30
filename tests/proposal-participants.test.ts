@@ -43,8 +43,11 @@ const hiddenProfile = {
   headshotUrl: null,
 };
 
-/** A panel whose proposer invites one person with an existing, claimed account and one new address. */
-async function submitPanelWithExistingInvitee() {
+/**
+ * A panel whose proposer invites one person with an existing, claimed account and one new address. The
+ * existing person also holds `alias-invitee@example.test`, which the proposer may invite instead.
+ */
+async function submitPanelWithExistingInvitee(invitedAddress = "private-invitee@example.test") {
   await seedEventAndAdmin(env.DB);
   const existingId = crypto.randomUUID();
   const at = new Date().toISOString();
@@ -58,6 +61,10 @@ async function submitPanelWithExistingInvitee() {
                                invited_at, started_at, created_at, updated_at)
        VALUES (?1, ?2, NULL, 'A private biography that only this person may share.', '["https://private.example"]',
                'account', 0, ?3, ?3, ?3, ?3)`,
+    ).bind(crypto.randomUUID(), existingId, at),
+    env.DB.prepare(
+      `INSERT INTO user_emails (id, user_id, email, normalized_email, verified_at, created_at)
+       VALUES (?1, ?2, 'alias-invitee@example.test', 'alias-invitee@example.test', ?3, ?3)`,
     ).bind(crypto.randomUUID(), existingId, at),
   ]);
   const response = await mountedAppFetch(
@@ -82,7 +89,7 @@ async function submitPanelWithExistingInvitee() {
             "Panel discussion on organizational governance, procurement, stakeholder management, and transition planning for post-quantum cryptography programs.",
         },
         speakers: [
-          { firstName: "Typed", lastName: "Name", email: "private-invitee@example.test", role: "panelist" },
+          { firstName: "Typed", lastName: "Name", email: invitedAddress, role: "panelist" },
           { firstName: "Fresh", lastName: "Invitee", email: "fresh-invitee@example.test", role: "panelist" },
         ],
         consents: [{ termKey: "speaker-terms", version: "v1" }],
@@ -500,6 +507,22 @@ describe("proposal participants", () => {
       lastName: null,
       ...hiddenProfile,
     });
+  });
+
+  it("shows the proposer the address they invited, not the account's primary one, until the speaker accepts", async () => {
+    const { existingId, read } = await submitPanelWithExistingInvitee("alias-invitee@example.test");
+    const invitee = async () => (await read()).find((speaker) => speaker.userId === existingId);
+    expect(await invitee()).toMatchObject({ status: "invited", email: "alias-invitee@example.test" });
+
+    await env.DB.prepare("UPDATE proposal_speakers SET status='declined', declined_at=? WHERE user_id=?")
+      .bind(new Date().toISOString(), existingId)
+      .run();
+    expect(await invitee()).toMatchObject({ status: "declined", email: "alias-invitee@example.test" });
+
+    await env.DB.prepare("UPDATE proposal_speakers SET status='confirmed', confirmed_at=? WHERE user_id=?")
+      .bind(new Date().toISOString(), existingId)
+      .run();
+    expect(await invitee()).toMatchObject({ status: "confirmed", email: "private-invitee@example.test" });
   });
 
   it("names another speaker on a speaker link only after they accept or by the name the proposer typed", async () => {

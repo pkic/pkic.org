@@ -68,6 +68,7 @@ async function inviteProposalSpeakerOnce(
     proposalId: payload.proposal.id,
     userId: preparedUser.user.id,
     role: payload.role,
+    invitedEmail,
     actingIdentity,
     inviteExpiresAt: requestedExpiresAt,
     renewExpiredInvitation: { event: payload.event, now },

@@ -150,6 +150,7 @@ export async function inviteSpeakerAndSubmitCapacityProposal(
     proposalId,
     userId: user.id,
     role: "co_speaker",
+    invitedEmail: "cospeaker@example.test",
     signingSecret: env.INTERNAL_SIGNING_SECRET!,
   });
   return { speakerManageToken, proposalId, coSpeakerUserId: user.id, proposalManageToken: manageToken };

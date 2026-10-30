@@ -84,6 +84,7 @@ async function getSpeakerById(db: DatabaseLike, speakerId: string, userId?: stri
     ps_created_at: string;
     ps_invite_generation: number;
     ps_invite_expires_at: string | null;
+    ps_invited_email: string | null;
     ps_invite_expired: number;
     sp_id: string;
     sp_event_id: string;
@@ -130,6 +131,7 @@ async function getSpeakerById(db: DatabaseLike, speakerId: string, userId?: stri
        ps.created_at      AS ps_created_at,
        ps.invite_generation AS ps_invite_generation,
        ps.invite_expires_at AS ps_invite_expires_at,
+       ps.invited_email   AS ps_invited_email,
        CASE
          WHEN ps.status IN ('invited', 'pending')
            AND (${inactiveEffectiveInviteExpirySql(
@@ -192,6 +194,7 @@ async function getSpeakerById(db: DatabaseLike, speakerId: string, userId?: stri
       created_at: row.ps_created_at,
       invite_generation: row.ps_invite_generation,
       invite_expires_at: row.ps_invite_expires_at,
+      invited_email: row.ps_invited_email,
       acting_identity_id: row.ps_acting_identity_id,
       acting_identity_selected_at: row.ps_acting_identity_selected_at,
     },
