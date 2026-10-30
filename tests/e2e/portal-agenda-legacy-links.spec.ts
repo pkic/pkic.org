@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { expect, test } from "@playwright/test";
@@ -57,29 +58,30 @@ async function openFragment(page: Page, evidence: SessionEvidence, anchor = evid
   return dialog;
 }
 
-test("retained historical event links resolve static IDs, dialogs, days, speakers, and original PDF bytes", async ({
-  page,
-}, info) => {
-  test.setTimeout(600_000);
-  const retainedFragments = JSON.parse(
-    await readFile("tests/fixtures/legacy-agenda-fragments.json", "utf8"),
-  ) as RetainedFragmentFixture[];
-  const browserAgendaRequests: string[] = [];
-  page.on("request", (request) => {
-    if (/\/api\/v1\/events\/[^/]+\/agenda(?:\/|\?|$)/u.test(new URL(request.url()).pathname))
-      browserAgendaRequests.push(request.url());
-  });
-  // Public historical pages must work even if the visitor agenda endpoint is unavailable.
-  await page.route("**/api/v1/events/*/agenda**", (route) => route.abort());
-  await page.route("https://www.youtube-nocookie.com/**", (route) => route.abort());
-  const summary: {
-    sourcePath: string;
-    dialogs: number;
-    labels: number;
-    days: number;
-    downloads: { url: string; sha256: string; bytes: number }[];
-  }[] = [];
-  for (const fixture of retainedFragments) {
+const retainedFragments = JSON.parse(
+  readFileSync("tests/fixtures/legacy-agenda-fragments.json", "utf8"),
+) as RetainedFragmentFixture[];
+
+test("the retained historical links cover every observed dialog and download", () => {
+  expect(retainedFragments.reduce((sum, event) => sum + event.dialogAnchors.length, 0)).toBe(172);
+  expect(retainedFragments.reduce((sum, event) => sum + event.downloadUrls.length, 0)).toBe(112);
+});
+
+// One test per event: each walks every dialog and download of its event, and has that event's budget to do it in.
+for (const fixture of retainedFragments) {
+  const eventPath = `/${dirname(fixture.sourcePath).replace(/^content\//u, "")}/`;
+  test(`retained historical links of ${eventPath} resolve static IDs, dialogs, days, speakers, and original PDF bytes`, async ({
+    page,
+  }, info) => {
+    test.setTimeout(600_000);
+    const browserAgendaRequests: string[] = [];
+    page.on("request", (request) => {
+      if (/\/api\/v1\/events\/[^/]+\/agenda(?:\/|\?|$)/u.test(new URL(request.url()).pathname))
+        browserAgendaRequests.push(request.url());
+    });
+    // Public historical pages must work even if the visitor agenda endpoint is unavailable.
+    await page.route("**/api/v1/events/*/agenda**", (route) => route.abort());
+    await page.route("https://www.youtube-nocookie.com/**", (route) => route.abort());
     const text = await readFile(fixture.sourcePath, "utf8");
     expect(digest(text)).toBe(fixture.sourceFileSHA256);
     const source = YAML.parse(text.split(/^---\s*$/mu)[1]!).data as AuthoredSource;
@@ -106,7 +108,6 @@ test("retained historical event links resolve static IDs, dialogs, days, speaker
               });
     }
     expect(evidence.map((row) => row.anchor)).toEqual(fixture.dialogAnchors);
-    const eventPath = `/${dirname(fixture.sourcePath).replace(/^content\//u, "")}/`;
     const initial = evidence.find((row) => row.date === dates[1] && row.title?.trim())!;
     expect(initial, "A later-day source session is required for initial fragment coverage").toBeTruthy();
     await page.setViewportSize({ width: 1440, height: 1000 });
@@ -205,26 +206,25 @@ test("retained historical event links resolve static IDs, dialogs, days, speaker
     const downloads: { url: string; sha256: string; bytes: number }[] = [];
     for (let offset = 0; offset < fixture.downloadUrls.length; offset += 4)
       downloads.push(...(await Promise.all(fixture.downloadUrls.slice(offset, offset + 4).map(verifyDownload))));
-    summary.push({
+    expect(downloads).toHaveLength(fixture.downloadUrls.length);
+    const summary = {
       sourcePath: fixture.sourcePath,
       dialogs: evidence.length,
       labels: evidence.length,
       days: dates.length,
       downloads,
-    });
-  }
-  expect(summary.reduce((sum, event) => sum + event.dialogs, 0)).toBe(172);
-  expect(summary.reduce((sum, event) => sum + event.downloads.length, 0)).toBe(112);
-  expect(browserAgendaRequests).toEqual([]);
-  const tempRoot = process.env.PKIC_TEST_TEMP_ROOT;
-  const evidencePath = tempRoot
-    ? join(tempRoot, `legacy-agenda-links-${crypto.randomUUID()}.json`)
-    : info.outputPath("legacy-agenda-links.json");
-  await mkdir(dirname(evidencePath), { recursive: true });
-  await writeFile(
-    evidencePath,
-    JSON.stringify({ events: summary, browserAgendaRequests, databaseQueriesInstrumented: false }, null, 2),
-    { mode: 0o600 },
-  );
-  await info.attach("historical-link-evidence", { path: evidencePath, contentType: "application/json" });
-});
+    };
+    expect(browserAgendaRequests).toEqual([]);
+    const tempRoot = process.env.PKIC_TEST_TEMP_ROOT;
+    const evidencePath = tempRoot
+      ? join(tempRoot, `legacy-agenda-links-${crypto.randomUUID()}.json`)
+      : info.outputPath("legacy-agenda-links.json");
+    await mkdir(dirname(evidencePath), { recursive: true });
+    await writeFile(
+      evidencePath,
+      JSON.stringify({ event: summary, browserAgendaRequests, databaseQueriesInstrumented: false }, null, 2),
+      { mode: 0o600 },
+    );
+    await info.attach("historical-link-evidence", { path: evidencePath, contentType: "application/json" });
+  });
+}
