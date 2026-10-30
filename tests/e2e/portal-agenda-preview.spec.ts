@@ -89,18 +89,21 @@ test("public preview shares the public layout, hides private content and preserv
   await expect(page.locator("form")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "New session", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Approve for publication", exact: true })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /^Actions for / })).toHaveCount(0);
+  // The agenda toolbar keeps its own actions menu; the preview content itself offers no session actions.
+  await expect(
+    page.getByRole("tabpanel", { name: "Public preview" }).getByRole("button", { name: /^Actions for / }),
+  ).toHaveCount(0);
   await expect(page.getByText("Resize duration", { exact: true })).toHaveCount(0);
   await page.screenshot({ path: `${artifacts}/agenda-public-preview-desktop.png`, fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: `${artifacts}/agenda-public-preview-phone.png`, fullPage: true });
-  await page.getByRole("tab", { name: "Approved revision", exact: true }).click();
+  await page.getByLabel("Preview revision", { exact: true }).selectOption("approved");
   await page.locator('[data-agenda-tab="2026-12-03"]').click();
   await expect(page.getByRole("button", { name: `Open session details: ${publicTitle}`, exact: true })).toBeVisible();
   await expect(page.getByText(draftTitle, { exact: true })).toHaveCount(0);
   await expect(page.getByText(privateTitle, { exact: true })).toHaveCount(0);
   await page.screenshot({ path: `${artifacts}/agenda-approved-preview-phone.png`, fullPage: true });
-  await page.getByRole("tab", { name: "Current draft", exact: true }).click();
+  await page.getByLabel("Preview revision", { exact: true }).selectOption("draft");
   await page.locator('[data-agenda-tab="2026-12-03"]').click();
   await expect(page.getByRole("button", { name: `Open session details: ${draftTitle}`, exact: true })).toBeVisible();
   const after = agendaSnapshotSchema.parse(await (await page.request.get(endpoint)).json());
@@ -113,7 +116,7 @@ test("public preview shares the public layout, hides private content and preserv
   expect(requestsAfter.page.total).toBe(requestsBefore.page.total);
   expect(requestsAfter.requests.map((row) => row.sequence)).toEqual(requestsBefore.requests.map((row) => row.sequence));
   expect(previewWrites).toEqual([]);
-  await page.getByRole("button", { name: "Back to agenda", exact: true }).click();
+  await page.getByRole("tab", { name: "Planner", exact: true }).click();
   await expect(page.getByRole("tab", { name: "Planner", exact: true })).toHaveAttribute("aria-selected", "true");
   await page.getByRole("button", { name: "Actions for Agenda", exact: true }).click();
   await expect(page.getByRole("menuitem", { name: "New session", exact: true })).toBeEnabled();

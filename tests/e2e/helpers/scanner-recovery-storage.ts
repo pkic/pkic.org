@@ -15,6 +15,14 @@ export const queuedScanSchema = scannerQueueRecordSchema.options[0].extend({
   nextAttemptAt: z.number().optional(),
 });
 
+/** A refused attempt (malformed code, unsupported code) the scanner audits in the same ledger as accepted scans. */
+export const queuedFailureSchema = scannerQueueRecordSchema.options[1].extend({
+  leaseUntil: z.number(),
+  owner: z.string().nullable(),
+  attempts: z.number().optional(),
+  nextAttemptAt: z.number().optional(),
+});
+
 /**
  * Every URL the scanner's offline shell has cached. The service worker keeps one generation per
  * deployed worker, named `pkic-scanner-shell-v2:<worker identity>`, so all of them are read.
@@ -52,8 +60,10 @@ export async function scannerStorage(page: Page) {
       db.close();
     }
   }, SCAN_STORAGE_VERSION);
+  const failureKind = (record: unknown) => (record as { kind?: unknown } | null)?.kind === "failure";
   return {
-    pending: stored.pending.map((record) => queuedScanSchema.parse(record)),
+    pending: stored.pending.filter((record) => !failureKind(record)).map((record) => queuedScanSchema.parse(record)),
+    failures: stored.pending.filter(failureKind).map((record) => queuedFailureSchema.parse(record)),
     history: stored.history.map((record) => archivedScanSchema.parse(record)),
   };
 }
