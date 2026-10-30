@@ -32,11 +32,21 @@ import { resolveMemberSessionTtlHours } from "../auth/session-policy";
 import { signInCapacityAuthorizationEvidence } from "../auth/sign-in-capacity-authorization";
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../db/authorization-guard";
 import { sessionExpiresAtToExp } from "../auth/session-engine";
-import { lastSignInMethodError, refuseRemovingLastSignInMethod } from "../auth/sign-in-methods";
-import { isAuditChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange } from "./audit";
+import {
+  lastSignInMethodError,
+  refuseRemovingLastSignInMethod,
+  signInMethodRemainsEvidence,
+} from "../auth/sign-in-methods";
+import {
+  isAuditChangeGuardFailure,
+  prepareAuditLog,
+  prepareAuditLogAfterOneChange,
+  prepareAuditLogWhen,
+} from "./audit";
+import { LAST_PASSKEY_MESSAGE } from "../../../assets/shared/auth-errors";
 import { MAX_PASSKEY_CREDENTIALS_PER_USER } from "../../../assets/shared/constants/passkeys";
 import type { authenticationResponseSchema, registrationResponseSchema } from "../../../assets/shared/schemas/passkeys";
-import type { DatabaseLike, Env } from "../types";
+import type { DatabaseLike, Env, StatementLike } from "../types";
 import {
   issuePasskeyChallengeToken,
   passkeyChallengeAlreadyUsedError,
@@ -552,10 +562,19 @@ export async function listPasskeysForUser(db: DatabaseLike, userId: string): Pro
   return rows.map(toSummary);
 }
 
+/**
+ * Revokes one of the owner's passkeys. A passkey that is the account's last
+ * way to sign in is refused unless the owner confirms: a compromised passkey
+ * must be revocable even then. That confirmed removal signs out every other
+ * session, which a stolen passkey may have opened, and keeps the caller's so
+ * its owner can add a new passkey. Whether it was the last way is decided
+ * inside the batch, so a concurrent change cannot misrecord it.
+ */
 export async function revokePasskey(
   db: DatabaseLike,
-  actor: { id: string; kind: "user" },
+  actor: { id: string; kind: "user"; sessionId: string },
   passkeyId: string,
+  options: { confirmLastMethod?: boolean } = {},
 ): Promise<void> {
   const row = await first<{ id: string; user_id: string }>(
     db,
@@ -571,15 +590,67 @@ export async function revokePasskey(
     throw new AppError(403, "PERMISSION_REQUIRED", "Cannot remove another user's passkey");
   }
 
-  const remains = await refuseRemovingLastSignInMethod(db, actor.id, { revokedPasskeyId: passkeyId });
+  const at = nowIso();
+  const revoke = db
+    .prepare("UPDATE passkey_credentials SET revoked_at = ? WHERE id = ? AND user_id = ? AND revoked_at IS NULL")
+    .bind(at, passkeyId, actor.id);
+
+  if (options.confirmLastMethod) {
+    await db.batch([revoke, ...prepareConfirmedRevokeEffects(db, actor, passkeyId, at)]);
+    return;
+  }
+
+  const remains = await refuseRemovingLastSignInMethod(
+    db,
+    actor.id,
+    { revokedPasskeyId: passkeyId },
+    LAST_PASSKEY_MESSAGE,
+  );
   try {
     await db.batch([
       prepareAuthorizationGuard(db, remains),
-      db.prepare("UPDATE passkey_credentials SET revoked_at = ? WHERE id = ?").bind(nowIso(), passkeyId),
-      prepareAuditLog(db, actor.kind, actor.id, "passkey_removed", "passkey_credential", passkeyId, {}),
+      revoke,
+      prepareAuditLog(db, actor.kind, actor.id, "passkey_removed", "passkey_credential", passkeyId, {}, at),
     ]);
   } catch (error) {
-    if (isAuthorizationGuardFailure(error)) throw lastSignInMethodError();
+    if (isAuthorizationGuardFailure(error)) throw lastSignInMethodError(LAST_PASSKEY_MESSAGE);
     throw error;
   }
+}
+
+/**
+ * Runs after the revoke in the same batch. Each effect holds only when this
+ * revoke won (the row carries its instant); the last-way effects hold only
+ * when no other way to sign in remains.
+ */
+function prepareConfirmedRevokeEffects(
+  db: DatabaseLike,
+  actor: { id: string; kind: "user"; sessionId: string },
+  passkeyId: string,
+  at: string,
+): StatementLike[] {
+  const remains = signInMethodRemainsEvidence(actor.id, { revokedPasskeyId: passkeyId });
+  const won = "EXISTS (SELECT 1 FROM passkey_credentials won WHERE won.id = ? AND won.revoked_at = ?)";
+  const audit = (lastSignInMethod: boolean) =>
+    prepareAuditLogWhen(db, {
+      actorType: actor.kind,
+      actorId: actor.id,
+      action: "passkey_removed",
+      entityType: "passkey_credential",
+      entityId: passkeyId,
+      details: lastSignInMethod ? { lastSignInMethod: true, otherSessionsSignedOut: true } : {},
+      conditionSql: `SELECT 1 WHERE ${won} AND ${lastSignInMethod ? "NOT " : ""}EXISTS (${remains.sql})`,
+      conditionBindings: [passkeyId, at, ...remains.bindings],
+      createdAt: at,
+    });
+  return [
+    db
+      .prepare(
+        `UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND id <> ? AND revoked_at IS NULL
+          AND ${won} AND NOT EXISTS (${remains.sql})`,
+      )
+      .bind(at, actor.id, actor.sessionId, passkeyId, at, ...remains.bindings),
+    audit(false),
+    audit(true),
+  ];
 }

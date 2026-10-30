@@ -3,7 +3,8 @@
  * passkey, remove an address, or withdraw an address's sign-in permission,
  * but not the last of them: an unproved primary address stops unlocking the
  * account once another mailbox is verified, so a person could otherwise lock
- * themselves out without noticing.
+ * themselves out without noticing. The one exception is a passkey its owner
+ * confirms revoking anyway, since a compromised passkey must not stay live.
  */
 import { LAST_SIGN_IN_METHOD, LAST_SIGN_IN_METHOD_MESSAGE } from "../../../assets/shared/auth-errors";
 import type { AuthorizationEvidence } from "../db/authorization-guard";
@@ -46,8 +47,9 @@ export function signInMethodRemainsEvidence(userId: string, change: SignInMethod
   };
 }
 
-export function lastSignInMethodError(): AppError {
-  return new AppError(409, LAST_SIGN_IN_METHOD, LAST_SIGN_IN_METHOD_MESSAGE);
+/** `message` names what the owner can do instead, which differs for a passkey they may still revoke. */
+export function lastSignInMethodError(message = LAST_SIGN_IN_METHOD_MESSAGE): AppError {
+  return new AppError(409, LAST_SIGN_IN_METHOD, message);
 }
 
 /**
@@ -58,8 +60,9 @@ export async function refuseRemovingLastSignInMethod(
   db: DatabaseLike,
   userId: string,
   change: SignInMethodChange,
+  message?: string,
 ): Promise<AuthorizationEvidence> {
   const evidence = signInMethodRemainsEvidence(userId, change);
-  if (!(await first(db, evidence.sql, [...evidence.bindings]))) throw lastSignInMethodError();
+  if (!(await first(db, evidence.sql, [...evidence.bindings]))) throw lastSignInMethodError(message);
   return evidence;
 }

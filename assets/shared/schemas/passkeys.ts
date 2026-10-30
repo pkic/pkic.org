@@ -11,9 +11,16 @@
 import { z } from "zod";
 import { userAuthEstablishedResponseSchema } from "./user-auth";
 import { databaseIdSchema } from "./identifiers";
+import { booleanQueryFlagSchema } from "./api-common";
 import { publicOperation, requiresSession } from "./route-contract";
 
 export const passkeyIdParamsSchema = z.object({ id: databaseIdSchema });
+
+/**
+ * Removing the account's last way to sign in takes an explicit confirmation:
+ * the owner may revoke a compromised passkey even when nothing else remains.
+ */
+export const passkeyDeleteQuerySchema = z.object({ confirmLastMethod: booleanQueryFlagSchema.optional() });
 
 const webauthnOptionsSchema = z.record(z.string(), z.unknown());
 
@@ -154,12 +161,17 @@ export const passkeyDeleteRouteSchema = {
   ...requiresSession(),
   tags: ["Passkeys"],
   summary: "Remove a passkey",
-  request: { params: passkeyIdParamsSchema },
+  description:
+    "Revokes one of the signed-in user's passkeys. When no other passkey and no address that may sign in would remain, the request is refused unless `confirmLastMethod=true`. A confirmed removal of the last way to sign in also signs out the account's other sessions and is audited as such; the calling session stays signed in so its owner can add a new passkey.",
+  request: { params: passkeyIdParamsSchema, query: passkeyDeleteQuerySchema },
   responses: {
     "200": { description: "Passkey removed." },
     "401": { description: "Authentication required." },
     "403": { description: "Cannot remove another user's passkey." },
     "404": { description: "Passkey not found." },
-    "409": { description: "The passkey is the account's last way to sign in." },
+    "409": {
+      description:
+        "LAST_SIGN_IN_METHOD: the passkey is the account's last way to sign in. Add a passkey or allow an address to sign in first, or repeat the request with `confirmLastMethod=true`.",
+    },
   },
 };

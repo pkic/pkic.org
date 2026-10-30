@@ -6,3 +6,6 @@ export const PERMISSION_DENIED_WITH_REFRESH_MESSAGE = `${PERMISSION_DENIED_MESSA
 export const LAST_SIGN_IN_METHOD = "LAST_SIGN_IN_METHOD";
 export const LAST_SIGN_IN_METHOD_MESSAGE =
   "You would have no way left to sign in. Add a passkey or verify your primary address first.";
+/** The same refusal for a passkey, which its owner may still revoke by confirming. */
+export const LAST_PASSKEY_MESSAGE =
+  "This passkey is your last way to sign in. Add another passkey or allow an email address to sign in first, or confirm that you want to remove it anyway.";

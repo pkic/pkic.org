@@ -18,7 +18,7 @@ import { queryAll } from "./helpers/context";
 import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
 import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
 import { MAX_PASSKEY_CREDENTIALS_PER_USER } from "../assets/shared/constants/passkeys";
-import { LAST_SIGN_IN_METHOD, LAST_SIGN_IN_METHOD_MESSAGE } from "../assets/shared/auth-errors";
+import { LAST_PASSKEY_MESSAGE, LAST_SIGN_IN_METHOD } from "../assets/shared/auth-errors";
 import { completePasskeyAuthentication, persistVerifiedPasskeyCredential } from "../functions/_lib/services/passkeys";
 import {
   passkeyAuthenticateCompleteSchema,
@@ -801,10 +801,12 @@ describe("passkeys (WebAuthn)", () => {
     expect(rows[0].revoked_at).not.toBeNull();
   });
 
-  it("refuses removing the last way to sign in, and allows it once another remains", async () => {
-    const { passkeyId } = await registerPasskey();
-    // An unproved primary stops unlocking the account once another mailbox is verified;
-    // that mailbox may not sign in until its owner allows it.
+  /**
+   * Leaves the passkey as the only way in: an unproved primary stops unlocking
+   * the account once another mailbox is verified, and that mailbox may not sign
+   * in until its owner allows it. Returns that mailbox's id.
+   */
+  async function leaveNoOtherWayToSignIn(): Promise<string> {
     const emailId = crypto.randomUUID();
     const at = new Date().toISOString();
     await env.DB.batch([
@@ -813,11 +815,36 @@ describe("passkeys (WebAuthn)", () => {
         "INSERT INTO user_emails (id,user_id,email,normalized_email,verified_at,created_at) VALUES (?,?,?,?,?,?)",
       ).bind(emailId, userId, "added@example.test", "added@example.test", at, at),
     ]);
+    return emailId;
+  }
+
+  async function passkeyRemovals(passkeyId: string) {
+    const rows = await queryAll<{ details_json: string }>(
+      env.DB,
+      "SELECT details_json FROM audit_log WHERE action = 'passkey_removed' AND entity_id = ?",
+      passkeyId,
+    );
+    return rows.map((row) => JSON.parse(row.details_json) as Record<string, unknown>);
+  }
+
+  async function liveSessionIds(): Promise<string[]> {
+    const rows = await queryAll<{ id: string }>(
+      env.DB,
+      "SELECT id FROM sessions WHERE user_id = ? AND revoked_at IS NULL ORDER BY id",
+      userId,
+    );
+    return rows.map((row) => row.id);
+  }
+
+  it("refuses removing the last way to sign in, and allows it once another remains", async () => {
+    const { passkeyId } = await registerPasskey();
+    const emailId = await leaveNoOtherWayToSignIn();
+    const at = new Date().toISOString();
 
     const refused = await call(`/api/v1/auth/passkeys/${passkeyId}`, { method: "DELETE" }, token);
     expect(refused.status).toBe(409);
     expect(await refused.json()).toMatchObject({
-      error: { code: LAST_SIGN_IN_METHOD, message: LAST_SIGN_IN_METHOD_MESSAGE },
+      error: { code: LAST_SIGN_IN_METHOD, message: LAST_PASSKEY_MESSAGE },
     });
     const kept = await queryAll<{ revoked_at: string | null }>(
       env.DB,
@@ -831,6 +858,54 @@ describe("passkeys (WebAuthn)", () => {
       .run();
     const allowed = await call(`/api/v1/auth/passkeys/${passkeyId}`, { method: "DELETE" }, token);
     expect(allowed.status).toBe(200);
+    expect(await passkeyRemovals(passkeyId)).toEqual([{}]);
+  });
+
+  it("revokes the last way to sign in once its owner confirms, signing out the other sessions", async () => {
+    const { passkeyId } = await registerPasskey();
+    await leaveNoOtherWayToSignIn();
+    const [callerSessionId] = await liveSessionIds();
+    await createAdminSession(env.DB, userId, "passkey-user-other-device");
+    expect(await liveSessionIds()).toHaveLength(2);
+
+    const unconfirmed = await call(
+      `/api/v1/auth/passkeys/${passkeyId}?confirmLastMethod=false`,
+      { method: "DELETE" },
+      token,
+    );
+    expect(unconfirmed.status).toBe(409);
+
+    const confirmed = await call(
+      `/api/v1/auth/passkeys/${passkeyId}?confirmLastMethod=true`,
+      { method: "DELETE" },
+      token,
+    );
+    expect(confirmed.status).toBe(200);
+    const revoked = await queryAll<{ revoked_at: string | null }>(
+      env.DB,
+      "SELECT revoked_at FROM passkey_credentials WHERE id = ?",
+      passkeyId,
+    );
+    expect(revoked[0].revoked_at).not.toBeNull();
+    // The caller stays signed in to add a new passkey; every other session ends.
+    expect(await liveSessionIds()).toEqual([callerSessionId]);
+    expect(await passkeyRemovals(passkeyId)).toEqual([
+      { lastSignInMethod: { from: null, to: true }, otherSessionsSignedOut: { from: null, to: true } },
+    ]);
+  });
+
+  it("treats a confirmation as a plain removal while another way to sign in remains", async () => {
+    const { passkeyId } = await registerPasskey();
+    await createAdminSession(env.DB, userId, "passkey-user-other-device");
+
+    const response = await call(
+      `/api/v1/auth/passkeys/${passkeyId}?confirmLastMethod=true`,
+      { method: "DELETE" },
+      token,
+    );
+    expect(response.status).toBe(200);
+    expect(await liveSessionIds()).toHaveLength(2);
+    expect(await passkeyRemovals(passkeyId)).toEqual([{}]);
   });
 
   it("a user cannot authenticate with a revoked passkey", async () => {
