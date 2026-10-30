@@ -19,7 +19,7 @@ import {
 } from "../../assets/shared/schemas/own-email-addresses";
 import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-auth";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
-import { openEmailSignIn, openMyProfile, signInToPortal } from "./helpers/portal-auth";
+import { declinePasskeyOffer, openEmailSignIn, openMyProfile, signInToPortal } from "./helpers/portal-auth";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
 import { ensureAppOrigin, uniqueSuffix } from "./helpers/membership";
 
@@ -46,7 +46,7 @@ test("sign-in capabilities require address permission, revoke with it, and canno
 
   await page.goto(link);
   await page.reload();
-  await expect(page.locator("#portal-root")).toBeVisible({ timeout: 15_000 });
+  await declinePasskeyOffer(page);
   await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toHaveCount(0);
 
   // The same link, in a browser that never held a session. Redeeming a
@@ -134,7 +134,7 @@ test("the capability is removed from the address bar and not left in history", a
 
   await page.goto(link);
   await page.reload();
-  await expect(page.locator("#portal-root")).toBeVisible({ timeout: 15_000 });
+  await declinePasskeyOffer(page);
 
   // The token must not survive in the address bar, where it would be shoulder
   // -surfable, copied into a bug report, or synced to another device.
