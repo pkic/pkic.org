@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve, dirname } from "node:path";
 import { sitePublicationReleaseSchema } from "../assets/shared/schemas/site-publication-release.ts";
+import { stopProcessGroup } from "./e2e-process-group.mjs";
 
 // Test releases are immutable while served, just as Worker deployments are.
 // Switch the local server only after the real publication build has finished.
@@ -43,11 +44,9 @@ function start(directory) {
 }
 
 async function stop() {
-  if (!worker || worker.exitCode !== null || worker.signalCode !== null) return;
-  const exited = once(worker, "exit");
-  // The CLI starts workerd children; terminate the entire local process group.
-  process.kill(-worker.pid, "SIGTERM");
-  await exited;
+  if (!worker) return;
+  // The CLI starts workerd children; end the entire local process group, and wait for every member to release the port.
+  await stopProcessGroup(worker.pid);
 }
 
 const control = createServer(async (request, response) => {
