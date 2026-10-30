@@ -120,7 +120,8 @@ test("sign-in capabilities require address permission, revoke with it, and canno
   } finally {
     await aliasContext.close();
   }
-  expect((await page.request.delete(path)).status()).toBe(200);
+  const removed = await page.request.delete(path);
+  expect(removed.status(), await removed.text()).toBe(200);
 });
 
 test("the capability is removed from the address bar and not left in history", async ({ page }) => {
