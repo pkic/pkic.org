@@ -554,10 +554,8 @@ export function formatInvitePerson(
   firstName: string | null,
   lastName: string | null,
   organizationName: string | null,
-  fallback: string,
 ): string {
   return formatProposalInvitePerson({
-    email: fallback,
     first_name: firstName,
     last_name: lastName,
     organization_name: organizationName,

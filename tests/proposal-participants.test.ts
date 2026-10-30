@@ -13,6 +13,10 @@ import {
 } from "../functions/_lib/services/proposals";
 import app from "./helpers/app";
 import { renderEmail } from "../functions/_lib/email/render";
+import {
+  buildProposalInviteEmailContext,
+  buildProposalInviteEmailContextMap,
+} from "../functions/_lib/services/proposal-invite-email-context";
 
 function mountedAppFetch(request: Request): Promise<Response> {
   return app.fetch(request, env as any, { passThroughOnException: () => {}, waitUntil: () => {} } as any);
@@ -305,6 +309,81 @@ describe("proposal participants", () => {
     for (const email of ["panelist1@example.test", "moderator@example.test"])
       for (const row of profileRows.filter((entry) => entry.email === email))
         expect(row).toMatchObject({ biography: null, links_json: null });
+  });
+
+  it("shows invitees only confirmed speakers and the proposer only the names they typed", async () => {
+    await seedEventAndAdmin(env.DB);
+    // An existing account whose stored name is not what the proposer typed.
+    await env.DB.prepare(
+      `INSERT INTO users (id, email, normalized_email, first_name, last_name, email_verified_at, created_at, updated_at)
+       VALUES (?, ?, ?, 'Private', 'Stored', datetime('now'), datetime('now'), datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), "existing-invitee@example.test", "existing-invitee@example.test")
+      .run();
+    const response = await mountedAppFetch(
+      new Request("https://app.test/api/v1/events/pqc-2026/proposals", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          ...(await participantProof("lineup-lead@example.test", true)),
+          sourceType: "direct",
+          proposer: {
+            firstName: "Lineup",
+            lastName: "Lead",
+            email: "lineup-lead@example.test",
+            actingIdentityId: null,
+            bio: "Leads cross-industry cryptography migration planning and public policy coordination programs.",
+            role: "moderator",
+          },
+          proposal: {
+            type: "panel",
+            title: "Panel: Who Is On The Lineup",
+            abstract:
+              "Panel discussion on organizational governance, procurement, stakeholder management, and transition planning for post-quantum cryptography programs.",
+          },
+          speakers: [
+            { firstName: "Typed", lastName: "Existing", email: "existing-invitee@example.test", role: "panelist" },
+            { firstName: "New", lastName: "Invitee", email: "new-invitee@example.test", role: "panelist" },
+          ],
+          consents: [{ termKey: "speaker-terms", version: "v1" }],
+        }),
+      }),
+    );
+    expect(response.status, await response.clone().text()).toBe(200);
+
+    const lineups = await queryAll<{ template_key: string; recipient_email: string; lineup: string }>(
+      env.DB,
+      `SELECT template_key, recipient_email,
+              json_extract(payload_json, '$.speakerLineupText.__pkicEmailPlainText') AS lineup
+         FROM email_outbox WHERE template_key IN ('proposal_submitted', 'co_speaker_invite')
+        ORDER BY template_key, recipient_email`,
+    );
+    const invites = lineups.filter((row) => row.template_key === "co_speaker_invite");
+    expect(invites.map((row) => row.recipient_email)).toEqual([
+      "existing-invitee@example.test",
+      "new-invitee@example.test",
+    ]);
+    for (const invite of invites) {
+      // Another invitee, or anyone's address, is never shown to an invitee.
+      expect(invite.lineup).not.toMatch(/@|Invitee|Existing|Private|Stored/);
+    }
+    const submitted = lineups.find((row) => row.template_key === "proposal_submitted")!;
+    expect(submitted.lineup).toContain("- Typed Existing");
+    expect(submitted.lineup).toContain("- New Invitee");
+    expect(submitted.lineup).not.toMatch(/@|Private|Stored/);
+
+    // Later invitations and reminders read the same lineup: confirmed speakers by name only.
+    const { proposalId } = (await response.json()) as { proposalId: string };
+    await env.DB.prepare(
+      "UPDATE proposal_speakers SET status='confirmed' WHERE proposal_id=? AND user_id=(SELECT id FROM users WHERE normalized_email='new-invitee@example.test')",
+    )
+      .bind(proposalId)
+      .run();
+    const context = await buildProposalInviteEmailContext(env.DB, { proposalId });
+    expect(context.speakerLineupText).toContain("- New Invitee");
+    expect(context.speakerLineupText).not.toMatch(/@|Private|Stored|Existing/);
+    const mapped = await buildProposalInviteEmailContextMap(env.DB, [proposalId]);
+    expect(mapped.get(proposalId)?.speakerLineupText).toBe(context.speakerLineupText);
   });
 
   it("does not clear an existing proposer's identity biography or links when the submission provides none", async () => {
