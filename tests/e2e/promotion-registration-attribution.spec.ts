@@ -25,8 +25,46 @@ import { registerInBrowser } from "./helpers/registration";
 const slug = "pqc-conference-amsterdam-nl";
 const eventApi = `/api/v1/events/${slug}`;
 const registrationPage = `/events/2026/${slug}/register/`;
-/** The member organization scripts/seed-member-profiles.mjs creates. */
-const SEEDED_MEMBER_ORGANIZATION = "Digitorus";
+
+/**
+ * A person registering while signed in takes part as one of the identities they hold. Staff give
+ * this person one the way a real organization does: by naming them as its representative.
+ */
+async function provisionRepresentative(staff: Page, email: string): Promise<string> {
+  const organizationName = `Promotion Organization ${randomUUID().slice(0, 8)}`;
+  const created = await staff.evaluate(
+    async ({ organizationName, email }) => {
+      const response = await fetch("/api/v1/organizations", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: organizationName,
+          membershipCategory: "F",
+          memberSince: "2026-01-15",
+          identities: [{ name: "Promotion Representative", email, jobTitle: "Delegate" }],
+          activationReason: "E2E: a representative to register for the event",
+        }),
+      });
+      const body = (await response.json()) as { organization?: { identities?: Array<{ userId: string }> } };
+      const userId = body.organization?.identities?.[0]?.userId;
+      // The registration form asks a person without a name on file for one; the person has it already.
+      const named = userId
+        ? await fetch(`/api/v1/users/${userId}`, {
+            method: "PATCH",
+            credentials: "same-origin",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ firstName: "Event", lastName: "Attendee" }),
+          })
+        : null;
+      return { status: response.status, namedStatus: named?.status, body: JSON.stringify(body) };
+    },
+    { organizationName, email },
+  );
+  expect(created.status, created.body).toBe(201);
+  expect(created.namedStatus, created.body).toBe(200);
+  return organizationName;
+}
 
 async function capture(page: Page, info: TestInfo, label: string) {
   for (const [device, width, height] of [
@@ -66,9 +104,7 @@ test("a rendered promotion QR preserves its referral through email sign-in and c
   const ownerEvent = eventDetailResponseSchema.parse(await ownerEventResponse.json());
   let ownerRegistrationId = ownerEvent.event.participation?.registrationId;
   if (!ownerRegistrationId) {
-    const owner = await registerInBrowser(page, ownerEmail, undefined, undefined, {
-      organization: SEEDED_MEMBER_ORGANIZATION,
-    });
+    const owner = await registerInBrowser(page, ownerEmail, await provisionRepresentative(page, ownerEmail));
     ownerRegistrationId = owner.result.registrationId;
   }
   const ownerDetailResponse = await page.request.get(`${eventApi}/registrations/${ownerRegistrationId}`);
@@ -220,6 +256,7 @@ test("a rendered promotion QR preserves its referral through email sign-in and c
     await capture(visitor, info, "attributed-guest-entry");
 
     const visitorEmail = e2eAdminEmail("promotion-registration-visitor");
+    const visitorOrganization = await provisionRepresentative(page, visitorEmail);
     await signInToPortal(visitor, visitorEmail);
     const sessionResponse = await visitor.request.get("/api/v1/auth/session");
     expect(sessionResponse.status(), await sessionResponse.text()).toBe(200);
@@ -231,9 +268,7 @@ test("a rendered promotion QR preserves its referral through email sign-in and c
     await visitor.goto(registrationPage);
     expect(new URL(visitor.url()).search).toBe("");
     expect(await visitor.evaluate(() => sessionStorage.getItem("pkic_ref"))).toBe(code);
-    const submitted = await registerInBrowser(visitor, visitorEmail, undefined, registrationPage, {
-      organization: SEEDED_MEMBER_ORGANIZATION,
-    });
+    const submitted = await registerInBrowser(visitor, visitorEmail, visitorOrganization, registrationPage);
     expect(submitted.request.referralCode).toBe(code);
     expect(submitted.request.sourceType).toBe("direct");
     expect(submitted.result.status).toBe("registered");
@@ -289,7 +324,7 @@ test("attendees can recover promotion materials after a selected session is with
   const eventResponse = await page.request.get(eventApi);
   const event = eventDetailResponseSchema.parse(await eventResponse.json());
   if (!event.event.participation?.registrationId)
-    await registerInBrowser(page, ownerEmail, undefined, undefined, { organization: SEEDED_MEMBER_ORGANIZATION });
+    await registerInBrowser(page, ownerEmail, await provisionRepresentative(page, ownerEmail));
   const agendaResponse = await page.request.get(`${eventApi}/agenda`);
   const agenda = agendaSnapshotSchema.parse(await agendaResponse.json());
   const title = `Withdrawn promotion selection ${randomUUID()}`;

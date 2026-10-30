@@ -36,7 +36,7 @@ test("public join preserves input on cancel and submits once after verification"
   await page.goto("/join/");
   const email = page.getByLabel("Your official work or organization email address");
   await email.fill(`turnstile-${Date.now()}@organization.test`);
-  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page.getByRole("button", { name: "Verify your work email", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Verify to continue" });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Continue", exact: true })).toBeDisabled();
@@ -45,7 +45,7 @@ test("public join preserves input on cancel and submits once after verification"
   await expect(dialog).toHaveCount(0);
   await expect(email).not.toHaveValue("");
   expect(completed).toBe(0);
-  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page.getByRole("button", { name: "Verify your work email", exact: true }).click();
   await dialog.getByRole("button", { name: "Complete test verification" }).click();
   await dialog.getByRole("button", { name: "Continue", exact: true }).click();
   await expect(page.getByText(/We sent an email/)).toBeVisible();

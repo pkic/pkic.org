@@ -53,7 +53,9 @@ for (const broadcast of [false, true]) {
           name: `E2E Participant Links Corp ${unique}`,
           membershipCategory: "F",
           memberSince: new Date().toISOString().slice(0, 10),
-          identities: [{ name: "E2E Meeting Participant", email: participantEmail }],
+          identities: [
+            { name: `E2E Meeting Participant ${unique}`, email: participantEmail, jobTitle: "Meeting participant" },
+          ],
           workingGroupSlugs: [],
           activationReason: "E2E: a participant to send a meeting link to",
         });
@@ -184,7 +186,9 @@ for (const broadcast of [false, true]) {
     // Who was invited, and that their calendar has not answered yet, is a
     // facet of the record.
     await page.getByRole("link", { name: "Invitations" }).click();
-    await expect(page.getByRole("row").filter({ hasText: participantEmail })).toContainText("No answer");
+    await expect(page.getByRole("row").filter({ hasText: `E2E Meeting Participant ${unique}` })).toContainText(
+      "No answer",
+    );
 
     // The reused local server has no scheduled outbox drain. Process the bounded
     // synthetic backlog left by earlier journeys, as the scheduler does in preview.
@@ -204,7 +208,7 @@ for (const broadcast of [false, true]) {
     const forwardedPage = await forwarded.newPage();
     try {
       await forwardedPage.goto(joinUrl);
-      await expect(forwardedPage.getByRole("alert")).toContainText("Welcome, E2E Meeting Participant.", {
+      await expect(forwardedPage.getByRole("alert")).toContainText(`Welcome, E2E Meeting Participant ${unique}.`, {
         timeout: 15_000,
       });
       await expect(forwardedPage.getByRole("button", { name: "Verify and continue" })).toBeVisible();
@@ -266,7 +270,7 @@ for (const broadcast of [false, true]) {
         expect(await forwardedPage.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 
         await page.goto(`/portal/#/groups/${GROUP_ID}/members`);
-        const participantRow = page.getByRole("row").filter({ hasText: participantEmail });
+        const participantRow = page.getByRole("row").filter({ hasText: `E2E Participant Links Corp ${unique}` });
         await participantRow.getByRole("button", { name: /^Actions for/ }).click();
         await page.getByRole("menuitem", { name: "End participation" }).click();
         await acceptConfirmDialog(page, "End participation");
