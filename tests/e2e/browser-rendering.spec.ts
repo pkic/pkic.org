@@ -538,8 +538,10 @@ test.describe("browser workflows", () => {
   });
 
   test("keeps agenda speakers in their scheduled cards and opens session details", async ({ page }) => {
-    await page.goto("/events/2026/pqc-conference-amsterdam-nl/agenda/");
-    const panel = page.getByRole("tabpanel", { name: "Tuesday" });
+    // An authored agenda no spec publishes: once a spec approves the seeded 2026 conference agenda in D1,
+    // that approved agenda replaces the authored 2026 program, so its authored sessions are not a stable fixture.
+    await page.goto("/events/2023/pqc-conference-amsterdam-nl/");
+    const panel = page.getByRole("tabpanel", { name: /^Tuesday/ });
     const opening = panel
       .locator("[data-agenda-session]")
       .filter({ has: page.getByRole("heading", { name: "Opening", exact: true }) });
@@ -555,10 +557,10 @@ test.describe("browser workflows", () => {
     await page.keyboard.press("Escape");
     await expect(page.getByRole("dialog").filter({ visible: true })).toHaveCount(0);
     await page.getByRole("tab", { name: /^Wednesday/ }).click();
-    await expect(page.getByRole("tabpanel", { name: "Wednesday" })).toBeVisible();
-    await page.keyboard.press("ArrowRight");
-    await expect(page.getByRole("tab", { name: "Thursday" })).toBeFocused();
-    await expect(page.getByRole("tabpanel", { name: "Thursday" })).toBeVisible();
+    await expect(page.getByRole("tabpanel", { name: /^Wednesday/ })).toBeVisible();
+    await page.keyboard.press("ArrowLeft");
+    await expect(page.getByRole("tab", { name: /^Tuesday/ })).toBeFocused();
+    await expect(panel).toBeVisible();
   });
 
   test("stops and reloads an agenda recording when its modal closes", async ({ page }) => {
