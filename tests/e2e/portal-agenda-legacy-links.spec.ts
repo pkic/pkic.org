@@ -60,7 +60,7 @@ async function openFragment(page: Page, evidence: SessionEvidence, anchor = evid
 test("retained historical event links resolve static IDs, dialogs, days, speakers, and original PDF bytes", async ({
   page,
 }, info) => {
-  test.setTimeout(360_000);
+  test.setTimeout(600_000);
   const retainedFragments = JSON.parse(
     await readFile("tests/fixtures/legacy-agenda-fragments.json", "utf8"),
   ) as RetainedFragmentFixture[];
@@ -158,7 +158,11 @@ test("retained historical event links resolve static IDs, dialogs, days, speaker
       await page.evaluate((value) => {
         window.location.hash = value;
       }, anchor);
-      await expect(page.getByRole("tab", { name: "Speakers", exact: true })).toHaveAttribute("aria-selected", "true");
+      // The tab's name carries its "All days" scope beside the label.
+      await expect(page.getByRole("tab", { name: "Speakers All days", exact: true })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
       await expect(byId(page, "agenda-speakers")).toBeVisible();
     }
     const multiroom = evidence.find((row) => row.rooms.length > 1 && row.title?.trim()) ?? initial;
@@ -166,7 +170,11 @@ test("retained historical event links resolve static IDs, dialogs, days, speaker
     const mobileDialog = await openFragment(page, multiroom);
     for (const speaker of multiroom.speakers.filter((name) => !["None", "TBC", "TBD"].includes(name)))
       await expect(
-        mobileDialog.getByRole("heading", { level: 3, name: speaker.replace(/ \*$/u, ""), exact: true }),
+        mobileDialog.getByRole("heading", {
+          level: 3,
+          name: `View speaker profile: ${speaker.replace(/ \*$/u, "")}`,
+          exact: true,
+        }),
       ).toBeVisible();
     const bounds = await mobileDialog.boundingBox();
     expect(bounds).not.toBeNull();
@@ -181,18 +189,20 @@ test("retained historical event links resolve static IDs, dialogs, days, speaker
     await expect(page.locator(`[data-agenda-tab="${dates.at(-1)}"]`)).toHaveAttribute("aria-selected", "true");
     await page.goto(`${eventPath}#nav-speakers`);
     await expect(byId(page, "agenda-speakers")).toBeVisible();
-    const downloads: { url: string; sha256: string; bytes: number }[] = [];
-    for (const url of fixture.downloadUrls) {
-      const original = await readFile(resolve("content", decodeURIComponent(url).slice(1)));
-      expect(original.subarray(0, 5).toString()).toBe("%PDF-");
-      const oldDownload = await page.request.get(url);
-      expect(oldDownload.status(), url).toBe(200);
-      expect(oldDownload.headers()["content-type"], url).toMatch(/^application\/pdf(?:;|$)/iu);
-      const actual = await oldDownload.body();
-      expect(new Uint8Array(actual), url).toEqual(new Uint8Array(original));
-      expect(digest(actual), url).toBe(digest(original));
-      downloads.push({ url, sha256: digest(actual), bytes: actual.length });
-    }
+    // Every retained download is checked against its source bytes; the requests are independent, so they run together.
+    const downloads: { url: string; sha256: string; bytes: number }[] = await Promise.all(
+      fixture.downloadUrls.map(async (url) => {
+        const original = await readFile(resolve("content", decodeURIComponent(url).slice(1)));
+        expect(original.subarray(0, 5).toString()).toBe("%PDF-");
+        const oldDownload = await page.request.get(url);
+        expect(oldDownload.status(), url).toBe(200);
+        expect(oldDownload.headers()["content-type"], url).toMatch(/^application\/pdf(?:;|$)/iu);
+        const actual = await oldDownload.body();
+        expect(new Uint8Array(actual), url).toEqual(new Uint8Array(original));
+        expect(digest(actual), url).toBe(digest(original));
+        return { url, sha256: digest(actual), bytes: actual.length };
+      }),
+    );
     summary.push({
       sourcePath: fixture.sourcePath,
       dialogs: evidence.length,

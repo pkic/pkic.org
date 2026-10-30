@@ -48,8 +48,12 @@ test("publication is an ellipsis action opening a dedicated review, with no acti
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   const geometry = await head.evaluate((element) => {
     const controls = [...element.querySelectorAll("th")].filter((cell) => cell.querySelector("button,input,select,a"));
+    // Narrow records move sorting to the toolbar: only the select-all head control stays on screen.
+    const onScreen = controls.filter((cell) => getComputedStyle(cell).clipPath === "none");
     return {
-      tops: controls.map((cell) => cell.getBoundingClientRect().top),
+      controlCount: controls.length,
+      onScreenAreSelection: onScreen.every((cell) => cell.classList.contains("pk-table__select")),
+      tops: onScreen.map((cell) => cell.getBoundingClientRect().top),
       width: element.getBoundingClientRect().width,
       staticHeaders: [...element.querySelectorAll("th")]
         .filter((cell) => !cell.querySelector("button,input,select,a"))
@@ -59,7 +63,9 @@ test("publication is an ellipsis action opening a dedicated review, with no acti
         })),
     };
   });
-  expect(geometry.tops.length).toBeGreaterThan(1);
+  expect(geometry.controlCount).toBeGreaterThan(1);
+  expect(geometry.tops.length).toBeGreaterThan(0);
+  expect(geometry.onScreenAreSelection).toBe(true);
   expect(Math.max(...geometry.tops) - Math.min(...geometry.tops)).toBeLessThan(1);
   expect(geometry.width).toBeLessThanOrEqual(390);
   expect(geometry.staticHeaders.every((header) => header.display !== "none" && header.clipped)).toBe(true);
@@ -106,7 +112,8 @@ test("publication is an ellipsis action opening a dedicated review, with no acti
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: `${artifacts}/publication-final-desktop.png`, fullPage: true });
-  await page.getByRole("button", { name: "Back to agenda", exact: true }).click();
+  // The review is the Revisions tab of the agenda; the Schedule tab returns to the session list.
+  await page.getByRole("tab", { name: "Schedule", exact: true }).click();
   await expect(menu).toBeVisible();
   await expect(page.getByText("Draft revision", { exact: true })).toHaveCount(0);
 });

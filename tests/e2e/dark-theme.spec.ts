@@ -111,7 +111,7 @@ test.describe("the dark theme", () => {
 
     await page.goto("/events/2026/pqc-conference-amsterdam-nl/register/");
     const warning = page
-      .getByText("In-person registration is currently full.")
+      .getByText("In-person is full — choose In-person to join the waitlist.")
       .locator("xpath=ancestor::blockquote[1]");
     await expect(warning).toBeVisible();
     const warningSurface = await warning.evaluate((element) => getComputedStyle(element).backgroundColor);
