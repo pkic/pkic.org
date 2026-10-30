@@ -877,26 +877,9 @@ test.describe("browser workflows", () => {
     await expect(page.getByText(/Please confirm whether you would like to participate/i)).toBeVisible();
     const participationConfirmation = page.getByRole("button", { name: /Confirm participation/i });
     await expect(participationConfirmation).toBeDisabled();
-    await resolveInvitedSpeaker(page, invitedSpeakerEmail);
-    await participationConfirmation.click();
-    await expect(page.locator("[data-confirmed-msg]")).toBeVisible();
-    await screenshot("04-speaker-participation-confirmed");
-
-    // After confirmation the speaker edits the profile of the identity they speak as, on the identity itself.
-    const identityProfile = page.locator("[data-identity-profile-form]");
-    await identityProfile
-      .getByLabel(/speaker bio/i)
-      .fill("Updated speaker biography with enough detail to satisfy validation and demonstrate the browser workflow.");
-    await identityProfile
-      .getByRole("textbox", { name: "Profile link URL", exact: true })
-      .fill("https://example.com/portfolio");
-    await identityProfile.getByRole("button", { name: "Add profile link", exact: true }).click();
-    await expect(identityProfile.getByRole("group", { name: "Added profile links" })).toBeVisible();
-    await identityProfile.getByRole("button", { name: "Save changes", exact: true }).click();
-    await expect(page.getByText(/Profile updated/i)).toBeVisible();
-    await screenshot("05-speaker-profile-saved");
-
-    // Upload a headshot via the browser, exercising the real R2 upload path
+    // Upload a headshot via the browser, exercising the real R2 upload path. The account the invitation
+    // created has never proved a mailbox, so its link alone may add the photo; once the speaker confirms
+    // their mailbox, changing it takes their own sign-in.
     const speakerToken = new URL(speakerManageUrl).searchParams.get("token") ?? "";
     const headshotResult = await page.evaluate(async (token) => {
       const canvas = document.createElement("canvas");
@@ -918,6 +901,25 @@ test.describe("browser workflows", () => {
     }, speakerToken);
     expect(headshotResult.success).toBe(true);
     expect(headshotResult.headshotUrl).toBeTruthy();
+
+    await resolveInvitedSpeaker(page, invitedSpeakerEmail);
+    await participationConfirmation.click();
+    await expect(page.locator("[data-confirmed-msg]")).toBeVisible();
+    await screenshot("04-speaker-participation-confirmed");
+
+    // After confirmation the speaker edits the profile of the identity they speak as, on the identity itself.
+    const identityProfile = page.locator("[data-identity-profile-form]");
+    await identityProfile
+      .getByLabel(/speaker bio/i)
+      .fill("Updated speaker biography with enough detail to satisfy validation and demonstrate the browser workflow.");
+    await identityProfile
+      .getByRole("textbox", { name: "Profile link URL", exact: true })
+      .fill("https://example.com/portfolio");
+    await identityProfile.getByRole("button", { name: "Add profile link", exact: true }).click();
+    await expect(identityProfile.getByRole("group", { name: "Added profile links" })).toBeVisible();
+    await identityProfile.getByRole("button", { name: "Save changes", exact: true }).click();
+    await expect(page.getByText(/Profile updated/i)).toBeVisible();
+    await screenshot("05-speaker-profile-saved");
 
     // Reload the speaker page and verify the headshot <img> element is rendered
     await page.goto(speakerManageRoute);
