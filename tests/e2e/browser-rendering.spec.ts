@@ -396,13 +396,20 @@ async function resolveInvitedSpeaker(page: Page, email: string): Promise<void> {
   if (await confirmation.isEnabled()) return;
   const identity = page.locator("[data-speaker-identity]");
   await identity.getByRole("radio", { name: EMAIL_FIRST_COPY.speaker.personal.title, exact: true }).check();
-  await identity.getByRole("textbox", { name: EMAIL_FIRST_COPY.speaker.personal.label, exact: true }).fill(email);
-  const since = await capturedEmailCount();
+  // The address the invitation was mailed to is offered first.
+  await expect(
+    identity.getByRole("textbox", { name: EMAIL_FIRST_COPY.speaker.personal.label, exact: true }),
+  ).toHaveValue(email);
+  const started = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/api/v1/events/pqc-conference-amsterdam-nl/proposals/proof" &&
+      response.request().method() === "POST",
+  );
   await identity.getByRole("button", { name: EMAIL_FIRST_COPY.speaker.personal.action, exact: true }).click();
-  const mail = await waitForCapturedEmail(email, "Verify your email for", { since });
-  // The proposal page reads the link at once and hands a speaker's proof on.
-  await page.goto(extractEmailUrl(mail, "/propose/"));
-  await expect(page).toHaveURL(/\/propose\/speaker\/.*#verify=/);
+  const startResponse = await started;
+  expect(startResponse.status(), await startResponse.text()).toBe(200);
+  // Opening the invitation link already proved that mailbox: no second email, the page continues in place.
+  expect(eventProposalProofStartResponseSchema.parse(await startResponse.json()).status).toBe("verified");
   await expect(page.locator("[data-speaker-identity]")).toContainText(email);
   await expect(page.locator('[data-profile-form] input[name="organizationName"]')).toHaveCount(0);
   await completeIndependentCapacityDisclosure(page.locator("[data-speaker-identity]"));
@@ -417,7 +424,6 @@ async function resolveInvitedSpeaker(page: Page, email: string): Promise<void> {
   expect(body.actingIdentityId).toBeNull();
   expect(body.continuationToken).toBeTruthy();
   await expect(confirmation).toBeEnabled();
-  await expect(page).not.toHaveURL(/#verify=/);
 }
 
 async function fillProposal(
