@@ -20,21 +20,32 @@ export function unclaimedAccountSql(person: string): string {
 }
 
 /**
- * Whether the speaker link could only ever have been mailed to `email`: the
- * account is unclaimed and holds that one address, with no alias an invitation
- * could have been sent to instead. Opening the link then proved that mailbox.
+ * The speaker link was mailed to `email`, which is still an address of the
+ * unclaimed account the invitation is for. Opening the link then proved that
+ * mailbox. Read when the proof starts and rechecked in every batch that relies on it.
  */
-export async function isInvitationOnlyAddress(db: DatabaseLike, userId: string, email: string): Promise<boolean> {
-  return Boolean(
-    await first(
-      db,
-      `SELECT 1 FROM users person
-        WHERE person.id = ? AND person.normalized_email = ? AND ${unclaimedAccountSql("person")}
-          AND NOT EXISTS (SELECT 1 FROM user_emails alias
-            WHERE alias.user_id = person.id AND alias.normalized_email <> person.normalized_email)`,
-      [userId, email],
-    ),
-  );
+export function invitationMailboxEvidence(input: {
+  speakerId: string;
+  userId: string;
+  email: string;
+}): AuthorizationEvidence {
+  return {
+    sql: `SELECT 1 FROM proposal_speakers invitation
+      JOIN users person ON person.id = invitation.user_id
+      WHERE invitation.id = ? AND invitation.user_id = ? AND invitation.invited_email = ?
+        AND ${unclaimedAccountSql("person")}
+        AND (person.normalized_email = invitation.invited_email OR EXISTS (SELECT 1 FROM user_emails alias
+          WHERE alias.user_id = person.id AND alias.normalized_email = invitation.invited_email))`,
+    bindings: [input.speakerId, input.userId, input.email],
+  };
+}
+
+export async function isInvitationMailbox(
+  db: DatabaseLike,
+  input: { speakerId: string; userId: string; email: string },
+): Promise<boolean> {
+  const evidence = invitationMailboxEvidence(input);
+  return Boolean(await first(db, evidence.sql, [...evidence.bindings]));
 }
 
 /** What lets a speaker page change the person's own name or headshot. */

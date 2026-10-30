@@ -13,6 +13,7 @@ import { issueDatabaseCapability } from "../auth/capability-links";
 import { getSpeakerByManageToken } from "./proposals";
 import type { ParticipantAuthority } from "./participant-authority";
 import { activeEffectiveInviteExpirySql, effectiveProposalSpeakerInviteExpirySql } from "../invite-validity";
+import { invitationMailboxEvidence, isInvitationMailbox } from "./proposal-speaker-account-authority";
 import type {
   eventProposalProofContextSchema,
   EventProposalProofPayload,
@@ -188,6 +189,7 @@ export async function prepareEventProposalProofContext(
     ...("speakerClaimSessionId" in input.payload
       ? await prepareInvitedSpeakerAccountClaim(db, input.payload, input.actor)
       : []),
+    ...(await prepareInvitationMailboxProof(db, input.payload)),
     prepareAuthorizationGuard(db, {
       sql: `SELECT 1 FROM proposal_speakers ps JOIN session_proposals sp ON sp.id=ps.proposal_id AND sp.deleted_at IS NULL JOIN events e ON e.id=sp.event_id WHERE ps.id=? AND ps.proposal_id=? AND ps.user_id=? AND ps.invite_generation=? AND ps.manage_link_secret IS ? AND sp.event_id=? AND (ps.status NOT IN ('invited','pending') OR (${activeEffectiveInviteExpirySql(effectiveProposalSpeakerInviteExpirySql("ps", "e"), "strftime('%Y-%m-%dT%H:%M:%fZ','now')")})) AND ${capability ? "? > unixepoch('now')" : "EXISTS(SELECT 1 FROM sessions WHERE id=? AND user_id=ps.user_id AND revoked_at IS NULL AND expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now'))"}`,
       bindings: [
@@ -209,6 +211,25 @@ export async function prepareEventProposalProofContext(
 
 export type EventProposalProofContext = z.infer<typeof eventProposalProofContextSchema>;
 
+/**
+ * A mailbox proved by opening its speaker link holds only while that link's invitation was mailed to it and
+ * the account is still unclaimed. Returns the guard that rechecks this in the caller's batch.
+ */
+async function prepareInvitationMailboxProof(
+  db: DatabaseLike,
+  payload: EventProposalProofPayload | EventProposalContinuationPayload,
+): Promise<StatementLike[]> {
+  if (payload.basis !== "invitation") return [];
+  const context = payload.context;
+  if (context?.kind !== "speaker" || context.sessionId)
+    throw new AppError(403, "PROPOSAL_PROOF_CONTEXT_MISMATCH", "Invalid speaker confirmation context.");
+  const invitation = { speakerId: context.speakerId, userId: context.userId, email: payload.email };
+  const evidence = invitationMailboxEvidence(invitation);
+  if (!(await isInvitationMailbox(db, invitation)))
+    throw new AppError(409, "PROPOSAL_PERSON_CHANGED", "Your account or invitation changed. Confirm your email again.");
+  return [prepareAuthorizationGuard(db, evidence)];
+}
+
 /** A signed mailbox proof resumes only its original, still-live speaker authority. */
 export async function resumeEventProposalSpeakerProof(
   db: DatabaseLike,
@@ -228,6 +249,7 @@ export async function resumeEventProposalSpeakerProof(
       "PROPOSAL_PROOF_CONTEXT_MISMATCH",
       "The speaker invitation changed. Confirm your email again.",
     );
+  await prepareInvitationMailboxProof(db, input.payload);
   return issueDatabaseCapability({
     db,
     signingSecret: input.signingSecret,

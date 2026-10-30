@@ -5,6 +5,7 @@ import { normalizeEmail } from "../validation";
 import { first } from "../db/queries";
 import { prepareAuthorizationGuard } from "../db/authorization-guard";
 import type { DatabaseLike, StatementLike } from "../types";
+import { prepareRotateUserProposalSpeakerManageSecrets } from "./registrations/manage-capability-revocation";
 
 export interface EmailOwnership {
   userId: string;
@@ -90,6 +91,8 @@ export function prepareEmailOwnershipClaim(
       db
         .prepare("DELETE FROM user_emails WHERE id=? AND user_id=? AND verified_at IS NULL")
         .bind(owner.emailId, owner.userId),
+      // A speaker link mailed to the released address now sits in another person's mailbox.
+      prepareRotateUserProposalSpeakerManageSecrets(db, owner.userId),
     );
   } else if (owner.alternateId && owner.alternateEmail && owner.alternateVerifiedAt) {
     // Preserve an already verified account under the address it actually owns.
@@ -109,6 +112,7 @@ export function prepareEmailOwnershipClaim(
           owner.userId,
           email,
         ),
+      prepareRotateUserProposalSpeakerManageSecrets(db, owner.userId),
     );
   }
   return statements;

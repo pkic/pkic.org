@@ -69,6 +69,8 @@ const proofPayloadSchema = z
     operation: z.enum(["proposal_submission", "speaker_profile"]),
     context: eventProposalProofContextSchema,
     entryContext: eventProposalEntryReceiptSchema.optional(),
+    /** The mailbox was proved by opening the speaker link mailed to it, not by a confirmation email. */
+    basis: z.literal("invitation").optional(),
   })
   .strict();
 const continuationPayloadSchema = proofPayloadSchema.extend({

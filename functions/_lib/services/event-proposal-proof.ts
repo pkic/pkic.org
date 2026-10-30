@@ -31,7 +31,7 @@ import {
   resumeEventProposalSpeakerProof,
 } from "./event-proposal-proof-context";
 import { listUserIdentities } from "./identities/read-model";
-import { isInvitationOnlyAddress } from "./proposal-speaker-account-authority";
+import { isInvitationMailbox } from "./proposal-speaker-account-authority";
 import {
   prepareInvitedSpeakerAccountClaim,
   isProposalProofAddressOwnedElsewhere,
@@ -153,6 +153,12 @@ export async function startEventProposalProof(
       signingSecret: input.signingSecret,
     }));
   const entryGuards = (await prepareEventProposalEntry(db, input.event.id, entryContext)).statements;
+  // A speaker link reaches only the mailbox it was sent to. When this is that address, opening the
+  // link proved it: the speaker continues at once instead of confirming it twice.
+  const invitationMailbox =
+    context?.kind === "speaker" &&
+    !context.sessionId &&
+    (await isInvitationMailbox(db, { speakerId: context.speakerId, userId: context.userId, email: input.body.email }));
   const payload: EventProposalProofPayload = {
     eventId: input.event.id,
     email: input.body.email,
@@ -163,6 +169,7 @@ export async function startEventProposalProof(
     operation: speakerAuthority ? "speaker_profile" : "proposal_submission",
     context,
     ...(entryContext ? { entryContext } : {}),
+    ...(invitationMailbox ? { basis: "invitation" as const } : {}),
   };
   const contextTtl =
     payload.context?.kind === "speaker" || payload.context?.kind === "mailbox"
@@ -171,12 +178,6 @@ export async function startEventProposalProof(
   const proofTtl = entryContext?.invite
     ? Math.min(contextTtl, entryContext.invite.expiresAt - Math.floor(Date.now() / 1000))
     : contextTtl;
-  // A speaker link reaches only the mailbox it was sent to. When that can only be this address,
-  // opening the link proved it: the speaker continues at once instead of confirming it twice.
-  const invitationMailbox =
-    context?.kind === "speaker" &&
-    !context.sessionId &&
-    (await isInvitationOnlyAddress(db, context.userId, input.body.email));
   const verificationToken = encodeURIComponent(queuedEventProposalProofToken(payload, proofTtl));
   const verificationUrl = input.body.speakerProposalId
     ? `${speakerParticipationPageUrl(input.appBaseUrl, input.event, input.body.speakerProposalId)}?verify=${verificationToken}`
