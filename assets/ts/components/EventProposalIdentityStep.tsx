@@ -94,6 +94,8 @@ export function EventProposalIdentityStep({
   const [changing, setChanging] = useState(false);
   const [adding, showAdding, closeAdding] = useDialogQueryState("identity");
   const flow = speakerManagementToken || speakerProposalId ? "speaker" : "proposal";
+  // Each page names its own save, not the other flow's.
+  const savedWhen = flow === "speaker" ? "when you save your speaker identity" : "when you submit your proposal";
   const proofBody = {
     consents: consents(),
     speakerManagementToken: identity.proofOwnerToken ? undefined : speakerManagementToken,
@@ -273,7 +275,7 @@ export function EventProposalIdentityStep({
                   person={knownPerson ?? { ...person, firstName: null, lastName: null }}
                   description={
                     needsFirstName || needsLastName
-                      ? "These new details are not saved yet. They will be saved when you submit your proposal or save your speaker profile."
+                      ? `These new details are not saved yet. They will be saved ${savedWhen}.`
                       : undefined
                   }
                   save={
@@ -329,7 +331,7 @@ export function EventProposalIdentityStep({
                   layout="stack"
                   description={
                     usesOrganizationChooser
-                      ? "Your representation is saved when you submit your proposal or save your speaker profile."
+                      ? `Your representation is saved ${savedWhen}.`
                       : identity.storedPerson && identity.kind === "organization"
                         ? "Choose an existing representation or verify your organization email to add one."
                         : undefined

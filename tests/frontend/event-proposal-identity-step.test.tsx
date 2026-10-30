@@ -141,9 +141,7 @@ describe("verified event entry", () => {
     expect(host!.querySelector('input[name="firstName"]')).toBeNull();
     expect(host!.querySelector('input[name="organizationName"]')).toBeNull();
     expect(host!.querySelector<HTMLInputElement>('input[name="jobTitle"]')?.required).toBe(true);
-    expect(host!.textContent).toContain(
-      "Your representation is saved when you submit your proposal or save your speaker profile.",
-    );
+    expect(host!.textContent).toContain("Your representation is saved when you submit your proposal.");
     expect(host!.textContent).not.toContain("This new representation");
     await vi.waitFor(() => expect(selection?.missingDetails).toEqual({ organizationName: "Example Organization" }));
     await act(() => {
@@ -416,9 +414,7 @@ describe("verified event entry", () => {
     expect([...host!.querySelectorAll("legend")].map((legend) => legend.textContent)).toContain(
       "Your representation for this proposal",
     );
-    expect(host!.textContent).toContain(
-      "Your representation is saved when you submit your proposal or save your speaker profile.",
-    );
+    expect(host!.textContent).toContain("Your representation is saved when you submit your proposal.");
     expect(host!.textContent).not.toContain("This new representation");
     expect(host!.querySelectorAll('input[name="organizationName"]')).toHaveLength(1);
     const summary = host!.querySelector(".pk-datalist")!;
