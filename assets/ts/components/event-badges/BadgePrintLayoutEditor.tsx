@@ -52,7 +52,7 @@ export function BadgePrintLayoutEditor({
         event.preventDefault();
         const parsed = form.submit();
         if (!parsed.data) {
-          setError(parsed.message ?? "Check the print layout.");
+          setError(parsed.formMessage ?? "");
           return;
         }
         setError("");

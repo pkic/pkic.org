@@ -83,9 +83,9 @@ export function UserAvailabilityEditor({
 
   async function save(event: Event) {
     event.preventDefault();
-    const { data, message } = form.submit();
+    const { data, formMessage } = form.submit();
     if (!data) {
-      toast(message, "error");
+      if (formMessage) toast(formMessage, "error");
       return;
     }
     setSaving(true);

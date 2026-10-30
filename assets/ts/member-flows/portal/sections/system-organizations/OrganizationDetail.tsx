@@ -119,7 +119,7 @@ export function OrganizationDetail({
     // Nothing leaves the page until the contract accepts the whole draft.
     const checked = form.submit();
     if (!checked.data) {
-      setSaveError(checked.message);
+      setSaveError(checked.formMessage ?? "");
       return;
     }
     // The name lives once, on the organization: a rename changes what every

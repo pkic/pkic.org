@@ -30,7 +30,7 @@ export function FormSubmissionForm({
     event.preventDefault();
     setSubmitted(false);
     const checked = answers.submit();
-    if (!checked.data) return setError(checked.message);
+    if (!checked.data) return setError(checked.formMessage ?? "");
     setSaving(true);
     setError("");
     try {

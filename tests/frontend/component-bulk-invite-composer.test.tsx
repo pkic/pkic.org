@@ -245,8 +245,9 @@ describe("bulk invite composer", () => {
     await typeInto(emailInput(container), "not-an-address");
     await click(button(container, "Preview email"));
 
+    // The field says why; no toast repeats it.
     expect(emailInput(container).getAttribute("aria-invalid")).toBe("true");
-    expect(notify).toHaveBeenCalledWith(expect.any(String), "error");
+    expect(notify).not.toHaveBeenCalled();
     expect(requests).toHaveLength(0);
   });
 

@@ -55,7 +55,7 @@ export function GroupMemberAddForm({
     // markup: a disabled control loses focus mid-form.
     if (saving || !user) return;
     const checked = form.submit();
-    if (!checked.data) return setError(checked.message);
+    if (!checked.data) return setError(checked.formMessage);
     setSaving(true);
     setError(null);
     try {

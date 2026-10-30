@@ -41,7 +41,7 @@ export function RoleCreate({ onCreated, onCancel }: { onCreated: (roleId: string
     // Nothing is sent until the contract accepts the whole draft.
     const checked = form.submit();
     if (!checked.data) {
-      setFormError(checked.message);
+      setFormError(checked.formMessage);
       return;
     }
     setSubmitting(true);

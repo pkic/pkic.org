@@ -89,10 +89,12 @@ export function GroupFormPlacementEditor({
     event.preventDefault();
     if (!editing || saving) return;
     setError("");
-    const { data, message } = form.submit();
+    const { data, formMessage } = form.submit();
     if (!data) {
-      setError(message);
-      toast(message, "error");
+      if (formMessage) {
+        setError(formMessage);
+        toast(formMessage, "error");
+      }
       return;
     }
     setSaving(true);

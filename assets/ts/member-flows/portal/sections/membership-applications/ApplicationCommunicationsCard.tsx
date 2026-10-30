@@ -101,7 +101,7 @@ export function ApplicationCommunicationsCard({
     setCommError("");
     const checked = communication.submit();
     if (!checked.data) {
-      setCommError(checked.message);
+      setCommError(checked.formMessage ?? "");
       return;
     }
     setCommSending(true);
@@ -124,7 +124,7 @@ export function ApplicationCommunicationsCard({
     setNoteError("");
     const checked = note.submit();
     if (!checked.data) {
-      setNoteError(checked.message);
+      setNoteError(checked.formMessage ?? "");
       return;
     }
     setNoteSaving(true);

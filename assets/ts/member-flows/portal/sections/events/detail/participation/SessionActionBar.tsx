@@ -146,7 +146,7 @@ export function SessionActionBar({
   async function apply(checked: ReturnType<typeof reserve.submit>, refuse: typeof reserve.refuse) {
     if (running.current) return;
     if (!checked.data) {
-      setError(checked.message);
+      setError(checked.formMessage ?? "");
       return;
     }
     running.current = true;

@@ -213,7 +213,7 @@ export function EventEmailCampaign({
   async function handlePreview() {
     const checked = form.submit();
     if (!checked.data) {
-      notify(checked.message, "error");
+      if (checked.formMessage) notify(checked.formMessage, "error");
       return;
     }
     setStatus("Generating preview…");

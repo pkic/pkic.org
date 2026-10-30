@@ -170,7 +170,7 @@ export function RegistrationFlow(props: Props) {
           if (boot.form.dataset.contactReady !== "true") return false;
           const checked = contactContract.submit();
           if (!checked.data) {
-            setError(checked.message);
+            setError(checked.formMessage ?? "");
             return false;
           }
           if (organization.current.validate?.() === false) return false;
@@ -178,14 +178,14 @@ export function RegistrationFlow(props: Props) {
         if (step === 2) {
           const checked = attendanceContract.submit();
           if (!checked.data) {
-            setError(checked.message);
+            setError(checked.formMessage ?? "");
             return false;
           }
         }
         if (step === 3) {
           const answered = currentQuestions.current.submit();
           if (!answered.data) {
-            setError(answered.message);
+            setError(answered.formMessage ?? "");
             return false;
           }
           updateRegistrationReview(boot.root, boot.form, fields);
@@ -270,19 +270,19 @@ export function RegistrationFlow(props: Props) {
           setError("");
           if (!updating) {
             const contact = contactContract.submit();
-            if (!contact.data) return setError(contact.message);
+            if (!contact.data) return setError(contact.formMessage ?? "");
             if (organization.current.validate?.() === false) return;
           }
           const answered = currentQuestions.current.submit();
           let checked = contract.submit();
-          if (!answered.data) return setError(answered.message);
-          if (!checked.data) return setError(checked.message);
+          if (!answered.data) return setError(answered.formMessage ?? "");
+          if (!checked.data) return setError(checked.formMessage ?? "");
           setBusy(true);
           try {
             if (!updating && organization.current.prepare) {
               if (!(await organization.current.prepare())) return;
               checked = contract.submit();
-              if (!checked.data) return setError(checked.message);
+              if (!checked.data) return setError(checked.formMessage ?? "");
             }
             if (props.mode === "update") await props.save(registrationManageSchema.parse(checked.data));
             else {

@@ -240,7 +240,7 @@ export function EventScannerCapture({
       )
         return;
       lastOperation.current = null;
-      setMessage(action === "lead" ? checked.message : "Invalid QR code. Scan a PKI Consortium badge.");
+      setMessage(action === "lead" ? (checked.formMessage ?? "") : "Invalid QR code. Scan a PKI Consortium badge.");
       setResult(action === "lead" ? null : unknownScanResponse(operationId));
       return;
     }

@@ -68,7 +68,7 @@ function AskQuestion({
         // Ask waits for a question: an empty field is at rest, not refused.
         if (!form.valid) return;
         const checked = form.submit();
-        if (!checked.data) return setError(checked.message);
+        if (!checked.data) return setError(checked.formMessage);
         const request = pending ?? { type: "question.ask", operationId: crypto.randomUUID(), ...checked.data };
         if (!onAsk(request)) return setError("The room is reconnecting. Please try again in a moment.");
         setPending(request);

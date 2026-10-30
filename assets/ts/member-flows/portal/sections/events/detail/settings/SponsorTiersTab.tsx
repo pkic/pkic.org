@@ -50,7 +50,7 @@ export function SponsorTiersTab({
     if (!canWrite || !editing || saving) return;
     const checked = form.submit();
     if (!checked.data) {
-      setFailure(checked.message);
+      setFailure(checked.formMessage ?? "");
       return;
     }
     setSaving(true);

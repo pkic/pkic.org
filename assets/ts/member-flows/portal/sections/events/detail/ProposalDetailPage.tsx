@@ -286,7 +286,7 @@ export function ProposalDetailPage({
     setSubmissionError("");
     const checked = submissionForm.submit();
     if (!checked.data) {
-      setSubmissionError(checked.message);
+      setSubmissionError(checked.formMessage ?? "");
       return;
     }
     setSavingAbstract(true);

@@ -160,7 +160,7 @@ function DesignForm({
       const next = parse();
       const checked = form.submit();
       if (!checked.data) {
-        setError(checked.message);
+        setError(checked.formMessage ?? "");
         return;
       }
       const body = eventSettingsUpdateSchema.parse({ ...checked.data, badgeTemplate: next });

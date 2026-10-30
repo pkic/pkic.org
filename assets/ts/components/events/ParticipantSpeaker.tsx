@@ -162,7 +162,7 @@ export function ParticipantSpeaker({
                   event.preventDefault();
                   const checked = participation.submit();
                   if (!checked.data) {
-                    setError(checked.message);
+                    setError(checked.formMessage ?? "");
                     return;
                   }
                   void perform(
@@ -236,7 +236,7 @@ export function ParticipantSpeaker({
                 }
                 const checked = form.submit();
                 if (!checked.data) {
-                  setError(checked.message);
+                  setError(checked.formMessage ?? "");
                   return;
                 }
                 void perform(async () => {

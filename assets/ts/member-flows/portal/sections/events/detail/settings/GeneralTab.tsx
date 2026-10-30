@@ -177,7 +177,7 @@ export function GeneralTab({
     if (!canWrite || !editing || saving) return;
     const checked = form.submit();
     if (!checked.data) {
-      setOutcome({ tone: "danger", message: checked.message });
+      setOutcome(checked.formMessage ? { tone: "danger", message: checked.formMessage } : null);
       return;
     }
     setSaving(true);

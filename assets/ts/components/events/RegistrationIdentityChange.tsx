@@ -102,7 +102,7 @@ export function RegistrationIdentityChange({
                 event.preventDefault();
                 if (busy) return;
                 const checked = contract.submit();
-                if (!checked.data) return setError(checked.message);
+                if (!checked.data) return setError(checked.formMessage ?? "");
                 setBusy(true);
                 setError("");
                 try {

@@ -79,7 +79,7 @@ function InvitationRecovery({
                   if (busy) return;
                   const result = contract.submit();
                   if (!result.data) {
-                    setError(result.message);
+                    setError(result.formMessage);
                     return;
                   }
                   setBusy(true);

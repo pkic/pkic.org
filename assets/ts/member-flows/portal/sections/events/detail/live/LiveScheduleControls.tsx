@@ -54,7 +54,7 @@ export function LiveScheduleControls({ targets, detail }: { targets: LiveTargets
               setConfig(checked.data);
               setOpen(false);
               setError(null);
-            } else setError(checked.message);
+            } else setError(checked.formMessage);
           }}
         >
           <form noValidate {...form.handlers} class="pk-stack" onSubmit={(event) => event.preventDefault()}>

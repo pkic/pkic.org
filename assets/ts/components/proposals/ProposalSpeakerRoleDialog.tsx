@@ -41,7 +41,7 @@ export function ProposalSpeakerRoleDialog({
   async function save() {
     const checked = form.submit();
     if (!checked.data) {
-      notify(checked.message, "error");
+      if (checked.formMessage) notify(checked.formMessage, "error");
       return;
     }
     if (checked.data.role === role) {

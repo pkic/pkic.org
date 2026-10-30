@@ -131,7 +131,7 @@ export function LiveTimerGraphicControls({ targets, timerId }: { targets: LiveTa
           onCancel={() => setOpen(false)}
           onConfirm={() => {
             const checked = form.submit();
-            if (!checked.data) return setError(checked.message);
+            if (!checked.data) return setError(checked.formMessage);
             setGraphic(checked.data);
             setOpen(false);
           }}

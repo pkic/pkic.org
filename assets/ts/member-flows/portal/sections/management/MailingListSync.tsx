@@ -27,7 +27,7 @@ export function useMailingListSync(groupId: string, listId: string) {
   async function save(event: Event) {
     event.preventDefault();
     const checked = form.submit();
-    if (!checked.data) return setError(checked.message);
+    if (!checked.data) return setError(checked.formMessage ?? "");
     setBusy(true);
     setError("");
     setNotice("");

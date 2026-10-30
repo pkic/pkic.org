@@ -47,7 +47,7 @@ function Harness() {
         type="button"
         onClick={() => {
           const checked = form.submit();
-          outcome = checked.data ? `sent ${JSON.stringify(checked.data)}` : checked.message;
+          outcome = checked.data ? `sent ${JSON.stringify(checked.data)}` : `alert: ${checked.formMessage ?? "none"}`;
         }}
       >
         Save
@@ -104,7 +104,7 @@ describe("useContractForm", () => {
         <button
           onClick={() => {
             const checked = form.submit();
-            outcome = checked.data ? checked.data.name : checked.message;
+            outcome = checked.data ? checked.data.name : (checked.formMessage ?? "");
           }}
         >
           Save
@@ -157,9 +157,11 @@ describe("useContractForm", () => {
     const root = mount();
     await typeInto(controlFor(root, "Website"), "https://example.test");
     await act(async () => root.querySelector<HTMLButtonElement>("button")!.click());
-    expect(outcome).toBe("Enter a name.");
+    // The field says why; the form's alert does not say it again.
+    expect(outcome).toBe("alert: none");
     const name = controlFor(root, "Name");
     expect(fieldOf(name).classList.contains("pk-field--invalid")).toBe(true);
+    expect(fieldOf(name).querySelector('[role="alert"]')?.textContent).toContain("Enter a name.");
     expect(document.activeElement).toBe(name);
 
     await typeInto(name, "Example");
@@ -179,5 +181,78 @@ describe("useContractForm", () => {
 
     await typeInto(website, "https://other.test");
     expect(fieldOf(website).classList.contains("pk-field--ok")).toBe(true);
+  });
+
+  it("gives the form's alert only a reason no visible field can show", async () => {
+    const confirmed = z
+      .object({ name: z.string().trim().min(1, "Enter a name."), note: z.string().min(1, "Add a note.") })
+      .refine((body) => body.name !== "Nobody", { message: "That name is reserved." });
+    let draft = { name: "", note: "" };
+    function Partial() {
+      // `note` has a control, but it sits in a closed section.
+      const form = useContractForm(confirmed, () => draft);
+      return (
+        <form noValidate {...form.handlers}>
+          <Field label="Name" {...form.of("name")}>
+            {(control) => <TextInput {...control} name="name" value={draft.name} />}
+          </Field>
+          <div hidden>
+            <Field label="Note" {...form.of("note")}>
+              {(control) => <TextInput {...control} name="note" value={draft.note} />}
+            </Field>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              const checked = form.submit();
+              outcome = checked.data ? "sent" : `alert: ${checked.formMessage ?? "none"}`;
+            }}
+          >
+            Save
+          </button>
+        </form>
+      );
+    }
+    container = document.createElement("div");
+    document.body.append(container);
+    await act(() => render(<Partial />, container!));
+    const save = () => act(async () => container!.querySelector("button")!.click());
+
+    // The name shows on its field; the hidden note has nowhere to show.
+    await save();
+    expect(outcome).toBe("alert: Add a note.");
+    expect(document.activeElement).toBe(controlFor(container, "Name"));
+
+    // Every refused field is in view: the alert stays quiet.
+    draft = { name: "", note: "Present" };
+    await save();
+    expect(outcome).toBe("alert: none");
+
+    // A rule about the whole body has no field to show it.
+    draft = { name: "Nobody", note: "Present" };
+    await save();
+    expect(outcome).toBe("alert: That name is reserved.");
+  });
+
+  it("speaks in the alert when no control on the page answers the refused field", async () => {
+    function Headless() {
+      const form = useContractForm(contract, { name: "", website: null });
+      return (
+        <button
+          type="button"
+          onClick={() => {
+            const checked = form.submit();
+            outcome = checked.data ? "sent" : `alert: ${checked.formMessage ?? "none"}`;
+          }}
+        >
+          Save
+        </button>
+      );
+    }
+    container = document.createElement("div");
+    document.body.append(container);
+    await act(() => render(<Headless />, container!));
+    await act(async () => container!.querySelector("button")!.click());
+    expect(outcome).toBe("alert: Enter a name.");
   });
 });

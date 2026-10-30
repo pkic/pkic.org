@@ -21,7 +21,7 @@ export function useStaffingSave(
     event.preventDefault();
     const checked = form.submit();
     if (!checked.data) {
-      setError(checked.message);
+      setError(checked.formMessage ?? "");
       return;
     }
     setBusy(true);

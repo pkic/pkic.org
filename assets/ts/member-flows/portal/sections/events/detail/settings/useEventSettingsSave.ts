@@ -34,7 +34,7 @@ export function useEventSettingsSave(
     submitEvent.preventDefault();
     if (!editing || saving) return;
     const checked = form.submit();
-    if (!checked.data) return setError(checked.message);
+    if (!checked.data) return setError(checked.formMessage ?? "");
     setSaving(true);
     setError("");
     try {

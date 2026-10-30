@@ -63,7 +63,7 @@ function MergeForm({ source }: { source: OrganizationDetail }) {
     setError("");
     const checked = form.submit();
     if (!checked.data) {
-      setError(checked.message);
+      setError(checked.formMessage ?? "");
       return;
     }
     if (!target) return;

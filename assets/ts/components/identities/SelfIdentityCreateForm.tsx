@@ -134,7 +134,7 @@ export function SelfIdentityCreateForm({
           event.preventDefault();
           if (busy) return;
           const checked = proofForm.submit();
-          if (!checked.data) return setError(checked.message);
+          if (!checked.data) return setError(checked.formMessage ?? "");
           setBusy(true);
           setError("");
           try {

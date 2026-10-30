@@ -55,7 +55,7 @@ function ReviewAction({ base, review, onSaved }: { base: string; review: Review;
   async function submit(event: Event) {
     event.preventDefault();
     const checked = form.submit();
-    if (!checked.data) return setError(checked.message);
+    if (!checked.data) return setError(checked.formMessage ?? "");
     if (busy) return;
     setBusy(true);
     try {
@@ -166,7 +166,7 @@ function ResolveObjection({
   async function submit(event: Event) {
     event.preventDefault();
     const checked = form.submit();
-    if (!checked.data) return setError(checked.message);
+    if (!checked.data) return setError(checked.formMessage ?? "");
     if (busy) return;
     setBusy(true);
     try {
