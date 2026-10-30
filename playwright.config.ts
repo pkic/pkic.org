@@ -54,7 +54,8 @@ export default defineConfig({
     url: e2eBaseUrl,
     // Always start fresh so Wrangler uses the seeded state dir.
     reuseExistingServer: Boolean(process.env.REUSE_SERVER),
-    timeout: 300_000,
+    // A local build shares the machine with other runs, so it gets longer than CI to prepare and start.
+    timeout: process.env.CI ? 300_000 : 900_000,
     // Let the release supervisor stop its Worker process group and close logs.
     gracefulShutdown: { signal: "SIGTERM", timeout: 10_000 },
     /*
