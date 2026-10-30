@@ -112,7 +112,7 @@ test("an organization contact submits a logo and content changes for review, the
     .locator("section")
     .filter({ has: page.getByRole("heading", { name: "Member page content" }) });
   await expect(editorPanel.getByText("A content change is pending staff review", { exact: false })).toBeVisible();
-  await expect(editorPanel.getByText("Includes a new logo.")).toBeVisible();
+  await expect(editorPanel.getByRole("listitem").filter({ hasText: "Logo: a new logo" })).toBeVisible();
   // The pending review occupies the editor slot, so the form itself is gone
   // until the submission is decided or withdrawn.
   await expect(editorPanel.getByLabel("Slogan")).toHaveCount(0);
@@ -310,7 +310,8 @@ test("the primary contact nominates and withdraws a secondary-contact nomination
     await page.reload();
     await expect(yourRole).toHaveText(role);
     await expect(page.getByText("Ordinary Representative", { exact: true }).first()).toBeVisible();
-    if (role !== "Representative") await expect(page.getByText("No submissions found", { exact: true })).toBeVisible();
+    if (role !== "Representative")
+      await expect(page.getByText("No profile changes submitted yet", { exact: true })).toBeVisible();
     for (const [name, width] of [
       ["desktop", 1440],
       ["phone", 375],

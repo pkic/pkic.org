@@ -52,7 +52,12 @@ async function confirmEmailedRegistration(page: Page, email: string, since: numb
   const mail = await waitForCapturedEmail(email, "Confirm your registration", { since });
   await page.goto(extractEmailUrl(mail, "/register/confirm"));
   await confirmRegistration(page, organization, "Security engineer");
-  await waitForCapturedEmail(email, "registration is confirmed", { since });
+  // Confirming proves the mailbox and issues a fresh management link; the one from submission no longer works.
+  const confirmed = await waitForCapturedEmail(email, "registration is confirmed", { since });
+  const manageUrl = extractEmailUrl(confirmed, "/register/manage/");
+  const manageToken = new URL(manageUrl).searchParams.get("token");
+  if (!manageToken) throw new Error("The confirmation email must carry the registration management link");
+  return { manageUrl, manageToken };
 }
 
 async function issueBadge(staff: Page, email: string) {
@@ -106,7 +111,7 @@ export async function prepareSponsorLiveFixture(staff: Page, attendee: Page) {
   if (!registered.manageUrl || !registered.manageToken)
     throw new Error("Fresh attendee must have a registration management capability");
   // The organization the lead is captured with is the one their confirmed address names.
-  await confirmEmailedRegistration(attendee, email, since, organization);
+  const confirmedManage = await confirmEmailedRegistration(attendee, email, since, organization);
 
   await signInAsE2eStaff(staff, e2eAdminEmail("default"));
   const eventResponse = await staff.request.get(eventApi);
@@ -169,8 +174,8 @@ export async function prepareSponsorLiveFixture(staff: Page, attendee: Page) {
     firstName,
     lastName,
     organization,
-    manageUrl: registered.manageUrl,
-    manageToken: registered.manageToken,
+    manageUrl: confirmedManage.manageUrl,
+    manageToken: confirmedManage.manageToken,
     workspace: `/portal/#/events/${sponsorEventSlug}/leads`,
   };
 }

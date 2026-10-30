@@ -175,7 +175,7 @@ test.describe("Portal management browser-verification pass", () => {
     await page.getByRole("button", { name: "Role actions", exact: true }).click();
     await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
     await expect(page.getByRole("textbox", { name: "Name", exact: true })).toHaveCount(0);
-    const permission = page.getByRole("checkbox", { name: "donations:read", exact: true });
+    const permission = page.getByRole("checkbox", { name: "Read: Donations", exact: true });
     const wasGranted = original.permissions.includes("donations:read");
     await permission.setChecked(!wasGranted);
     for (const width of [1440, 375]) {
@@ -866,7 +866,7 @@ test.describe("Portal management browser-verification pass", () => {
     await detail.getByRole("button", { name: "Reject" }).click();
     const reviewerNote = detail.getByLabel("Reviewer note");
     await expect(reviewerNote).toHaveAttribute("aria-invalid", "true");
-    await expect(detail.getByRole("alert").filter({ hasText: "Write the reason for the rejection" })).toBeVisible();
+    await expect(reviewerNote).toHaveAccessibleDescription(/Write the reason for the rejection/);
 
     await detail.getByRole("button", { name: "Approve" }).click();
     await expect(page.locator(".my-toast", { hasText: "Approved and applied" })).toBeVisible();
@@ -993,7 +993,8 @@ test.describe("Portal management browser-verification pass", () => {
     const applicantHeading = page.getByRole("heading", { name, level: 1 });
     await expect(applicantHeading).toBeVisible({ timeout: 10_000 });
     const header = page.locator("div").filter({ has: applicantHeading }).last();
-    await expect(header.getByText("Processing", { exact: true })).toBeVisible();
+    // The badge names the requirement the application waits on, not the generic stage.
+    await expect(header.getByText("Review organization and user", { exact: true })).toBeVisible();
 
     await page.getByRole("link", { name: "Review workflow and objections", exact: true }).click();
     await page.getByLabel("Review decision and reason").fill("Verified the organization and applicant authority.");
