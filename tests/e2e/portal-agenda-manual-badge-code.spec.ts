@@ -256,10 +256,11 @@ test("the protected printed short code works through manual offline capture and 
     await page.getByRole("textbox", { name: "Badge code", exact: true }).fill(fixture.eligibleBadgeId);
     await page.getByRole("button", { name: "Record attendance", exact: true }).click();
     await expect(page.getByText("Enter all 16 characters of the badge code.", { exact: true })).toBeVisible();
+    // The field says why at once; the refusal is audited after, in the same ledger as a failure, never as a scan.
+    await expect.poll(async () => (await scannerStorage(page)).failures.length).toBe(1);
     const afterReference = await scannerStorage(page);
     expect(afterReference.pending).toHaveLength(1);
     expect(afterReference.pending[0]!.scan).toEqual(queued);
-    // The refusal is audited in the same ledger as a failure, never captured as a scan.
     expect(afterReference.failures).toHaveLength(1);
     expect(afterReference.failures[0]!.scan).toMatchObject({
       reason: "malformed_credential",
