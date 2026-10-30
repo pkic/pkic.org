@@ -20,6 +20,7 @@ import {
 } from "../../shared/schemas/speaker-self-service";
 import { SpeakerParticipationIdentity } from "../components/SpeakerParticipationIdentity";
 import {
+  SPEAKER_MAILBOX_PROOF_HEADER,
   eventProposalProofIdentityPatchSchema,
   eventProposalProofIdentityPatchResponseSchema,
 } from "../../shared/schemas/event-proposal-proof";
@@ -342,6 +343,20 @@ async function main(): Promise<void> {
   renderIdentity();
   confirmForm?.addEventListener("change", renderIdentity);
 
+  /** The mailbox proof saved in this visit; the link alone changes the photo only on an unclaimed account. */
+  let mailboxProof: string | null = null;
+  function mountHeadshot(): void {
+    if (data.speaker.status === "declined") return;
+    mountTokenHeadshot({
+      section: headshotSection,
+      name: [data.profile.firstName, data.profile.lastName].filter(Boolean).join(" ") || data.profile.email,
+      initialUrl: data.profile.headshotUrl,
+      canChange: data.profile.personalDetailsEditable || mailboxProof !== null,
+      headers: mailboxProof ? { [SPEAKER_MAILBOX_PROOF_HEADER]: mailboxProof } : {},
+      url: proposalSpeakerAccessPath(boot.apiBase, token, "headshot"),
+    });
+  }
+
   profileForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (identityChanged && !entry) {
@@ -377,6 +392,9 @@ async function main(): Promise<void> {
           representationSaved = true;
           initialProof = undefined;
           history.replaceState({}, "", `${location.pathname}${location.search}`);
+          // The mailbox just proved speaks for the account in this step, so the photo can be added now too.
+          mailboxProof = submittedEntry.continuationToken ?? null;
+          mountHeadshot();
         }
         if (!identityChanged) {
           identityViewRevision += 1;
@@ -402,13 +420,7 @@ async function main(): Promise<void> {
   } else {
     toggleEditableSections(true);
     renderIdentityProfile();
-    mountTokenHeadshot({
-      section: headshotSection,
-      name: [data.profile.firstName, data.profile.lastName].filter(Boolean).join(" ") || data.profile.email,
-      initialUrl: data.profile.headshotUrl,
-      canChange: data.profile.personalDetailsEditable,
-      url: proposalSpeakerAccessPath(boot.apiBase, token, "headshot"),
-    });
+    mountHeadshot();
   }
 
   if (loadingEl) loadingEl.hidden = true;

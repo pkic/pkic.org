@@ -541,8 +541,9 @@ describe("speaker self-service page", () => {
     history.replaceState({}, "", location.pathname + location.search + "#verify=" + "v".repeat(40));
     const root = mountShell();
     const proof = "/api/v1/events/pqc-2026/proposals/proof/verify";
+    // The account's mailbox was proved before, so the link alone may not change its photo.
     const requests = installApi({
-      [READ]: () => json(speakerPage()),
+      [READ]: () => json(speakerPage({ personalDetailsEditable: false })),
       [TERMS]: () => json(speakerTerms()),
       [proof]: () =>
         json({
@@ -562,10 +563,12 @@ describe("speaker self-service page", () => {
             links: [],
           },
         }),
-      [`${READ}/profile`]: () => profileReceipt(),
+      [`${READ}/profile`]: () => profileReceipt(undefined, { personalDetailsEditable: false }),
     });
     await boot();
     await vi.waitFor(() => expect(panel(root, "data-speaker-identity").textContent).toContain("Ada Lovelace"));
+    const photoButton = () => root.querySelector('[data-headshot-section] button[aria-label^="Upload photo of"]');
+    expect(photoButton()).toBeNull();
     await completeIndependentCapacityDisclosure(root);
     const verified = eventProposalProofVerifySchema.parse(requests.find(({ path }) => path === proof)?.body);
     expect(verified.speakerManagementToken).toBe("speaker-token-12345678901234567890");
@@ -584,6 +587,7 @@ describe("speaker self-service page", () => {
     expect(location.hash).toBe("");
     expect(root.querySelector<HTMLButtonElement>("[data-confirm-participation]")!.disabled).toBe(false);
     expect(requests.some(({ path }) => path === AUTH)).toBe(false);
+    expect(photoButton()).not.toBeNull(); // The saved proof speaks for the account in this step.
   });
 
   it("toggles the decline panel through the attribute, both ways", async () => {

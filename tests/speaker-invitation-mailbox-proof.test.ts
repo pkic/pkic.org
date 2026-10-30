@@ -7,9 +7,12 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+  SPEAKER_MAILBOX_PROOF_HEADER,
   eventProposalProofStartResponseSchema,
   eventProposalProofVerifyResponseSchema,
 } from "../assets/shared/schemas/event-proposal-proof";
+import { headshotUploadResponseSchema } from "../assets/shared/schemas/registration";
+import { validJpegBytes } from "./helpers/raster-images";
 import { issueDatabaseCapability } from "../functions/_lib/services/capability-links";
 import { prepareEmailOwnershipClaim, readEmailOwnership } from "../functions/_lib/services/email-ownership";
 import { prepareEventProposalProofRedemption } from "../functions/_lib/services/event-proposal-proof-redemption";
@@ -26,20 +29,27 @@ const invited = "invited@speaker.example";
 async function invitedSpeaker(invitedEmail = invited) {
   const { eventId } = await seedEventAndAdmin(env.DB);
   const proposerId = await insertUser(env.DB, "proposer@example.test");
-  const userId = await insertUser(env.DB, invited);
   const proposalId = crypto.randomUUID();
+  await env.DB.prepare(
+    `INSERT INTO session_proposals
+    (id,event_id,proposer_user_id,status,proposal_type,title,abstract,manage_link_secret,submitted_at,updated_at)
+    VALUES (?, ?, ?, 'submitted', 'talk', 'Invitation proof', 'A proposal whose co-speaker confirms their invitation.', ?, datetime('now'), datetime('now'))`,
+  )
+    .bind(proposalId, eventId, proposerId, crypto.randomUUID())
+    .run();
+  return { eventId, proposalId, ...(await inviteSpeaker(proposalId, invited, invitedEmail)) };
+}
+
+/** Invites the account at `accountEmail` to the proposal, mailing its speaker link to `invitedEmail`. */
+async function inviteSpeaker(proposalId: string, accountEmail: string, invitedEmail = accountEmail) {
+  const userId = await insertUser(env.DB, accountEmail);
   const speakerId = crypto.randomUUID();
-  await env.DB.batch([
-    env.DB.prepare(
-      `INSERT INTO session_proposals
-      (id,event_id,proposer_user_id,status,proposal_type,title,abstract,manage_link_secret,submitted_at,updated_at)
-      VALUES (?, ?, ?, 'submitted', 'talk', 'Invitation proof', 'A proposal whose co-speaker confirms their invitation.', ?, datetime('now'), datetime('now'))`,
-    ).bind(proposalId, eventId, proposerId, crypto.randomUUID()),
-    env.DB.prepare(
-      `INSERT INTO proposal_speakers
-      (id,proposal_id,user_id,role,status,manage_link_secret,invite_generation,invite_expires_at,invited_email,created_at)
-      VALUES (?, ?, ?, 'speaker', 'invited', ?, 0, ?, ?, ?)`,
-    ).bind(
+  await env.DB.prepare(
+    `INSERT INTO proposal_speakers
+    (id,proposal_id,user_id,role,status,manage_link_secret,invite_generation,invite_expires_at,invited_email,created_at)
+    VALUES (?, ?, ?, 'speaker', 'invited', ?, 0, ?, ?, ?)`,
+  )
+    .bind(
       speakerId,
       proposalId,
       userId,
@@ -47,15 +57,15 @@ async function invitedSpeaker(invitedEmail = invited) {
       new Date(Date.now() + 86400000).toISOString(),
       invitedEmail,
       new Date().toISOString(),
-    ),
-  ]);
+    )
+    .run();
   const token = await issueDatabaseCapability({
     db: env.DB,
     signingSecret: env.INTERNAL_SIGNING_SECRET!,
     purpose: "speaker_manage",
     resourceId: speakerId,
   });
-  return { userId, token, eventId, speakerId };
+  return { userId, token, speakerId };
 }
 
 async function addAlias(userId: string, alias: string) {
@@ -76,6 +86,37 @@ async function start(token: string, email: string) {
   const response = await proof("", { email, consents, unaffiliatedAttestation: true, speakerManagementToken: token });
   expect(response.status, await response.clone().text()).toBe(200);
   return eventProposalProofStartResponseSchema.parse(await response.json());
+}
+
+/** Proves the invited mailbox in place, as the speaker page does, and returns the proof's continuation token. */
+async function proveInvitedMailbox(token: string, email: string): Promise<string> {
+  const started = await start(token, email);
+  expect(started.status).toBe("verified");
+  const verified = await proof("/verify", {
+    token: started.status === "verified" ? started.token : "",
+    speakerManagementToken: token,
+  });
+  expect(verified.status, await verified.clone().text()).toBe(200);
+  const ready = eventProposalProofVerifyResponseSchema.parse(await verified.json());
+  if (ready.status !== "ready") throw new Error(`Expected a ready proof, got ${ready.status}`);
+  return ready.continuationToken;
+}
+
+function changeHeadshot(token: string, method: "PUT" | "DELETE", mailboxProof?: string) {
+  const body = new FormData();
+  body.append("file", new File([validJpegBytes()], "headshot.jpg", { type: "image/jpeg" }));
+  body.append("consent", "true");
+  return callApi(env, `/api/v1/proposals/speakers/access/${token}/headshot`, {
+    method,
+    headers: mailboxProof ? { [SPEAKER_MAILBOX_PROOF_HEADER]: mailboxProof } : {},
+    ...(method === "PUT" ? { body } : {}),
+  });
+}
+
+async function headshotKey(userId: string) {
+  return (
+    await queryAll<{ headshot_r2_key: string | null }>(env.DB, "SELECT headshot_r2_key FROM users WHERE id=?", userId)
+  )[0]?.headshot_r2_key;
 }
 
 function verificationMails(email: string) {
@@ -186,5 +227,63 @@ describe("speaker invitation mailbox proof", () => {
       .run();
     const committed = await env.DB.batch(redemption.statements).catch((error: unknown) => error);
     expect(isAuthorizationGuardFailure(committed)).toBe(true);
+  });
+});
+
+describe("speaker photo in the mailbox proof step", () => {
+  /** Proves the invited mailbox and saves it, as the speaker's profile save does, which claims the account. */
+  async function claimedThroughProof() {
+    const speaker = await invitedSpeaker();
+    const continuationToken = await proveInvitedMailbox(speaker.token, invited);
+    const redemption = await prepareEventProposalProofRedemption(env.DB, {
+      eventId: speaker.eventId,
+      continuationToken,
+      signingSecret: env.INTERNAL_SIGNING_SECRET!,
+      at: new Date().toISOString(),
+      operation: "speaker_profile",
+      speakerAuthority: speaker.token,
+      speakerId: speaker.speakerId,
+    });
+    await env.DB.batch(redemption.statements);
+    return { ...speaker, continuationToken };
+  }
+
+  it("refuses the bare link once the proof claimed the account", async () => {
+    const { token, userId } = await claimedThroughProof();
+    for (const method of ["PUT", "DELETE"] as const) {
+      const refused = await changeHeadshot(token, method);
+      expect(refused.status, method).toBe(403);
+      await expect(refused.json()).resolves.toMatchObject({ error: { code: "SPEAKER_ACCOUNT_SIGN_IN_REQUIRED" } });
+    }
+    expect(await headshotKey(userId)).toBeNull();
+  });
+
+  it("lets the link with the speaker's own mailbox proof add and remove the photo", async () => {
+    const { token, userId, continuationToken } = await claimedThroughProof();
+    const uploaded = await changeHeadshot(token, "PUT", continuationToken);
+    expect(uploaded.status, await uploaded.clone().text()).toBe(200);
+    expect(headshotUploadResponseSchema.parse(await uploaded.json()).success).toBe(true);
+    expect(await headshotKey(userId)).toMatch(new RegExp(`^headshots/${userId}/`));
+
+    const removed = await changeHeadshot(token, "DELETE", continuationToken);
+    expect(removed.status, await removed.clone().text()).toBe(200);
+    expect(await headshotKey(userId)).toBeNull();
+  });
+
+  it("refuses the link with another speaker's mailbox proof", async () => {
+    const { token, userId, proposalId } = await invitedSpeaker();
+    await env.DB.prepare("UPDATE users SET email_verified_at=? WHERE id=?")
+      .bind(new Date().toISOString(), userId)
+      .run();
+    const other = await inviteSpeaker(proposalId, "other@speaker.example");
+    const othersProof = await proveInvitedMailbox(other.token, "other@speaker.example");
+
+    for (const method of ["PUT", "DELETE"] as const) {
+      const refused = await changeHeadshot(token, method, othersProof);
+      expect(refused.status, method).toBe(403);
+      await expect(refused.json()).resolves.toMatchObject({ error: { code: "SPEAKER_ACCOUNT_SIGN_IN_REQUIRED" } });
+    }
+    expect(await headshotKey(userId)).toBeNull();
+    expect(await headshotKey(other.userId)).toBeNull();
   });
 });

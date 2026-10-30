@@ -30,8 +30,8 @@ function storedUrl(data: object): string | null {
   return "headshotUrl" in data && typeof data.headshotUrl === "string" ? data.headshotUrl : null;
 }
 
-async function removeAt(url: string): Promise<void> {
-  await requestJson(url, successResponseSchema, { method: "DELETE" });
+async function removeAt(url: string, headers: Record<string, string> = {}): Promise<void> {
+  await requestJson(url, successResponseSchema, { method: "DELETE", headers });
 }
 
 /** A resource that reads the image as the request body. */
@@ -53,21 +53,23 @@ export function headshotBodyEndpoint(url: string, responseSchema: z.ZodType<obje
 /**
  * A resource that reads the image as the `file` field of a form. `fields`
  * carries what such a route asks for beside it, such as the registration
- * route's recorded consent.
+ * route's recorded consent; `headers` carries what both methods present,
+ * such as a speaker's fresh mailbox proof.
  */
 export function headshotFormEndpoint(
   url: string,
   responseSchema: z.ZodType<object>,
   fields: Record<string, string> = {},
+  headers: Record<string, string> = {},
 ): HeadshotEndpoint {
   return {
     async upload(image) {
       const body = new FormData();
       body.append("file", image, "headshot.jpg");
       for (const [name, value] of Object.entries(fields)) body.append(name, value);
-      const data = await requestJson(url, responseSchema, { method: "PUT", body, mapError: uploadFailure });
+      const data = await requestJson(url, responseSchema, { method: "PUT", body, headers, mapError: uploadFailure });
       return storedUrl(data);
     },
-    remove: () => removeAt(url),
+    remove: () => removeAt(url, headers),
   };
 }

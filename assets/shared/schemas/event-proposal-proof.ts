@@ -22,6 +22,15 @@ import { identityAffiliationPrepareBaseSchema, identityAffiliationPreviewRespons
 export const eventProposalContinuationTokenSchema = z.string().min(32).max(EMAIL_AUTH_TOKEN_MAX_LENGTH);
 
 /**
+ * Carries the continuation token of the mailbox proof just completed on a
+ * speaker link, so that step may also change the person's own photo.
+ */
+export const SPEAKER_MAILBOX_PROOF_HEADER = "x-pkic-mailbox-proof";
+export const speakerMailboxProofHeadersSchema = z.object({
+  [SPEAKER_MAILBOX_PROOF_HEADER]: eventProposalContinuationTokenSchema.nullish(),
+});
+
+/**
  * Starts mailbox proof for a proposal contact or speaker from the shared
  * email-first step. `unaffiliatedAttestation` is the capacity: `true` takes
  * part as an individual, `false` on behalf of an organization, which only that

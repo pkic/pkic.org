@@ -3,8 +3,8 @@
  * who holds the account. The person's own name and headshot are shown on every
  * proposal, badge and agenda, so a link alone changes them only while nobody
  * has ever proved the account's mailbox: an account only an invitation made.
- * Once the mailbox is proved, the change needs that person's live session (or
- * a fresh mailbox proof, which the proof flow checks itself).
+ * Once the mailbox is proved, the change needs that person's live session or
+ * the mailbox proof they just completed on this speaker link.
  */
 import { resolveOptionalIdentityFromRequest, type AuthenticatedIdentity } from "../auth/user-session";
 import type { AuthorizationEvidence } from "../db/authorization-guard";
@@ -12,6 +12,7 @@ import { first } from "../db/queries";
 import { AppError } from "../errors";
 import type { DatabaseLike, Env } from "../types";
 import type { ParticipantAuthority } from "./participant-authority";
+import { eventProposalProofRedemptionKey, verifyEventProposalCapability } from "./event-proposal-proof-capabilities";
 
 /** The account has no proved mailbox: no verified primary address and no verified secondary one. */
 export function unclaimedAccountSql(person: string): string {
@@ -48,8 +49,15 @@ export async function isInvitationMailbox(
   return Boolean(await first(db, evidence.sql, [...evidence.bindings]));
 }
 
-/** What lets a speaker page change the person's own name or headshot. */
-export type SpeakerAccountAuthority = { sessionId: string } | "unclaimed";
+/**
+ * What lets a speaker page change the person's own name or headshot: a live
+ * session, an account nobody has claimed yet, or the mailbox proof the person
+ * just completed on this speaker link.
+ */
+export type SpeakerAccountAuthority =
+  | { sessionId: string }
+  | "unclaimed"
+  | { provedMailbox: { email: string; capabilityId: string; expiresAt: number } };
 
 export function speakerAccountSignInRequiredError(): AppError {
   return new AppError(
@@ -85,16 +93,74 @@ export async function resolveSpeakerAccountAuthority(
   return speakerAccountAuthority({ ...input, session });
 }
 
-/** Rechecks the authority at commit: the session is still live, or the mailbox is still unproved. */
+/**
+ * The continuation token of a mailbox proof made on this speaker link, for
+ * this speaker's own account, speaks for that account in the same step: it
+ * already lets the person write their profile, so it lets them add their
+ * photo too. A proof for another link, invitation round or person is refused.
+ */
+export async function resolveSpeakerMailboxProofAuthority(input: {
+  signingSecret: string;
+  continuationToken: string;
+  eventId: string;
+  speakerId: string;
+  userId: string;
+  inviteGeneration: number;
+}): Promise<SpeakerAccountAuthority> {
+  const payload = await verifyEventProposalCapability(
+    input.signingSecret,
+    input.continuationToken,
+    input.eventId,
+    true,
+  );
+  const context = payload.context;
+  if (
+    payload.userId !== input.userId ||
+    context?.kind !== "speaker" ||
+    context.speakerId !== input.speakerId ||
+    context.userId !== input.userId ||
+    context.inviteGeneration !== input.inviteGeneration
+  )
+    throw speakerAccountSignInRequiredError();
+  return {
+    provedMailbox: { email: payload.email, capabilityId: payload.capabilityId, expiresAt: payload.expiresAt },
+  };
+}
+
+/**
+ * Rechecks the authority at commit: the session is still live, the mailbox is
+ * still unproved, or the proved address is still this person's and the proof
+ * is unexpired and was redeemed by nobody else.
+ */
 export function speakerAccountAuthorityEvidence(
   authority: SpeakerAccountAuthority,
   userId: string,
 ): AuthorizationEvidence {
-  return authority === "unclaimed"
-    ? { sql: `SELECT 1 FROM users person WHERE person.id = ? AND ${unclaimedAccountSql("person")}`, bindings: [userId] }
-    : {
-        sql: `SELECT 1 FROM sessions WHERE id = ? AND user_id = ? AND revoked_at IS NULL
+  if (authority === "unclaimed")
+    return {
+      sql: `SELECT 1 FROM users person WHERE person.id = ? AND ${unclaimedAccountSql("person")}`,
+      bindings: [userId],
+    };
+  if ("provedMailbox" in authority) {
+    const proof = authority.provedMailbox;
+    return {
+      sql: `SELECT 1 FROM users person WHERE person.id = ? AND ? > CAST(strftime('%s','now') AS INTEGER)
+          AND (person.normalized_email = ? OR EXISTS (SELECT 1 FROM user_emails alias
+            WHERE alias.user_id = person.id AND alias.normalized_email = ?))
+          AND NOT EXISTS (SELECT 1 FROM audit_log redeemed
+            WHERE redeemed.idempotency_key = ? AND redeemed.actor_id IS NOT person.id)`,
+      bindings: [
+        userId,
+        proof.expiresAt,
+        proof.email,
+        proof.email,
+        eventProposalProofRedemptionKey(proof.capabilityId),
+      ],
+    };
+  }
+  return {
+    sql: `SELECT 1 FROM sessions WHERE id = ? AND user_id = ? AND revoked_at IS NULL
           AND expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now')`,
-        bindings: [authority.sessionId, userId],
-      };
+    bindings: [authority.sessionId, userId],
+  };
 }

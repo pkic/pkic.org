@@ -27,6 +27,8 @@ export interface TokenHeadshotOptions {
   successNote?: string;
   /** Whether this link may change the photo; it is shown read-only otherwise. Defaults to true. */
   canChange?: boolean;
+  /** Sent with every change, such as the mailbox proof that lets a speaker link change the photo. */
+  headers?: Record<string, string>;
   onChanged?: () => void;
 }
 
@@ -41,7 +43,12 @@ function TokenHeadshot({ options, status }: { options: TokenHeadshotOptions; sta
         consent="own"
         self
         // The token routes record the uploader's consent with the image.
-        endpoint={headshotFormEndpoint(options.url, registrationHeadshotUploadResponseSchema, { consent: "true" })}
+        endpoint={headshotFormEndpoint(
+          options.url,
+          registrationHeadshotUploadResponseSchema,
+          { consent: "true" },
+          options.headers,
+        )}
         onChanged={(next) => {
           setImageUrl(next);
           options.onChanged?.();

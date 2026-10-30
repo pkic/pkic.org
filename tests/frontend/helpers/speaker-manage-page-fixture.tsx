@@ -203,9 +203,9 @@ export function panel(root: ParentNode, name: string): HTMLElement {
   return element;
 }
 
-/** Canonical saved selection receipt, independent of the recorded appearance. */
-export function profileReceipt(data?: Record<string, unknown>): Response {
-  const saved = data ?? speakerPage();
+/** Canonical saved selection receipt, independent of the recorded appearance; `page` shapes the default page. */
+export function profileReceipt(data?: Record<string, unknown>, page: Parameters<typeof speakerPage>[0] = {}): Response {
+  const saved = data ?? speakerPage(page);
   if (!data) {
     const selectedAt = "2026-01-01T00:00:00.000Z";
     saved.profile = {
