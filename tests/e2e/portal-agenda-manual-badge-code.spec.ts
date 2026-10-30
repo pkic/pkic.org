@@ -26,7 +26,8 @@ import { eventManagementDetailResponseSchema } from "../../assets/shared/schemas
 import { registrationManageReadResponseSchema } from "../../assets/shared/schemas/registration";
 import { prepareScannerTermination } from "./helpers/scanner-browser-termination";
 import { scannerStorage, openScannerDiagnostics, openScannerManualEntry } from "./helpers/scanner-recovery-storage";
-import { captureDeviceConsole, expectNoStoredSponsorContacts } from "./helpers/sponsor-live-fixture";
+import { expectNoStoredSponsorContacts } from "./helpers/sponsor-live-fixture";
+import { captureDeviceConsole } from "./helpers/device-console";
 
 test.use({ actionTimeout: 20_000 });
 

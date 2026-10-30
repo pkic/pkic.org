@@ -53,7 +53,6 @@ import {
 } from "./helpers/scanner-recovery-storage";
 import {
   prepareSponsorLiveFixture,
-  captureDeviceConsole,
   expectContactBadgeRejected,
   captureOfflineSponsorBadge,
   prepareDoorScannerContext,
@@ -61,6 +60,7 @@ import {
   expectNoStoredSponsorContacts,
   sponsorEventSlug,
 } from "./helpers/sponsor-live-fixture";
+import { captureDeviceConsole } from "./helpers/device-console";
 import {
   pilotAgendaApi,
   openPilotAgenda,

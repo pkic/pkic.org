@@ -20,7 +20,8 @@ import {
   openScannerManualEntry,
   scannerSessionState,
 } from "./helpers/scanner-recovery-storage";
-import { captureDeviceConsole, expectNoStoredSponsorContacts } from "./helpers/sponsor-live-fixture";
+import { expectNoStoredSponsorContacts } from "./helpers/sponsor-live-fixture";
+import { captureDeviceConsole } from "./helpers/device-console";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
 import { clientIpForIdentity } from "./helpers/portal-auth";
 import {
