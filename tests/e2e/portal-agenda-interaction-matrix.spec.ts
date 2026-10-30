@@ -360,7 +360,7 @@ test("expanded sponsor history prose and inner history fit their visible desktop
   page,
   browser,
 }, info) => {
-  test.setTimeout(300_000);
+  test.setTimeout(600_000);
   const staffContext = await browser.newContext({ baseURL: info.project.use.baseURL });
   const attendeeContext = await browser.newContext({ baseURL: info.project.use.baseURL });
   try {

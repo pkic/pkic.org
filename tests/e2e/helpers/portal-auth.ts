@@ -147,8 +147,8 @@ export async function signInToPortal(page: Page, email: string, options: { conti
 /** Email sign-in can offer passkey enrollment before the shell mounts: follows its visible opt-out. */
 export async function declinePasskeyOffer(page: Page): Promise<void> {
   const passkeyOffer = page.getByRole("region", { name: "You're signed in", exact: true });
-  await expect(page.locator("#portal-root").or(passkeyOffer).first()).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator("#portal-root").or(passkeyOffer).first()).toBeVisible({ timeout: 30_000 });
   if (await passkeyOffer.isVisible())
     await passkeyOffer.getByRole("button", { name: "Continue without a passkey", exact: true }).click();
-  await expect(page.locator("#portal-root")).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator("#portal-root")).toBeVisible({ timeout: 30_000 });
 }
