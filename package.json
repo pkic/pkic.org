@@ -36,6 +36,7 @@
     "test:migration:site": "PKIC_VALIDATE_SITE_MIGRATION=1 pnpm run test:worker tests/public-site-catalog.migration.ts",
     "test:e2e": "playwright test",
     "test:e2e:ci": "playwright test --config playwright.ci.config.ts",
+    "test:e2e:parallel": "node scripts/e2e-parallel.mjs",
     "test:e2e:publication": "playwright test --config playwright.publication.config.ts",
     "check:max-lines": "node scripts/check-max-lines.mjs",
     "check:filenames": "node scripts/check-filename-collisions.mjs",

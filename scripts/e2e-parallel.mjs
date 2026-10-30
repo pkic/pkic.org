@@ -1,0 +1,99 @@
+/**
+ * Run the browser suite as several independent shards on one machine.
+ *
+ * The specs share one seeded database and one email outbox, so they cannot run as parallel workers
+ * inside a single server. Each shard instead gets its own copy of one prepared release and database
+ * and its own port, and runs its slice of the specs, which is how CI splits the work too.
+ *
+ *   pnpm run test:e2e:parallel [--shards=3] [--base-port=8820] [playwright arguments...]
+ */
+import { spawn, spawnSync } from "node:child_process";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpus, tmpdir, totalmem } from "node:os";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
+
+/** One entry per shard: its `--shard` slice, its port, and its state directory name. */
+export function shardPlan(count, basePort) {
+  return Array.from({ length: count }, (_, index) => ({
+    index: index + 1,
+    shard: `${index + 1}/${count}`,
+    port: basePort + index,
+    name: `pkic-e2e.shard-${index + 1}`,
+  }));
+}
+
+/** A shard is a Worker, its database and a browser; budget this much memory for each. */
+const BYTES_PER_SHARD = 2 * 1024 ** 3;
+
+/** One shard per core, unless the machine's memory holds fewer. */
+export function defaultShards(cores = cpus().length, memory = totalmem()) {
+  return Math.max(1, Math.min(cores, Math.floor(memory / BYTES_PER_SHARD)));
+}
+
+export function parseArguments(argv, defaults = defaultShards()) {
+  const passthrough = [];
+  let shards = defaults;
+  let basePort = 8820;
+  for (const argument of argv) {
+    if (argument.startsWith("--shards=")) shards = Number(argument.slice("--shards=".length));
+    else if (argument.startsWith("--base-port=")) basePort = Number(argument.slice("--base-port=".length));
+    else passthrough.push(argument);
+  }
+  if (!Number.isInteger(shards) || shards < 1) throw new Error("--shards must be a positive whole number");
+  return { shards, basePort, passthrough };
+}
+
+function run() {
+  const { shards, basePort, passthrough } = parseArguments(process.argv.slice(2));
+  const root = mkdtempSync(path.join(process.env.E2E_STATE_ROOT ?? tmpdir(), "pkic-e2e-shards."));
+  const prepared = path.join(root, "pkic-e2e.prepared");
+  const cleanup = () => rmSync(root, { recursive: true, force: true });
+  process.on("exit", cleanup);
+  mkdirSync(prepared, { recursive: true });
+  mkdirSync("test-results", { recursive: true });
+  for (const stale of ["portal-management-verification", "portal-mobile-navigation", "portal-groups", "portal-vote-management"])
+    rmSync(`test-results/${stale}-auth.json`, { force: true });
+  console.log(`[e2e-parallel] preparing one release for ${shards} shards`);
+  const prepare = spawnSync("sh", ["scripts/e2e-prepare.sh", prepared], { stdio: "inherit" });
+  if (prepare.status !== 0) process.exit(prepare.status ?? 1);
+
+  const results = shardPlan(shards, basePort).map(
+    (plan) =>
+      new Promise((resolve) => {
+        const state = path.join(root, plan.name);
+        cpSync(prepared, state, { recursive: true });
+        const log = path.join(root, `${plan.name}.log`);
+        const child = spawn(
+          "pnpm",
+          ["exec", "playwright", "test", `--shard=${plan.shard}`, `--output=test-results/shard-${plan.index}`, ...passthrough],
+          {
+            env: {
+              ...process.env,
+              E2E_STATE_ROOT: root,
+              E2E_PREPARED_STATE_DIR: state,
+              E2E_PORT: String(plan.port),
+              E2E_SHARDED: "1",
+              E2E_SENDGRID_URL_FILE: path.join(root, `${plan.name}.sendgrid-url`),
+              E2E_STRIPE_URL_FILE: path.join(root, `${plan.name}.stripe-url`),
+            },
+            stdio: ["ignore", "pipe", "pipe"],
+          },
+        );
+        const chunks = [];
+        for (const stream of [child.stdout, child.stderr]) stream.on("data", (chunk) => chunks.push(chunk));
+        child.on("close", (code) => {
+          writeFileSync(log, Buffer.concat(chunks));
+          const text = readFileSync(log, "utf8");
+          const failed = [...text.matchAll(/^\s+\d+\) (tests\/e2e\/[^\n]+)$/gm)].map((match) => match[1]);
+          const summary = text.match(/^\s+(\d+) passed.*$/m)?.[0]?.trim() ?? "no summary";
+          console.log(`[e2e-parallel] shard ${plan.shard} (port ${plan.port}): ${summary}`);
+          for (const name of failed) console.log(`  failed: ${name}`);
+          resolve(code ?? 1);
+        });
+      }),
+  );
+  Promise.all(results).then((codes) => process.exit(codes.some((code) => code !== 0) ? 1 : 0));
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) run();
