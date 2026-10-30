@@ -9,6 +9,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { affiliationOfferResponseSchema } from "../assets/shared/schemas/affiliation-offer";
 import {
   EMAIL_VERIFIED_ELSEWHERE,
+  OWN_EMAIL_ALREADY_ON_ACCOUNT,
+  OWN_EMAIL_ALREADY_ON_ACCOUNT_MESSAGES,
   ownEmailAddressAddSchema,
   ownEmailVerificationRequestedResponseSchema,
   ownEmailAddressResponseSchema,
@@ -781,5 +783,29 @@ describe("a person's own email addresses", () => {
     expect(
       await queryAll(env.DB, "SELECT recipient_email FROM email_outbox WHERE template_key = 'user_email_verification'"),
     ).toEqual([{ recipient_email: "taken@example.test" }, { recipient_email: "fay@one.example" }]);
+  });
+
+  it("refuses a verified address the account already holds before sending any link", async () => {
+    const account = await signedIn("gil@owner.example");
+    const saved = await add(account.token, "gil@saved.example");
+    await verify(await verificationToken(saved.email));
+    const sentBefore = await queryAll(env.DB, "SELECT id FROM email_outbox");
+
+    for (const [email, message] of [
+      ["GIL@Owner.example", OWN_EMAIL_ALREADY_ON_ACCOUNT_MESSAGES.primary],
+      ["gil@saved.example", OWN_EMAIL_ALREADY_ON_ACCOUNT_MESSAGES.verified],
+    ] as const) {
+      const refused = await call(account.token, "", "POST", { email });
+      expect(refused.status, email).toBe(409);
+      expect(await refused.json()).toMatchObject({ error: { code: OWN_EMAIL_ALREADY_ON_ACCOUNT, message } });
+    }
+    expect(await queryAll(env.DB, "SELECT id FROM email_outbox")).toEqual(sentBefore);
+
+    // A saved address still waiting for proof can be requested again: its link still works.
+    await env.DB.prepare("INSERT INTO user_emails(id,user_id,email,normalized_email,created_at) VALUES(?,?,?,?,?)")
+      .bind(crypto.randomUUID(), account.userId, "gil@waiting.example", "gil@waiting.example", nowIso())
+      .run();
+    await add(account.token, "gil@waiting.example");
+    expect((await verify(await verificationToken("gil@waiting.example"))).status).toBe(200);
   });
 });

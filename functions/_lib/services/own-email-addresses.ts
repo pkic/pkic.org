@@ -15,6 +15,9 @@ import { setOwnEmailSignInPermission } from "./own-email-sign-in";
  */
 import {
   OWN_EMAIL_ADDRESS_LIMIT,
+  OWN_EMAIL_ALREADY_ON_ACCOUNT,
+  OWN_EMAIL_ALREADY_ON_ACCOUNT_MESSAGES,
+  type OwnEmailHolding,
   type OwnEmailAddress,
   type OwnEmailAddressUpdate,
   type OwnEmailAddressesListQuery,
@@ -29,6 +32,7 @@ import { AppError } from "../errors";
 import type { DatabaseLike, D1StatementResult } from "../types";
 import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
+import { normalizeEmail } from "../validation";
 import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange, prepareAuditLog } from "./audit";
 import {
   ADDRESS_SORT_EXPRESSIONS,
@@ -97,7 +101,19 @@ export async function listOwnEmailAddresses(
   return read.decode(await db.batch(read.statements));
 }
 
-/** Request proof without reserving the address or associating its owner with this account. */
+/** The person's own verified addresses that equal one requested address; bind user id and address twice. */
+const OWN_VERIFIED_HOLDING_SQL = `SELECT 'primary' AS holding FROM users WHERE id=? AND normalized_email=?
+  UNION ALL
+  SELECT 'verified' FROM user_emails WHERE user_id=? AND normalized_email=? AND verified_at IS NOT NULL`;
+
+/**
+ * Request proof without reserving the address or associating its owner with
+ * this account. An address this account already holds verified is refused
+ * before any mail goes out, since its link could only fail once opened. A
+ * saved address still waiting for proof may be requested again. Only the
+ * person's own addresses are named; another account's reservation stays
+ * undisclosed.
+ */
 export async function addOwnEmailAddress(
   db: DatabaseLike,
   input: {
@@ -111,6 +127,7 @@ export async function addOwnEmailAddress(
     refuseIneligibleWorkEmail({ email: input.email, unaffiliatedAttestation: input.unaffiliatedAttestation ?? false });
   const id = uuid();
   const at = nowIso();
+  const normalizedEmail = normalizeEmail(input.email);
   const message = await prepareOwnEmailVerificationMessage(db, { ...input, emailId: id, addressRequest: true, at });
   try {
     await db.batch([
@@ -122,6 +139,10 @@ export async function addOwnEmailAddress(
       prepareAuthorizationGuard(db, {
         sql: "SELECT 1 WHERE (SELECT COUNT(*) FROM user_emails WHERE user_id=?) < ?",
         bindings: [input.userId, OWN_EMAIL_ADDRESS_LIMIT],
+      }),
+      prepareAuthorizationGuard(db, {
+        sql: `SELECT 1 WHERE NOT EXISTS (${OWN_VERIFIED_HOLDING_SQL})`,
+        bindings: [input.userId, normalizedEmail, input.userId, normalizedEmail],
       }),
       prepareAuditLog(
         db,
@@ -136,13 +157,21 @@ export async function addOwnEmailAddress(
       ...message.statements,
     ]);
   } catch (error) {
-    if (isAuthorizationGuardFailure(error))
-      throw new AppError(
-        409,
-        "EMAIL_REQUEST_NOT_ALLOWED",
-        "Confirm your sign-in email and check your saved email addresses before requesting another link.",
-      );
-    throw error;
+    if (!isAuthorizationGuardFailure(error)) throw error;
+    // Only a refused request pays for reading which reason applies.
+    const held = await first<{ holding: OwnEmailHolding }>(db, `${OWN_VERIFIED_HOLDING_SQL} LIMIT 1`, [
+      input.userId,
+      normalizedEmail,
+      input.userId,
+      normalizedEmail,
+    ]);
+    if (held)
+      throw new AppError(409, OWN_EMAIL_ALREADY_ON_ACCOUNT, OWN_EMAIL_ALREADY_ON_ACCOUNT_MESSAGES[held.holding]);
+    throw new AppError(
+      409,
+      "EMAIL_REQUEST_NOT_ALLOWED",
+      "Confirm your sign-in email and check your saved email addresses before requesting another link.",
+    );
   }
   return { status: "verification_sent", email: input.email, requestId: id, outboxId: message.outboxId };
 }

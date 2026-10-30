@@ -32,6 +32,15 @@ export const EMAIL_VERIFIED_ELSEWHERE = {
     "This address is already verified on another PKI Consortium account. To use that account, sign in with this address. To combine the two accounts, contact us.",
 } as const;
 
+/** The refusal code for an address the person's own account already holds. */
+export const OWN_EMAIL_ALREADY_ON_ACCOUNT = "EMAIL_ALREADY_ON_ACCOUNT";
+/** What a person is told when they ask to add an address their account already holds. */
+export const OWN_EMAIL_ALREADY_ON_ACCOUNT_MESSAGES = {
+  primary: "This is already your primary email address.",
+  verified: "This address is already on your account and verified.",
+} as const;
+export type OwnEmailHolding = keyof typeof OWN_EMAIL_ALREADY_ON_ACCOUNT_MESSAGES;
+
 /**
  * One of the signed-in person's addresses: the profile's address shape (the
  * primary address has no id of its own; `verifiedAt` is null while the
@@ -110,7 +119,7 @@ export const ownEmailAddressAddRouteSchema = {
     },
     ...authErrors({
       badRequest: "Invalid email address.",
-      conflict: "The address is already in use, or the address limit is reached.",
+      conflict: "The address is already on this account (`EMAIL_ALREADY_ON_ACCOUNT`), or the address limit is reached.",
       tooManyRequests: "Too many verification emails; try again later.",
     }),
   },
