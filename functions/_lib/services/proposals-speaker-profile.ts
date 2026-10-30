@@ -27,6 +27,7 @@ import { assertProvedCapacity, prepareSelectedCapacityDisclosure } from "./propo
 import {
   speakerAccountAuthorityEvidence,
   speakerAccountSignInRequiredError,
+  unclaimedAccountSql,
   type SpeakerAccountAuthority,
 } from "./proposal-speaker-account-authority";
 
@@ -72,20 +73,39 @@ export function prepareSpeakerSelfAuthorityGuard(
   });
 }
 
+/**
+ * The other speakers on the proposal, as one speaker's link shows them. A speaker who has not accepted is
+ * named only by the name the proposer typed on an account no one has claimed; an existing person's own name
+ * stays theirs until they accept.
+ */
 export async function getProposalCoSpeakers(
   db: DatabaseLike,
   proposalId: string,
   excludeUserId: string,
 ): Promise<{ firstName: string | null; lastName: string | null; status: string }[]> {
-  return all<{ first_name: string | null; last_name: string | null; status: string }>(
+  const rows = await all<{
+    first_name: string | null;
+    last_name: string | null;
+    status: string;
+    account_claimed: 0 | 1;
+  }>(
     db,
-    `SELECT ${proposalSpeakerProfileColumns("u", "ps", "", ["firstName", "lastName"])}, ps.status
+    `SELECT ${proposalSpeakerProfileColumns("u", "ps", "", ["firstName", "lastName"])}, ps.status,
+            CASE WHEN ${unclaimedAccountSql("u")} THEN 0 ELSE 1 END AS account_claimed
      FROM proposal_speakers ps
      JOIN users u ON u.id = ps.user_id
      WHERE ps.proposal_id = ? AND ps.user_id != ?
      ORDER BY ps.created_at ASC`,
     [proposalId, excludeUserId],
-  ).then((rows) => rows.map((r) => ({ firstName: r.first_name, lastName: r.last_name, status: r.status })));
+  );
+  return rows.map((row) => {
+    const named = row.status === "confirmed" || !row.account_claimed;
+    return {
+      firstName: named ? row.first_name : null,
+      lastName: named ? row.last_name : null,
+      status: row.status,
+    };
+  });
 }
 
 export async function getPresentationUploader(
