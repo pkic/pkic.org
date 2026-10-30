@@ -18,7 +18,7 @@ import {
   publicPageSlugNameBase,
   publicPageSlugSchema,
 } from "../../../../assets/shared/schemas/public-page-slug";
-import { personDisplayNameSql } from "../event-agenda/speaker-name";
+import { personDisplayNameSql } from "./person-name-sql";
 import { PUBLIC_CANDIDACY_SOURCE_SQL, PUBLIC_LEADERSHIP_SOURCE_SQL, PUBLIC_SEAT_SOURCE_SQL } from "./published-person";
 
 const BATCH = 100;

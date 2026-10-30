@@ -38,7 +38,7 @@ afterEach(() => {
 
 describe("shared component translation layer", () => {
   it("PersonCell falls back to a placeholder name and omits the second line when nothing is on file", () => {
-    const container = mount(<PersonCell name={personDisplayName(null, null, null)} />);
+    const container = mount(<PersonCell name={personDisplayName({}, null)} />);
     expect(container.textContent).toContain("—");
     // The face repeats what the name says, so it is decoration rather than a
     // second announcement of the same person.
@@ -47,11 +47,13 @@ describe("shared component translation layer", () => {
   });
 
   it("PersonCell names a person without showing their address, and falls back to it only as the name", () => {
-    const named = mount(<PersonCell name={personDisplayName("Ada", "Lovelace", "ada@example.test")} />);
+    const named = mount(
+      <PersonCell name={personDisplayName({ firstName: "Ada", lastName: "Lovelace" }, "ada@example.test")} />,
+    );
     expect(named.querySelector(".pk-person-cell__name")?.textContent).toBe("Ada Lovelace");
     expect(named.textContent).not.toContain("ada@example.test");
 
-    const unnamed = mount(<PersonCell name={personDisplayName(null, null, "ada@example.test")} />);
+    const unnamed = mount(<PersonCell name={personDisplayName({}, "ada@example.test")} />);
     expect(unnamed.querySelector(".pk-person-cell__name")?.textContent).toBe("ada@example.test");
     expect(unnamed.querySelector(".pk-person-cell__email")).toBeNull();
   });

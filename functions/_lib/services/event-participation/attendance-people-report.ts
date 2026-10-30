@@ -15,6 +15,7 @@ import {
   attendanceScopeBindings,
   attendanceCapturedSql,
 } from "./attendance-report-context";
+import { personNameSql } from "../people/person-name-sql";
 export async function attendancePeopleQuery(db: DatabaseLike, eventId: string, raw: unknown) {
   const query = eventAttendancePeopleQuerySchema.parse(raw),
     context = await attendanceReportContext(db, eventId, query);
@@ -31,7 +32,7 @@ export async function attendancePeopleQuery(db: DatabaseLike, eventId: string, r
       endAt: context.intentEndAt,
       dayIntervalAvailable: context.dayDate === null || context.intentStartAt !== null,
     },
-    sql: `WITH observed AS (${observed}),intent AS (${intent}) SELECT observed.user_id AS userId,NULLIF(TRIM(COALESCE(person.preferred_name,person.first_name,'')||' '||COALESCE(person.last_name,'')),'') AS displayName,observed.firstObservedAt,observed.lastObservedAt,observed.observationCount,observed.missingContextObservations,observed.capturedTimeZones,observed.physicalObservations,observed.virtualObservations,observed.importedObservations,observed.providerAssertedVirtualObservations,COALESCE(intent.reservedSessions,0) AS reservedSessions,COALESCE(intent.savedSessions,0) AS savedSessions,COALESCE(intent.approvalPendingSessions,0) AS approvalPendingSessions FROM observed JOIN users person ON person.id=observed.user_id LEFT JOIN intent ON intent.user_id=observed.user_id WHERE INSTR(LOWER(COALESCE(person.preferred_name,'')||' '||COALESCE(person.first_name,'')||' '||COALESCE(person.last_name,'')),LOWER(?))>0`,
+    sql: `WITH observed AS (${observed}),intent AS (${intent}) SELECT observed.user_id AS userId,${personNameSql("person")} AS displayName,observed.firstObservedAt,observed.lastObservedAt,observed.observationCount,observed.missingContextObservations,observed.capturedTimeZones,observed.physicalObservations,observed.virtualObservations,observed.importedObservations,observed.providerAssertedVirtualObservations,COALESCE(intent.reservedSessions,0) AS reservedSessions,COALESCE(intent.savedSessions,0) AS savedSessions,COALESCE(intent.approvalPendingSessions,0) AS approvalPendingSessions FROM observed JOIN users person ON person.id=observed.user_id LEFT JOIN intent ON intent.user_id=observed.user_id WHERE INSTR(LOWER(COALESCE(person.preferred_name,'')||' '||COALESCE(person.first_name,'')||' '||COALESCE(person.last_name,'')),LOWER(?))>0`,
     bindings: [
       ...observedValues,
       eventId,

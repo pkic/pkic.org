@@ -1,3 +1,4 @@
+import { personLegalName } from "../../../../../shared/person-display";
 import { RepresentationEmailDialog } from "../../../../components/identities/RepresentationEmailDialog";
 import { RepresentationCorrectionDialog } from "../../../../components/identities/RepresentationCorrectionDialog";
 import { removeIncorrectRepresentation } from "./remove-representation";
@@ -107,7 +108,8 @@ export function UserAffiliationsPanel({
   );
   const formerIdentities = user.formerIdentities;
   const seatsOf = (identityId: string) => seats.filter((seat) => seat.identityId === identityId);
-  const subjectName = [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email;
+  // Staff correct and reinstate against proof of who the person is, so they read the legal name.
+  const subjectName = personLegalName({ firstName: user.first_name, lastName: user.last_name }, user.email);
 
   function pastIdentityActions(entry: FormerIdentity): MenuItem[] {
     const items: MenuItem[] = [];
@@ -187,7 +189,7 @@ export function UserAffiliationsPanel({
             canRemoveIdentity={canManage && canActivateIdentity}
             summarized={membership.identityId === summarizedIdentityId}
             viewerIsSubject={viewerIsSubject}
-            subjectName={[user.first_name, user.last_name].filter(Boolean).join(" ") || user.email}
+            subjectName={subjectName}
             seats={seatsOf(membership.identityId)}
             acting={membership.identityId === actingIdentityId}
             onEditEmail={

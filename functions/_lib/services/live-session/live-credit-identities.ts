@@ -7,7 +7,7 @@ import type {
 import type { z } from "zod";
 import { all, first } from "../../db/queries";
 import type { DatabaseLike } from "../../types";
-import { personDisplayNameSql } from "../event-agenda/speaker-name";
+import { personDisplayNameSql } from "../people/person-name-sql";
 import { identityJobTitleSql, identityOrganizationNameSql } from "../identities/affiliation-projection";
 import { creditedIdentityIdSql } from "../event-agenda/credited-identity";
 import { publicUserHeadshotPath } from "../user-headshot";

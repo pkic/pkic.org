@@ -1,5 +1,5 @@
 import { ApiDataTable } from "../../../../components/ApiDataTable";
-import { personDisplayName } from "../../../../../shared/person-display";
+import { personLegalName } from "../../../../../shared/person-display";
 import { PersonCell } from "../../../../ui/PersonCell";
 import { ButtonLink } from "../../../../ui/Button";
 import { fmtDate } from "../../ui";
@@ -69,7 +69,7 @@ export function UsersList({ canWrite, canGrantAccess }: { canWrite: boolean; can
           header: "Person",
           cell: (user) => (
             <PersonCell
-              name={personDisplayName(user.first_name, user.last_name, user.email)}
+              name={personLegalName({ firstName: user.first_name, lastName: user.last_name }, user.email)}
               avatarSrc={user.headshotUrl}
               size="sm"
             />
@@ -108,7 +108,7 @@ export function UsersList({ canWrite, canGrantAccess }: { canWrite: boolean; can
       empty="No users found"
       rowKey={(user) => user.id}
       rowAction={(user) => ({
-        label: `View ${personDisplayName(user.first_name, user.last_name, user.email)}`,
+        label: `View ${personLegalName({ firstName: user.first_name, lastName: user.last_name }, user.email)}`,
         href: usePortalHashLocation.hrefs(`/users/${encodeURIComponent(user.id)}`),
       })}
     />

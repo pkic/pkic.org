@@ -26,6 +26,7 @@ import {
   scannerTargetsResponseSchema,
 } from "../../../../assets/shared/schemas/event-participation-scanning";
 import { scannerTargetCatalog, scannerTargetFilter } from "./scanner-target-catalog";
+import { personNameSql } from "../people/person-name-sql";
 export async function scannerTargets(db: DatabaseLike, eventId: string, raw: unknown) {
   const query = scannerTargetQuerySchema.parse(raw);
   const catalog = await scannerTargetCatalog(db, eventId);
@@ -90,7 +91,7 @@ function prepareSessionBookings(db: DatabaseLike, eventId: EventReadSelection, o
           : "p.created_at ASC";
   const statements = buildOffsetPageStatements(db, {
     source: {
-      selectSql: `SELECT p.id,p.user_id AS userId,NULLIF(TRIM(COALESCE(u.preferred_name,u.first_name,'')||' '||COALESCE(u.last_name,'')),'') AS displayName,p.attendance_mode AS attendanceMode,p.status,p.created_at AS createdAt,
+      selectSql: `SELECT p.id,p.user_id AS userId,${personNameSql("u")} AS displayName,p.attendance_mode AS attendanceMode,p.status,p.created_at AS createdAt,
  (SELECT json_object('calendarReplyDisposition',receipt.disposition,'calendarReplyReceivedAt',receipt.received_at,'calendarReplyResponse',receipt.response_status) FROM agenda_session_invitations invitation JOIN agenda_session_rsvp_receipts receipt ON receipt.invitation_id=invitation.id WHERE invitation.event_id=p.event_id AND invitation.occurrence_id=p.occurrence_id AND invitation.user_id=p.user_id ORDER BY receipt.decision_revision DESC LIMIT 1) AS calendarReplyJson`,
       fromSql: where,
       bindings,
@@ -135,7 +136,7 @@ export async function sessionAttendancePeople(db: DatabaseLike, eventId: string,
           : "firstObservedAt ASC";
   const attendees = await all(
     db,
-    `SELECT o.user_id AS userId,NULLIF(TRIM(COALESCE(u.preferred_name,u.first_name,'')||' '||COALESCE(u.last_name,'')),'') AS displayName,COUNT(*) AS observationCount,MIN(o.observed_at) AS firstObservedAt,MAX(o.observed_at) AS lastObservedAt ${from} GROUP BY o.user_id ORDER BY ${sort},o.user_id LIMIT ? OFFSET ?`,
+    `SELECT o.user_id AS userId,${personNameSql("u")} AS displayName,COUNT(*) AS observationCount,MIN(o.observed_at) AS firstObservedAt,MAX(o.observed_at) AS lastObservedAt ${from} GROUP BY o.user_id ORDER BY ${sort},o.user_id LIMIT ? OFFSET ?`,
     [...bindings, query.limit, query.offset],
   );
   return attendancePeopleResponseSchema.parse({

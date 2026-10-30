@@ -1,3 +1,4 @@
+import { personDisplayName } from "../../../../../shared/person-display";
 import { Markdown } from "../../../../ui/Markdown";
 import { RefreshNotice } from "../../../../components/RefreshNotice";
 import { useData } from "../../../../hooks/useData";
@@ -184,7 +185,10 @@ export function UserDetail({
   if (error && !user) return <ErrorAlert error={error} />;
   if (!user) return null;
 
-  const displayName = [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email;
+  const displayName = personDisplayName(
+    { firstName: user.first_name, lastName: user.last_name, preferredName: user.preferred_name },
+    user.email,
+  );
   /*
    * Who may change the photograph. The same reach the photo panel has
    * always had — staff who may write the record, and the record's own

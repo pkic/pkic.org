@@ -1,6 +1,7 @@
 import { batchFirst, batchRows } from "../../db/pagination";
 import type { D1StatementResult, DatabaseLike } from "../../types";
 import { eventReadIdSql, type EventReadSelection } from "../events/selection";
+import { personDisplayNameSql } from "../people/person-name-sql";
 
 /** Independent editor projections share one D1 transaction and network round trip. */
 export function prepareAgendaSnapshotRows(db: DatabaseLike, eventId: EventReadSelection) {
@@ -28,7 +29,7 @@ export function prepareAgendaSnapshotRows(db: DatabaseLike, eventId: EventReadSe
       .bind(...scope.bindings),
     db
       .prepare(
-        `SELECT member.user_id,COALESCE(user.preferred_name,user.first_name,'Staff') AS display_name,member.roles_json,member.available_from,member.available_until,member.max_minutes,member.seniority,member.attendance_mode FROM event_agenda_role_members member JOIN users user ON user.id=member.user_id WHERE member.event_id = ${scope.sql} LIMIT 200`,
+        `SELECT member.user_id,${personDisplayNameSql("user", "Staff")} AS display_name,member.roles_json,member.available_from,member.available_until,member.max_minutes,member.seniority,member.attendance_mode FROM event_agenda_role_members member JOIN users user ON user.id=member.user_id WHERE member.event_id = ${scope.sql} LIMIT 200`,
       )
       .bind(...scope.bindings),
     db

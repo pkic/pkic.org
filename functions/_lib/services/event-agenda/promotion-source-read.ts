@@ -11,7 +11,7 @@ import { preparePromotionReferralCreation } from "./promotion-referral";
 import { prepareAgendaSpeakers, decodeAgendaSpeakers, type AgendaSpeakerRow } from "./speaker-profiles";
 import { storedAgendaSnapshotSchema } from "../../../../assets/shared/schemas/event-agenda-stored";
 import { batchFirst, batchRows } from "../../db/pagination";
-import { personDisplayNameSql } from "./speaker-name";
+import { personDisplayNameSql } from "../people/person-name-sql";
 import { REGISTRATION_ORGANIZATION_SQL, REGISTRATION_JOB_TITLE_SQL } from "../registrations/selected-identity";
 import { AppError } from "../../errors";
 

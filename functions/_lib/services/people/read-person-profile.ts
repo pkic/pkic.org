@@ -10,7 +10,7 @@ import { memberProfileHref } from "../../../../assets/shared/member-profile-url"
 import { publicationAgendaPage } from "../../../../assets/shared/publication-agenda-routes";
 import type { AgendaSnapshot } from "../../../../assets/shared/schemas/event-agenda";
 import type { PersonProfileAudience, PersonProfileResponse } from "../../../../assets/shared/schemas/person-profile";
-import { personDisplayNameSql } from "../event-agenda/speaker-name";
+import { personDisplayNameSql } from "./person-name-sql";
 import { projectPublishedAgendas, readPublishedAgendasCrediting } from "../site-publication-agendas";
 import { publishedSpeakerHistory } from "../site-session-history";
 import { personProfile } from "../site-person-profile";
