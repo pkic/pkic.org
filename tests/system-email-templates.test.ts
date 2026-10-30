@@ -4,6 +4,11 @@ import { resetDb } from "./helpers/reset-db";
 import { queryAll } from "./helpers/context";
 import { resolveTemplate } from "../functions/_lib/email/templates";
 import { callSystem, callWithToken, createStaffSession, setupSystemTemplates } from "./helpers/system-email-templates";
+import { callApi } from "./helpers/app";
+import { createAdminSession } from "./helpers/auth";
+import { insertUser } from "./helpers/membership";
+import { REQUIRED_EMAIL_TEMPLATE_KEYS } from "../functions/_lib/email/required-templates";
+import { emailTemplateRequirementsResponseSchema } from "../assets/shared/schemas/email-templates";
 
 describe("system email template endpoints", () => {
   beforeEach(async () => {
@@ -88,6 +93,37 @@ describe("system email template endpoints", () => {
     expect(payload.templates.length).toBeGreaterThan(0);
     expect(payload.templates.every((template) => template.template_key.startsWith("registration_"))).toBe(true);
     expect((await callSystem("/api/v1/email/templates?templateKeyPrefix=bad%2A")).status).toBe(400);
+  });
+
+  it("lists the required templates that cannot send, only to template readers", async () => {
+    await setupSystemTemplates();
+    const missing = "user_magic_link",
+      empty = "wg-chair-membership-digest",
+      now = new Date().toISOString();
+    await env.DB.prepare("DELETE FROM email_template_versions WHERE template_key IN (?, ?)").bind(missing, empty).run();
+    await env.DB.prepare(
+      `INSERT INTO email_template_versions (id, template_key, version, body, content_type, checksum_sha256, status, created_at)
+       VALUES (?, ?, 1, '', 'markdown', '', 'active', ?)`,
+    )
+      .bind(crypto.randomUUID(), empty, now)
+      .run();
+    const reader = await createStaffSession("email-templates:read");
+
+    const response = await callApi(
+      env,
+      "/api/v1/email/templates/requirements",
+      { headers: { authorization: `Bearer ${reader}` } },
+      { maxRoundTrips: 2, mode: "fail" },
+    );
+    expect(response.status, await response.clone().text()).toBe(200);
+    const body = emailTemplateRequirementsResponseSchema.parse(await response.json());
+    expect(body.requiredCount).toBe(REQUIRED_EMAIL_TEMPLATE_KEYS.length);
+    expect(body.unavailable).toContainEqual({ templateKey: missing, code: "EMAIL_TEMPLATE_NOT_FOUND" });
+    expect(body.unavailable).toContainEqual({ templateKey: empty, code: "EMAIL_TEMPLATE_MISSING_BODY" });
+    expect(body.unavailable.map((row) => row.templateKey)).not.toContain("registration_confirm_email");
+
+    const outsider = await createAdminSession(env.DB, await insertUser(env.DB, "no-grant@example.test"), "no-grant");
+    expect((await callWithToken(outsider, "/api/v1/email/templates/requirements")).status).toBe(403);
   });
 
   it("renders preview HTML and text with seeded partials and layout", async () => {

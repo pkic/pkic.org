@@ -97,6 +97,35 @@ export const emailTemplatesListRouteSchema = {
   },
 };
 
+/** Why a template the platform sends from code cannot send. */
+export const emailTemplateUnavailableCodeSchema = z.enum(["EMAIL_TEMPLATE_NOT_FOUND", "EMAIL_TEMPLATE_MISSING_BODY"]);
+export type EmailTemplateUnavailableCode = z.infer<typeof emailTemplateUnavailableCodeSchema>;
+
+/** Readiness of the templates the platform needs: empty `unavailable` means every required template can send. */
+export const emailTemplateRequirementsResponseSchema = z
+  .object({
+    requiredCount: z.number().int().nonnegative(),
+    unavailable: z.array(z.object({ templateKey: z.string(), code: emailTemplateUnavailableCodeSchema }).strict()),
+  })
+  .strict();
+export type EmailTemplateRequirements = z.infer<typeof emailTemplateRequirementsResponseSchema>;
+
+export const emailTemplateRequirementsRouteSchema = {
+  tags: ["Email templates"],
+  summary: "Check required email templates",
+  "x-pkic-auth": { required: true, scopes: ["email-templates:read"] },
+  description:
+    "Lists the templates the platform sends from code that have no active version with a body. " +
+    "Messages for those templates fail in the outbox with the listed code until the template is activated.",
+  responses: {
+    "200": {
+      description: "Required email template readiness.",
+      content: { "application/json": { schema: emailTemplateRequirementsResponseSchema } },
+    },
+    ...emailTemplateReadAuthorizationResponses,
+  },
+};
+
 export const emailTemplateVersionSchema = z.object({
   content: z.string().min(1, "Body cannot be empty").max(500_000),
   subjectTemplate: z.string().trim().min(1).max(512).optional(),

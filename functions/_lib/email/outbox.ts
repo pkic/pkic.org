@@ -21,11 +21,17 @@ import {
 } from "./attachments";
 import { materializeQueuedCapabilityLinks } from "../auth/capability-links";
 import type { DatabaseLike, Env } from "../types";
-import type { EmailContentType, EmailMessageType } from "../../../assets/shared/schemas/email-templates";
+import {
+  emailTemplateUnavailableCodeSchema,
+  type EmailContentType,
+  type EmailMessageType,
+} from "../../../assets/shared/schemas/email-templates";
 import type { CalendarPayload } from "./outbox-queue";
 import { createDurableJobLease } from "../jobs/lease";
 import { resolveImageAttachmentFormat } from "../utils/image-format";
 import type { EmailOutboxStatus } from "../../../assets/shared/schemas/email-outbox";
+
+const EMAIL_TEMPLATE_UNAVAILABLE_CODES: ReadonlySet<string> = new Set(emailTemplateUnavailableCodeSchema.options);
 
 export * from "./outbox-queue";
 
@@ -396,6 +402,10 @@ async function processOutboxRow(
       await markOutboxDeliveryUnknown(db, row, processingToken, error, acceptedMessageId, resolvedTemplateVersion);
     } else {
       await markOutboxFailed(db, row, processingToken, error);
+      // A missing template is configuration, not a transient failure: say so in the logs as well as in last_error,
+      // and GET /api/v1/email/templates/requirements lists every required template in this state.
+      if (error instanceof AppError && EMAIL_TEMPLATE_UNAVAILABLE_CODES.has(error.code))
+        logError("EMAIL_TEMPLATE_UNAVAILABLE", { outboxId: row.id, templateKey: row.template_key, code: error.code });
     }
     throw error;
   }

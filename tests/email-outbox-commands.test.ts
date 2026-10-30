@@ -107,6 +107,32 @@ describe("canonical email-outbox commands", () => {
     );
   });
 
+  it("records the missing-template code on a row whose template is not configured, without contacting the provider", async () => {
+    const outboxId = await queueEmail(env.DB, {
+      eventId,
+      templateKey: "user_magic_link",
+      recipientEmail: "missing-template@example.test",
+      messageType: "transactional",
+      data: {},
+    });
+    const fetchMock = sendGridAccepted();
+    vi.stubGlobal("fetch", fetchMock);
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await processPendingOutbox(env.DB, workerEnv, 10);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    const [row] = await queryAll<{ status: string; last_error: string }>(
+      env.DB,
+      "SELECT status, last_error FROM email_outbox WHERE id = ?",
+      [outboxId],
+    );
+    expect(row?.status).toBe("retrying");
+    expect(row?.last_error).toMatch(/^EMAIL_TEMPLATE_NOT_FOUND: /);
+    expect(logged.mock.calls.flat().join(" ")).toContain("EMAIL_TEMPLATE_UNAVAILABLE");
+    logged.mockRestore();
+  });
+
   it("rejects empty reset selections before any D1 or provider side effect", async () => {
     const fetchMock = sendGridAccepted();
     vi.stubGlobal("fetch", fetchMock);

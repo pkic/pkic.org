@@ -226,6 +226,28 @@ Best regards,
 
 PKI Consortium`,
   },
+  // Weekly working group membership changes for the group's chairs.
+  {
+    key: "wg-chair-membership-digest",
+    subjectTemplate: "{{workingGroupName}}: weekly membership update",
+    contentType: "markdown",
+    content: `Hello {{recipientName}},
+
+Here are last week's membership changes in **{{workingGroupName}}**, which you lead as {{recipientRole}}.
+
+{{#if hasJoined}}**Joined**
+
+{{#each joined}}- {{name}}{{#if organizationName}} ({{organizationName}}){{/if}}
+{{/each}}
+{{/if}}{{#if hasLeft}}**Left**
+
+{{#each left}}- {{name}}{{#if organizationName}} ({{organizationName}}){{/if}}
+{{/each}}
+{{/if}}
+You can turn off this weekly update in your notification settings.
+
+The PKI Consortium team`,
+  },
   {
     key: "partial_membership_review_summary",
     subjectTemplate: null,
