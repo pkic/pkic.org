@@ -481,9 +481,6 @@ async function fillProposal(
     await panelistCard
       .locator('input[name="speaker.1.role"][value="panelist"]')
       .evaluate((el) => (el as HTMLInputElement).click());
-    await panelistCard
-      .getByRole("textbox", { name: "Bio", exact: true })
-      .fill("Panelist biography with enough detail to satisfy validation and represent a real panel participant.");
   }
 }
 

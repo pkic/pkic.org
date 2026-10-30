@@ -246,7 +246,6 @@ test("guest event entry creates a nonmember affiliation and an invited known per
     await otherCard.getByLabel("First name", { exact: true }).fill("Known");
     await otherCard.getByLabel("Last name", { exact: true }).fill("Invitee");
     await otherCard.getByLabel("Email", { exact: true }).fill(knownEmail);
-    await otherCard.getByRole("textbox", { name: "Bio", exact: true }).fill(biography);
     await expect(otherCard.getByRole("combobox")).toHaveCount(0);
     expect(catalogs).toEqual([]);
     const since = await capturedEmailCount();

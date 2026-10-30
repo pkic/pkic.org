@@ -169,7 +169,6 @@ test("terms-first proposals and invited speakers verify identity without duplica
     await otherCard.getByLabel("First name", { exact: true }).fill("Guest");
     await otherCard.getByLabel("Last name", { exact: true }).fill("Speaker");
     await otherCard.getByLabel("Email", { exact: true }).fill(guest.email);
-    await otherCard.getByRole("textbox", { name: "Bio", exact: true }).fill(BIO);
     await expect(otherCard.getByRole("combobox")).toHaveCount(0);
     expect(catalogRequests).toHaveLength(beforeTypedGuest);
     const submitted = ownerPage.waitForResponse(
