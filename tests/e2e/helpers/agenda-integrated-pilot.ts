@@ -34,7 +34,10 @@ import {
   coSpeakerInviteSchema,
   coSpeakerInviteResponseSchema,
 } from "../../../assets/shared/schemas/proposal-management";
-import { eventProposalProofVerifyResponseSchema } from "../../../assets/shared/schemas/event-proposal-proof";
+import {
+  eventProposalProofStartResponseSchema,
+  eventProposalProofVerifyResponseSchema,
+} from "../../../assets/shared/schemas/event-proposal-proof";
 import { userCreateSchema, userCreateResponseSchema } from "../../../assets/shared/schemas/user-create";
 import {
   userRolesListResponseSchema,
@@ -228,20 +231,24 @@ export async function preparePilotSpeaker(staff: Page, speaker: Page, info: Test
   await identity.getByRole("radio", { name: EMAIL_FIRST_COPY.speaker.personal.title, exact: true }).check();
   await identity.getByRole("textbox", { name: EMAIL_FIRST_COPY.speaker.personal.label, exact: true }).fill(email);
   const proofSince = await capturedEmailCount();
-  await identity.getByRole("button", { name: EMAIL_FIRST_COPY.speaker.personal.action, exact: true }).click();
-  const proofMail = await waitForCapturedEmail(email, "Verify your email for", { since: proofSince });
-  // The link carries the terms agreed before it was sent: neither page asks for them again.
-  const verifying = speaker.waitForResponse(
-    (response) =>
-      new URL(response.url()).pathname === `/api/v1/events/${sponsorEventSlug}/proposals/proof/verify` &&
-      response.request().method() === "POST",
+  const proofPath = `/api/v1/events/${sponsorEventSlug}/proposals/proof`;
+  const starting = speaker.waitForResponse(
+    (response) => new URL(response.url()).pathname === proofPath && response.request().method() === "POST",
   );
-  await speaker.goto(extractEmailUrl(proofMail, "/propose/"));
+  const verifying = speaker.waitForResponse(
+    (response) => new URL(response.url()).pathname === `${proofPath}/verify` && response.request().method() === "POST",
+  );
+  await identity.getByRole("button", { name: EMAIL_FIRST_COPY.speaker.personal.action, exact: true }).click();
+  // The invitation link already proved the invited mailbox: the proof starts verified, without a second email.
+  const started = await starting;
+  expect(started.status(), await started.text()).toBe(200);
+  expect(eventProposalProofStartResponseSchema.parse(await started.json()).status).toBe("verified");
+  const verified = await verifying;
   await expect(speaker.getByRole("button", { name: "Save speaker identity", exact: true })).toBeVisible();
+  expect(await capturedEmailCount()).toBe(proofSince);
   const returnedToken = new URL(speaker.url()).searchParams.get("token");
   if (!returnedToken) throw new Error("Verified invitation must resume its own speaker capability");
   path = `/api/v1/proposals/speakers/access/${encodeURIComponent(returnedToken)}`;
-  const verified = await verifying;
   expect(verified.status(), await verified.text()).toBe(200);
   expect(eventProposalProofVerifyResponseSchema.parse(await verified.json())).toMatchObject({
     status: "ready",
