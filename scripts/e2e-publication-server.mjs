@@ -18,7 +18,23 @@ let worker;
 let switching = false;
 let closing = false;
 
-function start(directory) {
+/**
+ * Wrangler otherwise probes 9229-9239 for its devtools inspector. Every Worker on the machine probes that same short
+ * range, so one that restarts while another starts can pick the port the other then binds, and fail to start at all.
+ * A port the system hands out is outside that range.
+ */
+async function inspectorPort() {
+  const probe = createServer();
+  probe.listen(0, "127.0.0.1");
+  await once(probe, "listening");
+  const { port: free } = probe.address();
+  probe.close();
+  await once(probe, "close");
+  return free;
+}
+
+async function start(directory) {
+  const inspector = await inspectorPort();
   worker = spawn(
     "pnpm",
     [
@@ -28,6 +44,7 @@ function start(directory) {
       "--config=dist/pkic_org_base/wrangler.json",
       `--assets=${directory}`,
       `--port=${port}`,
+      `--inspector-port=${inspector}`,
       `--persist-to=${state}`,
       `--env-file=${environmentFile}`,
       `--log-level=${process.env.E2E_WRANGLER_LOG_LEVEL ?? (process.env.CI ? "warn" : "info")}`,
@@ -81,7 +98,7 @@ const control = createServer(async (request, response) => {
     );
     if (release.environment !== "local") throw new Error("Only local test releases may be activated");
     await stop();
-    start(selected);
+    await start(selected);
     response
       .writeHead(202, { "content-type": "application/json" })
       .end(JSON.stringify({ snapshotId: release.snapshotId }));
@@ -102,7 +119,7 @@ await writeFile(
     token,
   }),
 );
-start(resolve(state, "site"));
+await start(resolve(state, "site"));
 
 for (const signal of ["SIGINT", "SIGTERM"]) {
   process.on(signal, async () => {
