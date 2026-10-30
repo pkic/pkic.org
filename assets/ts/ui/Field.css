@@ -41,7 +41,8 @@
     border: 0;
     margin: 0;
     padding: 0;
-    min-width: 0;
+    /* Worded as `.pk-fieldset` words it, so the two resets compress as one. */
+    min-inline-size: 0;
   }
 
   .pk-field--group > .pk-field__label {
@@ -121,9 +122,12 @@
     --state: var(--pk-warn);
     --state-ink: var(--pk-warn-ink);
   }
+  /* An invalid control keeps its state while focused: the ring takes the
+     danger tone instead of drawing the accent around a red border. */
   .pk-field--invalid {
     --state: var(--pk-danger);
     --state-ink: var(--pk-danger-ink);
+    --pk-focus: 0 0 0 2px var(--pk-surface), 0 0 0 4px var(--state);
   }
 
   /* ── Controls ───────────────────────────────────────────────────────── */
@@ -214,8 +218,8 @@
     line-height: 1.4;
   }
 
+  /* A drawn box carries no text, so it needs no font of its own. */
   .pk-check__input {
-    font: inherit;
     appearance: none;
     margin: 0;
     flex: none;
