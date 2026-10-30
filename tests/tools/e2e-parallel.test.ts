@@ -8,6 +8,7 @@ import {
   releaseKey,
   shardPlan,
   shardPublicationEnvironment,
+  shardPublicationOutputRoot,
 } from "../../scripts/e2e-parallel.mjs";
 
 describe("the parallel e2e runner's plan", () => {
@@ -51,22 +52,41 @@ describe("the parallel e2e runner's plan", () => {
       const checkoutCache = path.join(root, "checkout-cache");
       mkdirSync(path.join(checkoutCache, "publication"), { recursive: true });
       writeFileSync(path.join(checkoutCache, "publication", "entry"), "cached");
+      const outputs = path.join(root, "outputs");
       const [first, second] = ["shard-1", "shard-2"].map((name) =>
-        shardPublicationEnvironment(path.join(root, name), checkoutCache),
+        shardPublicationEnvironment(path.join(root, name), path.join(outputs, name), checkoutCache),
       );
       expect(first.PKIC_PUBLICATION_OUTPUT_ROOT).not.toBe(second.PKIC_PUBLICATION_OUTPUT_ROOT);
       expect(first.PKIC_PUBLICATION_CACHE_ROOT).not.toBe(second.PKIC_PUBLICATION_CACHE_ROOT);
       for (const environment of [first, second]) {
-        expect(environment.PKIC_PUBLICATION_OUTPUT_ROOT.startsWith(root)).toBe(true);
+        expect(environment.PKIC_PUBLICATION_OUTPUT_ROOT.startsWith(outputs)).toBe(true);
         expect(readFileSync(path.join(environment.PKIC_PUBLICATION_CACHE_ROOT, "publication", "entry"), "utf8")).toBe(
           "cached",
         );
       }
-      expect(shardPublicationEnvironment(path.join(root, "shard-3"), path.join(root, "absent"))).toMatchObject({
+      expect(
+        shardPublicationEnvironment(
+          path.join(root, "shard-3"),
+          path.join(outputs, "shard-3"),
+          path.join(root, "absent"),
+        ),
+      ).toMatchObject({
         PKIC_PUBLICATION_CACHE_ROOT: path.join(root, "shard-3", "publication-cache"),
       });
     } finally {
       rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("builds every run's publications inside the checkout, where Astro keeps each prerender step apart", () => {
+    const checkout = mkdtempSync(path.join(tmpdir(), "pkic-e2e-parallel-checkout."));
+    try {
+      const [first, second] = [shardPublicationOutputRoot(checkout), shardPublicationOutputRoot(checkout)];
+      expect(first).not.toBe(second);
+      for (const output of [first, second])
+        expect(path.dirname(output)).toBe(path.join(checkout, ".cache", "e2e-publication"));
+    } finally {
+      rmSync(checkout, { recursive: true, force: true });
     }
   });
 

@@ -67,16 +67,27 @@ export function shardPlan(count, basePort) {
  * Specs publish the static site while the shards run side by side, so each shard builds into its
  * own output and cache: a shared one lets one shard's build delete files another is still copying.
  * Its cache starts as a clone of the checkout's, so the first build stays incremental.
+ *
+ * The output must lie inside the checkout. Astro bundles its prerender step beside an `outDir` within the
+ * working directory, but for one outside it falls back to the checkout's own `.astro/.prerender`, which every
+ * shard then shares and empties under the others; on another volume its final rename fails outright (EXDEV).
  */
-export function shardPublicationEnvironment(state, cacheRoot = publicationCacheRoot()) {
+export function shardPublicationEnvironment(state, output, cacheRoot = publicationCacheRoot()) {
   const cache = path.join(state, "publication-cache");
   const seed = path.join(cacheRoot, "publication");
   if (existsSync(seed))
     cpSync(seed, path.join(cache, "publication"), { recursive: true, mode: constants.COPYFILE_FICLONE });
   return {
-    PKIC_PUBLICATION_OUTPUT_ROOT: path.join(state, "publication-output"),
+    PKIC_PUBLICATION_OUTPUT_ROOT: output,
     PKIC_PUBLICATION_CACHE_ROOT: cache,
   };
+}
+
+/** Where a run's shards build their site publications: in the checkout, removed with the run. */
+export function shardPublicationOutputRoot(checkout = process.cwd()) {
+  const parent = path.join(checkout, ".cache", "e2e-publication");
+  mkdirSync(parent, { recursive: true });
+  return mkdtempSync(path.join(parent, "run."));
 }
 
 /** A shard is a Worker, its database and a browser; budget this much memory for each. */
@@ -107,7 +118,11 @@ function run() {
   const root = mkdtempSync(path.join(process.env.E2E_STATE_ROOT ?? tmpdir(), "pkic-e2e-shards."));
   const releases = path.join(process.env.E2E_STATE_ROOT ?? tmpdir(), "pkic-e2e-releases");
   const prepared = keptRelease ?? path.join(releases, releaseKey());
-  const cleanup = () => rmSync(root, { recursive: true, force: true });
+  const outputs = shardPublicationOutputRoot();
+  const cleanup = () => {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(outputs, { recursive: true, force: true });
+  };
   process.on("exit", cleanup);
   mkdirSync("test-results", { recursive: true });
   for (const stale of [
@@ -153,7 +168,7 @@ function run() {
               E2E_SHARDED: "1",
               E2E_SENDGRID_URL_FILE: path.join(root, `${plan.name}.sendgrid-url`),
               E2E_STRIPE_URL_FILE: path.join(root, `${plan.name}.stripe-url`),
-              ...shardPublicationEnvironment(state),
+              ...shardPublicationEnvironment(state, path.join(outputs, plan.name)),
             },
             stdio: ["ignore", "pipe", "pipe"],
           },
