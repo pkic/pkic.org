@@ -17,6 +17,7 @@ import {
   OWN_EMAIL_ADDRESS_LIMIT,
   OWN_EMAIL_ALREADY_ON_ACCOUNT,
   OWN_EMAIL_ALREADY_ON_ACCOUNT_MESSAGES,
+  ownEmailInUseMessage,
   type OwnEmailHolding,
   type OwnEmailAddress,
   type OwnEmailAddressUpdate,
@@ -36,6 +37,8 @@ import { normalizeEmail } from "../validation";
 import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange, prepareAuditLog } from "./audit";
 import {
   ADDRESS_SORT_EXPRESSIONS,
+  addressUsedByJsonSql,
+  decodeAddressUsedBy,
   OWN_ADDRESSES_SQL,
   OWN_ADDRESS_COLUMNS,
   readOwnEmailAddress,
@@ -299,24 +302,16 @@ export async function removeOwnEmailAddress(
   db: DatabaseLike,
   input: { userId: string; emailId: string },
 ): Promise<void> {
-  const address = await first<{ email: string; organization_name: string | null }>(
+  const address = await first<{ email: string; used_by_json: string }>(
     db,
-    `SELECT address.email,
-            (SELECT organization.name FROM identities identity
-               JOIN organizations organization ON organization.id = identity.organization_id
-              WHERE identity.user_id = address.user_id AND identity.ended_at IS NULL
-                AND (identity.email_id = address.id OR identity.id = address.identity_id)
-              LIMIT 1) AS organization_name
+    `SELECT address.email, ${addressUsedByJsonSql("address")} AS used_by_json
        FROM user_emails address WHERE address.id = ? AND address.user_id = ?`,
     [input.emailId, input.userId],
   );
   if (!address) throw new AppError(404, "EMAIL_NOT_FOUND", "Email address not found");
-  if (address.organization_name)
-    throw new AppError(
-      409,
-      "USER_EMAIL_IN_USE",
-      `This address identifies you at ${address.organization_name}; end that relationship first`,
-    );
+  const usedBy = decodeAddressUsedBy(address.used_by_json);
+  if (usedBy.length)
+    throw new AppError(409, "USER_EMAIL_IN_USE", ownEmailInUseMessage(usedBy.map((organization) => organization.name)));
   const at = nowIso();
   try {
     await db.batch([

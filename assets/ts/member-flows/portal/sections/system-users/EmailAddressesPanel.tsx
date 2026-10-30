@@ -17,6 +17,7 @@ import {
   ownEmailVerificationSentResponseSchema,
 } from "../../../../../shared/schemas/own-email-addresses";
 import { verificationLinkNotice } from "../../../../components/identities/verification-link-notice";
+import { formatConjunction } from "../../../../../shared/format-list";
 import { userEmailsListResponseSchema } from "../../../../../shared/schemas/user-emails";
 import { confirmAction } from "../../../../components/ConfirmDialog";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
@@ -43,6 +44,18 @@ interface AddressRow {
   primary: boolean;
   /** Whether the address is proven; null where the list does not say. */
   verified: boolean | null;
+  /** Organizations whose active identity uses the address; it cannot be removed while any does. */
+  usedBy: string[];
+  /** Whether the address may sign in; null where the list does not say. */
+  signInEnabled: boolean | null;
+}
+
+function rowMeta(address: AddressRow): string | undefined {
+  const parts = [
+    ...(address.primary ? ["Primary"] : address.verified === false ? ["Not verified yet"] : []),
+    ...(address.usedBy.length ? [`Used by ${formatConjunction(address.usedBy, undefined)}`] : []),
+  ];
+  return parts.length ? parts.join(" · ") : undefined;
 }
 
 function failure(caught: unknown, fallback: string): string {
@@ -69,12 +82,21 @@ export function EmailAddressesPanel({
         email: address.email,
         primary: address.primary,
         verified: Boolean(address.verifiedAt),
+        usedBy: address.usedBy.map((organization) => organization.name),
+        signInEnabled: address.signInEnabled,
       }));
     }
     const response = await getJson(endpoint, userEmailsListResponseSchema);
     return [
-      { id: null, email: primaryEmail, primary: true, verified: null },
-      ...response.emails.map((address) => ({ id: address.id, email: address.email, primary: false, verified: null })),
+      { id: null, email: primaryEmail, primary: true, verified: null, usedBy: [], signInEnabled: null },
+      ...response.emails.map((address) => ({
+        id: address.id,
+        email: address.email,
+        primary: false,
+        verified: null,
+        usedBy: [],
+        signInEnabled: null,
+      })),
     ];
   }, [endpoint, isSelf, primaryEmail]);
 
@@ -83,6 +105,18 @@ export function EmailAddressesPanel({
   }
 
   async function makePrimary(address: AddressRow): Promise<void> {
+    const current = addresses.find((row) => row.primary);
+    const confirmed = await confirmAction({
+      title: `Make ${address.email} your primary address?`,
+      consequences: [
+        "Your account email goes to this address, and you sign in with it.",
+        ...(current ? [`${current.email} stays on your account as an added address.`] : []),
+        "Each organization you represent keeps the address it uses.",
+      ],
+      confirmLabel: "Make primary",
+      tone: "primary",
+    });
+    if (!confirmed) return;
     try {
       await patchJson(
         addressEndpoint(address),
@@ -114,9 +148,11 @@ export function EmailAddressesPanel({
   async function remove(address: AddressRow): Promise<void> {
     const confirmed = await confirmAction({
       title: `Remove ${address.email}?`,
-      body: isSelf
-        ? "You no longer sign in or receive mail with this address."
-        : "This address is no longer associated with this account.",
+      body: !isSelf
+        ? "This address is no longer associated with this account."
+        : address.signInEnabled
+          ? "You can no longer sign in with this address."
+          : "This address is no longer part of your account.",
       confirmLabel: "Remove address",
       tone: "danger",
     });
@@ -140,7 +176,15 @@ export function EmailAddressesPanel({
           : { id: "resend", label: "Resend verification", onSelect: () => void resend(address) },
       );
     }
-    items.push({ id: "remove", label: "Remove", onSelect: () => void remove(address) });
+    // An address an organization identity uses stays until that representation ends; the row says which.
+    items.push({
+      id: "remove",
+      label: "Remove",
+      danger: true,
+      separatorBefore: items.length > 0,
+      disabled: address.usedBy.length > 0,
+      onSelect: () => void remove(address),
+    });
     return items;
   }
 
@@ -181,7 +225,7 @@ export function EmailAddressesPanel({
             {addresses.map((address) => (
               <RowListItem
                 key={address.id ?? "primary"}
-                meta={address.primary ? "Primary" : address.verified === false ? "Not verified yet" : undefined}
+                meta={rowMeta(address)}
                 end={<RowActions subject={address.email} actions={actions(address)} />}
               >
                 <span class="pk-email-address">

@@ -9,6 +9,7 @@
  * the organization its domain belongs to through the shared domain rule.
  */
 import { z } from "zod";
+import { formatConjunction } from "../format-list";
 import { workEmailStepSchema } from "./work-email";
 import { jsonErrorResponse, magicLinkVerifySchema, successResponseSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
@@ -42,14 +43,25 @@ export const OWN_EMAIL_ALREADY_ON_ACCOUNT_MESSAGES = {
 } as const;
 export type OwnEmailHolding = keyof typeof OWN_EMAIL_ALREADY_ON_ACCOUNT_MESSAGES;
 
+/** Why an address an organization identity uses cannot be removed, naming every such organization. */
+export function ownEmailInUseMessage(organizationNames: readonly string[]): string {
+  return `This address identifies you at ${formatConjunction(organizationNames)}. End ${
+    organizationNames.length === 1 ? "that representation" : "those representations"
+  } first.`;
+}
+
+const organizationReferenceSchema = z.object({ id: databaseIdSchema, name: z.string() });
+
 /**
  * One of the signed-in person's addresses: the profile's address shape (the
  * primary address has no id of its own; `verifiedAt` is null while the
- * address awaits verification), plus when it was added.
+ * address awaits verification), plus when it was added and the organizations
+ * whose active identity uses it.
  */
 export const ownEmailAddressSchema = verifiedEmailIdentitySchema.extend({
   createdAt: z.string(),
   signInEnabled: z.boolean(),
+  usedBy: z.array(organizationReferenceSchema).default([]),
 });
 export type OwnEmailAddress = z.infer<typeof ownEmailAddressSchema>;
 
@@ -82,8 +94,6 @@ export type OwnEmailAddressUpdate = z.infer<typeof ownEmailAddressUpdateSchema>;
 export const ownEmailAddressVerificationSchema = magicLinkVerifySchema.extend({
   consolidateUnverifiedAccount: z.boolean().optional(),
 });
-
-const organizationReferenceSchema = z.object({ id: databaseIdSchema, name: z.string() });
 
 /** What an opened link names, before anything changes. */
 export const ownEmailAddressVerificationPreviewResponseSchema = z.object({

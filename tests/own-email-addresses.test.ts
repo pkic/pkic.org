@@ -11,6 +11,7 @@ import {
   EMAIL_VERIFIED_ELSEWHERE,
   OWN_EMAIL_ALREADY_ON_ACCOUNT,
   OWN_EMAIL_ALREADY_ON_ACCOUNT_MESSAGES,
+  ownEmailInUseMessage,
   ownEmailAddressAddSchema,
   ownEmailVerificationRequestedResponseSchema,
   ownEmailVerificationSentResponseSchema,
@@ -761,9 +762,31 @@ describe("a person's own email addresses", () => {
     const spare = await add(token, "eva@spare.example");
     await verify(await verificationToken(spare.email));
 
+    // A second organization identity follows the same address: both are named, before and on refusal.
+    const secondId = await insertOrganization(env.DB, "Another Follower Co");
+    const at = nowIso();
+    await env.DB.prepare(
+      `INSERT INTO identities (id, user_id, organization_id, email_id, source, show_on_organization_profile, invited_at,
+         started_at, created_at, updated_at)
+       SELECT ?, user_id, ?, id, 'account', 0, ?, ?, ?, ? FROM user_emails WHERE id = ?`,
+    )
+      .bind(crypto.randomUUID(), secondId, at, at, at, at, work.id)
+      .run();
+    const listed = ownEmailAddressesListResponseSchema.parse(await (await call(token, "")).json());
+    expect(listed.emails.find((address) => address.id === work.id)?.usedBy.map((used) => used.name)).toEqual([
+      "Another Follower Co",
+      "Open Claimed Co",
+    ]);
+    expect(listed.emails.find((address) => address.id === spare.id)?.usedBy).toEqual([]);
+
     const inUse = await call(token, `/${work.id}`, "DELETE");
     expect(inUse.status).toBe(409);
-    expect(((await inUse.json()) as { error: { code: string } }).error.code).toBe("USER_EMAIL_IN_USE");
+    expect(await inUse.json()).toMatchObject({
+      error: {
+        code: "USER_EMAIL_IN_USE",
+        message: ownEmailInUseMessage(["Another Follower Co", "Open Claimed Co"]),
+      },
+    });
 
     const removed = await call(token, `/${spare.id}`, "DELETE");
     expect(removed.status, await removed.clone().text()).toBe(200);

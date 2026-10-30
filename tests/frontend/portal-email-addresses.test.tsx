@@ -60,6 +60,7 @@ const addresses = ownEmailAddressesListResponseSchema.parse({
       verificationMethod: "magic_link",
       identityId: null,
       createdAt: "2026-09-01T00:00:00.000Z",
+      usedBy: [{ id: aliasId, name: "Work Co" }],
     },
     {
       id: waitingId,
@@ -152,6 +153,24 @@ describe("email addresses on the user record", () => {
       ),
     ).toBe(false);
 
+    // The row says which organization uses the address, and removing it waits until that ends.
+    expect(host.textContent).toContain("Used by Work Co");
+    await press(host, "Actions for ana@work.example");
+    const remove = Array.from(host.querySelectorAll<HTMLElement>('[role="menuitem"]')).find(
+      (item) => item.textContent === "Remove",
+    );
+    expect(remove?.getAttribute("aria-disabled") ?? String(remove?.hasAttribute("disabled"))).toBe("true");
+
+    // Making an address primary is confirmed with what changes; declining changes nothing.
+    confirmAction.mockResolvedValueOnce(false);
+    await press(host, "Make primary");
+    expect(confirmAction).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        title: "Make ana@work.example your primary address?",
+        consequences: expect.arrayContaining(["ana@gmail.com stays on your account as an added address."]),
+      }),
+    );
+    expect(writes("PATCH")).toEqual([]);
     await press(host, "Actions for ana@work.example");
     await press(host, "Make primary");
     const [primary] = writes("PATCH");
@@ -168,7 +187,7 @@ describe("email addresses on the user record", () => {
 
     await press(host, "Actions for ana@waiting.example");
     await press(host, "Remove");
-    expect(confirmAction).toHaveBeenCalledTimes(1);
+    expect(confirmAction).toHaveBeenCalledTimes(3);
     expect(writes("DELETE").map((request) => request.path)).toEqual([`/api/v1/users/current/emails/${waitingId}`]);
   });
 
