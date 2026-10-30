@@ -21,6 +21,8 @@ import { Alert } from "../../ui/Alert";
 import { Button } from "../../ui/Button";
 import { DescriptionList } from "../../ui/DescriptionList";
 import { EmailAddressCreateForm } from "./EmailAddressCreateForm";
+import { verificationLinkNotice } from "./verification-link-notice";
+import type { ImmediateEmailDelivery } from "../../../shared/schemas/email-outbox";
 
 const PREVIEW_ENDPOINT = "/api/v1/users/current/identities/preview";
 type Resolved = z.infer<typeof identityAffiliationPreviewResponseSchema>;
@@ -40,6 +42,7 @@ export function SelfIdentityCreateForm({
   const [resolved, setResolved] = useState<Resolved | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [delivery, setDelivery] = useState<ImmediateEmailDelivery>("sent");
   useEffect(() => onBusy?.(busy), [busy]);
   useEffect(
     () =>
@@ -96,7 +99,7 @@ export function SelfIdentityCreateForm({
             setEmail(existing.email);
             if (existing.verifiedAt) await resolve(existing);
             else {
-              await postJson(
+              const requested = await postJson(
                 OWN_EMAILS_ENDPOINT,
                 ownRepresentationEmailAddSchema.parse({
                   email: value,
@@ -105,6 +108,7 @@ export function SelfIdentityCreateForm({
                 }),
                 ownEmailVerificationRequestedResponseSchema,
               );
+              setDelivery(requested.delivery);
               setStage("waiting");
             }
             return true;
@@ -112,8 +116,9 @@ export function SelfIdentityCreateForm({
             if (handled) setBusy(false);
           }
         }}
-        onAdded={(value) => {
-          setEmail(value);
+        onAdded={(added) => {
+          setEmail(added.email);
+          setDelivery(added.delivery ?? "sent");
           setStage("waiting");
           setBusy(false);
         }}
@@ -142,9 +147,13 @@ export function SelfIdentityCreateForm({
           }
         }}
       >
-        <p>
-          Open the verification email sent to <strong>{email}</strong> and confirm the address. Then return here.
-        </p>
+        {delivery === "sent" ? (
+          <p>
+            Open the verification email sent to <strong>{email}</strong> and confirm the address. Then return here.
+          </p>
+        ) : (
+          <Alert tone="warn">{verificationLinkNotice(email, delivery).message}</Alert>
+        )}
         {error && <Alert tone="danger">{error}</Alert>}
         <Button
           variant="link"
@@ -153,7 +162,7 @@ export function SelfIdentityCreateForm({
             setBusy(true);
             setError("");
             try {
-              await postJson(
+              const requested = await postJson(
                 OWN_EMAILS_ENDPOINT,
                 ownRepresentationEmailAddSchema.parse({
                   email,
@@ -162,6 +171,7 @@ export function SelfIdentityCreateForm({
                 }),
                 ownEmailVerificationRequestedResponseSchema,
               );
+              setDelivery(requested.delivery);
             } catch (cause) {
               setError(proofForm.refuse(cause));
             } finally {

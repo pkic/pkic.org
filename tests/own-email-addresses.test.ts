@@ -5,7 +5,7 @@
  * its domain belongs to through the shared rule.
  */
 import { env } from "cloudflare:workers";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { affiliationOfferResponseSchema } from "../assets/shared/schemas/affiliation-offer";
 import {
   EMAIL_VERIFIED_ELSEWHERE,
@@ -13,6 +13,7 @@ import {
   OWN_EMAIL_ALREADY_ON_ACCOUNT_MESSAGES,
   ownEmailAddressAddSchema,
   ownEmailVerificationRequestedResponseSchema,
+  ownEmailVerificationSentResponseSchema,
   ownEmailAddressResponseSchema,
   ownEmailAddressUpdateSchema,
   ownEmailAddressVerificationPreviewResponseSchema,
@@ -21,6 +22,7 @@ import {
   ownEmailAddressesListResponseSchema,
 } from "../assets/shared/schemas/own-email-addresses";
 import type { Env } from "../functions/_lib/types";
+import { activateTemplateVersion, createTemplateVersion } from "../functions/_lib/email/templates";
 import { findOrCreateUser } from "../functions/_lib/services/users";
 import { createRegistration, changeRegistrationEmail } from "../functions/_lib/services/registrations";
 import { getRegistrationByManageToken } from "../functions/_lib/services/registrations/queries";
@@ -807,5 +809,62 @@ describe("a person's own email addresses", () => {
       .run();
     await add(account.token, "gil@waiting.example");
     expect((await verify(await verificationToken("gil@waiting.example"))).status).toBe(200);
+  });
+
+  describe("verification link delivery", () => {
+    afterEach(() => vi.unstubAllGlobals());
+
+    async function seedVerificationTemplates(): Promise<void> {
+      for (const [templateKey, content] of [
+        ["email_layout", "{{{body_html}}}"],
+        ["user_email_verification", "Confirm {{email}}: {{verificationUrl}}"],
+      ]) {
+        const version = await createTemplateVersion(env.DB, { templateKey, content, createdByUserId: null });
+        await activateTemplateVersion(env.DB, { templateKey, version: version.version });
+      }
+    }
+
+    it("reports a link the provider accepted as sent, for a new and a resent link", async () => {
+      await seedVerificationTemplates();
+      environment = {
+        ...environment,
+        SENDGRID_API_KEY: "sendgrid-test-key",
+        SENDGRID_API_BASE: "https://sendgrid.test/mail/send",
+      };
+      const fetchMock = vi.fn(async () => new Response(null, { status: 202, headers: { "x-message-id": "sent" } }));
+      vi.stubGlobal("fetch", fetchMock);
+      const account = await signedIn("hal@owner.example");
+      const requested = await call(account.token, "", "POST", { email: "hal@work.example" });
+      expect(ownEmailVerificationRequestedResponseSchema.parse(await requested.json()).delivery).toBe("sent");
+
+      const id = crypto.randomUUID();
+      await env.DB.prepare("INSERT INTO user_emails(id,user_id,email,normalized_email,created_at) VALUES(?,?,?,?,?)")
+        .bind(id, account.userId, "hal@legacy.example", "hal@legacy.example", nowIso())
+        .run();
+      const resent = await call(account.token, `/${id}/verification`, "POST");
+      expect(resent.status).toBe(202);
+      expect(ownEmailVerificationSentResponseSchema.parse(await resent.json())).toEqual({ delivery: "sent" });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it("reports a link the provider refused as delayed and leaves it to the outbox retry", async () => {
+      await seedVerificationTemplates();
+      environment = {
+        ...environment,
+        SENDGRID_API_KEY: "sendgrid-test-key",
+        SENDGRID_API_BASE: "https://sendgrid.test/mail/send",
+      };
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => new Response(null, { status: 503 })),
+      );
+      const account = await signedIn("ivy@owner.example");
+      const requested = await call(account.token, "", "POST", { email: "ivy@work.example" });
+      expect(requested.status).toBe(202);
+      expect(ownEmailVerificationRequestedResponseSchema.parse(await requested.json()).delivery).toBe("delayed");
+      expect(
+        await queryAll(env.DB, "SELECT status FROM email_outbox WHERE recipient_email = ?", ["ivy@work.example"]),
+      ).toEqual([{ status: "retrying" }]);
+    });
   });
 });

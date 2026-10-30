@@ -29,7 +29,7 @@ import {
 import type { CalendarPayload } from "./outbox-queue";
 import { createDurableJobLease } from "../jobs/lease";
 import { resolveImageAttachmentFormat } from "../utils/image-format";
-import type { EmailOutboxStatus } from "../../../assets/shared/schemas/email-outbox";
+import type { EmailOutboxStatus, ImmediateEmailDelivery } from "../../../assets/shared/schemas/email-outbox";
 
 const EMAIL_TEMPLATE_UNAVAILABLE_CODES: ReadonlySet<string> = new Set(emailTemplateUnavailableCodeSchema.options);
 
@@ -411,22 +411,45 @@ async function processOutboxRow(
   }
 }
 
-export async function processOutboxById(db: DatabaseLike, env: Env, outboxId: string): Promise<void> {
-  if (getAvailability(env, Date.now(), "email").mode !== "normal") return;
+/** Sends one queued message now; true when the provider accepted it during this call. */
+export async function processOutboxById(db: DatabaseLike, env: Env, outboxId: string): Promise<boolean> {
+  if (getAvailability(env, Date.now(), "email").mode !== "normal") return false;
   const row = await first<OutboxRow>(db, `SELECT ${OUTBOX_ROW_COLUMNS} FROM email_outbox WHERE id = ?`, [outboxId]);
   if (!row) {
     throw new AppError(404, "OUTBOX_NOT_FOUND", "Outbox message not found");
   }
-  await processOutboxRow(db, env, row, createOutboxProcessingContext());
+  return processOutboxRow(db, env, row, createOutboxProcessingContext());
+}
+
+function logOutboxProcessFailure(outboxId: string, error: unknown): void {
+  const message = error instanceof Error ? error.message : "Unknown background email error";
+  const details = error instanceof AppError ? error.details : undefined;
+  logError("EMAIL_OUTBOX_PROCESS_FAILED", { outboxId, error: message, ...(details ? { details } : {}) });
 }
 
 export async function processOutboxByIdBackground(db: DatabaseLike, env: Env, outboxId: string): Promise<void> {
   try {
     await processOutboxById(db, env, outboxId);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown background email error";
-    const details = error instanceof AppError ? error.details : undefined;
-    logError("EMAIL_OUTBOX_PROCESS_FAILED", { outboxId, error: message, ...(details ? { details } : {}) });
+    logOutboxProcessFailure(outboxId, error);
+  }
+}
+
+/**
+ * Sends one message within the request so the caller can say truthfully
+ * whether it went out. A message that did not go out stays in the outbox,
+ * whose scheduled processor remains its one retry owner.
+ */
+export async function deliverOutboxMessageNow(
+  db: DatabaseLike,
+  env: Env,
+  outboxId: string,
+): Promise<ImmediateEmailDelivery> {
+  try {
+    return (await processOutboxById(db, env, outboxId)) ? "sent" : "delayed";
+  } catch (error) {
+    logOutboxProcessFailure(outboxId, error);
+    return "delayed";
   }
 }
 

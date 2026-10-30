@@ -12,6 +12,7 @@ import { z } from "zod";
 import { workEmailStepSchema } from "./work-email";
 import { jsonErrorResponse, magicLinkVerifySchema, successResponseSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
+import { immediateEmailDeliverySchema } from "./email-outbox";
 import { verifiedEmailIdentitySchema } from "./identity";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { authErrors, capabilityErrors, ok, publicOperation, requiresSession } from "./route-contract";
@@ -59,7 +60,13 @@ export const ownEmailAddressResponseSchema = z.object({ email: ownEmailAddressSc
 
 export const ownRepresentationEmailAddSchema = workEmailStepSchema.extend({ purpose: z.literal("representation") });
 export const ownEmailAddressAddSchema = z.union([ownRepresentationEmailAddSchema, userEmailAddSchema.strict()]);
-export const ownEmailVerificationRequestedResponseSchema = z.object({
+/**
+ * Whether the verification link went out while the person waited. A link
+ * that is `delayed` stays queued and is retried; nothing is saved either way
+ * until the mailbox is proved, so there is no waiting address to list.
+ */
+export const ownEmailVerificationSentResponseSchema = z.object({ delivery: immediateEmailDeliverySchema });
+export const ownEmailVerificationRequestedResponseSchema = ownEmailVerificationSentResponseSchema.extend({
   status: z.literal("verification_sent"),
   email: z.string(),
   requestId: databaseIdSchema,
@@ -114,7 +121,8 @@ export const ownEmailAddressAddRouteSchema = {
   request: { body: { required: true, content: { "application/json": { schema: ownEmailAddressAddSchema } } } },
   responses: {
     "202": {
-      description: "Verification requested; no address is saved before proof.",
+      description:
+        "Verification requested; no address is saved before proof. `delivery` says whether the link went out or is retried.",
       content: { "application/json": { schema: ownEmailVerificationRequestedResponseSchema } },
     },
     ...authErrors({
@@ -132,8 +140,8 @@ export const ownEmailAddressVerificationRequestRouteSchema = {
   request: { params: ownEmailAddressParamsSchema },
   responses: {
     "202": {
-      description: "A verification link was sent.",
-      content: { "application/json": { schema: successResponseSchema } },
+      description: "A verification link was requested; `delivery` says whether it went out or is retried.",
+      content: { "application/json": { schema: ownEmailVerificationSentResponseSchema } },
     },
     ...authErrors({
       notFound: "Address not found.",

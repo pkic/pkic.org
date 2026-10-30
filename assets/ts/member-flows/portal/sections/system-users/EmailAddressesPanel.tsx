@@ -14,7 +14,9 @@ import {
   ownEmailAddressResponseSchema,
   ownEmailAddressUpdateSchema,
   ownEmailAddressesListResponseSchema,
+  ownEmailVerificationSentResponseSchema,
 } from "../../../../../shared/schemas/own-email-addresses";
+import { verificationLinkNotice } from "../../../../components/identities/verification-link-notice";
 import { userEmailsListResponseSchema } from "../../../../../shared/schemas/user-emails";
 import { confirmAction } from "../../../../components/ConfirmDialog";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
@@ -97,8 +99,13 @@ export function EmailAddressesPanel({
 
   async function resend(address: AddressRow): Promise<void> {
     try {
-      await postJson(addressEndpoint(address, "/verification"), {}, successResponseSchema);
-      toast(`A new verification link is on its way to ${address.email}`, "success");
+      const sent = await postJson(
+        addressEndpoint(address, "/verification"),
+        {},
+        ownEmailVerificationSentResponseSchema,
+      );
+      const notice = verificationLinkNotice(address.email, sent.delivery);
+      toast(notice.message, notice.tone);
     } catch (caught) {
       toast(failure(caught, "Could not send a new link."), "error");
     }

@@ -12,6 +12,7 @@ import {
   ownEmailAddressRemoveRouteSchema,
   ownEmailAddressResponseSchema,
   ownEmailVerificationRequestedResponseSchema,
+  ownEmailVerificationSentResponseSchema,
   ownEmailAddressUpdateRouteSchema,
   ownEmailAddressVerificationRequestRouteSchema,
   ownEmailAddressesListResponseSchema,
@@ -21,7 +22,7 @@ import { successResponseSchema } from "../../../../../../assets/shared/schemas/a
 import { prepareMagicLinkRequestHttp } from "../../../../../_lib/auth/http-flow";
 import { requireIdentityFromRequest } from "../../../../../_lib/auth/user-session";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
-import { processOutboxByIdBackground } from "../../../../../_lib/email/outbox";
+import { deliverOutboxMessageNow } from "../../../../../_lib/email/outbox";
 import { jsonPrivate } from "../../../../../_lib/http";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
 import {
@@ -63,8 +64,8 @@ export const OwnEmailAddressPost = openApiRoute(ownEmailAddressAddRouteSchema, a
     signingSecret: http.secret,
     appBaseUrl: http.appBaseUrl,
   });
-  c.executionCtx.waitUntil(processOutboxByIdBackground(http.db, c.env, added.outboxId));
-  return jsonPrivate(ownEmailVerificationRequestedResponseSchema.parse(added), 202);
+  const delivery = await deliverOutboxMessageNow(http.db, c.env, added.outboxId);
+  return jsonPrivate(ownEmailVerificationRequestedResponseSchema.parse({ ...added, delivery }), 202);
 });
 
 export const OwnEmailAddressVerificationPost = openApiRoute(
@@ -79,8 +80,8 @@ export const OwnEmailAddressVerificationPost = openApiRoute(
       signingSecret: http.secret,
       appBaseUrl: http.appBaseUrl,
     });
-    c.executionCtx.waitUntil(processOutboxByIdBackground(http.db, c.env, sent.outboxId));
-    return jsonPrivate(successResponseSchema.parse({ success: true }), 202);
+    const delivery = await deliverOutboxMessageNow(http.db, c.env, sent.outboxId);
+    return jsonPrivate(ownEmailVerificationSentResponseSchema.parse({ delivery }), 202);
   },
 );
 

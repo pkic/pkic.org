@@ -22,8 +22,15 @@ import { EmailAddressesPanel } from "../../assets/ts/member-flows/portal/section
 
 const navigate = vi.fn();
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["/users/current", navigate] }));
-const confirmAction = vi.fn(async () => true);
-vi.mock("../../assets/ts/components/ConfirmDialog", () => ({ confirmAction: () => confirmAction() }));
+const confirmAction = vi.fn(async (_request?: unknown) => true);
+vi.mock("../../assets/ts/components/ConfirmDialog", () => ({
+  confirmAction: (request: unknown) => confirmAction(request),
+}));
+const toast = vi.fn();
+vi.mock("../../assets/ts/member-flows/portal/ui", async (original) => ({
+  ...(await original<typeof import("../../assets/ts/member-flows/portal/ui")>()),
+  toast: (...args: unknown[]) => toast(...args),
+}));
 
 const USER_ID = "00000000-0000-4000-8000-000000000050";
 const aliasId = "00000000-0000-4000-8000-000000000053";
@@ -72,14 +79,14 @@ function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 }
 
-function stub(writeResponse: () => Response, list: unknown = addresses): void {
+function stub(writeResponse: (method: string, path: string) => Response, list: unknown = addresses): void {
   vi.stubGlobal(
     "fetch",
     vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const method = init?.method ?? "GET";
       const path = new URL(String(input), location.origin).pathname;
       requests.push({ method, path, body: init?.body ? JSON.parse(String(init.body)) : undefined });
-      return Promise.resolve(method === "GET" ? json(list) : writeResponse());
+      return Promise.resolve(method === "GET" ? json(list) : writeResponse(method, path));
     }),
   );
 }
@@ -119,6 +126,7 @@ afterEach(() => {
   }
   navigate.mockReset();
   confirmAction.mockClear();
+  toast.mockClear();
   requests.splice(0);
   vi.unstubAllGlobals();
 });
@@ -127,7 +135,9 @@ describe("email addresses on the user record", () => {
   it("makes a verified address primary, resends a waiting one's link, and removes after confirmation", async () => {
     const reload = vi.fn();
     vi.stubGlobal("location", { ...window.location, reload, origin: window.location.origin });
-    stub(() => json({ success: true }));
+    stub((method, path) =>
+      path.endsWith("/verification") ? json({ delivery: "delayed" }, 202) : json({ success: true }),
+    );
     const host = mount(<EmailAddressesPanel userId={USER_ID} isSelf primaryEmail="ana@gmail.com" />);
     await settle();
     // Expected states are plain text: a verified address wears a quiet mark, a waiting one says so.
@@ -153,6 +163,8 @@ describe("email addresses on the user record", () => {
     expect(writes("POST").map((request) => request.path)).toEqual([
       `/api/v1/users/current/emails/${waitingId}/verification`,
     ]);
+    // A link that did not go out is not reported as sent.
+    expect(toast).toHaveBeenLastCalledWith(expect.stringContaining("could not send the link"), "error");
 
     await press(host, "Actions for ana@waiting.example");
     await press(host, "Remove");
@@ -228,7 +240,9 @@ describe("email addresses on the user record", () => {
   });
 
   it("adds an address through its own form and returns to the user record", async () => {
-    stub(() => json({ status: "verification_sent", email: "ana@new.example", requestId: waitingId }, 202));
+    stub(() =>
+      json({ status: "verification_sent", email: "ana@new.example", requestId: waitingId, delivery: "sent" }, 202),
+    );
     const host = mount(<EmailAddressAddForm userId={USER_ID} isSelf />);
     await settle();
     const input = host.querySelector<HTMLInputElement>('[name="email"]')!;
@@ -240,7 +254,29 @@ describe("email addresses on the user record", () => {
     const [sent] = writes("POST");
     expect(sent?.path).toBe("/api/v1/users/current/emails");
     expect(userEmailAddSchema.parse(sent!.body)).toEqual({ email: "ana@new.example" });
+    expect(toast).toHaveBeenCalledWith(
+      "Verification link sent to ana@new.example. It appears on your profile once you confirm it.",
+      "success",
+    );
     expect(navigate).toHaveBeenCalledWith(`/users/${USER_ID}`);
+  });
+
+  it("says plainly when the verification link could not be sent yet", async () => {
+    stub(() =>
+      json({ status: "verification_sent", email: "ana@new.example", requestId: waitingId, delivery: "delayed" }, 202),
+    );
+    const host = mount(<EmailAddressAddForm userId={USER_ID} isSelf />);
+    await settle();
+    const input = host.querySelector<HTMLInputElement>('[name="email"]')!;
+    await act(async () => {
+      input.value = "ana@new.example";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await press(host, "Send verification link");
+    expect(toast).toHaveBeenCalledWith(
+      "We could not send the link to ana@new.example yet. We will keep trying for a few minutes. If it does not arrive, request a new link.",
+      "error",
+    );
   });
 
   it("previews the mailbox link, names its destination account, and confirms only on an explicit click", async () => {

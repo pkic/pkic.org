@@ -7,6 +7,7 @@ import {
   ownEmailVerificationRequestedResponseSchema,
 } from "../../../shared/schemas/own-email-addresses";
 import { userEmailAddResponseSchema, userEmailAddSchema } from "../../../shared/schemas/user-emails";
+import type { ImmediateEmailDelivery } from "../../../shared/schemas/email-outbox";
 import { useContractForm } from "../../hooks/useContractForm";
 import { postJson } from "../../shared/api-client";
 import { OWN_EMAILS_ENDPOINT } from "../../shared/email-address-paths";
@@ -28,7 +29,8 @@ export function EmailAddressCreateForm({
 }: {
   userId?: string;
   isSelf: boolean;
-  onAdded: (email: string, individual?: boolean) => void | Promise<void>;
+  /** `delivery` is set for the person's own address: whether its verification link went out. */
+  onAdded: (added: { email: string; individual?: boolean; delivery?: ImmediateEmailDelivery }) => void | Promise<void>;
   beforeAdd?: (email: string, individual?: boolean) => Promise<boolean>;
   onIndividualChange?: (individual: boolean) => void;
   onBusy?: (busy: boolean) => void;
@@ -70,7 +72,11 @@ export function EmailAddressCreateForm({
           onContinue={async (step) => {
             if (beforeAdd && (await beforeAdd(step.email, step.unaffiliatedAttestation))) return;
             const added = await postJson(OWN_EMAILS_ENDPOINT, step, ownEmailVerificationRequestedResponseSchema);
-            await onAdded(added.email, step.unaffiliatedAttestation);
+            await onAdded({
+              email: added.email,
+              individual: step.unaffiliatedAttestation,
+              delivery: added.delivery,
+            });
           }}
         />
       </form>
@@ -95,14 +101,14 @@ export function EmailAddressCreateForm({
               checked.data,
               ownEmailVerificationRequestedResponseSchema,
             );
-            await onAdded(added.email);
+            await onAdded({ email: added.email, delivery: added.delivery });
           } else {
             const added = await postJson(
               `/api/v1/users/${encodeURIComponent(userId!)}/emails`,
               checked.data,
               userEmailAddResponseSchema,
             );
-            await onAdded(added.email.email);
+            await onAdded({ email: added.email.email });
           }
         } catch (cause) {
           setError(form.refuse(cause));

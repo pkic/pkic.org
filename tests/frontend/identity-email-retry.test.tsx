@@ -32,7 +32,7 @@ describe("shared identity mailbox retry", () => {
             return new Response(
               JSON.stringify(
                 status === 202
-                  ? { status: "verification_sent", email: "person@work.example", requestId: emailId }
+                  ? { status: "verification_sent", email: "person@work.example", requestId: emailId, delivery: "sent" }
                   : { error: { code: "RATE_LIMITED", message: "Please wait before requesting another link." } },
               ),
               { status, headers: { "content-type": "application/json" } },
