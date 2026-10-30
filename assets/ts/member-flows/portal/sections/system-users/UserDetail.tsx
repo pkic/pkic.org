@@ -357,7 +357,11 @@ export function UserDetail({
                 {aboutIdentity?.biography ? (
                   <Markdown markdown={aboutIdentity.biography} className="pk-affiliation__summary" />
                 ) : (
-                  <p class="pk-muted">Add a general introduction covering your interests and roles.</p>
+                  <p class="pk-muted">
+                    {isSelf
+                      ? "Add a general introduction covering your interests and roles."
+                      : `${displayName} has not added a general introduction yet.`}
+                  </p>
                 )}
               </PanelBody>
             </Panel>
