@@ -74,6 +74,16 @@ describe("PictureTile logo confirmation", () => {
     return button;
   }
 
+  it("draws the change cue at rest inside the control, for editors only", () => {
+    const editable = mount(<PictureTile {...props()} />);
+    const cue = namedControl(editable, "Change logo of Example Corp").querySelector(".pk-picture-tile__cue");
+    expect(cue?.getAttribute("aria-hidden")).toBe("true");
+    expect(cue?.querySelector("svg")).not.toBeNull();
+
+    const readOnly = mount(<PictureTile {...props({ canChange: false })} />);
+    expect(readOnly.querySelector(".pk-picture-tile__cue")).toBeNull();
+  });
+
   it("removes the logo only after the named confirmation is accepted", async () => {
     const onRemove = vi.fn(async () => undefined);
     const container = mount(
