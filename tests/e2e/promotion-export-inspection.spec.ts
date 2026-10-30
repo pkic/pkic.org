@@ -29,6 +29,7 @@ import {
   organizationCreateResponseSchema,
 } from "../../assets/shared/schemas/organization-management";
 import { eventDetailResponseSchema } from "../../assets/shared/schemas/event-management";
+import { runScheduledWork } from "./helpers/scheduled-work";
 
 const slug = "pqc-conference-amsterdam-nl";
 const agendaApi = `/api/v1/events/${slug}/agenda`;
@@ -266,7 +267,7 @@ test("every delivered long-panel promotion export has complete evidence and refu
           expect(["PROMOTION_RENDER_PENDING", "PROMOTION_PREVIEW_PENDING"]).toContain(
             apiErrorPayloadSchema.parse(await response.json()).error.code,
           );
-          await page.request.get("/cdn-cgi/local/scheduled");
+          await runScheduledWork(page);
           response = await page.request.get(url);
           return response.status() === 200;
         },

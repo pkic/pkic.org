@@ -22,6 +22,7 @@ import {
 } from "../../assets/shared/schemas/event-session-history";
 import { sessionPageAddress } from "../../assets/shared/public-agenda-pages";
 import type { AgendaSnapshot } from "../../assets/shared/schemas/event-agenda";
+import { runScheduledWork } from "./helpers/scheduled-work";
 const slug = "pqc-conference-amsterdam-nl";
 const title = "Historic cryptographic operations and practical migration lessons";
 const media = {
@@ -467,7 +468,7 @@ test("approved archive corrections and promotion exports remain tied to a frozen
       .poll(
         async () => {
           if (await pdf.isVisible()) return true;
-          await page.request.get("/cdn-cgi/local/scheduled");
+          await runScheduledWork(page);
           return pdf.isVisible();
         },
         { timeout: 120_000, intervals: [1000, 2000, 5000] },
