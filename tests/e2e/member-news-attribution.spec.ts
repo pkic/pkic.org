@@ -40,6 +40,7 @@ test("a blog post keeps its published byline without browser sponsor requests", 
   expect(await response!.text()).toContain("Tomas Gustavsson");
   await expect(page.getByText("Tomas Gustavsson", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("Chief PKI Officer", { exact: true })).toBeVisible();
-  expect(requests).toEqual([]);
+  // The account menu's session probe is the one request every public page makes; the post itself asks for nothing.
+  expect(requests.map((url) => new URL(url).pathname).filter((path) => path !== "/api/v1/auth/session")).toEqual([]);
   await page.screenshot({ path: testInfo.outputPath("post-owned-byline.png"), fullPage: true });
 });
