@@ -18,10 +18,13 @@ import { createPortalWaitlistEvent } from "./helpers/waitlist-event";
 import { publishE2eSite } from "./helpers/site-publication";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
 import {
+  SPEAKER_MAILBOX_PROOF_HEADER,
   eventProposalProofStartSchema,
   eventProposalProofStartResponseSchema,
   eventProposalProofVerifyResponseSchema,
 } from "../../assets/shared/schemas/event-proposal-proof";
+import { headshotUploadResponseSchema } from "../../assets/shared/schemas/registration";
+import { agreeToHeadshotTerms, chooseHeadshotThroughUploadButton } from "./helpers/headshot-upload";
 import {
   speakerSelfProfilePatchSchema,
   proposalCreateResponseSchema,
@@ -877,32 +880,23 @@ test.describe("browser workflows", () => {
     await expect(page.getByText(/Please confirm whether you would like to participate/i)).toBeVisible();
     const participationConfirmation = page.getByRole("button", { name: /Confirm participation/i });
     await expect(participationConfirmation).toBeDisabled();
-    // Upload a headshot via the browser, exercising the real R2 upload path. The account the invitation
-    // created has never proved a mailbox, so its link alone may add the photo; once the speaker confirms
-    // their mailbox, changing it takes their own sign-in.
-    const speakerToken = new URL(speakerManageUrl).searchParams.get("token") ?? "";
-    const headshotResult = await page.evaluate(async (token) => {
-      const canvas = document.createElement("canvas");
-      canvas.width = 1;
-      canvas.height = 1;
-      const ctx = canvas.getContext("2d");
-      ctx!.fillStyle = "#c0392b";
-      ctx!.fillRect(0, 0, 1, 1);
-      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.8));
-      if (!blob) return { success: false, headshotUrl: null };
-      const fd = new FormData();
-      fd.append("file", new File([blob], "headshot.jpg", { type: "image/jpeg" }));
-      fd.append("consent", "true");
-      const res = await fetch(`/api/v1/proposals/speakers/access/${encodeURIComponent(token)}/headshot`, {
-        method: "PUT",
-        body: fd,
-      });
-      return res.json() as Promise<{ success?: boolean; headshotUrl?: string }>;
-    }, speakerToken);
-    expect(headshotResult.success).toBe(true);
-    expect(headshotResult.headshotUrl).toBeTruthy();
-
     await resolveInvitedSpeaker(page, invitedSpeakerEmail);
+
+    // Right after proving their mailbox the speaker adds their photo in the same step, through the page's
+    // own tile and the real R2 upload path; the saved proof speaks for the account the link alone no longer does.
+    await chooseHeadshotThroughUploadButton(page);
+    const crop = await agreeToHeadshotTerms(page);
+    const uploaded = page.waitForResponse(
+      (response) =>
+        /^\/api\/v1\/proposals\/speakers\/access\/[^/]+\/headshot$/.test(new URL(response.url()).pathname) &&
+        response.request().method() === "PUT",
+    );
+    await crop.locator(".crop-headshot-confirm").click();
+    const headshotResponse = await uploaded;
+    expect(headshotResponse.status(), await headshotResponse.text()).toBe(200);
+    expect(await headshotResponse.request().headerValue(SPEAKER_MAILBOX_PROOF_HEADER)).toBeTruthy();
+    expect(headshotUploadResponseSchema.parse(await headshotResponse.json()).headshotUrl).toBeTruthy();
+
     await participationConfirmation.click();
     await expect(page.locator("[data-confirmed-msg]")).toBeVisible();
     await screenshot("04-speaker-participation-confirmed");
@@ -943,6 +937,7 @@ test.describe("browser workflows", () => {
     }
 
     // Upload a minimal PDF to exercise the presentation upload path
+    const speakerToken = new URL(speakerManageUrl).searchParams.get("token") ?? "";
     const presentationResult = await page.evaluate(async (token) => {
       const pdfContent =
         "%PDF-1.0\n1 0 obj<</Type /Catalog /Pages 2 0 R>>endobj 2 0 obj<</Type /Pages /Kids [3 0 R] /Count 1>>endobj 3 0 obj<</Type /Page /MediaBox [0 0 3 3]>>endobj\nxref\n0 4\ntrailer<</Size 4/Root 1 0 R>>\n%%EOF";
