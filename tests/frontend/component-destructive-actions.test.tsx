@@ -7,6 +7,8 @@ import { PictureTile, type PictureTileProps } from "../../assets/ts/components/P
 import { PasskeySettings } from "../../assets/ts/components/passkey-settings";
 import { ProposalSpeakerCard } from "../../assets/ts/components/proposals/ProposalSpeakerCard";
 import type { ProposalSpeaker } from "../../assets/shared/schemas/proposal-speakers";
+import { passkeyDeleteQuerySchema } from "../../assets/shared/schemas/passkeys";
+import { LAST_PASSKEY_MESSAGE, LAST_SIGN_IN_METHOD } from "../../assets/shared/auth-errors";
 import { controlFor, labelNames } from "./helpers/labeled-control";
 import { beginRecordEdit } from "./helpers/record-edit";
 import { rowActionControlNames, runCardAction, runRowAction } from "./helpers/row-actions";
@@ -220,6 +222,75 @@ describe("PasskeySettings confirmation and row actions", () => {
     await settle();
 
     expect(requests.some((request) => request.method === "DELETE")).toBe(true);
+  });
+
+  function lastWayRefusal(): Response {
+    return Response.json(
+      { error: { code: LAST_SIGN_IN_METHOD, message: LAST_PASSKEY_MESSAGE, details: null } },
+      { status: 409 },
+    );
+  }
+
+  async function removeWorkLaptop(): Promise<HTMLElement> {
+    const container = mount(
+      <>
+        <ConfirmDialogHost />
+        <PasskeySettings toastTargetId="toast" />
+      </>,
+    );
+    await settle();
+    await runRowAction(container, "Work laptop", "Remove");
+    await act(() => dialogButton(container, "Remove passkey").click());
+    await settle();
+    return container;
+  }
+
+  it("removes the last way to sign in only after a second, explicit warning", async () => {
+    const deletes: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method !== "DELETE") return passkeysResponse();
+        const url = new URL(String(input), "https://app.test");
+        deletes.push(url);
+        const query = passkeyDeleteQuerySchema.parse(Object.fromEntries(url.searchParams));
+        return query.confirmLastMethod ? Response.json({ success: true }) : lastWayRefusal();
+      }),
+    );
+
+    const container = await removeWorkLaptop();
+
+    // The refusal becomes a warning that says what is lost; nothing is removed yet.
+    expect(container.querySelector('[role="alertdialog"]')?.textContent).toContain("Remove your last way to sign in?");
+    expect(deletes).toHaveLength(1);
+
+    await act(() => dialogButton(container, "Remove passkey").click());
+    await settle();
+
+    expect(deletes).toHaveLength(2);
+    expect(passkeyDeleteQuerySchema.parse(Object.fromEntries(deletes[1].searchParams))).toEqual({
+      confirmLastMethod: true,
+    });
+    // The replacement is offered at once, while this session still signs in.
+    expect(container.querySelector("dialog[open]")?.textContent).toContain("Add a passkey");
+  });
+
+  it("keeps the passkey when the last-way warning is cancelled", async () => {
+    let deletes = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method !== "DELETE") return passkeysResponse();
+        deletes += 1;
+        return lastWayRefusal();
+      }),
+    );
+
+    const container = await removeWorkLaptop();
+    await act(() => dialogButton(container, "Cancel").click());
+    await settle();
+
+    expect(deletes).toBe(1);
   });
 
   it("names the list and the device-name field instead of leaving both anonymous", async () => {

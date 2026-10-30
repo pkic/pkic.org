@@ -21,6 +21,7 @@ export const passkeyIdParamsSchema = z.object({ id: databaseIdSchema });
  * the owner may revoke a compromised passkey even when nothing else remains.
  */
 export const passkeyDeleteQuerySchema = z.object({ confirmLastMethod: booleanQueryFlagSchema.optional() });
+export type PasskeyDeleteQuery = z.input<typeof passkeyDeleteQuerySchema>;
 
 const webauthnOptionsSchema = z.record(z.string(), z.unknown());
 
