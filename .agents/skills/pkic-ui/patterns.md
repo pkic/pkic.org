@@ -118,6 +118,6 @@ Each entry is the full anatomy of a control. The gallery id renders it (`pnpm ga
 
 - Use: `site/ContentContributionLinks.tsx` with canonical source metadata, only on public pages with an editable source. Never portal screens.
 - Shape: one centered, muted italic sentence between the content and footer, with an underlined feedback link. No heading, panel, border, or decorative arrow. Wrap naturally on phones.
-- A small circular pencil stays at the bottom-right with safe-area spacing and an accessible edit label. Keep the hero unchanged.
+- A small circular pencil stays at the bottom-right with safe-area spacing and an accessible edit label. On phones it sits in the flow under the invitation, since a floating one covers badges at the cards' right edge. Keep the hero unchanged.
 - Blog posts retain their footnote without the invitation; editing and selection feedback remain available.
 - Selection feedback includes the page, section or item, wording, source, and available version and revision. General feedback stays independent of the selection. Persistent links work without JavaScript.
