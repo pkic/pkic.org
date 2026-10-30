@@ -613,7 +613,8 @@ test("attendee manages a registration and downloads a personal event calendar", 
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: testInfo.outputPath("registration-mobile.png"), fullPage: true });
   // Changing domains returns through the same verified organization chooser.
-  const nextEmail = `changed-${crypto.randomUUID()}@domain-change-fixture.test`;
+  // A fresh domain each run, so no earlier run has already given it an organization.
+  const nextEmail = `changed@domain-change-${crypto.randomUUID()}.test`;
   const nextOrganization = `Domain Change Fixture ${crypto.randomUUID().slice(0, 8)}`;
   const beforeEmailChange = await capturedEmailCount();
   await registration.getByRole("button", { name: "Edit details", exact: true }).click();
