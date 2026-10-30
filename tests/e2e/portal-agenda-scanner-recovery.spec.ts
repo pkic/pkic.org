@@ -195,7 +195,7 @@ test("real pending scanner storage survives reload and logout without crossing a
   const checkedOther = userAuthSessionResponseSchema.parse(await checkingOtherResponse.json());
   expect(checkedOther.sessionId).toBe(other.sessionId);
   expect(checkedOther.identity.id).toBe(other.identity.id);
-  await expect(page.getByRole("heading", { name: "Scanner setup", exact: true })).toBeVisible();
+  await expect(page.getByRole("tablist", { name: "Badge scanner views", exact: true })).toBeVisible();
   await openScannerDiagnostics(page);
   await expect(page.locator(".pk-event-scanner")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Close scanner session", exact: true })).toBeEnabled();
@@ -251,7 +251,7 @@ test("real pending scanner storage survives reload and logout without crossing a
   const receipt = eventScanResponseSchema.parse(await uploaded.json());
   expect(receipt).toMatchObject({ operationId: original.operationId, outcome: "unknown", attendanceRecorded: false });
   await expect.poll(async () => (await scannerStorage(page)).pending.length).toBe(0);
-  await expect(page.getByRole("heading", { name: "Scanner setup", exact: true })).toBeVisible();
+  await expect(page.getByRole("tablist", { name: "Badge scanner views", exact: true })).toBeVisible();
   await expect(page.locator(".pk-event-scanner")).toHaveCount(0);
   const recovered = await scannerStorage(page);
   expect(recovered.pending).toHaveLength(0);
@@ -342,7 +342,7 @@ test("real pending scanner storage survives reload and logout without crossing a
     expect(enrolledEventScanRequestSchema.parse(importedResponse.request().postDataJSON())).toEqual(original);
     expect(eventScanResponseSchema.parse(await importedResponse.json())).toEqual(receipt);
     await expect.poll(async () => (await scannerStorage(recoveredPage)).pending.length).toBe(0);
-    await expect(recoveredPage.getByRole("heading", { name: "Scanner setup", exact: true })).toBeVisible();
+    await expect(recoveredPage.getByRole("tablist", { name: "Badge scanner views", exact: true })).toBeVisible();
     await expect(recoveredPage.locator(".pk-event-scanner")).toHaveCount(0);
     const imported = await scannerStorage(recoveredPage);
     expect(imported.pending).toHaveLength(0);

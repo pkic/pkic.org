@@ -155,11 +155,14 @@ export async function scannerSessionState(page: Page): Promise<unknown> {
   });
 }
 
+/** The phone event app has no account menu, so the account control is used in the same page's desktop layout. */
 export async function signOutThroughPortal(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Open navigation", exact: true }).click();
+  const original = page.viewportSize();
+  if (original && original.width < 1024) await page.setViewportSize({ width: 1280, height: 900 });
   await page.getByRole("button", { name: "Account menu", exact: true }).click();
   await page.getByRole("menuitem", { name: "Sign out", exact: true }).click();
   await expect(page.getByRole("button", { name: "Sign in with a passkey", exact: true })).toBeVisible();
+  if (original) await page.setViewportSize(original);
 }
 
 export async function importScannerRecoveryFile(page: Page, path: string): Promise<void> {

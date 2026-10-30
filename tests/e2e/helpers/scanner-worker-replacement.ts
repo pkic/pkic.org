@@ -12,8 +12,8 @@ import {
   scannerDeviceSessionStatusSchema,
 } from "../../../assets/shared/schemas/event-scanner-devices";
 import {
+  closeScannerDiagnostics,
   downloadScannerRecovery,
-  openScannerDiagnostics,
   openScannerRecovery,
   scannerSessionState,
   reconnectScannerBrowser,
@@ -195,6 +195,15 @@ async function observeScannerClaim(page: Page, operationId: string) {
         configurable: true,
         value: {
           observations,
+          /** The tab that is uploading keeps its control busy, so only an idle tab can compete; busy answers null. */
+          async clickAndAwaitClaim() {
+            if ((button as HTMLButtonElement).disabled) return null;
+            button.click();
+            const deadline = Date.now() + 5000;
+            while (!observations.length && Date.now() < deadline)
+              await new Promise((resolve) => setTimeout(resolve, 25));
+            return observations.length;
+          },
           cleanup: () => {
             IDBObjectStore.prototype.openCursor = original;
             button.removeEventListener("click", onClick, true);
@@ -205,6 +214,9 @@ async function observeScannerClaim(page: Page, operationId: string) {
     { operationId, marker },
   );
   return {
+    async clickAndAwaitClaim() {
+      return page.evaluate((key) => Reflect.get(window, key).clickAndAwaitClaim() as Promise<number | null>, marker);
+    },
     async completed() {
       return page.evaluate(
         (key) =>
@@ -267,8 +279,14 @@ export async function replayScannerFromTwoTabs(
   await context.route(pattern, handler);
   const observers: Awaited<ReturnType<typeof observeScannerClaim>>[] = [];
   try {
-    await openScannerDiagnostics(page);
-    await openScannerDiagnostics(other);
+    // The sync control sits on the Setup tab, beside the pending count. Everything the competing tab needs
+    // is in place before the upload is held: the scanner abandons an upload that is held for eight seconds.
+    await closeScannerDiagnostics(page);
+    await closeScannerDiagnostics(other);
+    observers.push(
+      await observeScannerClaim(page, original.operationId),
+      await observeScannerClaim(other, original.operationId),
+    );
     const uploading = context.waitForEvent(
       "response",
       (response) =>
@@ -283,23 +301,17 @@ export async function replayScannerFromTwoTabs(
         message: "A real canonical replay must be held before competing sync triggers",
       })
       .toBeGreaterThan(0);
-    observers.push(
-      await observeScannerClaim(page, original.operationId),
-      await observeScannerClaim(other, original.operationId),
+    // Whichever tab won the reconnect race is uploading and keeps its own sync control busy; the other tab
+    // is the competitor. One in-page step each, so tool latency between the hold and the clicks cannot
+    // outlast the scanner's upload timeout.
+    const competing = (await Promise.all(observers.map((observer) => observer.clickAndAwaitClaim()))).filter(
+      (count): count is number => count !== null,
     );
-    await Promise.all([
-      page.getByRole("button", { name: "Sync now", exact: true }).click(),
-      other.getByRole("button", { name: "Sync now", exact: true }).click(),
-    ]);
-    await Promise.all(
-      observers.map((observer) =>
-        expect
-          .poll(async () => (await observer.completed()).length, {
-            message: "The clicked tab must complete a real claim transaction while the original lease remains held",
-          })
-          .toBeGreaterThan(0),
-      ),
-    );
+    expect(competing, "Exactly one tab must be idle and able to compete for the held lease").toHaveLength(1);
+    expect(
+      competing[0],
+      "The clicked tab must complete a real claim transaction while the original lease remains held",
+    ).toBeGreaterThan(0);
     const claims = await Promise.all(observers.map((observer) => observer.completed()));
     const held = (await scannerStorage(page)).pending;
     expect(held).toHaveLength(1);
@@ -319,7 +331,7 @@ export async function replayScannerFromTwoTabs(
     await Promise.all(
       [page, other].map(async (scanner) => {
         await scanner.getByRole("button", { name: "Sync now", exact: true }).click();
-        await expect(scanner.getByRole("heading", { name: "Badge scanner", exact: true })).toBeVisible();
+        await expect(scanner.getByRole("tablist", { name: "Badge scanner views", exact: true })).toBeVisible();
         await expect(scanner.locator(".pk-event-scanner")).toHaveCount(0);
       }),
     );
@@ -327,6 +339,7 @@ export async function replayScannerFromTwoTabs(
     expect(stored.history).toHaveLength(1);
     expect(stored.history[0].scan).toEqual(original);
     expect(stored.history[0].receipt).toEqual(receipt);
+    await openScannerRecovery(page);
     const backupAfter = await downloadScannerRecovery(page);
     expect(backupAfter.records).toEqual(backupBefore.records);
     expect(backupAfter.scannerEpochs).toEqual(backupBefore.scannerEpochs);
@@ -337,7 +350,7 @@ export async function replayScannerFromTwoTabs(
     for (const body of actualRequests) expect(enrolledEventScanRequestSchema.parse(body)).toEqual(original);
     for (const result of actualReceipts) expect(result).toEqual(receipt);
     return {
-      syncTriggers: 2,
+      syncTriggers: 1,
       completedClaims: claims,
       routedRequests: actualRequests.length,
       epochBefore,
