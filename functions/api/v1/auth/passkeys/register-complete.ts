@@ -5,7 +5,7 @@ import { OpenAPIRoute } from "chanfana";
 import { jsonNoStore } from "../../../../_lib/http";
 import { requireAnyActorFromRequest } from "../../../../_lib/auth/actor";
 import { parseJsonBody } from "../../../../_lib/validation";
-import { completePasskeyRegistration } from "../../../../_lib/services/passkeys";
+import { completePasskeyRegistration } from "../../../../_lib/services/passkey-registration";
 import {
   passkeyRegisterCompleteRouteSchema,
   passkeyRegisterCompleteSchema,

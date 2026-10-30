@@ -3,7 +3,7 @@
  */
 import { jsonNoStore } from "../../../../_lib/http";
 import { requireIdentityFromRequest } from "../../../../_lib/auth/user-session";
-import { revokePasskey } from "../../../../_lib/services/passkeys";
+import { revokePasskey } from "../../../../_lib/services/passkey-revocation";
 import { passkeyDeleteRouteSchema } from "../../../../../assets/shared/schemas/passkeys";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
 import { openApiRoute } from "../../../../_lib/openapi/route";

@@ -19,7 +19,8 @@ import { buildCreateIndividualMemberStatements } from "../functions/_lib/service
 import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
 import { MAX_PASSKEY_CREDENTIALS_PER_USER } from "../assets/shared/constants/passkeys";
 import { LAST_PASSKEY_MESSAGE, LAST_SIGN_IN_METHOD } from "../assets/shared/auth-errors";
-import { completePasskeyAuthentication, persistVerifiedPasskeyCredential } from "../functions/_lib/services/passkeys";
+import { completePasskeyAuthentication } from "../functions/_lib/services/passkey-authentication";
+import { persistVerifiedPasskeyCredential } from "../functions/_lib/services/passkey-registration";
 import {
   passkeyAuthenticateCompleteSchema,
   passkeyAuthenticateCompleteResponseSchema,
