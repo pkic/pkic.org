@@ -2,12 +2,19 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { cp, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { expect, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import {
   sitePublicationSnapshotSchema,
   type SitePublicationSnapshot,
 } from "../../../assets/shared/schemas/site-publication";
 import type { SitePublicationRelease } from "../../../assets/shared/schemas/site-publication-release";
+
+/**
+ * A publication renders and post-processes the complete site, several minutes while other shards build theirs
+ * beside it, and then waits for the Worker to serve the new release.
+ */
+const PUBLICATION_BUILD_BUDGET_MS = 600_000;
+const RELEASE_ACTIVATION_BUDGET_MS = 120_000;
 
 /** Explicitly publish synthetic D1 changes through the actual Astro release pipeline. */
 export async function publishE2eSite(
@@ -15,6 +22,8 @@ export async function publishE2eSite(
   route: string,
   fixtureSnapshot?: SitePublicationSnapshot,
 ): Promise<{ directory: string; snapshotId: SitePublicationRelease["snapshotId"]; snapshot: SitePublicationSnapshot }> {
+  // Each publication brings its own time, so a test's budget covers only its own steps however many it publishes.
+  test.info().setTimeout(test.info().timeout + PUBLICATION_BUILD_BUDGET_MS + RELEASE_ACTIVATION_BUDGET_MS);
   const state = process.env.E2E_PREPARED_STATE_DIR ?? (await readFile("test-results/e2e-state-dir", "utf8")).trim();
   await readFile(resolve(state, ".prepared"));
   const directory = resolve(state, `site-release-${crypto.randomUUID()}`);
@@ -60,7 +69,7 @@ export async function publishE2eSite(
           return "";
         }
       },
-      { timeout: 30_000 },
+      { timeout: RELEASE_ACTIVATION_BUDGET_MS },
     )
     .toBe(`static; snapshot=${release.snapshotId}`);
   const snapshot = sitePublicationSnapshotSchema.parse(JSON.parse(await readFile(receiptPath, "utf8")));
