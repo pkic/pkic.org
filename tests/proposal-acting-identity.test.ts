@@ -140,7 +140,6 @@ describe("proposal speaker acting identity", () => {
             firstName: "Co",
             lastName: "Speaker",
             role: "speaker",
-            bio: "A co-speaker biography long enough to satisfy the proposal speaker contract.",
           },
         ],
       },

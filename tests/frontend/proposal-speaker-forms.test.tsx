@@ -56,13 +56,15 @@ function speakerCard(overrides: Partial<Parameters<typeof SpeakerFormCard>[0]> =
           firstName: "speaker.1.firstName",
           lastName: "speaker.1.lastName",
           email: "speaker.1.email",
-          bio: "speaker.1.bio",
           role: "speaker.1.role",
         }}
-        linksFieldName="speaker.1.links"
-        linksRef={createRef<ProfileLinksHandle>()}
+        profile={{
+          bioFieldName: "speaker.1.bio",
+          bioHelp: "A short professional biography.",
+          linksFieldName: "speaker.1.links",
+          linksRef: createRef<ProfileLinksHandle>(),
+        }}
         emailHelp="This person receives a personal confirmation link."
-        bioHelp="A short professional biography."
         errorPaths={{
           firstName: "speakers.1.firstName",
           lastName: "speakers.1.lastName",
@@ -231,13 +233,32 @@ describe("SpeakerFormCard", () => {
           firstName: "proposerSpeakerFirstName",
           lastName: "proposerSpeakerLastName",
           email: "proposerSpeakerEmail",
-          bio: "proposerBio",
         },
       }),
     );
 
     expect(groupNames(root.querySelector("form")!)).toEqual(["Profile links (optional)"]);
     expect(root.querySelector('input[type="radio"]')).toBeNull();
+  });
+
+  it("asks only who to invite when the card is for someone else", async () => {
+    const root = mount(speakerCard({ profile: undefined }));
+    const form = root.querySelector("form")!;
+
+    // An invited speaker writes their own bio, links and photo when they confirm.
+    expect(labelNames(form)).toEqual([
+      "First name",
+      "Last name",
+      "Email",
+      "Proposer",
+      "Speaker",
+      "Co-speaker",
+      "Moderator",
+      "Panelist",
+    ]);
+    expect(form.querySelector(".pk-markdown-editor")).toBeNull();
+    expect(form.querySelector('input[type="url"]')).toBeNull();
+    expect(groupNames(form)).toEqual(["Role"]);
   });
 });
 

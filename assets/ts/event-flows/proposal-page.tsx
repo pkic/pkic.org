@@ -69,7 +69,6 @@ function renderSessionTypes(
 interface SpeakerEntry {
   index: number;
   container: HTMLElement;
-  linksRef: ReturnType<typeof createRef<ProfileLinksHandle>>;
 }
 
 /** All additional speaker cards (not the proposer). */
@@ -111,15 +110,18 @@ function createProposerCard(
         firstName: "proposerSpeakerFirstName",
         lastName: "proposerSpeakerLastName",
         email: "proposerSpeakerEmail",
-        bio: "proposerBio",
         role: "proposerSpeakerRole",
       }}
       defaultRole={defaultRole}
-      linksFieldName="proposerLink"
-      linksRef={linksRef}
+      profile={{
+        bioFieldName: "proposerBio",
+        bioHelp:
+          "A short professional biography as you would like it to appear on the event website if your proposal is accepted.",
+        initialBio: entry.person.bio ?? "",
+        linksFieldName: "proposerLink",
+        linksRef,
+      }}
       emailHelp="Your management link is sent here. You will also receive a personal link to confirm your participation once the proposal is submitted."
-      bioHelp="A short professional biography as you would like it to appear on the event website if your proposal is accepted."
-      initialBio={entry.person.bio ?? ""}
       autocomplete
       errorPaths={{ bio: "proposer.bio" }}
     />,
@@ -132,12 +134,8 @@ function createProposerCard(
  * Builds a speaker card for an additional (non-proposer) speaker.
  * Index must be >= 1; index 0 is reserved for the proposer card.
  */
-function createSpeakerCard(index: number): {
-  el: HTMLElement;
-  linksRef: ReturnType<typeof createRef<ProfileLinksHandle>>;
-} {
+function createSpeakerCard(index: number): HTMLElement {
   const container = document.createElement("div");
-  const linksRef = createRef<ProfileLinksHandle>();
   const handleRemove = () => {
     render(null, container);
     container.remove();
@@ -152,33 +150,27 @@ function createSpeakerCard(index: number): {
         firstName: `speaker.${index}.firstName`,
         lastName: `speaker.${index}.lastName`,
         email: `speaker.${index}.email`,
-        bio: `speaker.${index}.bio`,
         role: `speaker.${index}.role`,
       }}
-      linksFieldName={`speaker.${index}.links`}
-      linksRef={linksRef}
-      emailHelp="This person will receive a personal link to confirm their participation and complete their speaker profile."
-      bioHelp="This person can write or change their own bio when they confirm their participation."
-      bioOptional
+      emailHelp="We email this person a personal link to confirm their participation and add their own bio and photo."
       errorPaths={{
         firstName: `speakers.${index}.firstName`,
         lastName: `speakers.${index}.lastName`,
         email: `speakers.${index}.email`,
-        bio: `speakers.${index}.bio`,
       }}
       onRemove={handleRemove}
       removeLabel={`Remove speaker ${index}`}
     />,
     container,
   );
-  return { el: container, linksRef };
+  return container;
 }
 
 // ── Payload builder ───────────────────────────────────────────────────────────
 
 function readAdditionalSpeakers(form: HTMLFormElement) {
   return additionalSpeakers
-    .map(({ index, linksRef }) => {
+    .map(({ index }) => {
       const email = readField(form, `speaker.${index}.email`);
       if (!email) return null;
 
@@ -189,8 +181,6 @@ function readAdditionalSpeakers(form: HTMLFormElement) {
         firstName: readField(form, `speaker.${index}.firstName`),
         lastName: readField(form, `speaker.${index}.lastName`),
         email,
-        bio: readField(form, `speaker.${index}.bio`) || undefined,
-        links: linksRef.current?.getLinks() ?? [],
       };
     })
     .filter((s): s is NonNullable<typeof s> => s !== null);
@@ -434,8 +424,8 @@ async function main(): Promise<void> {
   addSpeakerBtn?.addEventListener("click", () => {
     if (!speakersContainer) return;
     speakerCount += 1;
-    const { el, linksRef } = createSpeakerCard(speakerCount);
-    additionalSpeakers.push({ index: speakerCount, container: el, linksRef });
+    const el = createSpeakerCard(speakerCount);
+    additionalSpeakers.push({ index: speakerCount, container: el });
     speakersContainer.append(el);
   });
 

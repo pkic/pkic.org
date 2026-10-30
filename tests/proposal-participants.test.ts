@@ -177,7 +177,6 @@ describe("proposal participants", () => {
               lastName: "Speaker",
               email: "literal-speaker@example.test",
               role: "speaker",
-              bio: "A sufficiently detailed biography for the invited speaker security regression test.",
             },
           ],
           consents: [{ termKey: "speaker-terms", version: "v1" }],
@@ -216,7 +215,7 @@ describe("proposal participants", () => {
     }
   });
 
-  it("supports panel participants and stores user links", async () => {
+  it("supports panel participants and stores only the proposer's own profile links", async () => {
     await seedEventAndAdmin(env.DB);
 
     const response = await mountedAppFetch(
@@ -247,16 +246,12 @@ describe("proposal participants", () => {
               lastName: "One",
               email: "panelist1@example.test",
               role: "panelist",
-              bio: "Builds enterprise security reference architectures and guides cryptographic agility programs.",
-              links: ["https://github.com/panelist1"],
             },
             {
               firstName: "Moderator",
               lastName: "One",
               email: "moderator@example.test",
               role: "moderator",
-              bio: "Moderates industry forums focused on interoperability and deployment readiness.",
-              links: ["https://x.com/moderator"],
             },
           ],
           consents: [{ termKey: "speaker-terms", version: "v1" }],
@@ -298,13 +293,18 @@ describe("proposal participants", () => {
     expect(participantRoles.map((entry) => entry.role)).toContain("panelist");
     expect(participantRoles.map((entry) => entry.role)).toContain("moderator");
 
-    // What the proposer wrote about speakers new to the site starts their identity's profile.
-    const linkRows = await queryAll<{ links_json: string | null }>(
+    // The proposer's own links are stored; an invited speaker writes their own profile when they confirm.
+    const profileRows = await queryAll<{ email: string; biography: string | null; links_json: string | null }>(
       env.DB,
-      "SELECT links_json FROM identities WHERE user_id IN (SELECT user_id FROM proposal_speakers WHERE proposal_id = ?)",
-      [payload.proposalId],
+      `SELECT person.normalized_email AS email, identity.biography, identity.links_json
+         FROM identities identity JOIN users person ON person.id = identity.user_id
+        WHERE person.normalized_email IN ('lead@example.test', 'panelist1@example.test', 'moderator@example.test')
+        ORDER BY person.normalized_email`,
     );
-    expect(linkRows.some((entry) => Boolean(entry.links_json))).toBe(true);
+    expect(profileRows.find((row) => row.email === "lead@example.test")?.links_json).toContain("example.test/lead");
+    for (const email of ["panelist1@example.test", "moderator@example.test"])
+      for (const row of profileRows.filter((entry) => entry.email === email))
+        expect(row).toMatchObject({ biography: null, links_json: null });
   });
 
   it("does not clear an existing proposer's identity biography or links when the submission provides none", async () => {
@@ -454,7 +454,6 @@ describe("proposal participants", () => {
               lastName: "Person",
               email: "DUPLICATE-PERSON@example.test",
               role: "speaker",
-              bio: "A sufficiently detailed biography for validating the duplicate participant contract behavior.",
             },
           ],
           consents: [{ termKey: "speaker-terms", version: "v1" }],

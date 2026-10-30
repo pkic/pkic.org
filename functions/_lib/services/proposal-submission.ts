@@ -198,21 +198,9 @@ export async function submitProposal(
       proposalContext,
       actingIdentity,
     });
+    // A co-speaker's bio, links and photo are their own to write when they confirm; the proposer
+    // only names who to invite.
     statements.push(...preparedSpeaker.statements);
-    // What the proposer wrote about a co-speaker starts the profile of an account made by this
-    // submission; an existing person's identity is theirs alone to edit.
-    if (userWrite.created)
-      statements.push(
-        ...prepareIdentityProfileCompletion(db, {
-          userId: userWrite.user.id,
-          identityId: null,
-          biography: speaker.bio,
-          links: speaker.links,
-          at: inviteNow,
-          actor: { type: "user", id: proposer.id },
-          scope: { type: "proposal", id: created.proposal.id },
-        }),
-      );
     // Attached to the representation their address links to, or, until they choose one, their affiliation.
     const organizationName = actingIdentity
       ? actingIdentity.representation.organizationName

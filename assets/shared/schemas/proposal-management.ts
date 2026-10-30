@@ -16,7 +16,7 @@ import {
   trimmedString,
   utcInstantSchema,
 } from "./api-common";
-import { consentItemSchema, participantProfileSchema, proposerProfileSchema, speakerRoleSchema } from "./registration";
+import { consentItemSchema, proposerProfileSchema, speakerRoleSchema, userProfileSchema } from "./registration";
 import { proposalDecisionStatusSchema, proposalStatusSchema } from "./proposal-status";
 import { addDuplicateStringIssues } from "./refinements";
 import { httpCapabilityUrlSchema, httpUrlSchema } from "./urls";
@@ -146,11 +146,8 @@ export const proposalCreateSchema = boundedJsonObject(
     }),
     speakers: z
       .array(
-        participantProfileSchema.extend({
-          /** A co-speaker completes their own bio when they confirm; the proposer may leave it out. */
-          bio: participantProfileSchema.shape.bio.optional(),
-          role: speakerRoleSchema.default("speaker"),
-        }),
+        /** Who to invite; each co-speaker writes their own bio, links and photo when they confirm. */
+        userProfileSchema.extend({ role: speakerRoleSchema.default("speaker") }),
       )
       .max(MAX_PROPOSAL_ADDITIONAL_SPEAKERS)
       .default([]),
