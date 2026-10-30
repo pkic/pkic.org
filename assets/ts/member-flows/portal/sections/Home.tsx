@@ -84,7 +84,7 @@ function votePath(vote: MemberVote): string {
 }
 
 function formPath(form: MemberForm): string {
-  return `/groups/${encodeURIComponent(form.ownerGroupId)}/forms/${encodeURIComponent(form.placementId)}`;
+  return `/groups/${encodeURIComponent(form.accessGroupId)}/forms/${encodeURIComponent(form.placementId)}`;
 }
 
 function AttentionPanel() {

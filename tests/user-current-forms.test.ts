@@ -3,6 +3,7 @@ import { grantAdministrator } from "./helpers/administrator";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { currentUserFormsListResponseSchema } from "../assets/shared/schemas/member-forms";
+import { groupFormDefinitionResponseSchema } from "../assets/shared/schemas/group-forms";
 import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
 import { createGroup, joinGroup } from "../functions/_lib/services/groups";
 import { createManagedFormPlacement } from "../functions/_lib/services/forms";
@@ -166,6 +167,14 @@ describe("GET /api/v1/users/current/forms", () => {
       acceptingResponses: true,
       hasSubmitted: false,
     });
+
+    // Each form names the caller's group it is open through, and its page under that group lets them respond.
+    expect(openForm.accessGroupId).toBe(ownerGroup.id);
+    const sharedForm = page.forms.find((form) => form.placementId === sharedPlacementId)!;
+    expect(sharedForm).toMatchObject({ ownerGroupId: sharedOwnerGroup.id, accessGroupId: granteeGroup.id });
+    const sharedDetail = await getAs(token, `/api/v1/groups/${sharedForm.accessGroupId}/forms/${sharedPlacementId}`);
+    expect(sharedDetail.status, await sharedDetail.clone().text()).toBe(200);
+    expect(groupFormDefinitionResponseSchema.parse(await sharedDetail.json()).capabilities).toContain("submit");
 
     // hasSubmitted flips once a submission row exists for this user and placement.
     await insertSubmission(openFormId, openPlacementId, userId);

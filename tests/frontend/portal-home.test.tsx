@@ -402,6 +402,42 @@ describe("portal landing", () => {
     expect(attention.textContent).toContain("Vote on: Adopt the 2027 budget");
   });
 
+  it("opens a form shared with one of my groups under that group, not under its owner", async () => {
+    portalSession.value = portalSessionFixture({ member: true });
+    const placementId = "70000000-0000-4000-8000-000000000001";
+    const sharedWithGroupId = "10000000-0000-4000-8000-000000000002";
+    stubFeeds(
+      feeds({
+        "/api/v1/users/current/forms": {
+          forms: [
+            {
+              placementId,
+              formId: "70000000-0000-4000-8000-000000000002",
+              title: "Workshop feedback",
+              purpose: "survey",
+              ownerGroupId: "10000000-0000-4000-8000-000000000001",
+              ownerGroupName: "Organizing committee",
+              accessGroupId: sharedWithGroupId,
+              opensAt: null,
+              closesAt: null,
+              acceptingResponses: true,
+              hasSubmitted: false,
+            },
+          ],
+          page: onePage,
+        },
+      }),
+    );
+
+    const container = mount();
+    await settle();
+
+    const link = [...panelNamed(container, "Needs your voice").querySelectorAll("a")].find(
+      (anchor) => anchor.textContent === "Respond: Workshop feedback",
+    );
+    expect(link?.getAttribute("href")).toContain(`/groups/${sharedWithGroupId}/forms/${placementId}`);
+  });
+
   it("keeps an organization's standing in words, not in the badge color alone", async () => {
     portalSession.value = portalSessionFixture({ member: true });
     stubFeeds(
