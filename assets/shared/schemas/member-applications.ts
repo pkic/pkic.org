@@ -131,6 +131,9 @@ export const memberApplicationStatusResponseSchema = z.object({
   workflow: membershipWorkflowProgressSchema.nullable().optional(),
   id: databaseIdSchema,
   stage: applicationStageSchema,
+  membershipCategory: membershipCategorySchema,
+  /** The category's current catalog label; null once the category has left the catalog. */
+  membershipCategoryLabel: z.string().nullable(),
   stageEnteredAt: z.string(),
   createdAt: z.string(),
 });

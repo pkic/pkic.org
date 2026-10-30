@@ -639,6 +639,9 @@ describe("GET /api/v1/members/applications/:id/status", () => {
     expect(response.status).toBe(200);
     const body = memberApplicationStatusResponseSchema.parse(await response.json());
     expect(body.stage).toBe("submitted");
+    const label = await testEnv.DB.prepare("SELECT label FROM membership_categories WHERE code = 'A'").first("label");
+    expect(body).toMatchObject({ membershipCategory: "A", membershipCategoryLabel: label });
+    expect(label).toBeTruthy();
   });
 
   it("returns 401 for an invalid token", async () => {
