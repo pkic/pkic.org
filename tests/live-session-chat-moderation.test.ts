@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { LIVE_CHAT_POLICY } from "../assets/shared/live-chat-policy";
 import type { LiveRoomServerMessage } from "../assets/shared/schemas/live-session-room";
 import { LiveRoomChat } from "../functions/_lib/services/live-session/room-chat";
+import type { LiveRoomChatActions } from "../functions/_lib/services/live-session/room-chat-actions";
 import { LiveRoomSql } from "../functions/_lib/services/live-session/room-sql";
 import { createAdminSession } from "./helpers/auth";
 import { createLiveRoomFixture } from "./helpers/live-session-room";
@@ -62,6 +63,30 @@ async function extraAttendees(count: number): Promise<Client[]> {
   return clients;
 }
 
+/** The room's chat use cases, reached the way the sibling room tests reach its parts. */
+function chatActions(instance: unknown): LiveRoomChatActions {
+  return Reflect.get(instance as object, "chatActions");
+}
+
+/**
+ * Holds the reaction window open, then flushes it once the room handled each person's
+ * requests. A window that closes on its own timer would make batching depend on scheduling.
+ */
+async function inOneReactionWindow(handled: Record<string, number>, send: () => void) {
+  await runInDurableObject(f.room(), (instance) => {
+    Reflect.set(chatActions(instance), "reactionTimer", "held by the test");
+  });
+  send();
+  await vi.waitFor(() =>
+    runInDurableObject(f.room(), (instance) => {
+      const allowances: Map<string, number[]> = Reflect.get(chatActions(instance), "allowances");
+      for (const [userId, count] of Object.entries(handled))
+        expect(allowances.get(`reaction:${userId}`)?.length ?? 0).toBe(count);
+    }),
+  );
+  await runInDurableObject(f.room(), (instance) => chatActions(instance).flushReactions());
+}
+
 describe("live chat reactions, reports and moderation", () => {
   beforeEach(() => f.setup());
 
@@ -69,13 +94,15 @@ describe("live chat reactions, reports and moderation", () => {
     const author = await f.connect({ person: "attendee" });
     const reader = await f.connect({ person: "secondAttendee" });
     const message = await say(author, "Reactions please", reader);
-    reader.send({ type: "chat.react", messageId: message.id, reaction: "thumbs_up", on: true });
-    reader.send({ type: "chat.react", messageId: message.id, reaction: "thumbs_up", on: true });
-    author.send({ type: "chat.react", messageId: message.id, reaction: "love", on: true });
-    const own = await reader.next("chat.reactions", (update) => update.reactions.love === 1);
+    await inOneReactionWindow({ [f.users.secondAttendee]: 2, [f.users.attendee]: 1 }, () => {
+      reader.send({ type: "chat.react", messageId: message.id, reaction: "thumbs_up", on: true });
+      reader.send({ type: "chat.react", messageId: message.id, reaction: "thumbs_up", on: true });
+      author.send({ type: "chat.react", messageId: message.id, reaction: "love", on: true });
+    });
+    const own = await reader.next("chat.reactions");
     expect(own).toMatchObject({ reactions: { thumbs_up: 1, love: 1 }, myReactions: ["thumbs_up"] });
-    const shared = await author.next("chat.reactions", (update) => update.reactions.thumbs_up === 1);
-    expect(shared.myReactions).toEqual(["love"]);
+    const shared = await author.next("chat.reactions");
+    expect(shared).toMatchObject({ reactions: { thumbs_up: 1, love: 1 }, myReactions: ["love"] });
     // Three requests within the window arrive as one update per viewer.
     expect(reader.received.filter((update) => update.type === "chat.reactions")).toHaveLength(1);
     const joined = await f.connect({ person: "secondAttendee" });
@@ -83,9 +110,23 @@ describe("live chat reactions, reports and moderation", () => {
       reactions: { thumbs_up: 1, love: 1 },
       myReactions: ["thumbs_up"],
     });
+    const seen = author.received.length;
     reader.send({ type: "chat.react", messageId: message.id, reaction: "thumbs_up", on: false });
-    expect((await author.next("chat.reactions", (update) => !update.reactions.thumbs_up)).reactions).toEqual({
-      love: 1,
+    expect((await author.next("chat.reactions", () => true, { after: seen })).reactions).toEqual({ love: 1 });
+  });
+
+  it("leaves a viewer's own reactions out of a later update only someone else changed", async () => {
+    const author = await f.connect({ person: "attendee" });
+    const reader = await f.connect({ person: "secondAttendee" });
+    const message = await say(author, "Separate windows", reader);
+    reader.send({ type: "chat.react", messageId: message.id, reaction: "thumbs_up", on: true });
+    expect((await reader.next("chat.reactions")).myReactions).toEqual(["thumbs_up"]);
+    const seen = reader.received.length;
+    author.send({ type: "chat.react", messageId: message.id, reaction: "love", on: true });
+    // Null tells the reader their own reactions did not change; they keep the ones they had.
+    expect(await reader.next("chat.reactions", () => true, { after: seen })).toMatchObject({
+      reactions: { thumbs_up: 1, love: 1 },
+      myReactions: null,
     });
   });
 
@@ -126,10 +167,12 @@ describe("live chat reactions, reports and moderation", () => {
     const fresh = await f.connect({ person: "secondAttendee" });
     expect((fresh.received[0] as Extract<LiveRoomServerMessage, { type: "room.snapshot" }>).chat).toEqual([]);
 
+    const beforeKeep = operator.received.length;
     operator.send({ type: "chat.moderate", messageId: message.id, decision: "keep" });
     await operator.next(
       "chat.message",
       (update) => update.message.id === message.id && update.message.moderation?.reports === 0,
+      { after: beforeKeep },
     );
     // The author saw it held away, then back.
     await vi.waitFor(() =>
@@ -182,10 +225,9 @@ describe("live chat reactions, reports and moderation", () => {
     expect((await author.next("chat.access")).restriction).toBe("muted");
     author.send({ type: "chat.send", text: "Muted words" });
     expect((await author.next("room.refused")).code).toBe("LIVE_CHAT_MUTED");
+    const beforeReact = author.received.length;
     author.send({ type: "chat.react", messageId: message.id, reaction: "love", on: true });
-    expect((await author.next("room.refused", (refusal) => refusal.code === "LIVE_CHAT_MUTED")).code).toBe(
-      "LIVE_CHAT_MUTED",
-    );
+    expect((await author.next("room.refused", () => true, { after: beforeReact })).code).toBe("LIVE_CHAT_MUTED");
 
     organizer.send({ type: "chat.restrict", messageId: message.id, restriction: "banned" });
     expect((await author.next("chat.access", (update) => update.restriction === "banned")).restriction).toBe("banned");
@@ -199,9 +241,10 @@ describe("live chat reactions, reports and moderation", () => {
       banned.received.some((update) => update.type === "chat.message" && update.message.text === "Not for banned eyes"),
     ).toBe(false);
 
+    const beforeLift = reader.received.length;
     organizer.send({ type: "chat.restrict", messageId: message.id, restriction: null });
     expect((await author.next("chat.access", (update) => update.restriction === null)).restriction).toBeNull();
-    await reader.next("chat.message", (update) => update.message.id === message.id);
+    await reader.next("chat.message", (update) => update.message.id === message.id, { after: beforeLift });
     expectNoModerationData(reader);
   });
 
