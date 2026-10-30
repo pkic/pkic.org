@@ -15,6 +15,7 @@ import {
   ownEmailAddressVerificationSchema,
   ownEmailAddressesListResponseSchema,
 } from "../../assets/shared/schemas/own-email-addresses";
+import { LAST_SIGN_IN_METHOD, LAST_SIGN_IN_METHOD_MESSAGE } from "../../assets/shared/auth-errors";
 import { userEmailAddSchema } from "../../assets/shared/schemas/user-emails";
 import { EmailAddressAddForm } from "../../assets/ts/member-flows/portal/sections/EmailAddressAddForm";
 import { EmailVerificationConfirmation } from "../../assets/ts/member-flows/portal/shell/EmailVerificationConfirmation";
@@ -189,6 +190,20 @@ describe("email addresses on the user record", () => {
     await press(host, "Remove");
     expect(confirmAction).toHaveBeenCalledTimes(3);
     expect(writes("DELETE").map((request) => request.path)).toEqual([`/api/v1/users/current/emails/${waitingId}`]);
+  });
+
+  it("keeps a refused removal in the panel with its reason instead of a passing toast", async () => {
+    stub((method) =>
+      method === "DELETE"
+        ? json({ error: { code: LAST_SIGN_IN_METHOD, message: LAST_SIGN_IN_METHOD_MESSAGE, details: null } }, 409)
+        : json({ success: true }),
+    );
+    const host = mount(<EmailAddressesPanel userId={USER_ID} isSelf primaryEmail="ana@gmail.com" />);
+    await settle();
+    await press(host, "Actions for ana@waiting.example");
+    await press(host, "Remove");
+    expect(host.querySelector('[role="alert"]')?.textContent).toBe(LAST_SIGN_IN_METHOD_MESSAGE);
+    expect(toast).not.toHaveBeenCalled();
   });
 
   it("offers adding an address from the panel menu, and nothing for the primary address's row", async () => {
