@@ -37,6 +37,7 @@ function pruneReleases(directory, keep) {
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
+  constants,
   cpSync,
   existsSync,
   mkdirSync,
@@ -50,6 +51,7 @@ import {
 import { cpus, tmpdir, totalmem } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { publicationCacheRoot } from "./publication/build-context.mjs";
 
 /** One entry per shard: its `--shard` slice, its port, and its state directory name. */
 export function shardPlan(count, basePort) {
@@ -59,6 +61,22 @@ export function shardPlan(count, basePort) {
     port: basePort + index,
     name: `pkic-e2e.shard-${index + 1}`,
   }));
+}
+
+/**
+ * Specs publish the static site while the shards run side by side, so each shard builds into its
+ * own output and cache: a shared one lets one shard's build delete files another is still copying.
+ * Its cache starts as a clone of the checkout's, so the first build stays incremental.
+ */
+export function shardPublicationEnvironment(state, cacheRoot = publicationCacheRoot()) {
+  const cache = path.join(state, "publication-cache");
+  const seed = path.join(cacheRoot, "publication");
+  if (existsSync(seed))
+    cpSync(seed, path.join(cache, "publication"), { recursive: true, mode: constants.COPYFILE_FICLONE });
+  return {
+    PKIC_PUBLICATION_OUTPUT_ROOT: path.join(state, "publication-output"),
+    PKIC_PUBLICATION_CACHE_ROOT: cache,
+  };
 }
 
 /** A shard is a Worker, its database and a browser; budget this much memory for each. */
@@ -135,6 +153,7 @@ function run() {
               E2E_SHARDED: "1",
               E2E_SENDGRID_URL_FILE: path.join(root, `${plan.name}.sendgrid-url`),
               E2E_STRIPE_URL_FILE: path.join(root, `${plan.name}.stripe-url`),
+              ...shardPublicationEnvironment(state),
             },
             stdio: ["ignore", "pipe", "pipe"],
           },
