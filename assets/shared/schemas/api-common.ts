@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { EMAIL_AUTH_TOKEN_MAX_LENGTH } from "../constants/email-auth.ts";
 import { databaseIdSchema } from "./identifiers.ts";
+import { asciiEmailDomain, EMAIL_ADDRESS_PATTERN } from "../email-address.ts";
 
 /** Exact base response contract for successful mutations. Extend this for declared domain payloads. */
 export const successResponseSchema = z.object({ success: z.literal(true) }).strict();
@@ -82,9 +83,18 @@ export function boundedJsonObject<T extends z.ZodRawShape>(shape: T, maxLength: 
   });
 }
 
+const INVALID_EMAIL_MESSAGE = "Please enter a valid email address (for example: name@example.com).";
+/**
+ * An email address in its stored form. The domain is converted to ASCII before
+ * validation, so an internationalized domain is accepted and kept in the
+ * punycode spelling every other comparison uses.
+ */
 export const normalizedEmailSchema = z
-  .email({ error: "Please enter a valid email address (for example: name@example.com)." })
-  .transform((value) => value.trim().toLowerCase());
+  .string({ error: INVALID_EMAIL_MESSAGE })
+  .trim()
+  .transform(asciiEmailDomain)
+  .pipe(z.email({ pattern: EMAIL_ADDRESS_PATTERN, error: INVALID_EMAIL_MESSAGE }))
+  .transform((value) => value.toLowerCase());
 export const emailRecoveryRequestSchema = z.object({ email: normalizedEmailSchema });
 /** Canonically equivalent Unicode spellings share one representation; never guess a different encoding. */
 function personName(max: number, field: string) {

@@ -4,6 +4,7 @@ import { JSON_REQUEST_MAX_BYTES, readBoundedJsonBody } from "./http-body";
 import { attendanceTypeSchema, consentItemSchema } from "../../assets/shared/schemas/registration";
 import { normalizedEmailSchema } from "../../assets/shared/schemas/api-common";
 import { sourceTypeSchema } from "../../assets/shared/schemas/source";
+import { normalizeEmailAddress } from "../../assets/shared/email-address";
 
 type JsonRequestLike = Request | { raw?: Request };
 
@@ -35,7 +36,7 @@ export async function parseJsonBody<T>(
 }
 
 export function normalizeEmail(email: string): string {
-  return email.trim().toLowerCase();
+  return normalizeEmailAddress(email);
 }
 
 export const emailSchema = normalizedEmailSchema;
