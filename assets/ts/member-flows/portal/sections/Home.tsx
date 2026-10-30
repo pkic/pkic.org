@@ -123,8 +123,10 @@ function AttentionPanel() {
           {openSurveys.map((form) => (
             <li key={`form-${form.placementId}`} class="pk-cluster">
               <Link href={formPath(form)}>Respond: {form.title}</Link>
-              <span class="pk-small">{form.ownerGroupName}</span>
-              {form.closesAt && <span class="pk-small">closes {fmt(form.closesAt)}</span>}
+              {/* One meta line, so the group name does not read as what closes. */}
+              <span class="pk-small">
+                {[form.ownerGroupName, form.closesAt && `closes ${fmt(form.closesAt)}`].filter(Boolean).join(" · ")}
+              </span>
             </li>
           ))}
           {pendingReviews.map((organization) => (

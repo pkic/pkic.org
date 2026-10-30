@@ -438,7 +438,7 @@ describe("portal landing", () => {
               ownerGroupName: "Organizing committee",
               accessGroupId: sharedWithGroupId,
               opensAt: null,
-              closesAt: null,
+              closesAt: "2026-11-15T17:00:00.000Z",
               acceptingResponses: true,
               hasSubmitted: false,
             },
@@ -455,6 +455,8 @@ describe("portal landing", () => {
       (anchor) => anchor.textContent === "Respond: Workshop feedback",
     );
     expect(link?.getAttribute("href")).toContain(`/groups/${sharedWithGroupId}/forms/${placementId}`);
+    // The asking group and the deadline are separate facts, not "committee closes …".
+    expect(link?.parentElement?.textContent).toContain("Organizing committee · closes ");
   });
 
   it("keeps an organization's standing in words, not in the badge color alone", async () => {
