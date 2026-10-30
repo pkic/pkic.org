@@ -162,6 +162,9 @@ function run() {
         for (const stream of [child.stdout, child.stderr]) stream.on("data", (chunk) => chunks.push(chunk));
         child.on("close", (code) => {
           writeFileSync(log, Buffer.concat(chunks));
+          // The state root is removed on exit; keep each shard's output where a failure can be read afterwards.
+          mkdirSync("test-results/e2e-parallel", { recursive: true });
+          cpSync(log, path.join("test-results/e2e-parallel", `${plan.name}.log`));
           const text = readFileSync(log, "utf8");
           const failed = [...text.matchAll(/^\s+\d+\) (tests\/e2e\/[^\n]+)$/gm)].map((match) => match[1]);
           const summary = text.match(/^\s+(\d+) passed.*$/m)?.[0]?.trim() ?? "no summary";
