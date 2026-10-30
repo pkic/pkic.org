@@ -8,6 +8,7 @@ import { buildProvisionOrganizationMembership } from "../provisioning";
 import { prepareQueueEmailStatement } from "../../../email/outbox";
 import { adminDatabaseUserId } from "../../../auth/admin-identity";
 import { prepareAuditLog } from "../../audit";
+import { prepareIdentityProfileCompletion } from "../../identities/profile-completion";
 import {
   buildMemberAccountClaimEmail,
   buildApplicationApprovedWelcomeEmail,
@@ -76,6 +77,7 @@ export async function buildApplicationApproval(
   const requestedWorkingGroupSlugs = applicationWorkingGroupSlugs(answers);
   const jobTitle = typeof answers.job_title === "string" && answers.job_title.trim() ? answers.job_title.trim() : null;
   const links = typeof answers.linkedin === "string" && answers.linkedin.trim() ? [answers.linkedin.trim()] : [];
+  const biography = typeof answers.about_yourself === "string" ? answers.about_yourself : null;
   // Approving an organization's application creates its applicant's organization identity, which always has a job
   // title: staff add it to the application's answers before approving.
   if (!isIndividual && !jobTitle)
@@ -119,7 +121,19 @@ export async function buildApplicationApproval(
 
   const now = nowIso();
   const fromStage = application.stage;
-  const statements: StatementLike[] = [...provisioning.statements];
+  const statements: StatementLike[] = [
+    ...provisioning.statements,
+    // "About yourself" is the applicant's biography. It belongs to the identity
+    // they now act as, whether provisioning created it or reused a personal
+    // identity or organization affiliation, and it only ever fills a blank.
+    ...prepareIdentityProfileCompletion(db, {
+      userId: member.userId,
+      identityId: member.identityId,
+      biography,
+      at: now,
+      actor: { type: params.actor ? "user" : "system", id: params.actor?.id ?? null },
+    }),
+  ];
 
   // Compare-and-set: only applies if the application is still in the observed lifecycle,
   // guarding against a stale read racing a concurrent decline/on-hold/
