@@ -229,6 +229,34 @@ export async function getBadgePrintingContext(
   return { revision: basis.revision, template: basis.template, branding: checkedBranding.data };
 }
 
+/** Refusals that name a sponsor's stored artwork: organizers fix these, attendees cannot. */
+const SPONSOR_ARTWORK_REFUSALS = new Set([
+  "BADGE_SPONSOR_SVG_REQUIRED",
+  "BADGE_SPONSOR_LOGO_TOO_LARGE",
+  "BADGE_SPONSOR_ARTWORK_TOO_LARGE",
+  "BADGE_SPONSOR_ARTWORK_INVALID",
+]);
+
+/**
+ * The holder's ticket design. Sponsor artwork an organizer still has to replace must not hide the attendee's QR or
+ * show them organizer instructions, so the ticket falls back to the same template without sponsor logos. The
+ * organizer print document keeps refusing through {@link getBadgePrintingContext}.
+ */
+export async function getBadgeHolderPrintingContext(
+  db: DatabaseLike,
+  environment: Pick<Env, "ASSETS_BUCKET">,
+  eventId: string,
+) {
+  try {
+    return await getBadgePrintingContext(db, environment, eventId);
+  } catch (error) {
+    if (!(error instanceof AppError) || !SPONSOR_ARTWORK_REFUSALS.has(error.code)) throw error;
+    const basis = await prepareBadgePrintingBasis(db, eventId);
+    await db.batch(basis.guards);
+    return { revision: basis.revision, template: basis.template, branding: [] };
+  }
+}
+
 /** One canonical fingerprint for badge and promotion sponsor populations. */
 export function badgePrintingBasisRevision(
   eventId: string,
