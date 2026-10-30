@@ -41,4 +41,6 @@ export async function confirmSpeakerWithReceipt(page: Page, accessPath: string):
   } finally {
     await page.unroute(matches, capture);
   }
+  // The receipt is read before the page reloads; continue only on the reloaded, confirmed page.
+  await expect(page.getByText("You have confirmed your participation.", { exact: false })).toBeVisible();
 }
