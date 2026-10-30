@@ -5,6 +5,7 @@ import {
   organizationProfileExtendedFieldsSchema,
   organizationProfileLongContentSchema,
   organizationProfileSummaryFieldsSchema,
+  organizationReferenceSchema,
 } from "./organization-profile";
 import { linksSchema } from "./links";
 import { trimmedString } from "./api-common";
@@ -67,6 +68,19 @@ export const MEMBER_REPRESENTATION_LABELS: Record<MemberRepresentationState, str
   some: "With representatives",
 };
 
+/**
+ * What else an individual member stands as. A person may hold an individual
+ * membership and act for an organization at the same time (reinstating an
+ * ended representation does exactly that); nothing refuses it, and staff find
+ * those people to settle which membership should stand.
+ */
+export const MEMBER_ALSO_REPRESENTS = ["organization"] as const;
+export const memberAlsoRepresentsSchema = z.enum(MEMBER_ALSO_REPRESENTS);
+export type MemberAlsoRepresents = z.infer<typeof memberAlsoRepresentsSchema>;
+export const MEMBER_ALSO_REPRESENTS_LABELS: Record<MemberAlsoRepresents, string> = {
+  organization: "Individuals who also represent an organization",
+};
+
 export const membersListQuerySchema = listQuerySchema(MEMBERS_LIST_SORT_COLUMNS).extend({
   /**
    * Which projection the caller needs, stated rather than inferred.
@@ -110,6 +124,11 @@ export const membersListQuerySchema = listQuerySchema(MEMBERS_LIST_SORT_COLUMNS)
    */
   representatives: memberRepresentationSchema.optional(),
   /**
+   * Staff only. `organization` finds the individual members who also hold an
+   * active organization representation.
+   */
+  alsoRepresents: memberAlsoRepresentsSchema.optional(),
+  /**
    * One membership by its aggregate id — the same list, narrowed to a single
    * row, for a surface that edits one. `groupMembershipsListQuerySchema`
    * narrows the same way rather than growing a second read model.
@@ -146,6 +165,12 @@ export const staffMemberSummarySchema = z.object({
   status: memberStatusSchema,
   /** Live identities acting for this member. One (or none) for an individual. */
   representativeCount: z.number().int().nonnegative(),
+  /**
+   * For an individual member, the organizations the same person currently
+   * represents, by name. Empty for an organization member, and for a person
+   * who stands only as an individual.
+   */
+  representedOrganizations: z.array(organizationReferenceSchema),
   memberSince: z.string(),
 });
 export type StaffMemberSummary = z.infer<typeof staffMemberSummarySchema>;
