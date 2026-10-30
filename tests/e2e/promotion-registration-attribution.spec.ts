@@ -21,6 +21,7 @@ import { userUpdateSchema } from "../../assets/shared/schemas/user-management";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
 import { registerInBrowser } from "./helpers/registration";
+import { runScheduledWork } from "./helpers/scheduled-work";
 
 const slug = "pqc-conference-amsterdam-nl";
 const eventApi = `/api/v1/events/${slug}`;
@@ -172,13 +173,13 @@ test("a rendered promotion QR preserves its referral through email sign-in and c
     .check();
   await page.getByRole("button", { name: "Save my materials", exact: true }).click();
   await page.getByRole("button", { name: "Prepare downloads", exact: true }).click();
-  await page.request.get("/cdn-cgi/local/scheduled");
+  await runScheduledWork(page);
   const preview = page.getByRole("img", { name: "Preview of your promotion materials", exact: true });
   await expect
     .poll(
       async () => {
         if (await preview.isVisible()) return true;
-        await page.request.get("/cdn-cgi/local/scheduled");
+        await runScheduledWork(page);
         return preview.isVisible();
       },
       { timeout: 120_000, intervals: [1000, 2000, 5000] },
