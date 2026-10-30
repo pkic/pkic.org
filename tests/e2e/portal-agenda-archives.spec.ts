@@ -440,16 +440,6 @@ test("approved archive corrections and promotion exports remain tied to a frozen
   await expect(page.getByRole("heading", { name: `Promotion kit · ${title}`, exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Prepare downloads", exact: true }).click();
   const pdf = page.getByRole("link", { name: "Carousel PDF", exact: true });
-  await expect
-    .poll(
-      async () => {
-        if (await pdf.isVisible()) return true;
-        await page.request.get("/cdn-cgi/local/scheduled");
-        return pdf.isVisible();
-      },
-      { timeout: 120_000, intervals: [1000, 2000, 5000] },
-    )
-    .toBe(true);
   const renderDiagnostics = async (name: string) => {
     const state = process.env.E2E_PREPARED_STATE_DIR ?? (await readFile("test-results/e2e-state-dir", "utf8")).trim();
     const result = await promisify(execFile)(
@@ -472,6 +462,21 @@ test("approved archive corrections and promotion exports remain tied to a frozen
     );
     await testInfo.attach(name, { body: result.stdout, contentType: "application/json" });
   };
+  try {
+    await expect
+      .poll(
+        async () => {
+          if (await pdf.isVisible()) return true;
+          await page.request.get("/cdn-cgi/local/scheduled");
+          return pdf.isVisible();
+        },
+        { timeout: 120_000, intervals: [1000, 2000, 5000] },
+      )
+      .toBe(true);
+  } catch (error) {
+    await renderDiagnostics("promotion-render-not-ready");
+    throw error;
+  }
   await renderDiagnostics("promotion-render-first-attempt");
   const previewImage = page.getByRole("img", { name: "Preview of your promotion materials", exact: true });
   await expect(previewImage).toBeVisible();

@@ -104,7 +104,8 @@ test("publication is an ellipsis action opening a dedicated review, with no acti
   await page.screenshot({ path: `${artifacts}/sessions-final-phone.png`, fullPage: true });
   await runAgendaAction(page, "Review for publication");
   await expect(page.getByRole("heading", { name: "Review for publication", exact: true })).toBeVisible();
-  await expect(page.getByRole("table")).toHaveCount(0);
+  // The review replaces the session list; other review tables (speaker profiles) may exist once speakers do.
+  await expect(page.getByRole("table", { name: "Event sessions", exact: true })).toHaveCount(0);
   await expect(page.getByText("Draft revision", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Approve for publication", exact: true })).toBeVisible();
   await page.evaluate(() => window.scrollTo(0, 0));

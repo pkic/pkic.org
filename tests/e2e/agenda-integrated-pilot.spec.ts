@@ -13,6 +13,7 @@ import {
 import { personalAgendaResponseSchema } from "../../assets/shared/schemas/event-personal-agenda";
 import { roomRecommendationsResponseSchema } from "../../assets/shared/schemas/event-room-recommendations";
 import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-auth";
+import { sponsorshipStageUpdateSchema } from "../../assets/shared/schemas/sponsorship-management";
 import {
   registrationManageSchema,
   registrationManageReadResponseSchema,
@@ -149,9 +150,11 @@ test("one recurring meeting and conference retain the same actors through organi
     sponsor = await sponsorContext.newPage();
   const doorConsole = captureDeviceConsole(door),
     sponsorConsole = captureDeviceConsole(sponsor);
+  let rehearsalSponsorId: string | undefined;
   try {
     // Existing fixture establishes its own registrations, live sponsor and authority through actual mailbox/API flows.
     const fixture = await prepareSponsorLiveFixture(staff, attendee);
+    rehearsalSponsorId = fixture.sponsorId;
     const freeTextMarker = `Device-free-text-${randomUUID()}`;
     const forbidden = [fixture.email, fixture.deniedEmail, fixture.firstName, fixture.organization, freeTextMarker];
     const devicePrivacy: Array<Awaited<ReturnType<typeof expectNoStoredSponsorContacts>> & { stage: string }> = [];
@@ -627,6 +630,13 @@ test("one recurring meeting and conference retain the same actors through organi
       ),
     );
   } finally {
+    // The rehearsal sponsor has no printable logo; ending it keeps the shared event's badges and promotion kits renderable.
+    if (rehearsalSponsorId) {
+      const ended = await staff.request.patch(`/api/v1/sponsors/${rehearsalSponsorId}/stage`, {
+        data: sponsorshipStageUpdateSchema.parse({ toStage: "lapsed", endReason: "withdrawal" }),
+      });
+      expect.soft(ended.status(), await ended.text()).toBe(200);
+    }
     for (const context of contexts) await context.close();
   }
 });
