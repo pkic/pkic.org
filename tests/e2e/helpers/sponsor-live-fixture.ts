@@ -437,12 +437,17 @@ export async function expectContactBadgeRejected(page: Page, email: string, free
     await page.getByRole("button", { name: "Admission decision", exact: true }).click();
     await expect(page.getByLabel("Badge code", { exact: true })).toHaveAttribute("aria-invalid", "true");
     expect(submissions).toEqual([]);
-    // The refusal is audited locally as a failure that never carries the contact content, and keeps no scan.
-    const after = await scannerStorage(page);
-    expect(after.pending).toEqual(before.pending);
+    // The refusal is audited as a failure that never carries the contact content, and keeps no scan.
+    // The failure is queued first and reaches history only after the background upload archives it.
     const known = new Set(before.history.map((row) => row.scan.operationId));
+    const archivedFailures = async () => {
+      const current = await scannerStorage(page);
+      return { current, added: current.history.filter((row) => !known.has(row.scan.operationId)) };
+    };
+    await expect.poll(async () => (await archivedFailures()).added.length).toBe(1);
+    const { current: after, added } = await archivedFailures();
+    expect(after.pending).toEqual(before.pending);
     expect(after.history.filter((row) => known.has(row.scan.operationId))).toEqual(before.history);
-    const added = after.history.filter((row) => !known.has(row.scan.operationId));
     expect(added).toHaveLength(1);
     expect(added[0]).toMatchObject({
       kind: "failure",
