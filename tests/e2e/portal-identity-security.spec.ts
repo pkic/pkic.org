@@ -219,8 +219,8 @@ test("a membership join capability cannot be redeemed as a portal sign-in", asyn
   const joinToken = new URLSearchParams(new URL(joinUrl).hash.slice(1)).get("verify");
   expect(joinToken).toBeTruthy();
 
-  // Present it where a portal sign-in capability is expected.
-  const presented = await openSignInLink(page, `/portal/#verify=${encodeURIComponent(joinToken!)}`);
+  // Present it where a portal sign-in capability is expected, in the portal's own sign-in link form.
+  const presented = await openSignInLink(page, `/portal/#/verify?token=${encodeURIComponent(joinToken!)}`);
   expect(presented.ok(), "a join capability must be refused as a sign-in").toBe(false);
   await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toBeVisible({ timeout: 15_000 });
   const session = await page.evaluate(async () => {
