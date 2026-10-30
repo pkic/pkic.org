@@ -24,10 +24,23 @@ describe("portal capability-derived navigation", () => {
     expect(portalDefaultPath(session)).toBe(ownRecord);
     expect(portalSectionEnabled(session, "users")).toBe(true);
     expect(portalNavigationItems(session).map((item) => item.label)).toEqual(["Home"]);
-    for (const section of ["groups", "organizations", "members", "events", "sponsors", "settings"] as const) {
+    for (const section of ["groups", "organizations", "members", "sponsors", "settings"] as const) {
       expect(portalSectionEnabled(session, section)).toBe(false);
     }
     expect(portalCapacityFallbackPath(session, "/organizations/unrelated")).toBe(ownRecord);
+  });
+
+  it("opens the event pages Home links to for a signed-in person without event participation", () => {
+    // A representation that ended leaves an individual identity: Home still lists events, so their pages must open.
+    const session = userAuthSessionResponseSchema.parse({ ...portalSessionFixture({}), hasActiveIdentity: true });
+    expect(session.eventParticipation).toBeFalsy();
+    expect(portalSectionEnabled(session, "events")).toBe(true);
+    expect(portalCapacityFallbackPath(session, "/events")).toBeNull();
+    expect(portalCapacityFallbackPath(session, "/events/annual-conference")).toBeNull();
+    expect(portalCapacityFallbackPath(session, "/events/annual-conference/ticket")).toBeNull();
+    // The sidebar entry stays with participants and event grants.
+    expect(portalNavigationItems(session).map((item) => item.label)).toEqual(["Home"]);
+    expect(portalSectionEnabled(null, "events")).toBe(false);
   });
 
   it("gives a user with no capacity Home, their own record, and application history", () => {
@@ -36,7 +49,7 @@ describe("portal capability-derived navigation", () => {
     expect(portalDefaultPath(session)).toBe("/home");
     expect(portalNavigationItems(session).map((item) => item.label)).toEqual(["Home"]);
     expect(portalSectionEnabled(session, "users")).toBe(true);
-    for (const section of ["groups", "organizations", "members", "events", "sponsors", "settings"] as const) {
+    for (const section of ["groups", "organizations", "members", "sponsors", "settings"] as const) {
       expect(portalSectionEnabled(session, section)).toBe(false);
     }
   });
