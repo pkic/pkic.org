@@ -87,7 +87,14 @@ export async function signInToPortal(page: Page, email: string, options: { conti
   await openEmailSignIn(page);
   await page.getByLabel("Email").fill(email);
   const since = await capturedEmailCount();
+  // The confirmation follows the server's answer, which a busy server takes longer than an assertion's default to give.
+  const requested = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/api/v1/auth/request-link" && response.request().method() === "POST",
+  );
   await page.getByRole("button", { name: "Send sign-in link" }).click();
+  const linkRequest = await requested;
+  expect(linkRequest.status(), await linkRequest.text()).toBe(200);
   await expect(page.getByText("you'll receive a sign-in link shortly", { exact: false })).toBeVisible();
   const emailMessage = await waitForCapturedEmail(email, "sign-in link", { since });
   // A user normally opens the email in a new tab. The portal is already
