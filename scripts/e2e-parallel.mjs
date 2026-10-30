@@ -7,11 +7,46 @@
  *
  *   pnpm run test:e2e:parallel [--shards=3] [--base-port=8820] [--prepared=DIR] [playwright arguments...]
  *
- * `--prepared=DIR` keeps the built release and seeded database in DIR and reuses them on the next run,
- * so only the first run pays for the build. Delete DIR after changing product code or migrations.
+ * The built release and seeded database are kept between runs, keyed by the product code they were built
+ * from: a run on the same code (test files do not count) reuses them and starts in seconds, and a run after
+ * a product change builds a new one. Only the newest few are kept. `--prepared=DIR` names the directory.
  */
+const KEPT_RELEASES = 2;
+const git = (...args) => spawnSync("git", args, { encoding: "utf8", maxBuffer: 1 << 28 }).stdout ?? "";
+
+/** What the prepared release is built from: the commit plus uncommitted product changes, never test files. */
+export function releaseKey(run = git) {
+  const product = [".", ":(exclude)tests", ":(exclude)test-results"];
+  const untracked = run("ls-files", "-o", "--exclude-standard", "--", ...product)
+    .split("\n")
+    .filter(Boolean)
+    .map((file) => `${file}:${run("hash-object", "--", file).trim()}`);
+  return createHash("sha1")
+    .update([run("rev-parse", "HEAD"), run("diff", "HEAD", "--binary", "--", ...product), ...untracked].join("\0"))
+    .digest("hex")
+    .slice(0, 16);
+}
+
+function pruneReleases(directory, keep) {
+  const releases = readdirSync(directory)
+    .map((name) => path.join(directory, name))
+    .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs);
+  for (const stale of releases.slice(keep)) rmSync(stale, { recursive: true, force: true });
+}
+
 import { spawn, spawnSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { cpus, tmpdir, totalmem } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -52,7 +87,8 @@ export function parseArguments(argv, defaults = defaultShards()) {
 function run() {
   const { shards, basePort, prepared: keptRelease, passthrough } = parseArguments(process.argv.slice(2));
   const root = mkdtempSync(path.join(process.env.E2E_STATE_ROOT ?? tmpdir(), "pkic-e2e-shards."));
-  const prepared = keptRelease ?? path.join(root, "pkic-e2e.prepared");
+  const releases = path.join(process.env.E2E_STATE_ROOT ?? tmpdir(), "pkic-e2e-releases");
+  const prepared = keptRelease ?? path.join(releases, releaseKey());
   const cleanup = () => rmSync(root, { recursive: true, force: true });
   process.on("exit", cleanup);
   mkdirSync("test-results", { recursive: true });
@@ -67,9 +103,11 @@ function run() {
     console.log(`[e2e-parallel] reusing the prepared release in ${prepared}`);
   } else {
     console.log(`[e2e-parallel] preparing one release for ${shards} shards`);
+    rmSync(prepared, { recursive: true, force: true });
     mkdirSync(prepared, { recursive: true });
     const prepare = spawnSync("sh", ["scripts/e2e-prepare.sh", prepared], { stdio: "inherit" });
     if (prepare.status !== 0) process.exit(prepare.status ?? 1);
+    if (!keptRelease) pruneReleases(releases, KEPT_RELEASES);
   }
 
   const results = shardPlan(shards, basePort).map(

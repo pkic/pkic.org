@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultShards, parseArguments, shardPlan } from "../../scripts/e2e-parallel.mjs";
+import { defaultShards, parseArguments, releaseKey, shardPlan } from "../../scripts/e2e-parallel.mjs";
 
 describe("the parallel e2e runner's plan", () => {
   it("gives each shard its own slice, port and state directory", () => {
@@ -21,6 +21,19 @@ describe("the parallel e2e runner's plan", () => {
 
   it("takes a directory to keep the prepared release in", () => {
     expect(parseArguments(["--prepared=cache/release"], 2).prepared).toMatch(/cache\/release$/);
+  });
+
+  it("keys the prepared release by product code, not by test files", () => {
+    const state = { head: "a", diff: "", files: "" };
+    const run = (...args: string[]) =>
+      args[0] === "rev-parse" ? state.head : args[0] === "diff" ? state.diff : state.files;
+    const base = releaseKey(run);
+    expect(releaseKey(run)).toBe(base);
+    state.diff = "changed product file";
+    expect(releaseKey(run)).not.toBe(base);
+    state.diff = "";
+    state.head = "b";
+    expect(releaseKey(run)).not.toBe(base);
   });
 
   it("defaults to one shard per core, fewer when memory is short, and refuses nonsense", () => {
