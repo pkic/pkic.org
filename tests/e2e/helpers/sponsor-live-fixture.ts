@@ -179,6 +179,16 @@ export async function prepareSponsorLiveFixture(staff: Page, attendee: Page) {
     manageUrl: confirmedManage.manageUrl,
     manageToken: confirmedManage.manageToken,
     workspace: `/portal/#/events/${sponsorEventSlug}/leads`,
+    /**
+     * The fixture sponsor has no printable logo, and every active event sponsor is part of the event's badges and
+     * promotion kits. Ending it when the spec is done keeps those renderable for the specs that share the event.
+     */
+    async end() {
+      const ended = await staff.request.patch(`/api/v1/sponsors/${sponsorId}/stage`, {
+        data: sponsorshipStageUpdateSchema.parse({ toStage: "lapsed", endReason: "withdrawal" }),
+      });
+      expect.soft(ended.status(), await ended.text()).toBe(200);
+    },
   };
 }
 

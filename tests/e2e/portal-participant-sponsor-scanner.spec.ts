@@ -24,8 +24,10 @@ test("participant sponsor scanner keeps its sponsor context and manual exit cont
   test.setTimeout(300_000);
   const staffContext = await browser.newContext({ baseURL: info.project.use.baseURL });
   const attendeeContext = await browser.newContext({ baseURL: info.project.use.baseURL });
+  let endFixture: (() => Promise<void>) | undefined;
   try {
     const fixture = await prepareSponsorLiveFixture(await staffContext.newPage(), await attendeeContext.newPage());
+    endFixture = fixture.end;
     await signInToPortal(page, fixture.operator.email);
     const discovery = await page.request.get(`/api/v1/events/${sponsorEventSlug}/sponsors/leads`);
     expect(discovery.status()).toBe(200);
@@ -121,6 +123,7 @@ test("participant sponsor scanner keeps its sponsor context and manual exit cont
       await expect(page.getByText(`${sponsor.name} · Event-wide`, { exact: true })).toBeVisible();
     }
   } finally {
+    await endFixture?.();
     await staffContext.close();
     await attendeeContext.close();
   }
@@ -268,9 +271,11 @@ test("dual staff and sponsor identity reaches both event scanners across phone t
   test.setTimeout(300_000);
   const staffContext = await browser.newContext({ baseURL: info.project.use.baseURL });
   const attendeeContext = await browser.newContext({ baseURL: info.project.use.baseURL });
+  let endFixture: (() => Promise<void>) | undefined;
   try {
     const staff = await staffContext.newPage();
     const fixture = await prepareSponsorLiveFixture(staff, await attendeeContext.newPage());
+    endFixture = fixture.end;
     const eventResponse = await staff.request.get(`/api/v1/events/${sponsorEventSlug}`);
     expect(eventResponse.status()).toBe(200);
     const event = eventDetailResponseSchema.parse(await eventResponse.json()).event;
@@ -364,6 +369,7 @@ test("dual staff and sponsor identity reaches both event scanners across phone t
       });
     }
   } finally {
+    await endFixture?.();
     await staffContext.close();
     await attendeeContext.close();
   }

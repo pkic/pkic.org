@@ -189,20 +189,22 @@ test("retained historical event links resolve static IDs, dialogs, days, speaker
     await expect(page.locator(`[data-agenda-tab="${dates.at(-1)}"]`)).toHaveAttribute("aria-selected", "true");
     await page.goto(`${eventPath}#nav-speakers`);
     await expect(byId(page, "agenda-speakers")).toBeVisible();
-    // Every retained download is checked against its source bytes; the requests are independent, so they run together.
-    const downloads: { url: string; sha256: string; bytes: number }[] = await Promise.all(
-      fixture.downloadUrls.map(async (url) => {
-        const original = await readFile(resolve("content", decodeURIComponent(url).slice(1)));
-        expect(original.subarray(0, 5).toString()).toBe("%PDF-");
-        const oldDownload = await page.request.get(url);
-        expect(oldDownload.status(), url).toBe(200);
-        expect(oldDownload.headers()["content-type"], url).toMatch(/^application\/pdf(?:;|$)/iu);
-        const actual = await oldDownload.body();
-        expect(new Uint8Array(actual), url).toEqual(new Uint8Array(original));
-        expect(digest(actual), url).toBe(digest(original));
-        return { url, sha256: digest(actual), bytes: actual.length };
-      }),
-    );
+    // Every retained download is checked against its source bytes, a few at a time to stay within the local runtime.
+    const verifyDownload = async (url: string) => {
+      const original = await readFile(resolve("content", decodeURIComponent(url).slice(1)));
+      expect(original.subarray(0, 5).toString()).toBe("%PDF-");
+      // A keep-alive socket the runtime already closed is a reset, which the request retries on a fresh one.
+      const oldDownload = await page.request.get(url, { maxRetries: 3 });
+      expect(oldDownload.status(), url).toBe(200);
+      expect(oldDownload.headers()["content-type"], url).toMatch(/^application\/pdf(?:;|$)/iu);
+      const actual = await oldDownload.body();
+      expect(new Uint8Array(actual), url).toEqual(new Uint8Array(original));
+      expect(digest(actual), url).toBe(digest(original));
+      return { url, sha256: digest(actual), bytes: actual.length };
+    };
+    const downloads: { url: string; sha256: string; bytes: number }[] = [];
+    for (let offset = 0; offset < fixture.downloadUrls.length; offset += 4)
+      downloads.push(...(await Promise.all(fixture.downloadUrls.slice(offset, offset + 4).map(verifyDownload))));
     summary.push({
       sourcePath: fixture.sourcePath,
       dialogs: evidence.length,
