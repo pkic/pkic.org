@@ -153,7 +153,9 @@ export function App() {
       }
       setVerifying(Boolean(magicLinkToken));
       setVerifyError(null);
-      setAuthChecking();
+      // A session this tab already holds, such as one a link just signed in, is refreshed in place:
+      // covering it with the sign-in check would replace the passkey offer or the portal on screen.
+      if (!portalSession.value) setAuthChecking();
       const pendingLogout = await resumePendingUserLogout();
       if (cancelled) return;
       if (pendingLogout) {

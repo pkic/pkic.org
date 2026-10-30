@@ -249,6 +249,32 @@ it("retains canonical session recording and the reviewed return route after succ
   ]);
 });
 
+it("keeps the passkey offer on screen while the session a link just signed in is refreshed", async () => {
+  mocks.supportsPasskeys.mockReturnValue(true);
+  window.location.hash = "#/verify?token=synthetic-valid-link";
+  const session = portalSessionFixture({ pendingIdentityCount: 0 });
+  const refresh = pendingResponse();
+  fetchMock.mockImplementation(async (input) => {
+    const path = String(input);
+    if (path === "/api/v1/auth/session") return refresh.promise;
+    return Response.json(path === "/api/v1/users/current" ? portalProfileFixture(session) : session);
+  });
+  await mount();
+  await vi.waitFor(() =>
+    expect(fetchMock.mock.calls.map(([input]) => String(input))).toContain("/api/v1/auth/session"),
+  );
+  expect(host.textContent).not.toContain("Checking your sign-in");
+  expect(host.textContent).toContain("Continue without a passkey");
+  await act(async () => {
+    refresh.resolve(Response.json(session));
+  });
+  await vi.waitFor(() =>
+    expect(fetchMock.mock.calls.map(([input]) => String(input))).toContain("/api/v1/users/current"),
+  );
+  expect(host.textContent).toContain("Continue without a passkey");
+  expect(mocks.renderShell).not.toHaveBeenCalled();
+});
+
 async function followLink(token: string) {
   await act(async () => {
     history.replaceState({}, "", `/portal/#/verify?token=${token}&next=%2Fgroups%2Fsynthetic`);
