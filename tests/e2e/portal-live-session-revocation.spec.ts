@@ -64,7 +64,9 @@ test("two already-open live moderator clients stop receiving private questions, 
   test.setTimeout(300_000);
   await signInAsE2eStaff(staff, e2eAdminEmail("portal-agenda-track-demand"));
   const now = new Date(),
-    date = now.toISOString().slice(0, 10);
+    date = now.toISOString().slice(0, 10),
+    dayStart = Date.parse(`${date}T00:00:00.000Z`),
+    dayEnd = Date.parse(`${date}T23:59:00.000Z`);
   const fixture = await createRegistrationEvent(staff, "live-revocation", {
     date,
     startTime: "00:00",
@@ -87,8 +89,8 @@ test("two already-open live moderator clients stop receiving private questions, 
       expectedRevision: agenda.revision,
       title: "Synthetic live revocation acceptance",
       description: "Current-time private moderator delivery regression.",
-      startAt: new Date(now.getTime() - 60_000).toISOString(),
-      endAt: new Date(now.getTime() + 3_600_000).toISOString(),
+      startAt: new Date(Math.max(now.getTime() - 60_000, dayStart)).toISOString(),
+      endAt: new Date(Math.min(now.getTime() + 3_600_000, dayEnd)).toISOString(),
       roomId: room.id,
       admissionPolicy: "preference",
       accessPolicy: "open",
