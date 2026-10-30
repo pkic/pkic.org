@@ -272,6 +272,11 @@ async function main(): Promise<void> {
   const identityContainer = profileForm?.querySelector<HTMLElement>("[data-speaker-identity]");
   const invited = data.speaker.status === "invited";
   const acceptedConsents = () => readConsentValues(invited ? confirmForm! : profileForm!);
+  const profileSave = profileForm?.querySelector<HTMLElement>("[data-profile-save]");
+  /** Saving is offered only once there is an identity to save, never as a button that can only refuse. */
+  function syncProfileSave(): void {
+    if (profileSave) profileSave.hidden = identityChanged && !entry;
+  }
   const updateEntry = (selection: ProposalEntrySelection | null): void => {
     if (selection !== entry) {
       identityRevision += 1;
@@ -280,12 +285,14 @@ async function main(): Promise<void> {
       syncRepresentationConfirmation();
     }
     entry = selection;
+    syncProfileSave();
   };
   const editIdentity = (): void => {
     identityChanged = true;
     identityRevision += 1;
     representationSaved = false;
     syncRepresentationConfirmation();
+    syncProfileSave();
   };
   async function savePersonalDetails(names: PersonalNamePatch): Promise<ParticipationPerson> {
     await patchJson(
@@ -376,9 +383,12 @@ async function main(): Promise<void> {
           renderIdentity();
         }
         syncRepresentationConfirmation();
-        setStatus(boot.statusEl, "Speaker identity saved.");
-        if (identityChanged) showProfileEditForm();
-        else showProfileSavedState();
+        syncProfileSave();
+        // The saved state says so itself, beside the profile; the page status says it only while the form stays open.
+        if (identityChanged) {
+          setStatus(boot.statusEl, "Speaker identity saved.");
+          showProfileEditForm();
+        } else showProfileSavedState();
       } catch (error) {
         const normalized = normalizeValidation(error);
         setStatus(boot.statusEl, normalized.globalMessage, true);

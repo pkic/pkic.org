@@ -329,7 +329,11 @@ describe("speaker self-service page", () => {
     const confirmation = root.querySelector<HTMLButtonElement>("[data-confirm-participation]")!;
     expect(confirmation.disabled).toBe(true);
     expect(root.textContent).toContain("Confirm and save your speaker identity");
+    // Nothing is chosen yet, so there is no save to offer.
+    const save = root.querySelector<HTMLElement>("[data-profile-save]")!;
+    expect(save.hidden).toBe(true);
     await chooseIndividual(root);
+    expect(save.hidden).toBe(false);
     expect(confirmation.disabled).toBe(true);
     await act(async () => {
       root
@@ -343,6 +347,9 @@ describe("speaker self-service page", () => {
     expect(saved.organizationName).toBeUndefined();
     expect(saved.jobTitle).toBeUndefined();
     expect(confirmation.disabled).toBe(false);
+    // The saved state confirms the save once, beside the profile; the page status does not repeat it.
+    expect(panel(root, "data-profile-saved-state").hidden).toBe(false);
+    expect(root.querySelector("[data-flow-status]")?.textContent).not.toContain("Speaker identity saved.");
     expect(requests.some(({ path }) => path === AUTH)).toBe(true);
     expect(requests.some(({ path }) => path === `/api/v1/users/${SPEAKER_USER_ID}`)).toBe(true);
     // The biography is the chosen identity's: edited on the identity, through this speaker link.
