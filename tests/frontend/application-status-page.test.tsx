@@ -87,7 +87,6 @@ describe("StatusSummary", () => {
       render(
         <StatusSummary
           data={{
-            id: APPLICATION_ID,
             ...statusFields,
             stage: stage as never,
             workflow: progress,
