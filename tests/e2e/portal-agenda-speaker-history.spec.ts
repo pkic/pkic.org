@@ -369,10 +369,10 @@ test("public repeats retain event-specific employer credits through profile edit
     for (const [index, path] of paths.entries()) {
       const link = appearances.locator(`a[href="${path}"]`);
       await expect(link).toHaveCount(1);
-      await expect(link.locator("xpath=ancestor::li")).toContainText(
+      await expect(appearances.getByRole("listitem").filter({ has: link })).toContainText(
         index === 2 ? organizationB.name : organizationA.name,
       );
-      await expect(link.locator("xpath=ancestor::li")).toContainText(
+      await expect(appearances.getByRole("listitem").filter({ has: link })).toContainText(
         index === 2 ? roleB : corrected && index === 0 ? "Reviewed occurrence correction" : roleA,
       );
     }

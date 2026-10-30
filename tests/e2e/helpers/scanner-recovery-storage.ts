@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
+import { definitionFor } from "./definition-list";
 import { uploadThroughControl } from "./file-upload";
 import { expect, type Page, type APIResponse, type BrowserContext, type Request, type Route } from "@playwright/test";
 import { z } from "zod";
@@ -251,8 +252,7 @@ export async function holdGuardedLogout(page: Page, sessionId: string) {
 }
 
 export async function expectScannerSyncTime(page: Page, text: string): Promise<void> {
-  const term = page.locator("dt").filter({ hasText: /^Last successful scan sync$/ });
-  await expect(term.locator("xpath=following-sibling::dd[1]")).toHaveText(text);
+  await expect(definitionFor(page, "Last successful scan sync")).toHaveText(text);
 }
 
 export async function scannerEligibilityCount(page: Page): Promise<number> {

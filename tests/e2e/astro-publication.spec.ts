@@ -533,7 +533,7 @@ test("PQC registration uses published configuration and a warning card without A
     await route.abort();
   });
   await page.goto("/events/2026/pqc-conference-amsterdam-nl/register/");
-  const warning = page.getByText("In-person registration is currently full.").locator("xpath=ancestor::blockquote[1]");
+  const warning = page.locator("blockquote").filter({ hasText: "In-person registration is currently full." });
   await expect(warning).toBeVisible();
   expect(await warning.evaluate((element) => getComputedStyle(element).borderRadius)).not.toBe("0px");
   await expect(page.getByText("Could not load registration form details. Reload this page to try again.")).toHaveCount(

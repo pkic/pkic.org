@@ -16,8 +16,5 @@ import type { Locator, Page } from "@playwright/test";
 
 /** The `<dd>` that answers the `<dt>` reading exactly `term`, within `scope`. */
 export function definitionFor(scope: Page | Locator, term: string): Locator {
-  return scope
-    .getByRole("term")
-    .filter({ hasText: new RegExp(`^${term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`) })
-    .locator("xpath=following-sibling::dd[1]");
+  return scope.locator(`dt:text-is(${JSON.stringify(term)}) + dd`);
 }

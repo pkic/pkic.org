@@ -15,6 +15,7 @@ import { expect, test } from "@playwright/test";
 import type { CapturedEmail } from "./global-setup";
 import type { Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
+import { waitForCapturedEmail } from "./helpers/sendgrid";
 import { declinePasskeyOffer } from "./helpers/portal-auth";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
 
@@ -28,30 +29,6 @@ function sendgridServer(): string {
 async function readOutbox(): Promise<CapturedEmail[]> {
   const response = await fetch(`${sendgridServer()}/outbox`);
   return (await response.json()) as CapturedEmail[];
-}
-
-async function waitForEmail(
-  to: string,
-  subjectFragment: string,
-  timeoutMs = 15_000,
-  afterIndex = 0,
-): Promise<CapturedEmail> {
-  const deadline = Date.now() + timeoutMs;
-  let lastEmails: CapturedEmail[] = [];
-  while (Date.now() < deadline) {
-    lastEmails = await readOutbox();
-    for (let i = lastEmails.length - 1; i >= afterIndex; i--) {
-      const e = lastEmails[i];
-      if (e.to === to && e.subject.toLowerCase().includes(subjectFragment.toLowerCase())) {
-        return e;
-      }
-    }
-    await new Promise((r) => setTimeout(r, 300));
-  }
-  throw new Error(
-    `No email to <${to}> with subject containing "${subjectFragment}" within ${timeoutMs}ms. ` +
-      `Outbox has ${lastEmails.length} email(s).`,
-  );
 }
 
 function extractUrlFromEmail(email: CapturedEmail, urlSubstring: string): string {
@@ -162,7 +139,7 @@ test.describe("portal sponsor workspace", () => {
     // attendee would receive by email, hit directly as a GET (its query
     // params are the same either way; skips rendering the confirm page,
     // which isn't part of what this phase tests).
-    const confirmEmail = await waitForEmail(attendeeEmail, "confirm your registration");
+    const confirmEmail = await waitForCapturedEmail(attendeeEmail, "confirm your registration");
     const confirmUrl = extractUrlFromEmail(confirmEmail, "/confirm/");
     const confirmParams = new URL(confirmUrl, "http://127.0.0.1:8788").searchParams;
     const confirmStatus = await page.evaluate(
@@ -178,7 +155,7 @@ test.describe("portal sponsor workspace", () => {
     expect(confirmStatus).toBe(200);
 
     // ── Sponsor clicks the capability-bearing unified portal link ──────────
-    const accessEmail = await waitForEmail(contactEmail, "sponsor workspace");
+    const accessEmail = await waitForCapturedEmail(contactEmail, "sponsor workspace");
     const portalUrl = extractUrlFromEmail(accessEmail, "/portal/#/verify");
 
     // The setup identity must not mask the sponsor-only session established
@@ -241,7 +218,7 @@ test.describe("portal sponsor workspace", () => {
     await page.getByRole("button", { name: "Send sign-in link" }).click();
     await expect(page.getByText(/you'll receive a sign-in link shortly/i)).toBeVisible();
 
-    const resendEmail = await waitForEmail(contactEmail, "sponsor workspace", 15_000, resendAfterIndex);
+    const resendEmail = await waitForCapturedEmail(contactEmail, "sponsor workspace", { since: resendAfterIndex });
     const resendUrl = extractUrlFromEmail(resendEmail, "/portal/#/verify");
     expect(resendUrl).not.toBe(portalUrl);
 

@@ -41,7 +41,7 @@ async function setNativeChecked(page: Page, selector: string): Promise<void> {
   const input = page.locator(selector);
   await expect(input).toHaveCount(1);
   const id = await input.getAttribute("id");
-  const label = id ? page.locator(`label[for="${id}"]`) : input.locator("xpath=ancestor::label[1]");
+  const label = id ? page.locator(`label[for="${id}"]`) : page.locator("label").filter({ has: input });
   if (await label.count()) {
     await label.click();
   } else {
@@ -150,31 +150,6 @@ function createScreenshotter(page: Page): (label: string) => Promise<void> {
 
 async function clearOutbox(): Promise<void> {
   await fetch(`${sendgridServer()}/clear`, { method: "POST" });
-}
-
-/**
- * Poll the outbox until an email matching `to` and `subjectFragment` appears,
- * or the timeout elapses.  Returns the captured email record.
- */
-async function waitForEmail(to: string, subjectFragment: string, timeoutMs = 15_000): Promise<CapturedEmail> {
-  const deadline = Date.now() + timeoutMs;
-  let lastEmails: CapturedEmail[] = [];
-  while (Date.now() < deadline) {
-    const resp = await fetch(`${sendgridServer()}/outbox`);
-    lastEmails = (await resp.json()) as CapturedEmail[];
-    // Search from newest first so we pick up the latest matching email
-    for (let i = lastEmails.length - 1; i >= 0; i--) {
-      const e = lastEmails[i];
-      if (e.to === to && e.subject.toLowerCase().includes(subjectFragment.toLowerCase())) {
-        return e;
-      }
-    }
-    await new Promise((r) => setTimeout(r, 300));
-  }
-  throw new Error(
-    `No email to <${to}> with subject containing "${subjectFragment}" within ${timeoutMs}ms.\n` +
-      `Outbox has ${lastEmails.length} email(s): ${lastEmails.map((e) => `<${e.to}> "${e.subject}"`).join("; ")}`,
-  );
 }
 
 /**
@@ -673,7 +648,7 @@ test.describe("browser workflows", () => {
     ).toBeVisible();
     await screenshot("01-partial-capacity-confirmed");
 
-    const secondRegisteredEmail = await waitForEmail(capacityTwo, "confirmed");
+    const secondRegisteredEmail = await waitForCapturedEmail(capacityTwo, "confirmed");
     const secondManageUrl = extractUrlFromEmail(secondRegisteredEmail, "/register/manage/");
     await page.goto(secondManageUrl);
 
@@ -722,7 +697,7 @@ test.describe("browser workflows", () => {
     await screenshot("02-registration-confirmed");
 
     // Wait for the "confirmed" email which carries the manage URL
-    const confirmedEmail = await waitForEmail(alice, "confirmed");
+    const confirmedEmail = await waitForCapturedEmail(alice, "confirmed");
     const manageUrl = extractUrlFromEmail(confirmedEmail, "/register/manage/");
 
     const registrationManageRoute = `/events/2026/pqc-conference-amsterdam-nl/register/manage/?event=pqc-conference-amsterdam-nl&token=${encodeURIComponent(new URL(manageUrl).searchParams.get("token") ?? "")}`;
@@ -763,7 +738,7 @@ test.describe("browser workflows", () => {
     expect(inviteResp).toBe(200);
 
     // Accept-invite flow
-    const acceptInviteEmail = await waitForEmail("friend-accept@example.test", "invited");
+    const acceptInviteEmail = await waitForCapturedEmail("friend-accept@example.test", "invited");
     const acceptRegistrationUrl = extractUrlFromEmail(acceptInviteEmail, "/register/");
     const acceptDeclineUrl = extractUrlFromEmail(acceptInviteEmail, "/invite/");
     expect(acceptRegistrationUrl).toBeTruthy();
@@ -781,12 +756,12 @@ test.describe("browser workflows", () => {
     await screenshot("04-invited-attendee-registered");
 
     // Ensure the confirmation email arrived for the accepted invite
-    const acceptConfirmedEmail = await waitForEmail("friend-accept@example.test", "confirmed");
+    const acceptConfirmedEmail = await waitForCapturedEmail("friend-accept@example.test", "confirmed");
     const acceptManageUrl = extractUrlFromEmail(acceptConfirmedEmail, "/register/manage/");
     expect(acceptManageUrl).toBeTruthy();
 
     // Decline-invite flow
-    const declineInviteEmail = await waitForEmail("friend-decline@example.test", "invited");
+    const declineInviteEmail = await waitForCapturedEmail("friend-decline@example.test", "invited");
     const declineUrl = extractUrlFromEmail(declineInviteEmail, "/invite/");
 
     const invalidDeclineUrl = new URL(declineUrl);
@@ -799,7 +774,7 @@ test.describe("browser workflows", () => {
     await page.locator("[data-resend-invite-btn]").click();
     await expect(page.getByText(/a fresh link is on its way/i)).toBeVisible({ timeout: 10_000 });
 
-    const recoveredDeclineEmail = await waitForEmail("friend-decline@example.test", "Still considering");
+    const recoveredDeclineEmail = await waitForCapturedEmail("friend-decline@example.test", "Still considering");
     const recoveredDeclineUrl = extractUrlFromEmail(recoveredDeclineEmail, "/invite/");
     expect(new URL(recoveredDeclineUrl).searchParams.get("token")).toMatch(/^pkc1_/);
     await page.goto(recoveredDeclineUrl);
@@ -835,7 +810,7 @@ test.describe("browser workflows", () => {
     await expect(page.getByRole("heading", { name: /Proposal submitted, Priya!/i })).toBeVisible();
     await screenshot("01-proposal-submitted");
 
-    const proposalSubmittedEmail = await waitForEmail(proposerEmail, "proposal");
+    const proposalSubmittedEmail = await waitForCapturedEmail(proposerEmail, "proposal");
     const proposalManageUrl = extractUrlFromEmail(proposalSubmittedEmail, "/propose/manage/");
     const originalProposalManageToken = new URL(proposalManageUrl).searchParams.get("token") ?? "";
     expect(originalProposalManageToken).toMatch(/^pkc1_/);
@@ -852,7 +827,7 @@ test.describe("browser workflows", () => {
     await page.locator("[data-resend-proposal-manage-btn]").click();
     await expect(page.getByText(/you will receive an email shortly/i)).toBeVisible({ timeout: 10_000 });
 
-    const recoveredProposalEmail = await waitForEmail(proposerEmail, "Proposal received");
+    const recoveredProposalEmail = await waitForCapturedEmail(proposerEmail, "Proposal received");
     const recoveredProposalManageUrl = extractUrlFromEmail(recoveredProposalEmail, "/propose/manage/");
     const recoveredProposalManageToken = new URL(recoveredProposalManageUrl).searchParams.get("token") ?? "";
     expect(recoveredProposalManageToken).toMatch(/^pkc1_/);
@@ -891,7 +866,7 @@ test.describe("browser workflows", () => {
     await expect(page.getByText(`Invite sent to ${invitedSpeakerEmail}`)).toBeVisible();
     await screenshot("03-speaker-invited");
 
-    const speakerInviteEmail = await waitForEmail(invitedSpeakerEmail, "speaker");
+    const speakerInviteEmail = await waitForCapturedEmail(invitedSpeakerEmail, "speaker");
     const speakerManageUrl = extractUrlFromEmail(speakerInviteEmail, "/propose/speaker/");
 
     const speakerManageRoute = `/events/2026/pqc-conference-amsterdam-nl/propose/speaker/?event=pqc-conference-amsterdam-nl&token=${encodeURIComponent(new URL(speakerManageUrl).searchParams.get("token") ?? "")}`;
@@ -1015,7 +990,7 @@ test.describe("browser workflows", () => {
     expect(await page.evaluate(() => (window as unknown as Record<string, unknown>).__xss_fired)).toBeUndefined();
     await screenshot("02-xss-firstname-escaped-on-success-panel");
 
-    const confirmedEmail = await waitForEmail(sec, "confirmed");
+    const confirmedEmail = await waitForCapturedEmail(sec, "confirmed");
     const manageUrl = extractUrlFromEmail(confirmedEmail, "/register/manage/");
     const validToken = new URL(manageUrl).searchParams.get("token") ?? "";
 
@@ -1059,7 +1034,7 @@ test.describe("browser workflows", () => {
     await page.getByRole("button", { name: /Submit proposal/i }).click();
     await expect(page.getByRole("heading", { name: /Proposal submitted, Priya!/i })).toBeVisible();
 
-    const proposalEmail = await waitForEmail("proposal-speaker@example.test", "proposal");
+    const proposalEmail = await waitForCapturedEmail("proposal-speaker@example.test", "proposal");
     const propManageUrl = extractUrlFromEmail(proposalEmail, "/propose/manage/");
     const propToken = new URL(propManageUrl).searchParams.get("token") ?? "";
 
@@ -1074,7 +1049,7 @@ test.describe("browser workflows", () => {
     await securityInviteForm.getByRole("button", { name: /Send invite/i }).click();
     await expect(page.getByText(/Invite sent to speaker-sec@example.test/i)).toBeVisible();
 
-    const spkInviteEmail = await waitForEmail("speaker-sec@example.test", "speaker");
+    const spkInviteEmail = await waitForCapturedEmail("speaker-sec@example.test", "speaker");
     const spkManageUrl = extractUrlFromEmail(spkInviteEmail, "/propose/speaker/");
     const spkToken = new URL(spkManageUrl).searchParams.get("token") ?? "";
 
@@ -1138,7 +1113,7 @@ test.describe("browser workflows", () => {
     await fillRegistrationStep4(page, resendTester);
     await expect(page.getByRole("heading", { name: /You're registered/i })).toBeVisible({ timeout: 15_000 });
 
-    const originalManageEmail = await waitForEmail(resendTester, "confirmed");
+    const originalManageEmail = await waitForCapturedEmail(resendTester, "confirmed");
     const originalManageUrl = extractUrlFromEmail(originalManageEmail, "/register/manage/");
     const originalManageToken = new URL(originalManageUrl).searchParams.get("token") ?? "";
     expect(originalManageToken).toMatch(/^pkc1_/);
@@ -1158,7 +1133,7 @@ test.describe("browser workflows", () => {
     await screenshot("02-resend-manage-submitted");
 
     // Wait for fresh management link email (subject: "Your management link for …")
-    const newManageEmail = await waitForEmail(resendTester, "Your management link");
+    const newManageEmail = await waitForCapturedEmail(resendTester, "Your management link");
     const newManageUrl = extractUrlFromEmail(newManageEmail, "/register/manage/");
     const newManageToken = new URL(newManageUrl).searchParams.get("token") ?? "";
     expect(newManageToken).toMatch(/^pkc1_/);
@@ -1202,7 +1177,7 @@ test.describe("browser workflows", () => {
     await fillRegistrationStep4(page, nominator);
     await expect(page.getByRole("heading", { name: /You're registered/i })).toBeVisible({ timeout: 15_000 });
 
-    const nominatorConfirmedEmail = await waitForEmail(nominator, "confirmed");
+    const nominatorConfirmedEmail = await waitForCapturedEmail(nominator, "confirmed");
     const nominatorManageUrl = extractUrlFromEmail(nominatorConfirmedEmail, "/register/manage/");
     const nominatorManageToken = new URL(nominatorManageUrl).searchParams.get("token") ?? "";
     expect(nominatorManageToken).toBeTruthy();
@@ -1229,7 +1204,7 @@ test.describe("browser workflows", () => {
 
     // ── Dana declines the speaker invitation via the browser ──────────────────
     // Subject: "Invitation to speak at …"
-    const danaInviteEmail = await waitForEmail("dana-decline@example.test", "speak");
+    const danaInviteEmail = await waitForCapturedEmail("dana-decline@example.test", "speak");
     const danaDeclineUrl = extractUrlFromEmail(danaInviteEmail, "/invite/decline/");
     await page.goto(danaDeclineUrl);
     // For speaker invites, the heading reads "Not able to submit a proposal?"
@@ -1246,7 +1221,7 @@ test.describe("browser workflows", () => {
     await screenshot("03-speaker-decline-already-processed");
 
     // ── Sam accepts by submitting a proposal via the invite link ─────────────
-    const samInviteEmail = await waitForEmail("sam-speaker@example.test", "speak");
+    const samInviteEmail = await waitForCapturedEmail("sam-speaker@example.test", "speak");
     const samProposalUrl = extractUrlFromEmail(samInviteEmail, "/propose/");
     await page.goto(samProposalUrl);
     await expect(page).toHaveTitle(/Submit a Session Proposal/);
@@ -1283,7 +1258,7 @@ test.describe("browser workflows", () => {
 
     // Get the proposal manage URL from the submitted email
     // Subject: "Proposal received: Speaker-Nominated Session on Post-Quantum Readiness"
-    const samProposalSubmittedEmail = await waitForEmail("sam-speaker@example.test", "Proposal received");
+    const samProposalSubmittedEmail = await waitForCapturedEmail("sam-speaker@example.test", "Proposal received");
     const samProposalManageUrl = extractUrlFromEmail(samProposalSubmittedEmail, "/propose/manage/");
     const samProposalManageToken = new URL(samProposalManageUrl).searchParams.get("token") ?? "";
 
@@ -1328,7 +1303,7 @@ test.describe("browser workflows", () => {
 
     // Wait for the refreshed speaker management link
     // Subject: "Reminder: please confirm speaker participation — …"
-    const refreshedCoSpeakerEmail = await waitForEmail("co-sam-speaker@example.test", "please confirm speaker");
+    const refreshedCoSpeakerEmail = await waitForCapturedEmail("co-sam-speaker@example.test", "please confirm speaker");
     const refreshedCoSpeakerManageUrl = extractUrlFromEmail(refreshedCoSpeakerEmail, "/propose/speaker/");
     const refreshedToken = new URL(refreshedCoSpeakerManageUrl).searchParams.get("token") ?? "";
 
@@ -1382,7 +1357,7 @@ test.describe("browser workflows", () => {
     await expect(page.getByRole("heading", { name: /Proposal submitted/i })).toBeVisible({ timeout: 15_000 });
     await screenshot("01-proposal-submitted");
 
-    const submittedEmail = await waitForEmail("proposal-speaker@example.test", "proposal");
+    const submittedEmail = await waitForCapturedEmail("proposal-speaker@example.test", "proposal");
     const proposalManageUrl = extractUrlFromEmail(submittedEmail, "/propose/manage/");
     void proposalManageUrl; // only used to confirm the email arrived; speaker token comes later
 
@@ -1407,7 +1382,7 @@ test.describe("browser workflows", () => {
     // ── 3. Wait for the speaker profile request email sent by the finalize step ─
     // Accepting the proposal automatically queues a "speaker_profile_request" email.
     // Wait for it to arrive via the SendGrid interceptor.
-    const speakerEmail = await waitForEmail("proposal-speaker@example.test", "complete your speaker profile");
+    const speakerEmail = await waitForCapturedEmail("proposal-speaker@example.test", "complete your speaker profile");
     const speakerManageUrl = extractUrlFromEmail(speakerEmail, "/propose/speaker/");
     const speakerToken = new URL(speakerManageUrl).searchParams.get("token") ?? "";
     expect(speakerToken).toBeTruthy();

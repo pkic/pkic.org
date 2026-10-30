@@ -11,6 +11,7 @@ import { userAuthLogoutResponseSchema, userAuthSessionResponseSchema } from "../
 import { scanRecoverySchema } from "../../assets/shared/schemas/event-scan-recovery";
 import { enrolledOfflineEligibilityResponseSchema } from "../../assets/shared/schemas/event-offline-eligibility";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
+import { definitionFor } from "./helpers/definition-list";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
 import {
   downloadScannerRecovery,
@@ -72,8 +73,7 @@ test("real pending scanner storage survives reload and logout without crossing a
     ["Last eligibility check", snapshot.serverNow],
     ["Snapshot expires", snapshot.expiresAt],
   ]) {
-    const term = page.locator("dt").filter({ hasText: new RegExp(`^${label}$`) });
-    await expect(term.locator("xpath=following-sibling::dd[1]")).toHaveText(formatDateTime(timestamp));
+    await expect(definitionFor(page, label)).toHaveText(formatDateTime(timestamp));
   }
   await expect.poll(() => page.evaluate(() => navigator.serviceWorker.controller?.scriptURL ?? "")).not.toBe("");
   await expect(diagnostics.getByRole("button", { name: "Close scanner session", exact: true })).toBeEnabled();
