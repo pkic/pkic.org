@@ -15,6 +15,7 @@ import { expect, test } from "@playwright/test";
 import type { CapturedEmail } from "./global-setup";
 import type { Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
+import { declinePasskeyOffer } from "./helpers/portal-auth";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
 
 const SENDGRID_URL_FILE = process.env.E2E_SENDGRID_URL_FILE ?? "test-results/e2e-sendgrid-url";
@@ -136,14 +137,11 @@ test.describe("portal sponsor workspace", () => {
             lastName: "Attendee",
             email: attendeeEmail,
             attendanceType: "virtual",
-            // organization_name/job_title/country are this event's own
-            // required custom registration fields (seeded via
-            // scripts/seed-event.yaml's "pqc-2026-registration" form) — the
-            // first two are also promoted onto the user profile by the
-            // registration service (see registrations.ts's
-            // profileFromCustom), which is what the sponsor workspace's
-            // attendee list actually reads.
-            customAnswers: { organization_name: "Attendee Org", job_title: "Engineer", country: "NL" },
+            // country is this event's own required custom registration field
+            // (seeded via scripts/seed-event.yaml's "pqc-2026-registration"
+            // form). Organization and job title are not form answers: they
+            // come from the person's identity.
+            customAnswers: { country: "NL" },
             consents: [
               { termKey: "privacy-policy", version: "v1" },
               { termKey: "code-of-conduct", version: "v1" },
@@ -189,6 +187,7 @@ test.describe("portal sponsor workspace", () => {
     await page.context().clearCookies();
     await page.goto("/");
     await page.goto(portalUrl);
+    await declinePasskeyOffer(page);
     await expect(page).toHaveURL(/\/portal\/#\/sponsors$/);
     // The page header names the section once ("Sponsors"); the event is the
     // header's context line and the attendee table's own caption, so the event
@@ -248,6 +247,7 @@ test.describe("portal sponsor workspace", () => {
 
     await page.goto("/");
     await page.goto(resendUrl);
+    await declinePasskeyOffer(page);
     await expect(page.getByText(attendeeEmail)).toBeVisible({ timeout: 15_000 });
   });
 });

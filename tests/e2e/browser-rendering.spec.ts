@@ -294,7 +294,7 @@ async function fillRegistrationStep1(
 ): Promise<void> {
   await expect(page.locator("[data-event-registration] form")).toBeVisible();
   await continueRegistrationWithEmail(page, values);
-  await expect(page.locator("[data-day-attendance] label").first()).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("group", { name: "Attendance choices" })).toBeVisible({ timeout: 15_000 });
 }
 
 async function fillRegistrationStep2(page: Page): Promise<void> {
@@ -595,9 +595,12 @@ test.describe("browser workflows", () => {
     const modal = page.locator(`dialog[id="${await watchLink.getAttribute("data-agenda-open-session")}"]`);
     await expect(modal).toHaveCount(1);
     await expect(modal.locator("iframe")).not.toHaveAttribute("src");
-    const agendaUrl = page.url();
+    const agendaUrl = new URL(page.url());
     await watchLink.click();
-    expect(page.url()).toBe(agendaUrl);
+    // Opening the dialog stays on the agenda page and records only the session in the fragment.
+    const openedUrl = new URL(page.url());
+    expect(`${openedUrl.pathname}${openedUrl.search}`).toBe(`${agendaUrl.pathname}${agendaUrl.search}`);
+    expect(openedUrl.hash).toContain("session=");
 
     await expect(modal).toBeVisible();
     const iframe = modal.locator("iframe").first();
@@ -1073,27 +1076,26 @@ test.describe("browser workflows", () => {
     const spkManageUrl = extractUrlFromEmail(spkInviteEmail, "/propose/speaker/");
     const spkToken = new URL(spkManageUrl).searchParams.get("token") ?? "";
 
-    // PATCH a completely fabricated speaker token — must be 4xx
+    // PATCH a well-formed request with a completely fabricated speaker token: the token alone must refuse it
     const isolationStatus = await page.evaluate(async () => {
       const fakeSpkToken = encodeURIComponent("ISOLATION-FAKE-SPEAKER-TOKEN-000000");
       const res = await fetch(`/api/v1/proposals/speakers/access/${fakeSpkToken}/profile`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ biography: "injected bio" }),
+        body: JSON.stringify({ firstName: "Injected" }),
       });
       return res.status;
     });
     expect([401, 403, 404]).toContain(isolationStatus);
 
-    // Confirm the real speaker and verify their bio was NOT tampered with
+    // Confirm the real speaker and verify their name was NOT tampered with
     const spkRoute = `/events/2026/pqc-conference-amsterdam-nl/propose/speaker/?event=pqc-conference-amsterdam-nl&token=${encodeURIComponent(spkToken)}`;
     await page.goto(spkRoute);
     await resolveInvitedSpeaker(page, "speaker-sec@example.test");
     await page.getByRole("button", { name: /Confirm participation/i }).click();
     await expect(page.locator("[data-confirmed-msg]")).toBeVisible();
 
-    const bioValue = await page.getByRole("textbox", { name: /speaker bio/i }).innerText();
-    expect(bioValue).not.toContain("injected bio");
+    await expect(page.locator("main")).not.toContainText("Injected");
     await screenshot("05-speaker-token-isolation-verified");
 
     errorMonitor.assertClean();
