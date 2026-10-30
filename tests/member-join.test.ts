@@ -571,7 +571,8 @@ describe("verified-email-first membership join", () => {
 
     const replay = await postJson(testEnv, "/api/v1/members/applications", payload);
     expect(replay.status).toBe(409);
-    await expect(replay.json()).resolves.toMatchObject({ error: { code: "MEMBER_JOIN_CAPABILITY_USED" } });
+    // The open application already refuses the replay before the spent capability does.
+    await expect(replay.json()).resolves.toMatchObject({ error: { code: "APPLICATION_ALREADY_PENDING" } });
     expect(await queryAll(testEnv.DB, "SELECT id FROM member_applications")).toHaveLength(1);
   });
 

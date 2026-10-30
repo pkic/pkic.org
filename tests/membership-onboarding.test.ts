@@ -22,6 +22,11 @@ import {
   verifiedMemberApplicationPayload,
 } from "./helpers/member-applications";
 import { insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
+import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
+import {
+  INDIVIDUAL_WHILE_REPRESENTING,
+  ORGANIZATION_ALREADY_MEMBER,
+} from "../assets/shared/membership-application-refusals";
 import { normalizeOrgName } from "../assets/shared/organization-name";
 import { approveApplication } from "../functions/_lib/services/membership/applications/approve";
 import { evaluateMembershipApplication } from "../functions/_lib/services/membership/workflows/evaluate";
@@ -79,6 +84,7 @@ async function createReviewedApplication(
     organizationDomain:
       "organization_domain" in overrides ? (overrides.organization_domain as string | null) : "acme.test",
     membershipCategory: (overrides.membership_category as string) ?? "F",
+    applicantUserId: (overrides.applicant_user_id as string | undefined) ?? null,
     formSubmissionId,
     stage: "processing",
   });
@@ -314,6 +320,37 @@ describe("Post-approval onboarding", () => {
 
     const orgCount = await queryAll(env.DB, "SELECT id FROM organizations");
     expect(orgCount).toHaveLength(0);
+  });
+
+  it("refuses approving an organization that became a member while its application waited", async () => {
+    const { id } = await createReviewedApplication({}, { working_groups: [], job_title: "Representative" });
+    await seedOrganizationAggregate(env.DB, await insertOrganization(env.DB, "Acme Corp"), "A");
+    const response = await call(adminToken, `/api/v1/members/applications/${id}/approve`, { method: "POST" });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: { code: ORGANIZATION_ALREADY_MEMBER } });
+    expect(await queryAll(env.DB, "SELECT stage FROM member_applications WHERE id = ?", [id])).toEqual([
+      { stage: "processing" },
+    ]);
+  });
+
+  it("refuses approving an individual application once the applicant represents an organization", async () => {
+    const userId = await insertUser(env.DB, "newmember@acme.test");
+    const { id } = await createReviewedApplication(
+      { organization_name: null, organization_domain: null, membership_category: "H6", applicant_user_id: userId },
+      { working_groups: [] },
+    );
+    const representation = await buildCreateIdentityStatement(env.DB, {
+      userId,
+      organizationId: await insertOrganization(env.DB, "Later Employer"),
+      source: "staff",
+      jobTitle: "Engineer",
+      startImmediately: true,
+    });
+    await env.DB.batch([representation.statement]);
+    const response = await call(adminToken, `/api/v1/members/applications/${id}/approve`, { method: "POST" });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: { code: INDIVIDUAL_WHILE_REPRESENTING } });
+    expect(await queryAll(env.DB, "SELECT id FROM members")).toEqual([]);
   });
 
   it("adds the requested group capacity and reconciles mailing-list subscriptions", async () => {

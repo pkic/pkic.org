@@ -23,6 +23,7 @@ import { uuid } from "../../../utils/ids";
 import { nowIso } from "../../../utils/time";
 import {
   MEMBERSHIP_APPLICATION_FORM_KEY,
+  isMembershipApplicationIdentityFieldKey,
   membershipApplicationFields,
 } from "../../../../../assets/shared/schemas/membership-application-form";
 import { eligibleApplicationWorkingGroupIds } from "../application-groups";
@@ -35,8 +36,19 @@ import {
 import { requireMembershipCategory } from "../categories";
 import { membershipApplicantPolicySchema } from "../../../../../assets/shared/schemas/membership-applicant-policy";
 import { mailboxKind } from "../../../email-domains/classification";
-import { normalizeOrgName } from "../../../../../assets/shared/organization-name";
-import { first } from "../../../db/queries";
+import {
+  APPLICATION_ALREADY_PENDING,
+  APPLICATION_ALREADY_PENDING_MESSAGE,
+  INDIVIDUAL_ALREADY_MEMBER,
+  INDIVIDUAL_ALREADY_MEMBER_MESSAGE,
+  INDIVIDUAL_WHILE_REPRESENTING,
+  ORGANIZATION_ALREADY_MEMBER,
+  ORGANIZATION_DOMAIN_APPLICATION_PENDING_MESSAGE,
+  individualWhileRepresentingMessage,
+  organizationAlreadyMemberMessage,
+  organizationApplicationPendingMessage,
+} from "../../../../../assets/shared/membership-application-refusals";
+import { readMembershipApplicationConflicts } from "./conflicts";
 import { buildFindOrCreateUserStatement, findUserByEmail, splitPersonName } from "../../users";
 import { prepareVerifyOwnedEmailStatements } from "../../email-verification";
 import { normalizeEmail } from "../../../validation";
@@ -45,40 +57,63 @@ import type { DatabaseLike, StatementLike } from "../../../types";
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../../db/authorization-guard";
 
 /**
- * Refuses an application for an organization the consortium already has.
+ * Refuses an application whose outcome is already decided before review: the
+ * organization or the applicant is already a member, an individual applicant
+ * represents an organization, or an application for the same person or
+ * organization is still open (issue #27 and its follow-ups).
  *
- * A colleague of an existing member arrives through their verified domain and
- * continues straight into that organization; this is the other case — a
- * person at some other address naming a member organization, whose
- * application could only ever end in "they are already in". Approving it
- * would reuse the organization rather than duplicate it, so nothing breaks;
- * the applicant simply waits on a review that was decided before it started,
- * which is what issue #27 reports.
- *
- * The name is matched the way every other surface matches it, so a differently
- * spaced or capitalized spelling is still the same organization. Being an
- * `organizations` row is not enough: the refusal is about membership, and an
- * organization can exist without one.
+ * The organization is matched by its id when the applicant applies as an
+ * organization identity, and otherwise by its name, compared the way every
+ * other surface compares it. The person is matched by their account, never by
+ * a typed name or address; a submission without an account (a verified
+ * mailbox nobody holds yet) is matched by that verified address only for an
+ * open application. Being an `organizations` row is not enough: the refusal
+ * is about membership, and an organization can exist without one.
  */
-async function refuseIfAlreadyAMember(db: DatabaseLike, organizationName: string): Promise<void> {
-  const existing = await first<{ name: string }>(
-    db,
-    `SELECT organization.name
-       FROM organizations organization
-       JOIN members member ON member.organization_id = organization.id AND member.status = 'active'
-      WHERE organization.normalized_name = ?
-      LIMIT 1`,
-    [normalizeOrgName(organizationName)],
-  );
-  if (!existing) return;
-  const message = `${existing.name} is already a member of the PKI Consortium. Ask one of its representatives to invite you, or write to us if you meant a different organization.`;
-  // Carried as a field error as well as a sentence, so the refusal lands on
-  // the box the applicant would have to change — the same shape every other
-  // refusal in this flow takes.
-  throw new AppError(409, "ORGANIZATION_ALREADY_MEMBER", message, {
-    formErrors: [message],
-    fieldErrors: { organizationName: [`The consortium already has ${existing.name} as a member.`] },
-  });
+async function refuseConflictingApplication(
+  db: DatabaseLike,
+  input: {
+    isIndividual: boolean;
+    organizationName: string | null;
+    organizationId: string | null;
+    applicantUserId: string | null;
+    applicantEmail: string;
+  },
+): Promise<void> {
+  const conflicts = await readMembershipApplicationConflicts(db, input);
+  const typedOrganization = !input.organizationId && input.organizationName;
+  if (conflicts.memberOrganization) {
+    const message = organizationAlreadyMemberMessage(conflicts.memberOrganization);
+    // Carried as a field error as well as a sentence when the name was typed,
+    // so the refusal lands on the box the applicant would have to change.
+    throw new AppError(409, ORGANIZATION_ALREADY_MEMBER, message, {
+      formErrors: [message],
+      fieldErrors: typedOrganization
+        ? { organizationName: [`The consortium already has ${conflicts.memberOrganization} as a member.`] }
+        : {},
+    });
+  }
+  if (conflicts.individualMember)
+    throw new AppError(409, INDIVIDUAL_ALREADY_MEMBER, INDIVIDUAL_ALREADY_MEMBER_MESSAGE, {
+      formErrors: [INDIVIDUAL_ALREADY_MEMBER_MESSAGE],
+      fieldErrors: {},
+    });
+  if (conflicts.representedOrganization) {
+    const message = individualWhileRepresentingMessage(conflicts.representedOrganization);
+    throw new AppError(409, INDIVIDUAL_WHILE_REPRESENTING, message, { formErrors: [message], fieldErrors: {} });
+  }
+  if (conflicts.pendingForApplicant)
+    throw new AppError(409, APPLICATION_ALREADY_PENDING, APPLICATION_ALREADY_PENDING_MESSAGE, {
+      formErrors: [APPLICATION_ALREADY_PENDING_MESSAGE],
+      fieldErrors: {},
+    });
+  if (conflicts.pendingOrganization) {
+    const message = organizationApplicationPendingMessage(conflicts.pendingOrganization);
+    throw new AppError(409, APPLICATION_ALREADY_PENDING, message, {
+      formErrors: [message],
+      fieldErrors: typedOrganization ? { organizationName: [message] } : {},
+    });
+  }
 }
 
 /**
@@ -123,9 +158,20 @@ export interface CreateMemberApplicationInput {
   organizationName?: string | null;
   answers?: Record<string, unknown>;
   appBaseUrl: string;
-  joinCapabilityId: string;
+  /** The verified-email link the application was made through; null when a signed-in identity applies. */
+  joinCapabilityId: string | null;
   applicantKind: "organization" | "individual";
   applicantUserId: string | null;
+  /** The identity a signed-in applicant applies as; its holding is rechecked when the application commits. */
+  applicantIdentityId?: string | null;
+  /** The organization of that identity, matched by id rather than by name. */
+  organizationId?: string | null;
+  /**
+   * Answers copied from that identity (title, first link, bio). They replace
+   * whatever the request sent under those keys and are kept as the
+   * application's record of who applied.
+   */
+  identityAnswers?: Record<string, string>;
 }
 
 export interface CreateMemberApplicationResult {
@@ -154,7 +200,10 @@ async function translateDomainClaimConflict(
   if (domain) {
     const claim = await getOrganizationDomainClaim(db, domain);
     if (claim && claim.applicationId !== applicationId) {
-      throw new AppError(409, "DUPLICATE_APPLICATION", "This organization domain is already claimed");
+      throw new AppError(409, APPLICATION_ALREADY_PENDING, ORGANIZATION_DOMAIN_APPLICATION_PENDING_MESSAGE, {
+        formErrors: [ORGANIZATION_DOMAIN_APPLICATION_PENDING_MESSAGE],
+        fieldErrors: {},
+      });
     }
   }
   throw error;
@@ -183,8 +232,17 @@ export async function createMemberApplication(
     isIndividual,
     eligibleWorkingGroupIds: await eligibleApplicationWorkingGroupIds(db, category.code),
   });
+  const knownKeys = new Set(form.fields.map((field) => field.key));
+  const customAnswers = input.identityAnswers
+    ? {
+        ...Object.fromEntries(
+          Object.entries(input.answers ?? {}).filter(([key]) => !isMembershipApplicationIdentityFieldKey(key)),
+        ),
+        ...Object.fromEntries(Object.entries(input.identityAnswers).filter(([key]) => knownKeys.has(key))),
+      }
+    : input.answers;
   const answers = await validateCustomAnswersAgainstForm(form, {
-    customAnswers: input.answers,
+    customAnswers,
     errorStatus: 422,
   });
 
@@ -206,7 +264,13 @@ export async function createMemberApplication(
       "The membership category is not eligible for this verified join path",
     );
   }
-  if (!isIndividual && input.organizationName) await refuseIfAlreadyAMember(db, input.organizationName);
+  await refuseConflictingApplication(db, {
+    isIndividual,
+    organizationName: isIndividual ? null : (input.organizationName ?? null),
+    organizationId: isIndividual ? null : (input.organizationId ?? null),
+    applicantUserId: input.applicantUserId,
+    applicantEmail: input.applicantEmail,
+  });
   // An organization application holds the domain its address links through (normally the registrable domain).
   const organizationDomain = isIndividual ? null : await organizationLinkDomain(db, input.applicantEmail);
   const statusUrl = `${input.appBaseUrl}/application-status/?id=${encodeURIComponent(id)}&token=${encodeURIComponent(manageToken)}`;
@@ -231,6 +295,16 @@ export async function createMemberApplication(
                        )
                      )`,
             bindings: [input.applicantUserId, input.applicantEmail, input.applicantEmail],
+          }),
+        ]
+      : []),
+    ...(input.applicantIdentityId && input.applicantUserId
+      ? [
+          prepareAuthorizationGuard(db, {
+            sql: `SELECT 1 FROM identities
+                   WHERE id = ? AND user_id = ? AND organization_id IS ?
+                     AND started_at IS NOT NULL AND ended_at IS NULL AND blocked_at IS NULL`,
+            bindings: [input.applicantIdentityId, input.applicantUserId, input.organizationId ?? null],
           }),
         ]
       : []),

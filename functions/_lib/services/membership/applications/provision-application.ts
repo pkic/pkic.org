@@ -15,6 +15,15 @@ import {
   buildOrgContactAssignedEmail,
 } from "../notifications";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../../../types";
+import {
+  INDIVIDUAL_ALREADY_MEMBER,
+  INDIVIDUAL_ALREADY_MEMBER_MESSAGE,
+  INDIVIDUAL_WHILE_REPRESENTING,
+  ORGANIZATION_ALREADY_MEMBER,
+  individualWhileRepresentingMessage,
+  organizationAlreadyMemberMessage,
+} from "../../../../../assets/shared/membership-application-refusals";
+import { readMembershipApplicationConflicts } from "./conflicts";
 
 export interface ApproveApplicationResult {
   applicationId: string;
@@ -57,6 +66,42 @@ export interface ApplicationApprovalParams {
   sendOrgContactAssignedEmail?: boolean;
 }
 
+/**
+ * What submission refused can become true while an application waits: the
+ * organization joins through another application, or an individual applicant
+ * starts representing an organization or gains an individual membership.
+ * Approval checks again rather than provisioning a second membership. The
+ * reverse direction (taking up a representation while holding an individual
+ * membership) is only flagged elsewhere, never refused here.
+ */
+async function refuseDecidedApproval(
+  db: DatabaseLike,
+  application: MemberApplicationRow,
+  isIndividual: boolean,
+): Promise<void> {
+  const conflicts = await readMembershipApplicationConflicts(db, {
+    isIndividual,
+    organizationName: application.organization_name,
+    organizationId: null,
+    applicantUserId: application.applicant_user_id,
+    applicantEmail: application.applicant_email,
+    applicationId: application.id,
+  });
+  if (conflicts.memberOrganization)
+    throw new AppError(
+      409,
+      ORGANIZATION_ALREADY_MEMBER,
+      organizationAlreadyMemberMessage(conflicts.memberOrganization),
+    );
+  if (conflicts.individualMember) throw new AppError(409, INDIVIDUAL_ALREADY_MEMBER, INDIVIDUAL_ALREADY_MEMBER_MESSAGE);
+  if (conflicts.representedOrganization)
+    throw new AppError(
+      409,
+      INDIVIDUAL_WHILE_REPRESENTING,
+      individualWhileRepresentingMessage(conflicts.representedOrganization),
+    );
+}
+
 /** Build provisioning, approval history, and durable effects for a caller-owned atomic command. */
 export async function buildApplicationApproval(
   db: DatabaseLike,
@@ -64,6 +109,7 @@ export async function buildApplicationApproval(
   params: ApplicationApprovalParams,
 ): Promise<{ statements: StatementLike[]; guardIndex: number; result: ApproveApplicationResult }> {
   const { isIndividual } = await requireMembershipCategory(db, application.membership_category);
+  await refuseDecidedApproval(db, application, isIndividual);
 
   // The apply form collects job_title/linkedin/working_groups as free-form
   // answers (form_fields seeded in migration 0034, now stored as real
@@ -104,7 +150,8 @@ export async function buildApplicationApproval(
     membershipCategory: application.membership_category,
     identities: [{ name: application.applicant_name, email: application.applicant_email, jobTitle, links }],
     identitySource: "membership_approval",
-    mailboxVerified: Boolean(application.join_capability_id),
+    // A verified-email link, or a signed-in identity whose address the account already proved.
+    mailboxVerified: Boolean(application.join_capability_id || application.applicant_user_id),
     activateIdentities: true,
     workingGroupSlugs: requestedWorkingGroupSlugs,
     allowManagedGroupEnrollment: false,
