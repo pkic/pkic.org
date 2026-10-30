@@ -14,6 +14,7 @@ import { workEmailStepSchema } from "./work-email";
 import { jsonErrorResponse, magicLinkVerifySchema, successResponseSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import { immediateEmailDeliverySchema } from "./email-outbox";
+import { organizationReferenceSchema } from "./organization-profile";
 import { verifiedEmailIdentitySchema } from "./identity";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { authErrors, capabilityErrors, ok, publicOperation, requiresSession } from "./route-contract";
@@ -49,8 +50,6 @@ export function ownEmailInUseMessage(organizationNames: readonly string[]): stri
     organizationNames.length === 1 ? "that representation" : "those representations"
   } first.`;
 }
-
-const organizationReferenceSchema = z.object({ id: databaseIdSchema, name: z.string() });
 
 /**
  * One of the signed-in person's addresses: the profile's address shape (the

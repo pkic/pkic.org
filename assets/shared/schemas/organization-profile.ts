@@ -4,6 +4,9 @@ import { linksSchema } from "./links";
 import { markdownContentSchema } from "./markdown-content";
 import { httpOrSameOriginUrlSchema, httpUrlSchema } from "./urls";
 
+/** An organization named where another record refers to it: its id to link by, its name to show. */
+export const organizationReferenceSchema = z.object({ id: databaseIdSchema, name: z.string() });
+
 export const CONTENT_REVIEW_STATUSES = ["pending", "approved", "rejected", "withdrawn"] as const;
 export const contentReviewStatusSchema = z.enum(CONTENT_REVIEW_STATUSES);
 
