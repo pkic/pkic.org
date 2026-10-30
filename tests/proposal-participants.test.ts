@@ -4,7 +4,8 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
 import { deliveredEmailPayload, seedEventAndAdmin, queryAll } from "./helpers/context";
-import { createAdminSession } from "./helpers/auth";
+import { createAdminSession, createMemberSession } from "./helpers/auth";
+import { proposalAccessReadResponseSchema } from "../assets/shared/schemas/proposal-management";
 import {
   addProposalSpeaker,
   createProposal,
@@ -384,6 +385,99 @@ describe("proposal participants", () => {
     expect(context.speakerLineupText).not.toMatch(/@|Private|Stored|Existing/);
     const mapped = await buildProposalInviteEmailContextMap(env.DB, [proposalId]);
     expect(mapped.get(proposalId)?.speakerLineupText).toBe(context.speakerLineupText);
+  });
+
+  it("shows the proposer only the address of an invitee with an existing account until they accept", async () => {
+    await seedEventAndAdmin(env.DB);
+    const existingId = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO users (id, email, normalized_email, first_name, last_name, email_verified_at, created_at, updated_at)
+         VALUES (?, 'private-invitee@example.test', 'private-invitee@example.test', 'Private', 'Stored',
+                 datetime('now'), datetime('now'), datetime('now'))`,
+      ).bind(existingId),
+      env.DB.prepare(
+        `INSERT INTO identities (id, user_id, organization_id, biography, links_json, source, show_on_organization_profile,
+                                 invited_at, started_at, created_at, updated_at)
+         VALUES (?, ?, NULL, 'A private biography that only this person may share.', '["https://private.example"]',
+                 'account', 0, datetime('now'), datetime('now'), datetime('now'), datetime('now'))`,
+      ).bind(crypto.randomUUID(), existingId),
+    ]);
+    const response = await mountedAppFetch(
+      new Request("https://app.test/api/v1/events/pqc-2026/proposals", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          ...(await participantProof("view-lead@example.test", true)),
+          sourceType: "direct",
+          proposer: {
+            firstName: "View",
+            lastName: "Lead",
+            email: "view-lead@example.test",
+            actingIdentityId: null,
+            bio: "Leads cross-industry cryptography migration planning and public policy coordination programs.",
+            role: "moderator",
+          },
+          proposal: {
+            type: "panel",
+            title: "Panel: What The Proposer Sees",
+            abstract:
+              "Panel discussion on organizational governance, procurement, stakeholder management, and transition planning for post-quantum cryptography programs.",
+          },
+          speakers: [
+            { firstName: "Typed", lastName: "Name", email: "private-invitee@example.test", role: "panelist" },
+            { firstName: "Fresh", lastName: "Invitee", email: "fresh-invitee@example.test", role: "panelist" },
+          ],
+          consents: [{ termKey: "speaker-terms", version: "v1" }],
+        }),
+      }),
+    );
+    expect(response.status, await response.clone().text()).toBe(200);
+    const { proposalId } = (await response.json()) as { proposalId: string };
+    const proposerId = (await env.DB.prepare("SELECT proposer_user_id FROM session_proposals WHERE id=?")
+      .bind(proposalId)
+      .first<string>("proposer_user_id"))!;
+    const session = await createMemberSession(env.DB, proposerId, crypto.randomUUID(), undefined, null);
+    const read = async () => {
+      const view = await mountedAppFetch(
+        new Request(`https://app.test/api/v1/proposals/${proposalId}/submission`, {
+          headers: { authorization: `Bearer ${session}` },
+        }),
+      );
+      expect(view.status, await view.clone().text()).toBe(200);
+      return proposalAccessReadResponseSchema.parse(await view.json()).speakers;
+    };
+    const hidden = {
+      organizationName: null,
+      jobTitle: null,
+      bio: null,
+      links: [],
+      headshotUploaded: false,
+      headshotUrl: null,
+    };
+    const invited = await read();
+    expect(invited.find((speaker) => speaker.email === "private-invitee@example.test")).toMatchObject({
+      status: "invited",
+      firstName: null,
+      lastName: null,
+      ...hidden,
+    });
+    // An account the invitation made carries only the name the proposer typed.
+    expect(invited.find((speaker) => speaker.email === "fresh-invitee@example.test")).toMatchObject({
+      status: "invited",
+      firstName: "Fresh",
+      lastName: "Invitee",
+      ...hidden,
+    });
+
+    await env.DB.prepare("UPDATE proposal_speakers SET status='confirmed', confirmed_at=? WHERE user_id=?")
+      .bind(new Date().toISOString(), existingId)
+      .run();
+    expect((await read()).find((speaker) => speaker.email === "private-invitee@example.test")).toMatchObject({
+      status: "confirmed",
+      firstName: "Private",
+      lastName: "Stored",
+    });
   });
 
   it("does not clear an existing proposer's identity biography or links when the submission provides none", async () => {

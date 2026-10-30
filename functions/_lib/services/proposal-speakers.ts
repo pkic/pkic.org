@@ -17,6 +17,7 @@ import {
 } from "./event-participant-source-revision";
 import { formatProposalInvitePerson } from "./proposal-invite-person";
 import { proposalSpeakerProfileColumns, proposalSpeakerHeadshotColumns } from "./proposal-speaker-profile-projection";
+import { unclaimedAccountSql } from "./proposal-speaker-account-authority";
 import type { DatabaseLike, StatementLike } from "../types";
 import type { ProposalAccessSpeakerStatus } from "../../../assets/shared/schemas/proposal-management";
 import type { SpeakerRole } from "../../../assets/shared/schemas/registration";
@@ -509,6 +510,8 @@ export interface ProposalSpeakerWithUser extends ProposalSpeakerUserProfile, Pro
   invite_expires_at: string | null;
   decline_reason: string | null;
   created_at: string;
+  /** 1 once the person has proved a mailbox; 0 for an account no one has claimed yet. */
+  account_claimed: 0 | 1;
 }
 
 export {
@@ -523,6 +526,7 @@ export const PROPOSAL_SPEAKER_WITH_USER_COLUMNS = `ps.id AS speaker_id, ps.user_
   ps.acting_identity_id, ps.acting_identity_selected_at,
   ps.manage_link_secret, ps.confirmed_at, ps.declined_at, ps.terms_accepted_at, ps.invite_expires_at,
   ps.decline_reason, ps.created_at,
+  CASE WHEN ${unclaimedAccountSql("u")} THEN 0 ELSE 1 END AS account_claimed,
   u.email,
   ${proposalSpeakerProfileColumns()},
   ${proposalSpeakerHeadshotColumns()}`;
