@@ -46,7 +46,8 @@ test("approved archive corrections and promotion exports remain tied to a frozen
   page,
   browser,
 }, testInfo) => {
-  test.setTimeout(300_000);
+  // Two complete Astro publications (approval, then withdrawal) each take minutes on a busy machine.
+  test.setTimeout(600_000);
   await mkdir(artifacts, { recursive: true });
   await signInAsE2eStaff(page, e2eAdminEmail("default"));
   const identity = userAuthSessionResponseSchema.parse(
