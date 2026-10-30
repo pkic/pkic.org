@@ -363,8 +363,10 @@ test("expanded sponsor history prose and inner history fit their visible desktop
   test.setTimeout(600_000);
   const staffContext = await browser.newContext({ baseURL: info.project.use.baseURL });
   const attendeeContext = await browser.newContext({ baseURL: info.project.use.baseURL });
+  let liveSponsor: Awaited<ReturnType<typeof prepareSponsorLiveFixture>> | undefined;
   try {
     const fixture = await prepareSponsorLiveFixture(await staffContext.newPage(), await attendeeContext.newPage());
+    liveSponsor = fixture;
     await signInToPortal(page, fixture.operator.email);
     await page.goto(fixture.workspace);
     await page.getByRole("button", { name: /^Open leads for/ }).click();
@@ -411,6 +413,7 @@ test("expanded sponsor history prose and inner history fit their visible desktop
       await page.screenshot({ path: info.outputPath(`expanded-history-reading-${name}.png`), fullPage: true });
     }
   } finally {
+    await liveSponsor?.end();
     await staffContext.close();
     await attendeeContext.close();
   }

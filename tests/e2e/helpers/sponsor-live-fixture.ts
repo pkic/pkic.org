@@ -3,6 +3,7 @@ import { expect, type Page, type TestInfo } from "@playwright/test";
 import type { AgendaOccurrence } from "../../../assets/shared/schemas/event-agenda";
 import { e2eAdminEmail } from "../../helpers/e2e-admin";
 import { captureDeviceConsole } from "./device-console";
+import { endEventSponsor } from "./event-sponsor";
 import { signInAsE2eStaff } from "./staff-auth";
 import { createMember } from "./member-provisioning";
 import { confirmRegistration, ownDomainEmail, registerInBrowser } from "./registration";
@@ -138,58 +139,56 @@ export async function prepareSponsorLiveFixture(staff: Page, attendee: Page) {
   });
   expect(created.status()).toBe(201);
   const sponsorId = sponsorshipResponseSchema.parse(await created.json()).sponsorship.id;
-  const activated = await staff.request.patch(`/api/v1/sponsors/${sponsorId}/stage`, {
-    data: sponsorshipStageUpdateSchema.parse({ toStage: "active" }),
-  });
-  expect(activated.status()).toBe(200);
-  sponsorshipResponseSchema.parse(await activated.json());
-  const operator = await createMember(staff, { individual: true });
-  const grants: string[] = [];
-  for (const permission of ["agenda:leads_capture", "agenda:leads_view", "agenda:leads_export"] as const) {
-    const response = await staff.request.post("/api/v1/permissions/grants", {
-      data: accessGrantCreateSchema.parse({
-        userId: operator.userId,
-        permission,
-        contextType: "event_sponsor",
-        contextId: sponsorId,
-      }),
+  // Every spec ends the sponsor when it is done; a fixture that fails before it is returned ends it here.
+  const end = () => endEventSponsor(staff, sponsorId);
+  try {
+    const activated = await staff.request.patch(`/api/v1/sponsors/${sponsorId}/stage`, {
+      data: sponsorshipStageUpdateSchema.parse({ toStage: "active" }),
     });
-    expect(response.status()).toBe(201);
-    grants.push(accessGrantCreateResponseSchema.parse(await response.json()).grant.id);
-  }
-  const consenting = await issueBadge(staff, email);
-  const denied = await issueBadge(staff, deniedEmail);
-  if (!template.result.manageToken) throw new Error("Denied fixture needs its own registration capability");
-  const canceled = await attendee.request.patch(`/api/v1/registrations/access/${template.result.manageToken}`, {
-    data: registrationManageSchema.parse({ action: "cancel" }),
-  });
-  expect(canceled.status()).toBe(200);
-  registrationManageUpdateResponseSchema.parse(await canceled.json());
-  return {
-    sponsorId,
-    operator,
-    grants,
-    consenting,
-    denied,
-    email,
-    deniedEmail,
-    firstName,
-    lastName,
-    organization,
-    manageUrl: confirmedManage.manageUrl,
-    manageToken: confirmedManage.manageToken,
-    workspace: `/portal/#/events/${sponsorEventSlug}/leads`,
-    /**
-     * The fixture sponsor has no printable logo, and every active event sponsor is part of the event's badges and
-     * promotion kits. Ending it when the spec is done keeps those renderable for the specs that share the event.
-     */
-    async end() {
-      const ended = await staff.request.patch(`/api/v1/sponsors/${sponsorId}/stage`, {
-        data: sponsorshipStageUpdateSchema.parse({ toStage: "lapsed", endReason: "withdrawal" }),
+    expect(activated.status()).toBe(200);
+    sponsorshipResponseSchema.parse(await activated.json());
+    const operator = await createMember(staff, { individual: true });
+    const grants: string[] = [];
+    for (const permission of ["agenda:leads_capture", "agenda:leads_view", "agenda:leads_export"] as const) {
+      const response = await staff.request.post("/api/v1/permissions/grants", {
+        data: accessGrantCreateSchema.parse({
+          userId: operator.userId,
+          permission,
+          contextType: "event_sponsor",
+          contextId: sponsorId,
+        }),
       });
-      expect.soft(ended.status(), await ended.text()).toBe(200);
-    },
-  };
+      expect(response.status()).toBe(201);
+      grants.push(accessGrantCreateResponseSchema.parse(await response.json()).grant.id);
+    }
+    const consenting = await issueBadge(staff, email);
+    const denied = await issueBadge(staff, deniedEmail);
+    if (!template.result.manageToken) throw new Error("Denied fixture needs its own registration capability");
+    const canceled = await attendee.request.patch(`/api/v1/registrations/access/${template.result.manageToken}`, {
+      data: registrationManageSchema.parse({ action: "cancel" }),
+    });
+    expect(canceled.status()).toBe(200);
+    registrationManageUpdateResponseSchema.parse(await canceled.json());
+    return {
+      sponsorId,
+      operator,
+      grants,
+      consenting,
+      denied,
+      email,
+      deniedEmail,
+      firstName,
+      lastName,
+      organization,
+      manageUrl: confirmedManage.manageUrl,
+      manageToken: confirmedManage.manageToken,
+      workspace: `/portal/#/events/${sponsorEventSlug}/leads`,
+      end,
+    };
+  } catch (error) {
+    await end();
+    throw error;
+  }
 }
 
 async function openManualBadgeEntry(page: Page) {

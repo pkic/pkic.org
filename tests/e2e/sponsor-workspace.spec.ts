@@ -13,11 +13,12 @@
 import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import type { CapturedEmail } from "./global-setup";
-import type { Page } from "@playwright/test";
+import type { BrowserContext, Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { waitForCapturedEmail } from "./helpers/sendgrid";
 import { declinePasskeyOffer } from "./helpers/portal-auth";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
+import { endEventSponsor } from "./helpers/event-sponsor";
 
 const SENDGRID_URL_FILE = process.env.E2E_SENDGRID_URL_FILE ?? "test-results/e2e-sendgrid-url";
 const EVENT_SLUG = "pqc-conference-amsterdam-nl";
@@ -47,6 +48,23 @@ async function signInAsAdmin(page: Page): Promise<void> {
 }
 
 test.describe("portal sponsor workspace", () => {
+  /** The sponsorship this test activated, and the staff session that may end it. */
+  let activeSponsorship: { id: string; staff: Awaited<ReturnType<BrowserContext["storageState"]>> } | undefined;
+
+  test.afterEach(async ({ browser }, info) => {
+    if (!activeSponsorship) return;
+    const staffContext = await browser.newContext({
+      baseURL: info.project.use.baseURL,
+      storageState: activeSponsorship.staff,
+    });
+    try {
+      await endEventSponsor(await staffContext.newPage(), activeSponsorship.id);
+    } finally {
+      activeSponsorship = undefined;
+      await staffContext.close();
+    }
+  });
+
   test("magic-link access, attendee list + CSV export, sign out, and slug-based link re-request", async ({ page }) => {
     const stamp = Date.now();
     const contactEmail = `sponsor-e2e-${stamp}@example.test`;
@@ -96,11 +114,12 @@ test.describe("portal sponsor workspace", () => {
           credentials: "same-origin",
           body: JSON.stringify({ toStage: "active" }),
         });
-        return { createStatus: createRes.status, stageStatus: stageRes.status };
+        return { id: created.sponsorship.id, createStatus: createRes.status, stageStatus: stageRes.status };
       },
       { eventId: event.id, contactEmail, renewalDate },
     );
     expect(sponsorship.createStatus).toBe(201);
+    activeSponsorship = { id: sponsorship.id, staff: await page.context().storageState() };
     expect(sponsorship.stageStatus).toBe(200);
 
     // ── Register a consenting attendee via the real public registration API ─
