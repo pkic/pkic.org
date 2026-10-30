@@ -13,7 +13,7 @@ import {
   eventProposalProofStartResponseSchema,
   eventProposalProofVerifyResponseSchema,
 } from "../../../assets/shared/schemas/event-proposal-proof";
-import { EMAIL_FIRST_COPY } from "../../../assets/shared/email-first-copy";
+import { EMAIL_FIRST_COPY, INDEPENDENT_CAPACITY_COPY } from "../../../assets/shared/email-first-copy";
 import { submitProposal, decideProposal } from "./proposals";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./sendgrid";
 import { acceptVisibleTerms } from "./proposal-entry-ui";
@@ -73,7 +73,10 @@ export async function preparePilotSpeaker(staff: Page, speaker: Page, info: Test
   expect(started.status(), await started.text()).toBe(200);
   expect(eventProposalProofStartResponseSchema.parse(await started.json()).status).toBe("verified");
   const verified = await verifying;
-  await expect(speaker.getByRole("button", { name: "Save speaker identity", exact: true })).toBeVisible();
+  // Taking part as an individual is saveable only once the independence disclosure is answered.
+  const saveIdentity = speaker.getByRole("button", { name: "Save speaker identity", exact: true });
+  await expect(identity.getByRole("group", { name: INDEPENDENT_CAPACITY_COPY.question })).toBeVisible();
+  await expect(saveIdentity).toBeHidden();
   expect(await capturedEmailCount()).toBe(proofSince);
   const returnedToken = new URL(speaker.url()).searchParams.get("token");
   if (!returnedToken) throw new Error("Verified invitation must resume its own speaker capability");
@@ -84,11 +87,11 @@ export async function preparePilotSpeaker(staff: Page, speaker: Page, info: Test
     email,
     applicantKind: "individual",
   });
-  await completeIndependentCapacityDisclosure(speaker.locator("[data-speaker-identity]"));
+  await completeIndependentCapacityDisclosure(identity);
   const saving = speaker.waitForResponse(
     (response) => new URL(response.url()).pathname === `${path}/profile` && response.request().method() === "PATCH",
   );
-  await speaker.getByRole("button", { name: "Save speaker identity", exact: true }).click();
+  await saveIdentity.click();
   const saved = await saving;
   expect(saved.status(), await saved.text()).toBe(200);
   expect(speakerSelfProfilePatchSchema.parse(saved.request().postDataJSON())).toMatchObject({
