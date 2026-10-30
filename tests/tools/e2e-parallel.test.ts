@@ -14,8 +14,13 @@ describe("the parallel e2e runner's plan", () => {
     expect(parseArguments(["--shards=2", "--base-port=9000", "tests/e2e/a.spec.ts", "-g", "x"], 8)).toEqual({
       shards: 2,
       basePort: 9000,
+      prepared: null,
       passthrough: ["tests/e2e/a.spec.ts", "-g", "x"],
     });
+  });
+
+  it("takes a directory to keep the prepared release in", () => {
+    expect(parseArguments(["--prepared=cache/release"], 2).prepared).toMatch(/cache\/release$/);
   });
 
   it("defaults to one shard per core, fewer when memory is short, and refuses nonsense", () => {

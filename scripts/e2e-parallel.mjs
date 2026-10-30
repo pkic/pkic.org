@@ -5,10 +5,13 @@
  * inside a single server. Each shard instead gets its own copy of one prepared release and database
  * and its own port, and runs its slice of the specs, which is how CI splits the work too.
  *
- *   pnpm run test:e2e:parallel [--shards=3] [--base-port=8820] [playwright arguments...]
+ *   pnpm run test:e2e:parallel [--shards=3] [--base-port=8820] [--prepared=DIR] [playwright arguments...]
+ *
+ * `--prepared=DIR` keeps the built release and seeded database in DIR and reuses them on the next run,
+ * so only the first run pays for the build. Delete DIR after changing product code or migrations.
  */
 import { spawn, spawnSync } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { cpus, tmpdir, totalmem } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -35,28 +38,39 @@ export function parseArguments(argv, defaults = defaultShards()) {
   const passthrough = [];
   let shards = defaults;
   let basePort = 8820;
+  let prepared = null;
   for (const argument of argv) {
     if (argument.startsWith("--shards=")) shards = Number(argument.slice("--shards=".length));
     else if (argument.startsWith("--base-port=")) basePort = Number(argument.slice("--base-port=".length));
+    else if (argument.startsWith("--prepared=")) prepared = path.resolve(argument.slice("--prepared=".length));
     else passthrough.push(argument);
   }
   if (!Number.isInteger(shards) || shards < 1) throw new Error("--shards must be a positive whole number");
-  return { shards, basePort, passthrough };
+  return { shards, basePort, prepared, passthrough };
 }
 
 function run() {
-  const { shards, basePort, passthrough } = parseArguments(process.argv.slice(2));
+  const { shards, basePort, prepared: keptRelease, passthrough } = parseArguments(process.argv.slice(2));
   const root = mkdtempSync(path.join(process.env.E2E_STATE_ROOT ?? tmpdir(), "pkic-e2e-shards."));
-  const prepared = path.join(root, "pkic-e2e.prepared");
+  const prepared = keptRelease ?? path.join(root, "pkic-e2e.prepared");
   const cleanup = () => rmSync(root, { recursive: true, force: true });
   process.on("exit", cleanup);
-  mkdirSync(prepared, { recursive: true });
   mkdirSync("test-results", { recursive: true });
-  for (const stale of ["portal-management-verification", "portal-mobile-navigation", "portal-groups", "portal-vote-management"])
+  for (const stale of [
+    "portal-management-verification",
+    "portal-mobile-navigation",
+    "portal-groups",
+    "portal-vote-management",
+  ])
     rmSync(`test-results/${stale}-auth.json`, { force: true });
-  console.log(`[e2e-parallel] preparing one release for ${shards} shards`);
-  const prepare = spawnSync("sh", ["scripts/e2e-prepare.sh", prepared], { stdio: "inherit" });
-  if (prepare.status !== 0) process.exit(prepare.status ?? 1);
+  if (existsSync(path.join(prepared, ".prepared"))) {
+    console.log(`[e2e-parallel] reusing the prepared release in ${prepared}`);
+  } else {
+    console.log(`[e2e-parallel] preparing one release for ${shards} shards`);
+    mkdirSync(prepared, { recursive: true });
+    const prepare = spawnSync("sh", ["scripts/e2e-prepare.sh", prepared], { stdio: "inherit" });
+    if (prepare.status !== 0) process.exit(prepare.status ?? 1);
+  }
 
   const results = shardPlan(shards, basePort).map(
     (plan) =>
@@ -66,7 +80,14 @@ function run() {
         const log = path.join(root, `${plan.name}.log`);
         const child = spawn(
           "pnpm",
-          ["exec", "playwright", "test", `--shard=${plan.shard}`, `--output=test-results/shard-${plan.index}`, ...passthrough],
+          [
+            "exec",
+            "playwright",
+            "test",
+            `--shard=${plan.shard}`,
+            `--output=test-results/shard-${plan.index}`,
+            ...passthrough,
+          ],
           {
             env: {
               ...process.env,
