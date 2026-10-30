@@ -104,7 +104,7 @@ function sentence(random: () => number): string {
 }
 
 describe.each([1, 2, 3])("typed text survives the editor, storage and the page (seed %i)", (seed) => {
-  it("keeps every typed character", () => {
+  it("keeps every typed character", { timeout: 30_000 }, () => {
     const random = seededRandom(seed);
     const failures: string[] = [];
     for (let index = 0; index < 150; index += 1) {

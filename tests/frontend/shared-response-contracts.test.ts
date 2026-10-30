@@ -61,6 +61,8 @@ describe("shared frontend response contracts", () => {
       memberApplicationStatusResponseSchema.parse({
         id: "00000000-0000-4000-8000-000000000002",
         stage: "processing",
+        membershipCategory: "A",
+        membershipCategoryLabel: "Organization member",
         stageEnteredAt: "2026-01-01T00:00:00Z",
         createdAt: "2026-01-01T00:00:00Z",
       }).stage,

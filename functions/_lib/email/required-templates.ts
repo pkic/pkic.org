@@ -24,6 +24,7 @@ export const REQUIRED_EMAIL_TEMPLATE_KEYS = [
   "donation_payment_failed",
   "donation_thank_you",
   "event_proposal_verify",
+  "proposal_speaker_declined",
   "mailing-list-enrolled",
   "meeting-guest-invitation",
   "meeting-guest-verification-code",
