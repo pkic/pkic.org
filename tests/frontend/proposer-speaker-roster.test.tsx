@@ -115,6 +115,21 @@ describe("proposer-managed speaker roster", () => {
     expect(root.textContent).toContain("Reason for declining: I am traveling that week.");
   });
 
+  it("titles an invited speaker without a name by the address once, not twice", async () => {
+    const root = mount(
+      <SpeakerList
+        speakers={[managedSpeaker({ status: "invited", firstName: null, lastName: null, confirmedAt: null })]}
+        token="manage-token"
+        apiBase="/api/v1"
+        proposerUserId="proposer-1"
+        onReload={async () => {}}
+        onStatus={() => {}}
+      />,
+    );
+    const card = root.querySelector("[data-speaker-card]")!;
+    expect(card.textContent?.split("speaker@example.test")).toHaveLength(2);
+  });
+
   it("shows the speaker's identity read-only and edits only their role", async () => {
     const root = mount(
       <SpeakerList

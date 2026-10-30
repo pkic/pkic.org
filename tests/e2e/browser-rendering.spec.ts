@@ -834,7 +834,7 @@ test.describe("browser workflows", () => {
 
     const proposalManageRoute = `/events/2026/pqc-conference-amsterdam-nl/propose/manage/?event=pqc-conference-amsterdam-nl&token=${encodeURIComponent(recoveredProposalManageToken)}`;
     await page.goto(proposalManageRoute);
-    await expect(page.getByText(/Open this page from your proposal management link/i)).toBeVisible();
+    await expect(page.getByText(/Return here any time with the link from your proposal email/i)).toBeVisible();
     await expect(page.locator("#manage-proposal-type")).toHaveValue("panel");
     const proposerSpeakerCard = page.locator(`[data-speaker-card][data-speaker-email="${proposerEmail}"]`);
     await expect(proposerSpeakerCard).toBeVisible();
@@ -1265,7 +1265,7 @@ test.describe("browser workflows", () => {
     // Sam invites a co-speaker from the proposal manage page
     const proposalManageRoute = `/events/2026/pqc-conference-amsterdam-nl/propose/manage/?event=pqc-conference-amsterdam-nl&token=${encodeURIComponent(samProposalManageToken)}`;
     await page.goto(proposalManageRoute);
-    await expect(page.getByText(/Open this page from your proposal management link/i)).toBeVisible();
+    await expect(page.getByText(/Return here any time with the link from your proposal email/i)).toBeVisible();
     const nominationInviteForm = page.locator("[data-cospeaker-form]");
     await nominationInviteForm.locator("#cs-email").fill("co-sam-speaker@example.test");
     await nominationInviteForm.locator("#cs-first-name").fill("Co");
