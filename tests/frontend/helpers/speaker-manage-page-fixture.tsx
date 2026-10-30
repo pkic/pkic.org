@@ -83,7 +83,9 @@ export function json(value: unknown, status = 200): Response {
   return new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
 }
 
-export function speakerPage(overrides: { status?: string; proposalStatus?: string } = {}): Record<string, unknown> {
+export function speakerPage(
+  overrides: { status?: string; proposalStatus?: string; personalDetailsEditable?: boolean } = {},
+): Record<string, unknown> {
   return {
     speaker: {
       userId: SPEAKER_USER_ID,
@@ -121,6 +123,7 @@ export function speakerPage(overrides: { status?: string; proposalStatus?: strin
       headshotUploaded: false,
       headshotUpdatedAt: null,
       headshotUrl: null,
+      personalDetailsEditable: overrides.personalDetailsEditable ?? true,
     },
   };
 }

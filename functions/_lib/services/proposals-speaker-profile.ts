@@ -24,6 +24,11 @@ import { parseCapabilityToken } from "../auth/capability-token";
 import { activeEffectiveInviteExpirySql, effectiveProposalSpeakerInviteExpirySql } from "../invite-validity";
 import { isProposalSpeakerRosterEditableStatus } from "../../../assets/shared/schemas/proposal-status";
 import { assertProvedCapacity, prepareSelectedCapacityDisclosure } from "./proposal-speaker-capacity-selection";
+import {
+  speakerAccountAuthorityEvidence,
+  speakerAccountSignInRequiredError,
+  type SpeakerAccountAuthority,
+} from "./proposal-speaker-account-authority";
 
 /** Rechecks the verified link/session and current invitation scope inside the profile/confirmation batch. */
 export function prepareSpeakerSelfAuthorityGuard(
@@ -120,6 +125,8 @@ export async function updateSpeakerProfile(
   context: ProposalSpeakerWriteContext & {
     selectionAuthority?: { userId: string; sessionId: string };
     signingSecret?: string;
+    /** What lets the person's own name change without a mailbox proof in this request. */
+    accountAuthority?: SpeakerAccountAuthority;
   },
 ): Promise<void> {
   const at = nowIso();
@@ -131,6 +138,13 @@ export async function updateSpeakerProfile(
   if (payload.firstName !== undefined) fields.push("firstName");
   if (payload.lastName !== undefined) fields.push("lastName");
   if (fields.length === 0 && payload.actingIdentityId === undefined && !proofSelection) return;
+  // The speaker's own session that selects a representation also signs them in to their account.
+  const accountAuthority =
+    context.accountAuthority ??
+    (context.selectionAuthority?.userId === context.userId
+      ? { sessionId: context.selectionAuthority.sessionId }
+      : undefined);
+  if (fields.length > 0 && !proofSelection && !accountAuthority) throw speakerAccountSignInRequiredError();
   if (context.currentStatus === "declined")
     throw new AppError(403, "SPEAKER_DECLINED", "You have declined participation.");
   if (!isProposalSpeakerRosterEditableStatus(context.proposalStatus)) {
@@ -280,6 +294,9 @@ export async function updateSpeakerProfile(
     ...(proof?.statements ?? []),
     ...affiliationStatements,
     ...(selectionSessionGuard ? [selectionSessionGuard] : []),
+    ...(!proof && accountAuthority && (namePatch.firstName !== undefined || namePatch.lastName !== undefined)
+      ? [prepareAuthorizationGuard(db, speakerAccountAuthorityEvidence(accountAuthority, profileUserId))]
+      : []),
     ...(selected?.guards ?? []),
     ...(selected && (namePatch.firstName !== undefined || namePatch.lastName !== undefined)
       ? [

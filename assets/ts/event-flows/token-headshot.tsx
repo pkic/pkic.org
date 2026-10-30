@@ -25,6 +25,8 @@ export interface TokenHeadshotOptions {
   url: string;
   /** Said after a successful change, such as what else the photo updates. */
   successNote?: string;
+  /** Whether this link may change the photo; it is shown read-only otherwise. Defaults to true. */
+  canChange?: boolean;
   onChanged?: () => void;
 }
 
@@ -34,7 +36,7 @@ function TokenHeadshot({ options, status }: { options: TokenHeadshotOptions; sta
     <>
       <HeadshotTile
         name={options.name}
-        canChange
+        canChange={options.canChange ?? true}
         imageUrl={imageUrl}
         consent="own"
         self

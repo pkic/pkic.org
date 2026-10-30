@@ -58,6 +58,9 @@ export function SpeakerParticipationIdentity({
   const personalDetails = (
     <ParticipationPersonalDetails
       person={personal}
+      description={
+        data.profile.personalDetailsEditable ? undefined : "Sign in to change the name or photo on your account."
+      }
       save={
         saveNames
           ? async (names) => {

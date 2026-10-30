@@ -105,6 +105,11 @@ async function select(f: Awaited<ReturnType<typeof fixture>>, identityId: string
   return speakerProfileUpdateResponseSchema.parse(await response.json());
 }
 
+/** The selection is made signed in; a read with the link alone may not change the verified account's name or photo. */
+function signedOut<T extends { personalDetailsEditable: boolean }>(profile: T): T {
+  return { ...profile, personalDetailsEditable: false };
+}
+
 describe("speaker current representation", () => {
   it("returns the selected verified work mailbox and shows the live identity's title on the appearance", async () => {
     const f = await fixture();
@@ -128,7 +133,7 @@ describe("speaker current representation", () => {
     const current = await read(f);
     expect(current.currentRepresentation).toMatchObject({ email: identity.email, jobTitle: "Current role" });
     // Every profile value is read from the live identity; the proposal keeps no copy to fall back on.
-    expect(current.profile).toEqual({ ...selected.profile, jobTitle: "Current role" });
+    expect(current.profile).toEqual({ ...signedOut(selected.profile), jobTitle: "Current role" });
     await env.DB.prepare("UPDATE identities SET biography='Edited identity biography' WHERE id=?")
       .bind(identity.identityId)
       .run();
@@ -144,7 +149,7 @@ describe("speaker current representation", () => {
     await env.DB.prepare("UPDATE user_emails SET verified_at=NULL WHERE id=?").bind(identity.emailId).run();
     const current = await read(f);
     expect(current.currentRepresentation).toBeNull();
-    expect(current.profile).toEqual(selected.profile);
+    expect(current.profile).toEqual(signedOut(selected.profile));
     expect(current.profile.actingIdentitySelection).toBe("identity");
   });
 
@@ -167,7 +172,7 @@ describe("speaker current representation", () => {
       }
       const current = await read(f);
       expect(current.currentRepresentation).toBeNull();
-      expect(current.profile).toEqual(selected.profile);
+      expect(current.profile).toEqual(signedOut(selected.profile));
     },
   );
 
@@ -190,6 +195,7 @@ describe("speaker current representation", () => {
     await env.DB.prepare("UPDATE users SET email_verified_at=NULL WHERE id=?").bind(f.userId).run();
     const unavailable = await read(f);
     expect(unavailable.currentRepresentation).toBeNull();
+    // An account with no proved mailbox stays editable through the link that made it.
     expect(unavailable.profile).toEqual(selected.profile);
   });
 
@@ -213,7 +219,7 @@ describe("speaker current representation", () => {
     expect(refused.status).toBe(403);
     const current = await read(f);
     expect(current.currentRepresentation).toEqual(selected.currentRepresentation);
-    expect(current.profile).toEqual(selected.profile);
+    expect(current.profile).toEqual(signedOut(selected.profile));
     expect(JSON.stringify(current)).not.toContain("foreign@personal.example");
     expect(JSON.stringify(current)).not.toContain(f.secret);
     expect(JSON.stringify(current)).not.toContain("manage_link_secret");

@@ -248,6 +248,23 @@ describe("speaker self-service page", () => {
     expect(panel(root, "data-presentation-link").hidden).toBe(false);
   });
 
+  it("shows the account's name and photo read-only when the link alone may not change them", async () => {
+    const root = mountShell();
+    installApi({
+      [READ]: () => json(speakerPage({ status: "confirmed", personalDetailsEditable: false })),
+      [TERMS]: () => json(speakerTerms()),
+    });
+
+    await boot();
+
+    const photoSection = panel(root, "data-headshot-section");
+    expect(photoSection.hidden).toBe(false);
+    expect(photoSection.querySelector('button[aria-label="Upload photo of Ada Lovelace"]')).toBeNull();
+    const buttons = [...root.querySelectorAll("button")].map((button) => button.textContent);
+    expect(buttons).not.toContain("Edit my details");
+    expect(root.textContent).toContain("Sign in to change the name or photo on your account.");
+  });
+
   it("keeps the editors closed for a speaker who declined", async () => {
     const root = mountShell();
     installApi({ [READ]: () => json(speakerPage({ status: "declined" })), [TERMS]: () => json(speakerTerms()) });

@@ -19,10 +19,29 @@ import {
   proposalSpeakerHeadshotPutRouteSchema,
 } from "../../../../../../../assets/shared/schemas/route-contracts";
 import { proposalSpeakerAccessPath } from "../../../../../../../assets/shared/proposal-access-paths";
+import {
+  resolveSpeakerAccountAuthority,
+  speakerAccountSignInRequiredError,
+} from "../../../../../../_lib/services/proposal-speaker-account-authority";
 
 async function loadContext(c: AdminContext, token: ParticipantAuthority) {
   c.set?.("sensitive", true);
   return getSpeakerByManageToken(requestDb(c), token, requireInternalSecret(c.env));
+}
+
+/** The photo is the person's: a link alone changes it only on an account whose mailbox was never proved. */
+async function requireAccountAuthority(
+  c: AdminContext,
+  token: ParticipantAuthority,
+  user: { id: string; account_claimed: boolean },
+) {
+  const authority = await resolveSpeakerAccountAuthority(requestDb(c), c.req.raw, c.env, {
+    authority: token,
+    userId: user.id,
+    accountClaimed: user.account_claimed,
+  });
+  if (!authority) throw speakerAccountSignInRequiredError();
+  return authority;
 }
 
 export async function onGet(c: AdminContext, token: ParticipantAuthority): Promise<Response> {
@@ -38,6 +57,7 @@ export async function onPut(c: AdminContext, token: ParticipantAuthority): Promi
   if (speaker.status === "declined") {
     return json({ error: { code: "SPEAKER_DECLINED", message: "You have declined participation." } }, 403);
   }
+  const accountAuthority = await requireAccountAuthority(c, token, user);
 
   const image = await readValidatedUploadedImage(c.req.raw, "Headshot", SPEAKER_HEADSHOT_MAX_BYTES);
   const { r2Key, origin } = await uploadProposalSpeakerSelfHeadshot(
@@ -54,6 +74,7 @@ export async function onPut(c: AdminContext, token: ParticipantAuthority): Promi
       currentStatus: speaker.status,
       inviteGeneration: speaker.invite_generation,
       headshotKey: user.headshot_r2_key,
+      accountAuthority,
     },
     image,
   );
@@ -69,6 +90,7 @@ export async function onDelete(c: AdminContext, token: ParticipantAuthority): Pr
   if (speaker.status === "declined") {
     return json({ error: { code: "SPEAKER_DECLINED", message: "You have declined participation." } }, 403);
   }
+  const accountAuthority = await requireAccountAuthority(c, token, user);
   await removeProposalSpeakerSelfHeadshot({
     db: requestDb(c),
     env: c.env,
@@ -82,6 +104,7 @@ export async function onDelete(c: AdminContext, token: ParticipantAuthority): Pr
     currentStatus: speaker.status,
     inviteGeneration: speaker.invite_generation,
     headshotKey: user.headshot_r2_key,
+    accountAuthority,
   });
   return json({ success: true });
 }

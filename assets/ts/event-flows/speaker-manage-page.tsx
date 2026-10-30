@@ -326,7 +326,8 @@ async function main(): Promise<void> {
         onChange={updateEntry}
         onEditing={editIdentity}
         onTermsRecorded={recordTerms}
-        savePersonalDetails={savePersonalDetails}
+        // The link speaks for this proposal; the account's own name needs the person's sign-in once claimed.
+        savePersonalDetails={data.profile.personalDetailsEditable ? savePersonalDetails : undefined}
       />,
       identityContainer,
     );
@@ -395,6 +396,7 @@ async function main(): Promise<void> {
       section: headshotSection,
       name: [data.profile.firstName, data.profile.lastName].filter(Boolean).join(" ") || data.profile.email,
       initialUrl: data.profile.headshotUrl,
+      canChange: data.profile.personalDetailsEditable,
       url: proposalSpeakerAccessPath(boot.apiBase, token, "headshot"),
     });
   }

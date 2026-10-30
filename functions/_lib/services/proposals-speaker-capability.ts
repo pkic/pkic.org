@@ -16,6 +16,7 @@ import { parseLinksJson } from "../../../assets/shared/schemas/links";
 import { identityJobTitleSql } from "./identities/affiliation-projection";
 import { proposalSpeakerIdentityIdSql } from "./proposal-speaker-profile-projection";
 import { proposalActingIdentityReadModel } from "./proposal-speaker-identity";
+import { unclaimedAccountSql } from "./proposal-speaker-account-authority";
 import {
   speakerCurrentRepresentationSchema,
   speakerSelfServiceProfileSchema,
@@ -28,6 +29,8 @@ export interface SpeakerWithContext {
   currentRepresentation: SpeakerCurrentRepresentation | null;
   user: ProposalSpeakerUserProfile & {
     id: string;
+    /** The account has proved a mailbox, so a speaker link alone no longer changes its name or headshot. */
+    account_claimed: boolean;
   };
 }
 
@@ -108,6 +111,7 @@ async function getSpeakerById(db: DatabaseLike, speakerId: string, userId?: stri
     u_links_json: string | null;
     u_headshot_r2_key: string | null;
     u_headshot_updated_at: string | null;
+    u_account_claimed: number;
     ps_acting_identity_id: string | null;
     ps_acting_identity_selected_at: string | null;
   }>(
@@ -154,6 +158,7 @@ async function getSpeakerById(db: DatabaseLike, speakerId: string, userId?: stri
        u.email            AS u_email,
        ${proposalSpeakerProfileColumns("u", "ps", "u_")},
        ${proposalSpeakerHeadshotColumns("u", "u_")},
+       CASE WHEN ${unclaimedAccountSql("u")} THEN 0 ELSE 1 END AS u_account_claimed,
        ps.acting_identity_id AS ps_acting_identity_id
        , ps.acting_identity_selected_at AS ps_acting_identity_selected_at
      FROM proposal_speakers ps
@@ -219,6 +224,7 @@ async function getSpeakerById(db: DatabaseLike, speakerId: string, userId?: stri
       links_json: row.u_links_json,
       headshot_r2_key: row.u_headshot_r2_key,
       headshot_updated_at: row.u_headshot_updated_at,
+      account_claimed: row.u_account_claimed === 1,
     },
   };
   context.currentRepresentation = await currentSpeakerRepresentation(db, context.speaker);
@@ -281,9 +287,14 @@ async function currentSpeakerRepresentation(
 }
 
 /** How the speaker appears: the person's name and photo, and the profile of the identity they speak as. */
-export function speakerSelfServiceProfileReadModel(context: SpeakerWithContext, headshotUrl: string | null) {
+export function speakerSelfServiceProfileReadModel(
+  context: SpeakerWithContext,
+  headshotUrl: string | null,
+  personalDetailsEditable: boolean,
+) {
   const { speaker, user } = context;
   return speakerSelfServiceProfileSchema.parse({
+    personalDetailsEditable,
     ...proposalActingIdentityReadModel(speaker),
     firstName: user.first_name,
     lastName: user.last_name,
