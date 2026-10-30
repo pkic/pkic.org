@@ -130,6 +130,12 @@ describe("StatusSummary", () => {
 
     expect(root.querySelectorAll(".pk-panel")).toHaveLength(1);
     expect(root.querySelectorAll(".membership-progress__step")).toHaveLength(2);
+    // Each step's state is expected progress: plain words, not a tone badge per step.
+    expect([...root.querySelectorAll(".membership-progress__state")].map((state) => state.textContent)).toEqual([
+      "In progress",
+      "Not started",
+    ]);
+    expect(root.querySelector(".membership-progress__steps .pk-badge")).toBeNull();
     expect(root.textContent).toContain("Required fee: $125.00");
     expect(root.textContent).toContain("Payment will be available after the previous requirements are complete.");
     expect(root.getAttribute("aria-label")).toBeNull();
