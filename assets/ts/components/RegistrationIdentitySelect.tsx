@@ -35,7 +35,10 @@ export function RegistrationIdentityField({
   onSelect,
   presentation = "summary",
   onUpdated,
+  personalAdvisory = true,
 }: {
+  /** The registration waiting-list advisory on a personal identity; off where no waiting list applies. */
+  personalAdvisory?: boolean;
   preferred?: SessionActingIdentity | null;
   available?: readonly SessionActingIdentity[];
   userId?: string;
@@ -73,7 +76,7 @@ export function RegistrationIdentityField({
       <>
         <span class="pk-cluster pk-cluster--nowrap">
           <span>{selected ? identityLabel(selected) : "Participating as an individual"}</span>
-          {selected?.organizationId == null && (
+          {personalAdvisory && selected?.organizationId == null && (
             <span
               class="pk-representation-warning"
               role="img"

@@ -1,4 +1,4 @@
-import { completeSyntheticMembershipReview } from "./helpers/member-provisioning";
+import { completeSyntheticMembershipReview, createMember } from "./helpers/member-provisioning";
 /**
  * Membership joining across category kinds and domain outcomes.
  *
@@ -143,6 +143,30 @@ test("an individual must describe themselves and can submit without an organizat
   );
   await page.getByRole("button", { name: "Submit membership application" }).click();
   expect((await submission).status()).toBe(201);
+});
+
+test("a signed-in member is shown their membership instead of a new application", async ({ page }, testInfo) => {
+  const organizationName = `Signed In Member Organization ${uniqueSuffix()}`;
+  await signInToPortal(page, e2eAdminEmail("portal-join-categories"));
+  const member = await createMember(page, { organizationName });
+  await page.context().clearCookies();
+  await signInToPortal(page, member.email);
+
+  await page.goto("/join/");
+  const signedIn = page.locator("[data-join-signed-in]");
+  await expect(signedIn.getByText(member.email, { exact: true })).toBeVisible();
+  const refusal = signedIn.locator("[data-join-refusal]");
+  await expect(refusal.getByRole("heading", { name: `${organizationName} is already a member` })).toBeVisible();
+  await expect(refusal.getByRole("link", { name: "Manage membership" })).toHaveAttribute(
+    "href",
+    /^\/portal\/#\/organizations\//,
+  );
+  // Nothing to type: neither the email step nor the application form is offered.
+  await expect(page.locator("[data-join-start]")).toBeHidden();
+  await expect(page.locator("[data-join-application-form]")).toBeHidden();
+  await page.screenshot({ path: testInfo.outputPath("join-signed-in-member-desktop.png"), fullPage: true });
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.screenshot({ path: testInfo.outputPath("join-signed-in-member-phone.png"), fullPage: true });
 });
 
 test("a personal address cannot start an organization application without the explicit attestation", async ({

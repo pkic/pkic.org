@@ -20,7 +20,11 @@ import {
   membershipApplicationFields,
 } from "../../shared/schemas/membership-application-form";
 export { filterApplicationFieldsForApplicantKind } from "../../shared/schemas/membership-application-form";
+import type { SessionActingIdentity } from "../../shared/session-acting-identity";
+import { JoinSignedInApplicant, joinRefusalFor, readSignedInApplicant } from "./join-signed-in";
+import type { JoinRefusal, SignedInApplicant } from "./join-signed-in";
 import {
+  memberApplicationCreateAsIdentitySchemaForCategory,
   memberApplicationCreateResponseSchema,
   memberApplicationCreateSchemaForCategory,
   memberApplicationFormResponseSchema,
@@ -318,6 +322,7 @@ async function main(): Promise<void> {
   const categoryContainer = root.querySelector<HTMLElement>("[data-membership-categories]");
   const customFieldsContainer = root.querySelector<HTMLElement>("[data-custom-fields]");
   const individualCategoryList = root.querySelector<HTMLElement>("[data-join-individual-category-list]");
+  const signedInSection = root.querySelector<HTMLElement>("[data-join-signed-in]");
   if (
     !statusEl ||
     !startSection ||
@@ -331,6 +336,9 @@ async function main(): Promise<void> {
 
   let legalValidation: ReturnType<typeof installMembershipLegalValidation> | undefined;
   let applicationContext: JoinApplicationContext | null = null;
+  /** The identity a signed-in person applies as; null on the verified-email path. */
+  let signedInIdentity: SessionActingIdentity | null = null;
+  let signedInName = "";
   let categories: MembershipCategory[] = [];
   let applicationFields: MembershipApplicationField[] = [];
   let definitionPromise: Promise<MemberApplicationFormResponse> | null = null;
@@ -361,10 +369,10 @@ async function main(): Promise<void> {
     section.focus();
   };
 
-  const loadApplication = async (context: JoinApplicationContext) => {
+  const loadApplication = async (applicantKind: JoinApplicantKind) => {
     try {
       const definition = await getApplicationDefinition();
-      categories = filterCategoriesForApplicantKind(definition.categories, context.applicantKind);
+      categories = filterCategoriesForApplicantKind(definition.categories, applicantKind);
       if (!categoryContainer || categories.length === 0) {
         showSection(supportSection);
         setStatus(statusEl, "No eligible membership categories are currently available for this path.", true);
@@ -372,18 +380,18 @@ async function main(): Promise<void> {
       }
       renderMembershipCategories(categoryContainer, categories);
       const fields = definition.form?.fields ?? [];
-      applicationFields = configureMembershipLegalFields(applicationForm, fields, context.applicantKind);
+      applicationFields = configureMembershipLegalFields(applicationForm, fields, applicantKind);
       legalValidation?.dispose();
       legalValidation = installMembershipLegalValidation(applicationForm, fields);
       if (customFieldsContainer)
         renderMembershipApplicationQuestions(
           customFieldsContainer,
-          membershipApplicationFields(applicationFields, categories[0]),
+          membershipApplicationFields(applicationFields, categories[0], { fromIdentity: Boolean(signedInIdentity) }),
         );
-      if (verifiedEmail) verifiedEmail.textContent = context.applicantEmail;
+      if (applicationContext && verifiedEmail) verifiedEmail.textContent = applicationContext.applicantEmail;
       if (verifiedKind) {
         verifiedKind.textContent =
-          context.applicantKind === "individual" ? "Individual application" : "Organization application";
+          applicantKind === "individual" ? "Individual application" : "Organization application";
       }
       applyCategoryUI(applicationForm, categories[0]);
       showSection(applicationForm);
@@ -411,7 +419,9 @@ async function main(): Promise<void> {
     const selected = categories.find((category) => category.code === target.value);
     if (selected && customFieldsContainer) {
       const answers = readCustomFieldValues(applicationForm);
-      const fields = membershipApplicationFields(applicationFields, selected);
+      const fields = membershipApplicationFields(applicationFields, selected, {
+        fromIdentity: Boolean(signedInIdentity),
+      });
       for (const field of fields) {
         if (field.optionSource !== "active_working_groups") continue;
         const eligible = new Set(field.options?.map((option) => option.value));
@@ -433,25 +443,38 @@ async function main(): Promise<void> {
     const agreementsValid = legalValidation?.validate() ?? true;
     if (!fieldsValid || !agreementsValid) return;
     const category = readSelectedCategory(applicationForm);
-    if (!category || !applicationContext) {
+    const context = applicationContext;
+    const identity = signedInIdentity;
+    if (!category || (!context && !identity)) {
       setStatus(statusEl, "Your verified membership path has expired. Please start again.", true);
       return;
     }
-    const context = applicationContext;
     await withLoadingButton(findSubmitButton(applicationForm), async () => {
       try {
         const configuredCategory = categories.find((entry) => entry.code === category);
         if (!configuredCategory) throw new Error("Choose an available membership category");
         const formFields = (await getApplicationDefinition()).form?.fields ?? [];
-        const payload = memberApplicationCreateSchemaForCategory(configuredCategory, formFields).parse(
-          buildApplicationPayload(applicationForm, category, context),
-        );
+        let payload: object;
+        let applicantName = signedInName;
+        if (identity) {
+          payload = memberApplicationCreateAsIdentitySchemaForCategory(configuredCategory, formFields).parse({
+            identityId: identity.id,
+            membershipCategory: category,
+            answers: readCustomFieldValues(applicationForm),
+          });
+        } else if (context) {
+          const typed = memberApplicationCreateSchemaForCategory(configuredCategory, formFields).parse(
+            buildApplicationPayload(applicationForm, category, context),
+          );
+          payload = typed;
+          applicantName = typed.applicantName;
+        } else return;
         const result = await postJson(
           `${API_BASE}/members/applications`,
           payload,
           memberApplicationCreateResponseSchema,
         );
-        showSuccessPanel(root, applicationForm, result.applicationId, result.manageToken, payload.applicantName);
+        showSuccessPanel(root, applicationForm, result.applicationId, result.manageToken, applicantName);
       } catch (error) {
         handleSubmitError(error, applicationForm, statusEl);
         legalValidation?.refuse(error);
@@ -471,7 +494,7 @@ async function main(): Promise<void> {
       );
       if (result.status === "application_ready") {
         applicationContext = result;
-        await loadApplication(result);
+        await loadApplication(result.applicantKind);
       } else if (result.status === "already_member") {
         showSection(existingMemberSection);
       } else if (result.status === "organization_access_ready") {
@@ -484,8 +507,33 @@ async function main(): Promise<void> {
       showSection(startSection);
     }
   };
+  const startSignedIn = (applicant: SignedInApplicant) => {
+    if (!signedInSection) return;
+    signedInName = applicant.name;
+    // The identity supplies name, organization and the verified address, so the typed fields leave the form.
+    for (const typed of applicationForm.querySelectorAll("[data-join-verified-context], [data-join-typed-identity]"))
+      typed.remove();
+    const applyAs = (identity: SessionActingIdentity, refusal: JoinRefusal | null) => {
+      signedInIdentity = identity;
+      if (refusal) {
+        startSection.hidden = true;
+        applicationForm.hidden = true;
+        return;
+      }
+      void loadApplication(identity.organizationId ? "organization" : "individual");
+    };
+    signedInSection.hidden = false;
+    render(<JoinSignedInApplicant applicant={applicant} onIdentityChange={applyAs} />, signedInSection);
+    applyAs(applicant.preferred, joinRefusalFor(applicant.preferred, applicant.identities));
+  };
+
   window.addEventListener("hashchange", () => void verifyFromLocation());
-  await verifyFromLocation();
+  if (new URLSearchParams(window.location.hash.slice(1)).has("verify")) {
+    await verifyFromLocation();
+    return;
+  }
+  const applicant = await readSignedInApplicant();
+  if (applicant) startSignedIn(applicant);
 }
 
 void main();
