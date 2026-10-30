@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { boundedScannedValue, scannedAttemptCaptureSchema } from "../../assets/shared/schemas/scanner-attempt-capture";
+import {
+  boundedScannedValue,
+  scannedAttemptCaptureSchema,
+  WITHHELD_CONTACT_VALUE,
+} from "../../assets/shared/schemas/scanner-attempt-capture";
 import { scannerFailureRequestSchema } from "../../assets/shared/schemas/event-scanner-failure";
 describe("bounded original scan capture", () => {
   it("preserves the first64Unicodecodepoints and whitespace without splitting a character", () => {
@@ -15,6 +19,15 @@ describe("bounded original scan capture", () => {
     expect(
       scannedAttemptCaptureSchema.safeParse({ scannedValue: "😀".repeat(65), scannedValueTruncated: true }).success,
     ).toBe(false);
+  });
+  it("withholds a scanned contact payload instead of retaining its address", () => {
+    const contact = JSON.stringify({ email: "lead-contact@example.test", biography: "Private notes" });
+    const evidence = boundedScannedValue(contact);
+    expect(evidence).toEqual({ scannedValue: WITHHELD_CONTACT_VALUE, scannedValueTruncated: false });
+    expect(scannedAttemptCaptureSchema.safeParse(evidence).success).toBe(true);
+    // An address beyond the retained prefix is still recognized.
+    expect(boundedScannedValue(`${"x".repeat(70)} person@example.test`).scannedValue).toBe(WITHHELD_CONTACT_VALUE);
+    expect(boundedScannedValue("Not a badge").scannedValue).toBe("Not a badge");
   });
   it("does not let a refusal carry a badge identity or profile assertion", () => {
     const body = {
