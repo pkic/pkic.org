@@ -178,7 +178,9 @@ test("attendees ask, upvote, reply, accept answers and restore participation aft
     await expect(firstQuestion.getByRole("button", { name: "Remove acceptance", exact: true })).toBeVisible();
     await expect(secondQuestion.getByText("Accepted by the question author", { exact: true })).toBeVisible();
     await captureRole(first, (name) => info.outputPath(name), "accepted-question-answer");
-    // Organizers use the same session Questions section to review and accept attendee replies.
+    // Organizers use the same session Questions section to review and accept attendee replies. The attendee
+    // agenda offers it to registered viewers, so the organizer registers under their own verified address.
+    await registerStateAttendee(moderator, fixture, e2eAdminEmail("portal-live-session-participation"));
     await moderator.goto(`/portal/#/events/${fixture.slug}/agenda?session=${occurrence.id}`);
     const moderatorQuestion = moderator.getByRole("listitem").filter({ hasText: question });
     await moderatorQuestion.getByRole("button", { name: "Show answers", exact: true }).click();

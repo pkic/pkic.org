@@ -156,7 +156,7 @@ test("a real browser crash preserves a committed upload lease and reclaims the o
     if (!reauthenticated) expect(resumedOwner.sessionId).toBe(owner.sessionId);
     await page.goto(measurementScanner);
     await page.reload();
-    await expect(page.getByRole("heading", { name: "Badge scanner", exact: true })).toBeVisible();
+    await expect(page.getByRole("tablist", { name: "Badge scanner views", exact: true })).toBeVisible();
     await expect.poll(async () => (await scannerStorage(page)).pending.length).toBe(0);
     const recovered = await scannerStorage(page);
     expect(recovered.history).toHaveLength(1);

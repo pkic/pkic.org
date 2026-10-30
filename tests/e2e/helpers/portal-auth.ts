@@ -40,10 +40,11 @@ export async function openMyProfile(page: Page): Promise<void> {
   await expect(page).toHaveURL(/\/portal\/#\/users\/[^/?#]+$/, { timeout: 15_000 });
 }
 
-/** Takes "Edit profile" on the professional profile: the record's edit view, with its profile fields open. */
+/** Takes "Edit profile" from the record's actions menu, which opens the names editor over the record. */
 export async function editMyProfile(page: Page): Promise<void> {
-  await page.getByRole("link", { name: "Edit profile", exact: true }).click();
-  await expect(page).toHaveURL(/\/portal\/#\/users\/[^/?#]+\/edit$/, { timeout: 15_000 });
+  await page.getByRole("button", { name: "Record actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Edit profile", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Edit names", exact: true })).toBeVisible({ timeout: 15_000 });
 }
 
 /**
@@ -139,11 +140,15 @@ export async function signInToPortal(page: Page, email: string, options: { conti
           : choices.first()
     ).click();
   }
-  // Email sign-in can offer enrollment before the shell mounts. Follow its visible opt-out.
+  await declinePasskeyOffer(page);
+  await expect(page).toHaveURL(/\/portal\/#\/(?!verify(?:$|[/?]))[^?#]+/, { timeout: 15_000 });
+}
+
+/** Email sign-in can offer passkey enrollment before the shell mounts: follows its visible opt-out. */
+export async function declinePasskeyOffer(page: Page): Promise<void> {
   const passkeyOffer = page.getByRole("region", { name: "You're signed in", exact: true });
   await expect(page.locator("#portal-root").or(passkeyOffer).first()).toBeVisible({ timeout: 15_000 });
   if (await passkeyOffer.isVisible())
     await passkeyOffer.getByRole("button", { name: "Continue without a passkey", exact: true }).click();
   await expect(page.locator("#portal-root")).toBeVisible({ timeout: 15_000 });
-  await expect(page).toHaveURL(/\/portal\/#\/(?!verify(?:$|[/?]))[^?#]+/, { timeout: 15_000 });
 }
