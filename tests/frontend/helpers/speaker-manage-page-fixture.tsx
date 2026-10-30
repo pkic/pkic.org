@@ -1,4 +1,4 @@
-import { expect, vi } from "vitest";
+import { afterEach, beforeEach, expect, vi } from "vitest";
 import { act } from "preact/test-utils";
 import { renderToString } from "preact-render-to-string";
 import { EventSpeakerManagement } from "../../../assets/ts/site/EventSpeakerManagement";
@@ -15,6 +15,23 @@ export const SPEAKER_USER_ID = "00000000-0000-4000-8000-000000000041";
 /** The speaker's individual identity, which an individual selection speaks as. */
 export const INDIVIDUAL_IDENTITY_ID = "00000000-0000-4000-8000-000000000061";
 export const AUTH = "/api/v1/auth/session";
+
+/**
+ * Opens each case on the speaker link with a fresh module graph, since the
+ * page runs `main()` at import, and clears the page and stubs afterwards.
+ */
+export function resetSpeakerPageBetweenTests(): void {
+  beforeEach(() => {
+    vi.resetModules();
+    window.history.replaceState({}, "", "/events/2026/pqc-2026/speaker/?token=speaker-token-12345678901234567890");
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    document.body.innerHTML = "";
+    window.history.replaceState({}, "", "/");
+  });
+}
 
 export function signedInSession(userId = SPEAKER_USER_ID): Response {
   return json(
