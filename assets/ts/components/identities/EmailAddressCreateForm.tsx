@@ -91,7 +91,8 @@ export function EmailAddressCreateForm({
         event.preventDefault();
         setError("");
         const checked = form.submit();
-        if (!checked.data) return setError(checked.message);
+        // The refused field says why and takes focus; an alert would only repeat it.
+        if (!checked.data) return;
         setSaving(true);
         try {
           if (beforeAdd && (await beforeAdd(checked.data.email))) return;

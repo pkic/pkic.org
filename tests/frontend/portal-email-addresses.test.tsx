@@ -295,6 +295,16 @@ describe("email addresses on the user record", () => {
     expect(navigate).toHaveBeenCalledWith(`/users/${USER_ID}`);
   });
 
+  it("says an empty address once, on the field, and sends nothing", async () => {
+    stub(() => json({}));
+    const host = mount(<EmailAddressAddForm userId={USER_ID} isSelf />);
+    await settle();
+    await press(host, "Send verification link");
+    expect(writes("POST")).toHaveLength(0);
+    expect(host.querySelector('[name="email"]')?.getAttribute("aria-invalid")).toBe("true");
+    expect(host.querySelector(".pk-alert")).toBeNull();
+  });
+
   it("says plainly when the verification link could not be sent yet", async () => {
     stub(() =>
       json({ status: "verification_sent", email: "ana@new.example", requestId: waitingId, delivery: "delayed" }, 202),
