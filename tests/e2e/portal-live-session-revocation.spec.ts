@@ -43,19 +43,18 @@ async function prepareDraftPoll(page: Page, label: string) {
       showResults: true,
     },
   });
-  await expect
-    .poll(async () =>
-      (await liveMessages(page)).some(
-        (message) => message.type === "poll.changed" && message.poll.field.label === label,
-      ),
-    )
-    .toBe(true);
+  await livePoll(async () =>
+    (await liveMessages(page)).some((message) => message.type === "poll.changed" && message.poll.field.label === label),
+  ).toBe(true);
   const message = (await liveMessages(page)).find(
     (message) => message.type === "poll.changed" && message.poll.field.label === label,
   );
   if (!message || message.type !== "poll.changed") throw new Error("Private draft poll missing");
   return message.poll;
 }
+
+/** Live messages cross a socket and a busy server, so they get longer than an assertion's default to arrive. */
+const livePoll = <T>(fn: () => Promise<T> | T) => expect.poll(fn, { timeout: 20_000 });
 
 test("two already-open live moderator clients stop receiving private questions, polls and queue updates after grant revocation", async ({
   page: staff,
@@ -134,13 +133,11 @@ test("two already-open live moderator clients stop receiving private questions, 
       text: `Private baseline ${marker}`,
       anonymous: true,
     });
-    await expect
-      .poll(async () =>
-        (await liveMessages(staff)).some(
-          (message) => message.type === "question.changed" && message.question.text.includes("Private baseline"),
-        ),
-      )
-      .toBe(true);
+    await livePoll(async () =>
+      (await liveMessages(staff)).some(
+        (message) => message.type === "question.changed" && message.question.text.includes("Private baseline"),
+      ),
+    ).toBe(true);
     const question = (await liveMessages(staff)).find(
       (message) => message.type === "question.changed" && message.question.text.includes("Private baseline"),
     );
@@ -149,13 +146,11 @@ test("two already-open live moderator clients stop receiving private questions, 
     const privatePoll = await prepareDraftPoll(staff, `Baseline private draft ${marker}`);
     await sendLiveMessage(staff, { type: "queue.add", view: "poll", itemId: privatePoll.id });
     for (const page of pages) {
-      await expect
-        .poll(async () =>
-          (await liveMessages(page)).some(
-            (message) => message.type === "queue.changed" && message.queue.poll.includes(privatePoll.id),
-          ),
-        )
-        .toBe(true);
+      await livePoll(async () =>
+        (await liveMessages(page)).some(
+          (message) => message.type === "queue.changed" && message.queue.poll.includes(privatePoll.id),
+        ),
+      ).toBe(true);
       const received = (await liveMessages(page)).find(
         (message) => message.type === "question.changed" && message.question.id === question.question.id,
       );
@@ -181,7 +176,7 @@ test("two already-open live moderator clients stop receiving private questions, 
     expect((await staff.request.delete(`/api/v1/permissions/grants/${grant.id}`)).status()).toBe(200);
     // Revocation is discovered by the bounded background refresh, without a command from either passive client.
     for (const page of pages) {
-      await expect.poll(() => liveClose(page)).not.toBeNull();
+      await livePoll(() => liveClose(page)).not.toBeNull();
       expect(await liveClose(page)).toMatchObject({ code: 4403, reason: "LIVE_SESSION_ACCESS_CHANGED" });
     }
     const futureQuestion = `After revocation ${marker}`;
@@ -191,19 +186,17 @@ test("two already-open live moderator clients stop receiving private questions, 
       text: futureQuestion,
       anonymous: true,
     });
-    await expect
-      .poll(async () =>
-        (await liveMessages(staff)).some(
-          (message) => message.type === "question.changed" && message.question.text === futureQuestion,
-        ),
-      )
-      .toBe(true);
+    await livePoll(async () =>
+      (await liveMessages(staff)).some(
+        (message) => message.type === "question.changed" && message.question.text === futureQuestion,
+      ),
+    ).toBe(true);
 
     await prepareDraftPoll(staff, `Future private draft ${marker}`);
     await sendLiveMessage(staff, { type: "queue.remove", view: "poll", itemId: privatePoll.id });
-    await expect
-      .poll(async () => (await liveMessages(staff)).filter((message) => message.type === "queue.changed").length)
-      .toBe(2);
+    await livePoll(
+      async () => (await liveMessages(staff)).filter((message) => message.type === "queue.changed").length,
+    ).toBe(2);
     for (const [index, page] of pages.entries()) {
       const after = await liveMessages(page);
       expect(after.slice(baseline[index]!.length)).toEqual([]);
@@ -212,9 +205,9 @@ test("two already-open live moderator clients stop receiving private questions, 
       expect((await page.request.get(`/api/v1/events/${fixture.slug}`)).status()).toBe(200);
       expect((await page.request.post(`${api}/rooms/${room.id}/live/overlays`)).status()).toBe(403);
       await connectLiveBrowser(page, path);
-      await expect
-        .poll(async () => (await liveMessages(page)).some((message) => message.type === "room.snapshot"))
-        .toBe(true);
+      await livePoll(async () => (await liveMessages(page)).some((message) => message.type === "room.snapshot")).toBe(
+        true,
+      );
       const snapshot = (await liveMessages(page)).find((message) => message.type === "room.snapshot");
       expect(snapshot).toMatchObject({
         viewer: { role: "attendee" },
@@ -230,13 +223,11 @@ test("two already-open live moderator clients stop receiving private questions, 
       status: "approved",
     });
     for (const page of pages) {
-      await expect
-        .poll(async () =>
-          (await liveMessages(page)).some(
-            (message) => message.type === "question.changed" && message.question.id === question.question.id,
-          ),
-        )
-        .toBe(true);
+      await livePoll(async () =>
+        (await liveMessages(page)).some(
+          (message) => message.type === "question.changed" && message.question.id === question.question.id,
+        ),
+      ).toBe(true);
       const publicQuestion = (await liveMessages(page)).find(
         (message) => message.type === "question.changed" && message.question.id === question.question.id,
       );

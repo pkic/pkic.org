@@ -116,7 +116,7 @@ export async function prepareSponsorLiveFixture(staff: Page, attendee: Page) {
   // The organization the lead is captured with is the one their confirmed address names.
   const confirmedManage = await confirmEmailedRegistration(attendee, email, since, organization);
 
-  await signInAsE2eStaff(staff, e2eAdminEmail("default"));
+  await signInAsE2eStaff(staff, e2eAdminEmail("sponsor-live-fixture-operator"));
   const eventResponse = await staff.request.get(eventApi);
   expect(eventResponse.status()).toBe(200);
   const event = eventDetailResponseSchema.parse(await eventResponse.json()).event;

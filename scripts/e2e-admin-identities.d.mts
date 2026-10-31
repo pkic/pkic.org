@@ -8,6 +8,7 @@ export const E2E_ADMIN_SCOPES: readonly [
   "scanner-recovery-other",
   "scanner-termination-operator",
   "scanner-measurement-operator",
+  "sponsor-live-fixture-operator",
   "portal-agenda-accepted-placement",
   "portal-agenda-preview",
   "portal-agenda-list-readonly",
