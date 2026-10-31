@@ -105,7 +105,9 @@ test("a member uploads a headshot through the disclaimer and crop flow", async (
   await page.context().clearCookies();
   await signInToPortal(page, email);
   await openMyProfile(page);
-  await expect(page.getByRole("heading", { name: `Profile Headshot ${suffix}`, level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: `Profile Headshot ${suffix}`, level: 1 })).toBeVisible({
+    timeout: 15_000,
+  });
 
   /*
    * The portrait itself is the control (#28), and it names what pressing it

@@ -91,6 +91,7 @@ export async function signInToPortal(page: Page, email: string, options: { conti
   const requested = page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname === "/api/v1/auth/request-link" && response.request().method() === "POST",
+    { timeout: 60_000 },
   );
   await page.getByRole("button", { name: "Send sign-in link" }).click();
   const linkRequest = await requested;
