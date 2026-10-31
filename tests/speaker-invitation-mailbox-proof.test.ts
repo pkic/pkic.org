@@ -18,6 +18,8 @@ import { prepareEmailOwnershipClaim, readEmailOwnership } from "../functions/_li
 import { prepareEventProposalProofRedemption } from "../functions/_lib/services/event-proposal-proof-redemption";
 import { isAuthorizationGuardFailure } from "../functions/_lib/db/authorization-guard";
 import { callApi } from "./helpers/app";
+import { independentCapacityFixture } from "./helpers/independent-capacity";
+import { createMemberSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { insertUser } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
@@ -187,6 +189,51 @@ describe("speaker invitation mailbox proof", () => {
       });
       expect(response.status).toBe(404);
     }
+  });
+
+  it("kills the link mailed to an alias when the account owner removes that alias", async () => {
+    const alias = "second.mail@alias-test.test";
+    const { userId, token } = await invitedSpeaker(alias);
+    await addAlias(userId, alias);
+    const at = new Date().toISOString();
+    await env.DB.prepare(
+      `INSERT INTO identities (id, user_id, organization_id, source, show_on_organization_profile, invited_at,
+         started_at, created_at, updated_at) VALUES (?, ?, NULL, 'account', 0, ?, ?, ?, ?)`,
+    )
+      .bind(crypto.randomUUID(), userId, at, at, at, at)
+      .run();
+    const session = await createMemberSession(env.DB, userId, "alias-removal-session");
+    const read = () => callApi(env, `/api/v1/proposals/speakers/access/${token}`);
+    expect((await read()).status).toBe(200);
+
+    const aliasId = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM user_emails WHERE user_id=?", userId))[0]!
+      .id;
+    const removed = await callApi(env, `/api/v1/users/current/emails/${aliasId}`, {
+      method: "DELETE",
+      headers: { authorization: `Bearer ${session}` },
+    });
+    expect(removed.status, await removed.clone().text()).toBe(200);
+
+    expect((await read()).status).toBe(404);
+  });
+
+  it("saves the speaker identity on the first attempt after an instant mailbox proof, and refuses the same proof twice", async () => {
+    const { token } = await invitedSpeaker();
+    const continuationToken = await proveInvitedMailbox(token, invited);
+    const save = () =>
+      callApi(env, `/api/v1/proposals/speakers/access/${token}/profile`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          continuationToken,
+          unaffiliatedAttestation: true,
+          independentCapacity: independentCapacityFixture(),
+          consents,
+        }),
+      });
+    const first = await save();
+    expect(first.status, await first.clone().text()).toBe(200);
+    expect((await save()).status).toBe(409);
   });
 
   it("refuses an instant proof once the account was claimed before it is used", async () => {

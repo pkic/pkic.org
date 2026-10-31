@@ -61,3 +61,25 @@ export function prepareRotateUserProposalManageSecrets(
     WHERE proposer_user_id=?${condition ? ` AND EXISTS (${condition.sql})` : ""}`)
     .bind(userId, ...(condition?.bindings ?? []));
 }
+
+/**
+ * Rotates the proposal-speaker capabilities whose link was mailed to one
+ * address of a user, for use before that address is released. The link now
+ * sits in a mailbox the account no longer owns, so it must stop opening the
+ * speaker page; links mailed to the account's other addresses keep working.
+ */
+export function prepareRotateProposalSpeakerSecretsMailedToUserEmail(
+  db: DatabaseLike,
+  userId: string,
+  emailId: string,
+): StatementLike {
+  return db
+    .prepare(
+      `UPDATE proposal_speakers
+          SET manage_link_secret = lower(hex(randomblob(32))),
+              invite_generation = invite_generation + 1
+        WHERE user_id = ?
+          AND lower(invited_email) = (SELECT normalized_email FROM user_emails WHERE id = ? AND user_id = ?)`,
+    )
+    .bind(userId, emailId, userId);
+}
