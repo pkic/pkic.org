@@ -68,7 +68,11 @@ export function PasskeySettings({ toastTargetId }: { toastTargetId: string }) {
     const name = passkeyName(passkey);
     const confirmed = await confirmAction({
       title: `Remove passkey "${name}"?`,
-      consequences: ["You'll need another passkey or an email link to sign in on this device"],
+      consequences: [
+        (passkeys?.length ?? 0) > 1
+          ? "You can still sign in with your other passkeys."
+          : "This is your only passkey. Until you add another, you'll sign in with an email link.",
+      ],
       confirmLabel: "Remove passkey",
       tone: "danger",
     });

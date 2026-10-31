@@ -418,6 +418,71 @@ describe("portal email templates", () => {
     expect(container!.textContent).not.toContain("Template created");
   });
 
+  it("loads the next template into the editor when the route key changes", async () => {
+    const versionFor = (templateKey: string, body: string) => ({
+      id: `version-${templateKey}`,
+      template_key: templateKey,
+      version: 1,
+      subject_template: `Subject ${templateKey}`,
+      body,
+      content_type: "markdown",
+      r2_object_key: null,
+      checksum_sha256: "a".repeat(64),
+      status: "active",
+      created_by_user_id: "user-1",
+      created_at: "2026-08-27T12:00:00.000Z",
+      message_type: "transactional",
+      from_email: null,
+      from_name: null,
+    });
+    const bodies: Record<string, string> = { first_template: "First body", second_template: "Second body" };
+    const saved: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        const templateKey = url.pathname.split("/")[5] ?? "";
+        if (url.pathname === "/api/v1/email/templates/preview") {
+          return json({ success: true, subject: "S", html: "<p>S</p>", text: "S", data: {} });
+        }
+        if (url.pathname.endsWith("/versions") && init?.method === "POST") {
+          saved.push(url.pathname);
+          return json({ success: true, version: versionFor(templateKey, "saved") });
+        }
+        if (url.pathname.endsWith("/versions")) {
+          return json({
+            versions: [versionFor(templateKey, bodies[templateKey] ?? "")],
+            page: { limit: 1, offset: 0, total: 1, hasMore: false },
+          });
+        }
+        throw new Error(`Unexpected request: ${url.pathname}`);
+      }),
+    );
+
+    mount(<EmailTemplates canWrite templateKey="first_template" />);
+    await settle();
+    expect(await markdownValue(container!, "Body")).toBe("First body");
+
+    void act(() => render(<EmailTemplates canWrite templateKey="second_template" />, container!));
+    await settle();
+    expect(container!.textContent).toContain("second_template");
+    expect(await markdownValue(container!, "Body")).toBe("Second body");
+
+    await typeInto(labeled<HTMLInputElement>(container!, "Body"), "Second body edited");
+    await act(async () => {
+      button(container!, "Render Preview").click();
+    });
+    await settle();
+    await act(async () => {
+      button(container!, "Save as Draft").click();
+    });
+    await settle();
+    expect(saved).toEqual(["/api/v1/email/templates/second_template/versions"]);
+  });
+
   it("uses the canonical system API and keeps read-only users away from preview and writes", async () => {
     const requests: URL[] = [];
     vi.stubGlobal(

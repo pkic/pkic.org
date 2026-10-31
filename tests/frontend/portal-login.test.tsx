@@ -450,6 +450,14 @@ describe("portal login", () => {
     expect(authenticateWithPasskey).not.toHaveBeenCalled();
   });
 
+  it("opens the email form while the session check runs, with its actions disabled", async () => {
+    browserSupportsWebAuthn.mockReturnValue(true);
+    await act(() => render(<Login busy status="Checking your sign-in…" onSignedIn={vi.fn()} />, container));
+    await act(() => buttonLabeled("Sign in with an email link").click());
+    expect(controlLabeled("Work email").matches(":disabled")).toBe(true);
+    expect(buttonLabeled("Send sign-in link").matches(":disabled")).toBe(true);
+  });
+
   it("keeps a verification notice in the existing card and enables the same email field after checking", async () => {
     const onSignedIn = vi.fn();
     await act(() => render(<Login busy status="Checking your sign-in…" onSignedIn={onSignedIn} />, container));

@@ -9,12 +9,12 @@
 import { Alert } from "../ui/Alert";
 import { Button } from "../ui/Button";
 
-export function MagicLinkSubmitButton({ submitting }: { submitting: boolean }) {
+export function MagicLinkSubmitButton({ submitting, disabled = false }: { submitting: boolean; disabled?: boolean }) {
   // `loading` adds the spinner and aria-busy; `disabled` is what actually
   // stops a second submit, because a submit button posts its form on click
   // whether or not the component ignored the handler.
   return (
-    <Button type="submit" variant="primary" loading={submitting} disabled={submitting}>
+    <Button type="submit" variant="primary" loading={submitting} disabled={submitting || disabled}>
       {submitting ? "Sending…" : "Send sign-in link"}
     </Button>
   );

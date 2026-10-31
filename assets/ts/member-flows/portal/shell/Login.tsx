@@ -35,6 +35,7 @@ import { userAuthRequestSchema } from "../../../../shared/schemas/user-auth";
 import { portalMagicLinkReturnPath, portalReturnPath } from "../hash-route";
 import { Alert } from "../../../ui/Alert";
 import { Button } from "../../../ui/Button";
+import { ExternalLink } from "../../../ui/ExternalLink";
 import { Field } from "../../../ui/Field";
 import { TextInput } from "../../../ui/TextControl";
 import { LoginFrame } from "./LoginFrame";
@@ -143,14 +144,16 @@ export function Login({
       }
       after={
         <p class="pk-small pk-muted pk-login__terms">
-          By signing in you accept the <a href="/about/bylaws/">bylaws</a> and{" "}
-          <a href="/about/privacy-policy/">privacy policy</a>.
+          By signing in you accept the <ExternalLink href="/bylaws/" external>bylaws</ExternalLink> and{" "}
+          <ExternalLink href="/privacy/" external>privacy policy</ExternalLink>.
         </p>
       }
     >
       {!magicLink.sent && !magicLink.error && notice}
       {status && <Spinner size="sm" label={status} />}
-      <fieldset class="pk-login__controls pk-stack" disabled={busy || passkeySubmitting || magicLink.submitting}>
+      {/* While the session check runs (`busy`) the sign-in actions stay disabled one by one, so the
+          email disclosure still opens instead of swallowing the click. */}
+      <fieldset class="pk-login__controls pk-stack" disabled={passkeySubmitting || magicLink.submitting}>
         {magicLink.sent && (
           <Alert tone="ok" title="Check your email">
             If this address has portal access, you&apos;ll receive a sign-in link shortly.
@@ -162,7 +165,7 @@ export function Login({
             <Button
               variant="primary"
               loading={passkeySubmitting}
-              disabled={passkeySubmitting}
+              disabled={busy || passkeySubmitting}
               onClick={() => {
                 void handlePasskeySignIn();
               }}
@@ -204,11 +207,12 @@ export function Login({
                   onInput={(event) => setEmail(event.currentTarget.value)}
                   placeholder="you@example.com"
                   autocomplete="email"
+                  disabled={busy}
                 />
               )}
             </Field>
             <div class="pk-cluster">
-              <MagicLinkSubmitButton submitting={magicLink.submitting} />
+              <MagicLinkSubmitButton submitting={magicLink.submitting} disabled={busy} />
               {passkeysSupported && (
                 <Button
                   variant="ghost"

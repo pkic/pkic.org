@@ -72,6 +72,18 @@ export const PREVIEW_DEFAULTS: Record<string, unknown> = {
   proposalTitle: "Post-Quantum PKI in Practice",
   proposalAbstract: "An exploration of PQC migration strategies for enterprise PKI.",
   speakerStatus: "accepted",
+  speakerName: "Alex Example",
+  declineReason: "I can no longer travel on those dates.",
+  // Working group membership digest
+  workingGroupName: "Post-Quantum Cryptography",
+  recipientName: "Jane Doe",
+  recipientRole: "chair",
+  windowStart: "2026-09-21T00:00:00.000Z",
+  windowEnd: "2026-09-28T00:00:00.000Z",
+  joined: [{ name: "Sam Example", organizationName: "Example Corp" }],
+  left: [{ name: "Robin Sample", organizationName: null }],
+  hasJoined: true,
+  hasLeft: true,
 };
 
 export const TEMPLATE_HELPERS: TemplateHelperItem[] = [
