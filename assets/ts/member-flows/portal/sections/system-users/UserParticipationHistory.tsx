@@ -25,7 +25,7 @@ import { ApiDataTable } from "../../../../components/ApiDataTable";
 // product's vocabulary (a participant role, an upload vs a review) onto the
 // system's tones, which is exactly the translation that layer exists for.
 import { formatEventPlace } from "../../../../../shared/event-place";
-import { Badge } from "../../../../components/Badge";
+import { Badge, PlainStatus } from "../../../../components/Badge";
 import { type Column } from "../../../../components/Table";
 import { usePortalHashLocation } from "../../hash-location";
 import { TabList } from "../../../../ui/TabList";
@@ -94,14 +94,13 @@ function EventsTab({ userId }: { userId: string }) {
       header: "Roles",
       width: "fit",
       // One row per event carrying every role held there, so somebody who
-      // spoke and organized reads as one line with two badges.
-      cell: (row) => (
-        <span class="pk-cluster pk-cluster--nowrap">
-          {row.roles.map((role) => (
-            <Badge key={role} status={role} />
-          ))}
+      // spoke and organized reads as one line; a held role is expected, so plain text.
+      cell: (row) => row.roles.map((role, index) => (
+        <span key={role}>
+          {index > 0 && ", "}
+          <PlainStatus status={role} />
         </span>
-      ),
+      )),
     },
     { header: "Location", cell: (row) => formatEventPlace(row) ?? "—" },
     { header: "Date", width: "fit", cell: (row) => occurred(row.occurredAt) },

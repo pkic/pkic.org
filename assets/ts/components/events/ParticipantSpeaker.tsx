@@ -23,7 +23,7 @@ import { headshotFormEndpoint } from "../../shared/headshot/endpoints";
 import { showHeadshotDisclaimer } from "../../shared/headshot/upload";
 import { IdentityProfileForm } from "../identities/IdentityProfileForm";
 import { ConsentCard } from "../ConsentCard";
-import { Badge } from "../Badge";
+import { Badge, PlainStatus } from "../Badge";
 import { confirmAction } from "../ConfirmDialog";
 import { Alert } from "../../ui/Alert";
 import { Button } from "../../ui/Button";
@@ -144,7 +144,11 @@ export function ParticipantSpeaker({
         <PanelBody>
           <div class="pk-stack">
             <div class="pk-cluster">
-              <Badge status={data.speaker.status} />
+              {data.speaker.status === "confirmed" || data.speaker.status === "invited" ? (
+                <PlainStatus status={data.speaker.status} />
+              ) : (
+                <Badge status={data.speaker.status} />
+              )}
             </div>
             {!editable && (
               <Alert>Participation changes are unavailable because you declined or the proposal is closed.</Alert>

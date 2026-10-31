@@ -62,7 +62,7 @@ describe("speaker self-service page", () => {
     }
   });
 
-  it("paints both status pills with the design system's tone, not a Bootstrap background", async () => {
+  it("shows the expected speaker state as plain text and the proposal status with the design system's tone", async () => {
     const root = mountShell();
     installApi({ [READ]: () => json(speakerPage()), [TERMS]: () => json(speakerTerms()) });
 
@@ -70,7 +70,7 @@ describe("speaker self-service page", () => {
 
     const speakerBadge = panel(root, "data-speaker-status-badge");
     expect(speakerBadge.textContent).toBe("Invited");
-    expect(speakerBadge.className).toBe("pk-badge pk-badge--warn");
+    expect(speakerBadge.className).toBe("");
 
     const proposalBadge = panel(root, "data-proposal-status-badge");
     expect(proposalBadge.textContent).toBe("Submitted");

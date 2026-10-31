@@ -92,7 +92,11 @@ async function main(): Promise<void> {
 
   if (speakerStatusBadge) {
     speakerStatusBadge.textContent = formatStatusLabel(data.speaker.status);
-    speakerStatusBadge.className = statusBadgeToneClass(data.speaker.status);
+    // Confirmed and invited are the expected states: plain text, with the tone left to declined.
+    speakerStatusBadge.className =
+      data.speaker.status === "confirmed" || data.speaker.status === "invited"
+        ? ""
+        : statusBadgeToneClass(data.speaker.status);
   }
 
   if (data.speaker.status === "invited") {

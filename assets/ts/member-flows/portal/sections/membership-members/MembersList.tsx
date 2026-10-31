@@ -15,7 +15,7 @@ import type { StaffMemberSummary } from "../../../../../shared/schemas/members-d
 import { useRef } from "preact/hooks";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { confirmAction } from "../../../../components/ConfirmDialog";
-import { Badge, statusLabel } from "../../../../components/Badge";
+import { Badge, PlainStatus, statusLabel } from "../../../../components/Badge";
 import { IconOrganization } from "../../../../components/icons";
 import { IconPerson } from "../../../../components/icons/app-navigation";
 // `pk-muted` and `pk-small` are written here as class names rather than
@@ -220,7 +220,8 @@ export function MembersList({
         },
         {
           header: "Status",
-          cell: (member) => <Badge status={member.status} />,
+          cell: (member) =>
+            member.status === "active" ? <PlainStatus status={member.status} /> : <Badge status={member.status} />,
           width: "fit",
           sort: { asc: "status", desc: "-status" },
           filter: {
