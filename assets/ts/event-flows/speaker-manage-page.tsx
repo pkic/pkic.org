@@ -18,7 +18,7 @@ import {
   speakerProfileUpdateResponseSchema,
   type SpeakerSelfServiceReadResponse,
 } from "../../shared/schemas/speaker-self-service";
-import { SpeakerParticipationIdentity } from "../components/SpeakerParticipationIdentity";
+import { SPEAKER_STEPS_NOTICE, SpeakerParticipationIdentity } from "../components/SpeakerParticipationIdentity";
 import {
   SPEAKER_MAILBOX_PROOF_HEADER,
   eventProposalProofIdentityPatchSchema,
@@ -118,17 +118,16 @@ async function main(): Promise<void> {
   let speakerTerms: RequiredTerm[] = [];
   let speakerTermsLoaded = false;
   let representationSaved = data.profile.actingIdentitySelection !== "unrecorded";
+  let identityChanged = false;
   const confirmationButton = boot.root.querySelector<HTMLButtonElement>("[data-confirm-participation]");
   const representationNotice = document.createElement("div");
   confirmForm?.before(representationNotice);
+  const profileSaveActions = boot.root.querySelector<HTMLElement>("[data-profile-save]");
   function syncRepresentationConfirmation(): void {
     if (confirmationButton) confirmationButton.disabled = !speakerTermsLoaded || !representationSaved;
-    render(
-      representationSaved ? null : (
-        <Alert tone="warn">Confirm and save your speaker identity before confirming participation.</Alert>
-      ),
-      representationNotice,
-    );
+    // The save action appears only while there is a pending identity change to save.
+    if (profileSaveActions) profileSaveActions.hidden = !identityChanged;
+    render(representationSaved ? null : <p class="pk-muted">{SPEAKER_STEPS_NOTICE}</p>, representationNotice);
   }
   syncRepresentationConfirmation();
 
@@ -163,7 +162,7 @@ async function main(): Promise<void> {
       return;
     }
     if (!representationSaved) {
-      setStatus(boot.statusEl, "Confirm and save your speaker identity before confirming participation.", true);
+      setStatus(boot.statusEl, SPEAKER_STEPS_NOTICE, true);
       return;
     }
 
@@ -267,7 +266,6 @@ async function main(): Promise<void> {
   }
 
   let entry: ProposalEntrySelection | null = null;
-  let identityChanged = false;
   let identityRevision = 0;
   let identityViewRevision = 0;
   const identityContainer = profileForm?.querySelector<HTMLElement>("[data-speaker-identity]");
@@ -294,6 +292,13 @@ async function main(): Promise<void> {
     representationSaved = false;
     syncRepresentationConfirmation();
     syncProfileSave();
+  };
+  /** Backing out of a change leaves the saved representation in force. */
+  const cancelEditing = (): void => {
+    entry = null;
+    identityChanged = false;
+    representationSaved = data.profile.actingIdentitySelection !== "unrecorded";
+    syncRepresentationConfirmation();
   };
   async function savePersonalDetails(names: PersonalNamePatch): Promise<ParticipationPerson> {
     await patchJson(
@@ -333,6 +338,7 @@ async function main(): Promise<void> {
         consents={acceptedConsents}
         onChange={updateEntry}
         onEditing={editIdentity}
+        onCancelEditing={cancelEditing}
         onTermsRecorded={recordTerms}
         // The link speaks for this proposal; the account's own name needs the person's sign-in once claimed.
         savePersonalDetails={data.profile.personalDetailsEditable ? savePersonalDetails : undefined}

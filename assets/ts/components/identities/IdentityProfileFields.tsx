@@ -49,10 +49,10 @@ export function identityProfileBody(draft: IdentityProfileDraft, organization: b
  */
 export function IdentityEditNotice({ editor = "owner" }: { editor?: "owner" | "staff" }) {
   return editor === "owner" ? (
-    <Alert tone="warn">
+    <p class="pk-muted pk-small">
       Registrations, proposals and other records made as this identity show these changes too. If your affiliation
       itself changed, create a new identity instead of editing this one.
-    </Alert>
+    </p>
   ) : (
     <Alert tone="warn">
       This changes the identity itself. Their registrations, proposals and public profile show the change too.

@@ -283,6 +283,10 @@ export function ParticipantSpeaker({
                   consents={acceptedConsents}
                   onChange={onIdentityChange}
                   onEditing={onEditing}
+                  onCancelEditing={() => {
+                    setEntry(null);
+                    setIdentityChanged(false);
+                  }}
                   onTermsRecorded={setConsents}
                   savePersonalDetails={async (names) => {
                     const saved = await patchJson(
