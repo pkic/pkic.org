@@ -144,8 +144,15 @@ export function Login({
       }
       after={
         <p class="pk-small pk-muted pk-login__terms">
-          By signing in you accept the <ExternalLink href="/bylaws/" external>bylaws</ExternalLink> and{" "}
-          <ExternalLink href="/privacy/" external>privacy policy</ExternalLink>.
+          By signing in you accept the{" "}
+          <ExternalLink href="/bylaws/" external>
+            bylaws
+          </ExternalLink>{" "}
+          and{" "}
+          <ExternalLink href="/privacy/" external>
+            privacy policy
+          </ExternalLink>
+          .
         </p>
       }
     >

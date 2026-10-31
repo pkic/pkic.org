@@ -326,7 +326,9 @@ function RoutedTemplateEditor({ templateKey, canWrite }: { templateKey: string; 
   // the editor waits for the new template and remounts instead of showing the
   // previous template's body under the new heading.
   if (!loaded || loaded.key !== templateKey) return <Spinner label="Loading email template…" />;
-  return <TemplateEditor key={templateKey} templateKey={templateKey} initialVersion={loaded.version} canWrite={canWrite} />;
+  return (
+    <TemplateEditor key={templateKey} templateKey={templateKey} initialVersion={loaded.version} canWrite={canWrite} />
+  );
 }
 type TemplatesView = "list" | "create";
 

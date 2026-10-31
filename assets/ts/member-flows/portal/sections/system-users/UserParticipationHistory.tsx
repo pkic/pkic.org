@@ -95,12 +95,13 @@ function EventsTab({ userId }: { userId: string }) {
       width: "fit",
       // One row per event carrying every role held there, so somebody who
       // spoke and organized reads as one line; a held role is expected, so plain text.
-      cell: (row) => row.roles.map((role, index) => (
-        <span key={role}>
-          {index > 0 && ", "}
-          <PlainStatus status={role} />
-        </span>
-      )),
+      cell: (row) =>
+        row.roles.map((role, index) => (
+          <span key={role}>
+            {index > 0 && ", "}
+            <PlainStatus status={role} />
+          </span>
+        )),
     },
     { header: "Location", cell: (row) => formatEventPlace(row) ?? "—" },
     { header: "Date", width: "fit", cell: (row) => occurred(row.occurredAt) },
