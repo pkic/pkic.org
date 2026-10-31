@@ -32,14 +32,15 @@ async function prepareProposerDeclineNotice(
     reason: string | null;
     appBaseUrl: string;
   },
-): Promise<StatementLike[]> {
-  if (input.speaker.user_id === input.proposal.proposer_user_id) return [];
+): Promise<{ statements: StatementLike[]; outboxId: string | null }> {
+  const none = { statements: [], outboxId: null };
+  if (input.speaker.user_id === input.proposal.proposer_user_id) return none;
   const proposer = await first<{ email: string; first_name: string | null }>(
     db,
     "SELECT email, first_name FROM users WHERE id = ? AND active = 1 AND pii_redacted_at IS NULL",
     [input.proposal.proposer_user_id],
   );
-  if (!proposer) return [];
+  if (!proposer) return none;
   const manageUrl = proposalManagePageUrl(
     input.appBaseUrl,
     input.event,
@@ -47,9 +48,10 @@ async function prepareProposerDeclineNotice(
   );
   const key = `proposal_speaker_declined:${input.speaker.id}:${input.speaker.invite_generation}`;
   const speakerName = (input.speaker.status === "confirmed" && input.speakerName) || input.speakerEmail;
-  return [
+  const outboxId = (await sha256Hex(key)).slice(0, 32);
+  const queued = [
     prepareQueueEmailStatement(db, {
-      outboxId: (await sha256Hex(key)).slice(0, 32),
+      outboxId,
       idempotencyKey: key,
       eventId: input.event.id,
       baseUrl: input.appBaseUrl,
@@ -70,23 +72,25 @@ async function prepareProposerDeclineNotice(
       },
     }).statement,
   ];
+  return { statements: queued, outboxId };
 }
 
 /**
  * A speaker declines their own participation. The decline, the roster's
  * capacity, and their removal from every session the proposal was placed in
- * commit together; the agenda's organizers are told through the outbox.
+ * commit together; the agenda's organizers are told through the outbox. The
+ * outbox ids of the proposer's notice are returned so the route sends it now.
  */
 export async function declineSpeakerParticipation(
   db: DatabaseLike,
   manageToken: ParticipantAuthority,
   signingSecret: string,
   payload: { reason?: string | null; appBaseUrl: string },
-): Promise<void> {
+): Promise<{ outboxIds: string[] }> {
   const { speaker, proposal, user } = await getSpeakerByManageToken(db, manageToken, signingSecret);
 
   if (speaker.status === "declined") {
-    return;
+    return { outboxIds: [] };
   }
   if (!isProposalSpeakerRosterEditableStatus(proposal.status)) {
     throw new AppError(409, "PROPOSAL_CLOSED", "Speaker participation cannot be changed on a closed proposal");
@@ -172,7 +176,7 @@ export async function declineSpeakerParticipation(
         sourceRef: proposal.id,
       })),
       ...agendaRemoval,
-      ...proposerNotice,
+      ...proposerNotice.statements,
     ]);
   } catch (error) {
     if (isRegistrationTransitionConflict(error)) {
@@ -200,4 +204,5 @@ export async function declineSpeakerParticipation(
     }
     throw new AppError(409, "PROPOSAL_SPEAKER_CONFLICT", "Proposal speaker changed while the decline was processed");
   }
+  return { outboxIds: proposerNotice.outboxId ? [proposerNotice.outboxId] : [] };
 }

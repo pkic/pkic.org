@@ -1365,6 +1365,25 @@ describe("speaker self-management endpoints", () => {
     expect(notices).toEqual([{ speaker: "cospeaker@example.test" }]);
   });
 
+  it("POST decline — sends the proposer's notice at once instead of leaving it queued", async () => {
+    await setupWorkflow();
+    const { speakerManageToken } = await inviteSpeakerAndSubmitProposal();
+
+    const response = await callApi(env, `/api/v1/proposals/speakers/access/${speakerManageToken}/participation`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ status: "declined" }),
+    });
+    expect(response.status, await response.clone().text()).toBe(200);
+
+    const notices = await queryAll<{ status: string }>(
+      env.DB,
+      "SELECT status FROM email_outbox WHERE template_key = 'proposal_speaker_declined'",
+    );
+    expect(notices).toHaveLength(1);
+    expect(notices[0]!.status).not.toBe("queued");
+  });
+
   it("POST decline — rejects a capability after the proposal closes", async () => {
     await setupWorkflow();
     const { speakerManageToken, proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();

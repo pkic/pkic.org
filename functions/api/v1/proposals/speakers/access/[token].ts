@@ -35,6 +35,7 @@ import {
 import { confirmSpeakerParticipation } from "../../../../../_lib/services/proposal-speaker-confirmation";
 import { getRequiredTerms } from "../../../../../_lib/services/events";
 import { speakerPresentationPageUrl } from "../../../../../_lib/services/frontend-links";
+import { processSelectedOutboxBackground } from "../../../../../_lib/email/outbox";
 import { requireInternalSecret } from "../../../../../_lib/request";
 import { resolveAppBaseUrl } from "../../../../../_lib/config";
 import { isProposalSpeakerRosterEditableStatus } from "../../../../../../assets/shared/schemas/proposal-status";
@@ -135,10 +136,12 @@ export async function onRequestParticipationPatch(
       return json(speakerParticipationResponseSchema.parse({ success: true, status: "confirmed" }));
     }
 
-    await declineSpeakerParticipation(requestDb(c), token, requireInternalSecret(c.env), {
+    const declined = await declineSpeakerParticipation(requestDb(c), token, requireInternalSecret(c.env), {
       reason: body.reason ?? null,
       appBaseUrl: resolveAppBaseUrl(c.env, c.req.raw),
     });
+    if (declined.outboxIds.length > 0)
+      c.executionCtx.waitUntil(processSelectedOutboxBackground(c.env.DB, c.env, declined.outboxIds));
     return json(speakerParticipationResponseSchema.parse({ success: true, status: "declined" }));
   } catch (error) {
     return handleError(error);
