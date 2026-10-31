@@ -41,7 +41,7 @@ export async function preparePilotSpeaker(staff: Page, speaker: Page, info: Test
   });
   expect(invitation.status(), await invitation.text()).toBe(200);
   expect(coSpeakerInviteResponseSchema.parse(await invitation.json()).email).toBe(email);
-  const message = await waitForCapturedEmail(email, "You have been added as a speaker", { since });
+  const message = await waitForCapturedEmail(email, "Speaker invitation: please confirm", { since });
   const speakerUrl = extractEmailUrl(message, "/speaker/");
   const token = new URL(speakerUrl).searchParams.get("token");
   if (!token) throw new Error("The speaker must use their own emailed capability");
