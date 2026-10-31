@@ -65,8 +65,8 @@ export function EventSpeakerManagement() {
           <div data-profile-form-wrap>
             <form data-profile-form class="pk-form pk-stack--loose" noValidate>
               <div data-speaker-identity />
-              {/* Shown while a chosen identity waits to be saved. */}
-              <div class="pk-cluster" data-profile-save hidden>
+              {/* Offered while nothing is recorded or a chosen identity waits to be saved. */}
+              <div class="pk-cluster" data-profile-save>
                 <Button type="submit">Save speaker identity</Button>
               </div>
             </form>
