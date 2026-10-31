@@ -40,6 +40,11 @@
   .join-application-identity-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  // The names share a row; the organization name is a full-width field like the questions below.
+  .join-application-identity-grid > [data-organization-name-field] {
+    grid-column: 1 / -1;
+  }
 }
 
 .membership-legal-card {
