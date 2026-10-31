@@ -273,14 +273,10 @@ async function main(): Promise<void> {
   const invited = data.speaker.status === "invited";
   const acceptedConsents = () => readConsentValues(invited ? confirmForm! : profileForm!);
   const profileSave = profileForm?.querySelector<HTMLElement>("[data-profile-save]");
-  /**
-   * Saving is offered while nothing is recorded yet and while a chosen identity waits to be saved; never for an
-   * unchanged recorded identity, and never as a button that can only refuse.
-   */
+  /** Saving is offered only once there is an identity to save, never as a button that can only refuse. */
   function syncProfileSave(): void {
-    if (profileSave) profileSave.hidden = identityChanged ? !entry : representationSaved;
+    if (profileSave) profileSave.hidden = identityChanged && !entry;
   }
-  syncProfileSave();
   const updateEntry = (selection: ProposalEntrySelection | null): void => {
     if (selection !== entry) {
       identityRevision += 1;
@@ -304,6 +300,7 @@ async function main(): Promise<void> {
     identityChanged = false;
     representationSaved = data.profile.actingIdentitySelection !== "unrecorded";
     syncRepresentationConfirmation();
+    syncProfileSave();
   };
   async function savePersonalDetails(names: PersonalNamePatch): Promise<ParticipationPerson> {
     await patchJson(

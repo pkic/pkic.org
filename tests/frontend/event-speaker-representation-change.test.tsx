@@ -37,12 +37,12 @@ describe("speaker representation change", () => {
     await boot();
     const named = (label: string) =>
       [...root.querySelectorAll("button")].find((button) => button.textContent === label);
-    expect(panel(root, "data-profile-save").hidden).toBe(true);
+    expect(panel(root, "data-profile-save").hidden).toBe(false);
     await act(async () => named("Add representation")!.click());
     expect(named("Cancel")).toBeDefined();
     expect(panel(root, "data-profile-save").hidden).toBe(true);
     await act(async () => named("Cancel")!.click());
     expect(named("Add representation")).toBeDefined();
-    expect(panel(root, "data-profile-save").hidden).toBe(true);
+    expect(panel(root, "data-profile-save").hidden).toBe(false);
   });
 });
