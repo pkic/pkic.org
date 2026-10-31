@@ -210,6 +210,17 @@ describe("visual template highlighting", () => {
     expect(plainAmpersands("`a &amp;&amp; b` and &amp;lt; and &amp;")).toBe("`a &amp;&amp; b` and &amp;lt; and &");
   });
 
+  it("stores a typed < and > as themselves, with a backslash only where Markdown would read them as syntax", () => {
+    expect(plainAmpersands("a &lt; b &gt; c &lt;3")).toBe("a < b > c <3");
+    expect(plainAmpersands("&lt;script&gt;alert(1)&lt;/script&gt;")).toBe("\\<script>alert(1)\\</script>");
+    expect(plainAmpersands("&gt; not a quote\n&gt; still not")).toBe("\\> not a quote\n\\> still not");
+    expect(plainAmpersands("`a &lt; b` and &amp;lt;")).toBe("`a &lt; b` and &amp;lt;");
+    const host = document.createElement("div");
+    render(<Markdown markdown={"x < y > z and \\<b>bold\\</b>"} />, host);
+    expect(host.textContent).toBe("x < y > z and <b>bold</b>");
+    expect(host.querySelector("b")).toBeNull();
+  });
+
   it("reads the ampersand the editor encodes as the character it stands for", () => {
     const host = document.createElement("div");
     render(<Markdown markdown={"R&amp;D and **Q&amp;A** &amp;lt; `a &amp; b`"} />, host);

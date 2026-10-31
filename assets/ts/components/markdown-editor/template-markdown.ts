@@ -14,16 +14,24 @@ export function restoreTemplateMarkdown(markdown: string): string {
   return result + markdown.slice(from);
 }
 
-const CODE_OR_ENCODED_AMPERSAND = /(```[\s\S]*?```|`[^`\n]*`)|&amp;((?:#\d{1,7}|#[xX][0-9a-fA-F]{1,6}|[a-zA-Z]+);)?/g;
+const CODE_OR_ENCODED_CHARACTER =
+  /(```[\s\S]*?```|`[^`\n]*`)|&(lt|gt);|&amp;((?:#\d{1,7}|#[xX][0-9a-fA-F]{1,6}|[a-zA-Z]+);)?/g;
 
 /**
- * The serializer HTML-encodes a typed `&`, so a bio saved from the editor would read
- * "R&amp;D" wherever the text is shown as plain text. Store the ampersand itself, leaving
- * code, and a typed reference such as `&amp;lt;` that a reader would take for a character, as written.
+ * The serializer HTML-encodes a typed `&`, `<` and `>`, so a bio saved from the editor would read
+ * "R&amp;D" or "a &lt; b" wherever the text is shown as plain text. Markdown needs none of that:
+ * store the characters themselves, leaving code, and a typed reference such as `&amp;lt;` that a
+ * reader would take for a character, as written. A `<` that could open a tag and a `>` that
+ * could open a quote take the backslash Markdown gives them instead.
  */
 export function plainAmpersands(markdown: string): string {
-  return markdown.replace(CODE_OR_ENCODED_AMPERSAND, (match, code?: string, reference?: string) => {
-    if (code) return code;
-    return reference && isKnownCharacterReference(reference) ? match : `&${reference ?? ""}`;
-  });
+  return markdown.replace(
+    CODE_OR_ENCODED_CHARACTER,
+    (match, code: string | undefined, bracket: string | undefined, reference: string | undefined, offset: number) => {
+      if (code) return code;
+      if (bracket === "lt") return /^[A-Za-z/!?]/.test(markdown.slice(offset + match.length)) ? "\\<" : "<";
+      if (bracket === "gt") return /(^|\n)[ ]{0,3}$/.test(markdown.slice(0, offset)) ? "\\>" : ">";
+      return reference && isKnownCharacterReference(reference) ? match : `&${reference ?? ""}`;
+    },
+  );
 }
