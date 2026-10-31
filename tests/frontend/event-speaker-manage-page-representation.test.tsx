@@ -53,7 +53,7 @@ describe("speaker self-service representation", () => {
     await boot();
     const confirmation = root.querySelector<HTMLButtonElement>("[data-confirm-participation]")!;
     expect(confirmation.disabled).toBe(true);
-    expect(root.textContent).toContain("Confirm and save your speaker identity");
+    expect(root.textContent).toContain("Accept the speaker terms, then choose and save your speaker identity");
     // Nothing is chosen yet, so there is no save to offer.
     const save = root.querySelector<HTMLElement>("[data-profile-save]")!;
     expect(save.hidden).toBe(true);

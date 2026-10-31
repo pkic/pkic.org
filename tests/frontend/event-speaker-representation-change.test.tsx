@@ -25,7 +25,7 @@ afterEach(() => {
 });
 
 describe("speaker representation change", () => {
-  it("lets a speaker back out of changing a recorded representation, with the save action hidden until a change", async () => {
+  it("lets a speaker back out of changing a recorded representation, with the save action hidden until an identity is chosen", async () => {
     const root = mountShell();
     const data = speakerPage({ status: "confirmed", proposalStatus: "accepted" });
     data.profile = {
@@ -39,7 +39,8 @@ describe("speaker representation change", () => {
       [...root.querySelectorAll("button")].find((button) => button.textContent === label);
     expect(panel(root, "data-profile-save").hidden).toBe(true);
     await act(async () => named("Add representation")!.click());
-    expect(panel(root, "data-profile-save").hidden).toBe(false);
+    expect(named("Cancel")).toBeDefined();
+    expect(panel(root, "data-profile-save").hidden).toBe(true);
     await act(async () => named("Cancel")!.click());
     expect(named("Add representation")).toBeDefined();
     expect(panel(root, "data-profile-save").hidden).toBe(true);

@@ -123,13 +123,15 @@ export function JoinFlow({ documents }: { documents: MembershipDocument[] }) {
         >
           {() => <div data-membership-categories />}
         </Field>
-        <div class="join-application-identity-grid" data-join-typed-identity>
-          <Field id="firstName" label="First name" errorSlot="firstName">
-            {(control) => <TextInput {...control} name="firstName" autoComplete="given-name" required />}
-          </Field>
-          <Field id="lastName" label="Last name" errorSlot="applicantName">
-            {(control) => <TextInput {...control} name="lastName" autoComplete="family-name" required />}
-          </Field>
+        <div class="pk-stack" data-join-typed-identity>
+          <div class="join-application-identity-grid">
+            <Field id="firstName" label="First name" errorSlot="firstName">
+              {(control) => <TextInput {...control} name="firstName" autoComplete="given-name" required />}
+            </Field>
+            <Field id="lastName" label="Last name" errorSlot="applicantName">
+              {(control) => <TextInput {...control} name="lastName" autoComplete="family-name" required />}
+            </Field>
+          </div>
           <div data-organization-name-field>
             <Field
               id="organizationName"

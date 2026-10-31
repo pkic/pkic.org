@@ -454,7 +454,7 @@ describe("portal login", () => {
     browserSupportsWebAuthn.mockReturnValue(true);
     await act(() => render(<Login busy status="Checking your sign-in…" onSignedIn={vi.fn()} />, container));
     await act(() => buttonLabeled("Sign in with an email link").click());
-    expect(controlLabeled("Work email").matches(":disabled")).toBe(true);
+    expect(controlLabeled("Email").matches(":disabled")).toBe(true);
     expect(buttonLabeled("Send sign-in link").matches(":disabled")).toBe(true);
   });
 

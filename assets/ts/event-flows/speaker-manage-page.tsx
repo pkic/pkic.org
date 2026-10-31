@@ -126,11 +126,8 @@ async function main(): Promise<void> {
   const confirmationButton = boot.root.querySelector<HTMLButtonElement>("[data-confirm-participation]");
   const representationNotice = document.createElement("div");
   confirmForm?.before(representationNotice);
-  const profileSaveActions = boot.root.querySelector<HTMLElement>("[data-profile-save]");
   function syncRepresentationConfirmation(): void {
     if (confirmationButton) confirmationButton.disabled = !speakerTermsLoaded || !representationSaved;
-    // The save action appears only while there is a pending identity change to save.
-    if (profileSaveActions) profileSaveActions.hidden = !identityChanged;
     render(representationSaved ? null : <p class="pk-muted">{SPEAKER_STEPS_NOTICE}</p>, representationNotice);
   }
   syncRepresentationConfirmation();
@@ -276,9 +273,9 @@ async function main(): Promise<void> {
   const invited = data.speaker.status === "invited";
   const acceptedConsents = () => readConsentValues(invited ? confirmForm! : profileForm!);
   const profileSave = profileForm?.querySelector<HTMLElement>("[data-profile-save]");
-  /** Saving is offered only once there is an identity to save, never as a button that can only refuse. */
+  /** Saving is offered only while a chosen identity is waiting to be saved, never as a button that can only refuse. */
   function syncProfileSave(): void {
-    if (profileSave) profileSave.hidden = identityChanged && !entry;
+    if (profileSave) profileSave.hidden = !(identityChanged && entry);
   }
   const updateEntry = (selection: ProposalEntrySelection | null): void => {
     if (selection !== entry) {
