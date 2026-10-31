@@ -5,7 +5,7 @@
  */
 import { EMAIL_FIRST_ADVISORY_COPY, EMAIL_FIRST_COPY, WORK_EMAIL_STEER } from "../../assets/shared/email-first-copy";
 import { openMembershipVerificationLink } from "./helpers/member-join";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator } from "@playwright/test";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
 
 test("starts from the work email and steers a personal address to the explicit individual path", async ({ page }) => {
@@ -84,11 +84,11 @@ test("verifies an organization email before submitting the D1-backed membership 
   await firstLegalCard.scrollIntoViewIfNeeded();
   await expect(headerStatus).toBeInViewport();
   await expect(firstAgreement).not.toBeInViewport();
-  expect(await firstLegalCard.evaluate((card) => getComputedStyle(card).borderTopColor)).toBe(
-    await page
-      .getByLabel("About yourself", { exact: false })
-      .evaluate((input) => getComputedStyle(input).borderTopColor),
-  );
+  // The field's border eases into its state, so compare once it has settled.
+  const borderColor = (locator: Locator) => locator.evaluate((element) => getComputedStyle(element).borderTopColor);
+  await expect
+    .poll(async () => borderColor(page.getByLabel("About yourself", { exact: false })))
+    .toBe(await borderColor(firstLegalCard));
   await firstDocument.evaluate((container) => {
     container.scrollTop = container.scrollHeight;
   });

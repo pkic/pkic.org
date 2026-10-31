@@ -9,7 +9,6 @@ import { getJson, postJson } from "../shared/api-client";
 import { renderCustomFields, readCustomFieldValues } from "../shared/widgets/custom-fields";
 import { render } from "preact";
 import { useState } from "preact/hooks";
-import { installLiveValidation, validateBeforeSubmit } from "../shared/form/validation";
 import { withLoadingButton, handleSubmitError } from "../shared/form/submit";
 import { setStatus, readField, findSubmitButton } from "../shared/form/helpers";
 import { SuccessPanel } from "../components/SuccessPanel";
@@ -46,6 +45,7 @@ import "../ui/Content.css";
 import "../ui/Field.css";
 
 import { installMembershipLegalValidation } from "./membership-legal-validation";
+import { installJoinApplicationValidation } from "./join-application-validation";
 
 const API_BASE = "/api/v1";
 
@@ -341,6 +341,7 @@ async function main(): Promise<void> {
   let signedInName = "";
   let categories: MembershipCategory[] = [];
   let applicationFields: MembershipApplicationField[] = [];
+  let applicationFormFields: MembershipApplicationField[] = [];
   let definitionPromise: Promise<MemberApplicationFormResponse> | null = null;
 
   const getApplicationDefinition = () => {
@@ -380,6 +381,7 @@ async function main(): Promise<void> {
       }
       renderMembershipCategories(categoryContainer, categories);
       const fields = definition.form?.fields ?? [];
+      applicationFormFields = fields;
       applicationFields = configureMembershipLegalFields(applicationForm, fields, applicantKind);
       legalValidation?.dispose();
       legalValidation = installMembershipLegalValidation(applicationForm, fields);
@@ -402,7 +404,26 @@ async function main(): Promise<void> {
     }
   };
 
-  installLiveValidation(applicationForm, statusEl);
+  const applicationValidation = installJoinApplicationValidation(
+    applicationForm,
+    () => {
+      const configuredCategory = categories.find((entry) => entry.code === readSelectedCategory(applicationForm));
+      if (!configuredCategory) return null;
+      return signedInIdentity
+        ? memberApplicationCreateAsIdentitySchemaForCategory(configuredCategory, applicationFormFields)
+        : memberApplicationCreateSchemaForCategory(configuredCategory, applicationFormFields);
+    },
+    () => {
+      const category = readSelectedCategory(applicationForm);
+      if (signedInIdentity)
+        return {
+          identityId: signedInIdentity.id,
+          membershipCategory: category,
+          answers: readCustomFieldValues(applicationForm),
+        };
+      return applicationContext ? buildApplicationPayload(applicationForm, category, applicationContext) : {};
+    },
+  );
   render(
     <JoinEmailStep
       onIndividualChange={(individual) => {
@@ -439,7 +460,7 @@ async function main(): Promise<void> {
 
   applicationForm.addEventListener("submit", async (event) => {
     event.preventDefault();
-    const fieldsValid = validateBeforeSubmit(applicationForm, statusEl);
+    const fieldsValid = applicationValidation.validate();
     const agreementsValid = legalValidation?.validate() ?? true;
     if (!fieldsValid || !agreementsValid) return;
     const category = readSelectedCategory(applicationForm);
@@ -476,7 +497,8 @@ async function main(): Promise<void> {
         );
         showSuccessPanel(root, applicationForm, result.applicationId, result.manageToken, applicantName);
       } catch (error) {
-        handleSubmitError(error, applicationForm, statusEl);
+        handleSubmitError(error, null, statusEl);
+        applicationValidation.refuse(error);
         legalValidation?.refuse(error);
       }
     });
