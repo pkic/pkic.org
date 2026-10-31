@@ -21,6 +21,8 @@ export default defineConfig({
   // Whole-site republication variants are an explicit audit, not routine UI CI.
   grepInvert: /@publication/,
   timeout: 120_000,
+  // Several shards share one machine, so a portal screen can take longer than Playwright's five-second default to settle.
+  expect: { timeout: 15_000 },
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,

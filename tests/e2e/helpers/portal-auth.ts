@@ -88,13 +88,19 @@ export async function signInToPortal(page: Page, email: string, options: { conti
   await page.getByLabel("Email").fill(email);
   const since = await capturedEmailCount();
   // The confirmation follows the server's answer, which a busy server takes longer than an assertion's default to give.
-  const requested = page.waitForResponse(
-    (response) =>
-      new URL(response.url()).pathname === "/api/v1/auth/request-link" && response.request().method() === "POST",
-    { timeout: 60_000 },
-  );
-  await page.getByRole("button", { name: "Send sign-in link" }).click();
-  const linkRequest = await requested;
+  const sendLink = async () => {
+    const requested = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === "/api/v1/auth/request-link" && response.request().method() === "POST",
+      { timeout: 60_000 },
+    );
+    await page.getByRole("button", { name: "Send sign-in link" }).click();
+    return requested;
+  };
+  let linkRequest = await sendLink();
+  // The local D1 binding occasionally drops its connection under load; the refused request sent no mail, so asking once more is safe.
+  if (linkRequest.status() === 500 && (await linkRequest.text()).includes("Network connection lost"))
+    linkRequest = await sendLink();
   expect(linkRequest.status(), await linkRequest.text()).toBe(200);
   await expect(page.getByText("you'll receive a sign-in link shortly", { exact: false })).toBeVisible();
   const emailMessage = await waitForCapturedEmail(email, "sign-in link", { since });
