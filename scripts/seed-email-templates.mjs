@@ -947,7 +947,7 @@ Thank you for your interest in contributing to **{{eventName}}**.
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "co_speaker_invite",
-    subjectTemplate: `{{#if isReminder}}Reminder: please confirm speaker participation — {{eventName}}{{else}}You have been added as a speaker — {{eventName}}{{/if}}`,
+    subjectTemplate: `{{#if isReminder}}Reminder: please confirm speaker participation — {{eventName}}{{else}}Speaker invitation: please confirm — {{eventName}}{{/if}}`,
     content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Speaker,{{/if}}
 
 {{#if isReminder}}

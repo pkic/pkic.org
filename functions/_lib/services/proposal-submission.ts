@@ -274,7 +274,7 @@ export async function submitProposal(
       recipientEmail: user.email,
       recipientUserId: user.id,
       messageType: "transactional",
-      subject: `You have been added as a speaker — ${input.event.name}`,
+      subject: `Speaker invitation: please confirm — ${input.event.name}`,
       capabilityLinkValues: [manageUrl],
       data: {
         ...eventVariables,

@@ -184,7 +184,7 @@ test("terms-first proposals and invited speakers verify identity without duplica
     expect(submittedBody.proposer.email).toBeUndefined();
     expect("actingIdentityId" in submittedBody.speakers[0]).toBe(false);
     const created = proposalCreateResponseSchema.parse(await submittedResponse.json());
-    const guestInvitation = await waitForCapturedEmail(guest.email, "You have been added as a speaker", {
+    const guestInvitation = await waitForCapturedEmail(guest.email, "Speaker invitation: please confirm", {
       since: sinceOwn,
     });
     const guestSpeakerUrl = extractEmailUrl(guestInvitation, "/speaker/");
@@ -597,7 +597,7 @@ test("terms-first proposals and invited speakers verify identity without duplica
       );
       expect(invitationResponse.status(), await invitationResponse.text()).toBe(200);
       expect(coSpeakerInviteResponseSchema.parse(await invitationResponse.json()).email).toBe(secondaryEmail);
-      const aliasMail = await waitForCapturedEmail(secondaryEmail, "You have been added as a speaker", {
+      const aliasMail = await waitForCapturedEmail(secondaryEmail, "Speaker invitation: please confirm", {
         since: sinceAliasInvitation,
       });
       const aliasInvitationUrl = extractEmailUrl(aliasMail, "/speaker/");

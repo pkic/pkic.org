@@ -426,7 +426,7 @@ test("guest event entry creates a nonmember affiliation and an invited known per
     }
     await capture(guest, info, "parallel-representation-selected");
 
-    const invitation = await waitForCapturedEmail(knownEmail, "You have been added as a speaker", { since });
+    const invitation = await waitForCapturedEmail(knownEmail, "Speaker invitation: please confirm", { since });
     const speakerUrl = extractEmailUrl(invitation, "/speaker/");
     const oldToken = new URL(speakerUrl).searchParams.get("token")!;
     await guest.goto(speakerUrl);

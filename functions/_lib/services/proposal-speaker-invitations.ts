@@ -101,7 +101,7 @@ async function inviteProposalSpeakerOnce(
     recipientEmail: invitedEmail,
     recipientUserId: preparedUser.user.id,
     messageType: "transactional",
-    subject: `You have been added as a speaker — ${payload.event.name}`,
+    subject: `Speaker invitation: please confirm — ${payload.event.name}`,
     capabilityLinkValues: [manageUrl],
     data: {
       ...buildEventEmailVariables(payload.event, payload.appBaseUrl),

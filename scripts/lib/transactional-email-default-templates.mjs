@@ -6,8 +6,16 @@ export const DEFAULT_TRANSACTIONAL_EMAIL_TEMPLATES = [
     key: "event_proposal_verify",
     subjectTemplate: "Verify your email for {{eventName}}",
     content:
-      "Use this short-lived link to verify your email address and continue your proposal for {{eventName}}.\n\n{{verificationUrl}}\n\nIf you did not request this link, you can ignore this email.",
+      "Use this short-lived link to verify your email address for {{eventName}}.\n\n{{verificationUrl}}\n\nIf you did not request this link, you can ignore this email.",
     contentType: "text",
+    messageType: "transactional",
+  },
+  {
+    key: "membership_join_verify",
+    subjectTemplate: "Verify your email address to join the PKI Consortium",
+    content:
+      "Use the secure link below to verify your email address and continue joining the PKI Consortium. The link works for {{expiresInMinutes}} minutes.\n\n[Verify email and continue]({{verificationUrl}})\n\nIf you did not request this link, you can safely ignore this email.",
+    contentType: "markdown",
     messageType: "transactional",
   },
   {

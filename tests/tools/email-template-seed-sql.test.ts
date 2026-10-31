@@ -28,6 +28,7 @@ const EXPECTED_BASELINE_TEMPLATE_KEYS = [
   "event_proposal_verify",
   "membership-participation-warning",
   "membership-workflow-review-digest",
+  "membership_join_verify",
   "msg_attendee_inperson_check_plans",
   "msg_attendee_session_favorites",
   "msg_attendee_session_reminder",
