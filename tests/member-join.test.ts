@@ -19,7 +19,11 @@ import {
   queuedMemberJoinVerificationToken,
 } from "../functions/_lib/services/membership/join/capabilities";
 import { createMemberApplication } from "../functions/_lib/services/membership/applications/create";
-import { mutateBeforeNextBatch } from "./helpers/database-races";
+import { prepareIndividualIdentityStatement } from "../functions/_lib/services/users";
+import { nowIso } from "../functions/_lib/utils/time";
+import { createMemberSession } from "./helpers/auth";
+import { mutateBeforeNextBatch, mutateBeforeMatchingQuery } from "./helpers/database-races";
+import type { D1RoundTripBudget } from "./helpers/d1-round-trip-budget";
 
 function makeEnv() {
   return {
@@ -29,12 +33,22 @@ function makeEnv() {
   } as typeof env;
 }
 
-async function postJson(testEnv: typeof env, path: string, body: unknown): Promise<Response> {
-  return callApi(testEnv, path, {
-    method: "POST",
-    headers: { "content-type": "application/json", "cf-connecting-ip": "192.0.2.25" },
-    body: JSON.stringify(body),
-  });
+async function postJson(
+  testEnv: typeof env,
+  path: string,
+  body: unknown,
+  budget?: D1RoundTripBudget,
+): Promise<Response> {
+  return callApi(
+    testEnv,
+    path,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json", "cf-connecting-ip": "192.0.2.25" },
+      body: JSON.stringify(body),
+    },
+    budget,
+  );
 }
 
 async function startAndMaterializeVerification(
@@ -63,8 +77,8 @@ async function startAndMaterializeVerification(
   return token!;
 }
 
-async function verifyJoin(testEnv: typeof env, token: string): Promise<Response> {
-  return postJson(testEnv, "/api/v1/members/join/verify", { token });
+async function verifyJoin(testEnv: typeof env, token: string, budget?: D1RoundTripBudget): Promise<Response> {
+  return postJson(testEnv, "/api/v1/members/join/verify", { token }, budget);
 }
 
 describe("verified-email-first membership join", () => {
@@ -137,7 +151,7 @@ describe("verified-email-first membership join", () => {
   it("keeps the usable verification token out of D1 and issues an application capability after proof", async () => {
     const testEnv = makeEnv();
     const token = await startAndMaterializeVerification(testEnv, "applicant@unclaimed.example");
-    const response = await verifyJoin(testEnv, token);
+    const response = await verifyJoin(testEnv, token, { maxRoundTrips: 1 });
 
     expect(response.status).toBe(200);
     const body = memberJoinVerifyResponseSchema.parse(await response.json());
@@ -151,6 +165,19 @@ describe("verified-email-first membership join", () => {
     expect(
       await queryAll(testEnv.DB, "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'auth_magic_links'"),
     ).toHaveLength(0);
+  });
+
+  it("lets an existing nonmember attendee apply individually using the same canonical person", async () => {
+    const testEnv = makeEnv();
+    const email = "returning-attendee@unclaimed.example";
+    const userId = await insertUser(env.DB, email);
+    await env.DB.prepare("UPDATE users SET email_verified_at=? WHERE id=?").bind(nowIso(), userId).run();
+    await env.DB.batch([prepareIndividualIdentityStatement(env.DB, userId, nowIso())]);
+    const token = await startAndMaterializeVerification(testEnv, email, true);
+    const response = await verifyJoin(testEnv, token);
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(memberJoinVerifyResponseSchema.parse(await response.json()).status).toBe("application_ready");
+    expect(await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email=?", [email])).toEqual([{ id: userId }]);
   });
 
   it("reuses an active claimed organization, verifies the identity, and returns a normal member session", async () => {
@@ -188,11 +215,39 @@ describe("verified-email-first membership join", () => {
     ).toHaveLength(1);
     expect(await queryAll(testEnv.DB, "SELECT id FROM sessions")).toHaveLength(1);
 
-    const replay = await verifyJoin(testEnv, token);
+    const replay = await verifyJoin(testEnv, token, { maxRoundTrips: 1 });
     expect(replay.status).toBe(200);
     await expect(replay.json()).resolves.toEqual({ status: "already_member" });
     expect(replay.headers.get("set-cookie")).toBeNull();
     expect(await queryAll(testEnv.DB, "SELECT id FROM sessions")).toHaveLength(1);
+  });
+
+  it("rolls back a join when domain authority disappears after the shared preflight", async () => {
+    const testEnv = makeEnv();
+    const organizationId = await insertOrganization(testEnv.DB, "Concurrent domain organization");
+    await seedOrganizationAggregate(testEnv.DB, organizationId, "A");
+    const email = "new-person@domain-race.example";
+    await testEnv.DB.prepare(`INSERT INTO organization_domain_claims
+      (id,domain,organization_id,created_at,updated_at) VALUES(?,'domain-race.example',?,?,?)`)
+      .bind(crypto.randomUUID(), organizationId, nowIso(), nowIso())
+      .run();
+    const token = await startAndMaterializeVerification(testEnv, email);
+    const racingDb = mutateBeforeMatchingQuery(
+      testEnv.DB,
+      (sql) => sql.includes("INSERT INTO users"),
+      () =>
+        testEnv.DB.prepare("DELETE FROM organization_domain_claims WHERE organization_id=?").bind(organizationId).run(),
+    );
+    const response = await verifyJoin({ ...testEnv, DB: racingDb }, token);
+    expect(response.ok).toBe(false);
+    expect(await queryAll(testEnv.DB, "SELECT id FROM users WHERE normalized_email=?", [email])).toEqual([]);
+    expect(await queryAll(testEnv.DB, "SELECT id FROM identities WHERE organization_id=?", [organizationId])).toEqual(
+      [],
+    );
+    expect(await queryAll(testEnv.DB, "SELECT id FROM sessions")).toEqual([]);
+    expect(await queryAll(testEnv.DB, "SELECT id FROM audit_log WHERE action='membership_join_link_consumed'")).toEqual(
+      [],
+    );
   });
 
   it("binds a verified secondary work mailbox to the same person instead of their primary personal mailbox", async () => {
@@ -240,6 +295,135 @@ describe("verified-email-first membership join", () => {
       { email_id: emailId },
     ]);
   });
+
+  it("rolls back person, affiliation and proof redemption when session creation fails, and allows a retry", async () => {
+    const testEnv = makeEnv();
+    const organizationId = await insertOrganization(env.DB, "Atomic join organization");
+    await seedOrganizationAggregate(env.DB, organizationId, "A");
+    await env.DB.prepare(`INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at)
+      VALUES(?,'atomic-join.example',?,?,?)`)
+      .bind(crypto.randomUUID(), organizationId, nowIso(), nowIso())
+      .run();
+    const email = "new-person@atomic-join.example";
+    const token = await startAndMaterializeVerification(testEnv, email);
+    await env.DB.prepare(`CREATE TRIGGER refuse_join_session BEFORE INSERT ON sessions
+      BEGIN SELECT RAISE(ABORT,'SYNTHETIC_JOIN_SESSION_FAILURE'); END`).run();
+    try {
+      const failed = await verifyJoin(testEnv, token);
+      expect(failed.status).toBe(500);
+      expect(await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email=?", [email])).toHaveLength(0);
+      expect(
+        await queryAll(env.DB, "SELECT id FROM identities WHERE organization_id=?", [organizationId]),
+      ).toHaveLength(0);
+      expect(
+        await queryAll(env.DB, "SELECT id FROM audit_log WHERE action='membership_join_link_consumed'"),
+      ).toHaveLength(0);
+    } finally {
+      await env.DB.prepare("DROP TRIGGER refuse_join_session").run();
+    }
+    const retry = await verifyJoin(testEnv, token);
+    expect(retry.status, await retry.clone().text()).toBe(200);
+    expect(memberJoinVerifyResponseSchema.parse(await retry.json()).status).toBe("organization_access_ready");
+  });
+
+  it.each([false, true])(
+    "preserves an established account while reclaiming its unverified primary (rollback: %s)",
+    async (rollback) => {
+      const testEnv = makeEnv();
+      const organizationId = await insertOrganization(testEnv.DB, "Mailbox preservation organization");
+      await seedOrganizationAggregate(testEnv.DB, organizationId, "A");
+      const at = nowIso();
+      await testEnv.DB.prepare(`INSERT INTO organization_domain_claims
+      (id,domain,organization_id,created_at,updated_at) VALUES(?,'preservation.example',?,?,?)`)
+        .bind(crypto.randomUUID(), organizationId, at, at)
+        .run();
+      const email = "applicant@preservation.example";
+      const source = await insertUser(testEnv.DB, email);
+      const promoted = crypto.randomUUID();
+      const retained = crypto.randomUUID();
+      await testEnv.DB.batch([
+        prepareIndividualIdentityStatement(testEnv.DB, source, at),
+        testEnv.DB.prepare(`INSERT INTO user_emails
+        (id,user_id,email,normalized_email,verified_at,verification_method,created_at)
+        VALUES(?,?,?,?,?,'magic_link',?)`).bind(
+          promoted,
+          source,
+          "owner@established.example",
+          "owner@established.example",
+          at,
+          "2026-01-01T00:00:00.000Z",
+        ),
+        testEnv.DB.prepare(`INSERT INTO user_emails
+        (id,user_id,email,normalized_email,verified_at,verification_method,created_at)
+        VALUES(?,?,?,?,?,'magic_link',?)`).bind(
+          retained,
+          source,
+          "alternate@established.example",
+          "alternate@established.example",
+          at,
+          "2026-01-02T00:00:00.000Z",
+        ),
+      ]);
+      await createMemberSession(testEnv.DB, source, "synthetic-established-session");
+      const identitiesBefore = await queryAll(
+        testEnv.DB,
+        "SELECT id,source,started_at,ended_at,blocked_at FROM identities WHERE user_id=?",
+        [source],
+      );
+      const sessionsBefore = await queryAll(
+        testEnv.DB,
+        "SELECT id,token_hash,revoked_at FROM sessions WHERE user_id=?",
+        [source],
+      );
+      const token = await startAndMaterializeVerification(testEnv, email);
+      if (rollback)
+        await testEnv.DB.prepare(`CREATE TRIGGER refuse_preservation_session BEFORE INSERT ON sessions
+      BEGIN SELECT RAISE(ABORT,'SYNTHETIC_PRESERVATION_FAILURE'); END`).run();
+      let response: Response;
+      try {
+        response = await verifyJoin(testEnv, token);
+      } finally {
+        if (rollback) await testEnv.DB.prepare("DROP TRIGGER refuse_preservation_session").run();
+      }
+      expect(response.status, await response.clone().text()).toBe(rollback ? 500 : 200);
+      expect(
+        await queryAll(testEnv.DB, "SELECT email,normalized_email,email_verified_at FROM users WHERE id=?", [source]),
+      ).toEqual([
+        {
+          email: rollback ? email : "owner@established.example",
+          normalized_email: rollback ? email : "owner@established.example",
+          email_verified_at: rollback ? null : at,
+        },
+      ]);
+      expect(
+        await queryAll(testEnv.DB, "SELECT id FROM user_emails WHERE user_id=? ORDER BY created_at,id", [source]),
+      ).toEqual((rollback ? [promoted, retained] : [retained]).map((id) => ({ id })));
+      expect(
+        await queryAll(testEnv.DB, "SELECT id,source,started_at,ended_at,blocked_at FROM identities WHERE user_id=?", [
+          source,
+        ]),
+      ).toEqual(identitiesBefore);
+      expect(
+        await queryAll(testEnv.DB, "SELECT id,token_hash,revoked_at FROM sessions WHERE user_id=?", [source]),
+      ).toEqual(sessionsBefore);
+      const owners = await queryAll<{ id: string }>(testEnv.DB, "SELECT id FROM users WHERE normalized_email=?", [
+        email,
+      ]);
+      expect(owners).toHaveLength(1);
+      if (rollback) {
+        expect(owners[0].id).toBe(source);
+        expect(
+          await queryAll(testEnv.DB, "SELECT id FROM audit_log WHERE action='membership_join_link_consumed'"),
+        ).toEqual([]);
+      } else {
+        expect(owners[0].id).not.toBe(source);
+        expect(memberJoinVerifyResponseSchema.parse(await response.json())).toMatchObject({
+          status: "organization_access_ready",
+          member: { userId: owners[0].id },
+        });
+      }
+    },
+  );
 
   it("does not let an individual attestation bypass an exact claimed organization domain", async () => {
     const testEnv = makeEnv();
@@ -310,15 +494,13 @@ describe("verified-email-first membership join", () => {
     const response = await verifyJoin(testEnv, token);
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ status: "support_required" });
-    expect(await queryAll(testEnv.DB, "SELECT id FROM sessions")).toHaveLength(0);
+    const result = memberJoinVerifyResponseSchema.parse(await response.json());
+    expect(result.status).toBe("organization_access_ready");
+    if (result.status !== "organization_access_ready") throw new Error("Expected proved mailbox access");
+    expect(result.member.userId).not.toBe(userId);
+    expect(await queryAll(testEnv.DB, "SELECT id FROM sessions WHERE user_id=?", [userId])).toHaveLength(0);
     expect(await queryAll(testEnv.DB, "SELECT id FROM identities WHERE user_id = ?", [userId])).toHaveLength(0);
-    const [alias] = await queryAll<{ verified_at: string | null }>(
-      testEnv.DB,
-      "SELECT verified_at FROM user_emails WHERE user_id = ?",
-      [userId],
-    );
-    expect(alias.verified_at).toBeNull();
+    expect(await queryAll(testEnv.DB, "SELECT id FROM user_emails WHERE user_id=?", [userId])).toEqual([]);
   });
 
   it("binds a previously verified secondary alias to the same canonical applicant", async () => {
@@ -389,7 +571,8 @@ describe("verified-email-first membership join", () => {
 
     const replay = await postJson(testEnv, "/api/v1/members/applications", payload);
     expect(replay.status).toBe(409);
-    await expect(replay.json()).resolves.toMatchObject({ error: { code: "MEMBER_JOIN_CAPABILITY_USED" } });
+    // The open application already refuses the replay before the spent capability does.
+    await expect(replay.json()).resolves.toMatchObject({ error: { code: "APPLICATION_ALREADY_PENDING" } });
     expect(await queryAll(testEnv.DB, "SELECT id FROM member_applications")).toHaveLength(1);
   });
 

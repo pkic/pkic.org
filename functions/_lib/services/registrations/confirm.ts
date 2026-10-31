@@ -1,3 +1,13 @@
+import type {
+  RegistrationConfirmOrganization,
+  RegistrationOrganizationOutcome,
+} from "../../../../assets/shared/schemas/registration";
+import { emailDomainOf } from "../../../../assets/shared/schemas/email-domains";
+import { workEmailDomain } from "../../email-domains/classification";
+import { individualIdentityIdSql } from "../identities/affiliation-projection";
+import { prepareIndividualIdentityStatement } from "../users";
+import { readEventAffiliationContext } from "../identities/event-affiliation-context";
+import { planRegistrationAffiliation } from "./affiliation-plan";
 import { AppError } from "../../errors";
 import { first } from "../../db/queries";
 import { nowIso } from "../../utils/time";
@@ -12,11 +22,11 @@ import {
   prepareRevokeDuplicateInvitesStatement,
 } from "../invites";
 import { INVITE_COLUMNS, type InviteRecord } from "../invite-types";
-import { signCapabilityToken, verifyDatabaseCapability } from "../capability-links";
+import { newCapabilityLinkSecret, signCapabilityToken, verifyDatabaseCapability } from "../capability-links";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { REGISTRATION_COLUMNS, type RegistrationRecord } from "./types";
 import { isRegistrationTransitionConflict, prepareRegistrationTransitionGuard } from "./transition-guard";
-import { prepareVerifyPrimaryEmailStatement } from "../email-verification";
+import { prepareVerifyPrimaryEmailStatements } from "../email-verification";
 import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import { linkVerifiedAddressToDomainOrganization } from "../identities/email-domain-link";
 
@@ -28,6 +38,8 @@ export interface PreparedRegistrationConfirmation {
   statements: StatementLike[];
   /** The address this confirmation proves, for the organization link that follows the commit. */
   verifiedAddress: { userId: string; normalizedEmail: string };
+  affiliationConfirmed: boolean;
+  organizationOutcome?: RegistrationOrganizationOutcome;
 }
 
 export function isStaleRegistrationTransition(error: unknown): boolean {
@@ -43,6 +55,7 @@ export async function prepareConfirmRegistrationByToken(
     waitlistClaimWindowHours: number;
     confirmationTtlHours?: number;
     signingSecret: string;
+    organization?: RegistrationConfirmOrganization;
   },
 ): Promise<PreparedRegistrationConfirmation> {
   const verified = await verifyDatabaseCapability({
@@ -99,9 +112,10 @@ export async function prepareConfirmRegistrationByToken(
     pending_email: string | null;
     pending_email_change_registration_id: string | null;
     normalized_email: string;
+    individual_identity_id: string | null;
   }>(
     db,
-    `SELECT email, pending_email, pending_email_change_registration_id, normalized_email
+    `SELECT email, pending_email, pending_email_change_registration_id, normalized_email, ${individualIdentityIdSql("users.id")} AS individual_identity_id
        FROM users WHERE id = ?`,
     [registration.user_id],
   );
@@ -166,6 +180,50 @@ export async function prepareConfirmRegistrationByToken(
     }
   }
 
+  const domainChanged =
+    ownsPendingEmailChange && inviteEmail && emailDomainOf(inviteEmail) !== emailDomainOf(user.normalized_email);
+  const affiliationStatements: StatementLike[] = [];
+  let affiliationConfirmed = false;
+  let organizationOutcome: RegistrationOrganizationOutcome | undefined;
+  if (payload.organization?.contextToken) {
+    const context = await readEventAffiliationContext(
+      payload.signingSecret,
+      payload.organization.contextToken,
+      registration.event_id,
+      inviteEmail ?? user.normalized_email,
+      "registration-affiliation",
+      payload.organization,
+    );
+    const plan = await planRegistrationAffiliation(
+      db,
+      {
+        userId: registration.user_id,
+        proofEvidence: {
+          sql: "SELECT 1 FROM users WHERE id=? AND normalized_email=? AND email_verified_at IS NOT NULL",
+          bindings: [registration.user_id, context.input.email],
+        },
+      },
+      context.input,
+      context.basis,
+      now,
+    );
+    affiliationStatements.push(...plan.statements, ...(plan.prepareReview?.(registration.id) ?? []));
+    organizationOutcome = plan.outcome;
+    finalizedRegistration = { ...finalizedRegistration, registration_identity_id: plan.identityId };
+    affiliationConfirmed = true;
+  } else if (domainChanged) {
+    if (workEmailDomain(inviteEmail!))
+      throw new AppError(
+        422,
+        "REGISTRATION_REPRESENTATION_REQUIRED",
+        "Confirm your representation for the new email address before continuing.",
+      );
+    const personalId = user.individual_identity_id ?? crypto.randomUUID();
+    affiliationStatements.push(prepareIndividualIdentityStatement(db, registration.user_id, now, personalId));
+    finalizedRegistration = { ...finalizedRegistration, registration_identity_id: personalId };
+    affiliationConfirmed = true;
+  }
+
   const matchingInvite =
     !registration.invite_id && inviteEmail
       ? await first<InviteRecord>(
@@ -184,26 +242,37 @@ export async function prepareConfirmRegistrationByToken(
     userId: registration.user_id,
   });
   const newStatus = "registered";
+  finalizedRegistration = { ...finalizedRegistration, manage_link_secret: newCapabilityLinkSecret() };
   const verifiedEmail = inviteEmail ?? user.normalized_email;
   const updateStatements: StatementLike[] = [
     prepareRegistrationTransitionGuard(db, registration),
     ...emailFinalizeStatements,
-    prepareVerifyPrimaryEmailStatement(db, {
+    ...prepareVerifyPrimaryEmailStatements(db, {
       userId: registration.user_id,
       normalizedEmail: verifiedEmail,
       method: ownsPendingEmailChange ? "email_change_confirmation" : "registration_confirmation",
       verifiedAt: now,
+      excludeRegistrationId: registration.id,
     }),
+    ...affiliationStatements,
     db
       .prepare(
         `UPDATE registrations
          SET status = ?, confirmed_at = ?, confirmation_link_secret = NULL,
              pending_confirmation_deadline_at = NULL, confirmation_reminder_sent_at = NULL,
-             manage_link_secret = ?, created_identity_user_id = NULL,
+             manage_link_secret = ?, registration_identity_id = ?, created_identity_user_id = NULL,
              invite_id = COALESCE(invite_id, ?), updated_at = ?
          WHERE id = ? AND status = 'pending_email_confirmation'`,
       )
-      .bind(newStatus, now, finalizedRegistration.manage_link_secret, matchingInvite?.id ?? null, now, registration.id),
+      .bind(
+        newStatus,
+        now,
+        finalizedRegistration.manage_link_secret,
+        finalizedRegistration.registration_identity_id,
+        matchingInvite?.id ?? null,
+        now,
+        registration.id,
+      ),
   ];
   // A role-based attendee may bypass the queue. Preserve an explicit manager
   // return to the waitlist until that manager admits them again.
@@ -284,6 +353,8 @@ export async function prepareConfirmRegistrationByToken(
   });
   return {
     stage: "confirmed",
+    affiliationConfirmed,
+    organizationOutcome,
     registration: updated,
     manageToken,
     recipientEmail: inviteEmail ?? user.normalized_email,
@@ -302,6 +373,12 @@ export async function confirmRegistrationByToken(
       await db.batch(prepared.statements);
     } catch (error) {
       if (isAuthorizationGuardFailure(error)) {
+        if (prepared.affiliationConfirmed)
+          throw new AppError(
+            409,
+            "IDENTITY_CONTEXT_CHANGED",
+            "Confirm your organization details again before registering.",
+          );
         throw new AppError(410, "INVITE_EXPIRED", "Linked invitation has expired");
       }
       if (isStaleRegistrationTransition(error)) {
@@ -319,7 +396,7 @@ export async function confirmRegistrationByToken(
       [prepared.registration.id],
     );
     if (!registration) throw new AppError(500, "REGISTRATION_CONFIRM_FAILED", "Registration update failed");
-    await linkVerifiedAddressToDomainOrganization(db, prepared.verifiedAddress);
+    if (!prepared.affiliationConfirmed) await linkVerifiedAddressToDomainOrganization(db, prepared.verifiedAddress);
     return { registration, manageToken: prepared.manageToken };
   }
   throw new AppError(409, "INVITE_CHANGED", "Linked invite state changed; please retry confirmation");

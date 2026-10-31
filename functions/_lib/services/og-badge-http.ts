@@ -20,10 +20,14 @@ function finalizeBadgeResponse(response: Response, options: BadgeResponseOptions
     : response;
 }
 
-function badgeHeaders(contentType: string, cacheStatus: "HIT" | "MISS", isDownload: boolean): HeadersInit {
+function badgeHeaders(contentType: string, cacheStatus: "HIT" | "MISS", options: BadgeResponseOptions): HeadersInit {
   return {
     "Content-Type": contentType,
-    "Cache-Control": isDownload ? "no-store" : OG_BADGE_CACHE_CONTROL,
+    "Cache-Control": options.isDownload
+      ? "no-store"
+      : options.cacheMetadata.badgeRenderer
+        ? "public, no-cache"
+        : OG_BADGE_CACHE_CONTROL,
     "X-Cache": cacheStatus,
   };
 }
@@ -31,14 +35,13 @@ function badgeHeaders(contentType: string, cacheStatus: "HIT" | "MISS", isDownlo
 export async function readCachedBadge(options: BadgeResponseOptions): Promise<Response | null> {
   const cached = await options.bucket?.get(options.cacheKey);
   if (!cached) return null;
-  if (
-    options.cacheMetadata.badgeGeneration !== undefined &&
-    cached.customMetadata?.badgeGeneration !== options.cacheMetadata.badgeGeneration
-  )
-    return null;
+  for (const key of ["badgeGeneration", "badgeRenderer", "badgeDesignRevision", "badgeImageFormat"]) {
+    if (options.cacheMetadata[key] !== undefined && cached.customMetadata?.[key] !== options.cacheMetadata[key])
+      return null;
+  }
   return finalizeBadgeResponse(
     new Response(await cached.arrayBuffer(), {
-      headers: badgeHeaders(cached.httpMetadata?.contentType ?? JPEG_CONTENT_TYPE, "HIT", options.isDownload),
+      headers: badgeHeaders(cached.httpMetadata?.contentType ?? JPEG_CONTENT_TYPE, "HIT", options),
     }),
     options,
   );
@@ -67,7 +70,7 @@ export async function serveGeneratedBadge(
         }),
       );
       return finalizeBadgeResponse(
-        new Response(jpeg, { headers: badgeHeaders(JPEG_CONTENT_TYPE, "MISS", options.isDownload) }),
+        new Response(jpeg, { headers: badgeHeaders(JPEG_CONTENT_TYPE, "MISS", options) }),
         options,
       );
     } catch {
@@ -77,7 +80,7 @@ export async function serveGeneratedBadge(
 
   return finalizeBadgeResponse(
     new Response(png.buffer as ArrayBuffer, {
-      headers: badgeHeaders(PNG_CONTENT_TYPE, "MISS", options.isDownload),
+      headers: badgeHeaders(PNG_CONTENT_TYPE, "MISS", options),
     }),
     options,
   );

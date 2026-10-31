@@ -11,10 +11,16 @@
  */
 import { useState } from "preact/hooks";
 import { ApiClientError } from "../../../shared/api-client";
-import { actingIdentityLabel, PERSONAL_IDENTITY_LABEL } from "../../../shared/acting-identity-catalog";
+import {
+  actingIdentityLabel,
+  orderedForChoice,
+  PERSONAL_IDENTITY_LABEL,
+} from "../../../shared/acting-identity-catalog";
 import { friendlyErrorMessage } from "../../../components/ErrorAlert";
 import { Alert } from "../../../ui/Alert";
+import { Avatar } from "../../../ui/Avatar";
 import { Button } from "../../../ui/Button";
+import { PkicMark } from "../../../ui/PkicMark";
 import type { MenuItem } from "../../../ui/Menu";
 import { selectActingIdentity } from "../acting-identity";
 import type { PortalSession } from "../types";
@@ -38,6 +44,12 @@ function choiceLabel(identity: ActingIdentityChoice, all: readonly ActingIdentit
   return ambiguous ? actingIdentityLabel(identity) : short;
 }
 
+/** What the identity does, and the membership it holds, on one line; the title is left out when the name already carries it. */
+function choiceDetail(identity: ActingIdentityChoice, shownName: string): string {
+  const title = identity.jobTitle && !shownName.includes(identity.jobTitle) ? identity.jobTitle : null;
+  return [title, identity.membershipLabel ?? identity.membershipCategory].filter(Boolean).join(" \u00b7 ");
+}
+
 /** The account menu's heading: "Acting as Northwind Review Labs", or "Acting personally". */
 function actingHeading(identity: ActingIdentityChoice): string {
   return identity.organizationName ? `Acting as ${actingIdentityLabel(identity)}` : "Acting personally";
@@ -57,6 +69,9 @@ export function ActingIdentitySwitcher({
 }) {
   const [choosing, setChoosing] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const choices = orderedForChoice(session.actingIdentities);
+  // Only an organization is suggested; with just a personal identity there is nothing to recommend.
+  const suggested = Boolean(choices[0]?.organizationId);
 
   async function choose(identityId: string): Promise<void> {
     setError(null);
@@ -73,18 +88,40 @@ export function ActingIdentitySwitcher({
     <LoginFrame
       label="Choose how you take part"
       title="Choose how you take part"
-      lede="Take part personally or for your organization. You can switch at any time from the account menu."
+      lede="Take part for your organization where you can. You can switch at any time from the account menu."
       busy={choosing !== null}
     >
-      <fieldset class="pk-login__controls pk-stack" disabled={choosing !== null}>
-        {session.actingIdentities.map((identity) => (
+      <fieldset class="pk-login__controls pk-identity-choices" disabled={choosing !== null}>
+        {choices.map((identity, index) => (
           <Button
             key={identity.id}
-            variant="secondary"
+            variant={index === 0 && suggested ? "primary" : "secondary"}
             loading={choosing === identity.id}
             onClick={() => void choose(identity.id)}
           >
-            {choiceLabel(identity, session.actingIdentities)}
+            <span class="pk-identity-choice">
+              <Avatar
+                name={identity.organizationName ?? session.identity.email}
+                src={
+                  identity.organizationId
+                    ? `/api/v1/members/${encodeURIComponent(identity.organizationId)}/logo`
+                    : undefined
+                }
+                shape={identity.organizationName || identity.membershipCategory ? "square" : "round"}
+                size="lg"
+              />
+              <span class="pk-identity-choice__body">
+                <span class="pk-identity-choice__name">{choiceLabel(identity, session.actingIdentities)}</span>
+                <span class="pk-identity-choice__detail">
+                  {choiceDetail(identity, choiceLabel(identity, session.actingIdentities))}
+                </span>
+              </span>
+              {identity.membershipCategory && (
+                <span class="pk-identity-choice__mark" aria-hidden="true">
+                  <PkicMark />
+                </span>
+              )}
+            </span>
           </Button>
         ))}
       </fieldset>
@@ -124,7 +161,7 @@ export function useActingIdentityMenu(session: PortalSession | null): {
     }
   }
 
-  const choices: MenuItem[] = session.actingIdentities.map((identity) => ({
+  const choices: MenuItem[] = orderedForChoice(session.actingIdentities).map((identity) => ({
     id: `acting-identity-${identity.id}`,
     label: actingIdentityLabel(identity),
     checked: identity.id === session.actingIdentityId,

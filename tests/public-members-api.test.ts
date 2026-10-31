@@ -21,7 +21,9 @@ import {
   publicMembersListResponseSchema,
   memberWallResponseSchema,
   publicMemberDetailSchema,
+  staffMembersListResponseSchema,
 } from "../assets/shared/schemas/members-directory";
+import { callApi } from "./helpers/app";
 
 /** The Post-Quantum Cryptography Working Group, seeded by migration 0035. */
 const PQC_GROUP_ID = "20000000-0000-4000-8000-000000000003";
@@ -829,5 +831,73 @@ describe("the members list projection", () => {
     const unpermitted = await fetchMembers("/api/v1/members?view=staff&group=organization");
     expect(unpermitted.status).toBe(200);
     publicMembersListResponseSchema.parse(await unpermitted.json());
+  });
+
+  /**
+   * A person may hold an individual membership and act for an organization at
+   * once — reinstating an ended representation does exactly that. Nothing
+   * refuses it; staff find those people on the roll and settle it.
+   */
+  it("finds the individual members who also hold an active organization representation", async () => {
+    const both = crypto.randomUUID();
+    const endedRepresentation = crypto.randomUUID();
+    await seedIndividualMember({ userId: both, status: "active" });
+    await seedIndividualMember({ userId: endedRepresentation, status: "active" });
+    const acme = await insertOrganization(env.DB, "Acme Overlap Corp");
+    const formerEmployer = await insertOrganization(env.DB, "Former Employer Ltd");
+    const representations = await Promise.all([
+      buildCreateIdentityStatement(env.DB, {
+        userId: both,
+        organizationId: acme,
+        source: "staff",
+        startImmediately: true,
+      }),
+      buildCreateIdentityStatement(env.DB, {
+        userId: endedRepresentation,
+        organizationId: formerEmployer,
+        source: "staff",
+        startImmediately: true,
+      }),
+    ]);
+    await env.DB.batch(representations.map(({ statement }) => statement));
+    await env.DB.prepare("UPDATE identities SET ended_at = started_at WHERE id = ?")
+      .bind(representations[1].identityId)
+      .run();
+    // Somebody who only represents an organization holds no individual membership.
+    await seedOrgMember({
+      userId: crypto.randomUUID(),
+      organizationId: crypto.randomUUID(),
+      organizationName: "Organization Only Ltd",
+      status: "active",
+    });
+    const token = await staffToken("members-also-represents");
+
+    const roll = staffMembersListResponseSchema.parse(
+      await (await fetchMembers("/api/v1/members?view=staff", token)).json(),
+    );
+    const byUser = new Map(roll.members.map((member) => [member.userId ?? member.name, member]));
+    expect(byUser.get(both)?.representedOrganizations).toEqual([{ id: acme, name: "Acme Overlap Corp" }]);
+    expect(byUser.get(endedRepresentation)?.representedOrganizations).toEqual([]);
+    expect(byUser.get("Organization Only Ltd")?.representedOrganizations).toEqual([]);
+
+    const flagged = await callApi(
+      env as any,
+      "/api/v1/members?view=staff&alsoRepresents=organization",
+      { headers: { authorization: `Bearer ${token}` } },
+      // The staff roll resolves its reader, then reads one page; the overlap
+      // adds statements to that page batch, never another call.
+      { maxRoundTrips: 2, mode: "fail" },
+    );
+    expect(flagged.status).toBe(200);
+    const flaggedBody = staffMembersListResponseSchema.parse(await flagged.json());
+    expect(flaggedBody.members.map((member) => member.userId)).toEqual([both]);
+    expect(flaggedBody.page.total).toBe(1);
+
+    // The overlap is staff knowledge: without `membership:read` the filter
+    // narrows nothing and the public shape carries no representations.
+    const anonymous = await fetchMembers("/api/v1/members?view=staff&alsoRepresents=organization");
+    const anonymousBody = (await anonymous.json()) as { members: Array<Record<string, unknown>> };
+    expect(anonymousBody.members.length).toBeGreaterThan(1);
+    for (const member of anonymousBody.members) expect(member).not.toHaveProperty("representedOrganizations");
   });
 });

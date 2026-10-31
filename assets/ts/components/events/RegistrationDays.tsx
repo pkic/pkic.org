@@ -69,8 +69,7 @@ function DaysForm({
       <DayAttendancePicker
         days={data.eventDays}
         value={draft}
-        onChange={(dayDate, attendanceType) => setDraft({ ...draft, [dayDate]: attendanceType })}
-        allowNotAttending
+        onChange={(dayDate, attendanceType) => setDraft((current) => ({ ...current, [dayDate]: attendanceType }))}
       />
       {joining && (
         <p class="pk-small">

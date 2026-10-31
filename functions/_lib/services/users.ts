@@ -1,3 +1,11 @@
+import { firstNameSchema, lastNameSchema } from "../../../assets/shared/schemas/api-common";
+import {
+  readEmailOwnership,
+  provedMailboxUserId,
+  provedMailboxUserIdSelection,
+  prepareEmailOwnershipClaim,
+  type EmailOwnership,
+} from "./email-ownership";
 import { first } from "../db/queries";
 import { normalizeEmail } from "../validation";
 import { nowIso } from "../utils/time";
@@ -87,6 +95,8 @@ export interface FindOrCreateUserPayload {
   /** Whether to merge submitted profile fields into an existing record.
    *  Default: false — public submissions do not update existing profiles. */
   allowProfileUpdate?: boolean;
+  /** Set only after a signed mailbox challenge has been verified. */
+  mailboxVerified?: boolean;
   /**
    * Every person holds an identity. A new account receives an individual
    * identity in the same batch, unless the caller creates an identity for
@@ -157,8 +167,8 @@ export function prepareUserProfileStatements(
       memberValues.push(value);
     }
   };
-  add("first_name", payload.firstName);
-  add("last_name", payload.lastName);
+  add("first_name", payload.firstName == null ? payload.firstName : firstNameSchema.parse(payload.firstName));
+  add("last_name", payload.lastName == null ? payload.lastName : lastNameSchema.parse(payload.lastName));
   add("preferred_name", payload.preferredName, false);
   if (payload.headshotR2Key !== undefined) {
     add("headshot_r2_key", payload.headshotR2Key);
@@ -229,6 +239,17 @@ interface ResolvedUserWrite {
   statements: StatementLike[];
 }
 
+/** Request-owned database observations, never client-supplied authority. */
+export interface VerifiedUserWriteObservation {
+  ownership: EmailOwnership | null;
+  existing: UserRecord | null;
+}
+
+export function provedMailboxUserSelection(email: string) {
+  const owner = provedMailboxUserIdSelection(email);
+  return { sql: `SELECT ${userRecordColumns()} FROM users WHERE id=(${owner.sql})`, bindings: owner.bindings };
+}
+
 /** The individual identity a new account starts with: no organization, no title, not on any profile. */
 export function prepareAccountIdentityStatement(db: DatabaseLike, userId: string, at: string): StatementLike {
   return db
@@ -246,7 +267,12 @@ export function prepareAccountIdentityStatement(db: DatabaseLike, userId: string
  * example one who only held organization identities and now takes part as an
  * individual. Inserts nothing when they already hold an active one.
  */
-export function prepareIndividualIdentityStatement(db: DatabaseLike, userId: string, at: string): StatementLike {
+export function prepareIndividualIdentityStatement(
+  db: DatabaseLike,
+  userId: string,
+  at: string,
+  identityId = uuid(),
+): StatementLike {
   return db
     .prepare(
       `INSERT INTO identities (
@@ -259,20 +285,37 @@ export function prepareIndividualIdentityStatement(db: DatabaseLike, userId: str
           WHERE held.user_id = ? AND held.organization_id IS NULL
             AND held.started_at IS NOT NULL AND held.ended_at IS NULL AND held.blocked_at IS NULL)`,
     )
-    .bind(uuid(), userId, at, at, at, at, userId);
+    .bind(identityId, userId, at, at, at, at, userId);
 }
 
-async function resolveUserWrite(db: DatabaseLike, payload: FindOrCreateUserPayload): Promise<ResolvedUserWrite> {
+async function resolveUserWrite(
+  db: DatabaseLike,
+  payload: FindOrCreateUserPayload,
+  observed?: VerifiedUserWriteObservation,
+): Promise<ResolvedUserWrite> {
   const normalized = normalizeEmail(payload.email);
-  const existing = await findExistingUserByAnyEmail(db, normalized);
+  const ownership = payload.mailboxVerified
+    ? observed
+      ? observed.ownership
+      : await readEmailOwnership(db, normalized)
+    : null;
+  const provedUserId = provedMailboxUserId(ownership);
+  const existing =
+    payload.mailboxVerified && observed
+      ? observed.existing
+      : payload.mailboxVerified
+        ? provedUserId
+          ? await first<UserRecord>(db, `SELECT ${userRecordColumns()} FROM users WHERE id=?`, [provedUserId])
+          : null
+        : await findExistingUserByAnyEmail(db, normalized);
 
   if (!existing) {
     const user: UserRecord = {
       id: uuid(),
       email: payload.email,
       normalized_email: normalized,
-      first_name: payload.firstName ?? null,
-      last_name: payload.lastName ?? null,
+      first_name: payload.firstName === undefined ? null : firstNameSchema.parse(payload.firstName),
+      last_name: payload.lastName === undefined ? null : lastNameSchema.parse(payload.lastName),
       preferred_name: payload.preferredName ?? null,
       data_json: payload.dataJson ?? null,
     };
@@ -299,17 +342,26 @@ async function resolveUserWrite(db: DatabaseLike, payload: FindOrCreateUserPaylo
     return {
       user,
       created: true,
-      statements: payload.identityInBatch ? [insert] : [insert, prepareAccountIdentityStatement(db, user.id, now)],
+      statements: [
+        ...(payload.mailboxVerified ? prepareEmailOwnershipClaim(db, normalized, user.id, ownership) : []),
+        insert,
+        ...(payload.identityInBatch ? [] : [prepareAccountIdentityStatement(db, user.id, now)]),
+      ],
     };
   }
 
   // Public submissions must not overwrite existing profile data.
   if (!payload.allowProfileUpdate) {
-    return { user: existing, created: false, statements: [] };
+    return {
+      user: existing,
+      created: false,
+      statements: payload.mailboxVerified ? prepareEmailOwnershipClaim(db, normalized, existing.id, ownership) : [],
+    };
   }
 
-  const updatedFirstName = payload.firstName ?? existing.first_name;
-  const updatedLastName = payload.lastName ?? existing.last_name;
+  const updatedFirstName =
+    payload.firstName === undefined ? existing.first_name : firstNameSchema.parse(payload.firstName);
+  const updatedLastName = payload.lastName === undefined ? existing.last_name : lastNameSchema.parse(payload.lastName);
   const updatedPreferredName = payload.preferredName ?? existing.preferred_name;
   const updatedDataJson = payload.dataJson ?? existing.data_json;
 
@@ -361,6 +413,7 @@ export async function findOrCreateUser(db: DatabaseLike, payload: FindOrCreateUs
 export async function buildFindOrCreateUserStatement(
   db: DatabaseLike,
   payload: FindOrCreateUserPayload,
+  observed?: VerifiedUserWriteObservation,
 ): Promise<ResolvedUserWrite> {
-  return resolveUserWrite(db, payload);
+  return resolveUserWrite(db, payload, observed);
 }

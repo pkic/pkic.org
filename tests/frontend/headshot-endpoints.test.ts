@@ -6,6 +6,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { headshotBodyEndpoint, headshotFormEndpoint } from "../../assets/ts/shared/headshot/endpoints";
 import { successResponseSchema } from "../../assets/shared/schemas/api-common";
+import { SPEAKER_MAILBOX_PROOF_HEADER } from "../../assets/shared/schemas/event-proposal-proof";
 import {
   headshotUrlResponseSchema,
   registrationHeadshotUploadResponseSchema,
@@ -81,5 +82,22 @@ describe("headshot endpoints", () => {
     await headshotFormEndpoint("/api/v1/registrations/access/token/headshot", successResponseSchema).remove();
 
     expect(requests[0]).toMatchObject({ url: "/api/v1/registrations/access/token/headshot", method: "DELETE" });
+  });
+
+  it("presents the given headers with both the upload and the removal", async () => {
+    const requests = capture({ success: true });
+    const proof = "p".repeat(40);
+    const endpoint = headshotFormEndpoint(
+      "/api/v1/proposals/speakers/access/token/headshot",
+      successResponseSchema,
+      { consent: "true" },
+      { [SPEAKER_MAILBOX_PROOF_HEADER]: proof },
+    );
+
+    await endpoint.upload(IMAGE);
+    await endpoint.remove();
+
+    expect(requests.map(({ method }) => method)).toEqual(["PUT", "DELETE"]);
+    for (const request of requests) expect(request.headers.get(SPEAKER_MAILBOX_PROOF_HEADER)).toBe(proof);
   });
 });

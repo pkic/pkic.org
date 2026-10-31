@@ -44,6 +44,7 @@ const data = speakerSelfServiceReadResponseSchema.parse({
     headshotUploaded: false,
     headshotUpdatedAt: null,
     headshotUrl: null,
+    personalDetailsEditable: true,
     actingIdentityId: null,
     actingIdentitySelectedAt: null,
     actingIdentitySelection: "unrecorded",

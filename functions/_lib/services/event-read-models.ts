@@ -1,5 +1,5 @@
 import type { EventDayReadModel, RequiredTerm } from "../../../assets/shared/schemas/event-read-models";
-import { resolveAttendanceOptions, type EventDayRecord } from "./event-days";
+import { configuredAttendanceOptions, type DayAttendanceSelection, type EventDayRecord } from "./event-days";
 import type { EventTermRecord } from "./event-types";
 
 /** Maps the D1 event-term row once for every public event workflow. */
@@ -22,21 +22,32 @@ export function requiredTermReadModel(term: EventTermRecord): RequiredTerm {
 export function eventDayReadModels(
   eventDays: EventDayRecord[],
   registeredCounts: Map<string, Map<string, number>>,
+  heldAttendance: readonly DayAttendanceSelection[] = [],
 ): EventDayReadModel[] {
+  const heldByDay = new Map(heldAttendance.map((selection) => [selection.dayDate, selection.attendanceType]));
   return eventDays.map((day) => ({
     dayDate: day.day_date,
     label: day.label,
     inPersonCapacity: day.in_person_capacity,
     sortOrder: day.sort_order,
-    attendanceOptions: resolveAttendanceOptions(day).map((option) => {
-      const capacity = option.capacity ?? null;
-      const registered = registeredCounts.get(day.id)?.get(option.value) ?? 0;
-      return {
-        value: option.value,
-        label: option.label,
-        spotsRemainingPercent:
-          capacity != null && capacity > 0 ? Math.round(((capacity - registered) / capacity) * 100) : null,
-      };
-    }),
+    attendanceOptions: configuredAttendanceOptions(day)
+      .filter((option) => option.enabled !== false || heldByDay.get(day.day_date) === option.value)
+      .map((option) => {
+        const capacity = option.capacity ?? null;
+        const registered = registeredCounts.get(day.id)?.get(option.value) ?? 0;
+        const remaining = capacity == null ? null : capacity - registered;
+        return {
+          value: option.value,
+          label: option.label,
+          ...(option.icon ? { icon: option.icon } : {}),
+          ...(option.description ? { description: option.description } : {}),
+          spotsRemainingPercent:
+            capacity != null && capacity > 0 && remaining != null
+              ? remaining <= 0
+                ? 0
+                : Math.max(1, Math.round((remaining / capacity) * 100))
+              : null,
+        };
+      }),
   }));
 }

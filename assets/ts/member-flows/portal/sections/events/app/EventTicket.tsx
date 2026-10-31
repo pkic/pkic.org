@@ -1,3 +1,7 @@
+import { splitBadgePrintSvg } from "../../../../../../shared/badge-print-svg";
+import { createPortal } from "preact/compat";
+import { Dialog } from "../../../../../ui/Dialog";
+import { useDialogQueryState } from "../../../../../hooks/useDialogQueryState";
 /**
  * The attendee's ticket is their badge: the organizers' print renderer draws
  * the same front — template, sponsor artwork, role band, the QR code and the
@@ -18,21 +22,13 @@ import { EmptyState } from "../../../../../ui/EmptyState";
 import { usePortalHashLocation } from "../../../hash-location";
 import { eventParticipantRecordPath } from "../event-participant-paths";
 import { EventCard } from "./EventCard";
-import { eventRegistrationStanding, registrationOffer, type ParticipantEventDetail } from "./event-app-model";
-import { eventPhase } from "./event-timing";
-import { RegistrationOfferNotice } from "./RegistrationOfferNotice";
+import { eventRegistrationStanding, type ParticipantEventDetail } from "./event-app-model";
 import { attendanceStanding, type AttendanceStanding } from "../../../../../shared/viewer-attendance";
 import { formatDayList } from "../../../../../../shared/format-date";
 
 export function EventTicket({ event }: { event: ParticipantEventDetail }) {
+  // Only a registered reader reaches this page; the event home offers registration to everyone else.
   const standing = eventRegistrationStanding(event);
-  const ended = eventPhase(event.startsAt, event.endsAt).kind === "ended";
-  if (!standing.registered)
-    return (
-      <EventCard eyebrow="Registration" title="No ticket yet">
-        <RegistrationOfferNotice offer={registrationOffer(event, ended)} />
-      </EventCard>
-    );
   if (!standing.registrationId)
     return <EmptyState title="You're registered" body="Your ticket appears here once it is ready." />;
   const details = (
@@ -55,6 +51,7 @@ export function EventTicket({ event }: { event: ParticipantEventDetail }) {
 }
 
 function BadgeTicket({ event, details }: { event: ParticipantEventDetail; details: ComponentChildren }) {
+  const [enlarged, showCode, closeCode] = useDialogQueryState("ticket-code");
   const ticket = useData(async () => {
     const current = await putJson(
       `/api/v1/events/${encodeURIComponent(event.slug)}/badges/current`,
@@ -64,6 +61,7 @@ function BadgeTicket({ event, details }: { event: ParticipantEventDetail; detail
     // A label withheld by contact retention prints blank, as it does on paper.
     return { ...current, badge: { ...current.badge, displayName: current.badge.displayName ?? "" } };
   }, [event.slug]);
+  const qr = ticket.data ? splitBadgePrintSvg(ticket.data.badge.svg) : null;
   const viewer = "viewer" in event ? event.viewer : null;
   const standing = viewer ? attendanceStanding(viewer) : UNDATED_SEAT;
   const use = (
@@ -78,11 +76,37 @@ function BadgeTicket({ event, details }: { event: ParticipantEventDetail; detail
       {ticket.loading ? (
         <Spinner label="Loading your badge…" />
       ) : ticket.data ? (
-        <BadgeFace badge={ticket.data.badge} printing={ticket.data.printing} title={`Your badge for ${event.name}`} />
+        <BadgeFace
+          badge={ticket.data.badge}
+          printing={ticket.data.printing}
+          title={`Your badge for ${event.name}`}
+          onQrClick={showCode}
+        />
       ) : (
         <ErrorAlert error={ticket.error ?? "Your badge is unavailable."} />
       )}
       {standing.holdsInPersonSeat && use}
+      {ticket.data &&
+        createPortal(
+          <Dialog
+            open={enlarged}
+            title="Check-in code"
+            confirmLabel="Close"
+            closeLabel="Close check-in code"
+            onCancel={() => void closeCode()}
+            onConfirm={() => void closeCode()}
+            viewer
+            size="wide"
+          >
+            <img
+              class="pk-badge-qr-expanded"
+              src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(qr?.qr ?? ticket.data.badge.svg)}`}
+              alt="Your check-in QR code"
+            />
+            {qr && <p class="pk-center pk-mono">{qr.code}</p>}
+          </Dialog>,
+          document.body,
+        )}
     </div>
   );
 }

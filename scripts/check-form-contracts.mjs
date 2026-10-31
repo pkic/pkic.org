@@ -100,6 +100,25 @@ for (const file of code.filter((f) => /\.tsx?$/.test(f))) {
       }
     });
   }
+  // A refused submission speaks at its fields. Its form alert carries only
+  // `formMessage`, the reason no visible field shows; repeating a field's
+  // message in the alert (the old `message`) says the same thing twice.
+  if (/\.submit\(\)/.test(source)) {
+    const results = new Set(
+      [...source.matchAll(/\b(?:const|let)\s+(\w+)\s*=\s*[\w.]+\.submit\(\)/g)].map((match) => match[1]),
+    );
+    lines.forEach((line, index) => {
+      const repeats =
+        /\.submit\(\)\.message\b/.test(line) ||
+        /\{[^}]*\bmessage\b[^}]*\}\s*=\s*[\w.]+\.submit\(\)/.test(line) ||
+        [...results].some((name) => new RegExp(`\\b${name}\\.message\\b`).test(line));
+      if (repeats) {
+        findings.push(
+          `${rel}:${index + 1}: submission refusal read as a form message — the fields say why; use formMessage for the form alert`,
+        );
+      }
+    });
+  }
   // A Field with a state must take it from the shared contract.
   if (!primitive && /<Field\b[\s\S]*?\bstate=/.test(source) && !/useContractForm/.test(source)) {
     findings.push(`${rel}: Field state set without useContractForm — validate through the shared request contract`);

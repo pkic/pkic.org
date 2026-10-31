@@ -18,10 +18,13 @@ import { createPortalWaitlistEvent } from "./helpers/waitlist-event";
 import { publishE2eSite } from "./helpers/site-publication";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
 import {
+  SPEAKER_MAILBOX_PROOF_HEADER,
   eventProposalProofStartSchema,
   eventProposalProofStartResponseSchema,
   eventProposalProofVerifyResponseSchema,
 } from "../../assets/shared/schemas/event-proposal-proof";
+import { headshotUploadResponseSchema } from "../../assets/shared/schemas/registration";
+import { agreeToHeadshotTerms, chooseHeadshotThroughUploadButton } from "./helpers/headshot-upload";
 import {
   speakerSelfProfilePatchSchema,
   proposalCreateResponseSchema,
@@ -41,7 +44,7 @@ async function setNativeChecked(page: Page, selector: string): Promise<void> {
   const input = page.locator(selector);
   await expect(input).toHaveCount(1);
   const id = await input.getAttribute("id");
-  const label = id ? page.locator(`label[for="${id}"]`) : input.locator("xpath=ancestor::label[1]");
+  const label = id ? page.locator(`label[for="${id}"]`) : page.locator("label").filter({ has: input });
   if (await label.count()) {
     await label.click();
   } else {
@@ -150,31 +153,6 @@ function createScreenshotter(page: Page): (label: string) => Promise<void> {
 
 async function clearOutbox(): Promise<void> {
   await fetch(`${sendgridServer()}/clear`, { method: "POST" });
-}
-
-/**
- * Poll the outbox until an email matching `to` and `subjectFragment` appears,
- * or the timeout elapses.  Returns the captured email record.
- */
-async function waitForEmail(to: string, subjectFragment: string, timeoutMs = 15_000): Promise<CapturedEmail> {
-  const deadline = Date.now() + timeoutMs;
-  let lastEmails: CapturedEmail[] = [];
-  while (Date.now() < deadline) {
-    const resp = await fetch(`${sendgridServer()}/outbox`);
-    lastEmails = (await resp.json()) as CapturedEmail[];
-    // Search from newest first so we pick up the latest matching email
-    for (let i = lastEmails.length - 1; i >= 0; i--) {
-      const e = lastEmails[i];
-      if (e.to === to && e.subject.toLowerCase().includes(subjectFragment.toLowerCase())) {
-        return e;
-      }
-    }
-    await new Promise((r) => setTimeout(r, 300));
-  }
-  throw new Error(
-    `No email to <${to}> with subject containing "${subjectFragment}" within ${timeoutMs}ms.\n` +
-      `Outbox has ${lastEmails.length} email(s): ${lastEmails.map((e) => `<${e.to}> "${e.subject}"`).join("; ")}`,
-  );
 }
 
 /**
@@ -294,13 +272,13 @@ async function fillRegistrationStep1(
 ): Promise<void> {
   await expect(page.locator("[data-event-registration] form")).toBeVisible();
   await continueRegistrationWithEmail(page, values);
-  await expect(page.locator("[data-day-attendance] label").first()).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("group", { name: "Attendance choices" })).toBeVisible({ timeout: 15_000 });
 }
 
 async function fillRegistrationStep2(page: Page): Promise<void> {
-  await setNativeChecked(page, "input#dayAttendance-2026-12-01-in_person");
-  await setNativeChecked(page, "input#dayAttendance-2026-12-02-on_demand");
-  await setNativeChecked(page, "input#dayAttendance-2026-12-03-on_demand");
+  await setNativeChecked(page, "input[name='dayAttendance.2026-12-01'][value='in_person']");
+  await setNativeChecked(page, "input[name='dayAttendance.2026-12-02'][value='on_demand']");
+  await setNativeChecked(page, "input[name='dayAttendance.2026-12-03'][value='on_demand']");
   await page.getByRole("button", { name: /Continue/i }).click();
 }
 
@@ -334,9 +312,9 @@ async function fillInviteRegistration(
   values: { firstName: string; lastName: string; email: string; organization?: string },
 ): Promise<void> {
   await fillRegistrationStep1(page, values);
-  await setNativeChecked(page, "input#dayAttendance-2026-12-01-on_demand");
-  await setNativeChecked(page, "input#dayAttendance-2026-12-02-on_demand");
-  await setNativeChecked(page, "input#dayAttendance-2026-12-03-on_demand");
+  await setNativeChecked(page, "input[name='dayAttendance.2026-12-01'][value='on_demand']");
+  await setNativeChecked(page, "input[name='dayAttendance.2026-12-02'][value='on_demand']");
+  await setNativeChecked(page, "input[name='dayAttendance.2026-12-03'][value='on_demand']");
   await page.getByRole("button", { name: /Continue/i }).click();
   await page.getByLabel("Country").selectOption("US");
   await page.getByRole("button", { name: /Continue/i }).click();
@@ -421,13 +399,20 @@ async function resolveInvitedSpeaker(page: Page, email: string): Promise<void> {
   if (await confirmation.isEnabled()) return;
   const identity = page.locator("[data-speaker-identity]");
   await identity.getByRole("radio", { name: EMAIL_FIRST_COPY.speaker.personal.title, exact: true }).check();
-  await identity.getByRole("textbox", { name: EMAIL_FIRST_COPY.speaker.personal.label, exact: true }).fill(email);
-  const since = await capturedEmailCount();
+  // The address the invitation was mailed to is offered first.
+  await expect(
+    identity.getByRole("textbox", { name: EMAIL_FIRST_COPY.speaker.personal.label, exact: true }),
+  ).toHaveValue(email);
+  const started = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/api/v1/events/pqc-conference-amsterdam-nl/proposals/proof" &&
+      response.request().method() === "POST",
+  );
   await identity.getByRole("button", { name: EMAIL_FIRST_COPY.speaker.personal.action, exact: true }).click();
-  const mail = await waitForCapturedEmail(email, "Verify your email for", { since });
-  // The proposal page reads the link at once and hands a speaker's proof on.
-  await page.goto(extractEmailUrl(mail, "/propose/"));
-  await expect(page).toHaveURL(/\/propose\/speaker\/.*#verify=/);
+  const startResponse = await started;
+  expect(startResponse.status(), await startResponse.text()).toBe(200);
+  // Opening the invitation link already proved that mailbox: no second email, the page continues in place.
+  expect(eventProposalProofStartResponseSchema.parse(await startResponse.json()).status).toBe("verified");
   await expect(page.locator("[data-speaker-identity]")).toContainText(email);
   await expect(page.locator('[data-profile-form] input[name="organizationName"]')).toHaveCount(0);
   await completeIndependentCapacityDisclosure(page.locator("[data-speaker-identity]"));
@@ -442,7 +427,6 @@ async function resolveInvitedSpeaker(page: Page, email: string): Promise<void> {
   expect(body.actingIdentityId).toBeNull();
   expect(body.continuationToken).toBeTruthy();
   await expect(confirmation).toBeEnabled();
-  await expect(page).not.toHaveURL(/#verify=/);
 }
 
 async function fillProposal(
@@ -506,9 +490,6 @@ async function fillProposal(
     await panelistCard
       .locator('input[name="speaker.1.role"][value="panelist"]')
       .evaluate((el) => (el as HTMLInputElement).click());
-    await panelistCard
-      .getByRole("textbox", { name: "Bio", exact: true })
-      .fill("Panelist biography with enough detail to satisfy validation and represent a real panel participant.");
   }
 }
 
@@ -538,8 +519,10 @@ test.describe("browser workflows", () => {
   });
 
   test("keeps agenda speakers in their scheduled cards and opens session details", async ({ page }) => {
-    await page.goto("/events/2026/pqc-conference-amsterdam-nl/agenda/");
-    const panel = page.getByRole("tabpanel", { name: "Tuesday" });
+    // An authored agenda no spec publishes: once a spec approves the seeded 2026 conference agenda in D1,
+    // that approved agenda replaces the authored 2026 program, so its authored sessions are not a stable fixture.
+    await page.goto("/events/2023/pqc-conference-amsterdam-nl/");
+    const panel = page.getByRole("tabpanel", { name: /^Tuesday/ });
     const opening = panel
       .locator("[data-agenda-session]")
       .filter({ has: page.getByRole("heading", { name: "Opening", exact: true }) });
@@ -555,10 +538,10 @@ test.describe("browser workflows", () => {
     await page.keyboard.press("Escape");
     await expect(page.getByRole("dialog").filter({ visible: true })).toHaveCount(0);
     await page.getByRole("tab", { name: /^Wednesday/ }).click();
-    await expect(page.getByRole("tabpanel", { name: "Wednesday" })).toBeVisible();
-    await page.keyboard.press("ArrowRight");
-    await expect(page.getByRole("tab", { name: "Thursday" })).toBeFocused();
-    await expect(page.getByRole("tabpanel", { name: "Thursday" })).toBeVisible();
+    await expect(page.getByRole("tabpanel", { name: /^Wednesday/ })).toBeVisible();
+    await page.keyboard.press("ArrowLeft");
+    await expect(page.getByRole("tab", { name: /^Tuesday/ })).toBeFocused();
+    await expect(panel).toBeVisible();
   });
 
   test("stops and reloads an agenda recording when its modal closes", async ({ page }) => {
@@ -595,9 +578,12 @@ test.describe("browser workflows", () => {
     const modal = page.locator(`dialog[id="${await watchLink.getAttribute("data-agenda-open-session")}"]`);
     await expect(modal).toHaveCount(1);
     await expect(modal.locator("iframe")).not.toHaveAttribute("src");
-    const agendaUrl = page.url();
+    const agendaUrl = new URL(page.url());
     await watchLink.click();
-    expect(page.url()).toBe(agendaUrl);
+    // Opening the dialog stays on the agenda page and records only the session in the fragment.
+    const openedUrl = new URL(page.url());
+    expect(`${openedUrl.pathname}${openedUrl.search}`).toBe(`${agendaUrl.pathname}${agendaUrl.search}`);
+    expect(openedUrl.hash).toContain("session=");
 
     await expect(modal).toBeVisible();
     const iframe = modal.locator("iframe").first();
@@ -668,7 +654,7 @@ test.describe("browser workflows", () => {
     ).toBeVisible();
     await screenshot("01-partial-capacity-confirmed");
 
-    const secondRegisteredEmail = await waitForEmail(capacityTwo, "confirmed");
+    const secondRegisteredEmail = await waitForCapturedEmail(capacityTwo, "confirmed");
     const secondManageUrl = extractUrlFromEmail(secondRegisteredEmail, "/register/manage/");
     await page.goto(secondManageUrl);
 
@@ -717,7 +703,7 @@ test.describe("browser workflows", () => {
     await screenshot("02-registration-confirmed");
 
     // Wait for the "confirmed" email which carries the manage URL
-    const confirmedEmail = await waitForEmail(alice, "confirmed");
+    const confirmedEmail = await waitForCapturedEmail(alice, "confirmed");
     const manageUrl = extractUrlFromEmail(confirmedEmail, "/register/manage/");
 
     const registrationManageRoute = `/events/2026/pqc-conference-amsterdam-nl/register/manage/?event=pqc-conference-amsterdam-nl&token=${encodeURIComponent(new URL(manageUrl).searchParams.get("token") ?? "")}`;
@@ -758,7 +744,7 @@ test.describe("browser workflows", () => {
     expect(inviteResp).toBe(200);
 
     // Accept-invite flow
-    const acceptInviteEmail = await waitForEmail("friend-accept@example.test", "invited");
+    const acceptInviteEmail = await waitForCapturedEmail("friend-accept@example.test", "invited");
     const acceptRegistrationUrl = extractUrlFromEmail(acceptInviteEmail, "/register/");
     const acceptDeclineUrl = extractUrlFromEmail(acceptInviteEmail, "/invite/");
     expect(acceptRegistrationUrl).toBeTruthy();
@@ -776,12 +762,12 @@ test.describe("browser workflows", () => {
     await screenshot("04-invited-attendee-registered");
 
     // Ensure the confirmation email arrived for the accepted invite
-    const acceptConfirmedEmail = await waitForEmail("friend-accept@example.test", "confirmed");
+    const acceptConfirmedEmail = await waitForCapturedEmail("friend-accept@example.test", "confirmed");
     const acceptManageUrl = extractUrlFromEmail(acceptConfirmedEmail, "/register/manage/");
     expect(acceptManageUrl).toBeTruthy();
 
     // Decline-invite flow
-    const declineInviteEmail = await waitForEmail("friend-decline@example.test", "invited");
+    const declineInviteEmail = await waitForCapturedEmail("friend-decline@example.test", "invited");
     const declineUrl = extractUrlFromEmail(declineInviteEmail, "/invite/");
 
     const invalidDeclineUrl = new URL(declineUrl);
@@ -794,7 +780,7 @@ test.describe("browser workflows", () => {
     await page.locator("[data-resend-invite-btn]").click();
     await expect(page.getByText(/a fresh link is on its way/i)).toBeVisible({ timeout: 10_000 });
 
-    const recoveredDeclineEmail = await waitForEmail("friend-decline@example.test", "Still considering");
+    const recoveredDeclineEmail = await waitForCapturedEmail("friend-decline@example.test", "Still considering");
     const recoveredDeclineUrl = extractUrlFromEmail(recoveredDeclineEmail, "/invite/");
     expect(new URL(recoveredDeclineUrl).searchParams.get("token")).toMatch(/^pkc1_/);
     await page.goto(recoveredDeclineUrl);
@@ -830,7 +816,7 @@ test.describe("browser workflows", () => {
     await expect(page.getByRole("heading", { name: /Proposal submitted, Priya!/i })).toBeVisible();
     await screenshot("01-proposal-submitted");
 
-    const proposalSubmittedEmail = await waitForEmail(proposerEmail, "proposal");
+    const proposalSubmittedEmail = await waitForCapturedEmail(proposerEmail, "proposal");
     const proposalManageUrl = extractUrlFromEmail(proposalSubmittedEmail, "/propose/manage/");
     const originalProposalManageToken = new URL(proposalManageUrl).searchParams.get("token") ?? "";
     expect(originalProposalManageToken).toMatch(/^pkc1_/);
@@ -847,14 +833,14 @@ test.describe("browser workflows", () => {
     await page.locator("[data-resend-proposal-manage-btn]").click();
     await expect(page.getByText(/you will receive an email shortly/i)).toBeVisible({ timeout: 10_000 });
 
-    const recoveredProposalEmail = await waitForEmail(proposerEmail, "Proposal received");
+    const recoveredProposalEmail = await waitForCapturedEmail(proposerEmail, "Proposal received");
     const recoveredProposalManageUrl = extractUrlFromEmail(recoveredProposalEmail, "/propose/manage/");
     const recoveredProposalManageToken = new URL(recoveredProposalManageUrl).searchParams.get("token") ?? "";
     expect(recoveredProposalManageToken).toMatch(/^pkc1_/);
 
     const proposalManageRoute = `/events/2026/pqc-conference-amsterdam-nl/propose/manage/?event=pqc-conference-amsterdam-nl&token=${encodeURIComponent(recoveredProposalManageToken)}`;
     await page.goto(proposalManageRoute);
-    await expect(page.getByText(/Open this page from your proposal management link/i)).toBeVisible();
+    await expect(page.getByText(/Return here any time with the link from your proposal email/i)).toBeVisible();
     await expect(page.locator("#manage-proposal-type")).toHaveValue("panel");
     const proposerSpeakerCard = page.locator(`[data-speaker-card][data-speaker-email="${proposerEmail}"]`);
     await expect(proposerSpeakerCard).toBeVisible();
@@ -886,7 +872,7 @@ test.describe("browser workflows", () => {
     await expect(page.getByText(`Invite sent to ${invitedSpeakerEmail}`)).toBeVisible();
     await screenshot("03-speaker-invited");
 
-    const speakerInviteEmail = await waitForEmail(invitedSpeakerEmail, "speaker");
+    const speakerInviteEmail = await waitForCapturedEmail(invitedSpeakerEmail, "speaker");
     const speakerManageUrl = extractUrlFromEmail(speakerInviteEmail, "/propose/speaker/");
 
     const speakerManageRoute = `/events/2026/pqc-conference-amsterdam-nl/propose/speaker/?event=pqc-conference-amsterdam-nl&token=${encodeURIComponent(new URL(speakerManageUrl).searchParams.get("token") ?? "")}`;
@@ -895,6 +881,22 @@ test.describe("browser workflows", () => {
     const participationConfirmation = page.getByRole("button", { name: /Confirm participation/i });
     await expect(participationConfirmation).toBeDisabled();
     await resolveInvitedSpeaker(page, invitedSpeakerEmail);
+
+    // Right after proving their mailbox the speaker adds their photo in the same step, through the page's
+    // own tile and the real R2 upload path; the saved proof speaks for the account the link alone no longer does.
+    await chooseHeadshotThroughUploadButton(page);
+    const crop = await agreeToHeadshotTerms(page);
+    const uploaded = page.waitForResponse(
+      (response) =>
+        /^\/api\/v1\/proposals\/speakers\/access\/[^/]+\/headshot$/.test(new URL(response.url()).pathname) &&
+        response.request().method() === "PUT",
+    );
+    await crop.locator(".crop-headshot-confirm").click();
+    const headshotResponse = await uploaded;
+    expect(headshotResponse.status(), await headshotResponse.text()).toBe(200);
+    expect(await headshotResponse.request().headerValue(SPEAKER_MAILBOX_PROOF_HEADER)).toBeTruthy();
+    expect(headshotUploadResponseSchema.parse(await headshotResponse.json()).headshotUrl).toBeTruthy();
+
     await participationConfirmation.click();
     await expect(page.locator("[data-confirmed-msg]")).toBeVisible();
     await screenshot("04-speaker-participation-confirmed");
@@ -912,29 +914,6 @@ test.describe("browser workflows", () => {
     await identityProfile.getByRole("button", { name: "Save changes", exact: true }).click();
     await expect(page.getByText(/Profile updated/i)).toBeVisible();
     await screenshot("05-speaker-profile-saved");
-
-    // Upload a headshot via the browser, exercising the real R2 upload path
-    const speakerToken = new URL(speakerManageUrl).searchParams.get("token") ?? "";
-    const headshotResult = await page.evaluate(async (token) => {
-      const canvas = document.createElement("canvas");
-      canvas.width = 1;
-      canvas.height = 1;
-      const ctx = canvas.getContext("2d");
-      ctx!.fillStyle = "#c0392b";
-      ctx!.fillRect(0, 0, 1, 1);
-      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.8));
-      if (!blob) return { success: false, headshotUrl: null };
-      const fd = new FormData();
-      fd.append("file", new File([blob], "headshot.jpg", { type: "image/jpeg" }));
-      fd.append("consent", "true");
-      const res = await fetch(`/api/v1/proposals/speakers/access/${encodeURIComponent(token)}/headshot`, {
-        method: "PUT",
-        body: fd,
-      });
-      return res.json() as Promise<{ success?: boolean; headshotUrl?: string }>;
-    }, speakerToken);
-    expect(headshotResult.success).toBe(true);
-    expect(headshotResult.headshotUrl).toBeTruthy();
 
     // Reload the speaker page and verify the headshot <img> element is rendered
     await page.goto(speakerManageRoute);
@@ -958,6 +937,7 @@ test.describe("browser workflows", () => {
     }
 
     // Upload a minimal PDF to exercise the presentation upload path
+    const speakerToken = new URL(speakerManageUrl).searchParams.get("token") ?? "";
     const presentationResult = await page.evaluate(async (token) => {
       const pdfContent =
         "%PDF-1.0\n1 0 obj<</Type /Catalog /Pages 2 0 R>>endobj 2 0 obj<</Type /Pages /Kids [3 0 R] /Count 1>>endobj 3 0 obj<</Type /Page /MediaBox [0 0 3 3]>>endobj\nxref\n0 4\ntrailer<</Size 4/Root 1 0 R>>\n%%EOF";
@@ -1010,7 +990,7 @@ test.describe("browser workflows", () => {
     expect(await page.evaluate(() => (window as unknown as Record<string, unknown>).__xss_fired)).toBeUndefined();
     await screenshot("02-xss-firstname-escaped-on-success-panel");
 
-    const confirmedEmail = await waitForEmail(sec, "confirmed");
+    const confirmedEmail = await waitForCapturedEmail(sec, "confirmed");
     const manageUrl = extractUrlFromEmail(confirmedEmail, "/register/manage/");
     const validToken = new URL(manageUrl).searchParams.get("token") ?? "";
 
@@ -1054,7 +1034,7 @@ test.describe("browser workflows", () => {
     await page.getByRole("button", { name: /Submit proposal/i }).click();
     await expect(page.getByRole("heading", { name: /Proposal submitted, Priya!/i })).toBeVisible();
 
-    const proposalEmail = await waitForEmail("proposal-speaker@example.test", "proposal");
+    const proposalEmail = await waitForCapturedEmail("proposal-speaker@example.test", "proposal");
     const propManageUrl = extractUrlFromEmail(proposalEmail, "/propose/manage/");
     const propToken = new URL(propManageUrl).searchParams.get("token") ?? "";
 
@@ -1069,31 +1049,30 @@ test.describe("browser workflows", () => {
     await securityInviteForm.getByRole("button", { name: /Send invite/i }).click();
     await expect(page.getByText(/Invite sent to speaker-sec@example.test/i)).toBeVisible();
 
-    const spkInviteEmail = await waitForEmail("speaker-sec@example.test", "speaker");
+    const spkInviteEmail = await waitForCapturedEmail("speaker-sec@example.test", "speaker");
     const spkManageUrl = extractUrlFromEmail(spkInviteEmail, "/propose/speaker/");
     const spkToken = new URL(spkManageUrl).searchParams.get("token") ?? "";
 
-    // PATCH a completely fabricated speaker token — must be 4xx
+    // PATCH a well-formed request with a completely fabricated speaker token: the token alone must refuse it
     const isolationStatus = await page.evaluate(async () => {
       const fakeSpkToken = encodeURIComponent("ISOLATION-FAKE-SPEAKER-TOKEN-000000");
       const res = await fetch(`/api/v1/proposals/speakers/access/${fakeSpkToken}/profile`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ biography: "injected bio" }),
+        body: JSON.stringify({ firstName: "Injected" }),
       });
       return res.status;
     });
     expect([401, 403, 404]).toContain(isolationStatus);
 
-    // Confirm the real speaker and verify their bio was NOT tampered with
+    // Confirm the real speaker and verify their name was NOT tampered with
     const spkRoute = `/events/2026/pqc-conference-amsterdam-nl/propose/speaker/?event=pqc-conference-amsterdam-nl&token=${encodeURIComponent(spkToken)}`;
     await page.goto(spkRoute);
     await resolveInvitedSpeaker(page, "speaker-sec@example.test");
     await page.getByRole("button", { name: /Confirm participation/i }).click();
     await expect(page.locator("[data-confirmed-msg]")).toBeVisible();
 
-    const bioValue = await page.getByRole("textbox", { name: /speaker bio/i }).innerText();
-    expect(bioValue).not.toContain("injected bio");
+    await expect(page.locator("main")).not.toContainText("Injected");
     await screenshot("05-speaker-token-isolation-verified");
 
     errorMonitor.assertClean();
@@ -1134,7 +1113,7 @@ test.describe("browser workflows", () => {
     await fillRegistrationStep4(page, resendTester);
     await expect(page.getByRole("heading", { name: /You're registered/i })).toBeVisible({ timeout: 15_000 });
 
-    const originalManageEmail = await waitForEmail(resendTester, "confirmed");
+    const originalManageEmail = await waitForCapturedEmail(resendTester, "confirmed");
     const originalManageUrl = extractUrlFromEmail(originalManageEmail, "/register/manage/");
     const originalManageToken = new URL(originalManageUrl).searchParams.get("token") ?? "";
     expect(originalManageToken).toMatch(/^pkc1_/);
@@ -1154,7 +1133,7 @@ test.describe("browser workflows", () => {
     await screenshot("02-resend-manage-submitted");
 
     // Wait for fresh management link email (subject: "Your management link for …")
-    const newManageEmail = await waitForEmail(resendTester, "Your management link");
+    const newManageEmail = await waitForCapturedEmail(resendTester, "Your management link");
     const newManageUrl = extractUrlFromEmail(newManageEmail, "/register/manage/");
     const newManageToken = new URL(newManageUrl).searchParams.get("token") ?? "";
     expect(newManageToken).toMatch(/^pkc1_/);
@@ -1198,7 +1177,7 @@ test.describe("browser workflows", () => {
     await fillRegistrationStep4(page, nominator);
     await expect(page.getByRole("heading", { name: /You're registered/i })).toBeVisible({ timeout: 15_000 });
 
-    const nominatorConfirmedEmail = await waitForEmail(nominator, "confirmed");
+    const nominatorConfirmedEmail = await waitForCapturedEmail(nominator, "confirmed");
     const nominatorManageUrl = extractUrlFromEmail(nominatorConfirmedEmail, "/register/manage/");
     const nominatorManageToken = new URL(nominatorManageUrl).searchParams.get("token") ?? "";
     expect(nominatorManageToken).toBeTruthy();
@@ -1225,7 +1204,7 @@ test.describe("browser workflows", () => {
 
     // ── Dana declines the speaker invitation via the browser ──────────────────
     // Subject: "Invitation to speak at …"
-    const danaInviteEmail = await waitForEmail("dana-decline@example.test", "speak");
+    const danaInviteEmail = await waitForCapturedEmail("dana-decline@example.test", "speak");
     const danaDeclineUrl = extractUrlFromEmail(danaInviteEmail, "/invite/decline/");
     await page.goto(danaDeclineUrl);
     // For speaker invites, the heading reads "Not able to submit a proposal?"
@@ -1242,7 +1221,7 @@ test.describe("browser workflows", () => {
     await screenshot("03-speaker-decline-already-processed");
 
     // ── Sam accepts by submitting a proposal via the invite link ─────────────
-    const samInviteEmail = await waitForEmail("sam-speaker@example.test", "speak");
+    const samInviteEmail = await waitForCapturedEmail("sam-speaker@example.test", "speak");
     const samProposalUrl = extractUrlFromEmail(samInviteEmail, "/propose/");
     await page.goto(samProposalUrl);
     await expect(page).toHaveTitle(/Submit a Session Proposal/);
@@ -1279,14 +1258,14 @@ test.describe("browser workflows", () => {
 
     // Get the proposal manage URL from the submitted email
     // Subject: "Proposal received: Speaker-Nominated Session on Post-Quantum Readiness"
-    const samProposalSubmittedEmail = await waitForEmail("sam-speaker@example.test", "Proposal received");
+    const samProposalSubmittedEmail = await waitForCapturedEmail("sam-speaker@example.test", "Proposal received");
     const samProposalManageUrl = extractUrlFromEmail(samProposalSubmittedEmail, "/propose/manage/");
     const samProposalManageToken = new URL(samProposalManageUrl).searchParams.get("token") ?? "";
 
     // Sam invites a co-speaker from the proposal manage page
     const proposalManageRoute = `/events/2026/pqc-conference-amsterdam-nl/propose/manage/?event=pqc-conference-amsterdam-nl&token=${encodeURIComponent(samProposalManageToken)}`;
     await page.goto(proposalManageRoute);
-    await expect(page.getByText(/Open this page from your proposal management link/i)).toBeVisible();
+    await expect(page.getByText(/Return here any time with the link from your proposal email/i)).toBeVisible();
     const nominationInviteForm = page.locator("[data-cospeaker-form]");
     await nominationInviteForm.locator("#cs-email").fill("co-sam-speaker@example.test");
     await nominationInviteForm.locator("#cs-first-name").fill("Co");
@@ -1324,7 +1303,7 @@ test.describe("browser workflows", () => {
 
     // Wait for the refreshed speaker management link
     // Subject: "Reminder: please confirm speaker participation — …"
-    const refreshedCoSpeakerEmail = await waitForEmail("co-sam-speaker@example.test", "please confirm speaker");
+    const refreshedCoSpeakerEmail = await waitForCapturedEmail("co-sam-speaker@example.test", "please confirm speaker");
     const refreshedCoSpeakerManageUrl = extractUrlFromEmail(refreshedCoSpeakerEmail, "/propose/speaker/");
     const refreshedToken = new URL(refreshedCoSpeakerManageUrl).searchParams.get("token") ?? "";
 
@@ -1378,7 +1357,7 @@ test.describe("browser workflows", () => {
     await expect(page.getByRole("heading", { name: /Proposal submitted/i })).toBeVisible({ timeout: 15_000 });
     await screenshot("01-proposal-submitted");
 
-    const submittedEmail = await waitForEmail("proposal-speaker@example.test", "proposal");
+    const submittedEmail = await waitForCapturedEmail("proposal-speaker@example.test", "proposal");
     const proposalManageUrl = extractUrlFromEmail(submittedEmail, "/propose/manage/");
     void proposalManageUrl; // only used to confirm the email arrived; speaker token comes later
 
@@ -1403,7 +1382,7 @@ test.describe("browser workflows", () => {
     // ── 3. Wait for the speaker profile request email sent by the finalize step ─
     // Accepting the proposal automatically queues a "speaker_profile_request" email.
     // Wait for it to arrive via the SendGrid interceptor.
-    const speakerEmail = await waitForEmail("proposal-speaker@example.test", "complete your speaker profile");
+    const speakerEmail = await waitForCapturedEmail("proposal-speaker@example.test", "complete your speaker profile");
     const speakerManageUrl = extractUrlFromEmail(speakerEmail, "/propose/speaker/");
     const speakerToken = new URL(speakerManageUrl).searchParams.get("token") ?? "";
     expect(speakerToken).toBeTruthy();

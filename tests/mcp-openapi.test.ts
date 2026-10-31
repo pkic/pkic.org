@@ -20,6 +20,30 @@ const mcpWriteMetadata = {
 };
 
 describe("MCP OpenAPI filtering", () => {
+  it("discovers scoped JSON operations without a second opt-in and excludes binary or explicit exceptions", () => {
+    const scoped = {
+      [AUTH_EXTENSION]: { required: true, scopes: ["agenda:read"] },
+      responses: { 200: { content: { "application/json": {} } } },
+    };
+    const spec = filterOpenApiSpecForMcp({
+      paths: {
+        "/scoped": {
+          get: scoped,
+          post: { ...scoped, [AUTH_EXTENSION]: { required: true, scopesAnyOf: [["agenda:write"]] } },
+        },
+        "/disabled": { get: { ...scoped, [MCP_EXTENSION]: { expose: false } } },
+        "/binary": { get: { ...scoped, responses: { 200: { content: { "application/pdf": {} } } } } },
+        "/upload": { put: { ...scoped, requestBody: { content: { "multipart/form-data": {} } } } },
+        "/public": { get: { responses: scoped.responses } },
+        "/browser-session": { get: { ...scoped, [AUTH_EXTENSION]: { required: true, scopes: [] } } },
+      },
+    });
+    expect(Object.keys(spec.paths)).toEqual(["/scoped"]);
+    expect(spec.paths["/scoped"].get.security).toEqual([{ McpSession: ["agenda:read"] }]);
+    expect(spec.paths["/scoped"].post.security).toEqual([{ McpSession: ["agenda:write"] }]);
+    expect(spec.paths["/scoped"].post[MCP_EXTENSION].readonly).toBe(false);
+  });
+
   it("keeps explicitly exposed authenticated operations and adds bearer security", () => {
     const filtered = filterOpenApiSpecForMcp({
       openapi: "3.1.0",

@@ -6,6 +6,7 @@ import { grantAdministrator } from "./helpers/administrator";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { groupEventsListQuerySchema } from "../assets/shared/schemas/group-events";
+import { getEventDetail } from "../functions/_lib/services/events/detail";
 import {
   createGroupManagedEvent,
   listGroupManagedEventRegistrations,
@@ -18,6 +19,10 @@ import {
 import { replaceGroupEventRegistrationSettings } from "../functions/_lib/services/events/registration-settings";
 import { getGroupEvent, listGroupEvents } from "../functions/_lib/services/events/group-read-model";
 import { CONFIGURED_EVENT_DAY_ATTENDANCE_COUNTS_SQL } from "../functions/_lib/services/event-days";
+import { attendanceOptionLabel, listEventDays } from "../functions/_lib/services/event-days";
+import { groupEventDaysResponseSchema } from "../assets/shared/schemas/group-events";
+import { getRegistrationById } from "../functions/_lib/services/registrations/queries";
+import { buildRegistrationManageView } from "../functions/_lib/services/registrations/manage-view";
 import {
   createManagedFormPlacement,
   getActiveFormForEvent,
@@ -417,6 +422,148 @@ describe("group event management routes", () => {
     expect(delegatedExport.status, await delegatedExport.clone().text()).toBe(200);
   });
 
+  it("persists a website event's selected proposal form and returns it after reloading through either read model", async () => {
+    const fixture = await createFixture();
+    const created = await createGroupEvent(fixture);
+    const formId = crypto.randomUUID();
+    const at = new Date().toISOString();
+    await env.DB.batch([
+      env.DB.prepare("UPDATE events SET source_mode='hugo', updated_at='2026-10-01 12:00:00' WHERE id=?").bind(
+        created.id,
+      ),
+      env.DB.prepare(`INSERT INTO forms (id,key,scope_type,scope_ref,purpose,status,title,created_at,updated_at)
+        VALUES (?,'synthetic-proposal-form','event',?,'proposal_submission','active','Synthetic proposal form',?,?)`).bind(
+        formId,
+        created.id,
+        at,
+        at,
+      ),
+    ]);
+    const base = `/api/v1/groups/${fixture.ownerGroupId}/events/${created.id}/settings`;
+    const initial = await getEventById(env.DB, created.id);
+    const revision = (await getEventDetail(env.DB, initial.slug, ["read"])).updatedAt;
+    expect(revision).toBe("2026-10-01T12:00:00.000Z");
+    const saved = await request(fixture.ownerLeaderToken, base, {
+      method: "PATCH",
+      body: JSON.stringify({
+        expectedUpdatedAt: revision,
+        proposalFormKey: "synthetic-proposal-form",
+        proposalSubmissionWindow: { opensAt: "2027-01-01T00:00:00.000Z", closesAt: "2027-02-01T00:00:00.000Z" },
+      }),
+    });
+    expect(saved.status, await saved.clone().text()).toBe(200);
+    const event = await getEventById(env.DB, created.id);
+    expect((await getEventDetail(env.DB, event.slug, ["read"])).settings.forms).toMatchObject({
+      proposal_submission: "synthetic-proposal-form",
+    });
+    const configuration = await getEventRegistrationConfiguration(env.DB, event, "proposal_submission");
+    expect(configuration.form?.key).toBe("synthetic-proposal-form");
+    expect(configuration.form?.placement?.opensAt).toBe("2027-01-01T00:00:00.000Z");
+    const stale = await request(fixture.ownerLeaderToken, base, {
+      method: "PATCH",
+      body: JSON.stringify({
+        expectedUpdatedAt: revision,
+        proposalFormKey: null,
+      }),
+    });
+    expect(stale.status).toBe(409);
+    const denied = await request(fixture.granteeLeaderToken, base, {
+      method: "PATCH",
+      body: JSON.stringify({
+        expectedUpdatedAt: event.updated_at,
+        proposalFormKey: null,
+      }),
+    });
+    expect(denied.status).toBe(403);
+    expect((await getEventRegistrationConfiguration(env.DB, event, "proposal_submission")).form?.key).toBe(
+      "synthetic-proposal-form",
+    );
+  });
+
+  it("turns an option off and back on without losing its definition or registered attendance", async () => {
+    const fixture = await createFixture();
+    const created = await createGroupEvent(fixture);
+    const endpoint = `/api/v1/groups/${fixture.ownerGroupId}/events/${created.id}/days`;
+    let revision = created.updatedAt;
+    async function configure(enabled: boolean) {
+      const result = await request(fixture.ownerLeaderToken, endpoint, {
+        method: "PUT",
+        body: JSON.stringify({
+          expectedUpdatedAt: revision,
+          configuration: {
+            days: [
+              {
+                date: "2027-04-12",
+                attendanceOptions: [{ value: "virtual", label: "Live online", capacity: 100, enabled }],
+              },
+            ],
+          },
+        }),
+      });
+      expect(result.status, await result.clone().text()).toBe(200);
+      revision = ((await result.json()) as { eventUpdatedAt: string }).eventUpdatedAt;
+    }
+    await configure(true);
+    const [day] = await listEventDays(env.DB, created.id);
+    const registrationId = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(`INSERT INTO registrations (id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at)
+        VALUES (?,?,?,'registered','virtual','direct',?,'2027-04-01T00:00:00.000Z','2027-04-01T00:00:00.000Z')`).bind(
+        registrationId,
+        created.id,
+        fixture.ownerLeader.id,
+        crypto.randomUUID(),
+      ),
+      env.DB.prepare(`INSERT INTO registration_day_attendance (id,registration_id,event_day_id,attendance_type,created_at,updated_at)
+        VALUES (?,?,?,'virtual','2027-04-01T00:00:00.000Z','2027-04-01T00:00:00.000Z')`).bind(
+        crypto.randomUUID(),
+        registrationId,
+        day.id,
+      ),
+    ]);
+    await configure(false);
+    const managed = groupEventDaysResponseSchema.parse(
+      await (await request(fixture.ownerLeaderToken, endpoint)).json(),
+    );
+    expect(managed.days[0].attendanceOptions).toEqual([
+      { value: "virtual", label: "Live online", capacity: 100, enabled: false },
+    ]);
+    expect(managed.days[0].attendanceCounts.virtual).toBe(1);
+    expect(attendanceOptionLabel(await listEventDays(env.DB, created.id), "virtual")).toBe("Live online");
+    const configuration = await getEventRegistrationConfiguration(
+      env.DB,
+      await getEventById(env.DB, created.id),
+      "event_registration",
+    );
+    expect(configuration.eventDays[0].attendanceOptions).toEqual([]);
+    const manageView = await buildRegistrationManageView(
+      env.DB,
+      (await getRegistrationById(env.DB, registrationId))!,
+      "https://app.test",
+    );
+    expect(manageView.eventDays[0].attendanceOptions).toContainEqual({
+      value: "virtual",
+      label: "Live online",
+      spotsRemainingPercent: 99,
+    });
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS total FROM registration_day_attendance WHERE registration_id = ?")
+        .bind(registrationId)
+        .first(),
+    ).toEqual({ total: 1 });
+    await configure(true);
+    const restored = await getEventRegistrationConfiguration(
+      env.DB,
+      await getEventById(env.DB, created.id),
+      "event_registration",
+    );
+    expect(restored.eventDays[0].attendanceOptions).toContainEqual({
+      value: "virtual",
+      label: "Live online",
+      spotsRemainingPercent: 99,
+    });
+  });
+
   it("configures terms and attendance days through one guarded selected-group contract", async () => {
     const fixture = await createFixture();
     const created = await createGroupEvent(fixture);
@@ -497,7 +644,12 @@ describe("group event management routes", () => {
                 sortOrder: 10,
                 attendanceOptions: [
                   { value: "in_person", label: "In person", capacity: 25 },
-                  { value: "virtual", label: "Virtual" },
+                  {
+                    value: "virtual",
+                    label: "Virtual",
+                    icon: "video_people",
+                    description: "Watch together at a partner venue",
+                  },
                 ],
               },
             ],
@@ -523,11 +675,29 @@ describe("group event management routes", () => {
           sortOrder: 10,
           attendanceOptions: [
             { value: "in_person", label: "In person", capacity: 25 },
-            { value: "virtual", label: "Virtual" },
+            {
+              value: "virtual",
+              label: "Virtual",
+              icon: "video_people",
+              description: "Watch together at a partner venue",
+            },
           ],
           attendanceCounts: {},
         },
       ],
+    });
+
+    const registrationConfiguration = await getEventRegistrationConfiguration(
+      env.DB,
+      await getEventById(env.DB, created.id),
+      "event_registration",
+    );
+    expect(registrationConfiguration.eventDays[0].attendanceOptions).toContainEqual({
+      value: "virtual",
+      label: "Virtual",
+      icon: "video_people",
+      description: "Watch together at a partner venue",
+      spotsRemainingPercent: null,
     });
 
     const audits = await env.DB.prepare(

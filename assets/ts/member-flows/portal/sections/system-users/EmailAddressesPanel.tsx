@@ -9,18 +9,23 @@
  *
  * Adding an address is a form of its own, reached from the panel's menu.
  */
+import { useState } from "preact/hooks";
 import { successResponseSchema } from "../../../../../shared/schemas/api-common";
 import {
   ownEmailAddressResponseSchema,
   ownEmailAddressUpdateSchema,
   ownEmailAddressesListResponseSchema,
+  ownEmailVerificationSentResponseSchema,
 } from "../../../../../shared/schemas/own-email-addresses";
+import { verificationLinkNotice } from "../../../../components/identities/verification-link-notice";
+import { formatConjunction } from "../../../../../shared/format-list";
 import { userEmailsListResponseSchema } from "../../../../../shared/schemas/user-emails";
 import { confirmAction } from "../../../../components/ConfirmDialog";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
 import { useData } from "../../../../hooks/useData";
 import { ApiClientError, deleteJson, getJson, patchJson, postJson } from "../../../../shared/api-client";
+import { Alert } from "../../../../ui/Alert";
 import { Menu, type MenuItem } from "../../../../ui/Menu";
 import { IconCheckmark } from "../../../../ui/MediaIcons";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
@@ -28,7 +33,7 @@ import { RowActions } from "../../../../ui/RowActions";
 import { RowList, RowListItem } from "../../../../ui/RowList";
 import { usePortalHashLocation } from "../../hash-location";
 import { toast } from "../../ui";
-import { addEmailAddressPath, OWN_EMAILS_ENDPOINT } from "../email-address-paths";
+import { addEmailAddressPath, OWN_EMAILS_ENDPOINT } from "../../../../shared/email-address-paths";
 import "./EmailAddressesPanel.css";
 
 /** The panel's own address, so other forms on the record can lead the person to it. */
@@ -41,6 +46,18 @@ interface AddressRow {
   primary: boolean;
   /** Whether the address is proven; null where the list does not say. */
   verified: boolean | null;
+  /** Organizations whose active identity uses the address; it cannot be removed while any does. */
+  usedBy: string[];
+  /** Whether the address may sign in; null where the list does not say. */
+  signInEnabled: boolean | null;
+}
+
+function rowMeta(address: AddressRow): string | undefined {
+  const parts = [
+    ...(address.primary ? ["Primary"] : address.verified === false ? ["Not verified yet"] : []),
+    ...(address.usedBy.length ? [`Used by ${formatConjunction(address.usedBy, undefined)}`] : []),
+  ];
+  return parts.length ? parts.join(" · ") : undefined;
 }
 
 function failure(caught: unknown, fallback: string): string {
@@ -58,6 +75,7 @@ export function EmailAddressesPanel({
   primaryEmail: string;
 }) {
   const [, navigate] = usePortalHashLocation();
+  const [refusal, setRefusal] = useState<string | null>(null);
   const endpoint = isSelf ? OWN_EMAILS_ENDPOINT : `/api/v1/users/${encodeURIComponent(userId)}/emails`;
   const loaded = useData(async (): Promise<AddressRow[]> => {
     if (isSelf) {
@@ -67,12 +85,21 @@ export function EmailAddressesPanel({
         email: address.email,
         primary: address.primary,
         verified: Boolean(address.verifiedAt),
+        usedBy: address.usedBy.map((organization) => organization.name),
+        signInEnabled: address.signInEnabled,
       }));
     }
     const response = await getJson(endpoint, userEmailsListResponseSchema);
     return [
-      { id: null, email: primaryEmail, primary: true, verified: null },
-      ...response.emails.map((address) => ({ id: address.id, email: address.email, primary: false, verified: null })),
+      { id: null, email: primaryEmail, primary: true, verified: null, usedBy: [], signInEnabled: null },
+      ...response.emails.map((address) => ({
+        id: address.id,
+        email: address.email,
+        primary: false,
+        verified: null,
+        usedBy: [],
+        signInEnabled: null,
+      })),
     ];
   }, [endpoint, isSelf, primaryEmail]);
 
@@ -81,6 +108,19 @@ export function EmailAddressesPanel({
   }
 
   async function makePrimary(address: AddressRow): Promise<void> {
+    const current = addresses.find((row) => row.primary);
+    const confirmed = await confirmAction({
+      title: `Make ${address.email} your primary address?`,
+      consequences: [
+        "We send account email to this address, and you sign in with it.",
+        ...(current ? [`${current.email} stays on your account as an added address.`] : []),
+        "Each organization you represent keeps the address it uses.",
+      ],
+      confirmLabel: "Make primary",
+      tone: "primary",
+    });
+    if (!confirmed) return;
+    setRefusal(null);
     try {
       await patchJson(
         addressEndpoint(address),
@@ -91,35 +131,44 @@ export function EmailAddressesPanel({
       // The account's address is part of the session and profile the portal holds.
       window.location.reload();
     } catch (caught) {
-      toast(failure(caught, "Could not change your primary address."), "error");
+      setRefusal(failure(caught, "Could not change your primary address."));
     }
   }
 
   async function resend(address: AddressRow): Promise<void> {
+    setRefusal(null);
     try {
-      await postJson(addressEndpoint(address, "/verification"), {}, successResponseSchema);
-      toast(`A new verification link is on its way to ${address.email}`, "success");
+      const sent = await postJson(
+        addressEndpoint(address, "/verification"),
+        {},
+        ownEmailVerificationSentResponseSchema,
+      );
+      const notice = verificationLinkNotice(address.email, sent.delivery);
+      toast(notice.message, notice.tone);
     } catch (caught) {
-      toast(failure(caught, "Could not send a new link."), "error");
+      setRefusal(failure(caught, "Could not send a new link."));
     }
   }
 
   async function remove(address: AddressRow): Promise<void> {
     const confirmed = await confirmAction({
       title: `Remove ${address.email}?`,
-      body: isSelf
-        ? "You no longer sign in or receive mail with this address."
-        : "This address is no longer associated with this account.",
+      body: !isSelf
+        ? "This address will no longer be associated with this account."
+        : address.signInEnabled
+          ? "You will no longer be able to sign in with this address."
+          : "This address will no longer be part of your account.",
       confirmLabel: "Remove address",
       tone: "danger",
     });
     if (!confirmed) return;
+    setRefusal(null);
     try {
       await deleteJson(addressEndpoint(address), successResponseSchema);
       toast(`${address.email} removed`, "success");
       await loaded.reload();
     } catch (caught) {
-      toast(failure(caught, "Could not remove the address."), "error");
+      setRefusal(failure(caught, "Could not remove the address."));
     }
   }
 
@@ -133,7 +182,15 @@ export function EmailAddressesPanel({
           : { id: "resend", label: "Resend verification", onSelect: () => void resend(address) },
       );
     }
-    items.push({ id: "remove", label: "Remove", onSelect: () => void remove(address) });
+    // An address an organization identity uses stays until that representation ends; the row says which.
+    items.push({
+      id: "remove",
+      label: "Remove",
+      danger: true,
+      separatorBefore: items.length > 0,
+      disabled: address.usedBy.length > 0,
+      onSelect: () => void remove(address),
+    });
     return items;
   }
 
@@ -159,6 +216,12 @@ export function EmailAddressesPanel({
         }
       />
       <PanelBody flush>
+        {/* A refused change needs the person's action, so it stays in the panel instead of a passing toast. */}
+        {refusal && (
+          <div class="pk-panel__body">
+            <Alert tone="danger">{refusal}</Alert>
+          </div>
+        )}
         {loaded.error && (
           <div class="pk-panel__body">
             <ErrorAlert error={loaded.error} />
@@ -174,7 +237,7 @@ export function EmailAddressesPanel({
             {addresses.map((address) => (
               <RowListItem
                 key={address.id ?? "primary"}
-                meta={address.primary ? "Primary" : address.verified === false ? "Not verified yet" : undefined}
+                meta={rowMeta(address)}
                 end={<RowActions subject={address.email} actions={actions(address)} />}
               >
                 <span class="pk-email-address">

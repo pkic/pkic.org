@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { eventEmailCampaignPreviewInputSchema } from "../assets/shared/schemas/event-email-campaigns";
 import {
   formFieldRulesSchema,
+  formFieldOptionsSchema,
   formFieldOptionValues,
   isSafeFormFieldPattern,
   isAllowedProfileUrl,
@@ -62,6 +63,23 @@ describe("canonical form-field rules", () => {
       { value: "two", label: "Second", active: true },
     ]);
     expect(formFieldOptionValues(raw)).toEqual(["one", "two"]);
+  });
+  it("shows readable identifier labels without changing saved values or explicit wording", () => {
+    const raw = [
+      "gluten_free",
+      { value: "lactose_free", label: "Lactose_free" },
+      { value: "nut_allergy", label: "Nut_allergy", active: true },
+      { value: "other", label: "Something_else", active: false },
+    ];
+    const expected = [
+      { value: "gluten_free", label: "Gluten free", active: true },
+      { value: "lactose_free", label: "Lactose free", active: true },
+      { value: "nut_allergy", label: "Nut allergy", active: true },
+      { value: "other", label: "Something_else", active: false },
+    ];
+    expect(parseFormFieldOptions(raw)).toEqual(expected);
+    expect(formFieldOptionsSchema.parse(raw)).toEqual(expected);
+    expect(formFieldOptionValues(raw)).toEqual(["gluten_free", "lactose_free", "nut_allergy"]);
   });
 
   it("allows only HTTP profile URLs on configured domains or subdomains", () => {

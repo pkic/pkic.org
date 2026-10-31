@@ -21,6 +21,7 @@ import { EventProposalForm } from "../../assets/ts/site/EventProposalForm";
 import { eventProposalProofVerifySchema } from "../../assets/shared/schemas/event-proposal-proof";
 import { completeIndependentCapacityDisclosure } from "./helpers/independent-capacity";
 import { JOB_TITLE_REQUIRED } from "../../assets/shared/schemas/api-common";
+import { proposalProofResponse } from "./helpers/proposal-proof-response";
 
 const PLACEMENTS = "/api/v1/events/pqc-2026/forms/placements/proposal_submission";
 const PROPOSALS = "/api/v1/events/pqc-2026/proposals";
@@ -32,7 +33,7 @@ interface Captured {
 }
 
 function json(value: unknown, status = 200): Response {
-  return new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
+  return proposalProofResponse(value, status);
 }
 
 /** The placement projection the page builds its consents and types from. */
@@ -353,9 +354,9 @@ describe("proposal submission gate", () => {
     });
     // The contract refuses on the field itself, and the person stays on the contact step.
     expect(form.querySelector<HTMLElement>('[data-step="2"]')!.hidden).toBe(false);
-    const message = form.querySelector<HTMLElement>('[data-field-error="proposer.jobTitle"]')!;
-    expect(message.textContent).toBe(JOB_TITLE_REQUIRED);
-    expect(message.hidden).toBe(false);
+    expect(jobTitle.getAttribute("aria-invalid")).toBe("true");
+    const describedBy = jobTitle.getAttribute("aria-describedby")!.split(" ");
+    expect(describedBy.some((id) => document.getElementById(id)?.textContent === JOB_TITLE_REQUIRED)).toBe(true);
 
     await act(async () => {
       jobTitle.value = "Security Architect";

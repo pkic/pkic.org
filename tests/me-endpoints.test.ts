@@ -144,6 +144,12 @@ describe("Current-user and application self-service", () => {
     expect(await untitled.json()).toMatchObject({
       error: { details: { fieldErrors: { jobTitle: ["Enter your job title at this organization."] } } },
     });
+    // A name-only save leaves the profile alone, so the missing title does not hold it back.
+    const renamed = await call(token, "/api/v1/users/current", {
+      method: "PATCH",
+      body: JSON.stringify({ firstName: "Renamed" }),
+    });
+    expect(renamed.status, await renamed.clone().text()).toBe(200);
     const response = await call(token, "/api/v1/users/current", {
       method: "PATCH",
       body: JSON.stringify({ showOnOrgProfile: false, jobTitle: "Program lead" }),

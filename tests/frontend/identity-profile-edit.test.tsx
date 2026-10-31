@@ -1,3 +1,4 @@
+import { IdentityProfileForm } from "../../assets/ts/components/identities/IdentityProfileForm";
 // @vitest-environment jsdom
 /**
  * Editing one identity from the professional profile: the view loads that
@@ -12,7 +13,9 @@ import {
   ownIdentityProfileSchema,
 } from "../../assets/shared/schemas/own-identity-profile";
 import { IdentityProfileEditView } from "../../assets/ts/member-flows/portal/sections/system-users/IdentityProfileEditView";
-import { typeInto } from "./helpers/labeled-control";
+import { RegistrationIdentityField } from "../../assets/ts/components/RegistrationIdentitySelect";
+import { portalSessionFixture } from "../helpers/portal-session";
+import { typeInto, buttonNamed, controlFor as dialogControlFor } from "./helpers/labeled-control";
 
 const navigate = vi.hoisted(() => vi.fn());
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["/users/self/profile", navigate] }));
@@ -148,3 +151,92 @@ it("asks an organization identity saved without a job title for one before it sa
   expect(jobTitle.getAttribute("aria-invalid")).toBe("true");
   expect(container.textContent).toContain("Enter your job title at this organization.");
 });
+
+it("refreshes the canonical representation summary even when its selection dialog is canceled", async () => {
+  let saved = identity;
+  const selected = {
+    id: identityId,
+    organizationId: identity.organizationId,
+    organizationName: identity.organizationName,
+    jobTitle: identity.jobTitle,
+    membershipCategory: null,
+    membershipLabel: null,
+  };
+  const writes: unknown[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+      const path = new URL(String(input), location.origin).pathname;
+      if (path.endsWith(`/identities/${identityId}/profile`)) {
+        if (init.method === "PATCH") {
+          const body = identityProfileUpdateSchema.parse(JSON.parse(String(init.body)));
+          writes.push(body);
+          saved = ownIdentityProfileSchema.parse({ ...saved, ...body });
+        }
+        return Response.json(saved);
+      }
+      if (path === "/api/v1/auth/session")
+        return Response.json({
+          ...portalSessionFixture({}),
+          actingIdentityId: identityId,
+          actingIdentities: [{ ...selected, jobTitle: saved.jobTitle }],
+        });
+      throw new Error(`Unexpected request: ${path}`);
+    }),
+  );
+  const outerSubmit = vi.fn((event: Event) => event.preventDefault());
+  const onSelect = vi.fn();
+  await act(() =>
+    render(
+      <form onSubmit={outerSubmit}>
+        <RegistrationIdentityField preferred={selected} userId={userId} onSelect={onSelect} />
+      </form>,
+      container,
+    ),
+  );
+  await act(() => buttonNamed(container, "Change representation").click());
+  await settle();
+  await act(() => buttonNamed(document.body, "Edit representation").click());
+  await settle();
+  const title = dialogControlFor(document.body, "Job title for this organization");
+  await typeInto(title, "Coordinator");
+  await act(() => buttonNamed(document.body, "Save changes").click());
+  await settle();
+  expect(writes).toEqual([expect.objectContaining({ jobTitle: "Coordinator" })]);
+  expect(outerSubmit).not.toHaveBeenCalled();
+  await act(() => document.querySelector<HTMLButtonElement>('[aria-label="Close change representation"]')!.click());
+  await settle();
+  expect(container.textContent).toContain("Example Trust · Coordinator");
+  expect(container.querySelector<HTMLInputElement>('input[name="identityId"]')?.value).toBe(identityId);
+  expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: identityId, jobTitle: "Coordinator" }));
+});
+
+it.each(["owner", "staff"] as const)(
+  "omits a personal job title from the shared %s editor and saved contract",
+  async (editor) => {
+    const save = vi.fn(async (body) => identityProfileUpdateSchema.parse(body));
+    await act(() =>
+      render(
+        <IdentityProfileForm
+          identity={{
+            organizationId: null,
+            jobTitle: "Legacy personal text",
+            biography: "About this person",
+            links: [],
+          }}
+          editor={editor}
+          save={save}
+          cancel={null}
+          onSaved={() => {}}
+        />,
+        container,
+      ),
+    );
+    expect(container.querySelector('[name="jobTitle"]')).toBeNull();
+    await act(async () => {
+      container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(identityProfileUpdateSchema.parse(save.mock.calls[0]![0]).jobTitle).toBeUndefined();
+  },
+);

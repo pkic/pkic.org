@@ -74,18 +74,33 @@ export function filterApplicationFieldsForApplicantKind<T extends { key: string;
   );
 }
 
+/**
+ * Answers a signed-in applicant's identity supplies: their job title, first
+ * profile link, and bio. The form does not ask for them; the server copies
+ * them from the identity at submission, as the application's record of who
+ * applied.
+ */
+export const MEMBERSHIP_APPLICATION_IDENTITY_FIELD_KEYS = ["job_title", "linkedin", "about_yourself"] as const;
+const membershipApplicationIdentityFieldKeys = new Set<string>(MEMBERSHIP_APPLICATION_IDENTITY_FIELD_KEYS);
+
+export function isMembershipApplicationIdentityFieldKey(key: string): boolean {
+  return membershipApplicationIdentityFieldKeys.has(key);
+}
+
 /** Project the canonical form for the selected application category. */
 export function membershipApplicationFields(
   fields: FormFieldDefinition[],
   category: { isIndividual: boolean; eligibleWorkingGroupIds: string[] },
+  options: { fromIdentity?: boolean } = {},
 ): FormFieldDefinition[] {
   const eligible = new Set(category.eligibleWorkingGroupIds);
-  return filterApplicationFieldsForApplicantKind(fields, category.isIndividual ? "individual" : "organization").map(
-    (field) =>
+  return filterApplicationFieldsForApplicantKind(fields, category.isIndividual ? "individual" : "organization")
+    .filter((field) => !options.fromIdentity || !isMembershipApplicationIdentityFieldKey(field.key))
+    .map((field) =>
       field.optionSource === "active_working_groups"
         ? { ...field, options: field.options?.filter((option) => eligible.has(option.value)) ?? [] }
         : field,
-  );
+    );
 }
 
 export const membershipApplicationPolicyFieldSchema = formFieldDefinitionSchema.extend({

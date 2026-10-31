@@ -1,3 +1,4 @@
+import { promotionFormatSchema } from "../../assets/shared/schemas/event-promotion-kit";
 import { readD1Migrations } from "@cloudflare/vitest-plugin";
 import { afterEach, describe, expect, it } from "vitest";
 import { DatabaseSync } from "node:sqlite";
@@ -1468,4 +1469,79 @@ it("splits the consolidated migration into bounded statements for D1", async () 
   expect(Math.max(...consolidated.queries.map((query) => new TextEncoder().encode(query).byteLength))).toBeLessThan(
     100_000,
   );
+});
+
+it("cuts over unfinished promotion work without retaining a second render queue", () => {
+  const db = new DatabaseSync(":memory:");
+  try {
+    applyMigrationsBefore0038(db);
+    apply0038(db);
+    const at = "2026-10-26T00:00:00.000Z";
+    db.prepare(
+      "INSERT INTO users(id,email,normalized_email,active,created_at,updated_at) VALUES('queue-user','queue@example.test','queue@example.test',1,?,?)",
+    ).run(at, at);
+    db.prepare(
+      "INSERT INTO events(id,slug,name,timezone,created_at,updated_at) VALUES('queue-event','queue-event','Queue event','UTC',?,?)",
+    ).run(at, at);
+    db.exec(
+      "INSERT INTO event_agenda_occurrences(id,event_id,title) VALUES('queue-session','queue-event','Queue session')",
+    );
+    db.prepare(
+      "INSERT INTO event_agenda_promotion_copy(occurrence_id,copy_json,updated_by,updated_at) VALUES('queue-session',?,'queue-user',?)",
+    ).run(
+      JSON.stringify({
+        whyAttend: "A reviewed session introduction",
+        takeaways: ["Inventory first", "Plan the migration"],
+        callToAction: "Join the session",
+        campaign: "speaker-kit",
+        approvedAt: null,
+      }),
+      at,
+    );
+    const copyBefore = db
+      .prepare("SELECT copy_json FROM event_agenda_promotion_copy WHERE occurrence_id='queue-session'")
+      .get();
+    for (const [index, status] of ["queued", "retrying", "rendering", "rendered", "failed"].entries()) {
+      db.prepare(`INSERT INTO event_agenda_promotion_render_jobs(id,event_id,occurrence_id,user_id,revision,format,origin,cache_key,status,attempts,next_attempt_at,processing_token,lease_expires_at,created_at,updated_at)
+        VALUES(?,'queue-event','queue-session','queue-user',1,?,'https://example.test',?,?,2,?,'old-lease',?,?,?)`).run(
+        status,
+        promotionFormatSchema.options[index]!,
+        status,
+        status,
+        at,
+        at,
+        at,
+        at,
+      );
+    }
+    db.exec("BEGIN");
+    db.exec(fs.readFileSync(path.join(MIGRATIONS_DIR, "0039_event_promotion_kits.sql"), "utf8"));
+    db.exec("COMMIT");
+    expect(
+      db.prepare("SELECT id,status,fingerprint,processing_token FROM event_promotion_renders ORDER BY id").all(),
+    ).toEqual(
+      ["queued", "rendering", "retrying"].map((id) => ({
+        id,
+        status: "queued",
+        fingerprint: null,
+        processing_token: null,
+      })),
+    );
+    expect(
+      db
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name IN('event_agenda_promotion_render_jobs','event_agenda_promotion_copy','event_agenda_promotion_downloads','user_email_claims')",
+        )
+        .all(),
+    ).toEqual([]);
+    expect(
+      db
+        .prepare("SELECT promotion_copy_json AS copy_json FROM event_agenda_occurrences WHERE id='queue-session'")
+        .get(),
+    ).toEqual(copyBefore);
+    expect(db.prepare("SELECT id FROM users WHERE id='queue-user'").all()).toEqual([{ id: "queue-user" }]);
+    expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+  } finally {
+    db.close();
+  }
 });

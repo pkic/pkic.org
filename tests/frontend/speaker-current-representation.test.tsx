@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { act } from "preact/test-utils";
 import { speakerSelfProfilePatchSchema } from "../../assets/shared/schemas/proposal-management";
 import { eventProposalProofIdentityPatchSchema } from "../../assets/shared/schemas/event-proposal-proof";
@@ -13,21 +13,13 @@ import {
   mountShell,
   panel,
   profileReceipt,
+  resetSpeakerPageBetweenTests,
   signedInSession,
   speakerPage,
   speakerTerms,
 } from "./helpers/speaker-manage-page-fixture";
 
-beforeEach(() => {
-  vi.resetModules();
-  window.history.replaceState({}, "", "/events/2026/pqc-2026/speaker/?token=speaker-token-12345678901234567890");
-});
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-  document.body.innerHTML = "";
-  window.history.replaceState({}, "", "/");
-});
+resetSpeakerPageBetweenTests();
 
 describe("speaker current representation", () => {
   it("shows the live representation and edits its profile on the identity itself", async () => {
@@ -89,12 +81,12 @@ describe("speaker current representation", () => {
         .click();
     });
     await act(() => {
-      const first = root.querySelector<HTMLInputElement>('input[name="firstName"]')!;
+      const first = document.querySelector<HTMLInputElement>('dialog[open] input[name="firstName"]')!;
       first.value = "Augusta";
       first.dispatchEvent(new Event("input", { bubbles: true }));
     });
     await act(async () => {
-      Array.from(root.querySelectorAll("button"))
+      Array.from(document.querySelectorAll<HTMLButtonElement>("dialog[open] button"))
         .find((button) => button.textContent === "Save my details")!
         .click();
     });

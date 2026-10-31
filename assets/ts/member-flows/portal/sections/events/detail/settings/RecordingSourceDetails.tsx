@@ -115,7 +115,7 @@ export function RecordingSourceDetails({
     event.preventDefault();
     const checked = form.submit();
     if (!checked.data || busy || !canAcquire) {
-      setError(checked.message ?? "");
+      setError(checked.formMessage ?? "");
       return;
     }
     setBusy(true);

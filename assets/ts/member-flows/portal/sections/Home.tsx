@@ -84,7 +84,7 @@ function votePath(vote: MemberVote): string {
 }
 
 function formPath(form: MemberForm): string {
-  return `/groups/${encodeURIComponent(form.ownerGroupId)}/forms/${encodeURIComponent(form.placementId)}`;
+  return `/groups/${encodeURIComponent(form.accessGroupId)}/forms/${encodeURIComponent(form.placementId)}`;
 }
 
 function AttentionPanel() {
@@ -123,8 +123,10 @@ function AttentionPanel() {
           {openSurveys.map((form) => (
             <li key={`form-${form.placementId}`} class="pk-cluster">
               <Link href={formPath(form)}>Respond: {form.title}</Link>
-              <span class="pk-small">{form.ownerGroupName}</span>
-              {form.closesAt && <span class="pk-small">closes {fmt(form.closesAt)}</span>}
+              {/* One meta line, so the group name does not read as what closes. */}
+              <span class="pk-small">
+                {[form.ownerGroupName, form.closesAt && `closes ${fmt(form.closesAt)}`].filter(Boolean).join(" · ")}
+              </span>
             </li>
           ))}
           {pendingReviews.map((organization) => (
@@ -236,13 +238,24 @@ function MeetingsPanel() {
   );
 }
 
+/** Events shown on Home: the ones under way, then the next ones, in the order they take place. */
+const HOME_EVENT_COUNT = 4;
+
 function EventsPanel() {
   const events = useData(async () => {
     const [current, next] = await Promise.all([
-      getJson("/api/v1/events?kind=standalone&phase=now&sort=starts_at&limit=1", eventsListResponseSchema),
-      getJson("/api/v1/events?kind=standalone&phase=upcoming&sort=starts_at&limit=1", eventsListResponseSchema),
+      getJson(
+        `/api/v1/events?kind=standalone&phase=now&sort=starts_at&limit=${HOME_EVENT_COUNT}`,
+        eventsListResponseSchema,
+      ),
+      getJson(
+        `/api/v1/events?kind=standalone&phase=upcoming&sort=starts_at&limit=${HOME_EVENT_COUNT}`,
+        eventsListResponseSchema,
+      ),
     ]);
-    return { events: [...current.events, ...next.events] };
+    const distinct = new Map([...current.events, ...next.events].map((event) => [event.id, event]));
+    const inOrder = [...distinct.values()].sort((a, b) => (a.startsAt ?? "").localeCompare(b.startsAt ?? ""));
+    return { events: inOrder.slice(0, HOME_EVENT_COUNT) };
   }, []);
   const rows = events.data?.events ?? [];
   const now = useBoundaryClock((at) => {

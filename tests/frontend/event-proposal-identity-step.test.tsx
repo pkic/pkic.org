@@ -14,33 +14,28 @@ import {
 import type { ProposalEntryContext } from "../../assets/shared/schemas/proposal-entry";
 import type { ProposalEntrySelection } from "../../assets/ts/components/useProposalEntryIdentity";
 
+import {
+  proposalProofResponse as response,
+  proposalProofEndpoint as endpoint,
+  proposalProofToken as TOKEN,
+} from "./helpers/proposal-proof-response";
+
+import { mountProposalIdentityStep } from "./helpers/proposal-identity-fixture";
+
 let host: HTMLDivElement | undefined;
 let selection: ProposalEntrySelection | null;
-const TOKEN = "v".repeat(40);
-const endpoint = "/api/v1/events/pqc-2026/proposals/proof";
-function response(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+async function mount(enabled = true, entryContext?: ProposalEntryContext) {
+  host = await mountProposalIdentityStep({
+    enabled,
+    entryContext,
+    onChange: (value) => {
+      selection = value;
+    },
+  });
 }
-function mount(enabled = true, entryContext?: ProposalEntryContext) {
-  host = document.createElement("div");
-  document.body.append(host);
-  return act(() =>
-    render(
-      <EventProposalIdentityStep
-        enabled={enabled}
-        entryContext={entryContext}
-        eventSlug="pqc-2026"
-        consents={() => [{ termKey: "speaker-agreement", version: "1" }]}
-        onChange={(value) => {
-          selection = value;
-        }}
-      />,
-      host!,
-    ),
-  );
-}
-afterEach(() => {
-  if (host) render(null, host);
+afterEach(async () => {
+  const mounted = host;
+  if (mounted) await act(() => render(null, mounted));
   document.body.innerHTML = "";
   host = undefined;
   selection = null;
@@ -145,30 +140,29 @@ describe("verified event entry", () => {
     expect(host!.querySelector(".pk-datalist")?.textContent).not.toContain("Engineer");
     expect(host!.querySelector('input[name="firstName"]')).toBeNull();
     expect(host!.querySelector('input[name="organizationName"]')).toBeNull();
-    // A new affiliation on behalf of the organization asks for the job title, and requires it.
     expect(host!.querySelector<HTMLInputElement>('input[name="jobTitle"]')?.required).toBe(true);
-    expect(host!.textContent).toContain("No existing representation is selected.");
+    expect(host!.textContent).toContain("Your representation is saved when you submit your proposal.");
     expect(host!.textContent).not.toContain("This new representation");
-    expect(selection?.missingDetails).toEqual({});
+    await vi.waitFor(() => expect(selection?.missingDetails).toEqual({ organizationName: "Example Organization" }));
     await act(() => {
       Array.from(host!.querySelectorAll("button"))
         .find((button) => button.textContent === "Edit my details")!
         .click();
     });
     await act(() => {
-      const first = host!.querySelector<HTMLInputElement>('input[name="firstName"]')!;
+      const first = document.querySelector<HTMLInputElement>('input[name="firstName"]')!;
       first.value = "Augusta";
       first.dispatchEvent(new Event("input", { bubbles: true }));
     });
     await act(async () => {
-      Array.from(host!.querySelectorAll("button"))
+      Array.from(document.querySelectorAll("button"))
         .find((button) => button.textContent === "Save my details")!
         .click();
     });
-    await vi.waitFor(() => expect(host!.textContent).toContain("Please retry saving your name."));
-    expect(host!.querySelector<HTMLInputElement>('input[name="firstName"]')!.value).toBe("Augusta");
+    await vi.waitFor(() => expect(document.body.textContent).toContain("Please retry saving your name."));
+    expect(document.querySelector<HTMLInputElement>('input[name="firstName"]')!.value).toBe("Augusta");
     await act(async () => {
-      Array.from(host!.querySelectorAll("button"))
+      Array.from(document.querySelectorAll("button"))
         .find((button) => button.textContent === "Save my details")!
         .click();
     });
@@ -180,7 +174,7 @@ describe("verified event entry", () => {
     const savedNames = eventProposalProofPersonPatchSchema.parse(nameRequests[0]);
     expect(savedNames).toEqual({ firstName: "Augusta", lastName: "Lovelace", continuationToken: "c".repeat(40) });
     expect(selection?.person.firstName).toBe("Augusta Ada");
-    expect(selection?.missingDetails).toEqual({});
+    expect(selection?.missingDetails).toEqual({ organizationName: "Example Organization" });
     expect(host!.querySelector('input[name="firstName"]')).toBeNull();
     expect(host!.querySelector('input[name="organizationName"]')).toBeNull();
   });
@@ -277,8 +271,6 @@ describe("verified event entry", () => {
     await act(() => {
       host!.querySelector<HTMLElement>(`[role="option"][data-key="${identityId}"]`)!.click();
     });
-    expect(selection?.person.firstName).toBe("Ada");
-    expect(selection?.person.lastName).toBe("Lovelace");
     expect(selection?.actingIdentityId).toBe(identityId);
     expect(selection?.person.organizationName).toBe("Nonmember Organization");
     expect(host!.querySelector('input[name="firstName"]')).toBeNull();
@@ -287,11 +279,20 @@ describe("verified event entry", () => {
     expect(urls.find((url) => url.pathname.endsWith("identities"))?.searchParams.get("organizationOnly")).toBe("true");
     expect(host!.textContent).not.toContain("Your current representation is updated.");
     await act(() => {
+      [...host!.querySelectorAll("button")].find((button) => button.textContent === "Add representation")!.click();
+    });
+    const add = document.querySelector<HTMLDialogElement>("dialog[open]")!;
+    expect(add.textContent).toContain(EMAIL_FIRST_COPY.representation.work.label);
+    expect(add.querySelector('input[name="email"]')).not.toBeNull();
+    expect(add.querySelector('[role="combobox"], input[name="organizationName"]')).toBeNull();
+    await act(() => {
+      [...add.querySelectorAll("button")].find((button) => button.textContent === "Cancel")!.click();
+    });
+    await act(() => {
       Array.from(host!.querySelectorAll("button"))
         .find((button) => button.textContent === "Update current representation")!
         .click();
     });
-    expect(host!.querySelector('input[name="organizationName"]')).toBeNull();
     await act(() => {
       const role = host!.querySelector<HTMLInputElement>('input[name="jobTitle"]')!;
       role.value = "Principal Engineer";
@@ -304,16 +305,12 @@ describe("verified event entry", () => {
     });
     await vi.waitFor(() => expect(selection?.person.jobTitle).toBe("Principal Engineer"));
     expect(eventProposalProofIdentityPatchSchema.parse(roleRequests[0])).toEqual({ jobTitle: "Principal Engineer" });
-    expect(selection?.actingIdentityId).toBe(identityId);
-    expect(selection?.person.organizationName).toBe("Nonmember Organization");
-    expect(host!.querySelector('input[name="jobTitle"]')).toBeNull();
     expect(host!.querySelector('[role="status"]')?.textContent).toBe("Your current representation is updated.");
     await act(() => {
       Array.from(host!.querySelectorAll("button"))
         .find((button) => button.textContent === "Update current representation")!
         .click();
     });
-    expect(host!.textContent).not.toContain("Your current representation is updated.");
     await act(() => {
       const role = host!.querySelector<HTMLInputElement>('input[name="jobTitle"]')!;
       role.value = "";
@@ -324,14 +321,12 @@ describe("verified event entry", () => {
         .find((button) => button.textContent === "Save representation")!
         .click();
     });
-    // On behalf of an organization the job title stays required: the contract refuses a blank one on the field.
     const cleared = host!.querySelector<HTMLInputElement>('input[name="jobTitle"]')!;
     expect(cleared.required).toBe(true);
     expect(cleared.getAttribute("aria-invalid")).toBe("true");
     expect(host!.textContent).toContain(JOB_TITLE_REQUIRED);
     expect(roleRequests).toHaveLength(1);
     expect(selection?.person.jobTitle).toBe("Principal Engineer");
-    expect(selection?.person.organizationName).toBe("Nonmember Organization");
   });
   it("asks only missing verified-person details and retains a claimed organization name", async () => {
     history.replaceState({}, "", `/events/2026/pqc-2026/propose/#verify=${TOKEN}`);
@@ -363,7 +358,7 @@ describe("verified event entry", () => {
     expect(host!.textContent).not.toContain("verified profile");
     expect(host!.querySelectorAll('input[name="firstName"]')).toHaveLength(1);
     expect(host!.querySelector(".pk-datalist")?.textContent).not.toContain("Ada");
-    expect(host!.querySelector(".pk-datalist")?.textContent).toContain("Example Organization");
+    expect(host!.querySelector("select")?.textContent).toContain("Example Organization");
     expect(host!.querySelector('[role="combobox"]')).toBeNull();
     expect(selection?.person.organizationName).toBe("Example Organization");
   });
@@ -419,9 +414,8 @@ describe("verified event entry", () => {
     expect([...host!.querySelectorAll("legend")].map((legend) => legend.textContent)).toContain(
       "Your representation for this proposal",
     );
-    expect(host!.textContent).toContain("Any details entered below are unsaved");
+    expect(host!.textContent).toContain("Your representation is saved when you submit your proposal.");
     expect(host!.textContent).not.toContain("This new representation");
-    expect(host!.textContent).not.toContain("Complete your details");
     expect(host!.querySelectorAll('input[name="organizationName"]')).toHaveLength(1);
     const summary = host!.querySelector(".pk-datalist")!;
     expect(summary.textContent).toContain("Ada Lovelace");

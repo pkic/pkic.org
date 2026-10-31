@@ -10,7 +10,7 @@
  */
 import { jsonNoStore } from "../../../../_lib/http";
 import { requireAnyActorFromRequest } from "../../../../_lib/auth/actor";
-import { beginPasskeyRegistration } from "../../../../_lib/services/passkeys";
+import { beginPasskeyRegistration } from "../../../../_lib/services/passkey-registration";
 import { passkeyRegisterBeginRouteSchema } from "../../../../../assets/shared/schemas/passkeys";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
 import { openApiRoute } from "../../../../_lib/openapi/route";

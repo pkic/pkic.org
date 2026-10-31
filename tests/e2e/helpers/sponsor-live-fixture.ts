@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { expect, type Page, type TestInfo, type ConsoleMessage } from "@playwright/test";
+import { expect, type Page, type TestInfo } from "@playwright/test";
 import type { AgendaOccurrence } from "../../../assets/shared/schemas/event-agenda";
 import { e2eAdminEmail } from "../../helpers/e2e-admin";
+import { captureDeviceConsole } from "./device-console";
+import { endEventSponsor } from "./event-sponsor";
 import { signInAsE2eStaff } from "./staff-auth";
 import { createMember } from "./member-provisioning";
 import { confirmRegistration, ownDomainEmail, registerInBrowser } from "./registration";
@@ -35,6 +37,7 @@ import {
   eventScanResponseSchema,
 } from "../../../assets/shared/schemas/event-participation-scanning";
 import { enrolledOfflineEligibilityResponseSchema } from "../../../assets/shared/schemas/event-offline-eligibility";
+import { WITHHELD_CONTACT_VALUE } from "../../../assets/shared/schemas/scanner-attempt-capture";
 import {
   scannerStorage,
   scrollScannerToTop,
@@ -52,7 +55,12 @@ async function confirmEmailedRegistration(page: Page, email: string, since: numb
   const mail = await waitForCapturedEmail(email, "Confirm your registration", { since });
   await page.goto(extractEmailUrl(mail, "/register/confirm"));
   await confirmRegistration(page, organization, "Security engineer");
-  await waitForCapturedEmail(email, "registration is confirmed", { since });
+  // Confirming proves the mailbox and issues a fresh management link; the one from submission no longer works.
+  const confirmed = await waitForCapturedEmail(email, "registration is confirmed", { since });
+  const manageUrl = extractEmailUrl(confirmed, "/register/manage/");
+  const manageToken = new URL(manageUrl).searchParams.get("token");
+  if (!manageToken) throw new Error("The confirmation email must carry the registration management link");
+  return { manageUrl, manageToken };
 }
 
 async function issueBadge(staff: Page, email: string) {
@@ -106,9 +114,9 @@ export async function prepareSponsorLiveFixture(staff: Page, attendee: Page) {
   if (!registered.manageUrl || !registered.manageToken)
     throw new Error("Fresh attendee must have a registration management capability");
   // The organization the lead is captured with is the one their confirmed address names.
-  await confirmEmailedRegistration(attendee, email, since, organization);
+  const confirmedManage = await confirmEmailedRegistration(attendee, email, since, organization);
 
-  await signInAsE2eStaff(staff, e2eAdminEmail("default"));
+  await signInAsE2eStaff(staff, e2eAdminEmail("sponsor-live-fixture-operator"));
   const eventResponse = await staff.request.get(eventApi);
   expect(eventResponse.status()).toBe(200);
   const event = eventDetailResponseSchema.parse(await eventResponse.json()).event;
@@ -131,48 +139,56 @@ export async function prepareSponsorLiveFixture(staff: Page, attendee: Page) {
   });
   expect(created.status()).toBe(201);
   const sponsorId = sponsorshipResponseSchema.parse(await created.json()).sponsorship.id;
-  const activated = await staff.request.patch(`/api/v1/sponsors/${sponsorId}/stage`, {
-    data: sponsorshipStageUpdateSchema.parse({ toStage: "active" }),
-  });
-  expect(activated.status()).toBe(200);
-  sponsorshipResponseSchema.parse(await activated.json());
-  const operator = await createMember(staff, { individual: true });
-  const grants: string[] = [];
-  for (const permission of ["agenda:leads_capture", "agenda:leads_view", "agenda:leads_export"] as const) {
-    const response = await staff.request.post("/api/v1/permissions/grants", {
-      data: accessGrantCreateSchema.parse({
-        userId: operator.userId,
-        permission,
-        contextType: "event_sponsor",
-        contextId: sponsorId,
-      }),
+  // Every spec ends the sponsor when it is done; a fixture that fails before it is returned ends it here.
+  const end = () => endEventSponsor(staff, sponsorId);
+  try {
+    const activated = await staff.request.patch(`/api/v1/sponsors/${sponsorId}/stage`, {
+      data: sponsorshipStageUpdateSchema.parse({ toStage: "active" }),
     });
-    expect(response.status()).toBe(201);
-    grants.push(accessGrantCreateResponseSchema.parse(await response.json()).grant.id);
+    expect(activated.status()).toBe(200);
+    sponsorshipResponseSchema.parse(await activated.json());
+    const operator = await createMember(staff, { individual: true });
+    const grants: string[] = [];
+    for (const permission of ["agenda:leads_capture", "agenda:leads_view", "agenda:leads_export"] as const) {
+      const response = await staff.request.post("/api/v1/permissions/grants", {
+        data: accessGrantCreateSchema.parse({
+          userId: operator.userId,
+          permission,
+          contextType: "event_sponsor",
+          contextId: sponsorId,
+        }),
+      });
+      expect(response.status()).toBe(201);
+      grants.push(accessGrantCreateResponseSchema.parse(await response.json()).grant.id);
+    }
+    const consenting = await issueBadge(staff, email);
+    const denied = await issueBadge(staff, deniedEmail);
+    if (!template.result.manageToken) throw new Error("Denied fixture needs its own registration capability");
+    const canceled = await attendee.request.patch(`/api/v1/registrations/access/${template.result.manageToken}`, {
+      data: registrationManageSchema.parse({ action: "cancel" }),
+    });
+    expect(canceled.status()).toBe(200);
+    registrationManageUpdateResponseSchema.parse(await canceled.json());
+    return {
+      sponsorId,
+      operator,
+      grants,
+      consenting,
+      denied,
+      email,
+      deniedEmail,
+      firstName,
+      lastName,
+      organization,
+      manageUrl: confirmedManage.manageUrl,
+      manageToken: confirmedManage.manageToken,
+      workspace: `/portal/#/events/${sponsorEventSlug}/leads`,
+      end,
+    };
+  } catch (error) {
+    await end();
+    throw error;
   }
-  const consenting = await issueBadge(staff, email);
-  const denied = await issueBadge(staff, deniedEmail);
-  if (!template.result.manageToken) throw new Error("Denied fixture needs its own registration capability");
-  const canceled = await attendee.request.patch(`/api/v1/registrations/access/${template.result.manageToken}`, {
-    data: registrationManageSchema.parse({ action: "cancel" }),
-  });
-  expect(canceled.status()).toBe(200);
-  registrationManageUpdateResponseSchema.parse(await canceled.json());
-  return {
-    sponsorId,
-    operator,
-    grants,
-    consenting,
-    denied,
-    email,
-    deniedEmail,
-    firstName,
-    lastName,
-    organization,
-    manageUrl: registered.manageUrl,
-    manageToken: registered.manageToken,
-    workspace: `/portal/#/events/${sponsorEventSlug}/leads`,
-  };
 }
 
 async function openManualBadgeEntry(page: Page) {
@@ -363,55 +379,14 @@ export async function captureSponsorViews(page: Page, info: TestInfo, checkpoint
   }
 }
 
-/** Capture actual device console arguments before scanning, and await every pending serialization. */
-export function captureDeviceConsole(page: Page) {
-  const messages: unknown[] = [];
-  const pending: Promise<void>[] = [];
-  const serializationErrors: string[] = [];
-  const onConsole = (message: ConsoleMessage) => {
-    pending.push(
-      Promise.all(message.args().map((argument) => argument.jsonValue())).then(
-        (args) => {
-          messages.push({
-            source: message.worker() ? "worker" : "page",
-            type: message.type(),
-            text: message.text(),
-            args,
-          });
-        },
-        (error: unknown) => {
-          serializationErrors.push(String(error));
-        },
-      ),
-    );
-  };
-  const onPageError = (error: Error) => {
-    messages.push({ source: "pageerror", type: "pageerror", message: error.message });
-  };
-  page.context().on("console", onConsole);
-  page.on("pageerror", onPageError);
-  return async (stop = false) => {
-    if (stop) {
-      page.context().off("console", onConsole);
-      page.off("pageerror", onPageError);
-    }
-    let completed = 0;
-    while (completed < pending.length) {
-      const batch = pending.slice(completed);
-      completed += batch.length;
-      await Promise.all(batch);
-    }
-    expect(serializationErrors, "Every observed browser console argument must be inspectable").toEqual([]);
-    return [...messages];
-  };
-}
-
 /** Observe preparation caused by the actual epoch restart, preserving the selected session. */
 export async function startNextDoorScannerContext(
   page: Page,
   occurrence: Pick<AgendaOccurrence, "id" | "roomId">,
   previous: ReturnType<typeof enrolledOfflineEligibilityResponseSchema.parse>,
 ) {
+  // The scan mode belongs to the Setup tab; a closed session leaves the Diagnostics tab open.
+  await closeScannerDiagnostics(page);
   await page.getByLabel("Scan mode", { exact: true }).selectOption("attendance");
   const preparing = page
     .waitForResponse((response) => {
@@ -438,6 +413,8 @@ export async function startNextDoorScannerContext(
     publishedRevision: previous.publishedRevision,
   });
   expect(manifest.epochId).not.toBe(previous.epochId);
+  // The confirmation is shown on the Setup tab, while the restart was requested from Diagnostics.
+  await closeScannerDiagnostics(page);
   await expect(page.getByText("New scanner session prepared. Ready to scan.", { exact: true })).toBeVisible();
   await expectDoorScannerReady(page);
   await openManualBadgeEntry(page);
@@ -459,7 +436,24 @@ export async function expectContactBadgeRejected(page: Page, email: string, free
     await page.getByRole("button", { name: "Admission decision", exact: true }).click();
     await expect(page.getByLabel("Badge code", { exact: true })).toHaveAttribute("aria-invalid", "true");
     expect(submissions).toEqual([]);
-    expect(await scannerStorage(page)).toEqual(before);
+    // The refusal is audited as a failure that never carries the contact content, and keeps no scan.
+    // The failure is queued first and reaches history only after the background upload archives it.
+    const known = new Set(before.history.map((row) => row.scan.operationId));
+    const archivedFailures = async () => {
+      const current = await scannerStorage(page);
+      return { current, added: current.history.filter((row) => !known.has(row.scan.operationId)) };
+    };
+    await expect.poll(async () => (await archivedFailures()).added.length).toBe(1);
+    const { current: after, added } = await archivedFailures();
+    expect(after.pending).toEqual(before.pending);
+    expect(after.history.filter((row) => known.has(row.scan.operationId))).toEqual(before.history);
+    expect(added).toHaveLength(1);
+    expect(added[0]).toMatchObject({
+      kind: "failure",
+      scan: { reason: "malformed_credential", scannedValue: WITHHELD_CONTACT_VALUE, scannedValueTruncated: false },
+    });
+    expect(JSON.stringify(added)).not.toContain(email);
+    expect(JSON.stringify(added)).not.toContain(freeText);
   } finally {
     page.off("request", observe);
   }

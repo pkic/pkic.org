@@ -2,7 +2,6 @@ import { LiveOwnQuestionActions } from "./LiveOwnQuestionActions";
 import { LiveQuestionThread } from "./LiveQuestionThread";
 import { useHashQueryParam } from "../hooks/useHashQueryParam";
 import { LIVE_POLL_ANSWER_REFUSAL } from "../../shared/schemas/live-session-poll";
-import type { ComponentChildren } from "preact";
 import { useEffect, useId, useState } from "preact/hooks";
 import { type LiveQuestionOrder } from "../../shared/live-session-policy";
 import {
@@ -32,7 +31,7 @@ const ORDERS = [
   { id: "new", label: "New" },
 ] as const;
 
-import { useLiveWindow } from "./useLiveWindow";
+import { SessionInteractionWindow, type SessionInteractionProps } from "./SessionInteractionWindow";
 
 function AskQuestion({
   disabled,
@@ -69,7 +68,7 @@ function AskQuestion({
         // Ask waits for a question: an empty field is at rest, not refused.
         if (!form.valid) return;
         const checked = form.submit();
-        if (!checked.data) return setError(checked.message);
+        if (!checked.data) return setError(checked.formMessage);
         const request = pending ?? { type: "question.ask", operationId: crypto.randomUUID(), ...checked.data };
         if (!onAsk(request)) return setError("The room is reconnecting. Please try again in a moment.");
         setPending(request);
@@ -81,7 +80,7 @@ function AskQuestion({
           <Textarea
             {...control}
             name="text"
-            disabled={Boolean(pending)}
+            disabled={disabled || Boolean(pending)}
             rows={2}
             value={text}
             onInput={(event) => setText(event.currentTarget.value)}
@@ -90,7 +89,7 @@ function AskQuestion({
       </Field>
       <Checkbox
         name="anonymous"
-        disabled={Boolean(pending)}
+        disabled={disabled || Boolean(pending)}
         checked={anonymous}
         onChange={(event) => setAnonymous(event.currentTarget.checked)}
         label="Ask anonymously"
@@ -230,35 +229,18 @@ function SessionQuestionsRoom({
  * A session's Questions section in its details: present only while the room
  * is open to attendees, from shortly before the start until after the end.
  */
-export function SessionQuestions({
-  slug,
-  occurrenceId,
-  startAt,
-  endAt,
-  createSocket,
-  closed = null,
-  labelledBy,
-}: {
-  slug: string;
-  occurrenceId: string;
-  startAt: string;
-  endAt: string;
-  createSocket?: LiveSocketFactory;
-  /** Shown while the room is closed; nothing by default. */
-  closed?: ComponentChildren;
-  /** An existing heading that already names this section (a "Questions" tab), instead of its own. */
-  labelledBy?: string;
-}) {
-  const open = useLiveWindow(startAt, endAt);
-  if (!open) return <>{closed}</>;
+export function SessionQuestions(props: SessionInteractionProps) {
+  const { slug, occurrenceId, createSocket, labelledBy } = props;
   return (
-    <section class="pk-stack pk-stack--snug" aria-labelledby={labelledBy ?? `${occurrenceId}-questions`}>
-      {!labelledBy && (
-        <SectionHeading level={3} id={`${occurrenceId}-questions`}>
-          Questions
-        </SectionHeading>
-      )}
-      <SessionQuestionsRoom slug={slug} occurrenceId={occurrenceId} createSocket={createSocket} />
-    </section>
+    <SessionInteractionWindow {...props} disabledControls={<AskQuestion disabled onAsk={() => false} result={null} />}>
+      <section class="pk-stack pk-stack--snug" aria-labelledby={labelledBy ?? `${occurrenceId}-questions`}>
+        {!labelledBy && (
+          <SectionHeading level={3} id={`${occurrenceId}-questions`}>
+            Questions
+          </SectionHeading>
+        )}
+        <SessionQuestionsRoom slug={slug} occurrenceId={occurrenceId} createSocket={createSocket} />
+      </section>
+    </SessionInteractionWindow>
   );
 }

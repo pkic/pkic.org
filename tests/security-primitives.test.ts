@@ -1,3 +1,12 @@
+import { z } from "zod";
+import {
+  encodeCapabilityPayload,
+  decodeCapabilityPayload,
+  bytesToBase64Url,
+} from "../functions/_lib/auth/capability-payload";
+import { firstNameSchema, lastNameSchema } from "../assets/shared/schemas/api-common";
+import { myProfileUpdateSchema } from "../assets/shared/schemas/me";
+import { userUpdateSchema } from "../assets/shared/schemas/user-management";
 import { describe, expect, it } from "vitest";
 import { getSessionCookieToken, parseCookieHeader } from "../functions/_lib/auth/session-engine";
 import { generateSignedBounceAddress, verifySignedBounceAddress } from "../functions/_lib/email/bounces";
@@ -181,5 +190,37 @@ describe("bounded stream reader", () => {
     await expect(readBoundedStream(null, Number.MAX_SAFE_INTEGER + 1)).rejects.toThrow(
       "maxBytes must be a positive safe integer",
     );
+  });
+});
+
+describe("canonical Unicode personal names", () => {
+  it.each(["Zoë", "Test ø", "Jose\u0301", "李明", "محمد", "क्‍ष", "Anne‐Marie"])(
+    "round-trips %s across naming contracts and capability payloads",
+    (name) => {
+      const expected = name.normalize("NFC");
+      expect(firstNameSchema.parse(name)).toBe(expected);
+      expect(lastNameSchema.parse(name)).toBe(expected);
+      for (const schema of [myProfileUpdateSchema, userUpdateSchema])
+        expect(schema.parse({ firstName: name, lastName: name })).toMatchObject({
+          firstName: expected,
+          lastName: expected,
+        });
+      const schema = z.object({ name: z.string() });
+      expect(decodeCapabilityPayload(encodeCapabilityPayload({ name }), schema)).toEqual({ name });
+    },
+  );
+  it("rejects malformed UTF-8 instead of substituting replacement characters", () => {
+    const bytes = new Uint8Array([
+      ...new TextEncoder().encode('{"name":"'),
+      0xc3,
+      0x28,
+      ...new TextEncoder().encode('"}'),
+    ]);
+    expect(decodeCapabilityPayload(bytesToBase64Url(bytes), z.object({ name: z.string() }))).toBeNull();
+  });
+  it.each(["ZoÃ«", "Bad\u0000Name", "<script>"])("refuses invalid names consistently: %s", (name) => {
+    expect(firstNameSchema.safeParse(name).success).toBe(false);
+    expect(myProfileUpdateSchema.safeParse({ firstName: name }).success).toBe(false);
+    expect(userUpdateSchema.safeParse({ firstName: name }).success).toBe(false);
   });
 });

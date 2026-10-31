@@ -205,9 +205,9 @@ export function FormDefinitionEditor({
       const first = refused.success ? undefined : refused.error.issues.find((issue) => issue.path[0] === "fields");
       if (first) setOpenIndex(body.positions[Number(first.path[1])] ?? -1);
       const formWide = ["key", "title", "description", "status", "purpose"].flatMap((name) => form.errorsWithin(name));
-      const message = [checked.message, ...formWide].join(" ");
+      const message = [checked.formMessage, ...formWide].filter(Boolean).join(" ");
       setError(message);
-      onError?.(message);
+      if (message) onError?.(message);
       return;
     }
     setSaving(true);

@@ -17,6 +17,27 @@ export function actingIdentityLabel(
     .join(" · ");
 }
 
+/**
+ * The order identities are offered in: an organization that holds a membership first, then other
+ * organizations, and the personal identity last, because taking part for an organization is the norm.
+ */
+export function orderedForChoice<T extends { organizationId: string | null; membershipCategory?: string | null }>(
+  identities: readonly T[],
+): T[] {
+  const rank = (identity: T) => (identity.organizationId ? (identity.membershipCategory ? 0 : 1) : 2);
+  return [...identities].sort((a, b) => rank(a) - rank(b));
+}
+
+/** What a registration names as its representation: an organization still in staff review reads as such, not as Personal. */
+export function registrationRepresentationLabel(
+  identity: Pick<ActingIdentity, "organizationName" | "jobTitle">,
+  pendingOrganizationName: string | null,
+): string {
+  return !identity.organizationName && pendingOrganizationName
+    ? [pendingOrganizationName, identity.jobTitle, "awaiting review"].filter(Boolean).join(" · ")
+    : actingIdentityLabel(identity);
+}
+
 /** The caller supplies an endpoint whose authority owns the identity collection. */
 export function actingIdentityCatalog(
   endpoint: string,

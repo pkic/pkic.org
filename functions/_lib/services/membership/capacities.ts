@@ -8,12 +8,12 @@ import { nowIso } from "../../utils/time";
 import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
 import { prepareAutomaticGroupEnrollmentForUserStatements } from "../groups/automatic-enrollment";
 import { authorizedMembershipMutationDb } from "../membership-authorization";
-import { buildCreateIdentityStatement } from "./identities";
+import { buildIndividualMembershipIdentity } from "./individual-identity";
 import { assertCategoryCompatible, prepareMembershipCategoryGuard } from "./categories";
 import { INDIVIDUAL_MEMBERSHIP_OF_USER_SQL, buildCreateIndividualMemberStatements } from "./memberships";
 import { buildMembershipAccessOffboardingStatements } from "./offboarding";
 import { REPRESENTATIVE_ROLE_IDS, buildRevokeRepresentativeRoleStatement } from "./representative-roles";
-import { activeOrganizationMemberRepresentationPredicate } from "./capacity-query";
+import { individualMembershipConflictPredicate } from "./capacity-query";
 import { identityLifecyclePublicationCondition } from "../identities/lifecycle-publication";
 import { prepareSitePublicationRequest } from "../site-publication-requests";
 import {
@@ -264,14 +264,6 @@ export async function updateMembershipCapacity(
   return capacityResponse(identity, input);
 }
 
-function individualMembershipIdentityConflictPredicate(userIdSql: string): string {
-  return `(${activeOrganizationMemberRepresentationPredicate(userIdSql)} OR EXISTS (
-    SELECT 1 FROM identities individual
-     WHERE individual.user_id = ${userIdSql} AND individual.organization_id IS NULL
-       AND individual.started_at IS NOT NULL AND individual.ended_at IS NULL AND individual.blocked_at IS NULL
-  ))`;
-}
-
 /** Grants one active identity in a configured individual category to an existing user. */
 export async function grantIndividualMembership(
   db: DatabaseLike,
@@ -293,7 +285,7 @@ export async function grantIndividualMembership(
     await first<{ id: string }>(
       db,
       `SELECT target.id FROM users target
-        WHERE target.id = ? AND ${individualMembershipIdentityConflictPredicate("target.id")}`,
+        WHERE target.id = ? AND ${individualMembershipConflictPredicate("target.id")}`,
       [input.userId],
     )
   ) {
@@ -306,20 +298,13 @@ export async function grantIndividualMembership(
     sql: `SELECT 1 FROM users target
            WHERE target.id = ? AND target.active = 1
              AND target.pii_redacted_at IS NULL AND target.merged_into_user_id IS NULL
-             AND target.updated_at = ?
-             AND NOT EXISTS (
-               SELECT 1 FROM identities personal
-                 JOIN members held ON held.identity_id = personal.id
-                WHERE personal.user_id = target.id AND personal.organization_id IS NULL
-             )
-             AND NOT ${individualMembershipIdentityConflictPredicate("target.id")}`,
+             AND target.updated_at = ?`,
     bindings: [input.userId, user.updated_at],
   };
-  // The personal identity is created first, only while the target is still
-  // eligible; the membership it holds follows in the same batch.
-  const identity = await buildCreateIdentityStatement(authorizedDb, {
+  // Reuse or create the personal identity while the target is still eligible;
+  // its membership follows in the same batch with the shared conflict guard.
+  const identity = await buildIndividualMembershipIdentity(authorizedDb, {
     userId: input.userId,
-    organizationId: null,
     source: "staff",
     startImmediately: true,
     now: at,
@@ -332,7 +317,7 @@ export async function grantIndividualMembership(
   try {
     await authorizedDb.batch([
       categoryGuard,
-      identity.statement,
+      ...identity.statements,
       prepareAuditLogAfterOneChange(
         authorizedDb,
         "admin",

@@ -7,7 +7,7 @@ import {
   type EventSettingsInput,
   type EventSettingsUpdateInput,
 } from "../../../../assets/shared/schemas/event-management";
-import { prepareDirectEventFormSelectionRead } from "./direct-form-selection";
+import { prepareEventFormSettingsRead } from "./direct-form-selection";
 import { BADGE_TEMPLATE_SETTINGS_MAX_BYTES } from "../../../../assets/shared/schemas/event-badge-template";
 import type { DatabaseLike, StatementLike, UserBackedAuthAdmin } from "../../types";
 import { AppError } from "../../errors";
@@ -47,6 +47,7 @@ function mergeEventSettings(
   };
   assignNullable("venue", input.venue);
   assignNullable("badgeTemplate", input.badgeTemplate);
+  assignNullable("promotionDesign", input.promotionDesign);
   assignNullable("virtualUrl", input.virtualUrl);
   assignNullable("attendance", input.attendance);
   if (input.heroImageUrl !== undefined) {
@@ -127,7 +128,10 @@ export function buildEventSettingsMutationStatements(
   );
   const settingsJson = stringifyJson(mergedSettings);
   if (
-    (input.settings.badgeTemplate !== undefined || mergedSettings.badgeTemplate !== undefined) &&
+    (input.settings.badgeTemplate !== undefined ||
+      mergedSettings.badgeTemplate !== undefined ||
+      input.settings.promotionDesign !== undefined ||
+      mergedSettings.promotionDesign !== undefined) &&
     new TextEncoder().encode(settingsJson).byteLength > BADGE_TEMPLATE_SETTINGS_MAX_BYTES
   ) {
     throw new AppError(
@@ -137,7 +141,7 @@ export function buildEventSettingsMutationStatements(
     );
   }
   const auditSource = input.auditDetails ?? input.settings;
-  const auditDetails =
+  const templateAuditDetails =
     input.settings.badgeTemplate === undefined
       ? auditSource
       : {
@@ -153,6 +157,21 @@ export function buildEventSettingsMutationStatements(
                   assetCount: Object.keys(input.settings.badgeTemplate.assets).length,
                   bytes: new TextEncoder().encode(stringifyJson(input.settings.badgeTemplate)).byteLength,
                 },
+        };
+  const auditDetails =
+    input.settings.promotionDesign === undefined
+      ? templateAuditDetails
+      : {
+          ...(templateAuditDetails && typeof templateAuditDetails === "object" && !Array.isArray(templateAuditDetails)
+            ? templateAuditDetails
+            : { details: templateAuditDetails }),
+          promotionDesign: input.settings.promotionDesign
+            ? {
+                version: input.settings.promotionDesign.version,
+                name: input.settings.promotionDesign.name,
+                bytes: new TextEncoder().encode(stringifyJson(input.settings.promotionDesign)).byteLength,
+              }
+            : null,
         };
   const statements: StatementLike[] = [
     ...(input.authorizationGuards ?? []),
@@ -171,7 +190,7 @@ export function buildEventSettingsMutationStatements(
                 country = IIF(? = 1, country, ?),
                 invite_limit_attendee = COALESCE(?, invite_limit_attendee),
                 settings_json = ?, updated_at = ?
-          WHERE id = ? AND (? IS NULL OR updated_at = ?)`,
+          WHERE id = ? AND (? IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at) = strftime('%Y-%m-%dT%H:%M:%fZ', ?))`,
       )
       .bind(
         input.settings.slug ?? null,
@@ -281,32 +300,8 @@ export async function updateDirectEventSettings(
   const { expectedUpdatedAt, ...settings } = input.settings;
   const context = { type: "event", id: event.id };
   const updatedAt = nowIso();
-  const formReads = [
-    ...(settings.registrationFormKey === undefined
-      ? []
-      : [
-          prepareDirectEventFormSelectionRead(db, event, "event_registration", updatedAt, settings.registrationFormKey),
-        ]),
-    ...(settings.proposalSubmissionWindow === undefined && settings.proposalFormKey === undefined
-      ? []
-      : [
-          prepareDirectEventFormSelectionRead(
-            db,
-            event,
-            "proposal_submission",
-            updatedAt,
-            settings.proposalFormKey,
-            settings.proposalSubmissionWindow,
-          ),
-        ]),
-  ];
-  const formResults = formReads.length ? await db.batch(formReads.flatMap((read) => read.statements)) : [];
-  let offset = 0;
-  const formStatements = formReads.flatMap((read) => {
-    const statements = read.decode(formResults.slice(offset, offset + read.statements.length));
-    offset += read.statements.length;
-    return statements;
-  });
+  const formRead = prepareEventFormSettingsRead(db, event, settings, updatedAt);
+  const formStatements = formRead.decode(formRead.statements.length ? await db.batch(formRead.statements) : []);
   try {
     await db.batch([
       ...buildEventSettingsMutationStatements(db, {

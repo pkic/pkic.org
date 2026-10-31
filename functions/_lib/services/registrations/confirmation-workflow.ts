@@ -1,3 +1,5 @@
+import type { RegistrationOrganizationOutcome } from "../../../../assets/shared/schemas/registration";
+import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
@@ -10,10 +12,7 @@ import { prepareRegistrationConfirmedEmail } from "./status-notifications";
 import { firstReferralCodeQuerySql } from "../referral-code-projection";
 import { nowIso } from "../../utils/time";
 import type { RegistrationConfirmOrganization } from "../../../../assets/shared/schemas/registration";
-import {
-  linkConfirmedRegistrationOrganization,
-  type RegistrationOrganizationOutcome,
-} from "./confirmation-organization";
+import { linkConfirmedRegistrationOrganization } from "./confirmation-organization";
 import { linkVerifiedAddressToDomainOrganization } from "../identities/email-domain-link";
 
 export interface ConfirmRegistrationWorkflowPayload {
@@ -25,7 +24,7 @@ export interface ConfirmRegistrationWorkflowPayload {
   signingSecret: string;
   appBaseUrl: string;
   rsvpEmail?: string;
-  /** The organization the confirmation page asked for, linked once the confirmation has committed. */
+  /** The verified organization selection committed atomically with confirmation. */
   organization?: RegistrationConfirmOrganization;
 }
 
@@ -49,6 +48,12 @@ async function commitConfirmationIntent(
   try {
     await db.batch([...prepared.statements, emailStatement]);
   } catch (error) {
+    if (prepared.affiliationConfirmed && isAuthorizationGuardFailure(error))
+      throw new AppError(
+        409,
+        "IDENTITY_CONTEXT_CHANGED",
+        "Confirm your organization details again before registering.",
+      );
     if (!isStaleRegistrationTransition(error)) throw error;
     throw new AppError(404, "CONFIRM_TOKEN_INVALID", "Invalid or already-used confirmation token");
   }
@@ -104,6 +109,7 @@ async function confirmRegistrationWithNotificationOnce(
     waitlistClaimWindowHours: payload.waitlistClaimWindowHours,
     confirmationTtlHours: payload.confirmationTtlHours,
     signingSecret: payload.signingSecret,
+    organization: payload.organization,
   });
   const referral = await first<{ code: string }>(db, firstReferralCodeQuerySql("registration", "?"), [
     prepared.registration.id,
@@ -123,16 +129,18 @@ async function confirmRegistrationWithNotificationOnce(
   });
   await commitConfirmationIntent(db, prepared, email.statement);
   // The proved address joins the organization its domain belongs to, when the shared rule links it automatically.
-  await linkVerifiedAddressToDomainOrganization(db, prepared.verifiedAddress);
+  if (!prepared.affiliationConfirmed) await linkVerifiedAddressToDomainOrganization(db, prepared.verifiedAddress);
   // Its own atomic command after the confirmation: the committed confirmation is the mailbox proof,
   // and an organization that needs review never undoes the confirmation itself.
-  const organizationOutcome = payload.organization
-    ? await linkConfirmedRegistrationOrganization(db, {
-        registrationId: prepared.registration.id,
-        organization: payload.organization,
-        at: nowIso(),
-      })
-    : null;
+  const organizationOutcome = prepared.affiliationConfirmed
+    ? (prepared.organizationOutcome ?? "linked")
+    : payload.organization
+      ? await linkConfirmedRegistrationOrganization(db, {
+          registrationId: prepared.registration.id,
+          organization: payload.organization,
+          at: nowIso(),
+        })
+      : null;
   return confirmationResult(
     payload,
     prepared,

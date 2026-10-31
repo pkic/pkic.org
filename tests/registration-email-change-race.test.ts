@@ -12,7 +12,7 @@ import {
   finalizeEmailChange,
   updateRegistrationById,
 } from "../functions/_lib/services/registrations";
-import { prepareRotateUserRegistrationManageSecrets } from "../functions/_lib/services/registrations/manage-capability-revocation";
+import { prepareRotateUserRegistrationCapabilities } from "../functions/_lib/services/registrations/manage-capability-revocation";
 import { stubSuccessfulMxLookup } from "./helpers/mx-lookup";
 
 describe("registration email-change concurrency", () => {
@@ -210,7 +210,7 @@ describe("registration email-change concurrency", () => {
       signingSecret,
     });
 
-    const planned = prepareRotateUserRegistrationManageSecrets(
+    const planned = prepareRotateUserRegistrationCapabilities(
       env.DB,
       user.id,
       new Date().toISOString(),
@@ -236,7 +236,7 @@ describe("registration email-change concurrency", () => {
     );
   });
 
-  it("allows only one account to reserve a pending login email across concurrent batches", async () => {
+  it("allows concurrent requests but commits only one mailbox ownership proof", async () => {
     const signingSecret = "test-signing-secret";
     await seedEventAndAdmin(env.DB);
     const event = await getEventBySlug(env.DB, "pqc-2026");
@@ -268,7 +268,7 @@ describe("registration email-change concurrency", () => {
       signingSecret,
     });
     await gate.reached;
-    await changeRegistrationEmail(env.DB, {
+    const secondChange = await changeRegistrationEmail(env.DB, {
       registrationId: secondRegistration.registration.id,
       newEmail: "race-target@example.com",
       authority: { kind: "event_manager", actorUserId: secondRegistration.registration.user_id },
@@ -277,7 +277,7 @@ describe("registration email-change concurrency", () => {
     });
     gate.release();
 
-    await expect(staleReservation).rejects.toMatchObject({ status: 409, code: "EMAIL_TAKEN" });
+    await expect(staleReservation).resolves.toMatchObject({ pendingEmail: "race-target@example.com" });
     await expect(
       queryAll<{ email: string; pending_email: string | null }>(
         env.DB,
@@ -285,8 +285,27 @@ describe("registration email-change concurrency", () => {
         [firstUser.id, secondUser.id],
       ),
     ).resolves.toEqual([
-      { email: "race-first@example.com", pending_email: null },
+      { email: "race-first@example.com", pending_email: "race-target@example.com" },
       { email: "race-second@example.com", pending_email: "race-target@example.com" },
     ]);
+    const proofGate = gateNextBatch(env.DB);
+    const staleProof = finalizeEmailChange(proofGate.db, {
+      userId: firstUser.id,
+      eventId: event.id,
+      registrationId: firstRegistration.registration.id,
+    });
+    await proofGate.reached;
+    await confirmRegistrationByToken(env.DB, {
+      token: secondChange.confirmationToken,
+      registrationId: secondRegistration.registration.id,
+      eventId: event.id,
+      waitlistClaimWindowHours: 24,
+      signingSecret,
+    });
+    proofGate.release();
+    await expect(staleProof).rejects.toMatchObject({ status: 409, code: "REGISTRATION_CHANGED" });
+    expect(
+      await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email=?", ["race-target@example.com"]),
+    ).toEqual([{ id: secondUser.id }]);
   }, 15_000);
 });

@@ -1,3 +1,8 @@
+import {
+  registrationEmailProofVerifyResponseSchema,
+  registrationEmailProofVerifySchema,
+  type RegistrationEmailProofVerifyResponse,
+} from "../../shared/schemas/registration-email-proof";
 import { render, createRef } from "preact";
 import { useCallback, useEffect, useState } from "preact/hooks";
 import { getJson, postJson, ApiClientError } from "../shared/api-client";
@@ -393,6 +398,7 @@ async function main(): Promise<void> {
   let isExpired = false;
   let isRecoverable = false;
   let asksOrganization = false;
+  let organizationProof: string | undefined;
   try {
     const info = await getJson(
       `${boot.apiBase}/events/${boot.eventSlug}/registrations/confirm-info?token=${encodeURIComponent(token)}${registrationId ? `&id=${encodeURIComponent(registrationId)}` : ""}`,
@@ -406,6 +412,7 @@ async function main(): Promise<void> {
     isExpired = info.expired ?? false;
     isRecoverable = info.recoverable ?? false;
     asksOrganization = info.asksOrganization;
+    organizationProof = info.organizationProof;
   } catch {
     // Non-critical — page degrades to default placeholder text
   }
@@ -437,10 +444,7 @@ async function main(): Promise<void> {
   if (eventName) fills["eventName"] = eventName;
   fillPlaceholders(boot.root, fills);
 
-  if (loadingEl) loadingEl.hidden = true;
-  revealContent();
-
-  // Opening the link proved the mailbox; a work domain that names no organization is asked for it once.
+  // Reuse the verified organization chooser after confirmation proves the mailbox.
   const organizationMount = boot.form.querySelector<HTMLElement>("[data-confirm-organization]");
   const organization: ConfirmOrganizationController = {};
   if (asksOrganization && organizationMount) {
@@ -448,16 +452,43 @@ async function main(): Promise<void> {
     const intro = boot.root.querySelector<HTMLElement>("[data-confirm-intro]");
     if (intro) intro.hidden = true;
     organizationMount.hidden = false;
-    render(<RegistrationConfirmOrganization controller={organization} />, organizationMount);
+    const endpoint = `${boot.apiBase}/events/${boot.eventSlug}/registrations/proof/verify`;
+    let verified: RegistrationEmailProofVerifyResponse | null;
+    try {
+      verified = organizationProof
+        ? await postJson(
+            endpoint,
+            registrationEmailProofVerifySchema.parse({ token: organizationProof }),
+            registrationEmailProofVerifyResponseSchema,
+          )
+        : null;
+    } catch (error) {
+      if (loadingEl) loadingEl.hidden = true;
+      setStatus(boot.statusEl, normalizeValidation(error).globalMessage, true);
+      return;
+    }
+    render(
+      <RegistrationConfirmOrganization
+        controller={organization}
+        email={email}
+        proof={
+          organizationProof && verified?.affiliation
+            ? { token: organizationProof, endpoint, affiliation: verified.affiliation }
+            : undefined
+        }
+      />,
+      organizationMount,
+    );
   }
 
   boot.form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    const named = organization.read?.();
-    if (named && "refused" in named) return;
-
+    if (organization.validate?.() === false) return;
     await withLoadingButton(findSubmitButton(boot.form), async () => {
       try {
+        if (organization.prepare && !(await organization.prepare())) return;
+        const named = organization.read?.();
+        if (named && "refused" in named) return;
         const result = await postJson(
           `${boot.apiBase}/events/${boot.eventSlug}/registrations/confirm-email`,
           {
@@ -506,6 +537,10 @@ async function main(): Promise<void> {
       }
     });
   });
+
+  // Offer the confirmation only once its organization question and submit handling are in place.
+  if (loadingEl) loadingEl.hidden = true;
+  revealContent();
 }
 
 void main();

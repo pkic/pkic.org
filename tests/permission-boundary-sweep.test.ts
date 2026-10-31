@@ -31,6 +31,7 @@ interface DeclaredOperation {
 
 /** A well-formed identifier that matches no row, so path validation passes. */
 const ABSENT_ID = "00000000000000000000000000000000";
+const ABSENT_UUID = "00000000-0000-4000-8000-000000000000";
 const ABSENT_SLUG = "no-such-slug";
 const ABSENT_DOMAIN = "no-such-domain.example";
 // Each permission sweep calls every declared route in sequence. CI workerd
@@ -41,7 +42,13 @@ function fillPath(path: string): string | null {
   // Only sweep paths whose parameters can be filled with something
   // structurally valid. Anything else would answer 400 and prove nothing.
   const filled = path.replace(/\{([^}]+)\}/g, (_match, name: string) =>
-    name === "domain" ? ABSENT_DOMAIN : /slug|key|purpose|body|token/i.test(name) ? ABSENT_SLUG : ABSENT_ID,
+    name === "domain"
+      ? ABSENT_DOMAIN
+      : name === "batchId"
+        ? ABSENT_UUID
+        : /slug|key|purpose|body|token/i.test(name)
+          ? ABSENT_SLUG
+          : ABSENT_ID,
   );
   return filled.includes("{") ? null : filled;
 }

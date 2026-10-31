@@ -11,6 +11,10 @@ import { ApiClientError, getJson } from "../shared/api-client";
 import { formatDate } from "../shared/ui";
 import { setStatus } from "../shared/form/helpers";
 import { Badge } from "../components/Badge";
+import { ButtonLink } from "../ui/Button";
+import { DescriptionList } from "../ui/DescriptionList";
+import { SectionHeading } from "../ui/SectionHeading";
+import { applicationStageNextStep } from "../../shared/membership-application-next-steps";
 import {
   memberApplicationStatusResponseSchema,
   type MemberApplicationStatusResponse,
@@ -36,17 +40,37 @@ export function parseLookupParams(search: string): LookupParams | null {
 
 /** Exported so the rendered summary can be asserted on without the page. */
 export function StatusSummary({ data }: { data: ApplicationStatus }) {
+  const category = data.membershipCategoryLabel
+    ? `${data.membershipCategory} — ${data.membershipCategoryLabel}`
+    : data.membershipCategory;
   return (
-    <div class="pk pk-stack pk-stack--snug">
+    <div class="pk pk-stack">
       <h2>Application status</h2>
+      <DescriptionList
+        items={[
+          // The requirements panel carries the status itself when there is one.
+          ...(data.workflow ? [] : [{ term: "Status", value: <Badge status={data.stage} /> }]),
+          { term: "Eligibility category", value: category },
+          { term: "Submitted", value: formatDate(data.createdAt) },
+          { term: "Last updated", value: formatDate(data.stageEnteredAt) },
+        ]}
+      />
+      <section class="pk-stack pk-stack--snug" aria-labelledby="application-next-step">
+        <SectionHeading id="application-next-step" level={3}>
+          What happens next
+        </SectionHeading>
+        <p>{applicationStageNextStep(data.stage)}</p>
+        {data.stage === "approved" && (
+          <div class="pk-cluster">
+            <ButtonLink variant="primary" href="/portal/">
+              Sign in to the member portal
+            </ButtonLink>
+          </div>
+        )}
+      </section>
       {data.workflow && <MembershipWorkflowProgress progress={data.workflow} />}
-      {!data.workflow && (
-        <p>
-          <Badge status={data.stage} />
-        </p>
-      )}
       <p class="pk-small">
-        Submitted {formatDate(data.createdAt)} — last updated {formatDate(data.stageEnteredAt)}.
+        Questions about your application? <a href="/contact/">Contact the membership team</a>.
       </p>
     </div>
   );

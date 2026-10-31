@@ -1,3 +1,6 @@
+import { identityAffiliationContextSchema, identityAffiliationPrepareBaseSchema } from "./identity-affiliation";
+import { consentSelectionIssues } from "../consent-selection";
+import type { RequiredTerm } from "./event-read-models";
 import { z } from "zod";
 import { formAnswersSchema, submittedFormAnswersSchema } from "./form-answers";
 import { databaseIdSchema } from "./identifiers";
@@ -200,7 +203,8 @@ export const userProfileSchema = z.object({
   email: normalizedEmailSchema,
 });
 
-const speakerBioSchema = trimmedString(40, 5000);
+export const SPEAKER_BIO_TOO_SHORT = "Write at least 40 characters so attendees know who is speaking.";
+const speakerBioSchema = trimmedString(40, 5000, SPEAKER_BIO_TOO_SHORT);
 export const speakerRoleSchema = proposalSpeakerRoleSchema;
 export type SpeakerRole = z.infer<typeof speakerRoleSchema>;
 
@@ -228,8 +232,8 @@ function requireAttendance(
   if (!value.attendanceType && (!value.dayAttendance || value.dayAttendance.length === 0)) {
     context.addIssue({
       code: "custom",
-      path: ["attendanceType"],
-      message: "attendanceType or dayAttendance is required",
+      path: [value.dayAttendance === undefined ? "attendanceType" : "dayAttendance"],
+      message: "Choose how you'll attend the event.",
       input: value,
     });
   }
@@ -243,9 +247,34 @@ export const attendeeRegistrationFieldsSchema = z.object({
   attendanceType: attendanceTypeSchema.optional(),
   dayAttendance: z.array(dayAttendanceItemSchema).max(31).optional(),
   customAnswers: submittedFormAnswersSchema.optional(),
-  consents: z.array(consentItemSchema).min(1).max(20),
+  consents: z.array(consentItemSchema).min(1, "Review and accept the required terms to register.").max(20),
 });
 export type AttendeeRegistrationFields = z.infer<typeof attendeeRegistrationFieldsSchema>;
+/** Wizard steps use the same fields and attendance policy as the registration request. */
+export const registrationContactFieldsSchema = attendeeRegistrationFieldsSchema.pick({
+  firstName: true,
+  lastName: true,
+  email: true,
+});
+/** A rendered day must be answered explicitly; Not attending is an answer but creates no attendance row. */
+export function withRequiredDayAttendanceChoices<Schema extends z.ZodType>(
+  schema: Schema,
+  choices: () => readonly { dayLabel: string; answered: boolean }[],
+) {
+  return schema.superRefine((_value, context) => {
+    const missing = choices().find((day) => !day.answered);
+    if (missing)
+      context.addIssue({
+        code: "custom",
+        path: ["dayAttendance"],
+        message: `Choose an option for ${missing.dayLabel}. Select Not attending if you will skip this day.`,
+      });
+  });
+}
+
+export const registrationAttendanceFieldsSchema = attendeeRegistrationFieldsSchema
+  .pick({ attendanceType: true, dayAttendance: true })
+  .superRefine(requireAttendance);
 
 /** Authenticated registration payload; identity and profile fields come from the verified session user. */
 export const attendeeRegistrationParticipationSchema = attendeeRegistrationFieldsSchema
@@ -265,7 +294,12 @@ export type AttendeeRegistrationParticipation = z.infer<typeof attendeeRegistrat
  * none — asked once, after the mailbox is proved.
  */
 export const registrationConfirmOrganizationSchema = z
-  .object({ name: organizationNameSchema, jobTitle: jobTitleSchema })
+  .object({
+    name: organizationNameSchema,
+    jobTitle: jobTitleSchema,
+    contextToken: identityAffiliationContextSchema.optional(),
+    ...identityAffiliationPrepareBaseSchema.pick({ organizationId: true, domain: true }).partial().shape,
+  })
   .strict();
 export type RegistrationConfirmOrganization = z.infer<typeof registrationConfirmOrganizationSchema>;
 
@@ -287,6 +321,14 @@ export const registrationCreateSchema = attendeeRegistrationFieldsSchema
   })
   .superRefine(requireAttendance);
 
+/** The shared request contract resolved against the event's currently offered terms. */
+export function registrationCreateForTermsSchema(terms: readonly RequiredTerm[]) {
+  return registrationCreateSchema.superRefine((body, context) => {
+    for (const issue of consentSelectionIssues(terms, body.consents))
+      context.addIssue({ code: "custom", path: ["consents", issue.termKey], message: issue.message });
+  });
+}
+
 export const registrationConfirmQuerySchema = z.object({ id: databaseIdSchema.optional(), token: tokenSchema });
 
 export const registrationConfirmSchema = registrationConfirmQuerySchema.extend({
@@ -294,6 +336,7 @@ export const registrationConfirmSchema = registrationConfirmQuerySchema.extend({
 });
 /** Linked through the canonical affiliation rule, or queued for staff review; null when nothing was asked. */
 export const registrationOrganizationOutcomeSchema = z.enum(["linked", "review_required"]).nullable();
+export type RegistrationOrganizationOutcome = NonNullable<z.infer<typeof registrationOrganizationOutcomeSchema>>;
 
 const registrationCompletionResponseBaseSchema = successResponseSchema.merge(registrationDayStateSchema).extend({
   status: registrationLifecycleStatusSchema,
@@ -320,8 +363,9 @@ export const registrationConfirmInfoResponseSchema = z.object({
   lastName: z.string().nullable(),
   email: normalizedEmailSchema.nullable(),
   organizationName: z.string().nullable(),
-  /** A work address whose domain resolves to no organization: the page asks for it once. */
+  /** A verified work address confirms its organization through the shared chooser. */
   asksOrganization: z.boolean().default(false),
+  organizationProof: registrationEmailProofTokenSchema.optional(),
   eventName: z.string().nullable(),
   expired: z.boolean(),
   recoverable: z.boolean(),
@@ -404,6 +448,8 @@ export const registrationManageReadResponseSchema = successResponseSchema.extend
   dayWaitlist: registrationDayStateSchema.shape.dayWaitlist,
   /** The registrant holds no verified work address, so their waiting days are handled last. */
   waitlistHandledLast: z.boolean(),
+  /** The organization the registrant named that staff have not yet linked to their identity. */
+  pendingOrganizationName: z.string().nullable().default(null),
   shareUrl: httpUrlSchema.nullable(),
   headshotUrl: httpUrlSchema.nullable(),
 });

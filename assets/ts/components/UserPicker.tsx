@@ -1,4 +1,4 @@
-import { personDisplayName } from "../../shared/person-display";
+import { personLegalName } from "../../shared/person-display";
 import { z } from "zod";
 import { userCatalogListResponseSchema, type UserCatalogItem } from "../../shared/schemas/user-catalog";
 import type { FieldControlProps } from "../ui/Field";
@@ -41,7 +41,11 @@ export function UserPicker({
     last_name?: string | null;
     firstName?: string | null;
     lastName?: string | null;
-  }) => personDisplayName(user.first_name ?? user.firstName, user.last_name ?? user.lastName, user.email);
+  }) =>
+    personLegalName(
+      { firstName: user.first_name ?? user.firstName, lastName: user.last_name ?? user.lastName },
+      user.email,
+    );
   return (
     <SearchPicker<z.infer<typeof userCatalogListResponseSchema>, UserCatalogItem>
       picked={value ? value.email || nameOf(value) : null}

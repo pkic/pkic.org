@@ -141,7 +141,7 @@ export function EvidenceRemoval({ eventId, canRemove }: { eventId: string; canRe
     if (!canRemove || busy || !secureOperationsAvailable()) return;
     const checked = form.submit();
     if (!checked.data) {
-      setMessage(checked.message);
+      setMessage(checked.formMessage ?? "");
       return;
     }
     setBusy(true);
@@ -165,7 +165,7 @@ export function EvidenceRemoval({ eventId, canRemove }: { eventId: string; canRe
     if (!run || !canRemove || busy || !secureOperationsAvailable()) return;
     const checked = resumption.submit();
     if (!checked.data) {
-      setMessage(checked.message);
+      setMessage(checked.formMessage ?? "");
       return;
     }
     setBusy(true);

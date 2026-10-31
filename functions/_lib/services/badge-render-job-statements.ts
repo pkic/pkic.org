@@ -1,3 +1,5 @@
+import { BADGE_ATTACHMENT_WAIT_REASONS } from "../email/attachments";
+import { personalPromotionImageCacheKey } from "../../../assets/shared/personal-promotion-image";
 import type { DatabaseLike, StatementLike } from "../types";
 import { nowIso } from "../utils/time";
 
@@ -33,24 +35,48 @@ export function prepareBadgeRenderJob(
 }
 
 /** Queues every registration badge whose rendered profile depends on this user. */
-export function prepareBadgeRenderJobsForUser(db: DatabaseLike, userId: string, createdAt = nowIso()): StatementLike {
+export function prepareBadgeRenderJobsForUser(
+  db: DatabaseLike,
+  userId: string,
+  createdAt = nowIso(),
+  registrationId?: string,
+): StatementLike {
   return db
     .prepare(
       `INSERT INTO badge_render_jobs (${BADGE_JOB_COLUMNS})
        SELECT 'badge:' || rc.code, rc.code, 'queued', 1, NULL, 0, ?, NULL, ?, ?, NULL, NULL, NULL
          FROM referral_codes rc
          JOIN registrations r ON r.id = rc.owner_id AND rc.owner_type = 'registration'
-        WHERE r.user_id = ?
+        WHERE r.user_id = ? ${registrationId ? "AND r.id = ?" : ""}
        ${BADGE_JOB_REQUEUE_ON_CONFLICT}`,
     )
-    .bind(createdAt, createdAt, createdAt, userId);
+    .bind(createdAt, createdAt, createdAt, userId, ...(registrationId ? [registrationId] : []));
 }
 
-/** Generation metadata keeps R2 results aligned with the durable render request. */
-export async function badgeCacheMetadata(db: DatabaseLike, referralCode: string): Promise<Record<string, string>> {
-  const row = await db
-    .prepare("SELECT requested_generation FROM badge_render_jobs WHERE referral_code = ?")
-    .bind(referralCode)
-    .first<{ requested_generation: number }>();
-  return { referralCode, badgeGeneration: String(row?.requested_generation ?? 0) };
+/** Recover a completed image lost or superseded while its required email was waiting. */
+export function prepareWaitingEmailBadgeRenders(db: DatabaseLike, limit: number, at = nowIso()): StatementLike {
+  const prefix = personalPromotionImageCacheKey("");
+  return db
+    .prepare(`INSERT INTO badge_render_jobs (${BADGE_JOB_COLUMNS})
+    SELECT 'badge:'||referral.code,referral.code,'queued',1,NULL,0,?,NULL,?,?,NULL,NULL,NULL
+      FROM email_outbox mail JOIN json_each(mail.payload_json,'$.__attachments') attachment
+      JOIN referral_codes referral ON referral.code=substr(json_extract(attachment.value,'$.r2Key'),?)
+      LEFT JOIN badge_render_jobs job ON job.referral_code=referral.code
+     WHERE mail.status IN ('queued','retrying') AND mail.last_error IN (?,?)
+       AND json_extract(attachment.value,'$.kind')='r2-badge-image'
+       AND json_extract(attachment.value,'$.required')=1
+       AND json_extract(attachment.value,'$.r2Key')=?||referral.code
+       AND (job.id IS NULL OR (job.status='rendered' AND COALESCE(job.rendered_at,job.updated_at)<mail.updated_at))
+     GROUP BY referral.code LIMIT ?
+     ${BADGE_JOB_REQUEUE_ON_CONFLICT}`)
+    .bind(
+      at,
+      at,
+      at,
+      prefix.length + 1,
+      BADGE_ATTACHMENT_WAIT_REASONS.missing,
+      BADGE_ATTACHMENT_WAIT_REASONS.stale,
+      prefix,
+      limit,
+    );
 }

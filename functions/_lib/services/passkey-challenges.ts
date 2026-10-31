@@ -16,6 +16,7 @@ export interface PasskeyChallengeClaims {
   challenge: string;
   challengeId: string;
   userId?: string;
+  mailbox?: { email: string; verifiedAt: string };
   exp: number;
 }
 
@@ -23,6 +24,7 @@ export interface PasskeyChallengeUse {
   challengeId: string;
   purpose: PasskeyChallengePurpose;
   expiresAt: string;
+  mailbox?: { email: string; verifiedAt: string };
 }
 
 function isPasskeyChallengeClaims(claims: object): claims is PasskeyChallengeClaims {
@@ -42,6 +44,7 @@ export async function issuePasskeyChallengeToken(
   purpose: PasskeyChallengePurpose,
   challenge: string,
   userId?: string,
+  mailbox?: { email: string; verifiedAt: string },
 ): Promise<string> {
   const claims: PasskeyChallengeClaims = {
     typ: CHALLENGE_TOKEN_TYPE,
@@ -51,6 +54,7 @@ export async function issuePasskeyChallengeToken(
     exp: Math.floor(Date.now() / 1000) + CHALLENGE_TTL_SECONDS,
   };
   if (userId) claims.userId = userId;
+  if (mailbox) claims.mailbox = mailbox;
   return signJwt(secret, claims as unknown as Record<string, unknown>);
 }
 
@@ -75,6 +79,7 @@ export function toPasskeyChallengeUse(claims: PasskeyChallengeClaims): PasskeyCh
     challengeId: claims.challengeId,
     purpose: claims.purpose,
     expiresAt: new Date(claims.exp * 1000).toISOString(),
+    ...(claims.mailbox ? { mailbox: claims.mailbox } : {}),
   };
 }
 

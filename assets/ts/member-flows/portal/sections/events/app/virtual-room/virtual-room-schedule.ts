@@ -25,20 +25,16 @@ export function locationSessions(agenda: Pick<AgendaSnapshot, "occurrences">, ro
 export interface RoomMoment {
   /** The session running at this moment, if any. */
   current: RoomSession | null;
-  /** The sessions after it (or, between sessions, the next ones) on the same event day. */
+  /** The sessions after it (or, between sessions, the next ones) including later event days. */
   upcoming: RoomSession[];
 }
 
-/** The location's running session and the rest of its day, at `now`, in the event's zone. */
-export function roomMoment(sessions: readonly RoomSession[], now: number, timeZone: string): RoomMoment {
+/** The location's running session and the next scheduled sessions, including later event days. */
+export function roomMoment(sessions: readonly RoomSession[], now: number): RoomMoment {
   const instant = new Date(now).toISOString();
-  const today = instantToCalendarDate(instant, timeZone);
   const current = sessions.find((session) => session.startAt <= instant && instant < session.endAt) ?? null;
   const upcoming = sessions
-    .filter(
-      (session) =>
-        session !== current && session.startAt > instant && instantToCalendarDate(session.startAt, timeZone) === today,
-    )
+    .filter((session) => session !== current && session.startAt > instant)
     .slice(0, UPCOMING_SHOWN);
   return { current, upcoming };
 }

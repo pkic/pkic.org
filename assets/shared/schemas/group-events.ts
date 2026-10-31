@@ -15,6 +15,7 @@ import {
   eventProfileCatalogResponseSchema,
   eventResourceCoreSchema,
   eventSettingsSchema,
+  eventSettingsUpdateSchema,
 } from "./event-management";
 import { eventFormsResponseSchema } from "./forms";
 import {
@@ -162,6 +163,7 @@ export const groupEventSettingsUpdateSchema = eventSettingsSchema
   .extend({
     links: linksSchema.optional(),
     expectedUpdatedAt: utcInstantSchema,
+    proposalSubmissionWindow: eventSettingsUpdateSchema.shape.proposalSubmissionWindow,
   });
 export type GroupEventSettingsUpdateInput = z.infer<typeof groupEventSettingsUpdateSchema>;
 

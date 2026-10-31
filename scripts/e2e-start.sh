@@ -34,10 +34,13 @@ unset npm_config__jsr_registry NPM_CONFIG__JSR_REGISTRY
 
 mkdir -p "$(dirname "$INTERCEPT_URL_FILE")" "$(dirname "$STATE_PATH_FILE")"
 rm -f "$INTERCEPT_URL_FILE" "$PAYMENT_URL_FILE"
-rm -f test-results/portal-management-verification-auth.json
-rm -f test-results/portal-mobile-navigation-auth.json
-rm -f test-results/portal-groups-auth.json
-rm -f test-results/portal-vote-management-auth.json
+# Sharded runs clear these once, before any shard starts, so one shard cannot delete another's file.
+if [ -z "${E2E_SHARDED:-}" ]; then
+  rm -f test-results/portal-management-verification-auth.json
+  rm -f test-results/portal-mobile-navigation-auth.json
+  rm -f test-results/portal-groups-auth.json
+  rm -f test-results/portal-vote-management-auth.json
+fi
 
 cleanup() {
   if [ -n "${WORKER_PID:-}" ]; then

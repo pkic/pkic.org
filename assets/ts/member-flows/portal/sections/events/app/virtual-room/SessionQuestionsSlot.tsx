@@ -34,6 +34,7 @@ export function SessionQuestionsSlot({ slug, session, next = null, labelledBy }:
       startAt={target.startAt}
       endAt={target.endAt}
       labelledBy={labelledBy}
+      showClosedControls
       closed={CLOSED}
     />
   );

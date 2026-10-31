@@ -145,7 +145,7 @@ export function BulkInviteComposer({
   async function renderPreview() {
     const checked = form.submit();
     if (!checked.data) {
-      notify(checked.message, "error");
+      if (checked.formMessage) notify(checked.formMessage, "error");
       return;
     }
     setPreviewStatus("Generating preview…");
@@ -177,7 +177,13 @@ export function BulkInviteComposer({
       let endorsed = 0;
       let skipped = 0;
       const checked = form.submit();
-      if (!checked.data) throw new Error(checked.message);
+      if (!checked.data) {
+        if (checked.formMessage) {
+          setSendStatus(checked.formMessage);
+          notify(checked.formMessage, "error");
+        }
+        return;
+      }
       const body = checked.data;
       for (const batch of preview.sendBatches) {
         const invites = body.invites.slice(batch.offset, batch.offset + batch.count);

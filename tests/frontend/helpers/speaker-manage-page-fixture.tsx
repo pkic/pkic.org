@@ -1,4 +1,4 @@
-import { expect, vi } from "vitest";
+import { afterEach, beforeEach, expect, vi } from "vitest";
 import { act } from "preact/test-utils";
 import { renderToString } from "preact-render-to-string";
 import { EventSpeakerManagement } from "../../../assets/ts/site/EventSpeakerManagement";
@@ -15,6 +15,23 @@ export const SPEAKER_USER_ID = "00000000-0000-4000-8000-000000000041";
 /** The speaker's individual identity, which an individual selection speaks as. */
 export const INDIVIDUAL_IDENTITY_ID = "00000000-0000-4000-8000-000000000061";
 export const AUTH = "/api/v1/auth/session";
+
+/**
+ * Opens each case on the speaker link with a fresh module graph, since the
+ * page runs `main()` at import, and clears the page and stubs afterwards.
+ */
+export function resetSpeakerPageBetweenTests(): void {
+  beforeEach(() => {
+    vi.resetModules();
+    window.history.replaceState({}, "", "/events/2026/pqc-2026/speaker/?token=speaker-token-12345678901234567890");
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    document.body.innerHTML = "";
+    window.history.replaceState({}, "", "/");
+  });
+}
 
 export function signedInSession(userId = SPEAKER_USER_ID): Response {
   return json(
@@ -83,7 +100,9 @@ export function json(value: unknown, status = 200): Response {
   return new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
 }
 
-export function speakerPage(overrides: { status?: string; proposalStatus?: string } = {}): Record<string, unknown> {
+export function speakerPage(
+  overrides: { status?: string; proposalStatus?: string; personalDetailsEditable?: boolean } = {},
+): Record<string, unknown> {
   return {
     speaker: {
       userId: SPEAKER_USER_ID,
@@ -121,6 +140,7 @@ export function speakerPage(overrides: { status?: string; proposalStatus?: strin
       headshotUploaded: false,
       headshotUpdatedAt: null,
       headshotUrl: null,
+      personalDetailsEditable: overrides.personalDetailsEditable ?? true,
     },
   };
 }
@@ -200,9 +220,9 @@ export function panel(root: ParentNode, name: string): HTMLElement {
   return element;
 }
 
-/** Canonical saved selection receipt, independent of the recorded appearance. */
-export function profileReceipt(data?: Record<string, unknown>): Response {
-  const saved = data ?? speakerPage();
+/** Canonical saved selection receipt, independent of the recorded appearance; `page` shapes the default page. */
+export function profileReceipt(data?: Record<string, unknown>, page: Parameters<typeof speakerPage>[0] = {}): Response {
+  const saved = data ?? speakerPage(page);
   if (!data) {
     const selectedAt = "2026-01-01T00:00:00.000Z";
     saved.profile = {

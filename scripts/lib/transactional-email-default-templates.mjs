@@ -1,26 +1,36 @@
+import { IDENTITY_NOTIFICATION_EMAIL_TEMPLATE } from "../../assets/shared/email-template-actions.ts";
 // Operational messages seeded separately from schema migrations.
 export const DEFAULT_TRANSACTIONAL_EMAIL_TEMPLATES = [
+  IDENTITY_NOTIFICATION_EMAIL_TEMPLATE,
   {
     key: "event_proposal_verify",
     subjectTemplate: "Verify your email for {{eventName}}",
     content:
-      "Use this short-lived link to verify your email address and continue your proposal for {{eventName}}.\n\n{{verificationUrl}}\n\nIf you did not request this link, you can ignore this email.",
+      "Use this short-lived link to verify your email address for {{eventName}}.\n\n{{verificationUrl}}\n\nIf you did not request this link, you can ignore this email.",
     contentType: "text",
+    messageType: "transactional",
+  },
+  {
+    key: "membership_join_verify",
+    subjectTemplate: "Verify your email address to join the PKI Consortium",
+    content:
+      "Use the secure link below to verify your email address and continue joining the PKI Consortium. The link works for {{expiresInMinutes}} minutes.\n\n[Verify email and continue]({{verificationUrl}})\n\nIf you did not request this link, you can safely ignore this email.",
+    contentType: "markdown",
     messageType: "transactional",
   },
   {
     key: "registration_email_verify",
     subjectTemplate: "Verify your email for {{eventName}}",
     content:
-      "Open this link to verify your email address and continue your registration for {{eventName}}.\n\n{{verificationUrl}}\n\nIf you did not start a registration, you can ignore this email.",
-    contentType: "text",
+      'Verify your email address to continue your registration for **{{eventName}}**.\n\n<div class="cta-navy"><a href="{{verificationUrl}}">Verify email and continue &rarr;</a></div>\n\nIf you did not start a registration, you can ignore this email.',
+    contentType: "markdown",
     messageType: "transactional",
   },
   {
     key: "user_email_verification",
     subjectTemplate: "Verify your email address",
     content:
-      'Please confirm that **{{email}}** is your address for the **PKI Consortium portal**.\n\n<div class="cta-navy"><a href="{{verificationUrl}}">Verify this address &rarr;</a></div>\n\nThe link works once, for {{expiresInHours}} hours, and you do not need to sign in to use it. A verified work address links you to your organization.\n\nIf you did not add this address, you can ignore this email.',
+      'Please confirm that **{{email}}** is your address for the **PKI Consortium portal**.\n\n<div class="cta-navy"><a href="{{verificationUrl}}">Verify this address &rarr;</a></div>\n\nThe link works once, for {{expiresInHours}} hours. Sign in to the account where you requested this address, then confirm linking it. Confirm only if both addresses belong to you. A verified work address links you to your organization.\n\nIf you did not add this address, you can ignore this email.',
     contentType: "markdown",
     messageType: "transactional",
   },

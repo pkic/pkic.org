@@ -9,7 +9,11 @@ import {
   groupEventRegistrationSettingsResponseSchema,
   groupEventTermsResponseSchema,
   groupEventsListResponseSchema,
+  groupEventSettingsUpdateSchema,
 } from "../../assets/shared/schemas/group-events";
+import { eventManagementDetailResponseSchema } from "../../assets/shared/schemas/event-management";
+import { formsListResponseSchema } from "../../assets/shared/schemas/form-management";
+import { eventFormsResponseSchema } from "../../assets/shared/schemas/forms";
 import { eventInvitePreviewResponseSchema } from "../../assets/shared/schemas/event-invite-bulk";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { openRow } from "./helpers/data-table";
@@ -21,6 +25,108 @@ import { tab } from "./helpers/tabs";
 test.use({ timezoneId: "Europe/Amsterdam" });
 
 const GROUP_ID = "20000000-0000-4000-8000-000000000003";
+
+test("a manager configures a missing website CFP form and sees the saved selection in both settings views", async ({
+  page,
+}, info) => {
+  await signInToPortal(page, e2eAdminEmail("portal-event-management"));
+  const slug = "pqc-conference-amsterdam-nl";
+  const detail = await page.request.get(`/api/v1/events/${slug}`);
+  expect(detail.status()).toBe(200);
+  const event = eventManagementDetailResponseSchema.parse(await detail.json()).event;
+  expect(event.sourceMode).toBe("hugo");
+  expect(event.ownerGroupId).toBeTruthy();
+  const catalog = await page.request.get(
+    `/api/v1/events/${slug}/forms?purpose=proposal_submission&status=active&limit=1`,
+  );
+  expect(catalog.status()).toBe(200);
+  const form = formsListResponseSchema.parse(await catalog.json()).forms[0];
+  expect(form).toBeDefined();
+  const cleared = await page.request.patch(`/api/v1/groups/${event.ownerGroupId}/events/${event.id}/settings`, {
+    data: groupEventSettingsUpdateSchema.parse({ expectedUpdatedAt: event.updatedAt, proposalFormKey: null }),
+  });
+  expect(cleared.status(), await cleared.text()).toBe(200);
+  const base = `/portal/#/groups/${event.ownerGroupId}/events/${event.id}/settings`;
+  await page.goto(`${base}/cfp`);
+  await expect(page.getByText("No proposal form", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Call for proposals actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Edit CFP settings", exact: true }).click();
+  await page.getByRole("combobox", { name: "Proposal form", exact: true }).click();
+  await page.getByRole("option").filter({ hasText: form.title }).click();
+  await page.screenshot({ path: info.outputPath("cfp-editor-desktop.png"), fullPage: true });
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.screenshot({ path: info.outputPath("cfp-editor-phone.png"), fullPage: true });
+  await page.getByRole("button", { name: "Save call for proposals", exact: true }).click();
+  await expect(page.getByText("No proposal form", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("definition").filter({ hasText: form.title })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("definition").filter({ hasText: form.title })).toBeVisible();
+  await page.goto(`${base}/access`);
+  await expect(page.getByRole("definition").filter({ hasText: form.key })).toBeVisible();
+  await page.goto(`${base}/attendance-days`);
+  await page.getByRole("button", { name: "Attendance days actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Edit attendance days", exact: true }).click();
+  await page.getByRole("tab", { name: /^Options/ }).click();
+  await page
+    .locator("summary")
+    .filter({ hasText: /In[- ]person/ })
+    .first()
+    .click();
+  await page.getByRole("combobox", { name: "Icon", exact: true }).first().selectOption("people");
+  for (const [width, height, device] of [
+    [1280, 900, "desktop"],
+    [375, 812, "phone"],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    if (device === "phone") {
+      const actions = page.getByRole("region", { name: "Attendance settings actions", exact: true });
+      const cancel = await actions.getByRole("button", { name: "Cancel", exact: true }).boundingBox();
+      const save = await actions.getByRole("button", { name: "Save days", exact: true }).boundingBox();
+      expect(cancel).not.toBeNull();
+      expect(save).not.toBeNull();
+      expect(Math.abs(cancel!.y - save!.y)).toBeLessThan(1);
+      expect(save!.width).toBeGreaterThan(cancel!.width);
+      expect(save!.y + save!.height).toBeLessThanOrEqual(height);
+      await expect(page.getByRole("navigation", { name: "App", exact: true })).toBeHidden();
+    }
+    await page.screenshot({ path: info.outputPath(`attendance-icon-editor-${device}.png`), fullPage: true });
+  }
+  await page.getByRole("tab", { name: "Schedule", exact: true }).click();
+  for (const [width, height, device] of [
+    [1280, 900, "desktop"],
+    [375, 812, "phone"],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.screenshot({ path: info.outputPath(`attendance-schedule-${device}.png`), fullPage: true });
+  }
+  await page.getByRole("button", { name: "Save days", exact: true }).click();
+  await expect(page.getByText("Days saved.", { exact: true })).toBeVisible();
+  for (const [width, height, device] of [
+    [1280, 900, "desktop"],
+    [375, 812, "phone"],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await expect(page.getByRole("button", { name: "Save days", exact: true })).toHaveCount(0);
+    await expect(page.getByText("800 places").first()).toBeVisible();
+    await page.screenshot({ path: info.outputPath(`attendance-view-schedule-${device}.png`), fullPage: true });
+    await page.getByRole("tab", { name: /^Options/ }).click();
+    if (device === "phone")
+      await page
+        .locator("summary")
+        .filter({ hasText: /In[- ]person/ })
+        .click();
+    await expect(page.getByText("People", { exact: true })).toBeVisible();
+    await page.screenshot({ path: info.outputPath(`attendance-view-options-${device}.png`), fullPage: true });
+    await page.getByRole("tab", { name: "Schedule", exact: true }).click();
+  }
+  await page.reload();
+  await expect(page.getByText("800 places").first()).toBeVisible();
+  const configuration = await page.request.get(`/api/v1/events/${slug}/forms/placements/event_registration`);
+  expect(configuration.status()).toBe(200);
+  expect(eventFormsResponseSchema.parse(await configuration.json()).eventDays[0].attendanceOptions[0].icon).toBe(
+    "people",
+  );
+});
 
 test("a portal manager creates and edits a group-owned standalone event", async ({ page }) => {
   // The journey ends with a real Astro site release, which alone takes most of the default budget.
@@ -145,6 +251,8 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   await communications.screenshot({ path: test.info().outputPath("campaign-email-preview.png") });
 
   await tab(detail, "Settings").click();
+  await tab(detail, /^Registration$/).click();
+  await tab(detail, /^Terms$/).click();
   let registrationSetup = page.getByRole("region", { name: `Configure ${eventName} registration` });
   await expect(registrationSetup.getByLabel("Agreement text")).toHaveCount(0);
   await registrationSetup.getByRole("button", { name: "Event terms actions" }).click();
@@ -161,6 +269,7 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   await registrationSetup.getByRole("button", { name: "Save terms" }).click();
   expect((await termsSaved).status()).toBe(200);
 
+  await tab(detail, /^Policy$/).click();
   const policySection = registrationSetup.getByRole("region", { name: "Registration policy and questions" });
   await policySection.getByRole("button", { name: "Registration policy actions" }).click();
   await page.getByRole("menuitem", { name: "Edit settings", exact: true }).click();
@@ -245,8 +354,8 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   await expect(submissionWindow.getByLabel("Opens", { exact: true })).toHaveValue("2027-06-10T09:00");
   await submissionWindow.getByRole("button", { name: "Cancel", exact: true }).click();
 
+  await tab(detail, /^Attendance days$/).click();
   registrationSetup = page.getByRole("region", { name: `Configure ${eventName} registration` });
-  // Every setting is a panel open on arrival; nothing has to be unfolded.
   await registrationSetup.getByRole("button", { name: "Attendance days actions" }).click();
   await page.getByRole("menuitem", { name: "Edit attendance days", exact: true }).click();
   await registrationSetup.getByRole("button", { name: "Add day" }).click();
@@ -254,9 +363,11 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   await registrationSetup.getByLabel("Starts at").fill("09:00");
   await registrationSetup.getByLabel("Ends at").fill("17:00");
   await registrationSetup.getByRole("button", { name: "Add attendance option" }).click();
-  await registrationSetup.getByLabel("Value").fill("in_person");
-  await registrationSetup.getByLabel("Label").last().fill("In person");
-  await registrationSetup.getByLabel("Capacity").fill("40");
+  await registrationSetup.getByLabel("Key").fill("in_person");
+  await registrationSetup.getByLabel("Label").fill("In person");
+  await registrationSetup.getByRole("tab", { name: "Schedule", exact: true }).click();
+  await registrationSetup.getByRole("button", { name: "+ Offer", exact: true }).click();
+  await registrationSetup.getByLabel("Capacity for In person on 2027-06-10", { exact: true }).fill("40");
   const daysSaved = page.waitForResponse(
     (response) =>
       response.url().includes(`/api/v1/groups/${GROUP_ID}/events/`) &&
@@ -268,13 +379,18 @@ test("a portal manager creates and edits a group-owned standalone event", async 
 
   // The event's facts are edited where they are read: Edit is the details
   // panel's own command, and the panel becomes the form.
+  await tab(detail, /^Visibility and access$/).click();
   await page.getByRole("button", { name: "Event actions" }).click();
   await page.getByRole("menuitem", { name: "Edit event", exact: true }).click();
   const editor = page.getByRole("region", { name: "Edit event" });
   await expect(editor.getByLabel("Peer invitation limit")).toHaveValue("7");
   await editor.getByLabel("Peer invitation limit").fill("9");
-  await editor.getByLabel("City").fill("Rotterdam");
   await editor.getByRole("button", { name: "Save event" }).click();
+  await tab(detail, /^Location$/).click();
+  await page.getByRole("button", { name: "Event settings actions" }).click();
+  await page.getByRole("menuitem", { name: "Edit settings", exact: true }).click();
+  await page.getByLabel("City", { exact: true }).fill("Rotterdam");
+  await page.getByRole("button", { name: "Save changes", exact: true }).click();
   await tab(detail, "Overview").click();
   await expect(detail.getByText("Rotterdam, Netherlands", { exact: true })).toBeVisible();
 
@@ -334,20 +450,22 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   });
 
   const publicShells = [
-    ["register/", "data-event-registration"],
-    ["register/confirm/", "data-event-registration-confirm"],
-    ["register/manage/", "data-event-registration-manage"],
-    ["propose/", "data-event-proposal"],
-    ["propose/manage/", "data-event-proposal-manage"],
-    ["propose/speaker/", "data-event-speaker-manage"],
-    ["propose/presentation/", "data-event-speaker-presentation"],
-    ["invite/decline/", "data-invite-decline"],
+    ["register/", "data-event-registration", false],
+    ["register/confirm/", "data-event-registration-confirm", true],
+    ["register/manage/", "data-event-registration-manage", true],
+    ["propose/", "data-event-proposal", false],
+    ["propose/manage/", "data-event-proposal-manage", true],
+    ["propose/speaker/", "data-event-speaker-manage", true],
+    ["propose/presentation/", "data-event-speaker-presentation", true],
+    ["invite/decline/", "data-invite-decline", true],
   ] as const;
   await publishE2eSite(page, `/events/2027/${eventSlug}/register/`);
-  for (const [suffix, marker] of publicShells) {
+  for (const [suffix, marker, privatePage] of publicShells) {
     const response = await page.request.get(`/events/2027/${eventSlug}/${suffix}`);
     expect(response.status(), suffix).toBe(200);
-    expect(response.headers()["cache-control"], suffix).toContain("no-store");
+    expect(response.headers()["cache-control"], suffix).toBe(
+      privatePage ? "no-store, max-age=0" : "public, max-age=0, must-revalidate",
+    );
     expect(await response.text(), suffix).toContain(marker);
   }
 

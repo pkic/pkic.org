@@ -58,18 +58,18 @@ export async function getOrganizationDomainClaimForEmail(
   db: DatabaseLike,
   email: string,
 ): Promise<OrganizationDomainClaim | null> {
-  const candidates = organizationDomainCandidates(email);
-  if (candidates.length === 0) return null;
-  const row = await first<OrganizationDomainClaimRow>(
-    db,
-    `SELECT id, domain, application_id, organization_id
-     FROM organization_domain_claims
-     WHERE domain IN (${candidates.map(() => "?").join(", ")})
-     ORDER BY length(domain) DESC
-     LIMIT 1`,
-    candidates,
-  );
+  const read = organizationDomainClaimForEmailSelection(email);
+  const row = await first<OrganizationDomainClaimRow>(db, read.sql, read.bindings);
   return row ? toClaim(row) : null;
+}
+
+/** The same most-specific work-domain lookup, composable into a request's existing batch. */
+export function organizationDomainClaimForEmailSelection(email: string) {
+  return {
+    sql: `SELECT id,domain,application_id,organization_id FROM organization_domain_claims
+    WHERE domain IN(SELECT value FROM json_each(?)) ORDER BY length(domain) DESC LIMIT 1`,
+    bindings: [JSON.stringify(organizationDomainCandidates(email))],
+  };
 }
 
 /**
@@ -120,8 +120,10 @@ export async function prepareTransferApplicationDomainClaim(
 export async function prepareClaimDomainForOrganization(
   db: DatabaseLike,
   params: { domain: string; organizationId: string; now: string },
+  /** The caller must guard this observation in its atomic write when supplied. */
+  observedClaim?: OrganizationDomainClaim | null,
 ): Promise<StatementLike | null> {
-  const claim = await getOrganizationDomainClaim(db, params.domain);
+  const claim = observedClaim === undefined ? await getOrganizationDomainClaim(db, params.domain) : observedClaim;
   if (claim) {
     if (claim.organizationId === params.organizationId) return null;
     throw new AppError(409, "ORGANIZATION_DOMAIN_IN_USE", "This organization domain is already claimed");

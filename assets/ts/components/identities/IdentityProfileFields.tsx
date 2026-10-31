@@ -34,9 +34,9 @@ export function identityProfileDraft(identity: {
 }
 
 /** The draft as the contract reads it; an empty title or biography clears the stored one. */
-export function identityProfileBody(draft: IdentityProfileDraft) {
+export function identityProfileBody(draft: IdentityProfileDraft, organization: boolean) {
   return {
-    jobTitle: draft.jobTitle.trim(),
+    ...(organization ? { jobTitle: draft.jobTitle.trim() } : {}),
     biography: draft.biography.trim(),
     links: draft.pendingLink?.trim() ? [...draft.links, draft.pendingLink.trim()] : draft.links,
   };
@@ -49,10 +49,10 @@ export function identityProfileBody(draft: IdentityProfileDraft) {
  */
 export function IdentityEditNotice({ editor = "owner" }: { editor?: "owner" | "staff" }) {
   return editor === "owner" ? (
-    <Alert tone="warn">
+    <p class="pk-muted pk-small">
       Registrations, proposals and other records made as this identity show these changes too. If your affiliation
       itself changed, create a new identity instead of editing this one.
-    </Alert>
+    </p>
   ) : (
     <Alert tone="warn">
       This changes the identity itself. Their registrations, proposals and public profile show the change too.
@@ -89,20 +89,18 @@ export function IdentityProfileFields({
       : "A general introduction covering your interests and roles. For your work at a specific organization, edit that organization’s bio instead.";
   return (
     <>
-      <Field
-        label={organizationId ? "Job title for this organization" : "Job title"}
-        required={Boolean(organizationId)}
-        {...of("jobTitle")}
-      >
-        {(control) => (
-          <TextInput
-            {...control}
-            name="jobTitle"
-            value={draft.jobTitle}
-            onInput={(event) => onChange({ jobTitle: event.currentTarget.value })}
-          />
-        )}
-      </Field>
+      {organizationId && (
+        <Field label="Job title for this organization" required {...of("jobTitle")}>
+          {(control) => (
+            <TextInput
+              {...control}
+              name="jobTitle"
+              value={draft.jobTitle}
+              onInput={(event) => onChange({ jobTitle: event.currentTarget.value })}
+            />
+          )}
+        </Field>
+      )}
       <Field label={biographyLabel} help={biographyHint} {...of("biography")}>
         {(control) => (
           <MarkdownEditor

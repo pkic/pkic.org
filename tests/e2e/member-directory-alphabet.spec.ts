@@ -37,6 +37,7 @@ test("the published directory offers working letter navigation without API reads
   await destination.locator(".member-card").first().scrollIntoViewIfNeeded();
   await expect(destination.locator(".member-card").first()).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
-  expect(apiRequests).toEqual([]);
+  // The account menu's session probe is the one request every public page makes; the directory itself reads nothing.
+  expect(apiRequests.map((url) => new URL(url).pathname).filter((path) => path !== "/api/v1/auth/session")).toEqual([]);
   await page.screenshot({ path: test.info().outputPath("directory-letter-mobile.png") });
 });

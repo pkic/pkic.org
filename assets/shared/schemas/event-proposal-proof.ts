@@ -1,12 +1,7 @@
+import { personNamePatchSchema } from "./api-common";
 import { z } from "zod";
 import { EMAIL_AUTH_TOKEN_MAX_LENGTH } from "../constants/email-auth";
-import {
-  eventSlugParamsSchema,
-  normalizedEmailSchema,
-  firstNameSchema,
-  jobTitleSchema,
-  lastNameSchema,
-} from "./api-common";
+import { eventSlugParamsSchema, normalizedEmailSchema, jobTitleSchema } from "./api-common";
 import { consentItemSchema } from "./registration";
 import { memberJoinApplicantKindSchema } from "./member-join";
 import { linksSchema } from "./links";
@@ -22,8 +17,18 @@ import { databaseIdSchema } from "./identifiers";
 import { httpCapabilityUrlSchema } from "./urls";
 import { proposalEntryContextSchema } from "./proposal-entry";
 import { screensWorkEmailDomain, workEmailStepSchema } from "./work-email";
+import { identityAffiliationPrepareBaseSchema, identityAffiliationPreviewResponseSchema } from "./identity-affiliation";
 
 export const eventProposalContinuationTokenSchema = z.string().min(32).max(EMAIL_AUTH_TOKEN_MAX_LENGTH);
+
+/**
+ * Carries the continuation token of the mailbox proof just completed on a
+ * speaker link, so that step may also change the person's own photo.
+ */
+export const SPEAKER_MAILBOX_PROOF_HEADER = "x-pkic-mailbox-proof";
+export const speakerMailboxProofHeadersSchema = z.object({
+  [SPEAKER_MAILBOX_PROOF_HEADER]: eventProposalContinuationTokenSchema.nullish(),
+});
 
 /**
  * Starts mailbox proof for a proposal contact or speaker from the shared
@@ -41,12 +46,22 @@ export const eventProposalProofStartSchema = workEmailStepSchema
     consents: z.array(consentItemSchema).max(20),
   })
   .strict();
-export const eventProposalProofStartResponseSchema = z.object({ status: z.literal("verification_sent") });
+/**
+ * `verified` answers a speaker who opened their own invitation link and gave the
+ * address it was mailed to: that link already proved the mailbox, so no second
+ * email is sent and the token continues exactly as the emailed one would.
+ */
+export const eventProposalProofStartResponseSchema = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("verification_sent") }),
+  z.object({ status: z.literal("verified"), token: eventProposalContinuationTokenSchema }),
+]);
 export const eventProposalProofVerifySchema = z
   .object({
     token: eventProposalContinuationTokenSchema,
     speakerManagementToken: eventProposalContinuationTokenSchema.optional(),
     speakerProposalId: databaseIdSchema.optional(),
+    ...identityAffiliationPrepareBaseSchema.pick({ domain: true }).shape,
+    affiliation: identityAffiliationPrepareBaseSchema.omit({ phase: true, email: true, emailId: true }).optional(),
   })
   .strict();
 export const eventProposalProofPersonSchema = z.object({
@@ -58,16 +73,7 @@ export const eventProposalProofPersonSchema = z.object({
   bio: z.string().nullable(),
   links: linksSchema,
 });
-export const eventProposalPersonNamePatchSchema = z
-  .object({
-    firstName: firstNameSchema.optional(),
-    lastName: lastNameSchema.optional(),
-  })
-  .strict()
-  .refine((body) => body.firstName !== undefined || body.lastName !== undefined, {
-    message: "Enter a first or last name.",
-  });
-export const eventProposalProofPersonPatchSchema = eventProposalPersonNamePatchSchema.safeExtend({
+export const eventProposalProofPersonPatchSchema = personNamePatchSchema.safeExtend({
   continuationToken: eventProposalContinuationTokenSchema.optional(),
 });
 export const eventProposalProofPersonPatchResponseSchema = z.object({ person: eventProposalProofPersonSchema });
@@ -122,6 +128,7 @@ export const eventProposalProofVerifyResponseSchema = z.discriminatedUnion("stat
     consents: z.array(consentItemSchema).max(20),
     person: eventProposalProofPersonSchema.nullable(),
     email: normalizedEmailSchema,
+    affiliation: identityAffiliationPreviewResponseSchema.optional(),
     organization: z
       .object({
         id: databaseIdSchema,

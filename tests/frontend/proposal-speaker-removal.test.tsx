@@ -365,7 +365,7 @@ describe("proposal speaker removal UI", () => {
 
     const form = root.querySelector("form")!;
     expect(form.noValidate).toBe(true);
-    expect(labelNames(form)).toEqual(["Job title", "About you"]);
+    expect(labelNames(form)).toEqual(["About you"]);
     // The links are a group of one-URL inputs, named as a group rather than by a single label.
     expect(form.querySelector('input[aria-label="Profile link URL"]')).not.toBeNull();
     expect(form.textContent).toContain("Social and profile links");

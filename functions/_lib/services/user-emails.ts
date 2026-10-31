@@ -22,6 +22,7 @@ import { AppError } from "../errors";
 import type { DatabaseLike, StatementLike, UserBackedAuthAdmin } from "../types";
 import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "./audit";
 import { authorizedUserMutationDb } from "./user-management-authorization";
+import { prepareRotateProposalSpeakerSecretsMailedToUserEmail } from "./registrations/manage-capability-revocation";
 
 interface UserEmailRow {
   id: string;
@@ -154,7 +155,7 @@ export function prepareInsertUserEmail(
 
 /**
  * Removes one address; an identity that followed it falls back to the
- * primary address. The delete is last, so a one-change audit row after it
+ * primary address, and speaker links mailed to it are rotated. The delete is last, so a one-change audit row after it
  * records only a removal that happened.
  */
 export function prepareRemoveUserEmailStatements(
@@ -162,6 +163,8 @@ export function prepareRemoveUserEmailStatements(
   input: { userId: string; emailId: string; at: string },
 ): StatementLike[] {
   return [
+    // A speaker link mailed to this address must die with the address.
+    prepareRotateProposalSpeakerSecretsMailedToUserEmail(db, input.userId, input.emailId),
     db
       .prepare("UPDATE identities SET email_id = NULL, updated_at = ? WHERE email_id = ? AND user_id = ?")
       .bind(input.at, input.emailId, input.userId),

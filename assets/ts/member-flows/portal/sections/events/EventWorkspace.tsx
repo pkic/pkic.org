@@ -220,7 +220,9 @@ function LegacyEventRoute({
   // proposals, agenda, ticket and scanner tabs come from the caller-scoped
   // projection, and a reader who has none of them yet sees the event home
   // with its registration offer rather than a separate plain detail page.
-  return <ParticipantEvent event={event} tab={audienceFallback ? audienceTab : undefined} />;
+  return (
+    <ParticipantEvent event={event} tab={audienceFallback ? audienceTab : undefined} onRegistered={detail.reload} />
+  );
 }
 
 /**
@@ -313,6 +315,7 @@ export function EventWorkspace(props: EventWorkspaceProps) {
         audienceFallback={
           !tab ||
           tab === "overview" ||
+          tab === "register" ||
           tab === "submissions" ||
           tab === "agenda" ||
           tab === "promotion" ||

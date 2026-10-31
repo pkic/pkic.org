@@ -36,57 +36,59 @@ test("a member edits their name fields and toggles organization-page visibility"
   // sidebar had not.
   await expect(page.getByRole("heading", { name: `Profile Fields ${suffix}`, level: 1 })).toBeVisible();
 
-  // A record never arrives in edit mode, not even your own (#47): the fields
-  // open only once the reader takes "Edit profile", which leads to the record's edit view.
+  // A record never arrives in edit mode, not even your own (#47): the names
+  // open in their editor only once the reader takes "Edit profile".
   await editMyProfile(page);
 
   // Required fields carry a "(required)" suffix in their accessible name
   // (see ui/Field.tsx), so an exact match on the bare label never resolves.
-  await page.getByRole("textbox", { name: "First name (required)" }).fill("Renamed First");
-  await page.getByRole("textbox", { name: "Last name (required)" }).fill("Renamed Last");
-  await page.getByRole("textbox", { name: "Preferred name", exact: true }).fill("Renamed Preferred");
+  const editor = page.getByRole("dialog", { name: "Edit names", exact: true });
+  await editor.getByRole("textbox", { name: "First name (required)" }).fill("Renamed First");
+  await editor.getByRole("textbox", { name: "Last name (required)" }).fill("Renamed Last");
+  await editor.getByRole("textbox", { name: "Preferred name", exact: true }).fill("Renamed Preferred");
   const saved = page.waitForResponse(
     (response) => response.url().endsWith("/api/v1/users/current") && response.request().method() === "PATCH",
   );
-  await page.getByRole("button", { name: "Save changes" }).click();
+  await editor.getByRole("button", { name: "Save", exact: true }).click();
   expect((await saved).status()).toBe(200);
-  await expect(page.locator(".my-toast", { hasText: "Profile updated" })).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator(".my-toast", { hasText: "Names updated" })).toBeVisible({ timeout: 15_000 });
+  await expect(editor).toBeHidden();
 
   // Reload from a clean mount: the saved values must come back from the
-  // server, not merely persist in still-mounted component state. The edit
-  // view's address opens the fields again on a fresh mount.
+  // server, not merely persist in still-mounted component state.
   await page.reload();
-  await expect(page.getByRole("textbox", { name: "First name (required)" })).toHaveValue("Renamed First");
-  await expect(page.getByRole("textbox", { name: "Last name (required)" })).toHaveValue("Renamed Last");
-  await expect(page.getByRole("textbox", { name: "Preferred name", exact: true })).toHaveValue("Renamed Preferred");
+  await editMyProfile(page);
+  const reopened = page.getByRole("dialog", { name: "Edit names", exact: true });
+  await expect(reopened.getByRole("textbox", { name: "First name (required)" })).toHaveValue("Renamed First");
+  await expect(reopened.getByRole("textbox", { name: "Last name (required)" })).toHaveValue("Renamed Last");
+  await expect(reopened.getByRole("textbox", { name: "Preferred name", exact: true })).toHaveValue("Renamed Preferred");
+  await reopened.getByRole("button", { name: "Close names editor", exact: true }).click();
+  await expect(reopened).toBeHidden();
 
-  // The visibility switch only appears once the identity is organization-tied,
-  // which this member is.
-  const visibilitySwitch = page.getByRole("switch", {
-    name: `Show my name, job title, and bio on ${organizationName}'s public page`,
-  });
-  await expect(visibilitySwitch).toBeVisible();
-  await expect(visibilitySwitch).toBeChecked();
+  // The visibility command is offered on the identity row only once the
+  // identity is organization-tied, which this member is.
+  const shownOnOrganizationPage = page.getByText("Shown on the organization page", { exact: true });
+  await expect(shownOnOrganizationPage).toBeVisible();
+  const identityActions = page.getByRole("button", { name: `Actions for ${organizationName}`, exact: true });
 
   const hidden = page.waitForResponse(
     (response) => response.url().endsWith("/api/v1/users/current") && response.request().method() === "PATCH",
   );
-  await visibilitySwitch.click();
+  await identityActions.click();
+  await page.getByRole("menuitem", { name: `Hide from ${organizationName}'s public profile`, exact: true }).click();
   expect((await hidden).status()).toBe(200);
-  await expect(page.locator(".my-toast", { hasText: "hidden from your organization" })).toBeVisible({
+  await expect(page.locator(".my-toast", { hasText: "Identity visibility updated" })).toBeVisible({
     timeout: 15_000,
   });
-  await expect(visibilitySwitch).not.toBeChecked();
+  await expect(shownOnOrganizationPage).toHaveCount(0);
 
   const shown = page.waitForResponse(
     (response) => response.url().endsWith("/api/v1/users/current") && response.request().method() === "PATCH",
   );
-  await visibilitySwitch.click();
+  await identityActions.click();
+  await page.getByRole("menuitem", { name: `Show on ${organizationName}'s public profile`, exact: true }).click();
   expect((await shown).status()).toBe(200);
-  await expect(page.locator(".my-toast", { hasText: "now appear on your organization" })).toBeVisible({
-    timeout: 15_000,
-  });
-  await expect(visibilitySwitch).toBeChecked();
+  await expect(shownOnOrganizationPage).toBeVisible();
 });
 
 test("a member uploads a headshot through the disclaimer and crop flow", async ({ page }) => {
@@ -103,7 +105,9 @@ test("a member uploads a headshot through the disclaimer and crop flow", async (
   await page.context().clearCookies();
   await signInToPortal(page, email);
   await openMyProfile(page);
-  await expect(page.getByRole("heading", { name: `Profile Headshot ${suffix}`, level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: `Profile Headshot ${suffix}`, level: 1 })).toBeVisible({
+    timeout: 15_000,
+  });
 
   /*
    * The portrait itself is the control (#28), and it names what pressing it

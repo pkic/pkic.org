@@ -16,6 +16,8 @@ import {
   registrationResendConfirmationSchema,
 } from "./registration";
 import {
+  registrationProofPersonPatchSchema,
+  registrationProofPersonPatchResponseSchema,
   registrationEmailProofStartResponseSchema,
   registrationEmailProofStartSchema,
   registrationEmailProofVerifyResponseSchema,
@@ -218,4 +220,13 @@ export const registrationManageUpdateRouteSchema = {
     "409": { description: "Registration state or capacity changed concurrently." },
     "410": { description: "Registration management capability expired." },
   },
+};
+
+/** A mailbox capability edits only the live owner of that exact address, inside its event. */
+export const registrationProofPersonPatchRouteSchema = {
+  ...publicOperation(),
+  tags: ["Registrations"],
+  summary: "Correct the verified registrant's personal details",
+  request: { params: eventSlugParamsSchema, body: requiredJsonBody(registrationProofPersonPatchSchema) },
+  responses: { "200": jsonResponse("Saved canonical personal details.", registrationProofPersonPatchResponseSchema) },
 };

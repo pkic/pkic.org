@@ -1,7 +1,9 @@
+import { personalPromotionImagePath } from "../assets/shared/personal-promotion-image";
 import { env as workerEnv } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createReferralCode } from "../functions/_lib/services/referrals";
-import app from "./helpers/app";
+import app, { callApi } from "./helpers/app";
+import { readBadgeSource, personalBadgeCacheMetadata } from "../functions/_lib/services/og-badge-source";
 import { getEventBySlug } from "../functions/_lib/services/events";
 import {
   processBadgeRenderJobById,
@@ -64,6 +66,96 @@ async function seedRegistrationWithReferral(): Promise<{
 describe("registration badge regeneration", () => {
   beforeEach(async () => {
     await resetDb();
+  });
+
+  it("ignores sponsor changes for sponsor-free social cards and serves each format in one request batch", async () => {
+    const fixture = await seedRegistrationWithReferral();
+    const sponsorId = crypto.randomUUID();
+    const at = new Date().toISOString();
+    await env.DB.prepare(
+      "INSERT INTO sponsorships(id,sponsor_type,non_member_name,non_member_logo_r2_key,event_id,tier,pipeline_stage,created_at,updated_at) VALUES(?,'event','Visible sponsor','sponsor-logos/example/logo.svg',?,'Leader','active',?,?)",
+    )
+      .bind(sponsorId, fixture.event!.id, at, at)
+      .run();
+    const before = (await readBadgeSource(env.DB, fixture.referralCode))!;
+
+    await env.ASSETS_BUCKET!.put(`og-badges/${fixture.referralCode}`, validJpegBytes(), {
+      httpMetadata: { contentType: "image/jpeg" },
+      customMetadata: personalBadgeCacheMetadata(fixture.referralCode, before),
+    });
+    const response = await callApi(env, personalPromotionImagePath(fixture.referralCode), {}, { maxRoundTrips: 1 });
+    expect(response.status).toBe(200);
+    const squareKey = `og-badges/${fixture.referralCode}/square`;
+    await env.ASSETS_BUCKET!.put(squareKey, validJpegBytes(), {
+      httpMetadata: { contentType: "image/jpeg" },
+      customMetadata: personalBadgeCacheMetadata(fixture.referralCode, before, "square"),
+    });
+    const square = await callApi(
+      env,
+      personalPromotionImagePath(fixture.referralCode, undefined, "square"),
+      {},
+      { maxRoundTrips: 1 },
+    );
+    expect(square.status).toBe(200);
+    expect(square.headers.get("X-Cache")).toBe("HIT");
+    const invalid = await callApi(
+      env,
+      `${personalPromotionImagePath(fixture.referralCode)}&format=unknown`,
+      {},
+      { maxRoundTrips: 0 },
+    );
+    expect(invalid.status).toBe(400);
+    await env.DB.prepare("UPDATE sponsorships SET non_member_name='Renamed sponsor' WHERE id=?").bind(sponsorId).run();
+    const after = (await readBadgeSource(env.DB, fixture.referralCode))!;
+    expect(personalBadgeCacheMetadata(fixture.referralCode, after).badgeDesignRevision).toBe(
+      personalBadgeCacheMetadata(fixture.referralCode, before).badgeDesignRevision,
+    );
+  });
+
+  it("includes only the person's public sessions from the current publication and invalidates on a new revision", async () => {
+    const fixture = await seedRegistrationWithReferral();
+    const at = new Date().toISOString();
+    const occurrence = (id: string, visibility: string, userId: string) => ({
+      id,
+      title: id,
+      kind: "session",
+      visibility,
+      startAt: "2026-12-01T09:00:00.000Z",
+      speakers: [{ userId }],
+    });
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO event_agenda_state(event_id,revision,published_revision,updated_at) VALUES(?,3,2,?) ON CONFLICT(event_id) DO UPDATE SET revision=3,published_revision=2",
+      ).bind(fixture.event!.id, at),
+      ...[2, 3].map((revision) =>
+        env.DB.prepare(
+          "INSERT INTO event_agenda_publications(id,event_id,revision,snapshot_json,created_by,created_at) VALUES(?,?,?,?,?,?)",
+        ).bind(
+          crypto.randomUUID(),
+          fixture.event!.id,
+          revision,
+          JSON.stringify({
+            occurrences: [
+              occurrence(`Public session revision ${revision}`, "public", fixture.userId),
+              occurrence("Private session", "private", fixture.userId),
+              occurrence("Someone else's session", "public", fixture.actor.id),
+            ],
+          }),
+          fixture.actor.id,
+          at,
+        ),
+      ),
+    ]);
+    const before = (await readBadgeSource(env.DB, fixture.referralCode))!;
+    expect(before.sessions).toEqual([{ title: "Public session revision 2" }]);
+    await env.DB.prepare("UPDATE event_agenda_state SET published_revision=3 WHERE event_id=?")
+      .bind(fixture.event!.id)
+      .run();
+    const after = (await readBadgeSource(env.DB, fixture.referralCode))!;
+    expect(after.sessions).toEqual([{ title: "Public session revision 3" }]);
+    expect(personalBadgeCacheMetadata(fixture.referralCode, after).badgeDesignRevision).not.toBe(
+      personalBadgeCacheMetadata(fixture.referralCode, before).badgeDesignRevision,
+    );
   });
 
   afterEach(() => {
@@ -203,7 +295,7 @@ describe("registration badge regeneration", () => {
       success: true,
       status: "queued",
       referralCode: seeded.referralCode,
-      badgeUrl: `https://app.test/api/v1/registrations/referrals/${seeded.referralCode}/badge`,
+      badgeUrl: `https://app.test${personalPromotionImagePath(seeded.referralCode)}`,
     });
     expect(background).toHaveLength(1);
     await Promise.allSettled(background);

@@ -15,6 +15,7 @@ import type { DatabaseLike } from "../../types";
 import { constantTimeEqual, hmacSha256Bytes } from "../../utils/crypto";
 import { parseJsonSafe } from "../../utils/json";
 import { nowIso } from "../../utils/time";
+import { personNameSql } from "../people/person-name-sql";
 
 const LINK_DOMAIN = "pkic-meeting-personal-link:v2";
 const USER_SECRET_PAGE = 100;
@@ -282,8 +283,7 @@ export async function requirePersonalMeetingTarget(
     db,
     `SELECT occurrence.id AS occurrence_id, event.name AS event_name, occurrence.starts_at,
       CASE WHEN ? IS NOT NULL THEN
-        COALESCE(NULLIF(user.preferred_name, ''),
-          NULLIF(trim(COALESCE(user.first_name, '') || ' ' || COALESCE(user.last_name, '')), ''), user.email)
+        COALESCE(${personNameSql("user")}, user.email)
         ELSE guest.name END AS name,
       event.settings_json
      FROM event_series series

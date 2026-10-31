@@ -547,7 +547,7 @@ describe("secure meeting join browser flow", () => {
     const message = container.querySelector(`#${code.getAttribute("aria-describedby") ?? ""}`);
     expect(message?.getAttribute("role")).toBe("alert");
     expect(message?.textContent).toContain("That code is not correct.");
-    expect(document.activeElement).toBe(code);
+    await vi.waitFor(() => expect(document.activeElement).toBe(code));
   });
 
   it("states a refusal the server does not attribute to the code beside the control", async () => {

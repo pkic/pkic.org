@@ -648,7 +648,7 @@ it("renders three complete application forms with current labels and literal app
     expect(html.match(new RegExp(`Membership application from ${name}`, "g"))).toHaveLength(2);
   }
   expect(html).toContain("PKI or cryptographic software and device providers");
-  expect(html).toContain("Role / Job Title: PKI Engineer");
+  expect(html).toContain("Role or job title: PKI Engineer");
   expect(html).toContain("I build accessible forms.");
   expect(html).toContain("I help users manage certificate lifecycles.");
   expect(html).toContain("Actively contribute to the consortium and its mission");

@@ -98,6 +98,36 @@ describe("public API CDN cache gateway", () => {
     expect(response.headers.get("cache-control")).toContain("no-store");
   });
 
+  it.each(["GET", "HEAD"])("keeps the visitor country on the original anonymous %s request", async (method) => {
+    const ctx = createExecutionContext();
+    let cacheCalls = 0;
+    Object.defineProperty(ctx, "exports", {
+      value: {
+        PublicRead: {
+          async fetch() {
+            cacheCalls++;
+            return new Response(JSON.stringify({ country: null }));
+          },
+        },
+      },
+    });
+    for (const country of ["NL", "CA", null]) {
+      const response = await worker.fetch(
+        new Request("https://app.test/api/v1/geolocation/country", {
+          method,
+          headers: { "sec-fetch-site": "same-origin" },
+          cf: { country },
+        }),
+        env,
+        ctx,
+      );
+      expect(response.status).toBe(200);
+      expect(response.headers.get("cache-control")).toContain("private");
+      expect(await response.text()).toBe(method === "HEAD" ? "" : JSON.stringify({ country }));
+    }
+    expect(cacheCalls).toBe(0);
+  });
+
   it("answers browser validators from the cached representation", async () => {
     let forwardedMethod = "";
     let forwardedValidator: string | null = null;

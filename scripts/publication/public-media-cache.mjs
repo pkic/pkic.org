@@ -70,3 +70,29 @@ export async function publicMediaCache(directory, revision, getObject, manifest 
     },
   };
 }
+
+const PUBLISHED_MEDIA = /\/_published\/media\/([a-f0-9]{64}\.(?:svg|webp))(?=")/g;
+
+/**
+ * Stage the published media a snapshot already refers to, from the derivatives the cache holds.
+ *
+ * A synthetic snapshot is often an earlier release's snapshot with a few records changed. Its images are published
+ * paths that the earlier build derived from R2 and kept in this cache under the same content-addressed names, so the
+ * new build serves exactly those bytes. A path the cache no longer holds is an error rather than a broken image.
+ */
+export async function stageCachedPublishedMedia(snapshot, directory, outputs) {
+  const filenames = new Set([...JSON.stringify(snapshot).matchAll(PUBLISHED_MEDIA)].map((match) => match[1]));
+  for (const filename of filenames) {
+    const bytes = await readFile(resolve(directory, filename)).catch((error) => {
+      if (error.code === "ENOENT") return undefined;
+      throw error;
+    });
+    if (!bytes || digest(bytes) !== filename.split(".")[0])
+      throw new Error(`The snapshot refers to /_published/media/${filename}, which no earlier build derived`);
+    for (const output of outputs) {
+      await mkdir(resolve(output, "_published", "media"), { recursive: true });
+      await writeFile(resolve(output, "_published", "media", filename), bytes);
+    }
+  }
+  return filenames.size;
+}

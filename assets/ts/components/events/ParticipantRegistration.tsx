@@ -1,4 +1,4 @@
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import {
   registrationResendConfirmationSchema,
   okResponseSchema,
@@ -22,6 +22,7 @@ import { ParticipantRegistrationForm, type RegistrationChange } from "./Particip
 import { CopyLinkRow } from "../../shared/widgets/copy-link-row";
 import { RegistrationDays } from "./RegistrationDays";
 import { SectionHeading } from "../../ui/SectionHeading";
+import { useDialogQueryState } from "../../hooks/useDialogQueryState";
 
 export function ParticipantRegistration({
   registrationId,
@@ -83,7 +84,11 @@ function RegistrationRecord({
   reload: () => Promise<void>;
   focusDay: string | null;
 }) {
-  const [editing, setEditing] = useState(false);
+  const [editing, showEditor, closeEditor] = useDialogQueryState("editRegistration");
+  const [editorMounted, setEditorMounted] = useState(editing);
+  useEffect(() => {
+    if (editing) setEditorMounted(true);
+  }, [editing]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -93,6 +98,8 @@ function RegistrationRecord({
 
   /** Sends one change and returns to the read view on success; rejects with the refusal. */
   async function save(change: RegistrationChange, outcome?: string): Promise<void> {
+    // Giving up every day uses the same explicit cancellation confirmation from either editor.
+    if (change.action === "update" && change.dayAttendance?.length === 0) return cancelRegistration();
     setError("");
     setMessage("");
     const result = await patchJson(
@@ -100,7 +107,8 @@ function RegistrationRecord({
       registrationManageSchema.parse(change),
       registrationManageUpdateResponseSchema,
     );
-    setEditing(false);
+    await closeEditor();
+    setEditorMounted(false);
     setMessage(result.emailChanged ? outcomeOf(change, true) : (outcome ?? outcomeOf(change, false)));
     await reload();
   }
@@ -141,8 +149,6 @@ function RegistrationRecord({
   }
 
   async function saveDays(dayAttendance: Array<{ dayDate: string; attendanceType: string }>): Promise<void> {
-    // Leaving no day at all is a cancellation, with its own confirmation.
-    if (dayAttendance.length === 0) return cancelRegistration();
     await run(() => save({ action: "update", dayAttendance }, "Your days are updated. Thank you for letting us know."));
   }
 
@@ -173,9 +179,20 @@ function RegistrationRecord({
                 : " Contact the organizer to review it."}
             </Alert>
           )}
-          {editing ? (
-            <ParticipantRegistrationForm data={data} forms={forms} save={save} onDiscard={() => setEditing(false)} />
-          ) : (
+          {editorMounted && (
+            <div hidden={!editing}>
+              <ParticipantRegistrationForm
+                data={data}
+                forms={forms}
+                save={save}
+                onDiscard={() => {
+                  setEditorMounted(false);
+                  void closeEditor();
+                }}
+              />
+            </div>
+          )}
+          {!editing && (
             <>
               <RecordCommands
                 busy={busy}
@@ -194,7 +211,14 @@ function RegistrationRecord({
               />
               <section class="pk-stack pk-stack--snug" aria-label="Your details">
                 <SectionHeading level={3}>Your details</SectionHeading>
-                <ParticipantRegistrationDetails data={data} form={forms.form} daysSummarized />
+                <ParticipantRegistrationDetails
+                  data={data}
+                  form={forms.form}
+                  daysSummarized
+                  onIdentityChanged={async () => {
+                    await reload();
+                  }}
+                />
                 {!cancelled && (
                   <div class="pk-cluster">
                     <Button
@@ -203,7 +227,8 @@ function RegistrationRecord({
                       onClick={() => {
                         setMessage("");
                         setError("");
-                        setEditing(true);
+                        setEditorMounted(true);
+                        showEditor();
                       }}
                     >
                       Edit details

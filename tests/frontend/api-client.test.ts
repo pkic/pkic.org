@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import {
   ApiClientError,
+  getBlob,
   patchValidated,
   postJson,
   postValidated,
@@ -29,6 +30,29 @@ describe("shared API client", () => {
     setErrorPayloadInterceptor(null);
   });
 
+  it("downloads binary bodies through the same error and authentication handling", async () => {
+    const blob = new Blob(["%PDF-1.7"], { type: "application/pdf" });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        headers: new Headers({ "content-type": "application/pdf" }),
+        blob: async () => blob,
+      })),
+    );
+    expect(await getBlob("/api/v1/events/example/promotion/artifact")).toBe(blob);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({ error: { code: "PROMOTION_ARTIFACT_STALE", message: "Refresh your kit" } }, { status: 409 }),
+      ),
+    );
+    await expect(getBlob("/api/v1/events/example/promotion/artifact")).rejects.toMatchObject({
+      status: 409,
+      code: "PROMOTION_ARTIFACT_STALE",
+    });
+  });
   it("uses an upload content type without combining it with the JSON default", async () => {
     let requestHeaders = new Headers();
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {

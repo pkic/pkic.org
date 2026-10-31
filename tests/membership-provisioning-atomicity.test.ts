@@ -256,6 +256,26 @@ describe("individual membership alias preflight", () => {
     },
   );
 
+  it("does not grant an approved applicant's membership to an unverified alias holder", async () => {
+    const claimantId = await insertUser(env.DB);
+    const email = await addAlias(claimantId, false);
+    const result = await provisionOrganizationMembership(env.DB, {
+      ...input(email),
+      identitySource: "membership_approval",
+      mailboxVerified: true,
+    });
+    expect(result.identities[0].userId).not.toBe(claimantId);
+    expect(await queryAll(env.DB, "SELECT id FROM users WHERE id=?", claimantId)).toHaveLength(1);
+    expect(
+      await env.DB.prepare("SELECT email_verified_at FROM users WHERE id=?")
+        .bind(result.identities[0].userId)
+        .first("email_verified_at"),
+    ).not.toBeNull();
+    expect(
+      await queryAll(env.DB, "SELECT id FROM identities WHERE user_id=? AND started_at IS NOT NULL", claimantId),
+    ).toHaveLength(0);
+  });
+
   it.each([true, false])("reuses the canonical nonmember through a known alias (verified=%s)", async (verified) => {
     const userId = await insertUser(env.DB);
     const alias = await addAlias(userId, verified);
@@ -265,6 +285,23 @@ describe("individual membership alias preflight", () => {
     expect(
       await queryAll(env.DB, "SELECT user_id FROM identities WHERE id=?", result.identities[0].identityId),
     ).toEqual([{ user_id: userId }]);
+  });
+
+  it("adds approved membership to an attendee's existing personal identity without replacing its profile", async () => {
+    const userId = await insertUser(env.DB);
+    const alias = await addAlias(userId, true);
+    const identityId = crypto.randomUUID();
+    const at = "2026-10-17T00:00:00.000Z";
+    await env.DB.prepare(`INSERT INTO identities(id,user_id,source,biography,show_on_organization_profile,invited_at,started_at,created_at,updated_at)
+      VALUES(?,?,'staff','Existing attendee profile',0,?,?,?,?)`)
+      .bind(identityId, userId, at, at, at, at)
+      .run();
+    const result = await provisionOrganizationMembership(env.DB, input(alias));
+    expect(result.identities[0].identityId).toBe(identityId);
+    expect(
+      await env.DB.prepare("SELECT biography FROM identities WHERE id=?").bind(identityId).first("biography"),
+    ).toBe("Existing attendee profile");
+    expect(await queryAll(env.DB, "SELECT id FROM identities WHERE user_id=?", userId)).toEqual([{ id: identityId }]);
   });
 
   it("preserves rejection-disabled reuse and the existing active-identity refusal", async () => {

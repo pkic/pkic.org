@@ -1,9 +1,10 @@
 import type { ValidatedData } from "chanfana";
 import { json } from "../../../../../_lib/http";
-import { verifyDatabaseCapability } from "../../../../../_lib/services/capability-links";
+import { parseCapabilityToken, verifyCapabilityToken } from "../../../../../_lib/auth/capability-token";
+import { registrationConfirmationMailboxProof } from "../../../../../_lib/services/registrations/email-proof";
+import { workEmailDomain } from "../../../../../_lib/email-domains/classification";
 import { requireInternalSecret } from "../../../../../_lib/request";
 import { getRegistrationConfirmationInfo } from "../../../../../_lib/services/registrations/confirmation-info";
-import { registrationAsksOrganization } from "../../../../../_lib/services/registrations/confirmation-organization";
 import { requestDb } from "../../../../../_lib/db/context";
 
 import {
@@ -48,15 +49,10 @@ async function handleConfirmInfo(
     return json(registrationConfirmInfoResponseSchema.parse(empty));
   }
 
-  const verified = await verifyDatabaseCapability({
-    db: requestDb(c),
-    signingSecret: requireInternalSecret(c.env),
-    purpose: "registration_confirm",
-    token: token.trim(),
-  });
-  const resourceId = verified.ok ? verified.resourceId : registrationId;
+  const parsed = parseCapabilityToken(token.trim(), "registration_confirm");
+  const resourceId = parsed?.resourceId ?? registrationId;
 
-  if (!resourceId || (registrationId && verified.ok && registrationId !== verified.resourceId)) {
+  if (!resourceId || (registrationId && parsed && registrationId !== parsed.resourceId)) {
     return json(registrationConfirmInfoResponseSchema.parse(empty));
   }
 
@@ -66,7 +62,31 @@ async function handleConfirmInfo(
     return json(registrationConfirmInfoResponseSchema.parse(empty));
   }
 
-  const tokenMatches = verified.ok;
+  const verified = row.confirmation_link_secret
+    ? await verifyCapabilityToken({
+        signingSecret: requireInternalSecret(c.env),
+        purpose: "registration_confirm",
+        token: token.trim(),
+        linkSecret: row.confirmation_link_secret,
+      })
+    : { ok: false as const, reason: "invalid" as const };
+  const tokenMatches =
+    verified.ok &&
+    (!row.pending_confirmation_deadline_at || row.pending_confirmation_deadline_at > new Date().toISOString());
+  const work = tokenMatches && row.email ? Boolean(workEmailDomain(row.email)) : false;
+  const organizationProof =
+    tokenMatches && verified.ok && work && row.email
+      ? await registrationConfirmationMailboxProof(
+          requireInternalSecret(c.env),
+          {
+            eventId: row.event_id,
+            email: row.email,
+            unaffiliatedAttestation: false,
+            binding: { userId: row.user_id, registrationId: resourceId, revision: row.transition_revision },
+          },
+          verified.expiresAt,
+        )
+      : undefined;
 
   return json(
     registrationConfirmInfoResponseSchema.parse({
@@ -74,13 +94,8 @@ async function handleConfirmInfo(
       lastName: tokenMatches ? (row.last_name ?? null) : null,
       email: tokenMatches ? (row.email ?? null) : null,
       organizationName: tokenMatches ? (row.organization_name ?? null) : null,
-      // Only the mailbox holder learns whether their domain names an organization.
-      asksOrganization: tokenMatches
-        ? await registrationAsksOrganization(requestDb(c), {
-            userId: row.user_id,
-            normalizedEmail: row.normalized_email,
-          })
-        : false,
+      asksOrganization: work,
+      organizationProof,
       eventName: row.event_name,
       expired: !tokenMatches,
       recoverable: !tokenMatches,

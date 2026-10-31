@@ -1,5 +1,6 @@
 import type { ComponentChildren } from "preact";
 import { useEffect, useId, useRef, useState } from "preact/hooks";
+import { useMediaQuery } from "../../../../../../../hooks/useMediaQuery";
 import { useHashQueryParam } from "../../../../../../../hooks/useHashQueryParam";
 import type { LiveRoomState } from "../../../../../../../live-session/live-room-state";
 import { LiveOverlayPresentation } from "../../../../../../../live-session/LiveOverlayPresentation";
@@ -48,17 +49,7 @@ const PHONE_QUERY = "(max-width: 599px)";
 
 /** Whether the studio runs as the phone layout; it follows the window as it turns or resizes. */
 export function useStudioPhone(): boolean {
-  const query = () => typeof window !== "undefined" && typeof window.matchMedia === "function";
-  const [phone, setPhone] = useState(() => query() && window.matchMedia(PHONE_QUERY).matches);
-  useEffect(() => {
-    if (!query()) return;
-    const list = window.matchMedia(PHONE_QUERY);
-    const update = () => setPhone(list.matches);
-    update();
-    list.addEventListener?.("change", update);
-    return () => list.removeEventListener?.("change", update);
-  }, []);
-  return phone;
+  return useMediaQuery(PHONE_QUERY);
 }
 
 /** How long a monitor's tools stay after a tap, unless a tap elsewhere hides them first. */

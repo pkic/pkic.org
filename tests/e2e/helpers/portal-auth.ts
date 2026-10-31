@@ -28,9 +28,13 @@ export async function openEmailSignIn(page: Page): Promise<void> {
   // click is skipped, and the wait that follows is for a field still folded
   // away — which is a ten-second timeout rather than a useful failure.
   await expect(passkey).toBeVisible({ timeout: 15_000 });
+  // The busy "Checking your sign-in…" card shows the same buttons disabled,
+  // then loses its status line. Clicking through that settling makes the
+  // browser scroll a moved target into view; wait until the card is ready.
+  await expect(passkey).toBeEnabled({ timeout: 15_000 });
   const disclosure = page.getByRole("button", { name: "Sign in with an email link", exact: true });
   if (await disclosure.isVisible().catch(() => false)) await disclosure.click();
-  await expect(page.getByLabel("Work email")).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByLabel("Email")).toBeVisible({ timeout: 10_000 });
 }
 
 /** Opens the signed-in person's own record through the account menu. */
@@ -40,10 +44,25 @@ export async function openMyProfile(page: Page): Promise<void> {
   await expect(page).toHaveURL(/\/portal\/#\/users\/[^/?#]+$/, { timeout: 15_000 });
 }
 
-/** Takes "Edit profile" on the professional profile: the record's edit view, with its profile fields open. */
+/** Takes "Edit profile" from the record's actions menu, which opens the names editor over the record. */
 export async function editMyProfile(page: Page): Promise<void> {
-  await page.getByRole("link", { name: "Edit profile", exact: true }).click();
-  await expect(page).toHaveURL(/\/portal\/#\/users\/[^/?#]+\/edit$/, { timeout: 15_000 });
+  await page.getByRole("button", { name: "Record actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Edit profile", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Edit names", exact: true })).toBeVisible({ timeout: 15_000 });
+}
+
+/**
+ * Opens the profile page of one identity the person holds, from that
+ * identity's row menu on their record ("Edit profile…"). The identity's job
+ * title, biography and links are edited there, not on the record's edit view.
+ */
+export async function editMyIdentityProfile(page: Page, identityName: string): Promise<void> {
+  await page.getByRole("button", { name: `Actions for ${identityName}`, exact: true }).click();
+  await page.getByRole("menuitem", { name: "Edit profile…", exact: true }).click();
+  await expect(page).toHaveURL(/\/portal\/#\/users\/[^/?#]+\/affiliations\/[^/?#]+\/profile$/, {
+    timeout: 15_000,
+  });
+  await expect(page.getByRole("textbox", { name: /^Job title for this organization/ })).toBeVisible();
 }
 
 /**
@@ -66,9 +85,23 @@ export async function signInToPortal(page: Page, email: string, options: { conti
   await page.setExtraHTTPHeaders({ "cf-connecting-ip": clientIpForIdentity(email) });
   await page.goto("/portal/");
   await openEmailSignIn(page);
-  await page.getByLabel("Work email").fill(email);
+  await page.getByLabel("Email").fill(email);
   const since = await capturedEmailCount();
-  await page.getByRole("button", { name: "Send sign-in link" }).click();
+  // The confirmation follows the server's answer, which a busy server takes longer than an assertion's default to give.
+  const sendLink = async () => {
+    const requested = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === "/api/v1/auth/request-link" && response.request().method() === "POST",
+      { timeout: 60_000 },
+    );
+    await page.getByRole("button", { name: "Send sign-in link" }).click();
+    return requested;
+  };
+  let linkRequest = await sendLink();
+  // The local D1 binding occasionally drops its connection under load; the refused request sent no mail, so asking once more is safe.
+  if (linkRequest.status() === 500 && (await linkRequest.text()).includes("Network connection lost"))
+    linkRequest = await sendLink();
+  expect(linkRequest.status(), await linkRequest.text()).toBe(200);
   await expect(page.getByText("you'll receive a sign-in link shortly", { exact: false })).toBeVisible();
   const emailMessage = await waitForCapturedEmail(email, "sign-in link", { since });
   // A user normally opens the email in a new tab. The portal is already
@@ -115,13 +148,25 @@ export async function signInToPortal(page: Page, email: string, options: { conti
     // A long identity name wraps inside its choice, on a phone as on a desktop.
     for (const choice of await choices.all())
       expect(await choice.evaluate((button) => button.scrollWidth <= button.clientWidth)).toBe(true);
-    await (options.continueAs ? choices.filter({ hasText: options.continueAs }) : choices.first()).click();
+    // Without a named identity the helper continues personally, as it did when that choice was listed first.
+    const personal = choices.filter({ hasText: "Personal" });
+    await (
+      options.continueAs
+        ? choices.filter({ hasText: options.continueAs })
+        : (await personal.count()) > 0
+          ? personal.first()
+          : choices.first()
+    ).click();
   }
-  // Email sign-in can offer enrollment before the shell mounts. Follow its visible opt-out.
+  await declinePasskeyOffer(page);
+  await expect(page).toHaveURL(/\/portal\/#\/(?!verify(?:$|[/?]))[^?#]+/, { timeout: 15_000 });
+}
+
+/** Email sign-in can offer passkey enrollment before the shell mounts: follows its visible opt-out. */
+export async function declinePasskeyOffer(page: Page): Promise<void> {
   const passkeyOffer = page.getByRole("region", { name: "You're signed in", exact: true });
-  await expect(page.locator("#portal-root").or(passkeyOffer).first()).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator("#portal-root").or(passkeyOffer).first()).toBeVisible({ timeout: 30_000 });
   if (await passkeyOffer.isVisible())
     await passkeyOffer.getByRole("button", { name: "Continue without a passkey", exact: true }).click();
-  await expect(page.locator("#portal-root")).toBeVisible({ timeout: 15_000 });
-  await expect(page).toHaveURL(/\/portal\/#\/(?!verify(?:$|[/?]))[^?#]+/, { timeout: 15_000 });
+  await expect(page.locator("#portal-root")).toBeVisible({ timeout: 30_000 });
 }

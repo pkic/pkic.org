@@ -226,6 +226,28 @@ Best regards,
 
 PKI Consortium`,
   },
+  // Weekly working group membership changes for the group's chairs.
+  {
+    key: "wg-chair-membership-digest",
+    subjectTemplate: "{{workingGroupName}}: weekly membership update",
+    contentType: "markdown",
+    content: `Hello {{recipientName}},
+
+Here are last week's membership changes in **{{workingGroupName}}**, which you lead as {{recipientRole}}.
+
+{{#if hasJoined}}**Joined**
+
+{{#each joined}}- {{name}}{{#if organizationName}} ({{organizationName}}){{/if}}
+{{/each}}
+{{/if}}{{#if hasLeft}}**Left**
+
+{{#each left}}- {{name}}{{#if organizationName}} ({{organizationName}}){{/if}}
+{{/each}}
+{{/if}}
+You can turn off this weekly update in your notification settings.
+
+The PKI Consortium team`,
+  },
   {
     key: "partial_membership_review_summary",
     subjectTemplate: null,
@@ -830,6 +852,24 @@ Speaker identity: {{speakerName}}{{#if organizationName}}, {{organizationName}}{
 `,
   },
   {
+    key: "proposal_speaker_declined",
+    subjectTemplate: "A speaker declined your proposal — {{eventName}}",
+    content: `{{#if firstName}}Hello {{firstName}},{{else}}Hello,{{/if}}
+
+{{speakerName}} declined to speak on your proposal **{{proposalTitle}}** for **{{eventName}}**.
+
+{{#if declineReason}}
+They gave this reason:
+
+> {{declineReason}}
+{{/if}}
+
+You can invite another speaker or change the proposal on its page.
+
+[Manage my proposal]({{manageUrl}})
+`,
+  },
+  {
     key: "proposal_organizational_representation_request",
     subjectTemplate: "Please speak on behalf of your organization — {{eventName}}",
     content: `Hello {{firstName}},
@@ -907,7 +947,7 @@ Thank you for your interest in contributing to **{{eventName}}**.
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "co_speaker_invite",
-    subjectTemplate: `{{#if isReminder}}Reminder: please confirm speaker participation — {{eventName}}{{else}}You have been added as a speaker — {{eventName}}{{/if}}`,
+    subjectTemplate: `{{#if isReminder}}Reminder: please confirm speaker participation — {{eventName}}{{else}}Speaker invitation: please confirm — {{eventName}}{{/if}}`,
     content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Speaker,{{/if}}
 
 {{#if isReminder}}

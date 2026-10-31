@@ -246,7 +246,6 @@ test("guest event entry creates a nonmember affiliation and an invited known per
     await otherCard.getByLabel("First name", { exact: true }).fill("Known");
     await otherCard.getByLabel("Last name", { exact: true }).fill("Invitee");
     await otherCard.getByLabel("Email", { exact: true }).fill(knownEmail);
-    await otherCard.getByRole("textbox", { name: "Bio", exact: true }).fill(biography);
     await expect(otherCard.getByRole("combobox")).toHaveCount(0);
     expect(catalogs).toEqual([]);
     const since = await capturedEmailCount();
@@ -286,14 +285,16 @@ test("guest event entry creates a nonmember affiliation and an invited known per
     await guest.getByRole("button", { name: "Continue →", exact: true }).click();
     const reused = await openProposalProof(guest, await requestOrganizationProof(guest, newEmail));
     expect(reused.person).toMatchObject({ firstName: "New", lastName: "Participant" });
-    await expect(guest.getByRole("combobox", { name: "Your organization representation", exact: true })).toHaveCount(0);
+    await expect(guest.getByRole("combobox", { name: "Representation", exact: true })).toHaveCount(0);
     const beforeNames = await readUser(staff, createdUser.id);
     await expect(identity.getByText("New Participant", { exact: true })).toBeVisible();
     await guest.getByRole("button", { name: "Edit my details", exact: true }).click();
-    await identity.getByRole("textbox", { name: "First name", exact: true }).fill("Renamed");
-    await identity.getByRole("textbox", { name: "Last name", exact: true }).fill("Participant");
+    // Editing opens a dialog on the page, outside the identity step it was opened from.
+    const detailsDialog = guest.getByRole("dialog", { name: "Edit my details", exact: true });
+    await detailsDialog.getByRole("textbox", { name: /^First name/ }).fill("Renamed");
+    await detailsDialog.getByRole("textbox", { name: /^Last name/ }).fill("Participant");
     const savedNames = responseFor(guest, `${endpoint}/proof/person`, "PATCH");
-    await guest.getByRole("button", { name: "Save my details", exact: true }).click();
+    await detailsDialog.getByRole("button", { name: "Save my details", exact: true }).click();
     const namesResponse = await savedNames;
     expect(namesResponse.status(), await namesResponse.text()).toBe(200);
     expect(eventProposalProofPersonPatchSchema.parse(namesResponse.request().postDataJSON())).toMatchObject({
@@ -306,15 +307,16 @@ test("guest event entry creates a nonmember affiliation and an invited known per
       lastName: "Participant",
     });
     await expect(identity.getByText("Renamed Participant", { exact: true })).toBeVisible();
-    await expect(identity.getByRole("textbox", { name: "First name", exact: true })).toHaveCount(0);
+    await expect(detailsDialog).toHaveCount(0);
     const renamed = await readUser(staff, createdUser.id);
     expect(renamed).toMatchObject({ id: createdUser.id, first_name: "Renamed", last_name: "Participant" });
     expect(renamed.identities).toEqual(beforeNames.identities);
     await capture(guest, info, "known-person-names-saved");
-    await guest.getByRole("button", { name: "Choose another representation", exact: true }).click();
-    const picker = guest.getByRole("combobox", { name: "Your organization representation", exact: true });
+    // The picker loads its catalog as soon as it opens, before anything is chosen.
     const listed = responseFor(guest, `${endpoint}/proof/identities`);
-    await picker.fill(organizationName);
+    await guest.getByRole("button", { name: "Choose another representation", exact: true }).click();
+    const picker = guest.getByRole("combobox", { name: "Representation", exact: true });
+    await picker.click();
     const listResponse = await listed;
     expect(listResponse.status(), await listResponse.text()).toBe(200);
     expect(eventProposalProofIdentitiesSchema.parse(listResponse.request().postDataJSON()).continuationToken).toBe(
@@ -323,7 +325,11 @@ test("guest event entry creates a nonmember affiliation and an invited known per
     const catalog = identitiesListResponseSchema.parse(await listResponse.json());
     expect(catalog.identities).toHaveLength(1);
     expect(catalog.identities[0]).toMatchObject({ id: affiliation.identityId, userId: createdUser.id, memberId: null });
-    await guest.getByRole("option").filter({ hasText: organizationName }).click();
+    await guest
+      .getByRole("listbox", { name: "Your identities" })
+      .getByRole("option")
+      .filter({ hasText: organizationName })
+      .click();
     await expect(identity.getByText("Renamed Participant", { exact: true })).toBeVisible();
     expect((await readUser(staff, createdUser.id)).first_name).toBe("Renamed");
     expect((await readUser(staff, createdUser.id)).identities).toEqual(renamed.identities);
@@ -345,7 +351,9 @@ test("guest event entry creates a nonmember affiliation and an invited known per
     });
     await expect(identity.getByLabel(fieldLabel("Job title"))).toHaveCount(0);
     await expect(identity.getByRole("textbox", { name: fieldLabel("Organization name") })).toHaveCount(0);
-    await expect(identity.getByText(organizationName, { exact: true })).toBeVisible();
+    // The organization is chosen in the proof's own organization list, with the role it already holds.
+    await expect(identity.getByRole("combobox", { name: /^Organization/ })).toHaveValue(affiliation.organizationId!);
+    await expect(identity.getByText("Conference engineer", { exact: true })).toBeVisible();
     await submitOwnProofProposal(guest, `Verified alternate mailbox ${suffix}`, alternateProof.continuationToken);
     const aliasPeople = await usersByEmail(staff, alternateEmail);
     expect(aliasPeople.page.total).toBe(1);
@@ -360,8 +368,12 @@ test("guest event entry creates a nonmember affiliation and an invited known per
     const parallelProof = await openProposalProof(guest, await requestOrganizationProof(guest, alternateEmail));
     expect(parallelProof.person).toMatchObject({ firstName: "Renamed", lastName: "Participant" });
     await guest.getByRole("button", { name: "Choose another representation", exact: true }).click();
-    await picker.fill(organizationName);
-    await guest.getByRole("option").filter({ hasText: "Conference engineer" }).click();
+    await picker.click();
+    await guest
+      .getByRole("listbox", { name: "Your identities" })
+      .getByRole("option")
+      .filter({ hasText: "Conference engineer" })
+      .click();
     await expect(identity.getByText("Renamed Participant", { exact: true })).toBeVisible();
     await expect(identity.getByText("Conference engineer", { exact: true })).toBeVisible();
     expect(await readUser(staff, createdUser.id)).toEqual(parallelUser);
@@ -401,15 +413,20 @@ test("guest event entry creates a nonmember affiliation and an invited known per
       [parallelOrganization, "Parallel role"],
     ]) {
       await guest.getByRole("button", { name: "Choose another representation", exact: true }).click();
-      await picker.fill(organization);
-      await guest.getByRole("option").filter({ hasText: role }).click();
+      await picker.click();
+      await guest
+        .getByRole("listbox", { name: "Your identities" })
+        .getByRole("option")
+        .filter({ hasText: organization })
+        .filter({ hasText: role })
+        .click();
       await expect(identity.getByText("Renamed Participant", { exact: true })).toBeVisible();
       await expect(identity.getByText(role, { exact: true })).toBeVisible();
       expect(await readUser(staff, createdUser.id)).toEqual(twoRepresentations);
     }
     await capture(guest, info, "parallel-representation-selected");
 
-    const invitation = await waitForCapturedEmail(knownEmail, "You have been added as a speaker", { since });
+    const invitation = await waitForCapturedEmail(knownEmail, "Speaker invitation: please confirm", { since });
     const speakerUrl = extractEmailUrl(invitation, "/speaker/");
     const oldToken = new URL(speakerUrl).searchParams.get("token")!;
     await guest.goto(speakerUrl);
@@ -427,13 +444,8 @@ test("guest event entry creates a nonmember affiliation and an invited known per
     // The delivered link alone resumes the exact invitation in a fresh browser.
     const resumed = await resumeContext.newPage();
     await resumed.setExtraHTTPHeaders({ "cf-connecting-ip": clientIpForIdentity(secondaryEmail) });
+    // The one confirmation of the link hands the speaker page its own token; the page does not verify again.
     const redirected = responseFor(resumed, `${endpoint}/proof/verify`);
-    // The speaker page reads the handed-on link at once: the terms it was sent under are not asked again.
-    const verified = resumed.waitForResponse(
-      (response) =>
-        new URL(response.url()).pathname === `${endpoint}/proof/verify` &&
-        Boolean(response.request().postDataJSON()?.speakerManagementToken),
-    );
     await resumed.goto(secondaryMail);
     const redirectResponse = await redirected;
     expect(redirectResponse.status()).toBe(200);
@@ -441,11 +453,9 @@ test("guest event entry creates a nonmember affiliation and an invited known per
       eventProposalProofVerifySchema.parse(redirectResponse.request().postDataJSON()).speakerManagementToken,
     ).toBeUndefined();
     await expect(resumed.getByRole("button", { name: "Save speaker identity", exact: true })).toBeVisible();
-    const verifyResponse = await verified;
     for (const term of await resumed.locator("[data-speaker-consents]").getByRole("checkbox").all())
       await expect(term).toBeChecked();
-    expect(verifyResponse.status(), await verifyResponse.text()).toBe(200);
-    const verifiedBody = eventProposalProofVerifyResponseSchema.parse(await verifyResponse.json());
+    const verifiedBody = eventProposalProofVerifyResponseSchema.parse(await redirectResponse.json());
     if (verifiedBody.status !== "ready") throw new Error("The invited person's secondary mailbox must be verified");
     expect(verifiedBody).toMatchObject({
       email: secondaryEmail,
@@ -528,9 +538,7 @@ test("guest event entry creates a nonmember affiliation and an invited known per
     await expect(
       resumed.locator("[data-speaker-identity]").getByText(secondaryOrganization, { exact: true }),
     ).toBeVisible();
-    await expect(resumed.getByRole("combobox", { name: "Your organization representation", exact: true })).toHaveCount(
-      0,
-    );
+    await expect(resumed.getByRole("combobox", { name: "Representation", exact: true })).toHaveCount(0);
     expect((await readSpeaker(resumed, returnedToken)).speaker.status).toBe("confirmed");
     expect((await originalProposal()).speakers.find((speaker) => speaker.userId === knownId)).toEqual(
       originalAppearance,
@@ -541,26 +549,31 @@ test("guest event entry creates a nonmember affiliation and an invited known per
     const organizationResponse = await staff.request.get(`/api/v1/organizations/${organizationId}`);
     expect(organizationResponse.status(), await organizationResponse.text()).toBe(200);
     const organizationBefore = organizationDetailResponseSchema.parse(await organizationResponse.json()).organization;
-    await resumed.getByRole("button", { name: "Update current representation", exact: true }).click();
+    // The role is edited on the identity itself, through the speaker link: it changes that identity only.
+    const identityProfile = resumed.locator("[data-identity-profile]");
     for (const label of ["First name", "Last name", "Organization name", "Email"])
       await expect(resumed.getByRole("textbox", { name: label, exact: true })).toHaveCount(0);
-    await resumed.getByLabel(fieldLabel("Job title")).fill("Updated contributor");
+    await identityProfile.getByLabel(fieldLabel("Job title for this organization")).fill("Updated contributor");
     const roleSaved = responseFor(resumed, `${endpoint}/proof/identities/${currentIdentityId}`, "PATCH");
-    await resumed.getByRole("button", { name: "Save representation", exact: true }).click();
+    await identityProfile.getByRole("button", { name: "Save changes", exact: true }).click();
     const roleResponse = await roleSaved;
     expect(roleResponse.status(), await roleResponse.text()).toBe(200);
-    expect(eventProposalProofIdentityPatchSchema.parse(roleResponse.request().postDataJSON())).toEqual({
+    expect(eventProposalProofIdentityPatchSchema.parse(roleResponse.request().postDataJSON())).toMatchObject({
       jobTitle: "Updated contributor",
       speakerManagementToken: returnedToken,
     });
-    expect(eventProposalProofIdentityPatchResponseSchema.parse(await roleResponse.json())).toEqual({
+    expect(eventProposalProofIdentityPatchResponseSchema.parse(await roleResponse.json())).toMatchObject({
       identityId: currentIdentityId,
+      organizationId,
       jobTitle: "Updated contributor",
     });
     const afterRole = await readUser(staff, knownId);
     expect(afterRole.identities).toEqual(
       afterUser.identities.map((entry) =>
-        entry.identityId === currentIdentityId ? { ...entry, jobTitle: "Updated contributor" } : entry,
+        entry.identityId === currentIdentityId
+          ? // The profile form submits its biography field as written, so an unset biography reads back empty.
+            { ...entry, jobTitle: "Updated contributor", biography: entry.biography ?? "" }
+          : entry,
       ),
     );
     expect({ ...afterRole, identities: [] }).toEqual({ ...afterUser, identities: [] });
@@ -574,6 +587,7 @@ test("guest event entry creates a nonmember affiliation and an invited known per
     expect((await readSpeaker(resumed, returnedToken)).profile).toEqual({
       ...recorded.profile,
       jobTitle: "Updated contributor",
+      biography: recorded.profile.biography ?? "",
     });
     expect((await originalProposal()).speakers.find((speaker) => speaker.userId === knownId)).toEqual(
       originalAppearance,

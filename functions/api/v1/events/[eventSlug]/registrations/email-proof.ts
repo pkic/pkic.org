@@ -1,3 +1,7 @@
+import { updateRegistrationProofPerson } from "../../../../../_lib/services/registrations/proof-person";
+import { registrationProofPersonPatchResponseSchema } from "../../../../../../assets/shared/schemas/registration-email-proof";
+import { registrationProofPersonPatchRouteSchema } from "../../../../../../assets/shared/schemas/route-contracts-registrations";
+import { requestDb } from "../../../../../_lib/db/context";
 import {
   registrationEmailProofStartResponseSchema,
   registrationEmailProofVerifyResponseSchema,
@@ -40,15 +44,28 @@ export const RegistrationEmailProofPost = openApiRoute(registrationEmailProofSta
 export const RegistrationEmailProofVerifyPost = openApiRoute(
   registrationEmailProofVerifyRouteSchema,
   async (c, data) => {
-    const event = await getEventBySlug(c.env.DB, data.params.eventSlug);
     return jsonPrivate(
       registrationEmailProofVerifyResponseSchema.parse(
-        await verifyRegistrationEmailProof(c.env.DB, {
+        await verifyRegistrationEmailProof(requestDb(c), {
           signingSecret: requireInternalSecret(c.env),
           token: data.body.token,
-          eventId: event.id,
+          eventSlug: data.params.eventSlug,
+          domain: data.body.domain,
+          affiliation: data.body.affiliation,
         }),
       ),
     );
   },
+);
+
+export const RegistrationProofPersonPatch = openApiRoute(registrationProofPersonPatchRouteSchema, async (c, data) =>
+  jsonPrivate(
+    registrationProofPersonPatchResponseSchema.parse(
+      await updateRegistrationProofPerson(requestDb(c), {
+        eventSlug: data.params.eventSlug,
+        signingSecret: requireInternalSecret(c.env),
+        body: data.body,
+      }),
+    ),
+  ),
 );

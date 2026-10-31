@@ -1,9 +1,10 @@
 import { writeFile } from "node:fs/promises";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
-import { initialsFrom } from "../../assets/ts/shared/initials";
+import { initialsFrom } from "../../assets/shared/initials";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
 import { matrixTitle, prepareAgendaInteractionFixture } from "./helpers/agenda-interaction-fixture";
+import { enableAgendaEditing, openOrganizerAgenda } from "./helpers/organizer-agenda";
 import { captureBrowserZoomViewport, openBrowserZoomContext, setBrowserZoom } from "./helpers/browser-zoom";
 
 async function activate(control: Locator) {
@@ -59,7 +60,7 @@ test("actual 200% browser zoom preserves long-panel reading and keyboard access 
     expect(policy).toContain("style-src 'self'");
     expect(policy).toContain("style-src-attr 'none'");
     const fixture = await prepareAgendaInteractionFixture(page);
-    await page.goto(`/portal/#/events/${fixture.slug}/agenda`);
+    await openOrganizerAgenda(page, fixture.slug);
     await expect(page.getByRole("heading", { name: matrixTitle, exact: true })).toBeVisible();
     const baseline = await page.evaluate(() => ({ width: innerWidth, dpr: devicePixelRatio }));
     expect(baseline.width).toBeGreaterThanOrEqual(1000);
@@ -94,7 +95,7 @@ test("actual 200% browser zoom preserves long-panel reading and keyboard access 
     await expect(panel.getByText("Moderator", { exact: true })).toBeVisible();
     for (const person of fixture.people) {
       const speaker = panel.getByRole("article").filter({
-        has: page.getByRole("heading", { name: person.name, exact: true }),
+        has: page.getByRole("heading", { name: `View speaker profile: ${person.name}`, exact: true }),
       });
       await expect(speaker.getByText(initialsFrom(person.name), { exact: true })).toBeVisible();
       await expect(speaker.locator("img")).toHaveCount(0);
@@ -122,7 +123,7 @@ test("actual 200% browser zoom preserves long-panel reading and keyboard access 
     }
     await captureAtTop(page, info.outputPath("long-panel-browser-zoom-200-viewport.png"));
     for (const [index, person] of fixture.people.entries()) {
-      const heading = panel.getByRole("heading", { name: person.name, exact: true });
+      const heading = panel.getByRole("heading", { name: `View speaker profile: ${person.name}`, exact: true });
       await heading.scrollIntoViewIfNeeded();
       await expect(heading).toBeInViewport({ ratio: 1 });
       await captureAtTop(page, info.outputPath(`panel-speaker-${index + 1}-browser-zoom-200-viewport.png`));
@@ -130,6 +131,8 @@ test("actual 200% browser zoom preserves long-panel reading and keyboard access 
     await activate(panel.getByRole("button", { name: "Close session details", exact: true }));
     await expect(panel).toBeHidden();
     const before = await fixture.read();
+    // Resizing stays locked until the organizer explicitly enables editing.
+    await enableAgendaEditing(page, activate);
     await activate(
       page.getByRole("button", {
         name: `Resize ${matrixTitle} by dragging its bottom edge to an end time`,

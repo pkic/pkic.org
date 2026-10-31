@@ -3,7 +3,8 @@ import { identitiesListResponseSchema } from "../../assets/shared/schemas/identi
 import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-auth";
 import { EMAIL_FIRST_COPY } from "../../assets/shared/email-first-copy";
 import { registrationEmailProofStartSchema } from "../../assets/shared/schemas/registration-email-proof";
-import { userDetailResponseSchema } from "../../assets/shared/schemas/user-management";
+import { myProfileSchema } from "../../assets/shared/schemas/me";
+import { portalProfileFixture, portalSessionFixture } from "../helpers/portal-session";
 
 const USER_ID = "00000000-0000-4000-8000-000000000041";
 const REGISTRATION_PAGE = "/events/2026/pqc-conference-amsterdam-nl/register/";
@@ -22,25 +23,14 @@ test("a signed-in nonmember continues with saved details and no empty identity p
       }),
     }),
   );
-  await page.route(`**/api/v1/users/${USER_ID}`, (route) =>
+  await page.route("**/api/v1/users/current", (route) =>
     route.fulfill({
-      json: userDetailResponseSchema.parse({
-        user: {
-          id: USER_ID,
-          email: "ada@example.test",
-          first_name: "Ada",
-          last_name: "Lovelace",
-          preferred_name: null,
-          role: "user",
-          active: true,
-          isEcMember: false,
-          created_at: "2026-01-01T00:00:00.000Z",
-          updated_at: "2026-01-01T00:00:00.000Z",
-          pii_redacted_at: null,
-          headshotUrl: null,
-          identities: [],
-          formerIdentities: [],
-        },
+      json: myProfileSchema.parse({
+        ...portalProfileFixture(portalSessionFixture({})),
+        userId: USER_ID,
+        email: "ada@example.test",
+        firstName: "Ada",
+        lastName: "Lovelace",
       }),
     }),
   );
@@ -60,7 +50,7 @@ test("a signed-in nonmember continues with saved details and no empty identity p
   await contact.getByRole("button", { name: copy.work.action, exact: true }).click();
   await expect(contact).toContainText("Ada Lovelace");
   await expect(contact.getByRole("textbox", { name: /First name/ })).toHaveCount(0);
-  await expect(page.getByRole("combobox", { name: "Event identity" })).toHaveCount(0);
+  await expect(page.getByRole("combobox", { name: "Representation" })).toHaveCount(0);
 });
 
 test("a signed-out visitor verifies the address first and is asked nothing else until the link is opened", async ({
@@ -82,12 +72,13 @@ test("a signed-out visitor verifies the address first and is asked nothing else 
   await page.goto(REGISTRATION_PAGE);
   const contact = page.locator("[data-registration-contact]");
   await expect(contact.getByLabel(copy.work.label)).toBeVisible();
-  expect(sessionRequests).toBe(0);
+  // The public account menu checks the session once; the contact step waits for Continue.
+  await expect.poll(() => sessionRequests).toBe(1);
   await contact.getByLabel(copy.work.label).fill("new-attendee@example.test");
   await contact.getByRole("button", { name: copy.work.action, exact: true }).click();
   await expect(contact.getByText(copy.sentTitle, { exact: true })).toBeVisible();
   await expect(contact.getByText(copy.sent("new-attendee@example.test"), { exact: true })).toBeVisible();
-  expect(sessionRequests).toBe(1);
+  expect(sessionRequests).toBe(2);
   expect(registrationEmailProofStartSchema.parse(proofRequest)).toMatchObject({
     email: "new-attendee@example.test",
     unaffiliatedAttestation: false,

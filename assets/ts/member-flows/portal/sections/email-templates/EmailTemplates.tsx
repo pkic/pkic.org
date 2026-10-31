@@ -117,7 +117,7 @@ function CreateTemplate({
     // Nothing is sent until the contract accepts the whole draft.
     const checked = form.submit();
     if (!checked.data) {
-      setError(checked.message);
+      setError(checked.formMessage ?? "");
       return;
     }
     setSaving(true);
@@ -304,14 +304,14 @@ function EmailTemplateCreateOnly() {
 // ────────────────────────────────────────────────────────
 
 function RoutedTemplateEditor({ templateKey, canWrite }: { templateKey: string; canWrite: boolean }) {
-  const [loaded, setLoaded] = useState<{ version: EmailTemplateVersion | null } | null>(null);
+  const [loaded, setLoaded] = useState<{ key: string; version: EmailTemplateVersion | null } | null>(null);
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     getEmailTemplateEditorVersion(templateKey)
       .then((version) => {
-        if (!cancelled) setLoaded({ version });
+        if (!cancelled) setLoaded({ key: templateKey, version });
       })
       .catch((caught: unknown) => {
         if (!cancelled) setError(caught instanceof Error ? caught : new Error("Could not load this template."));
@@ -322,8 +322,13 @@ function RoutedTemplateEditor({ templateKey, canWrite }: { templateKey: string; 
   }, [templateKey]);
 
   if (error) return <ErrorAlert error={error} />;
-  if (!loaded) return <Spinner label="Loading email template…" />;
-  return <TemplateEditor templateKey={templateKey} initialVersion={loaded.version} canWrite={canWrite} />;
+  // A hash navigation to another template keeps this component mounted, so
+  // the editor waits for the new template and remounts instead of showing the
+  // previous template's body under the new heading.
+  if (!loaded || loaded.key !== templateKey) return <Spinner label="Loading email template…" />;
+  return (
+    <TemplateEditor key={templateKey} templateKey={templateKey} initialVersion={loaded.version} canWrite={canWrite} />
+  );
 }
 type TemplatesView = "list" | "create";
 

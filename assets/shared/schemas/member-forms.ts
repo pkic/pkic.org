@@ -12,6 +12,12 @@ export const memberFormPlacementSchema = z.object({
   purpose: z.string(),
   ownerGroupId: groupIdSchema,
   ownerGroupName: z.string(),
+  /**
+   * The caller's group the form is open to them through: the owner group when
+   * they belong to it, else a group the form is shared with. The form's page
+   * lives under this group.
+   */
+  accessGroupId: groupIdSchema,
   opensAt: utcInstantSchema.nullable(),
   closesAt: utcInstantSchema.nullable(),
   acceptingResponses: z.boolean(),

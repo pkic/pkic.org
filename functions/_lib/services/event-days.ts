@@ -8,17 +8,13 @@ import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
 import type { DatabaseLike, StatementLike } from "../types";
 import type { AttendanceType } from "../../../assets/shared/schemas/registration";
+import type { EventAttendanceOption } from "../../../assets/shared/schemas/event-configuration";
 
 // Open-ended: any string that matches a configured attendance option value.
 export type DayAttendanceType = string;
 
 /** A single configurable attendance option for an event day. */
-export interface AttendanceOption {
-  value: string;
-  label: string;
-  /** null / absent means unlimited capacity for this option. */
-  capacity?: number | null;
-}
+export type AttendanceOption = EventAttendanceOption;
 
 export interface EventDayRecord {
   id: string;
@@ -51,7 +47,7 @@ function eventDaysListSql(eventIdSql: string) {
  * Falls back to the legacy core options using the
  * in_person_capacity column when no options have been configured.
  */
-export function resolveAttendanceOptions(
+export function configuredAttendanceOptions(
   day: Pick<EventDayRecord, "attendance_options_json" | "in_person_capacity">,
 ): AttendanceOption[] {
   if (day.attendance_options_json) {
@@ -72,10 +68,17 @@ export function resolveAttendanceOptions(
   ];
 }
 
+/** Choices currently offered to new registrants; disabled definitions remain available to management. */
+export function resolveAttendanceOptions(
+  day: Pick<EventDayRecord, "attendance_options_json" | "in_person_capacity">,
+): AttendanceOption[] {
+  return configuredAttendanceOptions(day).filter((option) => option.enabled !== false);
+}
+
 /** The organizer's label for an attendance value on any day of the event, if one names it. */
 export function attendanceOptionLabel(days: readonly EventDayRecord[], value: string): string | null {
   for (const day of days) {
-    const option = resolveAttendanceOptions(day).find((candidate) => candidate.value === value);
+    const option = configuredAttendanceOptions(day).find((candidate) => candidate.value === value);
     if (option) return option.label;
   }
   return null;
@@ -137,7 +140,7 @@ export function decodeConfiguredEventDays(days: EventDayRecord[], counts: EventD
     startsAt: day.starts_at,
     endsAt: day.ends_at,
     sortOrder: day.sort_order,
-    attendanceOptions: resolveAttendanceOptions(day),
+    attendanceOptions: configuredAttendanceOptions(day),
     attendanceCounts: countByDay.get(day.id) ?? {},
   }));
 }

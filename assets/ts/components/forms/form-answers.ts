@@ -7,6 +7,7 @@
  */
 
 import type { FormFieldDefinition } from "../../../shared/schemas/forms";
+import { parseFormFieldOptions } from "../../../shared/schemas/form-field-rules";
 import { countryByCode } from "../../shared/countries";
 
 export interface FormAnswerRow {
@@ -21,23 +22,7 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function optionLabelMap(options: unknown): Map<string, string> {
-  const labels = new Map<string, string>();
-  if (!Array.isArray(options)) return labels;
-
-  for (const entry of options) {
-    if (typeof entry === "string") {
-      labels.set(entry, entry);
-      continue;
-    }
-    if (isRecord(entry) && typeof entry.value === "string") {
-      labels.set(
-        entry.value,
-        typeof entry.label === "string" && entry.label.trim().length > 0 ? entry.label.trim() : entry.value,
-      );
-    }
-  }
-
-  return labels;
+  return new Map(parseFormFieldOptions(options).map((option) => [option.value, option.label]));
 }
 
 function stringifyAnswer(value: unknown): string {
@@ -48,12 +33,18 @@ function stringifyAnswer(value: unknown): string {
   return JSON.stringify(value, null, 2);
 }
 
-export function formatFormAnswerValue(value: unknown, field?: FormFieldDefinition): string[] {
+export function formatFormAnswerValue(
+  value: unknown,
+  field?: Pick<FormFieldDefinition, "options" | "validation">,
+): string[] {
   const labels = optionLabelMap(field?.options);
   // A country is stored as its ISO code ("NL") and read by people as its name.
   if (field?.validation?.format === "iso_country" && typeof value === "string" && value.trim()) {
     return [countryByCode(value.trim())?.label ?? value];
   }
+
+  if (isRecord(value) && typeof value.start === "string" && typeof value.end === "string")
+    return value.start.trim() && value.end.trim() ? [`${value.start.trim()} to ${value.end.trim()}`] : ["-"];
 
   if (Array.isArray(value)) {
     if (value.length === 0) return ["-"];

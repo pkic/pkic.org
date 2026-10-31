@@ -1,3 +1,4 @@
+import { registrationEmailProofVerifySchema } from "../../assets/shared/schemas/registration-email-proof";
 // @vitest-environment jsdom
 /**
  * The confirmation shell, driven the way a browser drives it.
@@ -18,7 +19,7 @@ import {
 } from "../../assets/shared/schemas/registration";
 import { ORGANIZATION_JOB_TITLE_COPY, REGISTRATION_ORGANIZATION_COPY } from "../../assets/shared/email-first-copy";
 import { JOB_TITLE_REQUIRED, ORGANIZATION_NAME_REQUIRED } from "../../assets/shared/schemas/api-common";
-import { controlFor } from "./helpers/labeled-control";
+import { controlFor, buttonNamed } from "./helpers/labeled-control";
 
 const CONFIRM_INFO = "/api/v1/events/pqc-2026/registrations/confirm-info";
 const RESEND = "/api/v1/events/pqc-2026/registrations/resend-confirmation";
@@ -101,12 +102,6 @@ async function settle(): Promise<void> {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
-}
-
-function buttonNamed(root: ParentNode, name: string): HTMLButtonElement {
-  const match = [...root.querySelectorAll("button")].find((candidate) => candidate.textContent?.trim() === name);
-  if (!match) throw new Error(`no button reads "${name}"`);
-  return match;
 }
 
 async function click(target: HTMLElement): Promise<void> {
@@ -367,7 +362,30 @@ describe("registration confirmation shell", () => {
     window.history.replaceState({}, "", "/events/2026/pqc-2026/register/confirm/?token=live-token-0123456789");
     const root = mountShell();
     const requests = installApi({
-      [CONFIRM_INFO]: () => json(confirmInfo({ firstName: "Ada", asksOrganization: true })),
+      [CONFIRM_INFO]: () =>
+        json(
+          confirmInfo({
+            firstName: "Ada",
+            email: "ada@unknown-works.example",
+            asksOrganization: true,
+            organizationProof: "synthetic-mailbox-proof-01234567890123456789",
+          }),
+        ),
+      "/api/v1/events/pqc-2026/registrations/proof/verify": () =>
+        json({
+          email: "ada@unknown-works.example",
+          unaffiliatedAttestation: false,
+          person: null,
+          asksOrganization: true,
+          affiliation: {
+            email: "ada@unknown-works.example",
+            domain: "unknown-works.example",
+            domains: [],
+            organization: null,
+            organizations: [],
+            contextToken: "synthetic-affiliation-context-0123456789",
+          },
+        }),
       "/api/v1/events/pqc-2026/registrations/confirm-email": () =>
         json({
           success: true,
@@ -387,19 +405,20 @@ describe("registration confirmation shell", () => {
     const form = root.querySelector<HTMLFormElement>("form")!;
     // The question says what confirming needs, in place of the one-click greeting.
     expect(root.querySelector<HTMLElement>("[data-confirm-intro]")?.hidden).toBe(true);
-    expect(root.textContent).toContain(REGISTRATION_ORGANIZATION_COPY.question);
-    const name = controlFor(root, REGISTRATION_ORGANIZATION_COPY.nameLabel);
+    const organization = controlFor(root, "Organization name");
     const submit = async () =>
       act(async () => {
         form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
         await new Promise((resolve) => setTimeout(resolve, 0));
       });
     await submit();
-    expect(requests.some((request) => request.method === "POST")).toBe(false);
-    expect(name.getAttribute("aria-invalid")).toBe("true");
+    expect(requests.some((request) => request.path.endsWith("/confirm-email"))).toBe(false);
+    expect(organization.getAttribute("aria-invalid")).toBe("true");
     expect(root.textContent).toContain(ORGANIZATION_NAME_REQUIRED);
     expect(root.textContent).not.toContain("Invalid input");
 
+    const name = organization;
+    expect(root.querySelector('button[aria-label="Add organization"]')).toBeNull();
     await act(() => {
       name.value = "Unknown Works";
       name.dispatchEvent(new Event("input", { bubbles: true }));
@@ -410,7 +429,7 @@ describe("registration confirmation shell", () => {
     expect(jobTitle.required).toBe(true);
     expect(jobTitle.getAttribute("aria-invalid")).toBe("true");
     expect(root.textContent).toContain(JOB_TITLE_REQUIRED);
-    expect(requests.some((request) => request.method === "POST")).toBe(false);
+    expect(requests.some((request) => request.path.endsWith("/confirm-email"))).toBe(false);
 
     await act(() => {
       jobTitle.value = "Security Architect";
@@ -418,20 +437,86 @@ describe("registration confirmation shell", () => {
     });
     await submit();
     await settle();
-    const posted = requests.find((request) => request.method === "POST");
-    expect(registrationConfirmSchema.parse(posted?.body)).toEqual({
+    const preparation = requests.filter((request) => request.path.endsWith("/proof/verify")).at(-1);
+    expect(registrationEmailProofVerifySchema.parse(preparation?.body).affiliation).toMatchObject({
+      organizationName: "Unknown Works",
+      jobTitle: "Security Architect",
+      organizationId: null,
+    });
+    const posted = requests.find((request) => request.path.endsWith("/confirm-email"));
+    expect(registrationConfirmSchema.parse(posted?.body)).toMatchObject({
       token: "live-token-0123456789",
-      organization: { name: "Unknown Works", jobTitle: "Security Architect" },
+      organization: {
+        name: "Unknown Works",
+        jobTitle: "Security Architect",
+        contextToken: "synthetic-affiliation-context-0123456789",
+      },
     });
     expect(root.textContent).toContain(REGISTRATION_ORGANIZATION_COPY.reviewRequired);
     // Once confirmed, only the outcome stays: the invitation to confirm is gone.
     expect(root.querySelector<HTMLElement>("[data-confirm-content]")?.hidden).toBe(true);
   });
 
-  it("asks nothing when the address already names an organization", async () => {
+  it("offers the confirmation only once the organization question is ready", async () => {
+    window.history.replaceState({}, "", "/events/2026/pqc-2026/register/confirm/?token=live-token-0123456789");
+    const root = mountShell();
+    let answerProof: (response: Response) => void = () => undefined;
+    const pendingProof = new Promise<Response>((resolve) => {
+      answerProof = resolve;
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const path = new URL(String(input), location.origin).pathname;
+        if (path === CONFIRM_INFO)
+          return Promise.resolve(
+            json(
+              confirmInfo({
+                email: "ada@unknown-works.example",
+                asksOrganization: true,
+                organizationProof: "synthetic-mailbox-proof-01234567890123456789",
+              }),
+            ),
+          );
+        if (path === "/api/v1/events/pqc-2026/registrations/proof/verify") return pendingProof;
+        return Promise.resolve(json({}));
+      }),
+    );
+    await boot();
+    await settle();
+
+    // A confirm button offered before its organization question would submit without it.
+    expect(root.querySelector<HTMLElement>("[data-confirm-content]")?.hidden).toBe(true);
+    expect(root.querySelector<HTMLElement>("[data-confirm-loading]")?.hidden).toBe(false);
+
+    answerProof(
+      json({
+        email: "ada@unknown-works.example",
+        unaffiliatedAttestation: false,
+        person: null,
+        asksOrganization: true,
+        affiliation: {
+          email: "ada@unknown-works.example",
+          domain: "unknown-works.example",
+          domains: [],
+          organization: null,
+          organizations: [],
+          contextToken: "synthetic-affiliation-context-0123456789",
+        },
+      }),
+    );
+    await settle();
+    expect(root.querySelector<HTMLElement>("[data-confirm-loading]")?.hidden).toBe(true);
+    expect(root.querySelector<HTMLElement>("[data-confirm-content]")?.hidden).toBe(false);
+    expect(controlFor(root, "Organization name")).toBeTruthy();
+  });
+
+  it("does not ask a consumer address for an organization", async () => {
     window.history.replaceState({}, "", "/events/2026/pqc-2026/register/confirm/?token=live-token");
     const root = mountShell();
-    installApi({ [CONFIRM_INFO]: () => json(confirmInfo({ firstName: "Ada", asksOrganization: false })) });
+    installApi({
+      [CONFIRM_INFO]: () => json(confirmInfo({ firstName: "Ada", email: "ada@gmail.com", asksOrganization: false })),
+    });
     await boot();
     expect(root.querySelector<HTMLElement>("[data-confirm-organization]")?.hidden).toBe(true);
     expect(root.querySelectorAll("input")).toHaveLength(0);

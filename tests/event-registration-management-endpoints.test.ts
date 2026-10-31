@@ -98,6 +98,26 @@ describe("canonical event registration management", () => {
     expect(allowed.status).toBe(200);
   });
 
+  it("lets an event-only manager update attendance but refuses canonical name changes", async () => {
+    const { event, registrationId, userId } = await registrationFixture();
+    const manager = await scopedToken(event.id, "events:manage");
+    const path = `/api/v1/events/pqc-2026/registrations/${registrationId}`;
+    const before = await env.DB.prepare("SELECT first_name,last_name FROM users WHERE id=?").bind(userId).first();
+    const refused = await callApi(path, manager.token, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "update", firstName: "Changed" }),
+    });
+    expect(refused.status, await refused.clone().text()).toBe(403);
+    expect(await env.DB.prepare("SELECT first_name,last_name FROM users WHERE id=?").bind(userId).first()).toEqual(
+      before,
+    );
+    const allowed = await callApi(path, manager.token, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "update", attendanceType: "on_demand", firstName: before!.first_name }),
+    });
+    expect(allowed.status, await allowed.clone().text()).toBe(200);
+  });
+
   it("retains the same day-transition history in the list and dedicated detail without changing evidence on read", async () => {
     const event = await getEventBySlug(env.DB, "pqc-2026");
     await env.DB.prepare(
@@ -165,6 +185,10 @@ describe("canonical event registration management", () => {
   it("rolls back when event-management authority is revoked after preflight", async () => {
     const fixture = await registrationFixture();
     const manager = await scopedToken(fixture.event.id, "events:manage");
+    await env.DB.prepare(`INSERT INTO permission_grants(id,user_id,permission,granted_by_user_id,created_at)
+      SELECT ?,?,'users:write',id,? FROM users WHERE email='admin@pkic.org'`)
+      .bind(crypto.randomUUID(), manager.userId, new Date().toISOString())
+      .run();
     const racedDb = mutateBeforeMatchingQuery(
       env.DB,
       (sql) => /^\s*(?:INSERT|UPDATE|DELETE)/u.test(sql),

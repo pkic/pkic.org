@@ -13,6 +13,7 @@ import { EMAIL_AUTH_TOKEN_MAX_LENGTH } from "../constants/email-auth";
 import { linksSchema } from "./links";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { httpOrSameOriginUrlSchema } from "./urls";
+import { identityAffiliationContextSchema } from "./identity-affiliation";
 
 export const IDENTITY_SOURCES = [
   "membership_approval",
@@ -137,11 +138,16 @@ export const identityCreateSchema = z.discriminatedUnion("userReference", [
 ]);
 
 /** The current user explicitly activates one exact claimed-domain identity. */
-export const currentUserIdentityCreateSchema = z.object({
-  emailId: databaseIdSchema.nullable(),
-  organizationId: databaseIdSchema,
-  jobTitle: organizationIdentityJobTitleSchema,
-});
+export const currentUserIdentityCreateSchema = z.union([
+  z
+    .object({
+      emailId: databaseIdSchema.nullable(),
+      organizationId: databaseIdSchema,
+      jobTitle: organizationIdentityJobTitleSchema,
+    })
+    .strict(),
+  z.object({ contextToken: identityAffiliationContextSchema }).strict(),
+]);
 
 /**
  * When a representation ended: an instant no later than now. The portal
@@ -216,6 +222,14 @@ export const identityUpdateSchema = z
     message: "Provide exactly one profile update or lifecycle transition",
   });
 
+/** An incorrect association is replaced, not retained as a former role. */
+export const identityCorrectionSchema = z
+  .object({
+    replacementIdentityId: databaseIdSchema,
+    reason: trimmedString(3, 500, "Explain what was incorrect."),
+  })
+  .strict();
+
 export const identityMutationResponseSchema = successResponseSchema.extend({
   identityId: databaseIdSchema,
   state: identityStateSchema,
@@ -223,9 +237,13 @@ export const identityMutationResponseSchema = successResponseSchema.extend({
 
 export const IDENTITY_SORT_COLUMNS = ["user_name", "email", "organization_name", "started_at", "updated_at"] as const;
 export const identitiesListQuerySchema = listQuerySchema(IDENTITY_SORT_COLUMNS).extend({
+  state: identityStateSchema.optional(),
   memberId: databaseIdSchema.optional(),
   organizationId: databaseIdSchema.optional(),
   organizationOnly: booleanQueryFlagSchema.optional(),
+  identityId: databaseIdSchema.optional(),
+  excludeIdentityId: databaseIdSchema.optional(),
+  excludeOrganizationId: databaseIdSchema.optional(),
   userId: databaseIdSchema.optional(),
   active: booleanQueryFlagSchema.optional(),
   blocked: booleanQueryFlagSchema.optional(),

@@ -236,7 +236,7 @@ export function GroupEventEditor({
     const checked = form.submit();
     if (!checked.data) {
       setStatus("");
-      setError(schedule.problem ?? checked.message);
+      setError(schedule.problem ?? checked.formMessage);
       return;
     }
     setSaving(true);

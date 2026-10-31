@@ -174,8 +174,12 @@ describe("ActingIdentityDirectory", () => {
       "Invitation pending",
       "Ended",
     ]);
-    // Pending invitations have no commands; ended identities can be reinstated.
-    expect(rowActionControlNames(root)).toEqual(["Actions for Active Person", "Actions for Ended Person"]);
+    // Pending invitations can be cancelled; ended identities can be reinstated.
+    expect(rowActionControlNames(root)).toEqual([
+      "Actions for Active Person",
+      "Actions for Pending Person",
+      "Actions for Ended Person",
+    ]);
   });
 
   it("uses the shared person row with title and initials without repeating the email", async () => {

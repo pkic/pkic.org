@@ -20,7 +20,7 @@ import {
 import { identityJobTitleSql } from "../identities/affiliation-projection";
 import { LEADERSHIP_TERM_SELECT_SQL } from "../groups/leadership-sql";
 import { readAgendaSpeakerOrganizations } from "../event-agenda/speaker-organizations";
-import { personDisplayNameSql } from "../event-agenda/speaker-name";
+import { personDisplayNameSql } from "./person-name-sql";
 
 const BATCH = 50;
 const DEFAULT_SEAT_TITLE = "Member";

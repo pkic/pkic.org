@@ -9,6 +9,7 @@ import { agendaTransferSchema } from "../../assets/shared/schemas/event-agenda-t
 import { sessionPresentationVersionsSchema } from "../../assets/shared/schemas/session-presentation-versions";
 import { USER_SESSION_COOKIE_NAME } from "../../functions/_lib/auth/session-cookies";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
+import { openOrganizerAgenda } from "./helpers/organizer-agenda";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
 
 const source = "content/events/2023/post-quantum-cryptography-conference/index.md";
@@ -158,7 +159,7 @@ test("real Ottawa YAML archives all rows and offsets and uploads eight resumable
       .flatMap((row) => row.history?.materials ?? [])
       .every((material) => material.status === "draft" && material.approvedAt === null),
   ).toBe(true);
-  await page.goto(`/portal/#/events/${slug}/agenda`);
+  await openOrganizerAgenda(page, slug);
   await page.getByRole("tab", { name: "Schedule", exact: true }).click();
   const networkingRow = page.getByRole("row").filter({ has: page.getByText("Networking", { exact: true }) });
   await expect(networkingRow).toBeVisible();

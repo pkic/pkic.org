@@ -34,6 +34,7 @@ export function prepareAgendaSpeakers(
   db: DatabaseLike,
   eventId: EventReadSelection,
   occurrenceIds?: string[] | AgendaOccurrenceSelection,
+  profile: "full" | "credit" = "full",
 ) {
   const scope = eventReadIdSql(eventId);
   const selection = agendaOccurrenceSelection(eventId, occurrenceIds);
@@ -45,8 +46,8 @@ export function prepareAgendaSpeakers(
           CASE WHEN credited.available=1 THEN spoken_as.organization_id END AS organization_id,
           CASE WHEN credited.available=1 THEN spoken_as_organization.name END AS organization_name,
           CASE WHEN credited.available=1 THEN ${identityJobTitleSql("spoken_as.id")} END AS job_title,
-          CASE WHEN credited.available=1 THEN spoken_as.biography END AS biography,
-          CASE WHEN credited.available=1 THEN spoken_as.links_json END AS links_json,
+          ${profile === "full" ? "CASE WHEN credited.available=1 THEN spoken_as.biography END" : "NULL"} AS biography,
+          ${profile === "full" ? "CASE WHEN credited.available=1 THEN spoken_as.links_json END" : "NULL"} AS links_json,
           CASE WHEN credited.available=1 THEN credited.headshot_r2_key END AS headshot_r2_key
         FROM (
           SELECT speaker.occurrence_id,speaker.user_id,speaker.role,speaker.attendance_mode,speaker.room_id,

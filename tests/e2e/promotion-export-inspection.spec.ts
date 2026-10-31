@@ -29,6 +29,7 @@ import {
   organizationCreateResponseSchema,
 } from "../../assets/shared/schemas/organization-management";
 import { eventDetailResponseSchema } from "../../assets/shared/schemas/event-management";
+import { runScheduledWork } from "./helpers/scheduled-work";
 
 const slug = "pqc-conference-amsterdam-nl";
 const agendaApi = `/api/v1/events/${slug}/agenda`;
@@ -57,7 +58,7 @@ test("every delivered long-panel promotion export has complete evidence and refu
   const names = [
     "Alexandra Catherine van Example-Rivera, certificate lifecycle and migration engineering",
     "Benjamin Christopher Example-MacKenzie, cryptographic governance and assurance research",
-    "Charlotte Dominique Example-Hernandez, infrastructure architecture and operational resilience",
+    "Charlotte Dominique Example-Hernandez, infrastructure architecture, operational resilience",
   ];
   const affiliations = [
     `Synthetic Infrastructure Research Consortium and Independent Certificate Operations Laboratory ${randomUUID()}`,
@@ -133,6 +134,7 @@ test("every delivered long-panel promotion export has complete evidence and refu
       displayName: names[index]!,
       biography: "Reviewed synthetic appearance text for export inspection.",
       photoUrl: null,
+      links: [],
       approvedAt: new Date().toISOString(),
     };
   });
@@ -189,7 +191,49 @@ test("every delivered long-panel promotion export has complete evidence and refu
     .getByRole("row")
     .filter({ has: page.getByText(title, { exact: true }) });
   await runRowAction(page, row, "Speaker promotion kit");
-  await page.getByRole("button", { name: "Prepare published kit", exact: true }).click();
+  await page.getByRole("button", { name: "Prepare kits for all speakers", exact: true }).click();
+  const bulk = page.getByRole("dialog", { name: "Prepare speaker promotion kits", exact: true });
+  await expect(bulk).toBeVisible();
+  await page.goBack();
+  await expect(bulk).not.toBeVisible();
+  await page.goForward();
+  await expect(bulk).toBeVisible();
+  await bulk.getByRole("button", { name: "Close bulk promotion preparation", exact: true }).click();
+  await expect(bulk).not.toBeVisible();
+  await page.getByRole("button", { name: "Edit shared promotion copy", exact: true }).click();
+  const sharedCopy = page.getByRole("dialog", { name: "Shared promotion copy", exact: true });
+  await expect(sharedCopy).toBeVisible();
+  await page.goBack();
+  await expect(sharedCopy).not.toBeVisible();
+  await page.goForward();
+  await expect(sharedCopy).toBeVisible();
+  await sharedCopy.getByRole("button", { name: "Close shared promotion copy", exact: true }).click();
+  await expect(sharedCopy).not.toBeVisible();
+  await page.getByRole("button", { name: "Personalize promotion materials", exact: true }).click();
+  const editor = page.getByRole("dialog", { name: "Personalize promotion materials", exact: true });
+  const shortDescription = editor.getByRole("textbox", { name: "Your short description", exact: true });
+  const previousDescription = await shortDescription.inputValue();
+  await shortDescription.fill("Keep the personal draft through browser Back and Forward.");
+  await page.goBack();
+  await expect(editor).not.toBeVisible();
+  await page.goForward();
+  await expect(shortDescription).toHaveValue("Keep the personal draft through browser Back and Forward.");
+  await shortDescription.fill(previousDescription);
+  for (const [device, width, height] of [
+    ["desktop", 1280, 900],
+    ["phone", 375, 812],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await editor.getByLabel("Session content", { exact: true }).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: info.outputPath(`promotion-editor-${device}.png`) });
+  }
+
+  await page
+    .getByRole("checkbox", { name: "Print option Include a QR code for print or a second screen", exact: true })
+    .check();
+  await page.getByRole("button", { name: "Save my materials", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Personalize promotion materials", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Prepare downloads", exact: true }).click();
   const kitResponse = await page.request.get(kitApi);
   expect(kitResponse.status(), await kitResponse.text()).toBe(200);
   const kit = promotionKitSchema.parse(await kitResponse.json());
@@ -212,15 +256,7 @@ test("every delivered long-panel promotion export has complete evidence and refu
   await mkdir(directory, { recursive: true });
   const records = [];
   const urls = [];
-  const expectedPdfText = [
-    title,
-    copy.whyAttend,
-    ...copy.takeaways,
-    ...names,
-    ...affiliations,
-    ...roles,
-    copy.callToAction,
-  ];
+  const expectedPdfText = [title, ...copy.takeaways, ...names, ...affiliations, ...roles, copy.callToAction];
   const fetchReady = async (url: string) => {
     let response = await page.request.get(url);
     await expect
@@ -231,6 +267,7 @@ test("every delivered long-panel promotion export has complete evidence and refu
           expect(["PROMOTION_RENDER_PENDING", "PROMOTION_PREVIEW_PENDING"]).toContain(
             apiErrorPayloadSchema.parse(await response.json()).error.code,
           );
+          await runScheduledWork(page);
           response = await page.request.get(url);
           return response.status() === 200;
         },
@@ -240,13 +277,24 @@ test("every delivered long-panel promotion export has complete evidence and refu
     return response;
   };
   for (const format of promotionFormatSchema.options) {
-    // Local Wrangler has no cron. The mounted authorized artifact route is
-    // the existing due-time/lease retry owner, without counting a download.
-    const probe = promotionArtifactQuerySchema.parse({ format, revision: kit.publishedRevision, download: "false" });
+    // Exercise the scheduler through the local runtime trigger; artifact requests remain reads.
+    const probe = promotionArtifactQuerySchema.parse({
+      format,
+      revision: kit.publishedRevision,
+      fingerprint: kit.fingerprint,
+      download: "false",
+    });
     await fetchReady(`${kitApi}/artifact?${new URLSearchParams({ ...probe, revision: String(probe.revision) })}`);
-    const label = format === "carousel" ? "LinkedIn carousel PDF" : `${format} cards (PNG or ZIP)`;
+    const label = format === "carousel" ? "Carousel PDF" : `${format} images`;
     const link = page.getByRole("link", { name: label, exact: true });
     await expect(link).toBeVisible({ timeout: 120_000 });
+    if (format === "carousel") {
+      const completed = page.waitForEvent("download");
+      await link.click();
+      const downloaded = await completed;
+      expect(downloaded.suggestedFilename()).toBe("promotion-carousel.pdf");
+      await downloaded.saveAs(join(directory, "browser-download.pdf"));
+    }
     const href = await link.getAttribute("href");
     if (!href) throw new Error("The delivered export requires its real portal link");
     const artifactUrl = new URL(href, page.url());
@@ -260,7 +308,6 @@ test("every delivered long-panel promotion export has complete evidence and refu
       contentType: response.headers()["content-type"]!,
       bytes: await response.body(),
       registrationUrl: kit.registrationUrl,
-      sessionUrl: kit.sessionUrl!,
       expectedPdfText,
     });
     records.push({
@@ -287,9 +334,7 @@ test("every delivered long-panel promotion export has complete evidence and refu
     await page.screenshot({ path: join(directory, `kit-${device}.png`), fullPage: true });
   }
   const previewUrl = new URL(
-    (await page
-      .getByRole("img", { name: `First landscape promotion card for ${title}`, exact: true })
-      .getAttribute("src"))!,
+    (await page.getByRole("img", { name: "Preview of your promotion materials", exact: true }).getAttribute("src"))!,
     page.url(),
   ).href;
   const manifest = {
@@ -329,8 +374,21 @@ test("every delivered long-panel promotion export has complete evidence and refu
   expect(fresh.registrationUrl).toBe(kit.registrationUrl);
   expect(fresh.metrics.clicks).toBe(0);
   expect(fresh.metrics.confirmedRegistrations).toBe(0);
-  const freshQuery = promotionArtifactQuerySchema.parse({ format: "carousel", revision: fresh.publishedRevision });
+  const freshQuery = promotionArtifactQuerySchema.parse({
+    format: "carousel",
+    revision: fresh.publishedRevision,
+    fingerprint: fresh.fingerprint,
+  });
   const freshUrl = `${kitApi}/artifact?${new URLSearchParams({ ...freshQuery, revision: String(freshQuery.revision) })}`;
+  const queued = await page.request.post(`${kitApi}/renders`, {
+    data: {
+      fingerprint: fresh.fingerprint,
+      publishedRevision: fresh.publishedRevision,
+      compositionRevision: fresh.compositionRevision,
+      formats: ["carousel"],
+    },
+  });
+  expect(queued.status(), await queued.text()).toBe(200);
   const freshArtifact = await fetchReady(freshUrl);
   const freshResponseHeaders = protectedArtifactHeaders(freshArtifact);
   const freshEvidence = await inspectPromotionExport({
@@ -339,7 +397,6 @@ test("every delivered long-panel promotion export has complete evidence and refu
     contentType: freshArtifact.headers()["content-type"]!,
     bytes: await freshArtifact.body(),
     registrationUrl: fresh.registrationUrl,
-    sessionUrl: fresh.sessionUrl!,
     expectedPdfText: [`${title} · revised`, ...expectedPdfText.slice(1)],
   });
   await writeFile(

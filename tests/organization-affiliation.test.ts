@@ -2,7 +2,7 @@ import { ADMINISTRATOR_FIXTURE_USER_SQL, grantAdministrator } from "./helpers/ad
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
-  prepareExplicitVerifiedDomainIdentityStatements,
+  prepareExplicitVerifiedDomainIdentity,
   prepareVerifiedOrganizationAffiliation,
 } from "../functions/_lib/services/identities";
 import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
@@ -515,7 +515,7 @@ describe("canonical organization affiliations", () => {
     const organizationId = await insertOrganization(env.DB, "Existing Member Join Organization");
     const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
     await claimDomain(organizationId);
-    const statements = await prepareExplicitVerifiedDomainIdentityStatements(env.DB, {
+    const { statements } = await prepareExplicitVerifiedDomainIdentity(env.DB, {
       userId: person.userId,
       organizationId,
       normalizedEmail: person.email,

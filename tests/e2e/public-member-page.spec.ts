@@ -132,6 +132,7 @@ test("an organization created in the portal gets a readable address too", async 
         identities: [
           {
             name: "Release Review Person",
+            jobTitle: "Release reviewer",
             email: `member-links-${organizationName.split(" ").at(-1)}@example.test`,
             links: ["https://www.linkedin.com/in/pkic-example", "https://x.com/pkic_example"],
           },

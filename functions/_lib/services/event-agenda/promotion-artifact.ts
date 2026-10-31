@@ -1,4 +1,5 @@
 import { promotionPortraits } from "./promotion-portraits";
+import { promotionFontMeasure } from "./promotion-text";
 import { downloadZip } from "client-zip";
 import type { Env } from "../../types";
 import { AppError } from "../../errors";
@@ -57,10 +58,19 @@ export async function renderPromotionArtifact(
     portraits: await promotionPortraits(env, origin, data),
     logoPng,
     logoDataUrl: logoBytes ? `data:image/svg+xml;base64,${uint8ToBase64(logoBytes)}` : undefined,
+    measure: promotionFontMeasure(fonts),
+  };
+  const rasterize = async (svg: string) => {
+    const renderer = new Resvg(svg, { font: { fontBuffers: fonts, defaultFontFamily: "Roboto" } });
+    try {
+      return renderer.render().asPng();
+    } finally {
+      renderer.free();
+    }
   };
   if (format === "carousel")
     return {
-      body: await renderPromotionPdf(source, fonts[0]!, fonts[1]!, fonts.slice(2)),
+      body: await renderPromotionPdf(source, fonts[0]!, fonts[1]!, fonts.slice(2), rasterize),
       contentType: "application/pdf",
       count: 1,
     };

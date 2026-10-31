@@ -52,12 +52,15 @@ export function formatDate(value: string | null | undefined): string {
  * instant and localizing would shift the day for viewers west of UTC. A
  * value that is not date-only falls back to `formatDate`.
  */
-export function formatCalendarDate(value: string | null | undefined): string {
+export function formatCalendarDate(
+  value: string | null | undefined,
+  dateStyle: Intl.DateTimeFormatOptions["dateStyle"] = "medium",
+): string {
   if (!value) return EMPTY;
   if (!DATE_ONLY.test(value)) return formatDate(value);
   const date = toDate(`${value}T00:00:00Z`);
   if (!date) return EMPTY;
-  return date.toLocaleString(undefined, { dateStyle: "medium", timeZone: "UTC" });
+  return date.toLocaleString(undefined, { dateStyle, timeZone: "UTC" });
 }
 
 /**
@@ -89,10 +92,13 @@ export function calendarDateParts(value: string): { weekday: string; day: string
  * A short list of `YYYY-MM-DD` days as one phrase in the viewer's locale:
  * "Tue 1 Dec and Wed 2 Dec". For the days of one event, so no year.
  */
-export function formatDayList(values: readonly string[]): string {
+export function formatDayList(
+  values: readonly string[],
+  { includeDates = true, weekday = "short" }: { includeDates?: boolean; weekday?: "short" | "long" } = {},
+): string {
   const days = values.map((value) => {
-    const parts = calendarDateParts(value);
-    return `${parts.weekday} ${formatDayAndMonth(value)}`;
+    const label = weekday === "long" ? formatWeekday(value) : calendarDateParts(value).weekday;
+    return includeDates ? `${label} ${formatDayAndMonth(value)}` : label;
   });
   return new Intl.ListFormat(undefined, { style: "long", type: "conjunction" }).format(days);
 }
@@ -387,15 +393,16 @@ export function formatDateRange(
   startsAt: string | null | undefined,
   endsAt: string | null | undefined,
   timeZone?: string | null,
+  format?: { locale?: string; month?: "long" | "short" },
 ): string {
   if (!startsAt) return EMPTY;
   const options: Intl.DateTimeFormatOptions = {
     day: "numeric",
-    month: "long",
+    month: format?.month ?? "long",
     year: "numeric",
     ...(timeZone ? { timeZone } : {}),
   };
-  const formatter = new Intl.DateTimeFormat(undefined, options);
+  const formatter = new Intl.DateTimeFormat(format?.locale, options);
   // `Intl.DateTimeFormat.format` throws RangeError on an unreadable value
   // rather than writing "Invalid Date", which takes the whole surface down
   // instead of one line of it. Every other formatter here answers the empty

@@ -18,6 +18,7 @@ import { z } from "zod";
 import type { FormSubmission } from "../../assets/shared/schemas/form-management";
 import type { FormFieldDefinition } from "../../assets/shared/schemas/forms";
 import { VISUALIZATIONS } from "../../assets/shared/schemas/form-field-rules";
+import { parseFormFieldOptions } from "../../assets/shared/schemas/form-field-rules";
 import { buildFormAnswerRows, formatFormAnswerValue } from "../../assets/ts/components/forms/form-answers";
 import { FormResponseStats, type ServerFieldStat } from "../../assets/ts/components/forms/FormResponseStats";
 import { FormAnswerTable, FormSubmissionsTable } from "../../assets/ts/components/forms/FormResponseViews";
@@ -108,6 +109,19 @@ describe("form answer rows", () => {
     // An absent answer is a dash rather than the string "undefined".
     expect(formatFormAnswerValue(undefined, field())).toEqual(["-"]);
     expect(formatFormAnswerValue([], field())).toEqual(["-"]);
+  });
+
+  it("uses the canonical option labels and date-range wording in every answer view", () => {
+    const dietary = field({
+      options: parseFormFieldOptions(["gluten_free", "nut_allergy", { value: "custom_value", label: "Custom label" }]),
+    });
+    expect(formatFormAnswerValue(["gluten_free", "nut_allergy", "custom_value"], dietary)).toEqual([
+      "Gluten free",
+      "Nut allergy",
+      "Custom label",
+    ]);
+    expect(formatFormAnswerValue({ start: "2026-12-01", end: "2026-12-03" })).toEqual(["2026-12-01 to 2026-12-03"]);
+    expect(formatFormAnswerValue({ start: "", end: "2026-12-03" })).toEqual(["-"]);
   });
 
   it("reads a stored country code as the country's name", () => {

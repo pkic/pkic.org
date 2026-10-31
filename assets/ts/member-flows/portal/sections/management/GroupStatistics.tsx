@@ -95,7 +95,7 @@ export function GroupStatistics({ groupId }: { groupId: string }) {
     // boundary it refuses and the form states the rest.
     const checked = form.submit();
     if (!checked.data) {
-      setWindowError(checked.message);
+      setWindowError(checked.formMessage ?? "");
       return;
     }
     setWindowError("");

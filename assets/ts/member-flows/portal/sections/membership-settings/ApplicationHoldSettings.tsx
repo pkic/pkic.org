@@ -67,7 +67,7 @@ function WorkflowForm({ initial, canWrite }: { initial: MembershipSettings; canW
     if (!canWrite || !editing || saving) return;
     const checked = form.submit();
     if (!checked.data) {
-      setError(checked.message);
+      setError(checked.formMessage ?? "");
       return;
     }
     setError("");

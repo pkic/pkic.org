@@ -18,7 +18,7 @@ import {
   publicPageSlugNameBase,
   publicPageSlugSchema,
 } from "../../../../assets/shared/schemas/public-page-slug";
-import { personDisplayNameSql } from "../event-agenda/speaker-name";
+import { personDisplayNameSql } from "./person-name-sql";
 import { PUBLIC_CANDIDACY_SOURCE_SQL, PUBLIC_LEADERSHIP_SOURCE_SQL, PUBLIC_SEAT_SOURCE_SQL } from "./published-person";
 
 const BATCH = 100;
@@ -127,7 +127,7 @@ function preparePersonSlugPlan(db: DatabaseLike, people: readonly PersonProfileN
       db
         .prepare(
           `SELECT slug FROM person_profile_slugs slugs JOIN json_each(?) base
-        ON slugs.slug=base.value OR slugs.slug GLOB base.value||'-[1-9]*'`,
+        ON slugs.slug=base.value OR (INSTR(slugs.slug,base.value||'-')=1 AND SUBSTR(slugs.slug,LENGTH(base.value)+2,1) BETWEEN '1' AND '9')`,
         )
         .bind(JSON.stringify(bases.slice(offset, offset + BATCH))),
     );

@@ -106,6 +106,10 @@ describe("organization identity API", () => {
     const created = await jsonRequest(path, token, "POST", command);
     expect(created.status, await created.clone().text()).toBe(201);
     const { identityId } = (await created.json()) as { identityId: string };
+    if (visibility === "nonmember") {
+      expect(await queryAll(env.DB, "SELECT id FROM members")).toEqual([]);
+      expect(await queryAll(env.DB, "SELECT member_id FROM member_category_assignments")).toEqual([]);
+    }
     for (const body of [
       { profile: { biography: "Private biography" } },
       { transition: { state: "ended", reason: "Private representation ended" } },

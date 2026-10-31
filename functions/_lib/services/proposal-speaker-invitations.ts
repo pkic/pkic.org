@@ -6,7 +6,7 @@ import type { EventRecord } from "./events";
 import { buildEventEmailVariables } from "./events";
 import { speakerManagePageUrl } from "./frontend-links";
 import { buildProposalInviteEmailContext, proposalInviteEmailTextVariables } from "./proposal-invite-email-context";
-import { buildAddProposalSpeaker, formatInvitePerson } from "./proposal-speakers";
+import { buildAddProposalSpeaker } from "./proposal-speakers";
 import type { ProposalRecord } from "./proposals";
 import { buildFindOrCreateUserStatement } from "./users";
 import { prepareInvitedSpeakerRepresentation } from "./proposal-invited-speaker-identity";
@@ -25,7 +25,6 @@ import { withProposalWriteContextGuard, type ProposalWriteAuthorization } from "
 import { nowIso } from "../utils/time";
 import { normalizeEmail } from "../validation";
 import { first } from "../db/queries";
-import { readAffiliation } from "./identities/affiliation-projection";
 
 class ConcurrentSpeakerInvitation extends Error {}
 
@@ -69,6 +68,7 @@ async function inviteProposalSpeakerOnce(
     proposalId: payload.proposal.id,
     userId: preparedUser.user.id,
     role: payload.role,
+    invitedEmail,
     actingIdentity,
     inviteExpiresAt: requestedExpiresAt,
     renewExpiredInvitation: { event: payload.event, now },
@@ -89,18 +89,7 @@ async function inviteProposalSpeakerOnce(
     proposalId: payload.proposal.id,
     inviterUserId: payload.proposal.proposer_user_id,
   });
-  const pendingLine = `- ${formatInvitePerson(
-    preparedUser.user.first_name,
-    preparedUser.user.last_name,
-    actingIdentity
-      ? actingIdentity.representation.organizationName
-      : (await readAffiliation(db, preparedUser.user.id)).organizationName,
-    invitedEmail,
-  )}`;
-  const speakerLineupText = preparedSpeaker.alreadyPresent
-    ? context.speakerLineupText
-    : [context.speakerLineupText, pendingLine].filter(Boolean).join("\n");
-  const inviteEmailText = proposalInviteEmailTextVariables({ ...context, speakerLineupText });
+  const inviteEmailText = proposalInviteEmailTextVariables(context);
   const manageUrl = speakerManagePageUrl(payload.appBaseUrl, payload.event, preparedSpeaker.manageToken);
   const idempotencyKey = `proposal_speaker_invite:${preparedSpeaker.speakerId}:${preparedSpeaker.inviteGeneration}`;
   const queued = prepareQueueEmailStatement(db, {
@@ -112,7 +101,7 @@ async function inviteProposalSpeakerOnce(
     recipientEmail: invitedEmail,
     recipientUserId: preparedUser.user.id,
     messageType: "transactional",
-    subject: `You have been added as a speaker — ${payload.event.name}`,
+    subject: `Speaker invitation: please confirm — ${payload.event.name}`,
     capabilityLinkValues: [manageUrl],
     data: {
       ...buildEventEmailVariables(payload.event, payload.appBaseUrl),

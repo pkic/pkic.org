@@ -12,6 +12,7 @@ import { speakerProfileUpdateResponseSchema } from "../assets/shared/schemas/spe
 import { identitiesListResponseSchema } from "../assets/shared/schemas/identity";
 import { verifyEventProposalCapability } from "../functions/_lib/services/event-proposal-proof-capabilities";
 import { issueDatabaseCapability } from "../functions/_lib/services/capability-links";
+import { signUserSessionToken } from "../functions/_lib/auth/user-session";
 import type { DatabaseLike } from "../functions/_lib/types";
 import { callApi } from "./helpers/app";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
@@ -232,6 +233,83 @@ describe("authenticated speaker resource mailbox proof", () => {
     expect(response.status, await response.clone().text()).toBe(200);
     const saved = speakerProfileUpdateResponseSchema.parse(await response.json());
     expect(saved.currentRepresentation?.actingIdentityId).toBeTruthy();
+  });
+
+  it("treats a session the server no longer accepts as no session for an invited guest", async () => {
+    const f = await fixture();
+    const token = await issueDatabaseCapability({
+      db: env.DB,
+      signingSecret: env.INTERNAL_SIGNING_SECRET!,
+      purpose: "speaker_manage",
+      resourceId: f.speakerId,
+    });
+    const proof = await prepareProposalProof({
+      environment: env,
+      eventSlug: "pqc-2026",
+      email: "speaker@official.example",
+      consents,
+      unaffiliatedAttestation: false,
+      speakerManagementToken: token,
+    });
+    const response = await request(
+      `/api/v1/proposals/speakers/access/${proof.speakerManagementToken}/profile`,
+      speakerSelfProfilePatchSchema.parse({
+        continuationToken: proof.continuationToken,
+        unaffiliatedAttestation: false,
+        consents,
+        jobTitle: "Invited role",
+      }),
+      "expired-or-unknown-session",
+      env.DB,
+      "PATCH",
+    );
+    expect(response.status, await response.clone().text()).toBe(200);
+  });
+
+  it("lets an invited guest proceed when the browser still carries an idle staff session", async () => {
+    const f = await fixture();
+    // A live staff session whose staff activity is two hours old: past the one-hour staff idle limit.
+    const staffSession = await env.DB.prepare(
+      "SELECT s.id, s.user_id, s.expires_at FROM sessions s JOIN users u ON u.id=s.user_id WHERE u.email='admin@pkic.org'",
+    ).first<{ id: string; user_id: string; expires_at: string }>();
+    const now = Math.floor(Date.now() / 1000);
+    const idleStaffToken = await signUserSessionToken(env.INTERNAL_SIGNING_SECRET!, {
+      sub: staffSession!.user_id,
+      sid: staffSession!.id,
+      exp: Math.floor(new Date(staffSession!.expires_at).getTime() / 1000),
+      lastActivityAt: now,
+      staffLastActivityAt: now - 2 * 60 * 60,
+    });
+    const cookie = `pkic_session=${idleStaffToken}`;
+    const sessionCheck = await callApi(env, "/api/v1/auth/session", { headers: { cookie } });
+    expect(sessionCheck.status).toBe(401);
+    const token = await issueDatabaseCapability({
+      db: env.DB,
+      signingSecret: env.INTERNAL_SIGNING_SECRET!,
+      purpose: "speaker_manage",
+      resourceId: f.speakerId,
+    });
+    const proof = await prepareProposalProof({
+      environment: env,
+      eventSlug: "pqc-2026",
+      email: "speaker@official.example",
+      consents,
+      unaffiliatedAttestation: false,
+      speakerManagementToken: token,
+    });
+    const response = await callApi(env, `/api/v1/proposals/speakers/access/${proof.speakerManagementToken}/profile`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify(
+        speakerSelfProfilePatchSchema.parse({
+          continuationToken: proof.continuationToken,
+          unaffiliatedAttestation: false,
+          consents,
+          jobTitle: "Invited role",
+        }),
+      ),
+    });
+    expect(response.status, await response.clone().text()).toBe(200);
   });
 
   it.each(["anonymous", "other_owner", "other_event", "ambiguous"] as const)(

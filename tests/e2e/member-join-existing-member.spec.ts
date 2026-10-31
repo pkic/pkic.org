@@ -12,7 +12,7 @@ test("existing members get sign-in instructions and old join links remain helpfu
   const requestJoin = async () => {
     await page.goto("/join/");
     await page.getByLabel("Your official work or organization email address").fill(email);
-    await page.getByRole("button", { name: "Continue", exact: true }).click();
+    await page.getByRole("button", { name: "Verify your work email", exact: true }).click();
     await expect(page.getByText("Check your email", { exact: true })).toBeVisible();
   };
   const beforeVerification = await capturedEmailCount();

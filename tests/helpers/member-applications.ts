@@ -47,6 +47,8 @@ export function membershipApplicationDescriptionAnswers(membershipCategory: stri
 export async function verifiedMemberApplicationPayload<T extends Record<string, unknown>>(
   payload: T,
   signingSecret = env.INTERNAL_SIGNING_SECRET ?? "test-signing-secret",
+  /** The existing account the join step resolved for the verified mailbox, if any. */
+  applicantUserId: string | null = null,
 ): Promise<T & { joinToken: string }> {
   const membershipCategory = String(payload.membershipCategory ?? "");
   const capability = newMemberJoinCapabilityPayload(
@@ -58,7 +60,7 @@ export async function verifiedMemberApplicationPayload<T extends Record<string, 
   return {
     ...payload,
     answers: { ...membershipApplicationDescriptionAnswers(membershipCategory), ...answers },
-    joinToken: await issueMemberJoinApplicationToken(signingSecret, { ...capability, applicantUserId: null }, 15 * 60),
+    joinToken: await issueMemberJoinApplicationToken(signingSecret, { ...capability, applicantUserId }, 15 * 60),
   };
 }
 
@@ -149,13 +151,13 @@ export async function seedMembershipApplicationForm(): Promise<string> {
     .bind(formId, MEMBERSHIP_APPLICATION_FORM_KEY)
     .run();
   const fields = [
-    ["job_title", "Role / Job Title", "text", 0, null, null, null],
+    ["job_title", "Role or job title", "text", 0, null, null, null],
     ["linkedin", "Professional profile (e.g., LinkedIn)", "url", 0, null, null, null],
-    ["organization_website", "Organization Website", "url", 0, null, null, null],
-    ["about_yourself", "About Yourself", "textarea", 0, null, null, null],
-    ["about_organization", "About Your Organization", "textarea", 0, null, null, null],
-    ["reason", "Why do you want to join PKI Consortium?", "textarea", 1, null, null, null],
-    ["working_groups", "Working Groups of Interest", "multi_select", 0, null, "active_working_groups", null],
+    ["organization_website", "Organization website", "url", 0, null, null, null],
+    ["about_yourself", "About yourself", "textarea", 0, null, null, null],
+    ["about_organization", "About your organization", "textarea", 0, null, null, null],
+    ["reason", "Why do you want to join the PKI Consortium?", "textarea", 1, null, null, null],
+    ["working_groups", "Working groups of interest", "multi_select", 0, null, "active_working_groups", null],
     [
       "contribution_type",
       "How do you expect to participate?",

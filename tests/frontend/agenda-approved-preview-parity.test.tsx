@@ -117,6 +117,16 @@ describe("approved static and portal agenda parity", () => {
         false,
       );
       publicDocument.querySelector(".pk-content-agenda")!.removeAttribute("data-agenda-public-fragments");
+      // Each document owns distinct generated field IDs. Compare their content
+      // while retaining and verifying every label-to-control relationship.
+      for (const root of [publicDocument, previewDocument]) {
+        for (const [index, label] of [...root.querySelectorAll<HTMLLabelElement>('label[for^="field-"]')].entries()) {
+          const control = root.querySelector(`[id="${label.htmlFor}"]`);
+          expect(control).not.toBeNull();
+          label.htmlFor = `parity-field-${index}`;
+          control!.id = label.htmlFor;
+        }
+      }
       expect(publicDocument.innerHTML).toBe(previewDocument.innerHTML);
       expect(built).toContain("Historical speaker");
       expect(built).toContain("Historical organization");

@@ -15,6 +15,7 @@ import { ProposalDetailPage } from "../../assets/ts/member-flows/portal/sections
 import { beginRecordEdit } from "./helpers/record-edit";
 import { controlFor, markdownValue, submitForm, typeInto, typeMarkdown } from "./helpers/labeled-control";
 import { json, PROPOSAL_ID, EVENT_SLUG, proposal, settle } from "./helpers/proposal-detail-fixture";
+import { expectAbstractShownAsText, MARKUP_LIKE_ABSTRACT } from "./helpers/markup-like-abstract";
 
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", vi.fn()] }));
 vi.mock("wouter", () => ({
@@ -68,9 +69,10 @@ const fields = [
 let container: HTMLElement | null = null;
 
 /** An accepted proposal that keeps whatever the operator last changed about it. */
-function stubAcceptedProposal() {
+function stubAcceptedProposal(overrides: { abstract?: string } = {}) {
   const record = {
     ...proposal(),
+    ...overrides,
     status: "accepted",
     decision_status: "accepted",
     canceled_at: null as string | null,
@@ -195,6 +197,12 @@ describe("an accepted proposal's own page", () => {
     ]);
     expect([...answers.querySelectorAll("li")].map((item) => item.textContent)).toEqual(["PKI", "Policy"]);
     expect(root.querySelector('section[aria-label="Review standing"]')?.textContent).toContain("1 review (2 required)");
+  });
+
+  it("shows markup-like characters in an abstract exactly once, as text", async () => {
+    stubAcceptedProposal({ abstract: MARKUP_LIKE_ABSTRACT });
+    const root = await mount();
+    expectAbstractShownAsText(root);
   });
 
   it("corrects the title and abstract of an accepted session through the proposal contract and shows the corrected text", async () => {

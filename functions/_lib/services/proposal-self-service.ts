@@ -13,7 +13,7 @@ import {
   toEventFormResolutionEvent,
   validateCustomAnswersForSubmission,
 } from "./forms";
-import { listProposalSpeakersWithStatus } from "./proposal-speakers";
+import { listProposalSpeakersWithStatus, type ProposalSpeakerWithUser } from "./proposal-speakers";
 import { getProposalByManageToken, type ProposalRecord, updateProposalForVerifiedOwner } from "./proposals";
 import { getEventById, requireConfiguredSessionType } from "./events";
 import { proposalAccessPath } from "../../../assets/shared/proposal-access-paths";
@@ -47,26 +47,54 @@ export async function loadProposalAccessView(
   return {
     success: true,
     proposal: toAccessibleProposal(proposal),
-    speakers: speakers.map((speaker) => ({
-      ...proposalActingIdentityReadModel(speaker),
-      userId: speaker.user_id,
-      role: speaker.role,
-      status: speaker.status,
-      confirmedAt: speaker.confirmed_at,
-      declinedAt: speaker.declined_at,
-      email: speaker.email,
-      firstName: speaker.first_name,
-      lastName: speaker.last_name,
-      organizationName: speaker.organization_name,
-      jobTitle: speaker.job_title,
-      bio: speaker.biography,
-      links: parseLinksJson(speaker.links_json),
-      headshotUploaded: Boolean(speaker.headshot_r2_key),
-      headshotUpdatedAt: speaker.headshot_updated_at,
-      headshotUrl: speaker.headshot_r2_key
-        ? `${proposalAccessPath(input.appBaseUrl + "/api/v1", input.token, "speakers", speaker.user_id, "headshot")}?v=${encodeURIComponent(speaker.headshot_updated_at ?? "")}`
-        : null,
-    })),
+    speakers: speakers.map((speaker) => {
+      const status = {
+        ...proposalActingIdentityReadModel(speaker),
+        userId: speaker.user_id,
+        role: speaker.role,
+        status: speaker.status,
+        confirmedAt: speaker.confirmed_at,
+        declinedAt: speaker.declined_at,
+        declineReason: speaker.status === "declined" ? speaker.decline_reason : null,
+        email: speaker.status === "confirmed" ? speaker.email : (speaker.invited_email ?? speaker.email),
+      };
+      if (speaker.status !== "confirmed") return invitedSpeakerView(status, speaker);
+      return {
+        ...status,
+        firstName: speaker.first_name,
+        lastName: speaker.last_name,
+        organizationName: speaker.organization_name,
+        jobTitle: speaker.job_title,
+        bio: speaker.biography,
+        links: parseLinksJson(speaker.links_json),
+        headshotUploaded: Boolean(speaker.headshot_r2_key),
+        headshotUpdatedAt: speaker.headshot_updated_at,
+        headshotUrl: speaker.headshot_r2_key
+          ? `${proposalAccessPath(input.appBaseUrl + "/api/v1", input.token, "speakers", speaker.user_id, "headshot")}?v=${encodeURIComponent(speaker.headshot_updated_at ?? "")}`
+          : null,
+      };
+    }),
+  };
+}
+
+/**
+ * Until a speaker accepts, the proposer sees only who they invited: the address they typed, and the name only
+ * on an account no one has claimed (the name a proposer typed). An existing person's profile and primary
+ * address stay theirs, also after they decline.
+ */
+function invitedSpeakerView<T extends object>(status: T, speaker: ProposalSpeakerWithUser) {
+  const typedName = !speaker.account_claimed;
+  return {
+    ...status,
+    firstName: typedName ? speaker.first_name : null,
+    lastName: typedName ? speaker.last_name : null,
+    organizationName: null,
+    jobTitle: null,
+    bio: null,
+    links: [],
+    headshotUploaded: false,
+    headshotUpdatedAt: null,
+    headshotUrl: null,
   };
 }
 

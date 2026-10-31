@@ -1,6 +1,8 @@
+import { identityAffiliationPreviewResponseSchema, identityAffiliationPrepareBaseSchema } from "./identity-affiliation";
+import { emailDomainNameSchema } from "./email-domains";
 import { z } from "zod";
 import { EMAIL_AUTH_TOKEN_MAX_LENGTH } from "../constants/email-auth";
-import { normalizedEmailSchema, tokenSchema } from "./api-common";
+import { normalizedEmailSchema, tokenSchema, personNamePatchSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import { sourceTypeSchema } from "./source";
 import { workEmailStepSchema } from "./work-email";
@@ -33,18 +35,36 @@ export const registrationEmailProofStartSchema = workEmailStepSchema
   .strict();
 export const registrationEmailProofStartResponseSchema = z.object({ status: z.literal("verification_sent") });
 
-export const registrationEmailProofVerifySchema = z.object({ token: registrationEmailProofTokenSchema }).strict();
+export const registrationEmailProofVerifySchema = z
+  .object({
+    token: registrationEmailProofTokenSchema,
+    domain: emailDomainNameSchema.optional(),
+    affiliation: identityAffiliationPrepareBaseSchema.omit({ email: true, emailId: true, phase: true }).optional(),
+  })
+  .strict();
 
 /**
  * What a verified address continues with. Only the mailbox holder reaches
  * this, so the saved names of a person already known by the address, and
  * whether its domain names an organization, are theirs to see.
  */
+export const registrationProvedPersonSchema = z.object({
+  userId: databaseIdSchema,
+  firstName: z.string().nullable(),
+  lastName: z.string().nullable(),
+});
+export const registrationProofPersonPatchSchema = personNamePatchSchema.safeExtend({
+  token: registrationEmailProofTokenSchema,
+  userId: databaseIdSchema,
+});
+export const registrationProofPersonPatchResponseSchema = z.object({ person: registrationProvedPersonSchema });
+
 export const registrationEmailProofVerifyResponseSchema = z.object({
   email: normalizedEmailSchema,
   unaffiliatedAttestation: z.boolean(),
-  person: z.object({ firstName: z.string().nullable(), lastName: z.string().nullable() }).nullable(),
-  /** A work address whose domain resolves to no organization: the form asks for it once. */
+  person: registrationProvedPersonSchema.nullable(),
+  /** Every proved work address confirms its organization through the shared chooser. */
   asksOrganization: z.boolean(),
+  affiliation: identityAffiliationPreviewResponseSchema.nullable(),
 });
 export type RegistrationEmailProofVerifyResponse = z.infer<typeof registrationEmailProofVerifyResponseSchema>;

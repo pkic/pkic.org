@@ -2,8 +2,9 @@
  * PictureTile — a record's picture, and for editors the control that changes it.
  *
  * The veil naming the command is drawn over the picture only while the tile
- * is hovered or focused, so at rest the tile reads as the logo and nothing
- * else. The corner removal control stays visible and keyboard accessible.
+ * is hovered or focused; at rest a small pencil in the lower corner is the
+ * cue, since touch has no hover. The corner removal control stays keyboard
+ * accessible.
  */
 @layer components {
   /*
@@ -136,7 +137,8 @@
    * the tile is hovered or holds focus (#89). It stays reachable by keyboard
    * because focusing it is itself what reveals it.
    */
-  .pk-picture-tile__remove {
+  .pk-picture-tile__remove,
+  .pk-picture-tile__cue {
     position: absolute;
     inset-block-start: 0;
     inset-inline-end: 0;
@@ -164,5 +166,18 @@
 
   .pk-picture-tile__remove:disabled {
     cursor: progress;
+  }
+
+  /* The change cue sits on the picture's lower corner and never hides, so a
+     touch reader sees the tile is a control without hovering it. */
+  .pk-picture-tile__cue {
+    inset-block: auto 0;
+    z-index: 1;
+    opacity: 1;
+  }
+
+  .pk-picture-tile__cue svg {
+    width: 0.9rem;
+    height: 0.9rem;
   }
 }

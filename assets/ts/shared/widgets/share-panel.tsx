@@ -1,3 +1,7 @@
+import { DownloadAction } from "../../ui/DownloadAction";
+import { downloadFile } from "../download-file";
+import { getBlob } from "../api-client";
+import { personalPromotionImagePath } from "../../../shared/personal-promotion-image";
 /**
  * Renders a personalized sharing panel into a container element.
  *
@@ -74,12 +78,12 @@ function nameSlug(firstName?: string | null, lastName?: string | null): string {
 
 const MAX_INVITES = 10;
 
-function extractOgBadgeUrl(shareUrl: string): string | null {
+function extractOgBadgeUrl(shareUrl: string, version?: string): string | null {
   try {
     const match = shareUrl.match(/\/r\/([A-Za-z0-9]+)(?:[?#]|$)/);
     if (!match) return null;
     const origin = new URL(shareUrl).origin;
-    return `${origin}/api/v1/registrations/referrals/${match[1]}/badge`;
+    return `${origin}${personalPromotionImagePath(match[1], version)}`;
   } catch {
     return null;
   }
@@ -96,6 +100,21 @@ function OgBadge({
   eventName: string;
   badgeFilename: string;
 }) {
+  const squareUrl = new URL(ogBadgeUrl);
+  squareUrl.searchParams.set("format", "square");
+  squareUrl.searchParams.set("download", "1");
+  const squareFilename = badgeFilename.replace(/\.png$/u, "-square.png");
+  squareUrl.searchParams.set("name", squareFilename);
+  const [error, setError] = useState("");
+  async function download(url: string, filename: string) {
+    setError("");
+    try {
+      const blob = await getBlob(url);
+      downloadFile(blob, blob.type, filename);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not download your badge. Try again.");
+    }
+  }
   const [loading, setLoading] = useState(true);
   const imgRef = useRef<HTMLImageElement>(null);
 
@@ -134,13 +153,16 @@ function OgBadge({
         height={315}
       />
       <div class="pk-cluster pk-cluster--center">
-        <ButtonLink
-          href={`${ogBadgeUrl}${ogBadgeUrl.includes("?") ? "&" : "?"}download=1&name=${encodeURIComponent(badgeFilename)}`}
-          download={badgeFilename}
-        >
-          <span aria-hidden="true">⬇</span> Download badge
-        </ButtonLink>
+        <DownloadAction
+          label="Download badge (PNG)"
+          menuLabel="Download badge formats"
+          options={[
+            { id: "landscape", label: "Landscape badge (PNG)", onDownload: () => download(ogBadgeUrl, badgeFilename) },
+            { id: "square", label: "Square badge (PNG)", onDownload: () => download(squareUrl.href, squareFilename) },
+          ]}
+        />
       </div>
+      {error && <Alert tone="danger">{error}</Alert>}
     </div>
   );
 }
@@ -443,7 +465,7 @@ function InvitePanel({ manageToken, eventSlug }: { manageToken: string; eventSlu
 
 // ── Main share panel ────────────────────────────────────────────────────────
 
-function SharePanelInner({ options }: { options: SharePanelOptions }) {
+export function SharePanel({ options }: { options: SharePanelOptions }) {
   const { shareUrl, eventName, manageToken, eventSlug } = options;
 
   const shareText = `I just registered for ${eventName} — join me!`;
@@ -455,11 +477,7 @@ function SharePanelInner({ options }: { options: SharePanelOptions }) {
   const twitterUrl = `https://twitter.com/intent/tweet?text=${twitterText}`;
   const blueskyUrl = `https://bsky.app/intent/compose?text=${blueskyText}`;
   const redditUrl = `https://www.reddit.com/submit?url=${encodeURIComponent(shareUrl)}&title=${redditTitle}`;
-  const baseBadgeUrl = extractOgBadgeUrl(shareUrl);
-  const ogBadgeUrl =
-    baseBadgeUrl && options.badgeVersion
-      ? `${baseBadgeUrl}?v=${encodeURIComponent(options.badgeVersion)}`
-      : baseBadgeUrl;
+  const ogBadgeUrl = extractOgBadgeUrl(shareUrl, options.badgeVersion);
   const badgeFilename = `attendee-badge-${nameSlug(options.firstName, options.lastName)}.png`;
 
   const canInvite = Boolean(manageToken && eventSlug);
@@ -502,7 +520,7 @@ function SharePanelInner({ options }: { options: SharePanelOptions }) {
 }
 
 export function renderSharePanel(container: HTMLElement, options: SharePanelOptions): void {
-  render(<SharePanelInner options={options} />, container);
+  render(<SharePanel options={options} />, container);
 }
 
 /**

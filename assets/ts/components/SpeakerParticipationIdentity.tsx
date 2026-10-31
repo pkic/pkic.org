@@ -12,6 +12,10 @@ import type { PersonalNamePatch } from "./ParticipationPersonalDetails";
 import { ParticipationPersonalDetails } from "./ParticipationPersonalDetails";
 import type { ParticipationPerson, ProposalEntrySelection, VerifiedProposalEntry } from "./useProposalEntryIdentity";
 
+/** The order of a speaker's steps, said the same way wherever one of them is waiting. */
+export const SPEAKER_STEPS_NOTICE =
+  "Accept the speaker terms, then choose and save your speaker identity. After that you can confirm participation.";
+
 type SpeakerData = z.infer<typeof speakerSelfServiceReadResponseSchema>;
 
 /** Existing invitation details stay readable; changes cross the same verified affiliation boundary as proposals. */
@@ -26,6 +30,7 @@ export function SpeakerParticipationIdentity({
   consents,
   onChange,
   onEditing,
+  onCancelEditing,
   onTermsRecorded,
   savePersonalDetails,
   initialProof,
@@ -41,6 +46,8 @@ export function SpeakerParticipationIdentity({
   consents: () => { termKey: string; version: string }[];
   onChange: (selection: ProposalEntrySelection | null) => void;
   onEditing: () => void;
+  /** Called when the speaker backs out of a change; the saved representation stands. */
+  onCancelEditing?: () => void;
   /** The terms a returning email confirmation recorded: the caller draws them as agreed instead of asking again. */
   onTermsRecorded?: (consents: ConsentItem[]) => void;
   savePersonalDetails?: (names: PersonalNamePatch) => Promise<ParticipationPerson>;
@@ -58,6 +65,9 @@ export function SpeakerParticipationIdentity({
   const personalDetails = (
     <ParticipationPersonalDetails
       person={personal}
+      description={
+        data.profile.personalDetailsEditable ? undefined : "Sign in to change the name or photo on your account."
+      }
       save={
         saveNames
           ? async (names) => {
@@ -129,9 +139,26 @@ export function SpeakerParticipationIdentity({
               onSavePersonalDetails={saveNames}
               personalDetails={personalDetails}
               startWithEmailProof={adding}
+              invitedEmail={adding ? undefined : data.profile.email}
             />
           ) : (
-            <p class="pk-muted">Please accept the speaker terms before confirming your identity.</p>
+            <p class="pk-muted">Accept the speaker terms above to choose your speaker identity.</p>
+          )}
+          {data.profile.actingIdentitySelection !== "unrecorded" && !returning && (
+            <div class="pk-cluster">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setAdding(false);
+                  setChanging(false);
+                  onChange(null);
+                  onCancelEditing?.();
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
           )}
         </>
       ) : (

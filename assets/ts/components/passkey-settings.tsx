@@ -1,8 +1,13 @@
 import { browserSupportsWebAuthn } from "@simplewebauthn/browser";
 import { useCallback, useEffect, useState } from "preact/hooks";
-import { passkeysListResponseSchema, type PasskeySummary } from "../../shared/schemas/passkeys";
+import { LAST_SIGN_IN_METHOD } from "../../shared/auth-errors";
+import {
+  passkeysListResponseSchema,
+  type PasskeyDeleteQuery,
+  type PasskeySummary,
+} from "../../shared/schemas/passkeys";
 import { successResponseSchema } from "../../shared/schemas/api-common";
-import { deleteJson, getJson } from "../shared/api-client";
+import { ApiClientError, deleteJson, getJson } from "../shared/api-client";
 import { formatDateTime, showToast } from "../shared/ui";
 import { confirmAction } from "./ConfirmDialog";
 import { ErrorAlert } from "./ErrorAlert";
@@ -63,7 +68,11 @@ export function PasskeySettings({ toastTargetId }: { toastTargetId: string }) {
     const name = passkeyName(passkey);
     const confirmed = await confirmAction({
       title: `Remove passkey "${name}"?`,
-      consequences: ["You'll need another passkey or an email link to sign in on this device"],
+      consequences: [
+        (passkeys?.length ?? 0) > 1
+          ? "You can still sign in with your other passkeys."
+          : "This is your only passkey. Until you add another, you'll sign in with an email link.",
+      ],
       confirmLabel: "Remove passkey",
       tone: "danger",
     });
@@ -72,6 +81,41 @@ export function PasskeySettings({ toastTargetId }: { toastTargetId: string }) {
       await deleteJson(`/api/v1/auth/passkeys/${passkey.id}`, successResponseSchema);
       showToast(toastTargetId, "Passkey removed", "success");
       await load();
+    } catch (reason) {
+      if (reason instanceof ApiClientError && reason.code === LAST_SIGN_IN_METHOD) {
+        await removeLastWayToSignIn(passkey);
+        return;
+      }
+      showToast(toastTargetId, (reason as Error).message, "error");
+    }
+  }
+
+  /**
+   * The server refuses removing the last way to sign in until its owner
+   * confirms, so a compromised passkey can still be revoked. Reaching this
+   * means no email address can sign in either, so no email link will help.
+   */
+  async function removeLastWayToSignIn(passkey: PasskeySummary) {
+    const confirmed = await confirmAction({
+      title: "Remove your last way to sign in?",
+      body: `"${passkeyName(passkey)}" is your only passkey, and none of your email addresses can sign you in.`,
+      consequences: [
+        "You'll be signed out everywhere else",
+        "You stay signed in here, so you can add a new passkey right away",
+        "If you're signed out before you add one, contact us to get back into your account",
+      ],
+      confirmLabel: "Remove passkey",
+      tone: "danger",
+    });
+    if (!confirmed) return;
+    const query = new URLSearchParams({ confirmLastMethod: "true" } satisfies PasskeyDeleteQuery);
+    try {
+      await deleteJson(`/api/v1/auth/passkeys/${passkey.id}?${query}`, successResponseSchema);
+      showToast(toastTargetId, "Passkey removed", "success");
+      await load();
+      // Offer the replacement at once: this session is now the only way back in.
+      setEnrollmentError(null);
+      setAdding(true);
     } catch (reason) {
       showToast(toastTargetId, (reason as Error).message, "error");
     }

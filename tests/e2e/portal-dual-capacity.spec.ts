@@ -13,7 +13,7 @@ import { completeSyntheticMembershipReview } from "./helpers/member-provisioning
  */
 import { expect, test, type Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
-import { editMyProfile, openMyProfile, signInToPortal } from "./helpers/portal-auth";
+import { editMyIdentityProfile, openMyProfile, signInToPortal } from "./helpers/portal-auth";
 import { submitMembershipApplication, uniqueSuffix } from "./helpers/membership";
 
 interface Profile {
@@ -47,6 +47,31 @@ async function switchIdentityFromMenu(page: Page, organizationName: string): Pro
   await page.getByRole("button", { name: "Account menu" }).click();
   await expect(page.getByText(`Acting as ${organizationName}`)).toBeVisible();
   await page.keyboard.press("Escape");
+}
+
+function biographyEditor(page: Page) {
+  return page.getByRole("textbox", { name: /^Your bio at / });
+}
+
+/** Fills the identity profile page that is open and saves it through the form's own button. */
+async function saveIdentityProfile(
+  page: Page,
+  values: { jobTitle: string; biography: string; link: string },
+): Promise<void> {
+  await page.getByRole("textbox", { name: /^Job title for this organization/ }).fill(values.jobTitle);
+  await biographyEditor(page).fill(values.biography);
+  await page.getByRole("textbox", { name: "Profile link URL", exact: true }).fill(values.link);
+  await page.getByRole("button", { name: "Add profile link", exact: true }).click();
+  await expect(page.getByRole("group", { name: "Added profile links" })).toBeVisible();
+  const saved = page.waitForResponse(
+    (response) =>
+      /\/api\/v1\/users\/current\/identities\/[^/]+\/profile$/.test(new URL(response.url()).pathname) &&
+      response.request().method() === "PATCH",
+  );
+  await page.getByRole("button", { name: "Save changes" }).click();
+  expect((await saved).status()).toBe(200);
+  // Saving returns the person to their record.
+  await expect(page).toHaveURL(/\/portal\/#\/users\/[^/?#]+$/, { timeout: 15_000 });
 }
 
 /** Approves an application for `email`, creating a real member and user. */
@@ -115,51 +140,32 @@ test("a person representing two organizations can switch between both contexts",
   await openMyProfile(page);
   // The professional profile opens with the member, not a page title: its heading names the subject.
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-  await editMyProfile(page);
-  await page
-    .getByRole("textbox", { name: "Job title for this organization", exact: true })
-    .fill("Security lead in the first capacity");
-  await page
-    .getByRole("textbox", { name: "Biography", exact: true })
-    .fill("Biography written only for the first represented organization.");
-  await page
-    .getByRole("textbox", { name: "Social / profile links", exact: true })
-    .fill("https://example.test/first-capacity");
-  await Promise.all([
-    page.waitForResponse(
-      (response) => response.url().endsWith("/api/v1/users/current") && response.request().method() === "PATCH",
-    ),
-    page.getByRole("button", { name: "Save changes" }).click(),
-  ]);
+  await editMyIdentityProfile(page, firstOrganization);
+  await saveIdentityProfile(page, {
+    jobTitle: "Security lead in the first capacity",
+    biography: "Biography written only for the first represented organization.",
+    link: "https://example.test/first-capacity",
+  });
 
   await switchIdentityFromMenu(page, target!.organizationName!);
 
   await openMyProfile(page);
-  await editMyProfile(page);
-  await expect(page.getByRole("textbox", { name: "Job title for this organization", exact: true })).toHaveValue(
-    "Delegate",
-  );
+  await editMyIdentityProfile(page, target!.organizationName!);
+  await expect(page.getByRole("textbox", { name: /^Job title for this organization/ })).toHaveValue("Delegate");
+  // The other capacity's biography and links did not follow the switch.
+  await expect(biographyEditor(page)).toHaveText("");
+  await expect(page.getByRole("group", { name: "Added profile links" })).toHaveCount(0);
 
   const after = await readProfile(page);
   expect(after.organizationName).toBe(target!.organizationName);
   // Switching context must not cost the other capacity.
   expect(after.activeIdentities.map((identity) => identity.organizationName)).toEqual(expect.arrayContaining(names));
 
-  await page
-    .getByRole("textbox", { name: "Job title for this organization", exact: true })
-    .fill("Program chair in the second capacity");
-  await page
-    .getByRole("textbox", { name: "Biography", exact: true })
-    .fill("A different biography for the second represented organization.");
-  await page
-    .getByRole("textbox", { name: "Social / profile links", exact: true })
-    .fill("https://example.test/second-capacity");
-  await Promise.all([
-    page.waitForResponse(
-      (response) => response.url().endsWith("/api/v1/users/current") && response.request().method() === "PATCH",
-    ),
-    page.getByRole("button", { name: "Save changes" }).click(),
-  ]);
+  await saveIdentityProfile(page, {
+    jobTitle: "Program chair in the second capacity",
+    biography: "A different biography for the second represented organization.",
+    link: "https://example.test/second-capacity",
+  });
   expect(await readProfile(page)).toMatchObject({
     jobTitle: "Program chair in the second capacity",
     biography: "A different biography for the second represented organization.",
@@ -169,17 +175,15 @@ test("a person representing two organizations can switch between both contexts",
   await switchIdentityFromMenu(page, profile.organizationName!);
 
   await openMyProfile(page);
-  await editMyProfile(page);
-  await expect(page.getByRole("textbox", { name: "Job title for this organization", exact: true })).toHaveValue(
+  await editMyIdentityProfile(page, firstOrganization);
+  await expect(page.getByRole("textbox", { name: /^Job title for this organization/ })).toHaveValue(
     "Security lead in the first capacity",
   );
-  // The biography is a Markdown editor now (#114): its text, not a value.
-  await expect(page.getByRole("textbox", { name: "Biography", exact: true })).toHaveText(
-    "Biography written only for the first represented organization.",
-  );
-  await expect(page.getByRole("textbox", { name: "Social / profile links", exact: true })).toHaveValue(
-    "https://example.test/first-capacity",
-  );
+  // The biography is a Markdown editor: its text, not a value.
+  await expect(biographyEditor(page)).toHaveText("Biography written only for the first represented organization.");
+  // Links are added one at a time; the saved one comes back as an added link.
+  await expect(page.getByRole("group", { name: "Added profile links" })).toContainText("example.test");
+  expect(await readProfile(page)).toMatchObject({ links: ["https://example.test/first-capacity"] });
 });
 
 test("a membership the caller does not hold cannot be selected", async ({ page }) => {

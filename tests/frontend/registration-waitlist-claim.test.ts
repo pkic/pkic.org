@@ -1,4 +1,8 @@
 // @vitest-environment jsdom
+import { h } from "preact";
+import { renderToString } from "preact-render-to-string";
+import { EventRegistrationManagement } from "../../assets/ts/site/EventRegistrationManagement";
+import { eventFormsResponseSchema } from "../../assets/shared/schemas/forms";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { registrationManageSchema } from "../../assets/shared/schemas/registration";
 import { confirmationButton, openConfirmation } from "./helpers/confirm-dialog";
@@ -61,36 +65,10 @@ function manageResponse(): Response {
 function installManagePage(): void {
   vi.resetModules();
   window.history.replaceState({}, "", "/events/pqc-2026/register/manage/");
-  document.body.innerHTML = `
-    <main
-      data-event-registration-manage
-      data-event-slug="pqc-2026"
-      data-api-base="/api/v1"
-      data-manage-token="claim-token"
-    >
-      <div data-manage-loading></div>
-      <div data-manage-status-banner hidden></div>
-      <div data-manage-greeting hidden>
-        <span data-manage-greeting-text></span><span data-manage-status-badge></span>
-      </div>
-      <div data-manage-form hidden>
-        <section data-day-waitlist-section hidden><div data-day-waitlist></div></section>
-        <div data-manage-summary></div>
-        <form hidden>
-          <input name="email"><input name="firstName"><input name="lastName">
-          <div data-day-attendance></div>
-          <section data-custom-fields-section><div data-custom-fields></div></section>
-          <div data-action-buttons>
-            <button type="submit">Save changes</button>
-            <button type="button" data-action="discard">Discard changes</button>
-          </div>
-        </form>
-        <div data-flow-status></div>
-      </div>
-      <section data-post-action hidden>
-        <div data-post-action-alert><h2 data-post-action-title></h2><p data-post-action-message></p></div>
-      </section>
-    </main>`;
+  document.body.innerHTML = renderToString(h(EventRegistrationManagement, {}));
+  const root = document.querySelector<HTMLElement>("[data-event-registration-manage]")!;
+  root.dataset.eventSlug = "pqc-2026";
+  root.dataset.manageToken = "claim-token";
 }
 
 describe("registration waitlist claim UI", () => {
@@ -260,11 +238,11 @@ function buttonReading(label: string): HTMLButtonElement | null {
 }
 
 /** The manage page booted against `fetchMock`, once its read view is on screen. */
-async function bootReadView(fetchMock: ReturnType<typeof vi.fn>): Promise<HTMLFormElement> {
+async function bootReadView(fetchMock: ReturnType<typeof vi.fn>): Promise<HTMLElement> {
   vi.stubGlobal("fetch", fetchMock);
   await import("../../assets/ts/event-flows/registration-manage-page");
   await vi.waitFor(() => expect(buttonReading("Edit details")).not.toBeNull());
-  return document.querySelector<HTMLFormElement>("[data-manage-form] form")!;
+  return document.querySelector<HTMLElement>("[data-registration-editor]")!;
 }
 
 function patchBodies(fetchMock: ReturnType<typeof vi.fn>): unknown[] {
@@ -282,11 +260,25 @@ describe("registration manage read view", () => {
   });
 
   function okFetch() {
-    return vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) =>
-      init?.method === "PATCH"
+    return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).includes("/forms/placements/")) {
+        const manage = await manageResponse().json();
+        return jsonResponse(
+          eventFormsResponseSchema.parse({
+            event: manage.event,
+            registrationPolicy: "public",
+            purpose: "event_registration",
+            form: null,
+            requiredTerms: [],
+            allowedSessionTypes: [],
+            eventDays: manage.eventDays,
+          }),
+        );
+      }
+      return init?.method === "PATCH"
         ? jsonResponse({ success: true, emailChanged: false, sponsorSharing: { allowed: false, withdrawnAt: null } })
-        : manageResponse(),
-    );
+        : manageResponse();
+    });
   }
 
   it("opens on the registration's details, with the form hidden until Edit details", async () => {
@@ -303,11 +295,12 @@ describe("registration manage read view", () => {
     expect(form.hidden).toBe(false);
     expect(summary?.hidden).toBe(true);
     expect(buttonReading("Save changes")?.type).toBe("submit");
-    // The edit view offers no way to cancel the registration: its commands are Save and Discard only.
-    expect([...form.querySelectorAll("button")].map((b) => b.textContent?.trim())).toEqual([
-      "Save changes",
-      "Discard changes",
-    ]);
+    // Record commands stay Save and Discard; the attendance table has its own selection shortcuts.
+    expect(
+      [...form.querySelectorAll("button")]
+        .filter((button) => !button.closest("table"))
+        .map((b) => b.textContent?.trim()),
+    ).toEqual(["Save changes", "Discard changes"]);
     expect(buttonReading("Cancel my registration…")?.closest("[hidden]")).toBe(summary);
   });
 
@@ -321,9 +314,27 @@ describe("registration manage read view", () => {
     firstName.value = "Someone else";
     buttonReading("Discard changes")!.click();
 
-    expect(form.hidden).toBe(true);
-    expect(firstName.value).toBe("Casey");
+    await vi.waitFor(() => expect(form.hidden).toBe(true));
+    buttonReading("Edit details")!.click();
+    expect(form.querySelector<HTMLInputElement>('input[name="firstName"]')!.value).toBe("Casey");
     expect(patchBodies(fetchMock)).toEqual([]);
+  });
+
+  it("preserves an update draft through browser Back and Forward", async () => {
+    const fetchMock = okFetch();
+    const form = await bootReadView(fetchMock);
+    buttonReading("Edit details")!.click();
+    const firstName = form.querySelector<HTMLInputElement>('input[name="firstName"]')!;
+    firstName.value = "Draft name";
+    firstName.dispatchEvent(new Event("input", { bubbles: true }));
+    history.back();
+    await vi.waitFor(() => expect(form.hidden).toBe(true));
+    history.forward();
+    await vi.waitFor(() => expect(form.hidden).toBe(false));
+    expect(form.querySelector<HTMLInputElement>('input[name="firstName"]')!.value).toBe("Draft name");
+    expect(patchBodies(fetchMock)).toEqual([]);
+    buttonReading("Discard changes")!.click();
+    await vi.waitFor(() => expect(form.hidden).toBe(true));
   });
 
   it("cancels only after the shared confirmation, and Keep registration sends nothing", async () => {

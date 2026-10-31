@@ -16,7 +16,6 @@ import {
   recordReferralClick,
   recordReferralConversion,
 } from "../functions/_lib/services/referrals";
-import { recordPromotionDownload } from "../functions/_lib/services/event-agenda/promotion-access";
 import { setSessionParticipation } from "../functions/_lib/services/event-participation/session-booking";
 import { issueBadge, recordScan } from "../functions/_lib/services/event-participation/scanning";
 import { nowIso } from "../functions/_lib/utils/time";
@@ -132,7 +131,22 @@ async function setup() {
 let fixture: Awaited<ReturnType<typeof setup>>;
 
 async function readKit(token = fixture.ownerToken) {
-  const response = await callApi(env, fixture.path, { headers: { authorization: `Bearer ${token}` } });
+  let response = await callApi(
+    env,
+    fixture.path,
+    { headers: { authorization: `Bearer ${token}` } },
+    { maxRoundTrips: 1 },
+  );
+  if (
+    response.status === 409 &&
+    ((await response.clone().json()) as { error: { code: string } }).error.code === "PROMOTION_REFERRAL_REQUIRED"
+  )
+    response = await callApi(
+      env,
+      `${fixture.path}/referrals`,
+      { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: "{}" },
+      { maxRoundTrips: 1 },
+    );
   expect(response.status, await response.clone().text()).toBe(200);
   const body = await response.json();
   const kit = promotionKitSchema.parse(body);
@@ -237,7 +251,7 @@ describe("promotion confirmed registration metrics", () => {
     ).toEqual({ conversion_type: "proposal" });
   });
 
-  it("keeps clicks, downloads, RSVP and recorded attendance distinct from confirmed referral registrations", async () => {
+  it("keeps clicks and RSVP and recorded attendance distinct from confirmed referral registrations", async () => {
     const attendee = await register(fixture.eventId, "activity-only@example.com");
     await confirm(attendee);
     await recordReferralClick(env.DB, {
@@ -246,7 +260,6 @@ describe("promotion confirmed registration metrics", () => {
       userAgent: null,
       secret: signingSecret,
     });
-    await recordPromotionDownload(env.DB, fixture.occurrenceId, fixture.owner.user.id, "square");
     const reservation = await setSessionParticipation(env.DB, fixture.eventId, fixture.occurrenceId, attendee.user.id, {
       action: "reserve",
       attendanceMode: "remote",
@@ -282,7 +295,7 @@ describe("promotion confirmed registration metrics", () => {
     );
     expect(receipt.attendanceRecorded).toBe(true);
     const kit = await readKit();
-    expect(kit.metrics).toEqual({ clicks: 1, downloads: 1, confirmedRegistrations: 0, sessionRsvps: 1 });
+    expect(kit.metrics).toEqual({ clicks: 1, confirmedRegistrations: 0, sessionRsvps: 1 });
     const serialized = JSON.stringify(kit);
     for (const privateValue of [attendee.user.email, attendee.user.id, attendee.registration.id, badge.credential])
       expect(serialized).not.toContain(privateValue);
@@ -297,12 +310,7 @@ describe("promotion confirmed registration metrics", () => {
     expect((await callApi(env, fixture.path, { headers: { authorization: `Bearer ${token}` } })).status).toBe(403);
     const ownerKit = await readKit();
     const managerKit = await readKit(fixture.adminToken);
-    expect(Object.keys(ownerKit.metrics).sort()).toEqual([
-      "clicks",
-      "confirmedRegistrations",
-      "downloads",
-      "sessionRsvps",
-    ]);
+    expect(Object.keys(ownerKit.metrics).sort()).toEqual(["clicks", "confirmedRegistrations", "sessionRsvps"]);
     expect(managerKit.metrics.confirmedRegistrations).toBe(0);
     const serialized = JSON.stringify(ownerKit);
     for (const privateValue of [

@@ -1,22 +1,22 @@
 /** Check invitation access before collecting details; preserve the form during recovery. */
 import { render } from "preact";
 import { useState } from "preact/hooks";
-import { inviteInfoResponseSchema } from "../../shared/schemas/invites";
-import { inviteResendLinkSchema } from "../../shared/schemas/proposal-management";
-import { successResponseSchema } from "../../shared/schemas/api-common";
-import type { EventRegistrationPolicy } from "../../shared/schemas/event-series";
-import { parseEventFlowPath } from "../../shared/event-flow-paths";
-import { ApiClientError, getJson, postJson } from "../shared/api-client";
-import { readField } from "../shared/form/helpers";
-import { clearStatus } from "../shared/form/validation";
-import { useContractForm } from "../hooks/useContractForm";
-import { Alert } from "../ui/Alert";
-import { Button } from "../ui/Button";
-import { Field } from "../ui/Field";
-import { TextInput } from "../ui/TextControl";
-import { Panel, PanelBody, PanelHeader } from "../ui/Panel";
-import { Spinner } from "../components/Spinner";
-import type { FlowBoot } from "./boot";
+import { inviteInfoResponseSchema } from "../../../shared/schemas/invites";
+import { inviteResendLinkSchema } from "../../../shared/schemas/proposal-management";
+import { successResponseSchema } from "../../../shared/schemas/api-common";
+import type { EventRegistrationPolicy } from "../../../shared/schemas/event-series";
+import { parseEventFlowPath } from "../../../shared/event-flow-paths";
+import { ApiClientError, getJson, postJson } from "../../shared/api-client";
+import { readField } from "../../shared/form/helpers";
+import { clearStatus } from "../../shared/form/validation";
+import { useContractForm } from "../../hooks/useContractForm";
+import { Alert } from "../../ui/Alert";
+import { Button } from "../../ui/Button";
+import { Field } from "../../ui/Field";
+import { TextInput } from "../../ui/TextControl";
+import { Panel, PanelBody, PanelHeader } from "../../ui/Panel";
+import { Spinner } from "../Spinner";
+import type { FlowBoot } from "../../event-flows/boot";
 
 type InviteState = "invalid" | "expired" | "already_processed" | "unavailable";
 const RECOVERABLE_CODES = new Set(["INVITE_INVALID", "INVITE_NOT_FOUND", "INVITE_EXPIRED"]);
@@ -79,7 +79,7 @@ function InvitationRecovery({
                   if (busy) return;
                   const result = contract.submit();
                   if (!result.data) {
-                    setError(result.message);
+                    setError(result.formMessage);
                     return;
                   }
                   setBusy(true);

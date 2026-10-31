@@ -1,6 +1,5 @@
 import { generateBadgeCredential } from "../../assets/shared/schemas/badge-credential";
 import { createHash, randomUUID } from "node:crypto";
-import { z } from "zod";
 import { expect, test, type Page } from "@playwright/test";
 import {
   enrolledOfflineEligibilityQuerySchema,
@@ -9,7 +8,6 @@ import {
 import {
   enrolledEventScanRequestSchema,
   enrolledEventScanResponseSchema,
-  offlineScanRecordSchema,
 } from "../../assets/shared/schemas/event-participation-scanning";
 import { archivedScanSchema } from "../../assets/shared/schemas/event-scan-recovery";
 import { SCAN_STORAGE_VERSION } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/outbox-storage";
@@ -19,15 +17,10 @@ import {
   openScannerDiagnostics,
   closeScannerDiagnostics,
   openScannerManualEntry,
+  queuedScanSchema,
 } from "./helpers/scanner-recovery-storage";
 
 const slug = "pqc-conference-amsterdam-nl";
-const storedScanSchema = offlineScanRecordSchema.extend({
-  leaseUntil: z.number(),
-  owner: z.string().nullable(),
-  attempts: z.number().optional(),
-  nextAttemptAt: z.number().optional(),
-});
 async function stored(page: Page, store: "scans" | "history") {
   return page.evaluate(
     async ({ version, store }) => {
@@ -139,7 +132,7 @@ test("offline supporting scanner captures registered and unregistered attendance
     ).toContainText(index === 0 ? "Registered" : "Known badge · not registered");
     await expect(page.getByText(`${index + 1} scans awaiting upload`, { exact: true })).toBeVisible();
   }
-  const captured = (await stored(page, "scans")).map((record) => storedScanSchema.parse(record));
+  const captured = (await stored(page, "scans")).map((record) => queuedScanSchema.parse(record));
   expect(captured).toHaveLength(2);
   expect(new Set(captured.map(({ scan }) => scan.operationId)).size).toBe(2);
   for (const { scan } of captured) {
@@ -156,13 +149,13 @@ test("offline supporting scanner captures registered and unregistered attendance
   await page.evaluate(() => {
     window.location.hash = "#/events";
   });
-  await expect(page.getByRole("heading", { name: "Badge scanner", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("tablist", { name: "Badge scanner views", exact: true })).toHaveCount(0);
   await page.evaluate((slug) => {
     window.location.hash = `#/events/${slug}/scanner`;
   }, slug);
-  await expect(page.getByRole("heading", { name: "Badge scanner", exact: true })).toBeVisible();
+  await expect(page.getByRole("tablist", { name: "Badge scanner views", exact: true })).toBeVisible();
   await expect(page.getByText("2 scans awaiting upload", { exact: true })).toBeVisible();
-  const recovered = (await stored(page, "scans")).map((record) => storedScanSchema.parse(record));
+  const recovered = (await stored(page, "scans")).map((record) => queuedScanSchema.parse(record));
   expect(recovered.map(({ scan }) => scan).sort((a, b) => a.operationId.localeCompare(b.operationId))).toEqual(
     captured.map(({ scan }) => scan).sort((a, b) => a.operationId.localeCompare(b.operationId)),
   );
@@ -170,9 +163,9 @@ test("offline supporting scanner captures registered and unregistered attendance
   await context.setOffline(false);
   await page.getByRole("button", { name: "Sync now", exact: true }).click();
   await expect
-    .poll(async () => (await stored(page, "scans")).map((record) => storedScanSchema.parse(record)).length)
+    .poll(async () => (await stored(page, "scans")).map((record) => queuedScanSchema.parse(record)).length)
     .toBe(0);
-  await expect(page.getByRole("heading", { name: "Badge scanner", exact: true })).toBeVisible();
+  await expect(page.getByRole("tablist", { name: "Badge scanner views", exact: true })).toBeVisible();
   await expect(page.locator(".pk-event-scanner")).toHaveCount(0);
   expect(await stored(page, "scans")).toHaveLength(0);
   expect(uploaded.map((scan) => scan.operationId)).toEqual(

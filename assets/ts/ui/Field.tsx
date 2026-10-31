@@ -15,8 +15,10 @@
  * cannot separate the green and red by hue, so color alone is not a status.
  */
 
-import type { ComponentChildren } from "preact";
-import { useId } from "preact/hooks";
+import { cloneElement, isValidElement, type ComponentChildren, type VNode } from "preact";
+import { InputGroup, type InputGroupProps } from "./InputGroup";
+import { useState } from "preact/hooks";
+import { nextDomId } from "./dom-id";
 
 import { FIELD_STATE_ICON, type FieldState } from "./field-state";
 import { StrokeIcon } from "./MediaIcons";
@@ -97,7 +99,7 @@ export function Field({
   group = false,
   children,
 }: FieldProps) {
-  const generated = useId();
+  const [generated] = useState(() => nextDomId("field"));
   const id = givenId ?? generated;
   const controlId = givenId ?? `${id}-control`;
   const messageId = `${id}-message`;
@@ -117,6 +119,13 @@ export function Field({
           : undefined;
 
   const Frame = group ? "fieldset" : "div";
+  const control = children({
+    id: controlId,
+    required: required || undefined,
+    "aria-describedby": describedBy,
+    "aria-invalid": state === "invalid" ? "true" : undefined,
+  });
+  const status = state && !statusId && !group ? <StateIcon state={state} class="pk-field__state" /> : null;
 
   return (
     <Frame
@@ -157,14 +166,14 @@ export function Field({
       )}
 
       <div class="pk-field__control">
-        {children({
-          id: controlId,
-          required: required || undefined,
-          "aria-describedby": describedBy,
-          // Only a blocking state is invalid. An advisory is not an error.
-          "aria-invalid": state === "invalid" ? "true" : undefined,
-        })}
-        {state && !statusId && <StateIcon state={state} class="pk-field__state" />}
+        {isValidElement(control) && control.type === InputGroup ? (
+          cloneElement(control as VNode<InputGroupProps>, { status })
+        ) : (
+          <>
+            {control}
+            {status}
+          </>
+        )}
       </div>
 
       {showMessage && (

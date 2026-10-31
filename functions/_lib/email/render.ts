@@ -11,6 +11,7 @@ import {
   type TemplateRenderBudget,
 } from "./render-limit";
 import { inlineEmailComponentStyles, resolveEmailBrandBaseUrl } from "./render-components";
+import { decodeCharacterReferences } from "../../../assets/shared/html-entities";
 
 export {
   EMAIL_TEMPLATE_RENDER_MAX_CHARS,
@@ -471,29 +472,29 @@ function wrapHtml(
 
 function stripHtmlToText(input: string): string {
   const links: string[] = [];
-  return input
-    .replace(/<a\b[^>]*\bhref=(["'])(.*?)\1[^>]*>([\s\S]*?)<\/a>/gi, (_match, _quote, href, label) => {
-      const text = stripHtmlToText(label);
-      if (!href) return text;
-      const placeholder = `__PKIC_EMAIL_LINK_${links.length}__`;
-      links.push(`${text} <${href}>`);
-      return placeholder;
-    })
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/(p|div|li|h[1-6]|blockquote|section|article|table|tr)>/gi, "\n")
-    .replace(/<li[^>]*>/gi, "- ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&#39;|&#x27;/gi, "'")
-    .replace(/&quot;|&#34;|&#x22;/gi, '"')
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/[ \t]+\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .replace(/[ \t]{2,}/g, " ")
-    .replace(/__PKIC_EMAIL_LINK_(\d+)__/g, (_match, index) => links[Number(index)] ?? "")
-    .trim();
+  return (
+    input
+      .replace(/<a\b[^>]*\bhref=(["'])(.*?)\1[^>]*>([\s\S]*?)<\/a>/gi, (_match, _quote, href, label) => {
+        const text = stripHtmlToText(label);
+        if (!href) return text;
+        const placeholder = `__PKIC_EMAIL_LINK_${links.length}__`;
+        links.push(`${text} <${decodeCharacterReferences(href)}>`);
+        return placeholder;
+      })
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/(p|div|li|h[1-6]|blockquote|section|article|table|tr)>/gi, "\n")
+      .replace(/<li[^>]*>/gi, "- ")
+      // Inline marks sit inside a sentence, so removing them must not leave a space before the next word or period.
+      .replace(/<\/?(?:strong|b|em|i|u|span|code|small)\b[^>]*>/gi, "")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&[^;\s&]+;/g, (reference) => decodeCharacterReferences(reference).replace(/\u00a0/g, " "))
+      .replace(/[ \t]+\n/g, "\n")
+      .replace(/\n[ \t]+/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .replace(/[ \t]{2,}/g, " ")
+      .replace(/__PKIC_EMAIL_LINK_(\d+)__/g, (_match, index) => links[Number(index)] ?? "")
+      .trim()
+  );
 }
 
 export async function renderEmail(

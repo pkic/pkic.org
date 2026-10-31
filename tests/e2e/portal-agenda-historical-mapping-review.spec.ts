@@ -26,6 +26,7 @@ import { USER_SESSION_COOKIE_NAME } from "../../functions/_lib/auth/session-cook
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
 import { runAgendaAction } from "./helpers/agenda-actions";
+import { openOrganizerAgenda } from "./helpers/organizer-agenda";
 
 const execute = promisify(execFile);
 const authoredSource = "content/events/2025/pqc-conference-austin-us/index.md";
@@ -230,7 +231,11 @@ test("an actual selected source row stages canonical fixture attribution for vis
     const refusedPublication = await page.request.post(`${endpoint}/publications`, {
       data: agendaRevisionSchema.parse({ expectedRevision: draft.revision }),
     });
-    expect(refusedPublication.status()).toBe(422);
+    // Publishing without the reviewer's acknowledgment is a malformed request (400), not a refused review (422).
+    expect(refusedPublication.status(), await refusedPublication.text()).toBe(400);
+    expect(await refusedPublication.json()).toMatchObject({
+      error: { code: "AGENDA_PUBLICATION_ARCHIVE_REVIEW_REQUIRED" },
+    });
     expect((await read()).revision).toBe(draft.revision);
     const incoming = structuredClone(document);
     for (const [index, name] of names.entries()) {
@@ -301,7 +306,7 @@ test("an actual selected source row stages canonical fixture attribution for vis
     expect(refused.status(), await refused.text()).toBe(422);
     expect(await read()).toEqual(beforeRefusal);
     expect((await contents())[0]!.review).toEqual(pending.review);
-    await page.goto(`/portal/#/events/${slug}/agenda`);
+    await openOrganizerAgenda(page, slug);
     await runAgendaAction(page, "Reuse a session");
     const reusableContent = page.getByRole("table", { name: "Reusable session content", exact: true });
     await reusableContent.getByRole("button", { name: `Edit ${title}`, exact: true }).click();
@@ -379,7 +384,8 @@ test("an actual selected source row stages canonical fixture attribution for vis
     expect(frozen.occurrences[0]!.history!.legacyPaths).toContain(reviewedOldPath);
     expect(frozen.rooms).toEqual(accepted.rooms);
     expect(frozen.occurrences).toEqual(
-      accepted.occurrences.map((occurrence) => ({
+      // The frozen preview is the public projection: organizer-only counts are not part of it.
+      accepted.occurrences.map(({ pendingSpeakerCount: _organizerOnly, ...occurrence }) => ({
         ...occurrence,
         onlineAccessAvailable: false,
         speakers: occurrence.speakers.map(({ userId, displayName, role }) => ({ userId, displayName, role })),
@@ -396,9 +402,9 @@ test("an actual selected source row stages canonical fixture attribution for vis
       expect(occurrence.onlineAccessAvailable).toBe(false);
       for (const speaker of occurrence.speakers) expect(speaker).not.toHaveProperty("profileCandidate");
     }
-    await page.getByRole("button", { name: "Back to agenda", exact: true }).click();
-    await runAgendaAction(page, "Public preview");
-    await page.getByRole("tab", { name: "Approved revision", exact: true }).click();
+    // The review is the Revisions tab of the agenda, which holds the public preview beside it.
+    await page.getByRole("tab", { name: "Public preview", exact: true }).click();
+    await page.getByLabel("Preview revision", { exact: true }).selectOption({ label: "Approved revision" });
     await page.locator('[data-agenda-tab="2025-01-15"]').click();
     await expect(page.getByRole("button", { name: `Open session details: ${title}`, exact: true })).toBeVisible();
     await page.setViewportSize({ width: 1440, height: 1000 });

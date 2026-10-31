@@ -189,7 +189,7 @@ describe("Authored track-scoped staffing", () => {
     ]);
     const display = { ...saved, staffingRoles: saved.staffingRoles.map((role) => ({ ...role, showOnAgenda: true })) };
     expect(agendaDisplayRoles(display, day, true)).toMatchObject([
-      { locationId: roomB, track, duties: [{ displayName: "Synthetic" }] },
+      { locationId: roomB, track, duties: [{ displayName: "Synthetic host" }] },
     ]);
     const privateOnly = {
       ...display,

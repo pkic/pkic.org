@@ -1,3 +1,8 @@
+import { personLegalName } from "../../../../../shared/person-display";
+import { RepresentationEmailDialog } from "../../../../components/identities/RepresentationEmailDialog";
+import { RepresentationCorrectionDialog } from "../../../../components/identities/RepresentationCorrectionDialog";
+import { removeIncorrectRepresentation } from "./remove-representation";
+import { useDialogQueryState } from "../../../../hooks/useDialogQueryState";
 /**
  * Every identity a person holds or held — their experience — and the controls
  * that manage those ties. Laid out the way a résumé is: the position, where it
@@ -14,7 +19,7 @@
  * positions: they are the person's history in the consortium. The footer can
  * fold them away for a reader who only wants what is current.
  */
-import { useRef, useState } from "preact/hooks";
+import { useState } from "preact/hooks";
 
 import { formatTenure } from "../../../../shared/ui";
 import { AffiliationRow } from "../../../../ui/AffiliationRow";
@@ -22,7 +27,6 @@ import { Avatar } from "../../../../ui/Avatar";
 import { EmptyState } from "../../../../ui/EmptyState";
 import { ExpandFooter } from "../../../../ui/ExpandFooter";
 import { Button } from "../../../../ui/Button";
-import { Dialog } from "../../../../ui/Dialog";
 import { Menu, type MenuItem } from "../../../../ui/Menu";
 import { ReinstateRepresentationDialog } from "../../../../components/identities/ReinstateRepresentationDialog";
 import { toast } from "../../ui";
@@ -33,8 +37,7 @@ import { IconPlus } from "../../../../components/icons";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { usePortalHashLocation } from "../../hash-location";
 import { UserAffiliationRow } from "./UserAffiliationRow";
-import { SelfIdentityCreateForm } from "./SelfIdentityCreateForm";
-import { UserIdentityGrantForm } from "./UserIdentityGrantForm";
+import { IdentityCreateDialog } from "../../../../components/identities/IdentityCreateDialog";
 import type { UserDetail } from "./model";
 import type { UserGroupParticipation } from "../../../../../shared/schemas/user-participation";
 import { GroupSeatPositions } from "./GroupSeatPositions";
@@ -66,24 +69,29 @@ export function UserAffiliationsPanel({
   /** The identity whose biography the record already states as its About. */
   summarizedIdentityId?: string;
 }) {
+  const [correcting, setCorrecting] = useState<{
+    identityId: string;
+    organizationId: string | null;
+    organizationName: string;
+  } | null>(null);
+  const [correctingOpen, showCorrecting, closeCorrecting] = useDialogQueryState("organization-correction");
+  const [createdIdentityId, setCreatedIdentityId] = useState<string | null>(null);
+  function correct(identityId: string, organizationId: string | null, organizationName: string) {
+    setCorrecting({ identityId, organizationId, organizationName });
+    setCreatedIdentityId(null);
+    showCorrecting();
+  }
+  const [editingEmail, setEditingEmail] = useState<UserDetail["identities"][number] | null>(null);
+  const [emailOpen, showEmail, closeEmail] = useDialogQueryState("representation-email");
   const [historyOpen, setHistoryOpen] = useState(true);
-  const [adding, setAdding] = useState(false);
+  const [adding, showAdding, closeAdding] = useDialogQueryState("identity");
   const [busy, setBusy] = useState(false);
   const [reinstating, setReinstating] = useState<FormerIdentity | null>(null);
   // An emailed reinstatement link lands here, on the owner's own record.
   const [linkToken, setLinkToken] = useState(() =>
     viewerIsSubject ? portalHashParam(window.location.hash, "reinstatement") : null,
   );
-  const addRoot = useRef<HTMLDivElement>(null);
 
-  /*
-   * An individual capacity is the end of the line: someone who is a member in
-   * their own right holds no further identities, so the grant is withdrawn
-   * rather than offered and refused.
-   */
-  const hasIndividualMembership = user.identities.some(
-    (identity) => identity.organizationId === null && identity.memberId !== null,
-  );
   // An account identity keeps sign-in and existing references valid; it is not
   // professional experience. Show it only when it is the person's sole identity
   // or carries membership, participation, or their current/default choice.
@@ -100,7 +108,8 @@ export function UserAffiliationsPanel({
   );
   const formerIdentities = user.formerIdentities;
   const seatsOf = (identityId: string) => seats.filter((seat) => seat.identityId === identityId);
-  const subjectName = [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email;
+  // Staff correct and reinstate against proof of who the person is, so they read the legal name.
+  const subjectName = personLegalName({ firstName: user.first_name, lastName: user.last_name }, user.email);
 
   function pastIdentityActions(entry: FormerIdentity): MenuItem[] {
     const items: MenuItem[] = [];
@@ -113,6 +122,24 @@ export function UserAffiliationsPanel({
     // The person reinstates their own only through an address at the organization; staff need none.
     if (viewerIsSubject ? entry.selfReinstatable : canManage && entry.reinstatable)
       items.push({ id: "reinstate", label: "Reinstate representation…", onSelect: () => setReinstating(entry) });
+    if (entry.reinstatable && (viewerIsSubject || (canManage && canActivateIdentity)))
+      items.push({
+        id: "correct-organization",
+        label: "Correct identity…",
+        disabled: busy,
+        onSelect: () => correct(entry.identityId, entry.organizationId, entry.organizationName ?? "Personal"),
+      });
+    if ((viewerIsSubject || (canManage && canActivateIdentity)) && entry.reinstatable)
+      items.push({
+        id: "remove-incorrect",
+        label: "Delete identity…",
+        danger: true,
+        disabled: busy,
+        onSelect: () =>
+          void removeIncorrectRepresentation(entry.identityId, user.id, onChanged, setBusy, () =>
+            correct(entry.identityId, entry.organizationId, entry.organizationName ?? "Personal"),
+          ),
+      });
     return items;
   }
 
@@ -137,8 +164,8 @@ export function UserAffiliationsPanel({
         the header and opens its form in a dialog.
       */}
       <PanelHeader title="Identity and experience">
-        {(canManage || viewerIsSubject) && !hasIndividualMembership && (
-          <Button variant="ghost" icon aria-label="Add identity" title="Add identity" onClick={() => setAdding(true)}>
+        {(canManage || viewerIsSubject) && (
+          <Button variant="ghost" icon aria-label="Add identity" title="Add identity" onClick={() => showAdding()}>
             <IconPlus />
           </Button>
         )}
@@ -159,11 +186,26 @@ export function UserAffiliationsPanel({
             membership={membership}
             onChanged={onChanged}
             canManage={canManage}
+            canRemoveIdentity={canManage && canActivateIdentity}
             summarized={membership.identityId === summarizedIdentityId}
             viewerIsSubject={viewerIsSubject}
-            subjectName={[user.first_name, user.last_name].filter(Boolean).join(" ") || user.email}
+            subjectName={subjectName}
             seats={seatsOf(membership.identityId)}
             acting={membership.identityId === actingIdentityId}
+            onEditEmail={
+              membership.organizationId && (viewerIsSubject || canManage)
+                ? () => {
+                    setEditingEmail(membership);
+                    showEmail();
+                  }
+                : undefined
+            }
+            onCorrect={
+              viewerIsSubject || (canManage && canActivateIdentity)
+                ? () =>
+                    correct(membership.identityId, membership.organizationId, membership.organizationName ?? "Personal")
+                : undefined
+            }
           />
         ))}
 
@@ -182,7 +224,7 @@ export function UserAffiliationsPanel({
                   />
                 ) : undefined;
               })()}
-              media={<Avatar name={entry.organizationName ?? "Organization"} shape="square" size="lg" />}
+              media={<Avatar name={entry.organizationName ?? "Personal"} shape="square" size="lg" />}
               title={entry.jobTitle ?? entry.organizationName ?? "Individual member"}
               subtitle={entry.jobTitle ? (entry.organizationName ?? "Individual member") : undefined}
               href={
@@ -200,44 +242,45 @@ export function UserAffiliationsPanel({
           ))}
       </PanelBody>
 
-      {/* Creating an identity is a quick action, so it is a dialog: a person creates their own,
-          and staff grant one to somebody else. The form is mounted only while open, so a
-          cancelled draft does not linger. */}
-      <Dialog
+      {editingEmail && (
+        <RepresentationEmailDialog
+          key={editingEmail.identityId}
+          userId={user.id}
+          source={editingEmail}
+          open={emailOpen}
+          onClose={() => void closeEmail()}
+          onChanged={onChanged}
+        />
+      )}
+      {correcting && (
+        <RepresentationCorrectionDialog
+          key={correcting.identityId}
+          open={correctingOpen}
+          source={correcting}
+          userId={user.id}
+          isSelf={viewerIsSubject}
+          preselectIdentityId={createdIdentityId ?? actingIdentityId}
+          onAdd={showAdding}
+          onClose={() => void closeCorrecting()}
+          onCorrected={async (replacement) => {
+            toast(`Identity corrected to ${replacement.organizationName ?? "Personal"}`, "success");
+            await onChanged();
+          }}
+        />
+      )}
+
+      <IdentityCreateDialog
         open={adding}
-        title="Add identity"
-        closeLabel="Close add identity"
-        confirmLabel={canManage ? "Grant" : "Create"}
-        confirmDisabled={busy}
-        onConfirm={() => addRoot.current?.querySelector("form")?.requestSubmit()}
-        onCancel={() => {
-          if (!busy) setAdding(false);
+        targetUserId={canManage && !viewerIsSubject ? user.id : undefined}
+        canActivate={canActivateIdentity}
+        preferImmediateActivation={correctingOpen}
+        onBusy={setBusy}
+        onClose={() => closeAdding()}
+        onCreated={async (identityId) => {
+          setCreatedIdentityId(identityId);
+          await onChanged();
         }}
-      >
-        <div ref={addRoot}>
-          {adding &&
-            (canManage ? (
-              <UserIdentityGrantForm
-                user={user}
-                canActivate={canActivateIdentity}
-                onBusy={setBusy}
-                onGranted={() => {
-                  setAdding(false);
-                  void onChanged();
-                }}
-              />
-            ) : (
-              <SelfIdentityCreateForm
-                onBusy={setBusy}
-                onCreated={() => {
-                  setAdding(false);
-                  void onChanged();
-                }}
-                onCancel={() => setAdding(false)}
-              />
-            ))}
-        </div>
-      </Dialog>
+      />
 
       {reinstating && (
         <ReinstateRepresentationDialog

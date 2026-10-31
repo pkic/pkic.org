@@ -80,7 +80,7 @@ export function EndRepresentationDialog({
   async function end(): Promise<void> {
     const checked = form.submit();
     if (!checked.data) {
-      setError(checked.message);
+      setError(checked.formMessage ?? "");
       return;
     }
     setSaving(true);

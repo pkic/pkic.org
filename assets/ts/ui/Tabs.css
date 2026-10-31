@@ -20,9 +20,12 @@
   }
 
   @media (max-width: 48rem) {
+    /* The strip scrolls, never the page; the clipped last tab is the cue. A
+       scrollbar thumb under the labels read as a second active underline. */
     .pk-tabs__list {
       flex-wrap: nowrap;
       overflow-x: auto;
+      scrollbar-width: none;
     }
   }
 

@@ -1,7 +1,12 @@
+import { nowIso } from "../utils/time";
+import type { EventAffiliationContext } from "./identities/event-affiliation-context";
+import { planRegistrationAffiliation } from "./registrations/affiliation-plan";
+import type { IdentityRepresentation } from "./identities/selection";
+import { findUserEmailOwner } from "./user-emails";
 import { first } from "../db/queries";
 import { AppError } from "../errors";
 import type { DatabaseLike, StatementLike } from "../types";
-import type { AttendanceType } from "../../../assets/shared/schemas/registration";
+import type { AttendanceType, RegistrationOrganizationOutcome } from "../../../assets/shared/schemas/registration";
 import { prepareAuditLog } from "./audit";
 import { prepareConsentStatements } from "./consent";
 import { prepareAcceptInviteStatements, prepareRevokeDuplicateInvitesStatement, type InviteRecord } from "./invites";
@@ -25,6 +30,8 @@ import { normalizeEmail } from "../validation";
 
 export interface PreparedRegistrationSubmission {
   user: UserRecord;
+  representation?: IdentityRepresentation;
+  organizationOutcome?: RegistrationOrganizationOutcome;
   /** True only when this submission created a new, unprivileged identity. */
   identityWasCreated: boolean;
   registration: RegistrationRecord;
@@ -63,14 +70,41 @@ export async function prepareRegistrationSubmission(
     authorizationGuards?: readonly StatementLike[];
     termsSnapshotGuard?: StatementLike | null;
     verifiedIdentity?: VerifiedRegistrationIdentityContext;
+    affiliationContext?: EventAffiliationContext;
     /** The registrant opened the verification link for this address; it is recorded as verified with the registration. */
     mailboxVerified?: boolean;
   },
 ): Promise<PreparedRegistrationSubmission> {
-  const preparedUser = await buildFindOrCreateUserStatement(db, payload.user);
+  if (!payload.mailboxVerified && !payload.verifiedIdentity) {
+    const claim = await findUserEmailOwner(db, normalizeEmail(payload.user.email));
+    if (claim?.kind === "pending" || (claim?.kind === "secondary" && !claim.verified))
+      throw new AppError(422, "REGISTRATION_EMAIL_PROOF_REQUIRED", "Verify your email before continuing registration.");
+  }
+  const preparedUser = await buildFindOrCreateUserStatement(db, {
+    ...payload.user,
+    mailboxVerified: payload.mailboxVerified,
+  });
   if (payload.verifiedIdentity && preparedUser.user.id !== payload.verifiedIdentity.userId) {
     throw new AppError(403, "REGISTRATION_IDENTITY_MISMATCH", "Registration identity does not match the session");
   }
+  const affiliation = payload.affiliationContext
+    ? await planRegistrationAffiliation(
+        db,
+        {
+          userId: preparedUser.user.id,
+          proofEvidence: {
+            sql: "SELECT 1 WHERE ?>strftime('%Y-%m-%dT%H:%M:%fZ','now')",
+            bindings: [new Date(payload.affiliationContext.exp * 1000).toISOString()],
+          },
+        },
+        payload.affiliationContext.input,
+        payload.affiliationContext.basis,
+        nowIso(),
+      )
+    : null;
+  const verifiedIdentity = affiliation?.identityId
+    ? { ...payload.verifiedIdentity, userId: preparedUser.user.id, selectedIdentity: { id: affiliation.identityId } }
+    : payload.verifiedIdentity;
   const builtRegistration = await buildCreateRegistration(db, {
     event: { id: payload.eventId },
     userId: preparedUser.user.id,
@@ -86,7 +120,7 @@ export async function prepareRegistrationSubmission(
     confirmationTtlHours: payload.confirmationTtlHours,
     signingSecret: payload.signingSecret,
     unverifiedEmailCorrectionAllowed: preparedUser.created,
-    verifiedIdentity: payload.verifiedIdentity,
+    verifiedIdentity,
     mailboxVerified: payload.mailboxVerified,
   });
   const existingReferral = await first<{ code: string }>(db, firstReferralCodeQuerySql("registration", "?"), [
@@ -127,10 +161,13 @@ export async function prepareRegistrationSubmission(
         userId: preparedUser.user.id,
         normalizedEmail: normalizeEmail(payload.user.email),
         method: "registration_confirmation",
+        excludeRegistrationId: builtRegistration.registration.id,
       }),
     );
   statements.push(
+    ...(affiliation?.statements ?? []),
     ...builtRegistration.statements,
+    ...(affiliation?.prepareReview?.(builtRegistration.registration.id) ?? []),
     ...(formSubmission?.statements ?? []),
     ...(await prepareConsentStatements(db, {
       registrationId: builtRegistration.registration.id,
@@ -166,7 +203,7 @@ export async function prepareRegistrationSubmission(
         eventId: payload.eventId,
         status: builtRegistration.registration.status,
         registrationGroupId: payload.verifiedIdentity?.registrationGroupId ?? null,
-        registrationIdentityId: payload.verifiedIdentity?.selectedIdentity?.id ?? null,
+        registrationIdentityId: verifiedIdentity?.selectedIdentity?.id ?? null,
       },
       undefined,
       null,
@@ -178,6 +215,8 @@ export async function prepareRegistrationSubmission(
 
   return {
     user: preparedUser.user,
+    representation: affiliation?.representation,
+    organizationOutcome: affiliation?.outcome,
     identityWasCreated: preparedUser.created,
     registration: builtRegistration.registration,
     manageToken: builtRegistration.manageToken,

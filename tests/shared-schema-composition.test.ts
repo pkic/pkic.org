@@ -1,3 +1,7 @@
+import {
+  registrationAttendanceFieldsSchema,
+  withRequiredDayAttendanceChoices,
+} from "../assets/shared/schemas/registration";
 import { describe, expect, it } from "vitest";
 import {
   roleAssignmentTargetSchema,
@@ -324,5 +328,25 @@ describe("canonical shared schema composition", () => {
         },
       }).success,
     ).toBe(true);
+  });
+});
+
+describe("explicit attendance choices", () => {
+  it("refuses a partially answered schedule and accepts an explicit skipped day without creating attendance", () => {
+    const payload = { dayAttendance: [{ dayDate: "2027-09-10", attendanceType: "virtual" }] };
+    const missing = withRequiredDayAttendanceChoices(registrationAttendanceFieldsSchema, () => [
+      { dayLabel: "First day", answered: true },
+      { dayLabel: "Second day", answered: false },
+    ]).safeParse(payload);
+    expect(missing.success).toBe(false);
+    if (!missing.success)
+      expect(missing.error.issues).toEqual([
+        expect.objectContaining({ path: ["dayAttendance"], message: expect.stringContaining("Second day") }),
+      ]);
+    const completed = withRequiredDayAttendanceChoices(registrationAttendanceFieldsSchema, () => [
+      { dayLabel: "First day", answered: true },
+      { dayLabel: "Second day", answered: true },
+    ]).parse(payload);
+    expect(completed.dayAttendance).toEqual(payload.dayAttendance);
   });
 });

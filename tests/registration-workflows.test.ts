@@ -1298,7 +1298,7 @@ describe("registration workflows", () => {
       confirmationTtlHours: 48,
       signingSecret: "test-signing-secret",
     });
-    await confirmRegistrationByToken(env.DB, {
+    const confirmed = await confirmRegistrationByToken(env.DB, {
       token: created.confirmationToken as string,
       waitlistClaimWindowHours: 24,
       signingSecret: "test-signing-secret",
@@ -1306,7 +1306,7 @@ describe("registration workflows", () => {
 
     const gate = gateNextBatch(env.DB);
     const staleUpdate = updateRegistrationByManageToken(gate.db, {
-      manageToken: created.manageToken,
+      manageToken: confirmed.manageToken,
       action: "update",
       attendanceType: "on_demand",
       waitlistClaimWindowHours: 24,

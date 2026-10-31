@@ -29,7 +29,7 @@ test("attendance charts fit their panels and keep labels readable", async ({ pag
   );
   for (const width of [1440, 768, 390]) {
     await page.setViewportSize({ width, height: 900 });
-    await page.goto(`/portal/#/events/${slug}/stats/attendance`);
+    await page.goto(`/portal/#/events/${slug}/stats/registration-changes`);
     const where = page.getByRole("figure", { name: "Where attendance changed", exact: true });
     const how = page.getByRole("region", { name: "How attendance changed", exact: true });
     await expect(where).toBeVisible();

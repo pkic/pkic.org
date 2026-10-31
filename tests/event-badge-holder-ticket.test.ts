@@ -200,6 +200,30 @@ describe("The holder's own badge ticket", () => {
     },
   );
 
+  it("keeps the QR and leaves sponsor artwork off when a sponsor logo needs replacing", async () => {
+    const sponsorId = crypto.randomUUID(),
+      key = `sponsor-logos/${sponsorId}/logo.svg`,
+      now = new Date().toISOString();
+    await env.ASSETS_BUCKET!.put(key, "not SVG raster bytes", { httpMetadata: { contentType: "image/svg+xml" } });
+    await env.DB.prepare(
+      "INSERT INTO sponsorships(id,sponsor_type,non_member_name,non_member_logo_r2_key,event_id,tier,pipeline_stage,created_at,updated_at) VALUES(?,'event','Broken Logo Sponsor',?,?,'Leader','active',?,?)",
+    )
+      .bind(sponsorId, key, fixture.eventId, now, now)
+      .run();
+    const organizer = await call(`${base}/printing`, fixture.token);
+    expect(organizer.status).toBe(422);
+    expect(await organizer.json()).toMatchObject({ error: { code: "BADGE_SPONSOR_SVG_REQUIRED" } });
+
+    const response = await ticket(await sessionFor(fixture.userId));
+    const text = await response.clone().text();
+    expect(response.status, text).toBe(200);
+    expect(text).not.toContain("Broken Logo Sponsor");
+    const body = currentBadgeResponseSchema.parse(await response.json());
+    expect(printedCode(body.badge.svg)).toBe(fixture.badgeId);
+    expect(body.printing.branding).toEqual([]);
+    expect(body.badge.printingRevision).toBe(body.printing.revision);
+  });
+
   it("lets organizer printing reuse the holder's active badge instead of adding a credential", async () => {
     const userId = await person();
     const holder = currentBadgeResponseSchema.parse(await (await ticket(await sessionFor(userId))).json());

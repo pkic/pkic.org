@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { render } from "preact";
 import { act } from "preact/test-utils";
+import axe from "axe-core";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { serviceAvailability } from "../../assets/ts/shared/availability-state";
 import { clearAuth, portalSession, logoutNotice, savePortalSession } from "../../assets/ts/member-flows/portal/state";
@@ -59,6 +60,9 @@ vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/Offl
       <button onClick={onCheckSignIn}>Check sign-in again</button>
     </div>
   ),
+}));
+vi.mock("../../assets/ts/member-flows/portal/shell/MeetingEntryReturn", () => ({
+  MeetingEntryReturn: ({ destination }: { destination: string }) => <div data-meeting-return={destination} />,
 }));
 import { App } from "../../assets/ts/member-flows/portal/App";
 import { rememberedActingIdentityId } from "../../assets/ts/member-flows/portal/acting-identity";
@@ -191,6 +195,25 @@ it("opens the portal when a link opened twice is refused but the first opening s
   expect(window.location.hash).toBe("#/groups/synthetic");
 });
 
+it("returns to a personal meeting link when its sign-in link opened twice already signed this browser in", async () => {
+  const meetingToken = `m2.${"A".repeat(22)}.${"B".repeat(22)}.0.${"C".repeat(22)}`;
+  window.location.hash = `#/verify?token=synthetic-used-link&next=${encodeURIComponent(`/meeting-link/${meetingToken}`)}`;
+  const session = portalSessionFixture({ pendingIdentityCount: 1 });
+  fetchMock.mockImplementation(async (input: RequestInfo | URL) =>
+    String(input).endsWith("/verify-link")
+      ? refusal(409, "Magic link already used")
+      : Response.json(String(input) === "/api/v1/users/current" ? portalProfileFixture(session) : session),
+  );
+  await mount();
+  await vi.waitFor(() =>
+    expect(host.querySelector("[data-meeting-return]")?.getAttribute("data-meeting-return")).toBe(
+      `/m/#token=${meetingToken}`,
+    ),
+  );
+  expect(mocks.renderShell).not.toHaveBeenCalled();
+  expect(host.textContent).not.toContain("Magic link already used");
+});
+
 it("keeps online failure and retry in the card without entering the offline scanner", async () => {
   fetchMock.mockResolvedValueOnce(refusal(503, "Temporarily unavailable"));
   await mount();
@@ -224,6 +247,32 @@ it("retains canonical session recording and the reviewed return route after succ
     "/api/v1/auth/session",
     "/api/v1/users/current",
   ]);
+});
+
+it("keeps the passkey offer on screen while the session a link just signed in is refreshed", async () => {
+  mocks.supportsPasskeys.mockReturnValue(true);
+  window.location.hash = "#/verify?token=synthetic-valid-link";
+  const session = portalSessionFixture({ pendingIdentityCount: 0 });
+  const refresh = pendingResponse();
+  fetchMock.mockImplementation(async (input) => {
+    const path = String(input);
+    if (path === "/api/v1/auth/session") return refresh.promise;
+    return Response.json(path === "/api/v1/users/current" ? portalProfileFixture(session) : session);
+  });
+  await mount();
+  await vi.waitFor(() =>
+    expect(fetchMock.mock.calls.map(([input]) => String(input))).toContain("/api/v1/auth/session"),
+  );
+  expect(host.textContent).not.toContain("Checking your sign-in");
+  expect(host.textContent).toContain("Continue without a passkey");
+  await act(async () => {
+    refresh.resolve(Response.json(session));
+  });
+  await vi.waitFor(() =>
+    expect(fetchMock.mock.calls.map(([input]) => String(input))).toContain("/api/v1/users/current"),
+  );
+  expect(host.textContent).toContain("Continue without a passkey");
+  expect(mocks.renderShell).not.toHaveBeenCalled();
 });
 
 async function followLink(token: string) {
@@ -413,18 +462,36 @@ it("asks a person with several identities which one to continue as, then remembe
   const server = serveSeveralIdentities();
   await mount();
   await vi.waitFor(() => expect(card().textContent).toContain("Choose how you take part"));
-  const choices = [...card().querySelectorAll("button")].map((button) => button.textContent);
+  const choices = [...card().querySelectorAll("button")].map(
+    (button) => button.querySelector(".pk-identity-choice__name")?.textContent,
+  );
   // A first-time attendee chooses between themself and their employer by name.
+  // An organization is offered first, and green; the personal identity comes last.
   expect(choices).toEqual(["Alpha Org", "Personal"]);
   expect(mocks.renderShell).not.toHaveBeenCalled();
 
   await act(async () => {
-    [...card().querySelectorAll("button")].find((button) => button.textContent === "Personal")!.click();
+    [...card().querySelectorAll("button")].find((button) => button.textContent?.includes("Personal"))!.click();
   });
   await vi.waitFor(() => expect(host.textContent).toContain("Authenticated portal content"));
   expect(server.selections).toEqual([INDIVIDUAL_IDENTITY.id]);
   expect(portalSession.value?.actingIdentityId).toBe(INDIVIDUAL_IDENTITY.id);
   expect(rememberedActingIdentityId(portalSession.value!.identity.id)).toBe(INDIVIDUAL_IDENTITY.id);
+});
+
+it("offers the identity choices as named buttons with no accessibility defects", async () => {
+  clearRememberedIdentity();
+  serveSeveralIdentities();
+  await mount();
+  await vi.waitFor(() => expect(card().textContent).toContain("Choose how you take part"));
+  // Each choice is a button named by what it holds: the name and its role, not the decorative tile.
+  const names = [...card().querySelectorAll("button")].map(
+    (button) => button.getAttribute("aria-label") ?? button.textContent,
+  );
+  expect(names[0]).toContain("Alpha Org");
+  expect(names[0]).toContain("Delegate");
+  const results = await axe.run(card(), { rules: { "color-contrast": { enabled: false } } });
+  expect(results.violations.map((violation) => `${violation.id}: ${violation.help}`)).toEqual([]);
 });
 
 it("continues silently as the identity remembered on this device while it is still held", async () => {
@@ -487,9 +554,12 @@ it("takes an accepted identity invitation straight to sign-in without a second p
   expect(portalSession.value).toBe(previousSession);
   await act(async () => host.querySelector<HTMLButtonElement>("button")!.click());
   await vi.waitFor(() => expect(window.location.hash).toBe("#/users/current"));
-  await vi.waitFor(() => expect(card().textContent).toContain("Sign in"));
+  await vi.waitFor(() => {
+    expect(portalSession.value).toBeNull();
+    expect(card().textContent).toContain("Sign in");
+    expect(card().querySelector<HTMLInputElement>("input")!.matches(":disabled")).toBe(false);
+  });
   expect(host.textContent).not.toContain("Identity accepted");
   expect(host.textContent).not.toContain("Open portal");
-  expect(portalSession.value).toBeNull();
   expect(mocks.renderShell).not.toHaveBeenCalled();
 });

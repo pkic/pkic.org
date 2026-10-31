@@ -54,6 +54,21 @@ beforeEach(resetMyAgendaFixture);
 afterEach(cleanupMyAgendaFixture);
 
 describe("personal agenda on the shared agenda component", () => {
+  it("keeps the program browsable but offers no personal controls before event registration", async () => {
+    history.replaceState(null, "", "#/events/workshop/agenda");
+    setProgram(publishedProgram([]));
+    stubFetch(async () => {
+      throw new Error("Unexpected personal request");
+    });
+    const host = mount({ canPersonalize: false });
+    await vi.waitFor(() => expect(host.querySelector(".pk-content-agenda")).not.toBeNull());
+    expect(host.textContent).toContain("Open keynote");
+    expect(host.querySelector('button[aria-label^="Star "]')).toBeNull();
+    expect(host.querySelector("[data-agenda-mine-filter]")).toBeNull();
+    expect(host.querySelector('[aria-label="Calendar and reminders"]')).toBeNull();
+    const personal = mount({ canPersonalize: false, mine: true });
+    expect(personal.textContent).toContain("Register to create your agenda");
+  });
   it("shows personal marks on the published agenda, stars in place and filters to My agenda", async () => {
     history.replaceState(null, "", "#/events/workshop/agenda");
     setProgram(
@@ -157,7 +172,7 @@ describe("personal agenda on the shared agenda component", () => {
     const host = mount({ mine: true });
     await vi.waitFor(() => expect(host.querySelector(".pk-empty-state")).not.toBeNull());
     history.replaceState(null, "", "#/events/workshop/agenda");
-    await act(() => render(<MyAgenda slug="workshop" />, host));
+    await act(() => render(<MyAgenda slug="workshop" canPersonalize />, host));
     await vi.waitFor(() => expect(host.querySelector(".pk-content-agenda")).not.toBeNull());
     const seatOn = (id: string) =>
       card(host, id).querySelector<HTMLButtonElement>(

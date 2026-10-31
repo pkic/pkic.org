@@ -39,6 +39,7 @@ export async function redeemSponsorSignInCapability(
   const verified = await verifySponsorSignInCapability(db, payload);
   const preparedUser = await buildFindOrCreateUserStatement(db, {
     email: verified.sponsorship.contactEmail,
+    mailboxVerified: true,
   });
   if (!preparedUser.created && !(await findActiveIdentity(db, preparedUser.user.id))) {
     throw new AppError(403, "AUTH_FORBIDDEN", "This identity is inactive");

@@ -38,6 +38,10 @@ export async function confirmSpeakerWithReceipt(page: Page, accessPath: string):
     expect(captured.status).toBe(200);
     expect(speakerParticipationPatchSchema.parse(captured.input).status).toBe("confirmed");
     expect(speakerParticipationResponseSchema.parse(captured.body).status).toBe("confirmed");
+    // The receipt is read before the page reloads; continue only on the reloaded, confirmed page. The route
+    // stays until that reload has settled: removing interception while the reload's scripts are paused in
+    // it leaves those requests unanswered and the page stuck loading.
+    await expect(page.getByText("You have confirmed your participation.", { exact: false })).toBeVisible();
   } finally {
     await page.unroute(matches, capture);
   }

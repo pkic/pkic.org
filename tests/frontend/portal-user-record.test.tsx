@@ -151,6 +151,20 @@ describe("portal System Users detail record", () => {
     );
   });
 
+  it.each(["owner", "staff"] as const)("words an empty About for the %s reading it", async (viewer) => {
+    stubDetail({ ...user, identities: [personalProfile(null)] });
+    const container = await mountDetail(
+      { ...READ_ONLY, canManageMembership: viewer === "staff" },
+      viewer === "owner" ? user.id : undefined,
+    );
+    const about = cardNamed(container, "About")!.textContent ?? "";
+    if (viewer === "owner") expect(about).toContain("Add a general introduction covering your interests and roles.");
+    else {
+      expect(about).toContain("has not added a general introduction yet.");
+      expect(about).not.toContain("your interests");
+    }
+  });
+
   it("loads the audit log only when staff select its data view", async () => {
     history.replaceState(null, "", `/portal/#/users/${user.id}`);
     stubDetail(user);

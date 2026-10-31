@@ -25,16 +25,6 @@ import {
   meetingAgendaPublishSchema,
   publishedMeetingAgendaResponseSchema,
 } from "../../../assets/shared/schemas/meeting-agenda";
-import {
-  speakerSelfServiceReadResponseSchema,
-  speakerProfileUpdateResponseSchema,
-} from "../../../assets/shared/schemas/speaker-self-service";
-import {
-  speakerSelfProfilePatchSchema,
-  coSpeakerInviteSchema,
-  coSpeakerInviteResponseSchema,
-} from "../../../assets/shared/schemas/proposal-management";
-import { eventProposalProofVerifyResponseSchema } from "../../../assets/shared/schemas/event-proposal-proof";
 import { userCreateSchema, userCreateResponseSchema } from "../../../assets/shared/schemas/user-create";
 import {
   userRolesListResponseSchema,
@@ -45,17 +35,12 @@ import { sessionHistoryCorrectionSchema } from "../../../assets/shared/schemas/e
 import { dateTimeLocalToIso } from "../../../assets/shared/timezone";
 import { createMember } from "./member-provisioning";
 import { signInToPortal } from "./portal-auth";
-import { submitProposal, decideProposal } from "./proposals";
-import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./sendgrid";
-import { acceptVisibleTerms, fieldLabel } from "./proposal-entry-ui";
-import { confirmSpeakerWithReceipt } from "./speaker-participation-receipt";
+import { fieldLabel } from "./proposal-entry-ui";
 import { acceptConfirmDialog } from "./confirm-dialog";
 import { sessionEditor } from "./agenda-actions";
 import { runRowAction } from "./data-table";
 import { sponsorEventSlug } from "./sponsor-live-fixture";
 import { agendaWorkspacePath } from "./agenda-workspace";
-import { completeIndependentCapacityDisclosure } from "./independent-capacity";
-import { EMAIL_FIRST_COPY } from "../../../assets/shared/email-first-copy";
 
 export const pilotAgendaApi = `/api/v1/events/${sponsorEventSlug}/agenda`;
 /**
@@ -190,96 +175,14 @@ export async function preparePilotMeeting(staff: Page, participant: Page, groupI
   return { member, seriesId: series.id, eventId: series.eventId, occurrenceIds: occurrences.map((row) => row.id) };
 }
 
-/** The speaker's actual proof/confirmation feeds the accepted source imported into this same agenda. */
-export async function preparePilotSpeaker(staff: Page, speaker: Page, info: TestInfo) {
-  const email = `integrated-speaker-${randomUUID()}@example.test`;
-  const title = `Integrated speaker session ${randomUUID()}`;
-  const proposal = await submitProposal(staff, {
-    proposerEmail: `integrated-proposer-${randomUUID()}@example.test`,
-    firstName: "Integrated",
-    lastName: "Proposer",
-    title,
-    abstract:
-      "A synthetic discussion of canonical publication, accountable participation and preserved evidence across an integrated conference rehearsal.",
-  });
-  // The verified proposer already agreed to speaker terms at submission; invite a distinct person for confirmation.
-  const since = await capturedEmailCount();
-  const invitation = await speaker.request.post(`/api/v1/proposals/access/${proposal.accessToken}/speakers`, {
-    data: coSpeakerInviteSchema.parse({ email, firstName: "Integrated", lastName: "Speaker", role: "speaker" }),
-  });
-  expect(invitation.status(), await invitation.text()).toBe(200);
-  expect(coSpeakerInviteResponseSchema.parse(await invitation.json()).email).toBe(email);
-  const message = await waitForCapturedEmail(email, "You have been added as a speaker", { since });
-  const speakerUrl = extractEmailUrl(message, "/speaker/");
-  const token = new URL(speakerUrl).searchParams.get("token");
-  if (!token) throw new Error("The speaker must use their own emailed capability");
-  let path = `/api/v1/proposals/speakers/access/${encodeURIComponent(token)}`;
-  await speaker.goto(speakerUrl);
-  const before = speakerSelfServiceReadResponseSchema.parse(await (await speaker.request.get(path)).json());
-  expect(before.speaker.status).toBe("invited");
-  expect(before.profile.actingIdentitySelection).toBe("unrecorded");
-  expect(before.currentRepresentation).toBeNull();
-  expect(before.profile.email).toBe(email);
-  await expect(speaker.getByRole("button", { name: "Confirm participation", exact: true })).toBeDisabled();
-  await expect(speaker.locator("[data-speaker-consents]").getByRole("checkbox").first()).toBeVisible();
-  await acceptVisibleTerms(speaker, "[data-speaker-consents]");
-  // The individual path is the email step's personal card; the disclosure follows the mailbox proof.
-  const identity = speaker.locator("[data-speaker-identity]");
-  await identity.getByRole("radio", { name: EMAIL_FIRST_COPY.speaker.personal.title, exact: true }).check();
-  await identity.getByRole("textbox", { name: EMAIL_FIRST_COPY.speaker.personal.label, exact: true }).fill(email);
-  const proofSince = await capturedEmailCount();
-  await identity.getByRole("button", { name: EMAIL_FIRST_COPY.speaker.personal.action, exact: true }).click();
-  const proofMail = await waitForCapturedEmail(email, "Verify your email for", { since: proofSince });
-  // The link carries the terms agreed before it was sent: neither page asks for them again.
-  const verifying = speaker.waitForResponse(
-    (response) =>
-      new URL(response.url()).pathname === `/api/v1/events/${sponsorEventSlug}/proposals/proof/verify` &&
-      response.request().method() === "POST" &&
-      Boolean(response.request().postDataJSON()?.speakerManagementToken),
-  );
-  await speaker.goto(extractEmailUrl(proofMail, "/propose/"));
-  await expect(speaker.getByRole("button", { name: "Save profile", exact: true })).toBeVisible();
-  const returnedToken = new URL(speaker.url()).searchParams.get("token");
-  if (!returnedToken) throw new Error("Verified invitation must resume its own speaker capability");
-  path = `/api/v1/proposals/speakers/access/${encodeURIComponent(returnedToken)}`;
-  const verified = await verifying;
-  expect(verified.status(), await verified.text()).toBe(200);
-  expect(eventProposalProofVerifyResponseSchema.parse(await verified.json())).toMatchObject({
-    status: "ready",
-    email,
-    applicantKind: "individual",
-  });
-  await completeIndependentCapacityDisclosure(speaker.locator("[data-speaker-identity]"));
-  await speaker
-    .getByRole("textbox", { name: "Biography", exact: true })
-    .fill("An invited synthetic speaker reviewing the integrated publication and participation rehearsal.");
-  const saving = speaker.waitForResponse(
-    (response) => new URL(response.url()).pathname === `${path}/profile` && response.request().method() === "PATCH",
-  );
-  await speaker.getByRole("button", { name: "Save profile", exact: true }).click();
-  const saved = await saving;
-  expect(saved.status(), await saved.text()).toBe(200);
-  expect(speakerSelfProfilePatchSchema.parse(saved.request().postDataJSON())).toMatchObject({
-    actingIdentityId: null,
-    unaffiliatedAttestation: true,
-    independentCapacity: { organizationConnection: "no" },
-  });
-  const selected = speakerProfileUpdateResponseSchema.parse(await saved.json());
-  expect(selected.currentRepresentation?.actingIdentitySelection).toBe("individual");
-  expect(selected.currentRepresentation?.email).toBe(email);
-  await expect(speaker.getByRole("button", { name: "Confirm participation", exact: true })).toBeEnabled();
-  await confirmSpeakerWithReceipt(speaker, path);
-  const after = speakerSelfServiceReadResponseSchema.parse(await (await speaker.request.get(path)).json());
-  expect(after.speaker.status).toBe("confirmed");
-  expect(after.speaker.userId).toBe(before.speaker.userId);
-  expect(after.currentRepresentation).toEqual(selected.currentRepresentation);
-  await capturePilot(speaker, info, "pilot-confirmed-speaker");
-  expect(await decideProposal(staff, proposal.proposalId, "accepted")).toBe(200);
-  if (!after.speaker.userId) throw new Error("The confirmed speaker needs a canonical person");
-  return { ...proposal, userId: after.speaker.userId, title, email, path };
+/** The accepted proposal and confirmed speaker that preparePilotSpeaker returns. */
+export interface PilotAcceptedSpeaker {
+  proposalId: string;
+  title: string;
+  userId: string;
 }
 
-export async function preparePilotConference(staff: Page, speaker: Awaited<ReturnType<typeof preparePilotSpeaker>>) {
+export async function preparePilotConference(staff: Page, speaker: PilotAcceptedSpeaker) {
   let snapshot = await readPilotAgenda(staff);
   expect(snapshot.occurrences, "Run the integrated pilot alone on fresh prepared state").toHaveLength(0);
   const rooms: string[] = [];
@@ -563,10 +466,10 @@ export async function approvePilotAppearance(staff: Page, occurrence: AgendaOccu
   await openPilotAgenda(staff);
   await staff.getByRole("tab", { name: "Schedule", exact: true }).click();
   await runRowAction(staff, staff.getByRole("row").filter({ hasText: occurrence.title }), "Materials and archive");
-  expect(occurrence.history?.proposalRepresentations.find((choice) => choice.userId === userId)).toMatchObject({
-    actingIdentityId: null,
-    snapshot: { organizationName: null, jobTitle: null },
-  });
+  // The proposal keeps only the selection; the organization and title stay on the identity, never copied here.
+  const selection = occurrence.history?.proposalRepresentations.find((choice) => choice.userId === userId);
+  expect(selection).toMatchObject({ actingIdentityId: null, selectedAt: expect.any(String) });
+  expect(selection).not.toHaveProperty("snapshot");
   // The archive editor groups representation review in its own section tab.
   await staff
     .getByRole("tablist", { name: "Session archive sections", exact: true })

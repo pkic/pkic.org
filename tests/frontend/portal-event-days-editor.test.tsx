@@ -15,6 +15,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GroupEvent } from "../../assets/shared/schemas/group-events";
 import { groupEventDaysReplaceSchema } from "../../assets/shared/schemas/group-events";
 import { EventDaysEditor } from "../../assets/ts/member-flows/portal/sections/management/EventDaysEditor";
+import { axeViolations } from "./helpers/axe";
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const EVENT_ID = "architecture-workshop";
@@ -133,9 +134,162 @@ afterEach(() => {
     container.remove();
   }
   vi.unstubAllGlobals();
+  history.replaceState(null, "", location.pathname);
 });
 
+async function openOptions(container: HTMLElement): Promise<void> {
+  const tab = [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find((tab) =>
+    tab.textContent?.startsWith("Options"),
+  );
+  await act(() => tab!.click());
+  await settle();
+}
+
 describe("event attendance days editor", () => {
+  it.each([false, true])("shows the saved schedule and option details without editing (phone=%s)", async (phone) => {
+    vi.stubGlobal("matchMedia", () => ({ matches: phone, addEventListener() {}, removeEventListener() {} }));
+    const listed = {
+      ...oneDay,
+      days: [
+        {
+          ...oneDay.days[0],
+          attendanceOptions: [
+            { value: "in_person", label: "In person", description: "At the venue", capacity: 40 },
+            { value: "virtual", label: "Virtual", description: "Live stream", enabled: false },
+          ],
+          attendanceCounts: { in_person: 40 },
+        },
+      ],
+    };
+    const captured = stubDays(listed, () => json({}));
+    const container = mount(
+      <EventDaysEditor groupId={GROUP_ID} event={event} expectedUpdatedAt={event.updatedAt} onRevision={vi.fn()} />,
+    );
+    await settle();
+    expect(container.querySelector("form, input, select")).toBeNull();
+    expect(container.textContent).toContain("40 places");
+    expect(container.textContent).toContain("40 / 40 registered");
+    expect(container.textContent).toContain("Full · waitlist");
+    expect(container.textContent).toContain("Not offered");
+    expect(container.textContent).toContain("09:00 – 17:00");
+    expect(container.textContent).toContain("Europe/Amsterdam");
+    await openOptions(container);
+    if (phone) await act(() => container.querySelector<HTMLElement>("summary")!.click());
+    expect(container.textContent).toContain("At the venue");
+    expect(container.textContent).toContain("in_person");
+    expect(container.querySelector("form, input, select")).toBeNull();
+    expect(await axeViolations(container)).toEqual([]);
+    expect(captured.every((item) => item.method === "GET")).toBe(true);
+    await beginRecordEdit(container, "Attendance days actions", "Edit attendance days");
+    expect(container.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toContain("Options");
+    expect(container.querySelector("form")).not.toBeNull();
+  });
+
+  it("edits an option once for every day while preserving each capacity", async () => {
+    const listed = {
+      ...oneDay,
+      days: [
+        oneDay.days[0],
+        {
+          ...oneDay.days[0],
+          id: "second-day",
+          date: "2026-09-02",
+          attendanceOptions: [{ value: "in_person", label: "In person", capacity: 12 }],
+        },
+      ],
+    };
+    const captured = stubDays(listed, () =>
+      json({ success: true, eventUpdatedAt: "2026-08-02T00:00:00.000Z", skipped: [] }),
+    );
+    const container = mount(
+      <EventDaysEditor groupId={GROUP_ID} event={event} expectedUpdatedAt={event.updatedAt} onRevision={vi.fn()} />,
+    );
+    await settle();
+    await beginRecordEdit(container, "Attendance days actions", "Edit attendance days");
+    await openOptions(container);
+    expect(labeled(container, "Label")).toHaveLength(1);
+    await act(() => {
+      const label = labeled(container, "Label")[0];
+      label.value = "On site";
+      label.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await submit(container);
+    const body = groupEventDaysReplaceSchema.parse(JSON.parse(captured.find((item) => item.method === "PUT")!.body!));
+    expect(body.configuration.days.map((day) => day.attendanceOptions[0])).toEqual([
+      { value: "in_person", label: "On site", capacity: 40 },
+      { value: "in_person", label: "On site", capacity: 12 },
+    ]);
+  });
+
+  it("preserves a disabled option and capacity across phone tabs and a desktop resize", async () => {
+    let phone = true;
+    const listeners = new Set<() => void>();
+    vi.stubGlobal("matchMedia", () => ({
+      get matches() {
+        return phone;
+      },
+      addEventListener: (_type: string, callback: () => void) => listeners.add(callback),
+      removeEventListener: (_type: string, callback: () => void) => listeners.delete(callback),
+    }));
+    const listed = { ...oneDay, days: [{ ...oneDay.days[0], attendanceCounts: { in_person: 3 } }] };
+    const captured = stubDays(listed, () =>
+      json({ success: true, eventUpdatedAt: "2026-08-02T00:00:00.000Z", skipped: [] }),
+    );
+    const container = mount(
+      <EventDaysEditor groupId={GROUP_ID} event={event} expectedUpdatedAt={event.updatedAt} onRevision={vi.fn()} />,
+    );
+    await settle();
+    await beginRecordEdit(container, "Attendance days actions", "Edit attendance days");
+    const availability = container.querySelector<HTMLInputElement>('input[role="switch"]')!;
+    await act(() => availability.click());
+    expect(availability.checked).toBe(false);
+    await openOptions(container);
+    await act(() => container.querySelector<HTMLElement>("summary")!.click());
+    expect(labeled(container, "Key")[0].readOnly).toBe(true);
+    expect(
+      container.querySelector<HTMLButtonElement>('[aria-label="In use by existing registrations"]')?.disabled,
+    ).toBe(true);
+    expect(await axeViolations(container)).toEqual([]);
+    await act(() => {
+      phone = false;
+      for (const callback of listeners) callback();
+    });
+    expect(container.querySelector("table")).not.toBeNull();
+    await submit(container);
+    const body = groupEventDaysReplaceSchema.parse(JSON.parse(captured.find((item) => item.method === "PUT")!.body!));
+    expect(body.configuration.days[0].attendanceOptions).toEqual([
+      { value: "in_person", label: "In person", capacity: 40, enabled: false },
+    ]);
+  });
+
+  it("opens and focuses a refused option behind the other phone tab", async () => {
+    vi.stubGlobal("matchMedia", () => ({ matches: true, addEventListener() {}, removeEventListener() {} }));
+    const captured = stubDays(oneDay, () =>
+      json({ success: true, eventUpdatedAt: oneDay.eventUpdatedAt, skipped: [] }),
+    );
+    const container = mount(
+      <EventDaysEditor groupId={GROUP_ID} event={event} expectedUpdatedAt={event.updatedAt} onRevision={vi.fn()} />,
+    );
+    await settle();
+    await beginRecordEdit(container, "Attendance days actions", "Edit attendance days");
+    await openOptions(container);
+    await act(() => container.querySelector<HTMLElement>("summary")!.click());
+    await act(() => {
+      const label = labeled(container, "Label")[0];
+      label.value = "";
+      label.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(() =>
+      [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
+        .find((tab) => tab.textContent === "Schedule")!
+        .click(),
+    );
+    await submit(container);
+    await vi.waitFor(() => expect(document.activeElement).toBe(labeled(container, "Label")[0]));
+    expect(labeled(container, "Label")[0].getAttribute("aria-invalid")).toBe("true");
+    expect(captured.some((item) => item.method === "PUT")).toBe(false);
+  });
+
   it("binds every label to the control it names and marks the required ones", async () => {
     stubDays(oneDay, () => json({ success: true, eventUpdatedAt: oneDay.eventUpdatedAt, skipped: [] }));
 
@@ -160,22 +314,13 @@ describe("event attendance days editor", () => {
     // The asterisk is decorative; the word behind it is what is announced.
     expect(labels.find((label) => (label.textContent ?? "").startsWith("Date"))?.textContent).toContain("(required)");
 
-    // The end-to-end flow reaches the option's label with `getByLabel("Label")
-    // .last()`, so the day's own label must keep coming first in the DOM.
-    const labelFields = labeled(container, "Label");
-    expect(labelFields.map((input) => input.value)).toEqual(["Workshop day", "In person"]);
-
-    // The times are the event's wall clock, not the raw UTC instant.
+    expect(labeled(container, "Day label")[0].value).toBe("Workshop day");
     expect(labeled(container, "Starts at")[0].value).toBe("09:00");
-    const startsHelp = labeled(container, "Starts at")[0].getAttribute("aria-describedby") ?? "";
-    expect(byId(container, startsHelp)?.textContent).toContain("Europe/Amsterdam");
-
-    // Each remove control says which option it removes; twenty buttons all
-    // called "Remove" are indistinguishable control by control.
-    const removeOption = [...container.querySelectorAll("button")].filter((button) =>
-      (button.textContent ?? "").startsWith("Remove attendance option"),
-    );
-    expect(removeOption.map((button) => button.textContent)).toEqual(["Remove attendance option 1"]);
+    expect(container.textContent).toContain("Europe/Amsterdam");
+    await openOptions(container);
+    expect(labeled(container, "Label").map((input) => input.value)).toEqual(["In person"]);
+    const remove = container.querySelector<HTMLButtonElement>('[aria-label="Remove In person"]');
+    expect(remove?.disabled).toBe(false);
   });
 
   it("announces an empty configuration instead of a muted sentence", async () => {
@@ -194,44 +339,71 @@ describe("event attendance days editor", () => {
     expect(container.querySelector(".text-muted")).toBeNull();
   });
 
-  it("sends the shared replace contract and announces the saved revision", async () => {
-    const onRevision = vi.fn();
-    const captured = stubDays(oneDay, () =>
-      json({ success: true, eventUpdatedAt: "2026-08-02T00:00:00.000Z", skipped: ["2026-09-02"] }),
-    );
+  it.each(["people", "video_location", "video_people", "cocktail", "coffee", "dining"])(
+    "sends the shared replace contract with %s and announces the saved revision",
+    async (selectedIcon) => {
+      const onRevision = vi.fn();
+      const captured = stubDays(oneDay, () =>
+        json({ success: true, eventUpdatedAt: "2026-08-02T00:00:00.000Z", skipped: ["2026-09-02"] }),
+      );
 
-    const container = mount(
-      <EventDaysEditor groupId={GROUP_ID} event={event} expectedUpdatedAt={event.updatedAt} onRevision={onRevision} />,
-    );
-    await settle();
-    expect(container.querySelectorAll("input, select")).toHaveLength(0);
-    await beginRecordEdit(container, "Attendance days actions", "Edit attendance days");
-    await submit(container);
+      const container = mount(
+        <EventDaysEditor
+          groupId={GROUP_ID}
+          event={event}
+          expectedUpdatedAt={event.updatedAt}
+          onRevision={onRevision}
+        />,
+      );
+      await settle();
+      expect(container.querySelectorAll("input, select")).toHaveLength(0);
+      await beginRecordEdit(container, "Attendance days actions", "Edit attendance days");
+      await openOptions(container);
+      const icon = container.querySelector<HTMLSelectElement>('select[name$=".icon"]')!;
+      await act(() => {
+        icon.value = selectedIcon;
+        icon.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+      const description = container.querySelector<HTMLInputElement>('input[name$=".description"]')!;
+      await act(() => {
+        description.value = "Watch together at a partner venue";
+        description.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      await submit(container);
 
-    const put = captured.find(({ method }) => method === "PUT");
-    expect(put).toBeDefined();
-    // Parsed through the shared request schema, so a body that drifts from the
-    // contract fails here rather than at the endpoint.
-    expect(groupEventDaysReplaceSchema.parse(JSON.parse(put!.body!))).toEqual({
-      expectedUpdatedAt: event.updatedAt,
-      configuration: {
-        days: [
-          {
-            date: "2026-09-01",
-            label: "Workshop day",
-            startTime: "09:00",
-            endTime: "17:00",
-            sortOrder: 10,
-            attendanceOptions: [{ value: "in_person", label: "In person", capacity: 40 }],
-          },
-        ],
-      },
-    });
+      const put = captured.find(({ method }) => method === "PUT");
+      expect(put).toBeDefined();
+      // Parsed through the shared request schema, so a body that drifts from the
+      // contract fails here rather than at the endpoint.
+      expect(groupEventDaysReplaceSchema.parse(JSON.parse(put!.body!))).toEqual({
+        expectedUpdatedAt: event.updatedAt,
+        configuration: {
+          days: [
+            {
+              date: "2026-09-01",
+              label: "Workshop day",
+              startTime: "09:00",
+              endTime: "17:00",
+              sortOrder: 0,
+              attendanceOptions: [
+                {
+                  value: "in_person",
+                  label: "In person",
+                  capacity: 40,
+                  icon: selectedIcon,
+                  description: "Watch together at a partner venue",
+                },
+              ],
+            },
+          ],
+        },
+      });
 
-    expect(onRevision).toHaveBeenCalledWith("2026-08-02T00:00:00.000Z");
-    const announced = container.querySelector('[role="status"].pk-alert');
-    expect(announced?.textContent).toContain("retained dates in use: 2026-09-02");
-  });
+      expect(onRevision).toHaveBeenCalledWith("2026-08-02T00:00:00.000Z");
+      const announced = container.querySelector('[role="alert"].pk-alert');
+      expect(announced?.textContent).toContain("retained dates in use: 2026-09-02");
+    },
+  );
 
   it("interrupts with a rejected save and leaves the form usable", async () => {
     const onRevision = vi.fn();

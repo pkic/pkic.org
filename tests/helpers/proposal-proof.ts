@@ -12,6 +12,11 @@ import { callApi } from "./app";
 import { deliveredEmailPayload, queryAll } from "./context";
 import { withIndependentCapacity } from "./independent-capacity";
 
+async function mailedProofToken(environment: Env, payloadJson: string): Promise<string | null> {
+  const delivered = await deliveredEmailPayload<{ verificationUrl: string }>(environment.DB, environment, payloadJson);
+  return new URLSearchParams(new URL(delivered.verificationUrl).hash.slice(1)).get("verify");
+}
+
 /** Explicit positive-fixture mailbox authorization through the mounted email API. */
 export async function prepareProposalProof(input: {
   environment: Env;
@@ -40,20 +45,16 @@ export async function prepareProposalProof(input: {
   const started = await request("", body);
   const startedBody = await started.json();
   expect(started.status, JSON.stringify(startedBody)).toBe(200);
-  expect(eventProposalProofStartResponseSchema.parse(startedBody).status).toBe("verification_sent");
+  const start = eventProposalProofStartResponseSchema.parse(startedBody);
   const rows = await queryAll<{ id: string; payload_json: string }>(
     environment.DB,
     "SELECT id, payload_json FROM email_outbox WHERE template_key = 'event_proposal_verify' AND recipient_email = ? AND recipient_user_id IS NULL",
     body.email,
   );
   const queued = rows.filter((row) => !previous.some((before) => before.id === row.id));
-  expect(queued).toHaveLength(1);
-  const delivered = await deliveredEmailPayload<{ verificationUrl: string }>(
-    environment.DB,
-    environment,
-    queued[0].payload_json,
-  );
-  const token = new URLSearchParams(new URL(delivered.verificationUrl).hash.slice(1)).get("verify");
+  // A speaker's own invitation link already proved its address: no second email is sent.
+  expect(queued).toHaveLength(start.status === "verified" ? 0 : 1);
+  const token = start.status === "verified" ? start.token : await mailedProofToken(environment, queued[0].payload_json);
   const verified = await request(
     "/verify",
     eventProposalProofVerifySchema.parse({ token, speakerManagementToken: input.speakerManagementToken }),

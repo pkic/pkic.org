@@ -15,7 +15,7 @@ import { getUserSessionToken } from "../../auth/user-session-token";
 import { batchFirst, batchRows } from "../../db/pagination";
 import { AppError } from "../../errors";
 import type { D1StatementResult, DatabaseLike, Env } from "../../types";
-import { personDisplayNameSql } from "../event-agenda/speaker-name";
+import { personDisplayNameSql } from "../people/person-name-sql";
 import { publishedSessionsSql } from "../event-participation/published-schedule";
 import { sessionAccessEligibleSql } from "../event-participation/session-access";
 import { getEventBySlug } from "../events";

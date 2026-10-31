@@ -6,7 +6,6 @@ import { insertUser } from "./helpers/membership";
 import { grantAdministrator } from "./helpers/administrator";
 import { createAdminSession } from "./helpers/auth";
 import { mutateBeforeMatchingQuery } from "./helpers/database-races";
-import usersRouter from "../functions/api/v1/users/router";
 import { cacheAdminForRequest, requireAdminFromRequest } from "../functions/_lib/auth/admin";
 import { signUserSessionToken, verifyUserSessionToken } from "../functions/_lib/auth/user-session";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../functions/_lib/types";
@@ -190,8 +189,8 @@ describe("D1 read replication", () => {
     const { primaryDb, primaryQueries, sessionQueries, withSessionCalls } = createDbWithSessionRecorder();
     const adminToken = await createAdminToken();
 
-    const response = await usersRouter.fetch(
-      new Request("https://app.test/", {
+    const response = await worker.fetch(
+      new Request("https://app.test/api/v1/users", {
         headers: { authorization: `Bearer ${adminToken}` },
       }),
       { DB: primaryDb, INTERNAL_SIGNING_SECRET: signingSecret } as any,
@@ -221,8 +220,8 @@ describe("D1 read replication", () => {
     const env = { DB: primaryDb, INTERNAL_SIGNING_SECRET: signingSecret } as any;
     const adminToken = await createAdminToken();
 
-    const responsePromise = usersRouter.fetch(
-      new Request("https://app.test/", {
+    const responsePromise = worker.fetch(
+      new Request("https://app.test/api/v1/users", {
         headers: { authorization: `Bearer ${adminToken}` },
       }),
       env,
@@ -241,8 +240,8 @@ describe("D1 read replication", () => {
     const { primaryDb, withSessionCalls } = createDbWithSessionRecorder({ bookmark: "next/bookmark" });
     const adminToken = await createAdminToken("prior/bookmark");
 
-    const response = await usersRouter.fetch(
-      new Request("https://app.test/", {
+    const response = await worker.fetch(
+      new Request("https://app.test/api/v1/users", {
         headers: { authorization: `Bearer ${adminToken}` },
       }),
       { DB: primaryDb, INTERNAL_SIGNING_SECRET: signingSecret } as any,
@@ -264,8 +263,8 @@ describe("D1 read replication", () => {
     });
     const adminToken = await createAdminToken("users/prior-bookmark");
 
-    const response = await usersRouter.fetch(
-      new Request("https://app.test/", { headers: { authorization: `Bearer ${adminToken}` } }),
+    const response = await worker.fetch(
+      new Request("https://app.test/api/v1/users", { headers: { authorization: `Bearer ${adminToken}` } }),
       { DB: primaryDb, INTERNAL_SIGNING_SECRET: signingSecret } as any,
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );

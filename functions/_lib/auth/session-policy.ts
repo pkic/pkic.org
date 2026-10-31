@@ -1,6 +1,7 @@
 export const DEFAULT_MEMBER_SESSION_TTL_HOURS = 720;
 export const DEFAULT_USER_SESSION_IDLE_TTL_HOURS = 24 * 7;
 export const STAFF_SESSION_IDLE_TTL_HOURS = 1;
+export const STAFF_CAPACITY_TTL_HOURS = 8;
 
 const HOUR_MS = 60 * 60 * 1000;
 

@@ -60,7 +60,7 @@ export function AgendaPublicationWorkspace({
           event.preventDefault();
           const checked = form.submit();
           if (!checked.data) {
-            setError(checked.message);
+            setError(checked.formMessage ?? "");
             return;
           }
           void approve(checked.data);

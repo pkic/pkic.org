@@ -19,7 +19,7 @@ export function EventProposalManagement() {
         Loading proposal…
       </p>
       <div class="pk-stack pk-stack--loose" hidden data-proposal-manage-content>
-        <p class="pk-muted pk-small">Open this page from your proposal management link.</p>
+        <p class="pk-muted pk-small">Return here any time with the link from your proposal email.</p>
         <form class="pk-form needs-validation" noValidate>
           <Field id="manage-proposal-type" label="Session type" errorSlot="proposalType" required>
             {(control) => <Select {...control} name="proposalType" required />}
@@ -52,13 +52,12 @@ export function EventProposalManagement() {
         <div data-cospeaker-section class="pk-stack">
           <h3>Speakers</h3>
           <p class="pk-small">
-            Invite additional speakers to contribute to this proposal. You can provide their profile details and
-            headshot here, or send them a profile link so they can update their own information.
+            Invite the other speakers for this proposal. Each speaker confirms through the link we email them and keeps
+            their own bio, links, and photo current there.
           </p>
           <div data-cospeaker-list class="pk-stack" />
           <p class="pk-small" data-cospeaker-status-help>
-            Track who has accepted, keep speaker details current, and send a reminder to invited speakers who have not
-            responded yet.
+            Track who has accepted, and send a reminder to invited speakers who have not responded yet.
           </p>
           <div data-cospeaker-form class="pk-stack">
             <div class="pk-grid pk-grid--tight">

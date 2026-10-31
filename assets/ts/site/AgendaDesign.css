@@ -1575,7 +1575,8 @@
     .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__room > .pk-content-agenda__track {
       padding: 0;
       border: 0;
-      color: var(--pk-ink-muted);
+      /* Lightly strengthened: plain muted ink falls just under 4.5:1 on a tinted track card. */
+      color: color-mix(in oklab, var(--pk-ink-muted) 80%, var(--pk-ink));
       font-size: var(--pk-agenda-type-12);
       font-weight: 400;
     }

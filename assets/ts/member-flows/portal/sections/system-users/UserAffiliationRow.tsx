@@ -1,3 +1,4 @@
+import { removeIncorrectRepresentation } from "./remove-representation";
 import { useMembershipCategoryCatalog } from "../../../../hooks/useMembershipCategoryCatalog";
 import { useMembershipCategoryLabels } from "../../../../hooks/useMembershipCategoryLabels";
 /**
@@ -30,6 +31,7 @@ import { formatTenure } from "../../../../shared/ui";
 import { Badge, statusLabel } from "../../../../components/Badge";
 import { AffiliationRow } from "../../../../ui/AffiliationRow";
 import { Avatar } from "../../../../ui/Avatar";
+import { Markdown } from "../../../../ui/Markdown";
 import { Field } from "../../../../ui/Field";
 import { Menu, type MenuItem } from "../../../../ui/Menu";
 import { Select } from "../../../../ui/TextControl";
@@ -74,14 +76,19 @@ export function UserAffiliationRow({
   membership,
   onChanged,
   canManage,
+  canRemoveIdentity = false,
   summarized = false,
   viewerIsSubject = false,
   subjectName,
   seats = [],
   acting = false,
+  onCorrect,
+  onEditEmail,
 }: {
   /** The group seats held as this identity, current and past. */
   seats?: readonly UserGroupParticipation[];
+  onCorrect?: () => void;
+  onEditEmail?: () => void;
   /** The signed-in person is acting as this identity right now. */
   acting?: boolean;
   /** The person the record is about. */
@@ -91,6 +98,7 @@ export function UserAffiliationRow({
   membership: UserMembership;
   onChanged: () => Promise<void> | void;
   canManage: boolean;
+  canRemoveIdentity?: boolean;
   /** The person reading the record is the person it is about. */
   viewerIsSubject?: boolean;
   /**
@@ -332,6 +340,23 @@ export function UserAffiliationRow({
       onSelect: openMembershipEditor,
     });
   }
+  if (membership.organizationId && onEditEmail)
+    rowActions.push({ id: "change-email", label: "Change representation email…", onSelect: onEditEmail });
+  if (onCorrect)
+    rowActions.push({
+      id: "correct-organization",
+      label: "Correct identity…",
+      disabled: busy,
+      onSelect: onCorrect,
+    });
+  if (canManage || viewerIsSubject)
+    rowActions.push({
+      id: "remove-incorrect",
+      label: "Delete identity…",
+      danger: true,
+      disabled: busy || !(viewerIsSubject || canRemoveIdentity),
+      onSelect: () => void removeIncorrectRepresentation(membership.identityId, userId, onChanged, setBusy, onCorrect),
+    });
   // The person ends their own representation; staff end someone else's.
   if (membership.organizationId && (viewerIsSubject || canManage))
     rowActions.push({
@@ -416,7 +441,7 @@ export function UserAffiliationRow({
           ) : undefined
         }
       >
-        {summarized ? undefined : (membership.biography ?? undefined)}
+        {summarized || !membership.biography ? undefined : <Markdown markdown={membership.biography} />}
       </AffiliationRow>
       <Dialog
         open={editingMembership && (categoryEditable || statusEditable)}

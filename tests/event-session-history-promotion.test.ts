@@ -1,3 +1,4 @@
+import { promotionSessionListSchema } from "../assets/shared/schemas/event-agenda";
 import { projectLiveAgendaMaterials } from "../functions/_lib/services/site-agenda-material-eligibility";
 import { saveSessionHistory, listSessionMaterialVersions } from "../functions/_lib/services/event-agenda/history";
 import { createAgendaOccurrence } from "../functions/_lib/services/event-agenda/mutations";
@@ -15,7 +16,7 @@ import { callApi } from "./helpers/app";
 import { agendaSnapshotSchema, type AgendaSnapshot } from "../assets/shared/schemas/event-agenda";
 import {
   assignedPromotionKit,
-  listAssignedPromotionSessions,
+  listPublishedPromotionSessions,
 } from "../functions/_lib/services/event-agenda/promotion-access";
 import {
   requestPromotionRender,
@@ -504,14 +505,18 @@ describe("session archive and promotion publication", () => {
     const kit = await assignedPromotionKit(env.DB, eventId, occurrenceId, admin!.id, false, "https://pkic.org");
     expect(kit.occurrence.history?.appearances[0]?.affiliations[0]?.organizationName).toBe("Historical organization");
     expect(kit.kit.copy.whyAttend).toBe(copy.whyAttend);
-    expect(new URL(kit.kit.registrationUrl).pathname).not.toMatch(/^\/r\//);
-    expect(new URL(kit.kit.registrationUrl).searchParams.get("event")).toBe("pqc-2026");
-    expect(new URL(kit.kit.registrationUrl).searchParams.get("source")).toBe("speaker-kit");
+    expect(new URL(kit.kit.registrationUrl).pathname).toMatch(/^\/r\/[A-Za-z0-9]{10}$/);
+
     expect(kit.kit.registrationUrl).not.toMatch(/token|manage/);
     await expect(
       assignedPromotionKit(env.DB, eventId, occurrenceId, "unassigned", false, "https://pkic.org"),
     ).rejects.toMatchObject({ status: 403 });
-    const page = await listAssignedPromotionSessions(
+    const response = await callApi(env, `${base}/promotion?q=Approved&limit=1&offset=0`, { headers });
+    expect(response.status).toBe(200);
+    const assignedSessions = promotionSessionListSchema.parse(await response.json());
+    expect(assignedSessions.occurrences.map((occurrence) => occurrence.id)).toEqual([occurrenceId]);
+    expect(assignedSessions.page.total).toBe(1);
+    const page = await listPublishedPromotionSessions(
       env.DB,
       eventId,
       admin!.id,
@@ -521,7 +526,7 @@ describe("session archive and promotion publication", () => {
     expect(page.page.total).toBe(1);
     expect(
       (
-        await listAssignedPromotionSessions(
+        await listPublishedPromotionSessions(
           env.DB,
           eventId,
           admin!.id,
@@ -537,13 +542,11 @@ describe("session archive and promotion publication", () => {
     });
     const [retrying] = await queryAll<{ status: string; attempts: number }>(
       env.DB,
-      "SELECT status,attempts FROM event_agenda_promotion_render_jobs WHERE id=?",
+      "SELECT status,attempts FROM event_promotion_renders WHERE id=?",
       [job.id],
     );
     expect(retrying).toMatchObject({ status: "retrying", attempts: 1 });
-    await env.DB.prepare(
-      "UPDATE event_agenda_promotion_render_jobs SET next_attempt_at='2000-01-01T00:00:00.000Z' WHERE id=?",
-    )
+    await env.DB.prepare("UPDATE event_promotion_renders SET next_attempt_at='2000-01-01T00:00:00.000Z' WHERE id=?")
       .bind(job.id)
       .run();
     await processPromotionRenderJob(env.DB, env, job.id, async () => ({
@@ -553,7 +556,7 @@ describe("session archive and promotion publication", () => {
     }));
     const [rendered] = await queryAll<{ status: string }>(
       env.DB,
-      "SELECT status FROM event_agenda_promotion_render_jobs WHERE id=?",
+      "SELECT status FROM event_promotion_renders WHERE id=?",
       [job.id],
     );
     expect(rendered?.status).toBe("rendered");

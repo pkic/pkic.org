@@ -5,7 +5,7 @@ import { prepareUserSessionClaimsBatch } from "./user-session-live-data";
 import type { UserSessionResult } from "./user-session-result";
 import { recordAuditActingIdentity } from "../services/audit-actor";
 
-async function verifyUserSessionRequest(
+export async function verifyUserSessionRequest(
   request: Request,
   env: Pick<Env, "INTERNAL_SIGNING_SECRET">,
 ): Promise<UserSessionTokenClaims> {

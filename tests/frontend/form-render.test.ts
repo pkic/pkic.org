@@ -28,6 +28,48 @@ const base = (key: string, label: string) => ({
 });
 
 describe("frontend field rendering", () => {
+  it.each([
+    { label: "an empty country", saved: undefined, chosen: undefined, country: "NL", expected: "NL" },
+    { label: "a saved answer", saved: "US", chosen: undefined, country: "NL", expected: "US" },
+    { label: "a manual selection", saved: undefined, chosen: "GB", country: "NL", expected: "GB" },
+    { label: "a manually cleared answer", saved: undefined, chosen: "", country: "NL", expected: "" },
+    { label: "an unavailable country", saved: undefined, chosen: undefined, country: "T1", expected: "" },
+  ])("uses the visitor country without replacing $label", async ({ saved, chosen, country, expected }) => {
+    let finish!: () => void;
+    const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = () =>
+            resolve(new Response(JSON.stringify({ country }), { headers: { "content-type": "application/json" } }));
+        }),
+    );
+    const host = document.createElement("form");
+    try {
+      await act(() =>
+        render(
+          h(CustomFieldList, {
+            fields: [{ ...base("country", "Country"), validation: { format: "iso_country" } }],
+            context: { dayAttendance: [] },
+            initialValues: { country: saved },
+          }),
+          host,
+        ),
+      );
+      const select = host.querySelector<HTMLSelectElement>("select")!;
+      if (chosen !== undefined) {
+        select.value = chosen;
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+      await act(async () => {
+        finish();
+      });
+      expect(fetcher).toHaveBeenCalledWith("/api/v1/geolocation/country", expect.anything());
+      await vi.waitFor(() => expect(select.value).toBe(expected));
+    } finally {
+      await act(() => render(null, host));
+      fetcher.mockRestore();
+    }
+  });
   it("keeps questions and answers mounted when the form definition changes", () => {
     const host = document.createElement("form");
     const reason = { ...base("reason", "Reason"), fieldType: "textarea" as const };

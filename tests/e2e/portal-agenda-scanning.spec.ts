@@ -55,7 +55,10 @@ async function badgeMenu(page: Page, menu: string, action: string) {
 async function issueRenderedBadge(page: Page, decoderUrl: string, email?: string) {
   if (email) {
     await page.getByRole("textbox", { name: /^Attendee/ }).fill(email);
-    await page.getByRole("button").filter({ hasText: email }).click();
+    // Matches show a person's name and role, not the address searched for; the unique address leaves one match.
+    const matches = page.getByRole("group", { name: "Matching users", exact: true }).getByRole("button");
+    await expect(matches).toHaveCount(1);
+    await matches.click();
   }
   const issuedResponse = badgeResponse(page, badgesApi, "POST");
   await page.getByRole("button", { name: email ? "Create badge QR" : "Replace badge QR", exact: true }).click();

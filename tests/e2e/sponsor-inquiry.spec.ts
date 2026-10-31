@@ -59,6 +59,9 @@ test("submits a generic consortium sponsor inquiry using D1 tiers", async ({ pag
   const staffRendered = staffContent?.map(({ value }) => value).join("\n") ?? "";
   expect(staffRendered).toContain("Review updated agreement");
   expect(staffRendered).toContain("attacker.invalid/phish");
-  expect(staffRendered).not.toMatch(/<(?:a|img)\b[^>]*(?:href|src)=["']?https:\/\/attacker\.invalid/i);
+  // The plain-text part quotes the typed text; only the HTML part could render a live link or image.
+  const staffHtml = staffContent?.find(({ type }) => type === "text/html")?.value ?? "";
+  expect(staffHtml).not.toBe("");
+  expect(staffHtml).not.toMatch(/<(?:a|img)\b[^>]*(?:href|src)=["']?https:\/\/attacker\.invalid/i);
   expect(staffRendered).not.toMatch(/\{\{[^}]+\}\}/);
 });

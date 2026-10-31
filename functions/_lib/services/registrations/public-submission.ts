@@ -1,3 +1,9 @@
+import type { RegistrationOrganizationOutcome } from "../../../../assets/shared/schemas/registration";
+import { readEventAffiliationContext } from "../identities/event-affiliation-context";
+import {
+  personalPromotionImagePath,
+  personalPromotionSharePath,
+} from "../../../../assets/shared/personal-promotion-image";
 import type { z } from "zod";
 import type {
   RegistrationConfirmOrganization,
@@ -25,10 +31,7 @@ import { readRegistrationAffiliation } from "./selected-identity";
 import type { VerifiedRegistrationIdentityContext } from "./types";
 import { nowIso } from "../../utils/time";
 import { linkVerifiedAddressToDomainOrganization } from "../identities/email-domain-link";
-import {
-  linkConfirmedRegistrationOrganization,
-  type RegistrationOrganizationOutcome,
-} from "./confirmation-organization";
+import { linkConfirmedRegistrationOrganization } from "./confirmation-organization";
 import { eventTakesRegistrations } from "./email-proof";
 
 /** The individual capacity only gates the public contract's work-email policy; the use case does not read it. */
@@ -140,6 +143,25 @@ export async function submitEventRegistration(
     }
   }
 
+  if (body.organization?.organizationId !== undefined && !body.organization.contextToken)
+    throw new AppError(409, "IDENTITY_CONTEXT_REQUIRED", "Confirm your organization details again before registering.");
+  const affiliationContext =
+    body.organization?.contextToken && metadata.mailboxVerified
+      ? await readEventAffiliationContext(
+          metadata.signingSecret,
+          body.organization.contextToken,
+          event.id,
+          body.email,
+          "registration-affiliation",
+          body.organization,
+        )
+      : undefined;
+  if (body.organization?.contextToken && !affiliationContext)
+    throw new AppError(
+      422,
+      "REGISTRATION_EMAIL_PROOF_REQUIRED",
+      "Verify your email before confirming the organization.",
+    );
   const { prepared, requiredTerms, formResponse } = await prepareValidatedAttendeeRegistration(db, body, {
     sourceType: invite ? "invite" : body.sourceType,
     sourceRef: body.sourceRef,
@@ -157,6 +179,7 @@ export async function submitEventRegistration(
     authorizationGuards: metadata.authorizationGuards,
     event: { id: event.id, source_mode: event.source_mode },
     verifiedIdentity: metadata.verifiedIdentity,
+    affiliationContext,
     mailboxVerified: metadata.mailboxVerified,
   });
   const { user, referralCode } = prepared;
@@ -169,16 +192,18 @@ export async function submitEventRegistration(
   // unprivileged identity may keep the immediate correction link so a typo can
   // still be fixed before confirmation. A verified mailbox is that proof.
   const exposeManageCapability = prepared.identityWasCreated || Boolean(metadata.mailboxVerified);
-  const shareUrl = `${metadata.appBaseUrl}/r/${referralCode}`;
+  const shareUrl = `${metadata.appBaseUrl}${personalPromotionSharePath(referralCode)}`;
   const dayWaitlist = prepared.plannedDayWaitlist;
   const attendanceData = buildAttendanceEmailData(registration.attendance_type, prepared.dayAttendance, dayWaitlist);
   const statusData = buildRegistrationEmailStatusData(registration.status, dayWaitlist);
   const customAnswerRows = buildCustomAnswerRows(formResponse.answers, formResponse.form?.fields);
   const acceptedTermsText = buildAcceptedTermsText(body.consents, requiredTerms);
-  const affiliation = await readRegistrationAffiliation(db, {
-    identityId: registration.registration_identity_id,
-    userId: user.id,
-  });
+  const affiliation =
+    prepared.representation ??
+    (await readRegistrationAffiliation(db, {
+      identityId: registration.registration_identity_id,
+      userId: user.id,
+    }));
   const commonData = {
     ...buildEventEmailVariables(event, metadata.appBaseUrl),
     firstName: user.first_name ?? "",
@@ -199,7 +224,7 @@ export async function submitEventRegistration(
     twitterShareUrl: `https://twitter.com/intent/tweet?text=${encodeURIComponent(`I just registered for ${event.name} — join me! ${shareUrl}`)}`,
     blueskyShareUrl: `https://bsky.app/intent/compose?text=${encodeURIComponent(`I just registered for ${event.name} — join me!\n${shareUrl}`)}`,
     redditShareUrl: `https://www.reddit.com/submit?url=${encodeURIComponent(shareUrl)}&title=${encodeURIComponent(`Join me at ${event.name}`)}`,
-    badgeImageUrl: `${metadata.appBaseUrl}/api/v1/registrations/referrals/${referralCode}/badge`,
+    badgeImageUrl: `${metadata.appBaseUrl}${personalPromotionImagePath(referralCode)}`,
   };
 
   let queuedEmail: ReturnType<typeof prepareQueueEmailStatement>;
@@ -271,14 +296,16 @@ export async function submitEventRegistration(
 
   const badgeRenderJob = prepareBadgeRenderJob(db, referralCode);
   await commitRegistrationSubmission(db, prepared, [queuedEmail.statement, badgeRenderJob.statement]);
-  const organizationOutcome = metadata.mailboxVerified
-    ? await linkVerifiedRegistrant(db, {
-        registrationId: registration.id,
-        userId: user.id,
-        normalizedEmail: body.email,
-        organization: body.organization,
-      })
-    : null;
+  const organizationOutcome = affiliationContext
+    ? (prepared.organizationOutcome ?? null)
+    : metadata.mailboxVerified
+      ? await linkVerifiedRegistrant(db, {
+          registrationId: registration.id,
+          userId: user.id,
+          normalizedEmail: body.email,
+          organization: body.organization,
+        })
+      : null;
   return {
     response: {
       success: true,
@@ -292,12 +319,11 @@ export async function submitEventRegistration(
       organizationOutcome,
     },
     backgroundTasks: [
-      processOutboxByIdBackground(db, env, queuedEmail.id),
       seedGravatarAndProcessBadgeRenderJob(db, env, {
         userId: user.id,
         email: user.email,
         jobId: badgeRenderJob.id,
-      }),
+      }).then(() => processOutboxByIdBackground(db, env, queuedEmail.id)),
     ],
   };
 }

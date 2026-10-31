@@ -143,7 +143,9 @@ export function GeneralTab({
     ...(portalOwnsRegistration
       ? {}
       : { registrationFormKey: registrationFormMode === "none" ? null : registrationFormKey.trim() || null }),
-    proposalFormKey: proposalFormMode === "none" ? null : proposalFormKey.trim() || null,
+    ...(event.sourceMode === "portal"
+      ? {}
+      : { proposalFormKey: proposalFormMode === "none" ? null : proposalFormKey.trim() || null }),
     inviteLimitAttendee: inviteLimit,
   };
   if (retentionDays.trim()) draft.userRetentionDays = Number(retentionDays);
@@ -175,7 +177,7 @@ export function GeneralTab({
     if (!canWrite || !editing || saving) return;
     const checked = form.submit();
     if (!checked.data) {
-      setOutcome({ tone: "danger", message: checked.message });
+      setOutcome(checked.formMessage ? { tone: "danger", message: checked.formMessage } : null);
       return;
     }
     setSaving(true);
@@ -508,19 +510,21 @@ export function GeneralTab({
                       }}
                     />
                   )}
-                  <EventFormLinkSelect
-                    eventSlug={event.slug}
-                    purpose="proposal_submission"
-                    label="Proposal form"
-                    value={proposalFormKey}
-                    disabled={saving}
-                    autoSelectFirst={proposalFormMode === "unset"}
-                    help="Choose the form this event should use for proposals."
-                    onChange={(value) => {
-                      setProposalFormKey(value);
-                      setProposalFormMode(value ? "explicit" : "none");
-                    }}
-                  />
+                  {event.sourceMode !== "portal" && (
+                    <EventFormLinkSelect
+                      eventSlug={event.slug}
+                      purpose="proposal_submission"
+                      label="Proposal form"
+                      value={proposalFormKey}
+                      disabled={saving}
+                      autoSelectFirst={proposalFormMode === "unset"}
+                      help="Choose the form this event should use for proposals."
+                      onChange={(value) => {
+                        setProposalFormKey(value);
+                        setProposalFormMode(value ? "explicit" : "none");
+                      }}
+                    />
+                  )}
                 </div>
               </PanelBody>
             </Panel>

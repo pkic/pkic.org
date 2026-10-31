@@ -1,7 +1,7 @@
 import { administratorGrants, grantAdministrator } from "./helpers/administrator";
 import { env } from "cloudflare:workers";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { parseEventFlowPath } from "../assets/shared/event-flow-paths";
+import { isPrivateEventFlowPath, parseEventFlowPath } from "../assets/shared/event-flow-paths";
 import { createGroupManagedEvent } from "../functions/_lib/services/events/group-management";
 import type { DatabaseLike, Env, StaticAssetsBinding } from "../functions/_lib/types";
 import app from "./helpers/app";
@@ -23,6 +23,11 @@ const FLOW_PATHS = [
   ["speakerPresentation", `${EVENT_BASE_PATH}propose/presentation/`],
   ["inviteDecline", `${EVENT_BASE_PATH}invite/decline/`],
 ] as const;
+
+it.each(FLOW_PATHS)("classifies the %s page consistently for static publication", (flow, path) => {
+  expect(isPrivateEventFlowPath(path)).toBe(flow !== "registration" && flow !== "proposal");
+  expect(isPrivateEventFlowPath(path.replace("/2027/", "/"))).toBe(flow !== "registration" && flow !== "proposal");
+});
 
 function expectPrivateNoStoreHeaders(response: Response): void {
   expect(response.headers.get("cache-control")).toBe("no-store, max-age=0");

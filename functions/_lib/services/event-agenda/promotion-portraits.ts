@@ -1,15 +1,17 @@
+import { USER_HEADSHOT_PATH } from "../../../../assets/shared/headshot-variants";
+import { currentUserHeadshotResponse } from "../user-headshot";
 import type { Env } from "../../types";
 import { resolveHeroImageSource, fetchStaticAsset, uint8ToBase64 } from "../og-badge-hero-image";
 import { readBoundedStream } from "../../utils/bounded-stream";
 import { validateRasterImage } from "../../utils/image-format";
 import type { PromotionRenderData } from "./promotion-render";
-/** Approved frozen portraits only; bounded optional assets fall back to initials. */
+/** Resolve current profile portraits through their canonical service; optional images remain bounded. */
 export async function promotionPortraits(
   env: Env,
   origin: string,
   data: PromotionRenderData,
 ): Promise<Record<string, string>> {
-  const people = data.occurrence.history?.appearances ?? [];
+  const people = data.people ?? data.occurrence.history?.appearances ?? [];
   const output: Record<string, string> = {};
   for (let offset = 0; offset < people.length; offset += 4)
     await Promise.all(
@@ -19,9 +21,19 @@ export async function promotionPortraits(
         if (!source) return;
         try {
           const signal = AbortSignal.timeout(800);
-          const response = source.assetPath
-            ? await fetchStaticAsset(env, origin, source.assetPath, signal)
-            : await fetch(source.url, { signal, redirect: "manual" });
+          const headshot = USER_HEADSHOT_PATH.exec(new URL(source.url).pathname);
+          const response =
+            headshot && source.assetPath
+              ? await currentUserHeadshotResponse(
+                  env.DB,
+                  env,
+                  decodeURIComponent(headshot[1]!),
+                  decodeURIComponent(headshot[2]!),
+                  { width: "384", origin },
+                )
+              : source.assetPath
+                ? await fetchStaticAsset(env, origin, source.assetPath, signal)
+                : await fetch(source.url, { signal, redirect: "manual" });
           if (!response.ok || !response.body) return;
           const result = await readBoundedStream(response.body, 256 * 1024, "Portrait exceeds export byte budget");
           if (!result.ok) return;

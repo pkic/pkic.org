@@ -1,3 +1,4 @@
+import { personNamePatchSchema } from "../../shared/schemas/api-common";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { z } from "zod";
 import type { MemberJoinApplicantKind } from "../../shared/schemas/member-join";
@@ -8,7 +9,6 @@ import {
   eventProposalProofVerifySchema,
   eventProposalProofVerifyResponseSchema,
   eventProposalProofPersonPatchSchema,
-  eventProposalPersonNamePatchSchema,
   eventProposalIdentityJobTitlePatchSchema,
   eventProposalProofIdentityPatchSchema,
   eventProposalProofIdentityPatchResponseSchema,
@@ -17,6 +17,7 @@ import {
 import type { proposalCreateSchema } from "../../shared/schemas/proposal-management";
 import type { ProposalEntryContext } from "../../shared/schemas/proposal-entry";
 import type { ConsentItem } from "../../shared/schemas/registration";
+import type { identityAffiliationPreviewResponseSchema } from "../../shared/schemas/identity-affiliation";
 import { userAuthSessionResponseSchema } from "../../shared/schemas/user-auth";
 import { userDetailResponseSchema } from "../../shared/schemas/user-management";
 import { ApiClientError, getJson, patchJson, postJson } from "../shared/api-client";
@@ -29,7 +30,7 @@ export type VerifiedProposalEntry = {
 export type ParticipationPerson = z.infer<typeof eventProposalProofPersonSchema>;
 type Proposer = z.infer<typeof proposalCreateSchema>["proposer"];
 type NameDrafts = Pick<Proposer, "firstName" | "lastName">;
-type AffiliationDrafts = Pick<Proposer, "organizationName" | "jobTitle">;
+type AffiliationDrafts = Pick<Proposer, "organizationName" | "jobTitle" | "organizationContextToken">;
 export interface ProposalEntrySelection {
   authenticated: boolean;
   continuationToken?: string;
@@ -39,7 +40,16 @@ export interface ProposalEntrySelection {
   independentCapacity?: IndependentCapacityDisclosure;
   actingIdentityId: ActingIdentity["id"] | null | undefined;
   person: ParticipationPerson;
-  missingDetails: Pick<Proposer, "firstName" | "lastName" | "organizationName" | "jobTitle">;
+  missingDetails: NameDrafts & AffiliationDrafts;
+  prepareAffiliation?: () => Promise<AffiliationDrafts>;
+  validateAffiliation?: () => boolean;
+}
+
+/** Explicit submission prepares the same shared organization controller in every embedding. */
+export async function prepareProposalEntry(entry: ProposalEntrySelection): Promise<ProposalEntrySelection> {
+  return entry.prepareAffiliation
+    ? { ...entry, missingDetails: { ...entry.missingDetails, ...(await entry.prepareAffiliation()) } }
+    : entry;
 }
 
 /**
@@ -59,10 +69,12 @@ export function useProposalEntryIdentity(
   endpoint: string,
   speakerManagementToken?: string,
   expectedSpeakerUserId?: string | null,
-  saveNames?: (names: z.infer<typeof eventProposalPersonNamePatchSchema>) => Promise<ParticipationPerson>,
+  saveNames?: (names: z.infer<typeof personNamePatchSchema>) => Promise<ParticipationPerson>,
   startWithEmailProof = false,
   speakerProposalId?: string,
   initialProof?: VerifiedProposalEntry,
+  /** The address a speaker was invited at; their invitation link may already have proved it. */
+  invitedEmail = "",
 ) {
   // Email-first: a person takes part on behalf of their organization unless they explicitly choose otherwise.
   const [kind, setKindState] = useState<MemberJoinApplicantKind>("organization");
@@ -74,6 +86,8 @@ export function useProposalEntryIdentity(
   const [proofOwnerToken, setProofOwnerToken] = useState<string>();
   const [entryContext, setEntryContext] = useState<ProposalEntryContext>();
   const [selected, setSelected] = useState<ActingIdentity | null | undefined>();
+  const [affiliation, setAffiliation] = useState<z.infer<typeof identityAffiliationPreviewResponseSchema>>();
+  const [verificationToken, setVerificationToken] = useState<string>();
   /** Details for a new affiliation; they belong to the representation and go with it. */
   const [missingDetails, setMissingDetails] = useState<AffiliationDrafts>({});
   /**
@@ -89,7 +103,7 @@ export function useProposalEntryIdentity(
   const [error, setError] = useState<string>();
   /** A proved address that signs in to another account; nothing was linked. */
   const [signInEmail, setSignInEmail] = useState<string>();
-  const [email, setEmailState] = useState("");
+  const [email, setEmailState] = useState(invitedEmail);
   /** The terms a confirmed email already recorded: the flow does not ask for them again. */
   const [recordedConsents, setRecordedConsents] = useState<ConsentItem[]>();
   const initialized = useRef(false);
@@ -102,6 +116,8 @@ export function useProposalEntryIdentity(
     setSelected(undefined);
     setMissingDetails({});
     setContinuationToken(undefined);
+    setAffiliation(undefined);
+    setVerificationToken(undefined);
     setLoading(false);
   }
   function setKind(value: MemberJoinApplicantKind): void {
@@ -149,7 +165,12 @@ export function useProposalEntryIdentity(
   function complete(field: keyof ProposalEntrySelection["missingDetails"], value: string): void {
     if (field === "firstName" || field === "lastName") setNameDrafts((current) => ({ ...current, [field]: value }));
     else {
-      setMissingDetails((current) => ({ ...current, [field]: value }));
+      setMissingDetails((current) => {
+        const next = { ...current };
+        if (value === "") delete next[field];
+        else next[field] = value;
+        return next;
+      });
       setPerson((current) => (current ? { ...current, [field]: value } : null));
     }
   }
@@ -174,7 +195,7 @@ export function useProposalEntryIdentity(
     setSelected((current) => (current ? { ...current, jobTitle: result.jobTitle } : current));
     setPerson((current) => (current ? { ...current, jobTitle: result.jobTitle } : current));
   }
-  async function savePersonalDetails(names: z.infer<typeof eventProposalPersonNamePatchSchema>): Promise<void> {
+  async function savePersonalDetails(names: z.infer<typeof personNamePatchSchema>): Promise<void> {
     const currentGeneration = generation.current;
     const savedPerson = saveNames
       ? await saveNames(names)
@@ -252,6 +273,8 @@ export function useProposalEntryIdentity(
         resolved.jobTitle = result.organization.jobTitle;
       }
       proofAttempt.current = { scope: proofScope, token, state: "verified" };
+      // A confirmed address answers whatever went wrong before it.
+      setError(undefined);
       setKindState(result.applicantKind);
       setEmailState(result.email);
       setPerson(resolved);
@@ -263,6 +286,8 @@ export function useProposalEntryIdentity(
       setEntryContext(result.entryContext);
       setRecordedConsents(result.consents);
       setSelected(result.applicantKind === "individual" ? null : undefined);
+      setAffiliation(result.affiliation);
+      setVerificationToken(token);
       if (!speakerManagementToken && !speakerProposalId)
         history.replaceState({}, "", `${location.pathname}${location.search}`);
     } catch (caught) {
@@ -406,6 +431,8 @@ export function useProposalEntryIdentity(
     entryContext,
     recordedConsents,
     selected,
+    affiliation,
+    verificationToken,
     choose,
     email,
     setEmail,

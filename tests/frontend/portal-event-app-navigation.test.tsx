@@ -77,13 +77,25 @@ describe("event app tab selection", () => {
   it("gives a registered attendee My agenda and Ticket, and keeps everything else under More", () => {
     const { tabs, more } = navigation(registeredParticipant);
     expect(labels(tabs)).toEqual(["Home", "Agenda", "My agenda", "Ticket"]);
-    expect(ids(more)).toEqual(["registration", "virtual", "calendar", "venue", "event-page"]);
+    expect(ids(more)).toEqual(["registration", "virtual", "calendar", "promotion", "venue", "event-page"]);
     expect(more.find((item) => item.id === "virtual")?.href).toBe("#/events/summit/virtual");
     expect(more.find((item) => item.id === "registration")?.href).toBe(
       `#/events/summit/registrations/${participantRegistrationId}`,
     );
     expect(more.find((item) => item.id === "calendar")?.href).toBe("#/events/summit/agenda?mine=1&view=calendar");
   });
+
+  it.each(["pending_email_confirmation", "cancelled"] as const)(
+    "does not offer personal promotion for a %s registration",
+    (registrationStatus) => {
+      const { more } = navigation({
+        ...registeredParticipant,
+        viewer: { ...registeredParticipant.viewer, registrationStatus },
+        participation: { ...registeredParticipant.participation, registrationStatus },
+      });
+      expect(ids(more)).not.toContain("promotion");
+    },
+  );
 
   it("gives a registered attendee a Scan tab for check-in only while the event runs", () => {
     const running = {
@@ -94,7 +106,7 @@ describe("event app tab selection", () => {
     expect(labels(tabs)).toEqual(["Home", "Agenda", "Scan", "Ticket"]);
     expect(tabs.find((tab) => tab.id === "check-in")?.href).toBe("#/events/summit/check-in");
     expect(ids(more)).toContain("agenda");
-    expect(labels(navigation(running).tabs)).toEqual(["Home", "Agenda", "My agenda"]);
+    expect(labels(navigation(running).tabs)).toEqual(["Home", "Agenda"]);
     // Someone joining online has no code to scan.
     const online = { ...registeredParticipant.viewer, attendanceType: "virtual" };
     expect(labels(navigation({ ...registeredParticipant, ...running, viewer: online }).tabs)).toEqual([
@@ -107,9 +119,9 @@ describe("event app tab selection", () => {
 
   it("gives a reader without a registration no Ticket tab", () => {
     const { tabs, more } = navigation({ city: null, country: null });
-    expect(labels(tabs)).toEqual(["Home", "Agenda", "My agenda"]);
+    expect(labels(tabs)).toEqual(["Home", "Agenda"]);
     // Nothing about the venue to show, so no venue tile either.
-    expect(ids(more)).toEqual(["calendar", "event-page"]);
+    expect(ids(more)).toEqual(["event-page"]);
   });
 
   it("puts the lead scanner on a sponsor representative's bar and moves My agenda to More", () => {
@@ -130,8 +142,8 @@ describe("event app tab selection", () => {
         sponsors: [...sponsorDiscovery.sponsors, { id: otherSponsorId, name: "Second" }],
       },
     });
-    // Unregistered: My agenda takes the slot the ticket would have had.
-    expect(labels(tabs)).toEqual(["Home", "Agenda", "Leads", "My agenda"]);
+    // Personal agenda and calendar tools require a confirmed event registration.
+    expect(labels(tabs)).toEqual(["Home", "Agenda", "Leads"]);
     expect(tabs.find((tab) => tab.id === "lead-scanner")?.href).toBe("#/events/summit/lead-scanner");
   });
 
@@ -151,7 +163,7 @@ describe("event app tab selection", () => {
   it("offers no scanner from discovery alone or from another event's grant", () => {
     authority([{ ...badgeGrant, contextId: groupId }]);
     const { tabs, more } = navigation({ scannerAccess: { ...sponsorDiscovery, canScan: true } });
-    expect(labels(tabs)).toEqual(["Home", "Agenda", "My agenda"]);
+    expect(labels(tabs)).toEqual(["Home", "Agenda"]);
     expect(ids(more)).not.toContain("scanner");
     expect(ids(more)).not.toContain("lead-scanner");
   });
@@ -209,6 +221,7 @@ describe("event app More sheet", () => {
       "Registration",
       "Virtual room",
       "Calendar and reminders",
+      "Share",
       "Venue & links",
       "Event website",
     ]);

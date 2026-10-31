@@ -313,7 +313,7 @@ test("the private portal checks its session and opens the existing sign-in form"
   await expect(page.getByRole("heading", { name: "Member portal", exact: true })).toHaveCount(0);
   const emailOption = page.getByRole("button", { name: "Sign in with an email link", exact: true });
   if (await emailOption.isVisible()) await emailOption.click();
-  await page.getByRole("textbox", { name: "Work email" }).fill("synthetic@example.test");
+  await page.getByRole("textbox", { name: "Email" }).fill("synthetic@example.test");
   await page.getByRole("button", { name: /Send.*link/i }).click();
   await expect(page.getByText("Check your email", { exact: true })).toBeVisible();
   expect(submittedEmail).toBe("synthetic@example.test");
@@ -533,7 +533,7 @@ test("PQC registration uses published configuration and a warning card without A
     await route.abort();
   });
   await page.goto("/events/2026/pqc-conference-amsterdam-nl/register/");
-  const warning = page.getByText("In-person registration is currently full.").locator("xpath=ancestor::blockquote[1]");
+  const warning = page.locator("blockquote").filter({ hasText: "In-person registration is currently full." });
   await expect(warning).toBeVisible();
   expect(await warning.evaluate((element) => getComputedStyle(element).borderRadius)).not.toBe("0px");
   await expect(page.getByText("Could not load registration form details. Reload this page to try again.")).toHaveCount(

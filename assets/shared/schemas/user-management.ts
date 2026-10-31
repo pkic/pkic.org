@@ -1,3 +1,4 @@
+import { firstNameSchema, lastNameSchema } from "./api-common";
 /**
  * GET /api/v1/users — query/response contract (P6M-P2-08: the route
  * previously predated chanfana/OpenAPIRoute for this endpoint and parsed its
@@ -20,8 +21,8 @@ export const userUpdateSchema = z
   .object({
     active: z.boolean().optional(),
     email: z.string().trim().toLowerCase().email().optional(),
-    firstName: z.string().trim().max(80).nullable().optional(),
-    lastName: z.string().trim().max(120).nullable().optional(),
+    firstName: firstNameSchema.nullable().optional(),
+    lastName: lastNameSchema.nullable().optional(),
     preferredName: z.string().trim().max(80).nullable().optional(),
   })
   .strict()

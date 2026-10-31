@@ -93,7 +93,7 @@ function ReviewDetail({ reviewId, onDecided }: { reviewId: string; onDecided: ()
       // by the time focus returns to the form.
       const checked = form.submit();
       if (!checked.data) {
-        setError(checked.message);
+        setError(checked.formMessage);
         return;
       }
       body = checked.data;

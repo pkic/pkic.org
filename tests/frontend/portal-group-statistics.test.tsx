@@ -211,15 +211,14 @@ describe("portal group statistics", () => {
     expect(message?.getAttribute("role")).toBe("alert");
     expect(message?.textContent).toContain("to must be later than from");
     expect(controlFor(container, "From").getAttribute("aria-invalid")).toBeNull();
-    // The refused control takes focus, and the form says the window was not
-    // applied.
+    // The refused control takes focus; the field says why, so the form does
+    // not repeat it in an alert.
     expect(document.activeElement).toBe(to);
-    expect(container.querySelector(".pk-alert--danger")?.textContent).toContain("Please correct");
+    expect(container.querySelector(".pk-alert--danger")).toBeNull();
     // The rejected window never reached the server.
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
-    // Corrected: the boundary says it is good now, the form-level message
-    // goes, and the window is applied.
+    // Corrected: the boundary says it is good now and the window is applied.
     await typeInto(to, "2026-08-27");
     expect(to.closest(".pk-field")?.classList.contains("pk-field--ok")).toBe(true);
     await submitForm(container);

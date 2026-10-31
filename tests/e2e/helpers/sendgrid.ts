@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { expect } from "@playwright/test";
 import type { CapturedEmail } from "../global-setup";
 
 const SENDGRID_URL_FILE = process.env.E2E_SENDGRID_URL_FILE ?? "test-results/e2e-sendgrid-url";
@@ -17,22 +18,29 @@ export async function waitForCapturedEmail(
   subjectFragment: string,
   options: { timeoutMs?: number; since?: number } = {},
 ): Promise<CapturedEmail> {
-  const deadline = Date.now() + (options.timeoutMs ?? 15_000);
   const since = options.since ?? 0;
-  let emails: CapturedEmail[] = [];
-  while (Date.now() < deadline) {
-    const response = await fetch(`${sendgridServer()}/outbox`);
-    emails = (await response.json()) as CapturedEmail[];
-    for (let index = emails.length - 1; index >= since; index -= 1) {
-      const email = emails[index];
-      if (email.to === to && email.subject.toLowerCase().includes(subjectFragment.toLowerCase())) return email;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 300));
-  }
-  throw new Error(
-    `No email to <${to}> with subject containing "${subjectFragment}" was captured; ` +
-      `outbox has ${emails.length} message(s), searching from ${since}.`,
-  );
+  let found: CapturedEmail | undefined;
+  let captured = 0;
+  await expect
+    .poll(
+      async () => {
+        const response = await fetch(`${sendgridServer()}/outbox`);
+        const emails = (await response.json()) as CapturedEmail[];
+        captured = emails.length;
+        found = emails
+          .slice(since)
+          .reverse()
+          .find((email) => email.to === to && email.subject.toLowerCase().includes(subjectFragment.toLowerCase()));
+        return Boolean(found);
+      },
+      {
+        timeout: options.timeoutMs ?? 15_000,
+        intervals: [300],
+        message: `No email to <${to}> with subject containing "${subjectFragment}" was captured; the outbox had ${captured} message(s), searching from ${since}.`,
+      },
+    )
+    .toBe(true);
+  return found!;
 }
 
 export function extractEmailUrl(email: CapturedEmail, urlSubstring: string): string {

@@ -95,7 +95,7 @@ export function AgendaBulkSchedule({
             event.preventDefault();
             const checked = form.submit();
             if (checked.data) onProposal(checked.data);
-            else setError(checked.message);
+            else setError(checked.formMessage ?? "");
           }}
         >
           <Field label="Bulk change">

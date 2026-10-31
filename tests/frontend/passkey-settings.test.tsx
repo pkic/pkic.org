@@ -1,6 +1,7 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { runRowAction } from "./helpers/row-actions";
 import { passkeyRegisterCompleteSchema } from "../../assets/shared/schemas/passkeys";
 
 const startRegistration = vi.fn();
@@ -78,4 +79,43 @@ it.each([
 
   expect(completed).toHaveLength(1);
   expect(container.querySelector('[role="alert"]')).toBeNull();
+});
+
+it("states what remains to sign in with when removing the last passkey, in one confirmation", async () => {
+  const passkey = {
+    id: "22222222-2222-4222-8222-222222222222",
+    deviceName: "Laptop",
+    aaguid: null,
+    lastUsedAt: null,
+    createdAt: "2026-09-29T00:00:00.000Z",
+  };
+  const requests: string[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: string, init?: RequestInit) => {
+      requests.push(`${init?.method ?? "GET"} ${input}`);
+      return init?.method === "DELETE" ? Response.json({ success: true }) : Response.json({ passkeys: [passkey] });
+    }),
+  );
+  const { ConfirmDialogHost } = await import("../../assets/ts/components/ConfirmDialog");
+  const host = document.createElement("div");
+  document.body.append(host);
+  await act(async () => render(<ConfirmDialogHost />, host));
+  await act(async () => render(<PasskeySettings toastTargetId="test-toasts" />, container));
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  await runRowAction(container, "Laptop", "Remove");
+  const dialog = [...document.querySelectorAll("dialog, [role='dialog']")].find((candidate) =>
+    candidate.textContent?.includes("Remove passkey"),
+  );
+  expect(dialog?.textContent).toContain("only passkey");
+  expect(dialog?.textContent).toContain("email link");
+  await act(async () => {
+    [...dialog!.querySelectorAll("button")].find((button) => button.textContent === "Remove passkey")?.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  expect(requests.filter((entry) => entry.startsWith("DELETE"))).toHaveLength(1);
+  await act(async () => render(null, host));
+  host.remove();
 });

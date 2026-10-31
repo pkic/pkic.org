@@ -11,12 +11,19 @@ import { z } from "zod";
 import { actingIdentitySchema } from "./schemas/identity";
 
 /** One identity a session may act as: an organization affiliation or the individual capacity. */
-export const sessionActingIdentitySchema = actingIdentitySchema.pick({
-  id: true,
-  organizationId: true,
-  organizationName: true,
-  jobTitle: true,
-});
+export const sessionActingIdentitySchema = actingIdentitySchema
+  .pick({
+    id: true,
+    organizationId: true,
+    organizationName: true,
+    jobTitle: true,
+  })
+  .extend({
+    /** The membership this identity holds, so a person choosing how to take part can see whether it includes one. */
+    membershipCategory: actingIdentitySchema.shape.membershipCategory.default(null),
+    /** The name of that membership category, as the consortium words it. */
+    membershipLabel: z.string().min(1).nullable().default(null),
+  });
 export type SessionActingIdentity = z.infer<typeof sessionActingIdentitySchema>;
 
 /**

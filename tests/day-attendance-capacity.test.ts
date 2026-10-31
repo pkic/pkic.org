@@ -17,10 +17,44 @@ import { buildCreateRegistration } from "../functions/_lib/services/registration
 import { promoteEventWaitlistWithNotifications } from "../functions/_lib/services/registrations/waitlist-promotions";
 import { profileD1Flow } from "./helpers/d1-flow-profile";
 import { gateNextBatch } from "./helpers/d1-batch-gate";
+import { eventDayReadModels } from "../functions/_lib/services/event-read-models";
+import type { EventDayRecord } from "../functions/_lib/services/event-days";
+import { resolveAttendanceOptions } from "../functions/_lib/services/event-days";
 
 describe("day attendance capacity", () => {
   beforeEach(async () => {
     await resetDb();
+  });
+  it("retains the legacy default for an empty configuration while honoring an explicitly disabled definition", () => {
+    const legacy = resolveAttendanceOptions({ attendance_options_json: "[]", in_person_capacity: 25 });
+    expect(legacy.map((option) => option.value)).toEqual(["in_person", "virtual", "on_demand"]);
+    expect(legacy[0].capacity).toBe(25);
+    expect(
+      resolveAttendanceOptions({
+        attendance_options_json: JSON.stringify([{ value: "virtual", label: "Virtual", enabled: false }]),
+        in_person_capacity: null,
+      }),
+    ).toEqual([]);
+  });
+  it.each([
+    [999, 1],
+    [1000, 0],
+    [1001, 0],
+  ])("keeps a remaining place distinguishable from full at %s reservations", (registered, percent) => {
+    const day: EventDayRecord = {
+      id: "tiny-remainder-day",
+      event_id: "synthetic-event",
+      day_date: "2027-09-01",
+      label: "Day one",
+      starts_at: null,
+      ends_at: null,
+      in_person_capacity: 1000,
+      sort_order: 0,
+      capacity_revision: 0,
+      attendance_options_json: JSON.stringify([{ value: "in_person", label: "In person", capacity: 1000 }]),
+    };
+    const days = eventDayReadModels([day], new Map([[day.id, new Map([["in_person", registered]])]]));
+    expect(days[0].attendanceOptions[0].spotsRemainingPercent).toBe(percent);
   });
   it("waitlists only the full day instead of rejecting registration", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);

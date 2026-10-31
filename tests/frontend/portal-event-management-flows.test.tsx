@@ -4,7 +4,11 @@ import type { ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, GROUP_ID, json, mount, responseEvent, settle } from "./helpers/event-management";
-import { groupEventCreateSchema, groupEventSettingsUpdateSchema } from "../../assets/shared/schemas/group-events";
+import {
+  groupEventCreateSchema,
+  groupEventSettingsUpdateSchema,
+  groupEventDaysReplaceSchema,
+} from "../../assets/shared/schemas/group-events";
 import { GroupEventEditor } from "../../assets/ts/member-flows/portal/sections/management/GroupEventEditor";
 import { GroupEventWorkspace } from "../../assets/ts/member-flows/portal/sections/management/GroupEventWorkspace";
 import { controlFor, submitForm, typeInto } from "./helpers/labeled-control";
@@ -226,17 +230,21 @@ describe("portal event management flows", () => {
     );
     await settle();
     await beginRecordEdit(days, "Attendance days actions", "Edit attendance days");
+    await act(() =>
+      Array.from(days.querySelectorAll<HTMLButtonElement>("button"))
+        .find((button) => button.textContent?.trim() === "Add day")!
+        .click(),
+    );
+    await typeInto(controlFor(days, "Date"), "2027-09-01");
     const saveDays = Array.from(days.querySelectorAll<HTMLButtonElement>("button")).find(
       (button) => button.textContent === "Save days",
     )!;
     await act(async () => saveDays.click());
     await settle();
-    expect(requests.find(({ pathname, method }) => pathname.endsWith("/days") && method === "PUT")).toMatchObject({
-      body: {
-        expectedUpdatedAt: "2026-08-01T00:00:01.000Z",
-        configuration: { days: [] },
-      },
-    });
+    const daysRequest = requests.find(({ pathname, method }) => pathname.endsWith("/days") && method === "PUT");
+    const daysBody = groupEventDaysReplaceSchema.parse(daysRequest?.body);
+    expect(daysBody.expectedUpdatedAt).toBe("2026-08-01T00:00:01.000Z");
+    expect(daysBody.configuration.days).toEqual([{ date: "2027-09-01", sortOrder: 0, attendanceOptions: [] }]);
 
     // The event's facts are edited where they are read: Edit is the details
     // panel's own command, and the panel's heading becomes "Edit event" so the

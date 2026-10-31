@@ -129,7 +129,7 @@ describe("event proposal mailbox proof", () => {
     expect(response.status, await response.clone().text()).toBe(200);
   });
 
-  it("requires mailbox proof before known-person reuse and rejects unverified secondary reservations", async () => {
+  it("requires mailbox proof and does not reuse an unverified secondary claim", async () => {
     await seedEventAndAdmin(env.DB);
     const userId = await insertUser(env.DB, "known@official.example");
     await env.DB.prepare("UPDATE users SET first_name='Known',last_name='Person' WHERE id=?").bind(userId).run();
@@ -155,7 +155,14 @@ describe("event proposal mailbox proof", () => {
     const token = await start("reserved@official.example");
     const response = await request("/proof/verify", { token });
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ status: "support_required" });
+    expect(eventProposalProofVerifyResponseSchema.parse(await response.json())).toMatchObject({
+      status: "ready",
+      person: null,
+      email: "reserved@official.example",
+    });
+    expect(await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email='reserved@official.example'")).toEqual(
+      [],
+    );
     expect(await queryAll(env.DB, "SELECT id FROM session_proposals")).toHaveLength(0);
   });
 

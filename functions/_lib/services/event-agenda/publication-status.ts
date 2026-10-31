@@ -56,6 +56,6 @@ const publishedMatches = publicationConditionsSql([
   roomOrderMatches,
   additionalRoomsMatch,
   `json_extract(approved.payload_json,'$.history') IS (SELECT metadata_json FROM event_agenda_session_history WHERE occurrence_id=${draft}.id)`,
-  `json_extract(approved.payload_json,'$.promotionCopy') IS (SELECT copy_json FROM event_agenda_promotion_copy WHERE occurrence_id=${draft}.id)`,
+  `json_extract(approved.payload_json,'$.promotionCopy') IS ${draft}.promotion_copy_json`,
 ]);
 export const agendaPublicationStatusSql = `CASE WHEN NOT EXISTS(${currentProjection}) THEN 'unpublished' WHEN EXISTS(${currentProjection} AND ${publishedMatches}) THEN 'published' ELSE 'changed' END`;

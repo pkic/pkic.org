@@ -1,3 +1,4 @@
+import { personProfileSlugBase } from "../assets/shared/schemas/public-page-slug";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
@@ -65,6 +66,28 @@ const profileLinks = (agenda: Awaited<ReturnType<typeof previewAgenda>>) =>
     .sort();
 
 describe("speaker profile publication", () => {
+  it("resolves long approved-name collisions without exceeding D1 pattern limits", async () => {
+    const { eventId, admin } = await seedEventAndAdmin(env.DB);
+    await seedSpeaker("long-speaker-a");
+    await seedSpeaker("long-speaker-b");
+    const name = "Alexandra Catherine van Example-Rivera certificate lifecycle and migration engineering";
+    await approveSessions(eventId, admin.id, 0, [
+      { userId: "long-speaker-a", displayName: name, approvedAt: "2026-10-01T00:00:00.000Z" },
+    ]);
+    const current = await env.DB.prepare("SELECT revision FROM event_agenda_state WHERE event_id=?")
+      .bind(eventId)
+      .first<{ revision: number }>();
+    await approveSessions(eventId, admin.id, current!.revision, [
+      { userId: "long-speaker-b", displayName: name, approvedAt: "2026-10-02T00:00:00.000Z" },
+    ]);
+    const rows = await env.DB.prepare(
+      "SELECT slug FROM person_profile_slugs WHERE user_id IN('long-speaker-a','long-speaker-b') ORDER BY slug",
+    ).all<{ slug: string }>();
+    expect(rows.results.map((row) => row.slug)).toEqual([
+      personProfileSlugBase(name),
+      `${personProfileSlugBase(name)}-2`,
+    ]);
+  });
   it("links a profile only where the build renders it, following the event's live visibility", async () => {
     const { eventId, admin } = await seedEventAndAdmin(env.DB);
     await seedSpeaker("speaker-a");

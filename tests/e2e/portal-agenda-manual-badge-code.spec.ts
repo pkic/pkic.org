@@ -26,7 +26,8 @@ import { eventManagementDetailResponseSchema } from "../../assets/shared/schemas
 import { registrationManageReadResponseSchema } from "../../assets/shared/schemas/registration";
 import { prepareScannerTermination } from "./helpers/scanner-browser-termination";
 import { scannerStorage, openScannerDiagnostics, openScannerManualEntry } from "./helpers/scanner-recovery-storage";
-import { captureDeviceConsole, expectNoStoredSponsorContacts } from "./helpers/sponsor-live-fixture";
+import { expectNoStoredSponsorContacts } from "./helpers/sponsor-live-fixture";
+import { captureDeviceConsole } from "./helpers/device-console";
 
 test.use({ actionTimeout: 20_000 });
 
@@ -246,7 +247,7 @@ test("the protected printed short code works through manual offline capture and 
     });
     const queuedPrivacy = await expectNoStoredSponsorContacts(page, fixture.forbidden, await readConsole());
     await page.reload();
-    await expect(page.getByRole("heading", { name: "Badge scanner", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Scanner setup", exact: true })).toBeVisible();
     await expect(page.getByText("Offline · unverified until synced", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Sync now", exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Export sponsor leads", exact: true })).toHaveCount(0);
@@ -255,9 +256,16 @@ test("the protected printed short code works through manual offline capture and 
     await page.getByRole("textbox", { name: "Badge code", exact: true }).fill(fixture.eligibleBadgeId);
     await page.getByRole("button", { name: "Record attendance", exact: true }).click();
     await expect(page.getByText("Enter all 16 characters of the badge code.", { exact: true })).toBeVisible();
+    // The field says why at once; the refusal is audited after, in the same ledger as a failure, never as a scan.
+    await expect.poll(async () => (await scannerStorage(page)).failures.length).toBe(1);
     const afterReference = await scannerStorage(page);
     expect(afterReference.pending).toHaveLength(1);
     expect(afterReference.pending[0]!.scan).toEqual(queued);
+    expect(afterReference.failures).toHaveLength(1);
+    expect(afterReference.failures[0]!.scan).toMatchObject({
+      reason: "malformed_credential",
+      scannerSession: { epochId: manifest.epochId, sequence: 2 },
+    });
     expect(afterReference.history).toHaveLength(0);
     await page
       .getByRole("textbox", { name: "Badge code", exact: true })
@@ -274,7 +282,7 @@ test("the protected printed short code works through manual offline capture and 
       occurrenceId: queued.occurrenceId,
       action: "attendance",
       capturePublicationRevision: queued.capturePublicationRevision,
-      scannerSession: { epochId: manifest.epochId, sequence: 2 },
+      scannerSession: { epochId: manifest.epochId, sequence: 3 },
     });
     expect(
       (await scannerStorage(page)).pending.find((row) => row.scan.operationId === queued.operationId)?.scan,
@@ -326,8 +334,11 @@ test("the protected printed short code works through manual offline capture and 
         outcome: "eligible",
       });
     await expect.poll(async () => (await scannerStorage(page)).pending.length).toBe(0);
+    await expect.poll(async () => (await scannerStorage(page)).failures.length).toBe(0);
     const reconciled = await scannerStorage(page);
-    expect(reconciled.history).toHaveLength(2);
+    expect(reconciled.history.filter((row) => row.kind === "scan")).toHaveLength(2);
+    // The audited refusal is acknowledged and archived beside the two scans.
+    expect(reconciled.history.filter((row) => row.kind === "failure")).toHaveLength(1);
     for (const [index, original] of originals.entries()) {
       expect(reconciled.history.filter((row) => row.scan.operationId === original.operationId)).toHaveLength(1);
       expect(reconciled.history.find((row) => row.scan.operationId === original.operationId)).toMatchObject({

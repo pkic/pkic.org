@@ -134,6 +134,11 @@ describe("one D1 round trip includes JWT context and event data", () => {
       await env.DB.prepare("UPDATE events SET visibility='public', settings_json=? WHERE id=?")
         .bind(JSON.stringify({ internal: "never-audience", virtualUrl: "https://private.test" }), f.eventId)
         .run();
+      await env.DB.prepare(
+        "INSERT INTO referral_codes(code,event_id,owner_type,owner_id,created_at) SELECT 'ownshare',event_id,'registration',id,created_at FROM registrations WHERE event_id=? AND user_id=?",
+      )
+        .bind(f.eventId, f.userId)
+        .run();
       const token =
         capacity === "anonymous"
           ? null
@@ -149,6 +154,8 @@ describe("one D1 round trip includes JWT context and event data", () => {
       );
       expect(response.status).toBe(200);
       const event = eventDetailResponseSchema.parse(await response.json()).event;
+      if (capacity === "attendee") expect(event.participation?.promotion).toMatchObject({ sharePath: "/r/ownshare" });
+      else expect(event.participation?.promotion ?? null).toBeNull();
       expect("capabilities" in event).toBe(capacity === "management");
       if (capacity !== "management") expect(JSON.stringify(event)).not.toMatch(/never-audience|private.test/);
       expect(profile.summary().roundTrips).toBe(1);

@@ -22,6 +22,14 @@ export const emailOutboxStatusSchema = z.enum([
 ]);
 
 /**
+ * What a request that sends one message right away can truthfully report:
+ * the provider accepted it (`sent`), or it is not out yet and stays in the
+ * outbox, which retries it on its own schedule (`delayed`).
+ */
+export const immediateEmailDeliverySchema = z.enum(["sent", "delayed"]);
+export type ImmediateEmailDelivery = z.infer<typeof immediateEmailDeliverySchema>;
+
+/**
  * The template key recorded for an outbox row that carries its own message.
  *
  * A row keyed this way resolves no stored template: its own subject and the

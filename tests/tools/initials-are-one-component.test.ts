@@ -26,7 +26,7 @@ const OWNERS = new Set([
 ]);
 
 /** The one module answering "what letters stand in for this picture". */
-const CANONICAL = "assets/ts/shared/initials.ts";
+const CANONICAL = "assets/shared/initials.ts";
 
 function sourceFiles(dir: string, extensions: string[]): string[] {
   const found: string[] = [];

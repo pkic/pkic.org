@@ -74,7 +74,11 @@ test("publishes accessible event sponsor branding without visitor API or JavaScr
       expect(await image.evaluate((element: HTMLImageElement) => element.naturalWidth)).toBeGreaterThan(0);
       const tier = publicPage.locator(".sponsors-tier").filter({ has: image });
       await expect(tier.locator(".sponsor-level")).toHaveText(group.tierName);
-      await expect(tier.getByRole("link", { name: label, exact: true })).toHaveAttribute("href", sponsor.website!);
+      // An external link announces that it opens a new tab.
+      await expect(tier.getByRole("link", { name: `${label} (opens in a new tab)`, exact: true })).toHaveAttribute(
+        "href",
+        sponsor.website!,
+      );
     }
     await expect(publicPage.getByRole("button", { name: "Load more sponsors", exact: true })).toHaveCount(0);
     expect(visitorApiRequests).toEqual([]);

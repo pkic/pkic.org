@@ -15,6 +15,8 @@ import { prepareVerifiedOrganizationAffiliation } from "./identities";
 import { prepareEventProposalProofRedemption } from "./event-proposal-proof-redemption";
 import { assertEventProposalEntry } from "./event-proposal-proof-entry";
 import type { InviteRecord } from "./invites";
+import { readEventAffiliationContext } from "./identities/event-affiliation-context";
+import { planVerifiedAffiliation } from "./identities/verified-affiliation-plan";
 
 type Input = z.infer<typeof proposalCreateSchema>;
 
@@ -111,20 +113,47 @@ export async function prepareProposalSubmitter(
           jobTitleField: "proposer.jobTitle",
         });
       } else {
-        const affiliation = await prepareVerifiedOrganizationAffiliation(db, {
-          userId: user.id,
-          normalizedEmail: person.normalizedEmail,
-          emailId: person.emailId,
-          // The identity step's organization and title create this affiliation; nothing else stores them.
-          organizationName: input.body.proposer.organizationName || undefined,
-          at: input.at,
-          proofEvidence: person.proofEvidence,
-          profile: {
-            jobTitle: input.body.proposer.jobTitle || null,
-            biography: profile.bio,
-            linksJson: serializeLinks(profile.links),
-          },
-        });
+        const observed = input.body.proposer.organizationContextToken
+          ? await readEventAffiliationContext(
+              input.signingSecret,
+              input.body.proposer.organizationContextToken,
+              input.eventId,
+              person.normalizedEmail,
+              "proposal-affiliation",
+              {
+                name: input.body.proposer.organizationName ?? "",
+                jobTitle: input.body.proposer.jobTitle ?? "",
+              },
+            )
+          : null;
+        const affiliation = observed
+          ? await planVerifiedAffiliation(
+              db,
+              {
+                userId: user.id,
+                proofEvidence: person.proofEvidence,
+                profile: { biography: profile.bio, linksJson: serializeLinks(profile.links) },
+              },
+              // A mailbox the person has not proved before is recorded in this same batch, so the
+              // address the token observed has no row yet; the proof's own address is the owned one.
+              { ...observed.input, emailId: person.emailId },
+              observed.basis,
+              input.at,
+            )
+          : await prepareVerifiedOrganizationAffiliation(db, {
+              userId: user.id,
+              normalizedEmail: person.normalizedEmail,
+              emailId: person.emailId,
+              // The identity step's organization and title create this affiliation; nothing else stores them.
+              organizationName: input.body.proposer.organizationName || undefined,
+              at: input.at,
+              proofEvidence: person.proofEvidence,
+              profile: {
+                jobTitle: input.body.proposer.jobTitle || null,
+                biography: profile.bio,
+                linksJson: serializeLinks(profile.links),
+              },
+            });
         statements.push(...affiliation.statements);
         identity = {
           identityId: affiliation.identityId,

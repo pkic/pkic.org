@@ -13,9 +13,12 @@
 import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import type { CapturedEmail } from "./global-setup";
-import type { Page } from "@playwright/test";
+import type { BrowserContext, Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
+import { waitForCapturedEmail } from "./helpers/sendgrid";
+import { declinePasskeyOffer } from "./helpers/portal-auth";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
+import { endEventSponsor } from "./helpers/event-sponsor";
 
 const SENDGRID_URL_FILE = process.env.E2E_SENDGRID_URL_FILE ?? "test-results/e2e-sendgrid-url";
 const EVENT_SLUG = "pqc-conference-amsterdam-nl";
@@ -27,30 +30,6 @@ function sendgridServer(): string {
 async function readOutbox(): Promise<CapturedEmail[]> {
   const response = await fetch(`${sendgridServer()}/outbox`);
   return (await response.json()) as CapturedEmail[];
-}
-
-async function waitForEmail(
-  to: string,
-  subjectFragment: string,
-  timeoutMs = 15_000,
-  afterIndex = 0,
-): Promise<CapturedEmail> {
-  const deadline = Date.now() + timeoutMs;
-  let lastEmails: CapturedEmail[] = [];
-  while (Date.now() < deadline) {
-    lastEmails = await readOutbox();
-    for (let i = lastEmails.length - 1; i >= afterIndex; i--) {
-      const e = lastEmails[i];
-      if (e.to === to && e.subject.toLowerCase().includes(subjectFragment.toLowerCase())) {
-        return e;
-      }
-    }
-    await new Promise((r) => setTimeout(r, 300));
-  }
-  throw new Error(
-    `No email to <${to}> with subject containing "${subjectFragment}" within ${timeoutMs}ms. ` +
-      `Outbox has ${lastEmails.length} email(s).`,
-  );
 }
 
 function extractUrlFromEmail(email: CapturedEmail, urlSubstring: string): string {
@@ -69,6 +48,23 @@ async function signInAsAdmin(page: Page): Promise<void> {
 }
 
 test.describe("portal sponsor workspace", () => {
+  /** The sponsorship this test activated, and the staff session that may end it. */
+  let activeSponsorship: { id: string; staff: Awaited<ReturnType<BrowserContext["storageState"]>> } | undefined;
+
+  test.afterEach(async ({ browser }, info) => {
+    if (!activeSponsorship) return;
+    const staffContext = await browser.newContext({
+      baseURL: info.project.use.baseURL,
+      storageState: activeSponsorship.staff,
+    });
+    try {
+      await endEventSponsor(await staffContext.newPage(), activeSponsorship.id);
+    } finally {
+      activeSponsorship = undefined;
+      await staffContext.close();
+    }
+  });
+
   test("magic-link access, attendee list + CSV export, sign out, and slug-based link re-request", async ({ page }) => {
     const stamp = Date.now();
     const contactEmail = `sponsor-e2e-${stamp}@example.test`;
@@ -118,11 +114,12 @@ test.describe("portal sponsor workspace", () => {
           credentials: "same-origin",
           body: JSON.stringify({ toStage: "active" }),
         });
-        return { createStatus: createRes.status, stageStatus: stageRes.status };
+        return { id: created.sponsorship.id, createStatus: createRes.status, stageStatus: stageRes.status };
       },
       { eventId: event.id, contactEmail, renewalDate },
     );
     expect(sponsorship.createStatus).toBe(201);
+    activeSponsorship = { id: sponsorship.id, staff: await page.context().storageState() };
     expect(sponsorship.stageStatus).toBe(200);
 
     // ── Register a consenting attendee via the real public registration API ─
@@ -136,14 +133,11 @@ test.describe("portal sponsor workspace", () => {
             lastName: "Attendee",
             email: attendeeEmail,
             attendanceType: "virtual",
-            // organization_name/job_title/country are this event's own
-            // required custom registration fields (seeded via
-            // scripts/seed-event.yaml's "pqc-2026-registration" form) — the
-            // first two are also promoted onto the user profile by the
-            // registration service (see registrations.ts's
-            // profileFromCustom), which is what the sponsor workspace's
-            // attendee list actually reads.
-            customAnswers: { organization_name: "Attendee Org", job_title: "Engineer", country: "NL" },
+            // country is this event's own required custom registration field
+            // (seeded via scripts/seed-event.yaml's "pqc-2026-registration"
+            // form). Organization and job title are not form answers: they
+            // come from the person's identity.
+            customAnswers: { country: "NL" },
             consents: [
               { termKey: "privacy-policy", version: "v1" },
               { termKey: "code-of-conduct", version: "v1" },
@@ -164,7 +158,7 @@ test.describe("portal sponsor workspace", () => {
     // attendee would receive by email, hit directly as a GET (its query
     // params are the same either way; skips rendering the confirm page,
     // which isn't part of what this phase tests).
-    const confirmEmail = await waitForEmail(attendeeEmail, "confirm your registration");
+    const confirmEmail = await waitForCapturedEmail(attendeeEmail, "confirm your registration");
     const confirmUrl = extractUrlFromEmail(confirmEmail, "/confirm/");
     const confirmParams = new URL(confirmUrl, "http://127.0.0.1:8788").searchParams;
     const confirmStatus = await page.evaluate(
@@ -180,7 +174,7 @@ test.describe("portal sponsor workspace", () => {
     expect(confirmStatus).toBe(200);
 
     // ── Sponsor clicks the capability-bearing unified portal link ──────────
-    const accessEmail = await waitForEmail(contactEmail, "sponsor workspace");
+    const accessEmail = await waitForCapturedEmail(contactEmail, "sponsor workspace");
     const portalUrl = extractUrlFromEmail(accessEmail, "/portal/#/verify");
 
     // The setup identity must not mask the sponsor-only session established
@@ -189,6 +183,7 @@ test.describe("portal sponsor workspace", () => {
     await page.context().clearCookies();
     await page.goto("/");
     await page.goto(portalUrl);
+    await declinePasskeyOffer(page);
     await expect(page).toHaveURL(/\/portal\/#\/sponsors$/);
     // The page header names the section once ("Sponsors"); the event is the
     // header's context line and the attendee table's own caption, so the event
@@ -242,12 +237,13 @@ test.describe("portal sponsor workspace", () => {
     await page.getByRole("button", { name: "Send sign-in link" }).click();
     await expect(page.getByText(/you'll receive a sign-in link shortly/i)).toBeVisible();
 
-    const resendEmail = await waitForEmail(contactEmail, "sponsor workspace", 15_000, resendAfterIndex);
+    const resendEmail = await waitForCapturedEmail(contactEmail, "sponsor workspace", { since: resendAfterIndex });
     const resendUrl = extractUrlFromEmail(resendEmail, "/portal/#/verify");
     expect(resendUrl).not.toBe(portalUrl);
 
     await page.goto("/");
     await page.goto(resendUrl);
+    await declinePasskeyOffer(page);
     await expect(page.getByText(attendeeEmail)).toBeVisible({ timeout: 15_000 });
   });
 });

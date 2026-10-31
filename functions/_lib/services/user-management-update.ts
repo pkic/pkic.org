@@ -15,7 +15,7 @@ import { buildUserAccessOffboardingStatements } from "./membership/offboarding";
 import { findUserEmailOwner } from "./user-emails";
 import {
   prepareRotateUserProposalSpeakerManageSecrets,
-  prepareRotateUserRegistrationManageSecrets,
+  prepareRotateUserRegistrationCapabilities,
 } from "./registrations/manage-capability-revocation";
 import { authorizedUserMutationDb } from "./user-management-authorization";
 
@@ -196,7 +196,7 @@ export async function updateUser(db: DatabaseLike, actor: UserBackedAuthAdmin, u
   if (changingPrimaryEmail) {
     statements.push(...prepareMailingListEmailChange(db, user.id, at));
     statements.push(
-      prepareRotateUserRegistrationManageSecrets(db, user.id, at),
+      prepareRotateUserRegistrationCapabilities(db, user.id, at),
       prepareRotateUserProposalSpeakerManageSecrets(db, user.id),
     );
   }

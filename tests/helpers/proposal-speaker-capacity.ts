@@ -1,3 +1,4 @@
+import { nowIso } from "../../functions/_lib/utils/time";
 import type { DatabaseLike } from "../../functions/_lib/types";
 import { prepareProposalProof } from "./proposal-proof";
 import { ADMINISTRATOR_FIXTURE_USER_SQL, administratorGrants } from "./administrator";
@@ -44,7 +45,10 @@ export async function setupProposalSpeakerCapacityWorkflow(): Promise<{
   return { eventId, adminUserId: adminUser.id, adminSessionToken };
 }
 
-export async function inviteSpeakerAndSubmitCapacityProposal(adminSessionToken: string): Promise<{
+export async function inviteSpeakerAndSubmitCapacityProposal(
+  adminSessionToken: string,
+  { speakerEmailVerified = true }: { speakerEmailVerified?: boolean } = {},
+): Promise<{
   speakerManageToken: string;
   proposalId: string;
   coSpeakerUserId: string;
@@ -135,10 +139,18 @@ export async function inviteSpeakerAndSubmitCapacityProposal(adminSessionToken: 
         firstName: "Co",
         lastName: "Speaker",
       });
+  // Capacity fixtures describe an established participant; issue their invitation after mailbox proof.
+  if (speakerEmailVerified)
+    await env.DB.prepare(
+      "UPDATE users SET email_verified_at=COALESCE(email_verified_at,?),email_verification_method='magic_link' WHERE id=?",
+    )
+      .bind(nowIso(), user.id)
+      .run();
   const { manageToken: speakerManageToken } = await addProposalSpeaker(env.DB, {
     proposalId,
     userId: user.id,
     role: "co_speaker",
+    invitedEmail: "cospeaker@example.test",
     signingSecret: env.INTERNAL_SIGNING_SECRET!,
   });
   return { speakerManageToken, proposalId, coSpeakerUserId: user.id, proposalManageToken: manageToken };

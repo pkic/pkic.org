@@ -67,6 +67,11 @@ export const speakerSelfServiceProfileSchema = proposalActingIdentitySchema.exte
   headshotUploaded: z.boolean(),
   headshotUpdatedAt: nullableTimestampSchema,
   headshotUrl: httpUrlSchema.nullable(),
+  /**
+   * Whether this page may change the person's own name and headshot: with their
+   * live session, or while no mailbox of the account has ever been proved.
+   */
+  personalDetailsEditable: z.boolean(),
 });
 
 /**

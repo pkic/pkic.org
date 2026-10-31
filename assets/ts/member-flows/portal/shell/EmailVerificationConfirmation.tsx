@@ -1,14 +1,7 @@
-/**
- * Public, explicit confirmation for an emailed address verification link.
- *
- * Like an identity invitation, the link alone proves the mailbox, so nobody
- * signs in first: the page names the address (read-only, so a mail scanner
- * opening the link verifies nothing) and verifies it on an explicit click.
- * A work address of a non-member organization joins it at once; a member
- * organization is offered, and only answering that offer needs a sign-in.
- */
+/** Mailbox proof is previewed read-only; linking requires the intended signed-in account. */
 import { useEffect, useState } from "preact/hooks";
 import {
+  EMAIL_VERIFIED_ELSEWHERE,
   ownEmailAddressVerificationPreviewResponseSchema,
   ownEmailAddressVerificationResponseSchema,
   ownEmailAddressVerificationSchema,
@@ -30,6 +23,8 @@ type Verified = {
 };
 
 function linkError(error: unknown): string {
+  // The mailbox is proved but belongs to another account: say so, and what to do next.
+  if (error instanceof ApiClientError && error.code === EMAIL_VERIFIED_ELSEWHERE.code) return error.message;
   if (error instanceof ApiClientError && [404, 409, 410].includes(error.status)) {
     return "This link has expired, was already used, or no longer matches an address on your account. Send a new link from your profile.";
   }
@@ -39,6 +34,9 @@ function linkError(error: unknown): string {
 export function EmailVerificationConfirmation() {
   const token = portalEmailVerificationToken(window.location.hash);
   const parsed = ownEmailAddressVerificationSchema.safeParse({ token });
+  const [accountEmail, setAccountEmail] = useState<string | null>(null);
+  const [consolidating, setConsolidating] = useState(false);
+  const [needsSignIn, setNeedsSignIn] = useState(false);
   const [email, setEmail] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(parsed.success ? null : "This verification link is incomplete.");
   const [loading, setLoading] = useState(parsed.success);
@@ -50,7 +48,11 @@ export function EmailVerificationConfirmation() {
     let cancelled = false;
     postJson(`${ENDPOINT}/preview`, parsed.data, ownEmailAddressVerificationPreviewResponseSchema)
       .then((preview) => {
-        if (!cancelled) setEmail(preview.email);
+        if (!cancelled) {
+          setEmail(preview.email);
+          setAccountEmail(preview.accountEmail);
+          setConsolidating(preview.consolidatesUnverifiedAccount);
+        }
       })
       .catch((reason: unknown) => {
         if (!cancelled) setError(linkError(reason));
@@ -68,11 +70,19 @@ export function EmailVerificationConfirmation() {
     setVerifying(true);
     setError(null);
     try {
-      const result = await postJson(ENDPOINT, parsed.data, ownEmailAddressVerificationResponseSchema);
+      const result = await postJson(
+        ENDPOINT,
+        ownEmailAddressVerificationSchema.parse({
+          ...parsed.data,
+          ...(consolidating ? { consolidateUnverifiedAccount: true } : {}),
+        }),
+        ownEmailAddressVerificationResponseSchema,
+      );
       // The link is spent; keep it out of the address bar and history.
       history.replaceState({}, "", "/portal/#/email-verifications");
       setVerified(result);
     } catch (reason) {
+      setNeedsSignIn(reason instanceof ApiClientError && reason.status === 401);
       setError(linkError(reason));
     } finally {
       setVerifying(false);
@@ -97,11 +107,24 @@ export function EmailVerificationConfirmation() {
               {email && !verified && (
                 <div class="pk-stack pk-stack--snug">
                   <p>
-                    Confirm that <strong>{email}</strong> is your address?
+                    Link <strong>{email}</strong> to your account <strong>{accountEmail}</strong>?
                   </p>
-                  <p class="pk-small pk-muted">Opening the email link did not verify it.</p>
+                  <p class="pk-small pk-muted">
+                    Confirm only if both addresses belong to you. You must be signed in to the account shown above.
+                  </p>
+                  {consolidating && (
+                    <p>
+                      This address is on an unverified account. Confirming will consolidate it into your current account
+                      and disable access to the unverified account. Its previous permissions will not be transferred.
+                    </p>
+                  )}
+                  {needsSignIn && (
+                    <ButtonLink href="/portal/" variant="secondary">
+                      Sign in
+                    </ButtonLink>
+                  )}
                   <Button variant="primary" loading={verifying} onClick={() => void verify()}>
-                    {verifying ? "Verifying…" : "Verify this address"}
+                    {verifying ? "Verifying…" : consolidating ? "Consolidate into my account" : "Verify this address"}
                   </Button>
                 </div>
               )}
@@ -111,7 +134,7 @@ export function EmailVerificationConfirmation() {
                     ? `You now represent ${verified.joinedOrganization.name} through this address.`
                     : verified.offeredOrganization
                       ? `This address belongs to ${verified.offeredOrganization.name}. Sign in to join it.`
-                      : "You can now sign in with it."}
+                      : "You can manage this verified address from your profile."}
                 </Alert>
               )}
               {!loading && (error || verified) && (

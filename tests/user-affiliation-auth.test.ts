@@ -13,7 +13,8 @@ import { nowIso } from "../functions/_lib/utils/time";
 import { grantIndividualMembership } from "../functions/_lib/services/membership/capacities";
 import { createUserBackedAuthAdmin } from "../functions/_lib/auth/admin-identity";
 import { createTestRateLimiter, deliveredEmailPayload, queryAll } from "./helpers/context";
-import { mutateBeforeNextBatch } from "./helpers/database-races";
+import { mutateBeforeNextBatch, mutateBeforeMatchingQuery } from "./helpers/database-races";
+import { prepareIndividualIdentityStatement } from "../functions/_lib/services/users";
 import {
   insertIndividualMember,
   insertOrganization,
@@ -273,26 +274,42 @@ describe("affiliation-only account access", () => {
     expect(await queryAll(env.DB, "SELECT id FROM members WHERE organization_id=?", [f.organizationId])).toEqual([]);
   });
 
-  it("rolls back an individual membership grant when the existing affiliation acquires organization membership before commit", async () => {
-    const f = await affiliation();
-    const actor = await membershipActor();
-    const raced = mutateBeforeNextBatch(env.DB, () => seedOrganizationAggregate(env.DB, f.organizationId, "A"));
-    await expect(
-      grantIndividualMembership(raced, actor, {
-        userId: f.userId,
-        membershipCategory: "H5",
-        activationReason: "Reviewed individual membership before organization membership changed",
-      }),
-    ).rejects.toMatchObject({ code: "MEMBERSHIP_TARGET_CHANGED" });
-    expect(
-      await queryAll(env.DB, "SELECT id FROM identities WHERE user_id=? AND organization_id IS NULL", [f.userId]),
-    ).toEqual([]);
-    expect(await queryAll(env.DB, "SELECT id FROM members WHERE member_type='individual'")).toEqual([]);
-    expect(
-      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action='individual_identity_activated' AND actor_id=?", [
-        actor.id,
-      ]),
-    ).toEqual([]);
-    expect(await queryAll(env.DB, "SELECT id FROM group_memberships WHERE user_id=?", [f.userId])).toEqual([]);
-  });
+  it.each([
+    { reusePersonalIdentity: false, expectedCode: "MEMBERSHIP_TARGET_CHANGED" },
+    { reusePersonalIdentity: true, expectedCode: "MEMBERSHIP_AUTHORIZATION_CHANGED" },
+  ])(
+    "rolls back a membership grant when organization membership changes before commit (reuse personal identity: $reusePersonalIdentity)",
+    async ({ reusePersonalIdentity, expectedCode }) => {
+      const f = await affiliation();
+      const actor = await membershipActor();
+      if (reusePersonalIdentity) await env.DB.batch([prepareIndividualIdentityStatement(env.DB, f.userId, nowIso())]);
+      const personalBefore = await queryAll(
+        env.DB,
+        "SELECT id FROM identities WHERE user_id=? AND organization_id IS NULL",
+        [f.userId],
+      );
+      const raced = mutateBeforeMatchingQuery(
+        env.DB,
+        (sql) => /^\s*(?:INSERT INTO identities\b|UPDATE identities SET updated_at\b)/.test(sql),
+        () => seedOrganizationAggregate(env.DB, f.organizationId, "A"),
+      );
+      await expect(
+        grantIndividualMembership(raced, actor, {
+          userId: f.userId,
+          membershipCategory: "H5",
+          activationReason: "Reviewed individual membership before organization membership changed",
+        }),
+      ).rejects.toMatchObject({ status: 409, code: expectedCode });
+      expect(
+        await queryAll(env.DB, "SELECT id FROM identities WHERE user_id=? AND organization_id IS NULL", [f.userId]),
+      ).toEqual(personalBefore);
+      expect(await queryAll(env.DB, "SELECT id FROM members WHERE member_type='individual'")).toEqual([]);
+      expect(
+        await queryAll(env.DB, "SELECT id FROM audit_log WHERE action='individual_identity_activated' AND actor_id=?", [
+          actor.id,
+        ]),
+      ).toEqual([]);
+      expect(await queryAll(env.DB, "SELECT id FROM group_memberships WHERE user_id=?", [f.userId])).toEqual([]);
+    },
+  );
 });

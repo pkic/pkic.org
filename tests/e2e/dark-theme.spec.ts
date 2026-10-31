@@ -102,7 +102,7 @@ test.describe("the dark theme", () => {
   test("keeps event content and affiliation marks legible", async ({ page }) => {
     await page.goto("/events/2026/pqc-conference-amsterdam-nl/");
 
-    const reasons = page.getByText("The rules are finalized").locator("xpath=ancestor::section[1]");
+    const reasons = page.locator("section").filter({ hasText: "The rules are finalized" }).last();
     await expect(reasons).toBeVisible();
     const columns = await reasons.evaluate(
       (element) => getComputedStyle(element).gridTemplateColumns.split(" ").length,
@@ -111,8 +111,8 @@ test.describe("the dark theme", () => {
 
     await page.goto("/events/2026/pqc-conference-amsterdam-nl/register/");
     const warning = page
-      .getByText("In-person registration is currently full.")
-      .locator("xpath=ancestor::blockquote[1]");
+      .locator("blockquote")
+      .filter({ hasText: "In-person is full — choose In-person to join the waitlist." });
     await expect(warning).toBeVisible();
     const warningSurface = await warning.evaluate((element) => getComputedStyle(element).backgroundColor);
     expect(warningSurface).not.toBe("rgb(255, 255, 255)");

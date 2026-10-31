@@ -30,6 +30,10 @@
     border-radius: var(--pk-radius);
   }
 
+  img.pk-framed {
+    height: auto;
+  }
+
   /*
    * A 16:9 embed — the one shape rendered Markdown needs that no primitive
    * owns. It exists as a class because the alternative is a `style` attribute

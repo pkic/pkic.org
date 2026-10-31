@@ -174,7 +174,8 @@ describe("standalone event views redirect to the owning group", () => {
     await act(() => render(<EventWorkspace view="detail" slug="summit" />, container));
     await settle();
     await vi.waitFor(() => expect(container.querySelector(".pk-event-hero__title")?.textContent).toBe("Summit"));
-    expect(container.textContent).toContain("My agenda");
+    expect(container.textContent).toContain("Agenda");
+    expect(container.textContent).not.toContain("My agenda");
     expect(navigate).not.toHaveBeenCalled();
   });
 

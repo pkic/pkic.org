@@ -1,3 +1,5 @@
+import { formatLiveTimer } from "../../../../../../../shared/live-timer-policy";
+import { useLiveTimerNow } from "../../../../../../live-session/useLiveCountdown";
 /**
  * The location's live player and what is on it: YouTube's privacy-enhanced player for the day's stream, then
  * the running session's title and speakers, which follow the published agenda as sessions change.
@@ -5,7 +7,6 @@
 import type { LiveStream } from "../../../../../../../shared/schemas/event-live-stream";
 import { youtubePrivacyEmbedUrl, youtubeWatchUrl } from "../../../../../../../shared/youtube-video";
 import { eventSessionRoute } from "../../../../../../../shared/event-participation-link";
-import { EmptyState } from "../../../../../../ui/EmptyState";
 import { usePortalHashLocation } from "../../../../hash-location";
 import { JoinSessionMeeting } from "../../detail/participation/JoinSessionMeeting";
 import { sessionSpeakerLine, type RoomMoment } from "./virtual-room-schedule";
@@ -18,10 +19,12 @@ export function VirtualRoomPlayer({
   stream,
   locationName,
   presentation = "watch",
+  startsAt,
 }: {
   stream: LiveStream | null;
   locationName: string;
   presentation?: "watch" | "monitor";
+  startsAt?: string;
 }) {
   if (!stream && presentation === "monitor")
     return (
@@ -33,15 +36,7 @@ export function VirtualRoomPlayer({
         <span>No livestream</span>
       </div>
     );
-  if (!stream)
-    return (
-      <div class="pk-virtual-room__player pk-virtual-room__player--idle">
-        <EmptyState
-          title={`No live stream in ${locationName} today`}
-          body="Choose another location, or come back when its sessions are on."
-        />
-      </div>
-    );
+  if (!stream) return <WaitingRoomPlayer locationName={locationName} startsAt={startsAt} />;
   // One provider today; another joins here as its own player when the stream union grows.
   return (
     <div class={`pk-virtual-room__player${presentation === "monitor" ? " pk-virtual-room__player--monitor" : ""}`}>
@@ -54,6 +49,28 @@ export function VirtualRoomPlayer({
         allowFullScreen
         referrerPolicy="strict-origin-when-cross-origin"
       />
+    </div>
+  );
+}
+
+function WaitingRoomPlayer({ locationName, startsAt }: { locationName: string; startsAt?: string }) {
+  const now = useLiveTimerNow(Boolean(startsAt));
+  const remaining = startsAt ? Math.max(0, Date.parse(startsAt) - now) : null;
+  return (
+    <div class="pk-virtual-room__player pk-virtual-room__player--idle pk-center">
+      <div class="pk-stack pk-stack--snug">
+        <SectionHeading level={3}>{locationName}</SectionHeading>
+        {remaining !== null && remaining > 0 ? (
+          <>
+            <p>Starts in</p>
+            <p class="pk-virtual-room__countdown pk-mono" role="timer" aria-live="off">
+              {formatLiveTimer(remaining, "custom", "{{days}}d {{hours}}h {{minutes}}m {{seconds}}s")}
+            </p>
+          </>
+        ) : (
+          <p>Waiting for the broadcast to begin</p>
+        )}
+      </div>
     </div>
   );
 }

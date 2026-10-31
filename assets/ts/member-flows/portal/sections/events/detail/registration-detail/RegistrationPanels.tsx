@@ -49,7 +49,7 @@ export function BadgeRolePanel({ slug, regId }: { slug: string; regId: string })
   async function handleSave() {
     const checked = form.submit();
     if (!checked.data) {
-      setSaveError(checked.message);
+      setSaveError(checked.formMessage ?? "");
       return;
     }
     setSaving(true);
@@ -193,7 +193,7 @@ export function RegistrationEmailEditor({
     }
     const checked = form.submit();
     if (!checked.data) {
-      setError(checked.message);
+      setError(checked.formMessage ?? "");
       return;
     }
     setSaving(true);

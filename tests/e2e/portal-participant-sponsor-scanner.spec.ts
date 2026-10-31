@@ -24,8 +24,10 @@ test("participant sponsor scanner keeps its sponsor context and manual exit cont
   test.setTimeout(300_000);
   const staffContext = await browser.newContext({ baseURL: info.project.use.baseURL });
   const attendeeContext = await browser.newContext({ baseURL: info.project.use.baseURL });
+  let endFixture: (() => Promise<void>) | undefined;
   try {
     const fixture = await prepareSponsorLiveFixture(await staffContext.newPage(), await attendeeContext.newPage());
+    endFixture = fixture.end;
     await signInToPortal(page, fixture.operator.email);
     const discovery = await page.request.get(`/api/v1/events/${sponsorEventSlug}/sponsors/leads`);
     expect(discovery.status()).toBe(200);
@@ -61,7 +63,7 @@ test("participant sponsor scanner keeps its sponsor context and manual exit cont
       await expect(page.getByText("Capture sponsor lead", { exact: true })).toBeVisible();
       await expect(page.getByRole("combobox", { name: "Scan mode", exact: true })).toHaveCount(0);
       const start = page.getByRole("button", { name: "Start scanning", exact: true });
-      const enter = page.getByRole("button", { name: "Enter code", exact: true });
+      const enter = page.getByRole("button", { name: "Manual entry", exact: true });
       await expect(enter).toBeVisible();
       const startBounds = await start.boundingBox();
       const enterBounds = await enter.boundingBox();
@@ -99,12 +101,16 @@ test("participant sponsor scanner keeps its sponsor context and manual exit cont
         scanner.getByRole("status").getByText("Ready to capture sponsor leads", { exact: true }),
       ).toBeVisible();
       await expect(scanner.getByText(/Admission requires verification/)).toHaveCount(0);
-      await expect(scanner.getByRole("button", { name: "Enter or paste code", exact: true })).toBeVisible();
+      await expect(scanner.getByRole("button", { name: "Manual entry", exact: true })).toBeVisible();
       await expect(scanner.getByRole("button", { name: "Exit", exact: true })).toBeVisible();
       await page.screenshot({ path: info.outputPath(`${viewport.name}-sponsor-fullscreen.png`), fullPage: true });
-      await scanner.getByRole("button", { name: "Enter or paste code", exact: true }).click();
-      await expect(manual).toBeVisible();
-      await manual.getByRole("button", { name: "Cancel", exact: true }).click();
+      await scanner.getByRole("button", { name: "Manual entry", exact: true }).click();
+      // Inside the full-screen scanner, manual entry replaces the camera view instead of opening a second dialog.
+      const inlineEntry = scanner.getByRole("heading", { name: "Manual entry", level: 2, exact: true });
+      await expect(inlineEntry).toBeVisible();
+      await scanner.getByRole("button", { name: "Return to scanning", exact: true }).click();
+      await expect(inlineEntry).toHaveCount(0);
+      await scanner.getByRole("button", { name: "Exit", exact: true }).click();
       await expect(scanner).toHaveCount(0);
       await expect(page.getByRole("button", { name: "Start scanning", exact: true })).toBeVisible();
       await expect(page.getByText(`${sponsor.name} · Event-wide`, { exact: true })).toBeVisible();
@@ -117,6 +123,7 @@ test("participant sponsor scanner keeps its sponsor context and manual exit cont
       await expect(page.getByText(`${sponsor.name} · Event-wide`, { exact: true })).toBeVisible();
     }
   } finally {
+    await endFixture?.();
     await staffContext.close();
     await attendeeContext.close();
   }
@@ -182,7 +189,7 @@ test("event staff scanner shows its published session and room at phone and tabl
     const scanner = page.getByRole("dialog", { name: "Continuous badge scanner", exact: true });
     await expect(scanner).toBeVisible();
     await expect(scanner.getByText(`${contextLabel} · Record attendance`, { exact: true })).toBeVisible();
-    await expect(scanner.getByRole("button", { name: "Enter or paste code", exact: true })).toBeVisible();
+    await expect(scanner.getByRole("button", { name: "Manual entry", exact: true })).toBeVisible();
     await expect(scanner.getByRole("button", { name: "Exit", exact: true })).toBeVisible();
     await page.screenshot({ path: info.outputPath(`${viewport.name}-staff-fullscreen.png`), fullPage: true });
     await scanner.getByRole("button", { name: "Exit", exact: true }).click();
@@ -204,7 +211,7 @@ test("authorized group and event creation stays accessible in collection toolbar
   ]) {
     await page.setViewportSize(viewport);
     for (const surface of [
-      { name: "groups", route: "/portal/#/groups", toolbar: "Groups you can join controls", create: "New group" },
+      { name: "groups", route: "/portal/#/groups", toolbar: "Groups controls", create: "New group" },
       {
         name: "events",
         route: "/portal/#/groups/20000000-0000-4000-8000-000000000003/events",
@@ -264,9 +271,11 @@ test("dual staff and sponsor identity reaches both event scanners across phone t
   test.setTimeout(300_000);
   const staffContext = await browser.newContext({ baseURL: info.project.use.baseURL });
   const attendeeContext = await browser.newContext({ baseURL: info.project.use.baseURL });
+  let endFixture: (() => Promise<void>) | undefined;
   try {
     const staff = await staffContext.newPage();
     const fixture = await prepareSponsorLiveFixture(staff, await attendeeContext.newPage());
+    endFixture = fixture.end;
     const eventResponse = await staff.request.get(`/api/v1/events/${sponsorEventSlug}`);
     expect(eventResponse.status()).toBe(200);
     const event = eventDetailResponseSchema.parse(await eventResponse.json()).event;
@@ -360,6 +369,7 @@ test("dual staff and sponsor identity reaches both event scanners across phone t
       });
     }
   } finally {
+    await endFixture?.();
     await staffContext.close();
     await attendeeContext.close();
   }

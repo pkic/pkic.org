@@ -5,7 +5,7 @@ export async function captureResponsive(page: Page, info: TestInfo, phase: strin
   for (const [width, height, device] of [
     [1440, 1000, "desktop"],
     [820, 1180, "tablet"],
-    [390, 844, "phone"],
+    [375, 844, "phone"],
   ] as const) {
     await page.setViewportSize({ width, height });
     await page.evaluate(async () => {
@@ -19,11 +19,9 @@ export async function captureResponsive(page: Page, info: TestInfo, phase: strin
       expect(summary).not.toBeNull();
       expect(group).not.toBeNull();
       expect(summary!.width).toBeGreaterThanOrEqual(group!.width * 0.9);
-      const update = await representation
-        .getByRole("button", { name: "Update current representation", exact: true })
-        .boundingBox();
-      expect(update).not.toBeNull();
-      expect(update!.height).toBeLessThanOrEqual(64);
+      const save = await page.getByRole("button", { name: "Save changes", exact: true }).boundingBox();
+      expect(save).not.toBeNull();
+      expect(save!.height).toBeLessThanOrEqual(64);
     }
     if (phase === "invited-speaker-work-proof") {
       const steps = [

@@ -6,7 +6,7 @@ for (const viewport of [
   { width: 1440, height: 900 },
   { width: 1024, height: 1366 },
   { width: 1920, height: 1080 },
-  { width: 390, height: 844 },
+  { width: 375, height: 812 },
 ]) {
   test(`login fills the page without a gap below its side panel at ${viewport.width}px`, async ({ page }) => {
     await page.setViewportSize(viewport);
@@ -49,7 +49,9 @@ for (const viewport of [
   });
 }
 
-test("an expired administrator elevation keeps member access and offers a fresh sign-in", async ({ page }) => {
+test("an expired administrator elevation ends the whole portal session and offers a fresh sign-in", async ({
+  page,
+}) => {
   const { signInToPortal } = await import("./helpers/portal-auth");
   const { e2eAdminEmail } = await import("../helpers/e2e-admin");
   const { userAuthSessionResponseSchema, userAuthRequestSchema } =
@@ -87,10 +89,18 @@ test("an expired administrator elevation keeps member access and offers a fresh 
   await signInToPortal(page, email);
   await page.goto("/portal/#/organizations");
   await expect(page.getByRole("heading", { name: "Organizations", exact: true })).toBeVisible();
+  // A session acts as one identity, and membership belongs to the identity it acts as.
+  // The administrator also holds an individual identity, so the person chooses the member's.
+  const memberIdentity = organization.identities.find((identity) => identity.email === email);
+  expect(memberIdentity).toBeDefined();
+  const selected = await page.request.put("/api/v1/users/current/identities/active", {
+    data: { identityId: memberIdentity!.identityId },
+  });
+  expect(selected.status(), await selected.text()).toBe(200);
   const response = await page.request.get("/api/v1/auth/session");
   expect(response.status()).toBe(200);
   const session = userAuthSessionResponseSchema.parse(await response.json());
-  expect(session.member).toBeDefined();
+  expect(session.member, JSON.stringify(session.actingIdentities)).toBeDefined();
   expect(session.staff).toBeDefined();
   const staff = session.staff;
   if (!staff?.expiresAt || !staff.idleExpiresAt) throw new Error("Expected a staff elevation with both deadlines");
@@ -99,16 +109,13 @@ test("an expired administrator elevation keeps member access and offers a fresh 
   expect(deadline + 2000).toBeLessThan(memberDeadline);
   const browserNow = await page.evaluate(() => Date.now());
   await page.clock.fastForward(Math.max(0, deadline - browserNow) + 2000);
-  await expect(page.getByRole("alert")).toContainText("Administrator access expired");
-  await expect(page.getByText("You are still signed in with your other portal access.")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Organizations", exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: "Sign out and sign in again" }).click();
+  // Staff access ending ends the whole portal session, even for a person who also holds member access.
   await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toBeVisible();
-  // Intentional sign-out clears the old recovery key; the current hash is the
-  // canonical destination carried by the next sign-in request.
+  await expect(page.getByRole("heading", { name: "Organizations", exact: true })).toHaveCount(0);
+  // The expired session keeps the current hash as the destination carried by the next sign-in request.
   await expect(page).toHaveURL(/\/portal\/#\/organizations$/);
   await openEmailSignIn(page);
-  await page.getByLabel("Work email").fill(email);
+  await page.getByLabel("Email").fill(email);
   const nextSignIn = page.waitForResponse(
     (result) => new URL(result.url()).pathname === "/api/v1/auth/request-link" && result.request().method() === "POST",
   );
@@ -164,7 +171,7 @@ test.describe("client release recovery", () => {
     await page.clock.install();
     await page.goto("/portal/");
     await openEmailSignIn(page);
-    await page.getByLabel("Work email").fill("release-recovery@example.test");
+    await page.getByLabel("Email").fill("release-recovery@example.test");
     await page.route("**/portal/", async (route) => {
       if (route.request().isNavigationRequest()) return route.continue();
       await route.fulfill({
@@ -174,7 +181,7 @@ test.describe("client release recovery", () => {
     });
     await page.evaluate(() => window.dispatchEvent(new Event("vite:preloadError")));
     await page.clock.fastForward(600_000);
-    await expect(page.getByLabel("Work email")).toHaveValue("release-recovery@example.test");
+    await expect(page.getByLabel("Email")).toHaveValue("release-recovery@example.test");
   });
 
   test("a missing lazy view offers recovery without removing portal navigation", async ({ page }) => {

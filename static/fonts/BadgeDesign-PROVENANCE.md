@@ -16,3 +16,7 @@ License: Free for commercial use, per the author. Redistribution must include th
 Modification: converted from TrueType to WOFF2 with fontTools 4.60.2 and subset to Basic Latin, Latin-1 Supplement, Latin Extended-A, general punctuation dashes and quotes, the ellipsis, and the euro sign. Glyph outlines, layout features, and name table are unchanged.
 Bytes: 64804
 SHA-256: cb1da327736e7dff62ea6c6bd74cab370f02defe9cb05a96e682f5168300130d
+
+PromotionRoboto-Regular.ttf, PromotionRoboto-Medium.ttf, and PromotionRoboto-Bold.ttf are static 400, 500, and 700 instances of the existing Roboto-latin.woff2 and Roboto-latin-ext.woff2 design-kit subsets. PromotionRobotoMono-Medium.ttf and PromotionRobotoMono-SemiBold.ttf are static 500 and 600 instances of the corresponding RobotoMono subsets. Converted and merged with fontTools without changing the outlines at those weights. The original Roboto and RobotoMono license files remain alongside these fonts. These pinned outlines, metrics, and weights keep browser and Worker social-card rendering consistent.
+
+The PromotionRoboto files retain the existing full Roboto files’ additional glyphs as fallbacks, including Greek and Cyrillic, while preserving the design-kit Latin outlines and line metrics.

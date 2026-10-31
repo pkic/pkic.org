@@ -4,7 +4,10 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
 import { deliveredEmailPayload, seedEventAndAdmin, queryAll } from "./helpers/context";
-import { createAdminSession } from "./helpers/auth";
+import { createAdminSession, createMemberSession } from "./helpers/auth";
+import { proposalAccessReadResponseSchema } from "../assets/shared/schemas/proposal-management";
+import { speakerSelfServiceReadResponseSchema } from "../assets/shared/schemas/speaker-self-service";
+import { signCapabilityToken } from "../functions/_lib/auth/capability-token";
 import {
   addProposalSpeaker,
   createProposal,
@@ -13,6 +16,10 @@ import {
 } from "../functions/_lib/services/proposals";
 import app from "./helpers/app";
 import { renderEmail } from "../functions/_lib/email/render";
+import {
+  buildProposalInviteEmailContext,
+  buildProposalInviteEmailContextMap,
+} from "../functions/_lib/services/proposal-invite-email-context";
 
 function mountedAppFetch(request: Request): Promise<Response> {
   return app.fetch(request, env as any, { passThroughOnException: () => {}, waitUntil: () => {} } as any);
@@ -26,6 +33,86 @@ const participantProof = (email: string, unaffiliatedAttestation: boolean) =>
     consents: [{ termKey: "speaker-terms", version: "v1" }],
     unaffiliatedAttestation,
   });
+
+const hiddenProfile = {
+  organizationName: null,
+  jobTitle: null,
+  bio: null,
+  links: [],
+  headshotUploaded: false,
+  headshotUrl: null,
+};
+
+/**
+ * A panel whose proposer invites one person with an existing, claimed account and one new address. The
+ * existing person also holds `alias-invitee@example.test`, which the proposer may invite instead.
+ */
+async function submitPanelWithExistingInvitee(invitedAddress = "private-invitee@example.test") {
+  await seedEventAndAdmin(env.DB);
+  const existingId = crypto.randomUUID();
+  const at = new Date().toISOString();
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO users (id, email, normalized_email, first_name, last_name, email_verified_at, created_at, updated_at)
+       VALUES (?1, 'private-invitee@example.test', 'private-invitee@example.test', 'Private', 'Stored', ?2, ?2, ?2)`,
+    ).bind(existingId, at),
+    env.DB.prepare(
+      `INSERT INTO identities (id, user_id, organization_id, biography, links_json, source, show_on_organization_profile,
+                               invited_at, started_at, created_at, updated_at)
+       VALUES (?1, ?2, NULL, 'A private biography that only this person may share.', '["https://private.example"]',
+               'account', 0, ?3, ?3, ?3, ?3)`,
+    ).bind(crypto.randomUUID(), existingId, at),
+    env.DB.prepare(
+      `INSERT INTO user_emails (id, user_id, email, normalized_email, verified_at, created_at)
+       VALUES (?1, ?2, 'alias-invitee@example.test', 'alias-invitee@example.test', ?3, ?3)`,
+    ).bind(crypto.randomUUID(), existingId, at),
+  ]);
+  const response = await mountedAppFetch(
+    new Request("https://app.test/api/v1/events/pqc-2026/proposals", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        ...(await participantProof("view-lead@example.test", true)),
+        sourceType: "direct",
+        proposer: {
+          firstName: "View",
+          lastName: "Lead",
+          email: "view-lead@example.test",
+          actingIdentityId: null,
+          bio: "Leads cross-industry cryptography migration planning and public policy coordination programs.",
+          role: "moderator",
+        },
+        proposal: {
+          type: "panel",
+          title: "Panel: What The Proposer Sees",
+          abstract:
+            "Panel discussion on organizational governance, procurement, stakeholder management, and transition planning for post-quantum cryptography programs.",
+        },
+        speakers: [
+          { firstName: "Typed", lastName: "Name", email: invitedAddress, role: "panelist" },
+          { firstName: "Fresh", lastName: "Invitee", email: "fresh-invitee@example.test", role: "panelist" },
+        ],
+        consents: [{ termKey: "speaker-terms", version: "v1" }],
+      }),
+    }),
+  );
+  expect(response.status, await response.clone().text()).toBe(200);
+  const { proposalId } = (await response.json()) as { proposalId: string };
+  const proposerId = (await env.DB.prepare("SELECT proposer_user_id FROM session_proposals WHERE id=?")
+    .bind(proposalId)
+    .first<string>("proposer_user_id"))!;
+  const session = await createMemberSession(env.DB, proposerId, crypto.randomUUID(), undefined, null);
+  const read = async () => {
+    const view = await mountedAppFetch(
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/submission`, {
+        headers: { authorization: `Bearer ${session}` },
+      }),
+    );
+    expect(view.status, await view.clone().text()).toBe(200);
+    return proposalAccessReadResponseSchema.parse(await view.json()).speakers;
+  };
+  return { proposalId, proposerId, existingId, read };
+}
 
 describe("proposal participants", () => {
   beforeEach(async () => {
@@ -177,7 +264,6 @@ describe("proposal participants", () => {
               lastName: "Speaker",
               email: "literal-speaker@example.test",
               role: "speaker",
-              bio: "A sufficiently detailed biography for the invited speaker security regression test.",
             },
           ],
           consents: [{ termKey: "speaker-terms", version: "v1" }],
@@ -216,7 +302,7 @@ describe("proposal participants", () => {
     }
   });
 
-  it("supports panel participants and stores user links", async () => {
+  it("supports panel participants and stores only the proposer's own profile links", async () => {
     await seedEventAndAdmin(env.DB);
 
     const response = await mountedAppFetch(
@@ -247,16 +333,12 @@ describe("proposal participants", () => {
               lastName: "One",
               email: "panelist1@example.test",
               role: "panelist",
-              bio: "Builds enterprise security reference architectures and guides cryptographic agility programs.",
-              links: ["https://github.com/panelist1"],
             },
             {
               firstName: "Moderator",
               lastName: "One",
               email: "moderator@example.test",
               role: "moderator",
-              bio: "Moderates industry forums focused on interoperability and deployment readiness.",
-              links: ["https://x.com/moderator"],
             },
           ],
           consents: [{ termKey: "speaker-terms", version: "v1" }],
@@ -298,13 +380,185 @@ describe("proposal participants", () => {
     expect(participantRoles.map((entry) => entry.role)).toContain("panelist");
     expect(participantRoles.map((entry) => entry.role)).toContain("moderator");
 
-    // What the proposer wrote about speakers new to the site starts their identity's profile.
-    const linkRows = await queryAll<{ links_json: string | null }>(
+    // The proposer's own links are stored; an invited speaker writes their own profile when they confirm.
+    const profileRows = await queryAll<{ email: string; biography: string | null; links_json: string | null }>(
       env.DB,
-      "SELECT links_json FROM identities WHERE user_id IN (SELECT user_id FROM proposal_speakers WHERE proposal_id = ?)",
-      [payload.proposalId],
+      `SELECT person.normalized_email AS email, identity.biography, identity.links_json
+         FROM identities identity JOIN users person ON person.id = identity.user_id
+        WHERE person.normalized_email IN ('lead@example.test', 'panelist1@example.test', 'moderator@example.test')
+        ORDER BY person.normalized_email`,
     );
-    expect(linkRows.some((entry) => Boolean(entry.links_json))).toBe(true);
+    expect(profileRows.find((row) => row.email === "lead@example.test")?.links_json).toContain("example.test/lead");
+    for (const email of ["panelist1@example.test", "moderator@example.test"])
+      for (const row of profileRows.filter((entry) => entry.email === email))
+        expect(row).toMatchObject({ biography: null, links_json: null });
+  });
+
+  it("shows invitees only confirmed speakers and the proposer only the names they typed", async () => {
+    await seedEventAndAdmin(env.DB);
+    // An existing account whose stored name is not what the proposer typed.
+    await env.DB.prepare(
+      `INSERT INTO users (id, email, normalized_email, first_name, last_name, email_verified_at, created_at, updated_at)
+       VALUES (?, ?, ?, 'Private', 'Stored', datetime('now'), datetime('now'), datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), "existing-invitee@example.test", "existing-invitee@example.test")
+      .run();
+    const response = await mountedAppFetch(
+      new Request("https://app.test/api/v1/events/pqc-2026/proposals", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          ...(await participantProof("lineup-lead@example.test", true)),
+          sourceType: "direct",
+          proposer: {
+            firstName: "Lineup",
+            lastName: "Lead",
+            email: "lineup-lead@example.test",
+            actingIdentityId: null,
+            bio: "Leads cross-industry cryptography migration planning and public policy coordination programs.",
+            role: "moderator",
+          },
+          proposal: {
+            type: "panel",
+            title: "Panel: Who Is On The Lineup",
+            abstract:
+              "Panel discussion on organizational governance, procurement, stakeholder management, and transition planning for post-quantum cryptography programs.",
+          },
+          speakers: [
+            { firstName: "Typed", lastName: "Existing", email: "existing-invitee@example.test", role: "panelist" },
+            { firstName: "New", lastName: "Invitee", email: "new-invitee@example.test", role: "panelist" },
+          ],
+          consents: [{ termKey: "speaker-terms", version: "v1" }],
+        }),
+      }),
+    );
+    expect(response.status, await response.clone().text()).toBe(200);
+
+    const lineups = await queryAll<{ template_key: string; recipient_email: string; lineup: string }>(
+      env.DB,
+      `SELECT template_key, recipient_email,
+              json_extract(payload_json, '$.speakerLineupText.__pkicEmailPlainText') AS lineup
+         FROM email_outbox WHERE template_key IN ('proposal_submitted', 'co_speaker_invite')
+        ORDER BY template_key, recipient_email`,
+    );
+    const invites = lineups.filter((row) => row.template_key === "co_speaker_invite");
+    expect(invites.map((row) => row.recipient_email)).toEqual([
+      "existing-invitee@example.test",
+      "new-invitee@example.test",
+    ]);
+    for (const invite of invites) {
+      // Another invitee, or anyone's address, is never shown to an invitee.
+      expect(invite.lineup).not.toMatch(/@|Invitee|Existing|Private|Stored/);
+    }
+    const submitted = lineups.find((row) => row.template_key === "proposal_submitted")!;
+    expect(submitted.lineup).toContain("- Typed Existing");
+    expect(submitted.lineup).toContain("- New Invitee");
+    expect(submitted.lineup).not.toMatch(/@|Private|Stored/);
+
+    // Later invitations and reminders read the same lineup: confirmed speakers by name only.
+    const { proposalId } = (await response.json()) as { proposalId: string };
+    await env.DB.prepare(
+      "UPDATE proposal_speakers SET status='confirmed' WHERE proposal_id=? AND user_id=(SELECT id FROM users WHERE normalized_email='new-invitee@example.test')",
+    )
+      .bind(proposalId)
+      .run();
+    const context = await buildProposalInviteEmailContext(env.DB, { proposalId });
+    expect(context.speakerLineupText).toContain("- New Invitee");
+    expect(context.speakerLineupText).not.toMatch(/@|Private|Stored|Existing/);
+    const mapped = await buildProposalInviteEmailContextMap(env.DB, [proposalId]);
+    expect(mapped.get(proposalId)?.speakerLineupText).toBe(context.speakerLineupText);
+  });
+
+  it("shows the proposer only the address of an invitee with an existing account until they accept", async () => {
+    const { existingId, read } = await submitPanelWithExistingInvitee();
+    const invited = await read();
+    expect(invited.find((speaker) => speaker.email === "private-invitee@example.test")).toMatchObject({
+      status: "invited",
+      firstName: null,
+      lastName: null,
+      ...hiddenProfile,
+    });
+    // An account the invitation made carries only the name the proposer typed.
+    expect(invited.find((speaker) => speaker.email === "fresh-invitee@example.test")).toMatchObject({
+      status: "invited",
+      firstName: "Fresh",
+      lastName: "Invitee",
+      ...hiddenProfile,
+    });
+
+    await env.DB.prepare("UPDATE proposal_speakers SET status='confirmed', confirmed_at=? WHERE user_id=?")
+      .bind(new Date().toISOString(), existingId)
+      .run();
+    expect((await read()).find((speaker) => speaker.email === "private-invitee@example.test")).toMatchObject({
+      status: "confirmed",
+      firstName: "Private",
+      lastName: "Stored",
+    });
+  });
+
+  it("keeps an existing person's profile from the proposer after they decline without accepting", async () => {
+    const { existingId, read } = await submitPanelWithExistingInvitee();
+    await env.DB.prepare("UPDATE proposal_speakers SET status='declined', declined_at=? WHERE user_id=?")
+      .bind(new Date().toISOString(), existingId)
+      .run();
+    expect((await read()).find((speaker) => speaker.email === "private-invitee@example.test")).toMatchObject({
+      status: "declined",
+      firstName: null,
+      lastName: null,
+      ...hiddenProfile,
+    });
+  });
+
+  it("shows the proposer the address they invited, not the account's primary one, until the speaker accepts", async () => {
+    const { existingId, read } = await submitPanelWithExistingInvitee("alias-invitee@example.test");
+    const invitee = async () => (await read()).find((speaker) => speaker.userId === existingId);
+    expect(await invitee()).toMatchObject({ status: "invited", email: "alias-invitee@example.test" });
+
+    await env.DB.prepare("UPDATE proposal_speakers SET status='declined', declined_at=? WHERE user_id=?")
+      .bind(new Date().toISOString(), existingId)
+      .run();
+    expect(await invitee()).toMatchObject({ status: "declined", email: "alias-invitee@example.test" });
+
+    await env.DB.prepare("UPDATE proposal_speakers SET status='confirmed', confirmed_at=? WHERE user_id=?")
+      .bind(new Date().toISOString(), existingId)
+      .run();
+    expect(await invitee()).toMatchObject({ status: "confirmed", email: "private-invitee@example.test" });
+  });
+
+  it("names another speaker on a speaker link only after they accept or by the name the proposer typed", async () => {
+    const { proposalId, proposerId, existingId } = await submitPanelWithExistingInvitee();
+    const proposerSpeaker = (await env.DB.prepare(
+      "SELECT id, manage_link_secret FROM proposal_speakers WHERE proposal_id=? AND user_id=?",
+    )
+      .bind(proposalId, proposerId)
+      .first<{ id: string; manage_link_secret: string }>())!;
+    const token = await signCapabilityToken({
+      signingSecret: env.INTERNAL_SIGNING_SECRET!,
+      linkSecret: proposerSpeaker.manage_link_secret,
+      purpose: "speaker_manage",
+      resourceId: proposerSpeaker.id,
+    });
+    const coSpeakers = async () => {
+      const response = await mountedAppFetch(
+        new Request(`https://app.test/api/v1/proposals/speakers/access/${encodeURIComponent(token)}`),
+      );
+      expect(response.status, await response.clone().text()).toBe(200);
+      return speakerSelfServiceReadResponseSchema.parse(await response.json()).proposal.coSpeakers;
+    };
+    expect(await coSpeakers()).toEqual([
+      { firstName: null, lastName: null, status: "invited" },
+      { firstName: "Fresh", lastName: "Invitee", status: "invited" },
+    ]);
+
+    await env.DB.prepare("UPDATE proposal_speakers SET status='declined', declined_at=? WHERE user_id=?")
+      .bind(new Date().toISOString(), existingId)
+      .run();
+    expect((await coSpeakers())[0]).toEqual({ firstName: null, lastName: null, status: "declined" });
+
+    await env.DB.prepare("UPDATE proposal_speakers SET status='confirmed', confirmed_at=? WHERE user_id=?")
+      .bind(new Date().toISOString(), existingId)
+      .run();
+    expect((await coSpeakers())[0]).toEqual({ firstName: "Private", lastName: "Stored", status: "confirmed" });
   });
 
   it("does not clear an existing proposer's identity biography or links when the submission provides none", async () => {
@@ -454,7 +708,6 @@ describe("proposal participants", () => {
               lastName: "Person",
               email: "DUPLICATE-PERSON@example.test",
               role: "speaker",
-              bio: "A sufficiently detailed biography for validating the duplicate participant contract behavior.",
             },
           ],
           consents: [{ termKey: "speaker-terms", version: "v1" }],

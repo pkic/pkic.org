@@ -6,6 +6,8 @@ import { AppError } from "../errors";
 import { nowIso } from "../utils/time";
 import { isAuditChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "./audit";
 import { validateRequiredConsents } from "./consent";
+import { readEventAffiliationContext } from "./identities/event-affiliation-context";
+import { planVerifiedAffiliation } from "./identities/verified-affiliation-plan";
 import { prepareUserProfileStatements, type UserProfilePatch } from "./users";
 import { prepareProposalSpeakerWriteGuard, type ProposalSpeakerWriteContext } from "./proposal-speaker-authority";
 import { proposalSpeakerProfileColumns } from "./proposal-speakers";
@@ -22,6 +24,12 @@ import { parseCapabilityToken } from "../auth/capability-token";
 import { activeEffectiveInviteExpirySql, effectiveProposalSpeakerInviteExpirySql } from "../invite-validity";
 import { isProposalSpeakerRosterEditableStatus } from "../../../assets/shared/schemas/proposal-status";
 import { assertProvedCapacity, prepareSelectedCapacityDisclosure } from "./proposal-speaker-capacity-selection";
+import {
+  speakerAccountAuthorityEvidence,
+  speakerAccountSignInRequiredError,
+  unclaimedAccountSql,
+  type SpeakerAccountAuthority,
+} from "./proposal-speaker-account-authority";
 
 /** Rechecks the verified link/session and current invitation scope inside the profile/confirmation batch. */
 export function prepareSpeakerSelfAuthorityGuard(
@@ -65,20 +73,39 @@ export function prepareSpeakerSelfAuthorityGuard(
   });
 }
 
+/**
+ * The other speakers on the proposal, as one speaker's link shows them. A speaker who has not accepted is
+ * named only by the name the proposer typed on an account no one has claimed; an existing person's own name
+ * stays theirs until they accept.
+ */
 export async function getProposalCoSpeakers(
   db: DatabaseLike,
   proposalId: string,
   excludeUserId: string,
 ): Promise<{ firstName: string | null; lastName: string | null; status: string }[]> {
-  return all<{ first_name: string | null; last_name: string | null; status: string }>(
+  const rows = await all<{
+    first_name: string | null;
+    last_name: string | null;
+    status: string;
+    account_claimed: 0 | 1;
+  }>(
     db,
-    `SELECT ${proposalSpeakerProfileColumns("u", "ps", "", ["firstName", "lastName"])}, ps.status
+    `SELECT ${proposalSpeakerProfileColumns("u", "ps", "", ["firstName", "lastName"])}, ps.status,
+            CASE WHEN ${unclaimedAccountSql("u")} THEN 0 ELSE 1 END AS account_claimed
      FROM proposal_speakers ps
      JOIN users u ON u.id = ps.user_id
      WHERE ps.proposal_id = ? AND ps.user_id != ?
      ORDER BY ps.created_at ASC`,
     [proposalId, excludeUserId],
-  ).then((rows) => rows.map((r) => ({ firstName: r.first_name, lastName: r.last_name, status: r.status })));
+  );
+  return rows.map((row) => {
+    const named = row.status === "confirmed" || !row.account_claimed;
+    return {
+      firstName: named ? row.first_name : null,
+      lastName: named ? row.last_name : null,
+      status: row.status,
+    };
+  });
 }
 
 export async function getPresentationUploader(
@@ -113,10 +140,13 @@ export async function updateSpeakerProfile(
       | "consents"
       | "organizationName"
       | "jobTitle"
+      | "organizationContextToken"
     >,
   context: ProposalSpeakerWriteContext & {
     selectionAuthority?: { userId: string; sessionId: string };
     signingSecret?: string;
+    /** What lets the person's own name change without a mailbox proof in this request. */
+    accountAuthority?: SpeakerAccountAuthority;
   },
 ): Promise<void> {
   const at = nowIso();
@@ -128,6 +158,13 @@ export async function updateSpeakerProfile(
   if (payload.firstName !== undefined) fields.push("firstName");
   if (payload.lastName !== undefined) fields.push("lastName");
   if (fields.length === 0 && payload.actingIdentityId === undefined && !proofSelection) return;
+  // The speaker's own session that selects a representation also signs them in to their account.
+  const accountAuthority =
+    context.accountAuthority ??
+    (context.selectionAuthority?.userId === context.userId
+      ? { sessionId: context.selectionAuthority.sessionId }
+      : undefined);
+  if (fields.length > 0 && !proofSelection && !accountAuthority) throw speakerAccountSignInRequiredError();
   if (context.currentStatus === "declined")
     throw new AppError(403, "SPEAKER_DECLINED", "You have declined participation.");
   if (!isProposalSpeakerRosterEditableStatus(context.proposalStatus)) {
@@ -192,15 +229,40 @@ export async function updateSpeakerProfile(
         at,
       });
     } else {
-      const affiliation = await prepareVerifiedOrganizationAffiliation(db, {
-        userId: profileUserId,
-        normalizedEmail: proof.normalizedEmail,
-        emailId: proof.emailId,
-        organizationName: payload.organizationName || undefined,
-        at,
-        proofEvidence: proof.proofEvidence,
-        profile: { ...payload, jobTitle: payload.jobTitle || null },
-      });
+      const observed = payload.organizationContextToken
+        ? await readEventAffiliationContext(
+            context.signingSecret!,
+            payload.organizationContextToken,
+            proof.eventId,
+            proof.normalizedEmail,
+            "proposal-affiliation",
+            {
+              name: payload.organizationName ?? "",
+              jobTitle: payload.jobTitle ?? "",
+            },
+          )
+        : null;
+      const affiliation = observed
+        ? await planVerifiedAffiliation(
+            db,
+            {
+              userId: profileUserId,
+              proofEvidence: proof.proofEvidence,
+              profile: { ...payload, jobTitle: payload.jobTitle || null },
+            },
+            observed.input,
+            observed.basis,
+            at,
+          )
+        : await prepareVerifiedOrganizationAffiliation(db, {
+            userId: profileUserId,
+            normalizedEmail: proof.normalizedEmail,
+            emailId: proof.emailId,
+            organizationName: payload.organizationName || undefined,
+            at,
+            proofEvidence: proof.proofEvidence,
+            profile: { ...payload, jobTitle: payload.jobTitle || null },
+          });
       affiliationStatements.push(...affiliation.statements);
       selected = {
         identityId: affiliation.identityId,
@@ -252,6 +314,9 @@ export async function updateSpeakerProfile(
     ...(proof?.statements ?? []),
     ...affiliationStatements,
     ...(selectionSessionGuard ? [selectionSessionGuard] : []),
+    ...(!proof && accountAuthority && (namePatch.firstName !== undefined || namePatch.lastName !== undefined)
+      ? [prepareAuthorizationGuard(db, speakerAccountAuthorityEvidence(accountAuthority, profileUserId))]
+      : []),
     ...(selected?.guards ?? []),
     ...(selected && (namePatch.firstName !== undefined || namePatch.lastName !== undefined)
       ? [

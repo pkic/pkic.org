@@ -1,3 +1,6 @@
+import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
+import { insertOrganization } from "./helpers/membership";
+import { registrationEmailProofVerifyResponseSchema } from "../assets/shared/schemas/registration-email-proof";
 import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./helpers/administrator";
 /**
  * registration-resend-confirm-info.test.ts
@@ -17,7 +20,10 @@ import { issueDatabaseCapability, materializeQueuedCapabilityLinks } from "../fu
 import { getRegistrationByManageToken } from "../functions/_lib/services/registrations";
 import { callApi } from "./helpers/app";
 import { gateNextBatch } from "./helpers/d1-batch-gate";
-import { registrationManageUpdateResponseSchema } from "../assets/shared/schemas/registration";
+import {
+  registrationConfirmInfoResponseSchema,
+  registrationManageUpdateResponseSchema,
+} from "../assets/shared/schemas/registration";
 
 const signingSecret = "test-signing-secret";
 
@@ -27,6 +33,36 @@ function resendManageLink(environment: typeof env, email: string, clientIp = "20
     headers: { "content-type": "application/json", "cf-connecting-ip": clientIp },
     body: JSON.stringify({ email }),
   });
+}
+
+/** Exercise the same verified-domain chooser used by the confirmation page. */
+async function confirmationOrganization(token: string) {
+  const infoResponse = await callApi(
+    env,
+    `/api/v1/events/pqc-2026/registrations/confirm-info?token=${encodeURIComponent(token)}`,
+    undefined,
+    { maxRoundTrips: 1 },
+  );
+  expect(infoResponse.status).toBe(200);
+  const info = registrationConfirmInfoResponseSchema.parse(await infoResponse.json());
+  expect(info.organizationProof).toBeTruthy();
+  const affiliation = {
+    organizationId: null,
+    organizationName: "Corrected Domain Fixture",
+    jobTitle: "Engineer",
+  };
+  const prepared = await callApi(env, "/api/v1/events/pqc-2026/registrations/proof/verify", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ token: info.organizationProof, affiliation }),
+  });
+  expect(prepared.status, await prepared.clone().text()).toBe(200);
+  const proof = registrationEmailProofVerifyResponseSchema.parse(await prepared.json());
+  return {
+    name: affiliation.organizationName,
+    jobTitle: affiliation.jobTitle,
+    contextToken: proof.affiliation!.contextToken!,
+  };
 }
 
 async function registerAttendee(): Promise<{
@@ -111,6 +147,62 @@ describe("confirm-info endpoint", () => {
     expect(body.email).toBe("resendtest@pkic.org");
     expect(body.eventName).toBe("PQC Conference 2026");
     expect(body.expired).toBe(false);
+  });
+
+  it("refuses a confirmation mailbox proof after its pending registration changes", async () => {
+    await seedEventAndAdmin(env.DB);
+    const { confirmationToken, registrationId } = await registerAttendee();
+    const response = await callApi(
+      env,
+      `/api/v1/events/pqc-2026/registrations/confirm-info?token=${encodeURIComponent(confirmationToken)}`,
+      undefined,
+      { maxRoundTrips: 1 },
+    );
+    const info = registrationConfirmInfoResponseSchema.parse(await response.json());
+    expect(info.organizationProof).toBeTruthy();
+    await env.DB.prepare("UPDATE registrations SET transition_revision=transition_revision+1 WHERE id=?")
+      .bind(registrationId)
+      .run();
+    const stale = await callApi(
+      env,
+      "/api/v1/events/pqc-2026/registrations/proof/verify",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token: info.organizationProof }),
+      },
+      { maxRoundTrips: 1 },
+    );
+    expect(stale.status).toBe(409);
+    expect(await stale.json()).toMatchObject({ error: { code: "REGISTRATION_CHANGED" } });
+  });
+
+  it("rolls back confirmation when the verified organization context changes", async () => {
+    await seedEventAndAdmin(env.DB);
+    const { confirmationToken, registrationId } = await registerAttendee();
+    const organization = await confirmationOrganization(confirmationToken);
+    const competitor = await insertOrganization(env.DB, "Concurrent Domain Fixture");
+    const at = new Date().toISOString();
+    await env.DB.prepare(
+      "INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at) VALUES (?,?,?,?,?)",
+    )
+      .bind(crypto.randomUUID(), "pkic.org", competitor, at, at)
+      .run();
+    const response = await callApi(env, "/api/v1/events/pqc-2026/registrations/confirm-email", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token: confirmationToken, id: registrationId, organization }),
+    });
+    expect(response.status, await response.clone().text()).toBe(409);
+    expect(await response.json()).toMatchObject({ error: { code: "IDENTITY_CONTEXT_CHANGED" } });
+    expect(
+      await env.DB.prepare("SELECT status,registration_identity_id FROM registrations WHERE id=?")
+        .bind(registrationId)
+        .first(),
+    ).toMatchObject({ status: "pending_email_confirmation", registration_identity_id: null });
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS total FROM organizations WHERE name=?").bind(organization.name).first(),
+    ).toMatchObject({ total: 0 });
   });
 
   it("returns null values for an invalid/unknown token", async () => {
@@ -226,6 +318,26 @@ describe("resend-confirmation endpoint", () => {
     await seedWorkflowEmailTemplates(env.DB, admin.id);
 
     const { confirmationToken, registrationId, manageToken } = await registerAttendee();
+    const [{ user_id: userId }] = await queryAll<{ user_id: string }>(
+      env.DB,
+      "SELECT user_id FROM registrations WHERE id=?",
+      [registrationId],
+    );
+    const originalIdentity = await buildCreateIdentityStatement(env.DB, {
+      userId,
+      organizationId: await insertOrganization(env.DB, "Original Domain Fixture"),
+      source: "verified_email",
+      verifiedEmailDomain: "pkic.org",
+      startImmediately: true,
+    });
+    await env.DB.batch([
+      originalIdentity.statement,
+      env.DB.prepare("UPDATE registrations SET registration_identity_id=? WHERE id=?").bind(
+        originalIdentity.identityId,
+        registrationId,
+      ),
+    ]);
+
     const oldRecipientBefore = (
       await queryAll<{ total: number }>(
         env.DB,
@@ -304,12 +416,33 @@ describe("resend-confirmation endpoint", () => {
     const newAddressToken = new URL(newAddressDelivery.confirmationUrl as string).searchParams.get("token");
     expect(newAddressToken).toMatch(/^pkc1_/);
 
+    const organization = await confirmationOrganization(newAddressToken!);
+    expect(
+      await env.DB.prepare("SELECT ended_at FROM identities WHERE id=?").bind(originalIdentity.identityId).first(),
+    ).toMatchObject({ ended_at: null });
     const confirmation = await callApi(env, "/api/v1/events/pqc-2026/registrations/confirm-email", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ id: registrationId, token: newAddressToken }),
+      body: JSON.stringify({
+        id: registrationId,
+        token: newAddressToken,
+        organization,
+      }),
     });
     expect(confirmation.status).toBe(200);
+    const [selected] = await queryAll<{ name: string; registration_identity_id: string }>(
+      env.DB,
+      `SELECT organization.name,registration.registration_identity_id
+      FROM registrations registration JOIN identities identity ON identity.id=registration.registration_identity_id
+      JOIN organizations organization ON organization.id=identity.organization_id WHERE registration.id=?`,
+      [registrationId],
+    );
+    expect(selected.name).toBe("Corrected Domain Fixture");
+    expect(selected.registration_identity_id).not.toBe(originalIdentity.identityId);
+    expect(
+      await env.DB.prepare("SELECT ended_at FROM identities WHERE id=?").bind(originalIdentity.identityId).first(),
+    ).toMatchObject({ ended_at: expect.any(String) });
+
     expect(await confirmation.json()).toMatchObject({
       success: true,
       stage: "confirmed",
@@ -372,7 +505,11 @@ describe("resend-confirmation endpoint", () => {
     const firstConfirmation = await callApi(env, "/api/v1/events/pqc-2026/registrations/confirm-email", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ id: registrationId, token: firstToken }),
+      body: JSON.stringify({
+        id: registrationId,
+        token: firstToken,
+        organization: await confirmationOrganization(firstToken!),
+      }),
     });
     expect(firstConfirmation.status).toBe(200);
     expect(await firstConfirmation.json()).toMatchObject({ stage: "confirmed" });

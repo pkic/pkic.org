@@ -44,11 +44,11 @@ export function json(value: unknown, status = 200) {
   return new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
 }
 const hosts: HTMLElement[] = [];
-export function mount(props: { mine?: boolean } = {}) {
+export function mount(props: { mine?: boolean; canPersonalize?: boolean } = {}) {
   const host = document.createElement("div");
   document.body.append(host);
   hosts.push(host);
-  void act(() => render(<MyAgenda slug="workshop" {...props} />, host));
+  void act(() => render(<MyAgenda slug="workshop" canPersonalize {...props} />, host));
   return host;
 }
 let program: unknown = { agenda: null, marks: [] };

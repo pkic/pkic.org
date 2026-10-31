@@ -2,10 +2,29 @@
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { attendeeRegistrationParticipationSchema } from "../../assets/shared/schemas/registration";
 import type { EventFormsResponse } from "../../assets/shared/schemas/forms";
 import type { GroupEvent } from "../../assets/shared/schemas/group-events";
 import { GroupEventRegistrationPanel } from "../../assets/ts/member-flows/portal/sections/management/GroupEventRegistrationPanel";
 import { groupNames, namedGroup } from "./helpers/labeled-control";
+
+// Contact/session behavior is covered by the shared contact and browser journeys;
+// this host's contract is the group-scoped transport and event configuration.
+vi.mock("../../assets/ts/components/RegistrationContactStep", async () => {
+  const { useEffect } = await import("preact/hooks");
+  return {
+    RegistrationContactStep: ({ onReadyChange }: { onReadyChange: (ready: boolean) => void }) => {
+      useEffect(() => onReadyChange(true), [onReadyChange]);
+      return (
+        <>
+          <input type="hidden" name="email" value="person@example.test" />
+          <input type="hidden" name="firstName" value="Ada" />
+          <input type="hidden" name="lastName" value="Example" />
+        </>
+      );
+    },
+  };
+});
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const EVENT_ID = "20000000-0000-4000-8000-000000000001";
@@ -115,7 +134,10 @@ describe("portal group event registration", () => {
           location.origin,
         );
         const method = init.method ?? "GET";
-        const body = typeof init.body === "string" ? JSON.parse(init.body) : undefined;
+        const body =
+          typeof init.body === "string"
+            ? attendeeRegistrationParticipationSchema.parse(JSON.parse(init.body))
+            : undefined;
         requests.push({ url, method, body });
         if (method === "POST") {
           return json({
@@ -139,7 +161,7 @@ describe("portal group event registration", () => {
     expect(container.textContent).toContain("Registration details");
     expect(container.textContent).toContain("Tell the event team how you plan to participate.");
     expect(container.textContent).toContain("I agree to the event terms");
-    expect(container.textContent).toContain("How will you attend?");
+    expect(container.textContent).toContain("Attendance");
 
     const form = container.querySelector("form")!;
     const role = form.querySelector<HTMLInputElement>("input[name='custom.role']")!;
@@ -175,7 +197,10 @@ describe("portal group event registration", () => {
       "fetch",
       vi.fn(async (_input: RequestInfo | URL, init: RequestInit = {}) => {
         const method = init.method ?? "GET";
-        const body = typeof init.body === "string" ? JSON.parse(init.body) : undefined;
+        const body =
+          typeof init.body === "string"
+            ? attendeeRegistrationParticipationSchema.parse(JSON.parse(init.body))
+            : undefined;
         requests.push({ method, body });
         return method === "POST"
           ? json({
@@ -269,8 +294,8 @@ describe("portal group event registration", () => {
     // A `legend` names the set of radios; a `label` could only name one of
     // them, which is how a radio group ends up announced as three loose
     // controls with no question attached.
-    expect(groupNames(container)).toContain("How will you attend?");
-    const attendance = namedGroup(container, "How will you attend?");
+    expect(groupNames(container)).toContain("Attendance");
+    const attendance = namedGroup(container, "Attendance");
     const radios = [...attendance.querySelectorAll<HTMLInputElement>("input[type='radio']")];
     expect(radios).toHaveLength(3);
     for (const radio of radios) {
@@ -281,7 +306,7 @@ describe("portal group event registration", () => {
       expect(label.classList.contains("pk-check")).toBe(true);
       expect(label.querySelector(".pk-check__label")?.textContent).toBeTruthy();
     }
-    expect(radios.map((radio) => radio.closest("label")?.textContent)).toEqual(["In person", "Virtual", "On demand"]);
+    expect(radios.map((radio) => radio.closest("label")?.textContent)).toEqual(["In-person", "Virtual", "On-demand"]);
 
     // The whole panel is a named region, so the registration form is
     // reachable without reading the page from the top.

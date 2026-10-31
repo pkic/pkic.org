@@ -1,14 +1,13 @@
-import { badgeCacheMetadata } from "./badge-render-job-statements";
-import type { CountryCode } from "../../../assets/shared/countries";
-import { REGISTRATION_ORGANIZATION_SQL, REGISTRATION_JOB_TITLE_SQL } from "./registrations/selected-identity";
+import { personalPromotionSharePath } from "../../../assets/shared/personal-promotion-image";
+import { personalPromotionImageCacheKey } from "../../../assets/shared/personal-promotion-image";
 /**
  * OG badge pre-rendering service.
  *
  * Owns the resvg-wasm and font singletons (initialized once per worker
  * isolate) and exposes:
  *
- *   generateBadgePng      — fetch data + render SVG → PNG bytes
- *   renderAndCacheBadge   — generateBadgePng + write to R2 (throws on error)
+ *   renderBadgeSourcePng  — render loaded personal promotion facts to PNG bytes
+ *   renderAndCacheBadge   — load, render, and write to R2 (throws on error)
  *   prerenderAndCache     — background-safe wrapper around renderAndCacheBadge
  *   invalidateAndRerender — overwrite R2 for every badge owned by a user
  *   trySeedGravatarThenPrerender — try Gravatar on first-time users, then prerender
@@ -18,25 +17,28 @@ import { REGISTRATION_ORGANIZATION_SQL, REGISTRATION_JOB_TITLE_SQL } from "./reg
  */
 
 import { ensureResvgWasm } from "../utils/resvg";
-import { renderBadgeSvg, renderDonationBadgeSvg } from "./og-badge";
+import { renderDonationBadgeSvg } from "./og-badge";
 import { first, all } from "../db/queries";
 import { fetchGravatar } from "./gravatar";
-import type { DatabaseLike, Env } from "../types";
+import type { Env } from "../types";
 import { fetchHeroImage, fetchStaticAsset, uint8ToBase64 } from "./og-badge-hero-image";
 import { validateRasterImage } from "../utils/image-format";
 import { STANDARD_HEADSHOT_MAX_BYTES } from "../../../assets/shared/schemas/images";
 import { socialBadgeRoleSchema } from "../../../assets/shared/schemas/participant-roles";
-import { formatEventPlace } from "../../../assets/shared/event-place";
-import { proposalSpeakerProfileColumns } from "./proposal-speakers";
-import {
-  selectedOrAffiliationJobTitleSql,
-  selectedOrAffiliationOrganizationNameSql,
-} from "./identities/affiliation-projection";
+import { eventPlaceSummary } from "../../../assets/shared/event-place";
+import { readBadgeSource, personalBadgeCacheMetadata, type BadgeSource } from "./og-badge-source";
+import { renderPersonalPromotionSvg } from "./event-agenda/promotion-personal";
+import { promotionFontMeasure } from "./event-agenda/promotion-text";
+import { eventPromotionDesignFromSettings } from "../../../assets/shared/schemas/event-promotion-design";
+import { parseJsonSafe } from "../utils/json";
 
-type BadgeRenderEnv = Pick<Env, "DB" | "SPEAKER_UPLOADS_BUCKET" | "ASSETS" | "ASSETS_PUBLIC" | "IMAGES">;
+type BadgeRenderEnv = Pick<
+  Env,
+  "SPEAKER_UPLOADS_BUCKET" | "ASSETS" | "ASSETS_PUBLIC" | "ASSETS_BUCKET" | "IMAGES" | "HERO_IMAGE_ALLOWED_HOSTS"
+>;
 type BadgeCacheEnv = Pick<
   Env,
-  "DB" | "ASSETS_BUCKET" | "IMAGES" | "SPEAKER_UPLOADS_BUCKET" | "ASSETS" | "ASSETS_PUBLIC"
+  "DB" | "ASSETS_BUCKET" | "IMAGES" | "SPEAKER_UPLOADS_BUCKET" | "ASSETS" | "ASSETS_PUBLIC" | "HERO_IMAGE_ALLOWED_HOSTS"
 >;
 type DonationRenderEnv = Pick<Env, "DB" | "ASSETS" | "ASSETS_PUBLIC">;
 
@@ -50,16 +52,20 @@ let fontBuffersCache: Promise<Uint8Array[]> | null = null;
 
 function getFontBuffers(origin: string, env: Pick<Env, "ASSETS" | "ASSETS_PUBLIC">): Promise<Uint8Array[]> {
   if (!fontBuffersCache) {
-    const p = Promise.all([
-      fetchStaticAsset(env, origin, "/fonts/Roboto-Regular.ttf")
-        .then((r) => (r.ok ? r.arrayBuffer() : new ArrayBuffer(0)))
-        .catch(() => new ArrayBuffer(0))
-        .then((b) => new Uint8Array(b)),
-      fetchStaticAsset(env, origin, "/fonts/Roboto-Bold.ttf")
-        .then((r) => (r.ok ? r.arrayBuffer() : new ArrayBuffer(0)))
-        .catch(() => new ArrayBuffer(0))
-        .then((b) => new Uint8Array(b)),
-    ]);
+    const p = Promise.all(
+      [
+        "PromotionRoboto-Regular.ttf",
+        "PromotionRoboto-Bold.ttf",
+        "PromotionRobotoMono-Medium.ttf",
+        "PromotionRobotoMono-SemiBold.ttf",
+        "PromotionRoboto-Medium.ttf",
+      ].map((name) =>
+        fetchStaticAsset(env, origin, `/fonts/${name}`)
+          .then((response) => (response.ok ? response.arrayBuffer() : new ArrayBuffer(0)))
+          .catch(() => new ArrayBuffer(0))
+          .then((buffer) => new Uint8Array(buffer)),
+      ),
+    );
     fontBuffersCache = p.then((fonts) => {
       if (fonts.every((f) => f.length === 0)) fontBuffersCache = null;
       return fonts;
@@ -87,165 +93,61 @@ export async function loadValidatedHeadshotDataUrl(
   }
 }
 
-// ─── DB row types ─────────────────────────────────────────────────────────────
-
-interface ReferralCodeRow {
-  event_id: string;
-  owner_type: "registration" | "proposal";
-  owner_id: string;
-  created_by_user_id: string | null;
-}
-
-interface AttendeeRow {
-  first_name: string | null;
-  last_name: string | null;
-  organization_name: string | null;
-  job_title: string | null;
-  headshot_r2_key: string | null;
-  event_name: string;
-  starts_at: string | null;
-  ends_at: string | null;
-  settings_json: string;
-  city: string | null;
-  country: CountryCode | null;
-  /** Effective badge role: highest-priority active non-attendee participant role, or null (= attendee) */
-  effective_role: string | null;
-}
-
-interface SpeakerRow extends AttendeeRow {
-  speaker_role: string;
-}
+// ─── Core generation ─────────────────────────────────────────────────────────
 
 interface CodeRow {
   code: string;
 }
 
-/** Load the proposal-scoped public speaker representation used by badge rendering. */
-export async function getProposalSpeakerBadgeRenderData(
-  db: DatabaseLike,
-  proposalId: string,
-  userId: string,
-): Promise<SpeakerRow | null> {
-  return first<SpeakerRow>(
-    db,
-    `SELECT ${proposalSpeakerProfileColumns("u", "ps", "", ["firstName", "lastName"])},
-            ${selectedOrAffiliationOrganizationNameSql("ps.acting_identity_id", "u.id")} AS organization_name,
-            ${selectedOrAffiliationJobTitleSql("ps.acting_identity_id", "u.id")} AS job_title,
-            u.headshot_r2_key AS headshot_r2_key,
-            e.name AS event_name,
-            e.starts_at, e.ends_at, e.settings_json, e.city, e.country,
-            COALESCE(ps.role, 'speaker') AS speaker_role
-     FROM session_proposals sp
-     JOIN users u ON u.id = ?
-     JOIN events e ON e.id = sp.event_id
-     LEFT JOIN proposal_speakers ps
-       ON ps.proposal_id = sp.id AND ps.user_id = u.id
-     WHERE sp.id = ? AND sp.deleted_at IS NULL`,
-    [userId, proposalId],
-  );
-}
-
-// ─── Core generation ─────────────────────────────────────────────────────────
-
-const R2_KEY_PREFIX = "og-badges/";
-
-/**
- * Fetch all data for a referral code, render the badge SVG, and rasterise to
- * PNG. Returns `null` when the code is not found in the database.
- *
- */
-export async function generateBadgePng(code: string, env: BadgeRenderEnv, origin: string): Promise<Uint8Array | null> {
-  // Kick off wasm init + fonts + referral lookup together.
-  const [, fontBuffers, ref] = await Promise.all([
+/** Rendering a loaded snapshot performs no further D1 work. */
+export async function renderBadgeSourcePng(
+  code: string,
+  source: BadgeSource,
+  env: BadgeRenderEnv,
+  origin: string,
+  format: import("../../../assets/shared/personal-promotion-image").PersonalPromotionImageFormat = "landscape",
+): Promise<Uint8Array> {
+  const [Resvg, fontBuffers, headshotDataUrl, logoResponse, heroImage] = await Promise.all([
     ensureWasm(),
     getFontBuffers(origin, env),
-    first<ReferralCodeRow>(
-      env.DB,
-      "SELECT event_id, owner_type, owner_id, created_by_user_id FROM referral_codes WHERE code = ?",
-      [code],
-    ),
+    loadValidatedHeadshotDataUrl(source.headshot_r2_key, env.SPEAKER_UPLOADS_BUCKET),
+    fetchStaticAsset(env, origin, "/img/logo.svg"),
+    fetchHeroImage(source.settings_json, origin, env),
   ]);
+  const logoBytes = logoResponse.ok ? new Uint8Array(await logoResponse.arrayBuffer()) : null;
+  const settings = parseJsonSafe<Record<string, unknown>>(source.settings_json, {});
+  const svg = renderPersonalPromotionSvg({
+    firstName: source.first_name ?? "",
+    lastName: source.last_name ?? "",
+    role: socialBadgeRoleSchema.parse(source.role),
+    eventName: source.event_name,
+    startsAt: source.starts_at,
+    endsAt: source.ends_at,
+    timeZone: source.timezone,
+    location: eventPlaceSummary({ ...source, venue: typeof settings.venue === "string" ? settings.venue : null }),
+    city: source.city,
+    organization: source.organization_name,
+    jobTitle: source.job_title,
+    headshotDataUrl,
+    heroImage,
+    sessions: source.sessions,
+    format,
+    registrationUrl: new URL(personalPromotionSharePath(code), origin).href,
+    design: eventPromotionDesignFromSettings(source.event_name, settings),
+    measure: promotionFontMeasure(fontBuffers, {
+      mono: fontBuffers[2],
+      monoBold: fontBuffers[3],
+      medium: fontBuffers[4],
+    }),
+    logoDataUrl: logoBytes ? `data:image/svg+xml;base64,${uint8ToBase64(logoBytes)}` : undefined,
+  });
 
-  if (!ref) return null;
-
-  let svg: string;
-
-  if (ref.owner_type === "registration") {
-    const row = await first<AttendeeRow>(
-      env.DB,
-      `SELECT u.first_name, u.last_name, ${REGISTRATION_ORGANIZATION_SQL} AS organization_name, ${REGISTRATION_JOB_TITLE_SQL} AS job_title,
-              u.headshot_r2_key,
-              e.name   AS event_name,
-              e.starts_at, e.ends_at, e.settings_json, e.city, e.country,
-              COALESCE(bro.role, (
-                SELECT ep2.role
-                FROM   event_participant_badge_roles ep2
-                WHERE  ep2.event_id = r.event_id
-                  AND  ep2.user_id  = r.user_id
-                ORDER BY ep2.priority ASC, ep2.role ASC
-                LIMIT 1
-              )) AS effective_role
-       FROM   registrations r
-       JOIN   users  u ON u.id = r.user_id
-
-       JOIN   events e ON e.id = r.event_id
-       LEFT JOIN registration_badge_role_overrides bro ON bro.registration_id = r.id
-       WHERE  r.id = ?`,
-      [ref.owner_id],
-    );
-    if (!row) return null;
-
-    const [headshotDataUrl, heroImageDataUrl] = await Promise.all([
-      loadValidatedHeadshotDataUrl(row.headshot_r2_key, env.SPEAKER_UPLOADS_BUCKET),
-      fetchHeroImage(row.settings_json, origin, env),
-    ]);
-
-    svg = renderBadgeSvg({
-      firstName: row.first_name ?? "",
-      lastName: row.last_name ?? "",
-      role: socialBadgeRoleSchema.parse(row.effective_role ?? "attendee"),
-      eventName: row.event_name,
-      startsAt: row.starts_at,
-      endsAt: row.ends_at,
-      location: formatEventPlace(row, "en"),
-      organization: row.organization_name,
-      jobTitle: row.job_title,
-      headshotDataUrl,
-      heroImageDataUrl,
-    });
-  } else {
-    const userId = ref.created_by_user_id;
-    if (!userId) return null;
-
-    const row = await getProposalSpeakerBadgeRenderData(env.DB, ref.owner_id, userId);
-    if (!row) return null;
-
-    const [headshotDataUrl, heroImageDataUrl] = await Promise.all([
-      loadValidatedHeadshotDataUrl(row.headshot_r2_key, env.SPEAKER_UPLOADS_BUCKET),
-      fetchHeroImage(row.settings_json, origin, env),
-    ]);
-
-    svg = renderBadgeSvg({
-      firstName: row.first_name ?? "",
-      lastName: row.last_name ?? "",
-      role: socialBadgeRoleSchema.parse(row.speaker_role ?? "speaker"),
-      eventName: row.event_name,
-      startsAt: row.starts_at,
-      endsAt: row.ends_at,
-      location: formatEventPlace(row, "en"),
-      organization: row.organization_name,
-      jobTitle: row.job_title,
-      headshotDataUrl,
-      heroImageDataUrl,
-    });
+  const resvg = new Resvg(svg, { font: { fontBuffers, defaultFontFamily: "Roboto" } });
+  try {
+    return resvg.render().asPng();
+  } finally {
+    resvg.free();
   }
-
-  const Resvg = await ensureWasm();
-  const resvgOpts = {
-    font: { fontBuffers, defaultFontFamily: "Roboto" },
-  };
-  const resvg = new Resvg(svg, resvgOpts);
-  return resvg.render().asPng();
 }
 
 // ─── Cache management ─────────────────────────────────────────────────────────
@@ -294,10 +196,11 @@ async function pngToR2(
  * left in place until the replacement bytes have been generated successfully.
  */
 export async function renderAndCacheBadge(code: string, env: BadgeCacheEnv, origin: string): Promise<void> {
-  const metadata = await badgeCacheMetadata(env.DB, code);
-  const png = await generateBadgePng(code, env, origin);
-  if (!png) throw new Error(`Badge source not found for referral code ${code}`);
-  await pngToR2(png, `${R2_KEY_PREFIX}${code}`, metadata, env);
+  const source = await readBadgeSource(env.DB, code);
+  if (!source) throw new Error(`Badge source not found for referral code ${code}`);
+  const metadata = personalBadgeCacheMetadata(code, source);
+  const png = await renderBadgeSourcePng(code, source, env, origin);
+  await pngToR2(png, personalPromotionImageCacheKey(code), metadata, env);
 }
 
 /**

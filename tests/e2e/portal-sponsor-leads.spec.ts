@@ -57,6 +57,7 @@ test("sponsor live lead UI searches current contacts, shows capture provenance a
                 name: "Synthetic attendee",
                 email: "demo@example.test",
                 organization: "Example organization",
+                personalEmail: false,
                 capturedAt: "2026-12-01T09:30:00.000Z",
                 operatorUserId: operatorId,
                 operatorName: "Demo operator",

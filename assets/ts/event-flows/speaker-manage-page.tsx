@@ -18,14 +18,16 @@ import {
   speakerProfileUpdateResponseSchema,
   type SpeakerSelfServiceReadResponse,
 } from "../../shared/schemas/speaker-self-service";
-import { SpeakerParticipationIdentity } from "../components/SpeakerParticipationIdentity";
+import { SPEAKER_STEPS_NOTICE, SpeakerParticipationIdentity } from "../components/SpeakerParticipationIdentity";
 import {
+  SPEAKER_MAILBOX_PROOF_HEADER,
   eventProposalProofIdentityPatchSchema,
   eventProposalProofIdentityPatchResponseSchema,
 } from "../../shared/schemas/event-proposal-proof";
 import type { PersonalNamePatch } from "../components/ParticipationPersonalDetails";
 import {
   newAffiliationDetails,
+  prepareProposalEntry,
   type ParticipationPerson,
   type ProposalEntrySelection,
 } from "../components/useProposalEntryIdentity";
@@ -90,7 +92,11 @@ async function main(): Promise<void> {
 
   if (speakerStatusBadge) {
     speakerStatusBadge.textContent = formatStatusLabel(data.speaker.status);
-    speakerStatusBadge.className = statusBadgeToneClass(data.speaker.status);
+    // Confirmed and invited are the expected states: plain text, with the tone left to declined.
+    speakerStatusBadge.className =
+      data.speaker.status === "confirmed" || data.speaker.status === "invited"
+        ? ""
+        : statusBadgeToneClass(data.speaker.status);
   }
 
   if (data.speaker.status === "invited") {
@@ -116,17 +122,13 @@ async function main(): Promise<void> {
   let speakerTerms: RequiredTerm[] = [];
   let speakerTermsLoaded = false;
   let representationSaved = data.profile.actingIdentitySelection !== "unrecorded";
+  let identityChanged = false;
   const confirmationButton = boot.root.querySelector<HTMLButtonElement>("[data-confirm-participation]");
   const representationNotice = document.createElement("div");
   confirmForm?.before(representationNotice);
   function syncRepresentationConfirmation(): void {
     if (confirmationButton) confirmationButton.disabled = !speakerTermsLoaded || !representationSaved;
-    render(
-      representationSaved ? null : (
-        <Alert tone="warn">Confirm and save your speaker identity before confirming participation.</Alert>
-      ),
-      representationNotice,
-    );
+    render(representationSaved ? null : <p class="pk-muted">{SPEAKER_STEPS_NOTICE}</p>, representationNotice);
   }
   syncRepresentationConfirmation();
 
@@ -161,7 +163,7 @@ async function main(): Promise<void> {
       return;
     }
     if (!representationSaved) {
-      setStatus(boot.statusEl, "Confirm and save your speaker identity before confirming participation.", true);
+      setStatus(boot.statusEl, SPEAKER_STEPS_NOTICE, true);
       return;
     }
 
@@ -265,12 +267,16 @@ async function main(): Promise<void> {
   }
 
   let entry: ProposalEntrySelection | null = null;
-  let identityChanged = false;
   let identityRevision = 0;
   let identityViewRevision = 0;
   const identityContainer = profileForm?.querySelector<HTMLElement>("[data-speaker-identity]");
   const invited = data.speaker.status === "invited";
   const acceptedConsents = () => readConsentValues(invited ? confirmForm! : profileForm!);
+  const profileSave = profileForm?.querySelector<HTMLElement>("[data-profile-save]");
+  /** Saving is offered only once there is an identity to save, never as a button that can only refuse. */
+  function syncProfileSave(): void {
+    if (profileSave) profileSave.hidden = identityChanged && !entry;
+  }
   const updateEntry = (selection: ProposalEntrySelection | null): void => {
     if (selection !== entry) {
       identityRevision += 1;
@@ -279,12 +285,22 @@ async function main(): Promise<void> {
       syncRepresentationConfirmation();
     }
     entry = selection;
+    syncProfileSave();
   };
   const editIdentity = (): void => {
     identityChanged = true;
     identityRevision += 1;
     representationSaved = false;
     syncRepresentationConfirmation();
+    syncProfileSave();
+  };
+  /** Backing out of a change leaves the saved representation in force. */
+  const cancelEditing = (): void => {
+    entry = null;
+    identityChanged = false;
+    representationSaved = data.profile.actingIdentitySelection !== "unrecorded";
+    syncRepresentationConfirmation();
+    syncProfileSave();
   };
   async function savePersonalDetails(names: PersonalNamePatch): Promise<ParticipationPerson> {
     await patchJson(
@@ -324,8 +340,10 @@ async function main(): Promise<void> {
         consents={acceptedConsents}
         onChange={updateEntry}
         onEditing={editIdentity}
+        onCancelEditing={cancelEditing}
         onTermsRecorded={recordTerms}
-        savePersonalDetails={savePersonalDetails}
+        // The link speaks for this proposal; the account's own name needs the person's sign-in once claimed.
+        savePersonalDetails={data.profile.personalDetailsEditable ? savePersonalDetails : undefined}
       />,
       identityContainer,
     );
@@ -333,16 +351,31 @@ async function main(): Promise<void> {
   renderIdentity();
   confirmForm?.addEventListener("change", renderIdentity);
 
+  /** The mailbox proof saved in this visit; the link alone changes the photo only on an unclaimed account. */
+  let mailboxProof: string | null = null;
+  function mountHeadshot(): void {
+    if (data.speaker.status === "declined") return;
+    mountTokenHeadshot({
+      section: headshotSection,
+      name: [data.profile.firstName, data.profile.lastName].filter(Boolean).join(" ") || data.profile.email,
+      initialUrl: data.profile.headshotUrl,
+      canChange: data.profile.personalDetailsEditable || mailboxProof !== null,
+      headers: mailboxProof ? { [SPEAKER_MAILBOX_PROOF_HEADER]: mailboxProof } : {},
+      url: proposalSpeakerAccessPath(boot.apiBase, token, "headshot"),
+    });
+  }
+
   profileForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (identityChanged && !entry) {
       setStatus(boot.statusEl, "Confirm your identity and email before saving your profile.", true);
       return;
     }
-    const submittedEntry = identityChanged ? entry : null;
+    const selectedEntry = identityChanged ? entry : null;
     await withLoadingButton(findSubmitButton(profileForm), async () => {
       const submittedIdentityRevision = identityRevision;
       try {
+        const submittedEntry = selectedEntry ? await prepareProposalEntry(selectedEntry) : null;
         const saved = await patchJson(
           proposalSpeakerAccessPath(boot.apiBase, token, "profile"),
           speakerSelfProfilePatchSchema.parse({
@@ -367,15 +400,21 @@ async function main(): Promise<void> {
           representationSaved = true;
           initialProof = undefined;
           history.replaceState({}, "", `${location.pathname}${location.search}`);
+          // The mailbox just proved speaks for the account in this step, so the photo can be added now too.
+          mailboxProof = submittedEntry.continuationToken ?? null;
+          mountHeadshot();
         }
         if (!identityChanged) {
           identityViewRevision += 1;
           renderIdentity();
         }
         syncRepresentationConfirmation();
-        setStatus(boot.statusEl, "Speaker identity saved.");
-        if (identityChanged) showProfileEditForm();
-        else showProfileSavedState();
+        syncProfileSave();
+        // The saved state says so itself, beside the profile; the page status says it only while the form stays open.
+        if (identityChanged) {
+          setStatus(boot.statusEl, "Speaker identity saved.");
+          showProfileEditForm();
+        } else showProfileSavedState();
       } catch (error) {
         const normalized = normalizeValidation(error);
         setStatus(boot.statusEl, normalized.globalMessage, true);
@@ -389,12 +428,7 @@ async function main(): Promise<void> {
   } else {
     toggleEditableSections(true);
     renderIdentityProfile();
-    mountTokenHeadshot({
-      section: headshotSection,
-      name: [data.profile.firstName, data.profile.lastName].filter(Boolean).join(" ") || data.profile.email,
-      initialUrl: data.profile.headshotUrl,
-      url: proposalSpeakerAccessPath(boot.apiBase, token, "headshot"),
-    });
+    mountHeadshot();
   }
 
   if (loadingEl) loadingEl.hidden = true;

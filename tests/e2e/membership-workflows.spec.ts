@@ -108,7 +108,7 @@ test("creates, renames, and reorders organization categories from their forms an
   const code = `ORG_${Date.now()}`;
   const renamed = `${code}_NEW`;
   await page.goto("/portal/#/settings/membership-categories/new");
-  await page.getByLabel(/^Code/).fill(code);
+  await page.getByRole("textbox", { name: /^Code/ }).fill(code);
   await page.getByLabel(/^Name/).fill("Example Organization category");
   await page.getByLabel("Category", { exact: true }).selectOption("organization");
   await page
@@ -118,7 +118,7 @@ test("creates, renames, and reorders organization categories from their forms an
   await page.getByRole("button", { name: "Create category", exact: true }).click();
   await expect(page).toHaveURL(/membership-categories$/);
   await page.goto(`/portal/#/settings/membership-categories/${code}`);
-  await page.getByLabel(/^Code/).fill(renamed);
+  await page.getByRole("textbox", { name: /^Code/ }).fill(renamed);
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: testInfo.outputPath("category-form.png"), fullPage: true });
   await page.getByRole("button", { name: `Save category ${code}`, exact: true }).click();
@@ -133,7 +133,7 @@ test("creates, renames, and reorders organization categories from their forms an
   await page.reload();
   await expect(rows.nth(movedRowIndex)).toContainText(renamed);
   await page.goto(`/portal/#/settings/membership-categories/${renamed}`);
-  await expect(page.getByLabel(/^Code/)).toHaveValue(renamed);
+  await expect(page.getByRole("textbox", { name: /^Code/ })).toHaveValue(renamed);
   await expect(page.getByLabel("Category", { exact: true })).toBeDisabled();
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
@@ -159,7 +159,7 @@ test("explains payment references and removes unused organization workflow versi
   await page.getByRole("button", { name: "Delete draft…", exact: true }).click();
   await page.getByLabel("Reason for removal").fill("This unused organization policy draft is no longer needed.");
   await page.getByRole("button", { name: "Delete draft", exact: true }).click();
-  await expect(page).toHaveURL(/application-workflow\?workflows\.f\.archived=false$/);
+  await expect(page).toHaveURL(/application-workflow$/);
   expect((await page.request.get(`/api/v1/membership/workflows/versions/${draftId}`)).status()).toBe(404);
   await page.getByRole("button", { name: "New workflow", exact: true }).click();
   await page.getByLabel("Workflow name").fill(`${name} published`);
@@ -171,7 +171,7 @@ test("explains payment references and removes unused organization workflow versi
   await page.getByLabel("Reason for removal").fill("Replaced by another synthetic organization policy.");
   await page.screenshot({ path: testInfo.outputPath("workflow-archive-confirmation.png"), fullPage: true });
   await page.getByRole("button", { name: "Archive version", exact: true }).click();
-  await expect(page).toHaveURL(/application-workflow\?workflows\.f\.archived=false$/);
+  await expect(page).toHaveURL(/application-workflow$/);
 });
 
 /** @covers system.12.7 */
@@ -203,6 +203,8 @@ test("navigates workflow breadcrumbs between settings, the list, and an organiza
   await listLink.press("Enter");
   await expect(page).toHaveURL(/#\/settings\/application-workflow(?:\?|$)/);
   await expect(page.getByRole("table", { name: "Membership workflow versions" })).toBeVisible();
+  // The phone trail shows only the parent step; the full trail with its Settings link is the desktop one.
+  await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto(workflowUrl);
   await breadcrumb.getByRole("link", { name: "Settings", exact: true }).click();
   await expect(page).toHaveURL(/#\/settings$/);

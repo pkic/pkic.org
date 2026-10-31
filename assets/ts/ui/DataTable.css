@@ -884,8 +884,9 @@
     overflow-wrap: anywhere;
   }
 
-  /* An expanded region belonging to the row above it. */
-  .pk-table__detail > td {
+  /* An expanded region belonging to the row above it. It names the table as well, so it outranks the
+     base cell padding in Table.css whichever stylesheet loads last. */
+  .pk-table .pk-table__detail > td {
     padding: 0;
     background: var(--pk-surface-sunk);
   }

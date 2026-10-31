@@ -32,6 +32,8 @@ import type { AttendanceType } from "../../../../assets/shared/schemas/registrat
 import { prepareClearRegistrationEmailChangeStatement } from "./change-email";
 import { prepareRegistrationTransitionGuard } from "./transition-guard";
 import { newCapabilityLinkSecret } from "../capability-links";
+import type { AuthAdmin } from "../../types";
+import { requirePermission, preparePermissionsAuthorizationGuard } from "../../auth/permissions";
 
 export interface RegistrationUpdatePayload {
   action: "update" | "cancel" | "report_unauthorized";
@@ -46,6 +48,8 @@ export interface RegistrationUpdatePayload {
   sourceRef?: string | null;
   waitlistClaimWindowHours?: number;
   profilePatch?: UserProfilePatch;
+  /** Staff adapters must authorize canonical person changes independently of event management. */
+  profileActor?: AuthAdmin;
   auditActor?: { type: "admin" | "user"; id: string; action: string };
   /** Validates the form revision in the same D1 batch as customAnswersJson. */
   formRevisionGuard?: StatementLike | null;
@@ -379,6 +383,10 @@ export async function buildRegistrationUpdate(
     ? await userProfilePatchWouldChange(db, updated.user_id, payload.profilePatch)
     : false;
   if (payload.profilePatch && profileChanged) {
+    if (payload.profileActor) {
+      requirePermission(payload.profileActor, "users:write");
+      statements.push(preparePermissionsAuthorizationGuard(db, payload.profileActor, [{ permission: "users:write" }]));
+    }
     statements.push(...prepareUserProfileStatements(db, updated.user_id, payload.profilePatch));
   }
   const notificationChanged = scalarChanged || dayAttendanceChanged || waitlistChanged || profileChanged;

@@ -1,3 +1,5 @@
+import { preparePrimaryEmailDomainChange } from "../identities/primary-email-domain-change";
+import { readEmailOwnership, prepareEmailOwnershipClaim } from "../email-ownership";
 import { prepareMailingListEmailChange } from "../mailing-list-subscriptions/queue-email-change";
 /**
  * Initiates an email change for a registration by storing the pending email
@@ -11,6 +13,7 @@ import { prepareMailingListEmailChange } from "../mailing-list-subscriptions/que
  * 5. Promote the new canonical login address only after new-mailbox proof
  */
 
+import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import { AppError } from "../../errors";
 import { first } from "../../db/queries";
 import { normalizeEmail } from "../../validation";
@@ -25,7 +28,7 @@ import {
   prepareRegistrationEmailChangeNotice,
   type RegistrationConfirmationEmailParams,
 } from "./status-notifications";
-import { emailTakenError, findUserEmailOwner, isEmailReservationConflict } from "../user-emails";
+import { emailTakenError, isEmailReservationConflict } from "../user-emails";
 import {
   isRegistrationTransitionConflict,
   prepareRegistrationTransitionGuard,
@@ -34,7 +37,7 @@ import {
 import { isOrganizationContactForRepresentative } from "../membership/representative-roles";
 import {
   prepareRotateUserProposalSpeakerManageSecrets,
-  prepareRotateUserRegistrationManageSecrets,
+  prepareRotateUserRegistrationCapabilities,
 } from "./manage-capability-revocation";
 
 const PENDING_CONFIRMATION_DEADLINE_HOURS = 14 * 24;
@@ -155,16 +158,7 @@ export async function prepareRegistrationEmailChange(
     );
   }
 
-  // Confirming control of an email does not prove two accounts represent the
-  // same person. Never turn an email change into an implicit identity merge.
-  const emailOwner = await findUserEmailOwner(db, newNormalized);
-  if (emailOwner && emailOwner.userId !== currentUser.id) {
-    if (emailOwner.kind === "pending") {
-      throw new AppError(409, "EMAIL_TAKEN", "This email address is currently being claimed by another account");
-    }
-    throw new AppError(409, "EMAIL_TAKEN", "This email address is already reserved by another account");
-  }
-
+  // Sending mailbox proof creates only a pending request; it establishes no ownership.
   const now = nowIso();
   const confirmationLinkSecret = newCapabilityLinkSecret();
   const confirmationDeadlineAt = addHours(now, PENDING_CONFIRMATION_DEADLINE_HOURS);
@@ -393,8 +387,12 @@ export async function prepareFinalizeEmailChange(
 
   const newNormalized = normalizeEmail(user.pending_email);
 
-  const emailOwner = await findUserEmailOwner(db, newNormalized);
-  if (emailOwner && emailOwner.userId !== user.id) {
+  const emailOwner = await readEmailOwnership(db, newNormalized);
+  if (
+    emailOwner &&
+    emailOwner.userId !== user.id &&
+    (emailOwner.verifiedAt || (emailOwner.kind === "primary" && !emailOwner.alternateId))
+  ) {
     throw new AppError(409, "EMAIL_TAKEN", "This email address is already reserved by another account");
   }
 
@@ -407,6 +405,7 @@ export async function prepareFinalizeEmailChange(
   };
   const stmts: StatementLike[] =
     params.rotateManageLink === false ? [] : [prepareRegistrationTransitionGuard(db, registrationBefore)];
+  stmts.push(...prepareEmailOwnershipClaim(db, newNormalized, user.id, emailOwner));
   // If the target is already this user's secondary alias, promote it rather
   // than leaving the same address represented twice on one account.
   if (emailOwner?.kind === "secondary") {
@@ -448,7 +447,18 @@ export async function prepareFinalizeEmailChange(
   // auth capabilities are checked against the current email when used.
   stmts.push(
     db.prepare("UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL").bind(now, user.id),
-    prepareRotateUserRegistrationManageSecrets(db, user.id, now, registrationBefore.id),
+    db
+      .prepare("UPDATE passkey_credentials SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL")
+      .bind(now, user.id),
+    db
+      .prepare(
+        "UPDATE user_email_sign_in_permissions SET revoked_at = ? WHERE revoked_at IS NULL AND email_id IN (SELECT id FROM user_emails WHERE user_id = ?)",
+      )
+      .bind(now, user.id),
+    db
+      .prepare("UPDATE agenda_calendar_subscriptions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL")
+      .bind(now, user.id),
+    prepareRotateUserRegistrationCapabilities(db, user.id, now, registrationBefore.id),
     prepareRotateUserProposalSpeakerManageSecrets(db, user.id),
   );
   if (params.rotateManageLink !== false) {
@@ -471,6 +481,14 @@ export async function prepareFinalizeEmailChange(
   }
 
   stmts.push(...prepareMailingListEmailChange(db, user.id, now));
+  stmts.push(
+    ...preparePrimaryEmailDomainChange(db, {
+      userId: user.id,
+      previousEmail: user.email,
+      nextEmail: user.pending_email,
+      at: now,
+    }),
+  );
   return {
     registration: finalizedRegistration,
     finalEmail: user.pending_email,
@@ -508,7 +526,11 @@ export async function finalizeEmailChange(
   try {
     await db.batch(prepared.statements);
   } catch (error) {
-    if (isRegistrationTransitionConflict(error) || isAuditChangeGuardFailure(error)) {
+    if (
+      isRegistrationTransitionConflict(error) ||
+      isAuditChangeGuardFailure(error) ||
+      isAuthorizationGuardFailure(error)
+    ) {
       throw registrationChangedError();
     }
     throw error;

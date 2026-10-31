@@ -33,7 +33,7 @@ export function EventSpeakerManagement() {
           <div class="pk-stack pk-stack--snug" data-confirm-panel hidden>
             <p class="pk-muted">
               Please confirm whether you would like to participate in this session. Once the program committee accepts
-              the proposal, you'll be asked to upload a bio, headshot, and your presentation.
+              the proposal, you can upload your presentation.
             </p>
             <form id="speaker-participation-confirm" data-confirm-form class="pk-form" noValidate>
               <Field group label="Speaker terms and conditions" errorSlot="consents">
@@ -54,7 +54,7 @@ export function EventSpeakerManagement() {
         </div>
         <div class="pk-stack pk-stack--snug" data-profile-section hidden>
           <h4>Your speaker profile</h4>
-          <div class="pk-alert pk-alert--ok" data-profile-saved-state hidden>
+          <div class="pk-alert pk-alert--ok" data-profile-saved-state role="status" hidden>
             <div class="pk-cluster pk-cluster--between">
               <p>Speaker identity saved.</p>
               <Button type="button" variant="secondary" data-profile-edit>
@@ -65,7 +65,8 @@ export function EventSpeakerManagement() {
           <div data-profile-form-wrap>
             <form data-profile-form class="pk-form pk-stack--loose" noValidate>
               <div data-speaker-identity />
-              <div class="pk-cluster">
+              {/* Shown once there is something to save: a recorded identity, or one just confirmed by email. */}
+              <div class="pk-cluster" data-profile-save>
                 <Button type="submit">Save speaker identity</Button>
               </div>
             </form>

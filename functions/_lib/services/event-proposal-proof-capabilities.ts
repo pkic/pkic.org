@@ -69,6 +69,8 @@ const proofPayloadSchema = z
     operation: z.enum(["proposal_submission", "speaker_profile"]),
     context: eventProposalProofContextSchema,
     entryContext: eventProposalEntryReceiptSchema.optional(),
+    /** The mailbox was proved by opening the speaker link mailed to it, not by a confirmation email. */
+    basis: z.literal("invitation").optional(),
   })
   .strict();
 const continuationPayloadSchema = proofPayloadSchema.extend({
@@ -104,6 +106,20 @@ export function queuedEventProposalProofToken(payload: EventProposalProofPayload
     undefined,
     Math.floor(Date.now() / 1000) + ttlSeconds,
   );
+}
+
+/** The same proof the verification email carries, for a mailbox that is already proved. */
+export function issueEventProposalProofToken(
+  signingSecret: string,
+  payload: EventProposalProofPayload,
+  ttlSeconds: number,
+): Promise<string> {
+  return signStatelessCapabilityToken({
+    signingSecret,
+    purpose: "event_proposal_verify",
+    resourceId: encodeCapabilityPayload(payload),
+    ttlSeconds: Math.max(1, Math.floor(ttlSeconds)),
+  });
 }
 
 export function issueEventProposalContinuation(

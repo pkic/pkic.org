@@ -8,6 +8,7 @@ import { setErrorPayloadInterceptor, setUnauthorizedHandler } from "../../shared
 import type { ApiErrorPayload } from "../../../shared/schemas/api-common";
 import { PERMISSION_DENIED_WITH_REFRESH_MESSAGE } from "../../../shared/auth-errors";
 import type { MyProfile, PortalSession } from "./types";
+import { personDisplayName } from "../../../shared/person-display";
 
 export type AuthStatus = "loading" | "authenticated" | "anonymous";
 
@@ -16,9 +17,9 @@ export const portalSession = signal<PortalSession | null>(null);
 export const profile = signal<MyProfile | null>(null);
 export const isAuthed = computed(() => authStatus.value === "authenticated" && Boolean(portalSession.value));
 
-/** The name the account menu shows: the preferred name, else first and last name, else "Account". */
+/** The name the account menu shows, by the shared person-name rule; "Account" before the profile loads. */
 export function accountDisplayName(person: MyProfile | null): string {
-  return person?.preferredName || [person?.firstName, person?.lastName].filter(Boolean).join(" ").trim() || "Account";
+  return personDisplayName(person ?? {}, "Account");
 }
 
 /**

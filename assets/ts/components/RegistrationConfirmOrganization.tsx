@@ -1,69 +1,88 @@
-import { useEffect, useState } from "preact/hooks";
+import { useRef, useEffect } from "preact/hooks";
+import type { RegistrationConfirmOrganization as Organization } from "../../shared/schemas/registration";
 import {
-  ORGANIZATION_JOB_TITLE_COPY as jobTitleCopy,
-  REGISTRATION_ORGANIZATION_COPY as copy,
-} from "../../shared/email-first-copy";
+  registrationEmailProofVerifyResponseSchema,
+  registrationEmailProofVerifySchema,
+} from "../../shared/schemas/registration-email-proof";
+import type { identityAffiliationPreviewResponseSchema } from "../../shared/schemas/identity-affiliation";
+import type { z } from "zod";
+import { postJson } from "../shared/api-client";
 import {
-  registrationConfirmOrganizationSchema,
-  type RegistrationConfirmOrganization as Organization,
-} from "../../shared/schemas/registration";
-import { useContractForm } from "../hooks/useContractForm";
-import { Field } from "../ui/Field";
-import { TextInput } from "../ui/TextControl";
+  VerifiedOrganizationDetails,
+  type VerifiedOrganizationController,
+} from "./identities/VerifiedOrganizationDetails";
 
-/** What the confirmation's submit reads: the organization to send, or a refusal the fields now show. */
 export interface ConfirmOrganizationController {
   read?: () => { organization: Organization } | { refused: true };
+  validate?: () => boolean;
+  prepare?: () => Promise<boolean>;
 }
-
-/**
- * The organization a verified work address names when its domain resolves
- * to none, asked once — after the person has proved the mailbox by opening
- * the link: in the registration form, or on the confirmation page for a
- * registration that waited for email confirmation. The server links it through the canonical
- * affiliation rule or queues it for review; nothing here decides that.
- */
-export function RegistrationConfirmOrganization({ controller }: { controller: ConfirmOrganizationController }) {
-  const [name, setName] = useState("");
-  const [jobTitle, setJobTitle] = useState("");
-  const body = { name, jobTitle };
-  const form = useContractForm(registrationConfirmOrganizationSchema, body);
-  controller.read = () => {
-    const checked = form.submit();
-    return checked.data ? { organization: checked.data } : { refused: true };
-  };
-  // Once the question is gone (another address was chosen), nothing is asked or sent.
+/** Registration embeds the same verified organization flow; only its mailbox-proof adapter differs. */
+export function RegistrationConfirmOrganization({
+  controller,
+  email,
+  proof,
+}: {
+  controller: ConfirmOrganizationController;
+  email: string;
+  proof?: { token: string; endpoint: string; affiliation: z.infer<typeof identityAffiliationPreviewResponseSchema> };
+}) {
+  const details = useRef<VerifiedOrganizationController>({});
   useEffect(
     () => () => {
       delete controller.read;
+      delete controller.validate;
+      delete controller.prepare;
     },
     [controller],
   );
+  const initial = proof?.affiliation ?? { email, domain: "", domains: [], organization: null, organizations: [] };
+  controller.validate = () => details.current.validate?.() ?? false;
+  controller.read = () => {
+    const selected = details.current.read?.();
+    if (!selected || "refused" in selected) return { refused: true };
+    return {
+      organization: {
+        name: selected.organizationName,
+        jobTitle: selected.input.jobTitle,
+        ...(proof
+          ? {
+              organizationId: selected.input.organizationId,
+              domain: selected.input.domain,
+              contextToken: selected.contextToken,
+            }
+          : {}),
+      },
+    };
+  };
+  if (proof) controller.prepare = () => details.current.prepare?.() ?? Promise.resolve(false);
+  else delete controller.prepare;
   return (
-    <div class="pk-stack" {...form.handlers}>
-      <p>{copy.question}</p>
-      <Field label={copy.nameLabel} help={copy.help} required {...form.of("name")}>
-        {(control) => (
-          <TextInput
-            {...control}
-            name="name"
-            value={name}
-            autoComplete="organization"
-            onInput={(event) => setName(event.currentTarget.value)}
-          />
-        )}
-      </Field>
-      <Field label={jobTitleCopy.label} help={jobTitleCopy.help} required {...form.of("jobTitle")}>
-        {(control) => (
-          <TextInput
-            {...control}
-            name="jobTitle"
-            value={jobTitle}
-            autoComplete="organization-title"
-            onInput={(event) => setJobTitle(event.currentTarget.value)}
-          />
-        )}
-      </Field>
-    </div>
+    <VerifiedOrganizationDetails
+      initial={initial}
+      emailId={null}
+      controller={details.current}
+      resolve={async (domain) => {
+        if (!proof) return initial;
+        const result = await postJson(
+          proof.endpoint,
+          registrationEmailProofVerifySchema.parse({ token: proof.token, domain }),
+          registrationEmailProofVerifyResponseSchema,
+        );
+        if (!result.affiliation) throw new Error("Confirm your organization details again.");
+        return result.affiliation;
+      }}
+      prepare={async (input) => {
+        if (!proof) return initial;
+        const { email: _email, emailId: _id, phase: _phase, ...selection } = input;
+        const result = await postJson(
+          proof.endpoint,
+          registrationEmailProofVerifySchema.parse({ token: proof.token, affiliation: selection }),
+          registrationEmailProofVerifyResponseSchema,
+        );
+        if (!result.affiliation) throw new Error("Confirm your organization details again.");
+        return result.affiliation;
+      }}
+    />
   );
 }

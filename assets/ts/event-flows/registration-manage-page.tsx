@@ -1,31 +1,23 @@
+import { RegistrationFlow } from "../components/events/RegistrationFlow";
 import { mountSponsorContactSharing } from "../components/SponsorContactSharing";
-import { RegistrationAffiliation } from "../components/events/RegistrationAffiliation";
-import { isIdentityOwnedFormKey } from "../../shared/schemas/form-answers";
 import { Fragment, render } from "preact";
 import { getJson, patchJson } from "../shared/api-client";
 import { formatDateTime } from "../shared/ui";
 import type { EventFormsResponse, RegistrationManageResponse } from "../shared/types";
 import { eventFormsResponseSchema } from "../../shared/schemas/forms";
-import { clearFieldErrors, normalizeValidation } from "../shared/form/validation-map";
+import { normalizeValidation } from "../shared/form/validation-map";
 import { clearStatus } from "../shared/form/validation";
-import {
-  readCustomFieldValues,
-  renderCustomFields,
-  type CustomFieldsController,
-} from "../shared/widgets/custom-fields";
-import { readDayAttendance, renderDayAttendance, writeDayAttendance } from "../shared/widgets/day-attendance";
 import { renderSharePanel, refreshSharePanelBadge } from "../shared/widgets/share-panel";
 import { withLoadingButton, handleSubmitError } from "../shared/form/submit";
-import { bootstrap, setStatus } from "./boot";
+import { eventFlowContext, setStatus } from "./boot";
 import { mountTokenHeadshot } from "./token-headshot";
+import { createUrlDialogState, subscribeUrlQuery } from "../ui/url-query";
 import {
   registrationManageReadResponseSchema,
   registrationManageSchema,
   registrationManageUpdateResponseSchema,
-  type AttendanceType,
 } from "../../shared/schemas/registration";
 import { buildManageLinkRecoveryMessage, showPostAction, showResendManageLinkForm } from "./registration-manage-panels";
-import { setField, deriveEventAttendanceType, findSubmitButton } from "../shared/form/helpers";
 import {
   hasPendingRegistrationDayWaitlist,
   isPendingRegistrationDayWaitlistStatus,
@@ -106,13 +98,14 @@ function RegistrationStatusBanner({
 // ── Main ────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  const boot = bootstrap("[data-event-registration-manage]");
+  const boot = eventFlowContext(document.querySelector<HTMLElement>("[data-event-registration-manage]"));
   if (!boot) return;
 
-  const { form, statusEl, eventSlug, apiBase, query, root } = boot;
+  const { eventSlug, apiBase, query, root } = boot;
+  const statusEl = root.querySelector<HTMLElement>("[data-flow-status]")!;
+  const editorEl = root.querySelector<HTMLElement>("[data-registration-editor]")!;
   // The update contract decides what is valid, and the server's refusal names
   // any custom answer it rejects; the browser's own bubbles never speak first.
-  form.noValidate = true;
 
   const token: string | null =
     (root as HTMLElement & { dataset: DOMStringMap }).dataset.manageToken?.trim() ?? query.token ?? null;
@@ -129,11 +122,8 @@ async function main(): Promise<void> {
   const greetingEl = root.querySelector<HTMLElement>("[data-manage-greeting]");
   const greetingText = root.querySelector<HTMLElement>("[data-manage-greeting-text]");
   const statusBadge = root.querySelector<HTMLElement>("[data-manage-status-badge]");
-  const dayAttendanceContainer = root.querySelector<HTMLElement>("[data-day-attendance]");
   const dayWaitlistContainer = root.querySelector<HTMLElement>("[data-day-waitlist]");
   const dayWaitlistSection = root.querySelector<HTMLElement>("[data-day-waitlist-section]");
-  const customFieldsContainer = root.querySelector<HTMLElement>("[data-custom-fields]");
-  const customFieldsSection = root.querySelector<HTMLElement>("[data-custom-fields-section]");
   const summaryEl = root.querySelector<HTMLElement>("[data-manage-summary]");
 
   // ── Load data (manage API + forms API in parallel) ───────────────────────
@@ -190,63 +180,6 @@ async function main(): Promise<void> {
     greetingEl.hidden = false;
   }
 
-  // ── Pre-fill personal details ─────────────────────────────────────────────
-  // Also how "Discard changes" returns the form to the registration as loaded.
-  const fillPersonalDetails = () => {
-    setField(form, "email", user?.email);
-    setField(form, "firstName", user?.first_name);
-    setField(form, "lastName", user?.last_name);
-  };
-  fillPersonalDetails();
-  const affiliationEl = root.querySelector<HTMLElement>("[data-registration-affiliation]");
-  if (affiliationEl) {
-    render(
-      <RegistrationAffiliation organizationName={user?.organization_name ?? null} jobTitle={user?.job_title ?? null} />,
-      affiliationEl,
-    );
-  }
-
-  // ── Email change notice ───────────────────────────────────────────────────
-  const originalEmail = user?.email?.toLowerCase() ?? "";
-  const emailChangeNotice = root.querySelector<HTMLElement>("[data-email-change-notice]");
-  const emailInput = form.elements.namedItem("email") as HTMLInputElement | null;
-  if (emailInput && emailChangeNotice) {
-    emailInput.addEventListener("input", () => {
-      const changed = emailInput.value.trim().toLowerCase() !== originalEmail;
-      emailChangeNotice.hidden = !changed;
-    });
-  }
-
-  // ── Custom event questions (same pipeline as registration-page.ts) ────────
-  let customFieldsRendered = false;
-  let customFields: CustomFieldsController | null = null;
-  // Organization and title come from the identity, never from an event question.
-  const questionFields = (formsData?.form?.fields ?? []).filter((field) => !isIdentityOwnedFormKey(field.key));
-  if (customFieldsContainer && questionFields.length > 0) {
-    customFields = renderCustomFields(customFieldsContainer, questionFields);
-    customFieldsRendered = true;
-    if (registration.custom_answers) {
-      customFields.setValues(
-        Object.fromEntries(Object.entries(registration.custom_answers).filter(([key]) => !isIdentityOwnedFormKey(key))),
-      );
-    }
-    // Apply visibility rules based on current day attendance selections.
-    const currentDayAttendance = dayAttendance.map((d) => ({ attendanceType: d.attendanceType }));
-    customFields.updateVisibility({
-      dayAttendance: currentDayAttendance,
-      eventAttendanceType: deriveEventAttendanceType(currentDayAttendance),
-    });
-  } else if (customFieldsSection) {
-    // Hide the section entirely when there are no event-specific questions.
-    customFieldsSection.hidden = true;
-  }
-
-  // ── Day attendance ────────────────────────────────────────────────────────
-  if (dayAttendanceContainer) {
-    renderDayAttendance(dayAttendanceContainer, eventDays);
-    writeDayAttendance(form, dayAttendance);
-  }
-
   // ── Day waitlist (only shown when there are active entries) ──────────────
   if (dayWaitlistContainer && dayWaitlistSection) {
     const activeDayWaitlist = (dayWaitlist ?? []).filter((entry) =>
@@ -271,7 +204,10 @@ async function main(): Promise<void> {
                   const button = event.currentTarget as HTMLButtonElement;
                   void withLoadingButton(button, async () => {
                     try {
-                      const selections = readDayAttendance(form);
+                      const selections = dayAttendance.map(({ dayDate, attendanceType }) => ({
+                        dayDate,
+                        attendanceType,
+                      }));
                       await patchJson(
                         `${apiBase}/registrations/access/${encodeURIComponent(token)}`,
                         { action: "update", dayAttendance: selections, claimDayWaitlistOffers: offeredDayDates },
@@ -284,7 +220,7 @@ async function main(): Promise<void> {
                         });
                       }
                     } catch (error) {
-                      handleSubmitError(error, form, statusEl);
+                      handleSubmitError(error, null, statusEl);
                     }
                   });
                 }}
@@ -379,7 +315,7 @@ async function main(): Promise<void> {
   // ── Show the registration, read-only until the attendee asks to edit ──────
   if (loadingEl) loadingEl.hidden = true;
   if (manageFormEl) manageFormEl.hidden = false;
-  form.hidden = true;
+  editorEl.hidden = true;
 
   // ── Share panel ───────────────────────────────────────────────────────────
   const sharePanelEl = root.querySelector<HTMLElement>("[data-manage-share]");
@@ -414,31 +350,63 @@ async function main(): Promise<void> {
   }
 
   // ── Read view, and the edit command that swaps it for the form ────────────
+  const editorNavigation = createUrlDialogState("editRegistration", "search", location.pathname);
+  let editorMounted = false;
   const showEditor = (editing: boolean) => {
-    if (summaryEl) summaryEl.hidden = editing;
-    form.hidden = !editing;
-    if (editing) form.querySelector<HTMLInputElement>("input:not([type='hidden']):not([readonly])")?.focus();
-  };
-  const discardChanges = () => {
-    fillPersonalDetails();
-    const affiliationEl = root.querySelector<HTMLElement>("[data-registration-affiliation]");
-    if (affiliationEl) {
-      render(
-        <RegistrationAffiliation
-          organizationName={user?.organization_name ?? null}
-          jobTitle={user?.job_title ?? null}
-        />,
-        affiliationEl,
-      );
+    if (editing && isCancelled) {
+      void editorNavigation.close(editorNavigation.marker());
+      return;
     }
-    if (customFields) customFields.setValues(registration.custom_answers ?? {});
-    if (dayAttendanceContainer) writeDayAttendance(form, dayAttendance);
-    if (emailChangeNotice) emailChangeNotice.hidden = true;
-    clearFieldErrors(form);
-    clearStatus(statusEl);
-    showEditor(false);
+    if (summaryEl) summaryEl.hidden = editing;
+    editorEl.hidden = !editing;
+    if (!editing) {
+      return;
+    }
+    if (!formsData) {
+      setStatus(statusEl, "Could not load registration form details. Reload this page to try again.", true);
+      void editorNavigation.close(editorNavigation.marker());
+      return;
+    }
+    if (editorMounted) return;
+    editorMounted = true;
+    const marker = editorNavigation.marker();
+    render(
+      <RegistrationFlow
+        mode="update"
+        data={manageData}
+        forms={formsData}
+        onDiscard={() => {
+          render(null, editorEl);
+          editorMounted = false;
+          void editorNavigation.close(marker);
+        }}
+        save={async (change) => {
+          const result = await patchJson(
+            `${apiBase}/registrations/access/${encodeURIComponent(token)}`,
+            change,
+            registrationManageUpdateResponseSchema,
+          );
+          await editorNavigation.close(marker);
+          if (manageFormEl)
+            showPostAction(root, manageFormEl, {
+              title: result.emailChanged ? "Email address updated" : "Changes saved",
+              message: result.emailChanged
+                ? "We’ve sent a confirmation email to your new address. Please click the link in that email to reactivate your registration."
+                : "Your registration details have been updated. A confirmation email is on its way.",
+            });
+        }}
+      />,
+      editorEl,
+    );
   };
-  form.querySelector<HTMLButtonElement>("[data-action='discard']")?.addEventListener("click", discardChanges);
+  const stopEditorNavigation = subscribeUrlQuery(() => {
+    if (!root.isConnected) {
+      stopEditorNavigation();
+      return;
+    }
+    showEditor(Boolean(editorNavigation.marker()));
+  });
+  showEditor(Boolean(editorNavigation.marker()));
   if (summaryEl) {
     render(
       <RegistrationManageSummary
@@ -450,7 +418,7 @@ async function main(): Promise<void> {
         dialogHost={isCancelled || !headshotSection?.querySelector("[data-headshot-tile]")}
         onEdit={() => {
           clearStatus(statusEl);
-          showEditor(true);
+          editorNavigation.show();
         }}
         onCancel={() => void cancelRegistration()}
         onReport={() => void reportUnauthorized()}
@@ -458,68 +426,6 @@ async function main(): Promise<void> {
       summaryEl,
     );
   }
-
-  // Re-apply custom field visibility when day attendance changes.
-  if (customFields) {
-    const ctrl = customFields;
-    form.addEventListener("change", (e) => {
-      const target = e.target;
-      if (!(target instanceof HTMLInputElement) || !target.name.startsWith("dayAttendance.")) return;
-      const currentDayAttendance = readDayAttendance(form);
-      ctrl.updateVisibility({
-        dayAttendance: currentDayAttendance,
-        eventAttendanceType: deriveEventAttendanceType(currentDayAttendance),
-      });
-    });
-  }
-
-  // ── Save changes (update) ─────────────────────────────────────────────────
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    if (isCancelled) return;
-    clearFieldErrors(form);
-    const dayAttendancePayload = readDayAttendance(form);
-    const emailValue = (form.elements.namedItem("email") as HTMLInputElement | null)?.value.trim() || undefined;
-    const emailIsChanged = emailValue && emailValue.toLowerCase() !== originalEmail;
-    const update = registrationManageSchema.safeParse({
-      action: "update",
-      attendanceType: dayAttendancePayload.length === 0 ? (registration.attendance_type as AttendanceType) : undefined,
-      dayAttendance: dayAttendancePayload,
-      customAnswers: customFieldsRendered ? readCustomFieldValues(form) : undefined,
-      email: emailIsChanged ? emailValue : undefined,
-      firstName: (form.elements.namedItem("firstName") as HTMLInputElement | null)?.value.trim() || undefined,
-      lastName: (form.elements.namedItem("lastName") as HTMLInputElement | null)?.value.trim() || undefined,
-    });
-    if (!update.success) {
-      handleSubmitError(update.error, form, statusEl);
-      return;
-    }
-
-    const submitBtn = findSubmitButton(form);
-    const discardBtn = form.querySelector<HTMLButtonElement>("[data-action='discard']");
-    if (discardBtn) discardBtn.disabled = true;
-
-    await withLoadingButton(submitBtn, async () => {
-      try {
-        const result = await patchJson(
-          `${apiBase}/registrations/access/${encodeURIComponent(token)}`,
-          update.data,
-          registrationManageUpdateResponseSchema,
-        );
-        if (manageFormEl) {
-          showPostAction(root, manageFormEl, {
-            title: result.emailChanged ? "Email address updated" : "Changes saved",
-            message: result.emailChanged
-              ? "We\u2019ve sent a confirmation email to your new address. Please click the link in that email to reactivate your registration."
-              : "Your registration details have been updated. A confirmation email is on its way.",
-          });
-        }
-      } catch (error) {
-        handleSubmitError(error, form, statusEl);
-        if (discardBtn) discardBtn.disabled = false;
-      }
-    });
-  });
 
   // ── Whole-record commands, each confirmed in the shared dialog ────────────
   const accessUrl = `${apiBase}/registrations/access/${encodeURIComponent(token)}`;

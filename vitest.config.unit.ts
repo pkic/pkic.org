@@ -25,6 +25,7 @@ export const NODE_UNIT_TEST_FILES = [
   "tests/db-sort.test.ts",
   "tests/donation-badge.test.ts",
   "tests/download-disposition.test.ts",
+  "tests/email-address-schema.test.ts",
   "tests/email-attachments.test.ts",
   "tests/email-campaign-custom.test.ts",
   "tests/email-domain-classification.test.ts",

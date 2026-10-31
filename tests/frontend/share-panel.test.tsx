@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { downloadFile } from "../../assets/ts/shared/download-file";
+vi.mock("../../assets/ts/shared/download-file", () => ({ downloadFile: vi.fn() }));
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -156,6 +158,48 @@ describe("share panel", () => {
     // is described rather than hidden.
     const badge = container.querySelector<HTMLImageElement>("[data-og-badge-img]");
     expect(badge?.alt).toBe("Your personal invite badge for PKI Summit");
+  });
+
+  it("keeps the shared download control busy until the square image arrives, then saves it", async () => {
+    let finish!: (response: Response) => void;
+    const fetcher = vi.fn(
+      (_input: RequestInfo | URL) =>
+        new Promise<Response>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    vi.stubGlobal("fetch", fetcher);
+    const container = mount();
+    await click(container.querySelector<HTMLButtonElement>('button[aria-label="Download badge formats"]')!);
+    const square = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((item) =>
+      item.textContent?.includes("Square badge"),
+    )!;
+    await click(square);
+    const main = container.querySelector<HTMLButtonElement>('button[aria-label="Download badge (PNG)"]')!;
+    expect(main.getAttribute("aria-busy")).toBe("true");
+    expect(main.querySelector(".pk-btn__spinner")).not.toBeNull();
+    await click(main);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    const url = new URL(String(fetcher.mock.calls[0][0]));
+    expect(url.searchParams.get("format")).toBe("square");
+    expect(url.pathname).toContain("/referrals/AbC123/badge");
+    await act(async () => finish(new Response("synthetic image", { headers: { "content-type": "image/png" } })));
+    await settle();
+    expect(main.hasAttribute("aria-busy")).toBe(false);
+    expect(downloadFile).toHaveBeenCalledWith(expect.any(Blob), "image/png", expect.stringMatching(/-square\.png$/u));
+  });
+
+  it("shows a download refusal and leaves the control available to retry", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json({ error: { code: "FAILED", message: "Could not generate your badge. Try again." } }, 503)),
+    );
+    const container = mount();
+    const main = container.querySelector<HTMLButtonElement>('button[aria-label="Download badge (PNG)"]')!;
+    await click(main);
+    await settle();
+    expect(container.querySelector(".pk-alert--danger")?.textContent).toContain("Could not generate your badge");
+    expect(main.hasAttribute("aria-busy")).toBe(false);
   });
 
   it("sends invites the shared request contract accepts", async () => {

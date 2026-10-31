@@ -1,3 +1,5 @@
+import { BADGE_DISPLAY_ROLE_COLORS } from "./badge-role-colors";
+export { BADGE_DISPLAY_ROLE_COLORS } from "./badge-role-colors";
 import {
   badgeTemplateAssetBytes,
   badgeTemplateCss,
@@ -29,12 +31,6 @@ export interface BadgeTemplatePrintData {
   svg: string;
 }
 export type { BadgeTemplateSponsorGroup } from "./schemas/event-badge-template";
-export const BADGE_DISPLAY_ROLE_COLORS: Readonly<Record<BadgeDisplayRole, string>> = {
-  attendee: "#0b0d0c",
-  speaker: "#ed7d31",
-  staff: "#198754",
-  sponsor: "#5a9bd5",
-};
 function escape(value: string): string {
   return value.replace(
     /[&<>"']/g,

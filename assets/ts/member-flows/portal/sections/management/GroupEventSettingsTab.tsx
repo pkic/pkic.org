@@ -178,7 +178,11 @@ export function GroupEventSettingsTab({
       ) : detailId === "cfp" && canManage && canConfigureEventForms(event) ? (
         <LazyGroupEventConfiguration event={event} groupId={groupId} onUpdated={onUpdated} section="proposals" />
       ) : detailId === "cfp" && canManage ? (
-        <GroupEventSettingsSection slug={event.slug} onUpdated={onUpdated} />
+        <GroupEventSettingsSection
+          slug={event.slug}
+          onUpdated={onUpdated}
+          groupSettings={{ groupId, eventId: event.id, canEdit: canManage }}
+        />
       ) : ["registration", "terms", "attendance-days"].includes(detailId ?? "") && canManage ? (
         <LazyGroupEventConfiguration
           event={event}

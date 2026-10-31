@@ -62,6 +62,7 @@ function speakerData(
       headshotUploaded: Boolean(overrides.headshotUrl),
       headshotUpdatedAt: null,
       headshotUrl: overrides.headshotUrl ?? null,
+      personalDetailsEditable: true,
       actingIdentityId: null,
       actingIdentitySelectedAt: null,
       actingIdentitySelection: "unrecorded",

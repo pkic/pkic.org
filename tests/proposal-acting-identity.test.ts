@@ -140,7 +140,6 @@ describe("proposal speaker acting identity", () => {
             firstName: "Co",
             lastName: "Speaker",
             role: "speaker",
-            bio: "A co-speaker biography long enough to satisfy the proposal speaker contract.",
           },
         ],
       },
@@ -472,15 +471,14 @@ describe("proposal speaker acting identity", () => {
         })
       ).status,
     ).toBe(401);
-    expect(
-      (
-        await callApi(env, `${path}/profile`, {
-          method: "PATCH",
-          headers,
-          body: JSON.stringify({ firstName: "Identity" }),
-        })
-      ).status,
-    ).toBe(200);
+    // Without a live session, the link alone does not rename an account whose mailbox was proved.
+    const rename = await callApi(env, `${path}/profile`, {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({ firstName: "Identity" }),
+    });
+    expect(rename.status).toBe(403);
+    expect(await rename.json()).toMatchObject({ error: { code: "SPEAKER_ACCOUNT_SIGN_IN_REQUIRED" } });
     expect(
       speakerSelfServiceReadResponseSchema.parse(await (await callApi(env, path)).json()).profile.actingIdentityId,
     ).toBe(f.identityId);

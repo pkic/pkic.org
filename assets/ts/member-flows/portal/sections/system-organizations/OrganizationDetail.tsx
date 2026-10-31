@@ -42,6 +42,7 @@ import {
 import { Breadcrumb } from "../../../../ui/Breadcrumb";
 import { Menu, type MenuItem } from "../../../../ui/Menu";
 import { OrganizationRecordHero } from "./OrganizationRecordHero";
+import { OrganizationRelated } from "./OrganizationRelated";
 import { OrganizationActivity } from "./OrganizationActivity";
 import { OrganizationPrivateContactDetails } from "../OrganizationPrivateContactDetails";
 import { OrganizationSponsorshipStanding } from "./OrganizationSponsorshipStanding";
@@ -118,7 +119,7 @@ export function OrganizationDetail({
     // Nothing leaves the page until the contract accepts the whole draft.
     const checked = form.submit();
     if (!checked.data) {
-      setSaveError(checked.message);
+      setSaveError(checked.formMessage ?? "");
       return;
     }
     // The name lives once, on the organization: a rename changes what every
@@ -260,6 +261,7 @@ export function OrganizationDetail({
           <IdentityRoster organization={organization} canManageIdentities={canManageIdentities} onChanged={load} />
           {/* What the account has done across the consortium, one bounded
               query per tab, aggregated over its representatives. */}
+          <OrganizationRelated key={organization.id} organization={organization} />
           <OrganizationActivity organizationId={organization.id} canReadSponsorships={canReadSponsorships} />
         </div>
         <div class="pk-stack pk-datalist-aligned">

@@ -3,7 +3,11 @@ import { emailPlainText } from "../email/plain-text";
 import { AppError } from "../errors";
 import type { DatabaseLike } from "../types";
 import { stringifyJson } from "../utils/json";
-import { formatProposalInvitePerson, type ProposalInvitePerson } from "./proposal-invite-person";
+import {
+  formatProposalInvitePerson,
+  formatProposalSpeakerLineup,
+  type ProposalInvitePerson,
+} from "./proposal-invite-person";
 import { proposalSpeakerProfileColumns } from "./proposal-speakers";
 import { selectedOrAffiliationOrganizationNameSql } from "./identities/affiliation-projection";
 
@@ -21,6 +25,7 @@ export interface ProposalInviteEmailContext {
   inviterFirstName?: string;
   proposalTitle: string;
   proposalAbstract: string;
+  /** The confirmed speakers by name only: an invitation never shows another invitee or an address. */
   speakerLineupText: string;
 }
 
@@ -48,11 +53,11 @@ export function composeProposalInviteEmailContext(
   speakers: ProposalInvitePerson[],
 ): ProposalInviteEmailContext {
   return {
-    invitedByDisplay: inviter ? formatProposalInvitePerson(inviter) : "The proposer",
+    invitedByDisplay: (inviter && formatProposalInvitePerson(inviter)) || "The proposer",
     inviterFirstName: inviter?.first_name ?? "",
     proposalTitle: proposal.title,
     proposalAbstract: proposal.abstract,
-    speakerLineupText: speakers.map((speaker) => `- ${formatProposalInvitePerson(speaker)}`).join("\n"),
+    speakerLineupText: formatProposalSpeakerLineup(speakers),
   };
 }
 
@@ -62,7 +67,7 @@ export async function buildProposalInviteEmailContext(
 ): Promise<ProposalInviteEmailContext> {
   const row = await first<
     ProposalInviteSummary & {
-      inviter_email: string | null;
+      inviter_user_id: string | null;
       inviter_first_name: string | null;
       inviter_last_name: string | null;
       inviter_organization_name: string | null;
@@ -70,7 +75,7 @@ export async function buildProposalInviteEmailContext(
   >(
     db,
     `SELECT sp.id, sp.title, sp.abstract, sp.proposer_user_id,
-            u.email AS inviter_email,
+            u.id AS inviter_user_id,
             u.first_name AS inviter_first_name,
             u.last_name AS inviter_last_name,
             ${inviterOrganizationNameSql("sp.id", "u.id")} AS inviter_organization_name
@@ -83,16 +88,15 @@ export async function buildProposalInviteEmailContext(
 
   const speakers = await all<ProposalInvitePerson>(
     db,
-    `SELECT u.email, ${proposalSpeakerProfileColumns("u", "ps", "", ["firstName", "lastName", "organizationName"])}
+    `SELECT ${proposalSpeakerProfileColumns("u", "ps", "", ["firstName", "lastName", "organizationName"])}
        FROM proposal_speakers ps
        JOIN users u ON u.id = ps.user_id
-      WHERE ps.proposal_id = ?
+      WHERE ps.proposal_id = ? AND ps.status = 'confirmed'
       ORDER BY ps.created_at ASC`,
     [row.id],
   );
-  const inviter = row.inviter_email
+  const inviter = row.inviter_user_id
     ? {
-        email: row.inviter_email,
         first_name: row.inviter_first_name,
         last_name: row.inviter_last_name,
         organization_name: row.inviter_organization_name,
@@ -120,7 +124,7 @@ export async function buildProposalInviteEmailContextMap(
   const [proposers, speakers] = await Promise.all([
     all<ProposalSpeaker>(
       db,
-      `SELECT sp.id AS proposal_id, u.email, u.first_name, u.last_name,
+      `SELECT sp.id AS proposal_id, u.first_name, u.last_name,
               ${inviterOrganizationNameSql("sp.id", "u.id")} AS organization_name
          FROM session_proposals sp
          JOIN users u ON u.id = sp.proposer_user_id
@@ -129,11 +133,11 @@ export async function buildProposalInviteEmailContextMap(
     ),
     all<ProposalSpeaker>(
       db,
-      `SELECT ps.proposal_id, u.email,
+      `SELECT ps.proposal_id,
               ${proposalSpeakerProfileColumns("u", "ps", "", ["firstName", "lastName", "organizationName"])}
          FROM proposal_speakers ps
          JOIN users u ON u.id = ps.user_id
-        WHERE ps.proposal_id IN (SELECT value FROM json_each(?))
+        WHERE ps.proposal_id IN (SELECT value FROM json_each(?)) AND ps.status = 'confirmed'
         ORDER BY ps.created_at ASC`,
       [proposalIdsJson],
     ),

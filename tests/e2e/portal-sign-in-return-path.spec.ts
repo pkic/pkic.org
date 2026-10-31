@@ -18,7 +18,7 @@ test("a sign-in started on a working group page returns there from the emailed l
 
   await page.goto("/portal/#/groups/pqc");
   await openEmailSignIn(page);
-  await page.getByLabel("Work email").fill(email);
+  await page.getByLabel("Email").fill(email);
   const since = await capturedEmailCount();
   await page.getByRole("button", { name: "Send sign-in link" }).click();
   await expect(page.getByText("you'll receive a sign-in link shortly", { exact: false })).toBeVisible();
@@ -31,6 +31,10 @@ test("a sign-in started on a working group page returns there from the emailed l
   const fresh = await page.context().newPage();
   await fresh.setExtraHTTPHeaders({ "cf-connecting-ip": clientIpForIdentity(email) });
   await fresh.goto(link);
+  // Email sign-in offers a passkey before the workspace mounts; declining it continues to the page asked for.
+  const passkeyOffer = fresh.getByRole("region", { name: "You're signed in", exact: true });
+  await expect(passkeyOffer).toBeVisible({ timeout: 15_000 });
+  await passkeyOffer.getByRole("button", { name: "Continue without a passkey", exact: true }).click();
   // The workspace canonicalizes the slug to the group's id once it has
   // loaded, so the landing is judged by the group on screen, not the slug.
   await expect(fresh.getByRole("heading", { name: "Post-Quantum Cryptography Working Group" })).toBeVisible({

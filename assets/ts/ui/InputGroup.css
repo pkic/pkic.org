@@ -13,18 +13,33 @@
     min-width: 0;
   }
 
+  .pk-input-group__control {
+    position: relative;
+    display: flex;
+    align-items: stretch;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .pk-input-group__control > :first-child {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
   .pk-input-group > .pk-input {
     flex: 1 1 auto;
   }
 
   /* Touch buttons may exceed the density height; the input follows the row. */
-  .pk-input-group > .pk-input:not(.pk-input--textarea, [multiple]) {
+  .pk-input-group > .pk-input:not(.pk-input--textarea, [multiple]),
+  .pk-input-group__control > .pk-input:not(.pk-input--textarea, [multiple]) {
     block-size: auto;
   }
 
   .pk-input-group > .pk-btn {
     flex: none;
-    block-size: var(--pk-control-size);
+    block-size: auto;
+    min-block-size: var(--pk-control-size);
   }
 
   .pk-input-group__prefix {
@@ -44,6 +59,10 @@
 
   .pk-input-group--joined > * {
     border-radius: 0;
+  }
+
+  .pk-input-group--joined > .pk-input-group__control > .pk-input {
+    border-radius: inherit;
   }
 
   .pk-input-group--joined > * + * {

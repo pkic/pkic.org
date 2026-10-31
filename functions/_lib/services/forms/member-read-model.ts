@@ -28,6 +28,7 @@ interface MemberFormPlacementRow {
   purpose: string;
   owner_group_id: string;
   owner_group_name: string;
+  access_group_id: string;
   opens_at: string | null;
   closes_at: string | null;
   accepting_responses: number;
@@ -42,6 +43,7 @@ function toMemberFormPlacement(row: MemberFormPlacementRow): MemberFormPlacement
     purpose: row.purpose,
     ownerGroupId: row.owner_group_id,
     ownerGroupName: row.owner_group_name,
+    accessGroupId: row.access_group_id,
     opensAt: row.opens_at,
     closesAt: row.closes_at,
     acceptingResponses: row.accepting_responses === 1,
@@ -58,21 +60,27 @@ export function buildMemberFormPlacementsPageQuery(userId: string, query: Member
   const sql = `WITH member_groups AS (
       SELECT group_id FROM group_memberships WHERE user_id = ? AND left_at IS NULL
     ),
-    accessible_placement(placement_id) AS (
-      SELECT owned.id
+    access_route(placement_id, route) AS (
+      SELECT owned.id, '0' || owned.owner_group_id
         FROM form_placements owned INDEXED BY idx_form_placements_owner_active
         JOIN member_groups member_group ON member_group.group_id = owned.owner_group_id
         JOIN groups owner_group ON owner_group.id = owned.owner_group_id AND owner_group.active = 1
        WHERE owned.active = 1
       UNION
-      SELECT shared.placement_id
+      SELECT shared.placement_id, '1' || shared.group_id
         FROM form_placement_group_grants shared INDEXED BY idx_form_placement_group_grants_group
         JOIN member_groups member_group ON member_group.group_id = shared.group_id
         JOIN groups granted_group ON granted_group.id = shared.group_id AND granted_group.active = 1
        WHERE shared.capability IN (${grantPlaceholders})
+    ),
+    -- One row per placement, reached through the owner group when the caller
+    -- belongs to it, else through the first group it is shared with.
+    accessible_placement(placement_id, access_group_id) AS (
+      SELECT placement_id, substr(MIN(route), 2) FROM access_route GROUP BY placement_id
     )
     SELECT placement.id AS placement_id, form.id AS form_id, form.title AS title, form.purpose AS purpose,
            placement.owner_group_id AS owner_group_id, owner_group.name AS owner_group_name,
+           accessible.access_group_id,
            placement.opens_at, placement.closes_at,
            CASE WHEN ${ACCEPTING_RESPONSES_SQL} THEN 1 ELSE 0 END AS accepting_responses,
            CASE WHEN EXISTS (

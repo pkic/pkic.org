@@ -50,7 +50,7 @@ export async function startMemberJoin(
     messageType: "transactional",
     subject: "Verify your email address to join the PKI Consortium",
     capabilityLinkValues: [verificationUrl],
-    data: { verificationUrl },
+    data: { verificationUrl, expiresInMinutes: input.ttlMinutes },
   });
   await db.batch([
     email.statement,

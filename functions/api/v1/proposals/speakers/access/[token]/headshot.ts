@@ -19,10 +19,59 @@ import {
   proposalSpeakerHeadshotPutRouteSchema,
 } from "../../../../../../../assets/shared/schemas/route-contracts";
 import { proposalSpeakerAccessPath } from "../../../../../../../assets/shared/proposal-access-paths";
+import {
+  SPEAKER_MAILBOX_PROOF_HEADER,
+  speakerMailboxProofHeadersSchema,
+} from "../../../../../../../assets/shared/schemas/event-proposal-proof";
+import {
+  resolveSpeakerAccountAuthority,
+  resolveSpeakerMailboxProofAuthority,
+  speakerAccountSignInRequiredError,
+} from "../../../../../../_lib/services/proposal-speaker-account-authority";
+import { AppError } from "../../../../../../_lib/errors";
+
+type SpeakerContext = Awaited<ReturnType<typeof loadContext>>;
 
 async function loadContext(c: AdminContext, token: ParticipantAuthority) {
   c.set?.("sensitive", true);
   return getSpeakerByManageToken(requestDb(c), token, requireInternalSecret(c.env));
+}
+
+/** The upload route reads its multipart body itself, so its proof header is parsed here through the shared contract. */
+function mailboxProofHeader(c: AdminContext): string | null {
+  const parsed = speakerMailboxProofHeadersSchema.safeParse({
+    [SPEAKER_MAILBOX_PROOF_HEADER]: c.req.raw.headers.get(SPEAKER_MAILBOX_PROOF_HEADER),
+  });
+  if (!parsed.success) throw new AppError(400, "VALIDATION_ERROR", "Invalid request");
+  return parsed.data[SPEAKER_MAILBOX_PROOF_HEADER] ?? null;
+}
+
+/**
+ * The photo is the person's: a link alone changes it only on an account whose
+ * mailbox was never proved. Otherwise it takes the person's live session, or
+ * the mailbox proof they just completed on this link.
+ */
+async function requireAccountAuthority(
+  c: AdminContext,
+  token: ParticipantAuthority,
+  { proposal, speaker, user }: SpeakerContext,
+  mailboxProof: string | null,
+) {
+  const authority = await resolveSpeakerAccountAuthority(requestDb(c), c.req.raw, c.env, {
+    authority: token,
+    userId: user.id,
+    accountClaimed: user.account_claimed,
+  });
+  if (authority) return authority;
+  if (!mailboxProof) throw speakerAccountSignInRequiredError();
+  return resolveSpeakerMailboxProofAuthority({
+    signingSecret: requireInternalSecret(c.env),
+    continuationToken: mailboxProof,
+    eventId: proposal.event_id,
+    speakerId: speaker.id,
+    userId: user.id,
+    inviteGeneration: speaker.invite_generation,
+  });
 }
 
 export async function onGet(c: AdminContext, token: ParticipantAuthority): Promise<Response> {
@@ -33,11 +82,17 @@ export async function onGet(c: AdminContext, token: ParticipantAuthority): Promi
   return privateUserHeadshotResponse(requireProfileImageBucket(c.env, user.headshot_r2_key), user.headshot_r2_key);
 }
 
-export async function onPut(c: AdminContext, token: ParticipantAuthority): Promise<Response> {
-  const { proposal, speaker, user } = await loadContext(c, token);
+export async function onPut(
+  c: AdminContext,
+  token: ParticipantAuthority,
+  mailboxProof: string | null = null,
+): Promise<Response> {
+  const context = await loadContext(c, token);
+  const { proposal, speaker, user } = context;
   if (speaker.status === "declined") {
     return json({ error: { code: "SPEAKER_DECLINED", message: "You have declined participation." } }, 403);
   }
+  const accountAuthority = await requireAccountAuthority(c, token, context, mailboxProof);
 
   const image = await readValidatedUploadedImage(c.req.raw, "Headshot", SPEAKER_HEADSHOT_MAX_BYTES);
   const { r2Key, origin } = await uploadProposalSpeakerSelfHeadshot(
@@ -54,6 +109,7 @@ export async function onPut(c: AdminContext, token: ParticipantAuthority): Promi
       currentStatus: speaker.status,
       inviteGeneration: speaker.invite_generation,
       headshotKey: user.headshot_r2_key,
+      accountAuthority,
     },
     image,
   );
@@ -64,11 +120,17 @@ export async function onPut(c: AdminContext, token: ParticipantAuthority): Promi
   });
 }
 
-export async function onDelete(c: AdminContext, token: ParticipantAuthority): Promise<Response> {
-  const { proposal, speaker, user } = await loadContext(c, token);
+export async function onDelete(
+  c: AdminContext,
+  token: ParticipantAuthority,
+  mailboxProof: string | null = null,
+): Promise<Response> {
+  const context = await loadContext(c, token);
+  const { proposal, speaker, user } = context;
   if (speaker.status === "declined") {
     return json({ error: { code: "SPEAKER_DECLINED", message: "You have declined participation." } }, 403);
   }
+  const accountAuthority = await requireAccountAuthority(c, token, context, mailboxProof);
   await removeProposalSpeakerSelfHeadshot({
     db: requestDb(c),
     env: c.env,
@@ -82,6 +144,7 @@ export async function onDelete(c: AdminContext, token: ParticipantAuthority): Pr
     currentStatus: speaker.status,
     inviteGeneration: speaker.invite_generation,
     headshotKey: user.headshot_r2_key,
+    accountAuthority,
   });
   return json({ success: true });
 }
@@ -94,10 +157,10 @@ export class ProposalSpeakerHeadshotPut extends OpenAPIRoute {
   schema = proposalSpeakerHeadshotPutRouteSchema;
 
   async handle(c: AdminContext) {
-    return onPut(c, c.req.param("token"));
+    return onPut(c, c.req.param("token"), mailboxProofHeader(c));
   }
 }
 
 export const ProposalSpeakerHeadshotDelete = openApiRoute(proposalSpeakerHeadshotDeleteRouteSchema, (c, data) =>
-  onDelete(c, data.params.token),
+  onDelete(c, data.params.token, data.headers[SPEAKER_MAILBOX_PROOF_HEADER] ?? null),
 );

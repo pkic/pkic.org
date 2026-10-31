@@ -51,7 +51,8 @@ export function identityProfileChanges(
 /**
  * Every identity profile edit is written here, so the job-title rule holds for
  * all of them: an organization identity is refused an edit that would leave it
- * without a title, on the request field `jobTitleField` names. The guarded
+ * without a title, on the request field `jobTitleField` names. An edit that
+ * changes none of the profile fields, such as the person's names alone, is not held to it. The guarded
  * `updated_at` pins the title read here.
  */
 export function prepareIdentityProfileUpdateStatement(
@@ -61,7 +62,10 @@ export function prepareIdentityProfileUpdateStatement(
   at: string,
   jobTitleField = "jobTitle",
 ) {
+  // A names-only edit leaves the profile alone, so it is not held to the title rule.
+  const editsProfile = Object.values(input).some((value) => value !== undefined);
   if (
+    editsProfile &&
     organizationJobTitleMissing(
       { organization: identity.organization_id !== null, jobTitle: identity.job_title },
       input.jobTitle,

@@ -38,7 +38,7 @@ function PublishVersion({
   async function publish(event: Event) {
     event.preventDefault();
     const checked = form.submit();
-    if (!checked.data) return setError(checked.message);
+    if (!checked.data) return setError(checked.formMessage ?? "");
     if (busy) return;
     setBusy(true);
     try {
@@ -119,7 +119,7 @@ export function WorkflowVersionEditor({
   async function save(event: Event) {
     event.preventDefault();
     const checked = form.submit();
-    if (!checked.data) return setError(checked.message);
+    if (!checked.data) return setError(checked.formMessage ?? "");
     if (busy || !canWrite || published) return;
     setBusy(true);
     try {

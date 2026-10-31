@@ -1,3 +1,4 @@
+import { preparePendingIdentityActivation } from "./pending-activation";
 import { prepareIdentityEmailOwnershipStatements, requireIdentityEmailAssignable } from "./email-ownership";
 import { prepareOrganizationIdentityPublication } from "./lifecycle-publication";
 import {
@@ -7,7 +8,7 @@ import {
 } from "./profile-statement";
 import type { IdentityTransition } from "../../../../assets/shared/schemas/identity";
 import { preparePermissionsAuthorizationGuard } from "../../auth/permissions";
-import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
+import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../db/authorization-guard";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
@@ -28,6 +29,7 @@ import {
   type IdentityNotificationContext,
 } from "./notifications";
 import { loadReinstatementCandidate, planReinstatement, prepareReinstatementStatements } from "./reinstate";
+import { representationEmailDomainEvidence } from "./email-domain-support";
 import type { IdentityManagerActor } from "./types";
 
 interface IdentityStateRow {
@@ -179,6 +181,9 @@ export async function updateOrganizationIdentityProfile(
       sessionExpiresAt: actor.sessionExpiresAt,
       staffAuthorized: actor.staffAuthorized,
     }),
+    ...(input.emailId === undefined
+      ? []
+      : [prepareAuthorizationGuard(db, representationEmailDomainEvidence(identity.id, input.emailId))]),
     ...(publication ? [publication] : []),
     prepareIdentityProfileUpdateStatement(db, identity, input, at),
     prepareScopedAuditLogAfterOneChange(
@@ -244,32 +249,25 @@ export async function transitionOrganizationIdentity(
       await commitIdentityLifecycleBatch(db, [
         guard,
         permissionGuard,
-        db
-          .prepare(
-            `UPDATE identities SET started_at = ?, updated_at = ?
-              WHERE id = ? AND started_at IS NULL AND ended_at IS NULL AND blocked_at IS NULL AND updated_at = ?`,
-          )
-          .bind(at, at, identity.id, identity.updated_at),
-        prepareScopedAuditLogAfterOneChange(
-          db,
-          organizationIdentityAuditScope(identity.member_id, identity.user_id),
-          actor.actorType,
-          actor.userId,
-          "organization_identity_activated",
-          "identity",
-          identity.id,
-          { organizationId: input.organizationId, reason: input.transition.reason ?? null },
-          at,
-        ),
-        prepareOrganizationIdentityPublication(db, identity.id, at),
-        prepareIdentityNotification(db, {
+        ...preparePendingIdentityActivation(db, {
           identityId: identity.id,
           userId: identity.user_id,
-          context,
-          action: "activated",
           at,
+          expectedUpdatedAt: identity.updated_at,
+          audit: [
+            prepareScopedAuditLogAfterOneChange(
+              db,
+              organizationIdentityAuditScope(identity.member_id, identity.user_id),
+              actor.actorType,
+              actor.userId,
+              "organization_identity_activated",
+              "identity",
+              identity.id,
+              { organizationId: input.organizationId, reason: input.transition.reason ?? null },
+              at,
+            ),
+          ],
         }),
-        ...prepareAutomaticGroupEnrollmentForUserStatements(db, identity.user_id, at),
       ]);
       return { identityId: identity.id, state: "active" };
     }

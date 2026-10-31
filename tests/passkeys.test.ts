@@ -18,7 +18,9 @@ import { queryAll } from "./helpers/context";
 import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
 import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
 import { MAX_PASSKEY_CREDENTIALS_PER_USER } from "../assets/shared/constants/passkeys";
-import { completePasskeyAuthentication, persistVerifiedPasskeyCredential } from "../functions/_lib/services/passkeys";
+import { LAST_PASSKEY_MESSAGE, LAST_SIGN_IN_METHOD } from "../assets/shared/auth-errors";
+import { completePasskeyAuthentication } from "../functions/_lib/services/passkey-authentication";
+import { persistVerifiedPasskeyCredential } from "../functions/_lib/services/passkey-registration";
 import {
   passkeyAuthenticateCompleteSchema,
   passkeyAuthenticateCompleteResponseSchema,
@@ -60,8 +62,8 @@ async function call(path: string, init: RequestInit = {}, token?: string): Promi
 async function insertStaffUser(email: string): Promise<string> {
   const id = crypto.randomUUID();
   await env.DB.prepare(
-    `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
-     VALUES (?, ?, ?, 1, datetime('now'), datetime('now'))`,
+    `INSERT INTO users (id,email,normalized_email,active,email_verified_at,created_at,updated_at)
+     VALUES (?,?,?,1,strftime('%Y-%m-%dT%H:%M:%fZ','now'),strftime('%Y-%m-%dT%H:%M:%fZ','now'),strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
   )
     .bind(id, email, email)
     .run();
@@ -83,8 +85,8 @@ async function insertActiveMemberUser(email: string): Promise<string> {
   const { statements } = buildCreateIndividualMemberStatements(env.DB, identity.identityId, "H5", now);
   await env.DB.batch([
     env.DB.prepare(
-      `INSERT INTO users (id, email, normalized_email, first_name, active, created_at, updated_at)
-       VALUES (?, ?, ?, 'Test', 1, datetime('now'), datetime('now'))`,
+      `INSERT INTO users (id,email,normalized_email,first_name,active,email_verified_at,created_at,updated_at)
+       VALUES (?,?,?,'Test',1,strftime('%Y-%m-%dT%H:%M:%fZ','now'),strftime('%Y-%m-%dT%H:%M:%fZ','now'),strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
     ).bind(userId, email, email),
     identity.statement,
     ...statements,
@@ -122,6 +124,36 @@ describe("passkeys (WebAuthn)", () => {
     await resetDb();
     userId = await insertStaffUser("passkey-user@example.test");
     token = await createAdminSession(env.DB, userId, "passkey-user-token");
+  });
+
+  it("refuses passkey enrollment before the sign-in mailbox is verified", async () => {
+    await env.DB.prepare("UPDATE users SET email_verified_at=NULL WHERE id=?").bind(userId).run();
+    const response = await call("/api/v1/auth/passkeys/register/begin", { method: "POST" }, token);
+    expect(response.status).toBe(403);
+    expect(await queryAll(env.DB, "SELECT id FROM passkey_credentials WHERE user_id=?", [userId])).toEqual([]);
+  });
+
+  it("does not finish a ceremony after its verified mailbox changes", async () => {
+    const beginResponse = await call("/api/v1/auth/passkeys/register/begin", { method: "POST" }, token);
+    expect(beginResponse.status).toBe(200);
+    const begin = (await beginResponse.json()) as BeginResponse;
+    const authenticator = await createMockAuthenticator();
+    const response = await buildRegistrationResponse(authenticator, {
+      challenge: begin.options.challenge,
+      rpId: RP_ID,
+      origin: ORIGIN,
+    });
+    await env.DB.prepare("UPDATE users SET email_verified_at='2099-01-01T00:00:00.000Z' WHERE id=?").bind(userId).run();
+    const complete = await call(
+      "/api/v1/auth/passkeys/register/complete",
+      { method: "POST", body: JSON.stringify({ challengeToken: begin.challengeToken, response }) },
+      token,
+    );
+    expect(complete.status).toBe(409);
+    expect(await queryAll(env.DB, "SELECT id FROM passkey_credentials WHERE user_id=?", [userId])).toEqual([]);
+    expect(
+      await queryAll(env.DB, "SELECT challenge_id FROM passkey_challenge_uses WHERE purpose='registration'"),
+    ).toEqual([]);
   });
 
   async function registerPasskey(
@@ -768,6 +800,113 @@ describe("passkeys (WebAuthn)", () => {
       passkeyId,
     );
     expect(rows[0].revoked_at).not.toBeNull();
+  });
+
+  /**
+   * Leaves the passkey as the only way in: an unproved primary stops unlocking
+   * the account once another mailbox is verified, and that mailbox may not sign
+   * in until its owner allows it. Returns that mailbox's id.
+   */
+  async function leaveNoOtherWayToSignIn(): Promise<string> {
+    const emailId = crypto.randomUUID();
+    const at = new Date().toISOString();
+    await env.DB.batch([
+      env.DB.prepare("UPDATE users SET email_verified_at = NULL WHERE id = ?").bind(userId),
+      env.DB.prepare(
+        "INSERT INTO user_emails (id,user_id,email,normalized_email,verified_at,created_at) VALUES (?,?,?,?,?,?)",
+      ).bind(emailId, userId, "added@example.test", "added@example.test", at, at),
+    ]);
+    return emailId;
+  }
+
+  async function passkeyRemovals(passkeyId: string) {
+    const rows = await queryAll<{ details_json: string }>(
+      env.DB,
+      "SELECT details_json FROM audit_log WHERE action = 'passkey_removed' AND entity_id = ?",
+      passkeyId,
+    );
+    return rows.map((row) => JSON.parse(row.details_json) as Record<string, unknown>);
+  }
+
+  async function liveSessionIds(): Promise<string[]> {
+    const rows = await queryAll<{ id: string }>(
+      env.DB,
+      "SELECT id FROM sessions WHERE user_id = ? AND revoked_at IS NULL ORDER BY id",
+      userId,
+    );
+    return rows.map((row) => row.id);
+  }
+
+  it("refuses removing the last way to sign in, and allows it once another remains", async () => {
+    const { passkeyId } = await registerPasskey();
+    const emailId = await leaveNoOtherWayToSignIn();
+    const at = new Date().toISOString();
+
+    const refused = await call(`/api/v1/auth/passkeys/${passkeyId}`, { method: "DELETE" }, token);
+    expect(refused.status).toBe(409);
+    expect(await refused.json()).toMatchObject({
+      error: { code: LAST_SIGN_IN_METHOD, message: LAST_PASSKEY_MESSAGE },
+    });
+    const kept = await queryAll<{ revoked_at: string | null }>(
+      env.DB,
+      "SELECT revoked_at FROM passkey_credentials WHERE id = ?",
+      passkeyId,
+    );
+    expect(kept[0].revoked_at).toBeNull();
+
+    await env.DB.prepare("INSERT INTO user_email_sign_in_permissions (email_id, revision, enabled_at) VALUES (?,?,?)")
+      .bind(emailId, crypto.randomUUID(), at)
+      .run();
+    const allowed = await call(`/api/v1/auth/passkeys/${passkeyId}`, { method: "DELETE" }, token);
+    expect(allowed.status).toBe(200);
+    expect(await passkeyRemovals(passkeyId)).toEqual([{}]);
+  });
+
+  it("revokes the last way to sign in once its owner confirms, signing out the other sessions", async () => {
+    const { passkeyId } = await registerPasskey();
+    await leaveNoOtherWayToSignIn();
+    const [callerSessionId] = await liveSessionIds();
+    await createAdminSession(env.DB, userId, "passkey-user-other-device");
+    expect(await liveSessionIds()).toHaveLength(2);
+
+    const unconfirmed = await call(
+      `/api/v1/auth/passkeys/${passkeyId}?confirmLastMethod=false`,
+      { method: "DELETE" },
+      token,
+    );
+    expect(unconfirmed.status).toBe(409);
+
+    const confirmed = await call(
+      `/api/v1/auth/passkeys/${passkeyId}?confirmLastMethod=true`,
+      { method: "DELETE" },
+      token,
+    );
+    expect(confirmed.status).toBe(200);
+    const revoked = await queryAll<{ revoked_at: string | null }>(
+      env.DB,
+      "SELECT revoked_at FROM passkey_credentials WHERE id = ?",
+      passkeyId,
+    );
+    expect(revoked[0].revoked_at).not.toBeNull();
+    // The caller stays signed in to add a new passkey; every other session ends.
+    expect(await liveSessionIds()).toEqual([callerSessionId]);
+    expect(await passkeyRemovals(passkeyId)).toEqual([
+      { lastSignInMethod: { from: null, to: true }, otherSessionsSignedOut: { from: null, to: true } },
+    ]);
+  });
+
+  it("treats a confirmation as a plain removal while another way to sign in remains", async () => {
+    const { passkeyId } = await registerPasskey();
+    await createAdminSession(env.DB, userId, "passkey-user-other-device");
+
+    const response = await call(
+      `/api/v1/auth/passkeys/${passkeyId}?confirmLastMethod=true`,
+      { method: "DELETE" },
+      token,
+    );
+    expect(response.status).toBe(200);
+    expect(await liveSessionIds()).toHaveLength(2);
+    expect(await passkeyRemovals(passkeyId)).toEqual([{}]);
   });
 
   it("a user cannot authenticate with a revoked passkey", async () => {

@@ -1,28 +1,24 @@
+import { useDialogQueryState } from "../../../../../../hooks/useDialogQueryState";
 import "./SessionPromotionKit.css";
-import { useEffect, useState } from "preact/hooks";
-import {
-  promotionKitSaveSchema,
-  promotionKitSchema,
-  promotionFormatSchema,
-} from "../../../../../../../shared/schemas/event-promotion-kit";
+import { useState } from "preact/hooks";
+import { promotionKitSaveSchema } from "../../../../../../../shared/schemas/event-promotion-kit";
 import {
   agendaSnapshotSchema,
   type AgendaSnapshot,
   type AgendaOccurrence,
 } from "../../../../../../../shared/schemas/event-agenda";
 import { useContractForm } from "../../../../../../hooks/useContractForm";
-import { getJson, postJson } from "../../../../../../shared/api-client";
-import { copyText } from "../../../../../../shared/clipboard";
-import { toast } from "../../../../ui";
+import { postJson } from "../../../../../../shared/api-client";
+import { Dialog } from "../../../../../../ui/Dialog";
 import { Button } from "../../../../../../ui/Button";
+import { IconPlus } from "../../../../../../components/icons";
+import { PromotionBulkPreparation } from "./PromotionBulkPreparation";
 import { CloseButton } from "../../../../../../ui/CloseButton";
 import { Panel, PanelHeader, PanelBody } from "../../../../../../ui/Panel";
 import { Field } from "../../../../../../ui/Field";
 import { TextInput, Textarea } from "../../../../../../ui/TextControl";
 import { ErrorAlert } from "../../../../../../components/ErrorAlert";
-import { z } from "zod";
-import { ExternalLink } from "../../../../../../ui/ExternalLink";
-type Kit = z.infer<typeof promotionKitSchema>;
+import { PersonalPromotionKit } from "./PersonalPromotionKit";
 export function SessionPromotionKit({
   slug,
   occurrence,
@@ -40,9 +36,9 @@ export function SessionPromotionKit({
   const [takeaways, setTakeaways] = useState(occurrence.promotionCopy?.takeaways.join("\n") ?? "");
   const [callToAction, setCta] = useState(occurrence.promotionCopy?.callToAction ?? "Join this session");
   const [campaign, setCampaign] = useState(occurrence.promotionCopy?.campaign ?? "speaker-kit");
-  const [kit, setKit] = useState<Kit | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [editing, showEditing, closeEditing] = useDialogQueryState("promotionCopy");
   const base = `/api/v1/events/${encodeURIComponent(slug)}/agenda/occurrences/${encodeURIComponent(occurrence.id)}/promotion`;
   const body = {
     expectedRevision: snapshot?.revision ?? 0,
@@ -58,160 +54,94 @@ export function SessionPromotionKit({
     },
   };
   const form = useContractForm(promotionKitSaveSchema, body);
-  async function approve(event: Event) {
-    event.preventDefault();
+  async function approve() {
     const checked = form.submit();
     if (!checked.data) {
-      setError(checked.message);
+      setError(checked.formMessage ?? "");
       return;
     }
     setBusy(true);
     try {
       onSaved?.(await postJson(base, checked.data, agendaSnapshotSchema));
-      setKit(null);
       setError("");
+      await closeEditing();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save promotion copy.");
+      setError(form.refuse(e));
     } finally {
       setBusy(false);
     }
   }
-  async function load() {
-    setBusy(true);
-    setError("");
-    try {
-      setKit(await postJson(`${base}/renders`, {}, promotionKitSchema));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not prepare promotion kit.");
-    } finally {
-      setBusy(false);
-    }
-  }
-  useEffect(() => {
-    if (!kit || !kit.artifacts.some((artifact) => ["queued", "rendering", "retrying"].includes(artifact.status)))
-      return;
-    let cancelled = false;
-    const timer = setTimeout(() => {
-      void getJson(base, promotionKitSchema)
-        .then((next) => {
-          if (!cancelled) setKit(next);
-        })
-        .catch((failure) => {
-          if (!cancelled) setError(failure instanceof Error ? failure.message : "Could not refresh render progress.");
-        });
-    }, 2500);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [base, kit]);
   return (
     <Panel>
       <PanelHeader title={`Promotion kit · ${occurrence.title}`}>
+        {snapshot && (
+          <>
+            <PromotionBulkPreparation slug={slug} publishedRevision={snapshot.publishedRevision} />
+            <Button
+              icon
+              aria-label="Edit shared promotion copy"
+              title="Edit shared promotion copy"
+              onClick={showEditing}
+            >
+              <IconPlus />
+            </Button>
+          </>
+        )}
         <CloseButton label="Close promotion kit" onClick={onClose} />
       </PanelHeader>
       <PanelBody>
-        {snapshot && (
-          <form noValidate onSubmit={approve} class="pk-form">
-            <p>
-              Review the narrative, then approve the agenda to release this copy with its schedule and speaker credits.
-            </p>
-            <Field label="Why attend" {...form.of("copy.whyAttend")}>
-              {(control) => <Textarea {...control} value={whyAttend} onInput={(e) => setWhy(e.currentTarget.value)} />}
-            </Field>
-            <Field
-              label="Key questions / takeaways"
-              help="One per line; two to five specific points."
-              {...form.of("copy.takeaways")}
+        {snapshot && editing && (
+          <Dialog
+            open
+            title="Shared promotion copy"
+            closeLabel="Close shared promotion copy"
+            confirmLabel="Approve promotion copy"
+            confirmDisabled={busy}
+            onConfirm={() => void approve()}
+            onCancel={closeEditing}
+          >
+            <form
+              noValidate
+              {...form.handlers}
+              onSubmit={(event) => {
+                event.preventDefault();
+                void approve();
+              }}
+              class="pk-form"
             >
-              {(control) => (
-                <Textarea {...control} value={takeaways} onInput={(e) => setTakeaways(e.currentTarget.value)} />
-              )}
-            </Field>
-            <Field label="Call to action" {...form.of("copy.callToAction")}>
-              {(control) => (
-                <TextInput {...control} value={callToAction} onInput={(e) => setCta(e.currentTarget.value)} />
-              )}
-            </Field>
-            <Field label="Campaign" {...form.of("copy.campaign")}>
-              {(control) => (
-                <TextInput {...control} value={campaign} onInput={(e) => setCampaign(e.currentTarget.value)} />
-              )}
-            </Field>
-            <Button type="submit" disabled={busy}>
-              Approve promotion copy
-            </Button>
-          </form>
+              <p>
+                Review the narrative, then approve the agenda to release this copy with its schedule and speaker
+                credits.
+              </p>
+              <Field label="Why attend" {...form.of("copy.whyAttend")}>
+                {(control) => (
+                  <Textarea {...control} value={whyAttend} onInput={(e) => setWhy(e.currentTarget.value)} />
+                )}
+              </Field>
+              <Field
+                label="Key questions / takeaways"
+                help="Optional: one per line, up to eight specific points."
+                {...form.of("copy.takeaways")}
+              >
+                {(control) => (
+                  <Textarea {...control} value={takeaways} onInput={(e) => setTakeaways(e.currentTarget.value)} />
+                )}
+              </Field>
+              <Field label="Call to action" {...form.of("copy.callToAction")}>
+                {(control) => (
+                  <TextInput {...control} value={callToAction} onInput={(e) => setCta(e.currentTarget.value)} />
+                )}
+              </Field>
+              <Field label="Campaign" {...form.of("copy.campaign")}>
+                {(control) => (
+                  <TextInput {...control} value={campaign} onInput={(e) => setCampaign(e.currentTarget.value)} />
+                )}
+              </Field>
+              {error && <ErrorAlert error={error} />}
+            </form>
+          </Dialog>
         )}
-        <Button onClick={load} disabled={busy}>
-          Prepare published kit
-        </Button>
-        {error && <ErrorAlert error={error} />}{" "}
-        {kit && (
-          <section>
-            <p>
-              Approved agenda revision {kit.publishedRevision} · template {kit.templateVersion}. Times use the event
-              timezone. Check the session page for current details.
-            </p>
-            <p>
-              {kit.sessionUrl ? (
-                <>
-                  <a href={kit.sessionUrl}>Session page</a> ·{" "}
-                </>
-              ) : null}
-              <a href={kit.registrationUrl}>Event registration / promoter link</a>
-            </p>
-            <Button
-              onClick={() =>
-                void copyText(`${occurrence.title}\n${kit.copy.whyAttend}\n${kit.registrationUrl}`, {
-                  copied: "Post and registration link copied",
-                  failed: "Your browser would not let the page copy the post",
-                  notify: toast,
-                })
-              }
-            >
-              Copy post and registration link
-            </Button>
-            <p>
-              {kit.metrics.downloads} downloads · {kit.metrics.clicks} registration-link clicks ·{" "}
-              {kit.metrics.confirmedRegistrations} confirmed referrals · {kit.metrics.sessionRsvps} session RSVPs.
-              Registrations and RSVPs are separate from observed attendance.
-            </p>
-            <ul>
-              {promotionFormatSchema.options.map((format) => (
-                <li>
-                  {kit.artifacts.some((artifact) => artifact.format === format && artifact.status === "rendered") ? (
-                    <a href={`${base}/artifact?format=${format}&revision=${kit.publishedRevision}`} download>
-                      {format === "carousel" ? "LinkedIn carousel PDF" : `${format} cards (PNG or ZIP)`}
-                    </a>
-                  ) : (
-                    <span>
-                      {format}: {kit.artifacts.find((artifact) => artifact.format === format)?.status ?? "not prepared"}
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ul>
-            <p>
-              Document uploads support up to 100 MB and 300 pages.{" "}
-              <ExternalLink href="https://www.linkedin.com/help/linkedin/answer/a518909" external>
-                LinkedIn document guidance
-              </ExternalLink>
-            </p>
-            <p>
-              Long titles and complete panel credits continue across additional cards, downloaded together as a ZIP.
-            </p>
-            {kit.artifacts.some((artifact) => artifact.format === "landscape" && artifact.status === "rendered") && (
-              <img
-                class="pk-promotion-kit__preview"
-                src={`${base}/artifact?format=landscape&download=false&revision=${kit.publishedRevision}`}
-                width="1200"
-                height="630"
-                alt={`First landscape promotion card for ${occurrence.title}`}
-              />
-            )}
-          </section>
-        )}
+        <PersonalPromotionKit key={snapshot?.revision} base={base} title="My published materials" />
       </PanelBody>
     </Panel>
   );

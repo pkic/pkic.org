@@ -71,6 +71,7 @@ export async function prepareEventProposalProofRedemption(
     bindings: [proofKey, person.user.id],
   };
   return {
+    eventId: input.eventId,
     ...person,
     speakerClaimSessionId: payload.speakerClaimSessionId,
     normalizedEmail: payload.email,

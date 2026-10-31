@@ -58,7 +58,7 @@ export function IdentityProfileForm({
       organization: identity.organizationId !== null,
       jobTitle: identity.jobTitle,
     }),
-    identityProfileBody(draft),
+    identityProfileBody(draft, identity.organizationId !== null),
   );
 
   async function submit(event: Event) {
@@ -66,7 +66,7 @@ export function IdentityProfileForm({
     setError(null);
     const checked = form.submit();
     if (!checked.data) {
-      setError(checked.message);
+      setError(checked.formMessage);
       return;
     }
     setSaving(true);

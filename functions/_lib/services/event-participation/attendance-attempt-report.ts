@@ -16,6 +16,7 @@ import {
   attendanceCaptureProjection,
   attendanceRowCaptureContext,
 } from "./attendance-report-context";
+import { personNameSql } from "../people/person-name-sql";
 export async function attendanceAttemptsQuery(db: DatabaseLike, eventId: string, raw: unknown) {
   const query = attendanceAttemptQuerySchema.parse(raw),
     context = await attendanceReportContext(db, eventId, query);
@@ -39,7 +40,7 @@ export async function attendanceAttemptsQuery(db: DatabaseLike, eventId: string,
   const sortKey = query.sort?.replace(/^-/, "") === "observedAt" ? "observedAt" : "receivedAt",
     direction = query.sort && !query.sort.startsWith("-") ? "ASC" : "DESC";
   return {
-    sql: `SELECT ${attendanceCaptureProjection("a")},a.id AS id,a.user_id AS userId,NULLIF(TRIM(COALESCE(person.preferred_name,person.first_name,'')||' '||COALESCE(person.last_name,'')),'') AS displayName,a.occurrence_id AS occurrenceId,a.operator_user_id AS operatorUserId,a.device_id AS deviceId,a.action,a.outcome,a.reason,a.exception_reason AS exceptionReason,a.admission_decision AS admissionDecision,a.observed_at AS observedAt,a.created_at AS receivedAt,EXISTS(SELECT 1 FROM event_offline_admission_spends spent WHERE spent.operation_id=a.operation_id) AS offlineReconciled ${from}`,
+    sql: `SELECT ${attendanceCaptureProjection("a")},a.id AS id,a.user_id AS userId,${personNameSql("person")} AS displayName,a.occurrence_id AS occurrenceId,a.operator_user_id AS operatorUserId,a.device_id AS deviceId,a.action,a.outcome,a.reason,a.exception_reason AS exceptionReason,a.admission_decision AS admissionDecision,a.observed_at AS observedAt,a.created_at AS receivedAt,EXISTS(SELECT 1 FROM event_offline_admission_spends spent WHERE spent.operation_id=a.operation_id) AS offlineReconciled ${from}`,
     bindings: values,
     order: `${sortKey} ${direction},id`,
   };

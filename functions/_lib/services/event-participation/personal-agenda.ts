@@ -19,13 +19,16 @@ import type { D1StatementResult } from "../../types";
 import type { DatabaseLike, Env } from "../../types";
 import { readParticipantEvent } from "./participant-read-context";
 import { eventClockCity } from "../../../../assets/shared/event-clock";
-import { heldParticipationStatusesSql, onPersonalAgendaSql } from "./personal-agenda-membership";
+import {
+  heldParticipationStatusesSql,
+  onPersonalAgendaSql,
+  privateSessionAccessSql,
+} from "./personal-agenda-membership";
 /**
  * A private session reaches a participant only when they hold a place on it
  * (reserved or awaiting approval) or an unrevoked invitation. Expects the
  * session as `s`, the viewer's participation as `p`, and binds the viewer once.
  */
-const privateSessionAccessSql = `(p.status IN ('reserved','approval_pending') OR EXISTS(SELECT 1 FROM agenda_session_invitations invitation WHERE invitation.occurrence_id=s.id AND invitation.user_id=? AND invitation.revoked_at IS NULL))`;
 
 export async function personalAgenda(db: DatabaseLike, eventId: string, userId: string, raw: unknown) {
   const read = preparePersonalAgenda(db, eventId, userId, raw);

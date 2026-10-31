@@ -65,6 +65,8 @@ describe("member application response schemas", () => {
       memberApplicationStatusResponseSchema.parse({
         id: "00000000-0000-4000-8000-000000000001",
         stage: "processing",
+        membershipCategory: "A",
+        membershipCategoryLabel: "Certification authority",
         stageEnteredAt: "2026-08-23T00:00:00.000Z",
         createdAt: "2026-08-22T00:00:00.000Z",
       }),
@@ -84,6 +86,8 @@ describe("member application response schemas", () => {
       memberApplicationStatusResponseSchema.safeParse({
         id: "00000000-0000-4000-8000-000000000001",
         stage: "submitted",
+        membershipCategory: "A",
+        membershipCategoryLabel: null,
         stageEnteredAt: null,
         createdAt: "2026-08-22T00:00:00.000Z",
       }).success,

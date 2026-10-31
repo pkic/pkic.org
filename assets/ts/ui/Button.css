@@ -56,7 +56,8 @@
     border-color: var(--pk-line);
   }
   .pk-btn--secondary:hover:not(:disabled, [aria-disabled="true"]) {
-    background: var(--pk-surface-sunk);
+    /* Keep the shared select chevron when a button is used as a combobox. */
+    background-color: var(--pk-surface-sunk);
     border-color: var(--pk-line-strong);
   }
 

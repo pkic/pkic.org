@@ -1,3 +1,4 @@
+import { MAX_ACTING_IDENTITIES, SESSION_ACTING_IDENTITY_ORDER_SQL } from "./session-acting-identities";
 import { sessionEmailSignInAllowedSql } from "./email-sign-in-policy";
 import { hasEventParticipation } from "./event-participation";
 import type { AuthMember, DatabaseLike, EligibleIdentity } from "../types";
@@ -13,6 +14,10 @@ import {
 } from "../../../assets/shared/session-acting-identity";
 import { executiveCouncilSeatSql } from "./executive-council";
 import { activeOrganizationMemberRepresentationPredicate } from "../services/membership/capacity-query";
+import { sqlValue, type SqlId } from "../db/sql-value";
+import { batchRows } from "../db/pagination";
+import { actingIdentitiesSelection, decodeActingIdentities } from "./session-acting-identities";
+import type { D1StatementResult } from "../types";
 
 export const STAFF_ACCESS_CONDITION = `(
   EXISTS (
@@ -230,14 +235,36 @@ export async function resolveEligibleMembershipRows(
   db: DatabaseLike,
   userId: string,
 ): Promise<MemberEligibleUserRow[]> {
-  return all<MemberEligibleUserRow>(
-    db,
-    `SELECT ${MEMBER_ELIGIBLE_USER_COLUMNS}
+  const read = eligibleMembershipSelection(userId);
+  return all<MemberEligibleUserRow>(db, read.sql, read.bindings);
+}
+
+export function eligibleMembershipSelection(userId: SqlId) {
+  const user = sqlValue(userId);
+  return {
+    sql: `SELECT ${MEMBER_ELIGIBLE_USER_COLUMNS}
      FROM (${MEMBER_ELIGIBLE_USER_SELECT}) combined
-     WHERE id = ? AND active = 1
+     WHERE id = ${user.sql} AND active = 1
      ORDER BY sort_key ASC`,
-    [userId],
-  );
+    bindings: user.bindings,
+  };
+}
+
+/** Project the session's exact member and acting identities inside its existing write batch. */
+export function prepareEligibleMemberRead(db: DatabaseLike, userId: SqlId, identityId: string) {
+  const memberships = eligibleMembershipSelection(userId);
+  const identities = actingIdentitiesSelection(userId);
+  return {
+    statements: [
+      db.prepare(memberships.sql).bind(...memberships.bindings),
+      db.prepare(identities.sql).bind(...identities.bindings),
+    ],
+    decode: (results: D1StatementResult[]) =>
+      selectActingMember(
+        batchRows<MemberEligibleUserRow>(results[0]),
+        resolveSessionActingIdentityId(decodeActingIdentities(results[1]), identityId),
+      ),
+  };
 }
 
 /**
@@ -409,4 +436,20 @@ export async function resolveIdentityCapacities(
         actingIdentities,
       }
     : null;
+}
+
+/** Canonical live acting identity choice, shared by atomic audit and membership selection. */
+export function userSessionActingIdentitySelection(userId: string, selectedIdentityId?: string) {
+  return {
+    sql: `WITH acting AS MATERIALIZED(SELECT identity.id FROM identities identity LEFT JOIN organizations organization ON organization.id=identity.organization_id WHERE identity.user_id=? AND identity.started_at IS NOT NULL AND identity.ended_at IS NULL AND identity.blocked_at IS NULL ORDER BY ${SESSION_ACTING_IDENTITY_ORDER_SQL} LIMIT ${MAX_ACTING_IDENTITIES}) SELECT COALESCE((SELECT id FROM acting WHERE id=?),(SELECT MIN(id) FROM acting HAVING COUNT(*)=1))`,
+    bindings: [userId, selectedIdentityId ?? null],
+  };
+}
+/** The same live acting identity/member choice used by the session decoder, available inside a command guard. */
+export function userSessionMemberSelection(userId: string, selectedIdentityId?: string) {
+  const identity = userSessionActingIdentitySelection(userId, selectedIdentityId);
+  return {
+    sql: `SELECT eligible.member_id FROM (${MEMBER_ELIGIBLE_USER_SELECT}) eligible WHERE eligible.id=? AND eligible.active=1 AND eligible.identity_id=(${identity.sql}) ORDER BY eligible.sort_key LIMIT 1`,
+    bindings: [userId, ...identity.bindings],
+  };
 }

@@ -112,8 +112,9 @@ describe("direct session presentation management", () => {
     expect(host.querySelector("table")).toBeNull();
     await act(() => button("Save review").click());
     await vi.waitFor(() => expect(changed).toHaveBeenCalledTimes(2));
-    await settle();
-    expect(host.querySelector("[data-presentation-review-status]")?.textContent).toContain("Approved");
+    await vi.waitFor(() =>
+      expect(host.querySelector("[data-presentation-review-status]")?.textContent).toContain("Approved"),
+    );
     expect(host.querySelector<HTMLAnchorElement>("a[download]")?.getAttribute("href")).toBe(
       `${base}/${versionId}/content`,
     );

@@ -2,7 +2,7 @@ import type { DatabaseLike } from "../../functions/_lib/types";
 import { sha256Hex } from "../../functions/_lib/utils/crypto";
 import { nowIso } from "../../functions/_lib/utils/time";
 import { makeOwnEmailAddressPrimary } from "../../functions/_lib/services/own-email-addresses";
-import { prepareVerifyPrimaryEmailStatement } from "../../functions/_lib/services/email-verification";
+import { prepareVerifyPrimaryEmailStatements } from "../../functions/_lib/services/email-verification";
 
 export async function seedRsvpRegistration(db: DatabaseLike): Promise<{ registrationId: string; userId: string }> {
   const eventId = crypto.randomUUID();
@@ -43,7 +43,7 @@ export async function switchRsvpRegistrationPrimaryEmail(db: DatabaseLike, userI
   const emailId = crypto.randomUUID();
   const at = nowIso();
   await db.batch([
-    prepareVerifyPrimaryEmailStatement(db, {
+    ...prepareVerifyPrimaryEmailStatements(db, {
       userId,
       normalizedEmail: "alice@example.com",
       method: "registration_confirmation",

@@ -1,3 +1,4 @@
+import { eventPlaceSummary } from "../../assets/shared/event-place";
 // @vitest-environment jsdom
 import { render, type JSX } from "preact";
 import { act } from "preact/test-utils";
@@ -14,7 +15,6 @@ import { pickEventNow } from "../../assets/ts/member-flows/portal/sections/event
 import { eventPhase } from "../../assets/ts/member-flows/portal/sections/events/app/event-timing";
 import { formatDateTimeInZone } from "../../assets/shared/format-date";
 import {
-  eventPlaceSummary,
   eventVenueLines,
   type ParticipantEventDetail,
 } from "../../assets/ts/member-flows/portal/sections/events/app/event-app-model";
@@ -36,7 +36,8 @@ vi.mock("wouter", () => ({
   ),
 }));
 const currentLocation = { value: "/home" };
-vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => [currentLocation.value, vi.fn()] }));
+const navigateHash = vi.fn();
+vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => [currentLocation.value, navigateHash] }));
 
 const eventId = participantEventId;
 const registrationId = participantRegistrationId;
@@ -70,6 +71,7 @@ function json(value: unknown): Response {
 
 beforeEach(() => {
   currentLocation.value = "/home";
+  navigateHash.mockReset();
   host = document.createElement("div");
   document.body.append(host);
   requests = [];
@@ -219,7 +221,16 @@ describe("event bottom tabs", () => {
     // Each tab has a decorative glyph over its label; the label stays the accessible name.
     for (const tab of bar.querySelectorAll("a, button"))
       expect(tab.querySelector("svg.pk-app-tabbar__icon")?.getAttribute("aria-hidden")).toBe("true");
-    expect(tabLabels("Event")).toEqual(["Overview", "Agenda", "My agenda", "Ticket", "Virtual room", "Registration"]);
+    expect(tabLabels("Event")).toEqual([
+      "Overview",
+      "Agenda",
+      "My agenda",
+      "Ticket",
+      "Virtual room",
+      "Registration",
+      "Share",
+    ]);
+    expect(host.querySelector('[data-event-more="promotion"]')?.getAttribute("href")).toBe("#/events/summit/promotion");
     // The desktop tabs remain the page's one "Event" navigation.
     expect(host.querySelectorAll('nav[aria-label="Event"]')).toHaveLength(1);
     expect(host.querySelector('[data-event-more="registration"]')?.getAttribute("href")).toBe(
@@ -235,8 +246,9 @@ describe("event home", () => {
     await act(() => render(<ParticipantEvent event={event()} />, host));
     expect(host.querySelector(".pk-event-hero__title")?.textContent).toBe("Summit");
     expect(host.textContent).toContain("Amsterdam");
-    const register = [...host.querySelectorAll("a")].find((link) => link.textContent === "Register");
-    expect(register?.getAttribute("href")).toBe("/events/summit/register/");
+    const register = host.querySelector<HTMLAnchorElement>('a[href="#/events/summit/register/"]');
+    expect(register).toBeTruthy();
+    expect(host.querySelector('a[href="/events/summit/register/"]')).toBeNull();
     const card = register!.closest(".pk-event-card")!;
     expect(card.querySelector(".pk-event-card__eyebrow")?.textContent).toBe("Registration");
     expect(card.querySelector(".pk-event-card__title")?.textContent).toBe("You're not registered yet");
@@ -244,6 +256,8 @@ describe("event home", () => {
     expect(card.querySelectorAll("p:not(.pk-event-card__eyebrow)")).toHaveLength(0);
     expect(host.textContent).not.toContain("Show ticket");
     expect(host.textContent).not.toContain("Your proposals");
+    expect(host.textContent).not.toContain("Your next session");
+    expect(tabLabels("Event app")).not.toContain("My agenda");
     expect(requests).toEqual([]);
   });
 
@@ -366,6 +380,17 @@ describe("event home", () => {
     expect(requests).toEqual(["/api/v1/events/summit/badges/current"]);
   });
 
+  it("keeps sharing and promotion materials out of Ticket", async () => {
+    const detail = event(registered);
+    detail.participation!.promotion = { sharePath: "/r/ownshare", badgeVersion: "2026-12-01T10:00:00.000Z" };
+    await act(() => render(<ParticipantEvent event={detail} tab="ticket" />, host));
+    await vi.waitFor(() => expect(host.querySelector("iframe.pk-badge-face__frame")).not.toBeNull());
+    expect(host.querySelector("[data-og-badge-img]")).toBeNull();
+    expect(host.textContent).not.toContain("Invite a colleague");
+    expect(host.textContent).not.toContain("Prepare downloads");
+    expect(requests).toEqual(["/api/v1/events/summit/badges/current"]);
+  });
+
   describe("an attendee waiting for an in-person seat", () => {
     // In-person on Dec 1 and 2 (both waitlisted), online on Dec 3: the registration-level type is in_person.
     const waiting = {
@@ -434,10 +459,12 @@ describe("event home", () => {
     expect(requests).toEqual([]);
   });
 
-  it("offers registration on the ticket tab to a reader without one", async () => {
+  it("sends a reader without a registration from the ticket page to the event home, where no Ticket tab is listed", async () => {
     await act(() => render(<ParticipantEvent event={event()} tab="ticket" />, host));
-    expect(host.textContent).toContain("No ticket yet");
-    expect(host.querySelector('a[href="/events/summit/register/"]')).not.toBeNull();
+    expect(navigateHash).toHaveBeenCalledWith("/events/summit", { replace: true });
+    expect(host.textContent).not.toContain("No ticket yet");
+    expect(host.querySelector('a[href="#/events/summit/ticket"]')).toBeNull();
+    expect(host.querySelector('a[href="#/events/summit/register/"]')).not.toBeNull();
     expect(requests).toEqual([]);
   });
 });

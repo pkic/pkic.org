@@ -17,6 +17,8 @@ import {
 import type { UserBackedAuthAdmin } from "../functions/_lib/types";
 import { resetDb } from "./helpers/reset-db";
 import { gateNextBatch } from "./helpers/d1-batch-gate";
+import { prepareIndividualIdentityStatement } from "../functions/_lib/services/users";
+import { nowIso } from "../functions/_lib/utils/time";
 import {
   addRepresentative,
   INDIVIDUAL_MEMBERSHIPS_OF_USER_SQL,
@@ -128,6 +130,29 @@ describe("admin user membership capacities", () => {
     const repeated = await capacityRequest(token, "", "POST", body);
     expect(repeated.status).toBe(409);
     expect(await publicationRequests()).toHaveLength(1);
+  });
+
+  it("grants membership to an attendee's existing personal identity without replacing its profile or references", async () => {
+    const { token } = await publicationStaff();
+    const userId = await insertUser(env.DB, "attendee-membership@example.test");
+    await env.DB.batch([prepareIndividualIdentityStatement(env.DB, userId, nowIso())]);
+    const identityId = await env.DB.prepare("SELECT id FROM identities WHERE user_id=? AND organization_id IS NULL")
+      .bind(userId)
+      .first<string>("id");
+    await env.DB.prepare("UPDATE identities SET biography='Existing attendee biography' WHERE id=?")
+      .bind(identityId)
+      .run();
+    const created = await capacityRequest(token, "", "POST", {
+      userId,
+      membershipCategory: "H6",
+      activationReason: "Reviewed attendee application",
+    });
+    expect(created.status, await created.clone().text()).toBe(201);
+    const result = memberCapacityMutationResponseSchema.parse(await created.json());
+    expect(result.member.id).toBe(identityId);
+    expect(
+      (await env.DB.prepare("SELECT id,biography FROM identities WHERE user_id=?").bind(userId).all()).results,
+    ).toEqual([{ id: identityId, biography: "Existing attendee biography" }]);
   });
 
   it.each(["individual", "organization", "hidden", "inactive"] as const)(

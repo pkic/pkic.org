@@ -203,14 +203,19 @@ export function createLiveRoomFixture() {
           ),
         );
       },
-      /** The latest message of a type once it has arrived. */
+      /**
+       * The latest message of a type once it has arrived. `after` skips the messages
+       * received before that count, so an earlier match cannot stand in for a later one.
+       */
       async next<T extends LiveRoomServerMessage["type"]>(
         type: T,
         where: (message: Extract<LiveRoomServerMessage, { type: T }>) => boolean = () => true,
+        { after = 0 }: { after?: number } = {},
       ) {
         return vi.waitFor(
           () => {
-            const found = [...received]
+            const found = received
+              .slice(after)
               .reverse()
               .find(
                 (message): message is Extract<LiveRoomServerMessage, { type: T }> =>

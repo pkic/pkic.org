@@ -53,7 +53,6 @@ import {
 } from "./helpers/scanner-recovery-storage";
 import {
   prepareSponsorLiveFixture,
-  captureDeviceConsole,
   expectContactBadgeRejected,
   captureOfflineSponsorBadge,
   prepareDoorScannerContext,
@@ -61,13 +60,13 @@ import {
   expectNoStoredSponsorContacts,
   sponsorEventSlug,
 } from "./helpers/sponsor-live-fixture";
+import { captureDeviceConsole } from "./helpers/device-console";
 import {
   pilotAgendaApi,
   openPilotAgenda,
   readPilotAgenda,
   capturePilot,
   preparePilotMeeting,
-  preparePilotSpeaker,
   preparePilotConference,
   editAndSwapPilot,
   staffPilot,
@@ -75,6 +74,7 @@ import {
   approvePilotAppearance,
   releasePilotArchive,
 } from "./helpers/agenda-integrated-pilot";
+import { preparePilotSpeaker } from "./helpers/agenda-integrated-pilot-speaker";
 
 test.use({ actionTimeout: 30_000 });
 
@@ -84,6 +84,15 @@ async function closePilotScanner(page: Page, scan: ReturnType<typeof enrolledEve
   const manual = page.getByRole("dialog", { name: /^(Enter badge code|Review sponsor lead)$/ });
   if (await manual.isVisible()) await manual.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(manual).not.toBeVisible();
+  // A refused entry is audited under its own device sequence, so the session closes at the highest one retained.
+  const stored = await scannerStorage(page);
+  const highWater = Math.max(
+    scan.scannerSession.sequence,
+    ...[...stored.pending, ...stored.history].flatMap((row) => {
+      const session = row.scan.scannerSession;
+      return session?.epochId === scan.scannerSession.epochId ? [session.sequence] : [];
+    }),
+  );
   const diagnostics = await openScannerDiagnostics(page);
   const closing = page
     .waitForResponse(
@@ -97,7 +106,7 @@ async function closePilotScanner(page: Page, scan: ReturnType<typeof enrolledEve
       expect(response.status()).toBe(200);
       const input = scannerDeviceSessionClosingSchema.parse(response.request().postDataJSON());
       const status = scannerDeviceSessionStatusSchema.parse(await response.json());
-      expect(input.highWaterSequence).toBe(scan.scannerSession.sequence);
+      expect(input.highWaterSequence).toBe(highWater);
       expect(input.sponsorId).toBe(scan.sponsorId ?? undefined);
       expect(status).toMatchObject({
         epochId: scan.scannerSession.epochId,
@@ -140,9 +149,11 @@ test("one recurring meeting and conference retain the same actors through organi
     sponsor = await sponsorContext.newPage();
   const doorConsole = captureDeviceConsole(door),
     sponsorConsole = captureDeviceConsole(sponsor);
+  let rehearsal: Awaited<ReturnType<typeof prepareSponsorLiveFixture>> | undefined;
   try {
     // Existing fixture establishes its own registrations, live sponsor and authority through actual mailbox/API flows.
     const fixture = await prepareSponsorLiveFixture(staff, attendee);
+    rehearsal = fixture;
     const freeTextMarker = `Device-free-text-${randomUUID()}`;
     const forbidden = [fixture.email, fixture.deniedEmail, fixture.firstName, fixture.organization, freeTextMarker];
     const devicePrivacy: Array<Awaited<ReturnType<typeof expectNoStoredSponsorContacts>> & { stage: string }> = [];
@@ -220,9 +231,9 @@ test("one recurring meeting and conference retain the same actors through organi
     await capturePilot(publicPage, info, "pilot-approved-public-agenda");
 
     const managePath = `/api/v1/registrations/access/${encodeURIComponent(fixture.manageToken)}`;
-    const beforeRegistration = registrationManageReadResponseSchema.parse(
-      await (await attendee.request.get(managePath)).json(),
-    );
+    const beforeResponse = await attendee.request.get(managePath);
+    expect(beforeResponse.status(), await beforeResponse.text()).toBe(200);
+    const beforeRegistration = registrationManageReadResponseSchema.parse(await beforeResponse.json());
     expect(beforeRegistration.registration).toMatchObject({
       event_id: event.id,
       status: "registered",
@@ -540,7 +551,7 @@ test("one recurring meeting and conference retain the same actors through organi
     );
     const identityProfile = speakerPage.locator("[data-identity-profile-form]");
     await identityProfile
-      .getByRole("textbox", { name: "Biography", exact: true })
+      .getByRole("textbox", { name: "Your speaker bio", exact: true })
       .fill(
         "The same synthetic speaker updated their live biography after the rehearsal; their recorded appearance remains independently approved.",
       );
@@ -618,6 +629,7 @@ test("one recurring meeting and conference retain the same actors through organi
       ),
     );
   } finally {
+    await rehearsal?.end();
     for (const context of contexts) await context.close();
   }
 });

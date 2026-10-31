@@ -199,8 +199,8 @@ const publishedContentMedia = new Set(contentMediaPaths);
 
 export function resolveHeroImageUrl(event: Pick<EventRecord, "settings_json">): string | null {
   const settings = parseJsonSafe<{ heroImageUrl?: string | null }>(event.settings_json, {});
-  const image = settings.heroImageUrl?.trim();
-  return image ? resolveContentMediaUrl(image, publishedContentMedia) : null;
+  const image = settings?.heroImageUrl;
+  return typeof image === "string" && image.trim() ? resolveContentMediaUrl(image.trim(), publishedContentMedia) : null;
 }
 
 export function resolveEventVenue(event: Pick<EventRecord, "settings_json">): string | null {

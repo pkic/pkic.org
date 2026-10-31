@@ -43,8 +43,10 @@ test("sponsor captures live consented contacts, exports them and loses disclosur
   const attendeeContext = await browser.newContext({ baseURL: info.project.use.baseURL });
   const staff = await staffContext.newPage();
   const attendee = await attendeeContext.newPage();
+  let liveSponsor: Awaited<ReturnType<typeof prepareSponsorLiveFixture>> | undefined;
   try {
     const fixture = await prepareSponsorLiveFixture(staff, attendee);
+    liveSponsor = fixture;
     await signInToPortal(page, fixture.operator.email);
     const sessionResponse = await page.request.get("/api/v1/auth/session");
     expect(sessionResponse.status()).toBe(200);
@@ -363,6 +365,7 @@ test("sponsor captures live consented contacts, exports them and loses disclosur
     await expect(page.getByText(fixture.email, { exact: true })).toHaveCount(0);
     await captureSponsorViews(page, info, "assignment-ended");
   } finally {
+    await liveSponsor?.end();
     await attendeeContext.close();
     await staffContext.close();
   }

@@ -35,7 +35,7 @@ const articles = await renderMemberNews(page, sponsors, query, newsPageHref);
 <PublicPage pageInputs={pageInputs} title={content.title} description={content.description}>
   <SiteHero hero={content.hero} />
   <section class="pk-section pk-container pk-container--wide" data-pagefind-body>
-    <p><a href="/news/feed.xml">Subscribe to member news</a></p>
+    <div class="pk"><p><a href="/news/feed.xml">Subscribe to member news</a></p></div>
     <div set:html={articles} />
   </section>
 </PublicPage>

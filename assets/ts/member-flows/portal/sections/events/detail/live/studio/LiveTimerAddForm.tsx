@@ -57,7 +57,7 @@ export function LiveTimerAddForm({
   const form = useContractForm(liveTimerDraftSchema, draft);
   const add = () => {
     const checked = form.submit();
-    if (!checked.data) return setError(checked.message);
+    if (!checked.data) return setError(checked.formMessage);
     if (!send({ type: "timer.add", timer: checked.data }))
       return setError("The control room is reconnecting. Try again when it is connected.");
     setError(null);

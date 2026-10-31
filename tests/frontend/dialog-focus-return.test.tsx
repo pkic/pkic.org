@@ -7,6 +7,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { render } from "preact";
 import { act } from "preact/test-utils";
+import { useId } from "preact/hooks";
 import { Dialog } from "../../assets/ts/ui/Dialog";
 
 let host: HTMLElement;
@@ -51,6 +52,25 @@ function setup() {
 }
 
 describe("Dialog focus return", () => {
+  it("keeps its accessible name when a different render root owns the same local hook IDs", async () => {
+    const other = document.createElement("div");
+    document.body.prepend(other);
+    function OtherRoot() {
+      const id = useId();
+      return <h2 id={`${id}-title`}>More</h2>;
+    }
+    try {
+      await act(() => render(<OtherRoot />, other));
+      const { draw, trigger } = setup();
+      await draw(true);
+      const dialog = host.querySelector("dialog")!;
+      expect(document.getElementById(dialog.getAttribute("aria-labelledby")!)?.textContent).toBe("Settings");
+      trigger.remove();
+    } finally {
+      render(null, other);
+      other.remove();
+    }
+  });
   it("returns focus to the opener after the dialog closes", async () => {
     const { trigger, draw, openWhenFocused } = setup();
     await draw(true);
