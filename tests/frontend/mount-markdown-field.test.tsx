@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { proposalCreateSchema } from "../../assets/shared/schemas/proposal-management";
@@ -8,9 +8,12 @@ import { mountMarkdownField } from "../../assets/ts/components/markdown-editor/m
 import { installLiveValidation, validateBeforeSubmit } from "../../assets/ts/shared/form/validation";
 
 let form: HTMLFormElement;
-afterEach(() => {
+async function waitForCanvas() {
+  await vi.waitFor(() => expect(form.querySelector('[role="textbox"]')).not.toBeNull());
+}
+afterEach(async () => {
   const host = form?.querySelector("div");
-  if (host) void act(() => render(null, host));
+  if (host) await act(() => render(null, host));
   form?.remove();
 });
 
@@ -21,6 +24,7 @@ it("keeps a public form's Markdown value, label, help, and submitted field acros
   await act(async () => {
     await mountMarkdownField(form.querySelector("textarea"), "Biography", identityProfileUpdateSchema.shape.biography);
   });
+  await waitForCanvas();
   expect(form.querySelector('[role="textbox"]')?.getAttribute("aria-describedby")).toContain("bio-help");
   expect(new FormData(form).getAll("biography")).toEqual(["**Initial** biography"]);
   await act(async () => {
@@ -51,6 +55,7 @@ it("blocks an incomplete abstract through the request contract before advancing 
       proposalCreateSchema.shape.proposal.shape.abstract,
     );
   });
+  await waitForCanvas();
   await act(async () => {
     expect(controller?.validate()).toBe(false);
   });
@@ -70,6 +75,7 @@ it("keeps the contract's invalid state on a Markdown field while the page's DOM 
       proposalCreateSchema.shape.proposal.shape.abstract,
     );
   });
+  await waitForCanvas();
   installLiveValidation(form, document.createElement("p"));
   const canvas = form.querySelector<HTMLElement>('[role="textbox"]')!;
   const write = (text: string) =>

@@ -500,6 +500,7 @@ export function EventEmailCampaign({
           <MarkdownEditor
             {...control}
             key={bodyRevision}
+            profile="content"
             name="bodyContent"
             label="Message"
             initialValue={body}

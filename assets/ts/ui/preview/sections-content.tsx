@@ -25,7 +25,13 @@ Read the [contribution guide](https://example.org/contributing/) first.
 
 Continue with the main document here.`;
 
-function EditableContentSpecimen({ initialValue }: { initialValue: string }) {
+function EditableContentSpecimen({
+  initialValue,
+  profile = "content",
+}: {
+  initialValue: string;
+  profile?: "basic" | "content";
+}) {
   const [markdown, setMarkdown] = useState(initialValue);
   return (
     <div class="pk-stack">
@@ -36,6 +42,8 @@ function EditableContentSpecimen({ initialValue }: { initialValue: string }) {
             {(props) => (
               <MarkdownEditor
                 {...props}
+                profile={profile}
+                variant={profile === "basic" ? "compact" : "full"}
                 name="page-content"
                 label="Page content"
                 initialValue={initialValue}
@@ -69,6 +77,19 @@ export const contentSections: PreviewSection[] = [
     title: "Editing a long page",
     note: "One toolbar follows the page. Use Actions, right-click, or Shift+F10 for the selected content. On phones use Actions; Shift+right-click keeps the browser menu.",
     render: () => <EditableContentSpecimen initialValue={`${contentActionsExample}\n\n${contentReadingExample}`} />,
+  },
+  {
+    id: "content-basic",
+    title: "Basic Markdown fields",
+    note: "Biographies and short descriptions support bold, italic, links, and lists. Canvas size does not add page-authoring capabilities.",
+    render: () => (
+      <EditableContentSpecimen
+        profile="basic"
+        initialValue={
+          "I work on **public key infrastructure** and *open standards*.\n\n- Share practical experience\n- [Join the discussion](/wg/)"
+        }
+      />
+    ),
   },
   {
     id: "content-actions",

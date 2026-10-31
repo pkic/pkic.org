@@ -202,6 +202,7 @@ function ContentEditForm({
         {(control) => (
           <MarkdownEditor
             {...control}
+            profile="content"
             name="contentMarkdown"
             label="Long-form content (Markdown)"
             initialValue={form.contentMarkdown}

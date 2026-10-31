@@ -229,6 +229,7 @@ function CreateTemplate({
                 contentType === "markdown" ? (
                   <MarkdownEditor
                     {...control}
+                    profile="content"
                     name="content"
                     label="Body"
                     initialValue={body}

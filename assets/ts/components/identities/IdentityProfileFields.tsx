@@ -104,6 +104,7 @@ export function IdentityProfileFields({
       <Field label={biographyLabel} help={biographyHint} {...of("biography")}>
         {(control) => (
           <MarkdownEditor
+            profile="basic"
             {...control}
             variant="compact"
             name="biography"
