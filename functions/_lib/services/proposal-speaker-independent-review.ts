@@ -13,7 +13,7 @@ import type { AuthAdmin, DatabaseLike, StatementLike } from "../types";
 import { nowIso } from "../utils/time";
 import { isAuditChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "./audit";
 import { buildEventEmailVariables, getEventById } from "./events";
-import { speakerManagePageUrl } from "./frontend-links";
+import { speakerParticipationPageUrl } from "./frontend-links";
 import { requireProposalSpeakerPermission } from "./proposal-speaker-access";
 import {
   currentIndependentDisclosureColumns,
@@ -85,11 +85,8 @@ export async function reviewIndependentDisclosure(
   let outboxId: string | null = null;
   if (input.decision === "representation_requested") {
     const event = await getEventById(db, target.event_id);
-    const speakerManageUrl = speakerManagePageUrl(
-      input.appBaseUrl,
-      event,
-      await queuedSpeakerManageToken(db, target.proposal_speaker_id, target.manage_link_secret),
-    );
+    const speakerCapability = await queuedSpeakerManageToken(db, target.proposal_speaker_id, target.manage_link_secret);
+    const speakerManageUrl = speakerParticipationPageUrl(input.appBaseUrl, event, input.proposalId, input.userId);
     const email = prepareQueueEmailStatement(db, {
       eventId: event.id,
       baseUrl: input.appBaseUrl,
@@ -98,8 +95,11 @@ export async function reviewIndependentDisclosure(
       recipientUserId: input.userId,
       messageType: "transactional",
       subject: `Please speak on behalf of your organization — ${event.name}`,
-      capabilityLinkValues: [speakerManageUrl],
+      capabilityLinkValues: [speakerCapability],
       data: {
+        __speakerCapability: speakerCapability,
+        proposalId: input.proposalId,
+        speakerUserId: input.userId,
         ...buildEventEmailVariables(event, input.appBaseUrl),
         firstName: emailPlainText(target.first_name ?? ""),
         proposalTitle: emailPlainText(target.title),

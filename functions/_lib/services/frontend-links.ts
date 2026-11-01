@@ -115,11 +115,18 @@ export function myAgendaPageUrl(appBaseUrl: string, event: Pick<EventRouteSource
   return new URL(eventMyAgendaPath(event.slug), appBaseUrl).toString();
 }
 
-export function speakerParticipationPageUrl(appBaseUrl: string, event: EventRouteSource, proposalId: string): string {
-  return new URL(
+export function speakerParticipationPageUrl(
+  appBaseUrl: string,
+  event: EventRouteSource,
+  proposalId: string,
+  speakerUserId?: string,
+): string {
+  const url = new URL(
     `/portal/#/events/${encodeURIComponent(event.slug)}/proposals/${encodeURIComponent(proposalId)}/participation`,
     appBaseUrl,
-  ).toString();
+  );
+  if (speakerUserId) url.hash += `?speaker=${encodeURIComponent(speakerUserId)}`;
+  return url.toString();
 }
 
 export function speakerManagePageUrl(appBaseUrl: string, event: EventRouteSource, token: string): string {

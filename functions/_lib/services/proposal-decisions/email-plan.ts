@@ -3,6 +3,7 @@ import { first } from "../../db/queries";
 import { emailMarkdownText, emailPlainText } from "../../email/plain-text";
 import { AppError } from "../../errors";
 import type { AuthAdmin, DatabaseLike } from "../../types";
+import { speakerParticipationPageUrl } from "../frontend-links";
 import { buildEventEmailVariables } from "../events";
 import { listProposalSpeakersWithStatus, type ProposalSpeakerWithUser } from "../proposal-speakers";
 import { eventSessionTypeRequiresPresentation } from "../event-presentation";
@@ -93,7 +94,8 @@ export async function buildProposalDecisionEmailPlan(
     }
 
     if (payload.finalStatus !== "accepted" || speaker.status === "declined") continue;
-    const manageUrl = await options.resolveSpeakerManageUrl(speaker, event);
+    const speakerCapabilityUrl = await options.resolveSpeakerManageUrl(speaker, event);
+    const manageUrl = speakerParticipationPageUrl(options.appBaseUrl, event, proposal.id, speaker.user_id);
     const eventVariables = buildEventEmailVariables(event, options.appBaseUrl);
     messages.push({
       id: `speaker-profile:${speaker.user_id}`,
@@ -103,6 +105,7 @@ export async function buildProposalDecisionEmailPlan(
       recipientLabel: recipientLabel(speaker),
       fallbackSubject: `Action required: complete your speaker profile — ${event.name}`,
       data: {
+        __speakerCapabilityUrl: speakerCapabilityUrl,
         ...eventVariables,
         proposalId: proposal.id,
         speakerUserId: speaker.user_id,
@@ -123,6 +126,7 @@ export async function buildProposalDecisionEmailPlan(
       recipientLabel: recipientLabel(speaker),
       fallbackSubject: `Please upload your presentation — ${event.name}`,
       data: {
+        __speakerCapabilityUrl: speakerCapabilityUrl,
         ...eventVariables,
         proposalId: proposal.id,
         speakerUserId: speaker.user_id,

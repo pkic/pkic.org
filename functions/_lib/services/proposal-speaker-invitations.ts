@@ -4,7 +4,7 @@ import type { DatabaseLike, StatementLike } from "../types";
 import { sha256Hex } from "../utils/crypto";
 import type { EventRecord } from "./events";
 import { buildEventEmailVariables } from "./events";
-import { speakerManagePageUrl } from "./frontend-links";
+import { speakerParticipationPageUrl } from "./frontend-links";
 import { buildProposalInviteEmailContext, proposalInviteEmailTextVariables } from "./proposal-invite-email-context";
 import { buildAddProposalSpeaker } from "./proposal-speakers";
 import type { ProposalRecord } from "./proposals";
@@ -90,7 +90,12 @@ async function inviteProposalSpeakerOnce(
     inviterUserId: payload.proposal.proposer_user_id,
   });
   const inviteEmailText = proposalInviteEmailTextVariables(context);
-  const manageUrl = speakerManagePageUrl(payload.appBaseUrl, payload.event, preparedSpeaker.manageToken);
+  const manageUrl = speakerParticipationPageUrl(
+    payload.appBaseUrl,
+    payload.event,
+    payload.proposal.id,
+    preparedUser.user.id,
+  );
   const idempotencyKey = `proposal_speaker_invite:${preparedSpeaker.speakerId}:${preparedSpeaker.inviteGeneration}`;
   const queued = prepareQueueEmailStatement(db, {
     outboxId: (await sha256Hex(idempotencyKey)).slice(0, 32),
@@ -102,9 +107,10 @@ async function inviteProposalSpeakerOnce(
     recipientUserId: preparedUser.user.id,
     messageType: "transactional",
     subject: `Speaker invitation: please confirm — ${payload.event.name}`,
-    capabilityLinkValues: [manageUrl],
+    capabilityLinkValues: [preparedSpeaker.manageToken],
     data: {
       ...buildEventEmailVariables(payload.event, payload.appBaseUrl),
+      __speakerCapability: preparedSpeaker.manageToken,
       proposalId: payload.proposal.id,
       speakerUserId: preparedUser.user.id,
       firstName: emailPlainText(preparedUser.user.first_name ?? ""),

@@ -1,7 +1,7 @@
 import { all } from "../../db/queries";
 import { eventCommunicationSettingsSql } from "../events/communication-settings";
 import { emailPlainText } from "../../email/plain-text";
-import { speakerPresentationPageUrl } from "../frontend-links";
+import { speakerParticipationPageUrl } from "../frontend-links";
 import { buildEventEmailVariables } from "../events";
 import {
   daysUntil,
@@ -115,19 +115,17 @@ export async function runPresentationReminders(
   if (!dryRun && duePresentation.length > 0) {
     const emailRows = await Promise.all(
       preparedRows.map(async ({ row, event, effectiveDeadline, daysToDeadline, reminderNumber, subject }) => {
-        const uploadUrl = speakerPresentationPageUrl(
-          appBaseUrl,
-          event,
-          await queuedSpeakerManageToken(db, row.speaker_id, row.manage_link_secret),
-        );
+        const speakerCapability = await queuedSpeakerManageToken(db, row.speaker_id, row.manage_link_secret);
+        const uploadUrl = speakerParticipationPageUrl(appBaseUrl, event, row.proposal_id, row.user_id);
         return {
           eventId: row.event_id,
           recipientEmail: row.email,
           recipientUserId: row.user_id,
           templateKey: "presentation_upload_request",
           subject,
-          capabilityLinkValues: [uploadUrl],
+          capabilityLinkValues: [speakerCapability],
           data: {
+            __speakerCapability: speakerCapability,
             ...buildEventEmailVariables(event, appBaseUrl),
             proposalId: row.proposal_id,
             speakerUserId: row.user_id,

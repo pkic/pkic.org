@@ -185,7 +185,12 @@ export function ParticipantSpeaker({
                       )}
                     />
                   ))}
-                  <Button type="submit" loading={busy}>
+                  {!data.currentRepresentation && (
+                    <p class="pk-small pk-muted">
+                      Accept the terms, then choose and save your speaker identity before confirming.
+                    </p>
+                  )}
+                  <Button type="submit" loading={busy} disabled={!termsAccepted || !data.currentRepresentation}>
                     Confirm participation
                   </Button>
                 </fieldset>

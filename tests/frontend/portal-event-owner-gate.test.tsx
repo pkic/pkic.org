@@ -370,4 +370,24 @@ describe("standalone event views redirect to the owning group", () => {
     expect(navigate).not.toHaveBeenCalled();
     await vi.waitFor(() => expect(container.textContent).toContain("My promotion kits"));
   });
+  it("does not open another speaker's direct link under the current account", async () => {
+    const proposalId = "00000000-0000-4000-8000-000000000010";
+    history.replaceState(
+      {},
+      "",
+      `/#/events/summit/proposals/${proposalId}/participation?speaker=00000000-0000-4000-8000-000000000099`,
+    );
+    stubDetail(null);
+    await act(() =>
+      render(
+        <EventWorkspace view="participant" kind="proposal" slug="summit" resourceId={proposalId} tab="participation" />,
+        container,
+      ),
+    );
+    await vi.waitFor(() => expect(container.textContent).toContain("This invitation is for a different account"));
+    expect(vi.mocked(fetch).mock.calls.some(([input]) => String(input).includes(`/proposals/${proposalId}`))).toBe(
+      false,
+    );
+    history.replaceState({}, "", "/");
+  });
 });

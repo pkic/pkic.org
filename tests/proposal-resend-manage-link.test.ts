@@ -220,7 +220,7 @@ describe("proposal resend-manage-link endpoint", () => {
     await expect(
       queryAll<{ recipient_email: string }>(
         env.DB,
-        "SELECT recipient_email FROM email_outbox WHERE template_key = '__direct__' ORDER BY recipient_email",
+        "SELECT recipient_email FROM email_outbox WHERE template_key = 'user_magic_link' ORDER BY recipient_email",
       ),
     ).resolves.toEqual([{ recipient_email: "confirmed-speaker@example.test" }]);
   });
@@ -262,7 +262,7 @@ describe("proposal resend-manage-link endpoint", () => {
     expect(response.status).toBe(410);
     await expect(response.json()).resolves.toMatchObject({ error: { code: "PROPOSAL_TOKEN_EXPIRED" } });
   });
-  it("recovers every active speaker participation through a verified secondary address", async () => {
+  it("sends one event-app sign-in link for many participations through a verified secondary address", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const now = nowIso();
     const proposerId = crypto.randomUUID();
@@ -326,11 +326,10 @@ describe("proposal resend-manage-link endpoint", () => {
       env.DB,
       "SELECT recipient_email, payload_json FROM email_outbox ORDER BY created_at, id",
     );
-    expect(messages).toHaveLength(21);
-    expect(messages.every((message) => message.recipient_email === "new@example.test")).toBe(true);
-    const bodies = messages.map((message) => JSON.parse(message.payload_json).__directBodyContent as string);
-    expect(bodies.some((body) => body.includes("Your participation is confirmed"))).toBe(true);
-    expect(bodies.some((body) => body.includes("confirm or decline"))).toBe(true);
+    expect(messages).toHaveLength(1);
+    expect(messages[0].recipient_email).toBe("new@example.test");
+    const payload = JSON.parse(messages[0].payload_json) as Record<string, unknown>;
+    expect(payload.magicLinkUrl).toContain(encodeURIComponent("/events/pqc-2026/submissions"));
     await run(env.DB, "DELETE FROM user_emails WHERE user_id = ? AND normalized_email = ?", [
       speakerId,
       "old@example.test",
@@ -341,6 +340,6 @@ describe("proposal resend-manage-link endpoint", () => {
       body: JSON.stringify({ email: "old@example.test" }),
     });
     expect(removed.status).toBe(200);
-    expect(await queryAll(env.DB, "SELECT id FROM email_outbox")).toHaveLength(21);
+    expect(await queryAll(env.DB, "SELECT id FROM email_outbox")).toHaveLength(1);
   });
 });

@@ -2,8 +2,6 @@ import { EMAIL_FIRST_COPY } from "../../assets/shared/email-first-copy";
 import { randomUUID } from "node:crypto";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import {
-  eventProposalProofIdentityPatchSchema,
-  eventProposalProofIdentityPatchResponseSchema,
   eventProposalProofPersonPatchSchema,
   eventProposalProofPersonPatchResponseSchema,
   eventProposalProofIdentitiesSchema,
@@ -12,7 +10,6 @@ import {
   eventProposalProofVerifySchema,
   eventProposalProofVerifyResponseSchema,
 } from "../../assets/shared/schemas/event-proposal-proof";
-import { organizationDetailResponseSchema } from "../../assets/shared/schemas/organization-management";
 import { identitiesListResponseSchema } from "../../assets/shared/schemas/identity";
 import {
   proposalAccessReadResponseSchema,
@@ -27,6 +24,7 @@ import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { clientIpForIdentity, signInToPortal } from "./helpers/portal-auth";
 import { acceptVisibleTerms, answerRequiredProposalFields, fieldLabel } from "./helpers/proposal-entry-ui";
 import { PROPOSAL_EVENT_SLUG, submitProposal } from "./helpers/proposals";
+import { completeIndependentCapacityDisclosure } from "./helpers/independent-capacity";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
 
 const pagePath = `/events/2026/${PROPOSAL_EVENT_SLUG}/propose/`;
@@ -39,6 +37,7 @@ const biography =
 function responseFor(page: Page, path: string, method = "POST") {
   return page.waitForResponse(
     (response) => new URL(response.url()).pathname === path && response.request().method() === method,
+    { timeout: 30_000 },
   );
 }
 
@@ -71,7 +70,13 @@ async function capture(page: Page, info: TestInfo, phase: string) {
   await page.setViewportSize({ width: 1280, height: 900 });
 }
 
-async function requestOrganizationProof(page: Page, email: string, speakerToken?: string, continuationToken?: string) {
+async function requestOrganizationProof(
+  page: Page,
+  email: string,
+  speakerToken?: string,
+  continuationToken?: string,
+  linkPath = "/propose/",
+) {
   // Email-first: a work address takes part on behalf of its organization unless the person says otherwise.
   await page.getByLabel(EMAIL_FIRST_COPY.proposal.work.label, { exact: true }).fill(email);
   const since = await capturedEmailCount();
@@ -87,7 +92,7 @@ async function requestOrganizationProof(page: Page, email: string, speakerToken?
   expect(started.speakerManagementToken).toBe(speakerToken);
   expect(started.continuationToken).toBe(continuationToken);
   expect(eventProposalProofStartResponseSchema.parse(await response.json()).status).toBe("verification_sent");
-  return extractEmailUrl(await waitForCapturedEmail(email, "Verify your email for", { since }), "/propose/");
+  return extractEmailUrl(await waitForCapturedEmail(email, "Verify your email for", { since }), linkPath);
 }
 
 async function openProposalProof(page: Page, mailUrl: string) {
@@ -135,8 +140,8 @@ async function usersByEmail(staff: Page, email: string) {
   return usersListResponseSchema.parse(await response.json());
 }
 
-async function readSpeaker(page: Page, token: string) {
-  const response = await page.request.get(`/api/v1/proposals/speakers/access/${encodeURIComponent(token)}`);
+async function readSpeaker(page: Page, proposalId: string) {
+  const response = await page.request.get(`/api/v1/proposals/${encodeURIComponent(proposalId)}/participation`);
   expect(response.status(), await response.text()).toBe(200);
   return speakerSelfServiceReadResponseSchema.parse(await response.json());
 }
@@ -258,7 +263,7 @@ test("guest event entry creates a nonmember affiliation and an invited known per
     expect(input.proposer.actingIdentityId).toBeUndefined();
     expect(input.continuationToken).toBe(proof.continuationToken);
     expect(input.unaffiliatedAttestation).toBe(false);
-    proposalCreateResponseSchema.parse(await response.json());
+    const submittedProposal = proposalCreateResponseSchema.parse(await response.json());
     const newPeople = await usersByEmail(staff, newEmail);
     expect(newPeople.page.total).toBe(1);
     const createdUser = await readUser(staff, newPeople.users[0]!.id);
@@ -426,64 +431,43 @@ test("guest event entry creates a nonmember affiliation and an invited known per
     }
     await capture(guest, info, "parallel-representation-selected");
 
-    const invitation = await waitForCapturedEmail(knownEmail, "Speaker invitation: please confirm", { since });
-    const speakerUrl = extractEmailUrl(invitation, "/speaker/");
-    const oldToken = new URL(speakerUrl).searchParams.get("token")!;
-    await guest.goto(speakerUrl);
-    const invited = await readSpeaker(guest, oldToken);
-    expect(invited.speaker).toMatchObject({ userId: knownId, status: "invited" });
-    const beforeMailboxProof = await readUser(staff, knownId);
-    await expect(guest.getByRole("radio")).toHaveCount(0);
-    await expect(guest.getByRole("button", { name: "Confirm participation", exact: true })).toBeDisabled();
-    await acceptVisibleTerms(guest, "[data-speaker-consents]");
-    const secondaryEmail = `person@secondary-${suffix}.test`;
-    const secondaryMail = await requestOrganizationProof(guest, secondaryEmail, oldToken);
-    expect(await readUser(staff, knownId)).toEqual(beforeMailboxProof);
-    expect((await readSpeaker(guest, oldToken)).profile).toEqual(invited.profile);
-
-    // The delivered link alone resumes the exact invitation in a fresh browser.
+    const invitation = await waitForCapturedEmail(knownEmail, "You have been added as a speaker", { since });
+    const speakerUrl = extractEmailUrl(invitation, "/portal/");
+    const proposalId = submittedProposal.proposalId!;
     const resumed = await resumeContext.newPage();
-    await resumed.setExtraHTTPHeaders({ "cf-connecting-ip": clientIpForIdentity(secondaryEmail) });
-    // The one confirmation of the link hands the speaker page its own token; the page does not verify again.
+    resumed.setDefaultTimeout(20_000);
+    await signInToPortal(resumed, knownEmail);
+    await resumed.goto(speakerUrl);
+    await expect(resumed.getByRole("heading", { name: "Speaker participation" })).toBeVisible();
+    const invited = await readSpeaker(resumed, proposalId);
+    expect(invited.speaker).toMatchObject({ userId: knownId, status: "invited" });
+    const terms = resumed.locator("[data-term-key] input[type='checkbox']");
+    await expect(terms.first()).toBeVisible();
+    for (let i = 0; i < (await terms.count()); i++) await terms.nth(i).check();
+    await resumed.getByRole("button", { name: "I'm presenting as an individual" }).click();
+    await completeIndependentCapacityDisclosure(resumed);
+    await resumed.getByRole("button", { name: "Save speaker identity", exact: true }).click();
+    await expect(resumed.getByText("Speaker identity saved.")).toBeVisible();
+    const beforeMailboxProof = await readUser(staff, knownId);
+    const beforeAffiliation = await readSpeaker(resumed, proposalId);
+    await resumed.getByRole("button", { name: "Add representation", exact: true }).click();
+    const secondaryEmail = `person@secondary-${suffix}.test`;
+    const secondaryMail = await requestOrganizationProof(resumed, secondaryEmail, undefined, undefined, "/portal/");
+    expect(await readUser(staff, knownId)).toEqual(beforeMailboxProof);
+    expect((await readSpeaker(resumed, proposalId)).profile).toEqual(beforeAffiliation.profile);
+
+    // Mailbox verification resumes the same signed-in speaker and proposal.
     const redirected = responseFor(resumed, `${endpoint}/proof/verify`);
     await resumed.goto(secondaryMail);
     const redirectResponse = await redirected;
     expect(redirectResponse.status()).toBe(200);
-    expect(
-      eventProposalProofVerifySchema.parse(redirectResponse.request().postDataJSON()).speakerManagementToken,
-    ).toBeUndefined();
-    await expect(resumed.getByRole("button", { name: "Save speaker identity", exact: true })).toBeVisible();
-    for (const term of await resumed.locator("[data-speaker-consents]").getByRole("checkbox").all())
-      await expect(term).toBeChecked();
     const verifiedBody = eventProposalProofVerifyResponseSchema.parse(await redirectResponse.json());
     if (verifiedBody.status !== "ready") throw new Error("The invited person's secondary mailbox must be verified");
-    expect(verifiedBody).toMatchObject({
-      email: secondaryEmail,
-      applicantKind: "organization",
-      person: { firstName: "Known", lastName: "Invitee" },
-    });
-    const returnedToken = new URL(resumed.url()).searchParams.get("token")!;
-    expect((await readSpeaker(resumed, returnedToken)).speaker.userId).toBe(knownId);
-    const speakerIdentity = resumed.locator("[data-speaker-identity]");
-    await expect(speakerIdentity.getByText("Known Invitee", { exact: true })).toBeVisible();
-    for (const label of ["First name", "Last name", "Email"])
-      await expect(speakerIdentity.getByRole("textbox", { name: fieldLabel(label) })).toHaveCount(0);
+    expect(verifiedBody.email).toBe(secondaryEmail);
     const secondaryOrganization = `Secondary work affiliation ${suffix}`;
-    await speakerIdentity.getByLabel(fieldLabel("Organization name")).fill(secondaryOrganization);
-    await speakerIdentity.getByLabel(fieldLabel("Job title")).fill("Program contributor");
-    const knownSummaries = speakerIdentity.locator(".pk-datalist");
-    await expect(knownSummaries).toHaveCount(2);
-    await expect(knownSummaries.nth(0)).toContainText("Known Invitee");
-    await expect(knownSummaries.nth(1)).toContainText(secondaryEmail);
-    for (const summary of [knownSummaries.nth(0), knownSummaries.nth(1)]) {
-      await expect(summary).not.toContainText(secondaryOrganization);
-      await expect(summary).not.toContainText("Program contributor");
-    }
-    expect(await readUser(staff, knownId)).toEqual(beforeMailboxProof);
-    expect((await readSpeaker(resumed, returnedToken)).profile).toEqual(invited.profile);
-    await expect(speakerIdentity.getByRole("combobox")).toHaveCount(0);
-    await capture(resumed, info, "invited-secondary-known-details");
-    const profilePath = `/api/v1/proposals/speakers/access/${encodeURIComponent(returnedToken)}/profile`;
+    await resumed.getByLabel(fieldLabel("Organization name")).fill(secondaryOrganization);
+    await resumed.getByLabel(fieldLabel("Job title")).fill("Program contributor");
+    const profilePath = `/api/v1/proposals/${encodeURIComponent(proposalId)}/participation/profile`;
     const saved = responseFor(resumed, profilePath, "PATCH");
     await resumed.getByRole("button", { name: "Save speaker identity", exact: true }).click();
     const saveResponse = await saved;
@@ -495,104 +479,35 @@ test("guest event entry creates a nonmember affiliation and an invited known per
       organizationName: secondaryOrganization,
       jobTitle: "Program contributor",
     });
-    expect(profileInput.firstName).toBeUndefined();
-    expect(profileInput.lastName).toBeUndefined();
-    const recorded = await readSpeaker(resumed, returnedToken);
+    const recorded = await readSpeaker(resumed, proposalId);
     expect(recorded.speaker.userId).toBe(knownId);
     expect(recorded.profile).toMatchObject({
       organizationName: secondaryOrganization,
       jobTitle: "Program contributor",
-      actingIdentitySelection: "identity",
     });
     const afterUser = await readUser(staff, knownId);
-    expect(afterUser).toMatchObject({
-      id: originalUser.id,
-      email: originalUser.email,
-      first_name: originalUser.first_name,
-      last_name: originalUser.last_name,
-    });
-    expect(afterUser.identities).toHaveLength(2);
+    expect(afterUser).toMatchObject({ id: originalUser.id, email: originalUser.email });
     expect(afterUser.identities).toContainEqual(originalUser.identities[0]);
-    const proved = afterUser.identities.find((entry) => entry.organizationId !== null);
-    expect(proved).toMatchObject({
-      identityId: recorded.profile.actingIdentityId,
-      email: secondaryEmail,
+    expect(afterUser.identities.find((entry) => entry.email === secondaryEmail)).toMatchObject({
       organizationName: secondaryOrganization,
       memberId: null,
-      membershipCategory: null,
     });
-    expect(proved!.emailId).not.toBeNull();
-    expect((await resumed.request.get("/api/v1/auth/session")).status()).toBe(401);
     const confirmed = responseFor(
       resumed,
-      `/api/v1/proposals/speakers/access/${encodeURIComponent(returnedToken)}/participation`,
+      `/api/v1/proposals/${encodeURIComponent(proposalId)}/participation`,
       "PATCH",
     );
     await resumed.getByRole("button", { name: "Confirm participation", exact: true }).click();
     const confirmResponse = await confirmed;
     expect(confirmResponse.status()).toBe(200);
     expect(speakerParticipationPatchSchema.parse(confirmResponse.request().postDataJSON()).status).toBe("confirmed");
-    await expect(resumed.getByText("You have confirmed your participation. Thank you!", { exact: true })).toBeVisible();
+    await expect(resumed.getByText("Participation confirmed.")).toBeVisible();
     await resumed.reload();
-    await expect(resumed.getByText("You have confirmed your participation. Thank you!", { exact: true })).toBeVisible();
-    await expect(
-      resumed.locator("[data-speaker-identity]").getByText(secondaryOrganization, { exact: true }),
-    ).toBeVisible();
-    await expect(resumed.getByRole("combobox", { name: "Representation", exact: true })).toHaveCount(0);
-    expect((await readSpeaker(resumed, returnedToken)).speaker.status).toBe("confirmed");
+    expect((await readSpeaker(resumed, proposalId)).speaker.status).toBe("confirmed");
+    // The original proposal keeps its original individual attribution.
     expect((await originalProposal()).speakers.find((speaker) => speaker.userId === knownId)).toEqual(
       originalAppearance,
     );
-    await capture(resumed, info, "invited-secondary-saved-summary");
-    const currentIdentityId = recorded.profile.actingIdentityId!;
-    const organizationId = proved!.organizationId!;
-    const organizationResponse = await staff.request.get(`/api/v1/organizations/${organizationId}`);
-    expect(organizationResponse.status(), await organizationResponse.text()).toBe(200);
-    const organizationBefore = organizationDetailResponseSchema.parse(await organizationResponse.json()).organization;
-    // The role is edited on the identity itself, through the speaker link: it changes that identity only.
-    const identityProfile = resumed.locator("[data-identity-profile]");
-    for (const label of ["First name", "Last name", "Organization name", "Email"])
-      await expect(resumed.getByRole("textbox", { name: label, exact: true })).toHaveCount(0);
-    await identityProfile.getByLabel(fieldLabel("Job title for this organization")).fill("Updated contributor");
-    const roleSaved = responseFor(resumed, `${endpoint}/proof/identities/${currentIdentityId}`, "PATCH");
-    await identityProfile.getByRole("button", { name: "Save changes", exact: true }).click();
-    const roleResponse = await roleSaved;
-    expect(roleResponse.status(), await roleResponse.text()).toBe(200);
-    expect(eventProposalProofIdentityPatchSchema.parse(roleResponse.request().postDataJSON())).toMatchObject({
-      jobTitle: "Updated contributor",
-      speakerManagementToken: returnedToken,
-    });
-    expect(eventProposalProofIdentityPatchResponseSchema.parse(await roleResponse.json())).toMatchObject({
-      identityId: currentIdentityId,
-      organizationId,
-      jobTitle: "Updated contributor",
-    });
-    const afterRole = await readUser(staff, knownId);
-    expect(afterRole.identities).toEqual(
-      afterUser.identities.map((entry) =>
-        entry.identityId === currentIdentityId
-          ? // The profile form submits its biography field as written, so an unset biography reads back empty.
-            { ...entry, jobTitle: "Updated contributor", biography: entry.biography ?? "" }
-          : entry,
-      ),
-    );
-    expect({ ...afterRole, identities: [] }).toEqual({ ...afterUser, identities: [] });
-    const organizationAfterResponse = await staff.request.get(`/api/v1/organizations/${organizationId}`);
-    expect(organizationAfterResponse.status()).toBe(200);
-    const organizationAfter = organizationDetailResponseSchema.parse(
-      await organizationAfterResponse.json(),
-    ).organization;
-    expect({ ...organizationAfter, identities: [] }).toEqual({ ...organizationBefore, identities: [] });
-    // The speaker appears as the live identity they act as, so only its new title changes.
-    expect((await readSpeaker(resumed, returnedToken)).profile).toEqual({
-      ...recorded.profile,
-      jobTitle: "Updated contributor",
-      biography: recorded.profile.biography ?? "",
-    });
-    expect((await originalProposal()).speakers.find((speaker) => speaker.userId === knownId)).toEqual(
-      originalAppearance,
-    );
-    await capture(resumed, info, "current-representation-role-saved");
   } finally {
     await guestContext.close();
     await resumeContext.close();

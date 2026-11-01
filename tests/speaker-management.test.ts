@@ -2090,6 +2090,21 @@ describe("speaker self-management endpoints", () => {
       invitedUser.id,
     );
     expect(speaker).toMatchObject({ status: "invited", invite_generation: 0 });
+    const invitationEmail = (
+      await queryAll<{ payload_json: string }>(
+        env.DB,
+        "SELECT payload_json FROM email_outbox WHERE template_key = 'co_speaker_invite' AND recipient_user_id = ?",
+        invitedUser.id,
+      )
+    )[0];
+    const invitationPayload = await deliveredEmailPayload<{ manageUrl: string; __speakerCapability: string }>(
+      env.DB,
+      env,
+      invitationEmail.payload_json,
+    );
+    expect(new URL(invitationPayload.manageUrl).hash).toContain(`/proposals/${proposalId}/participation`);
+    expect(invitationPayload.manageUrl).not.toContain("token=");
+    expect(invitationPayload.__speakerCapability).toBeTruthy();
     const oldManageToken = await issueDatabaseCapability({
       db: env.DB,
       signingSecret: env.INTERNAL_SIGNING_SECRET!,
@@ -2489,7 +2504,7 @@ describe("speaker self-management endpoints", () => {
     expect(outboxRows[0].payload_json).toContain("profileUrl");
   });
 
-  it("admin remind speaker issues a valid token that the speaker can use", async () => {
+  it("admin reminder links to the event app and retains its delivery guard", async () => {
     await setupWorkflow();
     const { proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
 
@@ -2506,24 +2521,26 @@ describe("speaker self-management endpoints", () => {
     );
     expect(remindResponse.status).toBe(200);
 
-    // Extract the token from the queued email's profileUrl
+    // The email opens the account-owned participation; its private guard is not in the link.
     const outboxRows = await queryAll<{ template_key: string; payload_json: string }>(
       env.DB,
       "SELECT template_key, payload_json FROM email_outbox ORDER BY created_at DESC LIMIT 1",
     );
     expect(outboxRows[0].template_key).toBe("speaker_profile_reminder");
-    const payload = await deliveredEmailPayload<{ profileUrl?: string; requiresConfirmation?: boolean }>(
-      env.DB,
-      env,
-      outboxRows[0].payload_json,
-    );
+    const payload = await deliveredEmailPayload<{
+      profileUrl?: string;
+      requiresConfirmation?: boolean;
+      __speakerCapability?: string;
+    }>(env.DB, env, outboxRows[0].payload_json);
     expect(payload.requiresConfirmation).toBe(true);
     expect(payload.profileUrl).toBeDefined();
     const profileUrl = new URL(payload.profileUrl!);
-    const token = profileUrl.searchParams.get("token");
+    expect(profileUrl.hash).toContain(`/proposals/${proposalId}/participation`);
+    expect(profileUrl.searchParams.get("token")).toBeNull();
+    const token = payload.__speakerCapability;
     expect(token).toBeTruthy();
 
-    // The token from the email must be usable to access the speaker endpoint
+    // Delivery still validates the speaker capability against the live invitation.
     const speakerResponse = await speakerGet(
       createContext(env, new Request(`https://app.test/api/v1/proposals/speakers/access/${token}`, { method: "GET" }), {
         token: token!,

@@ -87,7 +87,12 @@ export async function recordProposalDecision(
         recipientUserId: notification.recipientUserId,
         subject: notification.fallbackSubject,
         messageType: "transactional",
-        capabilityLinkValues: [notification.data.manageUrl, notification.data.profileUrl, notification.data.uploadUrl],
+        capabilityLinkValues: [
+          notification.data.manageUrl,
+          notification.data.profileUrl,
+          notification.data.uploadUrl,
+          notification.data.__speakerCapabilityUrl,
+        ],
         data: notification.data,
       },
       condition,

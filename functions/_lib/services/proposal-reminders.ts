@@ -8,7 +8,7 @@ import { nowIso } from "../utils/time";
 import { isAuditChangeGuardFailure, prepareScopedAuditLog, prepareScopedAuditLogAfterOneChange } from "./audit";
 import { buildEventEmailVariables, getEventById, type EventRecord } from "./events";
 import { eventSessionTypeRequiresPresentation } from "./event-presentation";
-import { speakerManagePageUrl, speakerPresentationPageUrl } from "./frontend-links";
+import { speakerParticipationPageUrl } from "./frontend-links";
 import { buildProposalInviteEmailContext, proposalInviteEmailTextVariables } from "./proposal-invite-email-context";
 import { proposalSpeakerProfileColumns, queuedSpeakerManageToken } from "./proposal-speakers";
 import type { ProposalRecord } from "./proposals";
@@ -195,10 +195,7 @@ export async function sendProposalSpeakerReminders(
   );
   for (const [index, speaker] of speakers.entries()) {
     const token = manageTokens[index];
-    const actionUrl =
-      payload.kind === "profile"
-        ? speakerManagePageUrl(payload.appBaseUrl, event, token)
-        : speakerPresentationPageUrl(payload.appBaseUrl, event, token);
+    const actionUrl = speakerParticipationPageUrl(payload.appBaseUrl, event, proposal.id, speaker.user_id);
     const templateKey = payload.kind === "profile" ? "speaker_profile_reminder" : "presentation_upload_request";
     const queued = prepareQueueEmailStatement(
       db,
@@ -213,8 +210,9 @@ export async function sendProposalSpeakerReminders(
             ? `Action required: complete your speaker profile — ${event.name}`
             : `Action required: upload your presentation — ${event.name}`,
         messageType: "transactional",
-        capabilityLinkValues: [actionUrl],
+        capabilityLinkValues: [token],
         data: {
+          __speakerCapability: token,
           ...buildEventEmailVariables(event, payload.appBaseUrl),
           proposalId: proposal.id,
           speakerUserId: speaker.user_id,
@@ -295,11 +293,8 @@ export async function remindProposalSpeakerByProposer(
   const isProfileReviewRequest = speaker.status === "confirmed";
   const now = nowIso();
   assertInvitationActive(speaker, event, now);
-  const manageUrl = speakerManagePageUrl(
-    payload.appBaseUrl,
-    event,
-    await queuedSpeakerManageToken(db, speaker.proposal_speaker_id, speaker.manage_link_secret),
-  );
+  const speakerCapability = await queuedSpeakerManageToken(db, speaker.proposal_speaker_id, speaker.manage_link_secret);
+  const manageUrl = speakerParticipationPageUrl(payload.appBaseUrl, event, payload.proposal.id, speaker.user_id);
   const queued = prepareQueueEmailStatement(
     db,
     {
@@ -312,9 +307,10 @@ export async function remindProposalSpeakerByProposer(
       subject: isProfileReviewRequest
         ? `Action requested: review or update your speaker profile — ${event.name}`
         : `Reminder: confirm your participation — ${event.name}`,
-      capabilityLinkValues: [manageUrl],
+      capabilityLinkValues: [speakerCapability],
       data: isProfileReviewRequest
         ? {
+            __speakerCapability: speakerCapability,
             ...buildEventEmailVariables(event, payload.appBaseUrl),
             proposalId: payload.proposal.id,
             speakerUserId: speaker.user_id,
@@ -326,6 +322,7 @@ export async function remindProposalSpeakerByProposer(
             hasBio: speaker.biography ? "true" : "",
           }
         : {
+            __speakerCapability: speakerCapability,
             ...buildEventEmailVariables(event, payload.appBaseUrl),
             proposalId: payload.proposal.id,
             speakerUserId: speaker.user_id,

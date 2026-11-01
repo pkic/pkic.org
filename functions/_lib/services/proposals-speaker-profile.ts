@@ -1,6 +1,7 @@
 import type { ParticipantAuthority } from "./participant-authority";
 import type { z } from "zod";
 import type { speakerSelfProfilePatchSchema } from "../../../assets/shared/schemas/proposal-management";
+import { speakerInvitedAddressOwnedSql } from "./proposal-speaker-invited-address";
 import { all, first } from "../db/queries";
 import { AppError } from "../errors";
 import { nowIso } from "../utils/time";
@@ -59,7 +60,7 @@ export function prepareSpeakerSelfAuthorityGuard(
             AND ${
               capability
                 ? "ps.manage_link_secret IS ? AND ? > unixepoch('now')"
-                : "EXISTS (SELECT 1 FROM sessions WHERE id=? AND user_id=ps.user_id AND revoked_at IS NULL AND expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now'))"
+                : `EXISTS (SELECT 1 FROM sessions WHERE id=? AND user_id=ps.user_id AND revoked_at IS NULL AND expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now')) AND ${speakerInvitedAddressOwnedSql("ps")}`
             }`,
     bindings: [
       context.proposalSpeakerId,

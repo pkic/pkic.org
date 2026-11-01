@@ -218,6 +218,10 @@ export function Login({
                 />
               )}
             </Field>
+            <p class="pk-small pk-muted">
+              Use your account’s primary email or an address you enabled for sign-in. New speakers can use their
+              invitation email.
+            </p>
             <div class="pk-cluster">
               <MagicLinkSubmitButton submitting={magicLink.submitting} disabled={busy} />
               {passkeysSupported && (

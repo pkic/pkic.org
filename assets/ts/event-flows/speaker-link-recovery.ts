@@ -27,7 +27,7 @@ export function showSpeakerManageLinkRecovery(
     emailSelector: "[data-resend-speaker-manage-email]",
     endpoint: `${apiBase}/events/${eventSlug}/proposals/resend-speaker-manage-link`,
     successMessage:
-      "If the details match a speaker, a link will be sent to the account’s primary email address. Please check that inbox and spam folder.",
+      "If the details match a speaker, a sign-in link will be sent to the account’s primary email address. Check that inbox and spam folder.",
     introMessage,
   });
 }
@@ -103,7 +103,7 @@ export async function loadSpeakerPageData<T>(options: {
       boot.root,
       boot.apiBase,
       boot.eventSlug,
-      "This speaker link is missing. Request a new link below, or contact the proposer if you need help.",
+      "This speaker link is missing. Sign in below, or contact the proposer if you need help.",
     );
     return null;
   }
@@ -124,7 +124,7 @@ export async function loadSpeakerPageData<T>(options: {
       boot.root,
       boot.apiBase,
       boot.eventSlug,
-      `${normalized.globalMessage} Request a new link below, or contact the proposer if your participation was removed.`,
+      `${normalized.globalMessage} Sign in below, or contact the proposer if your participation was removed.`,
     );
     return null;
   }

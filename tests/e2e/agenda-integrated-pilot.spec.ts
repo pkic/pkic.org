@@ -544,12 +544,14 @@ test("one recurring meeting and conference retain the same actors through organi
     );
     await capturePilot(staff, info, "pilot-attributable-attendance-report");
     // The speaker edits the biography of the identity they speak as, on the identity itself.
+    await speakerPage.reload();
+    const identityProfile = speakerPage.getByRole("region", { name: "Speaker profile" });
+    await identityProfile.getByRole("button", { name: "Edit", exact: true }).click();
     const profileSaving = speakerPage.waitForResponse(
       (response) =>
         new URL(response.url()).pathname.includes("/proposals/proof/identities/") &&
         response.request().method() === "PATCH",
     );
-    const identityProfile = speakerPage.locator("[data-identity-profile-form]");
     await identityProfile
       .getByRole("textbox", { name: "Your speaker bio", exact: true })
       .fill(

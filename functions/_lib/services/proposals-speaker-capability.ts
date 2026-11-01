@@ -17,6 +17,7 @@ import { identityJobTitleSql } from "./identities/affiliation-projection";
 import { proposalSpeakerIdentityIdSql } from "./proposal-speaker-profile-projection";
 import { proposalActingIdentityReadModel } from "./proposal-speaker-identity";
 import { unclaimedAccountSql } from "./proposal-speaker-account-authority";
+import { speakerInvitedAddressOwnedSql } from "./proposal-speaker-invited-address";
 import {
   speakerCurrentRepresentationSchema,
   speakerSelfServiceProfileSchema,
@@ -40,7 +41,19 @@ export async function getSpeakerByManageToken(
   signingSecret: string,
 ): Promise<SpeakerWithContext> {
   if (typeof manageToken !== "string") {
-    return getSpeakerByProposalUser(db, manageToken.resourceId, manageToken.userId);
+    const context = await getSpeakerByProposalUser(db, manageToken.resourceId, manageToken.userId);
+    const verified = await first(
+      db,
+      `SELECT 1 FROM proposal_speakers ps WHERE ps.id = ? AND ${speakerInvitedAddressOwnedSql("ps")}`,
+      [context.speaker.id],
+    );
+    if (!verified)
+      throw new AppError(
+        403,
+        "SPEAKER_INVITED_EMAIL_UNVERIFIED",
+        "Verify the email address used for this invitation in your profile before managing your participation.",
+      );
+    return context;
   }
   const verified = await verifyDatabaseCapability({ db, signingSecret, purpose: "speaker_manage", token: manageToken });
   if (!verified.ok) {

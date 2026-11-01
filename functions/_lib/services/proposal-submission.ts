@@ -15,7 +15,7 @@ import { prepareReferralCodeStatement } from "./referrals";
 import { prepareQueueEmailStatement } from "../email/outbox";
 import { emailPlainText } from "../email/plain-text";
 import { buildEventEmailVariables, getRequiredTerms } from "./events";
-import { proposalManagePageUrl, speakerManagePageUrl } from "./frontend-links";
+import { proposalManagePageUrl, speakerParticipationPageUrl } from "./frontend-links";
 import { queuedCapabilityToken } from "./capability-links";
 import { requireConfiguredSessionType } from "./events";
 import { isRegistrationTransitionConflict, registrationChangedError } from "./registrations/transition-guard";
@@ -267,7 +267,7 @@ export async function submitProposal(
   const outboxIds: string[] = [];
 
   for (const { user, manageToken } of coSpeakers) {
-    const manageUrl = speakerManagePageUrl(input.appBaseUrl, input.event, manageToken);
+    const manageUrl = speakerParticipationPageUrl(input.appBaseUrl, input.event, created.proposal.id, user.id);
     const email = prepareQueueEmailStatement(db, {
       eventId: input.event.id,
       templateKey: "co_speaker_invite",
@@ -275,8 +275,11 @@ export async function submitProposal(
       recipientUserId: user.id,
       messageType: "transactional",
       subject: `Speaker invitation: please confirm — ${input.event.name}`,
-      capabilityLinkValues: [manageUrl],
+      capabilityLinkValues: [manageToken],
       data: {
+        __speakerCapability: manageToken,
+        proposalId: created.proposal.id,
+        speakerUserId: user.id,
         ...eventVariables,
         firstName: emailPlainText(user.first_name ?? ""),
         lastName: emailPlainText(user.last_name ?? ""),
@@ -293,7 +296,7 @@ export async function submitProposal(
     input.event,
     queuedCapabilityToken("proposal_manage", created.proposal.id),
   );
-  const speakerManageUrl = speakerManagePageUrl(input.appBaseUrl, input.event, proposerSpeaker.manageToken);
+  const speakerManageUrl = speakerParticipationPageUrl(input.appBaseUrl, input.event, created.proposal.id, proposer.id);
   const proposerEmail = prepareQueueEmailStatement(db, {
     eventId: input.event.id,
     templateKey: "proposal_submitted",
@@ -301,8 +304,9 @@ export async function submitProposal(
     recipientUserId: proposer.id,
     messageType: "transactional",
     subject: `Proposal submitted: ${created.proposal.title}`,
-    capabilityLinkValues: [queuedManageUrl, speakerManageUrl],
+    capabilityLinkValues: [queuedManageUrl, proposerSpeaker.manageToken],
     data: {
+      __speakerCapability: proposerSpeaker.manageToken,
       ...eventVariables,
       firstName: emailPlainText(proposer.first_name ?? ""),
       lastName: emailPlainText(proposer.last_name ?? ""),
@@ -325,8 +329,9 @@ export async function submitProposal(
       recipientUserId: proposer.id,
       messageType: "transactional",
       subject: `Review your speaker representation — ${input.event.name}`,
-      capabilityLinkValues: [speakerManageUrl],
+      capabilityLinkValues: [proposerSpeaker.manageToken],
       data: {
+        __speakerCapability: proposerSpeaker.manageToken,
         ...eventVariables,
         firstName: emailPlainText(proposer.first_name ?? ""),
         proposalTitle: emailPlainText(created.proposal.title),

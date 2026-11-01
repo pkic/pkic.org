@@ -6,6 +6,7 @@ import { eventSummarySchema } from "./event-read-models";
 import { databaseIdSchema } from "./identifiers";
 import { paginatedResponseSchema, listQuerySchema } from "./pagination";
 import { proposalStatusSchema } from "./proposal-status";
+import { proposalAccessSpeakerStatusSchema } from "./proposal-management";
 
 /** "submitter" when the caller is the proposal's proposer_user_id, "speaker" for any other listed role. */
 export const CURRENT_USER_PROPOSAL_ROLES = ["submitter", "speaker"] as const;
@@ -18,6 +19,7 @@ export const currentUserProposalSchema = z.object({
   title: z.string(),
   status: proposalStatusSchema,
   role: currentUserProposalRoleSchema,
+  speakerStatus: proposalAccessSpeakerStatusSchema.nullable().optional(),
   updatedAt: utcInstantSchema,
 });
 export type CurrentUserProposal = z.infer<typeof currentUserProposalSchema>;

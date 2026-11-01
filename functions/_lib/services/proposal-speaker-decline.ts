@@ -1,3 +1,4 @@
+import { speakerInvitedAddressOwnedSql } from "./proposal-speaker-invited-address";
 import type { ParticipantAuthority } from "./participant-authority";
 import { first } from "../db/queries";
 import { AppError } from "../errors";
@@ -138,6 +139,7 @@ export async function declineSpeakerParticipation(
           `UPDATE proposal_speakers
            SET status = 'declined', declined_at = ?, decline_reason = ?
            WHERE id = ? AND proposal_id = ? AND user_id = ? AND role = ? AND status = ? AND invite_generation = ?
+             AND ${typeof manageToken === "string" ? "1" : speakerInvitedAddressOwnedSql("proposal_speakers")}
              AND (SELECT COUNT(*) FROM proposal_speakers
                   WHERE proposal_id = ? AND status <> 'declined') > 1
              AND EXISTS (

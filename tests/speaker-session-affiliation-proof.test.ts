@@ -146,6 +146,47 @@ async function profile(f: Awaited<ReturnType<typeof fixture>>, continuationToken
 }
 
 describe("authenticated speaker resource mailbox proof", () => {
+  it("requires a pending invitation address to be verified by the signed-in account", async () => {
+    const f = await fixture();
+    const emailId = crypto.randomUUID();
+    const proposerId = await insertUser(env.DB, "other-proposer@example.test");
+    await env.DB.prepare("UPDATE session_proposals SET proposer_user_id=? WHERE id=?")
+      .bind(proposerId, f.proposalId)
+      .run();
+    await env.DB.prepare(
+      "INSERT INTO user_emails (id,user_id,email,normalized_email,created_at) VALUES (?,?,'invited@example.test','invited@example.test',?)",
+    )
+      .bind(emailId, f.userId, new Date().toISOString())
+      .run();
+    await env.DB.prepare(
+      "UPDATE proposal_speakers SET status='invited', invited_email='invited@example.test' WHERE id=?",
+    )
+      .bind(f.speakerId)
+      .run();
+    const read = () =>
+      callApi(env, `/api/v1/proposals/${f.proposalId}/participation`, {
+        headers: { authorization: `Bearer ${f.session}` },
+      });
+    const list = async () =>
+      (await (
+        await callApi(env, "/api/v1/users/current/proposals", {
+          headers: { authorization: `Bearer ${f.session}` },
+        })
+      ).json()) as { proposals: Array<{ id: string }> };
+    expect((await list()).proposals).toHaveLength(0);
+    const blocked = await read();
+    expect(blocked.status).toBe(403);
+    await expect(blocked.json()).resolves.toMatchObject({ error: { code: "SPEAKER_INVITED_EMAIL_UNVERIFIED" } });
+    await env.DB.prepare("UPDATE user_emails SET verified_at=? WHERE id=?")
+      .bind(new Date().toISOString(), emailId)
+      .run();
+    expect((await read()).status).toBe(200);
+    expect((await list()).proposals.map((proposal) => proposal.id)).toEqual([f.proposalId]);
+    await env.DB.prepare("UPDATE proposal_speakers SET status='confirmed' WHERE id=?").bind(f.speakerId).run();
+    await env.DB.prepare("DELETE FROM user_emails WHERE id=?").bind(emailId).run();
+    expect((await read()).status).toBe(200);
+  });
+
   it("proves the exact secondary mailbox and records the owned representation without a manage token or duplicate person", async () => {
     const f = await fixture();
     const proof = await ready(f);

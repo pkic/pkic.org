@@ -1,3 +1,4 @@
+import { portalSession } from "../../state";
 import { lazy, Suspense } from "preact/compat";
 import { useEffect } from "preact/hooks";
 import { useHashLocation } from "wouter/use-hash-location";
@@ -21,7 +22,7 @@ import { ParticipantRegistration } from "../../../../components/events/Participa
 import { ParticipantSubmission } from "../../../../components/events/ParticipantSubmission";
 import { ParticipantSpeaker } from "../../../../components/events/ParticipantSpeaker";
 import { Spinner } from "../../../../components/Spinner";
-import { Badge } from "../../../../components/Badge";
+import { Badge, PlainStatus } from "../../../../components/Badge";
 import { Tabs } from "../../../../ui/Tabs";
 import { ParticipantEventNavigation, ParticipantLeadScanner } from "./ParticipantEventNavigation";
 import { Alert } from "../../../../ui/Alert";
@@ -258,7 +259,18 @@ function ParticipantProposals({ event }: { event: EventDetail }) {
             <a href={href(eventParticipantRecordPath(event.slug, "proposal", proposal.id))}>{proposal.title}</a>
           ),
         },
-        { header: "Status", cell: (proposal) => <Badge status={proposal.status} /> },
+        { header: "Proposal status", cell: (proposal) => <Badge status={proposal.status} /> },
+        {
+          header: "Your participation",
+          cell: (proposal) =>
+            proposal.speakerStatus === "confirmed" ? (
+              <PlainStatus status={proposal.speakerStatus} />
+            ) : proposal.speakerStatus ? (
+              <Badge status={proposal.speakerStatus} />
+            ) : (
+              "—"
+            ),
+        },
         { header: "Your role", cell: (proposal) => (proposal.role === "submitter" ? "Submitter" : "Speaker") },
       ]}
     />
@@ -286,7 +298,14 @@ function ParticipantProposal({
   header: (title?: string) => ComponentChildren;
 }) {
   const base = `/api/v1/proposals/${encodeURIComponent(proposalId)}`;
+  const intendedSpeaker = facet === "participation" ? portalHashParam(window.location.hash, "speaker") : null;
+  const activeUserId = portalSession.value?.identity.id;
   const loaded = useData(async () => {
+    if (intendedSpeaker && intendedSpeaker !== activeUserId) {
+      throw new Error(
+        "This invitation is for a different account. Sign out and sign in with the account invited to speak.",
+      );
+    }
     const [submission, speaker, forms, speakerTerms] = await Promise.all([
       optionalRecord(getJson(base + "/submission", proposalAccessReadResponseSchema)),
       optionalRecord(getJson(base + "/participation", speakerSelfServiceReadResponseSchema)),
@@ -301,9 +320,11 @@ function ParticipantProposal({
       (submission?.proposal.event_id && submission.proposal.event_id !== event.id) ||
       (speaker?.proposal.eventId && speaker.proposal.eventId !== event.id)
     )
-      throw new Error("Proposal not found for this event.");
+      throw new Error(
+        "This proposal is unavailable for this account. Sign in with the account invited to participate, or contact the proposer.",
+      );
     return { submission, speaker, forms, speakerTerms };
-  }, [proposalId, event.id]);
+  }, [proposalId, event.id, intendedSpeaker, activeUserId]);
   if (loaded.loading)
     return (
       <>
