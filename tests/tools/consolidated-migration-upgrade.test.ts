@@ -1474,8 +1474,8 @@ it("splits the consolidated migration into bounded statements for D1", async () 
   );
 });
 
-/** The formats the retired 0038 render queue accepted, panel included. */
-const LEGACY_PROMOTION_FORMATS = ["portrait", "carousel", "landscape", "square", "panel"];
+/** The formats the retired 0038 render queue accepted; the unfinished panel request is dropped. */
+const LEGACY_PROMOTION_FORMATS = ["portrait", "panel", "carousel", "landscape", "square"];
 
 it("cuts over unfinished promotion work without retaining a second render queue", () => {
   const db = new DatabaseSync(":memory:");
@@ -1556,7 +1556,7 @@ it("cuts over unfinished promotion work without retaining a second render queue"
         )
         .all(),
     ).toEqual(
-      ["queued", "rendering", "retrying"].map((id) => ({
+      ["queued", "rendering"].map((id) => ({
         id,
         status: "queued",
         fingerprint: null,

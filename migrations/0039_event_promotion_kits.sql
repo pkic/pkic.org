@@ -47,7 +47,8 @@ CREATE INDEX event_promotion_render_requested ON event_promotion_renders(event_i
 
 -- A migrated request resolves its fingerprint and artifact location under the
 -- normal worker lease. Completed cache entries are disposable; authored copy,
--- personal choices remain in their canonical records.
+-- personal choices remain in their canonical records. The panel format is
+-- retired, so its unfinished requests are not carried forward.
 INSERT INTO event_promotion_renders
  (id,event_id,occurrence_id,user_id,revision,fingerprint,format,origin,cache_key,
   status,attempts,next_attempt_at,created_at,updated_at,requested_at)
@@ -56,7 +57,7 @@ SELECT id,event_id,occurrence_id,user_id,revision,NULL,format,origin,cache_key,
  CASE WHEN status='rendering' THEN strftime('%Y-%m-%dT%H:%M:%fZ','now') ELSE next_attempt_at END,
  created_at,strftime('%Y-%m-%dT%H:%M:%fZ','now'),created_at
 FROM event_agenda_promotion_render_jobs
-WHERE status IN ('queued','retrying','rendering');
+WHERE status IN ('queued','retrying','rendering') AND format<>'panel';
 DROP TABLE event_agenda_promotion_render_jobs;
 
 -- Badges join the same render queue: one row per referral code, its revision
