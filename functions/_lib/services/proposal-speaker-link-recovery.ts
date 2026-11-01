@@ -1,4 +1,5 @@
-import { first } from "../db/queries";
+import { all } from "../db/queries";
+import { DIRECT_EMAIL_TEMPLATE_KEY, directEmailBodyPayload } from "../email/direct-body";
 import { emailPlainText } from "../email/plain-text";
 import { prepareQueueEmailStatementWhen } from "../email/outbox";
 import type { DatabaseLike } from "../types";
@@ -9,6 +10,7 @@ import { PROPOSAL_INACTIVE_STATUS_SQL_LIST } from "./proposal-status-policy";
 import { activeEffectiveInviteExpirySql, effectiveProposalSpeakerInviteExpirySql } from "../invite-validity";
 import { nowIso } from "../utils/time";
 import { queuedSpeakerManageToken } from "./proposal-speakers";
+import { unclaimedAccountSql } from "./proposal-speaker-account-authority";
 
 interface SpeakerManageLinkMatch {
   speaker_id: string;
@@ -34,11 +36,14 @@ export async function queueProposalSpeakerManageLinkRecovery(
   event: EventRecord,
   email: string,
   appBaseUrl: string,
-): Promise<string | null> {
+): Promise<string[]> {
   const now = nowIso();
-  const speaker = await first<SpeakerManageLinkMatch>(
-    db,
-    `SELECT
+  const speakers: SpeakerManageLinkMatch[] = [];
+  let cursor = "";
+  while (true) {
+    const page = await all<SpeakerManageLinkMatch>(
+      db,
+      `SELECT
        ps.id AS speaker_id,
        ps.proposal_id,
        sp.proposer_user_id,
@@ -58,7 +63,11 @@ export async function queueProposalSpeakerManageLinkRecovery(
      JOIN proposal_speakers ps ON ps.user_id = u.id
      JOIN session_proposals sp ON sp.id = ps.proposal_id
      JOIN events e ON e.id = sp.event_id
-     WHERE u.normalized_email = ?
+     WHERE u.active = 1 AND (u.email_verified_at IS NOT NULL OR ${unclaimedAccountSql("u")})
+       AND (u.normalized_email = ? OR EXISTS (
+         SELECT 1 FROM user_emails address WHERE address.user_id = u.id
+           AND address.normalized_email = ? AND address.verified_at IS NOT NULL
+       ))
        AND sp.event_id = ?
        AND ps.role <> 'proposer'
        AND ps.status IN ('invited', 'confirmed')
@@ -70,43 +79,61 @@ export async function queueProposalSpeakerManageLinkRecovery(
        )
        AND sp.status NOT IN (${PROPOSAL_INACTIVE_STATUS_SQL_LIST})
        AND sp.deleted_at IS NULL
-     ORDER BY ps.created_at DESC
-     LIMIT 1`,
-    [email, event.id, now],
-  );
-  if (!speaker) return null;
+       AND ps.id > ?
+     ORDER BY ps.id
+     LIMIT 20`,
+      [email, email, event.id, now, cursor],
+    );
+    speakers.push(...page);
+    if (page.length < 20) break;
+    cursor = page[page.length - 1]!.speaker_id;
+  }
+  if (!speakers.length) return [];
 
-  const context = await buildProposalInviteEmailContext(db, {
-    proposalId: speaker.proposal_id,
-    inviterUserId: speaker.proposer_user_id,
-  });
-  const manageUrl = speakerManagePageUrl(
-    appBaseUrl,
-    event,
-    await queuedSpeakerManageToken(db, speaker.speaker_id, speaker.manage_link_secret),
-  );
-  const queued = prepareQueueEmailStatementWhen(
-    db,
-    {
-      eventId: event.id,
-      baseUrl: appBaseUrl,
-      templateKey: "co_speaker_invite",
-      recipientEmail: speaker.email,
-      recipientUserId: speaker.user_id,
-      messageType: "transactional",
-      subject: `Your speaker management link for ${event.name}`,
-      capabilityLinkValues: [manageUrl],
-      data: {
-        ...buildEventEmailVariables(event, appBaseUrl),
-        firstName: emailPlainText(speaker.first_name ?? ""),
-        lastName: emailPlainText(speaker.last_name ?? ""),
-        ...proposalInviteEmailTextVariables(context),
-        manageUrl,
-        isReminder: true,
+  const queuedEmails = [];
+  for (const speaker of speakers) {
+    const context = await buildProposalInviteEmailContext(db, {
+      proposalId: speaker.proposal_id,
+      inviterUserId: speaker.proposer_user_id,
+    });
+    const manageUrl = speakerManagePageUrl(
+      appBaseUrl,
+      event,
+      await queuedSpeakerManageToken(db, speaker.speaker_id, speaker.manage_link_secret),
+    );
+    const queued = prepareQueueEmailStatementWhen(
+      db,
+      {
+        eventId: event.id,
+        baseUrl: appBaseUrl,
+        templateKey: DIRECT_EMAIL_TEMPLATE_KEY,
+        recipientEmail: speaker.email,
+        recipientUserId: speaker.user_id,
+        messageType: "transactional",
+        subject: `Your speaker management link for ${event.name}`,
+        capabilityLinkValues: [manageUrl],
+        data: {
+          ...buildEventEmailVariables(event, appBaseUrl),
+          __currentRecipient: { userId: speaker.user_id, email: speaker.email },
+          proposalId: speaker.proposal_id,
+          speakerUserId: speaker.user_id,
+          firstName: emailPlainText(speaker.first_name ?? ""),
+          lastName: emailPlainText(speaker.last_name ?? ""),
+          ...proposalInviteEmailTextVariables(context),
+          manageUrl,
+          ...directEmailBodyPayload(`{{#if firstName}}Dear {{firstName}},{{else}}Dear Speaker,{{/if}}
+
+Your speaker participation for **{{eventName}}**: **{{proposalTitle}}**.
+
+${speaker.speaker_status === "confirmed" ? "Your participation is confirmed. You can review your details using the link below." : "Please review the proposal and confirm or decline your participation."}
+
+[Manage your speaker participation]({{manageUrl}})
+
+This link is personal. Please do not share it.`),
+        },
       },
-    },
-    {
-      sql: `SELECT 1
+      {
+        sql: `SELECT 1
               FROM proposal_speakers ps
               JOIN session_proposals sp ON sp.id = ps.proposal_id
               JOIN events e ON e.id = sp.event_id
@@ -123,23 +150,32 @@ export async function queueProposalSpeakerManageLinkRecovery(
                    ${activeEffectiveInviteExpirySql(effectiveProposalSpeakerInviteExpirySql("ps", "e"))}
                  )
                )
-               AND u.normalized_email = ? AND u.updated_at = ?`,
-      bindings: [
-        speaker.speaker_id,
-        speaker.proposal_id,
-        speaker.user_id,
-        speaker.speaker_status,
-        speaker.invite_expires_at,
-        event.id,
-        speaker.proposal_updated_at,
-        speaker.event_starts_at,
-        speaker.event_ends_at,
-        now,
-        speaker.normalized_email,
-        speaker.user_updated_at,
-      ],
-    },
-  );
-  const result = await queued.statement.run();
-  return result.meta?.changes === 1 ? queued.id : null;
+               AND u.active = 1 AND (u.email_verified_at IS NOT NULL OR ${unclaimedAccountSql("u")})
+               AND u.normalized_email = ? AND u.updated_at = ?
+               AND (u.normalized_email = ? OR EXISTS (
+                 SELECT 1 FROM user_emails address WHERE address.user_id = u.id
+                   AND address.normalized_email = ? AND address.verified_at IS NOT NULL
+               ))`,
+        bindings: [
+          speaker.speaker_id,
+          speaker.proposal_id,
+          speaker.user_id,
+          speaker.speaker_status,
+          speaker.invite_expires_at,
+          event.id,
+          speaker.proposal_updated_at,
+          speaker.event_starts_at,
+          speaker.event_ends_at,
+          now,
+          speaker.normalized_email,
+          speaker.user_updated_at,
+          email,
+          email,
+        ],
+      },
+    );
+    queuedEmails.push(queued);
+  }
+  const results = await db.batch(queuedEmails.map((entry) => entry.statement));
+  return queuedEmails.flatMap((entry, index) => (results[index]?.meta?.changes === 1 ? [entry.id] : []));
 }

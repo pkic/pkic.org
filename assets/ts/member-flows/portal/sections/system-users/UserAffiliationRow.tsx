@@ -1,3 +1,5 @@
+import { userAuthSessionResponseSchema } from "../../../../../shared/schemas/user-auth";
+import { notifyActingIdentityChanged } from "../../acting-identity";
 import { removeIncorrectRepresentation } from "./remove-representation";
 import { useMembershipCategoryCatalog } from "../../../../hooks/useMembershipCategoryCatalog";
 import { useMembershipCategoryLabels } from "../../../../hooks/useMembershipCategoryLabels";
@@ -18,12 +20,12 @@ import { useRef, useState } from "preact/hooks";
 import { confirmAction } from "../../../../components/ConfirmDialog";
 import { memberCapacityMutationResponseSchema } from "../../../../../shared/schemas/membership-management";
 import { MEMBER_STATUSES, memberStatusSchema } from "../../../../../shared/schemas/membership-categories";
-import { deleteJson, patchJson } from "../../../../shared/api-client";
+import { deleteJson, getJson, patchJson } from "../../../../shared/api-client";
 import { successResponseSchema } from "../../../../../shared/schemas/api-common";
 import { identityMutationResponseSchema } from "../../../../../shared/schemas/identity";
 import { JOB_TITLE_NEEDED_LABEL, needsOrganizationJobTitle } from "../../../../../shared/schemas/identity-job-title";
 import { myProfileSchema, myProfileUpdateSchema } from "../../../../../shared/schemas/me";
-import { profile as profileSignal, saveProfile } from "../../state";
+import { portalSession, profile as profileSignal, savePortalSession, saveProfile } from "../../state";
 import { CURRENT_USER_API } from "./current-user-api";
 import { Badge as ToneBadge } from "../../../../ui/Badge";
 import { toast } from "../../ui";
@@ -512,6 +514,19 @@ export function UserAffiliationRow({
           startedAt={membership.createdAt}
           onEnd={async (endedAt) => {
             await endRepresentation(membership, viewerIsSubject, endedAt);
+            if (viewerIsSubject && portalSession.value) {
+              const sessionId = portalSession.value.sessionId;
+              notifyActingIdentityChanged(portalSession.value.identity.id);
+              try {
+                const next = await getJson("/api/v1/auth/session", userAuthSessionResponseSchema);
+                if (portalSession.value?.sessionId === sessionId && next.sessionId === sessionId)
+                  savePortalSession(next);
+              } catch {
+                // The change succeeded; reload instead of keeping an outdated identity in the shell.
+                window.location.reload();
+                return;
+              }
+            }
             toast("Representation ended", "success");
             await onChanged();
           }}

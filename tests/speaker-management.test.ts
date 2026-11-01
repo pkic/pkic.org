@@ -1,3 +1,4 @@
+import { validateEmailDeliveryGuard } from "../functions/_lib/email/delivery-guard";
 import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
 import { addRepresentative, seedOrganizationAggregate, insertOrganization } from "./helpers/membership";
 import { declineSpeakerParticipation } from "../functions/_lib/services/proposal-speaker-decline";
@@ -447,6 +448,19 @@ describe("speaker self-management endpoints", () => {
       ),
     ).resolves.toEqual([]);
     await expect(queryAll(env.DB, "SELECT id FROM users WHERE id = ?", [coSpeakerUserId])).resolves.toHaveLength(1);
+    const removalNotices = await queryAll<{ recipient_user_id: string; payload_json: string }>(
+      env.DB,
+      "SELECT recipient_user_id, payload_json FROM email_outbox WHERE template_key = '__direct__' AND recipient_user_id = ?",
+      [coSpeakerUserId],
+    );
+    expect(removalNotices).toHaveLength(1);
+    expect(JSON.parse(removalNotices[0].payload_json).__directBodyContent).toContain("removed as a speaker");
+    const noticePayload = JSON.parse(removalNotices[0].payload_json) as Record<string, unknown>;
+    await expect(validateEmailDeliveryGuard(env.DB, noticePayload)).resolves.toBeUndefined();
+    await env.DB.prepare("UPDATE users SET email = ?, normalized_email = ? WHERE id = ?")
+      .bind("changed@example.test", "changed@example.test", coSpeakerUserId)
+      .run();
+    await expect(validateEmailDeliveryGuard(env.DB, noticePayload)).rejects.toThrow("no longer deliverable");
     await expect(
       queryAll<{ scope_type: string | null; scope_id: string | null }>(
         env.DB,
@@ -1137,6 +1151,7 @@ describe("speaker self-management endpoints", () => {
         manageToken: proposalManageToken,
         signingSecret: env.INTERNAL_SIGNING_SECRET!,
         userId: coSpeakerUserId,
+        appBaseUrl: "https://example.test",
       }),
     ).rejects.toMatchObject({ code: "PROPOSAL_SPEAKER_CONFLICT" });
     await expect(

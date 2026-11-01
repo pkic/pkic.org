@@ -1,3 +1,5 @@
+import { resolveAppBaseUrl } from "../../../../../../_lib/config";
+import { processSelectedOutboxBackground } from "../../../../../../_lib/email/outbox";
 import type { ParticipantRouteData } from "../../../../../../_lib/routes/participant-authority";
 import { json } from "../../../../../../_lib/http";
 import type { AdminContext } from "../../../../../../_lib/db/context";
@@ -43,8 +45,18 @@ export async function onRequestDelete(
     manageToken: params.token,
     signingSecret: requireInternalSecret(c.env),
     userId: params.userId,
+    appBaseUrl: resolveAppBaseUrl(c.env, c.req.raw),
   });
-  return json(proposalSpeakerRemovalResponseSchema.parse(result));
+  if (result.outboxIds.length)
+    c.executionCtx.waitUntil(processSelectedOutboxBackground(c.env.DB, c.env, result.outboxIds));
+  return json(
+    proposalSpeakerRemovalResponseSchema.parse({
+      success: result.success,
+      removedUserId: result.removedUserId,
+      proposerUserId: result.proposerUserId,
+      cancelledEmailCount: result.cancelledEmailCount,
+    }),
+  );
 }
 
 export const ProposalAccessSpeakerPatch = openApiRoute(

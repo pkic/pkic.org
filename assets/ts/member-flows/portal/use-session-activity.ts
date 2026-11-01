@@ -1,5 +1,6 @@
 import { useEffect } from "preact/hooks";
 import { userAuthSessionResponseSchema } from "../../../shared/schemas/user-auth";
+import { rememberedIdentityKey } from "./acting-identity";
 import { ApiClientError, getJson } from "../../shared/api-client";
 import { clearMemberProfile, expirePortalSession, portalSession, savePortalSession } from "./state";
 
@@ -16,6 +17,7 @@ export function useSessionActivity(): void {
   useEffect(() => {
     if (!session) return;
     const sessionId = session.sessionId;
+    const userId = session.identity.id;
 
     let lastRefreshAt = Date.now();
     let refreshPending = false;
@@ -61,6 +63,14 @@ export function useSessionActivity(): void {
       if (document.visibilityState === "visible") acknowledgeInteraction();
     }
 
+    function identityChangedInAnotherTab(event: StorageEvent): void {
+      if (event.key === rememberedIdentityKey(userId) || event.key === `portal-identity-changed:${userId}`) {
+        // Scoped screens must discard data loaded for the previous identity.
+        window.location.reload();
+      }
+    }
+
+    window.addEventListener("storage", identityChangedInAnotherTab);
     window.addEventListener("focus", acknowledgeInteraction);
     window.addEventListener("pageshow", acknowledgeInteraction);
     window.addEventListener("scroll", acknowledgeInteraction, { passive: true });
@@ -69,6 +79,7 @@ export function useSessionActivity(): void {
     document.addEventListener("visibilitychange", acknowledgeVisiblePage);
     return () => {
       clearTimeout(refreshTimer);
+      window.removeEventListener("storage", identityChangedInAnotherTab);
       window.removeEventListener("focus", acknowledgeInteraction);
       window.removeEventListener("pageshow", acknowledgeInteraction);
       window.removeEventListener("scroll", acknowledgeInteraction);

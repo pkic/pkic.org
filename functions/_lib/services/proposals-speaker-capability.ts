@@ -47,7 +47,7 @@ export async function getSpeakerByManageToken(
     throw new AppError(
       verified.reason === "expired" ? 410 : 404,
       verified.reason === "expired" ? "SPEAKER_TOKEN_EXPIRED" : "SPEAKER_TOKEN_NOT_FOUND",
-      verified.reason === "expired" ? "Speaker manage link has expired" : "Invalid speaker token",
+      verified.reason === "expired" ? "Speaker manage link has expired" : "This speaker link is no longer available.",
     );
   }
 
@@ -172,7 +172,7 @@ async function getSpeakerById(db: DatabaseLike, speakerId: string, userId?: stri
   );
 
   if (!row || (userId !== undefined && row.ps_user_id !== userId)) {
-    throw new AppError(404, "SPEAKER_TOKEN_NOT_FOUND", "Invalid or expired speaker token");
+    throw new AppError(404, "SPEAKER_TOKEN_NOT_FOUND", "This speaker link is no longer available.");
   }
   if (row.ps_invite_expired === 1) {
     throw new AppError(410, "SPEAKER_INVITATION_EXPIRED", "Speaker invitation has expired");

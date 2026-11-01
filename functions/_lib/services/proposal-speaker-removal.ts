@@ -6,6 +6,7 @@ import {
 import { getProposalAccessForEvent } from "../auth/proposal-access";
 import { first } from "../db/queries";
 import { prepareQueueEmailStatementWhen } from "../email/outbox";
+import { DIRECT_EMAIL_TEMPLATE_KEY, directEmailBodyPayload } from "../email/direct-body";
 import { emailPlainText } from "../email/plain-text";
 import { AppError } from "../errors";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../types";
@@ -41,6 +42,8 @@ interface SpeakerRemovalContext {
   speaker_user_id: string;
   speaker_role: ProposalSpeakerRole;
   speaker_status: string;
+  speaker_email: string;
+  speaker_first_name: string | null;
 }
 
 interface ReplacementSpeaker {
@@ -57,6 +60,7 @@ export interface ProposalSpeakerRemovalResult {
   removedUserId: string;
   proposerUserId: string;
   cancelledEmailCount: number;
+  outboxIds: string[];
 }
 
 async function getSpeakerRemovalContext(
@@ -71,9 +75,11 @@ async function getSpeakerRemovalContext(
             (SELECT COUNT(*) FROM proposal_speakers roster
              WHERE roster.proposal_id = sp.id AND roster.status <> 'declined') AS speaker_count,
             ps.id AS speaker_id, ps.user_id AS speaker_user_id,
-            ps.role AS speaker_role, ps.status AS speaker_status
+            ps.role AS speaker_role, ps.status AS speaker_status,
+            u.email AS speaker_email, u.first_name AS speaker_first_name
      FROM session_proposals sp
      JOIN proposal_speakers ps ON ps.proposal_id = sp.id AND ps.user_id = ?
+     JOIN users u ON u.id = ps.user_id
      WHERE sp.id = ? AND sp.deleted_at IS NULL`,
     [userId, proposalId],
   );
@@ -177,7 +183,7 @@ async function removeProposalSpeaker(
     permissionActor?: AuthAdmin;
     replacementProposerUserId?: string;
     allowProposerTransfer: boolean;
-    appBaseUrl?: string;
+    appBaseUrl: string;
     authorization?: ProposalWriteAuthorization;
   },
 ): Promise<ProposalSpeakerRemovalResult> {
@@ -364,13 +370,48 @@ async function removeProposalSpeaker(
     ),
   );
 
+  const event = await getEventById(db, context.event_id);
+  const removalNotice = prepareQueueEmailStatementWhen(
+    db,
+    {
+      eventId: context.event_id,
+      baseUrl: input.appBaseUrl,
+      templateKey: DIRECT_EMAIL_TEMPLATE_KEY,
+      recipientUserId: context.speaker_user_id,
+      recipientEmail: context.speaker_email,
+      subject: `Speaker participation update for ${event.name}`,
+      messageType: "transactional",
+      data: {
+        ...buildEventEmailVariables(event, input.appBaseUrl),
+        __currentRecipient: { userId: context.speaker_user_id, email: context.speaker_email },
+        firstName: emailPlainText(context.speaker_first_name ?? ""),
+        proposalTitle: emailPlainText(context.proposal_title),
+        ...directEmailBodyPayload(`{{#if firstName}}Dear {{firstName}},{{else}}Dear Speaker,{{/if}}
+
+You have been removed as a speaker from **{{proposalTitle}}** for **{{eventName}}**. Your previous speaker link no longer works.
+
+If you believe this is a mistake or want to participate again, please contact the proposer.`),
+      },
+    },
+    {
+      sql: `SELECT 1 FROM users u WHERE u.id = ? AND u.active = 1 AND u.email = ?
+        AND NOT EXISTS (SELECT 1 FROM proposal_speakers ps WHERE ps.id = ?)`,
+      bindings: [context.speaker_user_id, context.speaker_email, context.speaker_id],
+    },
+    now,
+  );
+  const noticeStatementIndex = statements.length;
+  statements.push(removalNotice.statement);
+
   try {
     const results = await db.batch(withProposalWriteContextGuard(input.authorization, statements));
+    const offset = input.authorization?.contextGuard ? 1 : 0;
     return {
       success: true,
       removedUserId: context.speaker_user_id,
       proposerUserId: replacement?.user_id ?? context.proposer_user_id,
-      cancelledEmailCount: Number(results[cancelStatementIndex]?.meta?.changes ?? 0),
+      cancelledEmailCount: Number(results[cancelStatementIndex + offset]?.meta?.changes ?? 0),
+      outboxIds: results[noticeStatementIndex + offset]?.meta?.changes === 1 ? [removalNotice.id] : [],
     };
   } catch (error) {
     if (isRegistrationTransitionConflict(error)) {
@@ -389,7 +430,7 @@ async function removeProposalSpeaker(
 
 export async function removeProposalSpeakerByProposer(
   db: DatabaseLike,
-  input: { manageToken: ParticipantAuthority; signingSecret: string; userId: string },
+  input: { manageToken: ParticipantAuthority; signingSecret: string; userId: string; appBaseUrl: string },
 ): Promise<ProposalSpeakerRemovalResult> {
   const proposal = await getProposalByManageToken(db, input.manageToken, input.signingSecret);
   const context = await getSpeakerRemovalContext(db, proposal.id, input.userId);
@@ -401,6 +442,7 @@ export async function removeProposalSpeakerByProposer(
     actorType: "user",
     actorId: proposal.proposer_user_id,
     allowProposerTransfer: false,
+    appBaseUrl: input.appBaseUrl,
   });
 }
 

@@ -8,6 +8,7 @@ import { proposalSpeakerPatchResponseSchema } from "../../../../../../assets/sha
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { resolveAppBaseUrl } from "../../../../../_lib/config";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
+import { processSelectedOutboxBackground } from "../../../../../_lib/email/outbox";
 import { json } from "../../../../../_lib/http";
 import { editProposalSpeaker } from "../../../../../_lib/services/proposal-speaker-management";
 import { removeProposalSpeakerByManager } from "../../../../../_lib/services/proposal-speaker-removal";
@@ -45,5 +46,13 @@ export async function onRequestDelete(
     replacementProposerUserId: data.body.replacementProposerUserId,
     appBaseUrl: resolveAppBaseUrl(c.env, c.req.raw),
   });
-  return json(proposalSpeakerRemovalResponseSchema.parse(result));
+  if (result.outboxIds.length) c.executionCtx.waitUntil(processSelectedOutboxBackground(db, c.env, result.outboxIds));
+  return json(
+    proposalSpeakerRemovalResponseSchema.parse({
+      success: result.success,
+      removedUserId: result.removedUserId,
+      proposerUserId: result.proposerUserId,
+      cancelledEmailCount: result.cancelledEmailCount,
+    }),
+  );
 }

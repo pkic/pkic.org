@@ -15,7 +15,7 @@ import type { PortalSession } from "./types";
 
 const ACTIVE_IDENTITY_ENDPOINT = "/api/v1/users/current/identities/active";
 
-function rememberedIdentityKey(userId: string): string {
+export function rememberedIdentityKey(userId: string): string {
   return `portal-acting-identity:${userId}`;
 }
 
@@ -62,5 +62,14 @@ export async function applyRememberedActingIdentity(session: PortalSession): Pro
   } catch {
     // The person is asked instead; a failed convenience must not end the sign-in.
     return session;
+  }
+}
+
+/** Tell other tabs that the server's available identities have changed. */
+export function notifyActingIdentityChanged(userId: string): void {
+  try {
+    localStorage.setItem(`portal-identity-changed:${userId}`, crypto.randomUUID());
+  } catch {
+    // The current tab still refreshes even when device storage is unavailable.
   }
 }

@@ -9,7 +9,7 @@
 import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { json } from "../../../../../_lib/http";
 import { getEventBySlug } from "../../../../../_lib/services/events";
-import { processOutboxByIdBackground } from "../../../../../_lib/email/outbox";
+import { processSelectedOutboxBackground } from "../../../../../_lib/email/outbox";
 import { resolveAppBaseUrl } from "../../../../../_lib/config";
 import { getClientIp } from "../../../../../_lib/request";
 import { enforceEmailTriggerRateLimits } from "../../../../../_lib/rate-limit";
@@ -29,9 +29,9 @@ async function resendSpeakerManageLink(c: AdminContext, eventSlug: string, email
   const db = requestDb(c);
   const event = await getEventBySlug(db, eventSlug);
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
-  const outboxId = await queueProposalSpeakerManageLinkRecovery(db, event, email, appBaseUrl);
-  if (outboxId) {
-    c.executionCtx.waitUntil(processOutboxByIdBackground(db, c.env, outboxId));
+  const outboxIds = await queueProposalSpeakerManageLinkRecovery(db, event, email, appBaseUrl);
+  if (outboxIds.length) {
+    c.executionCtx.waitUntil(processSelectedOutboxBackground(db, c.env, outboxIds));
   }
 
   return json({ success: true });
