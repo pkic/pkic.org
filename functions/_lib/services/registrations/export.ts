@@ -1,3 +1,5 @@
+import { loadRegistrationDayStates } from "./day-states";
+import { configuredAttendanceOptions, listEventDays } from "../event-days";
 import { REGISTRATION_ORGANIZATION_SQL, REGISTRATION_JOB_TITLE_SQL } from "./selected-identity";
 import { encodeBoundedCsv } from "../../csv";
 import { all } from "../../db/queries";
@@ -92,16 +94,24 @@ export async function buildRegistrationCsv(
     throw new AppError(413, "CSV_EXPORT_ROW_LIMIT_EXCEEDED", `CSV export is limited to ${limits.maxRows} records`);
   }
 
-  const responseByRegistration = await resolveEventFormResponses(
-    db,
-    rows.map((row) => ({
-      source: "registration" as const,
-      sourceId: row.id,
-      event,
-      formPlacementId: row.form_placement_id,
-      answersJson: row.custom_answers_json,
-    })),
-  );
+  const [responseByRegistration, dayStates, eventDays] = await Promise.all([
+    resolveEventFormResponses(
+      db,
+      rows.map((row) => ({
+        source: "registration" as const,
+        sourceId: row.id,
+        event,
+        formPlacementId: row.form_placement_id,
+        answersJson: row.custom_answers_json,
+      })),
+    ),
+    loadRegistrationDayStates(
+      db,
+      rows.map((row) => row.id),
+    ),
+    listEventDays(db, event.id),
+  ]);
+  const daysByDate = new Map(eventDays.map((day) => [day.day_date, day]));
   const formColumns = exportFormColumns(rows.map((row) => responseByRegistration.get(row.id) ?? null));
   const header = [
     "ID",
@@ -120,6 +130,18 @@ export async function buildRegistrationCsv(
     const response = responseByRegistration.get(row.id) ?? null;
     const customAnswers = response ? response.answers : null;
     const affiliation = contactAffiliation(row.user_email, row.organization);
+    const selectedDays = dayStates.get(row.id) ?? [];
+    const attendance = selectedDays.length
+      ? selectedDays
+          .map((day) => {
+            const configured = daysByDate.get(day.dayDate);
+            const label =
+              configured &&
+              configuredAttendanceOptions(configured).find((option) => option.value === day.attendanceType)?.label;
+            return `${day.dayDate}: ${label ?? day.attendanceType}`;
+          })
+          .join("; ")
+      : row.attendance_type;
     return [
       row.id,
       row.display_name,
@@ -127,7 +149,7 @@ export async function buildRegistrationCsv(
       affiliation.personalEmail ? PERSONAL_EMAIL_ADDRESS_LABEL : affiliation.organization,
       row.job_title,
       row.status,
-      row.attendance_type,
+      attendance,
       row.source_type,
       row.created_at,
       row.sponsor_consent ? "Yes" : "No",

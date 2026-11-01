@@ -6,14 +6,13 @@ import {
   type EventAttendanceRegistrationsQuery,
   type EventAttendanceRegistrationsStats,
 } from "../../../../assets/shared/schemas/event-registrations";
-import { all } from "../../db/queries";
 import { queryPage } from "../../db/pagination";
 import { registrationPopulationFilter } from "./registration-population-filter";
 import type { DatabaseLike } from "../../types";
 import { publicUserHeadshotPath } from "../user-headshot";
 import { getAttendanceStatusByType } from "./attendance-statistics";
 import { loadRegistrationDayStates } from "./day-states";
-import { aggregateEventRegistrationStats, type EventRegistrationStatsRow } from "./event-registration-stats";
+import { getEventRegistrationStats } from "./event-registration-stats";
 import { resolveEventRegistrationOrderBy } from "./event-registration-sort";
 import { contactAffiliation } from "../../email-domains/contact-kind";
 import { waitlistHandledLast } from "../../email-domains/contact-kind";
@@ -77,17 +76,10 @@ export async function listEventAttendanceRegistrations(
       db,
       rows.map((row) => row.id),
     ),
-    all<EventRegistrationStatsRow>(
-      db,
-      `SELECT attendance_type, status, COUNT(*) AS count
-         FROM registrations
-        WHERE event_id = ?
-        GROUP BY attendance_type, status`,
-      [eventId],
-    ),
+    getEventRegistrationStats(db, eventId),
     getAttendanceStatusByType(db, eventId),
   ]);
-  const { byAttendanceType, byStatus } = aggregateEventRegistrationStats(statRows);
+  const { byAttendanceType, byStatus } = statRows;
   return {
     registrations: rows.map((row) =>
       eventAttendanceRegistrationSummarySchema.parse({

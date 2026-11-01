@@ -53,6 +53,20 @@ describe("canonical form-field rules", () => {
     expect(isFormFieldVisible(rules, { dayAttendanceTypes: ["virtual"] })).toBe(false);
   });
 
+  it("evaluates event attendance rules against all selected days", () => {
+    const rules = parseFormFieldRules({ showWhen: { eventAttendanceTypeIn: ["moon_base_42"] } });
+    expect(
+      isFormFieldVisible(rules, {
+        dayAttendanceTypes: ["in_person", "moon_base_42"],
+        eventAttendanceType: "in_person",
+      }),
+    ).toBe(true);
+    expect(isFormFieldVisible(rules, { dayAttendanceTypes: ["in_person"], eventAttendanceType: "moon_base_42" })).toBe(
+      false,
+    );
+    expect(isFormFieldVisible(rules, { eventAttendanceType: "moon_base_42" })).toBe(true);
+  });
+
   it("uses one tolerant option codec", () => {
     const raw = ["one", { value: "two", label: " Second " }, { ignored: true }];
     expect(parseFormFieldOptions(raw)).toEqual([

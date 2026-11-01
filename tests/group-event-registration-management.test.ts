@@ -1,3 +1,12 @@
+import { getEventAnalytics } from "../functions/_lib/services/events/analytics";
+import {
+  prepareAttendanceChangeStatisticsStatements,
+  decodeAttendanceChangeStatistics,
+} from "../functions/_lib/services/registrations/attendance-statistics";
+import { buildEventRegistrationsPageQuery } from "../functions/_lib/services/registrations/event-registrations";
+import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
+import { attendeeCampaignSelection } from "../functions/_lib/services/event-email-campaign/audience";
+import { getEventBySlug } from "../functions/_lib/services/events";
 import { eventAttendanceRegistrationsListResponseSchema } from "../assets/shared/schemas/event-registrations";
 import { eventRegistrationAttendanceDetailResponseSchema } from "../assets/shared/schemas/event-registration-detail";
 import {
@@ -142,6 +151,92 @@ async function seedAttendees(eventId: string): Promise<{ registrationId: string;
 
 describe("group event attendee management", () => {
   beforeEach(resetDb);
+
+  it("matches mixed-day registrations by each selected type in lists and campaigns", async () => {
+    const fixture = await createFixture();
+    const event = await createEvent(fixture);
+    const { registrationId, holderId } = await seedAttendees(event.id);
+    const legacyUserId = await insertUser(env.DB, "legacy-attendee@example.test");
+    const legacyRegistrationId = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(`INSERT INTO registrations (id, event_id, user_id, status, attendance_type, source_type, manage_link_secret, created_at, updated_at)
+        VALUES (?, ?, ?, 'registered', 'virtual', 'direct', ?, datetime('now'), datetime('now'))`).bind(
+        legacyRegistrationId,
+        event.id,
+        legacyUserId,
+        crypto.randomUUID(),
+      ),
+      env.DB.prepare(`INSERT INTO event_days (id, event_id, day_date, label, sort_order, created_at, updated_at)
+        VALUES ('mixed-day', ?, '2027-04-13', 'Day 2', 2, datetime('now'), datetime('now'))`).bind(event.id),
+      env.DB.prepare(`INSERT INTO registration_day_attendance (id, registration_id, event_day_id, attendance_type, created_at, updated_at)
+        VALUES ('mixed-selection', ?, 'mixed-day', 'moon_base_42', datetime('now'), datetime('now'))`).bind(
+        registrationId,
+      ),
+      env.DB.prepare(`INSERT INTO registration_attendance_history (id, registration_id, event_day_id, from_type, to_type, changed_by, changed_at)
+        VALUES ('mixed-change', ?, 'mixed-day', 'in_person', 'moon_base_42', 'admin:test', datetime('now'))`).bind(
+        registrationId,
+      ),
+    ]);
+    const target = await env.DB.prepare("SELECT user_id FROM registrations WHERE id = ?")
+      .bind(registrationId)
+      .first<{ user_id: string }>();
+    await env.DB.prepare(`INSERT INTO event_day_waitlist_entries (id, event_id, event_day_id, registration_id, user_id, priority_lane, status, position, created_at, updated_at)
+      SELECT 'mixed-waitlist', ?, id, ?, ?, 'general', 'waiting', 1, datetime('now'), datetime('now') FROM event_days WHERE event_id = ? AND day_date = '2027-04-12'`)
+      .bind(event.id, registrationId, target!.user_id, event.id)
+      .run();
+    const history = decodeAttendanceChangeStatistics(
+      await env.DB.batch(prepareAttendanceChangeStatisticsStatements(env.DB, event.id)),
+    );
+    expect(history).toMatchObject({ leftInPersonAttendees: 1, leftInPersonDayChanges: 1 });
+    const filtered = buildOffsetPageSql(
+      buildEventRegistrationsPageQuery(event.id, { attendance_change: "left_in_person", limit: 25, offset: 0 }),
+    );
+    const page = await env.DB.prepare(filtered.pageSql)
+      .bind(...filtered.bindings, 25, 0)
+      .all<{ id: string }>();
+    expect(page.results.map((row) => row.id)).toEqual([registrationId]);
+    const analytics = await getEventAnalytics(
+      env.DB,
+      { id: event.id, slug: "mixed", name: "Mixed attendance" },
+      { includeProposalStats: false },
+    );
+    expect(analytics.registrations.total).toBe(3);
+    expect(analytics.registrations.byAttendanceType).toMatchObject({ in_person: 2, moon_base_42: 1, virtual: 1 });
+    expect(analytics.registrations.byStatusAndType).toContainEqual({
+      status: "registered",
+      attendance_type: "moon_base_42",
+      count: 1,
+    });
+    for (const [type, expectedIds] of [
+      ["in_person", [registrationId, holderId]],
+      ["moon_base_42", [registrationId]],
+      ["virtual", [legacyRegistrationId]],
+    ] as const) {
+      const response = await request(
+        fixture.ownerLeaderToken,
+        `/api/v1/groups/${fixture.ownerGroupId}/events/${event.id}/registrations?attendance_type=${type}`,
+      );
+      expect(response.status, await response.clone().text()).toBe(200);
+      const body = eventAttendanceRegistrationsListResponseSchema.parse(await response.json());
+      expect(body.registrations.map((row) => row.id).sort()).toEqual([...expectedIds].sort());
+      expect(body.stats.byAttendanceType).toMatchObject({ in_person: 2, moon_base_42: 1, virtual: 1 });
+      expect(body.stats.byStatus).toMatchObject({ registered: 3 });
+      expect(body.stats.attendanceStatusByType).toMatchObject({
+        in_person: { accepted: 1, waitlisted: 1 },
+        moon_base_42: { accepted: 1, waitlisted: 0 },
+      });
+      const row = await env.DB.prepare("SELECT slug FROM events WHERE id = ?").bind(event.id).first<{ slug: string }>();
+      const campaign = attendeeCampaignSelection(
+        await getEventBySlug(env.DB, row!.slug),
+        { audience: "attendees", attendanceType: type },
+        null,
+      );
+      const recipients = await env.DB.prepare(campaign.sql)
+        .bind(...campaign.bindings)
+        .all<{ registration_id: string }>();
+      expect(recipients.results.map((item) => item.registration_id).sort()).toEqual([...expectedIds].sort());
+    }
+  });
 
   it("opens the attendance details of a registration created from an accepted proposal", async () => {
     const fixture = await createFixture();

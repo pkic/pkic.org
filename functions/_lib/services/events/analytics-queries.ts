@@ -1,3 +1,4 @@
+import { eventRegistrationAttendanceTypesSql } from "../registrations/event-registration-stats";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { sponsorConsentSql } from "../event-participation/sponsor-consent";
 import {
@@ -23,30 +24,20 @@ export function prepareEventAnalyticsStatements(
   return [
     db.prepare(`SELECT status, COUNT(*) AS count FROM registrations WHERE event_id = ? GROUP BY status`).bind(eventId),
     db
-      .prepare(
-        `SELECT attendance_type, COUNT(*) AS count
-         FROM registrations
-         WHERE event_id = ? AND status = 'registered'
-         GROUP BY attendance_type`,
-      )
-      .bind(eventId),
+      .prepare(`WITH registration_types AS (${eventRegistrationAttendanceTypesSql})
+      SELECT attendance_type, COUNT(*) AS count FROM registration_types
+      WHERE status = 'registered' GROUP BY attendance_type`)
+      .bind(eventId, eventId),
     db
-      .prepare(
-        `SELECT status, attendance_type, COUNT(*) AS count
-         FROM registrations
-         WHERE event_id = ?
-         GROUP BY status, attendance_type`,
-      )
-      .bind(eventId),
+      .prepare(`WITH registration_types AS (${eventRegistrationAttendanceTypesSql})
+      SELECT status, attendance_type, COUNT(*) AS count FROM registration_types
+      GROUP BY status, attendance_type`)
+      .bind(eventId, eventId),
     db
-      .prepare(
-        `SELECT date(created_at) AS date, attendance_type, COUNT(*) AS count
-         FROM registrations
-         WHERE event_id = ?
-         GROUP BY date(created_at), attendance_type
-         ORDER BY date ASC`,
-      )
-      .bind(eventId),
+      .prepare(`WITH registration_types AS (${eventRegistrationAttendanceTypesSql})
+      SELECT date(created_at) AS date, attendance_type, COUNT(*) AS count FROM registration_types
+      GROUP BY date(created_at), attendance_type ORDER BY date ASC`)
+      .bind(eventId, eventId),
     db.prepare(`SELECT COUNT(*) AS count FROM registrations WHERE event_id = ?`).bind(eventId),
     db
       .prepare(

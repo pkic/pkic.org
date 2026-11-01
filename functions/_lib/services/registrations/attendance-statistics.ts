@@ -1,3 +1,4 @@
+import { eventRegistrationAttendanceTypesSql } from "./event-registration-stats";
 import { batchFirst, batchRows } from "../../db/pagination";
 import type { DatabaseLike, D1StatementResult, StatementLike } from "../../types";
 
@@ -66,26 +67,33 @@ export interface AttendanceChangeStatistics {
 }
 
 /**
- * Split registered attendees by whether they still have an active day waitlist.
- * A registration is waitlisted until every requested day has either been
- * accepted or removed from the active queue.
+ * Count registered attendees once per selected type. A type is waitlisted when
+ * one of its selected days has an active waitlist; other types stay accepted.
  */
 export function prepareAttendanceStatusByTypeStatement(db: DatabaseLike, eventId: string): StatementLike {
   return db
     .prepare(
-      `WITH active_waitlist AS (
-       SELECT registration_id
-       FROM event_day_waitlist_entries
-       WHERE event_id = ? AND status IN ('waiting', 'offered')
+      `WITH registration_types AS (${eventRegistrationAttendanceTypesSql}),
+     typed_registration_waitlist AS (
+       SELECT DISTINCT selected.registration_id, selected.attendance_type
+       FROM event_day_waitlist_entries waiting
+       JOIN registration_day_attendance selected
+         ON selected.registration_id = waiting.registration_id AND selected.event_day_id = waiting.event_day_id
+       WHERE waiting.event_id = ? AND waiting.status IN ('waiting', 'offered')
+       UNION ALL
+       SELECT DISTINCT waiting.registration_id, registration.attendance_type
+       FROM event_day_waitlist_entries waiting JOIN registrations registration ON registration.id = waiting.registration_id
+       WHERE waiting.event_id = ? AND waiting.status IN ('waiting', 'offered')
+         AND NOT EXISTS (SELECT 1 FROM registration_day_attendance selected WHERE selected.registration_id = registration.id)
      )
      SELECT r.attendance_type,
-            SUM(CASE WHEN r.id IN (SELECT registration_id FROM active_waitlist) THEN 0 ELSE 1 END) AS accepted,
-            SUM(CASE WHEN r.id IN (SELECT registration_id FROM active_waitlist) THEN 1 ELSE 0 END) AS waitlisted
-     FROM registrations r
-     WHERE r.event_id = ? AND r.status = 'registered'
-     GROUP BY r.attendance_type`,
+            SUM(CASE WHEN w.registration_id IS NULL THEN 1 ELSE 0 END) AS accepted,
+            SUM(CASE WHEN w.registration_id IS NULL THEN 0 ELSE 1 END) AS waitlisted
+     FROM registration_types r
+     LEFT JOIN typed_registration_waitlist w ON w.registration_id = r.id AND w.attendance_type = r.attendance_type
+     WHERE r.status = 'registered' GROUP BY r.attendance_type`,
     )
-    .bind(eventId, eventId);
+    .bind(eventId, eventId, eventId, eventId);
 }
 
 export function decodeAttendanceStatusByType(result: D1StatementResult): Record<string, AttendanceStatusCount> {
@@ -113,19 +121,19 @@ export function prepareAttendanceChangeStatisticsStatements(db: DatabaseLike, ev
               COUNT(DISTINCT h.registration_id) AS changed_attendees,
               COUNT(DISTINCT CASE
                 WHEN h.from_type = 'in_person' AND COALESCE(h.to_type, 'not_attending') <> 'in_person'
-                  AND COALESCE(r.attendance_type, '') <> 'in_person' THEN h.registration_id
+                  AND NOT EXISTS (SELECT 1 FROM registration_day_attendance current_day WHERE current_day.registration_id = h.registration_id AND current_day.event_day_id = h.event_day_id AND current_day.attendance_type = 'in_person') THEN h.registration_id
               END) AS left_in_person_attendees,
               SUM(CASE
                 WHEN h.from_type = 'in_person' AND COALESCE(h.to_type, 'not_attending') <> 'in_person'
-                  AND COALESCE(r.attendance_type, '') <> 'in_person' THEN 1 ELSE 0
+                  AND NOT EXISTS (SELECT 1 FROM registration_day_attendance current_day WHERE current_day.registration_id = h.registration_id AND current_day.event_day_id = h.event_day_id AND current_day.attendance_type = 'in_person') THEN 1 ELSE 0
               END) AS left_in_person_day_changes,
               COUNT(DISTINCT CASE
                 WHEN COALESCE(h.from_type, 'not_attending') <> 'in_person' AND h.to_type = 'in_person'
-                  AND r.attendance_type = 'in_person' THEN h.registration_id
+                  AND EXISTS (SELECT 1 FROM registration_day_attendance current_day WHERE current_day.registration_id = h.registration_id AND current_day.event_day_id = h.event_day_id AND current_day.attendance_type = 'in_person') THEN h.registration_id
               END) AS joined_in_person_attendees,
               SUM(CASE
                 WHEN COALESCE(h.from_type, 'not_attending') <> 'in_person' AND h.to_type = 'in_person'
-                  AND r.attendance_type = 'in_person' THEN 1 ELSE 0
+                  AND EXISTS (SELECT 1 FROM registration_day_attendance current_day WHERE current_day.registration_id = h.registration_id AND current_day.event_day_id = h.event_day_id AND current_day.attendance_type = 'in_person') THEN 1 ELSE 0
               END) AS joined_in_person_day_changes
        FROM registration_attendance_history h
        JOIN registrations r ON r.id = h.registration_id
@@ -160,11 +168,11 @@ export function prepareAttendanceChangeStatisticsStatements(db: DatabaseLike, ev
               COUNT(*) AS day_changes,
               COUNT(DISTINCT CASE
                 WHEN h.from_type = 'in_person' AND COALESCE(h.to_type, 'not_attending') <> 'in_person'
-                  AND COALESCE(r.attendance_type, '') <> 'in_person' THEN h.registration_id
+                  AND NOT EXISTS (SELECT 1 FROM registration_day_attendance current_day WHERE current_day.registration_id = h.registration_id AND current_day.event_day_id = h.event_day_id AND current_day.attendance_type = 'in_person') THEN h.registration_id
               END) AS left_in_person_attendees,
               COUNT(DISTINCT CASE
                 WHEN COALESCE(h.from_type, 'not_attending') <> 'in_person' AND h.to_type = 'in_person'
-                  AND r.attendance_type = 'in_person' THEN h.registration_id
+                  AND EXISTS (SELECT 1 FROM registration_day_attendance current_day WHERE current_day.registration_id = h.registration_id AND current_day.event_day_id = h.event_day_id AND current_day.attendance_type = 'in_person') THEN h.registration_id
               END) AS joined_in_person_attendees
        FROM registration_attendance_history h
        JOIN registrations r ON r.id = h.registration_id

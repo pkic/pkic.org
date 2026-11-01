@@ -1,7 +1,7 @@
 import type { EventAttendanceRegistrationsQuery } from "../../../../assets/shared/schemas/event-registrations";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { registrationBadgeDisplayRoleSql } from "./badge-role";
-import { activeDayWaitlistExistsSql } from "./day-states";
+import { activeDayWaitlistExistsSql, selectedAttendanceTypeSql } from "./day-states";
 
 /** One predicate for the group registration table and its badge-print population. */
 export function registrationPopulationFilter(
@@ -15,8 +15,8 @@ export function registrationPopulationFilter(
     bindings.push(params.status);
   }
   if (params.attendance_type) {
-    conditions.push("r.attendance_type = ?");
-    bindings.push(params.attendance_type);
+    conditions.push(selectedAttendanceTypeSql("r"));
+    bindings.push(params.attendance_type, params.attendance_type);
   }
   if (params.badge_role) {
     conditions.push(`${registrationBadgeDisplayRoleSql("r")} = ?`);

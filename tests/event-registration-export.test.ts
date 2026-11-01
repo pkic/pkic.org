@@ -52,6 +52,38 @@ describe("event registration CSV export", () => {
     } as unknown as ExecutionContext);
   }
 
+  it("exports each day's configured attendance label rather than a registration summary", async () => {
+    await seedRegistration("mixed@example.test", "Mixed");
+    const [registration] = await queryAll<{ id: string }>(
+      env.DB,
+      "SELECT id FROM registrations WHERE event_id = ?",
+      eventId,
+    );
+    await env.DB.batch([
+      env.DB.prepare(`INSERT INTO event_days (id, event_id, day_date, sort_order, attendance_options_json, created_at, updated_at)
+        VALUES ('export-day-1', ?, '2026-12-01', 1, ?, datetime('now'), datetime('now'))`).bind(
+        eventId,
+        JSON.stringify([{ value: "in_person", label: "At the venue" }]),
+      ),
+      env.DB.prepare(`INSERT INTO event_days (id, event_id, day_date, sort_order, attendance_options_json, created_at, updated_at)
+        VALUES ('export-day-2', ?, '2026-12-02', 2, ?, datetime('now'), datetime('now'))`).bind(
+        eventId,
+        JSON.stringify([{ value: "moon_base_42", label: "Moon base" }]),
+      ),
+      env.DB.prepare(`INSERT INTO registration_day_attendance (id, registration_id, event_day_id, attendance_type, created_at, updated_at)
+        VALUES ('export-attendance-1', ?, 'export-day-1', 'in_person', datetime('now'), datetime('now'))`).bind(
+        registration.id,
+      ),
+      env.DB.prepare(`INSERT INTO registration_day_attendance (id, registration_id, event_day_id, attendance_type, created_at, updated_at)
+        VALUES ('export-attendance-2', ?, 'export-day-2', 'moon_base_42', datetime('now'), datetime('now'))`).bind(
+        registration.id,
+      ),
+    ]);
+    const response = await exportCsv();
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("2026-12-01: At the venue; 2026-12-02: Moon base");
+  });
+
   it("neutralizes formulas and audits a successful export", async () => {
     await seedRegistration("formula@example.test", "=2+2");
 

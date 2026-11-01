@@ -273,9 +273,10 @@ export function isFormFieldVisible(rules: FormFieldRules, context: FormFieldVisi
     if (!rules.showWhen.dayAttendanceIn.some((mode) => dayModes.has(mode))) return false;
   }
   if (rules.showWhen.eventAttendanceTypeIn?.length) {
-    if (!context.eventAttendanceType || !rules.showWhen.eventAttendanceTypeIn.includes(context.eventAttendanceType)) {
-      return false;
-    }
+    const selectedTypes = dayModes.size
+      ? dayModes
+      : new Set(context.eventAttendanceType ? [context.eventAttendanceType] : []);
+    if (!rules.showWhen.eventAttendanceTypeIn.some((type) => selectedTypes.has(type))) return false;
   }
   return true;
 }

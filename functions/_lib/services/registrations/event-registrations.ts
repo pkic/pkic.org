@@ -3,7 +3,7 @@ import { REGISTRATION_ORGANIZATION_SQL, REGISTRATION_JOB_TITLE_SQL } from "./sel
  * Bounded, set-based event-registration read model. Both the retiring admin
  * routes and group-context routes consume this one query and projection.
  */
-import { all, first } from "../../db/queries";
+import { first } from "../../db/queries";
 import { publicUserHeadshotPath } from "../user-headshot";
 import { queryPage } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
@@ -19,7 +19,7 @@ import {
   type EventRegistrationsQuery,
 } from "../../../../assets/shared/schemas/event-registrations";
 import type { DatabaseLike } from "../../types";
-import { aggregateEventRegistrationStats, type EventRegistrationStatsRow } from "./event-registration-stats";
+import { getEventRegistrationStats } from "./event-registration-stats";
 import { resolveEventRegistrationOrderBy } from "./event-registration-sort";
 import { sponsorConsentSql } from "../event-participation/sponsor-consent";
 import { contactAffiliation } from "../../email-domains/contact-kind";
@@ -100,14 +100,18 @@ export function buildEventRegistrationsPageQuery(eventId: string, params: EventR
   if (attendanceChangeFilter === "any") {
     conditions.push(hasAttendanceChange());
   } else if (attendanceChangeFilter === "left_in_person") {
-    conditions.push("COALESCE(r.attendance_type, '') <> 'in_person'");
     conditions.push(
-      hasAttendanceChange("AND h.from_type = 'in_person' AND COALESCE(h.to_type, 'not_attending') <> 'in_person'"),
+      hasAttendanceChange(`AND h.from_type = 'in_person' AND COALESCE(h.to_type, 'not_attending') <> 'in_person'
+        AND NOT EXISTS (SELECT 1 FROM registration_day_attendance current_day
+          WHERE current_day.registration_id = h.registration_id AND current_day.event_day_id = h.event_day_id
+            AND current_day.attendance_type = 'in_person')`),
     );
   } else if (attendanceChangeFilter === "joined_in_person") {
-    conditions.push("r.attendance_type = 'in_person'");
     conditions.push(
-      hasAttendanceChange("AND COALESCE(h.from_type, 'not_attending') <> 'in_person' AND h.to_type = 'in_person'"),
+      hasAttendanceChange(`AND COALESCE(h.from_type, 'not_attending') <> 'in_person' AND h.to_type = 'in_person'
+        AND EXISTS (SELECT 1 FROM registration_day_attendance current_day
+          WHERE current_day.registration_id = h.registration_id AND current_day.event_day_id = h.event_day_id
+            AND current_day.attendance_type = 'in_person')`),
     );
   }
 
@@ -221,13 +225,7 @@ export async function listEventRegistrations(
 
   const [statRows, bouncedCountRow, consentCountRow, attendanceStatusByType] = await Promise.all([
     // Aggregate stats always cover all registrations for the event (unfiltered)
-    all<EventRegistrationStatsRow>(
-      db,
-      `SELECT attendance_type, status, COUNT(*) AS count
-       FROM registrations WHERE event_id = ?
-       GROUP BY attendance_type, status`,
-      [eventId],
-    ),
+    getEventRegistrationStats(db, eventId),
     first<{ bounced_count: number }>(
       db,
       `SELECT COUNT(DISTINCT r.id) AS bounced_count
@@ -244,7 +242,7 @@ export async function listEventRegistrations(
     getAttendanceStatusByType(db, eventId),
   ]);
 
-  const { byAttendanceType, byStatus } = aggregateEventRegistrationStats(statRows);
+  const { byAttendanceType, byStatus } = statRows;
 
   return {
     registrations: registrations.map((registration) => eventRegistrationSummarySchema.parse(registration)),

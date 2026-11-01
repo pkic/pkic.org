@@ -1,3 +1,4 @@
+import { selectedAttendanceTypeSql } from "../registrations/day-states";
 import { isInvitationCampaignAudience } from "../../../../assets/shared/schemas/event-email-campaigns";
 import { listInvitationCampaignRecipients } from "./invitation-audience";
 import { REGISTRATION_ORGANIZATION_SQL, REGISTRATION_JOB_TITLE_SQL } from "../registrations/selected-identity";
@@ -81,7 +82,7 @@ export function attendeeCampaignSelection(
     : "";
   const attendanceFilter = filter.dayDate
     ? "AND (? = 'all' OR rda.attendance_type = ?)"
-    : "AND (? = 'all' OR r.attendance_type = ?)";
+    : `AND (? = 'all' OR ${selectedAttendanceTypeSql("r")})`;
 
   return {
     sql: `WITH ranked_recipients AS (
@@ -117,6 +118,7 @@ export function attendeeCampaignSelection(
       ...(filter.dayDate ? [filter.dayDate] : []),
       filter.attendanceType ?? "all",
       filter.attendanceType ?? "all",
+      ...(filter.dayDate ? [] : [filter.attendanceType ?? "all"]),
       ...dayWaitlistFilterParams(dayWaitlistStatus),
       recipientEmails ? JSON.stringify(recipientEmails) : null,
       recipientEmails ? JSON.stringify(recipientEmails) : null,

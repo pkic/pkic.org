@@ -250,6 +250,43 @@ describe("form-submission read-model population", () => {
     expect((await readPopulation("identity-population", { q: "Account organization" })).list.page.total).toBe(0);
   });
 
+  it("filters form submissions using any selected attendance day before and after backfill", async () => {
+    const formId = await insertForm("mixed-attendance-population", "event_registration", "food", null, true);
+    const userId = await insertUser("mixed-attendance@example.test");
+    const registrationId = await insertRegistration({
+      eventId,
+      userId,
+      status: "registered",
+      attendanceType: "in_person",
+      answer: "Vegetarian",
+    });
+    await env.DB.batch([
+      env.DB.prepare(`INSERT INTO event_days (id, event_id, day_date, sort_order, created_at, updated_at)
+        VALUES ('mixed-form-day', ?, '2026-12-01', 1, datetime('now'), datetime('now'))`).bind(eventId),
+      env.DB.prepare(`INSERT INTO registration_day_attendance (id, registration_id, event_day_id, attendance_type, created_at, updated_at)
+        VALUES ('mixed-form-attendance', ?, 'mixed-form-day', 'virtual', datetime('now'), datetime('now'))`).bind(
+        registrationId,
+      ),
+    ]);
+    const filters = { attendanceType: "virtual" };
+    const before = await readPopulation("mixed-attendance-population", filters);
+    expect(before.list.page.total).toBe(1);
+    expect(before.stats.total).toBe(1);
+    expect((await readPopulation("mixed-attendance-population", { attendanceType: "in_person" })).list.page.total).toBe(
+      0,
+    );
+    await backfillSourceAnswer({
+      formId,
+      contextType: "registration",
+      contextRef: registrationId,
+      fieldKey: "food",
+      answer: "Vegetarian",
+    });
+    const after = await readPopulation("mixed-attendance-population", filters);
+    expect(after.list.page.total).toBe(1);
+    expect(after.stats.total).toBe(1);
+  });
+
   it("keeps registration filters, page totals, and statistics identical before and after backfill", async () => {
     const formId = await insertForm("registration-population", "event_registration", "food", null, true);
     const legacyUser = await insertUser("needle-legacy@example.test");

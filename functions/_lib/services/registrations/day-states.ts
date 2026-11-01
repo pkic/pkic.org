@@ -21,6 +21,15 @@ export function activeDayWaitlistExistsSql(alias: string): string {
                   WHERE w.registration_id = ${alias}.id AND w.status IN ('waiting', 'offered'))`;
 }
 
+/** Match any selected day, retaining the no-day fallback during the schema transition. */
+export function selectedAttendanceTypeSql(alias: string): string {
+  return `(EXISTS (SELECT 1 FROM registration_day_attendance selected_day
+                    WHERE selected_day.registration_id = ${alias}.id AND selected_day.attendance_type = ?)
+           OR (NOT EXISTS (SELECT 1 FROM registration_day_attendance selected_day
+                           WHERE selected_day.registration_id = ${alias}.id)
+               AND ${alias}.attendance_type = ?))`;
+}
+
 /**
  * The per-day state of one page of registrations, in one bounded read.
  *
