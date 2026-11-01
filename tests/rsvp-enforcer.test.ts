@@ -77,8 +77,8 @@ async function seedTwoDayRegistration(): Promise<SeededRegistration> {
     ).bind(userId, userEmail, userEmail, at, at),
     env.DB.prepare(
       `INSERT INTO registrations
-           (id, event_id, user_id, status, attendance_type, source_type, manage_link_secret, created_at, updated_at)
-         VALUES (?, ?, ?, 'registered', 'in_person', 'direct', ?, ?, ?)`,
+           (id, event_id, user_id, status, source_type, manage_link_secret, created_at, updated_at)
+         VALUES (?, ?, ?, 'registered', 'direct', ?, ?, ?)`,
     ).bind(registrationId, eventId, userId, crypto.randomUUID(), at, at),
     env.DB.prepare(
       `INSERT INTO event_days
@@ -217,12 +217,8 @@ describe("day-scoped RSVP enforcement", () => {
       ),
     ).resolves.toEqual([{ status: "removed" }]);
     await expect(
-      queryAll<{ status: string; attendance_type: string }>(
-        env.DB,
-        "SELECT status, attendance_type FROM registrations WHERE id = ?",
-        seeded.registrationId,
-      ),
-    ).resolves.toEqual([{ status: "registered", attendance_type: "in_person" }]);
+      queryAll<{ status: string }>(env.DB, "SELECT status FROM registrations WHERE id = ?", seeded.registrationId),
+    ).resolves.toEqual([{ status: "registered" }]);
     await expect(
       queryAll<{ event_day_id: string; to_type: string }>(
         env.DB,
@@ -343,7 +339,44 @@ describe("day-scoped RSVP enforcement", () => {
     ).resolves.toEqual([{ status: "registered" }]);
   });
 
-  it("removes the final declined day without changing the registration-wide aggregate", async () => {
+  it("releases a custom physical option without allocating a capacity-limited fallback", async () => {
+    const seeded = await seedTwoDayRegistration();
+    await env.DB.prepare("UPDATE event_days SET attendance_options_json=? WHERE id=?")
+      .bind(
+        JSON.stringify([
+          { value: "moon_base", label: "Moon base", accessMode: "physical", capacity: 10 },
+          { value: "lunar_stream", label: "Lunar stream", accessMode: "remote", capacity: 1 },
+        ]),
+        seeded.dayOneId,
+      )
+      .run();
+    await env.DB.prepare(
+      "UPDATE registration_day_attendance SET attendance_type='moon_base' WHERE registration_id=? AND event_day_id=?",
+    )
+      .bind(seeded.registrationId, seeded.dayOneId)
+      .run();
+    await recordResponse(seeded, "declined", seeded.dayOneDate, hoursFromNow(-3));
+    await makeRegistrationActionsDue(seeded.registrationId);
+    expect(await runRsvpEnforcer(env.DB, testEnv())).toMatchObject({ downgradesProcessed: 1 });
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT attendance_type FROM registration_day_attendance WHERE registration_id=? AND event_day_id=?",
+        seeded.registrationId,
+        seeded.dayOneId,
+      ),
+    ).toEqual([]);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT from_type,to_type FROM registration_attendance_history WHERE registration_id=? AND event_day_id=?",
+        seeded.registrationId,
+        seeded.dayOneId,
+      ),
+    ).toEqual([{ from_type: "moon_base", to_type: "not_attending" }]);
+  });
+
+  it("removes the final declined day without canceling the registration", async () => {
     const seeded = await seedTwoDayRegistration();
     await env.DB.prepare("DELETE FROM registration_day_attendance WHERE registration_id = ? AND event_day_id = ?")
       .bind(seeded.registrationId, seeded.dayTwoId)
@@ -356,12 +389,12 @@ describe("day-scoped RSVP enforcement", () => {
 
     await expect(runRsvpEnforcer(env.DB, testEnv())).resolves.toMatchObject({ downgradesProcessed: 1 });
     await expect(
-      queryAll<{ status: string; attendance_type: string; cancellation_reason_code: string | null }>(
+      queryAll<{ status: string; cancellation_reason_code: string | null }>(
         env.DB,
-        "SELECT status, attendance_type, cancellation_reason_code FROM registrations WHERE id = ?",
+        "SELECT status, cancellation_reason_code FROM registrations WHERE id = ?",
         seeded.registrationId,
       ),
-    ).resolves.toEqual([{ status: "registered", attendance_type: "in_person", cancellation_reason_code: null }]);
+    ).resolves.toEqual([{ status: "registered", cancellation_reason_code: null }]);
     await expect(
       queryAll<{ event_day_id: string }>(
         env.DB,

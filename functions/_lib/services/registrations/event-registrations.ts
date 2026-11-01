@@ -1,3 +1,4 @@
+import { physicalAttendanceTransitionSql } from "./attendance-history-physical";
 import { REGISTRATION_ORGANIZATION_SQL, REGISTRATION_JOB_TITLE_SQL } from "./selected-identity";
 /**
  * Bounded, set-based event-registration read model. Both the retiring admin
@@ -30,7 +31,6 @@ interface RegistrationRow {
   id: string;
   user_id: string;
   status: string;
-  attendance_type: string | null;
   source_type: string | null;
   created_at: string;
   updated_at: string;
@@ -90,7 +90,7 @@ export function buildEventRegistrationsPageQuery(eventId: string, params: EventR
 
   const hasAttendanceChange = (transition = "") => `EXISTS (
     SELECT 1
-    FROM registration_attendance_history h
+    FROM registration_attendance_history h JOIN event_days history_day ON history_day.id = h.event_day_id
     WHERE h.registration_id = r.id
       AND h.event_day_id IS NOT NULL
       AND h.changed_by <> 'system'
@@ -100,19 +100,9 @@ export function buildEventRegistrationsPageQuery(eventId: string, params: EventR
   if (attendanceChangeFilter === "any") {
     conditions.push(hasAttendanceChange());
   } else if (attendanceChangeFilter === "left_in_person") {
-    conditions.push(
-      hasAttendanceChange(`AND h.from_type = 'in_person' AND COALESCE(h.to_type, 'not_attending') <> 'in_person'
-        AND NOT EXISTS (SELECT 1 FROM registration_day_attendance current_day
-          WHERE current_day.registration_id = h.registration_id AND current_day.event_day_id = h.event_day_id
-            AND current_day.attendance_type = 'in_person')`),
-    );
+    conditions.push(hasAttendanceChange(`AND ${physicalAttendanceTransitionSql("left", "h", "history_day")}`));
   } else if (attendanceChangeFilter === "joined_in_person") {
-    conditions.push(
-      hasAttendanceChange(`AND COALESCE(h.from_type, 'not_attending') <> 'in_person' AND h.to_type = 'in_person'
-        AND EXISTS (SELECT 1 FROM registration_day_attendance current_day
-          WHERE current_day.registration_id = h.registration_id AND current_day.event_day_id = h.event_day_id
-            AND current_day.attendance_type = 'in_person')`),
-    );
+    conditions.push(hasAttendanceChange(`AND ${physicalAttendanceTransitionSql("joined", "h", "history_day")}`));
   }
 
   if (search) {
@@ -140,7 +130,7 @@ export function buildEventRegistrationsPageQuery(eventId: string, params: EventR
   const pageOrderBy = attendanceChangeFilter ? `ORDER BY ${orderBySql}` : orderBy;
   return {
     source: {
-      selectSql: `SELECT r.id, r.user_id, r.status, r.attendance_type, r.source_type, r.created_at, r.updated_at,
+      selectSql: `SELECT r.id, r.user_id, r.status, r.source_type, r.created_at, r.updated_at,
               u.email AS user_email,
               COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS display_name,
               u.headshot_r2_key AS headshot_r2_key,

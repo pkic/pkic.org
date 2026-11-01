@@ -417,7 +417,7 @@ describe("approved agenda constraint guards at provider activation", () => {
     );
     const attendee = await insertIndividualMember(env.DB);
     await env.DB.prepare(
-      "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','in_person','test',?,?,?)",
+      "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','test',?,?,?)",
     )
       .bind(crypto.randomUUID(), fixture.eventId, attendee.userId, crypto.randomUUID(), nowIso(), nowIso())
       .run();

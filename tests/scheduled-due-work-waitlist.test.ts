@@ -51,7 +51,6 @@ describe("scheduled due work waitlist promotions", () => {
     const holder = await createRegistration(baseEnv.DB, {
       event,
       userId: "user-1",
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -66,7 +65,6 @@ describe("scheduled due work waitlist promotions", () => {
     const waiting = await createRegistration(baseEnv.DB, {
       event,
       userId: "user-2",
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -135,7 +133,6 @@ describe("scheduled due work waitlist promotions", () => {
     const registration = await createRegistration(baseEnv.DB, {
       event,
       userId: "user-expired-offer",
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -207,9 +204,9 @@ describe("scheduled due work waitlist promotions", () => {
       blocked.map((index) =>
         baseEnv.DB.prepare(
           `INSERT INTO registrations (
-             id, event_id, user_id, status, attendance_type, source_type,
+             id, event_id, user_id, status, source_type,
              manage_link_secret, created_at, updated_at
-           ) VALUES (?, ?, ?, 'registered', 'in_person', 'direct', ?, datetime('now'), datetime('now'))`,
+           ) VALUES (?, ?, ?, 'registered', 'direct', ?, datetime('now'), datetime('now'))`,
         ).bind(
           `blocked-registration-${index}`,
           `blocked-event-${index}`,
@@ -250,10 +247,10 @@ describe("scheduled due work waitlist promotions", () => {
       ),
       baseEnv.DB.prepare(
         `INSERT INTO registrations (
-           id, event_id, user_id, status, attendance_type, source_type,
+           id, event_id, user_id, status, source_type,
            manage_link_secret, created_at, updated_at
          ) VALUES (
-           'promotable-registration', ?, 'promotable-user', 'registered', 'in_person', 'direct',
+           'promotable-registration', ?, 'promotable-user', 'registered', 'direct',
            'promotable-manage-token', datetime('now'), datetime('now')
          )`,
       ).bind(eventId),

@@ -1,3 +1,4 @@
+import { createScheduledRegistration as createRegistration } from "./helpers/scheduled-registration";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
@@ -8,7 +9,6 @@ import { getEventBySlug } from "../functions/_lib/services/events";
 import {
   changeRegistrationEmail,
   confirmRegistrationByToken,
-  createRegistration,
   finalizeEmailChange,
   updateRegistrationById,
 } from "../functions/_lib/services/registrations";
@@ -31,7 +31,6 @@ describe("registration email-change concurrency", () => {
     const created = await createRegistration(env.DB, {
       event,
       userId: user.id,
-      attendanceType: "virtual",
       sourceType: "web",
       confirmationTtlHours: 24,
       signingSecret,
@@ -130,7 +129,6 @@ describe("registration email-change concurrency", () => {
     const created = await createRegistration(env.DB, {
       event,
       userId: user.id,
-      attendanceType: "virtual",
       sourceType: "web",
       confirmationTtlHours: 24,
       signingSecret,
@@ -196,7 +194,6 @@ describe("registration email-change concurrency", () => {
     const first = await createRegistration(env.DB, {
       event: { id: eventId },
       userId: user.id,
-      attendanceType: "virtual",
       sourceType: "web",
       confirmationTtlHours: 24,
       signingSecret,
@@ -204,7 +201,6 @@ describe("registration email-change concurrency", () => {
     const sibling = await createRegistration(env.DB, {
       event: { id: secondEventId },
       userId: user.id,
-      attendanceType: "virtual",
       sourceType: "web",
       confirmationTtlHours: 24,
       signingSecret,
@@ -245,7 +241,6 @@ describe("registration email-change concurrency", () => {
     const firstRegistration = await createRegistration(env.DB, {
       event,
       userId: firstUser.id,
-      attendanceType: "virtual",
       sourceType: "web",
       confirmationTtlHours: 24,
       signingSecret,
@@ -253,7 +248,6 @@ describe("registration email-change concurrency", () => {
     const secondRegistration = await createRegistration(env.DB, {
       event,
       userId: secondUser.id,
-      attendanceType: "virtual",
       sourceType: "web",
       confirmationTtlHours: 24,
       signingSecret,

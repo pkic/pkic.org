@@ -97,7 +97,7 @@ it("uses the session address, validates event questions, and submits the shared 
     email: "ada@example.test",
     firstName: "Ada",
     lastName: "Lovelace",
-    attendanceType: "virtual",
+    dayAttendance: [{ dayDate: "2027-09-10", attendanceType: "virtual" }],
     consents: [{ termKey: "privacy", version: "1" }],
   };
   expect(consentContract.safeParse(request).success).toBe(false);

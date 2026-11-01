@@ -47,7 +47,6 @@ export const sponsorAttendeeSchema = z.object({
   /** A consumer mailbox: shown as "Personal email address" in place of an organization. */
   personalEmail: z.boolean(),
   jobTitle: z.string().nullable(),
-  attendanceType: z.string().nullable(),
 });
 
 export const sponsorAttendeesParamsSchema = z.object({
@@ -56,10 +55,9 @@ export const sponsorAttendeesParamsSchema = z.object({
 });
 
 export const sponsorAttendeeFormatSchema = z.enum(["json", "csv"]);
-export const sponsorAttendeesListQuerySchema = listQuerySchema(
-  ["name", "email", "organizationName", "attendanceType"] as const,
-  { limit: 100 },
-).extend({ format: sponsorAttendeeFormatSchema.default("json") });
+export const sponsorAttendeesListQuerySchema = listQuerySchema(["name", "email", "organizationName"] as const, {
+  limit: 100,
+}).extend({ format: sponsorAttendeeFormatSchema.default("json") });
 export type SponsorAttendeesListQuery = z.infer<typeof sponsorAttendeesListQuerySchema>;
 export const sponsorAttendeesListResponseSchema = paginatedResponseSchema("attendees", sponsorAttendeeSchema);
 export type SponsorAttendee = z.infer<typeof sponsorAttendeeSchema>;

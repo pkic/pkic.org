@@ -57,9 +57,7 @@ function optionalEquality(expression: string, value: string | undefined): SqlFra
 }
 
 function optionalAttendanceType(alias: string, value: string | undefined): SqlFragment {
-  return value
-    ? { sql: `AND ${selectedAttendanceTypeSql(alias)}`, bindings: [value, value] }
-    : { sql: "", bindings: [] };
+  return value ? { sql: `AND ${selectedAttendanceTypeSql(alias)}`, bindings: [value] } : { sql: "", bindings: [] };
 }
 
 function optionalSearch(query: string | undefined, expressions: readonly string[]): SqlFragment {

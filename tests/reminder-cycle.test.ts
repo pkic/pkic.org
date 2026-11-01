@@ -139,11 +139,11 @@ async function insertPendingRegistration(opts: {
   await db
     .prepare(
       `INSERT INTO registrations
-         (id, event_id, user_id, status, attendance_type, source_type,
+         (id, event_id, user_id, status, source_type,
           confirmation_link_secret, pending_confirmation_deadline_at,
           confirmation_reminder_sent_at, manage_link_secret,
           created_at, updated_at)
-       VALUES (?, ?, ?, 'pending_email_confirmation', 'virtual', 'open',
+       VALUES (?, ?, ?, 'pending_email_confirmation', 'open',
                ?, ?, ?, ?, datetime('now', '-2 days'), datetime('now'))`,
     )
     .bind(opts.regId, opts.eventId, opts.userId, hash, deadlineAt, opts.reminderSentAt ?? null, manageHash)

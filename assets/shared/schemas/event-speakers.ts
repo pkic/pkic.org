@@ -3,7 +3,7 @@ import { databaseIdSchema } from "./identifiers";
 import { independentCapacityReviewStatusSchema } from "./independent-capacity";
 import { listQuerySchema, paginatedResponseSchema, sortColumnSchemaWithDefault } from "./pagination";
 import { registrationDayStateSchema } from "./event-registrations";
-import { registrationLifecycleStatusSchema, attendanceTypeSchema } from "./registration";
+import { registrationLifecycleStatusSchema } from "./registration";
 import { proposalSpeakerProfileSchema } from "./proposal-management";
 
 export const EVENT_SPEAKER_SORT_COLUMNS = ["speaker", "proposal", "registration"] as const;
@@ -30,7 +30,6 @@ export const eventProposalSpeakerSchema = proposalSpeakerProfileSchema
     /** The speaker's portrait for the roster row, as a same-origin path; null without one. */
     headshotUrl: z.string().nullable(),
     registrationStatus: registrationLifecycleStatusSchema.nullable(),
-    attendanceType: attendanceTypeSchema.nullable(),
     days: z.array(registrationDayStateSchema),
     /** Set only for a speaker taking part as an individual: where their independence disclosure stands. */
     independentCapacityStatus: independentCapacityReviewStatusSchema.nullable(),

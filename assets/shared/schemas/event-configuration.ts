@@ -2,6 +2,7 @@ import { z } from "zod";
 import { successResponseSchema, termKeyPattern, trimmedString, versionPattern } from "./api-common";
 import { addDuplicateStringIssues } from "./refinements";
 import { attendanceIconSchema } from "../event-attendance-icons";
+import { eventAttendanceAccessModeSchema } from "../event-attendance-access";
 
 /**
  * Configuration contracts shared by every event-management surface. These are
@@ -64,6 +65,7 @@ export const eventAttendanceOptionSchema = z.object({
   label: trimmedString(1, 80),
   description: z.string().trim().max(240).optional(),
   icon: attendanceIconSchema.optional(),
+  accessMode: eventAttendanceAccessModeSchema.optional(),
   enabled: z.boolean().optional(),
   capacity: z.number().int().positive().nullable().optional(),
 });

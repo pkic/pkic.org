@@ -1,3 +1,4 @@
+import { createScheduledRegistration as createRegistration } from "./helpers/scheduled-registration";
 import { withScannedInput } from "./helpers/scanned-input";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
@@ -6,11 +7,7 @@ import { promotionKitSchema } from "../assets/shared/schemas/event-promotion-kit
 import { eventScanRequestSchema } from "../assets/shared/schemas/event-participation-scanning";
 import { createProposal } from "../functions/_lib/services/proposals";
 import { findOrCreateUser } from "../functions/_lib/services/users";
-import {
-  confirmRegistrationByToken,
-  createRegistration,
-  updateRegistrationById,
-} from "../functions/_lib/services/registrations";
+import { confirmRegistrationByToken, updateRegistrationById } from "../functions/_lib/services/registrations";
 import {
   createReferralCode,
   recordReferralClick,
@@ -33,7 +30,6 @@ async function register(eventId: string, email: string, referredByCode?: string)
   const created = await createRegistration(env.DB, {
     event: { id: eventId },
     userId: user.id,
-    attendanceType: "virtual",
     sourceType: "web",
     referredByCode,
     signingSecret,
@@ -254,6 +250,9 @@ describe("promotion confirmed registration metrics", () => {
   it("keeps clicks and RSVP and recorded attendance distinct from confirmed referral registrations", async () => {
     const attendee = await register(fixture.eventId, "activity-only@example.com");
     await confirm(attendee);
+    await env.DB.prepare("UPDATE registration_day_attendance SET attendance_type='virtual' WHERE registration_id=?")
+      .bind(attendee.registration.id)
+      .run();
     await recordReferralClick(env.DB, {
       code: fixture.code,
       ip: null,

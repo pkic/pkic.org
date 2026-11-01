@@ -6,7 +6,7 @@ import { nowIso, addHours } from "../functions/_lib/utils/time";
 import {
   changeRegistrationEmail,
   confirmRegistrationByToken,
-  createRegistration,
+  createRegistration as createRegistrationRaw,
   finalizeEmailChange,
   updateRegistrationById,
   updateRegistrationByManageToken,
@@ -24,6 +24,25 @@ import { first, run } from "../functions/_lib/db/queries";
 import { getRegistrationByManageToken } from "../functions/_lib/services/registrations/queries";
 import { queueRegistrationStatusEmail } from "../functions/_lib/services/registrations/status-notifications";
 import { stubSuccessfulMxLookup } from "./helpers/mx-lookup";
+
+async function createRegistration(
+  db: Parameters<typeof createRegistrationRaw>[0],
+  payload: Parameters<typeof createRegistrationRaw>[1],
+) {
+  if (payload.dayAttendance) return createRegistrationRaw(db, payload);
+  const [day] = await db
+    .prepare("SELECT day_date FROM event_days WHERE event_id=? ORDER BY day_date LIMIT 1")
+    .bind(payload.event.id)
+    .all<{ day_date: string }>()
+    .then((result) => result.results);
+  const dayDate = day?.day_date ?? "2026-12-01";
+  if (!day)
+    await db
+      .prepare("INSERT INTO event_days(id,event_id,day_date,created_at,updated_at) VALUES(?,?,?,?,?)")
+      .bind(crypto.randomUUID(), payload.event.id, dayDate, new Date().toISOString(), new Date().toISOString())
+      .run();
+  return createRegistrationRaw(db, { ...payload, dayAttendance: [{ dayDate, attendanceType: "virtual" }] });
+}
 
 describe("Registration Email Change", () => {
   beforeEach(async () => {
@@ -72,7 +91,6 @@ describe("Registration Email Change", () => {
       const { registration: reg } = await createRegistration(env.DB, {
         event: { id: eventId },
         userId: user.id,
-        attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
         signingSecret: "test-signing-secret",
@@ -107,7 +125,6 @@ describe("Registration Email Change", () => {
       const { registration } = await createRegistration(env.DB, {
         event,
         userId: user.id,
-        attendanceType: "virtual",
         sourceType: "web",
         confirmationTtlHours: 24,
         signingSecret: "test-signing-secret",
@@ -150,7 +167,6 @@ describe("Registration Email Change", () => {
       const { registration: reg } = await createRegistration(env.DB, {
         event: { id: eventId },
         userId: user.id,
-        attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
         signingSecret: "test-signing-secret",
@@ -179,7 +195,6 @@ describe("Registration Email Change", () => {
       const { registration } = await createRegistration(env.DB, {
         event: { id: eventId },
         userId: user.id,
-        attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
         signingSecret: "test-signing-secret",
@@ -219,7 +234,6 @@ describe("Registration Email Change", () => {
       const { registration: reg } = await createRegistration(env.DB, {
         event: { id: eventId },
         userId: user.id,
-        attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
         signingSecret: "test-signing-secret",
@@ -246,7 +260,6 @@ describe("Registration Email Change", () => {
       const { registration: reg } = await createRegistration(env.DB, {
         event: { id: eventId },
         userId: user.id,
-        attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
         signingSecret: "test-signing-secret",
@@ -273,7 +286,6 @@ describe("Registration Email Change", () => {
       const { registration: reg } = await createRegistration(env.DB, {
         event: { id: eventId },
         userId: user.id,
-        attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
         signingSecret: "test-signing-secret",
@@ -308,7 +320,6 @@ describe("Registration Email Change", () => {
       const created = await createRegistration(env.DB, {
         event: { id: eventId },
         userId: user.id,
-        attendanceType: "virtual",
         sourceType: "web",
         confirmationTtlHours: 24,
         signingSecret,
@@ -324,7 +335,6 @@ describe("Registration Email Change", () => {
         manageToken,
         signingSecret,
         action: "update",
-        attendanceType: "in_person",
         dayAttendance: [{ dayDate, attendanceType: "in_person" }],
       });
 
@@ -352,7 +362,6 @@ describe("Registration Email Change", () => {
       const owner = await createRegistration(env.DB, {
         event: { id: ownerEventId },
         userId: user.id,
-        attendanceType: "virtual",
         sourceType: "web",
         confirmationTtlHours: 24,
         signingSecret,
@@ -360,7 +369,6 @@ describe("Registration Email Change", () => {
       const other = await createRegistration(env.DB, {
         event: { id: otherEventId },
         userId: user.id,
-        attendanceType: "virtual",
         sourceType: "web",
         confirmationTtlHours: 24,
         signingSecret,
@@ -503,7 +511,6 @@ describe("Registration Email Change", () => {
       const owner = await createRegistration(env.DB, {
         event: { id: ownerEventId },
         userId: user.id,
-        attendanceType: "virtual",
         sourceType: "web",
         confirmationTtlHours: 24,
         signingSecret,
@@ -511,7 +518,6 @@ describe("Registration Email Change", () => {
       const other = await createRegistration(env.DB, {
         event: { id: otherEventId },
         userId: user.id,
-        attendanceType: "virtual",
         sourceType: "web",
         confirmationTtlHours: 24,
         signingSecret,
@@ -562,7 +568,6 @@ describe("Registration Email Change", () => {
       const created = await createRegistration(env.DB, {
         event: { id: eventId },
         userId: user.id,
-        attendanceType: "virtual",
         sourceType: "web",
         confirmationTtlHours: 24,
         signingSecret,
@@ -603,7 +608,6 @@ describe("Registration Email Change", () => {
       const { registration } = await createRegistration(env.DB, {
         event: { id: eventId },
         userId: user.id,
-        attendanceType: "virtual",
         sourceType: "web",
         confirmationTtlHours: 24,
         signingSecret: "test-signing-secret",
@@ -624,7 +628,6 @@ describe("Registration Email Change", () => {
       const { registration: reg } = await createRegistration(env.DB, {
         event: { id: eventId },
         userId: user.id,
-        attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
         signingSecret: "test-signing-secret",
@@ -708,7 +711,6 @@ describe("Registration Email Change", () => {
       const { registration } = await createRegistration(env.DB, {
         event: { id: eventId },
         userId: user.id,
-        attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
         signingSecret: "test-signing-secret",
@@ -745,7 +747,6 @@ describe("Registration Email Change", () => {
       const { registration: reg } = await createRegistration(env.DB, {
         event: { id: eventId },
         userId: user.id,
-        attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
         signingSecret: "test-signing-secret",
@@ -783,7 +784,6 @@ describe("Registration Email Change", () => {
       const { registration: reg1 } = await createRegistration(env.DB, {
         event: { id: eventId },
         userId: user1.id,
-        attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
         signingSecret: "test-signing-secret",
@@ -791,7 +791,6 @@ describe("Registration Email Change", () => {
       const { registration: reg2 } = await createRegistration(env.DB, {
         event: { id: eventId },
         userId: user2.id,
-        attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
         signingSecret: "test-signing-secret",
@@ -826,7 +825,6 @@ describe("Registration Email Change", () => {
       const { registration: reg4 } = await createRegistration(env.DB, {
         event: { id: eventId },
         userId: user4.id,
-        attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
         signingSecret: "test-signing-secret",
@@ -859,7 +857,6 @@ describe("Registration Email Change", () => {
       const { registration: origReg } = await createRegistration(env.DB, {
         event: { id: eventId },
         userId: origUser.id,
-        attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
         signingSecret: "test-signing-secret",
@@ -867,7 +864,6 @@ describe("Registration Email Change", () => {
       const { registration: dupeReg } = await createRegistration(env.DB, {
         event: { id: eventId },
         userId: dupeUser.id,
-        attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
         signingSecret: "test-signing-secret",
@@ -904,7 +900,6 @@ describe("Registration Email Change", () => {
       await createRegistration(env.DB, {
         event: { id: otherEventId },
         userId: squatter.id,
-        attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
         signingSecret: "test-signing-secret",
@@ -914,7 +909,6 @@ describe("Registration Email Change", () => {
       const { registration: reg } = await createRegistration(env.DB, {
         event: { id: eventId },
         userId: user.id,
-        attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
         signingSecret: "test-signing-secret",
@@ -947,7 +941,6 @@ describe("Registration Email Change", () => {
       const { registration: reserverRegistration } = await createRegistration(env.DB, {
         event: { id: eventId },
         userId: reserver.id,
-        attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
         signingSecret: "test-signing-secret",
@@ -959,7 +952,6 @@ describe("Registration Email Change", () => {
       const { registration: reg } = await createRegistration(env.DB, {
         event: { id: eventId },
         userId: user.id,
-        attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
         signingSecret: "test-signing-secret",
@@ -988,7 +980,6 @@ describe("Registration Email Change", () => {
       await createRegistration(env.DB, {
         event: { id: eventId },
         userId: dupe.id,
-        attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
         signingSecret: "test-signing-secret",
@@ -998,7 +989,6 @@ describe("Registration Email Change", () => {
       const { registration: reg } = await createRegistration(env.DB, {
         event: { id: eventId },
         userId: user.id,
-        attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
         signingSecret: "test-signing-secret",
@@ -1026,7 +1016,6 @@ describe("Registration Email Change", () => {
       const { registration: reg } = await createRegistration(env.DB, {
         event: { id: eventId },
         userId: user.id,
-        attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
         signingSecret: "test-signing-secret",
@@ -1049,7 +1038,6 @@ describe("Registration Email Change", () => {
       const { registration: reg } = await createRegistration(env.DB, {
         event: { id: eventId },
         userId: user.id,
-        attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
         signingSecret: "test-signing-secret",

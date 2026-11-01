@@ -94,7 +94,7 @@ export function EventDaysForm({
     const definition: AttendanceDefinition = {
       id: crypto.randomUUID(),
       originalValue: "",
-      option: { value: "", label: "" },
+      option: { value: "", label: "", accessMode: "none" },
     };
     setDraft((current) => ({ ...current, definitions: [...current.definitions, definition] }));
     setExpanded(definition.id);

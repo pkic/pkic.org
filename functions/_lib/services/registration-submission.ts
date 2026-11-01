@@ -6,7 +6,7 @@ import { findUserEmailOwner } from "./user-emails";
 import { first } from "../db/queries";
 import { AppError } from "../errors";
 import type { DatabaseLike, StatementLike } from "../types";
-import type { AttendanceType, RegistrationOrganizationOutcome } from "../../../assets/shared/schemas/registration";
+import type { RegistrationOrganizationOutcome } from "../../../assets/shared/schemas/registration";
 import { prepareAuditLog } from "./audit";
 import { prepareConsentStatements } from "./consent";
 import { prepareAcceptInviteStatements, prepareRevokeDuplicateInvitesStatement, type InviteRecord } from "./invites";
@@ -39,7 +39,14 @@ export interface PreparedRegistrationSubmission {
   confirmationToken: string | null;
   reactivated: boolean;
   referralCode: string;
-  dayAttendance: Array<{ dayDate: string; attendanceType: string; label: string | null }>;
+  dayAttendance: Array<{
+    dayDate: string;
+    attendanceType: string;
+    label: string | null;
+    accessMode: import("../../../assets/shared/event-attendance-access").EventAttendanceAccessMode;
+    startsAt: string | null;
+    endsAt: string | null;
+  }>;
   plannedDayWaitlist: PlannedDayWaitlistEntry[];
   statements: StatementLike[];
 }
@@ -49,7 +56,6 @@ export async function prepareRegistrationSubmission(
   payload: {
     eventId: string;
     user: FindOrCreateUserPayload;
-    attendanceType: AttendanceType;
     dayAttendance?: DayAttendanceSelection[];
     sourceType: string;
     sourceRef?: string | null;
@@ -108,7 +114,6 @@ export async function prepareRegistrationSubmission(
   const builtRegistration = await buildCreateRegistration(db, {
     event: { id: payload.eventId },
     userId: preparedUser.user.id,
-    attendanceType: payload.attendanceType,
     dayAttendance: payload.dayAttendance,
     sourceType: payload.sourceType,
     sourceRef: payload.sourceRef,

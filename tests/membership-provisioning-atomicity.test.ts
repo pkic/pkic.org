@@ -327,8 +327,8 @@ describe("individual membership alias preflight", () => {
     )
       .bind(eventId, "2026-10-17T00:00:00.000Z", "2026-10-17T00:00:00.000Z")
       .run();
-    await env.DB.prepare(`INSERT INTO registrations (id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,confirmation_link_secret,created_at,updated_at)
-      VALUES (?,?,?,'pending_email_confirmation','virtual','test',?,?,?,?)`)
+    await env.DB.prepare(`INSERT INTO registrations (id,event_id,user_id,status,source_type,manage_link_secret,confirmation_link_secret,created_at,updated_at)
+      VALUES (?,?,?,'pending_email_confirmation','test',?,?,?,?)`)
       .bind(
         registrationId,
         eventId,

@@ -45,8 +45,8 @@ function correct(f: Fixture, token = f.token, replacement = f.secondIdentityId, 
 async function registration(f: Fixture) {
   const id = crypto.randomUUID();
   const at = nowIso();
-  await env.DB.prepare(`INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,registration_identity_id,created_at,updated_at)
-    VALUES(?,?,?,'registered','in_person','test',?,?,?,?)`)
+  await env.DB.prepare(`INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,registration_identity_id,created_at,updated_at)
+    VALUES(?,?,?,'registered','test',?,?,?,?)`)
     .bind(id, f.eventId, f.userId, crypto.randomUUID(), f.identityId, at, at)
     .run();
   return id;

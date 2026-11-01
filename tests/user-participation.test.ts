@@ -86,8 +86,8 @@ async function insertEvent(slug: string): Promise<string> {
 
 async function register(eventId: string, userId: string, status: "registered" | "cancelled"): Promise<void> {
   await env.DB.prepare(
-    `INSERT INTO registrations (id, event_id, user_id, status, attendance_type, source_type, manage_link_secret, created_at, updated_at)
-     VALUES (?, ?, ?, ?, 'virtual', 'direct', ?, ?, ?)`,
+    `INSERT INTO registrations (id, event_id, user_id, status, source_type, manage_link_secret, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'direct', ?, ?, ?)`,
   )
     .bind(crypto.randomUUID(), eventId, userId, status, crypto.randomUUID(), NOW(), NOW())
     .run();

@@ -365,10 +365,16 @@ describe("Authenticated recovery of the same active badge print", () => {
           await env.DB.prepare("UPDATE event_badge_credentials SET expires_at='2000-01-01T00:00:00.000Z' WHERE id=?")
             .bind(id)
             .run();
-        if (kind === "registration")
+        if (kind === "registration") {
+          await env.DB.prepare(
+            "DELETE FROM registration_day_attendance WHERE registration_id IN (SELECT id FROM registrations WHERE event_id=? AND user_id=?)",
+          )
+            .bind(fixture.eventId, fixture.userId)
+            .run();
           await env.DB.prepare("DELETE FROM registrations WHERE event_id=? AND user_id=?")
             .bind(fixture.eventId, fixture.userId)
             .run();
+        }
         if (kind === "purge")
           await env.DB.prepare("UPDATE event_evidence_retention_state SET capture_closed_at=? WHERE event_id=?")
             .bind(new Date().toISOString(), fixture.eventId)

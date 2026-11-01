@@ -41,7 +41,6 @@ function GroupRegistration({ groupId, event }: { groupId: string; event: GroupEv
               `${base}/registrations`,
               attendeeRegistrationParticipationSchema.parse({
                 identityId: body.identityId,
-                attendanceType: body.attendanceType,
                 dayAttendance: body.dayAttendance,
                 customAnswers: body.customAnswers,
                 consents: body.consents,

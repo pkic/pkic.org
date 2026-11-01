@@ -165,7 +165,6 @@ describe("a person's own email addresses", () => {
     const registration = await createRegistration(env.DB, {
       event: { id: eventId },
       userId: source.id,
-      attendanceType: "virtual",
       sourceType: "web",
       confirmationTtlHours: 24,
       signingSecret: environment.INTERNAL_SIGNING_SECRET!,
@@ -188,7 +187,6 @@ describe("a person's own email addresses", () => {
     const ownRegistration = await createRegistration(env.DB, {
       event: { id: eventId },
       userId: account.userId,
-      attendanceType: "virtual",
       sourceType: "web",
       confirmationTtlHours: 24,
       signingSecret: environment.INTERNAL_SIGNING_SECRET!,
@@ -467,7 +465,6 @@ describe("a person's own email addresses", () => {
     const created = await createRegistration(env.DB, {
       event: { id: eventId },
       userId: bootstrap.id,
-      attendanceType: "virtual",
       sourceType: "web",
       confirmationTtlHours: 24,
       signingSecret,
@@ -500,7 +497,6 @@ describe("a person's own email addresses", () => {
     const created = await createRegistration(env.DB, {
       event: { id: eventId },
       userId: bootstrap.id,
-      attendanceType: "virtual",
       sourceType: "web",
       confirmationTtlHours: 24,
       signingSecret,

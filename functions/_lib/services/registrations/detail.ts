@@ -23,7 +23,6 @@ export interface RegistrationDetailRow {
   user_id: string;
   status: string;
   cancellation_reason_code: string | null;
-  attendance_type: EventRegistrationDetailResponse["registration"]["attendance_type"];
   source_type: EventRegistrationDetailResponse["registration"]["source_type"];
   created_at: string;
   updated_at: string;
@@ -43,7 +42,7 @@ export async function fetchRegistrationWithDetails(
 ): Promise<RegistrationDetailRow | null> {
   return first<RegistrationDetailRow>(
     db,
-    `SELECT r.id, r.event_id, r.user_id, r.status, r.cancellation_reason_code, r.attendance_type, r.source_type,
+    `SELECT r.id, r.event_id, r.user_id, r.status, r.cancellation_reason_code, r.source_type,
             r.custom_answers_json, r.form_placement_id, r.created_at, r.updated_at,
             u.email AS user_email,
             COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS display_name,
@@ -115,7 +114,6 @@ export function toRegistrationDetail(
     user_id: registration.user_id,
     status: registration.status,
     cancellation_reason_code: registration.cancellation_reason_code,
-    attendance_type: registration.attendance_type,
     source_type: registration.source_type,
     created_at: registration.created_at,
     updated_at: registration.updated_at,
@@ -185,7 +183,6 @@ export async function getEventRegistrationAttendanceDetail(
     event_id: string;
     user_id: string;
     status: string;
-    attendance_type: string;
     source_type: string;
     created_at: string;
     updated_at: string;
@@ -193,7 +190,7 @@ export async function getEventRegistrationAttendanceDetail(
     display_name: string | null;
   }>(
     db,
-    `SELECT r.id, r.event_id, r.user_id, r.status, r.attendance_type, r.source_type,
+    `SELECT r.id, r.event_id, r.user_id, r.status, r.source_type,
             r.created_at, r.updated_at, u.email AS user_email,
             COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS display_name
        FROM registrations r

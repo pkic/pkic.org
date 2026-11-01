@@ -3,6 +3,11 @@ import ICAL from "ical.js";
 import type { EventRecord } from "../services/events";
 import { resolveEventVenue, resolveEventVirtualUrl } from "../services/events";
 import { generateSignedRsvpAddress } from "../email/rsvp";
+import {
+  eventAttendanceAccessMode,
+  type EventAttendanceAccessMode,
+} from "../../../assets/shared/event-attendance-access";
+import { zonedDateTimeParts, zonedDateTimeToDate } from "../../../assets/shared/timezone";
 import { formatEventPlace } from "../../../assets/shared/event-place";
 
 type IcsDateTuple = [number, number, number, number, number];
@@ -27,9 +32,6 @@ interface CalendarAlarm {
   trigger: { hours?: number; minutes?: number; before: boolean };
 }
 
-/** Attendance types that represent a scheduled live attendance (in-person or livestream). */
-const LIVE_ATTENDANCE_TYPES = new Set(["in_person", "virtual", "live"]);
-
 function toUtcTuple(value: string): IcsDateTuple {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -39,45 +41,25 @@ function toUtcTuple(value: string): IcsDateTuple {
   return [date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate(), date.getUTCHours(), date.getUTCMinutes()];
 }
 
-/**
- * Combines a YYYY-MM-DD day date with the time-of-day from the event's
- * starts_at / ends_at to build per-day start and end tuples.
- * Falls back to 09:00–18:00 UTC when the event has no times set.
- */
+/** Resolve day wall times through the event zone; explicit day instants take precedence. */
 function toDayWindow(
-  dayDate: string,
-  eventStartsAt: string | null,
-  eventEndsAt: string | null,
+  day: DayAttendanceEntry,
+  event: Pick<EventRecord, "starts_at" | "ends_at" | "timezone">,
 ): { start: IcsDateTuple; end: IcsDateTuple } {
-  const startDate = eventStartsAt ? new Date(eventStartsAt) : null;
-  const endDate = eventEndsAt ? new Date(eventEndsAt) : null;
-
-  const startHour = startDate && !Number.isNaN(startDate.getTime()) ? startDate.getUTCHours() : 9;
-  const startMinute = startDate && !Number.isNaN(startDate.getTime()) ? startDate.getUTCMinutes() : 0;
-  const endHour = endDate && !Number.isNaN(endDate.getTime()) ? endDate.getUTCHours() : 18;
-  const endMinute = endDate && !Number.isNaN(endDate.getTime()) ? endDate.getUTCMinutes() : 0;
-
-  const parts = dayDate.split("-").map(Number);
-  const [year, month, day] = parts;
-
-  return {
-    start: [year, month, day, startHour, startMinute],
-    end: [year, month, day, endHour, endMinute],
+  const [year, month, date] = day.dayDate.split("-").map(Number);
+  const resolve = (dayInstant: string | null | undefined, eventInstant: string | null, defaultHour: number) => {
+    if (dayInstant) return toUtcTuple(dayInstant);
+    const clock = eventInstant
+      ? zonedDateTimeParts(eventInstant, event.timezone)
+      : { hour: defaultHour, minute: 0, second: 0 };
+    return toUtcTuple(
+      zonedDateTimeToDate(
+        { year, month, day: date, hour: clock.hour, minute: clock.minute, second: clock.second },
+        event.timezone,
+      ).toISOString(),
+    );
   };
-}
-
-function toEventWindow(event: Pick<EventRecord, "starts_at" | "ends_at">): { start: IcsDateTuple; end: IcsDateTuple } {
-  const now = new Date().toISOString();
-  const startSource = event.starts_at ?? now;
-  const startDate = new Date(startSource);
-
-  const defaultEndDate = new Date(startDate.getTime() + 60 * 60 * 1000).toISOString();
-  const endSource = event.ends_at ?? defaultEndDate;
-
-  return {
-    start: toUtcTuple(startSource),
-    end: toUtcTuple(endSource),
-  };
+  return { start: resolve(day.startsAt, event.starts_at, 9), end: resolve(day.endsAt, event.ends_at, 18) };
 }
 
 function toIcalTime(tuple: IcsDateTuple): InstanceType<typeof ICAL.Time> {
@@ -176,6 +158,17 @@ export interface DayAttendanceEntry {
   dayDate: string;
   attendanceType: string;
   label: string | null;
+  accessMode?: EventAttendanceAccessMode;
+  startsAt?: string | null;
+  endsAt?: string | null;
+}
+
+/** Only accepted or unqueued days can appear as confirmed calendar events. */
+export function calendarConfirmedDays<T extends DayAttendanceEntry>(
+  days: T[],
+  waitlist: Array<{ dayDate: string; status: string }>,
+): T[] {
+  return days.filter((day) => !waitlist.some((entry) => entry.dayDate === day.dayDate && entry.status !== "accepted"));
 }
 
 export interface IcsFile {
@@ -184,24 +177,9 @@ export interface IcsFile {
   content: string;
 }
 
-/**
- * Builds the ICS calendar attachment for a registration confirmation email.
- *
- * Behavior:
- * - Multi-day registrations with per-day attendance produce one VEVENT per
- *   live day (in_person or virtual), skipping on_demand days (recorded content
- *   has no fixed schedule).
- * - Each VEVENT uses the event's daily start/end times (derived from
- *   event.starts_at / event.ends_at) — e.g. 09:00–18:00 UTC for every day.
- * - Location is set per attendance type:
- *     in_person → venue address from settings_json.venue, else the event's
- *                 city and country ("Amsterdam, Netherlands")
- *     virtual   → system-generated attendee virtual room URL
- * - Both in-person and virtual VEVENTs include 24 h and 1 h display reminders.
- * - Falls back to a single spanning event when no live day attendance is present.
- */
+/** Build calendar events for confirmed live attendance days. */
 export async function buildRegistrationIcs(
-  event: Pick<EventRecord, "name" | "slug" | "base_path" | "starts_at" | "ends_at" | "settings_json"> &
+  event: Pick<EventRecord, "name" | "slug" | "base_path" | "starts_at" | "ends_at" | "settings_json" | "timezone"> &
     Partial<Pick<EventRecord, "city" | "country">>,
   registrationId: string,
   manageUrl: string,
@@ -218,15 +196,18 @@ export async function buildRegistrationIcs(
   const venueAddress = resolveEventVenue(event) ?? formatEventPlace(event, "en");
   const virtualUrl = resolveEventVirtualUrl(event, baseUrl);
 
-  const liveDays = dayAttendance.filter((d) => LIVE_ATTENDANCE_TYPES.has(d.attendanceType));
+  const liveDays = dayAttendance.filter(
+    (day) => eventAttendanceAccessMode({ value: day.attendanceType, accessMode: day.accessMode }) !== "none",
+  );
 
   if (liveDays.length > 0) {
     const isMultiDay = liveDays.length > 1;
 
     const calEvents: Array<{ dayDate: string; eventUid: string; calEvent: CalendarEvent }> = await Promise.all(
       liveDays.map(async (day) => {
-        const window = toDayWindow(day.dayDate, event.starts_at, event.ends_at);
-        const isInPerson = day.attendanceType === "in_person";
+        const window = toDayWindow(day, event);
+        const isInPerson =
+          eventAttendanceAccessMode({ value: day.attendanceType, accessMode: day.accessMode }) === "physical";
         const location = isInPerson ? (venueAddress ?? undefined) : (virtualUrl ?? undefined);
         const url = isInPerson ? manageUrl : (virtualUrl ?? manageUrl);
         const dayLabel = day.label ?? day.dayDate;
@@ -268,20 +249,5 @@ export async function buildRegistrationIcs(
     return { uid, files };
   }
 
-  const window = toEventWindow(event);
-  const fallbackEvent: CalendarEvent = {
-    uid,
-    title: event.name,
-    description: `Manage your registration at ${manageUrl}`,
-    url: manageUrl,
-    organizerEmail: rsvpEmail,
-    attendeeEmail,
-    start: window.start,
-    end: window.end,
-    status: "CONFIRMED",
-    alarms: STANDARD_ALARMS,
-  };
-
-  const fallbackContent = buildIcsContent([fallbackEvent]);
-  return { uid, files: [{ uid, filename: "invite.ics", content: fallbackContent }], inlineContent: fallbackContent };
+  return { uid, files: [] };
 }

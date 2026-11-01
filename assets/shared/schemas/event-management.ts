@@ -18,6 +18,7 @@ import { databaseIdSchema } from "./identifiers";
 import { linksSchema } from "./links";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { attendanceTypeSchema, registrationLifecycleStatusSchema } from "./registration";
+import { eventAttendanceAccessModeSchema } from "../event-attendance-access";
 import { eventBadgeTemplateSchema } from "./event-badge-template";
 import { eventPromotionDesignSchema } from "./event-promotion-design";
 import { countryCodeSchema } from "../countries";
@@ -190,17 +191,17 @@ export type EventResourceCore = z.infer<typeof eventResourceCoreSchema>;
 
 /**
  * Per-day state of the viewer's own registration, keyed by the event day's
- * calendar date. Present only for events with day-level registration; a
- * single-attendance-type registration has no day rows and yields `[]`.
+ * calendar date. Each selected day carries its configured session access.
  *
  * `attendanceType` is how the viewer asked to attend that day; `state` says
  * whether they hold it. An in-person day still waiting for, or offered, a
  * seat is `waitlisted`, so "in person" alone never implies a seat.
  */
-export const eventViewerDayStateSchema = z.enum(["registered", "waitlisted"]);
+export const eventViewerDayStateSchema = z.enum(["registered", "waitlisted", "expired"]);
 export const eventViewerDaySchema = z.object({
   date: eventDayDateSchema,
   attendanceType: attendanceTypeSchema,
+  accessMode: eventAttendanceAccessModeSchema,
   state: eventViewerDayStateSchema,
 });
 export type EventViewerDay = z.infer<typeof eventViewerDaySchema>;
@@ -210,13 +211,10 @@ export type EventViewerDay = z.infer<typeof eventViewerDaySchema>;
  * `waitlisted` is true when at least one in-person day is still waiting for,
  * or offered, a seat (day waitlist rows are the sole authoritative waitlist
  * state, and an accepted offer holds its seat); `days` mirrors that per day.
- * `attendanceType` is the registration-level derivation (in person if any
- * day is), never a confirmed seat: read the days for that. Null for anonymous callers and for
- * callers with no standing (non-existent or cancelled registration).
+ * The viewer is null for anonymous callers and callers without an active registration.
  */
 export const eventViewerStateSchema = z.object({
   registrationStatus: registrationLifecycleStatusSchema,
-  attendanceType: attendanceTypeSchema,
   waitlisted: z.boolean(),
   days: z.array(eventViewerDaySchema).max(31),
   /** Whether any of the viewer's verified addresses, primary or secondary, is a work address. */

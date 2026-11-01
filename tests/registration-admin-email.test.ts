@@ -22,7 +22,6 @@ async function seedPendingRegistration(): Promise<{ registrationId: string; admi
   const created = await createRegistration(env.DB, {
     event,
     userId,
-    attendanceType: "virtual",
     sourceType: "open_registration",
     confirmationTtlHours: 48,
     signingSecret: env.INTERNAL_SIGNING_SECRET!,

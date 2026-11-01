@@ -7,6 +7,7 @@ import { publishedSessionsSql } from "./published-schedule";
 import { preparePersonalCalendarEntries } from "./calendar-entries";
 import { promoteSessionWaitlist } from "./waitlist";
 import { eventReadIdSql, type EventReadSelection } from "../events/selection";
+import { registrationDaySessionAccessSql } from "./session-access";
 export function prepareParticipationWork(db: DatabaseLike, selection: EventReadSelection) {
   const event = eventReadIdSql(selection);
   return db
@@ -22,9 +23,15 @@ export async function reconcileEventParticipations(
   limit = 100,
   cursor?: { updatedAt: string; id: string },
 ) {
-  const rows = await all<{ id: string; updated_at: string; start_at: string | null; timezone: string }>(
+  const rows = await all<{
+    id: string;
+    updated_at: string;
+    start_at: string | null;
+    timezone: string;
+    attendance_day_date: string | null;
+  }>(
     db,
-    `SELECT p.id,p.updated_at,s.start_at,s.timezone FROM agenda_session_participations p LEFT JOIN (${publishedSessionsSql}) s ON s.id=p.occurrence_id AND s.event_id=p.event_id
+    `SELECT p.id,p.updated_at,p.attendance_day_date,s.start_at,s.timezone FROM agenda_session_participations p LEFT JOIN (${publishedSessionsSql}) s ON s.id=p.occurrence_id AND s.event_id=p.event_id
    WHERE p.event_id=? AND p.status IN ('reserved','approval_pending','waitlisted') AND (? IS NULL OR p.updated_at>? OR p.updated_at=? AND p.id>?) ORDER BY p.updated_at,p.id LIMIT ?`,
     [
       eventId,
@@ -38,15 +45,23 @@ export async function reconcileEventParticipations(
   let canceled = 0;
   for (const row of rows) {
     const day = row.start_at ? instantToDateTimeLocal(row.start_at, row.timezone).slice(0, 10) : null;
+    if (day && row.attendance_day_date === null) {
+      await db
+        .prepare(`UPDATE agenda_session_participations AS claim SET attendance_day_date=?
+        WHERE claim.id=? AND claim.attendance_day_date IS NULL
+          AND EXISTS(SELECT 1 FROM (${publishedSessionsSql}) session WHERE session.id=claim.occurrence_id
+            AND session.event_id=claim.event_id AND session.start_at=? AND session.timezone=?)`)
+        .bind(day, row.id, row.start_at, row.timezone)
+        .run();
+    }
     const result = await db
       .prepare(
         `UPDATE agenda_session_participations AS claim SET status='canceled',allocation_revision=allocation_revision+1,updated_at=? WHERE id=? AND status IN ('reserved','approval_pending','waitlisted')
    AND (NOT EXISTS(SELECT 1 FROM (${publishedSessionsSql}) s WHERE s.id=claim.occurrence_id AND s.event_id=claim.event_id)
     OR NOT EXISTS(SELECT 1 FROM registrations reg JOIN users person ON person.id=reg.user_id WHERE reg.event_id=claim.event_id AND reg.user_id=claim.user_id AND reg.status='registered' AND person.active=1
-      AND COALESCE((SELECT attendance.attendance_type FROM registration_day_attendance attendance JOIN event_days day ON day.id=attendance.event_day_id WHERE attendance.registration_id=reg.id AND day.day_date=?),
-       CASE WHEN EXISTS(SELECT 1 FROM event_days day WHERE day.event_id=claim.event_id AND day.day_date=?) THEN 'none' ELSE reg.attendance_type END)=CASE claim.attendance_mode WHEN 'physical' THEN 'in_person' ELSE 'virtual' END))`,
+      AND ${registrationDaySessionAccessSql("reg", "?")}=CASE claim.attendance_mode WHEN 'physical' THEN 'in_person' ELSE 'virtual' END))`,
       )
-      .bind(nowIso(), row.id, day, day)
+      .bind(nowIso(), row.id, day)
       .run();
     canceled += result.meta?.changes ?? 0;
   }
@@ -85,7 +100,9 @@ export async function runAgendaParticipationDueWork(db: DatabaseLike, eventLimit
   return { events: events.length, promoted, canceled };
 }
 
-/** Set-based mutation hook; persisted venue-day identities avoid UTC-date mistakes near midnight. */
+/** Set-based mutation hook; persisted venue-day identities avoid UTC-date mistakes near midnight.
+ * Legacy claims without a day are left for the queued reconciliation, which resolves the exact date in the event time zone.
+ */
 export function prepareParticipationReconciliation(db: DatabaseLike, eventId: string, userId?: string) {
   const values = userId ? [eventId, userId] : [eventId];
   const now = nowIso();
@@ -94,9 +111,8 @@ export function prepareParticipationReconciliation(db: DatabaseLike, eventId: st
       .prepare(
         `UPDATE agenda_session_participations AS claim SET status='canceled',allocation_revision=allocation_revision+1,updated_at=? WHERE event_id=? ${userId ? "AND user_id=?" : ""} AND status IN ('reserved','approval_pending','waitlisted')
    AND (NOT EXISTS(SELECT 1 FROM (${publishedSessionsSql}) s WHERE s.id=claim.occurrence_id AND s.event_id=claim.event_id)
-   OR NOT EXISTS(SELECT 1 FROM registrations reg JOIN users person ON person.id=reg.user_id WHERE reg.event_id=claim.event_id AND reg.user_id=claim.user_id AND reg.status='registered' AND person.active=1
-    AND COALESCE((SELECT attendance.attendance_type FROM registration_day_attendance attendance JOIN event_days day ON day.id=attendance.event_day_id WHERE attendance.registration_id=reg.id AND day.day_date=claim.attendance_day_date),
-      CASE WHEN EXISTS(SELECT 1 FROM event_days day WHERE day.event_id=claim.event_id AND day.day_date=claim.attendance_day_date) THEN 'none' ELSE reg.attendance_type END)=CASE claim.attendance_mode WHEN 'physical' THEN 'in_person' ELSE 'virtual' END))`,
+   OR (claim.attendance_day_date IS NOT NULL AND NOT EXISTS(SELECT 1 FROM registrations reg JOIN users person ON person.id=reg.user_id WHERE reg.event_id=claim.event_id AND reg.user_id=claim.user_id AND reg.status='registered' AND person.active=1
+    AND ${registrationDaySessionAccessSql("reg", "claim.attendance_day_date")}=CASE claim.attendance_mode WHEN 'physical' THEN 'in_person' ELSE 'virtual' END)))`,
       )
       .bind(now, ...values),
     ...preparePersonalCalendarEntries(db, eventId, userId),

@@ -64,11 +64,7 @@ function BadgeTicket({ event, details }: { event: ParticipantEventDetail; detail
   const qr = ticket.data ? splitBadgePrintSvg(ticket.data.badge.svg) : null;
   const viewer = "viewer" in event ? event.viewer : null;
   const standing = viewer ? attendanceStanding(viewer) : UNDATED_SEAT;
-  const use = (
-    <TicketUse standing={standing} wholeEventInPerson={viewer?.attendanceType === "in_person"}>
-      {details}
-    </TicketUse>
-  );
+  const use = <TicketUse standing={standing}>{details}</TicketUse>;
   // Without a seat the explanation leads, so the code is not read as admission.
   return (
     <div class="pk-stack">
@@ -111,15 +107,16 @@ function BadgeTicket({ event, details }: { event: ParticipantEventDetail; detail
   );
 }
 
-/** The standing a whole-event in-person registration without day rows reads as. */
+/** With no day information, do not imply that the badge grants a venue place. */
 const UNDATED_SEAT: AttendanceStanding = {
   inPerson: [],
   waitlisted: [],
+  waitlistedInPerson: [],
+  expired: [],
   virtual: [],
   onDemand: [],
-  holdsInPersonSeat: true,
+  holdsInPersonSeat: false,
   online: false,
-  wholeEvent: true,
 };
 
 /**
@@ -127,15 +124,7 @@ const UNDATED_SEAT: AttendanceStanding = {
  * on confirmed in-person days only. A day on the waiting list or joined
  * online has no seat behind the code, so the card says so instead.
  */
-function TicketUse({
-  standing,
-  wholeEventInPerson,
-  children,
-}: {
-  standing: AttendanceStanding;
-  wholeEventInPerson: boolean;
-  children: ComponentChildren;
-}) {
+function TicketUse({ standing, children }: { standing: AttendanceStanding; children: ComponentChildren }) {
   const online = standing.virtual.length ? `On ${formatDayList(standing.virtual)} you join online.` : "";
   if (standing.holdsInPersonSeat)
     return (
@@ -146,25 +135,58 @@ function TicketUse({
             : "Show this QR code at the entrance and at sessions, or read out the code under it."}{" "}
           Your printed badge carries the same code.
         </p>
-        {(standing.waitlisted.length > 0 || online) && (
+        {(standing.waitlisted.length > 0 || standing.expired.length > 0 || online) && (
           <p>
             {standing.waitlisted.length ? `You're on the waiting list for ${formatDayList(standing.waitlisted)}. ` : ""}
+            {standing.expired.length ? `Your offer expired for ${formatDayList(standing.expired)}. ` : ""}
             {online}
           </p>
         )}
         <div class="pk-cluster">{children}</div>
       </EventCard>
     );
-  if (standing.waitlisted.length || (standing.wholeEvent && wholeEventInPerson))
+  if (standing.expired.length)
+    return (
+      <EventCard eyebrow="Registration" title="Offer expired">
+        <p>
+          Your offer expired for {formatDayList(standing.expired)}. Update your registration to request a place again.
+        </p>
+        {standing.waitlisted.length > 0 && <p>You're on the waiting list for {formatDayList(standing.waitlisted)}.</p>}
+        {online && <p>{online}</p>}
+        <div class="pk-cluster">{children}</div>
+      </EventCard>
+    );
+  if (standing.waitlistedInPerson.length)
     return (
       <EventCard eyebrow="Waiting list" title="No in-person seat yet">
         <p>
-          {standing.waitlisted.length
-            ? `You're on the waiting list for ${formatDayList(standing.waitlisted)}.`
-            : "You're on the waiting list."}{" "}
-          This code gets you in once a seat is yours, and we email you when one is offered.
+          {`You're on the waiting list for ${formatDayList(standing.waitlistedInPerson)}.`} This code gets you in once a
+          seat is yours, and we email you when one is offered.
         </p>
         {online && <p>{online}</p>}
+        <div class="pk-cluster">{children}</div>
+      </EventCard>
+    );
+  if (standing.waitlisted.length)
+    return (
+      <EventCard eyebrow="Waiting list">
+        <p>
+          You're on the waiting list for {formatDayList(standing.waitlisted)}. We'll email you when a place is offered.
+        </p>
+        <div class="pk-cluster">{children}</div>
+      </EventCard>
+    );
+  if (!standing.online && !standing.onDemand.length)
+    return (
+      <EventCard eyebrow="Registration">
+        <p>Review your registration to see your attendance choices.</p>
+        <div class="pk-cluster">{children}</div>
+      </EventCard>
+    );
+  if (!standing.online)
+    return (
+      <EventCard eyebrow="On demand">
+        <p>Your registration includes on-demand access. Review the event details for available recordings.</p>
         <div class="pk-cluster">{children}</div>
       </EventCard>
     );

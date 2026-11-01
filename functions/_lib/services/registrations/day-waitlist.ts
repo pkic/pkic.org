@@ -20,7 +20,7 @@ export {
 } from "./day-waitlist-plan";
 export { expireDayWaitlistOffers, promoteDayWaitlistIfCapacity } from "./day-waitlist-promotion";
 export {
-  listConfirmedInPersonEventDayIdsForRegistration,
+  listConfirmedAttendanceEventDayIdsForRegistration,
   listDayWaitlistForRegistration,
-  listInPersonEventDayIdsForRegistration,
+  listAttendanceEventDayIdsForRegistration,
 } from "./day-waitlist-queries";

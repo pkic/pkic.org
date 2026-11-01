@@ -388,7 +388,7 @@ Know someone who should attend? Share your personal referral link: [{{shareUrl}}
   // ─────────────────────────────────────────────────────────────────────────
   // 2. Registration confirmed
   // Variables: eventName, eventUrl, firstName, lastName, email, organizationName,
-  //            jobTitle, attendanceType, venue, status, manageUrl, myAgendaUrl, shareUrl,
+  //            jobTitle, dayAttendance, venue, status, manageUrl, myAgendaUrl, shareUrl,
   //            sponsorsImageUrl, heroImageUrl, customAnswerRows, acceptedTermsText
   // Partials:  {{> reg_details}}, {{> sponsors_block}}
   // ─────────────────────────────────────────────────────────────────────────
@@ -403,16 +403,14 @@ Know someone who should attend? Share your personal referral link: [{{shareUrl}}
 We are delighted to confirm that **your registration for {{eventName}} has been successfully processed**.
 {{/if}}
 
-{{#if eq attendanceType "in_person"}}
-<div class="notice notice-success">&#128197; A <strong>calendar invitation</strong> is attached to this email — please add it to your calendar.</div>
+{{#if hasCalendarInvite}}
+<div class="notice notice-success">A calendar invitation is attached for your confirmed live attendance days.</div>
 {{/if}}
+
 {{#if venue}}
 <div class="notice notice-info">&#128205; The conference will be held at <strong>{{venue}}</strong>. Enhance your conference experience by staying at the official venue hotel(s), see the <a href="{{eventUrl}}">event website</a> for more details.</div>
 {{/if}}
 
-{{#if eq attendanceType "virtual"}}
-<div class="notice notice-info">&#128187; You are registered for <strong>virtual / online</strong> attendance. Livestream access details will be shared closer to the event.</div>
-{{/if}}
 {{#if eq status "waitlisted"}}
 <div class="notice notice-warning">&#9203; Your registration is currently <strong>waitlisted</strong>, which means the event has not yet fully confirmed your attendance. One of the limiting factors for in-person capacity is the event budget — we will be able to admit more attendees as sponsors commit to the conference. If {{#if organizationName}}<strong>{{organizationName}}</strong>{{else}}your organization{{/if}} is willing and able to sponsor this conference, please <a href="mailto:contact@pkic.org">contact us</a>. We will notify you as soon as the remaining seats become available.</div>
 {{/if}}

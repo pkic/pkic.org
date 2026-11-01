@@ -3,12 +3,21 @@ import { registrationReadIdSql, type RegistrationReadSelection } from "./registr
 import { batchRows } from "../db/pagination";
 import { prepareParticipationReconciliation } from "./event-participation/reconciliation";
 import { AppError } from "../errors";
-import { attendanceMethodName, dayAttendanceTypeNotConfiguredError, dayNotConfiguredError } from "./event-day-refusals";
+import {
+  attendanceMethodName,
+  dayAttendanceTypeNotConfiguredError,
+  dayNotConfiguredError,
+  eventDaysNotScheduledError,
+} from "./event-day-refusals";
 import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
 import type { DatabaseLike, StatementLike } from "../types";
-import type { AttendanceType } from "../../../assets/shared/schemas/registration";
 import type { EventAttendanceOption } from "../../../assets/shared/schemas/event-configuration";
+import {
+  attendanceOptionLabelSql,
+  eventDayOptionAccessSql,
+  registrationDayHoldsOptionSql,
+} from "./event-attendance-option-sql";
 
 // Open-ended: any string that matches a configured attendance option value.
 export type DayAttendanceType = string;
@@ -84,6 +93,13 @@ export function attendanceOptionLabel(days: readonly EventDayRecord[], value: st
   return null;
 }
 
+/** Recheck the schedule after a concurrent registration transition. */
+export async function assertEventHasScheduledDays(db: DatabaseLike, eventId: string): Promise<void> {
+  if (!(await db.prepare("SELECT 1 AS present FROM event_days WHERE event_id=? LIMIT 1").bind(eventId).first())) {
+    throw eventDaysNotScheduledError();
+  }
+}
+
 export async function listEventDays(db: DatabaseLike, eventId: string): Promise<EventDayRecord[]> {
   return (await prepareEventDays(db, eventId).all<EventDayRecord>()).results;
 }
@@ -104,6 +120,7 @@ function eventDayAttendanceCountsSql(includePendingConfirmation: boolean, eventI
         SELECT id FROM registrations
         WHERE event_id = (SELECT id FROM selected_event) AND status ${status}
       )
+      ${includePendingConfirmation ? `AND ${registrationDayHoldsOptionSql("rda", "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')")}` : ""}
     GROUP BY rda.event_day_id, rda.attendance_type`;
 }
 
@@ -149,6 +166,10 @@ export interface RegistrationDayAttendanceRow {
   dayDate: string;
   attendanceType: DayAttendanceType;
   label: string | null;
+  optionLabel: string | null;
+  accessMode: import("../../../assets/shared/event-attendance-access").EventAttendanceAccessMode;
+  startsAt: string | null;
+  endsAt: string | null;
   /** When the day was first held on this registration. */
   heldSince: string;
   /** When the day's attendance last changed. */
@@ -158,6 +179,8 @@ export interface RegistrationDayAttendanceRow {
 export function prepareRegistrationDayAttendance(db: DatabaseLike, registrationId: string) {
   return db
     .prepare(`SELECT ed.day_date AS dayDate, rda.attendance_type AS attendanceType, ed.label AS label,
+            ${attendanceOptionLabelSql("ed", "rda.attendance_type")} AS optionLabel,
+            ${eventDayOptionAccessSql("ed", "rda.attendance_type")} AS accessMode, ed.starts_at AS startsAt, ed.ends_at AS endsAt,
             rda.created_at AS heldSince, rda.updated_at AS changedAt
      FROM registration_day_attendance rda
      JOIN event_days ed ON ed.id = rda.event_day_id
@@ -194,24 +217,8 @@ function normalizeSelections(selections?: DayAttendanceSelection[]): DayAttendan
   return normalized;
 }
 
-export function deriveEventAttendanceType(selections?: DayAttendanceSelection[]): AttendanceType | null {
-  if (!selections || selections.length === 0) {
-    return null;
-  }
-
-  if (selections.some((entry) => entry.attendanceType === "in_person")) {
-    return "in_person";
-  }
-
-  if (selections.some((entry) => entry.attendanceType === "virtual")) {
-    return "virtual";
-  }
-
-  return selections[0].attendanceType;
-}
-
 /**
- * Returns a single-query count of confirmed registrations per (event_day_id, attendance_type)
+ * Returns occupied capacity per (event_day_id, attendance_type), including live offers and pending confirmations,
  * for a given event. Used by form endpoints to compute spotsRemainingPercent without N+1 queries.
  */
 export async function countRegisteredByEventDay(

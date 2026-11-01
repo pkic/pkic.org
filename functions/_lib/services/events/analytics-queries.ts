@@ -1,4 +1,5 @@
 import { eventRegistrationAttendanceTypesSql } from "../registrations/event-registration-stats";
+import { dayWaitlistStatusSql } from "../registrations/day-waitlist-policy";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { sponsorConsentSql } from "../event-participation/sponsor-consent";
 import {
@@ -27,17 +28,17 @@ export function prepareEventAnalyticsStatements(
       .prepare(`WITH registration_types AS (${eventRegistrationAttendanceTypesSql})
       SELECT attendance_type, COUNT(*) AS count FROM registration_types
       WHERE status = 'registered' GROUP BY attendance_type`)
-      .bind(eventId, eventId),
+      .bind(eventId),
     db
       .prepare(`WITH registration_types AS (${eventRegistrationAttendanceTypesSql})
       SELECT status, attendance_type, COUNT(*) AS count FROM registration_types
       GROUP BY status, attendance_type`)
-      .bind(eventId, eventId),
+      .bind(eventId),
     db
       .prepare(`WITH registration_types AS (${eventRegistrationAttendanceTypesSql})
       SELECT date(created_at) AS date, attendance_type, COUNT(*) AS count FROM registration_types
       GROUP BY date(created_at), attendance_type ORDER BY date ASC`)
-      .bind(eventId, eventId),
+      .bind(eventId),
     db.prepare(`SELECT COUNT(*) AS count FROM registrations WHERE event_id = ?`).bind(eventId),
     db
       .prepare(
@@ -83,6 +84,7 @@ export function prepareEventAnalyticsStatements(
                 ed.sort_order,
                 rda.attendance_type,
                 CASE
+                  WHEN ${dayWaitlistStatusSql("w")} = 'expired' THEN 'expired'
                   WHEN w.id IS NOT NULL THEN 'waitlisted'
                   WHEN r.status = 'registered' THEN 'accepted'
                   ELSE 'pending'
@@ -94,7 +96,7 @@ export function prepareEventAnalyticsStatements(
          LEFT JOIN event_day_waitlist_entries w
            ON w.event_day_id = ed.id
           AND w.registration_id = r.id
-          AND w.status IN ('waiting', 'offered')
+          AND w.status IN ('waiting', 'offered', 'expired')
          WHERE ed.event_id = ?
          GROUP BY ed.id, rda.attendance_type, attendance_status
          ORDER BY ed.sort_order ASC, ed.day_date ASC`,

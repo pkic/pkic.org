@@ -5,6 +5,7 @@ import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { sha256Hex } from "../../utils/crypto";
 import type { EventRecord } from "../events";
+import { assertEventHasScheduledDays } from "../event-days";
 import { isStaleInviteTransition } from "../invite-lifecycle";
 import { registrationManagePageUrl } from "../frontend-links";
 import { isStaleRegistrationTransition, prepareConfirmRegistrationByToken } from "./confirm";
@@ -55,6 +56,7 @@ async function commitConfirmationIntent(
         "Confirm your organization details again before registering.",
       );
     if (!isStaleRegistrationTransition(error)) throw error;
+    await assertEventHasScheduledDays(db, prepared.registration.event_id);
     throw new AppError(404, "CONFIRM_TOKEN_INVALID", "Invalid or already-used confirmation token");
   }
 }

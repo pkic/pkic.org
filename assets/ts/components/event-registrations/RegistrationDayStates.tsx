@@ -17,10 +17,15 @@ import { Badge, type BadgeTone } from "../../ui/Badge";
 
 /** The words and tone for one day's state. */
 export function registrationDayStatus(day: RegistrationDayState): { label: string; tone: BadgeTone } {
-  if (day.waitlistStatus === "waiting") return { label: "Waitlisted", tone: "warn" };
-  if (day.waitlistStatus === "offered") return { label: "Seat offered", tone: "info" };
-  if (day.attendanceType === "in_person") return { label: attendanceTypeLabel(day.attendanceType), tone: "ok" };
-  return { label: attendanceTypeLabel(day.attendanceType), tone: "neutral" };
+  if (day.waitlistStatus === "waiting")
+    return { label: day.optionLabel ? `Waitlisted · ${day.optionLabel}` : "Waitlisted", tone: "warn" };
+  if (day.waitlistStatus === "offered")
+    return { label: day.optionLabel ? `Place offered · ${day.optionLabel}` : "Place offered", tone: "info" };
+  if (day.waitlistStatus === "expired")
+    return { label: day.optionLabel ? `Offer expired · ${day.optionLabel}` : "Offer expired", tone: "warn" };
+  if (day.attendanceType === "in_person")
+    return { label: day.optionLabel ?? attendanceTypeLabel(day.attendanceType), tone: "ok" };
+  return { label: day.optionLabel ?? attendanceTypeLabel(day.attendanceType), tone: "neutral" };
 }
 
 /** The days still waiting for, or offered, an in-person seat. */
@@ -29,11 +34,10 @@ export function pendingRegistrationDays(days: readonly RegistrationDayState[]): 
 }
 
 /**
- * One sentence for a header: "3 days · 2 in-person · 1 waitlisted". An event
- * without days falls back to the whole-registration attendance type.
+ * One sentence for a header: "3 days · 2 in-person · 1 waitlisted".
  */
-export function describeRegistrationDays(days: readonly RegistrationDayState[], attendanceType: string | null): string {
-  if (days.length === 0) return attendanceTypeLabel(attendanceType);
+export function describeRegistrationDays(days: readonly RegistrationDayState[]): string {
+  if (days.length === 0) return "No selected days";
   const counts = new Map<string, number>();
   for (const day of days) {
     const { label } = registrationDayStatus(day);
@@ -51,15 +55,9 @@ export function describeRegistrationDays(days: readonly RegistrationDayState[], 
  * than push the list wider than its panel. A three-day event used to stack
  * three badges per row, and a five-day one would have been five.
  */
-export function RegistrationDayStates({
-  days,
-  attendanceType,
-}: {
-  days: readonly RegistrationDayState[];
-  attendanceType: string | null;
-}) {
+export function RegistrationDayStates({ days }: { days: readonly RegistrationDayState[] }) {
   if (days.length === 0) {
-    return attendanceType ? <>{attendanceTypeLabel(attendanceType)}</> : <span class="pk-muted">—</span>;
+    return <span class="pk-muted">—</span>;
   }
   // The distinct states in the order the days hold them, each with its days.
   const states = new Map<string, { tone: BadgeTone; days: string[] }>();

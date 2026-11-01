@@ -8,6 +8,10 @@ import { IconRemove } from "../../../../components/icons";
 import { attendanceIconSchema, ATTENDANCE_ICON_LABELS } from "../../../../../shared/event-attendance-icons";
 import { formatNumber } from "../../../../../shared/format-number";
 import {
+  eventAttendanceAccessMode,
+  eventAttendanceAccessModeSchema,
+} from "../../../../../shared/event-attendance-access";
+import {
   optionFieldPrefix,
   optionInUse,
   type AttendanceDefinition,
@@ -38,19 +42,28 @@ function DefinitionField({
   props,
 }: {
   definition: AttendanceDefinition;
-  property: "value" | "label" | "description" | "icon";
+  property: "value" | "label" | "description" | "icon" | "accessMode";
   props: AttendanceOptionsProps;
 }) {
   const name = `${optionFieldPrefix(props.draft, definition.id)}.${property}`;
-  const labels = { value: "Key", label: "Label", description: "Description", icon: "Icon" };
+  const labels = {
+    value: "Key",
+    label: "Label",
+    description: "Description",
+    icon: "Icon",
+    accessMode: "Session access",
+  };
+  const accessLabels = { physical: "In person", remote: "Online", none: "No live access" } as const;
   if (props.readOnly)
     return (
       <span class={property === "value" ? "pk-mono" : undefined}>
-        {property === "icon"
-          ? definition.option.icon
-            ? ATTENDANCE_ICON_LABELS[definition.option.icon]
-            : "Automatic"
-          : definition.option[property] || "—"}
+        {property === "accessMode"
+          ? accessLabels[eventAttendanceAccessMode(definition.option)]
+          : property === "icon"
+            ? definition.option.icon
+              ? ATTENDANCE_ICON_LABELS[definition.option.icon]
+              : "Automatic"
+            : definition.option[property] || "—"}
       </span>
     );
   return (
@@ -61,7 +74,24 @@ function DefinitionField({
       required={property === "value" || property === "label"}
     >
       {(control) =>
-        property === "icon" ? (
+        property === "accessMode" ? (
+          <Select
+            {...control}
+            name={name}
+            value={eventAttendanceAccessMode(definition.option)}
+            onChange={(event) =>
+              props.onChange(definition.id, {
+                accessMode: eventAttendanceAccessModeSchema.parse(event.currentTarget.value),
+              })
+            }
+          >
+            {eventAttendanceAccessModeSchema.options.map((mode) => (
+              <option key={mode} value={mode}>
+                {accessLabels[mode]}
+              </option>
+            ))}
+          </Select>
+        ) : property === "icon" ? (
           <Select
             {...control}
             name={name}
@@ -142,6 +172,11 @@ export function EventAttendanceOptions(props: AttendanceOptionsProps) {
             cell: (definition) => <DefinitionField definition={definition} property="value" props={props} />,
           },
           {
+            id: "accessMode",
+            header: "Session access",
+            cell: (definition) => <DefinitionField definition={definition} property="accessMode" props={props} />,
+          },
+          {
             id: "description",
             header: "Description",
             cell: (definition) => <DefinitionField definition={definition} property="description" props={props} />,
@@ -185,11 +220,19 @@ export function EventAttendanceOptions(props: AttendanceOptionsProps) {
               </span>
             </summary>
             <div class="pk-stack pk-attendance-settings__definition-fields">
-              {(["label", "value", "description", "icon"] as const).map((property) =>
+              {(["label", "value", "description", "icon", "accessMode"] as const).map((property) =>
                 props.readOnly ? (
                   <div key={property} class="pk-stack pk-stack--tight">
                     <span class="pk-small pk-muted">
-                      {{ label: "Label", value: "Key", description: "Description", icon: "Icon" }[property]}
+                      {
+                        {
+                          label: "Label",
+                          value: "Key",
+                          description: "Description",
+                          icon: "Icon",
+                          accessMode: "Session access",
+                        }[property]
+                      }
                     </span>
                     <DefinitionField definition={definition} property={property} props={props} />
                   </div>

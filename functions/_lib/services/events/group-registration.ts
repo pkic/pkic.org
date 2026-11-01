@@ -51,7 +51,6 @@ export async function submitGroupEventRegistration(
       firstName: user.first_name,
       lastName: user.last_name,
       email: user.email,
-      attendanceType: input.attendanceType,
       dayAttendance: input.dayAttendance,
       customAnswers: input.customAnswers,
       consents: input.consents,

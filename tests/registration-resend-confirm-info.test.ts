@@ -71,6 +71,11 @@ async function registerAttendee(): Promise<{
   email: string;
   manageToken: string;
 }> {
+  await env.DB.prepare(
+    "INSERT INTO event_days(id,event_id,day_date,created_at,updated_at) SELECT ? ,id,'2026-12-01',?,? FROM events WHERE slug='pqc-2026' ON CONFLICT(event_id,day_date) DO NOTHING",
+  )
+    .bind(crypto.randomUUID(), new Date().toISOString(), new Date().toISOString())
+    .run();
   const registrationEnv = {
     ...env,
     EMAIL_RATE_LIMITER: createTestRateLimiter(100),
@@ -83,7 +88,7 @@ async function registerAttendee(): Promise<{
       firstName: "Test",
       lastName: "User",
       email: "resendtest@pkic.org",
-      attendanceType: "virtual",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
       sourceType: "direct",
       consents: [
         { termKey: "privacy-policy", version: "v1" },
@@ -563,7 +568,7 @@ describe("resend-confirmation endpoint", () => {
         firstName: "Test",
         lastName: "User",
         email: "resendtest@pkic.org",
-        attendanceType: "virtual",
+        dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
         sourceType: "direct",
         consents: [
           { termKey: "privacy-policy", version: "v1" },

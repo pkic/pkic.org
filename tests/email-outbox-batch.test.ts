@@ -74,6 +74,10 @@ async function queueN(db: typeof env.DB, eventId: string, count: number): Promis
 }
 
 describe("email outbox batch processing", () => {
+  it("keeps unmocked email delivery on a local-only test endpoint", () => {
+    expect(new URL(env.SENDGRID_API_BASE!).hostname).toBe("127.0.0.1");
+  });
+
   let eventId: string;
   let adminId: string;
 
@@ -202,8 +206,8 @@ describe("email outbox batch processing", () => {
     const mailEnv = { ...env, ASSETS_BUCKET: { ...assetsBucket, get } };
     const now = new Date().toISOString();
     await env.DB.prepare(
-      `INSERT INTO registrations (id, event_id, user_id, status, attendance_type, source_type, manage_link_secret, created_at, updated_at)
-       VALUES (?, ?, ?, 'registered', 'virtual', 'test', ?, ?, ?)`,
+      `INSERT INTO registrations (id, event_id, user_id, status, source_type, manage_link_secret, created_at, updated_at)
+       VALUES (?, ?, ?, 'registered', 'test', ?, ?, ?)`,
     )
       .bind(registrationId, eventId, adminId, manageSecret, now, now)
       .run();

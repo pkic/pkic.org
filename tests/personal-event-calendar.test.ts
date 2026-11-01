@@ -9,6 +9,8 @@ import { createRegistration } from "../functions/_lib/services/registrations";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { insertUser } from "./helpers/membership";
+import { buildRegistrationIcs, calendarConfirmedDays } from "../functions/_lib/utils/calendar";
+import { seedSessionAttendanceDays } from "./helpers/session-attendance-days";
 import { resetDb } from "./helpers/reset-db";
 
 const signingSecret = "personal-event-calendar-test-secret";
@@ -29,6 +31,40 @@ describe("personal event calendar", () => {
     await seedEventAndAdmin(env.DB);
   });
 
+  it("uses configured access, local day times, and excludes unconfirmed attendance", async () => {
+    const event = {
+      ...(await getEventBySlug(env.DB, "pqc-2026")),
+      timezone: "Europe/Amsterdam",
+      starts_at: "2026-03-28T08:00:00.000Z",
+      ends_at: "2026-03-28T17:00:00.000Z",
+    };
+    const days = [
+      { dayDate: "2026-03-29", attendanceType: "moon_base", label: "Sunday", accessMode: "physical" as const },
+      { dayDate: "2026-03-30", attendanceType: "lunar_stream", label: "Monday", accessMode: "remote" as const },
+    ];
+    const selected = calendarConfirmedDays(days, [{ dayDate: "2026-03-30", status: "waiting" }]);
+    const result = await buildRegistrationIcs(event, "registration", "https://example.test/manage", selected);
+    const calendar = new ICAL.Component(ICAL.parse(result.files[0]!.content));
+    const entries = calendar.getAllSubcomponents("vevent");
+    expect(entries).toHaveLength(1);
+    expect(String(entries[0]!.getFirstPropertyValue("dtstart"))).toBe("2026-03-29T07:00:00Z");
+    for (const status of ["waiting", "offered", "expired"]) {
+      expect(calendarConfirmedDays(days, [{ dayDate: days[0]!.dayDate, status }])).toEqual([days[1]]);
+    }
+    expect(calendarConfirmedDays(days, [{ dayDate: days[0]!.dayDate, status: "accepted" }])).toEqual(days);
+    expect((await buildRegistrationIcs(event, "registration", "https://example.test/manage", [])).files).toEqual([]);
+    expect(
+      (await buildRegistrationIcs(event, "registration", "https://example.test/manage", [days[1]!])).files,
+    ).toHaveLength(1);
+    expect(
+      (
+        await buildRegistrationIcs(event, "registration", "https://example.test/manage", [
+          { ...days[0]!, accessMode: "none" },
+        ])
+      ).files,
+    ).toEqual([]);
+  });
+
   it("downloads the active attendee's existing calendar identity and denies other identities", async () => {
     const event = await getEventBySlug(env.DB, "pqc-2026");
     const attendeeEmail = `calendar-attendee-${crypto.randomUUID()}@example.test`;
@@ -37,11 +73,11 @@ describe("personal event calendar", () => {
     const created = await createRegistration(env.DB, {
       event,
       userId: attendeeId,
-      attendanceType: "virtual",
       sourceType: "direct",
       signingSecret,
     });
     const registrationId = created.registration.id;
+    await seedSessionAttendanceDays(env.DB, event.id, ["2026-05-20"], "virtual");
     await env.DB.prepare("UPDATE registrations SET status = 'registered' WHERE id = ?").bind(registrationId).run();
     const attendeeToken = await createAdminSession(env.DB, attendeeId, crypto.randomUUID(), signingSecret);
     const otherToken = await createAdminSession(env.DB, other.id, crypto.randomUUID(), signingSecret);

@@ -192,7 +192,9 @@ describe("private event HTML badge compiler", () => {
     const html = Array.from({ length: 100 }, () => compiled.renderSide("front", badge)).join("");
     expect(compiled.resourcesHtml).toContain('id="badge-vector-0-paint"');
     expect(compiled.resourcesHtml).toContain('fill="url(#badge-vector-0-paint)"');
-    expect(html).toContain('<svg class="badge-template-sponsor-logo" role="img" aria-label="Owned sponsor"');
+    expect(html).toMatch(
+      /<svg class="badge-template-sponsor-logo badge-logo-aspect-\d+" role="img" aria-label="Owned sponsor"/,
+    );
     expect(html).not.toContain("linearGradient");
     expect(html.match(/href="#badge-vector-0"/g)).toHaveLength(100);
     expect(compiled.resourcesHtml.match(/<symbol /g)).toHaveLength(1);

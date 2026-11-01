@@ -620,9 +620,7 @@ test.describe("browser workflows", () => {
     await fillRegistrationStep4(page, capacityTwo, false);
     await expect(page.getByRole("heading", { name: /registration is in place/i })).toBeVisible({ timeout: 15_000 });
     await expect(
-      page.getByText(
-        "Your overall registration is confirmed, but one or more selected in-person days are still pending",
-      ),
+      page.getByText("Your registration is confirmed, but one or more selected days are still waiting for a place"),
     ).toBeVisible();
     await screenshot("01-partial-capacity-confirmed");
 

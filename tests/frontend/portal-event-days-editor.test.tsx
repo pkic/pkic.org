@@ -221,6 +221,27 @@ describe("event attendance days editor", () => {
     ]);
   });
 
+  it("saves the organizer's configured session access for an option", async () => {
+    const captured = stubDays(oneDay, () =>
+      json({ success: true, eventUpdatedAt: "2026-08-02T00:00:00.000Z", skipped: [] }),
+    );
+    const container = mount(
+      <EventDaysEditor groupId={GROUP_ID} event={event} expectedUpdatedAt={event.updatedAt} onRevision={vi.fn()} />,
+    );
+    await settle();
+    await beginRecordEdit(container, "Attendance days actions", "Edit attendance days");
+    await openOptions(container);
+    const select = container.querySelector<HTMLSelectElement>('select[name$=".accessMode"]')!;
+    expect(select.value).toBe("physical");
+    await act(() => {
+      select.value = "remote";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await submit(container);
+    const body = groupEventDaysReplaceSchema.parse(JSON.parse(captured.find((item) => item.method === "PUT")!.body!));
+    expect(body.configuration.days[0].attendanceOptions[0]).toMatchObject({ value: "in_person", accessMode: "remote" });
+  });
+
   it("preserves a disabled option and capacity across phone tabs and a desktop resize", async () => {
     let phone = true;
     const listeners = new Set<() => void>();

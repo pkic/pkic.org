@@ -95,7 +95,7 @@ async function fixture(dayCapacity = 1, secondRegistered = false) {
     const registrationId = crypto.randomUUID();
     await env.DB.batch([
       env.DB.prepare(
-        "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','in_person','test',?,datetime('now'),datetime('now'))",
+        "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','test',?,datetime('now'),datetime('now'))",
       ).bind(registrationId, eventId, userId, crypto.randomUUID()),
       env.DB.prepare(
         "INSERT INTO registration_day_attendance(id,registration_id,event_day_id,attendance_type,created_at,updated_at) VALUES(?,?,?,'in_person',datetime('now'),datetime('now'))",

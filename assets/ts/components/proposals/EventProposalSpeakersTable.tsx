@@ -18,7 +18,7 @@ function speakerName(speaker: EventProposalSpeaker): string {
 
 function selectedDays(speaker: EventProposalSpeaker) {
   if (speaker.registrationStatus !== "registered") return "—";
-  return <RegistrationDayStates days={speaker.days} attendanceType={speaker.attendanceType} />;
+  return <RegistrationDayStates days={speaker.days} />;
 }
 
 /** Event-wide roster, with one row per talk speaker and a live registration filter. */

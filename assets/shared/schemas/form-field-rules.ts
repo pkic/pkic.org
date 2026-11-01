@@ -210,7 +210,7 @@ export function parseFormFieldRules(value: unknown): FormFieldRules {
       : undefined;
     const parsed = showWhenSchema.safeParse({
       dayAttendanceIn: dayAttendanceIn?.slice(0, 20),
-      eventAttendanceTypeIn: eventAttendanceTypeIn?.slice(0, 3),
+      eventAttendanceTypeIn: eventAttendanceTypeIn?.slice(0, 20),
     });
     if (parsed.success && (parsed.data.dayAttendanceIn?.length || parsed.data.eventAttendanceTypeIn?.length)) {
       candidate.showWhen = parsed.data;

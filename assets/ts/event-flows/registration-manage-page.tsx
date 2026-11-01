@@ -38,7 +38,7 @@ function RegistrationStatusBanner({
   dayAttendance,
   dayWaitlist,
 }: {
-  dayAttendance: Array<{ dayDate: string; attendanceType: string; label: string | null }>;
+  dayAttendance: Array<{ dayDate: string; attendanceType: string; label: string | null; optionLabel?: string | null }>;
   dayWaitlist: Array<{ dayDate: string; status: string }>;
 }) {
   const activeDayWaitlist = dayWaitlist.filter((entry) => isPendingRegistrationDayWaitlistStatus(entry.status));
@@ -51,8 +51,8 @@ function RegistrationStatusBanner({
         <strong>Registration status:</strong>{" "}
         {offeredDayWaitlist.length > 0 ? (
           <>
-            <Badge tone="info">Spot available</Badge> An in-person spot is available for one or more waitlisted days.
-            Use the claim button below while the offer is active.
+            <Badge tone="info">Place available</Badge> A place is available for one or more waitlisted days. Use the
+            claim button below while the offer is active.
           </>
         ) : (
           <>
@@ -69,7 +69,7 @@ function RegistrationStatusBanner({
           <dl class="pk-datalist">
             {dayAttendance.map((day) => {
               const dayLabel = day.label ?? day.dayDate;
-              const attLabel = attendanceTypeLabel(day.attendanceType);
+              const attLabel = day.optionLabel ?? attendanceTypeLabel(day.attendanceType);
               const waitlistStatus = waitlistByDay.get(day.dayDate);
               const confirmation = dayConfirmation(waitlistStatus);
               return (
@@ -194,7 +194,7 @@ async function main(): Promise<void> {
         <>
           {offeredDayDates.length > 0 && (
             <div class="event-flow-day-waitlist-offer pk-stack pk-stack--snug">
-              <p>An in-person spot is available. Claim it before the offer expires.</p>
+              <p>A spot is available. Claim it before the offer expires.</p>
               {/* Class names rather than the `Button` component, because
                   `withLoadingButton` drives this control imperatively. */}
               <button
@@ -215,7 +215,7 @@ async function main(): Promise<void> {
                       );
                       if (manageFormEl) {
                         showPostAction(root, manageFormEl, {
-                          title: "In-person spot claimed",
+                          title: "Spot claimed",
                           message: "Your day attendance has been confirmed. A confirmation email is on its way.",
                         });
                       }
@@ -233,7 +233,7 @@ async function main(): Promise<void> {
             {activeDayWaitlist.map((entry) => {
               const expiry = entry.offerExpiresAt ? `, offer expires ${formatDateTime(entry.offerExpiresAt)}` : "";
               const dayLabel = labelByDayDate.get(entry.dayDate) ?? entry.dayDate;
-              const statusText = entry.status === "offered" ? "In-person spot available" : "Waiting for in-person seat";
+              const statusText = entry.status === "offered" ? "Spot available" : "On the waitlist";
               return (
                 // The state is spelled out inside the badge, so the tone only
                 // agrees with the words rather than carrying them.
@@ -446,7 +446,7 @@ async function main(): Promise<void> {
       title: "Cancel your registration?",
       body:
         `Your place at ${eventName} is released for someone else. You can register again later while ` +
-        "registration is open, but a released in-person place or waitlisted spot is not held for you.",
+        "registration is open, but a released place or waitlist position is not held for you.",
       confirmLabel: "Cancel registration",
       cancelLabel: "Keep registration",
     });

@@ -19,7 +19,7 @@ import {
   type AcceptedRegistrationTermRow,
 } from "../../utils/registration-email";
 import { buildAttendanceEmailData, buildRegistrationEmailStatusData } from "../../utils/attendance";
-import { buildRegistrationIcs } from "../../utils/calendar";
+import { buildRegistrationIcs, calendarConfirmedDays } from "../../utils/calendar";
 import { generateSignedRsvpAddress } from "../../email/rsvp";
 import { prepareRegistrationDayAttendance, type RegistrationDayAttendanceRow } from "../event-days";
 import { prepareRegistrationDayWaitlist, type RegistrationDayWaitlistRow } from "./day-waitlist-queries";
@@ -56,7 +56,15 @@ export interface RegistrationStatusEmailEvent {
 }
 
 /** What an email says about a held day; a builder passing its own rows need not carry timestamps. */
-type DayAttendanceForEmail = Array<{ dayDate: string; attendanceType: string; label: string | null }>;
+type DayAttendanceForEmail = Array<{
+  dayDate: string;
+  attendanceType: string;
+  label: string | null;
+  optionLabel?: string | null;
+  accessMode?: import("../../../../assets/shared/event-attendance-access").EventAttendanceAccessMode;
+  startsAt?: string | null;
+  endsAt?: string | null;
+}>;
 
 interface RegistrationEmailOverrides {
   registration?: RegistrationRecord;
@@ -133,7 +141,7 @@ export async function prepareRegistrationStatusEmail(
 ): Promise<{ outboxId: string; statement: StatementLike; manageToken: string; manageUrl: string }> {
   const { registration, user, dayAttendance, dayWaitlist, customAnswerRows, acceptedTermsText } =
     await loadRegistrationEmailContext(db, params.event, params.registrationId, params);
-  const attendanceData = buildAttendanceEmailData(registration.attendance_type, dayAttendance, dayWaitlist);
+  const attendanceData = buildAttendanceEmailData(dayAttendance, dayWaitlist);
   const statusData = buildRegistrationEmailStatusData(registration.status, dayWaitlist);
   const { manageToken, manageUrl } = await registrationManageCapability(params.appBaseUrl, params.event, registration);
   const recipientEmail = params.recipientEmailOverride ?? user.email;
@@ -155,8 +163,15 @@ export async function prepareRegistrationStatusEmail(
       email: recipientEmail,
       organizationName: user.organization_name ?? "",
       jobTitle: user.job_title ?? "",
-      attendanceType: registration.attendance_type,
       attendanceLabel: attendanceData.attendanceLabel,
+      attendanceSummary: attendanceData.dayAttendance.length
+        ? attendanceData.dayAttendance
+            .map(
+              (day) =>
+                `${day.dayLabel}: ${day.attendanceLabel}${day.statusLabel === day.attendanceLabel ? "" : ` — ${day.statusLabel}`}`,
+            )
+            .join("; ")
+        : attendanceData.attendanceLabel,
       dayAttendance: attendanceData.dayAttendance,
       dayWaitlist,
       customAnswerRows,
@@ -201,7 +216,7 @@ export async function prepareRegistrationConfirmedEmail(
   const { registration, user, dayAttendance, dayWaitlist, customAnswerRows, acceptedTermsText } =
     await loadRegistrationEmailContext(db, params.event, params.registrationId, params);
   const recipientEmail = params.recipientEmailOverride ?? user.email;
-  const attendanceData = buildAttendanceEmailData(registration.attendance_type, dayAttendance, dayWaitlist);
+  const attendanceData = buildAttendanceEmailData(dayAttendance, dayWaitlist);
   const statusData = buildRegistrationEmailStatusData(registration.status, dayWaitlist);
   const { manageUrl } = await registrationManageCapability(params.appBaseUrl, params.event, registration);
   const rsvpAddress = params.internalSigningSecret
@@ -211,7 +226,7 @@ export async function prepareRegistrationConfirmedEmail(
     params.event,
     registration.id,
     manageUrl,
-    dayAttendance,
+    calendarConfirmedDays(dayAttendance, dayWaitlist),
     params.appBaseUrl,
     rsvpAddress,
     recipientEmail,
@@ -242,13 +257,13 @@ export async function prepareRegistrationConfirmedEmail(
         ]
       : undefined,
     data: {
+      hasCalendarInvite: calendar.files.length > 0,
       ...buildEventEmailVariables(params.event, params.appBaseUrl),
       firstName: user.first_name ?? "",
       lastName: user.last_name ?? "",
       email: recipientEmail,
       organizationName: user.organization_name ?? "",
       jobTitle: user.job_title ?? "",
-      attendanceType: registration.attendance_type,
       attendanceLabel: attendanceData.attendanceLabel,
       dayAttendance: attendanceData.dayAttendance,
       dayWaitlist,
@@ -302,7 +317,7 @@ export async function prepareRegistrationConfirmationEmail(
   const { registration, user, dayAttendance, dayWaitlist, customAnswerRows, acceptedTermsText } =
     await loadRegistrationEmailContext(db, params.event, params.registrationId, params);
   const recipientEmail = params.recipientEmail ?? user.email;
-  const attendanceData = buildAttendanceEmailData(registration.attendance_type, dayAttendance, dayWaitlist);
+  const attendanceData = buildAttendanceEmailData(dayAttendance, dayWaitlist);
   const statusData = buildRegistrationEmailStatusData("pending_email_confirmation", dayWaitlist);
   const kind = params.kind ?? "registration";
   const confirmationUrl = await registrationConfirmationUrl(

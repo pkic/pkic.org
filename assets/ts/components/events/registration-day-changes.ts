@@ -4,8 +4,14 @@
  * since there is no stored "not attending" type.
  */
 import type { RegistrationManageReadResponse } from "../../../shared/schemas/registration";
+import { eventAttendanceAccessMode } from "../../../shared/event-attendance-access";
 
-export const IN_PERSON = "in_person";
+export function physicalAttendance(data: RegistrationManageReadResponse, dayDate: string, value: string): boolean {
+  const option = data.eventDays
+    .find((day) => day.dayDate === dayDate)
+    ?.attendanceOptions.find((item) => item.value === value);
+  return eventAttendanceAccessMode({ value, accessMode: option?.accessMode }) === "physical";
+}
 
 export type DayState =
   | { kind: "attending"; attendanceType: string }

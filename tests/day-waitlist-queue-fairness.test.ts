@@ -89,8 +89,8 @@ describe("day waitlist queue fairness", () => {
       ),
       env.DB.prepare(
         `INSERT INTO registrations
-         (id, event_id, user_id, status, attendance_type, source_type, manage_link_secret, created_at, updated_at)
-         VALUES ('admitted-registration', ?, 'admitted', 'registered', 'in_person', 'direct', 'secret', datetime('now'), datetime('now'))`,
+         (id, event_id, user_id, status, source_type, manage_link_secret, created_at, updated_at)
+         VALUES ('admitted-registration', ?, 'admitted', 'registered', 'direct', 'secret', datetime('now'), datetime('now'))`,
       ).bind(eventId),
       env.DB.prepare(
         `INSERT INTO registration_day_attendance
@@ -108,7 +108,6 @@ describe("day waitlist queue fairness", () => {
     const attendee = await createRegistration(env.DB, {
       event,
       userId: "attendee",
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -151,19 +150,16 @@ describe("day waitlist queue fairness", () => {
     const holder = await createRegistration(env.DB, {
       ...common,
       userId: "holder",
-      attendanceType: "in_person",
       dayAttendance: inPerson,
     });
     const firstWaiting = await createRegistration(env.DB, {
       ...common,
       userId: "waiting",
-      attendanceType: "in_person",
       dayAttendance: inPerson,
     });
     const editing = await createRegistration(env.DB, {
       ...common,
       userId: "editing",
-      attendanceType: "virtual",
       dayAttendance: virtual,
     });
 
@@ -176,7 +172,6 @@ describe("day waitlist queue fairness", () => {
     const direct = await createRegistration(env.DB, {
       ...common,
       userId: "direct",
-      attendanceType: "in_person",
       dayAttendance: inPerson,
     });
     await updateRegistrationByManageToken(env.DB, {
@@ -225,19 +220,16 @@ describe("day waitlist queue fairness", () => {
     await createRegistration(env.DB, {
       ...common,
       userId: "holder",
-      attendanceType: "in_person",
       dayAttendance: inPerson,
     });
     const firstWaiting = await createRegistration(env.DB, {
       ...common,
       userId: "waiting",
-      attendanceType: "in_person",
       dayAttendance: inPerson,
     });
     const editing = await createRegistration(env.DB, {
       ...common,
       userId: "editing",
-      attendanceType: "virtual",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
     });
 
@@ -246,7 +238,6 @@ describe("day waitlist queue fairness", () => {
     const direct = await createRegistration(env.DB, {
       ...common,
       userId: "direct",
-      attendanceType: "in_person",
       dayAttendance: inPerson,
     });
     await updateRegistrationByManageToken(env.DB, {
@@ -258,7 +249,6 @@ describe("day waitlist queue fairness", () => {
     const late = await createRegistration(env.DB, {
       ...common,
       userId: "late",
-      attendanceType: "in_person",
       dayAttendance: inPerson,
     });
 

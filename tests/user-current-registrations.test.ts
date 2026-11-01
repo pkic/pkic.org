@@ -40,17 +40,10 @@ async function insertRegistration(
   const id = crypto.randomUUID();
   await env.DB.prepare(
     `INSERT INTO registrations
-       (id, event_id, user_id, status, attendance_type, source_type, manage_link_secret, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, 'self_service', ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
+       (id, event_id, user_id, status, source_type, manage_link_secret, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'self_service', ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
   )
-    .bind(
-      id,
-      eventId,
-      userId,
-      overrides.status ?? "registered",
-      overrides.attendanceType ?? "in_person",
-      crypto.randomUUID(),
-    )
+    .bind(id, eventId, userId, overrides.status ?? "registered", crypto.randomUUID())
     .run();
   return id;
 }
@@ -58,10 +51,16 @@ async function insertRegistration(
 async function markActiveDayWaitlisted(eventId: string, registrationId: string, userId: string): Promise<void> {
   const dayId = crypto.randomUUID();
   await env.DB.prepare(
-    `INSERT INTO event_days (id, event_id, day_date, sort_order, created_at, updated_at)
-     VALUES (?, ?, '2027-06-01', 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
+    `INSERT INTO event_days (id, event_id, day_date, sort_order, attendance_options_json, created_at, updated_at)
+     VALUES (?, ?, '2027-06-01', 0, '[{"value":"moon_base","label":"Moon outpost","accessMode":"physical"}]', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
   )
     .bind(dayId, eventId)
+    .run();
+  await env.DB.prepare(
+    `INSERT INTO registration_day_attendance (id, registration_id, event_day_id, attendance_type, created_at, updated_at)
+     VALUES (?, ?, ?, 'moon_base', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
+  )
+    .bind(crypto.randomUUID(), registrationId, dayId)
     .run();
   await env.DB.prepare(
     `INSERT INTO event_day_waitlist_entries
@@ -157,13 +156,29 @@ describe("GET /api/v1/users/current/registrations", () => {
 
     const early = page.registrations.find((r) => r.id === earlyRegistration)!;
     expect(early.waitlisted).toBe(false);
-    expect(early.attendanceType).toBe("in_person");
+    expect(early.days).toEqual([]);
     expect(early.status).toBe("registered");
     expect(early.event.startsAt).toBe("2027-01-01T00:00:00.000Z");
 
     const late = page.registrations.find((r) => r.id === lateRegistration)!;
     expect(late.waitlisted).toBe(true);
-    expect(late.attendanceType).toBe("virtual");
+    expect(late.days).toEqual([
+      {
+        dayDate: "2027-06-01",
+        label: null,
+        attendanceType: "moon_base",
+        optionLabel: "Moon outpost",
+        waitlistStatus: "waiting",
+      },
+    ]);
+    await env.DB.prepare("UPDATE event_day_waitlist_entries SET status='accepted' WHERE registration_id=?")
+      .bind(lateRegistration)
+      .run();
+    const afterAdmission = await listCurrentUserRegistrations(env.DB, userId, { limit: 20, offset: 0 });
+    expect(afterAdmission.registrations.find((r) => r.id === lateRegistration)).toMatchObject({
+      waitlisted: false,
+      days: [{ attendanceType: "moon_base", waitlistStatus: null }],
+    });
 
     // Parity: the route is a thin wrapper over the service, not a second policy.
     const direct = await listCurrentUserRegistrations(env.DB, userId, { limit: 20, offset: 0 });

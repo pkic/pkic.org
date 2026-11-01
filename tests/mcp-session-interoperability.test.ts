@@ -148,7 +148,7 @@ async function registerPromotionAttendee(userId: string) {
   const event = await env.DB.prepare("SELECT id FROM events WHERE slug='pqc-2026'").first<{ id: string }>();
   const at = new Date().toISOString();
   await env.DB.prepare(
-    "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','virtual','direct','synthetic',?,?)",
+    "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','direct','synthetic',?,?)",
   )
     .bind(crypto.randomUUID(), event!.id, userId, at, at)
     .run();

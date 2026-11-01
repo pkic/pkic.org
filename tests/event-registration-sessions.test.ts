@@ -69,7 +69,7 @@ beforeEach(async () => {
   sessions = titles.map(() => crypto.randomUUID());
   await env.DB.batch([
     env.DB.prepare(
-      "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','in_person','direct',?,?,?)",
+      "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','direct',?,?,?)",
     ).bind(registrationId, eventId, ownerId, crypto.randomUUID(), now, now),
     env.DB.prepare(
       "INSERT INTO event_agenda_state(event_id,revision,published_revision,updated_at) VALUES(?,2,1,?)",

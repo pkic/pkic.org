@@ -366,7 +366,7 @@ describe("ParticipantRegistration", () => {
     );
     const container = await mount();
 
-    await click(button(container, "Claim seat"));
+    await click(button(container, "Claim place"));
     expect(registrationManageSchema.parse(requests.find(({ method }) => method === "PATCH")?.body)).toEqual({
       action: "update",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
@@ -389,7 +389,7 @@ describe("ParticipantRegistration", () => {
     const container = await mount();
     const rows = [...container.querySelectorAll<HTMLElement>(".pk-day-status__row")];
     expect(rows.map((row) => row.dataset.kind)).toEqual(["waiting", "confirmed"]);
-    expect(rows[0]!.textContent).toContain("On the waiting list for an in-person seat");
+    expect(rows[0]!.textContent).toContain("On the waiting list: In-person");
   });
 
   it("keeps a waiting day in the queue when the days are saved unchanged", async () => {
@@ -450,6 +450,34 @@ describe("ParticipantRegistration", () => {
         { dayDate: "2026-12-01", attendanceType: "on_demand" },
         { dayDate: "2026-12-02", attendanceType: "in_person" },
       ],
+    });
+  });
+
+  it("offers the release flow for a custom physical option", async () => {
+    const day = readResponse().eventDays[0]!;
+    const requests = installApi(
+      readResponse({
+        eventDays: [
+          {
+            ...day,
+            attendanceOptions: [
+              { value: "moon_base", label: "Moon base", accessMode: "physical" },
+              { value: "live_lounge", label: "Live lounge", accessMode: "remote" },
+            ],
+          },
+        ],
+        dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "moon_base", optionLabel: "Moon base", label: null }],
+      }),
+    );
+    const container = await mount();
+    await click(button(container, "Can't make it in person?"));
+    const dialog = openConfirmation()!;
+    await click(dialog.querySelector<HTMLInputElement>('input[name="joinInstead"][value="live_lounge"]'));
+    await click([...dialog.querySelectorAll("button")].find((item) => item.textContent?.startsWith("Release"))!);
+    await settle();
+    expect(registrationManageSchema.parse(requests.find(({ method }) => method === "PATCH")?.body)).toEqual({
+      action: "update",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "live_lounge" }],
     });
   });
 

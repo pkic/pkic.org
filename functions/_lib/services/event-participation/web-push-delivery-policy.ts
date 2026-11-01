@@ -1,3 +1,4 @@
+import { registrationDaySessionAccessSql } from "./session-access";
 import { publishedSessionsSql } from "./published-schedule";
 import { onPersonalAgendaSql } from "./personal-agenda-membership";
 /** Rechecked at claim and immediately before transport; browser permission is not stored authorization. */
@@ -15,6 +16,5 @@ export function webPushDeliverableSql(alias = "outbox") {
           AND EXISTS(SELECT 1 FROM (${publishedSessionsSql}) published WHERE published.event_id=entry.event_id AND published.id=entry.occurrence_id AND published.start_at=entry.start_at)
           AND EXISTS(SELECT 1 FROM agenda_session_participations participation JOIN registrations registration ON registration.event_id=participation.event_id AND registration.user_id=participation.user_id
             WHERE participation.event_id=entry.event_id AND participation.occurrence_id=entry.occurrence_id AND participation.user_id=entry.user_id AND participation.status='reserved' AND registration.status='registered'
-              AND COALESCE((SELECT attendance.attendance_type FROM registration_day_attendance attendance JOIN event_days day ON day.id=attendance.event_day_id WHERE attendance.registration_id=registration.id AND day.day_date=${alias}.day_date),
-                CASE WHEN EXISTS(SELECT 1 FROM event_days day WHERE day.event_id=entry.event_id AND day.day_date=${alias}.day_date) THEN 'none' ELSE registration.attendance_type END)=CASE participation.attendance_mode WHEN 'physical' THEN 'in_person' ELSE 'virtual' END))))`;
+              AND ${registrationDaySessionAccessSql("registration", `${alias}.day_date`)}=CASE participation.attendance_mode WHEN 'physical' THEN 'in_person' ELSE 'virtual' END))))`;
 }

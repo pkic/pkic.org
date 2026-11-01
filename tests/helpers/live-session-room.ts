@@ -74,7 +74,7 @@ export function createLiveRoomFixture() {
       ["outsider", "cancelled"],
     ] as const)
       await env.DB.prepare(
-        "INSERT INTO registrations (id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES (?,?,?,?,'in_person','test',?,?,?)",
+        "INSERT INTO registrations (id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES (?,?,?,?,'test',?,?,?)",
       )
         .bind(crypto.randomUUID(), eventId, users[person], status, crypto.randomUUID(), now, now)
         .run();

@@ -41,7 +41,7 @@ async function person(status = "registered") {
       "INSERT INTO individual_job_titles(user_id,job_title,created_at,updated_at) VALUES(?,'Rear admiral',?,?)",
     ).bind(id, now, now),
     env.DB.prepare(
-      "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,?,'in_person','test',?,?,?)",
+      "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,?,'test',?,?,?)",
     ).bind(crypto.randomUUID(), fixture.eventId, id, status, crypto.randomUUID(), now, now),
   ]);
   return id;

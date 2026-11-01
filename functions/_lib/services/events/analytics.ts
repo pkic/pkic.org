@@ -40,7 +40,7 @@ interface RegistrationsByEventDayRow extends CountByAttendanceTypeRow {
   day_date: string;
   label: string | null;
   sort_order: number;
-  attendance_status: "accepted" | "waitlisted" | "pending";
+  attendance_status: "accepted" | "waitlisted" | "expired" | "pending";
 }
 
 interface InviteDeclineRow {

@@ -132,7 +132,7 @@ function RegistrationRecord({
       title: "Cancel your registration?",
       body:
         "Your place at this event is released for someone else. You can restore the registration from this page " +
-        "while registration is open, but a released in-person place is not held for you.",
+        "while registration is open, but a released place is not held for you.",
       confirmLabel: "Cancel registration",
       cancelLabel: "Keep registration",
     });

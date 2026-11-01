@@ -1,3 +1,4 @@
+import { eventAttendanceAccessMode, eventAttendanceAccessModeSchema } from "../assets/shared/event-attendance-access";
 import { describe, expect, it } from "vitest";
 import { eventEmailCampaignPreviewInputSchema } from "../assets/shared/schemas/event-email-campaigns";
 import {
@@ -67,6 +68,13 @@ describe("canonical form-field rules", () => {
     expect(isFormFieldVisible(rules, { eventAttendanceType: "moon_base_42" })).toBe(true);
   });
 
+  it("retains configured visibility options beyond the legacy three", () => {
+    const rules = parseFormFieldRules({
+      showWhen: { eventAttendanceTypeIn: ["alpha", "beta", "gamma", "moon_base_42"] },
+    });
+    expect(isFormFieldVisible(rules, { dayAttendanceTypes: ["moon_base_42"] })).toBe(true);
+  });
+
   it("uses one tolerant option codec", () => {
     const raw = ["one", { value: "two", label: " Second " }, { ignored: true }];
     expect(parseFormFieldOptions(raw)).toEqual([
@@ -131,11 +139,27 @@ describe("configurable attendance types", () => {
     expect(
       eventViewerStateSchema.safeParse({
         registrationStatus: "registered",
-        attendanceType: "livestream_lounge",
         waitlisted: false,
-        days: [{ date: "2026-12-01", attendanceType: "livestream_lounge", state: "registered" }],
+        days: [{ date: "2026-12-01", attendanceType: "livestream_lounge", accessMode: "remote", state: "registered" }],
         holdsWorkAddress: true,
       }).success,
     ).toBe(true);
+  });
+});
+
+describe("configured attendance session access", () => {
+  it("uses each option's configured mode regardless of its identifier", () => {
+    expect(eventAttendanceAccessMode({ value: "moon_base_42", accessMode: "physical" })).toBe("physical");
+    expect(eventAttendanceAccessMode({ value: "in_person", accessMode: "remote" })).toBe("remote");
+    expect(eventAttendanceAccessMode({ value: "virtual", accessMode: "none" })).toBe("none");
+  });
+
+  it("preserves legacy core defaults without granting unknown options access", () => {
+    expect(eventAttendanceAccessMode({ value: "in_person" })).toBe("physical");
+    expect(eventAttendanceAccessMode({ value: "virtual" })).toBe("remote");
+    expect(eventAttendanceAccessMode({ value: "on_demand" })).toBe("none");
+    expect(eventAttendanceAccessMode({ value: "moon_base_42" })).toBe("none");
+    expect(eventAttendanceAccessMode({ value: "constructor" })).toBe("none");
+    expect(eventAttendanceAccessModeSchema.safeParse("automatic").success).toBe(false);
   });
 });

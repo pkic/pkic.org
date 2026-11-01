@@ -9,7 +9,7 @@ import { getEventBySlug } from "../functions/_lib/services/events";
 import { buildManagedEventsPageQuery, listManagedEvents } from "../functions/_lib/services/events/catalog";
 import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
 import {
-  createRegistration,
+  createRegistration as createRegistrationRaw,
   confirmRegistrationByToken,
   updateRegistrationById,
 } from "../functions/_lib/services/registrations";
@@ -23,6 +23,25 @@ import { createUserBackedAuthAdmin } from "../functions/_lib/auth/admin-identity
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { insertUser } from "./helpers/membership";
 import type { UserBackedAuthAdmin } from "../functions/_lib/types";
+
+async function createRegistration(
+  db: Parameters<typeof createRegistrationRaw>[0],
+  payload: Parameters<typeof createRegistrationRaw>[1],
+) {
+  if (payload.dayAttendance) return createRegistrationRaw(db, payload);
+  const [day] = await queryAll<{ day_date: string }>(
+    db,
+    "SELECT day_date FROM event_days WHERE event_id=? ORDER BY day_date LIMIT 1",
+    payload.event.id,
+  );
+  const dayDate = day?.day_date ?? "2026-12-01";
+  if (!day)
+    await db
+      .prepare("INSERT INTO event_days(id,event_id,day_date,created_at,updated_at) VALUES(?,?,?,?,?)")
+      .bind(crypto.randomUUID(), payload.event.id, dayDate, new Date().toISOString(), new Date().toISOString())
+      .run();
+  return createRegistrationRaw(db, { ...payload, dayAttendance: [{ dayDate, attendanceType: "in_person" }] });
+}
 
 let ADMIN_TOKEN = "event-admin-token";
 
@@ -220,14 +239,14 @@ describe("admin event management endpoints", () => {
       ),
       env.DB.prepare(
         `INSERT INTO registrations
-           (id, event_id, user_id, status, attendance_type, source_type, manage_link_secret, created_at, updated_at)
-         VALUES (?, ?, ?, 'registered', 'in_person', 'direct', ?, datetime('now'), datetime('now'))`,
+           (id, event_id, user_id, status, source_type, manage_link_secret, created_at, updated_at)
+         VALUES (?, ?, ?, 'registered', 'direct', ?, datetime('now'), datetime('now'))`,
       ).bind(crypto.randomUUID(), pageEventId, pageUserId, `page-manage-${crypto.randomUUID()}`),
       ...unrelatedUserIds.map((userId) =>
         env.DB.prepare(
           `INSERT INTO registrations
-             (id, event_id, user_id, status, attendance_type, source_type, manage_link_secret, created_at, updated_at)
-           VALUES (?, ?, ?, 'registered', 'in_person', 'direct', ?, datetime('now'), datetime('now'))`,
+             (id, event_id, user_id, status, source_type, manage_link_secret, created_at, updated_at)
+           VALUES (?, ?, ?, 'registered', 'direct', ?, datetime('now'), datetime('now'))`,
         ).bind(crypto.randomUUID(), unrelatedEventId, userId, `unrelated-manage-${crypto.randomUUID()}`),
       ),
       env.DB.prepare(
@@ -324,8 +343,8 @@ describe("admin event management endpoints", () => {
       ).bind(userId),
       env.DB.prepare(
         `INSERT INTO registrations
-           (id, event_id, user_id, status, attendance_type, source_type, manage_link_secret, created_at, updated_at)
-         VALUES (?, ?, ?, 'registered', 'virtual', 'direct', ?, datetime('now'), datetime('now'))`,
+           (id, event_id, user_id, status, source_type, manage_link_secret, created_at, updated_at)
+         VALUES (?, ?, ?, 'registered', 'direct', ?, datetime('now'), datetime('now'))`,
       ).bind(registrationId, baseEventId, userId, `manage-${crypto.randomUUID()}`),
       env.DB.prepare(
         `INSERT INTO referral_codes
@@ -811,7 +830,6 @@ describe("admin event management endpoints", () => {
     const created = await createRegistration(env.DB, {
       event,
       userId,
-      attendanceType: "virtual",
       sourceType: "direct",
       confirmationTtlHours: 48,
       signingSecret: "test-signing-secret",
@@ -851,7 +869,7 @@ describe("admin event management endpoints", () => {
     // Admin reinstates via the HTTP endpoint
     const reinstateResponse = await callAdmin(`/api/v1/events/pqc-2026/registrations/${created.registration.id}`, {
       method: "PATCH",
-      body: JSON.stringify({ action: "update", attendanceType: "virtual" }),
+      body: JSON.stringify({ action: "update" }),
     });
     expect(reinstateResponse.status).toBe(200);
     const reinstatePayload = (await reinstateResponse.json()) as { success: boolean; registration: { status: string } };
@@ -866,6 +884,31 @@ describe("admin event management endpoints", () => {
       )
     )[0];
     expect(row.cancelled_at).toBeNull();
+  });
+
+  it("does not restore a cancelled registration when the event has no scheduled days", async () => {
+    const { baseEventId } = await setupAdmin();
+    const userId = await insertUser(env.DB, "restore-without-days@example.test");
+    const created = await createRegistration(env.DB, {
+      event: { id: baseEventId },
+      userId,
+      sourceType: "direct",
+      signingSecret: "test-signing-secret",
+    });
+    await env.DB.prepare("UPDATE registrations SET status='cancelled' WHERE id=?").bind(created.registration.id).run();
+    await env.DB.prepare("DELETE FROM registration_day_attendance WHERE registration_id=?")
+      .bind(created.registration.id)
+      .run();
+    await env.DB.prepare("DELETE FROM event_days WHERE event_id=?").bind(baseEventId).run();
+    const response = await callAdmin(`/api/v1/events/pqc-2026/registrations/${created.registration.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "update" }),
+    });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: { code: "EVENT_DAYS_NOT_SCHEDULED" } });
+    expect(
+      await env.DB.prepare("SELECT status FROM registrations WHERE id=?").bind(created.registration.id).first("status"),
+    ).toBe("cancelled");
   });
 
   it("does not let an event route mutate a registration owned by another event", async () => {
@@ -884,7 +927,6 @@ describe("admin event management endpoints", () => {
     const created = await createRegistration(env.DB, {
       event: otherEvent,
       userId,
-      attendanceType: "in_person",
       sourceType: "direct",
       confirmationTtlHours: 48,
       signingSecret: "test-signing-secret",
@@ -893,7 +935,7 @@ describe("admin event management endpoints", () => {
     const wrongEventPath = `/api/v1/events/pqc-2026/registrations/${created.registration.id}`;
     const ordinaryUpdate = await callAdmin(wrongEventPath, {
       method: "PATCH",
-      body: JSON.stringify({ action: "update", attendanceType: "virtual" }),
+      body: JSON.stringify({ action: "update" }),
     });
     expect(ordinaryUpdate.status).toBe(404);
 
@@ -906,7 +948,7 @@ describe("admin event management endpoints", () => {
     expect(
       await queryAll<{ attendance_type: string; status: string }>(
         env.DB,
-        "SELECT attendance_type, status FROM registrations WHERE id = ?",
+        "SELECT d.attendance_type, r.status FROM registrations r JOIN registration_day_attendance d ON d.registration_id=r.id WHERE r.id = ?",
         created.registration.id,
       ),
     ).toEqual([{ attendance_type: "in_person", status: "pending_email_confirmation" }]);
@@ -937,7 +979,6 @@ describe("admin event management endpoints", () => {
     const created = await createRegistration(env.DB, {
       event,
       userId,
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -951,12 +992,14 @@ describe("admin event management endpoints", () => {
 
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toMatchObject({
-      error: { code: "DAY_ATTENDANCE_REQUIRED" },
+      error: { code: "VALIDATION_ERROR" },
     });
     await expect(
-      queryAll<{ attendance_type: string }>(env.DB, "SELECT attendance_type FROM registrations WHERE id = ?", [
-        created.registration.id,
-      ]),
+      queryAll<{ attendance_type: string }>(
+        env.DB,
+        "SELECT attendance_type FROM registration_day_attendance WHERE registration_id = ?",
+        [created.registration.id],
+      ),
     ).resolves.toEqual([{ attendance_type: "in_person" }]);
     await expect(
       queryAll<{ attendance_type: string }>(
@@ -989,7 +1032,6 @@ describe("admin event management endpoints", () => {
     const accepted = await createRegistration(env.DB, {
       event,
       userId: "statistics-accepted",
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -1004,7 +1046,6 @@ describe("admin event management endpoints", () => {
     const waitlisted = await createRegistration(env.DB, {
       event,
       userId: "statistics-waitlisted",
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -1019,7 +1060,7 @@ describe("admin event management endpoints", () => {
     const virtual = await createRegistration(env.DB, {
       event,
       userId: "statistics-virtual",
-      attendanceType: "virtual",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
       signingSecret: "test-signing-secret",
@@ -1089,7 +1130,6 @@ describe("admin event management endpoints", () => {
     const original = await createRegistration(env.DB, {
       event,
       userId: "reactivation-attendee",
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -1102,7 +1142,6 @@ describe("admin event management endpoints", () => {
     const reactivated = await createRegistration(env.DB, {
       event,
       userId: "reactivation-attendee",
-      attendanceType: "virtual",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -1147,7 +1186,6 @@ describe("admin event management endpoints", () => {
     const created = await createRegistration(env.DB, {
       event,
       userId: "legacy-movement-attendee",
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -1215,7 +1253,6 @@ describe("admin event management endpoints", () => {
     const created = await createRegistration(env.DB, {
       event,
       userId: "movement-attendee",
-      attendanceType: "in_person",
       dayAttendance,
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -1240,7 +1277,6 @@ describe("admin event management endpoints", () => {
         eventId: event.id,
         registrationId: created.registration.id,
         action: "update",
-        attendanceType: "virtual",
         dayAttendance: dayAttendance.map((entry) => ({ ...entry, attendanceType: "virtual" as const })),
         waitlistClaimWindowHours: 24,
       },
@@ -1331,7 +1367,6 @@ describe("admin event management endpoints", () => {
     const later = await createRegistration(env.DB, {
       event,
       userId: "movement-later",
-      attendanceType: "in_person",
       dayAttendance,
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -1348,7 +1383,6 @@ describe("admin event management endpoints", () => {
         eventId: event.id,
         registrationId: later.registration.id,
         action: "update",
-        attendanceType: "virtual",
         dayAttendance: dayAttendance.map((entry) => ({ ...entry, attendanceType: "virtual" as const })),
         waitlistClaimWindowHours: 24,
       },
@@ -1360,7 +1394,6 @@ describe("admin event management endpoints", () => {
         eventId: event.id,
         registrationId: created.registration.id,
         action: "update",
-        attendanceType: "on_demand",
         dayAttendance: dayAttendance.map((entry) => ({ ...entry, attendanceType: "on_demand" as const })),
         waitlistClaimWindowHours: 24,
       },
@@ -1421,7 +1454,6 @@ describe("admin event management endpoints", () => {
       const registration = await createRegistration(env.DB, {
         event,
         userId,
-        attendanceType: "virtual",
         sourceType: "direct",
         confirmationTtlHours: 48,
         signingSecret: "test-signing-secret",

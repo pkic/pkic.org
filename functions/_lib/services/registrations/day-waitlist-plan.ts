@@ -1,9 +1,12 @@
+import { eventAttendanceAccessMode } from "../../../../assets/shared/event-attendance-access";
+import { configuredAttendanceOptions } from "../event-days";
 import { nowIso } from "../../utils/time";
 import type { DatabaseLike, StatementLike } from "../../types";
 import type { DayAttendanceSelection } from "../event-days";
 import { uuid } from "../../utils/ids";
 import { prepareAuditLog } from "../audit";
 import {
+  attendanceOptionCapacity,
   dayWaitlistOfferUnavailableError,
   prepareCapacityEventDays,
   prepareCapacityGuardStatements,
@@ -83,22 +86,27 @@ export function planRegistrationDayWaitlistSync(
   const preserved = new Set(payload.preserveConfirmedEventDayIds ?? []);
   const forcedWaitlistDates = new Set(payload.forceWaitlistDayDates ?? []);
   const claimOfferedDayDates = new Set(payload.claimOfferedDayDates ?? []);
-  const { at: now, eventDays, existingRows, capacityRows, storedRegistration } = snapshot;
+  const { at: now, eventDays, existingRows, capacityRows, previousSelections, storedRegistration } = snapshot;
   if (!eventDays.length) {
     if (claimOfferedDayDates.size > 0) throw dayWaitlistOfferUnavailableError();
     return { guardStatements: [], statements: [], activeRows: [], changed: false, decisions: [] };
   }
 
   const dayByDate = new Map(eventDays.map((day) => [day.day_date, day]));
+  const existingByDay = new Map(existingRows.map((row) => [row.event_day_id, row]));
+  const previousByDay = new Map(previousSelections.map((row) => [row.event_day_id, row.attendance_type]));
   for (const dayDate of claimOfferedDayDates) {
     const day = dayByDate.get(dayDate);
-    if (selectedByDate.get(dayDate) !== "in_person" || !day?.in_person_capacity || day.in_person_capacity <= 0) {
+    if (
+      !day ||
+      previousByDay.get(day.id) !== selectedByDate.get(dayDate) ||
+      existingByDay.get(day.id)?.status !== "offered"
+    ) {
       throw dayWaitlistOfferUnavailableError();
     }
   }
 
-  const existingByDay = new Map(existingRows.map((row) => [row.event_day_id, row]));
-  const capacityByDay = new Map(capacityRows.map((row) => [row.event_day_id, row]));
+  const capacityByDayAndType = new Map(capacityRows.map((row) => [`${row.event_day_id}:${row.attendance_type}`, row]));
   const guardStatements = prepareCapacityGuardStatements(
     db,
     eventDays,
@@ -125,10 +133,26 @@ export function planRegistrationDayWaitlistSync(
 
   for (const day of eventDays) {
     const selectedType = selectedByDate.get(day.day_date);
-    const existing = existingByDay.get(day.id);
-    const capacity = capacityByDay.get(day.id);
+    const existingEntry = existingByDay.get(day.id);
+    const existing = existingEntry && existingEntry.attendance_type === selectedType ? existingEntry : undefined;
+    const capacity = capacityByDayAndType.get(`${day.id}:${selectedType}`);
+    const limit = attendanceOptionCapacity(day, selectedType);
+    const selectedOption = configuredAttendanceOptions({
+      attendance_options_json: day.attendance_options_json ?? null,
+      in_person_capacity: day.in_person_capacity,
+    }).find((option) => option.value === selectedType);
+    const physical = selectedOption ? eventAttendanceAccessMode(selectedOption) === "physical" : false;
+    if (existingEntry && !existing && ["waiting", "offered", "accepted", "expired"].includes(existingEntry.status)) {
+      changed = true;
+      statements.push(
+        db
+          .prepare(`UPDATE event_day_waitlist_entries SET status = 'removed', offer_expires_at = NULL,
+        reason_code = 'selection_changed', reason_note = NULL, updated_at = ? WHERE id = ?`)
+          .bind(now, existingEntry.id),
+      );
+    }
     const recordDecision = (outcome: DayCapacityDecision["outcome"], reason: string): void => {
-      if (selectedType !== "in_person") return;
+      if (!selectedType) return;
       decisions.push({
         dayDate: day.day_date,
         attendanceType: selectedType,
@@ -136,29 +160,30 @@ export function planRegistrationDayWaitlistSync(
         reason,
         seatsReservedBeforeDecision: Number(capacity?.reserved ?? 0),
         attendeesWaitingBeforeDecision: Number(capacity?.waiting ?? 0),
-        limit: day.in_person_capacity,
+        limit,
         roleReason: payload.capacityExemptReason,
       });
     };
     const clearReason =
       payload.capacityExemptReason &&
+      physical &&
       existing?.reason_code !== "admin_returned_to_waitlist" &&
       !forcedWaitlistDates.has(day.day_date)
         ? { code: "capacity_exempt", note: payload.capacityExemptReason }
-        : selectedType !== "in_person"
+        : !selectedType
           ? { code: "selection_changed", note: null }
-          : !day.in_person_capacity || day.in_person_capacity <= 0
+          : (!limit || limit <= 0) && !claimOfferedDayDates.has(day.day_date)
             ? { code: "capacity_unlimited", note: null }
             : null;
     if (clearReason) {
       recordDecision("admitted", clearReason.code);
-      if (existing && ["waiting", "offered", "accepted"].includes(existing.status)) changed = true;
+      if (existing && ["waiting", "offered", "accepted", "expired"].includes(existing.status)) changed = true;
       statements.push(
         db
           .prepare(
             `UPDATE event_day_waitlist_entries
              SET status = 'removed', offer_expires_at = NULL, reason_code = ?, reason_note = ?, updated_at = ?
-             WHERE event_day_id = ? AND registration_id = ? AND status IN ('waiting', 'offered', 'accepted')`,
+             WHERE event_day_id = ? AND registration_id = ? AND status IN ('waiting', 'offered', 'accepted', 'expired')`,
           )
           .bind(clearReason.code, clearReason.note, now, day.id, payload.registrationId),
       );
@@ -222,7 +247,7 @@ export function planRegistrationDayWaitlistSync(
 
     const continuity =
       storedRegistration?.status === "registered" &&
-      eventDays.some((other) => other.id !== day.id && selectedByDate.get(other.day_date) === "in_person");
+      eventDays.some((other) => other.id !== day.id && selectedByDate.get(other.day_date) === selectedType);
     const priorityLane: DayWaitlistLane = continuity ? "continuity" : "general";
     if (existing && (existingStatus === "waiting" || existingStatus === "expired")) {
       recordDecision("waitlisted", "existing_queue_position");
@@ -249,7 +274,7 @@ export function planRegistrationDayWaitlistSync(
     // Hold one seat for each earlier waiting attendee. Any capacity beyond
     // confirmed seats, active offers, and those holds can be admitted now.
     const waiting = Number(capacity?.waiting ?? 0);
-    if (Number(capacity?.reserved ?? 0) + waiting < day.in_person_capacity!) {
+    if (Number(capacity?.reserved ?? 0) + waiting < limit!) {
       recordDecision("admitted", waiting > 0 ? "capacity_available_after_queue" : "capacity_available");
       if (existing?.status === "removed") {
         changed = true;
@@ -266,7 +291,7 @@ export function planRegistrationDayWaitlistSync(
       }
       continue;
     }
-    if (preserved.has(day.id)) {
+    if (preserved.has(day.id) && previousByDay.get(day.id) === selectedType) {
       recordDecision("admitted", "existing_admission_preserved");
       continue;
     }

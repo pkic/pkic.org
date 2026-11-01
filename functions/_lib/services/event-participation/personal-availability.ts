@@ -19,7 +19,6 @@ interface AvailabilityRow {
   invitation_required: number;
   invited: number;
   registered: number;
-  registration_default_mode: string | null;
   registration_days_json: string | null;
   startAt: string | null;
   timeZone: string;
@@ -72,7 +71,7 @@ export function preparePersonalAvailabilitySelection(
     db
       .prepare(`WITH target AS(SELECT ? AS user_id),page AS(${selection.sql}),sessions AS(SELECT approved.id,approved.event_id,approved.room_id,approved.additional_room_ids_json,approved.admission_policy,approved.access_policy,approved.booking_opens_at,approved.booking_closes_at,approved.capacity,approved.remote_capacity,approved.start_at,approved.timezone FROM (${publishedSessionsSql}) approved JOIN page ON page.id=approved.id WHERE approved.event_id=${event.sql})
  SELECT s.id,s.admission_policy AS policy,s.access_policy='invitation' AS invitation_required,EXISTS(SELECT 1 FROM agenda_session_invitations invite WHERE invite.occurrence_id=s.id AND invite.user_id=target.user_id AND invite.revoked_at IS NULL) AS invited,registration.id IS NOT NULL AS registered,
- registration.attendance_type AS registration_default_mode,${registrationSessionDayOptionsSql("registration", "s")} AS registration_days_json,s.start_at AS startAt,s.timezone AS timeZone,
+ ${registrationSessionDayOptionsSql("registration", "s")} AS registration_days_json,s.start_at AS startAt,s.timezone AS timeZone,
  s.booking_opens_at AS opens_at,s.booking_closes_at AS closes_at,
  s.capacity AS physical_capacity,${physicalOccupiedSql("s.id", "target.user_id")} AS physical_occupied,${physicalPoolCapacitySql("s")} AS pool_capacity,
  s.remote_capacity,${remoteOccupiedSql("s.id", "target.user_id")} AS remote_occupied,

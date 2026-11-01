@@ -121,7 +121,7 @@ it("interleaves two prepared last-seat claims with online and delayed attendance
     .bind(JSON.stringify(await getAgenda(env.DB, fixture.eventId, "scan-test")), fixture.eventId)
     .run();
   await env.DB.prepare(
-    "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','in_person','test',?,?,?)",
+    "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','test',?,?,?)",
   )
     .bind(crypto.randomUUID(), fixture.eventId, rival, crypto.randomUUID(), now, now)
     .run();

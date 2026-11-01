@@ -53,6 +53,7 @@ export function compileBadgeTemplate(input: EventBadgeTemplate, branding: readon
   const checkedBranding = badgeTemplateBrandingSchema.parse(branding);
   const definitions: string[] = [];
   const vectors = new Map<string, VectorResource>();
+  let renderedStyleId = 0;
   function vector(svg: string) {
     const previous = vectors.get(svg);
     if (previous) return previous;
@@ -98,8 +99,11 @@ export function compileBadgeTemplate(input: EventBadgeTemplate, branding: readon
   );
   /** Sponsor logos expose their aspect ratio so a template can balance logos of different shapes optically. */
   function vectorImage(resource: VectorResource, label: string, className: string, exposeAspect = false): string {
-    const aspect = exposeAspect ? ` style="--badge-logo-aspect:${Math.round(resource.aspect * 1000) / 1000}"` : "";
-    return `<svg class="${escape(className)}" role="img" aria-label="${escape(label)}" viewBox="${resource.viewBox}" preserveAspectRatio="xMidYMid meet"${aspect}><use href="#${resource.id}"></use></svg>`;
+    const aspectClass = exposeAspect ? `badge-logo-aspect-${renderedStyleId++}` : "";
+    const aspect = exposeAspect
+      ? `<style>.${aspectClass}{--badge-logo-aspect:${Math.round(resource.aspect * 1000) / 1000}}</style>`
+      : "";
+    return `${aspect}<svg class="${escape(className)}${aspectClass ? ` ${aspectClass}` : ""}" role="img" aria-label="${escape(label)}" viewBox="${resource.viewBox}" preserveAspectRatio="xMidYMid meet"><use href="#${resource.id}"></use></svg>`;
   }
   const urls = new Map(
     Object.entries(template.assets).map(([key, asset]) => [key, `data:${asset.mime};base64,${asset.base64}`]),
@@ -109,10 +113,10 @@ export function compileBadgeTemplate(input: EventBadgeTemplate, branding: readon
   const back = parseBadgeTemplateMarkup(template.backHtml, new Set(urls.keys()), groups);
   const css =
     badgeTemplateCss(template.css, urls) +
-    "\n.badge-template-qr{display:block;width:100%;height:100%;object-fit:contain}.badge-template-sponsors{display:flex;flex-direction:column;align-items:center;gap:2mm}.badge-template-sponsor-logos{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:3mm}.badge-template-sponsor-logo{max-width:35mm;max-height:12mm;object-fit:contain}.badge-template-role{background:var(--badge-role-color);color:var(--badge-role-text);text-align:center;font-weight:bold}";
+    "\n.badge-vector-resources{position:absolute;overflow:hidden}.badge-template-qr{display:block;width:100%;height:100%;object-fit:contain}.badge-template-sponsors{display:flex;flex-direction:column;align-items:center;gap:2mm}.badge-template-sponsor-logos{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:3mm}.badge-template-sponsor-logo{max-width:35mm;max-height:12mm;object-fit:contain}.badge-template-role{background:var(--badge-role-color);color:var(--badge-role-text);text-align:center;font-weight:bold}";
   return {
     css,
-    resourcesHtml: `<svg xmlns="http://www.w3.org/2000/svg" width="0" height="0" aria-hidden="true" style="position:absolute;overflow:hidden"><defs>${definitions.join("")}</defs></svg>`,
+    resourcesHtml: `<svg class="badge-vector-resources" xmlns="http://www.w3.org/2000/svg" width="0" height="0" aria-hidden="true"><defs>${definitions.join("")}</defs></svg>`,
     renderSide(side: "front" | "back", badge: BadgeTemplatePrintData): string {
       const role = badgeDisplayRoleSchema.parse(badge.badgeRole);
       const split = splitBadgePrintSvg(badge.svg);
@@ -125,7 +129,7 @@ export function compileBadgeTemplate(input: EventBadgeTemplate, branding: readon
         badgeRole: role.toUpperCase(),
         badgeCode: split?.code ?? "",
       };
-      // Numeric measurements only: attendee text itself never enters the style attribute.
+      // Numeric measurements only: attendee text itself never enters the style rule.
       const textFit = badgeTextFitProperties({
         firstName: values.firstName,
         lastName: values.lastName,
@@ -170,7 +174,8 @@ export function compileBadgeTemplate(input: EventBadgeTemplate, branding: readon
           })
           .join("");
       const textColor = role === "attendee" || role === "staff" ? "#fff" : "#0b0d0c";
-      return `<div class="badge-template" style="--badge-role-color:${BADGE_DISPLAY_ROLE_COLORS[role]};--badge-role-text:${textColor};${textFit};width:${template.widthMm}mm;height:${template.heightMm}mm;position:relative;overflow:hidden">${render(side === "front" ? front : back)}</div>`;
+      const instanceClass = `badge-template-instance-${renderedStyleId++}`;
+      return `<style>.${instanceClass}{--badge-role-color:${BADGE_DISPLAY_ROLE_COLORS[role]};--badge-role-text:${textColor};${textFit};width:${template.widthMm}mm;height:${template.heightMm}mm;position:relative;overflow:hidden}</style><div class="badge-template ${instanceClass}">${render(side === "front" ? front : back)}</div>`;
     },
   };
 }

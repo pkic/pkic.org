@@ -150,7 +150,6 @@ describe("verified guest same-person additional mailbox", () => {
     const pending = await createRegistration(env.DB, {
       event,
       userId: other,
-      attendanceType: "virtual",
       sourceType: "direct",
       signingSecret: env.INTERNAL_SIGNING_SECRET,
     });

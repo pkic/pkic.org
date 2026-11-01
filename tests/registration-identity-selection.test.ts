@@ -145,7 +145,12 @@ beforeEach(async () => {
 });
 
 async function fixture(withMembership = true) {
-  await seedEventAndAdmin(env.DB);
+  const { eventId } = await seedEventAndAdmin(env.DB);
+  await env.DB.prepare(
+    "INSERT INTO event_days(id,event_id,day_date,created_at,updated_at) VALUES(?,?,'2026-11-30',?,?)",
+  )
+    .bind(crypto.randomUUID(), eventId, new Date().toISOString(), new Date().toISOString())
+    .run();
   const email = `identity-${crypto.randomUUID()}@example.test`;
   const userId = await insertUser(env.DB, email);
   await env.DB.prepare("UPDATE users SET first_name = 'Event', last_name = 'Attendee' WHERE id = ?").bind(userId).run();
@@ -166,7 +171,7 @@ async function fixture(withMembership = true) {
     lastName: "Attendee",
     email,
     identityId,
-    attendanceType: "virtual",
+    dayAttendance: [{ dayDate: "2026-11-30", attendanceType: "virtual" }],
     sourceType: "direct",
     consents: [
       { termKey: "privacy-policy", version: "v1" },
@@ -531,7 +536,6 @@ describe("explicit event identity selection", () => {
     const holder = await createRegistration(env.DB, {
       event,
       userId: holderId,
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       signingSecret: env.INTERNAL_SIGNING_SECRET!,
@@ -541,7 +545,6 @@ describe("explicit event identity selection", () => {
     const response = await register(
       registrationCreateSchema.parse({
         ...f.body,
-        attendanceType: "in_person",
         dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       }),
       f.token,

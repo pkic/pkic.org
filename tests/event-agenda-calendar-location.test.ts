@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import ICAL from "ical.js";
 import { resetDb } from "./helpers/reset-db";
+import { seedSessionAttendanceDays } from "./helpers/session-attendance-days";
 import { getAgenda } from "../functions/_lib/services/event-agenda/read";
 import { setSessionParticipation } from "../functions/_lib/services/event-participation/session-booking";
 import {
@@ -35,10 +36,11 @@ describe("Personal calendar physical allocation location", () => {
       .bind(eventId, now, now)
       .run();
     await env.DB.prepare(
-      "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','in_person','test',?,?,?)",
+      "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','test',?,?,?)",
     )
       .bind(crypto.randomUUID(), eventId, userId, crypto.randomUUID(), now, now)
       .run();
+    await seedSessionAttendanceDays(env.DB, eventId, [start.slice(0, 10)]);
     for (const [id, name] of [
       [primaryRoom, "Primary room"],
       [additionalRoom, "Additional room"],

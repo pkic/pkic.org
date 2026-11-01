@@ -88,8 +88,8 @@ describe("registration audit-log pagination (P6M-FT-02)", () => {
     const registrationId = crypto.randomUUID();
     await env.DB.prepare(
       `INSERT INTO registrations
-         (id, event_id, user_id, status, attendance_type, source_type, manage_link_secret, created_at, updated_at)
-       VALUES (?, ?, ?, 'registered', 'virtual', 'admin', ?, datetime('now'), datetime('now'))`,
+         (id, event_id, user_id, status, source_type, manage_link_secret, created_at, updated_at)
+       VALUES (?, ?, ?, 'registered', 'admin', ?, datetime('now'), datetime('now'))`,
     )
       .bind(registrationId, eventId, userId, crypto.randomUUID())
       .run();

@@ -11,7 +11,7 @@ import {
   type EventDayCapacityGuardPlan,
 } from "./day-waitlist-capacity";
 import { registrationColumns, type RegistrationRecord } from "./types";
-import { prepareRegistrationTransitionGuard } from "./transition-guard";
+import { prepareRegistrationTransitionGuard, prepareScheduledRegistrationTransitionGuard } from "./transition-guard";
 
 /**
  * Reconciles day admission with the intended post-transition participant roles.
@@ -53,6 +53,8 @@ export async function prepareRoleCapacityReconciliationStatements(
     getRegistrationDayAttendance(db, registration.id),
     listEventDays(db, input.eventId),
   ]);
+  // Speaker participation can proceed, but an unscheduled event cannot confirm a registration.
+  if (eventDays.length === 0) return [];
   const waitlist = await buildRegistrationDayWaitlistSync(db, {
     registrationId: registration.id,
     eventId: input.eventId,
@@ -68,7 +70,9 @@ export async function prepareRoleCapacityReconciliationStatements(
   });
   const now = nowIso();
   return [
-    prepareRegistrationTransitionGuard(db, registration),
+    confirm
+      ? prepareScheduledRegistrationTransitionGuard(db, registration)
+      : prepareRegistrationTransitionGuard(db, registration),
     ...waitlist.guardStatements,
     ...(confirm
       ? [

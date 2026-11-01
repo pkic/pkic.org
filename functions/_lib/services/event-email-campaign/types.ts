@@ -43,7 +43,6 @@ export interface AttendeeCampaignRow {
   organization_name: string | null;
   job_title: string | null;
   status: string;
-  attendance_type: string | null;
   custom_answers_json: string | null;
   formResponse?: CampaignFormResponseData;
 }
@@ -57,6 +56,7 @@ export interface AttendeeDayAttendanceRow {
   dayDate: string;
   attendanceType: string;
   label: string | null;
+  optionLabel: string | null;
 }
 
 export interface AttendeeDayWaitlistRow {
@@ -69,6 +69,7 @@ export type AttendeeDayAttendance = {
   dayDate: string;
   attendanceType: string;
   label: string | null;
+  optionLabel: string | null;
 };
 
 export type AttendeeDayWaitlist = {

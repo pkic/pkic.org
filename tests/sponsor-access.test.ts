@@ -68,8 +68,8 @@ async function seedConsentingRegistration(eventId: string, email: string, term: 
     ).bind(userId, email, email),
     env.DB.prepare(
       `INSERT INTO registrations
-           (id, event_id, user_id, status, attendance_type, source_type, manage_link_secret, created_at, updated_at)
-         VALUES (?, ?, ?, 'registered', 'in_person', 'self', ?, datetime('now'), datetime('now'))`,
+           (id, event_id, user_id, status, source_type, manage_link_secret, created_at, updated_at)
+         VALUES (?, ?, ?, 'registered', 'self', ?, datetime('now'), datetime('now'))`,
     ).bind(registrationId, eventId, userId, `manage-token-hash-${registrationId}`),
     env.DB.prepare(
       `INSERT INTO consent_acceptances
@@ -169,6 +169,8 @@ describe("sponsor capacity in the canonical portal session", () => {
     expect(attendees.status).toBe(200);
     const attendeeBody = (await attendees.json()) as { attendees: Array<{ email: string }> };
     expect(attendeeBody.attendees.map((attendee) => attendee.email)).toEqual(["yes@attendee.test"]);
+    expect(attendeeBody.attendees[0]).not.toHaveProperty("attendanceType");
+    expect(attendeeBody.attendees[0]).not.toHaveProperty("days");
     expect(await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email = 'leader@sponsor.test'")).toHaveLength(
       1,
     );
@@ -324,7 +326,10 @@ describe("sponsor capacity in the canonical portal session", () => {
     );
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("text/csv");
-    expect(await response.text()).toContain("shared@attendee.test");
+    const csv = await response.text();
+    expect(csv).toContain("shared@attendee.test");
+    expect(csv).not.toContain("Attendance type");
+    expect(csv).not.toContain("in_person");
     expect(await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'sponsor_attendee_export'")).toHaveLength(1);
   });
 

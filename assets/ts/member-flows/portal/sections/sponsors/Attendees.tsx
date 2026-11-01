@@ -15,11 +15,6 @@ function fmtName(a: SponsorAttendee): string {
   return [a.firstName, a.lastName].filter(Boolean).join(" ").trim() || "—";
 }
 
-function fmtAttendanceType(value: string | null): string {
-  if (!value) return "—";
-  return value.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
-}
-
 /**
  * Declared once outside the component: the columns depend on nothing the
  * render decides, so rebuilding them on every listing update only makes the
@@ -37,8 +32,6 @@ const ATTENDEE_COLUMNS: Column<SponsorAttendee>[] = [
     cell: (a) => <ContactOrganization organization={a.organizationName} personalEmail={a.personalEmail} />,
   },
   { header: "Job title", cell: (a) => a.jobTitle ?? "—" },
-  // A bounded vocabulary hugs its content instead of claiming slack.
-  { header: "Attendance", width: "fit", cell: (a) => fmtAttendanceType(a.attendanceType) },
 ];
 
 export function SponsorAttendees({

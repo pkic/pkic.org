@@ -44,7 +44,6 @@ const ONE_ATTENDEE = attendeesResponse([
     organizationName: "Analytical Engines",
     personalEmail: false,
     jobTitle: "Analyst",
-    attendanceType: "in_person",
   },
 ]);
 
@@ -115,12 +114,11 @@ describe("sponsor attendee roster", () => {
     expect(container.querySelector("caption")?.textContent).toBe("Consenting attendees for Spring Summit");
 
     const headers = [...container.querySelectorAll("thead th")].map((th) => th.textContent);
-    expect(headers).toEqual(["Name", "Email", "Organization", "Job title", "Attendance"]);
+    expect(headers).toEqual(["Name", "Email", "Organization", "Job title"]);
 
     const row = container.querySelector("tbody tr");
     expect(row?.textContent).toContain("Ada Lovelace");
     expect(row?.textContent).toContain("ada@example.test");
-    expect(row?.textContent).toContain("In person");
 
     // The export is a navigation to another representation of this list, so it
     // has to be a link a reader can open, copy, or save.

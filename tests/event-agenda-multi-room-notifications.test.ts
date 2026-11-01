@@ -88,7 +88,7 @@ async function fixture(additionalRoomCount: number) {
   await env.DB.batch(
     [pilot.person.userId, pilot.operatorId, unrelated.userId].map((userId) =>
       env.DB.prepare(
-        "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','in_person','test',?,?,?)",
+        "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','test',?,?,?)",
       ).bind(crypto.randomUUID(), pilot.eventId, userId, crypto.randomUUID(), registeredAt, registeredAt),
     ),
   );

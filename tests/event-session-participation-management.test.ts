@@ -20,6 +20,7 @@ import { callApi } from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { resetDb } from "./helpers/reset-db";
+import { clearSessionAttendanceDays, seedSessionAttendanceDays } from "./helpers/session-attendance-days";
 import {
   sessionParticipationRequestSchema,
   sessionParticipationResponseSchema,
@@ -127,11 +128,15 @@ beforeEach(async () => {
     .run();
   for (const id of [speakerId, attendeeId, otherPersonId]) {
     await env.DB.prepare(
-      "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','in_person','test',?,?,?)",
+      "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','test',?,?,?)",
     )
       .bind(crypto.randomUUID(), eventId, id, crypto.randomUUID(), now, now)
       .run();
   }
+  await seedSessionAttendanceDays(env.DB, eventId, [
+    new Date(Date.now() + 3600000).toISOString().slice(0, 10),
+    new Date(Date.now() + 3 * 3600000).toISOString().slice(0, 10),
+  ]);
   for (const [index, id] of [occurrenceId, otherOccurrenceId].entries()) {
     await env.DB.prepare(
       "INSERT INTO event_agenda_occurrences(id,event_id,title,start_at,end_at,admission_policy,capacity) VALUES(?,?,?,?,?,'approval',1)",
@@ -166,7 +171,7 @@ beforeEach(async () => {
 });
 
 describe("Canonical occurrence action routes", () => {
-  it("requires event registration before saving a session, in one complete authenticated batch", async () => {
+  it("requires event registration before saving a session after resolving the event's local day", async () => {
     for (const [userId, expected] of [
       [unregisteredId, 403],
       [attendeeId, 200],
@@ -180,7 +185,7 @@ describe("Canonical occurrence action routes", () => {
           headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
           body: JSON.stringify(sessionParticipationRequestSchema.parse({ action: "save" })),
         },
-        { maxRoundTrips: 1 },
+        { maxRoundTrips: 2 },
       );
       expect(response.status, await response.clone().text()).toBe(expected);
       if (expected === 200)
@@ -401,6 +406,7 @@ describe("Audited participant management for assigned sessions", () => {
   });
 
   it("refuses managed Add for the wrong event-day mode without changing registration or effects", async () => {
+    await clearSessionAttendanceDays(env.DB, eventId);
     const now = nowIso(),
       dayId = crypto.randomUUID();
     const start = await env.DB.prepare("SELECT start_at FROM event_agenda_occurrences WHERE id=?")

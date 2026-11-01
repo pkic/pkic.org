@@ -16,6 +16,17 @@ export function prepareRegistrationTransitionGuard(
     .bind(uuid(), registration.id, registration.transition_revision);
 }
 
+/** Confirm a pending registration only while at least one event day remains scheduled. */
+export function prepareScheduledRegistrationTransitionGuard(
+  db: DatabaseLike,
+  registration: Pick<RegistrationRecord, "id" | "event_id" | "transition_revision">,
+): StatementLike {
+  return db
+    .prepare(`INSERT INTO registration_transition_guards (id, registration_id, expected_revision)
+    SELECT ?, ?, CASE WHEN EXISTS (SELECT 1 FROM event_days WHERE event_id=?) THEN ? ELSE -1 END`)
+    .bind(uuid(), registration.id, registration.event_id, registration.transition_revision);
+}
+
 /** D1 exposes the trigger's deliberate compare-and-set failure as SQL text. */
 export function isRegistrationTransitionConflict(error: unknown): boolean {
   return error instanceof Error && error.message.includes("REGISTRATION_CHANGED");

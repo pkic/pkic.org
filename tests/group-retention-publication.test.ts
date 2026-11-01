@@ -27,8 +27,8 @@ async function registration(userId: string, due = true) {
   await env.DB.prepare("INSERT INTO retention_policies(event_id,user_retention_days,updated_at) VALUES (?,30,?)")
     .bind(eventId, nowIso())
     .run();
-  await env.DB.prepare(`INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,source_ref,custom_answers_json,manage_link_secret,created_at,updated_at)
-    VALUES (?,?,?,'registered','virtual','direct','Sensitive source','{"private":true}','synthetic-manage',?,?)`)
+  await env.DB.prepare(`INSERT INTO registrations(id,event_id,user_id,status,source_type,source_ref,custom_answers_json,manage_link_secret,created_at,updated_at)
+    VALUES (?,?,?,'registered','direct','Sensitive source','{"private":true}','synthetic-manage',?,?)`)
     .bind(crypto.randomUUID(), eventId, userId, nowIso(), nowIso())
     .run();
 }

@@ -134,7 +134,6 @@ export const registrationCapabilitySafeProjectionSchema = z.object({
   user_id: databaseIdSchema,
   invite_id: databaseIdSchema.nullable(),
   status: registrationLifecycleStatusSchema,
-  attendance_type: attendanceTypeSchema,
   source_type: z.string().min(2).max(64),
   source_ref: z.string().nullable(),
   custom_answers_json: z.string().nullable(),
@@ -179,13 +178,14 @@ export const dayAttendanceItemSchema = z.object({
 
 export const dayWaitlistItemSchema = z.object({
   dayDate: dayDateSchema,
-  status: z.enum(["waiting", "offered", "accepted"]),
+  status: z.enum(["waiting", "offered", "accepted", "expired"]),
   priorityLane: z.enum(["continuity", "general"]),
   offerExpiresAt: z.string().trim().nullable(),
 });
 
 export const registrationDayAttendanceResponseItemSchema = dayAttendanceItemSchema.extend({
   label: z.string().nullable(),
+  optionLabel: z.string().nullable().optional(),
   /** When the day was first held on this registration; absent where a builder has no row to read. */
   heldSince: z.string().optional(),
   /** When the day's attendance last changed. */
@@ -225,27 +225,15 @@ export const inviteeSchema = z.object({
   lastName: lastNameSchema.optional(),
 });
 
-function requireAttendance(
-  value: { attendanceType?: string; dayAttendance?: unknown[] },
-  context: z.core.$RefinementCtx,
-): void {
-  if (!value.attendanceType && (!value.dayAttendance || value.dayAttendance.length === 0)) {
-    context.addIssue({
-      code: "custom",
-      path: [value.dayAttendance === undefined ? "attendanceType" : "dayAttendance"],
-      message: "Choose how you'll attend the event.",
-      input: value,
-    });
-  }
-}
-
 export const attendeeRegistrationFieldsSchema = z.object({
   firstName: firstNameSchema,
   lastName: lastNameSchema,
   email: normalizedEmailSchema,
   identityId: databaseIdSchema.optional(),
-  attendanceType: attendanceTypeSchema.optional(),
-  dayAttendance: z.array(dayAttendanceItemSchema).max(31).optional(),
+  dayAttendance: z
+    .array(dayAttendanceItemSchema)
+    .min(1, "Choose at least one event day and attendance option to register.")
+    .max(31),
   customAnswers: submittedFormAnswersSchema.optional(),
   consents: z.array(consentItemSchema).min(1, "Review and accept the required terms to register.").max(20),
 });
@@ -272,21 +260,17 @@ export function withRequiredDayAttendanceChoices<Schema extends z.ZodType>(
   });
 }
 
-export const registrationAttendanceFieldsSchema = attendeeRegistrationFieldsSchema
-  .pick({ attendanceType: true, dayAttendance: true })
-  .superRefine(requireAttendance);
+export const registrationAttendanceFieldsSchema = attendeeRegistrationFieldsSchema.pick({ dayAttendance: true });
 
 /** Authenticated registration payload; identity and profile fields come from the verified session user. */
 export const attendeeRegistrationParticipationSchema = attendeeRegistrationFieldsSchema
   .pick({
     identityId: true,
-    attendanceType: true,
     dayAttendance: true,
     customAnswers: true,
     consents: true,
   })
-  .strict()
-  .superRefine(requireAttendance);
+  .strict();
 export type AttendeeRegistrationParticipation = z.infer<typeof attendeeRegistrationParticipationSchema>;
 
 /**
@@ -319,7 +303,7 @@ export const registrationCreateSchema = attendeeRegistrationFieldsSchema
     emailProof: registrationEmailProofTokenSchema.optional(),
     organization: registrationConfirmOrganizationSchema.optional(),
   })
-  .superRefine(requireAttendance);
+  .strict();
 
 /** The shared request contract resolved against the event's currently offered terms. */
 export function registrationCreateForTermsSchema(terms: readonly RequiredTerm[]) {
@@ -395,7 +379,6 @@ export const okResponseSchema = z.object({ ok: z.boolean() });
 export const registrationManageSchema = z
   .object({
     action: z.enum(["update", "cancel", "report_unauthorized", "withdraw_sponsor_sharing"]),
-    attendanceType: attendanceTypeSchema.optional(),
     dayAttendance: z.array(dayAttendanceItemSchema).max(31).optional(),
     claimDayWaitlistOffers: z.array(dayDateSchema).max(31).optional(),
     customAnswers: submittedFormAnswersSchema.optional(),
@@ -404,6 +387,7 @@ export const registrationManageSchema = z
     firstName: firstNameSchema.optional(),
     lastName: lastNameSchema.optional(),
   })
+  .strict()
   .refine(
     (value) =>
       value.action !== "withdraw_sponsor_sharing" ||
@@ -423,7 +407,6 @@ export const registrationManageRegistrationSchema = z.object({
   event_id: eventSummarySchema.shape.id,
   status: registrationLifecycleStatusSchema,
   cancellation_reason_code: z.string().nullable(),
-  attendance_type: attendanceTypeSchema,
   custom_answers: formAnswersSchema.nullable(),
   isEmailVerified: z.boolean(),
 });
@@ -525,4 +508,4 @@ export const inviteDeclineSchema = z
     }
   });
 
-export const inviteAcceptAttendeeSchema = attendeeRegistrationFieldsSchema.superRefine(requireAttendance);
+export const inviteAcceptAttendeeSchema = attendeeRegistrationFieldsSchema.strict();

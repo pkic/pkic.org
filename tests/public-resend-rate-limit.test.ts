@@ -76,7 +76,6 @@ describe("public resend rate limits", () => {
     const submitted = await createRegistration(env.DB, {
       event: { id: eventId },
       userId: user.id,
-      attendanceType: "virtual",
       sourceType: "direct",
       signingSecret: "test-signing-secret",
       confirmationTtlHours: 24,

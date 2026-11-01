@@ -380,9 +380,9 @@ describe("secondary user emails", () => {
       .run();
     await env.DB.prepare(
       `INSERT INTO registrations
-         (id, event_id, user_id, status, attendance_type, source_type,
+         (id, event_id, user_id, status, source_type,
           confirmation_link_secret, manage_link_secret, created_at, updated_at)
-       VALUES (?, ?, ?, 'pending_email_confirmation', 'virtual', 'admin', ?, ?, datetime('now'), datetime('now'))`,
+       VALUES (?, ?, ?, 'pending_email_confirmation', 'admin', ?, ?, datetime('now'), datetime('now'))`,
     )
       .bind(registrationId, eventId, userB, crypto.randomUUID(), crypto.randomUUID())
       .run();

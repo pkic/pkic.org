@@ -63,12 +63,12 @@ async function seedEventReferral(): Promise<string> {
     `),
     baseEnv.DB.prepare(`
       INSERT INTO registrations (
-        id, event_id, user_id, invite_id, status, attendance_type, source_type, source_ref,
+        id, event_id, user_id, invite_id, status, source_type, source_ref,
         custom_answers_json, referred_by_code, confirmation_link_secret,
         manage_link_secret, confirmed_at, cancelled_at,
         created_at, updated_at
       ) VALUES (
-        '${registrationId}', '${eventId}', '${userId}', NULL, 'registered', 'in_person', 'direct', NULL,
+        '${registrationId}', '${eventId}', '${userId}', NULL, 'registered', 'direct', NULL,
         NULL, NULL, NULL, 'manage-token', NULL, NULL, datetime('now'), datetime('now')
       )
     `),

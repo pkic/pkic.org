@@ -39,9 +39,9 @@ async function seedRegistrationWithReferral(): Promise<{
     ).bind(userId),
     env.DB.prepare(
       `INSERT INTO registrations (
-           id, event_id, user_id, status, attendance_type, source_type,
+           id, event_id, user_id, status, source_type,
            manage_link_secret, created_at, updated_at
-         ) VALUES (?, ?, ?, 'registered', 'virtual', 'direct', ?, datetime('now'), datetime('now'))`,
+         ) VALUES (?, ?, ?, 'registered', 'direct', ?, datetime('now'), datetime('now'))`,
     ).bind(registrationId, eventId, userId, crypto.randomUUID()),
   ]);
   const referralCode = await createReferralCode(env.DB, {

@@ -16,7 +16,7 @@ export function registrationPopulationFilter(
   }
   if (params.attendance_type) {
     conditions.push(selectedAttendanceTypeSql("r"));
-    bindings.push(params.attendance_type, params.attendance_type);
+    bindings.push(params.attendance_type);
   }
   if (params.badge_role) {
     conditions.push(`${registrationBadgeDisplayRoleSql("r")} = ?`);

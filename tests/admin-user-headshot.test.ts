@@ -274,8 +274,8 @@ describe("admin user headshot upload", () => {
     const registrationId = crypto.randomUUID();
     await env.DB.prepare(
       `INSERT INTO registrations
-         (id, event_id, user_id, status, attendance_type, source_type, manage_link_secret, created_at, updated_at)
-       VALUES (?, ?, ?, 'registered', 'virtual', 'direct', ?, datetime('now'), datetime('now'))`,
+         (id, event_id, user_id, status, source_type, manage_link_secret, created_at, updated_at)
+       VALUES (?, ?, ?, 'registered', 'direct', ?, datetime('now'), datetime('now'))`,
     )
       .bind(registrationId, eventId, targetUserId, crypto.randomUUID())
       .run();

@@ -2,13 +2,16 @@ import type { RegistrationDayState } from "../../../../assets/shared/schemas/eve
 import { buildD1JsonMembershipFilter } from "../../db/json-membership";
 import { all } from "../../db/queries";
 import type { DatabaseLike } from "../../types";
+import { attendanceOptionLabelSql } from "../event-attendance-option-sql";
+import { dayWaitlistStatusSql } from "./day-waitlist-policy";
 
 interface RegistrationDayStateRow {
   registration_id: string;
   day_date: string;
   label: string | null;
   attendance_type: string;
-  waitlist_status: "waiting" | "offered" | null;
+  option_label: string | null;
+  waitlist_status: "waiting" | "offered" | "expired" | null;
 }
 
 /**
@@ -18,16 +21,13 @@ interface RegistrationDayStateRow {
  */
 export function activeDayWaitlistExistsSql(alias: string): string {
   return `EXISTS (SELECT 1 FROM event_day_waitlist_entries w
-                  WHERE w.registration_id = ${alias}.id AND w.status IN ('waiting', 'offered'))`;
+                  WHERE w.registration_id = ${alias}.id AND ${dayWaitlistStatusSql("w")} IN ('waiting', 'offered'))`;
 }
 
-/** Match any selected day, retaining the no-day fallback during the schema transition. */
+/** Match an option selected on at least one day. */
 export function selectedAttendanceTypeSql(alias: string): string {
-  return `(EXISTS (SELECT 1 FROM registration_day_attendance selected_day
-                    WHERE selected_day.registration_id = ${alias}.id AND selected_day.attendance_type = ?)
-           OR (NOT EXISTS (SELECT 1 FROM registration_day_attendance selected_day
-                           WHERE selected_day.registration_id = ${alias}.id)
-               AND ${alias}.attendance_type = ?))`;
+  return `EXISTS (SELECT 1 FROM registration_day_attendance selected_day
+    WHERE selected_day.registration_id = ${alias}.id AND selected_day.attendance_type = ?)`;
 }
 
 /**
@@ -51,11 +51,12 @@ export async function loadRegistrationDayStates(
             ed.day_date,
             ed.label,
             rda.attendance_type,
-            (SELECT w.status
+            ${attendanceOptionLabelSql("ed", "rda.attendance_type")} AS option_label,
+            (SELECT ${dayWaitlistStatusSql("w")}
                FROM event_day_waitlist_entries w
               WHERE w.registration_id = rda.registration_id
                 AND w.event_day_id = rda.event_day_id
-                AND w.status IN ('waiting', 'offered')
+                AND w.status IN ('waiting', 'offered', 'expired')
               LIMIT 1) AS waitlist_status
        FROM registration_day_attendance rda
        JOIN event_days ed ON ed.id = rda.event_day_id
@@ -69,6 +70,7 @@ export async function loadRegistrationDayStates(
       dayDate: row.day_date,
       label: row.label,
       attendanceType: row.attendance_type,
+      ...(row.option_label ? { optionLabel: row.option_label } : {}),
       waitlistStatus: row.waitlist_status,
     });
     states.set(row.registration_id, days);

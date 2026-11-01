@@ -92,10 +92,10 @@ describe("manage read endpoints", () => {
       `),
       env.DB.prepare(`
         INSERT INTO registrations (
-          id, event_id, user_id, status, attendance_type, source_type,
+          id, event_id, user_id, status, source_type,
           manage_link_secret, created_at, updated_at
         ) VALUES (
-          '${registrationId}', '${eventId}', '${userId}', 'registered', 'virtual', 'direct',
+          '${registrationId}', '${eventId}', '${userId}', 'registered', 'direct',
           '${linkSecret}', datetime('now'), datetime('now')
         )
       `),
@@ -137,10 +137,10 @@ describe("manage read endpoints", () => {
       `),
       env.DB.prepare(`
         INSERT INTO registrations (
-          id, event_id, user_id, status, attendance_type, source_type,
+          id, event_id, user_id, status, source_type,
           manage_link_secret, created_at, updated_at
         ) VALUES (
-          '${registrationId}', '${eventId}', '${userId}', 'registered', 'in_person', 'direct',
+          '${registrationId}', '${eventId}', '${userId}', 'registered', 'direct',
           '${tokenHash}', datetime('now'), datetime('now')
         )
       `),
@@ -168,7 +168,6 @@ describe("manage read endpoints", () => {
     const created = await createRegistration(env.DB, {
       event,
       userId: "pending-user",
-      attendanceType: "virtual",
       sourceType: "direct",
       confirmationTtlHours: 48,
       signingSecret: "test-signing-secret",
@@ -214,7 +213,6 @@ describe("manage read endpoints", () => {
     const first = await createRegistration(env.DB, {
       event,
       userId: "user-1",
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -229,7 +227,6 @@ describe("manage read endpoints", () => {
     const second = await createRegistration(env.DB, {
       event,
       userId: "user-2",
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -278,7 +275,6 @@ describe("manage read endpoints", () => {
     const created = await createRegistration(env.DB, {
       event,
       userId: registrantId,
-      attendanceType: "virtual",
       sourceType: "direct",
       confirmationTtlHours: 48,
       signingSecret: "test-signing-secret",
@@ -441,9 +437,9 @@ describe("manage read endpoints", () => {
       ).bind(registrationUserId, "managed-attendee@example.test", "managed-attendee@example.test"),
       env.DB.prepare(
         `INSERT INTO registrations (
-           id, event_id, user_id, status, attendance_type, source_type,
+           id, event_id, user_id, status, source_type,
            manage_link_secret, created_at, updated_at
-         ) VALUES (?, ?, ?, 'registered', 'virtual', 'direct', ?, datetime('now'), datetime('now'))`,
+         ) VALUES (?, ?, ?, 'registered', 'direct', ?, datetime('now'), datetime('now'))`,
       ).bind(registrationId, eventId, registrationUserId, crypto.randomUUID()),
       ...(["events:read", "events:write", "events:manage", "donations:read"] as const).map((permission) =>
         env.DB.prepare(

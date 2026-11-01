@@ -6,6 +6,7 @@ import { readSitePublicationSnapshot } from "../functions/_lib/services/site-pub
 import { describe, it, expect, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
+import { seedSessionAttendanceDays } from "./helpers/session-attendance-days";
 import { createAdminSession } from "./helpers/auth";
 import { callApi } from "./helpers/app";
 import { staffingFixture } from "./helpers/agenda-staffing";
@@ -783,9 +784,10 @@ describe("agenda platform", () => {
           "INSERT INTO users(id,email,normalized_email,active,created_at,updated_at) VALUES(?,?,?,1,?,?)",
         ).bind(userId, `${userId}@example.test`, `${userId}@example.test`, now, now),
         env.DB.prepare(
-          "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','in_person','synthetic',?,?,?)",
+          "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','synthetic',?,?,?)",
         ).bind(crypto.randomUUID(), eventId, userId, crypto.randomUUID(), now, now),
       ]);
+    await seedSessionAttendanceDays(env.DB, eventId, ["2026-12-01"]);
     let snapshot = await createAgendaOccurrence(
       env.DB,
       eventId,

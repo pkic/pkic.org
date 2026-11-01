@@ -218,6 +218,7 @@ describe("group event registrations roster", () => {
     expect(badges).toHaveLength(3);
     expect(badges[0]).toContain("In-person");
     expect(badges[1]).toContain("Waitlisted");
+    expect(badges[1]).toContain("Venue pass");
     expect(badges[2]).toContain("Virtual");
     // The raw token never reaches the page.
     expect(container.textContent).not.toContain("in_person");
@@ -395,7 +396,7 @@ describe("group event registration record", () => {
         method: "POST",
         body: {
           mode: "capacity_exempt",
-          reason: "Event manager approved in-person admission",
+          reason: "Event manager approved attendance admission",
           dayDates: ["2026-09-01"],
         },
       }),

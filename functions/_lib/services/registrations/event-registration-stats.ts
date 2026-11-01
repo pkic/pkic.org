@@ -1,15 +1,11 @@
 import type { DatabaseLike } from "../../types";
 import { all } from "../../db/queries";
 
-/** Distinct registration/type pairs from day selections, with the temporary no-day fallback. */
+/** Distinct registration/type pairs from day selections. */
 export const eventRegistrationAttendanceTypesSql = `
   SELECT DISTINCT r.id, r.status, r.created_at, day.attendance_type
     FROM registrations r JOIN registration_day_attendance day ON day.registration_id = r.id
-   WHERE r.event_id = ?
-  UNION ALL
-  SELECT r.id, r.status, r.created_at, r.attendance_type FROM registrations r
-   WHERE r.event_id = ?
-     AND NOT EXISTS (SELECT 1 FROM registration_day_attendance day WHERE day.registration_id = r.id)`;
+   WHERE r.event_id = ?`;
 
 interface EventRegistrationStatsRow {
   kind: "status" | "type";
@@ -34,7 +30,7 @@ export async function getEventRegistrationStats(
     UNION ALL
     SELECT 'type' AS kind, attendance_type AS value, COUNT(*) AS count FROM registration_types
       WHERE status = 'registered' GROUP BY attendance_type`,
-    [eventId, eventId, eventId],
+    [eventId, eventId],
   );
   const byAttendanceType: Record<string, number> = {};
   const byStatus: Record<string, number> = {};

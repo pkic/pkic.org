@@ -12,6 +12,7 @@ export const ATTENDEE_STANDING_LABELS: Record<AttendeeStanding, string> = {
   remote: "Online",
   not_registered: "Not registered",
   no_in_person_place: "No in-person place",
+  no_remote_place: "No online place",
 };
 
 const option = <Value extends string>(labels: Record<Value, string>) =>

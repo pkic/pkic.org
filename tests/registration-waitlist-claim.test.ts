@@ -37,9 +37,9 @@ async function seedClaimFixture(
     ).bind(userId),
     env.DB.prepare(
       `INSERT INTO registrations (
-           id, event_id, user_id, status, attendance_type, source_type, manage_link_secret,
+           id, event_id, user_id, status, source_type, manage_link_secret,
            confirmed_at, created_at, updated_at
-         ) VALUES (?, ?, ?, 'registered', 'in_person', 'direct', ?, datetime('now'), datetime('now'), datetime('now'))`,
+         ) VALUES (?, ?, ?, 'registered', 'direct', ?, datetime('now'), datetime('now'), datetime('now'))`,
     ).bind(registrationId, eventId, userId, crypto.randomUUID()),
   ]);
 
@@ -173,7 +173,7 @@ describe("mounted registration day-waitlist claims", () => {
 
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toMatchObject({
-      error: { code: "DAY_ATTENDANCE_REQUIRED" },
+      error: { code: "VALIDATION_ERROR" },
     });
     await expect(
       queryAll<{ attendance_type: string }>(
@@ -183,11 +183,6 @@ describe("mounted registration day-waitlist claims", () => {
          WHERE rda.registration_id = ?`,
         [fixture.registrationId],
       ),
-    ).resolves.toEqual([{ attendance_type: "in_person" }]);
-    await expect(
-      queryAll<{ attendance_type: string }>(env.DB, "SELECT attendance_type FROM registrations WHERE id = ?", [
-        fixture.registrationId,
-      ]),
     ).resolves.toEqual([{ attendance_type: "in_person" }]);
   });
 

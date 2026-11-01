@@ -90,7 +90,7 @@ describe("Opt-in browser agenda notifications", () => {
     fixture = await webPushFixture();
     const now = new Date().toISOString();
     await env.DB.prepare(
-      "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','in_person','test',?,?,?)",
+      "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','test',?,?,?)",
     )
       .bind(crypto.randomUUID(), eventId, userId, crypto.randomUUID(), now, now)
       .run();
@@ -235,7 +235,7 @@ describe("Opt-in browser agenda notifications", () => {
             ).all()
           ).results,
           entry: (await env.DB.prepare("SELECT sequence,status,start_at FROM agenda_calendar_entries").all()).results,
-          registration: (await env.DB.prepare("SELECT status,attendance_type FROM registrations").all()).results,
+          registration: (await env.DB.prepare("SELECT status FROM registrations").all()).results,
         }),
       );
     expect(queued).toEqual({ queued: 1 });
@@ -434,7 +434,7 @@ describe("Opt-in browser agenda notifications", () => {
     });
     expect(response.status).toBe(200);
     await env.DB.prepare(
-      "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','in_person','test',?,?,?)",
+      "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','test',?,?,?)",
     )
       .bind(
         crypto.randomUUID(),
@@ -470,7 +470,7 @@ describe("Opt-in browser agenda notifications", () => {
       reminderMinutes: 15,
     });
     await env.DB.prepare(
-      "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','in_person','test',?,?,?)",
+      "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','test',?,?,?)",
     )
       .bind(crypto.randomUUID(), eventId, otherId, crypto.randomUUID(), now, now)
       .run();

@@ -52,9 +52,9 @@ async function withEventRegistration(userId: string): Promise<void> {
        VALUES (?, ?, 'Reinstatement Event', 'Europe/Amsterdam', 'public', ?, ?)`,
     ).bind(eventId, `reinstatement-${eventId}`, at, at),
     env.DB.prepare(
-      `INSERT INTO registrations (id, event_id, user_id, status, attendance_type, source_type, manage_link_secret,
+      `INSERT INTO registrations (id, event_id, user_id, status, source_type, manage_link_secret,
          created_at, updated_at)
-       VALUES (?, ?, ?, 'registered', 'in_person', 'test', ?, ?, ?)`,
+       VALUES (?, ?, ?, 'registered', 'test', ?, ?, ?)`,
     ).bind(crypto.randomUUID(), eventId, userId, crypto.randomUUID(), at, at),
   ]);
 }

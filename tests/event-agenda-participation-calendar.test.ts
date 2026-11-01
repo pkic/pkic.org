@@ -1,4 +1,5 @@
 import { profileD1Flow } from "./helpers/d1-flow-profile";
+import { clearSessionAttendanceDays, seedSessionAttendanceDays } from "./helpers/session-attendance-days";
 import { mutateBeforeMatchingQuery } from "./helpers/database-races";
 import { sessionHoldListSchema } from "../assets/shared/schemas/event-session-holds";
 import { grantAdministrator } from "./helpers/administrator";
@@ -30,6 +31,10 @@ import {
   revokeSessionHold,
 } from "../functions/_lib/services/event-participation/holds";
 import { promoteSessionWaitlist } from "../functions/_lib/services/event-participation/waitlist";
+import {
+  prepareParticipationReconciliation,
+  reconcileEventParticipations,
+} from "../functions/_lib/services/event-participation/reconciliation";
 import { reviewSessionParticipation } from "../functions/_lib/services/event-participation/approval";
 import {
   currentAgendaCalendarSubscription,
@@ -432,6 +437,7 @@ describe("Participation capacity and private calendar lifecycle", () => {
     const statements = [];
     for (let index = 0; index < 101; index++) {
       const user = crypto.randomUUID();
+      const registration = crypto.randomUUID();
       statements.push(
         env.DB.prepare("INSERT INTO users(id,email,normalized_email,active) VALUES(?,?,?,1)").bind(
           user,
@@ -439,19 +445,38 @@ describe("Participation capacity and private calendar lifecycle", () => {
           `${user}@example.test`,
         ),
         env.DB.prepare(
-          "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','in_person','test',?,?,?)",
-        ).bind(crypto.randomUUID(), eventId, user, crypto.randomUUID(), now, now),
+          "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','test',?,?,?)",
+        ).bind(registration, eventId, user, crypto.randomUUID(), now, now),
+        env.DB.prepare(`INSERT INTO registration_day_attendance
+          (id,registration_id,event_day_id,attendance_type,created_at,updated_at)
+          SELECT ?,?,id,'in_person',?,? FROM event_days WHERE event_id=? AND day_date=?`).bind(
+          crypto.randomUUID(),
+          registration,
+          now,
+          now,
+          eventId,
+          start.slice(0, 10),
+        ),
         env.DB.prepare(
-          "INSERT INTO agenda_session_participations(id,event_id,occurrence_id,user_id,attendance_mode,status,created_at,updated_at,waitlisted_at) VALUES(?,?,?,?,'physical','waitlisted',?,?,?)",
-        ).bind(crypto.randomUUID(), eventId, occurrenceId, user, now, now, "2000-01-01T00:00:00.000Z"),
+          "INSERT INTO agenda_session_participations(id,event_id,occurrence_id,user_id,attendance_mode,status,created_at,updated_at,waitlisted_at,attendance_day_date) VALUES(?,?,?,?,'physical','waitlisted',?,?,?,?)",
+        ).bind(
+          crypto.randomUUID(),
+          eventId,
+          occurrenceId,
+          user,
+          now,
+          now,
+          "2000-01-01T00:00:00.000Z",
+          start.slice(0, 10),
+        ),
       );
     }
     for (let offset = 0; offset < statements.length; offset += 90)
       await env.DB.batch(statements.slice(offset, offset + 90));
     await env.DB.prepare(
-      "INSERT INTO agenda_session_participations(id,event_id,occurrence_id,user_id,attendance_mode,status,created_at,updated_at,waitlisted_at) VALUES(?,?,?,?,'physical','waitlisted',?,?,?)",
+      "INSERT INTO agenda_session_participations(id,event_id,occurrence_id,user_id,attendance_mode,status,created_at,updated_at,waitlisted_at,attendance_day_date) VALUES(?,?,?,?,'physical','waitlisted',?,?,?,?)",
     )
-      .bind(crypto.randomUUID(), eventId, nextId, firstUser, now, now, now)
+      .bind(crypto.randomUUID(), eventId, nextId, firstUser, now, now, now, start.slice(0, 10))
       .run();
     expect(await promoteSessionWaitlist(env.DB, eventId, 100)).toMatchObject({ inspected: 1, promoted: 1 });
     expect(
@@ -613,7 +638,9 @@ describe("Participation capacity and private calendar lifecycle", () => {
     });
     expect(await saved(firstUser)).toEqual({ saved: 1, attendance_mode: "physical" });
     // A virtual day attends online, so the person never shares the room's seats.
-    await env.DB.prepare("UPDATE registrations SET attendance_type='virtual' WHERE event_id=? AND user_id=?")
+    await env.DB.prepare(
+      "UPDATE registration_day_attendance SET attendance_type='virtual' WHERE registration_id=(SELECT id FROM registrations WHERE event_id=? AND user_id=?)",
+    )
       .bind(eventId, secondUser)
       .run();
     expect(await setSessionParticipation(env.DB, eventId, occurrenceId, secondUser, { action: "reserve" })).toEqual({
@@ -636,7 +663,9 @@ describe("Participation capacity and private calendar lifecycle", () => {
     });
     expect(await saved(firstUser)).toEqual({ saved: 1, attendance_mode: "physical" });
     // An on-demand registration attends neither way, so there is no seat to take.
-    await env.DB.prepare("UPDATE registrations SET attendance_type='on_demand' WHERE event_id=? AND user_id=?")
+    await env.DB.prepare(
+      "UPDATE registration_day_attendance SET attendance_type='on_demand' WHERE registration_id=(SELECT id FROM registrations WHERE event_id=? AND user_id=?)",
+    )
       .bind(eventId, firstUser)
       .run();
     await expect(
@@ -804,10 +833,11 @@ describe("Participation capacity and private calendar lifecycle", () => {
       .run();
     for (const id of [firstUser, secondUser])
       await env.DB.prepare(
-        "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','in_person','test',?,?,?)",
+        "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','test',?,?,?)",
       )
         .bind(crypto.randomUUID(), eventId, id, crypto.randomUUID(), now, now)
         .run();
+    await seedSessionAttendanceDays(env.DB, eventId, [start.slice(0, 10)]);
     await env.DB.prepare(
       "INSERT INTO event_agenda_occurrences(id,event_id,title,start_at,end_at,admission_policy,capacity) VALUES(?,?,'Reserved session',?,?,'reservation',1)",
     )
@@ -820,6 +850,96 @@ describe("Participation capacity and private calendar lifecycle", () => {
       .run();
     await publish();
   });
+  it.each([
+    ["moon_base_42", "physical"],
+    ["moon_base_42", "remote"],
+    ["moon_base_42", "none"],
+    ["moon_base_42", undefined],
+    ["in_person", "remote"],
+    ["virtual", "none"],
+  ] as const)("applies option %s with configured %s session access", async (optionKey, accessMode) => {
+    await clearSessionAttendanceDays(env.DB, eventId);
+    const dayDate = start.slice(0, 10);
+    const registration = await env.DB.prepare("SELECT id FROM registrations WHERE event_id=? AND user_id=?")
+      .bind(eventId, firstUser)
+      .first<{ id: string }>();
+    const dayId = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO event_days(id,event_id,day_date,attendance_options_json,created_at,updated_at) VALUES(?,?,?,?,?,?)",
+      ).bind(
+        dayId,
+        eventId,
+        dayDate,
+        JSON.stringify([{ value: optionKey, label: "Configured option", accessMode }]),
+        new Date().toISOString(),
+        new Date().toISOString(),
+      ),
+      env.DB.prepare(
+        "INSERT INTO registration_day_attendance(id,registration_id,event_day_id,attendance_type,created_at,updated_at) VALUES(?,?,?,?,?,?)",
+      ).bind(
+        crypto.randomUUID(),
+        registration!.id,
+        dayId,
+        optionKey,
+        new Date().toISOString(),
+        new Date().toISOString(),
+      ),
+    ]);
+    const availability = (await personalAgenda(env.DB, eventId, firstUser, { occurrenceId })).sessions[0]!
+      .availability!;
+    expect(availability.attendanceMode).toBe(accessMode === "none" || accessMode === undefined ? null : accessMode);
+    if (accessMode === "physical" || accessMode === "remote") {
+      expect(await setSessionParticipation(env.DB, eventId, occurrenceId, firstUser, { action: "save" })).toMatchObject(
+        {
+          status: "saved",
+          attendanceMode: accessMode,
+        },
+      );
+    }
+    if (accessMode === "none" || accessMode === undefined) {
+      expect(availability.state).toBe("wrong_mode");
+      await expect(
+        setSessionParticipation(env.DB, eventId, occurrenceId, firstUser, { action: "reserve" }),
+      ).rejects.toMatchObject({ code: "SESSION_ATTENDANCE_DAY_REQUIRED" });
+    } else {
+      const wrongMode = accessMode === "physical" ? "remote" : "physical";
+      await expect(
+        setSessionParticipation(env.DB, eventId, occurrenceId, firstUser, {
+          action: "reserve",
+          attendanceMode: wrongMode,
+        }),
+      ).rejects.toThrow();
+      expect(
+        await setSessionParticipation(env.DB, eventId, occurrenceId, firstUser, { action: "reserve" }),
+      ).toMatchObject({ status: "reserved", attendanceMode: accessMode });
+      await env.DB.prepare(
+        "UPDATE agenda_session_participations SET attendance_day_date=NULL WHERE occurrence_id=? AND user_id=?",
+      )
+        .bind(occurrenceId, firstUser)
+        .run();
+      await env.DB.batch(prepareParticipationReconciliation(env.DB, eventId, firstUser));
+      expect(
+        await env.DB.prepare("SELECT status FROM agenda_session_participations WHERE occurrence_id=? AND user_id=?")
+          .bind(occurrenceId, firstUser)
+          .first("status"),
+      ).toBe("reserved");
+      expect(await reconcileEventParticipations(env.DB, eventId)).toMatchObject({ canceled: 0 });
+      expect(
+        await env.DB.prepare(
+          "SELECT attendance_day_date FROM agenda_session_participations WHERE occurrence_id=? AND user_id=?",
+        )
+          .bind(occurrenceId, firstUser)
+          .first("attendance_day_date"),
+      ).toBe(start.slice(0, 10));
+      expect(
+        await env.DB.prepare("SELECT status FROM agenda_session_participations WHERE occurrence_id=? AND user_id=?")
+          .bind(occurrenceId, firstUser)
+          .first("status"),
+      ).toBe("reserved");
+    }
+  });
+
   it("projects focused live full, closed and invitation-required actions without changing allocations", async () => {
     await setSessionParticipation(env.DB, eventId, occurrenceId, firstUser, {
       action: "reserve",
@@ -900,6 +1020,46 @@ describe("Participation capacity and private calendar lifecycle", () => {
       action: "cancel",
     });
     expect((await promoteSessionWaitlist(env.DB, eventId)).promoted).toBe(1);
+  });
+
+  it("approves and promotes a custom online attendance option", async () => {
+    await clearSessionAttendanceDays(env.DB, eventId);
+    const dayId = crypto.randomUUID();
+    const now = new Date().toISOString();
+    await env.DB.prepare(
+      "INSERT INTO event_days(id,event_id,day_date,attendance_options_json,created_at,updated_at) VALUES(?,?,?,?,?,?)",
+    )
+      .bind(
+        dayId,
+        eventId,
+        start.slice(0, 10),
+        JSON.stringify([{ value: "moon_lounge", label: "Moon lounge", accessMode: "remote" }]),
+        now,
+        now,
+      )
+      .run();
+    for (const userId of [firstUser, secondUser]) {
+      await env.DB.prepare(
+        "INSERT INTO registration_day_attendance(id,registration_id,event_day_id,attendance_type,created_at,updated_at) SELECT ?,id,?,'moon_lounge',?,? FROM registrations WHERE event_id=? AND user_id=?",
+      )
+        .bind(crypto.randomUUID(), dayId, now, now, eventId, userId)
+        .run();
+    }
+    await env.DB.prepare("UPDATE event_agenda_occurrences SET remote_capacity=1 WHERE id=?").bind(occurrenceId).run();
+    await publish();
+    expect(
+      await setSessionParticipation(env.DB, eventId, occurrenceId, firstUser, { action: "reserve" }),
+    ).toMatchObject({ status: "reserved", attendanceMode: "remote" });
+    await publish("approval");
+    expect(
+      await setSessionParticipation(env.DB, eventId, occurrenceId, secondUser, { action: "request" }),
+    ).toMatchObject({ status: "approval_pending", attendanceMode: "remote" });
+    expect(await reviewSessionParticipation(env.DB, eventId, occurrenceId, secondUser, "approve", admin)).toMatchObject(
+      { status: "waitlisted" },
+    );
+    await setSessionParticipation(env.DB, eventId, occurrenceId, firstUser, { action: "cancel" });
+    expect((await promoteSessionWaitlist(env.DB, eventId)).promoted).toBe(1);
+    expect(await reconcileEventParticipations(env.DB, eventId)).toMatchObject({ canceled: 0 });
   });
   it("rotates hash-only feeds and preserves UID with increased cancellation sequence", async () => {
     await setSessionParticipation(env.DB, eventId, occurrenceId, firstUser, {

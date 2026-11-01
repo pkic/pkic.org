@@ -45,7 +45,6 @@ import {
   staffUserHeadshotEndpoint,
 } from "../../shared/headshot/user-headshot";
 import { formatDate, formatDateTime, type ToastType } from "../../shared/ui";
-import { attendanceTypeLabel } from "../../shared/attendance";
 import { SPEAKER_NOT_YET_ACCEPTED_LABEL } from "../../../shared/proposal-speaker-acceptance";
 import { AttentionList, type AttentionItem } from "../../ui/AttentionList";
 import { Button } from "../../ui/Button";
@@ -115,7 +114,7 @@ function participationText(speaker: ProposalSpeaker): string | null {
 export function speakerRegistrationText(registration: ProposalRosterSpeaker["registration"]): string {
   if (!registration) return "Not registered";
   if (registration.status === "registered") {
-    return `Registered (${attendanceTypeLabel(registration.attendanceType).toLowerCase()})`;
+    return "Registered";
   }
   return `Registration ${statusLabel(registration.status).toLowerCase()}`;
 }

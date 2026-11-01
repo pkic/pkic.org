@@ -83,13 +83,13 @@ describe("attendee standing", () => {
     expect(attendeeStanding({ ...inPerson, registered: false })).toBe("not_registered");
     expect(attendeeStanding({ ...inPerson, dayAttendance: "none" })).toBe("not_registered");
     expect(attendeeStanding({ ...inPerson, dayAttendance: "virtual" })).toBe("remote");
-    expect(attendeeStanding({ ...inPerson, dayAttendance: "on_demand", waitlisted: true })).toBe("remote");
+    expect(attendeeStanding({ ...inPerson, dayAttendance: "on_demand", waitlisted: true })).toBe("no_remote_place");
     expect(attendeeStanding({ ...inPerson, waitlisted: true })).toBe("no_in_person_place");
   });
 
   it("records only online registrants as attending online", () => {
     expect(attendanceModeForStanding("remote")).toBe("virtual");
-    for (const standing of ["in_person", "not_registered", "no_in_person_place"] as const)
+    for (const standing of ["in_person", "not_registered", "no_in_person_place", "no_remote_place"] as const)
       expect(attendanceModeForStanding(standing)).toBe("physical");
   });
 });

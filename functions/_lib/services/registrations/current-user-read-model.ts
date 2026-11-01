@@ -22,11 +22,13 @@ import type { OffsetPageQuery } from "../../db/pagination";
 import { queryPage } from "../../db/pagination";
 import type { DatabaseLike } from "../../types";
 import { persistedUtcInstant } from "../../utils/time";
+import { loadRegistrationDayStates } from "./day-states";
+import { dayWaitlistStatusSql } from "./day-waitlist-policy";
+import type { RegistrationDayState } from "../../../../assets/shared/schemas/event-registrations";
 
 interface CurrentUserRegistrationRow {
   id: string;
   status: string;
-  attendance_type: string;
   created_at: string;
   waitlisted: number;
   event_id: string;
@@ -37,7 +39,10 @@ interface CurrentUserRegistrationRow {
   event_timezone: string;
 }
 
-function toCurrentUserRegistration(row: CurrentUserRegistrationRow): CurrentUserRegistration {
+function toCurrentUserRegistration(
+  row: CurrentUserRegistrationRow,
+  days: RegistrationDayState[],
+): CurrentUserRegistration {
   return currentUserRegistrationSchema.parse({
     id: row.id,
     event: {
@@ -49,7 +54,7 @@ function toCurrentUserRegistration(row: CurrentUserRegistrationRow): CurrentUser
       timezone: row.event_timezone,
     },
     status: row.status,
-    attendanceType: row.attendance_type,
+    days,
     waitlisted: Boolean(row.waitlisted),
     createdAt: persistedUtcInstant(row.created_at),
   });
@@ -71,13 +76,13 @@ export function buildCurrentUserRegistrationsPageQuery(
     bindings.push(query.to);
   }
   return {
-    sql: `SELECT r.id AS id, r.status AS status, r.attendance_type AS attendance_type, r.created_at AS created_at,
+    sql: `SELECT r.id AS id, r.status AS status, r.created_at AS created_at,
             e.id AS event_id, e.slug AS event_slug, e.name AS event_name,
             e.starts_at AS event_starts_at, e.ends_at AS event_ends_at, e.timezone AS event_timezone,
             EXISTS (
               SELECT 1 FROM event_day_waitlist_entries w
                WHERE w.registration_id = r.id
-                 AND w.status IN ('waiting', 'offered', 'accepted')
+                 AND ${dayWaitlistStatusSql("w")} IN ('waiting', 'offered')
             ) AS waitlisted
           FROM registrations r
           JOIN events e ON e.id = r.event_id
@@ -101,5 +106,9 @@ export async function listCurrentUserRegistrations(
     db,
     buildCurrentUserRegistrationsPageQuery(userId, query),
   );
-  return { registrations: rows.map(toCurrentUserRegistration), total };
+  const days = await loadRegistrationDayStates(
+    db,
+    rows.map((row) => row.id),
+  );
+  return { registrations: rows.map((row) => toCurrentUserRegistration(row, days.get(row.id) ?? [])), total };
 }

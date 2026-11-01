@@ -1,9 +1,11 @@
+import { eventAttendanceAccessMode } from "../../../../assets/shared/event-attendance-access";
 import type { EventDayCapacityGuardPlan } from "./day-waitlist-capacity";
 import { assertRegistrationRestorationAllowed } from "./restoration";
 import type { EventParticipantRole } from "../../../../assets/shared/schemas/participant-roles";
 import { prepareRoleBasedCapacityExemption } from "./day-waitlist-capacity";
 import { prepareRegistrationTransitionGuard } from "./transition-guard";
 import { AppError } from "../../errors";
+import { dayAttendanceRequiredError, eventDaysNotScheduledError } from "../event-day-refusals";
 import { batchFirst, batchRows } from "../../db/pagination";
 import { prepareRegistrationBySelection } from "./queries";
 import { prepareRegistrationDayWaitlistRead } from "./day-waitlist-read";
@@ -13,7 +15,7 @@ import { nowIso, addHours } from "../../utils/time";
 import { prepareReferralByCode, planReferralConversionStatements, type ReferralRow } from "../referrals";
 import { prepareEngagementStatement } from "../engagement";
 import {
-  deriveEventAttendanceType,
+  configuredAttendanceOptions,
   prepareEventDays,
   preparePreviousRegistrationDayAttendance,
   planRegistrationDayAttendanceChange,
@@ -25,7 +27,6 @@ import { withDayCapacityRetry, type PlannedDayWaitlistEntry } from "./day-waitli
 import { newCapabilityLinkSecret, signedOrQueuedCapability } from "../capability-links";
 import type { DatabaseLike, StatementLike } from "../../types";
 import type { RegistrationRecord, VerifiedRegistrationIdentityContext } from "./types";
-import type { AttendanceType } from "../../../../assets/shared/schemas/registration";
 
 const DEFAULT_PENDING_CONFIRMATION_DEADLINE_HOURS = 14 * 24;
 
@@ -35,7 +36,6 @@ export interface CreateRegistrationPayload {
   sharedCapacityGuards?: EventDayCapacityGuardPlan;
   event: { id: string };
   userId: string;
-  attendanceType: AttendanceType;
   dayAttendance?: DayAttendanceSelection[];
   sourceType: string;
   sourceRef?: string | null;
@@ -94,7 +94,15 @@ export async function buildCreateRegistration(
   reactivated: boolean;
   statements: StatementLike[];
   plannedDayWaitlist: PlannedDayWaitlistEntry[];
-  dayAttendance: Array<{ dayDate: string; attendanceType: string; label: string | null }>;
+  dayAttendance: Array<{
+    dayDate: string;
+    attendanceType: string;
+    label: string | null;
+    optionLabel: string | null;
+    accessMode: import("../../../../assets/shared/event-attendance-access").EventAttendanceAccessMode;
+    startsAt: string | null;
+    endsAt: string | null;
+  }>;
 }> {
   const status = initialRegistrationStatus(
     payload.inviteId ?? null,
@@ -120,6 +128,8 @@ export async function buildCreateRegistration(
   ]);
   const existing = batchFirst<RegistrationRecord>(existingResult);
   const configuredEventDays = batchRows<EventDayRecord>(daysResult);
+  if (configuredEventDays.length === 0) throw eventDaysNotScheduledError();
+  if (!existing && !payload.dayAttendance?.length) throw dayAttendanceRequiredError();
   const capacitySnapshot = capacity.decode(details.slice(0, capacity.statements.length));
   const previousAttendance = batchRows<PreviousRegistrationDayAttendanceRow>(details[capacity.statements.length]);
   if (existing) {
@@ -134,7 +144,6 @@ export async function buildCreateRegistration(
   const now = nowIso();
   const registrationId = existing?.id ?? uuid();
   const manageLinkSecret = newCapabilityLinkSecret();
-  const attendanceType = deriveEventAttendanceType(payload.dayAttendance) ?? payload.attendanceType;
   const capacityExemptReason = roles.decode(batchRows<{ role: string }>(rolesResult));
   let confirmationLinkSecret: string | null = null;
   let pendingConfirmationDeadlineAt: string | null = null;
@@ -153,7 +162,6 @@ export async function buildCreateRegistration(
     user_id: payload.userId,
     invite_id: payload.inviteId ?? null,
     status,
-    attendance_type: attendanceType,
     source_type: payload.sourceType,
     source_ref: payload.sourceRef ?? null,
     custom_answers_json: payload.customAnswersJson ?? null,
@@ -189,7 +197,7 @@ export async function buildCreateRegistration(
       db
         .prepare(
           `UPDATE registrations
-       SET invite_id = ?, status = ?, attendance_type = ?, source_type = ?, source_ref = ?,
+       SET invite_id = ?, status = ?, source_type = ?, source_ref = ?,
            custom_answers_json = ?, form_placement_id = ?, registration_group_id = ?, registration_identity_id = ?, referred_by_code = ?, confirmation_link_secret = ?,
            pending_confirmation_deadline_at = ?,
            manage_link_secret = ?,
@@ -200,7 +208,6 @@ export async function buildCreateRegistration(
         .bind(
           registration.invite_id,
           registration.status,
-          registration.attendance_type,
           registration.source_type,
           registration.source_ref,
           registration.custom_answers_json,
@@ -221,12 +228,12 @@ export async function buildCreateRegistration(
       db
         .prepare(
           `INSERT INTO registrations (
-      id, event_id, user_id, invite_id, status, attendance_type, source_type, source_ref,
+      id, event_id, user_id, invite_id, status, source_type, source_ref,
       custom_answers_json, form_placement_id, registration_group_id, registration_identity_id, referred_by_code, confirmation_link_secret,
       pending_confirmation_deadline_at,
       manage_link_secret, cancellation_reason_code,
       created_identity_user_id, confirmed_at, cancelled_at, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .bind(
           registration.id,
@@ -234,7 +241,6 @@ export async function buildCreateRegistration(
           registration.user_id,
           registration.invite_id,
           registration.status,
-          registration.attendance_type,
           registration.source_type,
           registration.source_ref,
           registration.custom_answers_json,
@@ -294,7 +300,7 @@ export async function buildCreateRegistration(
       sourceType: "registration",
       sourceRef: registration.id,
       idempotencyKey: `registration_created:registration:${registration.id}`,
-      data: { status: registration.status, attendanceType: registration.attendance_type },
+      data: { status: registration.status },
     }),
   );
   if (payload.referredByCode) {
@@ -331,7 +337,24 @@ export async function buildCreateRegistration(
     plannedDayWaitlist: waitlist.activeRows,
     dayAttendance: (payload.dayAttendance ?? []).map((selection) => {
       const day = configuredEventDays.find((entry) => entry.day_date === selection.dayDate);
-      return { dayDate: selection.dayDate, attendanceType: selection.attendanceType, label: day?.label ?? null };
+      return {
+        dayDate: selection.dayDate,
+        attendanceType: selection.attendanceType,
+        label: day?.label ?? null,
+        accessMode: eventAttendanceAccessMode(
+          day
+            ? (configuredAttendanceOptions(day).find((option) => option.value === selection.attendanceType) ?? {
+                value: selection.attendanceType,
+              })
+            : { value: selection.attendanceType },
+        ),
+        startsAt: day?.starts_at ?? null,
+        endsAt: day?.ends_at ?? null,
+        optionLabel: day
+          ? (configuredAttendanceOptions(day).find((option) => option.value === selection.attendanceType)?.label ??
+            null)
+          : null,
+      };
     }),
   };
 }

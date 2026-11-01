@@ -148,7 +148,7 @@ function showConfirmedPanel(
     root.dataset["partialWaitlistTitle"] ?? "{firstName}, your registration is in place{forEvent}!";
   const partialWaitlistBody =
     root.dataset["partialWaitlistBody"] ??
-    "Your overall registration is confirmed, but one or more selected in-person days are still pending because those rooms are at capacity right now.";
+    "Your registration is confirmed, but one or more selected days are still waiting for a place.";
   const hasPartialDayWaitlist =
     result.status === "registered" && hasPendingRegistrationDayWaitlist(result.dayWaitlist ?? []);
 

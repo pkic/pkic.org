@@ -54,7 +54,7 @@ function registration(email: string, emailProof: string | undefined, extra: Reco
     lastName: "Attendee",
     email,
     unaffiliatedAttestation: false,
-    attendanceType: "virtual",
+    dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
     consents,
     emailProof,
     ...extra,
@@ -66,6 +66,8 @@ describe("registration verifies the email address first", () => {
     await resetDb();
     stubSuccessfulMxLookup();
     await seedEventAndAdmin(env.DB);
+    await env.DB.prepare(`INSERT INTO event_days(id,event_id,day_date,created_at,updated_at)
+      SELECT 'proof-day',id,'2026-12-01','2026-01-01T00:00:00.000Z','2026-01-01T00:00:00.000Z' FROM events WHERE slug='pqc-2026'`).run();
   });
   afterEach(() => vi.unstubAllGlobals());
 
@@ -263,6 +265,18 @@ describe("registration verifies the email address first", () => {
     const response = await post("", registration("casey@new-org.example", undefined));
     expect(response.status, await response.clone().text()).toBe(200);
     expect(registrationSubmissionResponseSchema.parse(await response.json()).status).toBe("pending_email_confirmation");
+  });
+  it("refuses registration before event days are scheduled", async () => {
+    await env.DB.prepare("DELETE FROM event_days WHERE id='proof-day'").run();
+    const response = await post(
+      "",
+      registration("unscheduled@new-org.example", undefined, {
+        dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
+      }),
+    );
+    expect(response.status, await response.clone().text()).toBe(409);
+    expect(await response.json()).toMatchObject({ error: { code: "EVENT_DAYS_NOT_SCHEDULED" } });
+    expect(await queryAll(env.DB, "SELECT id FROM registrations")).toEqual([]);
   });
   it.each([false, true])("registers a reserved work domain with affiliation review; stale claim: %s", async (stale) => {
     const email = "attendee@reserved-work.example";

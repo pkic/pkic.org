@@ -46,6 +46,8 @@ export const eventAttendanceOptionSchema = z.object({
   label: z.string(),
   icon: attendanceIconSchema.optional(),
   description: configuredAttendanceOptionSchema.shape.description,
+  accessMode: configuredAttendanceOptionSchema.shape.accessMode,
+  enabled: configuredAttendanceOptionSchema.shape.enabled,
   spotsRemainingPercent: z.number().nullable().optional(),
 });
 

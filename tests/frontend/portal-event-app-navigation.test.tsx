@@ -108,7 +108,10 @@ describe("event app tab selection", () => {
     expect(ids(more)).toContain("agenda");
     expect(labels(navigation(running).tabs)).toEqual(["Home", "Agenda"]);
     // Someone joining online has no code to scan.
-    const online = { ...registeredParticipant.viewer, attendanceType: "virtual" };
+    const online = {
+      ...registeredParticipant.viewer,
+      days: [{ date: "2026-12-01", attendanceType: "virtual", accessMode: "remote", state: "registered" }],
+    };
     expect(labels(navigation({ ...registeredParticipant, ...running, viewer: online }).tabs)).toEqual([
       "Home",
       "Agenda",

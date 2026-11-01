@@ -1,6 +1,7 @@
 import type { EventDayReadModel, RequiredTerm } from "../../../assets/shared/schemas/event-read-models";
 import { configuredAttendanceOptions, type DayAttendanceSelection, type EventDayRecord } from "./event-days";
 import type { EventTermRecord } from "./event-types";
+import { eventAttendanceAccessMode } from "../../../assets/shared/event-attendance-access";
 
 /** Maps the D1 event-term row once for every public event workflow. */
 export function requiredTermReadModel(term: EventTermRecord): RequiredTerm {
@@ -39,6 +40,8 @@ export function eventDayReadModels(
         return {
           value: option.value,
           label: option.label,
+          accessMode: eventAttendanceAccessMode(option),
+          enabled: option.enabled !== false,
           ...(option.icon ? { icon: option.icon } : {}),
           ...(option.description ? { description: option.description } : {}),
           spotsRemainingPercent:

@@ -45,6 +45,7 @@ export function badgePrintHtml(
   const compiled = design === "event_badge" && template ? compileBadgeTemplate(template, printing.branding) : null;
   const dimensions = badgePrintPageDimensions(layout.page);
   const pages: string[] = [];
+  const slotStyles: string[] = [];
   for (const page of badgePrintPages(badges.length, layout)) {
     pages.push(
       `<section class="badge-print-sheet" aria-label="Badge sheet">${page.slots
@@ -53,7 +54,11 @@ export function badgePrintHtml(
           const body = compiled
             ? `<div class="badge-template-surface">${compiled.renderSide(slot.side, badge)}</div>`
             : `<div class="name">${escapeHtml(badge.displayName)}</div><img alt="Attendee badge QR code" src="data:image/svg+xml;charset=utf-8,${encodeURIComponent(badge.svg)}">`;
-          return `<article class="badge-print-slot${compiled ? " badge--template" : ""}" style="left:${slot.xMm}mm;top:${slot.yMm}mm;width:${slot.widthMm}mm;height:${slot.heightMm}mm" aria-label="Badge ${slot.side}">${body}</article>`;
+          const slotClass = `badge-print-slot-${slotStyles.length}`;
+          slotStyles.push(
+            `.${slotClass}{left:${slot.xMm}mm;top:${slot.yMm}mm;width:${slot.widthMm}mm;height:${slot.heightMm}mm}`,
+          );
+          return `<article class="badge-print-slot ${slotClass}${compiled ? " badge--template" : ""}" aria-label="Badge ${slot.side}">${body}</article>`;
         })
         .join("")}</section>`,
     );
@@ -61,6 +66,7 @@ export function badgePrintHtml(
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${BADGE_PRINT_CONTENT_SECURITY_POLICY}"><meta name="referrer" content="no-referrer"><meta name="viewport" content="width=device-width"><title>Attendee badges</title><style>
 @page{size:${dimensions.widthMm}mm ${dimensions.heightMm}mm;margin:0}*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;color:#111;background:white}.badge-print-sheet{width:${dimensions.widthMm}mm;height:${dimensions.heightMm}mm;position:relative;break-after:page;break-inside:avoid}.badge-print-sheet:last-child{break-after:auto}.badge-print-slot{position:absolute;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2mm;padding:3mm;overflow:hidden}.badge-print-slot:not(.badge--template) img{width:75%;max-height:70%;object-fit:contain;min-height:0}.name{font-size:14pt;font-weight:bold;overflow-wrap:anywhere;text-align:center}.badge-side{font-size:8pt}@media screen{body{background:#eee}.badge-print-sheet{background:white;margin:10px auto;box-shadow:0 1px 5px #aaa}}
 ${compiled?.css ?? ""}
+${slotStyles.join("\n")}
 .badge--template{display:block;padding:0}.badge-template-surface{width:${template?.widthMm ?? layout.label.widthMm}mm;height:${template?.heightMm ?? layout.label.heightMm}mm}
 </style></head><body>${compiled?.resourcesHtml ?? ""}<div hidden aria-hidden="true"><pre>${escapeHtml(BADGE_GENERIC_FONT_LICENSE)}</pre></div>${pages.join("")}</body></html>`;
 }

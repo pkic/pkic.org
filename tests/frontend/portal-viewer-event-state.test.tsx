@@ -33,9 +33,9 @@ function viewer(overrides: Record<string, unknown> = {}): EventViewerState {
     waitlisted: false,
     holdsWorkAddress: true,
     days: [
-      { date: "2026-10-03", attendanceType: "virtual", state: "registered" },
-      { date: "2026-10-01", attendanceType: "in_person", state: "waitlisted" },
-      { date: "2026-10-02", attendanceType: "in_person", state: "waitlisted" },
+      { date: "2026-10-03", attendanceType: "virtual", accessMode: "remote", state: "registered" },
+      { date: "2026-10-01", attendanceType: "in_person", accessMode: "physical", state: "waitlisted" },
+      { date: "2026-10-02", attendanceType: "in_person", accessMode: "physical", state: "waitlisted" },
     ],
     ...overrides,
   });
@@ -68,7 +68,7 @@ describe("viewer event state", () => {
     const badges = [...row.querySelectorAll(".pk-badge")];
     expect(badges).toHaveLength(1);
     expect(badges[0]?.className).toContain("pk-badge--info");
-    expect(badges[0]?.textContent).toMatch(/^Waitlisted in person/);
+    expect(badges[0]?.textContent).toMatch(/^Waitlisted/);
     expect(row.querySelector(".pk-badge--ok")).toBeNull();
   });
 
@@ -83,7 +83,7 @@ describe("viewer event state", () => {
     // The month/day order is the runtime locale's to choose, so the day is
     // matched either way round; what the assertion pins is which day it is.
     expect(links[0].textContent).toMatch(/virtual (3 Oct|Oct 3)/);
-    expect(links[0].textContent).toMatch(/Waitlisted in person (1|Oct 1)\s*–\s*(2 Oct|2)/);
+    expect(links[0].textContent).toMatch(/Waitlisted (1|Oct 1)\s*–\s*(2 Oct|2)/);
   });
 
   it("never calls a virtual day in person because the registration has an in-person day", () => {
@@ -97,7 +97,9 @@ describe("viewer event state", () => {
   it("renders day dates as calendar days, never shifted by the viewer's zone", () => {
     const row = mount(
       <ViewerEventState
-        viewer={viewer({ days: [{ date: "2026-01-01", attendanceType: "in_person", state: "registered" }] })}
+        viewer={viewer({
+          days: [{ date: "2026-01-01", attendanceType: "in_person", accessMode: "physical", state: "registered" }],
+        })}
       />,
     );
 
@@ -109,9 +111,26 @@ describe("viewer event state", () => {
   it("renders a viewer with no recorded days rather than failing on the empty list", () => {
     const row = mount(<ViewerEventState viewer={viewer({ days: [], waitlisted: false })} />);
 
-    // Without days the registration's type covers the whole event.
-    expect(row.textContent).toBe("You're registered (in person)");
+    // Without day choices no attendance mode is implied.
+    expect(row.textContent).toBe("You're registered");
     expect(row.querySelector(".pk-badge")).toBeNull();
     expect(row.querySelector("a")).toBeNull();
+  });
+
+  it("uses configured access for custom options and does not label an online waitlist in person", () => {
+    const row = mount(
+      <ViewerEventState
+        viewer={viewer({
+          days: [
+            { date: "2026-10-01", attendanceType: "moon_lounge", accessMode: "remote", state: "waitlisted" },
+            { date: "2026-10-02", attendanceType: "moon_base", accessMode: "physical", state: "registered" },
+          ],
+          waitlisted: true,
+        })}
+      />,
+    );
+    expect(row.textContent).toMatch(/in person .*2/i);
+    expect(row.textContent).toMatch(/waitlisted .*1/i);
+    expect(row.textContent).not.toMatch(/waitlisted in person/i);
   });
 });

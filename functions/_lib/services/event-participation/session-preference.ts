@@ -23,6 +23,7 @@ export function prepareSessionPreference(
   userId: string,
   action: "save" | "unsave",
   options: Pick<z.infer<typeof sessionParticipationCommandSchema>, "attendanceMode" | "replaceOccurrenceId"> = {},
+  defaultAttendanceMode: "physical" | "remote" | null = null,
 ) {
   if (options.replaceOccurrenceId)
     throw new AppError(
@@ -38,7 +39,7 @@ export function prepareSessionPreference(
     statements: [
       db
         .prepare(`INSERT INTO agenda_session_participations(id,event_id,occurrence_id,user_id,attendance_mode,status,created_at,updated_at,saved)
-        SELECT ?,s.event_id,s.id,?,COALESCE(?,p.attendance_mode,(SELECT CASE registration.attendance_type WHEN 'virtual' THEN 'remote' ELSE 'physical' END FROM registrations registration WHERE registration.event_id=s.event_id AND registration.user_id=? AND registration.status='registered'),'physical'),'saved',?,?,?
+        SELECT ?,s.event_id,s.id,?,COALESCE(?,?,p.attendance_mode,'physical'),'saved',?,?,?
         FROM (${publishedSessionsSql}) s JOIN events event ON event.id=s.event_id
         LEFT JOIN agenda_session_participations p ON p.occurrence_id=s.id AND p.user_id=?
         WHERE s.id=? AND event.id=${event.sql} AND ${audience.sql}
@@ -50,7 +51,7 @@ export function prepareSessionPreference(
           crypto.randomUUID(),
           userId,
           options.attendanceMode ?? null,
-          userId,
+          defaultAttendanceMode,
           at,
           at,
           saved,

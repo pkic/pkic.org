@@ -16,7 +16,7 @@ import { buildBadgeAttachment } from "../../email/attachments";
 import { checkEmailDomainMx } from "../../email/mx-check";
 import { prepareQueueEmailStatement, processOutboxByIdBackground } from "../../email/outbox";
 import { generateSignedRsvpAddress } from "../../email/rsvp";
-import { buildRegistrationIcs } from "../../utils/calendar";
+import { buildRegistrationIcs, calendarConfirmedDays } from "../../utils/calendar";
 import { buildAttendanceEmailData, buildRegistrationEmailStatusData } from "../../utils/attendance";
 import { buildAcceptedTermsText, buildCustomAnswerRows } from "../../utils/registration-email";
 import { prepareValidatedAttendeeRegistration } from "../attendee-registration";
@@ -194,7 +194,7 @@ export async function submitEventRegistration(
   const exposeManageCapability = prepared.identityWasCreated || Boolean(metadata.mailboxVerified);
   const shareUrl = `${metadata.appBaseUrl}${personalPromotionSharePath(referralCode)}`;
   const dayWaitlist = prepared.plannedDayWaitlist;
-  const attendanceData = buildAttendanceEmailData(registration.attendance_type, prepared.dayAttendance, dayWaitlist);
+  const attendanceData = buildAttendanceEmailData(prepared.dayAttendance, dayWaitlist);
   const statusData = buildRegistrationEmailStatusData(registration.status, dayWaitlist);
   const customAnswerRows = buildCustomAnswerRows(formResponse.answers, formResponse.form?.fields);
   const acceptedTermsText = buildAcceptedTermsText(body.consents, requiredTerms);
@@ -254,7 +254,7 @@ export async function submitEventRegistration(
       event,
       registration.id,
       queuedManageUrl,
-      prepared.dayAttendance,
+      calendarConfirmedDays(prepared.dayAttendance, dayWaitlist),
       metadata.appBaseUrl,
       rsvpEmail,
       user.email,
@@ -280,7 +280,7 @@ export async function submitEventRegistration(
       ],
       data: {
         ...commonData,
-        attendanceType: registration.attendance_type,
+        hasCalendarInvite: calendar.files.length > 0,
         myAgendaUrl: myAgendaPageUrl(metadata.appBaseUrl, event),
       },
       bounceAddress: rsvpEmail,

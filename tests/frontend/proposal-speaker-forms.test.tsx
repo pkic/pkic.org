@@ -487,7 +487,7 @@ describe("ProposalSpeakersPanel", () => {
       expect(mira.querySelector(".pk-badge")).toBeNull();
       const standing = [...mira.querySelectorAll(".pk-speaker-portrait-standing > dd")].map((dd) => dd.textContent);
       expect(standing[0]).toBe("Speaker");
-      expect(standing[1]).toMatch(/^Accepted .+ · Registered \(in-person\)$/);
+      expect(standing[1]).toMatch(/^Accepted .+ · Registered$/);
       // Nothing to chase: no checklist at all.
       expect(mira.querySelector(".pk-attention-list")).toBeNull();
     });

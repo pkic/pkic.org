@@ -305,8 +305,8 @@ describe("group event management routes", () => {
     const attendeeUserId = await insertUser(env.DB, "group-event-attendee@example.test");
     await env.DB.prepare(
       `INSERT INTO registrations
-           (id, event_id, user_id, status, attendance_type, source_type, manage_link_secret, created_at, updated_at)
-         VALUES (?, ?, ?, 'registered', 'in_person', 'direct', ?, datetime('now'), datetime('now'))`,
+           (id, event_id, user_id, status, source_type, manage_link_secret, created_at, updated_at)
+         VALUES (?, ?, ?, 'registered', 'direct', ?, datetime('now'), datetime('now'))`,
     )
       .bind(attendeeId, created.id, attendeeUserId, `manage-${crypto.randomUUID()}`)
       .run();
@@ -507,8 +507,8 @@ describe("group event management routes", () => {
     const [day] = await listEventDays(env.DB, created.id);
     const registrationId = crypto.randomUUID();
     await env.DB.batch([
-      env.DB.prepare(`INSERT INTO registrations (id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at)
-        VALUES (?,?,?,'registered','virtual','direct',?,'2027-04-01T00:00:00.000Z','2027-04-01T00:00:00.000Z')`).bind(
+      env.DB.prepare(`INSERT INTO registrations (id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at)
+        VALUES (?,?,?,'registered','direct',?,'2027-04-01T00:00:00.000Z','2027-04-01T00:00:00.000Z')`).bind(
         registrationId,
         created.id,
         fixture.ownerLeader.id,

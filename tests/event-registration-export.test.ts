@@ -29,9 +29,9 @@ describe("event registration CSV export", () => {
       ).bind(userId, email, email, firstName),
       env.DB.prepare(
         `INSERT INTO registrations
-             (id, event_id, user_id, status, attendance_type, source_type, custom_answers_json,
+             (id, event_id, user_id, status, source_type, custom_answers_json,
               manage_link_secret, created_at, updated_at)
-           VALUES (?, ?, ?, 'registered', 'in_person', 'self', ?, ?, datetime('now'), datetime('now'))`,
+           VALUES (?, ?, ?, 'registered', 'self', ?, ?, datetime('now'), datetime('now'))`,
       ).bind(
         registrationId,
         eventId,
@@ -82,6 +82,13 @@ describe("event registration CSV export", () => {
     const response = await exportCsv();
     expect(response.status).toBe(200);
     expect(await response.text()).toContain("2026-12-01: At the venue; 2026-12-02: Moon base");
+    await env.DB.prepare(`INSERT INTO event_day_waitlist_entries
+      (id, event_id, event_day_id, registration_id, user_id, priority_lane, status, position, created_at, updated_at)
+      SELECT 'export-waitlist', event_id, 'export-day-2', id, user_id, 'general', 'waiting', 1,
+        datetime('now'), datetime('now') FROM registrations WHERE id = ?`)
+      .bind(registration.id)
+      .run();
+    expect(await (await exportCsv()).text()).toContain("2026-12-02: Moon base (waitlisted)");
   });
 
   it("neutralizes formulas and audits a successful export", async () => {
@@ -96,6 +103,14 @@ describe("event registration CSV export", () => {
     );
     expect(audit.action).toBe("admin_registration_export");
     expect(JSON.parse(audit.details_json)).toMatchObject({ recordCount: { from: null, to: 1 } });
+  });
+
+  it("leaves attendance empty when a registration has no selected days", async () => {
+    await seedRegistration("no-day@example.test", "No day");
+    const response = await exportCsv();
+    expect(response.status).toBe(200);
+    const [header, row] = (await response.text()).split("\r\n");
+    expect(row!.split(",")[header!.split(",").indexOf("Attendance")]).toBe("");
   });
 
   it("rejects an export over the configured row limit without auditing a download", async () => {

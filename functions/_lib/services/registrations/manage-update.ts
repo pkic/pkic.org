@@ -1,7 +1,6 @@
 import { AppError } from "../../errors";
 import { registrationManageSchema } from "../../../../assets/shared/schemas/registration";
 import type { DatabaseLike } from "../../types";
-import { deriveEventAttendanceType } from "../event-days";
 import { getEventById } from "../events";
 import {
   prepareReplaceContextFormSubmission,
@@ -62,14 +61,13 @@ export async function updateManagedRegistration(
     return { registration, outboxId: null, outboxIds: [], emailChanged: false };
   }
   const event = await getEventById(db, current.event_id);
-  const attendanceType = body.attendanceType ?? deriveEventAttendanceType(body.dayAttendance) ?? undefined;
   const validatedForm =
     body.customAnswers !== undefined
       ? await validateCustomAnswersForSubmission(db, {
           event: toEventFormResolutionEvent({ id: event.id, source_mode: event.source_mode }),
           purpose: "event_registration",
           customAnswers: body.customAnswers,
-          context: { attendanceType, dayAttendance: body.dayAttendance },
+          context: { dayAttendance: body.dayAttendance },
         })
       : null;
   const customAnswers = validatedForm?.answers ?? {};
@@ -99,7 +97,6 @@ export async function updateManagedRegistration(
   const emailChanged = Boolean(currentEmail && body.email && body.email.trim().toLowerCase() !== currentEmail);
   const updatePayload = {
     action: body.action,
-    attendanceType,
     dayAttendance: body.dayAttendance,
     claimDayWaitlistOffers: body.claimDayWaitlistOffers,
     customAnswersJson: body.customAnswers !== undefined ? JSON.stringify(customAnswers) : undefined,

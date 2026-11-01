@@ -1,4 +1,6 @@
 import { withScannedInput } from "./scanned-input";
+import { seedSessionAttendanceDays } from "./session-attendance-days";
+import { instantToCalendarDate } from "../../assets/shared/timezone";
 import { generateBadgeCredential } from "../../assets/shared/schemas/badge-credential";
 import { env } from "cloudflare:workers";
 import { expect } from "vitest";
@@ -74,7 +76,7 @@ export async function pilotEvidence(
   const now = new Date().toISOString();
   await env.DB.batch([
     env.DB.prepare(
-      "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','in_person','test',?,?,?)",
+      "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','test',?,?,?)",
     ).bind(registrationId, eventId, pilot.person.userId, crypto.randomUUID(), now, now),
     env.DB.prepare(
       "INSERT INTO sponsorships(id,sponsor_type,event_id,non_member_name,pipeline_stage,created_at,updated_at) VALUES(?,'event',?,'Integrated pilot sponsor','active',?,?)",
@@ -92,6 +94,10 @@ export async function pilotEvidence(
       "INSERT INTO consent_acceptances(id,registration_id,event_id,user_id,audience_type,term_key,term_version,accepted_at) VALUES(?,?,?,?,'attendee','sponsor-data-sharing','1',?)",
     ).bind(crypto.randomUUID(), registrationId, eventId, pilot.person.userId, now),
   ]);
+  const event = await env.DB.prepare("SELECT timezone FROM events WHERE id=?")
+    .bind(eventId)
+    .first<{ timezone: string }>();
+  await seedSessionAttendanceDays(env.DB, eventId, [instantToCalendarDate(observedAt, event!.timezone)]);
   const base = `/api/v1/events/${slug}`;
   const badge = await pilot.api(`${base}/badges`, badgeIssueResponseSchema, {
     operationId: crypto.randomUUID(),

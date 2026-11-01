@@ -176,7 +176,6 @@ export async function seedAcceptedSpeakerRegistration(input: {
   const holderRegistration = await createRegistrationService(env.DB, {
     event,
     userId: holder.id,
-    attendanceType: "in_person",
     dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
     sourceType: "direct",
     confirmationTtlHours: 48,
@@ -193,7 +192,6 @@ export async function seedAcceptedSpeakerRegistration(input: {
   const speakerRegistration = await createRegistrationService(env.DB, {
     event,
     userId: input.speakerUserId,
-    attendanceType: "in_person",
     dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
     sourceType: "direct",
     confirmationTtlHours: 48,
@@ -226,7 +224,6 @@ export async function seedPendingSpeakerRegistration(input: {
   const holderRegistration = await createRegistrationService(env.DB, {
     event,
     userId: holder.id,
-    attendanceType: "in_person",
     dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
     sourceType: "direct",
     confirmationTtlHours: 48,
@@ -240,7 +237,6 @@ export async function seedPendingSpeakerRegistration(input: {
   const speakerRegistration = await createRegistrationService(env.DB, {
     event,
     userId: input.speakerUserId,
-    attendanceType: "in_person",
     dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
     sourceType: "direct",
     confirmationTtlHours: 48,

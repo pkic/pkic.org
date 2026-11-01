@@ -53,18 +53,13 @@ export function buildRegistrationEmailStatusData(
 /**
  * Build structured attendance data for email templates.
  *
- * Returns either:
- * - `dayAttendance` as a non-empty array for multi-day registrations, with
- *   `attendanceLabel` left empty (the template uses {{#each dayAttendance}})
- * - `attendanceLabel` as a single human-readable string for non-per-day
- *   registrations, with `dayAttendance` as an empty array
+ * A registration with no selected days has no attendance label.
  *
  * Day labels come from the event_days.label column (e.g. "Tuesday 1 December 2026"),
  * falling back to the ISO day_date if no label is set.
  */
 export function buildAttendanceEmailData(
-  attendanceType: string,
-  dayAttendance: Array<{ dayDate: string; attendanceType: string; label: string | null }>,
+  dayAttendance: Array<{ dayDate: string; attendanceType: string; label: string | null; optionLabel?: string | null }>,
   dayWaitlist: DayWaitlistEmailEntry[] = [],
 ): {
   attendanceLabel: string;
@@ -86,8 +81,8 @@ export function buildAttendanceEmailData(
         const waitlistStatus = waitlistByDay.get(d.dayDate) ?? "";
         return {
           dayLabel: d.label ?? d.dayDate,
-          attendanceLabel: ATTENDANCE_TYPE_LABELS[d.attendanceType] ?? d.attendanceType,
-          statusLabel: buildDayAttendanceStatusLabel(d.attendanceType, waitlistStatus),
+          attendanceLabel: d.optionLabel ?? ATTENDANCE_TYPE_LABELS[d.attendanceType] ?? d.attendanceType,
+          statusLabel: buildDayAttendanceStatusLabel(d.attendanceType, waitlistStatus, d.optionLabel),
           waitlistStatus,
           isWaitlisted: waitlistStatus === "waiting",
           isWaitlistOffer: waitlistStatus === "offered",
@@ -97,22 +92,29 @@ export function buildAttendanceEmailData(
   }
 
   return {
-    attendanceLabel: ATTENDANCE_TYPE_LABELS[attendanceType] ?? attendanceType,
+    attendanceLabel: "",
     dayAttendance: [],
   };
 }
 
-function buildDayAttendanceStatusLabel(attendanceType: string, waitlistStatus: string | undefined): string {
+function buildDayAttendanceStatusLabel(
+  attendanceType: string,
+  waitlistStatus: string | undefined,
+  optionLabel?: string | null,
+): string {
+  if (waitlistStatus === "expired") {
+    return "Offer expired";
+  }
   if (waitlistStatus === "offered") {
     return "Waitlist offer sent";
   }
 
   if (waitlistStatus === "waiting") {
-    return "Waitlisted for in-person attendance";
+    return attendanceType === "in_person" ? "Waitlisted for in-person attendance" : "Waitlisted";
   }
 
   if (waitlistStatus === "accepted") {
-    return "Confirmed in-person attendance";
+    return attendanceType === "in_person" ? "Confirmed in-person attendance" : "Attendance confirmed";
   }
 
   switch (attendanceType) {
@@ -123,6 +125,6 @@ function buildDayAttendanceStatusLabel(attendanceType: string, waitlistStatus: s
     case "on_demand":
       return "On-demand attendance";
     default:
-      return ATTENDANCE_TYPE_LABELS[attendanceType] ?? attendanceType;
+      return optionLabel ?? ATTENDANCE_TYPE_LABELS[attendanceType] ?? attendanceType;
   }
 }

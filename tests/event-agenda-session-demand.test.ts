@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { seedSessionAttendanceDays } from "./helpers/session-attendance-days";
 import { env } from "cloudflare:workers";
 import {
   agendaOccurrenceListItemSchema,
@@ -313,10 +314,11 @@ describe("Live organizer session demand projection", () => {
     expect(published.status, await published.clone().text()).toBe(200);
     const userId = await insertUser(env.DB);
     await env.DB.prepare(
-      "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','in_person','test',?,?,?)",
+      "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','test',?,?,?)",
     )
       .bind(crypto.randomUUID(), eventId, userId, crypto.randomUUID(), nowIso(), nowIso())
       .run();
+    await seedSessionAttendanceDays(env.DB, eventId, ["2026-12-01", "2026-12-02"]);
     const attendeeToken = await createAdminSession(env.DB, userId, crypto.randomUUID());
     for (const [action, confirmed, preferences] of [
       ["save", 0, 1],

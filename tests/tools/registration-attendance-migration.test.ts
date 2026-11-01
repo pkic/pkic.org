@@ -95,3 +95,41 @@ it("rolls the rebuild back if a statement fails after the original table is drop
     db.close();
   }
 });
+
+it("removes the registration-wide field while preserving day attendance and related records", () => {
+  const db = existingDatabase();
+  try {
+    db.exec(`BEGIN;\n${delta()}\nCOMMIT;`);
+    const before = snapshot(db);
+    const cutover = readFileSync("migrations/0040_registration_day_attendance.sql", "utf8");
+    db.exec(`BEGIN;\n${cutover}\nCOMMIT;`);
+    const after = snapshot(db);
+    expect(after.days).toEqual(before.days);
+    expect(after.history).toEqual(before.history);
+    expect(after.badge).toEqual(before.badge);
+    expect(after.eventDays).toEqual(before.eventDays);
+    expect(db.prepare("PRAGMA table_info(registrations)").all()).not.toContainEqual(
+      expect.objectContaining({ name: "attendance_type" }),
+    );
+    expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+    expect(db.prepare("PRAGMA integrity_check").get()).toEqual({ integrity_check: "ok" });
+  } finally {
+    db.close();
+  }
+});
+
+it("refuses to discard registration-only attendance and rolls the cutover back", () => {
+  const db = existingDatabase();
+  try {
+    db.exec(`BEGIN;\n${delta()}\nCOMMIT;`);
+    db.exec("DELETE FROM registration_day_attendance");
+    const before = snapshot(db);
+    const cutover = readFileSync("migrations/0040_registration_day_attendance.sql", "utf8");
+    expect(() => db.exec(`BEGIN;\n${cutover}\nCOMMIT;`)).toThrow();
+    db.exec("ROLLBACK");
+    expect(snapshot(db)).toEqual(before);
+    expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+  } finally {
+    db.close();
+  }
+});

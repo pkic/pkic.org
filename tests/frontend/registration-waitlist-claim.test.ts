@@ -209,7 +209,7 @@ describe("registration waitlist claim UI", () => {
     expect(claimButton.className).toBe("pk-btn pk-btn--primary");
     const chip = document.querySelector("[data-day-waitlist] .pk-badge");
     // The chip spells the state out; the tone only agrees with the words.
-    expect(chip?.textContent).toContain("In-person spot available");
+    expect(chip?.textContent).toContain("Spot available");
     expect(chip?.classList.contains("pk-badge--info")).toBe(true);
   });
 

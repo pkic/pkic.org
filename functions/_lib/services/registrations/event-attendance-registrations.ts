@@ -22,7 +22,6 @@ interface AttendanceRegistrationRow {
   id: string;
   user_id: string;
   status: string;
-  attendance_type: string | null;
   created_at: string;
   updated_at: string;
   user_email: string | null;
@@ -48,7 +47,7 @@ export function buildEventAttendanceRegistrationsPageQuery(eventId: string, para
   const population = registrationPopulationFilter(eventId, params);
   return {
     source: {
-      selectSql: `SELECT r.id, r.user_id, r.status, r.attendance_type, r.created_at, r.updated_at,
+      selectSql: `SELECT r.id, r.user_id, r.status, r.created_at, r.updated_at,
                          u.email AS user_email,
                          COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS display_name,
                          u.headshot_r2_key AS headshot_r2_key,

@@ -80,9 +80,9 @@ async function seedRegistrationResponse(input: {
     ).bind(userId, input.email, input.email),
     env.DB.prepare(
       `INSERT INTO registrations
-         (id, event_id, user_id, status, attendance_type, source_type, custom_answers_json,
+         (id, event_id, user_id, status, source_type, custom_answers_json,
           form_placement_id, manage_link_secret, created_at, updated_at)
-       VALUES (?, ?, ?, 'registered', 'virtual', 'direct', ?, ?, ?, datetime('now'), datetime('now'))`,
+       VALUES (?, ?, ?, 'registered', 'direct', ?, ?, ?, datetime('now'), datetime('now'))`,
     ).bind(
       input.id,
       input.eventId,

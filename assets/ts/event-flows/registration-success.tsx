@@ -63,8 +63,7 @@ export function showRegistrationSuccess(
             paragraph is no longer asked to contain a block. */}
         <div class="pk-stack pk-stack--snug">
           <p class="event-flow-success-body">
-            Your overall registration is confirmed, but one or more selected in-person days are still pending because
-            those rooms are at capacity.
+            Your registration is confirmed, but one or more selected days are still waiting for a place.
           </p>
           {result.manageUrl && <a href={result.manageUrl}>Review or change registration</a>}
         </div>

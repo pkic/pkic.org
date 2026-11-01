@@ -475,10 +475,10 @@ describe("admin user deactivation", () => {
     await env.DB.batch([
       env.DB.prepare(
         `INSERT INTO registrations
-             (id, event_id, user_id, status, attendance_type, source_type,
+             (id, event_id, user_id, status, source_type,
               confirmation_link_secret, manage_link_secret, pending_confirmation_deadline_at,
               created_at, updated_at)
-           VALUES (?, ?, ?, 'pending_email_confirmation', 'virtual', 'admin', ?, ?,
+           VALUES (?, ?, ?, 'pending_email_confirmation', 'admin', ?, ?,
                    datetime('now', '+1 day'), datetime('now'), datetime('now'))`,
       ).bind(registrationId, eventId, userId, confirmationLinkSecret, manageLinkSecret),
       env.DB.prepare(
@@ -854,9 +854,9 @@ describe("admin user anonymization", () => {
     await env.DB.batch([
       env.DB.prepare(
         `INSERT INTO registrations
-           (id, event_id, user_id, status, attendance_type, source_type,
+           (id, event_id, user_id, status, source_type,
             confirmation_link_secret, manage_link_secret, created_at, updated_at)
-         VALUES (?, ?, ?, 'pending_email_confirmation', 'virtual', 'admin', ?, ?, datetime('now'), datetime('now'))`,
+         VALUES (?, ?, ?, 'pending_email_confirmation', 'admin', ?, ?, datetime('now'), datetime('now'))`,
       ).bind(registrationId, eventId, userId, confirmationLinkSecret, manageLinkSecret),
       env.DB.prepare(
         "INSERT INTO user_emails (id, user_id, email, normalized_email, created_at) VALUES (?, ?, ?, ?, datetime('now'))",
@@ -1143,8 +1143,8 @@ describe("admin user anonymization", () => {
     const registrationId = crypto.randomUUID();
     await env.DB.prepare(
       `INSERT INTO registrations
-         (id, event_id, user_id, status, attendance_type, source_type, manage_link_secret, created_at, updated_at)
-       VALUES (?, ?, ?, 'registered', 'in_person', 'test', ?, ?, ?)`,
+         (id, event_id, user_id, status, source_type, manage_link_secret, created_at, updated_at)
+       VALUES (?, ?, ?, 'registered', 'test', ?, ?, ?)`,
     )
       .bind(registrationId, eventId, userId, `secret-${registrationId}`, at, at)
       .run();

@@ -79,10 +79,22 @@ async function fixture({ streamed = true }: { streamed?: boolean } = {}) {
     expect(configured.status, await configured.clone().text()).toBe(200);
   }
   async function register(userId: string, attendanceType = "on_demand", status = "registered") {
+    const registrationId = crypto.randomUUID();
+    const now = new Date().toISOString();
     await env.DB.prepare(
-      "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,?,?,'test',?,strftime('%Y-%m-%dT%H:%M:%fZ','now'),strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+      "INSERT INTO event_days(id,event_id,day_date,created_at,updated_at) VALUES(?,?,'2026-12-02',?,?) ON CONFLICT(event_id,day_date) DO NOTHING",
     )
-      .bind(crypto.randomUUID(), eventId, userId, status, attendanceType, crypto.randomUUID())
+      .bind(crypto.randomUUID(), eventId, now, now)
+      .run();
+    await env.DB.prepare(
+      "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,?,'test',?,strftime('%Y-%m-%dT%H:%M:%fZ','now'),strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+    )
+      .bind(registrationId, eventId, userId, status, crypto.randomUUID())
+      .run();
+    await env.DB.prepare(
+      "INSERT INTO registration_day_attendance(id,registration_id,event_day_id,attendance_type,created_at,updated_at) SELECT ?,?,id,?,?,? FROM event_days WHERE event_id=? AND day_date='2026-12-02'",
+    )
+      .bind(crypto.randomUUID(), registrationId, attendanceType, now, now, eventId)
       .run();
   }
   return { eventId, adminId: admin.id, staffToken, call, roomId, occurrenceId, snapshot, streamPath, register };

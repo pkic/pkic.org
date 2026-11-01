@@ -58,8 +58,8 @@ describe("one D1 round trip for event configuration endpoints", () => {
     ]);
     const pendingId = crypto.randomUUID();
     await env.DB.batch([
-      env.DB.prepare(`INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at)
-        VALUES(?,?,?,'pending_email_confirmation','in_person','test',?,?,?)`).bind(
+      env.DB.prepare(`INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at)
+        VALUES(?,?,?,'pending_email_confirmation','test',?,?,?)`).bind(
         pendingId,
         f.eventId,
         f.operatorId,

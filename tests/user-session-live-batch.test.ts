@@ -244,8 +244,8 @@ describe("distinct live recipient query bounds", () => {
         SELECT json_extract(value,'$.userId'),json_extract(value,'$.email'),json_extract(value,'$.email'),'Synthetic',1,?,? FROM json_each(?)`,
       ).bind(now, now, input),
       env.DB.prepare(
-        `INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at)
-        SELECT json_extract(value,'$.registrationId'),?,json_extract(value,'$.userId'),'registered','in_person','test',json_extract(value,'$.registrationId'),?,? FROM json_each(?)`,
+        `INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at)
+        SELECT json_extract(value,'$.registrationId'),?,json_extract(value,'$.userId'),'registered','test',json_extract(value,'$.registrationId'),?,? FROM json_each(?)`,
       ).bind(f.eventId, now, now, input),
       env.DB.prepare(
         `INSERT INTO sessions(id,user_id,token_hash,expires_at,revoked_at,created_at)

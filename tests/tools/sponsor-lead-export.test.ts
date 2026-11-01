@@ -38,7 +38,7 @@ function fixture() {
   sqlite.exec(`INSERT INTO users(id,email,normalized_email,first_name,last_name,active) VALUES('operator','operator@example.test','operator@example.test','Operator','',1),('attendee','attendee@example.test','attendee@example.test','=HYPERLINK("bad")','Example',1);
  INSERT INTO events(id,slug,name,timezone,settings_json,created_at,updated_at) VALUES('event','export-test','Export test','UTC','{}','2026-10-03','2026-10-03'),('other-event','other-event','Other event','UTC','{}','2026-10-03','2026-10-03');
  INSERT INTO sponsorships(id,sponsor_type,event_id,non_member_name,pipeline_stage,created_at,updated_at) VALUES('sponsor','event','event','Synthetic sponsor','active','2026-10-03','2026-10-03'),('other-sponsor','event','event','Other sponsor','active','2026-10-03','2026-10-03');
- INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES('registration','event','attendee','registered','in_person','test','synthetic','2026-10-03','2026-10-03');
+ INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES('registration','event','attendee','registered','test','synthetic','2026-10-03','2026-10-03');
  INSERT INTO event_sponsor_leads(id,event_id,sponsor_id,user_id,operator_user_id,observed_at) VALUES('lead','event','sponsor','attendee','operator','2026-10-03T10:00:00Z');
  INSERT INTO permission_grants(id,user_id,permission,context_type,context_id,created_at) VALUES('grant','operator','agenda:leads_export','event_sponsor','sponsor','2026-10-03');
  INSERT INTO event_terms(id,event_id,audience_type,term_key,version,active,created_at) VALUES('term','event','attendee','sponsor-data-sharing','1',1,'2026-10-03');

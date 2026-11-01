@@ -109,8 +109,8 @@ describe("canonical user authentication", () => {
         VALUES (?,?,'account',0,?,?,?,?)`).bind(crypto.randomUUID(), userId, at, at, at, at),
       env.DB.prepare(`INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at)
         VALUES (?,'ibm.example',?,?,?)`).bind(crypto.randomUUID(), organizationId, at, at),
-      env.DB.prepare(`INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at)
-        VALUES (?,?,?,'registered','in_person','test',?,?,?)`).bind(
+      env.DB.prepare(`INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at)
+        VALUES (?,?,?,'registered','test',?,?,?)`).bind(
         crypto.randomUUID(),
         eventId,
         userId,

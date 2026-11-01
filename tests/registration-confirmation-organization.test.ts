@@ -33,7 +33,7 @@ async function register(email: string, unaffiliatedAttestation = false): Promise
       lastName: "Attendee",
       email,
       unaffiliatedAttestation,
-      attendanceType: "virtual",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
       sourceType: "direct",
       consents,
     }),
@@ -102,7 +102,12 @@ describe("organization named on registration confirmation", () => {
   beforeEach(async () => {
     await resetDb();
     stubSuccessfulMxLookup();
-    await seedEventAndAdmin(env.DB);
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    await env.DB.prepare(
+      "INSERT INTO event_days(id,event_id,day_date,created_at,updated_at) VALUES(?,?,'2026-12-01',?,?)",
+    )
+      .bind(crypto.randomUUID(), eventId, new Date().toISOString(), new Date().toISOString())
+      .run();
   });
   afterEach(() => vi.unstubAllGlobals());
 

@@ -107,7 +107,7 @@ export async function recordSessionInvitationRsvp(db: DatabaseLike, raw: unknown
       })
     : null;
   const date = context ? instantToDateTimeLocal(context.startAt, context.timeZone).slice(0, 10) : null;
-  const eligibleRegistrationSql = `EXISTS(SELECT 1 FROM registrations reg WHERE reg.event_id=invite.event_id AND reg.user_id=invite.user_id AND reg.status='registered' AND COALESCE((SELECT attendance.attendance_type FROM registration_day_attendance attendance JOIN event_days day ON day.id=attendance.event_day_id WHERE attendance.registration_id=reg.id AND day.day_date=?),CASE WHEN EXISTS(SELECT 1 FROM event_days day WHERE day.event_id=reg.event_id AND day.day_date=?) THEN 'none' ELSE reg.attendance_type END)=?)`;
+  const eligibleRegistrationSql = `EXISTS(SELECT 1 FROM registrations reg WHERE reg.event_id=invite.event_id AND reg.user_id=invite.user_id AND reg.status='registered' AND ${registrationDaySessionAccessSql("reg", "?")}=?)`;
   const guard = (requireMaterial: boolean, eligibility: "required" | "invalid" | "ignore" = "required") => {
     const checkEligibility = requireMaterial && input.responseStatus === "accepted" && eligibility !== "ignore";
     return prepareAuthorizationGuard(db, {
@@ -122,7 +122,7 @@ export async function recordSessionInvitationRsvp(db: DatabaseLike, raw: unknown
         target.reply_context_json,
         target.reply_mode,
         ...(requireMaterial ? [now] : []),
-        ...(checkEligibility ? [date, date, target.reply_mode === "physical" ? "in_person" : "virtual"] : []),
+        ...(checkEligibility ? [date, target.reply_mode === "physical" ? "in_person" : "virtual"] : []),
       ],
     });
   };
@@ -235,3 +235,4 @@ export async function recordSessionInvitationRsvp(db: DatabaseLike, raw: unknown
     chronology: "server_received_order_client_clock_unverified",
   });
 }
+import { registrationDaySessionAccessSql } from "./session-access";

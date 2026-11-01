@@ -105,7 +105,6 @@ export async function buildRegistrationManageView(
       event_id: registration.event_id,
       status: registration.status,
       cancellation_reason_code: registration.cancellation_reason_code,
-      attendance_type: registration.attendance_type,
       custom_answers: parseJsonSafe<Record<string, unknown> | null>(registration.custom_answers_json, null),
       isEmailVerified: registration.confirmed_at !== null,
     },

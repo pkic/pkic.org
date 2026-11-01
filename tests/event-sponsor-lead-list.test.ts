@@ -86,7 +86,7 @@ beforeEach(async () => {
       .bind(userId, `attendee${i}@synthetic.test`, `attendee${i}@synthetic.test`, `Person ${i}`, "Example")
       .run();
     await env.DB.prepare(
-      "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','in_person','test',?,?,?)",
+      "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','test',?,?,?)",
     )
       .bind(regId, eventId, userId, crypto.randomUUID(), "2026-10-04T10:00:00.000Z", "2026-10-04T10:00:00.000Z")
       .run();

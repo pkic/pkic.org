@@ -6,7 +6,6 @@ import { attendeeRegistrationParticipationSchema } from "../../assets/shared/sch
 import type { EventFormsResponse } from "../../assets/shared/schemas/forms";
 import type { GroupEvent } from "../../assets/shared/schemas/group-events";
 import { GroupEventRegistrationPanel } from "../../assets/ts/member-flows/portal/sections/management/GroupEventRegistrationPanel";
-import { groupNames, namedGroup } from "./helpers/labeled-control";
 
 // Contact/session behavior is covered by the shared contact and browser journeys;
 // this host's contract is the group-scoped transport and event configuration.
@@ -110,7 +109,15 @@ function config(overrides: Partial<EventFormsResponse> = {}): EventFormsResponse
     registrationPolicy: "public",
     requiredTerms: [term],
     allowedSessionTypes: [],
-    eventDays: [],
+    eventDays: [
+      {
+        dayDate: "2026-09-01",
+        label: "Day one",
+        inPersonCapacity: null,
+        sortOrder: 0,
+        attendanceOptions: [{ value: "in_person", label: "In person" }],
+      },
+    ],
     ...overrides,
   };
 }
@@ -161,15 +168,13 @@ describe("portal group event registration", () => {
     expect(container.textContent).toContain("Registration details");
     expect(container.textContent).toContain("Tell the event team how you plan to participate.");
     expect(container.textContent).toContain("I agree to the event terms");
-    expect(container.textContent).toContain("Attendance");
+    expect(container.textContent).toContain("Day one");
 
     const form = container.querySelector("form")!;
+    form.querySelector<HTMLInputElement>("input[name='dayAttendance.2026-09-01']")!.click();
     const role = form.querySelector<HTMLInputElement>("input[name='custom.role']")!;
     role.value = "Engineer";
     role.dispatchEvent(new Event("input", { bubbles: true }));
-    const attendance = form.querySelector<HTMLInputElement>("input[name='attendanceType'][value='virtual']")!;
-    attendance.checked = true;
-    attendance.dispatchEvent(new Event("change", { bubbles: true }));
     // The consent is a real checkbox now, so the test agrees to it the way
     // a reader does rather than by clicking a styling class.
     form.querySelector<HTMLInputElement>("input[name='consents']")?.click();
@@ -182,7 +187,7 @@ describe("portal group event registration", () => {
     expect(requests.find(({ method }) => method === "POST")).toMatchObject({
       url: expect.objectContaining({ pathname: `/api/v1/groups/${GROUP_ID}/events/${EVENT_ID}/registrations` }),
       body: {
-        attendanceType: "virtual",
+        dayAttendance: [{ dayDate: "2026-09-01", attendanceType: "in_person" }],
         customAnswers: { role: "Engineer" },
         consents: [{ termKey: "event-terms", version: "2026-01" }],
       },
@@ -263,7 +268,7 @@ describe("portal group event registration", () => {
     await settle();
 
     expect(container.textContent).toContain("required event terms have not been configured");
-    expect(container.querySelector<HTMLButtonElement>("button[type='submit']")?.disabled).toBe(true);
+    expect(container.querySelector<HTMLButtonElement>("button[type='submit']")).toBeNull();
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 
@@ -282,31 +287,17 @@ describe("portal group event registration", () => {
     expect(container.querySelector("form")).toBeNull();
   });
 
-  it("names the attendance choice as a group and gives each radio a real label", async () => {
+  it("does not allow registration before event days are scheduled", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => json(config())),
+      vi.fn(async () => json(config({ eventDays: [] }))),
     );
 
     const container = mount(<GroupEventRegistrationPanel groupId={GROUP_ID} event={event} />);
     await settle();
 
-    // A `legend` names the set of radios; a `label` could only name one of
-    // them, which is how a radio group ends up announced as three loose
-    // controls with no question attached.
-    expect(groupNames(container)).toContain("Attendance");
-    const attendance = namedGroup(container, "Attendance");
-    const radios = [...attendance.querySelectorAll<HTMLInputElement>("input[type='radio']")];
-    expect(radios).toHaveLength(3);
-    for (const radio of radios) {
-      // All three parts of the checkbox/radio pattern, or the browser draws
-      // its own control and the styling is silently absent.
-      expect(radio.classList.contains("pk-check__input")).toBe(true);
-      const label = radio.closest("label")!;
-      expect(label.classList.contains("pk-check")).toBe(true);
-      expect(label.querySelector(".pk-check__label")?.textContent).toBeTruthy();
-    }
-    expect(radios.map((radio) => radio.closest("label")?.textContent)).toEqual(["In-person", "Virtual", "On-demand"]);
+    expect(container.textContent).toContain("Registration opens when the event days are scheduled.");
+    expect(container.querySelector("input[name='attendanceType']")).toBeNull();
 
     // The whole panel is a named region, so the registration form is
     // reachable without reading the page from the top.
@@ -327,9 +318,7 @@ describe("portal group event registration", () => {
     await settle();
 
     const form = container.querySelector("form")!;
-    const attendance = form.querySelector<HTMLInputElement>("input[name='attendanceType'][value='virtual']")!;
-    attendance.checked = true;
-    attendance.dispatchEvent(new Event("change", { bubbles: true }));
+    form.querySelector<HTMLInputElement>("input[name='dayAttendance.2026-09-01']")!.click();
     form.querySelector<HTMLInputElement>("input[name='consents']")?.click();
     await act(async () => {
       form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));

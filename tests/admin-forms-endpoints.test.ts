@@ -247,9 +247,9 @@ describe("canonical Forms resource endpoints", () => {
     });
     await env.DB.prepare(
       `INSERT INTO registrations (
-         id, event_id, user_id, status, attendance_type, source_type, custom_answers_json,
+         id, event_id, user_id, status, source_type, custom_answers_json,
          manage_link_secret, created_at, updated_at
-       ) VALUES (?, ?, ?, 'registered', 'virtual', 'admin', ?, ?, ?, ?)`,
+       ) VALUES (?, ?, ?, 'registered', 'admin', ?, ?, ?, ?)`,
     )
       .bind(
         doubleCountRegistrationContextRef,
@@ -685,10 +685,10 @@ describe("canonical Forms resource endpoints", () => {
     const inPersonRegistrationId = crypto.randomUUID();
     await env.DB.prepare(
       `INSERT INTO registrations (
-         id, event_id, user_id, status, attendance_type, source_type, custom_answers_json,
+         id, event_id, user_id, status, source_type, custom_answers_json,
          manage_link_secret, created_at, updated_at
-       ) VALUES (?, ?, ?, 'registered', 'virtual', 'admin', ?, ?, ?, ?),
-                (?, ?, ?, 'registered', 'in_person', 'admin', ?, ?, ?, ?)`,
+       ) VALUES (?, ?, ?, 'registered', 'admin', ?, ?, ?, ?),
+                (?, ?, ?, 'registered', 'admin', ?, ?, ?, ?)`,
     )
       .bind(
         registrationId,

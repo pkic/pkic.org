@@ -1,5 +1,7 @@
 import { all } from "../../db/queries";
 import { stringifyJson } from "../../utils/json";
+import { attendanceOptionLabelSql } from "../event-attendance-option-sql";
+import { dayWaitlistStatusSql } from "../registrations/day-waitlist-policy";
 import type { DatabaseLike } from "../../types";
 import type {
   AttendeeDayAttendance,
@@ -13,7 +15,12 @@ function indexAttendanceRows(rows: AttendeeDayAttendanceRow[]): Map<string, Atte
   const byRegistration = new Map<string, AttendeeDayAttendance[]>();
   for (const row of rows) {
     const entries = byRegistration.get(row.registration_id) ?? [];
-    entries.push({ dayDate: row.dayDate, attendanceType: row.attendanceType, label: row.label });
+    entries.push({
+      dayDate: row.dayDate,
+      attendanceType: row.attendanceType,
+      label: row.label,
+      optionLabel: row.optionLabel,
+    });
     byRegistration.set(row.registration_id, entries);
   }
   return byRegistration;
@@ -38,7 +45,8 @@ async function listDayAttendance(
     `SELECT rda.registration_id,
             ed.day_date AS dayDate,
             rda.attendance_type AS attendanceType,
-            ed.label AS label
+            ed.label AS label,
+            ${attendanceOptionLabelSql("ed", "rda.attendance_type")} AS optionLabel
      FROM registration_day_attendance rda
      JOIN event_days ed ON ed.id = rda.event_day_id
      WHERE rda.registration_id IN (SELECT value FROM json_each(?))
@@ -56,11 +64,11 @@ async function listDayWaitlist(
     db,
     `SELECT w.registration_id,
             ed.day_date AS dayDate,
-            w.status AS status
+            ${dayWaitlistStatusSql("w")} AS status
      FROM event_day_waitlist_entries w
      JOIN event_days ed ON ed.id = w.event_day_id
      WHERE w.registration_id IN (SELECT value FROM json_each(?))
-       AND w.status IN ('waiting', 'offered', 'accepted')
+       AND w.status IN ('waiting', 'offered', 'accepted', 'expired')
      ORDER BY w.registration_id ASC, ed.sort_order ASC, ed.day_date ASC`,
     [registrationIdsJson],
   );

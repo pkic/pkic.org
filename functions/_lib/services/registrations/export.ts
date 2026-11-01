@@ -1,5 +1,4 @@
 import { loadRegistrationDayStates } from "./day-states";
-import { configuredAttendanceOptions, listEventDays } from "../event-days";
 import { REGISTRATION_ORGANIZATION_SQL, REGISTRATION_JOB_TITLE_SQL } from "./selected-identity";
 import { encodeBoundedCsv } from "../../csv";
 import { all } from "../../db/queries";
@@ -16,7 +15,6 @@ import { PERSONAL_EMAIL_ADDRESS_LABEL } from "../../../../assets/shared/email-fi
 interface ExportRow {
   id: string;
   status: string;
-  attendance_type: string | null;
   source_type: string | null;
   created_at: string;
   user_email: string | null;
@@ -74,7 +72,7 @@ export async function buildRegistrationCsv(
 ): Promise<{ csv: string; recordCount: number }> {
   const rows = await all<ExportRow>(
     db,
-    `SELECT r.id, r.status, r.attendance_type, r.source_type, r.created_at,
+    `SELECT r.id, r.status, r.source_type, r.created_at,
             u.email AS user_email,
             COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS display_name,
             ${REGISTRATION_ORGANIZATION_SQL} AS organization,
@@ -94,7 +92,7 @@ export async function buildRegistrationCsv(
     throw new AppError(413, "CSV_EXPORT_ROW_LIMIT_EXCEEDED", `CSV export is limited to ${limits.maxRows} records`);
   }
 
-  const [responseByRegistration, dayStates, eventDays] = await Promise.all([
+  const [responseByRegistration, dayStates] = await Promise.all([
     resolveEventFormResponses(
       db,
       rows.map((row) => ({
@@ -109,9 +107,7 @@ export async function buildRegistrationCsv(
       db,
       rows.map((row) => row.id),
     ),
-    listEventDays(db, event.id),
   ]);
-  const daysByDate = new Map(eventDays.map((day) => [day.day_date, day]));
   const formColumns = exportFormColumns(rows.map((row) => responseByRegistration.get(row.id) ?? null));
   const header = [
     "ID",
@@ -131,17 +127,19 @@ export async function buildRegistrationCsv(
     const customAnswers = response ? response.answers : null;
     const affiliation = contactAffiliation(row.user_email, row.organization);
     const selectedDays = dayStates.get(row.id) ?? [];
-    const attendance = selectedDays.length
-      ? selectedDays
-          .map((day) => {
-            const configured = daysByDate.get(day.dayDate);
-            const label =
-              configured &&
-              configuredAttendanceOptions(configured).find((option) => option.value === day.attendanceType)?.label;
-            return `${day.dayDate}: ${label ?? day.attendanceType}`;
-          })
-          .join("; ")
-      : row.attendance_type;
+    const attendance = selectedDays
+      .map((day) => {
+        const status =
+          day.waitlistStatus === "waiting"
+            ? " (waitlisted)"
+            : day.waitlistStatus === "offered"
+              ? " (place offered)"
+              : day.waitlistStatus === "expired"
+                ? " (offer expired)"
+                : "";
+        return `${day.dayDate}: ${day.optionLabel ?? day.attendanceType}${status}`;
+      })
+      .join("; ");
     return [
       row.id,
       row.display_name,

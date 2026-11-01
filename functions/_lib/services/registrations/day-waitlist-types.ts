@@ -4,6 +4,7 @@ export interface EventDayCapacityRow {
   id: string;
   day_date: string;
   in_person_capacity: number | null;
+  attendance_options_json?: string | null;
   capacity_revision: number;
 }
 
@@ -18,7 +19,8 @@ export interface DayWaitlistRow {
   position: number;
   offer_expires_at: string | null;
   reason_code?: string | null;
-  capacitySnapshot?: { seatsReservedBeforeDecision: number; limit: number };
+  attendance_type?: string | null;
+  capacitySnapshot?: { seatsReservedBeforeDecision: number; limit: number | null };
 }
 
 export interface PlannedDayWaitlistEntry {

@@ -18,8 +18,17 @@ import { promoteEventWaitlistWithNotifications } from "../functions/_lib/service
 import { profileD1Flow } from "./helpers/d1-flow-profile";
 import { gateNextBatch } from "./helpers/d1-batch-gate";
 import { eventDayReadModels } from "../functions/_lib/services/event-read-models";
+import {
+  activeDayWaitlistExistsSql,
+  loadRegistrationDayStates,
+} from "../functions/_lib/services/registrations/day-states";
+import { listDayWaitlistForRegistration } from "../functions/_lib/services/registrations/day-waitlist-queries";
+import { fetchViewerEventState } from "../functions/_lib/services/events/viewer-state";
+import { registrationDaySessionAccessSql } from "../functions/_lib/services/event-participation/session-access";
+import { projectAttendeeDayState } from "../functions/_lib/services/event-email-campaign/attendance-projection";
+import { buildAttendanceEmailData } from "../functions/_lib/utils/attendance";
 import type { EventDayRecord } from "../functions/_lib/services/event-days";
-import { resolveAttendanceOptions } from "../functions/_lib/services/event-days";
+import { countRegisteredByEventDay, resolveAttendanceOptions } from "../functions/_lib/services/event-days";
 
 describe("day attendance capacity", () => {
   beforeEach(async () => {
@@ -56,6 +65,324 @@ describe("day attendance capacity", () => {
     const days = eventDayReadModels([day], new Map([[day.id, new Map([["in_person", registered]])]]));
     expect(days[0].attendanceOptions[0].spotsRemainingPercent).toBe(percent);
   });
+  it("enforces capacity separately for every configured attendance option", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const date = "2026-12-01";
+    const options = [
+      { value: "moon_base", label: "Moon base", accessMode: "physical", capacity: 1 },
+      { value: "satellite_hub", label: "Satellite hub", accessMode: "physical", capacity: 1 },
+      { value: "interactive_stream", label: "Interactive stream", accessMode: "remote", capacity: 1 },
+    ];
+    await env.DB.prepare(`INSERT INTO event_days (id, event_id, day_date, attendance_options_json, sort_order, created_at, updated_at)
+      VALUES ('custom-capacity-day', ?, ?, ?, 1, datetime('now'), datetime('now'))`)
+      .bind(eventId, date, JSON.stringify(options))
+      .run();
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const missingDayUser = crypto.randomUUID();
+    await env.DB.prepare("INSERT INTO users (id, email, normalized_email, active) VALUES (?, ?, ?, 1)")
+      .bind(missingDayUser, "no-day@example.test", "no-day@example.test")
+      .run();
+    await expect(
+      createRegistration(env.DB, {
+        event,
+        userId: missingDayUser,
+        sourceType: "direct",
+        signingSecret: "test-signing-secret",
+      }),
+    ).rejects.toMatchObject({ code: "DAY_ATTENDANCE_REQUIRED" });
+    const create = async (value: string, index: number) => {
+      const userId = crypto.randomUUID();
+      await env.DB.prepare("INSERT INTO users (id, email, normalized_email, active) VALUES (?, ?, ?, 1)")
+        .bind(userId, `capacity-option-${index}@example.test`, `capacity-option-${index}@example.test`)
+        .run();
+      return createRegistration(env.DB, {
+        event,
+        userId,
+        dayAttendance: [{ dayDate: date, attendanceType: value }],
+        sourceType: "direct",
+        signingSecret: "test-signing-secret",
+      });
+    };
+    const moonFirst = await create("moon_base", 1);
+    const moonWaiting = await create("moon_base", 2);
+    const hubFirst = await create("satellite_hub", 3);
+    const streamFirst = await create("interactive_stream", 4);
+    const streamWaiting = await create("interactive_stream", 5);
+    const sessionAccess = async (registrationId: string) =>
+      env.DB.prepare(
+        `SELECT ${registrationDaySessionAccessSql("r", "?")} AS access FROM registrations r WHERE r.id = ?`,
+      )
+        .bind(date, registrationId)
+        .first<{ access: string }>();
+    const noDayRegistration = crypto.randomUUID();
+    await env.DB.prepare(`INSERT INTO registrations
+      (id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at)
+      VALUES (?,?,?,'registered','direct',?,datetime('now'),datetime('now'))`)
+      .bind(noDayRegistration, eventId, missingDayUser, crypto.randomUUID())
+      .run();
+    expect(await sessionAccess(noDayRegistration)).toEqual({ access: "none" });
+    expect(
+      await env.DB.prepare(
+        `SELECT ${registrationDaySessionAccessSql("r", "?")} AS access FROM registrations r WHERE r.id = ?`,
+      )
+        .bind("2030-01-01", noDayRegistration)
+        .first(),
+    ).toEqual({ access: "none" });
+    expect(await sessionAccess(moonFirst.registration.id)).toEqual({ access: "in_person" });
+    expect(await sessionAccess(moonWaiting.registration.id)).toEqual({ access: "none" });
+    expect(await sessionAccess(streamWaiting.registration.id)).toEqual({ access: "none" });
+    const waiting = await queryAll<{ registration_id: string }>(
+      env.DB,
+      "SELECT registration_id FROM event_day_waitlist_entries WHERE status = 'waiting' ORDER BY registration_id",
+    );
+    expect(waiting.map((row) => row.registration_id).sort()).toEqual(
+      [moonWaiting.registration.id, streamWaiting.registration.id].sort(),
+    );
+    expect(waiting.map((row) => row.registration_id)).not.toContain(moonFirst.registration.id);
+    expect(waiting.map((row) => row.registration_id)).not.toContain(hubFirst.registration.id);
+    expect(waiting.map((row) => row.registration_id)).not.toContain(streamFirst.registration.id);
+    const counts = async () => (await countRegisteredByEventDay(env.DB, eventId)).get("custom-capacity-day");
+    expect(Object.fromEntries((await counts()) ?? [])).toEqual({
+      moon_base: 1,
+      satellite_hub: 1,
+      interactive_stream: 1,
+    });
+
+    await updateRegistrationByManageToken(env.DB, {
+      manageToken: moonFirst.manageToken,
+      action: "cancel",
+      waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
+    });
+    const offer = await promoteDayWaitlistIfCapacity(env.DB, {
+      eventId,
+      eventDayId: "custom-capacity-day",
+      claimWindowHours: 24,
+    });
+    expect(offer).toMatchObject({ registration_id: moonWaiting.registration.id, status: "offered" });
+    expect(await sessionAccess(moonWaiting.registration.id)).toEqual({ access: "none" });
+    expect((await counts())?.get("moon_base")).toBe(1);
+    await env.DB.prepare(
+      "UPDATE event_day_waitlist_entries SET offer_expires_at = '2000-01-01T00:00:00.000Z' WHERE id = ?",
+    )
+      .bind(offer!.id)
+      .run();
+    expect((await counts())?.get("moon_base") ?? 0).toBe(0);
+    await env.DB.prepare("UPDATE event_day_waitlist_entries SET offer_expires_at = ? WHERE id = ?")
+      .bind(offer!.offer_expires_at, offer!.id)
+      .run();
+    const other = await env.DB.prepare("SELECT status FROM event_day_waitlist_entries WHERE registration_id = ?")
+      .bind(streamWaiting.registration.id)
+      .first<{ status: string }>();
+    expect(other?.status).toBe("waiting");
+    const confirmed = await confirmRegistrationByToken(env.DB, {
+      token: moonWaiting.confirmationToken!,
+      waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
+    });
+    await expect(
+      updateRegistrationByManageToken(env.DB, {
+        manageToken: confirmed.manageToken,
+        action: "update",
+        dayAttendance: [{ dayDate: date, attendanceType: "satellite_hub" }],
+        claimDayWaitlistOffers: [date],
+        waitlistClaimWindowHours: 24,
+        signingSecret: "test-signing-secret",
+      }),
+    ).rejects.toMatchObject({ code: "DAY_WAITLIST_OFFER_UNAVAILABLE" });
+    expect(
+      await env.DB.prepare("SELECT attendance_type FROM registration_day_attendance WHERE registration_id = ?")
+        .bind(moonWaiting.registration.id)
+        .first(),
+    ).toEqual({ attendance_type: "moon_base" });
+    await updateRegistrationByManageToken(env.DB, {
+      manageToken: confirmed.manageToken,
+      action: "update",
+      dayAttendance: [{ dayDate: date, attendanceType: "moon_base" }],
+      claimDayWaitlistOffers: [date],
+      waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
+    });
+    expect(
+      await env.DB.prepare("SELECT status FROM event_day_waitlist_entries WHERE registration_id = ?")
+        .bind(moonWaiting.registration.id)
+        .first(),
+    ).toEqual({ status: "accepted" });
+    expect(await sessionAccess(moonWaiting.registration.id)).toEqual({ access: "in_person" });
+
+    const updatedOptions = options.map((option) =>
+      option.value === "interactive_stream" ? { ...option, capacity: null } : option,
+    );
+    await env.DB.prepare("UPDATE event_days SET attendance_options_json = ? WHERE id = 'custom-capacity-day'")
+      .bind(JSON.stringify(updatedOptions))
+      .run();
+    const unlimitedOffer = await promoteDayWaitlistIfCapacity(env.DB, {
+      eventId,
+      eventDayId: "custom-capacity-day",
+      claimWindowHours: 24,
+    });
+    expect(unlimitedOffer).toMatchObject({ registration_id: streamWaiting.registration.id, status: "offered" });
+    expect(await sessionAccess(streamWaiting.registration.id)).toEqual({ access: "none" });
+    const confirmedStream = await confirmRegistrationByToken(env.DB, {
+      token: streamWaiting.confirmationToken!,
+      waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
+    });
+    await updateRegistrationByManageToken(env.DB, {
+      manageToken: confirmedStream.manageToken,
+      action: "update",
+      dayAttendance: [{ dayDate: date, attendanceType: "interactive_stream" }],
+      claimDayWaitlistOffers: [date],
+      waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
+    });
+    expect(
+      await env.DB.prepare("SELECT status FROM event_day_waitlist_entries WHERE registration_id = ?")
+        .bind(streamWaiting.registration.id)
+        .first(),
+    ).toEqual({ status: "accepted" });
+  });
+
+  it("does not offer a place after the waiter's selected option changes", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const firstUser = crypto.randomUUID();
+    const secondUser = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(`INSERT INTO event_days (id,event_id,day_date,attendance_options_json,sort_order,created_at,updated_at)
+        VALUES ('custom-offer-race',?,'2026-12-01',?,1,datetime('now'),datetime('now'))`).bind(
+        eventId,
+        JSON.stringify([
+          { value: "moon", label: "Moon", capacity: 1 },
+          { value: "mars", label: "Mars", capacity: 1 },
+        ]),
+      ),
+      ...[firstUser, secondUser].map((id) =>
+        env.DB.prepare("INSERT INTO users(id,email,normalized_email,active) VALUES(?,?,?,1)").bind(
+          id,
+          `${id}@example.test`,
+          `${id}@example.test`,
+        ),
+      ),
+    ]);
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const common = {
+      event,
+      attendanceType: "moon",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "moon" }],
+      sourceType: "direct",
+      signingSecret: "test-signing-secret",
+    };
+    const first = await createRegistration(env.DB, { ...common, userId: firstUser });
+    const second = await createRegistration(env.DB, { ...common, userId: secondUser });
+    await updateRegistrationByManageToken(env.DB, {
+      manageToken: first.manageToken,
+      action: "cancel",
+      waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
+    });
+    const gate = gateNextBatch(env.DB);
+    const promotion = promoteDayWaitlistIfCapacity(gate.db, {
+      eventId,
+      eventDayId: "custom-offer-race",
+      claimWindowHours: 24,
+    });
+    await gate.reached;
+    await env.DB.prepare("UPDATE registration_day_attendance SET attendance_type = 'mars' WHERE registration_id = ?")
+      .bind(second.registration.id)
+      .run();
+    gate.release();
+    expect(await promotion).toBeNull();
+    expect(
+      await env.DB.prepare("SELECT status FROM event_day_waitlist_entries WHERE registration_id = ?")
+        .bind(second.registration.id)
+        .first(),
+    ).toEqual({ status: "waiting" });
+  });
+
+  it("rejects a stale final-place plan for an arbitrary configured option", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const firstUser = crypto.randomUUID();
+    const secondUser = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(`INSERT INTO event_days (id,event_id,day_date,attendance_options_json,sort_order,created_at,updated_at)
+        VALUES ('custom-race-day',?,'2026-12-01',?,1,datetime('now'),datetime('now'))`).bind(
+        eventId,
+        JSON.stringify([{ value: "moon_base", label: "Moon base", accessMode: "remote", capacity: 1 }]),
+      ),
+      ...[firstUser, secondUser].map((id) =>
+        env.DB.prepare("INSERT INTO users(id,email,normalized_email,active) VALUES(?,?,?,1)").bind(
+          id,
+          `${id}@example.test`,
+          `${id}@example.test`,
+        ),
+      ),
+    ]);
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const common = {
+      event,
+      attendanceType: "moon_base",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "moon_base" }],
+      sourceType: "direct",
+      signingSecret: "test-signing-secret",
+    };
+    const [firstPlan, stalePlan] = await Promise.all([
+      buildCreateRegistration(env.DB, { ...common, userId: firstUser }),
+      buildCreateRegistration(env.DB, { ...common, userId: secondUser }),
+    ]);
+    await env.DB.batch(firstPlan.statements);
+    await expect(env.DB.batch(stalePlan.statements)).rejects.toThrow(/EVENT_DAY_CAPACITY_CHANGED/);
+    const second = await createRegistration(env.DB, { ...common, userId: secondUser });
+    expect(
+      await env.DB.prepare("SELECT status FROM event_day_waitlist_entries WHERE registration_id = ?")
+        .bind(second.registration.id)
+        .first(),
+    ).toEqual({ status: "waiting" });
+  });
+
+  it("retries independent options without consuming each other's final places", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const firstUser = crypto.randomUUID();
+    const secondUser = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(`INSERT INTO event_days(id,event_id,day_date,attendance_options_json,sort_order,created_at,updated_at)
+        VALUES('independent-options-day',?,'2026-12-01',?,1,datetime('now'),datetime('now'))`).bind(
+        eventId,
+        JSON.stringify([
+          { value: "moon", label: "Moon", capacity: 1 },
+          { value: "mars", label: "Mars", capacity: 1 },
+        ]),
+      ),
+      ...[firstUser, secondUser].map((id) =>
+        env.DB.prepare("INSERT INTO users(id,email,normalized_email,active) VALUES(?,?,?,1)").bind(
+          id,
+          `${id}@example.test`,
+          `${id}@example.test`,
+        ),
+      ),
+    ]);
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const input = (userId: string, value: string) => ({
+      event,
+      userId,
+      attendanceType: value,
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: value }],
+      sourceType: "direct",
+      signingSecret: "test-signing-secret",
+    });
+    const [moon, staleMars] = await Promise.all([
+      buildCreateRegistration(env.DB, input(firstUser, "moon")),
+      buildCreateRegistration(env.DB, input(secondUser, "mars")),
+    ]);
+    await env.DB.batch(moon.statements);
+    await expect(env.DB.batch(staleMars.statements)).rejects.toThrow(/EVENT_DAY_CAPACITY_CHANGED/);
+    const mars = await createRegistration(env.DB, input(secondUser, "mars"));
+    expect(
+      await env.DB.prepare("SELECT status FROM event_day_waitlist_entries WHERE registration_id = ?")
+        .bind(mars.registration.id)
+        .first(),
+    ).toBeNull();
+  });
+
   it("waitlists only the full day instead of rejecting registration", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
 
@@ -84,7 +411,6 @@ describe("day attendance capacity", () => {
     await createRegistration(env.DB, {
       event,
       userId: firstUser.id,
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -94,7 +420,6 @@ describe("day attendance capacity", () => {
     const second = await createRegistration(env.DB, {
       event,
       userId: secondUser.id,
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -131,7 +456,6 @@ describe("day attendance capacity", () => {
     const holder = await createRegistration(env.DB, {
       event,
       userId: "role-exempt-holder",
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -146,7 +470,6 @@ describe("day attendance capacity", () => {
     const pending = await createRegistration(env.DB, {
       event,
       userId: "role-exempt-pending",
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -315,7 +638,6 @@ describe("day attendance capacity", () => {
     const first = await createRegistration(env.DB, {
       event,
       userId: "user-1",
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -330,7 +652,6 @@ describe("day attendance capacity", () => {
     const second = await createRegistration(env.DB, {
       event,
       userId: "user-2",
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -380,7 +701,6 @@ describe("day attendance capacity", () => {
     const first = await createRegistration(env.DB, {
       event,
       userId: "user-1",
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -395,7 +715,6 @@ describe("day attendance capacity", () => {
     const second = await createRegistration(env.DB, {
       event,
       userId: "user-2",
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -430,7 +749,6 @@ describe("day attendance capacity", () => {
     await updateRegistrationByManageToken(env.DB, {
       manageToken: confirmedSecond.manageToken,
       action: "update",
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       waitlistClaimWindowHours: 24,
       signingSecret: "test-signing-secret",
@@ -446,7 +764,6 @@ describe("day attendance capacity", () => {
     await updateRegistrationByManageToken(env.DB, {
       manageToken: confirmedSecond.manageToken,
       action: "update",
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       claimDayWaitlistOffers: ["2026-12-01"],
       waitlistClaimWindowHours: 24,
@@ -479,7 +796,6 @@ describe("day attendance capacity", () => {
     const holder = await createRegistration(env.DB, {
       event,
       userId: "user-admin-holder",
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -493,7 +809,6 @@ describe("day attendance capacity", () => {
     const attendee = await createRegistration(env.DB, {
       event,
       userId: "user-admin-return",
-      attendanceType: "virtual",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -569,7 +884,6 @@ describe("day attendance capacity", () => {
       const holder = await createRegistration(env.DB, {
         event,
         userId,
-        attendanceType: "in_person",
         dayAttendance: [{ dayDate, attendanceType: "in_person" }],
         sourceType: "direct",
         confirmationTtlHours: 48,
@@ -584,7 +898,6 @@ describe("day attendance capacity", () => {
     const attendee = await createRegistration(env.DB, {
       event,
       userId: "user-day-scoped",
-      attendanceType: "virtual",
       dayAttendance: [
         { dayDate: "2026-12-01", attendanceType: "virtual" },
         { dayDate: "2026-12-02", attendanceType: "virtual" },
@@ -595,6 +908,16 @@ describe("day attendance capacity", () => {
     });
     const confirmed = await confirmRegistrationByToken(env.DB, {
       token: attendee.confirmationToken as string,
+      waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
+    });
+    await updateRegistrationByManageToken(env.DB, {
+      manageToken: confirmed.manageToken,
+      action: "update",
+      dayAttendance: [
+        { dayDate: "2026-12-01", attendanceType: "in_person" },
+        { dayDate: "2026-12-02", attendanceType: "virtual" },
+      ],
       waitlistClaimWindowHours: 24,
       signingSecret: "test-signing-secret",
     });
@@ -653,7 +976,6 @@ describe("day attendance capacity", () => {
     const target = await createRegistration(env.DB, {
       event,
       userId: "user-force-target",
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -673,7 +995,6 @@ describe("day attendance capacity", () => {
     const holder = await createRegistration(env.DB, {
       event,
       userId: "user-force-holder",
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -690,7 +1011,6 @@ describe("day attendance capacity", () => {
         registrationId: target.registration.id,
         eventId,
         action: "update",
-        attendanceType: "in_person",
         dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
         waitlistClaimWindowHours: 24,
       },
@@ -730,7 +1050,6 @@ describe("day attendance capacity", () => {
     const tueHolder = await createRegistration(env.DB, {
       event,
       userId: "user-tue-holder",
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -745,7 +1064,6 @@ describe("day attendance capacity", () => {
     const attendee = await createRegistration(env.DB, {
       event,
       userId: "user-attendee",
-      attendanceType: "in_person",
       dayAttendance: [
         { dayDate: "2026-12-01", attendanceType: "in_person" },
         { dayDate: "2026-12-02", attendanceType: "in_person" },
@@ -767,7 +1085,6 @@ describe("day attendance capacity", () => {
     const thursdayOther = await createRegistration(env.DB, {
       event,
       userId: "user-thu-other",
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-03", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -802,7 +1119,6 @@ describe("day attendance capacity", () => {
     await updateRegistrationByManageToken(env.DB, {
       manageToken: confirmedAttendee.manageToken,
       action: "update",
-      attendanceType: "in_person",
       dayAttendance: [
         { dayDate: "2026-12-01", attendanceType: "in_person" },
         { dayDate: "2026-12-02", attendanceType: "in_person" },
@@ -850,7 +1166,6 @@ describe("day attendance capacity", () => {
       const registration = await createRegistration(env.DB, {
         event,
         userId,
-        attendanceType: "in_person",
         dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
         sourceType: "direct",
         confirmationTtlHours: 48,
@@ -911,7 +1226,6 @@ describe("day attendance capacity", () => {
     const holder = await createRegistration(env.DB, {
       event,
       userId: "user-1",
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -926,7 +1240,6 @@ describe("day attendance capacity", () => {
     const waiting = await createRegistration(env.DB, {
       event,
       userId: "user-2",
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -941,7 +1254,6 @@ describe("day attendance capacity", () => {
     const backup = await createRegistration(env.DB, {
       event,
       userId: "user-3",
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -972,13 +1284,42 @@ describe("day attendance capacity", () => {
       .bind(waiting.registration.id)
       .run();
 
+    const emailProjection = await projectAttendeeDayState(env.DB, [waiting.registration.id]);
+    const emailDays = emailProjection.attendanceByRegistration.get(waiting.registration.id)!;
+    const emailWaitlist = emailProjection.waitlistByRegistration.get(waiting.registration.id)!;
+    expect(emailWaitlist).toMatchObject([{ status: "expired" }]);
+    expect(
+      await env.DB.prepare(`SELECT ${activeDayWaitlistExistsSql("r")} AS active FROM registrations r WHERE r.id = ?`)
+        .bind(waiting.registration.id)
+        .first(),
+    ).toEqual({ active: 0 });
+    expect(buildAttendanceEmailData(emailDays, emailWaitlist).dayAttendance).toMatchObject([
+      { statusLabel: "Offer expired" },
+    ]);
+
+    const nextOffer = await promoteDayWaitlistIfCapacity(env.DB, {
+      eventId,
+      eventDayId: "day-1",
+      claimWindowHours: 24,
+    });
+    expect(nextOffer).toMatchObject({ registration_id: backup.registration.id, status: "offered" });
+    expect(
+      (await loadRegistrationDayStates(env.DB, [waiting.registration.id])).get(waiting.registration.id),
+    ).toMatchObject([{ waitlistStatus: "expired" }]);
+    expect(await listDayWaitlistForRegistration(env.DB, waiting.registration.id)).toMatchObject([
+      { status: "expired" },
+    ]);
+    expect(await fetchViewerEventState(env.DB, "user-2", eventId)).toMatchObject({
+      waitlisted: false,
+      days: [{ state: "expired" }],
+    });
+
     await updateRegistrationById(
       env.DB,
       {
         eventId: event.id,
         registrationId: confirmedWaiting.registration.id,
         action: "update",
-        attendanceType: "in_person",
         dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
         waitlistClaimWindowHours: 24,
       },
@@ -993,6 +1334,25 @@ describe("day attendance capacity", () => {
     expect(rows.find((row) => row.registration_id === waiting.registration.id)?.status).toBe("waiting");
     expect(rows.find((row) => row.registration_id === waiting.registration.id)?.position).toBe(1);
     expect(rows.find((row) => row.registration_id === backup.registration.id)?.position).toBe(2);
+
+    await env.DB.prepare("UPDATE event_day_waitlist_entries SET status = 'expired' WHERE registration_id = ?")
+      .bind(waiting.registration.id)
+      .run();
+    await updateRegistrationById(
+      env.DB,
+      {
+        eventId: event.id,
+        registrationId: waiting.registration.id,
+        action: "update",
+        dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
+        waitlistClaimWindowHours: 24,
+      },
+      "test",
+    );
+    expect(await listDayWaitlistForRegistration(env.DB, waiting.registration.id)).toEqual([]);
+    expect(
+      (await loadRegistrationDayStates(env.DB, [waiting.registration.id])).get(waiting.registration.id),
+    ).toMatchObject([{ attendanceType: "virtual", waitlistStatus: null }]);
   });
 
   it("rejects a stale admin day patch instead of losing another admin's day change", async () => {
@@ -1016,7 +1376,6 @@ describe("day attendance capacity", () => {
     const created = await createRegistration(env.DB, {
       event,
       userId: "concurrent-day-user",
-      attendanceType: "virtual",
       dayAttendance: [
         { dayDate: "2026-12-01", attendanceType: "virtual" },
         { dayDate: "2026-12-02", attendanceType: "virtual" },

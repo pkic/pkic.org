@@ -309,8 +309,7 @@ describe("event home", () => {
     expect(host.textContent).toContain("You're registered");
     // The title already says so; no status badge repeats it.
     expect(host.querySelector(".pk-event-card .pk-badge")).toBeNull();
-    // A registration without days holds its type for the whole event.
-    expect(host.querySelector(".pk-event-card__meta")?.textContent).toBe("In person");
+    expect(host.querySelector(".pk-event-card__meta")?.textContent).toMatch(/^In person .*1/);
     expect(host.querySelector('a[href="#/events/summit/ticket"]')).not.toBeNull();
     expect(host.textContent).toContain("Your proposals");
     expect(host.textContent).toContain("1 submitted");
@@ -401,9 +400,9 @@ describe("event home", () => {
         ...registered.viewer,
         waitlisted: true,
         days: [
-          { date: "2026-12-01", attendanceType: "in_person", state: "waitlisted" },
-          { date: "2026-12-02", attendanceType: "in_person", state: "waitlisted" },
-          { date: "2026-12-03", attendanceType: "virtual", state: "registered" },
+          { date: "2026-12-01", attendanceType: "in_person", accessMode: "physical", state: "waitlisted" },
+          { date: "2026-12-02", attendanceType: "in_person", accessMode: "physical", state: "waitlisted" },
+          { date: "2026-12-03", attendanceType: "virtual", accessMode: "remote", state: "registered" },
         ],
       },
     };
@@ -416,7 +415,7 @@ describe("event home", () => {
       expect(welcome).toMatch(/^On the waiting list for Tue.*1.* and Wed.*2.* · Virtual on Thu.*3/);
       expect(host.textContent).not.toContain("Release your seat");
       expect(host.textContent).not.toContain("Can't attend in person?");
-      expect(host.querySelector(".pk-event-card__meta")?.textContent).toMatch(/^Virtual .*3 · Waitlisted in person /);
+      expect(host.querySelector(".pk-event-card__meta")?.textContent).toMatch(/^Virtual .*3 · Waitlisted /);
     });
 
     it("offers to release a seat only for a confirmed in-person day", async () => {

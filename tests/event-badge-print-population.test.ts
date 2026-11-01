@@ -41,7 +41,7 @@ async function registration(eventId: string, label: string, status = "registered
     .run();
   const id = crypto.randomUUID();
   await env.DB.prepare(
-    "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,?,'in_person','test',?,datetime('now'),datetime('now'))",
+    "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,?,'test',?,datetime('now'),datetime('now'))",
   )
     .bind(id, eventId, userId, status, crypto.randomUUID())
     .run();
@@ -105,7 +105,20 @@ describe("group-owned badge print population", () => {
     const grace = await registration(f.eventId, "Grace");
     const linus = await registration(f.eventId, "Linus");
     const sam = await registration(f.eventId, "Sam");
-    await env.DB.prepare("UPDATE registrations SET attendance_type='virtual' WHERE id=?").bind(grace.id).run();
+    const dayId = crypto.randomUUID();
+    const at = new Date().toISOString();
+    await env.DB.prepare(
+      "INSERT INTO event_days(id,event_id,day_date,created_at,updated_at) VALUES(?,?,'2026-12-01',?,?)",
+    )
+      .bind(dayId, f.eventId, at, at)
+      .run();
+    for (const person of [ada, grace, linus, sam]) {
+      await env.DB.prepare(
+        "INSERT INTO registration_day_attendance(id,registration_id,event_day_id,attendance_type,created_at,updated_at) VALUES(?,?,?,?,?,?)",
+      )
+        .bind(crypto.randomUUID(), person.id, dayId, person.id === grace.id ? "virtual" : "in_person", at, at)
+        .run();
+    }
     for (const [id, role] of [
       [grace.id, "moderator"],
       [linus.id, "organizer"],
@@ -133,7 +146,7 @@ describe("group-owned badge print population", () => {
         "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM n WHERE i<10005) INSERT INTO users(id,email,normalized_email,active,first_name) SELECT printf('%032x',i),printf('bulk-%d@example.test',i),printf('bulk-%d@example.test',i),1,'Bulk' FROM n",
       ),
       env.DB.prepare(
-        "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM n WHERE i<10005) INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) SELECT printf('%032x',i),?,printf('%032x',i),'registered','in_person','test',printf('secret-%d',i),datetime('now'),datetime('now') FROM n",
+        "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM n WHERE i<10005) INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) SELECT printf('%032x',i),?,printf('%032x',i),'registered','test',printf('secret-%d',i),datetime('now'),datetime('now') FROM n",
       ).bind(f.eventId),
     ]);
     const afterTenThousand = (10000).toString(16).padStart(32, "0");

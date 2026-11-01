@@ -194,9 +194,7 @@ export function GroupEventRegistrations({
             // what a manager is looking for. The filter narrows to the rows
             // still waiting for a seat on any day.
             header: "Attendance",
-            cell: (registration) => (
-              <RegistrationDayStates days={registration.days} attendanceType={registration.attendance_type} />
-            ),
+            cell: (registration) => <RegistrationDayStates days={registration.days} />,
             filter: {
               param: "waitlisted",
               options: [
@@ -207,16 +205,13 @@ export function GroupEventRegistrations({
             },
           },
           {
-            // The whole-registration type: in-person when any day is. The
-            // Attendance column already shows it day by day, so it is hidden
-            // until asked for; it stays as a column because its filter is how
-            // a badge print run is scoped to one type.
+            // The option filter also scopes badge print runs; each row still
+            // shows its actual day choices.
             header: "Attendance type",
-            cell: (registration) => attendanceTypeLabel(registration.attendance_type),
+            cell: (registration) => <RegistrationDayStates days={registration.days} />,
             width: "fit",
             className: "pk-small",
             defaultHidden: true,
-            sort: { asc: "attendance_type", desc: "-attendance_type" },
             filter: {
               param: "attendance_type",
               options: [

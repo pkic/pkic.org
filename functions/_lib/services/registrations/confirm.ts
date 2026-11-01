@@ -13,7 +13,8 @@ import { first } from "../../db/queries";
 import { nowIso } from "../../utils/time";
 import { prepareEngagementStatement } from "../engagement";
 import { buildRegistrationDayWaitlistSync, resolveCapacityExemptReason } from "./day-waitlist";
-import { getRegistrationDayAttendance } from "../event-days";
+import { assertEventHasScheduledDays, getRegistrationDayAttendance } from "../event-days";
+import { eventDaysNotScheduledError } from "../event-day-refusals";
 import { isAuditChangeGuardFailure, prepareAuditLog } from "../audit";
 import { prepareFinalizeEmailChange } from "./change-email";
 import {
@@ -25,7 +26,11 @@ import { INVITE_COLUMNS, type InviteRecord } from "../invite-types";
 import { newCapabilityLinkSecret, signCapabilityToken, verifyDatabaseCapability } from "../capability-links";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { REGISTRATION_COLUMNS, type RegistrationRecord } from "./types";
-import { isRegistrationTransitionConflict, prepareRegistrationTransitionGuard } from "./transition-guard";
+import {
+  isRegistrationTransitionConflict,
+  prepareRegistrationTransitionGuard,
+  prepareScheduledRegistrationTransitionGuard,
+} from "./transition-guard";
 import { prepareVerifyPrimaryEmailStatements } from "../email-verification";
 import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import { linkVerifiedAddressToDomainOrganization } from "../identities/email-domain-link";
@@ -73,9 +78,9 @@ export async function prepareConfirmRegistrationByToken(
         : "Invalid or already-used confirmation token",
     );
   }
-  const registration = await first<RegistrationRecord>(
+  const registration = await first<RegistrationRecord & { has_scheduled_day: number }>(
     db,
-    `SELECT ${REGISTRATION_COLUMNS} FROM registrations
+    `SELECT ${REGISTRATION_COLUMNS}, EXISTS(SELECT 1 FROM event_days WHERE event_id = registrations.event_id) AS has_scheduled_day FROM registrations
      WHERE id = ?
        AND status = 'pending_email_confirmation'
        AND (? IS NULL OR id = ?)
@@ -96,6 +101,7 @@ export async function prepareConfirmRegistrationByToken(
   if (!registration) {
     throw new AppError(404, "CONFIRM_TOKEN_INVALID", "Invalid or already-used confirmation token");
   }
+  if (!registration.has_scheduled_day) throw eventDaysNotScheduledError();
   const now = nowIso();
   if (registration.pending_confirmation_deadline_at && registration.pending_confirmation_deadline_at < now) {
     throw new AppError(410, "CONFIRM_TOKEN_EXPIRED", "Confirmation link has expired — please request a new one");
@@ -106,7 +112,7 @@ export async function prepareConfirmRegistrationByToken(
   // appeared after initiation), clear the pending_email reservation so the
   // user is not stuck and can retry from the manage URL.
   const emailFinalizeStatements: StatementLike[] = [];
-  let finalizedRegistration = registration;
+  let finalizedRegistration: RegistrationRecord = registration;
   const user = await first<{
     email: string;
     pending_email: string | null;
@@ -245,7 +251,7 @@ export async function prepareConfirmRegistrationByToken(
   finalizedRegistration = { ...finalizedRegistration, manage_link_secret: newCapabilityLinkSecret() };
   const verifiedEmail = inviteEmail ?? user.normalized_email;
   const updateStatements: StatementLike[] = [
-    prepareRegistrationTransitionGuard(db, registration),
+    prepareScheduledRegistrationTransitionGuard(db, registration),
     ...emailFinalizeStatements,
     ...prepareVerifyPrimaryEmailStatements(db, {
       userId: registration.user_id,
@@ -313,7 +319,6 @@ export async function prepareConfirmRegistrationByToken(
       {
         eventId: registration.event_id,
         status: newStatus,
-        attendanceType: registration.attendance_type,
         ...(matchingInvite && {
           inviteId: matchingInvite.id,
           inviteAcceptedVia: "registration_confirmation",
@@ -382,6 +387,7 @@ export async function confirmRegistrationByToken(
         throw new AppError(410, "INVITE_EXPIRED", "Linked invitation has expired");
       }
       if (isStaleRegistrationTransition(error)) {
+        await assertEventHasScheduledDays(db, prepared.registration.event_id);
         throw new AppError(404, "CONFIRM_TOKEN_INVALID", "Invalid or already-used confirmation token");
       }
       if (isStaleInviteTransition(error) && attempt === 0) continue;

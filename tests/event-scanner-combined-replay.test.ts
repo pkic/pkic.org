@@ -31,6 +31,7 @@ import { callApi } from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll } from "./helpers/context";
 import { createEventScannerFixture } from "./helpers/event-scanner-fixture";
+import { seedSessionAttendanceDays } from "./helpers/session-attendance-days";
 import { insertUser } from "./helpers/membership";
 
 const fixture = createEventScannerFixture();
@@ -39,7 +40,7 @@ const headers = (token: string) => ({ authorization: `Bearer ${token}`, "content
 
 async function allocation() {
   const queries = [
-    "SELECT id,user_id,status,attendance_type FROM registrations WHERE event_id=? ORDER BY id",
+    "SELECT id,user_id,status FROM registrations WHERE event_id=? ORDER BY id",
     "SELECT id,user_id,occurrence_id,status,attendance_mode,saved,approval_state,allocation_revision FROM agenda_session_participations WHERE event_id=? ORDER BY id",
     "SELECT id,occurrence_id,user_id,attendance_mode,expires_at,revoked_at FROM agenda_session_holds WHERE event_id=? ORDER BY id",
     `SELECT session.id,session.room_id,session.capacity,session.remote_capacity,${physicalOccupiedSql("session.id")} AS occupied,${remoteOccupiedSql("session.id")} AS remote_occupied FROM (${publishedSessionsSql}) session WHERE session.event_id=? ORDER BY session.id`,
@@ -90,6 +91,7 @@ describe("Combined enrolled attendance and sponsor lead reconciliation", () => {
 
   it("reconciles two operators' original captures and repeated receipts without spending the last reserved place or bypassing consent and sponsor scope", async () => {
     const now = new Date().toISOString();
+    const sessionStart = new Date(Date.now() + 86400000).toISOString();
     const roomId = crypto.randomUUID(),
       sponsorId = crypto.randomUUID(),
       otherSponsorId = crypto.randomUUID();
@@ -99,21 +101,17 @@ describe("Combined enrolled attendance and sponsor lead reconciliation", () => {
       .bind(roomId, fixture.eventId)
       .run();
     await env.DB.prepare("UPDATE event_agenda_occurrences SET room_id=?,start_at=?,end_at=? WHERE id=?")
-      .bind(
-        roomId,
-        new Date(Date.now() + 86400000).toISOString(),
-        new Date(Date.now() + 90000000).toISOString(),
-        fixture.occurrenceId,
-      )
+      .bind(roomId, sessionStart, new Date(Date.now() + 90000000).toISOString(), fixture.occurrenceId)
       .run();
     await env.DB.prepare("UPDATE event_agenda_publications SET snapshot_json=? WHERE event_id=? AND revision=0")
       .bind(JSON.stringify(await getAgenda(env.DB, fixture.eventId, "scan-test")), fixture.eventId)
       .run();
     await env.DB.prepare(
-      "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','in_person','test',?,?,?)",
+      "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','test',?,?,?)",
     )
       .bind(crypto.randomUUID(), fixture.eventId, rival, crypto.randomUUID(), now, now)
       .run();
+    await seedSessionAttendanceDays(env.DB, fixture.eventId, [sessionStart.slice(0, 10)]);
     for (const id of [sponsorId, otherSponsorId])
       await env.DB.prepare(
         "INSERT INTO sponsorships(id,sponsor_type,event_id,non_member_name,pipeline_stage,created_at,updated_at) VALUES(?,'event',?,'Synthetic sponsor','active',?,?)",

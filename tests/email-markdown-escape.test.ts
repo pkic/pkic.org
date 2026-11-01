@@ -165,7 +165,6 @@ describe("untrusted Markdown email text", () => {
           organization_name: '<img src="https://attacker.invalid/org.gif">',
           job_title: "[Reviewer](https://attacker.invalid/job)",
           status: "registered",
-          attendance_type: "virtual",
           custom_answers_json: JSON.stringify({
             interests: '<script src="https://attacker.invalid/answer.js"></script>',
             registrationUrl: "https://attacker.invalid/shadowed-route",

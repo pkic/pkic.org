@@ -198,7 +198,7 @@ export interface AttendanceStandingForDay {
   registered: boolean;
   /** The registered attendance on that day; `none` when the day is not part of the registration. */
   dayAttendance: "in_person" | "virtual" | "on_demand" | "none";
-  /** Waiting for, or offered, an in-person place on that day. */
+  /** The selected option does not yet have an accepted place on that day. */
   waitlisted: boolean;
 }
 
@@ -207,13 +207,19 @@ export interface AttendanceStandingForDay {
  * to them: a confirmed in-person place, attending online that day, not
  * registered for the day, or registered without an in-person place yet.
  */
-export const ATTENDEE_STANDINGS = ["in_person", "remote", "not_registered", "no_in_person_place"] as const;
+export const ATTENDEE_STANDINGS = [
+  "in_person",
+  "remote",
+  "not_registered",
+  "no_in_person_place",
+  "no_remote_place",
+] as const;
 export const attendeeStandingSchema = z.enum(ATTENDEE_STANDINGS);
 export type AttendeeStanding = z.infer<typeof attendeeStandingSchema>;
 
 export function attendeeStanding(standing: AttendanceStandingForDay | null): AttendeeStanding {
   if (!standing?.registered || standing.dayAttendance === "none") return "not_registered";
-  if (standing.dayAttendance !== "in_person") return "remote";
+  if (standing.dayAttendance !== "in_person") return standing.waitlisted ? "no_remote_place" : "remote";
   return standing.waitlisted ? "no_in_person_place" : "in_person";
 }
 

@@ -152,6 +152,58 @@ describe("attendee self check-in", () => {
     expect((await occupancy())[0]).toMatchObject({ checkedIn: 0, checkedOut: 0, onSite: 0 });
   });
 
+  it("uses configured access for custom options when recording check-ins", async () => {
+    await env.DB.prepare("UPDATE event_days SET attendance_options_json=? WHERE id=?")
+      .bind(
+        JSON.stringify([
+          { value: "moon_base", label: "Moon base", accessMode: "physical" },
+          { value: "live_lounge", label: "Live lounge", accessMode: "remote" },
+        ]),
+        ids.today,
+      )
+      .run();
+    for (const [user, type] of [
+      [ids.attendee, "moon_base"],
+      [ids.virtual, "live_lounge"],
+    ]) {
+      await env.DB.prepare(
+        "UPDATE registration_day_attendance SET attendance_type=? WHERE event_day_id=? AND registration_id=(SELECT id FROM registrations WHERE event_id=? AND user_id=?)",
+      )
+        .bind(type, ids.today, ids.event, user)
+        .run();
+    }
+    const token = await point("venue_check_in");
+    expect((await record("attendee", "check-ins", token)).body).toMatchObject({ standing: "in_person" });
+    expect((await record("virtual", "check-ins", token)).body).toMatchObject({ standing: "remote" });
+  });
+
+  it("does not count a waitlisted online choice as admitted online attendance", async () => {
+    const now = new Date().toISOString();
+    await env.DB.prepare(`INSERT INTO event_day_waitlist_entries
+      (id,event_id,event_day_id,registration_id,user_id,priority_lane,status,position,created_at,updated_at)
+      SELECT ?,event_id,?,id,user_id,'general','waiting',1,?,? FROM registrations WHERE event_id=? AND user_id=?`)
+      .bind(crypto.randomUUID(), ids.today, now, now, ids.event, ids.virtual)
+      .run();
+    const token = await point("venue_check_in");
+    expect((await record("virtual", "check-ins", token)).body).toMatchObject({
+      status: "checked_in",
+      standing: "no_remote_place",
+    });
+    expect(
+      (
+        await env.DB.prepare("SELECT attendance_mode FROM event_attendance_observations WHERE user_id=?")
+          .bind(ids.virtual)
+          .all()
+      ).results,
+    ).toEqual([{ attendance_mode: "physical" }]);
+  });
+
+  it("does not report an individual option's capacity as the whole venue capacity", async () => {
+    await env.DB.prepare("UPDATE events SET capacity_in_person=10 WHERE id=?").bind(ids.event).run();
+    await env.DB.prepare("UPDATE event_days SET in_person_capacity=1 WHERE id=?").bind(ids.today).run();
+    expect((await occupancy())[0]).toMatchObject({ capacity: 10, available: 10 });
+  });
+
   it("checks in to a session without a booking and says whether a place was booked", async () => {
     const lab = (await fixture.points("?kind=session")).find((item) => item.session?.id === ids.lab)!;
     expect((await read("attendee", lab.token)).body).toMatchObject({ status: "ready", booked: false });

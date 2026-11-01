@@ -66,6 +66,16 @@ describe("RegistrationDayStatusSummary", () => {
     expect(rows[0]!.textContent).toContain("All 3 days");
   });
 
+  it("shows an expired offer and how to request a place again", () => {
+    const root = mount(
+      [{ dayDate: "2026-09-01", attendanceType: "moon_base", label: null, optionLabel: "Moon base" }],
+      [{ dayDate: "2026-09-01", status: "expired" }],
+    );
+    expect(root.textContent).toContain("Offer expired: Moon base");
+    expect(root.textContent).toContain("Update and save your attendance to request a place again.");
+    expect(root.querySelector("button")).toBeNull();
+  });
+
   it("splits only where days differ, with the offered seat first and the waiting list in words", () => {
     const root = mount(
       [
@@ -81,8 +91,8 @@ describe("RegistrationDayStatusSummary", () => {
     );
     const rows = [...root.querySelectorAll<HTMLElement>(".pk-day-status__row")];
     expect(rows.map((row) => row.dataset.kind)).toEqual(["offered", "waiting", "confirmed", "confirmed"]);
-    expect(rows[0]!.textContent).toContain("An in-person seat is yours to claim");
-    expect(rows[1]!.textContent).toContain("On the waiting list for an in-person seat");
+    expect(rows[0]!.textContent).toContain("A place is available: In-person");
+    expect(rows[1]!.textContent).toContain("On the waiting list: In-person");
     expect(rows[1]!.textContent).toContain("You stay registered");
     expect(rows.map((row) => row.querySelector(".pk-day-status__title")?.textContent).slice(2)).toEqual([
       "In-person",
@@ -108,6 +118,37 @@ describe("RegistrationDayStatusSummary", () => {
     );
     await act(async () => container!.querySelector("button")!.click());
     expect(claimed).toEqual([["2026-09-01"]]);
+  });
+
+  it("keeps offers for different configured options separate", async () => {
+    container = document.createElement("div");
+    document.body.append(container);
+    const claimed: string[][] = [];
+    await act(() =>
+      render(
+        <RegistrationDayStatusSummary
+          dayAttendance={[
+            { dayDate: "2026-09-01", attendanceType: "moon_base", optionLabel: "Moon base", label: null },
+            { dayDate: "2026-09-02", attendanceType: "live_lounge", optionLabel: "Live lounge", label: null },
+          ]}
+          dayWaitlist={[
+            { dayDate: "2026-09-01", status: "offered" },
+            { dayDate: "2026-09-02", status: "offered" },
+          ]}
+          onClaim={(days) => claimed.push(days)}
+        />,
+        container!,
+      ),
+    );
+    const rows = [...container.querySelectorAll<HTMLElement>(".pk-day-status__row")];
+    expect(rows).toHaveLength(2);
+    expect(rows.map((row) => row.textContent)).toEqual([
+      expect.stringContaining("Moon base"),
+      expect.stringContaining("Live lounge"),
+    ]);
+    await act(async () => rows[1]!.querySelector("button")!.click());
+    expect(claimed).toEqual([["2026-09-02"]]);
+    expect(container.textContent).not.toContain("in-person");
   });
 
   it("states a cancelled registration's days as cancelled, not as seats held", async () => {

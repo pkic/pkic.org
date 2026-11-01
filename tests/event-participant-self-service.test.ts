@@ -22,7 +22,7 @@ async function fixture() {
   );
   const registrationId = crypto.randomUUID();
   await env.DB.prepare(
-    "INSERT INTO registrations (id, event_id, user_id, status, attendance_type, source_type, manage_link_secret, created_at, updated_at) VALUES (?, ?, ?, 'registered', 'virtual', 'self_service', ?, ?, ?)",
+    "INSERT INTO registrations (id, event_id, user_id, status, source_type, manage_link_secret, created_at, updated_at) VALUES (?, ?, ?, 'registered', 'self_service', ?, ?, ?)",
   )
     .bind(registrationId, eventId, owner, crypto.randomUUID(), new Date().toISOString(), new Date().toISOString())
     .run();
@@ -143,7 +143,7 @@ describe("session-owned event participation", () => {
     const holder = await insertUser(env.DB, "seat-holder@example.test");
     const holderRegistration = crypto.randomUUID();
     await env.DB.prepare(
-      "INSERT INTO registrations (id, event_id, user_id, status, attendance_type, source_type, manage_link_secret, confirmed_at, created_at, updated_at) VALUES (?, ?, ?, 'registered', 'in_person', 'self_service', ?, datetime('now'), datetime('now'), datetime('now'))",
+      "INSERT INTO registrations (id, event_id, user_id, status, source_type, manage_link_secret, confirmed_at, created_at, updated_at) VALUES (?, ?, ?, 'registered', 'self_service', ?, datetime('now'), datetime('now'), datetime('now'))",
     )
       .bind(holderRegistration, f.eventId, holder, crypto.randomUUID())
       .run();

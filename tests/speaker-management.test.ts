@@ -2842,7 +2842,6 @@ describe("speaker nomination by attendees", () => {
     const created = await createRegistration(env.DB, {
       event: { id: eventId },
       userId: attendee.id,
-      attendanceType: "virtual",
       sourceType: "direct",
       confirmationTtlHours: 48,
       signingSecret: env.INTERNAL_SIGNING_SECRET!,

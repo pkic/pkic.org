@@ -39,9 +39,8 @@ export function participantEventFixture(overrides: EventOverrides = {}) {
 export const registeredParticipant = {
   viewer: {
     registrationStatus: "registered",
-    attendanceType: "in_person",
     waitlisted: false,
-    days: [],
+    days: [{ date: "2026-12-01", attendanceType: "in_person", accessMode: "physical", state: "registered" }],
     holdsWorkAddress: true,
   },
   participation: {

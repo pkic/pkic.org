@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import app from "./helpers/app";
 import type { DatabaseLike, Env } from "../functions/_lib/types";
 import { getEventBySlug } from "../functions/_lib/services/events";
-import { createRegistration } from "../functions/_lib/services/registrations";
+import { createScheduledRegistration as createRegistration } from "./helpers/scheduled-registration";
 import { eventRegistrationDetailResponseSchema } from "../assets/shared/schemas/event-registration-detail";
 import { eventRegistrationsListResponseSchema } from "../assets/shared/schemas/event-registrations";
 import { eventRegistrationManagementUpdateSchema } from "../assets/shared/schemas/route-contracts-event-registration-management";
@@ -53,7 +53,6 @@ async function registrationFixture(dayAttendance?: Parameters<typeof createRegis
   const created = await createRegistration(env.DB, {
     event,
     userId,
-    attendanceType: "virtual",
     dayAttendance,
     sourceType: "direct",
     confirmationTtlHours: 48,
@@ -113,7 +112,11 @@ describe("canonical event registration management", () => {
     );
     const allowed = await callApi(path, manager.token, {
       method: "PATCH",
-      body: JSON.stringify({ action: "update", attendanceType: "on_demand", firstName: before!.first_name }),
+      body: JSON.stringify({
+        action: "update",
+        dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "on_demand" }],
+        firstName: before!.first_name,
+      }),
     });
     expect(allowed.status, await allowed.clone().text()).toBe(200);
   });
@@ -134,7 +137,6 @@ describe("canonical event registration management", () => {
       body: JSON.stringify(
         eventRegistrationManagementUpdateSchema.parse({
           action: "update",
-          attendanceType: "on_demand",
           dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "on_demand" }],
         }),
       ),
@@ -146,11 +148,9 @@ describe("canonical event registration management", () => {
         "SELECT id,registration_id,event_day_id,from_type,to_type,changed_by,changed_at FROM registration_attendance_history WHERE registration_id=? ORDER BY id",
         [fixture.registrationId],
       ),
-      registration: await queryAll(
-        env.DB,
-        "SELECT id,attendance_type,transition_revision,updated_at FROM registrations WHERE id=?",
-        [fixture.registrationId],
-      ),
+      registration: await queryAll(env.DB, "SELECT id,transition_revision,updated_at FROM registrations WHERE id=?", [
+        fixture.registrationId,
+      ]),
       audit: await queryAll(env.DB, "SELECT id FROM audit_log ORDER BY id"),
       outbox: await queryAll(env.DB, "SELECT id FROM email_outbox ORDER BY id"),
     });

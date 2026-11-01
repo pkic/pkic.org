@@ -23,7 +23,7 @@ import { clearReferralSession } from "../../shared/query-context";
 import { forgetRegistrationEmailProof } from "../useRegistrationEmailProof";
 import { useContractForm } from "../../hooks/useContractForm";
 import { postJson } from "../../shared/api-client";
-import { deriveEventAttendanceType, readField } from "../../shared/form/helpers";
+import { readField } from "../../shared/form/helpers";
 import { installStepNavigation, REGISTRATION_STEP_PARAM } from "../../shared/form/step-navigation";
 import { CONTRACT_VALIDATION_ATTRIBUTE } from "../../shared/form/validation";
 import { splitHash } from "../../ui/url-query";
@@ -34,8 +34,6 @@ import { EventFlowProgress } from "../../site/EventFlowProgress";
 import { Alert } from "../../ui/Alert";
 import { Button } from "../../ui/Button";
 import { Field } from "../../ui/Field";
-import { Radio } from "../../ui/Checkbox";
-import { attendanceTypeLabel } from "../../shared/attendance";
 import { SectionHeading } from "../../ui/SectionHeading";
 import { TextInput } from "../../ui/TextControl";
 import { ConsentList } from "../ConsentCard";
@@ -44,9 +42,6 @@ import { RegistrationContactStep } from "../RegistrationContactStep";
 import type { ConfirmOrganizationController } from "../RegistrationConfirmOrganization";
 import { RegistrationAffiliation } from "./RegistrationAffiliation";
 import { useFormAnswers } from "../forms/useFormAnswers";
-
-/** An event with no configured days has no configured options; these are offered until its days are set. */
-const UNSCHEDULED_ATTENDANCE_TYPES = ["in_person", "virtual", "on_demand"];
 
 export type RegistrationChange = z.output<typeof registrationManageSchema>;
 export type RegistrationInput = z.output<typeof registrationCreateSchema>;
@@ -77,7 +72,9 @@ const PERSONAL_FIELDS = [
 export function RegistrationFlow(props: Props) {
   const { forms } = props;
   const updating = props.mode === "update";
-  const available = updating || forms.requiredTerms.some((term) => term.required);
+  const termsAvailable = forms.requiredTerms.some((term) => term.required);
+  const daysAvailable = forms.eventDays.length > 0;
+  const available = updating || (termsAvailable && daysAvailable);
   const entry = props.mode === "create" ? registrationEntry(props.context.query) : {};
   const initial = updating ? props.data : null;
   const root = useRef<HTMLDivElement>(null);
@@ -113,7 +110,7 @@ export function RegistrationFlow(props: Props) {
     };
     const shared = {
       ...personal,
-      dayAttendance: forms.eventDays.length ? dayAttendance : undefined,
+      dayAttendance,
       customAnswers: forms.form ? readCustomFieldValues(form) : undefined,
     };
     if (props.mode === "update")
@@ -121,13 +118,11 @@ export function RegistrationFlow(props: Props) {
         ...shared,
         action: "update",
         email: personal.email === props.data.user.email ? undefined : personal.email,
-        attendanceType: dayAttendance.length ? undefined : readField(form, "attendanceType") || undefined,
       };
     const named = organization.current.read?.();
     const liveEntry = registrationEntry(props.context.query);
     return {
       ...shared,
-      attendanceType: dayAttendance.length ? undefined : readField(form, "attendanceType") || undefined,
       identityId: readField(form, "identityId") || undefined,
       unaffiliatedAttestation: readField(form, "unaffiliatedAttestation") === "true",
       consents: readConsentValues(form),
@@ -159,7 +154,7 @@ export function RegistrationFlow(props: Props) {
   const contactReady = useCallback((value: boolean) => setReady(value), []);
 
   useLayoutEffect(() => {
-    if (props.mode !== "create" || !root.current || !element.current || !status.current) return;
+    if (props.mode !== "create" || !available || !root.current || !element.current || !status.current) return;
     const boot: FlowBoot = { ...props.context, root: root.current, form: element.current, statusEl: status.current };
     invitation.current = registrationInvitation(boot);
     void invitation.current.check(forms.registrationPolicy);
@@ -229,7 +224,7 @@ export function RegistrationFlow(props: Props) {
 
   return (
     <div class="event-flow pk" ref={root} data-registration-flow={props.mode}>
-      {!updating && (
+      {!updating && available && (
         <EventFlowProgress label="Registration progress" steps={["You", "Attendance", "Profile", "Review"]} />
       )}
       <form
@@ -313,7 +308,12 @@ export function RegistrationFlow(props: Props) {
       >
         <fieldset class="pk-fieldset pk-stack" disabled={busy}>
           {error && <Alert tone="danger">{error}</Alert>}
-          {!available && (
+          {!updating && !daysAvailable && (
+            <Alert tone="warn" title="Registration unavailable">
+              Registration opens when the event days are scheduled.
+            </Alert>
+          )}
+          {!updating && daysAvailable && !termsAvailable && (
             <Alert tone="warn" title="Registration unavailable">
               Registration is temporarily unavailable because the required event terms have not been configured.
             </Alert>
@@ -367,16 +367,16 @@ export function RegistrationFlow(props: Props) {
             )}
           </section>
           <section data-step={updating ? undefined : "2"} class="event-flow-step pk-stack" hidden={!updating}>
-            <Field
-              group
-              label="Attendance"
-              labelHidden={forms.eventDays.length > 0}
-              {...(contract.ofGroup(forms.eventDays.length ? "dayAttendance" : "attendanceType").state === "invalid"
-                ? contract.ofGroup(forms.eventDays.length ? "dayAttendance" : "attendanceType")
-                : attendanceContract.ofGroup(forms.eventDays.length ? "dayAttendance" : "attendanceType"))}
-            >
-              {(control) =>
-                forms.eventDays.length ? (
+            {forms.eventDays.length ? (
+              <Field
+                group
+                label="Attendance"
+                labelHidden
+                {...(contract.ofGroup("dayAttendance").state === "invalid"
+                  ? contract.ofGroup("dayAttendance")
+                  : attendanceContract.ofGroup("dayAttendance"))}
+              >
+                {(control) => (
                   <DayAttendancePicker
                     control={control}
                     days={forms.eventDays}
@@ -391,22 +391,11 @@ export function RegistrationFlow(props: Props) {
                         }
                       : {})}
                   />
-                ) : (
-                  <div class="pk-stack pk-stack--tight">
-                    {UNSCHEDULED_ATTENDANCE_TYPES.map((type) => (
-                      <Radio
-                        key={type}
-                        name="attendanceType"
-                        value={type}
-                        label={attendanceTypeLabel(type)}
-                        required={type === UNSCHEDULED_ATTENDANCE_TYPES[0]}
-                        defaultChecked={type === (initial?.registration.attendance_type ?? "virtual")}
-                      />
-                    ))}
-                  </div>
-                )
-              }
-            </Field>
+                )}
+              </Field>
+            ) : (
+              <p>Event days have not been scheduled.</p>
+            )}
           </section>
           <section data-step={updating ? undefined : "3"} class="event-flow-step pk-stack" hidden={!updating}>
             {!updating && (
@@ -422,7 +411,7 @@ export function RegistrationFlow(props: Props) {
               <CustomFieldList
                 fields={fields}
                 initialValues={initial?.registration.custom_answers ?? undefined}
-                context={{ dayAttendance: attendance, eventAttendanceType: deriveEventAttendanceType(attendance) }}
+                context={{ dayAttendance: attendance }}
                 presentationOf={questions.presentationOf}
               />
             </div>
@@ -440,32 +429,34 @@ export function RegistrationFlow(props: Props) {
               </Field>
             </section>
           )}
-          <div class={updating ? "pk-cluster" : "event-flow-step-nav"}>
-            {updating ? (
-              <>
-                <Button type="submit" variant="primary" loading={busy}>
-                  Save changes
-                </Button>
-                <Button variant="secondary" onClick={props.onDiscard}>
-                  Discard changes
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button variant="link" data-step-back hidden>
-                  Back
-                </Button>
-                <div class="event-flow-step-forward">
-                  <Button variant="primary" data-step-next disabled={!ready || !available}>
-                    Continue
+          {available && (
+            <div class={updating ? "pk-cluster" : "event-flow-step-nav"}>
+              {updating ? (
+                <>
+                  <Button type="submit" variant="primary" loading={busy}>
+                    Save changes
                   </Button>
-                  <Button type="submit" variant="primary" hidden loading={busy} disabled={!available}>
-                    Register
+                  <Button variant="secondary" onClick={props.onDiscard}>
+                    Discard changes
                   </Button>
-                </div>
-              </>
-            )}
-          </div>
+                </>
+              ) : (
+                <>
+                  <Button variant="link" data-step-back hidden>
+                    Back
+                  </Button>
+                  <div class="event-flow-step-forward">
+                    <Button variant="primary" data-step-next disabled={!ready || !available}>
+                      Continue
+                    </Button>
+                    <Button type="submit" variant="primary" hidden loading={busy} disabled={!available}>
+                      Register
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </fieldset>
         <p data-flow-status ref={status} class="pk-alert pk-sr-only" role="status" aria-live="polite" />
       </form>

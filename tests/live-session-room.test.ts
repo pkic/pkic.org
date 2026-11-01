@@ -485,7 +485,7 @@ describe("live room passive access revocation", () => {
   });
   it("requires reconnect when operator access becomes attendee access instead of using stale audience tags", async () => {
     await env.DB.prepare(
-      "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) SELECT ?,event_id,?,'registered',attendance_type,source_type,?,created_at,updated_at FROM registrations WHERE user_id=?",
+      "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) SELECT ?,event_id,?,'registered',source_type,?,created_at,updated_at FROM registrations WHERE user_id=?",
     )
       .bind(crypto.randomUUID(), f.users.operator, crypto.randomUUID(), f.users.attendee)
       .run();

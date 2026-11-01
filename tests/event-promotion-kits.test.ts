@@ -100,7 +100,7 @@ async function fixture(withSecondSpeaker = false) {
       "INSERT INTO users(id,email,normalized_email,active,first_name,last_name,created_at,updated_at) VALUES(?,'promotion-attendee@example.test','promotion-attendee@example.test',1,'Example','Attendee',?,?)",
     ).bind(userId, at, at),
     env.DB.prepare(
-      "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','in_person','direct','synthetic-secret',?,?)",
+      "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','direct','synthetic-secret',?,?)",
     ).bind(registrationId, eventId, userId, at, at),
   ]);
   await promotionReferral(env.DB, eventId, admin.id);
@@ -400,7 +400,7 @@ describe("personal event promotion kits", () => {
     expect(referral).toMatchObject({ owner_id: f.admin.id, created_by_user_id: f.admin.id });
     const at = new Date().toISOString();
     await env.DB.prepare(
-      "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','virtual','direct','synthetic',?,?)",
+      "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','direct','synthetic',?,?)",
     )
       .bind(crypto.randomUUID(), f.eventId, f.admin.id, at, at)
       .run();

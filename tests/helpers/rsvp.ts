@@ -29,9 +29,9 @@ export async function seedRsvpRegistration(db: DatabaseLike): Promise<{ registra
     db
       .prepare(
         `INSERT INTO registrations
-           (id, event_id, user_id, status, attendance_type, source_type,
+           (id, event_id, user_id, status, source_type,
             manage_link_secret, created_at, updated_at)
-         VALUES (?, ?, ?, 'registered', 'in_person', 'direct', ?, ?, ?)`,
+         VALUES (?, ?, ?, 'registered', 'direct', ?, ?, ?)`,
       )
       .bind(registrationId, eventId, userId, await sha256Hex("manage-token"), at, at),
   ]);

@@ -6,7 +6,7 @@ import { databaseIdSchema } from "./identifiers";
 import { paginatedResponseSchema, searchableListQuerySchema, sortColumnSchema } from "./pagination";
 import { registrationRecordContextSchema } from "./registration-record";
 
-export const EVENT_REGISTRATIONS_SORT_COLUMNS = ["display_name", "status", "attendance_type", "created_at"] as const;
+export const EVENT_REGISTRATIONS_SORT_COLUMNS = ["display_name", "status", "created_at"] as const;
 export const EVENT_REGISTRATION_STATUSES = ["registered", "pending_email_confirmation", "cancelled"] as const;
 export const EVENT_REGISTRATION_STATUS_FILTERS = ["all", ...EVENT_REGISTRATION_STATUSES] as const;
 export const EVENT_REGISTRATION_STATUS_LABELS: Record<EventRegistrationStatus, string> = {
@@ -60,8 +60,9 @@ export const registrationDayStateSchema = z.object({
   dayDate: z.string(),
   label: z.string().nullable(),
   attendanceType: z.string(),
+  optionLabel: z.string().optional(),
   /** An active waitlist entry for the day, or null when the day is confirmed. */
-  waitlistStatus: z.enum(["waiting", "offered"]).nullable(),
+  waitlistStatus: z.enum(["waiting", "offered", "expired"]).nullable(),
 });
 export type RegistrationDayState = z.infer<typeof registrationDayStateSchema>;
 export type EventRegistrationsQuery = z.infer<typeof eventRegistrationsQuerySchema>;
@@ -90,7 +91,6 @@ export const eventRegistrationSummarySchema = registrationRecordContextSchema.ex
   waitlist_handled_last: z.boolean(),
   job_title: z.string().nullable(),
   status: eventRegistrationStatusSchema,
-  attendance_type: z.string().nullable(),
   source_type: z.string().nullable(),
   rsvp_events_json: z.string().nullable(),
   has_bounced: z.boolean(),
@@ -101,9 +101,15 @@ export const eventRegistrationSummarySchema = registrationRecordContextSchema.ex
   lastAttendanceChange: eventRegistrationAttendanceChangeSchema.nullable(),
 });
 export type EventRegistrationSummary = z.infer<typeof eventRegistrationSummarySchema>;
+export const attendanceStatusCountSchema = z.object({
+  accepted: z.number(),
+  waitlisted: z.number(),
+  expired: z.number().default(0),
+});
+export type AttendanceStatusCount = z.infer<typeof attendanceStatusCountSchema>;
 export const eventRegistrationsStatsSchema = z.object({
   byAttendanceType: z.record(z.string(), z.number()),
-  attendanceStatusByType: z.record(z.string(), z.object({ accepted: z.number(), waitlisted: z.number() })),
+  attendanceStatusByType: z.record(z.string(), attendanceStatusCountSchema),
   byStatus: z.record(z.string(), z.number()),
   bouncedCount: z.number(),
   consentCount: z.number(),
@@ -133,7 +139,7 @@ export const eventAttendanceRegistrationsQuerySchema = eventRegistrationsQuerySc
     waitlisted: true,
   })
   .extend({
-    /** The whole-registration attendance type: in-person when any day is. */
+    /** Match an attendance option selected on at least one day. */
     attendance_type: eventAttendanceTypeValueSchema.optional(),
     /** The role band the registration's badge prints. */
     badge_role: badgeDisplayRoleSchema.optional(),
@@ -153,7 +159,6 @@ export const eventAttendanceRegistrationSummarySchema = registrationRecordContex
     waitlist_handled_last: z.boolean(),
     job_title: z.string().nullable(),
     status: eventRegistrationStatusSchema,
-    attendance_type: z.string().nullable(),
     days: z.array(registrationDayStateSchema),
   });
 export type EventAttendanceRegistrationSummary = z.infer<typeof eventAttendanceRegistrationSummarySchema>;

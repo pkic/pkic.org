@@ -20,7 +20,7 @@ type RegistrationForm = EventFormsResponse["form"];
 
 function dayAttendanceItems(data: RegistrationManageReadResponse): DescriptionListItem[] {
   if (data.eventDays.length === 0) {
-    return [{ term: "Attendance", value: attendanceTypeLabel(data.registration.attendance_type) }];
+    return [{ term: "Attendance", value: "No selected days" }];
   }
   return data.eventDays.map((day) => {
     const chosen = data.dayAttendance.find((entry) => entry.dayDate === day.dayDate)?.attendanceType;

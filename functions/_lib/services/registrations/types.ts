@@ -24,7 +24,6 @@ const REGISTRATION_COLUMN_NAMES = [
   "user_id",
   "invite_id",
   "status",
-  "attendance_type",
   "source_type",
   "source_ref",
   "custom_answers_json",

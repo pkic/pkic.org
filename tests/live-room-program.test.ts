@@ -204,7 +204,7 @@ describe("stable physical room broadcast sources", () => {
     const registrationId = crypto.randomUUID(),
       now = new Date().toISOString();
     await env.DB.prepare(
-      "INSERT INTO registrations (id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES (?,?,?,'registered','in_person','test',?,?,?)",
+      "INSERT INTO registrations (id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES (?,?,?,'registered','test',?,?,?)",
     )
       .bind(registrationId, f.eventId, f.users.operator, crypto.randomUUID(), now, now)
       .run();

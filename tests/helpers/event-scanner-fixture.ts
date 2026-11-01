@@ -7,12 +7,15 @@ import { createAdminSession } from "./auth";
 import { issueBadge } from "../../functions/_lib/services/event-participation/scanning";
 import { getAgenda } from "../../functions/_lib/services/event-agenda/read";
 import { enrollScannerDevice } from "../../functions/_lib/services/event-participation/scanner-device-sessions";
+import { seedSessionAttendanceDays } from "./session-attendance-days";
 /** Synthetic published session and recognized attendee shared by scan protocol tests. */
 export function createEventScannerFixture() {
   const eventId = crypto.randomUUID();
   const userId = crypto.randomUUID();
   const operatorId = crypto.randomUUID();
   const occurrenceId = crypto.randomUUID();
+  const registrationId = crypto.randomUUID();
+  const eventDayId = crypto.randomUUID();
   let token: string;
   let badgeId: string;
   const deviceId = crypto.randomUUID();
@@ -53,12 +56,23 @@ export function createEventScannerFixture() {
       .bind(eventId, now, now)
       .run();
     await env.DB.prepare(
-      "INSERT INTO registrations (id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES (?,?,?,'registered','in_person','test',?,?,?)",
+      "INSERT INTO registrations (id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES (?,?,?,'registered','test',?,?,?)",
     )
-      .bind(crypto.randomUUID(), eventId, userId, crypto.randomUUID(), now, now)
+      .bind(registrationId, eventId, userId, crypto.randomUUID(), now, now)
       .run();
     await env.DB.prepare(
-      "INSERT INTO event_agenda_occurrences (id,event_id,title,admission_policy,capacity) VALUES (?,?,'Limited session','reservation',1)",
+      "INSERT INTO event_days(id,event_id,day_date,created_at,updated_at) VALUES (?,?,'2026-10-03',?,?)",
+    )
+      .bind(eventDayId, eventId, now, now)
+      .run();
+    await env.DB.prepare(
+      "INSERT INTO registration_day_attendance(id,registration_id,event_day_id,attendance_type,created_at,updated_at) VALUES (?,?,?,'in_person',?,?)",
+    )
+      .bind(crypto.randomUUID(), registrationId, eventDayId, now, now)
+      .run();
+    await seedSessionAttendanceDays(env.DB, eventId, [now.slice(0, 10)]);
+    await env.DB.prepare(
+      "INSERT INTO event_agenda_occurrences (id,event_id,title,admission_policy,capacity,start_at,end_at) VALUES (?,?,'Limited session','reservation',1,'2026-10-03T10:00:00.000Z','2026-10-03T11:00:00.000Z')",
     )
       .bind(occurrenceId, eventId)
       .run();

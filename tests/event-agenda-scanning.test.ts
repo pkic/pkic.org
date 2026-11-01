@@ -2,6 +2,7 @@ import { generateBadgeCredential } from "../assets/shared/schemas/badge-credenti
 import { callApi } from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
 import { createEventScannerFixture } from "./helpers/event-scanner-fixture";
+import { seedSessionAttendanceDays } from "./helpers/session-attendance-days";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { issueBadge, revokeBadge, recordScan } from "../functions/_lib/services/event-participation/scanning";
@@ -19,7 +20,16 @@ import { profileD1Flow } from "./helpers/d1-flow-profile";
 const fixture = createEventScannerFixture();
 const { eventId, userId, operatorId, occurrenceId, observedAt, scan, scanBody } = fixture;
 describe("Event agenda scan evidence", () => {
-  beforeEach(fixture.setup);
+  beforeEach(async () => {
+    await fixture.setup();
+    await seedSessionAttendanceDays(env.DB, eventId, [observedAt.slice(0, 10)]);
+    await env.DB.batch([
+      env.DB.prepare("UPDATE event_agenda_occurrences SET start_at=? WHERE id=?").bind(observedAt, occurrenceId),
+      env.DB.prepare(
+        "UPDATE event_agenda_publications SET snapshot_json=json_set(snapshot_json,'$.occurrences[0].startAt',?) WHERE event_id=? AND revision=0",
+      ).bind(observedAt, eventId),
+    ]);
+  });
   it("awards one event attendance across repeated scans and never for a check or checkout", async () => {
     await env.DB.prepare("UPDATE standing_settings SET activity_started_at='2026-01-01T00:00:00.000Z'").run();
     expect((await scan(scanBody({ action: "check" }))).status).toBe(200);
@@ -240,6 +250,11 @@ describe("Event agenda scan evidence", () => {
     ).toEqual({ user_id: null, badge_id: null, scanned_value: body.scannedValue });
   });
   it("records a recognized badge without an event registration or available offline grant", async () => {
+    await env.DB.prepare(
+      "DELETE FROM registration_day_attendance WHERE registration_id IN (SELECT id FROM registrations WHERE event_id=? AND user_id=?)",
+    )
+      .bind(eventId, userId)
+      .run();
     await env.DB.prepare("DELETE FROM registrations WHERE event_id=? AND user_id=?").bind(eventId, userId).run();
     const body = scanBody({
       occurrenceId: null,
@@ -291,7 +306,9 @@ describe("Event agenda scan evidence", () => {
     ).toBe(false);
   });
   it("records a known remote attendee with an informative attendance-mode warning", async () => {
-    await env.DB.prepare("UPDATE registrations SET attendance_type='virtual' WHERE event_id=? AND user_id=?")
+    await env.DB.prepare(
+      "UPDATE registration_day_attendance SET attendance_type='virtual' WHERE registration_id=(SELECT id FROM registrations WHERE event_id=? AND user_id=?)",
+    )
       .bind(eventId, userId)
       .run();
     expect(await (await scan(scanBody({ occurrenceId: null }))).json()).toMatchObject({
@@ -328,10 +345,11 @@ describe("Event agenda scan evidence", () => {
         .bind(second, `${second}@example.test`, `${second}@example.test`)
         .run();
       await env.DB.prepare(
-        "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','in_person','test',?,?,?)",
+        "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','test',?,?,?)",
       )
         .bind(crypto.randomUUID(), eventId, second, crypto.randomUUID(), now, now)
         .run();
+      await seedSessionAttendanceDays(env.DB, eventId, [observedAt.slice(0, 10)]);
       const credential = (
         await issueBadge(env.DB, eventId, operatorId, { userId: second, operationId: crypto.randomUUID() }, env)
       ).credential!;
@@ -383,7 +401,9 @@ describe("Event agenda scan evidence", () => {
     )
       .bind(eventId)
       .run();
-    await env.DB.prepare("UPDATE registrations SET attendance_type='virtual' WHERE user_id=? AND event_id=?")
+    await env.DB.prepare(
+      "UPDATE registration_day_attendance SET attendance_type='virtual' WHERE registration_id=(SELECT id FROM registrations WHERE user_id=? AND event_id=?)",
+    )
       .bind(userId, eventId)
       .run();
     await expect(
