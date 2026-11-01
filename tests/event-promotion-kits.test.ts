@@ -1,6 +1,5 @@
+import { promotionFixture, eventBase } from "./helpers/promotion-fixture";
 import { profileD1Flow } from "./helpers/d1-flow-profile";
-import { promotionReferral } from "../functions/_lib/services/event-agenda/promotion-referral";
-import { findOrCreateUser } from "../functions/_lib/services/users";
 import { promotionBatchCreateSchema, promotionBatchSchema } from "../assets/shared/schemas/event-promotion-batches";
 import { processPendingPromotionRecipients } from "../functions/_lib/services/event-agenda/promotion-batch-dispatch";
 import { promotionPortraits } from "../functions/_lib/services/event-agenda/promotion-portraits";
@@ -9,12 +8,10 @@ import { validJpegBytes } from "./helpers/raster-images";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
-import { seedEventAndAdmin } from "./helpers/context";
-import { createAdminSession, createMcpSession } from "./helpers/auth";
+import { createMcpSession } from "./helpers/auth";
 import { callApi } from "./helpers/app";
-import { createAgendaOccurrence } from "../functions/_lib/services/event-agenda/mutations";
-import { agendaOccurrenceCreateSchema, agendaSnapshotSchema } from "../assets/shared/schemas/event-agenda";
 import { promotionKitSchema } from "../assets/shared/schemas/event-promotion-kit";
+import { agendaSnapshotSchema } from "../assets/shared/schemas/event-agenda";
 import { promotionCompositionSaveSchema } from "../assets/shared/schemas/event-promotion-design";
 import {
   processPromotionRenderJob,
@@ -22,108 +19,10 @@ import {
 } from "../functions/_lib/services/event-agenda/promotion-render-jobs";
 import { recordReferralClick, recordReferralConversion } from "../functions/_lib/services/referrals";
 
-const eventBase = "/api/v1/events/pqc-2026";
-async function fixture(withSecondSpeaker = false) {
-  const { eventId } = await seedEventAndAdmin(env.DB);
-  const admin = (await env.DB.prepare("SELECT id,email FROM users WHERE email='admin@pkic.org'").first<{
-    id: string;
-    email: string;
-  }>())!;
-  const headers = {
-    authorization: `Bearer ${await createAdminSession(env.DB, admin.id, "promotion-admin")}`,
-    "content-type": "application/json",
-  };
-  const secondSpeaker = withSecondSpeaker
-    ? await findOrCreateUser(env.DB, { email: "bulk-speaker@example.test", firstName: "Second", lastName: "Speaker" })
-    : null;
-  const draft = await createAgendaOccurrence(
-    env.DB,
-    eventId,
-    "pqc-2026",
-    agendaOccurrenceCreateSchema.parse({
-      expectedRevision: 0,
-      title: "Planning a quantum-safe migration",
-      description: "A practical session abstract about inventory, deployment and operational controls.",
-      startAt: "2026-12-01T09:00:00.000Z",
-      endAt: "2026-12-01T09:30:00.000Z",
-      roomId: null,
-      speakerUserIds: secondSpeaker ? [admin.id, secondSpeaker.id] : [admin.id],
-    }),
-    admin.id,
-  );
-  const reviewed = await callApi(env, `${eventBase}/agenda/occurrences/${draft.occurrences[0]!.id}/history`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      expectedRevision: draft.revision,
-      history: {
-        appearances: [
-          ...(secondSpeaker
-            ? [
-                {
-                  userId: secondSpeaker.id,
-                  displayName: "Second Speaker",
-                  affiliations: [],
-                  biography: "",
-                  photoUrl: null,
-                  approvedAt: new Date().toISOString(),
-                },
-              ]
-            : []),
-          {
-            userId: admin.id,
-            displayName: "Example Speaker",
-            affiliations: [],
-            biography: "",
-            photoUrl: null,
-            approvedAt: new Date().toISOString(),
-          },
-        ],
-      },
-    }),
-  });
-  expect(reviewed.status, await reviewed.clone().text()).toBe(200);
-  const review = agendaSnapshotSchema.parse(await reviewed.json());
-  const publish = await callApi(env, `${eventBase}/agenda/publications`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ expectedRevision: review.revision }),
-  });
-  expect(publish.status, await publish.clone().text()).toBe(200);
-  const published = agendaSnapshotSchema.parse(await publish.json()),
-    sessionId = published.occurrences[0]!.id;
-  const userId = crypto.randomUUID(),
-    registrationId = crypto.randomUUID(),
-    at = new Date().toISOString();
-  await env.DB.batch([
-    env.DB.prepare(
-      "INSERT INTO users(id,email,normalized_email,active,first_name,last_name,created_at,updated_at) VALUES(?,'promotion-attendee@example.test','promotion-attendee@example.test',1,'Example','Attendee',?,?)",
-    ).bind(userId, at, at),
-    env.DB.prepare(
-      "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','direct','synthetic-secret',?,?)",
-    ).bind(registrationId, eventId, userId, at, at),
-  ]);
-  await promotionReferral(env.DB, eventId, admin.id);
-  await promotionReferral(env.DB, eventId, userId);
-  const attendeeHeaders = {
-    authorization: `Bearer ${await createAdminSession(env.DB, userId, "promotion-attendee")}`,
-    "content-type": "application/json",
-  };
-  return {
-    eventId,
-    admin,
-    secondSpeaker,
-    headers,
-    userId,
-    attendeeHeaders,
-    sessionId,
-    sessionBase: `${eventBase}/agenda/occurrences/${sessionId}/promotion`,
-  };
-}
 describe("personal event promotion kits", () => {
   beforeEach(() => resetDb());
   it("resumes an unfinished request migrated from the session-only queue", async () => {
-    const f = await fixture();
+    const f = await promotionFixture();
     const source = await getPromotionKit(env.DB, f.eventId, f.sessionId, f.admin.id, "https://example.test");
     const job = await requestPromotionRender(env.DB, f.eventId, source, "carousel", "https://example.test");
     await env.DB.prepare("UPDATE event_promotion_renders SET fingerprint=NULL,cache_key='old-cache-key' WHERE id=?")
@@ -134,6 +33,7 @@ describe("personal event promotion kits", () => {
         body: new Uint8Array([1, 2]),
         contentType: "application/pdf",
         count: 1,
+        thumbnail: { bytes: new Uint8Array([9]), contentType: "image/webp" },
       })),
     ).toBe(true);
     expect(
@@ -147,7 +47,7 @@ describe("personal event promotion kits", () => {
   });
 
   it("prepares all published speaker kits durably, preserves attribution, and reports real render completion", async () => {
-    const f = await fixture(true);
+    const f = await promotionFixture(true);
     const source = promotionKitSchema.parse(await (await callApi(env, f.sessionBase, { headers: f.headers })).json());
     const input = promotionBatchCreateSchema.parse({
       requestId: crypto.randomUUID(),
@@ -207,6 +107,7 @@ describe("personal event promotion kits", () => {
           body: new Uint8Array([1, 2, 3]),
           contentType: job.format === "carousel" ? "application/pdf" : "image/png",
           count: 1,
+          thumbnail: { bytes: new Uint8Array([9]), contentType: "image/webp" },
         };
       });
     expect(promotionBatchSchema.parse(await (await read()).json())).toMatchObject({
@@ -227,7 +128,7 @@ describe("personal event promotion kits", () => {
     expect(stale.status).toBe(409);
   });
   it("projects one session from a large publication without returning the full agenda", async () => {
-    const f = await fixture(true);
+    const f = await promotionFixture(true);
     const row = await env.DB.prepare(
       "SELECT snapshot_json FROM event_agenda_publications WHERE event_id=? ORDER BY revision DESC LIMIT 1",
     )
@@ -252,7 +153,7 @@ describe("personal event promotion kits", () => {
     expect(flow.summary().queries[0]!.resultBytes).toBeLessThan(150_000);
   });
   it("refuses expired staff sessions atomically for personal and organizer writes", async () => {
-    const f = await fixture();
+    const f = await promotionFixture();
     const kit = promotionKitSchema.parse(await (await callApi(env, f.sessionBase, { headers: f.headers })).json());
     await env.DB.prepare("UPDATE sessions SET created_at=? WHERE user_id=?")
       .bind(new Date(Date.now() - 9 * 60 * 60 * 1000).toISOString(), f.admin.id)
@@ -290,7 +191,7 @@ describe("personal event promotion kits", () => {
     expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM event_promotion_kits").first()).toEqual({ count: 0 });
   });
   it("initializes a missing personal referral in one authorized batch", async () => {
-    const f = await fixture();
+    const f = await promotionFixture();
     await env.DB.prepare("DELETE FROM referral_codes WHERE owner_id=?").bind(f.admin.id).run();
     const missing = await callApi(env, f.sessionBase, { headers: f.headers }, { maxRoundTrips: 1 });
     expect(missing.status).toBe(409);
@@ -309,7 +210,7 @@ describe("personal event promotion kits", () => {
     expect(promotionKitSchema.parse(await repeat.json()).registrationUrl).toBe(kit.registrationUrl);
   });
   it("keeps listing, queueing and delivery within one batch each", async () => {
-    const f = await fixture();
+    const f = await promotionFixture();
     const list = await callApi(
       env,
       `${eventBase}/promotion/sessions?q=quantum&sort=-title&limit=1&offset=0&day=2026-12-01&timeZone=Europe%2FAmsterdam`,
@@ -350,6 +251,7 @@ describe("personal event promotion kits", () => {
       body: new TextEncoder().encode("%PDF-1.7 synthetic"),
       contentType: "application/pdf",
       count: 1,
+      thumbnail: { bytes: new Uint8Array([9]), contentType: "image/webp" },
     }));
     const file = await callApi(env, url, { headers: f.headers }, { maxRoundTrips: 1 });
     expect(file.status, await file.clone().text()).toBe(200);
@@ -362,7 +264,7 @@ describe("personal event promotion kits", () => {
     expect((await callApi(env, url, { headers: f.headers }, { maxRoundTrips: 1 })).status).toBe(401);
   });
   it("saves shared copy and returns its agenda revision in one atomic request", async () => {
-    const f = await fixture();
+    const f = await promotionFixture();
     const before = await env.DB.prepare("SELECT revision FROM event_agenda_state WHERE event_id=?")
       .bind(f.eventId)
       .first<{ revision: number }>();
@@ -387,7 +289,7 @@ describe("personal event promotion kits", () => {
     ).toEqual({ revision: before!.revision + 1 });
   });
   it("provides a tracked default from the approved abstract without requiring takeaways", async () => {
-    const f = await fixture();
+    const f = await promotionFixture();
     const response = await callApi(env, f.sessionBase, { headers: f.headers }, { maxRoundTrips: 1 });
     expect(response.status).toBe(200);
     const kit = promotionKitSchema.parse(await response.json());
@@ -408,7 +310,7 @@ describe("personal event promotion kits", () => {
     expect(after.registrationUrl).toBe(kit.registrationUrl);
   });
   it("loads current profile portraits without routing API requests through static assets", async () => {
-    const f = await fixture();
+    const f = await promotionFixture();
     const key = `headshots/${f.admin.id}/promotion.jpg`;
     await env.SPEAKER_UPLOADS_BUCKET!.put(key, validJpegBytes(64, 64));
     await env.DB.prepare("UPDATE users SET headshot_r2_key=? WHERE id=?").bind(key, f.admin.id).run();
@@ -424,7 +326,7 @@ describe("personal event promotion kits", () => {
     ).toEqual({});
   });
   it("keeps speaker and attendee compositions private and rejects stale saves atomically", async () => {
-    const f = await fixture();
+    const f = await promotionFixture();
     const original = promotionKitSchema.parse(await (await callApi(env, f.sessionBase, { headers: f.headers })).json());
     const input = promotionCompositionSaveSchema.parse({
       expectedRevision: 0,
@@ -481,7 +383,7 @@ describe("personal event promotion kits", () => {
     expect(source?.description).toBe(original.copy.whyAttend);
   });
   it("lets an authorized MCP client save draft takeaways through the same personal contract", async () => {
-    const f = await fixture();
+    const f = await promotionFixture();
     const token = await createMcpSession(env.DB, f.admin, "mcp-promotion", ["agenda:write"]);
     const headers = {
       authorization: `Bearer ${token}`,
@@ -507,7 +409,7 @@ describe("personal event promotion kits", () => {
     expect(promotionKitSchema.parse(await saved.json()).composition?.takeaways).toHaveLength(2);
   });
   it("keeps withdrawn attendee picks editable and refuses exports without queue writes", async () => {
-    const f = await fixture();
+    const f = await promotionFixture();
     const base = `${eventBase}/promotion`;
     const read = async () => {
       const response = await callApi(env, base, { headers: f.attendeeHeaders }, { maxRoundTrips: 1 });
@@ -573,7 +475,12 @@ describe("personal event promotion kits", () => {
     let rendered = false;
     await processPromotionRenderJob(env.DB, env, job.id, async () => {
       rendered = true;
-      return { body: new Uint8Array(), contentType: "image/png", count: 1 };
+      return {
+        body: new Uint8Array(),
+        contentType: "image/png",
+        count: 1,
+        thumbnail: { bytes: new Uint8Array([9]), contentType: "image/webp" },
+      };
     });
     expect(rendered).toBe(false);
     const recovered = await callApi(
@@ -612,7 +519,7 @@ describe("personal event promotion kits", () => {
     expect(prepared.status, await prepared.clone().text()).toBe(200);
   });
   it("accepts public session picks, queues attendee exports, and invalidates obsolete compositions", async () => {
-    const f = await fixture();
+    const f = await promotionFixture();
     const response = await callApi(env, `${eventBase}/promotion`, { headers: f.attendeeHeaders });
     expect(response.status, await response.clone().text()).toBe(200);
     const kit = promotionKitSchema.parse(await response.json());
@@ -651,7 +558,12 @@ describe("personal event promotion kits", () => {
     let rendered = false;
     await processPromotionRenderJob(env.DB, env, job.id, async () => {
       rendered = true;
-      return { body: new Uint8Array(), contentType: "image/png", count: 1 };
+      return {
+        body: new Uint8Array(),
+        contentType: "image/png",
+        count: 1,
+        thumbnail: { bytes: new Uint8Array([9]), contentType: "image/webp" },
+      };
     });
     expect(rendered).toBe(false);
     expect(
@@ -673,7 +585,7 @@ describe("personal event promotion kits", () => {
     expect(invalid.status).toBe(422);
   });
   it("keeps referral click, conversion and point attribution attached to an unregistered speaker", async () => {
-    const f = await fixture();
+    const f = await promotionFixture();
     const kit = promotionKitSchema.parse(await (await callApi(env, f.sessionBase, { headers: f.headers })).json());
     const code = new URL(kit.registrationUrl).pathname.split("/").at(-1)!;
     await recordReferralClick(env.DB, { code, ip: null, userAgent: null, secret: "synthetic" });

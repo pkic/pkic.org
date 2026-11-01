@@ -3,6 +3,7 @@ import { PERSONAL_PROMOTION_RENDERER } from "../../../assets/shared/personal-pro
 import type { CountryCode } from "../../../assets/shared/countries";
 import type { DatabaseLike } from "../types";
 import { batchFirst } from "../db/pagination";
+import { badgeRenderId } from "./badge-render-job-statements";
 import { proposalSpeakerProfileColumns } from "./proposal-speakers";
 import { REGISTRATION_ORGANIZATION_SQL, REGISTRATION_JOB_TITLE_SQL } from "./registrations/selected-identity";
 import {
@@ -24,7 +25,7 @@ export interface BadgeSource {
   city: string | null;
   country: CountryCode | null;
   role: string;
-  requested_generation: number;
+  render_revision: number;
   event_revision: string;
   agenda_revision: number;
   sessions: { title: string }[];
@@ -48,7 +49,7 @@ export async function readBadgeSource(db: DatabaseLike, code: string): Promise<B
           WHERE ep.event_id=r.event_id AND ep.user_id=r.user_id
           ORDER BY ep.priority ASC,ep.role ASC LIMIT 1
         ),'attendee') END AS role,
-      COALESCE(job.requested_generation,0) AS requested_generation
+      COALESCE(job.revision,0) AS render_revision
     FROM referral_codes rc
     JOIN events e ON e.id=rc.event_id
     LEFT JOIN registrations r ON rc.owner_type='registration' AND r.id=rc.owner_id
@@ -56,10 +57,10 @@ export async function readBadgeSource(db: DatabaseLike, code: string): Promise<B
     JOIN users u ON u.id=CASE rc.owner_type WHEN 'registration' THEN r.user_id ELSE rc.created_by_user_id END
     LEFT JOIN proposal_speakers ps ON rc.owner_type='proposal' AND ps.proposal_id=sp.id AND ps.user_id=u.id
     LEFT JOIN registration_badge_role_overrides bro ON bro.registration_id=r.id
-    LEFT JOIN badge_render_jobs job ON job.referral_code=rc.code
+    LEFT JOIN event_promotion_renders job ON job.id=?
     WHERE rc.code=? AND (r.id IS NOT NULL OR sp.id IS NOT NULL)
     LIMIT 1`)
-      .bind(code),
+      .bind(badgeRenderId(code), code),
     db
       .prepare(`SELECT json_extract(entry.value,'$.title') AS title
       FROM referral_codes rc
@@ -87,7 +88,7 @@ export function personalBadgeCacheMetadata(
 ): Record<string, string> {
   return {
     referralCode: code,
-    badgeGeneration: String(source.requested_generation),
+    badgeGeneration: String(source.render_revision),
     badgeImageFormat: format,
     badgeRenderer: PERSONAL_PROMOTION_RENDERER,
     badgeDesignRevision: `${source.event_revision}:${source.agenda_revision ?? 0}`,

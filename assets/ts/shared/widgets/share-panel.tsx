@@ -64,6 +64,8 @@ export interface SharePanelOptions {
    * as a sales line, so the invitation drops the urgency.
    */
   waitlisted?: boolean;
+  /** Leave out the badge where the page already shows it with the other materials. */
+  hideBadge?: boolean;
 }
 
 function nameSlug(firstName?: string | null, lastName?: string | null): string {
@@ -78,7 +80,7 @@ function nameSlug(firstName?: string | null, lastName?: string | null): string {
 
 const MAX_INVITES = 10;
 
-function extractOgBadgeUrl(shareUrl: string, version?: string): string | null {
+export function extractOgBadgeUrl(shareUrl: string, version?: string): string | null {
   try {
     const match = shareUrl.match(/\/r\/([A-Za-z0-9]+)(?:[?#]|$)/);
     if (!match) return null;
@@ -485,7 +487,9 @@ export function SharePanel({ options }: { options: SharePanelOptions }) {
   return (
     <Panel class="pk pk-start">
       <PanelBody class="pk-stack pk-stack--snug">
-        {ogBadgeUrl && <OgBadge ogBadgeUrl={ogBadgeUrl} eventName={eventName} badgeFilename={badgeFilename} />}
+        {ogBadgeUrl && !options.hideBadge && (
+          <OgBadge ogBadgeUrl={ogBadgeUrl} eventName={eventName} badgeFilename={badgeFilename} />
+        )}
 
         {options.waitlisted ? (
           <h3>Invite a colleague</h3>

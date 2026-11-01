@@ -226,7 +226,7 @@ describe("promotion exports", () => {
       })),
     }));
     for (const qrCode of [false, true]) {
-      for (const format of ["landscape", "panel", "square", "portrait", "carousel"] as const) {
+      for (const format of ["landscape", "square", "portrait", "carousel"] as const) {
         const pages = buildPromotionPages(
           {
             ...data,
@@ -343,7 +343,7 @@ describe("promotion exports", () => {
   });
 
   it("escapes speaker titles and includes a decodable matrix destination in every card aspect", async () => {
-    for (const format of ["landscape", "square", "portrait", "panel"] as const) {
+    for (const format of ["landscape", "square", "portrait"] as const) {
       const svg = renderPromotionSvg(
         {
           ...data,
@@ -420,11 +420,11 @@ describe("promotion exports", () => {
         }),
       },
     };
-    const pages = promotionCardPages(extended, "panel");
+    const pages = promotionCardPages(extended, "landscape");
     expect(pages.length).toBeGreaterThan(1);
     const text = pages.flatMap((page) => page.cardLines?.map((line) => line.text) ?? []).join(" ");
     for (let index = 0; index < 30; index++) expect(text).toContain(`Speaker ${index}`);
-    for (const page of pages) expect(renderPromotionSvg(page, "panel")).toContain("<svg");
+    for (const page of pages) expect(renderPromotionSvg(page, "landscape")).toContain("<svg");
     const pdf = await renderPromotionPdf(
       extended,
       readFileSync("static/fonts/Roboto-Regular.ttf"),

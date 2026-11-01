@@ -553,6 +553,7 @@ describe("session archive and promotion publication", () => {
       body: new Uint8Array([1, 2, 3]),
       contentType: "image/png",
       count: 1,
+      thumbnail: { bytes: new Uint8Array([9]), contentType: "image/webp" },
     }));
     const [rendered] = await queryAll<{ status: string }>(
       env.DB,

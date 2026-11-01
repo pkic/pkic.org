@@ -7,6 +7,8 @@ import { preparePromotionRenderRequests } from "./promotion-render-request";
 import { eventReadIdSql } from "../events/selection";
 import { promotionReferralOwnerSql } from "./promotion-referral";
 import { AppError } from "../../errors";
+import { batchFirst } from "../../db/pagination";
+import { PROMOTION_OPEN_SQL } from "./promotion-retention";
 
 /** Enqueue only. Rendering and every retry remain with the scheduler's durable owner. */
 export async function queueOwnPromotionRenders(
@@ -29,7 +31,7 @@ export async function queueOwnPromotionRenders(
     },
   );
   const allowed = {
-    sql: `WITH entitled AS MATERIALIZED(${source.authority.sql}) SELECT 1 FROM entitled WHERE EXISTS(SELECT 1 FROM events event LEFT JOIN event_agenda_state state ON state.event_id=event.id WHERE event.id=${event.sql} AND COALESCE(state.published_revision,1)=?) AND COALESCE((SELECT revision FROM event_promotion_kits WHERE event_id=${event.sql} AND user_id=? AND occurrence_id IS ?),0)=? AND EXISTS(${owner.sql})${occurrenceId ? "" : ` AND EXISTS(${picks.sql})`}`,
+    sql: `WITH entitled AS MATERIALIZED(${source.authority.sql}) SELECT 1 FROM entitled WHERE EXISTS(SELECT 1 FROM events event LEFT JOIN event_agenda_state state ON state.event_id=event.id WHERE event.id=${event.sql} AND ${PROMOTION_OPEN_SQL} AND COALESCE(state.published_revision,1)=?) AND COALESCE((SELECT revision FROM event_promotion_kits WHERE event_id=${event.sql} AND user_id=? AND occurrence_id IS ?),0)=? AND EXISTS(${owner.sql})${occurrenceId ? "" : ` AND EXISTS(${picks.sql})`}`,
     bindings: [
       ...source.authority.bindings,
       ...event.bindings,
@@ -53,8 +55,16 @@ export async function queueOwnPromotionRenders(
     origin,
     allowed,
   );
-  const loaded = await db.batch([...queue.statements, ...source.statements]);
-  const current = await source.decode(loaded.slice(queue.statements.length));
+  const loaded = await db.batch([
+    ...queue.statements,
+    ...source.statements,
+    db
+      .prepare(`SELECT ${PROMOTION_OPEN_SQL} AS open FROM events event WHERE event.id=${event.sql}`)
+      .bind(...event.bindings),
+  ]);
+  if (!batchFirst<{ open: number }>(loaded.at(-1)!)?.open)
+    throw new AppError(409, "PROMOTION_CLOSED", "Sharing closed when the event ended.");
+  const current = await source.decode(loaded.slice(queue.statements.length, -1));
   if (current.kit.stale)
     throw new AppError(
       409,

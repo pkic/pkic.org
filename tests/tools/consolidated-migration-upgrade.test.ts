@@ -1,4 +1,3 @@
-import { promotionFormatSchema } from "../../assets/shared/schemas/event-promotion-kit";
 import { readD1Migrations } from "@cloudflare/vitest-plugin";
 import { afterEach, describe, expect, it } from "vitest";
 import { DatabaseSync } from "node:sqlite";
@@ -1331,6 +1330,22 @@ it("upgrades pre-0035 profiles through 0038 so identities alone own organization
             WHERE id = 'registration-empty';
         `);
       }
+      if (migrationNumber(fileName) === 39) {
+        // These historical identity fixtures predate day selections. Give each
+        // registration a synthetic day before the day-only cutover.
+        db.exec(`
+          INSERT INTO event_days(id,event_id,day_date,created_at,updated_at)
+          SELECT 'upgrade-day-' || e.id,e.id,'2026-12-01','2026-01-01T00:00:00.000Z','2026-01-01T00:00:00.000Z'
+          FROM events e WHERE EXISTS (SELECT 1 FROM registrations r WHERE r.event_id=e.id)
+            AND NOT EXISTS (SELECT 1 FROM event_days d WHERE d.event_id=e.id);
+          INSERT INTO registration_day_attendance(id,registration_id,event_day_id,attendance_type,created_at,updated_at)
+          SELECT 'upgrade-attendance-' || r.id,r.id,
+            (SELECT d.id FROM event_days d WHERE d.event_id=r.event_id ORDER BY d.day_date LIMIT 1),
+            r.attendance_type,'2026-01-01T00:00:00.000Z','2026-01-01T00:00:00.000Z'
+          FROM registrations r WHERE NOT EXISTS
+            (SELECT 1 FROM registration_day_attendance a WHERE a.registration_id=r.id);
+        `);
+      }
       // D1 applies each migration file atomically; the registration rebuild needs
       // that transaction while foreign keys are deferred.
       if (migrationNumber(fileName) === 39) db.exec("BEGIN");
@@ -1475,6 +1490,9 @@ it("splits the consolidated migration into bounded statements for D1", async () 
   );
 });
 
+/** The formats the retired 0038 render queue accepted; the unfinished panel request is dropped. */
+const LEGACY_PROMOTION_FORMATS = ["portrait", "panel", "carousel", "landscape", "square"];
+
 it("cuts over unfinished promotion work without retaining a second render queue", () => {
   const db = new DatabaseSync(":memory:");
   try {
@@ -1509,7 +1527,7 @@ it("cuts over unfinished promotion work without retaining a second render queue"
       db.prepare(`INSERT INTO event_agenda_promotion_render_jobs(id,event_id,occurrence_id,user_id,revision,format,origin,cache_key,status,attempts,next_attempt_at,processing_token,lease_expires_at,created_at,updated_at)
         VALUES(?,'queue-event','queue-session','queue-user',1,?,'https://example.test',?,?,2,?,'old-lease',?,?,?)`).run(
         status,
-        promotionFormatSchema.options[index]!,
+        LEGACY_PROMOTION_FORMATS[index]!,
         status,
         status,
         at,
@@ -1518,13 +1536,43 @@ it("cuts over unfinished promotion work without retaining a second render queue"
         at,
       );
     }
+    for (const [code, owner] of [
+      ["QUEUEBDG1", "queue-user"],
+      ["ORPHANBDG1", null],
+    ]) {
+      db.prepare(
+        "INSERT INTO referral_codes(code,event_id,owner_type,owner_id,created_by_user_id,created_at) VALUES(?,'queue-event','proposal','queue-proposal',?,?)",
+      ).run(code, owner, at);
+      db.prepare(`INSERT INTO badge_render_jobs(id,referral_code,status,requested_generation,attempts,next_attempt_at,created_at,updated_at,processing_token,lease_expires_at)
+        VALUES(?,?,'rendering',3,1,?,?,?,'old-lease',?)`).run(`badge:${code}`, code, at, at, at, at);
+    }
     db.exec("BEGIN");
     db.exec(fs.readFileSync(path.join(MIGRATIONS_DIR, "0039_event_promotion_kits.sql"), "utf8"));
     db.exec("COMMIT");
     expect(
-      db.prepare("SELECT id,status,fingerprint,processing_token FROM event_promotion_renders ORDER BY id").all(),
+      db
+        .prepare(
+          "SELECT id,user_id,revision,status,cache_key,processing_token FROM event_promotion_renders WHERE format='badge'",
+        )
+        .all(),
+    ).toEqual([
+      {
+        id: "badge:QUEUEBDG1",
+        user_id: "queue-user",
+        revision: 3,
+        status: "queued",
+        cache_key: "og-badges/QUEUEBDG1",
+        processing_token: null,
+      },
+    ]);
+    expect(
+      db
+        .prepare(
+          "SELECT id,status,fingerprint,processing_token FROM event_promotion_renders WHERE format<>'badge' ORDER BY id",
+        )
+        .all(),
     ).toEqual(
-      ["queued", "rendering", "retrying"].map((id) => ({
+      ["queued", "rendering"].map((id) => ({
         id,
         status: "queued",
         fingerprint: null,
@@ -1534,7 +1582,7 @@ it("cuts over unfinished promotion work without retaining a second render queue"
     expect(
       db
         .prepare(
-          "SELECT name FROM sqlite_master WHERE type='table' AND name IN('event_agenda_promotion_render_jobs','event_agenda_promotion_copy','event_agenda_promotion_downloads','user_email_claims')",
+          "SELECT name FROM sqlite_master WHERE type='table' AND name IN('badge_render_jobs','event_agenda_promotion_render_jobs','event_agenda_promotion_copy','event_agenda_promotion_downloads','user_email_claims')",
         )
         .all(),
     ).toEqual([]);

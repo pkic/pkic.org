@@ -100,6 +100,7 @@ export async function buildSpeakerPromotionSource(basis: PromotionSourceBasis, a
   };
   kit.fingerprint = await sha256Hex(
     JSON.stringify({
+      template: PROMOTION_TEMPLATE_VERSION,
       agenda,
       occurrence,
       people,

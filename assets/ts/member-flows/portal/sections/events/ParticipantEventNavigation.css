@@ -6,4 +6,16 @@
       display: none;
     }
   }
+  /* Where the tab strip shows, its active tab already names the page; the
+     page title stays for assistive technology and for phones. */
+  @media (min-width: 48.0625rem) {
+    .pk-participant-event__page-title {
+      position: absolute;
+      inline-size: 1px;
+      block-size: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+  }
 }

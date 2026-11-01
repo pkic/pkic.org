@@ -319,7 +319,7 @@ test("every delivered long-panel promotion export has complete evidence and refu
     });
     urls.push(href);
   }
-  expect(records.find((record) => record.format === "panel")!.pageCount).toBeGreaterThan(1);
+  expect(records.find((record) => record.format === "landscape")!.pageCount).toBeGreaterThan(1);
   expect(records.find((record) => record.format === "carousel")!.pageCount).toBeGreaterThan(4);
   for (const [device, width, height] of [
     ["desktop", 1280, 900],

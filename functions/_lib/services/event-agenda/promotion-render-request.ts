@@ -19,7 +19,8 @@ export interface PromotionRenderJob {
   fingerprint: string | null;
   user_id: string;
   revision: number;
-  format: z.infer<typeof promotionFormatSchema>;
+  /** A kit format, or the badge format of a badge row. */
+  format: string;
   origin: string;
   cache_key: string;
   status: string;
@@ -40,7 +41,8 @@ export async function promotionRenderLocation(
       template: PROMOTION_TEMPLATE_VERSION,
     }),
   );
-  return { id, key: `promotion/v${PROMOTION_TEMPLATE_VERSION}/${id}.${format === "carousel" ? "pdf" : "png"}` };
+  // The stored object carries its content type; the key names no file type.
+  return { id, key: `promotion/v${PROMOTION_TEMPLATE_VERSION}/${id}` };
 }
 /** A client fingerprint is only a queue hint; the durable render owner re-resolves and verifies the source. */
 export async function preparePromotionRenderRequests(
@@ -54,8 +56,12 @@ export async function preparePromotionRenderRequests(
   origin: string,
   authority?: AuthorizationEvidence,
 ) {
-  if (!formats.length || formats.length > 5 || new Set(formats).size !== formats.length)
-    throw new Error("Choose one to five distinct promotion formats.");
+  if (
+    !formats.length ||
+    formats.length > promotionFormatSchema.options.length ||
+    new Set(formats).size !== formats.length
+  )
+    throw new Error("Choose each promotion format at most once.");
   const scope = eventReadIdSql(event),
     now = nowIso();
   const jobs = await Promise.all(

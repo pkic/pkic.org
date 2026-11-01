@@ -4,17 +4,17 @@ import { promotionCopySchema } from "./event-promotion-copy";
 import { agendaOccurrenceFieldsSchema, agendaPlannedMediaSchema, agendaOccurrenceQuerySchema } from "./event-agenda";
 export { promotionCopySchema } from "./event-promotion-copy";
 import { promotionCompositionSchema } from "./event-promotion-design";
-export const PROMOTION_TEMPLATE_VERSION = 7 as const;
+export const PROMOTION_TEMPLATE_VERSION = 8 as const;
 export const promotionRenderStateSchema = z.enum(["queued", "rendering", "retrying", "rendered", "failed", "obsolete"]);
-export const promotionFormatSchema = z.enum(["landscape", "square", "portrait", "panel", "carousel"]);
+export const promotionFormatSchema = z.enum(["landscape", "square", "portrait", "carousel"]);
 export const promotionFingerprintSchema = z.string().regex(/^[a-f0-9]{64}$/);
 export const promotionFormatsSchema = z
   .array(promotionFormatSchema)
   .min(1)
-  .max(5)
+  .max(promotionFormatSchema.options.length)
   .refine((items) => new Set(items).size === items.length, "Choose each format once.")
   .default([...promotionFormatSchema.options]);
-export const PROMOTION_RENDER_ORDER = ["portrait", "carousel", "landscape", "square", "panel"] as const;
+export const PROMOTION_RENDER_ORDER = ["portrait", "carousel", "landscape", "square"] as const;
 export const promotionRenderRequestSchema = z.strictObject({
   fingerprint: promotionFingerprintSchema,
   publishedRevision: z.number().int().positive(),

@@ -2320,7 +2320,7 @@ describe("speaker self-management endpoints", () => {
     );
     const [{ total: badgeJobsBeforeUpload }] = await queryAll<{ total: number }>(
       env.DB,
-      "SELECT COUNT(*) AS total FROM badge_render_jobs",
+      "SELECT COUNT(*) AS total FROM event_promotion_renders",
     );
     const bucket = new FakeUploadsBucket();
     const scopedEnv = { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket } as any;
@@ -2370,7 +2370,9 @@ describe("speaker self-management endpoints", () => {
     await expect(
       queryAll(env.DB, "SELECT object_key FROM storage_deletion_outbox WHERE object_key LIKE 'headshots/%'"),
     ).resolves.toHaveLength(0);
-    await expect(queryAll(env.DB, "SELECT id FROM badge_render_jobs")).resolves.toHaveLength(badgeJobsBeforeUpload);
+    await expect(queryAll(env.DB, "SELECT id FROM event_promotion_renders")).resolves.toHaveLength(
+      badgeJobsBeforeUpload,
+    );
   });
 
   it("rolls back a self headshot delete when roster authority is revoked before D1 commit", async () => {
@@ -2383,7 +2385,7 @@ describe("speaker self-management endpoints", () => {
     );
     const [{ total: badgeJobsBeforeDelete }] = await queryAll<{ total: number }>(
       env.DB,
-      "SELECT COUNT(*) AS total FROM badge_render_jobs",
+      "SELECT COUNT(*) AS total FROM event_promotion_renders",
     );
     const existingKey = `headshots/${user.id}/existing.jpg`;
     const bucket = new FakeUploadsBucket();
@@ -2432,7 +2434,9 @@ describe("speaker self-management endpoints", () => {
     await expect(
       queryAll(env.DB, "SELECT object_key FROM storage_deletion_outbox WHERE object_key = ?", [existingKey]),
     ).resolves.toHaveLength(0);
-    await expect(queryAll(env.DB, "SELECT id FROM badge_render_jobs")).resolves.toHaveLength(badgeJobsBeforeDelete);
+    await expect(queryAll(env.DB, "SELECT id FROM event_promotion_renders")).resolves.toHaveLength(
+      badgeJobsBeforeDelete,
+    );
     expect(await bucket.get(existingKey)).not.toBeNull();
   });
 

@@ -5,7 +5,6 @@ import { resetDb } from "./helpers/reset-db";
 import { EMAIL_OUTBOX_DUE_QUERY, EMAIL_OUTBOX_EXPIRED_LEASE_QUERY } from "../functions/_lib/email/outbox";
 import { GOOGLE_GROUPS_DUE_QUERY } from "../functions/_lib/services/google-groups";
 import { STORAGE_DELETION_DUE_QUERY } from "../functions/_lib/services/storage-deletion-outbox";
-import { BADGE_RENDER_DUE_QUERY } from "../functions/_lib/services/registration-badge-regeneration";
 import { WG_CHAIR_DIGEST_CHANGE_EVENTS_QUERY } from "../functions/_lib/services/wg-chair-digest";
 import {
   RSVP_ACTION_DUE_QUERY,
@@ -77,14 +76,6 @@ describe("durable external-effect due query plans", () => {
       await explain(STORAGE_DELETION_DUE_QUERY),
       ["idx_storage_deletion_outbox_due", "idx_storage_deletion_outbox_expired_lease"],
       "storage_deletion_outbox",
-    );
-  });
-
-  it("uses branch-specific indexes for badge due and expired-lease rows", async () => {
-    expectBoundedDuePlan(
-      await explain(BADGE_RENDER_DUE_QUERY),
-      ["idx_badge_render_jobs_due", "idx_badge_render_jobs_expired_lease"],
-      "badge_render_jobs",
     );
   });
 

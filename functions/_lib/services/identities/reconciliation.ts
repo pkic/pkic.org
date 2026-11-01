@@ -1,5 +1,6 @@
 import { prepareIdentityProfileUpdateStatement } from "./profile-statement";
 import { prepareOrganizationIdentityPublication } from "./lifecycle-publication";
+import { preparePendingIdentityActivation } from "./pending-activation";
 import {
   requireOrganizationLinkDomain,
   resolveVerifiedEmailDomainOrganization,
@@ -354,10 +355,13 @@ export async function prepareVerifiedOrganizationAffiliation(
         )
     : null;
   if (existing?.blocked_at) throw new AppError(409, "IDENTITY_BLOCKED", "This identity requires explicit review");
-  if (existing && !existing.started_at)
+  // A pending invitation is never accepted autonomously. A person who proved
+  // the mailbox and chose this organization accepts it, as its emailed link would.
+  if (existing && !existing.started_at && !confirmedSelection)
     throw new AppError(409, "IDENTITY_INVITATION_PENDING", "An identity invitation is already pending");
   if (existing) {
-    // An owned approved affiliation is reused without changing its selected email or profile.
+    // An owned affiliation is reused without changing its selected email or profile.
+    const accepting = !existing.started_at;
     const memberId = observed
       ? (observed.organizations.find((organization) => organization.id === organizationId)?.member_id ?? null)
       : await resolveOrganizationMemberId(db, organizationId!);
@@ -374,7 +378,8 @@ export async function prepareVerifiedOrganizationAffiliation(
           sql: `SELECT 1 WHERE EXISTS (${proof.sql}) AND EXISTS (${enrichment.sql}) AND EXISTS (
                 SELECT 1 FROM identities identity WHERE identity.id = ? AND identity.user_id = ?
                   AND identity.organization_id = ? AND identity.email_id IS ? AND identity.updated_at = ?
-                  AND identity.started_at IS NOT NULL AND identity.ended_at IS NULL AND identity.blocked_at IS NULL
+                  AND identity.started_at IS ${accepting ? "NULL" : "NOT NULL"}
+                  AND identity.ended_at IS NULL AND identity.blocked_at IS NULL
                   AND EXISTS (SELECT 1 FROM organizations WHERE id = identity.organization_id AND name = ?)
               )`,
           bindings: [
@@ -409,7 +414,27 @@ export async function prepareVerifiedOrganizationAffiliation(
               prepareOrganizationIdentityPublication(db, existing.id, input.at),
             ]
           : []),
-        ...prepareAutomaticGroupEnrollmentForUserStatements(db, input.userId, input.at),
+        // The guard above pins the invitation; the title completion may already have advanced updated_at.
+        ...(accepting
+          ? preparePendingIdentityActivation(db, {
+              identityId: existing.id,
+              userId: input.userId,
+              at: input.at,
+              audit: [
+                prepareScopedAuditLogAfterOneChange(
+                  db,
+                  organizationIdentityAuditScope(memberId, input.userId),
+                  "user",
+                  input.userId,
+                  "organization_identity_invitation_accepted",
+                  "identity",
+                  existing.id,
+                  { organizationId },
+                  input.at,
+                ),
+              ],
+            })
+          : prepareAutomaticGroupEnrollmentForUserStatements(db, input.userId, input.at)),
       ],
     };
   }

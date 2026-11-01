@@ -1,4 +1,4 @@
-import { processPendingBadgeRenders } from "../functions/_lib/services/registration-badge-regeneration";
+import { processPendingPromotionRenders } from "../functions/_lib/services/event-agenda/promotion-render-jobs";
 import { prepareBadgeRenderJob } from "../functions/_lib/services/badge-render-job-statements";
 import { createReferralCode } from "../functions/_lib/services/referrals";
 import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./helpers/administrator";
@@ -150,17 +150,28 @@ describe("email outbox batch processing", () => {
   it("recovers a completed older-renderer badge through its existing job before delivering the waiting email", async () => {
     const fetchMock = makeSendgridMock();
     vi.stubGlobal("fetch", fetchMock);
+    // A badge row belongs to the registration's user, so the code needs a real owner.
+    const userId = crypto.randomUUID();
+    const registrationId = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO users (id,email,normalized_email,created_at,updated_at) VALUES (?,'waiting@example.test','waiting@example.test',datetime('now'),datetime('now'))",
+      ).bind(userId),
+      env.DB.prepare(
+        "INSERT INTO registrations (id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES (?,?,?,'registered','test','synthetic-secret',datetime('now'),datetime('now'))",
+      ).bind(registrationId, eventId, userId),
+    ]);
     const code = await createReferralCode(env.DB, {
       eventId,
       ownerType: "registration",
-      ownerId: crypto.randomUUID(),
+      ownerId: registrationId,
       length: 10,
     });
     const badge = buildBadgeAttachment({ badgeCode: code, badgeType: "attendee" });
     const job = prepareBadgeRenderJob(env.DB, code, "2000-01-01T00:00:00.000Z");
     await job.statement.run();
-    await env.DB.prepare("UPDATE badge_render_jobs SET status='rendered',rendered_at=?,updated_at=? WHERE id=?")
-      .bind("2000-01-01T00:00:00.000Z", "2000-01-01T00:00:00.000Z", job.id)
+    await env.DB.prepare("UPDATE event_promotion_renders SET status='rendered',updated_at=? WHERE id=?")
+      .bind("2000-01-01T00:00:00.000Z", job.id)
       .run();
     await env.ASSETS_BUCKET!.put(badge.r2Key, validPngBytes(), {
       httpMetadata: { contentType: "image/png" },
@@ -182,12 +193,12 @@ describe("email outbox batch processing", () => {
         customMetadata: { badgeRenderer: badge.renderer! },
       });
     });
-    expect(await processPendingBadgeRenders(env.DB, env, 1, render)).toEqual({ processed: 1, failed: 0 });
-    expect(await processPendingBadgeRenders(env.DB, env, 1, render)).toEqual({ processed: 0, failed: 0 });
+    expect(await processPendingPromotionRenders(env.DB, env, 1, render)).toEqual({ processed: 1, failed: 0 });
+    expect(await processPendingPromotionRenders(env.DB, env, 1, render)).toEqual({ processed: 0, failed: 0 });
     expect(render).toHaveBeenCalledOnce();
-    expect(
-      await queryAll(env.DB, "SELECT requested_generation,status FROM badge_render_jobs WHERE id=?", job.id),
-    ).toEqual([{ requested_generation: 2, status: "rendered" }]);
+    expect(await queryAll(env.DB, "SELECT revision,status FROM event_promotion_renders WHERE id=?", job.id)).toEqual([
+      { revision: 2, status: "rendered" },
+    ]);
     await env.DB.prepare("UPDATE email_outbox SET send_after=? WHERE id=?").bind("2000-01-01T00:00:00.000Z", id).run();
     expect(await processPendingOutbox(env.DB, env, 10)).toEqual({ processed: 1, failed: 0 });
     expect(fetchMock).toHaveBeenCalledOnce();

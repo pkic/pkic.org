@@ -321,7 +321,7 @@ describe("admin user headshot upload", () => {
       ),
     ).toEqual([{ action: "headshot_imported_gravatar" }]);
     expect(
-      await queryAll(env.DB, "SELECT id, status FROM badge_render_jobs WHERE referral_code = ?", referralCode),
+      await queryAll(env.DB, "SELECT id, status FROM event_promotion_renders WHERE id = 'badge:' || ?", referralCode),
     ).toEqual([{ id: `badge:${referralCode}`, status: "queued" }]);
     expect(
       await queryAll(env.DB, "SELECT object_key FROM storage_deletion_outbox WHERE object_key = ?", oldKey),

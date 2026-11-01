@@ -2,29 +2,55 @@ import { useDialogQueryState } from "../../../../../../hooks/useDialogQueryState
 import { Alert } from "../../../../../../ui/Alert";
 import { downloadFile } from "../../../../../../shared/download-file";
 import { loadPromotionKit } from "./promotion-kit-client";
-import { useEffect, useState } from "preact/hooks";
+import type { ComponentChildren } from "preact";
+import { useEffect, useRef, useState } from "preact/hooks";
 import type { z } from "zod";
-import { promotionKitSchema, promotionFormatSchema } from "../../../../../../../shared/schemas/event-promotion-kit";
+import {
+  promotionKitSchema,
+  type promotionFormatSchema,
+} from "../../../../../../../shared/schemas/event-promotion-kit";
 import { postJson, getBlob } from "../../../../../../shared/api-client";
 import { Panel, PanelHeader, PanelBody } from "../../../../../../ui/Panel";
-import { IconPlus } from "../../../../../../components/icons";
 import { Button } from "../../../../../../ui/Button";
 import { CloseButton } from "../../../../../../ui/CloseButton";
-import { ExternalLink } from "../../../../../../ui/ExternalLink";
+import { DownloadAction } from "../../../../../../ui/DownloadAction";
 import { ErrorAlert } from "../../../../../../components/ErrorAlert";
 import { PromotionCompositionEditor } from "./PromotionCompositionEditor";
+import { PromotionTile } from "./PromotionTile";
 import { copyText } from "../../../../../../shared/clipboard";
 import { toast } from "../../../../ui";
-import "./SessionPromotionKit.css";
+import "./PromotionGallery.css";
 type Kit = z.infer<typeof promotionKitSchema>;
-export function PersonalPromotionKit({ base, title, onClose }: { base: string; title: string; onClose?: () => void }) {
+type Format = z.infer<typeof promotionFormatSchema>;
+
+const tiles = [
+  { format: "portrait", name: "Tall post", detail: "4:5 · JPEG", type: "JPEG" },
+  { format: "square", name: "Square post", detail: "1:1 · JPEG", type: "JPEG" },
+  { format: "landscape", name: "Wide post", detail: "1.91:1 · JPEG", type: "JPEG" },
+  { format: "carousel", name: "Carousel", detail: "PDF slides", type: "PDF", stacked: true },
+] satisfies readonly { format: Format; name: string; detail: string; type: string; stacked?: boolean }[];
+const inFlight = ["queued", "rendering", "retrying"];
+
+export function PersonalPromotionKit({
+  base,
+  title,
+  leading,
+  onClose,
+}: {
+  base: string;
+  title: string;
+  /** Tiles from outside this kit shown first, such as the attendee badge. */
+  leading?: ComponentChildren;
+  onClose?: () => void;
+}) {
   const [kit, setKit] = useState<Kit | null>(null),
-    [error, setError] = useState(""),
-    [busy, setBusy] = useState<"prepare" | "download" | null>(null);
+    [error, setError] = useState("");
+  const requested = useRef(false);
   const [editing, showEditing, closeEditing] = useDialogQueryState(`promotionComposition:${base}`);
   useEffect(() => {
     let cancelled = false;
     setKit(null);
+    requested.current = false;
     void loadPromotionKit(base)
       .then((value) => {
         if (!cancelled) setKit(value);
@@ -37,7 +63,14 @@ export function PersonalPromotionKit({ base, title, onClose }: { base: string; t
     };
   }, [base]);
   useEffect(() => {
-    if (!kit?.artifacts.some((item) => ["queued", "rendering", "retrying"].includes(item.status))) return;
+    if (!kit || kit.stale) return;
+    const missing = tiles.some((tile) => [undefined, "obsolete"].includes(status(tile.format)));
+    if (missing && !requested.current) {
+      requested.current = true;
+      void prepare(kit);
+      return;
+    }
+    if (!kit.artifacts.some((item) => inFlight.includes(item.status))) return;
     let cancelled = false;
     const timer = setTimeout(() => {
       void loadPromotionKit(base)
@@ -53,55 +86,56 @@ export function PersonalPromotionKit({ base, title, onClose }: { base: string; t
       clearTimeout(timer);
     };
   }, [kit, base]);
-  async function prepare() {
-    setBusy("prepare");
+  async function prepare(current: Kit) {
     try {
       setKit(
         await postJson(
           `${base}/renders`,
           {
-            fingerprint: kit!.fingerprint,
-            publishedRevision: kit!.publishedRevision,
-            compositionRevision: kit!.compositionRevision,
+            fingerprint: current.fingerprint,
+            publishedRevision: current.publishedRevision,
+            compositionRevision: current.compositionRevision,
           },
           promotionKitSchema,
         ),
       );
       setError("");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not prepare your materials.");
-    } finally {
-      setBusy(null);
+      setError(e instanceof Error ? e.message : "Could not create your materials.");
     }
   }
-  async function download(format: string) {
-    if (!kit) return;
-    setBusy("download");
+  async function download(format: Format) {
     try {
       const content = await getBlob(artifact(format));
-      const extension = content.type === "application/zip" ? "zip" : format === "carousel" ? "pdf" : "png";
+      const extension =
+        { "application/zip": "zip", "application/pdf": "pdf", "image/jpeg": "jpg" }[content.type] ?? "png";
       downloadFile(content, content.type, `promotion-${format}.${extension}`);
       setError("");
     } catch (error) {
       setError(error instanceof Error ? error.message : "Could not download these materials.");
-    } finally {
-      setBusy(null);
     }
   }
-  const artifact = (format: string, preview = false) =>
+  const artifact = (format: Format, preview = false) =>
     `${base}/artifact?format=${encodeURIComponent(format)}&revision=${kit!.publishedRevision}&fingerprint=${kit!.fingerprint}${preview ? "&download=false" : ""}`;
+  const status = (format: Format) => kit?.artifacts.find((item) => item.format === format)?.status;
   return (
     <Panel>
       <PanelHeader title={title}>
         {kit && (
-          <Button
-            icon
-            aria-label="Personalize promotion materials"
-            title="Personalize promotion materials"
-            onClick={showEditing}
-          >
-            <IconPlus />
-          </Button>
+          <>
+            <Button
+              onClick={() =>
+                void copyText(`${kit.source?.title ?? title}\n${kit.copy.whyAttend}\n${kit.registrationUrl}`, {
+                  copied: "Post copied",
+                  failed: "Your browser could not copy the post",
+                  notify: toast,
+                })
+              }
+            >
+              Copy post
+            </Button>
+            <Button onClick={showEditing}>Customize</Button>
+          </>
         )}
         {onClose && <CloseButton label="Close promotion materials" onClick={onClose} />}
       </PanelHeader>
@@ -111,28 +145,33 @@ export function PersonalPromotionKit({ base, title, onClose }: { base: string; t
           <div class="pk-stack">
             {kit.stale && (
               <Alert tone="warn">
-                Unavailable sessions have been removed from this draft. Use the + button to review and save your
-                materials to continue.
+                Some sessions in your materials are no longer on the agenda. Choose Customize to review them.
               </Alert>
             )}
-            <p>Your downloads and registration link credit referrals to you.</p>
-            <ExternalLink href={kit.registrationUrl}>Your registration referral link</ExternalLink>
-            <div class="pk-promotion-kit__actions">
-              <Button onClick={prepare} loading={busy === "prepare"} disabled={kit.stale || busy === "download"}>
-                Prepare downloads
-              </Button>
-              <Button
-                onClick={() =>
-                  void copyText(`${kit.source?.title ?? title}\n${kit.copy.whyAttend}\n${kit.registrationUrl}`, {
-                    copied: "Post and registration link copied",
-                    failed: "Your browser could not copy the post",
-                    notify: toast,
-                  })
-                }
-              >
-                Copy post and registration link
-              </Button>
-            </div>
+            <ul class="pk-promotion-gallery">
+              {leading}
+              {tiles.map((tile) => {
+                const ready = status(tile.format) === "rendered";
+                return (
+                  <PromotionTile
+                    key={tile.format}
+                    name={tile.name}
+                    detail={tile.detail}
+                    stacked={"stacked" in tile}
+                    previewSrc={ready ? artifact(tile.format, true) : undefined}
+                    previewAlt={`Preview of your ${tile.name.toLowerCase()}`}
+                    pending={status(tile.format) === "failed" ? "Couldn't create this" : "Creating…"}
+                    action={
+                      <DownloadAction
+                        label={`Download ${tile.name.toLowerCase()} (${tile.type})`}
+                        disabled={!ready}
+                        onDownload={() => download(tile.format)}
+                      />
+                    }
+                  />
+                );
+              })}
+            </ul>
             <PromotionCompositionEditor
               open={editing}
               key={kit.compositionRevision}
@@ -141,46 +180,10 @@ export function PersonalPromotionKit({ base, title, onClose }: { base: string; t
               onCancel={closeEditing}
               onSaved={(value) => {
                 setKit(value);
+                requested.current = false;
                 void closeEditing();
               }}
             />
-            <ul>
-              {promotionFormatSchema.options.map((format) => {
-                const state = kit.artifacts.find((item) => item.format === format);
-                return (
-                  <li key={format}>
-                    {state?.status === "rendered" ? (
-                      <a
-                        href={artifact(format)}
-                        download
-                        aria-disabled={Boolean(busy)}
-                        onClick={(event) => {
-                          if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
-                            return;
-                          event.preventDefault();
-                          if (!busy) void download(format);
-                        }}
-                      >
-                        {format === "carousel" ? "Carousel PDF" : `${format} images`}
-                      </a>
-                    ) : (
-                      <span>
-                        {format}: {state?.status ?? "not prepared"}
-                      </span>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-            {kit.artifacts.some((item) => item.format === "portrait" && item.status === "rendered") && (
-              <img
-                class="pk-promotion-kit__preview"
-                src={artifact("portrait", true)}
-                width="1080"
-                height="1350"
-                alt="Preview of your promotion materials"
-              />
-            )}
           </div>
         )}
       </PanelBody>

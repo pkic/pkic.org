@@ -97,7 +97,14 @@ it("saves personal copy and ordered panels through the canonical contract withou
   expect(promotionCompositionSaveSchema.safeParse({ ...request, userId: "another-user" }).success).toBe(false);
 });
 
-it("keeps a stale attendee draft editable while disabling exports", async () => {
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+const buttonNamed = (name: string) =>
+  [...root.querySelectorAll<HTMLButtonElement>("button")].find(
+    (button) => button.textContent === name || button.getAttribute("aria-label") === name,
+  );
+
+it("keeps a stale attendee draft editable while holding back renders and downloads", async () => {
   const draft = promotionKitSchema.parse({
     ...kit,
     occurrenceId: null,
@@ -106,43 +113,33 @@ it("keeps a stale attendee draft editable while disabling exports", async () => 
     composition: defaultPromotionComposition(true),
     compositionRevision: 1,
   });
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(
-      async (request) =>
-        new Response(
-          JSON.stringify(
-            String(request).includes("/sessions")
-              ? { occurrences: [], page: { limit: 25, offset: 0, total: 0 } }
-              : draft,
-          ),
-          { headers: { "content-type": "application/json" } },
-        ),
+  const fetcher = vi.fn(async (request: RequestInfo | URL, init?: RequestInit) =>
+    json(
+      init?.method === "POST"
+        ? draft
+        : String(request).includes("/sessions")
+          ? { occurrences: [], page: { limit: 25, offset: 0, total: 0 } }
+          : draft,
     ),
   );
+  vi.stubGlobal("fetch", fetcher);
   root = document.createElement("div");
   document.body.append(root);
-  await act(() =>
-    render(
-      <PersonalPromotionKit base="/api/v1/events/event/promotion" title="Your attendee promotion materials" />,
-      root,
-    ),
+  await act(() => render(<PersonalPromotionKit base="/api/v1/events/event/promotion" title="Your materials" />, root));
+  await vi.waitFor(() =>
+    expect(root.querySelector('[role="alert"]')?.textContent).toContain("no longer on the agenda"),
   );
-  await vi.waitFor(() => expect(root.querySelector('[role="alert"]')?.textContent).toContain("Unavailable sessions"));
-  expect(
-    [...root.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent === "Prepare downloads")
-      ?.disabled,
-  ).toBe(true);
-  await act(() => root.querySelector<HTMLButtonElement>('[aria-label="Personalize promotion materials"]')!.click());
+  expect(fetcher.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+  expect(buttonNamed("Download tall post (JPEG)")?.disabled).toBe(true);
+  await act(() => buttonNamed("Customize")!.click());
   expect(root.querySelector("dialog form")).not.toBeNull();
-  expect(root.querySelector("a[download]")).toBeNull();
 });
 
 it("keeps a personal editor draft through browser Back and Forward using shared dialog navigation", async () => {
   window.history.replaceState({}, "", "/portal/#/events/example/promotion");
   vi.stubGlobal(
     "fetch",
-    vi.fn(async () => new Response(JSON.stringify(kit), { headers: { "content-type": "application/json" } })),
+    vi.fn(async () => json(kit)),
   );
   root = document.createElement("div");
   document.body.append(root);
@@ -150,7 +147,7 @@ it("keeps a personal editor draft through browser Back and Forward using shared 
     render(<PersonalPromotionKit base="/api/v1/events/example/promotion" title="Your materials" />, root),
   );
   await vi.waitFor(() => expect(root.querySelector("dialog")).not.toBeNull());
-  await act(() => root.querySelector<HTMLButtonElement>('[aria-label="Personalize promotion materials"]')!.click());
+  await act(() => buttonNamed("Customize")!.click());
   const dialog = root.querySelector<HTMLDialogElement>("dialog")!;
   expect(dialog.open).toBe(true);
   await typeInto(controlFor(dialog, "Your short description"), "Keep this personal draft while navigating.");
@@ -167,19 +164,24 @@ it("keeps a personal editor draft through browser Back and Forward using shared 
   expect(controlFor(dialog, "Your short description").value).toBe("Keep this personal draft while navigating.");
 });
 
-it("shows prepare progress until the response and allows retry after a refusal", async () => {
-  let finish!: (response: Response) => void;
+it("requests the missing materials once, shows a refusal, and previews thumbnails once rendered", async () => {
+  const fingerprint = "a".repeat(64);
+  const rendered = promotionKitSchema.parse({
+    ...kit,
+    fingerprint,
+    artifacts: ["portrait", "square", "landscape", "carousel"].map((format) => ({
+      format,
+      status: "rendered",
+      attempts: 1,
+    })),
+  });
   let posts = 0;
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (_request, init?: RequestInit) => {
-      if (init?.method === "POST") {
-        posts++;
-        return new Promise<Response>((resolve) => {
-          finish = resolve;
-        });
-      }
-      return new Response(JSON.stringify(kit), { headers: { "content-type": "application/json" } });
+    vi.fn(async (_request: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method !== "POST") return json({ ...kit, fingerprint });
+      posts++;
+      return json({ error: { code: "FAILED", message: "Try creating your materials again." } }, 503);
     }),
   );
   root = document.createElement("div");
@@ -187,37 +189,30 @@ it("shows prepare progress until the response and allows retry after a refusal",
   await act(() =>
     render(<PersonalPromotionKit base="/api/v1/events/example/promotion" title="Your materials" />, root),
   );
-  await vi.waitFor(() => expect(root.textContent).toContain("Prepare downloads"));
-  const button = [...root.querySelectorAll<HTMLButtonElement>("button")].find(
-    (item) => item.textContent === "Prepare downloads",
-  )!;
-  await act(() => button.click());
-  expect(button.getAttribute("aria-busy")).toBe("true");
-  expect(button.querySelector(".pk-btn__spinner")).not.toBeNull();
-  await act(() => button.click());
+  await vi.waitFor(() => expect(root.textContent).toContain("Try creating your materials again"));
   expect(posts).toBe(1);
-  await act(async () =>
-    finish(
-      new Response(JSON.stringify({ error: { code: "FAILED", message: "Try preparing your materials again." } }), {
-        status: 503,
-        headers: { "content-type": "application/json" },
-      }),
-    ),
+  expect(root.textContent).not.toContain("Prepare downloads");
+  expect(root.querySelector(".pk-promotion-tile img")).toBeNull();
+
+  render(null, root);
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => json(rendered)),
   );
-  await vi.waitFor(() => expect(root.textContent).toContain("Try preparing your materials again"));
-  expect(button.hasAttribute("aria-busy")).toBe(false);
-  await act(() => button.click());
-  expect(posts).toBe(2);
-  await act(async () => finish(new Response(JSON.stringify(kit), { headers: { "content-type": "application/json" } })));
-  await vi.waitFor(() => expect(button.hasAttribute("aria-busy")).toBe(false));
+  await act(() =>
+    render(<PersonalPromotionKit base="/api/v1/events/example/promotion" title="Your materials" />, root),
+  );
+  await vi.waitFor(() => expect(root.querySelectorAll(".pk-promotion-tile img")).toHaveLength(4));
+  for (const image of root.querySelectorAll("img")) expect(image.getAttribute("src")).toContain("download=false");
+  expect(buttonNamed("Download carousel (PDF)")?.disabled).toBe(false);
 });
 
-it("keeps Share focused and opens optional materials as their own view", async () => {
+it("opens Share on one gallery with the badge first and the invite link below", async () => {
   history.replaceState({}, "", "/portal/#/events/example/promotion");
-  const fetcher = vi.fn(
-    async () => new Response(JSON.stringify(kit), { headers: { "content-type": "application/json" } }),
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => json(kit)),
   );
-  vi.stubGlobal("fetch", fetcher);
   root = document.createElement("div");
   document.body.append(root);
   await act(() =>
@@ -231,20 +226,9 @@ it("keeps Share focused and opens optional materials as their own view", async (
       root,
     ),
   );
-  expect(root.querySelector("[data-og-badge-img]")).not.toBeNull();
+  await vi.waitFor(() => expect(root.querySelectorAll(".pk-promotion-tile")).toHaveLength(5));
+  expect(root.querySelector(".pk-promotion-tile__name")?.textContent).toBe("Badge");
+  expect(root.querySelector("[data-og-badge-img]")).toBeNull();
   expect(root.textContent).not.toContain("Prepare downloads");
   expect(root.querySelector("table")).toBeNull();
-  expect(fetcher).not.toHaveBeenCalled();
-  const create = [...root.querySelectorAll<HTMLButtonElement>("button")].find(
-    (button) => button.textContent === "Create promotion materials",
-  )!;
-  await act(() => create.click());
-  await vi.waitFor(() => expect(root.textContent).toContain("Prepare downloads"));
-  expect(root.querySelector("[data-og-badge-img]")).toBeNull();
-  await act(async () => {
-    history.back();
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  });
-  expect(root.querySelector("[data-og-badge-img]")).not.toBeNull();
-  expect(root.textContent).not.toContain("Prepare downloads");
 });

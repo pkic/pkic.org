@@ -22,7 +22,6 @@ const formatLabels = {
   landscape: "Landscape images",
   square: "Square images",
   portrait: "Portrait images",
-  panel: "Panel images",
 } as const;
 export function PromotionBulkPreparation({
   slug,

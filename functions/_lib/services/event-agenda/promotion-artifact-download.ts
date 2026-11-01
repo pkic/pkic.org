@@ -3,6 +3,7 @@ import type { DatabaseLike, Env } from "../../types";
 import { promotionArtifactQuerySchema } from "../../../../assets/shared/schemas/event-promotion-kit";
 import { prepareOwnPromotionRequest } from "./promotion-request-context";
 import { promotionRenderLocation } from "./promotion-render-request";
+import { promotionThumbnailKey } from "./promotion-storage-keys";
 import { eventReadIdSql } from "../events/selection";
 import { batchFirst } from "../../db/pagination";
 import { buildDownloadDisposition } from "../../utils/download-disposition";
@@ -23,13 +24,10 @@ export async function downloadOwnPromotionArtifact(
   const location = await promotionRenderLocation(source.actor.subjectId, occurrenceId, query.fingerprint, query.format),
     event = eventReadIdSql({ slug });
   if (!env.ASSETS_BUCKET) throw new AppError(503, "PROMOTION_STORAGE_UNAVAILABLE", "Promotion storage is unavailable.");
-  let cached = await env.ASSETS_BUCKET.get(location.key);
-  if (
-    query.download === "false" &&
-    query.format !== "carousel" &&
-    cached?.httpMetadata?.contentType === "application/zip"
-  )
-    cached = await env.ASSETS_BUCKET.get(`${location.key}.preview.png`);
+  // A preview is the small gallery thumbnail, never the full file.
+  const cached = await env.ASSETS_BUCKET.get(
+    query.download === "false" ? promotionThumbnailKey(location.key) : location.key,
+  );
   const loaded = await db.batch([
     ...source.statements,
     db
@@ -52,7 +50,9 @@ export async function downloadOwnPromotionArtifact(
   return new Response(cached.body, {
     headers: {
       "content-type": type,
-      "cache-control": "private, no-store, max-age=0",
+      // The URL names one fingerprint, so its bytes never change; a thumbnail may stay in this browser.
+      "cache-control":
+        query.download === "false" ? "private, max-age=86400, immutable" : "private, no-store, max-age=0",
       "content-disposition": buildDownloadDisposition(`promotion-${query.format}`, type, "promotion-materials"),
     },
   });

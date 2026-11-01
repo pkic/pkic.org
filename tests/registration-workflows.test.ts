@@ -362,8 +362,8 @@ describe("registration workflows", () => {
       await queryAll<{ id: string }>(
         env.DB,
         `SELECT brj.id
-           FROM badge_render_jobs brj
-           JOIN referral_codes rc ON rc.code = brj.referral_code
+           FROM event_promotion_renders brj
+           JOIN referral_codes rc ON brj.id = 'badge:' || rc.code
           WHERE rc.owner_type = 'registration' AND rc.owner_id = ?`,
         [createdPayload.registrationId],
       ),
@@ -804,8 +804,8 @@ describe("registration workflows", () => {
       await queryAll<{ id: string }>(
         env.DB,
         `SELECT brj.id
-           FROM badge_render_jobs brj
-           JOIN referral_codes rc ON rc.code = brj.referral_code
+           FROM event_promotion_renders brj
+           JOIN referral_codes rc ON brj.id = 'badge:' || rc.code
           WHERE rc.owner_type = 'registration' AND rc.owner_id = ?`,
         [payload.registrationId],
       ),

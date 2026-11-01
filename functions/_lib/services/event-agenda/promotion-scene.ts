@@ -109,7 +109,6 @@ export const promotionDimensions = {
   landscape: [1200, 630],
   square: [1080, 1080],
   portrait: [1080, 1350],
-  panel: [1200, 630],
   carousel: [1080, 1350],
 } as const;
 export type PromotionFormat = keyof typeof promotionDimensions;
@@ -137,7 +136,7 @@ export function buildPromotionPages(
   const scale = width / 1080,
     margin = 80 * scale,
     usable = width - margin * 2;
-  const footer = height - (format === "landscape" || format === "panel" ? 95 : 210);
+  const footer = height - (format === "landscape" ? 95 : 210);
   const sponsorBottom = height < 800 ? height - (data.composition?.qrCode ? 180 : 130) : footer;
   const pages: PromotionPage[] = [];
   const composition: PromotionComposition =
@@ -243,13 +242,11 @@ export function buildPromotionPages(
     data.audience === "attendee" ? `I’m attending ${data.agenda.eventName ?? "this event"}` : data.occurrence.title;
   if (format !== "carousel") {
     const credits =
-      format === "panel"
+      people.length > 1
         ? people
-        : people.length > 1
-          ? people
-          : [people.find((person) => person.userId === data.actorId) ?? people[0]].filter(
-              (person): person is NonNullable<typeof person> => Boolean(person),
-            );
+        : [people.find((person) => person.userId === data.actorId) ?? people[0]].filter(
+            (person): person is NonNullable<typeof person> => Boolean(person),
+          );
     const summary = selected.includes("content")
       ? composition.summary ||
         (composition.content === "abstract" ? data.occurrence.description : data.copy.whyAttend) ||
