@@ -43,21 +43,25 @@ export function installJoinApplicationValidation(
     }
   }
 
-  function validate(): boolean {
+  /** What the contract says about the form as it stands, or null when there is no contract to hold it to. */
+  function check(): Record<string, string> | null {
     const schema = contract();
-    if (!schema) return true;
+    if (!schema) return null;
     const result = schema.safeParse(read());
-    present(result.success ? {} : normalizeValidation(result.error).fields);
-    return result.success;
+    return result.success ? {} : normalizeValidation(result.error).fields;
+  }
+
+  function validate(): boolean {
+    const fields = check();
+    if (!fields) return true;
+    present(fields);
+    return Object.keys(fields).length === 0;
   }
 
   /** A control that has been left says what the contract says about it, and shows it is right when it is. */
-  function touch(control: FormControl): void {
-    const schema = contract();
+  function touch(control: FormControl, fields: Record<string, string>): void {
     const slot = findControlFieldError(control);
-    if (!schema || !slot || control.closest("[data-membership-legal-field]")) return;
-    const result = schema.safeParse(read());
-    const fields = result.success ? {} : normalizeValidation(result.error).fields;
+    if (!slot || control.closest("[data-membership-legal-field]")) return;
     const message = Object.entries(fields).find(
       ([path]) => !isAgreement(path) && findFieldErrorTarget(form, path) === slot,
     )?.[1];
@@ -76,8 +80,11 @@ export function installJoinApplicationValidation(
       )
     )
       return;
-    if (attempted) validate();
-    if (attempted || event.type !== "input") touch(control);
+    if (!attempted && event.type === "input") return;
+    const fields = check();
+    if (!fields) return;
+    if (attempted) present(fields);
+    touch(control, fields);
   };
   form.addEventListener("focusout", onControl);
   form.addEventListener("change", onControl);

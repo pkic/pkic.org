@@ -15,7 +15,10 @@ export function restoreTemplateMarkdown(markdown: string): string {
 }
 
 const CODE_OR_ENCODED_CHARACTER =
-  /(```[\s\S]*?```|`[^`\n]*`)|&(lt|gt);|&amp;((?:#\d{1,7}|#[xX][0-9a-fA-F]{1,6}|[a-zA-Z]+);)?/g;
+  /(`{3,}[\s\S]*?`{3,}|~{3,}[\s\S]*?~{3,}|(`+)(?!`)[^\n]*?[^`\n]\2(?!`))|&(lt|gt);|&amp;((?:#\d{1,7}|#[xX][0-9a-fA-F]{1,6}|[a-zA-Z]+);)?/g;
+
+/** Where a `>` would open a quote: at a line start, or after list markers and other quote markers. */
+const QUOTE_POSITION = /(^|\n)[ ]{0,3}(?:(?:[-+*]|\d{1,9}[.)])[ ]+)*$/;
 
 /**
  * The serializer HTML-encodes a typed `&`, `<` and `>`, so a bio saved from the editor would read
@@ -27,10 +30,17 @@ const CODE_OR_ENCODED_CHARACTER =
 export function plainAmpersands(markdown: string): string {
   return markdown.replace(
     CODE_OR_ENCODED_CHARACTER,
-    (match, code: string | undefined, bracket: string | undefined, reference: string | undefined, offset: number) => {
+    (
+      match,
+      code: string | undefined,
+      _ticks: string | undefined,
+      bracket: string | undefined,
+      reference: string | undefined,
+      offset: number,
+    ) => {
       if (code) return code;
       if (bracket === "lt") return /^[A-Za-z/!?]/.test(markdown.slice(offset + match.length)) ? "\\<" : "<";
-      if (bracket === "gt") return /(^|\n)[ ]{0,3}$/.test(markdown.slice(0, offset)) ? "\\>" : ">";
+      if (bracket === "gt") return QUOTE_POSITION.test(markdown.slice(0, offset)) ? "\\>" : ">";
       return reference && isKnownCharacterReference(reference) ? match : `&${reference ?? ""}`;
     },
   );

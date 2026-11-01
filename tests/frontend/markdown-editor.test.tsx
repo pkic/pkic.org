@@ -215,6 +215,9 @@ describe("visual template highlighting", () => {
     expect(plainAmpersands("&lt;script&gt;alert(1)&lt;/script&gt;")).toBe("\\<script>alert(1)\\</script>");
     expect(plainAmpersands("&gt; not a quote\n&gt; still not")).toBe("\\> not a quote\n\\> still not");
     expect(plainAmpersands("`a &lt; b` and &amp;lt;")).toBe("`a &lt; b` and &amp;lt;");
+    expect(plainAmpersands("``a ` &lt; b`` and &lt;")).toBe("``a ` &lt; b`` and <");
+    expect(plainAmpersands("~~~\n&lt;b&gt;\n~~~\n&lt;")).toBe("~~~\n&lt;b&gt;\n~~~\n<");
+    expect(plainAmpersands("- &gt; x\n1. &gt; y\n- a &gt; b")).toBe("- \\> x\n1. \\> y\n- a > b");
     const host = document.createElement("div");
     render(<Markdown markdown={"x < y > z and \\<b>bold\\</b>"} />, host);
     expect(host.textContent).toBe("x < y > z and <b>bold</b>");

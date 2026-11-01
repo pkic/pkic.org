@@ -474,7 +474,7 @@ async function main(): Promise<void> {
       try {
         const configuredCategory = categories.find((entry) => entry.code === category);
         if (!configuredCategory) throw new Error("Choose an available membership category");
-        const formFields = (await getApplicationDefinition()).form?.fields ?? [];
+        const formFields = applicationFormFields;
         let payload: object;
         let applicantName = signedInName;
         if (identity) {
