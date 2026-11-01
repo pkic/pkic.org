@@ -17,8 +17,17 @@ import { personalPromotionImageCacheKey } from "../../../assets/shared/personal-
  */
 
 import { ensureResvgWasm } from "../utils/resvg";
+import {
+  encodeRenderedPng,
+  BADGE_IMAGE_OUTPUT,
+  THUMBNAIL_OUTPUT,
+  type RenderedImageOutput,
+} from "../utils/image-encoding";
+import { promotionThumbnailKey } from "./event-agenda/promotion-storage";
+import { promotionIsRetained } from "../../../assets/shared/promotion-retention";
 import { renderDonationBadgeSvg } from "./og-badge";
 import { first, all } from "../db/queries";
+import { AppError } from "../errors";
 import { fetchGravatar } from "./gravatar";
 import type { Env } from "../types";
 import { fetchHeroImage, fetchStaticAsset, uint8ToBase64 } from "./og-badge-hero-image";
@@ -153,12 +162,9 @@ export async function renderBadgeSourcePng(
 // ─── Cache management ─────────────────────────────────────────────────────────
 
 /**
- * Convert a PNG buffer to JPEG (via the Images binding when available) and
- * store the result in R2. Falls back to storing raw PNG in local dev where the
- * IMAGES binding is absent — content-type is set correctly in both cases so the
+ * Encode a PNG buffer (via the Images binding when available) and store the
+ * result in R2. The content-type follows what was stored, so the
  * outbox can read it back without assuming JPEG.
- *
- * Returns the stored content-type so callers can log or branch if needed.
  * Throws on R2 write failure (callers should catch as appropriate).
  */
 async function pngToR2(
@@ -166,29 +172,12 @@ async function pngToR2(
   r2Key: string,
   customMetadata: Record<string, string>,
   env: Pick<Env, "ASSETS_BUCKET" | "IMAGES">,
+  output: RenderedImageOutput = BADGE_IMAGE_OUTPUT,
 ): Promise<void> {
   if (!env.ASSETS_BUCKET) throw new Error("ASSETS_BUCKET is required to cache an OG badge");
 
-  if (env.IMAGES) {
-    const pngStream = new ReadableStream<Uint8Array>({
-      start(ctrl) {
-        ctrl.enqueue(png);
-        ctrl.close();
-      },
-    });
-    const result = await env.IMAGES.input(pngStream).transform({}).output({ format: "image/jpeg", quality: 95 });
-    const jpegBuf = await (await result.response()).arrayBuffer();
-    await env.ASSETS_BUCKET.put(r2Key, jpegBuf, {
-      httpMetadata: { contentType: "image/jpeg" },
-      customMetadata,
-    });
-  } else {
-    // Fallback for local dev: store raw PNG.
-    await env.ASSETS_BUCKET.put(r2Key, png.buffer as ArrayBuffer, {
-      httpMetadata: { contentType: "image/png" },
-      customMetadata,
-    });
-  }
+  const image = await encodeRenderedPng(env, png, output);
+  await env.ASSETS_BUCKET.put(r2Key, image.bytes, { httpMetadata: { contentType: image.contentType }, customMetadata });
 }
 
 /**
@@ -197,10 +186,15 @@ async function pngToR2(
  */
 export async function renderAndCacheBadge(code: string, env: BadgeCacheEnv, origin: string): Promise<void> {
   const source = await readBadgeSource(env.DB, code);
-  if (!source) throw new Error(`Badge source not found for referral code ${code}`);
+  if (!source) throw new AppError(404, "BADGE_SOURCE_NOT_FOUND", "This badge has no registration or proposal.");
+  // The retention sweep removed this event's badges; a profile change must not bring them back.
+  if (!promotionIsRetained({ startsAt: source.starts_at, endsAt: source.ends_at })) return;
   const metadata = personalBadgeCacheMetadata(code, source);
   const png = await renderBadgeSourcePng(code, source, env, origin);
-  await pngToR2(png, personalPromotionImageCacheKey(code), metadata, env);
+  const key = personalPromotionImageCacheKey(code);
+  await pngToR2(png, key, metadata, env);
+  // The gallery previews the badge from a small thumbnail with the same freshness metadata.
+  await pngToR2(png, promotionThumbnailKey(key), metadata, env, THUMBNAIL_OUTPUT);
 }
 
 /**

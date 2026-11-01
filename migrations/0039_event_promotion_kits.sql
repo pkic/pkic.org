@@ -59,6 +59,24 @@ FROM event_agenda_promotion_render_jobs
 WHERE status IN ('queued','retrying','rendering');
 DROP TABLE event_agenda_promotion_render_jobs;
 
+-- Badges join the same render queue: one row per referral code, its revision
+-- counting re-render requests. Carry every badge row forward, so cached images
+-- keep matching their revision; unfinished work resumes under a fresh lease.
+INSERT INTO event_promotion_renders
+ (id,event_id,occurrence_id,user_id,revision,fingerprint,format,origin,cache_key,
+  status,attempts,next_attempt_at,last_error,created_at,updated_at,requested_at)
+SELECT job.id,referral.event_id,NULL,
+ CASE referral.owner_type WHEN 'registration' THEN registration.user_id ELSE referral.created_by_user_id END,
+ job.requested_generation,NULL,'badge','','og-badges/'||referral.code,
+ CASE WHEN job.status='rendering' THEN 'queued' ELSE job.status END,job.attempts,
+ CASE WHEN job.status='rendering' THEN strftime('%Y-%m-%dT%H:%M:%fZ','now') ELSE job.next_attempt_at END,
+ job.last_error,job.created_at,COALESCE(job.rendered_at,job.updated_at),job.updated_at
+FROM badge_render_jobs job
+JOIN referral_codes referral ON referral.code=job.referral_code
+LEFT JOIN registrations registration ON referral.owner_type='registration' AND registration.id=referral.owner_id
+WHERE CASE referral.owner_type WHEN 'registration' THEN registration.user_id ELSE referral.created_by_user_id END IS NOT NULL;
+DROP TABLE badge_render_jobs;
+
 
 -- A bulk request contains resource references only. The dispatcher prepares
 -- bounded recipients for the existing render queue; it never renders a full

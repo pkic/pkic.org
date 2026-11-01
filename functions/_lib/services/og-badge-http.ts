@@ -1,5 +1,6 @@
 import type { Env } from "../types";
 import { applyDownloadDisposition } from "../utils/download-disposition";
+import { encodeRenderedPng, BADGE_IMAGE_OUTPUT, type RenderedImageOutput } from "../utils/image-encoding";
 
 const JPEG_CONTENT_TYPE = "image/jpeg";
 const PNG_CONTENT_TYPE = "image/png";
@@ -12,6 +13,8 @@ interface BadgeResponseOptions {
   isDownload: boolean;
   downloadName: string;
   fallbackDownloadName: string;
+  /** The stored encoding; a full-size badge unless the caller asks for a thumbnail. */
+  output?: RenderedImageOutput;
 }
 
 function finalizeBadgeResponse(response: Response, options: BadgeResponseOptions): Response {
@@ -49,39 +52,26 @@ export async function readCachedBadge(options: BadgeResponseOptions): Promise<Re
 
 export async function serveGeneratedBadge(
   png: Uint8Array,
-  images: Env["IMAGES"],
+  env: Pick<Env, "IMAGES">,
   executionCtx: Pick<ExecutionContext, "waitUntil">,
   options: BadgeResponseOptions,
 ): Promise<Response> {
-  if (options.bucket && images) {
-    try {
-      const pngStream = new ReadableStream<Uint8Array>({
-        start(controller) {
-          controller.enqueue(png);
-          controller.close();
-        },
-      });
-      const transformed = await images.input(pngStream).transform({}).output({ format: "image/jpeg", quality: 95 });
-      const jpeg = await (await transformed.response()).arrayBuffer();
-      executionCtx.waitUntil(
-        options.bucket.put(options.cacheKey, jpeg, {
-          httpMetadata: { contentType: JPEG_CONTENT_TYPE },
-          customMetadata: options.cacheMetadata,
-        }),
-      );
-      return finalizeBadgeResponse(
-        new Response(jpeg, { headers: badgeHeaders(JPEG_CONTENT_TYPE, "MISS", options) }),
-        options,
-      );
-    } catch {
-      // Local development and transient image-transform failures use the PNG.
-    }
+  let image = { bytes: png, contentType: PNG_CONTENT_TYPE };
+  try {
+    image = await encodeRenderedPng(env, png, options.output ?? BADGE_IMAGE_OUTPUT);
+  } catch {
+    // Local development and transient image-transform failures use the PNG.
   }
-
+  // Only an encoded image is cached; a PNG fallback is rendered again next time.
+  if (options.bucket && image.contentType !== PNG_CONTENT_TYPE)
+    executionCtx.waitUntil(
+      options.bucket.put(options.cacheKey, image.bytes, {
+        httpMetadata: { contentType: image.contentType },
+        customMetadata: options.cacheMetadata,
+      }),
+    );
   return finalizeBadgeResponse(
-    new Response(png.buffer as ArrayBuffer, {
-      headers: badgeHeaders(PNG_CONTENT_TYPE, "MISS", options),
-    }),
+    new Response(image.bytes as Uint8Array<ArrayBuffer>, { headers: badgeHeaders(image.contentType, "MISS", options) }),
     options,
   );
 }

@@ -1,4 +1,4 @@
-import { promotionKitSchema } from "../../../../assets/shared/schemas/event-promotion-kit";
+import { promotionKitSchema, promotionFormatSchema } from "../../../../assets/shared/schemas/event-promotion-kit";
 import type { DatabaseLike, D1StatementResult } from "../../types";
 import { promotionReferralOwnerSql } from "./promotion-referral";
 import { eventReadIdSql, type EventReadSelection } from "../events/selection";
@@ -12,13 +12,22 @@ export function preparePromotionRenderStatus(
   fingerprint?: string,
 ) {
   const scope = eventReadIdSql(event);
-  return db
-    .prepare(
-      fingerprint
-        ? `SELECT format,status,attempts,fingerprint FROM event_promotion_renders WHERE event_id=${scope.sql} AND user_id=? AND occurrence_id IS ? AND fingerprint=? ORDER BY format LIMIT 5`
-        : `SELECT format,status,attempts,fingerprint FROM (SELECT format,status,attempts,fingerprint,row_number() OVER(PARTITION BY format ORDER BY COALESCE(requested_at,created_at) DESC,id DESC) AS ordinal FROM event_promotion_renders WHERE event_id=${scope.sql} AND user_id=? AND occurrence_id IS ?) WHERE ordinal=1 ORDER BY format LIMIT 5`,
-    )
-    .bind(...scope.bindings, userId, occurrenceId, ...(fingerprint ? [fingerprint] : []));
+  return (
+    db
+      .prepare(
+        fingerprint
+          ? `SELECT format,status,attempts,fingerprint FROM event_promotion_renders WHERE event_id=${scope.sql} AND user_id=? AND occurrence_id IS ? AND format IN(SELECT value FROM json_each(?)) AND fingerprint=? ORDER BY format LIMIT 5`
+          : `SELECT format,status,attempts,fingerprint FROM (SELECT format,status,attempts,fingerprint,row_number() OVER(PARTITION BY format ORDER BY COALESCE(requested_at,created_at) DESC,id DESC) AS ordinal FROM event_promotion_renders WHERE event_id=${scope.sql} AND user_id=? AND occurrence_id IS ? AND format IN(SELECT value FROM json_each(?))) WHERE ordinal=1 ORDER BY format LIMIT 5`,
+      )
+      // Only kit formats: the owner's badge row and rows of a retired format never take a slot.
+      .bind(
+        ...scope.bindings,
+        userId,
+        occurrenceId,
+        JSON.stringify(promotionFormatSchema.options),
+        ...(fingerprint ? [fingerprint] : []),
+      )
+  );
 }
 /** Independent metrics and the stable owner code join the same source snapshot, before its artwork hash exists. */
 export function preparePromotionMetrics(

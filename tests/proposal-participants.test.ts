@@ -353,8 +353,8 @@ describe("proposal participants", () => {
       await queryAll<{ id: string }>(
         env.DB,
         `SELECT brj.id
-           FROM badge_render_jobs brj
-           JOIN referral_codes rc ON rc.code = brj.referral_code
+           FROM event_promotion_renders brj
+           JOIN referral_codes rc ON brj.id = 'badge:' || rc.code
           WHERE rc.owner_type = 'proposal' AND rc.owner_id = ?`,
         [payload.proposalId],
       ),
@@ -674,7 +674,7 @@ describe("proposal participants", () => {
       ).toHaveLength(0);
       expect(await queryAll(env.DB, "SELECT id FROM consent_acceptances")).toHaveLength(0);
       expect(await queryAll(env.DB, "SELECT code FROM referral_codes")).toHaveLength(0);
-      expect(await queryAll(env.DB, "SELECT id FROM badge_render_jobs")).toHaveLength(0);
+      expect(await queryAll(env.DB, "SELECT id FROM event_promotion_renders")).toHaveLength(0);
       expect(await queryAll(env.DB, "SELECT id FROM email_outbox ORDER BY id")).toEqual(proofOutbox);
     } finally {
       await env.DB.prepare("DROP TRIGGER IF EXISTS reject_proposal_submission_email").run();

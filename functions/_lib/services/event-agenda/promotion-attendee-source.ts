@@ -57,6 +57,7 @@ export async function buildAttendeePromotionSource(basis: PromotionSourceBasis, 
   ];
   const fingerprint = await sha256Hex(
     JSON.stringify({
+      template: PROMOTION_TEMPLATE_VERSION,
       event: visual.event,
       design: visual.design,
       brandingRevision: visual.brandingRevision,

@@ -1,0 +1,77 @@
+@layer components {
+  .pk-promotion-gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+    gap: var(--pk-4);
+    padding: 0;
+    margin: 0;
+    list-style: none;
+  }
+  .pk-promotion-tile {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pk-2);
+    min-width: 0;
+  }
+  .pk-promotion-tile__frame {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 9rem;
+    padding: var(--pk-2);
+    overflow: hidden;
+    background: var(--pk-surface-sunk);
+    border: 1px solid var(--pk-line-soft);
+    border-radius: var(--pk-radius-card);
+  }
+  .pk-promotion-tile__frame img {
+    min-width: 0;
+    max-width: 100%;
+    max-height: 100%;
+    border-radius: var(--pk-radius-sm);
+  }
+  /* Two slide edges behind the cover, the way apps show a multi-page post. */
+  .pk-promotion-tile__frame--stacked {
+    padding-inline-end: calc(var(--pk-2) + 0.75rem);
+    padding-block-end: calc(var(--pk-2) + 0.75rem);
+  }
+  .pk-promotion-tile__frame--stacked img {
+    box-shadow:
+      0.375rem 0.375rem 0 -1px var(--pk-surface),
+      0.375rem 0.375rem 0 0 var(--pk-line-strong),
+      0.75rem 0.75rem 0 -1px var(--pk-surface),
+      0.75rem 0.75rem 0 0 var(--pk-line-strong);
+  }
+  .pk-promotion-tile__pending {
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-sm);
+  }
+  .pk-promotion-tile__caption {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: var(--pk-2);
+  }
+  .pk-promotion-tile__text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .pk-promotion-tile__name {
+    font-weight: 600;
+  }
+  .pk-promotion-tile__detail {
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-sm);
+  }
+  @media (max-width: 30rem) {
+    .pk-promotion-gallery {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--pk-3);
+    }
+    .pk-promotion-tile__frame {
+      height: 7.5rem;
+    }
+  }
+}

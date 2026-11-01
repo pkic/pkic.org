@@ -284,6 +284,19 @@ describe("OG share links", () => {
     );
   });
 
+  it("serves the stored thumbnail beside the badge for gallery previews", async () => {
+    const code = await seedEventReferral();
+    const source = (await readBadgeSource(baseEnv.DB, code))!;
+    const thumbnail = { ...cachedImage("image/webp"), customMetadata: personalBadgeCacheMetadata(code, source) };
+    const get = vi.fn(async (key: string) => (key === `og-badges/${code}.thumb` ? thumbnail : null));
+    const environment = { ...baseEnv, ASSETS_BUCKET: { get } as unknown as Env["ASSETS_BUCKET"] } as Env;
+    const response = await callApi(environment, `/api/v1/registrations/referrals/${code}/badge?thumbnail=1`);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Type")).toBe("image/webp");
+    expect(response.headers.get("X-Cache")).toBe("HIT");
+    expect(mockedRenderBadgeSourcePng).not.toHaveBeenCalled();
+  });
+
   it("regenerates a cached image after the event promotion design changes", async () => {
     const code = await seedEventReferral();
     const before = (await readBadgeSource(baseEnv.DB, code))!;

@@ -2,6 +2,7 @@ import {
   personalPromotionImageQuerySchema,
   personalPromotionImageCacheKey,
 } from "../../../../../../assets/shared/personal-promotion-image";
+import { promotionIsRetained } from "../../../../../../assets/shared/promotion-retention";
 import { readBadgeSource, personalBadgeCacheMetadata } from "../../../../../_lib/services/og-badge-source";
 /**
  * Registration referral badge image endpoint
@@ -12,7 +13,8 @@ import { readBadgeSource, personalBadgeCacheMetadata } from "../../../../../_lib
  * local dev falls back to PNG when the Images binding is unavailable.
  *
  * The JPEG is cached in R2 (ASSETS_BUCKET, key "og-badges/{code}", or "og-badges/{code}/square")
- * on first render and served from cache on subsequent requests.
+ * on first render and served from cache on subsequent requests. `thumbnail=1` serves the small
+ * WebP preview stored beside it.
  */
 
 import { requestDb } from "../../../../../_lib/db/context";
@@ -20,6 +22,8 @@ import { dispatchRequestMethod, json } from "../../../../../_lib/http";
 import { resolveAppBaseUrl } from "../../../../../_lib/config";
 import { readCachedBadge, serveGeneratedBadge } from "../../../../../_lib/services/og-badge-http";
 import { renderBadgeSourcePng } from "../../../../../_lib/services/og-badge-prerender";
+import { promotionThumbnailKey } from "../../../../../_lib/services/event-agenda/promotion-storage";
+import { BADGE_IMAGE_OUTPUT, THUMBNAIL_OUTPUT } from "../../../../../_lib/utils/image-encoding";
 
 export async function onRequestGet(c: any): Promise<Response> {
   const code = c.req.param("code");
@@ -34,13 +38,16 @@ export async function onRequestGet(c: any): Promise<Response> {
       },
       400,
     );
-  const { format, download, name } = parsed.data;
-  const r2Key = personalPromotionImageCacheKey(code, format);
+  const { format, download, name, thumbnail } = parsed.data;
+  const imageKey = personalPromotionImageCacheKey(code, format);
+  const r2Key = thumbnail === "1" ? promotionThumbnailKey(imageKey) : imageKey;
   const isDownload = download === "1";
   const rawName = name ?? "";
 
   const source = await readBadgeSource(requestDb(c), code);
   if (!source) return json({ error: { code: "NOT_FOUND", message: "Unknown referral code" } }, 404);
+  if (!promotionIsRetained({ startsAt: source.starts_at, endsAt: source.ends_at }))
+    return json({ error: { code: "NOT_FOUND", message: "This badge is no longer available." } }, 404);
 
   const responseOptions = {
     bucket,
@@ -49,6 +56,7 @@ export async function onRequestGet(c: any): Promise<Response> {
     isDownload,
     downloadName: rawName,
     fallbackDownloadName: format === "square" ? "attendee-badge-square" : "attendee-badge",
+    output: thumbnail === "1" ? THUMBNAIL_OUTPUT : BADGE_IMAGE_OUTPUT,
   };
   const cached = await readCachedBadge(responseOptions);
   if (cached) return cached;
@@ -68,7 +76,7 @@ export async function onRequestGet(c: any): Promise<Response> {
     return json({ error: { code: "NOT_FOUND", message: "Unknown referral code" } }, 404);
   }
 
-  return serveGeneratedBadge(png, c.env.IMAGES, c.executionCtx, responseOptions);
+  return serveGeneratedBadge(png, c.env, c.executionCtx, responseOptions);
 }
 
 export async function onRequest(c: any): Promise<Response> {

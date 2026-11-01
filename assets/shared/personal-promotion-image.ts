@@ -20,6 +20,7 @@ export const PERSONAL_PROMOTION_IMAGE_DIMENSIONS = {
 export const personalPromotionImageQuerySchema = z.object({
   format: personalPromotionImageFormatSchema.default("landscape"),
   download: z.enum(["0", "1"]).optional(),
+  thumbnail: z.enum(["0", "1"]).optional(),
   name: z.string().max(512).optional(),
 });
 export function personalPromotionImageCacheKey(

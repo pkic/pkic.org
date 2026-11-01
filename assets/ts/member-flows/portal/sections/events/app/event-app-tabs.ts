@@ -22,6 +22,7 @@ import { eventRegistrationStanding, eventVenueLines, type ParticipantEventDetail
 import { participantScannerAccess } from "./participant-scanner-access";
 import { eventPhase } from "./event-timing";
 import { attendanceStanding } from "../../../../../shared/viewer-attendance";
+import { promotionIsOpen } from "../../../../../../shared/promotion-retention";
 
 type ScannerAccess = z.infer<typeof eventScannerAccessSchema>;
 
@@ -75,9 +76,14 @@ export function hasEventProposals(event: Pick<EventAppSubject, "participation">)
   return Boolean(event.participation?.proposals || event.participation?.speakerProposals);
 }
 
-/** Personal promotion is offered to speakers and confirmed attendees in every navigation surface. */
-export function hasEventPromotionMaterials(event: Pick<EventAppSubject, "participation" | "viewer">): boolean {
-  return hasEventProposals(event) || eventRegistrationStanding(event).status === "registered";
+/** Personal promotion is offered to speakers and confirmed attendees in every navigation surface, until the event ends. */
+export function hasEventPromotionMaterials(
+  event: Pick<EventAppSubject, "participation" | "viewer" | "startsAt" | "endsAt">,
+): boolean {
+  return (
+    promotionIsOpen({ startsAt: event.startsAt ?? null, endsAt: event.endsAt ?? null }) &&
+    (hasEventProposals(event) || eventRegistrationStanding(event).status === "registered")
+  );
 }
 
 /**

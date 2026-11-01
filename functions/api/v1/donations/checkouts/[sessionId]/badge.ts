@@ -61,5 +61,5 @@ export async function onRequestGet(c: any): Promise<Response> {
     return json({ pending: true }, 202);
   }
 
-  return serveGeneratedBadge(png, c.env.IMAGES, c.executionCtx, responseOptions);
+  return serveGeneratedBadge(png, c.env, c.executionCtx, responseOptions);
 }

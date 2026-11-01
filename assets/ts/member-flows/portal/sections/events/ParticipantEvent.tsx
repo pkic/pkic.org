@@ -164,7 +164,7 @@ export function ParticipantEvent({
       <EventAppHero event={event} />
       {navigation}
       {active !== "overview" && active !== "register" && (
-        <SectionHeading level={3}>
+        <SectionHeading level={3} class={kind === "proposal" ? undefined : "pk-participant-event__page-title"}>
           {kind === "proposal" ? (recordTitle ?? "Proposal") : (PAGE_LABELS[active] ?? "Proposals")}
         </SectionHeading>
       )}
@@ -200,7 +200,7 @@ export function ParticipantEvent({
         <Suspense fallback={<Spinner />}>
           <MySessionManagement slug={event.slug} />
         </Suspense>
-      ) : tab === "promotion" ? (
+      ) : tab === "promotion" && hasEventPromotionMaterials(event) ? (
         <Suspense fallback={<Spinner />}>
           <MyPromotionKits
             slug={event.slug}

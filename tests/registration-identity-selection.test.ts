@@ -98,7 +98,7 @@ describe("registration representation changes", () => {
     expect(
       await queryAll(
         env.DB,
-        "SELECT job.id FROM badge_render_jobs job JOIN referral_codes rc ON rc.code=job.referral_code WHERE rc.owner_id=?",
+        "SELECT job.id FROM event_promotion_renders job JOIN referral_codes rc ON job.id='badge:'||rc.code WHERE rc.owner_id=?",
         [f.registrationId],
       ),
     ).toHaveLength(1);
