@@ -1,6 +1,7 @@
 import { prepareVerifiedAffiliationRead } from "../identities/verified-affiliation-read";
 import { verifiedAffiliationPreview } from "../identities/verified-affiliation-preview";
 import { planRegistrationAffiliation } from "./affiliation-plan";
+import { queueRegistrationManageLinkRecovery } from "./manage-link-recovery";
 import { identityAffiliationPrepareSchema } from "../../../../assets/shared/schemas/identity-affiliation";
 import type { registrationEmailProofVerifySchema } from "../../../../assets/shared/schemas/registration-email-proof";
 import { provedMailboxUserIdSelection } from "../email-ownership";
@@ -99,6 +100,11 @@ export async function startRegistrationEmailProof(
       "The email domain does not appear to accept mail. Please check the address and try again.",
       { email: "This email domain does not accept mail. Check the address." },
     );
+  // A held registration gets its management link instead; the response stays the same, so nothing is enumerated.
+  const registered = await queueRegistrationManageLinkRecovery(db, input.event, input.body.email, input.appBaseUrl, {
+    alreadyRegistered: true,
+  });
+  if (registered) return { status: "verification_sent", outboxId: registered };
   const payload: RegistrationEmailProof = {
     eventId: input.event.id,
     email: input.body.email,

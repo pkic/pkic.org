@@ -12,6 +12,9 @@ import { insertOrganization, insertUser } from "./helpers/membership";
 import { stubSuccessfulMxLookup } from "./helpers/mx-lookup";
 import { createMemberSession } from "./helpers/auth";
 import { prepareAccountIdentityStatement } from "../functions/_lib/services/users";
+import { getEventBySlug } from "../functions/_lib/services/events";
+import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
+import { startRegistrationEmailProof } from "../functions/_lib/services/registrations/email-proof";
 import {
   registrationEmailProofStartSchema,
   registrationEmailProofVerifyResponseSchema,
@@ -32,10 +35,22 @@ const post = (path: string, body: unknown) =>
     path === "/proof/verify" ? { maxRoundTrips: 1 } : undefined,
   );
 
+/** Starts verification through the use case, leaving the per-IP route budget to the route tests. */
+async function startProof(email: string, body: Record<string, unknown> = {}) {
+  await startRegistrationEmailProof(env.DB, {
+    event: await getEventBySlug(env.DB, "pqc-2026"),
+    body: registrationEmailProofStartSchema.parse({ email, ...body }),
+    appBaseUrl: "https://pkic.test",
+    ttlSeconds: 3600,
+  });
+}
+
 /** Starts verification and returns the link the email carries. */
-async function emailedLink(email: string, body: Record<string, unknown> = {}): Promise<URL> {
-  const response = await post("/proof", registrationEmailProofStartSchema.parse({ email, ...body }));
-  expect(response.status, await response.clone().text()).toBe(200);
+async function emailedLink(email: string, body: Record<string, unknown> = {}, { viaRoute = true } = {}): Promise<URL> {
+  if (viaRoute) {
+    const response = await post("/proof", registrationEmailProofStartSchema.parse({ email, ...body }));
+    expect(response.status, await response.clone().text()).toBe(200);
+  } else await startProof(email, body);
   const [mail] = await queryAll<{ payload_json: string }>(
     env.DB,
     "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_email_verify' AND recipient_email = ?",
@@ -75,6 +90,36 @@ describe("registration verifies the email address first", () => {
     expect(link.searchParams.get("ref")).toBe("ABCDEF12");
     expect(tokenOf(link)).toBeTruthy();
     expect(await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email = 'casey@new-org.example'")).toEqual([]);
+  });
+
+  it("sends a registered address its registration link instead of another verification link", async () => {
+    const email = "casey@gmail.com";
+    const registered = await post(
+      "",
+      registration(email, tokenOf(await emailedLink(email, { unaffiliatedAttestation: true }, { viaRoute: false })), {
+        unaffiliatedAttestation: true,
+      }),
+    );
+    expect(registered.status, await registered.clone().text()).toBe(200);
+
+    await startProof(email, { unaffiliatedAttestation: true });
+    const mails = await queryAll<{ template_key: string; payload_json: string }>(
+      env.DB,
+      "SELECT template_key, payload_json FROM email_outbox WHERE recipient_email = ? ORDER BY rowid",
+      [email],
+    );
+    expect(mails.map((mail) => mail.template_key)).toEqual([
+      "registration_email_verify",
+      "registration_confirmed",
+      "registration_manage_link",
+    ]);
+    expect(
+      await deliveredEmailPayload<{ alreadyRegistered: boolean; manageUrl: string }>(
+        env.DB,
+        env,
+        mails[2]!.payload_json,
+      ),
+    ).toMatchObject({ alreadyRegistered: true, manageUrl: expect.any(String) });
   });
 
   it("returns the verified address, a known person's names and whether the domain needs an organization", async () => {
@@ -395,6 +440,56 @@ describe("registration verifies the email address first", () => {
       }),
     );
     expect(second.status, await second.clone().text()).toBe(200);
+  });
+
+  it("accepts a pending invitation when the verified registrant chooses its organization", async () => {
+    const organizationId = await insertOrganization(env.DB, "Inviting Organization");
+    await env.DB.prepare(
+      "INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at) VALUES(?,'inviting.test',?,?,?)",
+    )
+      .bind(crypto.randomUUID(), organizationId, new Date().toISOString(), new Date().toISOString())
+      .run();
+    const email = "invited@inviting.test";
+    const userId = await insertUser(env.DB, email);
+    const invitation = await buildCreateIdentityStatement(env.DB, {
+      userId,
+      organizationId,
+      source: "staff",
+      jobTitle: "Chair",
+      startImmediately: false,
+    });
+    await env.DB.batch([invitation.statement]);
+
+    const proof = tokenOf(await emailedLink(email, {}, { viaRoute: false }));
+    const prepared = await post("/proof/verify", {
+      token: proof,
+      affiliation: { organizationId, jobTitle: "Chair", domain: "inviting.test" },
+    });
+    expect(prepared.status, await prepared.clone().text()).toBe(200);
+    const contextToken = registrationEmailProofVerifyResponseSchema.parse(await prepared.json()).affiliation!
+      .contextToken!;
+    const result = await post(
+      "",
+      registration(email, proof, {
+        organization: { name: "Inviting Organization", jobTitle: "Chair", contextToken },
+      }),
+    );
+    expect(result.status, await result.clone().text()).toBe(200);
+    expect(
+      await queryAll(
+        env.DB,
+        `SELECT registration.registration_identity_id AS identity_id, identity.started_at IS NOT NULL AS started
+           FROM registrations registration JOIN identities identity ON identity.id = registration.registration_identity_id
+          WHERE registration.user_id = ?`,
+        [userId],
+      ),
+    ).toEqual([{ identity_id: invitation.identityId, started: 1 }]);
+    expect(
+      await queryAll(env.DB, "SELECT action FROM audit_log WHERE entity_id = ? AND action = ?", [
+        invitation.identityId,
+        "organization_identity_invitation_accepted",
+      ]),
+    ).toHaveLength(1);
   });
   it("does not let a mailbox proof enumerate unrelated organizations or reuse another address's prepared choice", async () => {
     const email = "proof@private-choice.test";
