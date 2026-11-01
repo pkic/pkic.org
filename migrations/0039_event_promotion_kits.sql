@@ -139,18 +139,13 @@ WHERE form_id = (SELECT id FROM forms WHERE key = 'membership-application')
   AND key = 'working_groups'
   AND label = 'Working Groups of Interest';
 
--- Flexible event registration attendance types.
--- The aggregate uses the same event-configured value as its day records. Its
--- original CHECK froze an evolving vocabulary and rejected valid options.
--- Production and preview use the same registrations schema before this rebuild.
--- Preview already recorded 0039: apply this section only as an atomic file import.
--- A rebuild is necessary because the old column's CHECK cannot be altered in place.
--- An additive override would leave old readers with a misleading attendance type.
--- legacy_alter_table preserves views while the replacement receives its final name.
--- D1 does not disable foreign keys, and DROP can run cascades even when deferred.
--- The only cascading children are transient guard tables, asserted empty below.
--- Preserve dependent rows without leaving unresolved deferred foreign keys.
--- Their triggers are suspended and restored exactly to avoid side effects.
+-- Registration attendance is recorded per event day.
+-- Replace the obsolete registration-wide attendance value with day-only attendance.
+-- The old CHECK cannot be dropped in place, and a second column would preserve
+-- contradictory sources of truth.
+-- Stop if any registration still depends on the old value or unexpected child
+-- triggers exist. Restore dependent rows and triggers inside the atomic batch.
+-- Preview and production application require separate approval and coordination.
 PRAGMA legacy_alter_table = ON;
 
 -- Both tables contain only transient transaction guards and must be empty.
@@ -176,6 +171,10 @@ DROP TRIGGER validate_event_day_waitlist_update;
 DROP TRIGGER validate_registration_day_attendance_insert;
 DROP TRIGGER validate_registration_day_attendance_update;
 
+-- Refuse loss of registration-only attendance; resolve those records before dropping the column.
+INSERT INTO registration_rebuild_guard (invalid)
+ SELECT COUNT(*) FROM registrations r WHERE NOT EXISTS (SELECT 1 FROM registration_day_attendance d WHERE d.registration_id = r.id);
+
 CREATE TABLE registration_rebuild_backup_calendar_rsvp_events AS SELECT * FROM calendar_rsvp_events;
 CREATE TABLE registration_rebuild_backup_event_day_waitlist_entries AS SELECT * FROM event_day_waitlist_entries;
 CREATE TABLE registration_rebuild_backup_registration_attendance_history AS SELECT * FROM registration_attendance_history;
@@ -188,13 +187,14 @@ DELETE FROM registration_attendance_history;
 DELETE FROM registration_badge_role_overrides;
 DELETE FROM registration_day_attendance;
 
+DROP VIEW event_participant_role_sources;
+
 CREATE TABLE registrations_rebuilt (
   id                              TEXT    NOT NULL PRIMARY KEY,
   event_id                        TEXT    NOT NULL,
   user_id                         TEXT    NOT NULL,
   invite_id                       TEXT,
   status                          TEXT    NOT NULL CHECK (status IN ('pending_email_confirmation', 'registered', 'waitlisted', 'cancelled')),
-  attendance_type                 TEXT    NOT NULL,
   source_type                     TEXT    NOT NULL CHECK (length(source_type) >= 2 AND length(source_type) <= 64),
   source_ref                      TEXT,
   custom_answers_json             TEXT,
@@ -211,11 +211,83 @@ CREATE TABLE registrations_rebuilt (
   FOREIGN KEY(invite_id) REFERENCES invites(id)
 );
 
-INSERT INTO registrations_rebuilt ("id", "event_id", "user_id", "invite_id", "status", "attendance_type", "source_type", "source_ref", "custom_answers_json", "referred_by_code", "confirmation_link_secret", "manage_link_secret", "confirmed_at", "cancelled_at", "created_at", "updated_at", "confirmation_reminder_sent_at", "pending_confirmation_deadline_at", "cancellation_reason_code", "transition_revision", "created_identity_user_id", "form_placement_id", "registration_group_id", "registration_identity_id") SELECT "id", "event_id", "user_id", "invite_id", "status", "attendance_type", "source_type", "source_ref", "custom_answers_json", "referred_by_code", "confirmation_link_secret", "manage_link_secret", "confirmed_at", "cancelled_at", "created_at", "updated_at", "confirmation_reminder_sent_at", "pending_confirmation_deadline_at", "cancellation_reason_code", "transition_revision", "created_identity_user_id", "form_placement_id", "registration_group_id", "registration_identity_id" FROM registrations;
+INSERT INTO registrations_rebuilt ("id", "event_id", "user_id", "invite_id", "status", "source_type", "source_ref", "custom_answers_json", "referred_by_code", "confirmation_link_secret", "manage_link_secret", "confirmed_at", "cancelled_at", "created_at", "updated_at", "confirmation_reminder_sent_at", "pending_confirmation_deadline_at", "cancellation_reason_code", "transition_revision", "created_identity_user_id", "form_placement_id", "registration_group_id", "registration_identity_id") SELECT "id", "event_id", "user_id", "invite_id", "status", "source_type", "source_ref", "custom_answers_json", "referred_by_code", "confirmation_link_secret", "manage_link_secret", "confirmed_at", "cancelled_at", "created_at", "updated_at", "confirmation_reminder_sent_at", "pending_confirmation_deadline_at", "cancellation_reason_code", "transition_revision", "created_identity_user_id", "form_placement_id", "registration_group_id", "registration_identity_id" FROM registrations;
 
 DROP TABLE registrations;
 
 ALTER TABLE registrations_rebuilt RENAME TO registrations;
+CREATE VIEW event_participant_role_sources AS
+SELECT
+  'event_participant:' || ep.id AS source_key,
+  'event_participant' AS source_kind,
+  ep.id AS source_id,
+  ep.event_id,
+  ep.user_id,
+  ep.role,
+  ep.subrole,
+  ep.status,
+  ep.source_type,
+  ep.source_ref
+FROM event_participants ep
+WHERE COALESCE(ep.source_type, '') <> 'proposal'
+  AND (
+    ep.role <> 'attendee'
+    OR NOT EXISTS (
+      SELECT 1
+      FROM registrations registration_source
+      WHERE registration_source.event_id = ep.event_id
+        AND registration_source.user_id = ep.user_id
+    )
+  )
+UNION ALL
+SELECT
+  'registration:' || r.id AS source_key,
+  'registration' AS source_kind,
+  r.id AS source_id,
+  r.event_id,
+  r.user_id,
+  'attendee' AS role,
+  NULL AS subrole,
+  CASE r.status
+    WHEN 'registered' THEN 'active'
+    WHEN 'pending_email_confirmation' THEN 'invited'
+    WHEN 'waitlisted' THEN 'waitlisted'
+    ELSE 'inactive'
+  END AS status,
+  r.source_type,
+  r.source_ref
+FROM registrations r
+UNION ALL
+SELECT
+  'proposal_speaker:' || ps.id AS source_key,
+  'proposal_speaker' AS source_kind,
+  ps.id AS source_id,
+  sp.event_id,
+  ps.user_id,
+  CASE ps.role
+    WHEN 'moderator' THEN 'moderator'
+    WHEN 'panelist' THEN 'panelist'
+    WHEN 'proposer' THEN 'speaker'
+    WHEN 'speaker' THEN 'speaker'
+    WHEN 'co_speaker' THEN 'speaker'
+  END AS role,
+  CASE ps.role
+    WHEN 'moderator' THEN NULL
+    WHEN 'panelist' THEN NULL
+    WHEN 'proposer' THEN 'proposer'
+    WHEN 'speaker' THEN 'speaker'
+    WHEN 'co_speaker' THEN 'co_speaker'
+  END AS subrole,
+  CASE
+    WHEN sp.status = 'accepted' AND sp.deleted_at IS NULL AND ps.status <> 'declined' THEN 'active'
+    ELSE 'inactive'
+  END AS status,
+  'proposal' AS source_type,
+  ps.proposal_id AS source_ref
+FROM proposal_speakers ps
+JOIN session_proposals sp ON sp.id = ps.proposal_id
+WHERE ps.role IN ('proposer', 'speaker', 'co_speaker', 'moderator', 'panelist');
+
 PRAGMA legacy_alter_table = OFF;
 
 INSERT INTO calendar_rsvp_events SELECT * FROM registration_rebuild_backup_calendar_rsvp_events;
@@ -339,7 +411,7 @@ END;
 CREATE INDEX idx_registrations_created_at
   ON registrations(created_at);
 
-CREATE INDEX idx_registrations_event_status       ON registrations(event_id, status, attendance_type);
+CREATE INDEX idx_registrations_event_status ON registrations(event_id, status);
 
 CREATE INDEX idx_registrations_event_status_created
   ON registrations(event_id, status, created_at);

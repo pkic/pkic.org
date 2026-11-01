@@ -3,7 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import { expect, it } from "vitest";
 
 const migration = "0039_event_promotion_kits.sql";
-const marker = "-- Flexible event registration attendance types.";
+const marker = "-- Registration attendance is recorded per event day.";
 const at = "2026-01-01T00:00:00.000Z";
 
 function existingDatabase(): DatabaseSync {
@@ -59,17 +59,45 @@ function snapshot(db: DatabaseSync) {
   };
 }
 
-it("preserves existing records and database objects while allowing configured attendance types", () => {
+it("applies the complete migration to existing production-shaped data", () => {
+  const db = existingDatabase();
+  try {
+    db.exec(`BEGIN;\n${readFileSync(`migrations/${migration}`, "utf8")}\nCOMMIT;`);
+    expect(db.prepare("PRAGMA table_info(registrations)").all()).not.toContainEqual(
+      expect.objectContaining({ name: "attendance_type" }),
+    );
+    expect(db.prepare("SELECT attendance_type FROM registration_day_attendance").get()).toEqual({
+      attendance_type: "virtual",
+    });
+    expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+  } finally {
+    db.close();
+  }
+});
+
+it("removes the registration-wide field while preserving day attendance and related records", () => {
   const db = existingDatabase();
   try {
     const before = snapshot(db);
     db.exec(`BEGIN;\n${delta()}\nCOMMIT;`);
-    expect(snapshot(db)).toEqual(before);
+    const after = snapshot(db);
+    expect(after.days).toEqual(before.days);
+    expect(after.history).toEqual(before.history);
+    expect(after.badge).toEqual(before.badge);
+    expect(after.eventDays).toEqual(before.eventDays);
+    const { attendance_type: _removed, ...registration } = before.registration[0];
+    expect(after.registration).toEqual([registration]);
+    expect(after.objects.map(({ type, name }) => ({ type, name }))).toEqual(
+      before.objects.map(({ type, name }) => ({ type, name })),
+    );
+    expect(db.prepare("PRAGMA table_info(registrations)").all()).not.toContainEqual(
+      expect.objectContaining({ name: "attendance_type" }),
+    );
     expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
     expect(db.prepare("PRAGMA integrity_check").get()).toEqual({ integrity_check: "ok" });
-    db.exec("UPDATE registrations SET attendance_type='livestream_lounge' WHERE id='registration'");
-    expect(db.prepare("SELECT attendance_type FROM registrations WHERE id='registration'").get()).toEqual({
-      attendance_type: "livestream_lounge",
+    db.exec("UPDATE registration_day_attendance SET attendance_type='moon_base_42' WHERE id='attendance'");
+    expect(db.prepare("SELECT attendance_type FROM registration_day_attendance WHERE id='attendance'").get()).toEqual({
+      attendance_type: "moon_base_42",
     });
   } finally {
     db.close();
@@ -96,36 +124,12 @@ it("rolls the rebuild back if a statement fails after the original table is drop
   }
 });
 
-it("removes the registration-wide field while preserving day attendance and related records", () => {
-  const db = existingDatabase();
-  try {
-    db.exec(`BEGIN;\n${delta()}\nCOMMIT;`);
-    const before = snapshot(db);
-    const cutover = readFileSync("migrations/0040_registration_day_attendance.sql", "utf8");
-    db.exec(`BEGIN;\n${cutover}\nCOMMIT;`);
-    const after = snapshot(db);
-    expect(after.days).toEqual(before.days);
-    expect(after.history).toEqual(before.history);
-    expect(after.badge).toEqual(before.badge);
-    expect(after.eventDays).toEqual(before.eventDays);
-    expect(db.prepare("PRAGMA table_info(registrations)").all()).not.toContainEqual(
-      expect.objectContaining({ name: "attendance_type" }),
-    );
-    expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
-    expect(db.prepare("PRAGMA integrity_check").get()).toEqual({ integrity_check: "ok" });
-  } finally {
-    db.close();
-  }
-});
-
 it("refuses to discard registration-only attendance and rolls the cutover back", () => {
   const db = existingDatabase();
   try {
-    db.exec(`BEGIN;\n${delta()}\nCOMMIT;`);
     db.exec("DELETE FROM registration_day_attendance");
     const before = snapshot(db);
-    const cutover = readFileSync("migrations/0040_registration_day_attendance.sql", "utf8");
-    expect(() => db.exec(`BEGIN;\n${cutover}\nCOMMIT;`)).toThrow();
+    expect(() => db.exec(`BEGIN;\n${delta()}\nCOMMIT;`)).toThrow();
     db.exec("ROLLBACK");
     expect(snapshot(db)).toEqual(before);
     expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
