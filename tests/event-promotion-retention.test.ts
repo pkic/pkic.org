@@ -12,7 +12,7 @@ import {
   requestPromotionRender,
 } from "../functions/_lib/services/event-agenda/promotion-render-jobs";
 import { purgeExpiredPromotionFiles } from "../functions/_lib/services/event-agenda/promotion-retention";
-import { promotionThumbnailKey } from "../functions/_lib/services/event-agenda/promotion-storage";
+import { promotionThumbnailKey } from "../functions/_lib/services/event-agenda/promotion-storage-keys";
 
 const rendered = async () => ({
   body: new TextEncoder().encode("%PDF-1.7 synthetic"),

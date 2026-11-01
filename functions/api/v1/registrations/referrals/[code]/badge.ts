@@ -22,7 +22,7 @@ import { dispatchRequestMethod, json } from "../../../../../_lib/http";
 import { resolveAppBaseUrl } from "../../../../../_lib/config";
 import { readCachedBadge, serveGeneratedBadge } from "../../../../../_lib/services/og-badge-http";
 import { renderBadgeSourcePng } from "../../../../../_lib/services/og-badge-prerender";
-import { promotionThumbnailKey } from "../../../../../_lib/services/event-agenda/promotion-storage";
+import { promotionThumbnailKey } from "../../../../../_lib/services/event-agenda/promotion-storage-keys";
 import { BADGE_IMAGE_OUTPUT, THUMBNAIL_OUTPUT } from "../../../../../_lib/utils/image-encoding";
 
 export async function onRequestGet(c: any): Promise<Response> {

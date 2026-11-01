@@ -17,7 +17,8 @@ import { createDurableJobLease, durableRenderRetry } from "../../jobs/lease";
 import { AppError } from "../../errors";
 import { getPromotionKit, getAttendeePromotionKit } from "./promotion-source";
 import type { renderPromotionArtifact } from "./promotion-artifact";
-import { storePromotionArtifact, promotionArtifactKeys, promotionThumbnailKey } from "./promotion-storage";
+import { storePromotionArtifact } from "./promotion-storage";
+import { promotionArtifactKeys, promotionThumbnailKey } from "./promotion-storage-keys";
 import { PROMOTION_OPEN_SQL } from "./promotion-retention";
 import {
   BADGE_RENDER_FORMAT,

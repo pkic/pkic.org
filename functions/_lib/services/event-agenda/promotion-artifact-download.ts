@@ -3,7 +3,7 @@ import type { DatabaseLike, Env } from "../../types";
 import { promotionArtifactQuerySchema } from "../../../../assets/shared/schemas/event-promotion-kit";
 import { prepareOwnPromotionRequest } from "./promotion-request-context";
 import { promotionRenderLocation } from "./promotion-render-request";
-import { promotionThumbnailKey } from "./promotion-storage";
+import { promotionThumbnailKey } from "./promotion-storage-keys";
 import { eventReadIdSql } from "../events/selection";
 import { batchFirst } from "../../db/pagination";
 import { buildDownloadDisposition } from "../../utils/download-disposition";

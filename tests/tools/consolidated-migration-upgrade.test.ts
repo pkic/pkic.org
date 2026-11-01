@@ -1,4 +1,3 @@
-import { promotionFormatSchema } from "../../assets/shared/schemas/event-promotion-kit";
 import { readD1Migrations } from "@cloudflare/vitest-plugin";
 import { afterEach, describe, expect, it } from "vitest";
 import { DatabaseSync } from "node:sqlite";
@@ -1475,6 +1474,9 @@ it("splits the consolidated migration into bounded statements for D1", async () 
   );
 });
 
+/** The formats the retired 0038 render queue accepted, panel included. */
+const LEGACY_PROMOTION_FORMATS = ["portrait", "carousel", "landscape", "square", "panel"];
+
 it("cuts over unfinished promotion work without retaining a second render queue", () => {
   const db = new DatabaseSync(":memory:");
   try {
@@ -1509,7 +1511,7 @@ it("cuts over unfinished promotion work without retaining a second render queue"
       db.prepare(`INSERT INTO event_agenda_promotion_render_jobs(id,event_id,occurrence_id,user_id,revision,format,origin,cache_key,status,attempts,next_attempt_at,processing_token,lease_expires_at,created_at,updated_at)
         VALUES(?,'queue-event','queue-session','queue-user',1,?,'https://example.test',?,?,2,?,'old-lease',?,?,?)`).run(
         status,
-        promotionFormatSchema.options[index]!,
+        LEGACY_PROMOTION_FORMATS[index]!,
         status,
         status,
         at,
@@ -1518,11 +1520,41 @@ it("cuts over unfinished promotion work without retaining a second render queue"
         at,
       );
     }
+    for (const [code, owner] of [
+      ["QUEUEBDG1", "queue-user"],
+      ["ORPHANBDG1", null],
+    ]) {
+      db.prepare(
+        "INSERT INTO referral_codes(code,event_id,owner_type,owner_id,created_by_user_id,created_at) VALUES(?,'queue-event','proposal','queue-proposal',?,?)",
+      ).run(code, owner, at);
+      db.prepare(`INSERT INTO badge_render_jobs(id,referral_code,status,requested_generation,attempts,next_attempt_at,created_at,updated_at,processing_token,lease_expires_at)
+        VALUES(?,?,'rendering',3,1,?,?,?,'old-lease',?)`).run(`badge:${code}`, code, at, at, at, at);
+    }
     db.exec("BEGIN");
     db.exec(fs.readFileSync(path.join(MIGRATIONS_DIR, "0039_event_promotion_kits.sql"), "utf8"));
     db.exec("COMMIT");
     expect(
-      db.prepare("SELECT id,status,fingerprint,processing_token FROM event_promotion_renders ORDER BY id").all(),
+      db
+        .prepare(
+          "SELECT id,user_id,revision,status,cache_key,processing_token FROM event_promotion_renders WHERE format='badge'",
+        )
+        .all(),
+    ).toEqual([
+      {
+        id: "badge:QUEUEBDG1",
+        user_id: "queue-user",
+        revision: 3,
+        status: "queued",
+        cache_key: "og-badges/QUEUEBDG1",
+        processing_token: null,
+      },
+    ]);
+    expect(
+      db
+        .prepare(
+          "SELECT id,status,fingerprint,processing_token FROM event_promotion_renders WHERE format<>'badge' ORDER BY id",
+        )
+        .all(),
     ).toEqual(
       ["queued", "rendering", "retrying"].map((id) => ({
         id,
@@ -1534,7 +1566,7 @@ it("cuts over unfinished promotion work without retaining a second render queue"
     expect(
       db
         .prepare(
-          "SELECT name FROM sqlite_master WHERE type='table' AND name IN('event_agenda_promotion_render_jobs','event_agenda_promotion_copy','event_agenda_promotion_downloads','user_email_claims')",
+          "SELECT name FROM sqlite_master WHERE type='table' AND name IN('badge_render_jobs','event_agenda_promotion_render_jobs','event_agenda_promotion_copy','event_agenda_promotion_downloads','user_email_claims')",
         )
         .all(),
     ).toEqual([]);

@@ -23,7 +23,7 @@ import {
   THUMBNAIL_OUTPUT,
   type RenderedImageOutput,
 } from "../utils/image-encoding";
-import { promotionThumbnailKey } from "./event-agenda/promotion-storage";
+import { promotionThumbnailKey } from "./event-agenda/promotion-storage-keys";
 import { promotionIsRetained } from "../../../assets/shared/promotion-retention";
 import { renderDonationBadgeSvg } from "./og-badge";
 import { first, all } from "../db/queries";

@@ -1,7 +1,7 @@
 import { BADGE_ATTACHMENT_WAIT_REASONS } from "../email/attachments";
 import { personalPromotionImageCacheKey } from "../../../assets/shared/personal-promotion-image";
 import type { DatabaseLike, StatementLike } from "../types";
-import { promotionThumbnailKey } from "./event-agenda/promotion-storage";
+import { promotionThumbnailKey } from "./event-agenda/promotion-storage-keys";
 import { nowIso } from "../utils/time";
 
 /**

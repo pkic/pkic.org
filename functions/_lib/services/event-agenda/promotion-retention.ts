@@ -2,7 +2,7 @@ import { PROMOTION_RETENTION_DAYS } from "../../../../assets/shared/promotion-re
 import type { DatabaseLike, Env } from "../../types";
 import { all, run } from "../../db/queries";
 import { BADGE_RENDER_FORMAT, badgeRenderKeys, badgeRenderReferralCode } from "../badge-render-job-statements";
-import { promotionArtifactKeys } from "./promotion-storage";
+import { promotionArtifactKeys } from "./promotion-storage-keys";
 
 /** SQL twin of `promotionIsOpen` for a row aliased `event`. */
 export const PROMOTION_OPEN_SQL =

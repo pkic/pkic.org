@@ -65,7 +65,7 @@ DROP TABLE event_agenda_promotion_render_jobs;
 INSERT INTO event_promotion_renders
  (id,event_id,occurrence_id,user_id,revision,fingerprint,format,origin,cache_key,
   status,attempts,next_attempt_at,last_error,created_at,updated_at,requested_at)
-SELECT job.id,referral.event_id,NULL,
+SELECT 'badge:'||referral.code,referral.event_id,NULL,
  CASE referral.owner_type WHEN 'registration' THEN registration.user_id ELSE referral.created_by_user_id END,
  job.requested_generation,NULL,'badge','','og-badges/'||referral.code,
  CASE WHEN job.status='rendering' THEN 'queued' ELSE job.status END,job.attempts,
