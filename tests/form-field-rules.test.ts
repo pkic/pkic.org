@@ -10,15 +10,12 @@ import {
   parseFormFieldOptions,
   parseFormFieldRules,
 } from "../assets/shared/schemas/form-field-rules";
-import {
-  ATTENDANCE_TYPES as CANONICAL_ATTENDANCE_TYPES,
-  attendanceTypeSchema as canonicalAttendanceTypeSchema,
-} from "../assets/shared/schemas/registration";
+import { attendanceTypeSchema as canonicalAttendanceTypeSchema } from "../assets/shared/schemas/registration";
 
 describe("canonical form-field rules", () => {
   it("uses the canonical attendance vocabulary across registration, form rules, and campaigns", () => {
-    expect(CANONICAL_ATTENDANCE_TYPES).toEqual(["in_person", "virtual", "on_demand"]);
-    for (const attendanceType of CANONICAL_ATTENDANCE_TYPES) {
+    // Attendance options are configured per event day, so any configured identifier is a valid type.
+    for (const attendanceType of ["in_person", "virtual", "on_demand", "livestream_lounge"]) {
       expect(canonicalAttendanceTypeSchema.safeParse(attendanceType).success).toBe(true);
       expect(formFieldRulesSchema.safeParse({ showWhen: { eventAttendanceTypeIn: [attendanceType] } }).success).toBe(
         true,
@@ -30,7 +27,7 @@ describe("canonical form-field rules", () => {
         }).success,
       ).toBe(true);
     }
-    expect(canonicalAttendanceTypeSchema.safeParse("future_mode").success).toBe(false);
+    expect(canonicalAttendanceTypeSchema.safeParse("Future Mode").success).toBe(false);
   });
 
   it("normalizes the one persisted rule shape used by frontend and backend", () => {
@@ -39,7 +36,7 @@ describe("canonical form-field rules", () => {
         format: "professional_profile",
         maxLength: 200,
         allowedDomains: ["example.com", 42],
-        showWhen: { dayAttendanceIn: ["in_person", null], eventAttendanceTypeIn: ["virtual", "invalid"] },
+        showWhen: { dayAttendanceIn: ["in_person", null], eventAttendanceTypeIn: ["virtual", "Not Valid"] },
         ignored: true,
       }),
     ).toEqual({
@@ -111,5 +108,20 @@ describe("canonical form-field rules", () => {
     expect(parseFormFieldRules({ pattern: "^(a+)+$", patternMessage: "Nope", maxLength: 200 })).toEqual({
       maxLength: 200,
     });
+  });
+});
+
+describe("configurable attendance types", () => {
+  it("lets the viewer state carry a type the event configures", async () => {
+    const { eventViewerStateSchema } = await import("../assets/shared/schemas/event-management");
+    expect(
+      eventViewerStateSchema.safeParse({
+        registrationStatus: "registered",
+        attendanceType: "livestream_lounge",
+        waitlisted: false,
+        days: [{ date: "2026-12-01", attendanceType: "livestream_lounge", state: "registered" }],
+        holdsWorkAddress: true,
+      }).success,
+    ).toBe(true);
   });
 });

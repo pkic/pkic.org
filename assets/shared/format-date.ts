@@ -457,7 +457,7 @@ export function formatEventWhen(
   startsAt: string | null | undefined,
   clock: ClockZone | null | undefined,
   location: string | null | undefined,
-  attendanceType?: "in_person" | "virtual" | "on_demand" | null,
+  attendanceType?: string | null,
 ): string {
   if (attendanceType === "in_person" && clock) return formatDateTimeInZone(startsAt, clock);
   if (attendanceType) return formatDateTime(startsAt);

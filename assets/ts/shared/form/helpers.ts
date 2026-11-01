@@ -76,8 +76,7 @@ export function setField(form: HTMLFormElement, name: string, value: string | nu
 export function deriveEventAttendanceType(values: Array<{ attendanceType: string }>): AttendanceType | undefined {
   if (values.some((v) => v.attendanceType === "in_person")) return "in_person";
   if (values.some((v) => v.attendanceType === "virtual")) return "virtual";
-  if (values.length > 0) return "on_demand";
-  return undefined;
+  return values[0]?.attendanceType;
 }
 
 /**

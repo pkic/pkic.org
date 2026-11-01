@@ -5,7 +5,6 @@ import type { z } from "zod";
 import type { EventFormsResponse } from "../../../shared/schemas/forms";
 import { isIdentityOwnedFormKey } from "../../../shared/schemas/form-answers";
 import {
-  ATTENDANCE_TYPES,
   registrationCreateSchema,
   registrationCreateForTermsSchema,
   registrationContactFieldsSchema,
@@ -45,6 +44,9 @@ import { RegistrationContactStep } from "../RegistrationContactStep";
 import type { ConfirmOrganizationController } from "../RegistrationConfirmOrganization";
 import { RegistrationAffiliation } from "./RegistrationAffiliation";
 import { useFormAnswers } from "../forms/useFormAnswers";
+
+/** An event with no configured days has no configured options; these are offered until its days are set. */
+const UNSCHEDULED_ATTENDANCE_TYPES = ["in_person", "virtual", "on_demand"];
 
 export type RegistrationChange = z.output<typeof registrationManageSchema>;
 export type RegistrationInput = z.output<typeof registrationCreateSchema>;
@@ -391,13 +393,13 @@ export function RegistrationFlow(props: Props) {
                   />
                 ) : (
                   <div class="pk-stack pk-stack--tight">
-                    {ATTENDANCE_TYPES.map((type) => (
+                    {UNSCHEDULED_ATTENDANCE_TYPES.map((type) => (
                       <Radio
                         key={type}
                         name="attendanceType"
                         value={type}
                         label={attendanceTypeLabel(type)}
-                        required={type === ATTENDANCE_TYPES[0]}
+                        required={type === UNSCHEDULED_ATTENDANCE_TYPES[0]}
                         defaultChecked={type === (initial?.registration.attendance_type ?? "virtual")}
                       />
                     ))}

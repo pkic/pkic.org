@@ -31,7 +31,9 @@ import {
   filteredBadgePrintScope,
   type BadgePrintScope,
 } from "../../../../components/event-badges/badge-print-population";
-import { ATTENDANCE_TYPES } from "../../../../../shared/schemas/registration";
+import { groupEventDaysResponseSchema } from "../../../../../shared/schemas/group-events";
+import { getJson } from "../../../../shared/api-client";
+import { useData } from "../../../../hooks/useData";
 import { BADGE_DISPLAY_ROLE_LABELS, badgeDisplayRoleSchema } from "../../../../../shared/schemas/participant-roles";
 import { attendanceTypeLabel } from "../../../../shared/attendance";
 import { usePortalHashLocation } from "../../hash-location";
@@ -65,6 +67,18 @@ export function GroupEventRegistrations({
   });
   const [stats, setStats] = useState<EventAttendanceRegistrationsStats | null>(null);
   const tableRef = useRef<ApiTableActions | null>(null);
+  // The types a registration can hold are the ones this event configures per day.
+  const days = useData(
+    () =>
+      getJson(
+        `/api/v1/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(eventId)}/days`,
+        groupEventDaysResponseSchema,
+      ),
+    [groupId, eventId],
+  );
+  const attendanceTypes = [
+    ...new Set((days.data?.days ?? []).flatMap((day) => day.attendanceOptions.map((option) => option.value))),
+  ];
   const registrationEndpoint = `/api/v1/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(eventId)}/registrations`;
 
   return (
@@ -207,7 +221,7 @@ export function GroupEventRegistrations({
               param: "attendance_type",
               options: [
                 { value: "", label: "All types" },
-                ...ATTENDANCE_TYPES.map((type) => ({ value: type as string, label: attendanceTypeLabel(type) })),
+                ...attendanceTypes.map((type) => ({ value: type, label: attendanceTypeLabel(type) })),
               ],
             },
           },

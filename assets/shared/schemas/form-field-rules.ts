@@ -122,7 +122,7 @@ export const safeFormFieldPatternSchema = z
 const showWhenSchema = z
   .object({
     dayAttendanceIn: z.array(attendanceOptionSchema).max(20).optional(),
-    eventAttendanceTypeIn: z.array(attendanceTypeSchema).max(3).optional(),
+    eventAttendanceTypeIn: z.array(attendanceTypeSchema).max(20).optional(),
   })
   .strict();
 

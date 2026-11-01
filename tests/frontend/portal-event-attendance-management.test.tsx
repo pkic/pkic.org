@@ -82,6 +82,28 @@ function installApi(waitlisted: boolean) {
       const method = init.method ?? "GET";
       const body = typeof init.body === "string" ? JSON.parse(init.body) : undefined;
       requests.push({ path: url.pathname, method, body, search: url.search });
+      if (method === "GET" && url.pathname.endsWith(`/events/${EVENT_ID}/days`)) {
+        const option = (value: string, label: string) => ({ value, label });
+        return json({
+          days: [
+            {
+              id: "day-1",
+              date: "2026-09-01",
+              label: null,
+              startsAt: null,
+              endsAt: null,
+              sortOrder: 0,
+              attendanceOptions: [
+                option("in_person", "In-person"),
+                option("virtual", "Virtual"),
+                option("livestream_lounge", "Livestream lounge"),
+              ],
+              attendanceCounts: {},
+            },
+          ],
+          eventUpdatedAt: "2026-08-01T00:00:00.000Z",
+        });
+      }
       if (method === "GET" && url.pathname.endsWith(`/events/${EVENT_ID}/registrations`)) {
         return json(registrationList());
       }
@@ -238,7 +260,7 @@ describe("group event registrations roster", () => {
       "All types",
       "In-person",
       "Virtual",
-      "On-demand",
+      "Livestream lounge",
     ]);
     await chooseColumnFilter(container, "Attendance type", "In-person");
     await settle();

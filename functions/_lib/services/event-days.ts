@@ -207,7 +207,7 @@ export function deriveEventAttendanceType(selections?: DayAttendanceSelection[])
     return "virtual";
   }
 
-  return "on_demand";
+  return selections[0].attendanceType;
 }
 
 /**

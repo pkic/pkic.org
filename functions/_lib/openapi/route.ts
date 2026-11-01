@@ -9,7 +9,7 @@ import {
   type OpenAPIRouteSchema,
   type ValidatedData,
 } from "chanfana";
-import type { z } from "zod";
+import { ZodError, type z } from "zod";
 import { AppError } from "../errors";
 import { refuseIneligibleWorkEmail } from "../email-domains/work-email-screen";
 import type { apiValidationErrorDetailsSchema } from "../../../assets/shared/schemas/api-common";
@@ -169,7 +169,21 @@ export function openApiRoute<Schema extends OpenAPIRouteSchema, Context = any>(
         refuseIneligibleWorkEmail((data as { body: { email: string; unaffiliatedAttestation: boolean } }).body);
       const policy = extensions["x-pkic-abuse-protection"];
       if (policy) await enforcePublicAction(context as AdminContext, policy);
-      return handle(context, data);
+      try {
+        return await handle(context, data);
+      } catch (error) {
+        // A handler that parses its own response against a contract failed: the server's data does not
+        // fit the contract. chanfana would report that as the caller's 400, which it is not.
+        if (error instanceof ZodError) {
+          console.error("[openApiRoute] Response contract violation:", error);
+          throw new AppError(
+            500,
+            "RESPONSE_CONTRACT_INVALID",
+            "We could not load this right now. Please try again in a moment. If it keeps happening, contact the secretariat.",
+          );
+        }
+        throw error;
+      }
     }
   };
 }

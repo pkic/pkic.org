@@ -23,6 +23,8 @@ const MALFORMED_RESPONSE =
   "The server sent a response this page could not read. Try again, and let us know if it keeps happening.";
 
 const FRIENDLY_BY_STATUS: Record<string, string> = {
+  "HTTP 400":
+    "This request could not be completed. Reload the page and try again, and let us know if it keeps happening.",
   "HTTP 401": "Your session has ended. Sign in again to continue.",
   "HTTP 403": "You don't have access to this. If you think you should, ask an administrator.",
   "HTTP 404": "This wasn't found. It may have been removed, or the link may be out of date.",

@@ -53,6 +53,7 @@ describe("canonical status registry", () => {
 
 describe("error copy", () => {
   it("turns transport phrasing into sentences", () => {
+    expect(friendlyErrorMessage("HTTP 400")).toContain("could not be completed");
     expect(friendlyErrorMessage("HTTP 403")).toContain("don't have access");
     expect(friendlyErrorMessage("HTTP 409")).toContain("Reload");
     expect(friendlyErrorMessage("HTTP 500: boom")).toContain("our side");
