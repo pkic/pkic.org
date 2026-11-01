@@ -29,7 +29,7 @@ import {
   memberApplicationFormResponseSchema,
   type MemberApplicationFormResponse,
 } from "../../shared/schemas/member-applications";
-import type { z } from "zod";
+import { z } from "zod";
 import {
   memberJoinStartResponseSchema,
   memberJoinStartSchema,
@@ -84,6 +84,14 @@ export function buildApplicationPayload(
     answers: readCustomFieldValues(form),
   };
 }
+
+/** The form asks for both names; the request carries them as the one applicant name. */
+export const applicantNamePartsSchema = z
+  .object({ firstName: z.string().trim().min(1, "First name is required"), lastName: z.string().trim() })
+  .superRefine((parts, context) => {
+    if (!parts.lastName)
+      context.addIssue({ code: "custom", path: ["applicantName"], message: "Last name is required" });
+  });
 
 /** The category catalog is server-provided; this only mirrors its selected presentation state. */
 export function applyCategoryUI(form: HTMLFormElement, category: MembershipCategory | undefined): void {
@@ -411,7 +419,10 @@ async function main(): Promise<void> {
       if (!configuredCategory) return null;
       return signedInIdentity
         ? memberApplicationCreateAsIdentitySchemaForCategory(configuredCategory, applicationFormFields)
-        : memberApplicationCreateSchemaForCategory(configuredCategory, applicationFormFields);
+        : z.intersection(
+            memberApplicationCreateSchemaForCategory(configuredCategory, applicationFormFields),
+            applicantNamePartsSchema,
+          );
     },
     () => {
       const category = readSelectedCategory(applicationForm);
@@ -421,7 +432,13 @@ async function main(): Promise<void> {
           membershipCategory: category,
           answers: readCustomFieldValues(applicationForm),
         };
-      return applicationContext ? buildApplicationPayload(applicationForm, category, applicationContext) : {};
+      return applicationContext
+        ? {
+            ...buildApplicationPayload(applicationForm, category, applicationContext),
+            firstName: readField(applicationForm, "firstName"),
+            lastName: readField(applicationForm, "lastName"),
+          }
+        : {};
     },
   );
   render(

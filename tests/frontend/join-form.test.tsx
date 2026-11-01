@@ -7,6 +7,7 @@ import { installLiveValidation, validateBeforeSubmit } from "../../assets/ts/sha
 import { afterEach, describe, expect, it } from "vitest";
 import {
   buildApplicationPayload,
+  applicantNamePartsSchema,
   applyCategoryUI,
   configureMembershipLegalFields,
   filterApplicationFieldsForApplicantKind,
@@ -433,5 +434,20 @@ describe("join-form helpers", () => {
     renderMembershipCategorySummary(container, []);
     expect(container.querySelector("ul")).toBeNull();
     expect(container.textContent).toBe("No eligible individual categories are currently available.");
+  });
+});
+
+describe("applicant name parts", () => {
+  it("requires both the first and the last name", () => {
+    expect(applicantNamePartsSchema.safeParse({ firstName: "Ada", lastName: "Lovelace" }).success).toBe(true);
+    const missing = applicantNamePartsSchema.safeParse({ firstName: " ", lastName: "" });
+    expect(missing.error?.issues.map((issue) => [issue.path[0], issue.message])).toEqual([
+      ["firstName", "First name is required"],
+      ["applicantName", "Last name is required"],
+    ]);
+    const last = applicantNamePartsSchema.safeParse({ firstName: "Ada", lastName: " " });
+    expect(last.error?.issues.map((issue) => [issue.path[0], issue.message])).toEqual([
+      ["applicantName", "Last name is required"],
+    ]);
   });
 });
