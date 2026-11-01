@@ -569,6 +569,8 @@ Plan the sessions you want to attend in [My agenda &rarr;]({{myAgendaUrl}})
 {{/if}}
 
 If you did not request this email, you can safely ignore it.
+
+{{> sponsors_block}}
 `,
   },
 
