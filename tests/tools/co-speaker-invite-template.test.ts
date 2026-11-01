@@ -25,7 +25,7 @@ describe("co-speaker invitation template", () => {
         proposalTitle: "Post-Quantum Migration Strategies",
         proposalAbstract: "A practical guide to migrating enterprise PKI.",
         speakerLineupText: "- Ada Lovelace (Example Org)",
-        manageUrl: "https://pkic.org/events/2026/pqc-2026/propose/speaker/?token=t",
+        manageUrl: "https://pkic.org/portal/#/events/pqc-2026/proposals/proposal-1/participation?speaker=user-1",
       },
       "markdown",
     );
@@ -35,7 +35,9 @@ describe("co-speaker invitation template", () => {
     expect(rendered).toContain("A practical guide to migrating enterprise PKI.");
     expect(rendered).toContain("only once you accept");
     expect(rendered).toContain("decline");
-    expect(rendered).toContain('href="https://pkic.org/events/2026/pqc-2026/propose/speaker/?token=t"');
+    expect(rendered).toContain(
+      'href="https://pkic.org/portal/#/events/pqc-2026/proposals/proposal-1/participation?speaker=user-1"',
+    );
   });
 
   it.each([

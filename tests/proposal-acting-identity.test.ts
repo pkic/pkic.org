@@ -253,7 +253,9 @@ describe("proposal speaker acting identity", () => {
     expect(data.invitedByDisplay).toBeTruthy();
     expect(JSON.stringify(data.proposalTitle)).toContain(f.body.proposal.title);
     expect(data.proposalAbstract).toBeTruthy();
-    expect(String(data.manageUrl)).toContain("/propose/speaker/");
+    expect(new URL(String(data.manageUrl)).hash).toBe(
+      `#/events/pqc-2026/proposals/${proposalId}/participation?speaker=${coUserId}`,
+    );
     // A new person starts with their personal account identity; an organization identity waits for their own mailbox proof.
     const second = await submitWithCoSpeaker(f, newcomer);
     const created = await env.DB.prepare("SELECT id FROM users WHERE normalized_email=?")
