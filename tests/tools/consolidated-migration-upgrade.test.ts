@@ -1331,7 +1331,11 @@ it("upgrades pre-0035 profiles through 0038 so identities alone own organization
             WHERE id = 'registration-empty';
         `);
       }
+      // D1 applies each migration file atomically; the registration rebuild needs
+      // that transaction while foreign keys are deferred.
+      if (migrationNumber(fileName) === 39) db.exec("BEGIN");
       db.exec(fs.readFileSync(path.join(MIGRATIONS_DIR, fileName), "utf8"));
+      if (migrationNumber(fileName) === 39) db.exec("COMMIT");
     }
 
     expect(db.prepare("PRAGMA integrity_check").get()).toEqual({ integrity_check: "ok" });

@@ -304,7 +304,7 @@ describe("group event attendee management", () => {
       .bind(
         JSON.stringify([
           { value: "in_person", label: "In-person", capacity: 1 },
-          { value: "livestream", label: "Live stream", capacity: null },
+          { value: "livestream_lounge", label: "Live stream", capacity: null },
         ]),
         event.id,
       )
@@ -314,7 +314,7 @@ describe("group event attendee management", () => {
       `/api/v1/groups/${fixture.ownerGroupId}/events/${event.id}/registrations/${registrationId}/day-attendance`,
       {
         method: "PATCH",
-        body: JSON.stringify({ action: "livestream", dayDates: ["2027-04-12"] }),
+        body: JSON.stringify({ action: "livestream_lounge", dayDates: ["2027-04-12"] }),
       },
     );
     expect(customAttendance.status, await customAttendance.clone().text()).toBe(200);
@@ -325,7 +325,12 @@ describe("group event attendee management", () => {
       )
         .bind(registrationId)
         .first(),
-    ).toEqual({ attendance_type: "livestream" });
+    ).toEqual({ attendance_type: "livestream_lounge" });
+    expect(
+      await env.DB.prepare("SELECT attendance_type FROM registrations WHERE id = ?").bind(registrationId).first(),
+    ).toEqual({
+      attendance_type: "livestream_lounge",
+    });
     const unsupportedAttendance = await request(
       fixture.ownerLeaderToken,
       `/api/v1/groups/${fixture.ownerGroupId}/events/${event.id}/registrations/${registrationId}/day-attendance`,
@@ -342,7 +347,7 @@ describe("group event attendee management", () => {
       )
         .bind(registrationId)
         .first(),
-    ).toEqual({ attendance_type: "livestream" });
+    ).toEqual({ attendance_type: "livestream_lounge" });
 
     for (const body of [
       { mode: "vip", reason: "x", dayDates: ["2027-04-12"] },

@@ -70,6 +70,50 @@ describe("registration workflows", () => {
 
   afterEach(() => vi.unstubAllGlobals());
 
+  it("registers and confirms a configured custom attendance type", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    await env.DB.prepare(
+      `INSERT INTO event_days (id, event_id, day_date, label, attendance_options_json, sort_order, created_at, updated_at)
+       VALUES (?, ?, '2026-12-01', 'Day 1', ?, 10, datetime('now'), datetime('now'))`,
+    )
+      .bind(
+        crypto.randomUUID(),
+        eventId,
+        JSON.stringify([{ value: "livestream_lounge", label: "Livestream lounge", capacity: null }]),
+      )
+      .run();
+
+    const response = await postRegistration({
+      firstName: "Lounge",
+      lastName: "Attendee",
+      email: "lounge@example.test",
+      attendanceType: "livestream_lounge",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "livestream_lounge" }],
+      sourceType: "direct",
+      consents: [
+        { termKey: "privacy-policy", version: "v1" },
+        { termKey: "code-of-conduct", version: "v1" },
+      ],
+    });
+    expect(response.status, await response.clone().text()).toBe(200);
+    const { registrationId } = (await response.json()) as { registrationId: string };
+    const [email] = await queryAll<{ payload_json: string }>(
+      env.DB,
+      "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirm_email' ORDER BY created_at DESC LIMIT 1",
+    );
+    const confirmation = await postConfirmation({ token: await extractConfirmationToken(email.payload_json) });
+    expect(confirmation.status, await confirmation.clone().text()).toBe(200);
+    expect(
+      await queryAll(
+        env.DB,
+        `SELECT registration.attendance_type, day.attendance_type AS day_attendance_type
+      FROM registrations registration JOIN registration_day_attendance day ON day.registration_id = registration.id
+      WHERE registration.id = ?`,
+        registrationId,
+      ),
+    ).toEqual([{ attendance_type: "livestream_lounge", day_attendance_type: "livestream_lounge" }]);
+  });
+
   /** Registration creates no membership; verified approved domains establish affiliation. */
   it.each([true, false])(
     "confirms registration with automatic affiliation only for an approved domain (approved: %s)",

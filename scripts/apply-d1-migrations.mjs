@@ -7,6 +7,7 @@ import { wranglerTargetArgs } from "./lib/wrangler-target.mjs";
 
 const migrationName = "0035_membership_portal_governance.sql";
 const retirementMigrationName = "0037_retire_legacy_account_role.sql";
+const attendanceMigrationName = "0039_event_promotion_kits.sql";
 const migrationDir = fileURLToPath(new URL("../migrations/", import.meta.url));
 
 function wrangler(args, stdio = "inherit") {
@@ -91,6 +92,14 @@ export function apply(environment) {
     // The retirement trigger needs the same remote trigger-parser workaround.
     // Import intervening migrations in order so 0037 never skips its prerequisites.
     for (const name of pending.filter((name) => name > migrationName && name <= retirementMigrationName)) {
+      importMigration(environment, name);
+    }
+  }
+
+  if (pending.includes(attendanceMigrationName)) {
+    // Migration 0039 now recreates registration triggers. Import it and any
+    // earlier pending files atomically, including each file's ledger entry.
+    for (const name of pending.filter((name) => name > retirementMigrationName && name <= attendanceMigrationName)) {
       importMigration(environment, name);
     }
   }
