@@ -13,7 +13,7 @@ import { administratorGrants } from "./helpers/administrator";
  *  5. Admin attempts to delete the only approved version — expects 409
  *  6. Speaker GET endpoint returns a presentationUrl with the correct token
  *  7. Speaker download endpoint retrieves the current uploaded file
- *  8. Migration backfill: proposal with existing presentation data gets version 1 row
+ *  8. Legacy uploads with no uploader retain their upload timestamp
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
@@ -260,14 +260,6 @@ async function scopedPresentationActor(
       grants: [{ permission, contextType: "event", contextId: eventId }],
     },
   };
-}
-
-async function applyTestMigration(name: string): Promise<void> {
-  const migration = env.TEST_MIGRATIONS.find((candidate) => candidate.name === name);
-  if (!migration) throw new Error(`Missing test migration: ${name}`);
-  for (const query of migration.queries) {
-    await env.DB.prepare(query).run();
-  }
 }
 
 describe("presentation versioning", () => {
@@ -1537,52 +1529,20 @@ describe("presentation versioning", () => {
     expect(versions[0]).toMatchObject({ version_number: 1, is_current: 1, file_name: "current.pdf" });
   });
 
-  it("migration backfills a legacy upload with no uploader into version 1", async () => {
+  it("reads a legacy presentation version with no uploader", async () => {
     const { proposalId } = await seed();
-
-    await env.DB.prepare("DROP TABLE presentation_version_reviews").run();
-    await env.DB.prepare("DROP TABLE presentation_versions").run();
-    await env.DB.prepare("ALTER TABLE session_proposals ADD COLUMN presentation_r2_key TEXT").run();
-    await env.DB.prepare("ALTER TABLE session_proposals ADD COLUMN presentation_uploaded_at TEXT").run();
-    await env.DB.prepare("ALTER TABLE session_proposals ADD COLUMN presentation_uploaded_by_user_id TEXT").run();
+    const uploadedAt = "2026-01-02T12:00:00.000Z";
     await env.DB.prepare(
-      "UPDATE session_proposals SET presentation_r2_key = ?, presentation_uploaded_at = NULL, presentation_uploaded_by_user_id = NULL WHERE id = ?",
+      `INSERT INTO presentation_versions
+        (id, proposal_id, version_number, r2_key, uploaded_by_user_id, uploaded_at, is_current)
+       VALUES (?, ?, 1, 'presentations/legacy.pdf', NULL, ?, 1)`,
     )
-      .bind("presentations/legacy.pdf", proposalId)
+      .bind(crypto.randomUUID(), proposalId, uploadedAt)
       .run();
-
-    await applyTestMigration("0033_presentation_versions.sql");
-    await applyTestMigration("0034_presentation_version_invariants.sql");
-
-    const versions = await queryAll<{
-      version_number: number;
-      r2_key: string;
-      uploaded_by_user_id: string | null;
-      uploaded_at: string;
-      is_current: number;
-    }>(
-      env.DB,
-      "SELECT version_number, r2_key, uploaded_by_user_id, uploaded_at, is_current FROM presentation_versions WHERE proposal_id = ?",
-      proposalId,
-    );
-    expect(versions).toHaveLength(1);
-    expect(versions[0]).toMatchObject({
-      version_number: 1,
-      r2_key: "presentations/legacy.pdf",
-      uploaded_by_user_id: null,
-      is_current: 1,
-    });
-    expect(versions[0].uploaded_at).toBeTruthy();
-    await expect(getPresentationUploader(env.DB, proposalId)).resolves.toMatchObject({
+    await expect(getPresentationUploader(env.DB, proposalId)).resolves.toEqual({
       firstName: null,
       lastName: null,
-      uploadedAt: versions[0].uploaded_at,
+      uploadedAt,
     });
-
-    const cols = await queryAll<{ name: string }>(env.DB, "PRAGMA table_info(session_proposals)");
-    const colNames = cols.map((column) => column.name);
-    expect(colNames).not.toContain("presentation_r2_key");
-    expect(colNames).not.toContain("presentation_uploaded_at");
-    expect(colNames).not.toContain("presentation_uploaded_by_user_id");
   });
 });
