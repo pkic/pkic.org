@@ -2802,7 +2802,8 @@ describe("speaker nomination by attendees", () => {
           body: JSON.stringify({
             firstName: "Attendee",
             lastName: "Nominator",
-            email: "nominator@pkic.org",
+            email: "nominator@gmail.com",
+            unaffiliatedAttestation: true,
             dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
             sourceType: "direct",
             consents: [
@@ -2834,6 +2835,7 @@ describe("speaker nomination by attendees", () => {
         { eventSlug: "pqc-2026" },
       ),
     );
+    expect(confirmResponse.status, await confirmResponse.clone().text()).toBe(200);
     const confirmPayload = (await confirmResponse.json()) as { manageToken: string };
     return confirmPayload.manageToken;
   }
