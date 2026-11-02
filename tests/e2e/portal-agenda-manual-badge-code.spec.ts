@@ -109,6 +109,7 @@ test("the registration desk switches between immediate labels and full badges", 
   await page.goto(labelsPage);
   // Patch the parent document after hash navigation, before an iframe can print.
   await page.evaluate(() => {
+    let printCalls = 0;
     const descriptor = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, "contentWindow");
     if (!descriptor?.get) throw new Error("The browser must expose iframe windows");
     Object.defineProperty(HTMLIFrameElement.prototype, "contentWindow", {
@@ -117,7 +118,8 @@ test("the registration desk switches between immediate labels and full badges", 
         const frameWindow = descriptor.get!.call(this) as Window | null;
         if (frameWindow) {
           frameWindow.print = () => {
-            this.setAttribute("data-print-called", "1");
+            printCalls += 1;
+            this.setAttribute("data-print-called", String(printCalls));
             frameWindow.dispatchEvent(new Event("afterprint"));
           };
         }
@@ -151,7 +153,7 @@ test("the registration desk switches between immediate labels and full badges", 
   await page.getByRole("button", { name: "Print settings", exact: true }).click();
   await page.getByRole("menuitemradio", { name: "1 label", exact: true }).click();
   await page.getByRole("button", { name: "Print labels again", exact: true }).click();
-  await expect(document).toHaveAttribute("data-print-called", "1");
+  await expect(document).toHaveAttribute("data-print-called", "2");
   await expect(page.frameLocator('iframe[title="Attendee label print document"]').getByRole("img")).toHaveCount(1);
   expect(artwork).toEqual([]);
   const inventory = badgeCredentialsResponseSchema.parse(
@@ -162,7 +164,7 @@ test("the registration desk switches between immediate labels and full badges", 
   await page.getByRole("menuitemradio", { name: "Full badges", exact: true }).click();
   await page.getByRole("button", { name: "Print badges again", exact: true }).click();
   const fullDocument = page.locator('iframe[title="Attendee badge print document"]');
-  await expect(fullDocument).toHaveAttribute("data-print-called", "1");
+  await expect(fullDocument).toHaveAttribute("data-print-called", "3");
   const full = page.frameLocator('iframe[title="Attendee badge print document"]');
   await expect(full.locator(".badge-print-sheet")).toHaveCount(2);
   await expect(full.locator(".badge-template-surface")).toHaveCount(2);
@@ -170,7 +172,7 @@ test("the registration desk switches between immediate labels and full badges", 
   await page.getByRole("button", { name: "Print settings", exact: true }).click();
   await page.getByRole("menuitemradio", { name: "Back only", exact: true }).click();
   await page.getByRole("button", { name: "Print badges again", exact: true }).click();
-  await expect(fullDocument).toHaveAttribute("data-print-called", "1");
+  await expect(fullDocument).toHaveAttribute("data-print-called", "4");
   await expect(full.locator(".badge-print-sheet")).toHaveCount(1);
   await expect(full.locator('[aria-label="Badge back"]')).toHaveCount(1);
   await expect(full.locator('[aria-label="Badge front"]')).toHaveCount(0);
@@ -182,7 +184,7 @@ test("the registration desk switches between immediate labels and full badges", 
   await page.screenshot({ path: info.outputPath("print-mode-settings-phone.png"), fullPage: true });
   await page.getByRole("menuitemradio", { name: "Labels", exact: true }).click();
   await page.getByRole("button", { name: "Print labels again", exact: true }).click();
-  await expect(document).toHaveAttribute("data-print-called", "1");
+  await expect(document).toHaveAttribute("data-print-called", "5");
   await expect(page.frameLocator('iframe[title="Attendee label print document"]').getByRole("img")).toHaveCount(1);
   expect(artwork).toHaveLength(1);
   await page.setViewportSize({ width: 1280, height: 900 });

@@ -5,7 +5,7 @@ import type { PreviewSection } from "./PreviewShell";
 export const registrationRosterActionsSection: PreviewSection = {
   id: "registration-roster-actions",
   title: "Registration exports",
-  note: "The CSV download stays in the roster toolbar and is disabled when restored filters are invalid.",
+  note: "The CSV download label names its scope: registered and pending registrations by default. Invalid restored filters disable it.",
   render: () => (
     <Panel>
       <PanelHeader title="Registrations">

@@ -136,6 +136,7 @@ export function GroupEventRegistrations({
                 <RegistrationRosterActions
                   promotionsEndpoint={`${registrationEndpoint}/promotions`}
                   exportsEndpoint={registrationRosterExportUrl(`${registrationEndpoint}/exports`, query)}
+                  exportHasStatusFilter={Boolean(query.status)}
                   onPromoted={() => tableRef.current?.reload()}
                   notify={toast}
                   onPrintAllMatching={
