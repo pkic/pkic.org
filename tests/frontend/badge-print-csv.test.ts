@@ -1,3 +1,4 @@
+import printerTemplate from "../../data/badge-personalization.json";
 import { describe, expect, it } from "vitest";
 import { composeBadgePrintSvg } from "../../assets/shared/badge-print-svg";
 import { badgePrintCsv, type PrintableBadgePrint } from "../../assets/ts/components/event-badges/badge-print-artifacts";
@@ -19,7 +20,7 @@ const badge: PrintableBadgePrint = {
 describe("printer personalization CSV", () => {
   it("matches the supplied seven-column template, including recovered badge codes", () => {
     expect(badgePrintCsv([badge])).toBe(
-      "\uFEFFrole,first_name,last_name,job_title,organisation,attendee_id,qr_content\r\nAttendee,Synthetic,Attendee,Cryptography Policy Advisor,Example Research Lab,ABCD-EFGH-JKLM-NPQR,ABCDEFGHJKLMNPQR",
+      `\uFEFF${printerTemplate.columns.join(",")}\r\nAttendee,Synthetic,Attendee,Cryptography Policy Advisor,Example Research Lab,ABCD-EFGH-JKLM-NPQR,ABCDEFGHJKLMNPQR`,
     );
     expect(badgePrintCsv([{ ...badge, credential: code }])).toBe(badgePrintCsv([badge]));
   });

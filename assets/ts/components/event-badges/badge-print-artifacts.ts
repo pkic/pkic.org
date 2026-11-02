@@ -1,3 +1,4 @@
+import printerTemplate from "../../../../data/badge-personalization.json";
 import { escapeCsvField } from "../../../shared/csv";
 import { splitBadgePrintSvg } from "../../../shared/badge-print-svg";
 import { badgeCredentialSchema, formatBadgeCredential } from "../../../shared/schemas/badge-credential";
@@ -106,7 +107,7 @@ export function badgePrintCredential(badge: PrintableBadgePrint): string | null 
 
 export function badgePrintCsv(badges: readonly PrintableBadgePrint[]): string {
   // Exact column names from the printer’s supplied personalization template.
-  const header = ["role", "first_name", "last_name", "job_title", "organisation", "attendee_id", "qr_content"];
+  const header = printerTemplate.columns;
   const rows = badges.map((badge) => {
     const credential = badgePrintCredential(badge);
     if (!credential) throw new Error("This badge has no printable QR code. Reload its print document.");
