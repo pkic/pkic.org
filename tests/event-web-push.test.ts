@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
+import { seedSessionAttendanceDays } from "./helpers/session-attendance-days";
+import { instantToCalendarDate } from "../assets/shared/timezone";
 import { seedEventAndAdmin } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { callApi } from "./helpers/app";
@@ -26,6 +28,8 @@ import {
   webPushEndpointSchema,
   webPushNotificationSchema,
 } from "../assets/shared/schemas/event-web-push";
+const EVENT_TIME_ZONE = "Europe/Amsterdam";
+
 let eventId: string,
   userId: string,
   otherId: string,
@@ -65,6 +69,7 @@ async function reminder() {
   )
     .bind(JSON.stringify({ id, title: "Private session name", startAt: start, endAt: end, roomId: null }), eventId)
     .run();
+  await seedSessionAttendanceDays(env.DB, eventId, [instantToCalendarDate(start, EVENT_TIME_ZONE)]);
   return id;
 }
 
@@ -105,7 +110,7 @@ describe("Opt-in browser agenda notifications", () => {
       .bind(
         crypto.randomUUID(),
         eventId,
-        JSON.stringify({ timeZone: "Europe/Amsterdam", occurrences: [], rooms: [] }),
+        JSON.stringify({ timeZone: EVENT_TIME_ZONE, occurrences: [], rooms: [] }),
         userId,
         now,
       )
@@ -225,19 +230,6 @@ describe("Opt-in browser agenda notifications", () => {
     await register();
     const occurrenceId = await reminder();
     const queued = await queueAgendaPushReminders(env.DB);
-    if (queued.queued !== 1)
-      throw new Error(
-        JSON.stringify({
-          queued,
-          outbox: (
-            await env.DB.prepare(
-              "SELECT kind,status,day_date,source_version,idempotency_key FROM agenda_push_outbox",
-            ).all()
-          ).results,
-          entry: (await env.DB.prepare("SELECT sequence,status,start_at FROM agenda_calendar_entries").all()).results,
-          registration: (await env.DB.prepare("SELECT status FROM registrations").all()).results,
-        }),
-      );
     expect(queued).toEqual({ queued: 1 });
     // A reminder opens the event app's agenda filtered to the reader's own sessions.
     expect(await env.DB.prepare("SELECT destination FROM agenda_push_outbox").first("destination")).toMatch(

@@ -24,6 +24,8 @@ import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { profileD1Flow } from "./helpers/d1-flow-profile";
 import { insertUser } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
+import { seedSessionAttendanceDays } from "./helpers/session-attendance-days";
+import { instantToCalendarDate } from "../assets/shared/timezone";
 
 const groupId = "20000000-0000-4000-8000-000000000003";
 const nativeEventContext = nativeEventCaptureContextSchema.parse({
@@ -188,6 +190,10 @@ describe("Native meeting event-wide captured calendar context", () => {
     )
       .bind(registrationId, eventId, userId, crypto.randomUUID(), nowIso(), nowIso())
       .run();
+    await seedSessionAttendanceDays(env.DB, eventId, [
+      instantToCalendarDate(observedAt, nativeEventContext.timeZone),
+      instantToCalendarDate(nowIso(), nativeEventContext.timeZone),
+    ]);
     // Keep the badge valid while preserving the fixed calendar and DST observations.
     const issued = await request("/api/v1/events/native-capture/badges", {
       operationId: crypto.randomUUID(),

@@ -101,9 +101,9 @@ export async function recordScan(
   const missingBooking = scan.occurrenceId
     ? `NOT EXISTS(SELECT 1 FROM (${publishedSessionsSql}) session WHERE session.id=target.occurrence_id AND session.event_id=badge.event_id AND ${sessionAccessEligibleSql("session", "badge.user_id", "'physical'")})`
     : "0=1";
-  const physicalDay = `${registrationDaySessionAccessSql("reg", "target.day_date")}<>'in_person'`;
-  const outcomeSql = `CASE WHEN badge.revoked_at IS NOT NULL OR (badge.expires_at IS NOT NULL AND badge.expires_at<=?) THEN 'denied' WHEN ${wrongLocation ? "1=1" : "0=1"} THEN 'warning' WHEN ${registration} OR (${missingBooking}) OR ${physicalDay} THEN 'warning' WHEN NOT (${capture.sql}) THEN 'unverified' ELSE 'eligible' END`;
-  const reasonSql = `CASE WHEN badge.revoked_at IS NOT NULL THEN 'revoked_badge' WHEN badge.expires_at IS NOT NULL AND badge.expires_at<=? THEN 'expired_badge' WHEN ${wrongLocation ? "1=1" : "0=1"} THEN 'wrong_location' WHEN reg.status='cancelled' THEN 'canceled_registration' WHEN ${registration} OR (${missingBooking}) THEN 'missing_registration' WHEN ${physicalDay} THEN 'wrong_attendance_mode' WHEN NOT (${capture.sql}) THEN 'verification_required' ELSE 'eligible' END`;
+  const wrongAttendanceMode = `(target.day_date IS NOT NULL AND ${registrationDaySessionAccessSql("reg", "target.day_date")}<>'in_person')`;
+  const outcomeSql = `CASE WHEN badge.revoked_at IS NOT NULL OR (badge.expires_at IS NOT NULL AND badge.expires_at<=?) THEN 'denied' WHEN ${wrongLocation ? "1=1" : "0=1"} THEN 'warning' WHEN ${registration} OR (${missingBooking}) OR ${wrongAttendanceMode} THEN 'warning' WHEN NOT (${capture.sql}) THEN 'unverified' ELSE 'eligible' END`;
+  const reasonSql = `CASE WHEN badge.revoked_at IS NOT NULL THEN 'revoked_badge' WHEN badge.expires_at IS NOT NULL AND badge.expires_at<=? THEN 'expired_badge' WHEN ${wrongLocation ? "1=1" : "0=1"} THEN 'wrong_location' WHEN reg.status='cancelled' THEN 'canceled_registration' WHEN ${registration} OR (${missingBooking}) THEN 'missing_registration' WHEN ${wrongAttendanceMode} THEN 'wrong_attendance_mode' WHEN NOT (${capture.sql}) THEN 'verification_required' ELSE 'eligible' END`;
   const statements = [
     db
       .prepare(

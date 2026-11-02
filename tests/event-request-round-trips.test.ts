@@ -4,6 +4,7 @@ import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { eventDetailResponseSchema, eventsListResponseSchema } from "../assets/shared/schemas/event-management";
 import { createEventScannerFixture } from "./helpers/event-scanner-fixture";
+import { clearSessionAttendanceDays } from "./helpers/session-attendance-days";
 import { readEventAdminContext } from "../functions/_lib/services/events/authorized-context";
 import { buildRegistrationManageView } from "../functions/_lib/services/registrations/manage-view";
 import { getRegistrationById } from "../functions/_lib/services/registrations/queries";
@@ -40,6 +41,7 @@ describe("one D1 round trip for event configuration endpoints", () => {
   });
 
   it("includes live authorization, the event, days, and registered counts in one read", async () => {
+    await clearSessionAttendanceDays(env.DB, f.eventId);
     await env.DB.batch([
       env.DB.prepare(`INSERT INTO event_days(id,event_id,day_date,label,in_person_capacity,sort_order,created_at,updated_at)
         VALUES('budget-day',?,'2026-12-01','First day',2,0,?,?)`).bind(

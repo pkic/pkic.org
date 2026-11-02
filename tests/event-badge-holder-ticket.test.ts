@@ -14,6 +14,8 @@ import { hashBadgeCredential } from "../functions/_lib/services/event-participat
 import { createEventScannerFixture } from "./helpers/event-scanner-fixture";
 import { callApi } from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
+import { seedSessionAttendanceDays } from "./helpers/session-attendance-days";
+import { instantToCalendarDate } from "../assets/shared/timezone";
 
 const fixture = createEventScannerFixture();
 const base = "/api/v1/events/scan-test/badges";
@@ -99,6 +101,7 @@ describe("The holder's own badge ticket", () => {
 
   it("issues one credential to a confirmed registration without a badge, and the scanner admits its code", async () => {
     const userId = await person();
+    await seedSessionAttendanceDays(env.DB, fixture.eventId, [instantToCalendarDate(fixture.observedAt, "UTC")]);
     const token = await sessionFor(userId);
     const [first, concurrent] = await Promise.all([ticket(token), ticket(token)]);
     expect(first.status, await first.clone().text()).toBe(200);

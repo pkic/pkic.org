@@ -5,6 +5,7 @@ import { createMemberSession } from "./helpers/auth";
 import { seedEventAndAdmin, deliveredEmailPayload } from "./helpers/context";
 import { insertIndividualMember, insertUser } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
+import { seedSessionAttendanceDays } from "./helpers/session-attendance-days";
 import { createProposal, getProposalById, updateProposalForVerifiedOwner } from "../functions/_lib/services/proposals";
 import { registrationManageReadResponseSchema } from "../assets/shared/schemas/registration";
 import { proposalAccessReadResponseSchema } from "../assets/shared/schemas/proposal-management";
@@ -95,6 +96,7 @@ describe("session-owned event participation", () => {
 
   it("preserves registration verification, cancellation and restore rules", async () => {
     const f = await fixture();
+    await seedSessionAttendanceDays(env.DB, f.eventId, ["2026-12-01"]);
     const path = `/api/v1/registrations/${f.registrationId}`;
     const update = await request(path, f.tokens[0], { action: "update", firstName: "Updated attendee" });
     expect(update.status, await update.clone().text()).toBe(200);

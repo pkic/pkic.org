@@ -23,6 +23,8 @@ import { queryAll } from "./helpers/context";
 import { gateNextBatch } from "./helpers/d1-batch-gate";
 import { createEventScannerFixture } from "./helpers/event-scanner-fixture";
 import { insertUser } from "./helpers/membership";
+import { seedSessionAttendanceDays } from "./helpers/session-attendance-days";
+import { instantToCalendarDate } from "../assets/shared/timezone";
 
 const fixture = createEventScannerFixture();
 const base = "/api/v1/events/scan-test";
@@ -101,6 +103,7 @@ async function receive(record: OfflineScanRecord, token: string) {
 
 it("interleaves two prepared last-seat claims with online and delayed attendance/lead receipts without scanner allocation", async () => {
   const now = new Date().toISOString();
+  const startsAt = new Date(Date.now() + 86400000).toISOString();
   const roomId = crypto.randomUUID(),
     sponsorId = crypto.randomUUID(),
     secondDevice = crypto.randomUUID();
@@ -110,12 +113,7 @@ it("interleaves two prepared last-seat claims with online and delayed attendance
     .bind(roomId, fixture.eventId)
     .run();
   await env.DB.prepare("UPDATE event_agenda_occurrences SET room_id=?,start_at=?,end_at=? WHERE id=?")
-    .bind(
-      roomId,
-      new Date(Date.now() + 86400000).toISOString(),
-      new Date(Date.now() + 90000000).toISOString(),
-      fixture.occurrenceId,
-    )
+    .bind(roomId, startsAt, new Date(Date.now() + 90000000).toISOString(), fixture.occurrenceId)
     .run();
   await env.DB.prepare("UPDATE event_agenda_publications SET snapshot_json=? WHERE event_id=? AND revision=0")
     .bind(JSON.stringify(await getAgenda(env.DB, fixture.eventId, "scan-test")), fixture.eventId)
@@ -125,6 +123,7 @@ it("interleaves two prepared last-seat claims with online and delayed attendance
   )
     .bind(crypto.randomUUID(), fixture.eventId, rival, crypto.randomUUID(), now, now)
     .run();
+  await seedSessionAttendanceDays(env.DB, fixture.eventId, [instantToCalendarDate(startsAt, "UTC")]);
   await env.DB.prepare(
     "INSERT INTO sponsorships(id,sponsor_type,event_id,non_member_name,pipeline_stage,created_at,updated_at) VALUES(?,'event',?,'Concurrent sponsor','active',?,?)",
   )
