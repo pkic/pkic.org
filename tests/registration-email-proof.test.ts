@@ -28,6 +28,7 @@ const consents = [
   { termKey: "code-of-conduct", version: "v1" },
 ];
 
+let requestSequence = 0;
 const post = (path: string, body: unknown) =>
   callApi(
     env,
@@ -36,7 +37,7 @@ const post = (path: string, body: unknown) =>
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "CF-Connecting-IP": `2001:db8::${crypto.getRandomValues(new Uint16Array(1))[0].toString(16)}`,
+        "CF-Connecting-IP": `2001:db8::${(++requestSequence).toString(16)}`,
       },
       body: JSON.stringify(body),
     },
