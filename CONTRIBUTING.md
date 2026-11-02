@@ -180,7 +180,8 @@ local inbox; no local command delivers email. It shares its serving code with
 
 Both hot-reload by default: the Vite dev server runs the Worker from source
 against the state directory, and a watching client build rewrites the portal
-bundle under stable development names. Pass `--build` to serve the bundled
+bundle with stable entry names and content-hashed dependencies, retaining old
+files so open tabs keep a consistent build. Pass `--build` to serve the bundled
 Worker and built site instead. Development and built behavior differ in these
 ways:
 

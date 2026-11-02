@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { successResponseSchema } from "./api-common";
+import { successResponseSchema, utcInstantSchema } from "./api-common";
 import { eventAttendanceTypeValueSchema, eventSummarySchema } from "./event-read-models";
 import { badgeDisplayRoleSchema } from "./participant-roles";
 import { databaseIdSchema } from "./identifiers";
@@ -143,6 +143,7 @@ export const eventAttendanceRegistrationsQuerySchema = eventRegistrationsQuerySc
     attendance_type: eventAttendanceTypeValueSchema.optional(),
     /** The role band the registration's badge prints. */
     badge_role: badgeDisplayRoleSchema.optional(),
+    created_since: utcInstantSchema.optional(),
   });
 export type EventAttendanceRegistrationsQuery = z.infer<typeof eventAttendanceRegistrationsQuerySchema>;
 

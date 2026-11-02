@@ -48,7 +48,7 @@ export function rehearsalBuildSteps(env, state, { fast = false, watch = false, w
 /**
  * The hot-reloading processes: the Vite dev server compiles and reloads the Worker from
  * source against the rehearsal's state, and a watching client build rewrites the portal
- * bundle under its stable development names, so a page reload shows the change.
+ * bundle under stable entry names and retains hashed dependencies for open tabs.
  */
 export function rehearsalWatchProcesses(env, { root, configPath, state, port, host = "127.0.0.1" }) {
   const devEnv = {

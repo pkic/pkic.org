@@ -26,6 +26,7 @@ import { IconRefresh } from "./icons";
 export interface ApiTableActions {
   reload: () => Promise<void>;
   resetPage: () => void;
+  setFilter?: (param: string, value: string) => void;
 }
 
 export interface ApiDataTableProps<T, Response> extends Omit<DataTableProps<T>, "data" | "currentSort" | "onSort"> {
@@ -255,7 +256,7 @@ export function ApiDataTable<T, Response = unknown>({
     retainDataOnError,
   });
 
-  const actions: ApiTableActions = { reload: collection.reload, resetPage: pager.resetPage };
+  const actions: ApiTableActions = { reload: collection.reload, resetPage: pager.resetPage, setFilter: applyFilter };
   if (actionsRef) actionsRef.current = actions;
 
   const lastNotifiedData = useRef<Response | null>(null);

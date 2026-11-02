@@ -3,7 +3,6 @@ import {
   formatBadgeCredential,
   generateBadgeCredential,
 } from "../../assets/shared/schemas/badge-credential";
-import { splitBadgePrintSvg } from "../../assets/shared/badge-print-svg";
 import { SCAN_STORAGE_VERSION } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/outbox-storage";
 import { archivedScanSchema } from "../../assets/shared/schemas/event-scan-recovery";
 import { expect, test, type Page, type Response, type TestInfo } from "@playwright/test";
@@ -67,7 +66,8 @@ async function issueRenderedBadge(page: Page, decoderUrl: string, email?: string
   const request = badgeIssueRequestSchema.parse(response.request().postDataJSON());
   const badge = badgeIssueResponseSchema.parse(await response.json());
   if (badge.result !== "issued") throw new Error("A new operation must return a fresh printable credential");
-  const qr = page.getByRole("img", { name: "Attendee badge QR code", exact: true });
+  const preview = page.frameLocator('iframe[title="Attendee badge print preview"]');
+  const qr = preview.getByLabel("Badge front", { exact: true }).getByRole("img");
   await expect(qr).toBeVisible();
   await expect.poll(() => qr.evaluate((image) => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
   // Decode the displayed image's actual pixels with the shipped camera fallback, without supplying the expected code.
@@ -76,7 +76,7 @@ async function issueRenderedBadge(page: Page, decoderUrl: string, email?: string
     const image = element as HTMLImageElement;
     const canvas = document.createElement("canvas");
     canvas.width = 512;
-    canvas.height = 512;
+    canvas.height = Math.round((512 * image.naturalHeight) / image.naturalWidth);
     const context = canvas.getContext("2d");
     if (!context) throw new Error("Could not read rendered badge pixels");
     context.drawImage(image, 0, 0, canvas.width, canvas.height);
@@ -86,21 +86,19 @@ async function issueRenderedBadge(page: Page, decoderUrl: string, email?: string
   }, decoderUrl);
   expect(decoded).toBe(badge.credential);
   expect(badge.credential).not.toBe(badge.id);
-  const preview = page.frameLocator('iframe[title="Attendee badge print preview"]');
   // A printed badge carries the same QR on its front and its back, each with the badge code the scanner's
   // manual entry accepts printed beside it as a fallback when the QR cannot be read.
   const manualCode = formatBadgeCredential(badge.credential);
   expect(badgeCredentialSchema.parse(manualCode)).toBe(decoded);
   const composed = decodeURIComponent((await qr.getAttribute("src"))!.replace("data:image/svg+xml;charset=utf-8,", ""));
-  const split = splitBadgePrintSvg(composed);
-  expect(split?.code).toBe(manualCode);
+  expect(composed).toContain(manualCode);
+  const source = await qr.getAttribute("src");
+  expect(composed).not.toContain(badge.id);
+  expect(composed).not.toContain(decoded);
+  if (email) expect(composed).not.toContain(email);
   for (const side of ["Badge front", "Badge back"]) {
     const face = preview.getByLabel(side, { exact: true });
-    await expect(face.getByRole("img", { name: "Attendee badge QR code", exact: true })).toHaveAttribute(
-      "src",
-      `data:image/svg+xml;charset=utf-8,${encodeURIComponent(split!.qr)}`,
-    );
-    await expect(face.getByText(manualCode, { exact: true })).toBeVisible();
+    await expect(face.getByRole("img")).toHaveAttribute("src", source!);
   }
   await expect(preview.locator("body")).not.toContainText(badge.id);
   await expect(preview.locator("body")).not.toContainText(decoded);

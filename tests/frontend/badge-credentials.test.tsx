@@ -9,7 +9,7 @@ import {
   badgeCredentialsResponseSchema,
   badgeIssueRequestSchema,
   badgePrintingResponseSchema,
-  badgePrintRequestSchema,
+  badgeLabelRequestSchema,
   badgePrintResponseSchema,
 } from "../../assets/shared/schemas/route-contracts-event-badges";
 import { BadgeCredentials } from "../../assets/ts/member-flows/portal/sections/events/detail/badges/BadgeCredentials";
@@ -209,8 +209,8 @@ describe("badge credentials", () => {
         const path = requestUrl(input).pathname;
         if (path.endsWith("/printing"))
           return json(badgePrintingResponseSchema.parse({ revision: "1".repeat(64), template: null, branding: [] }));
-        if (path.endsWith("/print")) {
-          expect(badgePrintRequestSchema.parse(JSON.parse(String(init?.body))).printingRevision).toBe("1".repeat(64));
+        if (path.endsWith("/labels")) {
+          expect(badgeLabelRequestSchema.parse(JSON.parse(String(init?.body))).source).toBe("badge");
           return json(
             badgePrintResponseSchema.parse({
               id: NEXT,
@@ -219,7 +219,7 @@ describe("badge credentials", () => {
               lastName: "Speaker",
               organization: null,
               badgeRole: "speaker",
-              printingRevision: "1".repeat(64),
+              printingRevision: "0".repeat(64),
               expiresAt: metadata.expiresAt,
               svg: '<svg xmlns="http://www.w3.org/2000/svg"><text>Badge code</text><text>ABCD-EFGH-JKLM-NPQR</text></svg>',
             }),
@@ -245,12 +245,9 @@ describe("badge credentials", () => {
     expect(request.replaceBadgeId).toBe(ID);
     expect(host.textContent).not.toContain(BEARER);
     expect(host.textContent).toContain(NEXT);
-    expect(host.querySelector('img[alt="Attendee badge QR code"]')).not.toBeNull();
-    const printable = decodeURIComponent(
-      host.querySelector<HTMLImageElement>('img[alt="Attendee badge QR code"]')!.src.split(",")[1]!,
-    );
-    expect(printable).toContain(">Badge code</text>");
-    expect(printable).toContain(">ABCD-EFGH-JKLM-NPQR</text>");
+    const frame = host.querySelector("iframe");
+    expect(frame).not.toBeNull();
+    expect(decodeURIComponent(frame!.getAttribute("srcdoc")!)).toContain("ABCD-EFGH-JKLM-NPQR");
     expect(qr).not.toHaveBeenCalled();
     await click(host, "Badge actions");
     await click(host, "View badge");
@@ -280,7 +277,7 @@ describe("badge credentials", () => {
     const first = badgeIssueRequestSchema.parse(bodies[0]);
     const retry = badgeIssueRequestSchema.parse(bodies[1]);
     expect(retry).toEqual(first);
-    expect(host.textContent).toContain("This request was already completed");
+    expect(host.textContent).toContain("Badge replaced");
     expect(host.querySelector("img")).toBeNull();
     expect(host.textContent).not.toContain(BEARER);
     expect(qr).not.toHaveBeenCalled();

@@ -39,7 +39,7 @@ export function RegistrationRosterActions({
         align="end"
         items={[
           ...(onPrintAllMatching
-            ? [{ id: "print-all-matching", label: "Create / print all matching badges", onSelect: onPrintAllMatching }]
+            ? [{ id: "print-all-matching", label: "Print all matching labels", onSelect: onPrintAllMatching }]
             : []),
           {
             id: "waitlist-promotions",

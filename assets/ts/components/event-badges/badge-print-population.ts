@@ -14,11 +14,11 @@ export type BadgePrintScope =
   | { kind: "filtered"; endpoint: string; filters: ReturnType<typeof filtersSchema.parse> };
 
 export function filteredBadgePrintScope(endpoint: string, query: Readonly<Record<string, string>>): BadgePrintScope {
-  const { q, status, waitlisted, attendance_type, badge_role } = query;
+  const { q, status, waitlisted, attendance_type, badge_role, created_since } = query;
   return {
     kind: "filtered",
     endpoint,
-    filters: filtersSchema.parse({ q, status, waitlisted, attendance_type, badge_role }),
+    filters: filtersSchema.parse({ q, status, waitlisted, attendance_type, badge_role, created_since }),
   };
 }
 

@@ -1,3 +1,4 @@
+import { buildD1TextSearchFilter } from "../../db/search";
 import { publicUserHeadshotPath } from "../user-headshot";
 import { registrationJobTitleSql, registrationOrganizationSql } from "../registrations/selected-identity";
 import {
@@ -13,8 +14,12 @@ export function badgeAttendeeEligibilitySql(registrationAlias: string, userAlias
 }
 export async function badgeAttendees(db: DatabaseLike, eventId: string, raw: unknown) {
   const query = badgeAttendeeQuerySchema.parse(raw);
-  const from = `FROM registrations reg JOIN users u ON u.id=reg.user_id WHERE reg.event_id=? AND ${badgeAttendeeEligibilitySql("reg", "u")} AND INSTR(LOWER(COALESCE(u.email,'')||' '||COALESCE(u.first_name,'')||' '||COALESCE(u.last_name,'')),LOWER(?))>0`;
-  const bindings = [eventId, query.q ?? ""];
+  const name = "TRIM(COALESCE(u.preferred_name,u.first_name,'') || ' ' || COALESCE(u.last_name,''))";
+  const search = query.q?.trim()
+    ? buildD1TextSearchFilter(query.q, [name, "u.email", registrationOrganizationSql("reg")])
+    : null;
+  const from = `FROM registrations reg JOIN users u ON u.id=reg.user_id WHERE reg.event_id=? AND ${badgeAttendeeEligibilitySql("reg", "u")} ${search ? `AND ${search.sql}` : ""}`;
+  const bindings = [eventId, ...(search?.bindings ?? [])];
   const count = await first<{ total: number }>(db, `SELECT COUNT(*) AS total ${from}`, bindings);
   const users = await all<{
     id: string;

@@ -1,0 +1,8 @@
+@layer components {
+  /* An isolated screen proof shows its own heading, without the gallery chrome. */
+  body:has(.pk-preview__main > #badge-label-desk:only-child) .pk-preview__bar,
+  body:has(.pk-preview__main > #badge-label-desk:only-child) .pk-preview__toc,
+  #badge-label-desk:only-child > h2 {
+    display: none;
+  }
+}

@@ -8,7 +8,7 @@ import {
 } from "../../assets/shared/schemas/event-badge-printing";
 import {
   badgeIssueRequestSchema,
-  badgePrintRequestSchema,
+  badgeLabelRequestSchema,
   badgeCredentialMetadataSchema,
   badgePrintingResponseSchema,
 } from "../../assets/shared/schemas/route-contracts-event-badges";
@@ -51,7 +51,7 @@ vi.mock("../../assets/ts/components/event-badges/badge-print-artifacts", async (
   ...(await importOriginal<typeof import("../../assets/ts/components/event-badges/badge-print-artifacts")>()),
   downloadBadgeArtifact: vi.fn(),
 }));
-const printing = badgePrintingResponseSchema.parse({ revision: "1".repeat(64), template: null, branding: [] });
+const printing = badgePrintingResponseSchema.parse({ revision: "0".repeat(64), template: null, branding: [] });
 const printDetails = {
   firstName: "Synthetic",
   lastName: "Attendee",
@@ -179,7 +179,7 @@ it("keeps the actual management refusal authoritative and never issues a badge",
   expect(fetch).toHaveBeenCalledTimes(1);
 });
 
-it("loads every filtered page before confirmation, retains successful badges on refusal and retries the same remaining operation", async () => {
+it("loads every filtered page before preparing labels, retains successful badges on refusal and retries the same remaining operation", async () => {
   const bodies: ReturnType<typeof badgeIssueRequestSchema.parse>[] = [];
   let reads = 0;
   let refused = false;
@@ -188,10 +188,10 @@ it("loads every filtered page before confirmation, retains successful badges on 
     vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
       const pathname = new URL(String(input), location.origin).pathname;
       if (pathname.endsWith("/printing")) return json(printing);
-      if (pathname.endsWith("/print")) {
-        const parsed = badgePrintRequestSchema.parse(JSON.parse(String(init.body)));
-        expect(parsed.printingRevision).toBe(printing.revision);
-        const id = pathname.split("/").at(-2)!;
+      if (pathname.endsWith("/labels")) {
+        const parsed = badgeLabelRequestSchema.parse(JSON.parse(String(init.body)));
+        expect(parsed.source).toBe("badge");
+        const id = parsed.source === "badge" ? parsed.badgeId : "";
         const index = Number(id.slice(-12));
         return json({
           ...printDetails,
@@ -258,9 +258,6 @@ it("loads every filtered page before confirmation, retains successful badges on 
       host,
     ),
   );
-  await vi.waitFor(() => expect(host.textContent).toContain("0 of 3 requests completed"));
-  expect(bodies).toHaveLength(0);
-  await click(host, "Create all matching badges");
   await vi.waitFor(() => expect(host.textContent).toContain("Synthetic partial refusal"));
   expect(host.textContent).toContain("1 of 3 requests completed");
   expect(host.querySelector("iframe")?.getAttribute("srcdoc")).toContain("Synthetic attendee 1");
@@ -269,10 +266,71 @@ it("loads every filtered page before confirmation, retains successful badges on 
   expect(bodies.map((body) => body.userId)).toEqual([row(1).user_id, row(2).user_id, row(2).user_id, row(3).user_id]);
   expect(bodies.at(1)!.operationId).toBe(bodies.at(2)!.operationId);
   expect(reads).toBe(3);
-  expect(confirmAction).toHaveBeenCalledTimes(1);
-  expect(vi.mocked(confirmAction).mock.calls[0]?.[0]?.body).toContain("Prepare badges for 3 registrations");
+  expect(confirmAction).not.toHaveBeenCalled();
   const preview = host.querySelector("iframe")?.getAttribute("srcdoc");
   for (let index = 1; index <= 3; index++) expect(preview).toContain(`Synthetic attendee ${index}`);
+});
+
+it("automatically prepares 100 selected attendees as 200 labels without loading full artwork", async () => {
+  const rows = Array.from({ length: 100 }, (_, index) => row(index + 1));
+  const fetch = vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+    const path = new URL(String(input), location.origin).pathname;
+    if (path.endsWith("/printing")) throw new Error("Full artwork must remain lazy");
+    if (path.endsWith("/badges")) {
+      const body = badgeIssueRequestSchema.parse(JSON.parse(String(init.body)));
+      return json({
+        result: "existing",
+        id: body.userId,
+        credential: null,
+        replacedBadgeId: null,
+        expiresAt: "2099-01-01T00:00:00.000Z",
+      });
+    }
+    const label = path.endsWith("/labels") ? badgeLabelRequestSchema.parse(JSON.parse(String(init.body))) : null;
+    const id = label?.source === "badge" ? label.badgeId : path.split("/").at(-1)!;
+    const index = Number(id.slice(-12));
+    if (label)
+      return json({
+        ...printDetails,
+        id,
+        svg: '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0h1v1H0z"/></svg>',
+        displayName: row(index).display_name,
+        expiresAt: "2099-01-01T00:00:00.000Z",
+      });
+    return json({
+      id,
+      eventId,
+      userId: id,
+      displayName: row(index).display_name,
+      createdAt: "2026-11-01T00:00:00.000Z",
+      expiresAt: "2099-01-01T00:00:00.000Z",
+      revokedAt: null,
+      status: "active",
+      reprintAvailable: true,
+    });
+  });
+  vi.stubGlobal("fetch", fetch);
+  const host = document.createElement("div");
+  document.body.append(host);
+  mounted.push(host);
+  await act(() =>
+    render(
+      <RegistrationBadgePrinting
+        slug="workshop"
+        eventId={eventId}
+        scope={{ kind: "selected", rows }}
+        isCurrent={() => true}
+        onBack={vi.fn()}
+      />,
+      host,
+    ),
+  );
+  await vi.waitFor(() => expect(host.textContent).toContain("100 of 100 requests completed"));
+  const html = host.querySelector("iframe")?.getAttribute("srcdoc");
+  expect(html?.match(/class="badge-print-sheet"/g)).toHaveLength(200);
+  expect(html).toContain("Synthetic attendee 100");
+  expect(fetch).toHaveBeenCalledTimes(300);
+  expect(confirmAction).not.toHaveBeenCalled();
 });
 
 it("preserves explicit selected-page scope without loading other attendees", async () => {
@@ -317,7 +375,7 @@ it.each(["session changed", "revoked"])(
       reprintAvailable: true,
     });
     const issueBodies: ReturnType<typeof badgeIssueRequestSchema.parse>[] = [];
-    const printBodies: ReturnType<typeof badgePrintRequestSchema.parse>[] = [];
+    const printBodies: ReturnType<typeof badgeLabelRequestSchema.parse>[] = [];
     let current = true;
     let revoked = false;
     let metadataReads = 0;
@@ -327,8 +385,10 @@ it.each(["session changed", "revoked"])(
         const path = new URL(String(input), location.origin).pathname;
         if (path.endsWith("/printing")) return json(printing);
         const firstId = "60000000-0000-4000-8000-000000000001";
-        if (path.endsWith(`${firstId}/print`)) {
-          badgePrintRequestSchema.parse(JSON.parse(String(init.body)));
+        const labelBody = path.endsWith("/labels")
+          ? badgeLabelRequestSchema.parse(JSON.parse(String(init.body)))
+          : null;
+        if (labelBody?.source === "badge" && labelBody.badgeId === firstId) {
           return json({
             ...printDetails,
             id: firstId,
@@ -344,9 +404,9 @@ it.each(["session changed", "revoked"])(
           metadataReads++;
           return json(revoked ? { ...metadata, status: "revoked", revokedAt: "2026-10-07T00:00:00.000Z" } : metadata);
         }
-        if (path.endsWith("/print")) {
-          expect(path).toBe(`/api/v1/events/workshop/badges/${badgeId}/print`);
-          printBodies.push(badgePrintRequestSchema.parse(JSON.parse(String(init.body))));
+        if (path.endsWith("/labels")) {
+          expect(labelBody).toMatchObject({ source: "badge", badgeId });
+          printBodies.push(badgeLabelRequestSchema.parse(JSON.parse(String(init.body))));
           if (revoked)
             return json(
               { error: { code: "BADGE_PRINT_UNAVAILABLE", message: "Badge no longer available for printing." } },
@@ -403,8 +463,6 @@ it.each(["session changed", "revoked"])(
         host,
       ),
     );
-    await vi.waitFor(() => expect(host.textContent).toContain("0 of 2 requests completed"));
-    await click(host, "Create selected badges");
     await vi.waitFor(() => expect(host.textContent).toContain("1 of 2 requests completed"));
     await click(host, "Retry remaining requests");
     await vi.waitFor(() => expect(host.textContent).toContain("Synthetic print preparation interrupted"));
@@ -419,7 +477,6 @@ it.each(["session changed", "revoked"])(
     expect(QR.toString).not.toHaveBeenCalled();
     expect(metadataReads).toBe(1);
     expect(host.querySelector("iframe")?.getAttribute("srcdoc")).toContain("original-badge");
-    expect(host.textContent).toContain("recovered without replacing their credentials");
     await click(host, "Download print files");
     expect(host.textContent).not.toContain("Printing CSV with QR codes");
     current = refusal !== "session changed";
@@ -459,7 +516,9 @@ it("prints exact canonical front/back sheets and label stock without changing QR
   expect(document.querySelector("style")?.textContent).toContain(".badge-print-slot-0{left:");
   expect(document.querySelector("style")?.textContent).toContain(".badge-print-slot-1{left:");
   expect(a4).toContain("A &lt; B");
-  expect(a4).toContain(encodeURIComponent(badges[0].svg));
+  const image = document.querySelector("img")!;
+  const label = decodeURIComponent(image.getAttribute("src")!.split(",")[1]);
+  expect(label).toContain(encodeURIComponent(badges[0].svg));
   expect(badgePrintHtml(badges, badgePrintPreset("avery_5160"), printing, "name_qr")).toContain("size:215.9mm 279.4mm");
 });
 it("checks release authority after asynchronous SVG archive preparation", async () => {
@@ -482,7 +541,7 @@ it("checks release authority after asynchronous SVG archive preparation", async 
     ),
   );
   await click(host, "Download print files");
-  await click(host, "QR codes (SVG ZIP)");
+  await click(host, "Labels (SVG ZIP)");
   expect(beforeRelease).not.toHaveBeenCalled();
   authorized = false;
   await act(async () => {

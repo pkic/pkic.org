@@ -1,4 +1,7 @@
 import { loadRegistrationDayStates } from "./day-states";
+import { registrationPopulationFilter } from "./registration-population-filter";
+import { buildD1JsonMembershipFilter } from "../../db/json-membership";
+import type { GroupEventRegistrationExportQuery } from "../../../../assets/shared/schemas/group-event-registration-operations";
 import { REGISTRATION_ORGANIZATION_SQL, REGISTRATION_JOB_TITLE_SQL } from "./selected-identity";
 import { encodeBoundedCsv } from "../../csv";
 import { all } from "../../db/queries";
@@ -69,7 +72,10 @@ export async function buildRegistrationCsv(
   db: DatabaseLike,
   event: EventFormResolutionEvent,
   limits: { maxRows: number; maxBytes: number },
+  query?: GroupEventRegistrationExportQuery,
 ): Promise<{ csv: string; recordCount: number }> {
+  const population = registrationPopulationFilter(event.id, query ?? {});
+  const selected = query?.ids ? buildD1JsonMembershipFilter("r.id", query.ids) : null;
   const rows = await all<ExportRow>(
     db,
     `SELECT r.id, r.status, r.source_type, r.created_at,
@@ -79,14 +85,12 @@ export async function buildRegistrationCsv(
             ${REGISTRATION_JOB_TITLE_SQL} AS job_title,
             ${sponsorConsentSql("r")} AS sponsor_consent,
             r.custom_answers_json, r.form_placement_id
-     FROM registrations r
-     LEFT JOIN users u ON u.id = r.user_id
-
-     WHERE r.event_id = ?
-       AND r.status IN ('registered', 'pending_email_confirmation')
+     ${population.fromSql}
+       ${query === undefined ? "AND r.status IN ('registered', 'pending_email_confirmation')" : ""}
+       ${selected ? `AND ${selected.sql}` : ""}
      ORDER BY r.status ASC, r.created_at ASC
      LIMIT ?`,
-    [event.id, limits.maxRows + 1],
+    [...population.bindings, ...(selected?.bindings ?? []), limits.maxRows + 1],
   );
   if (rows.length > limits.maxRows) {
     throw new AppError(413, "CSV_EXPORT_ROW_LIMIT_EXCEEDED", `CSV export is limited to ${limits.maxRows} records`);
@@ -166,8 +170,9 @@ export async function buildRegistrationCsvWithAudit(
   event: EventFormResolutionEvent,
   actorUserId: string,
   limits: { maxRows: number; maxBytes: number },
+  query?: GroupEventRegistrationExportQuery,
 ): Promise<{ csv: string; recordCount: number }> {
-  const result = await buildRegistrationCsv(db, event, limits);
+  const result = await buildRegistrationCsv(db, event, limits, query);
   await writeAuditLog(db, "admin", actorUserId, "admin_registration_export", "event", event.id, {
     recordCount: result.recordCount,
   });

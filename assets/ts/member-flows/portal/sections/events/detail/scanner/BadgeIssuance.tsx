@@ -1,3 +1,4 @@
+import { BADGE_LABEL_PRINTING_CONTEXT } from "../../../../../../../shared/badge-label-policy";
 import { formatDateTime } from "../../../../../../../shared/format-date";
 import { TextInput } from "../../../../../../ui/TextControl";
 import { useEffect, useMemo, useState } from "preact/hooks";
@@ -8,10 +9,10 @@ import {
   badgeAttendeesResponseSchema,
   badgeCredentialMetadataSchema,
   badgePrintingResponseSchema,
-  badgePrintRequestSchema,
+  badgeLabelRequestSchema,
   badgePrintResponseSchema,
   type BadgePrintingContext,
-  type BadgePrintRequest,
+  type BadgeLabelRequest,
   type BadgeIssueResponse,
 } from "../../../../../../../shared/schemas/route-contracts-event-badges";
 import { useContractForm } from "../../../../../../hooks/useContractForm";
@@ -27,14 +28,11 @@ import { DescriptionList } from "../../../../../../ui/DescriptionList";
 import { Menu } from "../../../../../../ui/Menu";
 import { Alert } from "../../../../../../ui/Alert";
 import { BadgePrintPreview } from "../../../../../../components/event-badges/BadgePrintPreview";
-import {
-  verifyBadgePrintingContext,
-  verifyBadgePrintArtifact,
-} from "../../../../../../components/event-badges/badge-print-context";
+import { verifyBadgeLabelArtifact } from "../../../../../../components/event-badges/badge-print-context";
 import { isAuthed, portalSession } from "../../../../state";
 import type { PortalSession } from "../../../../types";
 import { useSessionExpiry } from "../../../../use-session-expiry";
-import type { FreshBadgePrint } from "../../../../../../components/event-badges/badge-print-artifacts";
+import type { PrintableBadgePrint } from "../../../../../../components/event-badges/badge-print-artifacts";
 
 type CredentialMetadata = z.infer<typeof badgeCredentialMetadataSchema>;
 
@@ -89,7 +87,7 @@ function SessionBadgeIssuance({
   const request = useMemo(() => new AbortController(), [endpoint, session]);
   useEffect(() => () => request.abort(), [request]);
   const [printing, setPrinting] = useState<BadgePrintingContext | null>(null);
-  const [printBody, setPrintBody] = useState<BadgePrintRequest | null>(null);
+  const [printBody, setPrintBody] = useState<BadgeLabelRequest | null>(null);
   const [printResponse, setPrintResponse] = useState<z.output<typeof badgePrintResponseSchema> | null>(null);
   const [printOperationId] = useState(() => crypto.randomUUID());
   function current() {
@@ -106,7 +104,7 @@ function SessionBadgeIssuance({
   const [user, setUser] = useState<PickedUser | null>(null);
   const [operationId, setOperationId] = useState(() => crypto.randomUUID());
   const [result, setResult] = useState<BadgeIssueResponse | null>(null);
-  const [printable, setPrintable] = useState<FreshBadgePrint | null>(null);
+  const [printable, setPrintable] = useState<PrintableBadgePrint | null>(null);
   const [expiry, setExpiry] = useState("");
   const [timeZone] = useState(browserTimeZone);
   const [error, setError] = useState("");
@@ -117,18 +115,13 @@ function SessionBadgeIssuance({
     expiresAt: instantFromLocal(expiry, timeZone) ?? undefined,
     ...(replacement ? { replaceBadgeId: replacement.id } : {}),
   });
-  async function preparePrint(issued: Extract<BadgeIssueResponse, { result: "issued" }>) {
+  async function preparePrint(issued: BadgeIssueResponse) {
     requireCurrent();
-    const context =
-      printing ?? (await getJson(`${endpoint}/printing`, badgePrintingResponseSchema, { signal: request.signal }));
+    const context = BADGE_LABEL_PRINTING_CONTEXT;
     requireCurrent();
     setPrinting(context);
-    const body = badgePrintRequestSchema.parse({ operationId: printOperationId, printingRevision: context.revision });
-    const prepared = await postJson(
-      `${endpoint}/${encodeURIComponent(issued.id)}/print`,
-      body,
-      badgePrintResponseSchema,
-    );
+    const body = badgeLabelRequestSchema.parse({ source: "badge", badgeId: issued.id, operationId: printOperationId });
+    const prepared = await postJson(`${endpoint}/labels`, body, badgePrintResponseSchema);
     requireCurrent();
     if (
       prepared.id !== issued.id ||
@@ -139,15 +132,17 @@ function SessionBadgeIssuance({
       throw new Error("This badge changed. Open its record to prepare a new print document.");
     setPrintBody(body);
     setPrintResponse(prepared);
-    setPrintable({ ...prepared, displayName: prepared.displayName ?? "Attendee", credential: issued.credential });
+    setPrintable({
+      ...prepared,
+      displayName: prepared.displayName ?? "Attendee",
+      ...(issued.result === "issued" ? { credential: issued.credential } : {}),
+    });
   }
   async function beforeRelease() {
     if (!printing || !printBody || !printResponse) return false;
     try {
       requireCurrent();
-      await verifyBadgePrintingContext(endpoint, printing, request.signal);
-      requireCurrent();
-      await verifyBadgePrintArtifact(endpoint, printResponse, printBody);
+      await verifyBadgeLabelArtifact(endpoint, printResponse, printBody);
       requireCurrent();
       return true;
     } catch (cause) {
@@ -173,9 +168,7 @@ function SessionBadgeIssuance({
       );
       requireCurrent();
       setResult(issued);
-      if (issued.result === "issued") {
-        await preparePrint(issued);
-      }
+      await preparePrint(issued);
     } catch (cause) {
       if (current()) setError(form.refuse(cause));
     } finally {
@@ -197,15 +190,15 @@ function SessionBadgeIssuance({
             />
           }
         />
-        {result.result !== "issued" ? (
-          <Alert tone="info">
-            {result.result === "replayed"
-              ? "This request was already completed."
-              : "This attendee already holds an active badge."}{" "}
-            Open View badge to reprint this active badge where available, without changing its code.
-          </Alert>
-        ) : printable && printing ? (
-          <BadgePrintPreview badges={[printable]} printing={printing} beforeRelease={beforeRelease} />
+        {printable && printing ? (
+          <BadgePrintPreview
+            badges={[printable]}
+            printing={printing}
+            beforeRelease={beforeRelease}
+            loadPrintingContext={() =>
+              getJson(`${endpoint}/printing`, badgePrintingResponseSchema, { signal: request.signal })
+            }
+          />
         ) : (
           <div class="pk-stack">
             <Alert tone="info">The badge was created. Keep this page open while preparing its print file.</Alert>

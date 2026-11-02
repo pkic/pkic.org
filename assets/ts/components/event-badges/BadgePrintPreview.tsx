@@ -1,21 +1,25 @@
+import { formatNumber } from "../../../shared/format-number";
+import { useMeasuredWidth } from "../../hooks/useMeasuredWidth";
+import { badgePrintPageDimensions } from "../../../shared/schemas/badge-print-layout";
+import { badgeLabelSvg } from "../../../shared/badge-label-svg";
 import { useHashQueryParam } from "../../hooks/useHashQueryParam";
 import { BadgeDocumentFrame } from "./BadgeDocumentFrame";
 import type { BadgePrintingContext } from "../../../shared/schemas/route-contracts-event-badges";
 import type { BadgePrintDesign } from "../../../shared/schemas/event-badge-template";
-import { badgePrintPreset } from "../../../shared/badge-print-layout";
+import { badgeFaceLayout, badgePrintPreset } from "../../../shared/badge-print-layout";
 import { BadgePrintLayoutEditor } from "./BadgePrintLayoutEditor";
 import { badgeSvgArchive } from "./badge-svg-archive";
 import { TabList } from "../../ui/TabList";
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { Button } from "../../ui/Button";
 import { DownloadAction } from "../../ui/DownloadAction";
 import { Alert } from "../../ui/Alert";
 import {
   badgePrintCsv,
+  badgePrintCredential,
   badgePrintHtml,
   downloadBadgeArtifact,
   type BadgePrintLayout,
-  type FreshBadgePrint,
   type PrintableBadgePrint,
 } from "./badge-print-artifacts";
 import "./BadgePrintPreview.css";
@@ -24,16 +28,19 @@ export function BadgePrintPreview({
   badges,
   beforeRelease,
   printing,
+  loadPrintingContext,
 }: {
   badges: readonly PrintableBadgePrint[];
   printing: BadgePrintingContext;
+  loadPrintingContext?: () => Promise<BadgePrintingContext>;
   /** Reprints recheck live metadata before releasing any private print file. */
   beforeRelease?: () => Promise<boolean>;
 }) {
-  const [layout, setLayout] = useState<BadgePrintLayout>(() =>
-    badgePrintPreset(printing.template ? "a6" : "label_100_50"),
-  );
-  const [design, setDesign] = useState<BadgePrintDesign>(printing.template ? "event_badge" : "name_qr");
+  const { element, width: availableWidth } = useMeasuredWidth();
+  const [completePrinting, setCompletePrinting] = useState<BadgePrintingContext | null>(null);
+  const context = completePrinting ?? printing;
+  const [layout, setLayout] = useState<BadgePrintLayout>(() => badgePrintPreset("brother_dk_1208"));
+  const [design, setDesign] = useState<BadgePrintDesign>("name_qr");
   const [tab, setTab] = useHashQueryParam("printView", "preview");
   const [error, setError] = useState("");
   const archiveBuilding = useRef(false);
@@ -50,9 +57,7 @@ export function BadgePrintPreview({
     },
     [],
   );
-  const fresh = badges.filter(
-    (badge): badge is FreshBadgePrint => "credential" in badge && typeof badge.credential === "string",
-  );
+  const csvAvailable = badges.length > 0 && badges.every((badge) => badgePrintCredential(badge));
   async function release(action: () => void) {
     if (checking.current || !live.current) return;
     if (!beforeRelease) {
@@ -62,7 +67,53 @@ export function BadgePrintPreview({
     checking.current = true;
     setBusy(true);
     try {
+      if (
+        design === "event_badge" &&
+        loadPrintingContext &&
+        JSON.stringify(await loadPrintingContext()) !== JSON.stringify(context)
+      ) {
+        setError("The badge artwork changed. Reload the print layout.");
+        return;
+      }
       if ((await beforeRelease()) && live.current) action();
+    } catch (cause) {
+      if (live.current) setError(cause instanceof Error ? cause.message : "Could not check this print document.");
+    } finally {
+      checking.current = false;
+      if (live.current) setBusy(false);
+    }
+  }
+  async function useFullBadge(download: boolean) {
+    if (checking.current || archiveBuilding.current || !live.current) return;
+    const owned = badges;
+    checking.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      const complete = loadPrintingContext ? await loadPrintingContext() : context;
+      if (!live.current || owner.current !== owned) return;
+      if (!complete.template) throw new Error("No full badge artwork is configured for this event.");
+      const fullLayout: BadgePrintLayout = {
+        ...badgeFaceLayout(complete.template.widthMm, complete.template.heightMm),
+        sides: "front_back",
+      };
+      if (download) {
+        if (beforeRelease && !(await beforeRelease())) return;
+        if (!live.current || owner.current !== owned) return;
+        downloadBadgeArtifact(
+          badgePrintHtml(owned, fullLayout, complete, "event_badge"),
+          "text/html;charset=utf-8",
+          "attendee-badges-full.html",
+        );
+      } else {
+        setCompletePrinting(complete);
+        setLayout(fullLayout);
+        setDesign("event_badge");
+        setReady(false);
+        setTab("preview");
+      }
+    } catch (cause) {
+      if (live.current) setError(cause instanceof Error ? cause.message : "Could not load the badge artwork.");
     } finally {
       checking.current = false;
       if (live.current) setBusy(false);
@@ -75,10 +126,10 @@ export function BadgePrintPreview({
     setBusy(true);
     setError("");
     try {
-      const archive = await badgeSvgArchive(owned);
+      const archive = await badgeSvgArchive(owned, layout.label.widthMm, layout.label.heightMm);
       if (!live.current || owner.current !== owned) return;
       await release(() => {
-        if (owner.current === owned) downloadBadgeArtifact(archive, "application/zip", "attendee-badge-qr-codes.zip");
+        if (owner.current === owned) downloadBadgeArtifact(archive, "application/zip", "attendee-badge-labels.zip");
       });
     } catch (cause) {
       if (live.current) setError(cause instanceof Error ? cause.message : "Could not prepare QR downloads.");
@@ -87,12 +138,14 @@ export function BadgePrintPreview({
       if (live.current) setBusy(false);
     }
   }
-  const html = badgePrintHtml(badges, layout, printing, design);
+  const physicalWidth = (badgePrintPageDimensions(layout.page).widthMm * 96) / 25.4;
+  const previewScale = availableWidth ? Math.min(1, Math.max(1, availableWidth - 22) / physicalWidth) : 1;
+  const html = useMemo(() => badgePrintHtml(badges, layout, context, design), [badges, layout, context, design]);
   return (
-    <div class="pk-stack">
+    <div class="pk-stack" ref={element}>
       <Alert tone="info">
-        Downloaded HTML can be reopened and printed again. Print files contain access codes: keep them private.
-        Reprinting an active badge is available only while authorized.
+        {formatNumber(layout.copies * (layout.sides === "front_back" ? 2 : 1))}{" "}
+        {design === "name_qr" ? "labels" : "badge faces"} per attendee. Keep downloaded print files private.
       </Alert>
       <TabList
         label="Badge print views"
@@ -107,22 +160,30 @@ export function BadgePrintPreview({
         }}
       />
       {tab === "layout" ? (
-        <BadgePrintLayoutEditor
-          layout={{ ...layout, design }}
-          template={printing.template}
-          onApply={(next) => {
-            const { design: nextDesign, ...nextLayout } = next;
-            setLayout(nextLayout);
-            setDesign(nextDesign);
-            setReady(false);
-            setTab("preview");
-          }}
-        />
+        <div class="pk-stack">
+          {(context.template || loadPrintingContext) && (
+            <Button loading={busy} onClick={() => void useFullBadge(false)}>
+              Use full badge
+            </Button>
+          )}
+          <BadgePrintLayoutEditor
+            layout={{ ...layout, design }}
+            template={context.template}
+            onApply={(next) => {
+              const { design: nextDesign, ...nextLayout } = next;
+              setLayout(nextLayout);
+              setDesign(nextDesign);
+              setReady(false);
+              setTab("preview");
+            }}
+          />
+          {error && <Alert tone="danger">{error}</Alert>}
+        </div>
       ) : (
         <>
           <div class="pk-cluster">
             <Button disabled={!ready || busy} onClick={() => void release(() => frame.current?.contentWindow?.print())}>
-              Print / save browser PDF
+              {design === "name_qr" ? "Print labels" : "Print badges"}
             </Button>
             <DownloadAction
               label="Download reusable badge print file (HTML)"
@@ -135,7 +196,10 @@ export function BadgePrintPreview({
                   onDownload: () =>
                     release(() => downloadBadgeArtifact(html, "text/html;charset=utf-8", "attendee-badges.html")),
                 },
-                ...(fresh.length === badges.length && fresh.length > 0
+                ...(context.template || loadPrintingContext
+                  ? [{ id: "full-html", label: "Full badge (HTML)", onDownload: () => useFullBadge(true) }]
+                  : []),
+                ...(csvAvailable
                   ? [
                       {
                         id: "csv",
@@ -143,7 +207,7 @@ export function BadgePrintPreview({
                         onDownload: () =>
                           release(() =>
                             downloadBadgeArtifact(
-                              badgePrintCsv(fresh),
+                              badgePrintCsv(badges),
                               "text/csv;charset=utf-8",
                               "attendee-badges-print.csv",
                             ),
@@ -152,15 +216,25 @@ export function BadgePrintPreview({
                     ]
                   : []),
                 ...(badges.length > 1
-                  ? [{ id: "svg-zip", label: "QR codes (SVG ZIP)", onDownload: () => downloadSvgArchive() }]
+                  ? [{ id: "svg-zip", label: "Labels (SVG ZIP)", onDownload: () => downloadSvgArchive() }]
                   : []),
                 ...(badges.length === 1
                   ? [
                       {
                         id: "svg",
-                        label: "QR code (SVG)",
+                        label: "Label (SVG)",
                         onDownload: () =>
-                          release(() => downloadBadgeArtifact(badges[0].svg, "image/svg+xml", "attendee-badge-qr.svg")),
+                          release(() =>
+                            downloadBadgeArtifact(
+                              badgeLabelSvg(
+                                { ...badges[0], jobTitle: badges[0].jobTitle ?? null },
+                                layout.label.widthMm,
+                                layout.label.heightMm,
+                              ),
+                              "image/svg+xml",
+                              "attendee-badge-label.svg",
+                            ),
+                          ),
                       },
                     ]
                   : []),
@@ -168,25 +242,18 @@ export function BadgePrintPreview({
             />
           </div>
           <p>
-            Use the selected paper size and 100% scale in your print dialog. Your browser can save the preview as PDF.
-            Use the matching label stock and printer margins; the layout is not automatically scaled. Disable browser
-            headers and footers. For separate front/back sheets, check the printer duplex direction with one test badge
-            first. If your print company requires outlined fonts, convert the saved PDF separately; browser PDF does not
-            guarantee font outlines.
+            Print at 100% using the selected stock. Disable browser headers and footers.{" "}
+            {design === "name_qr"
+              ? "Use Print layout to change label stock, copies, or switch to full badges."
+              : "Use Print layout to change paper, copies, or switch to labels."}
           </p>
-          {badges.length === 1 && (
-            <img
-              class="pk-badge-qr-preview"
-              src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(badges[0].svg)}`}
-              alt="Attendee badge QR code"
-            />
-          )}
           {error && <Alert tone="danger">{error}</Alert>}
           <BadgeDocumentFrame
             frameRef={frame}
             className="pk-badge-print-preview"
             title="Attendee badge print preview"
             html={html}
+            screenCss={`@media screen{body{zoom:${previewScale}}}`}
             onReady={() => {
               if (live.current) setReady(true);
             }}

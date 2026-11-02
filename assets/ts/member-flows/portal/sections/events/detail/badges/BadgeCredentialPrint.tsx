@@ -1,14 +1,12 @@
-import {
-  verifyBadgePrintingContext,
-  verifyBadgePrintArtifact,
-} from "../../../../../../components/event-badges/badge-print-context";
+import { verifyBadgeLabelArtifact } from "../../../../../../components/event-badges/badge-print-context";
+import { BADGE_LABEL_PRINTING_CONTEXT } from "../../../../../../../shared/badge-label-policy";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import {
   badgePrintingResponseSchema,
   type BadgePrintingContext,
-  type BadgePrintRequest,
+  type BadgeLabelRequest,
   badgeCredentialMetadataSchema,
-  badgePrintRequestSchema,
+  badgeLabelRequestSchema,
   badgePrintResponseSchema,
 } from "../../../../../../../shared/schemas/route-contracts-event-badges";
 import { BadgePrintPreview } from "../../../../../../components/event-badges/BadgePrintPreview";
@@ -51,13 +49,12 @@ function SessionBadgePrint({
   const endpoint = `/api/v1/events/${encodeURIComponent(slug)}/badges/${encodeURIComponent(credentialId)}`;
   const request = useMemo(() => new AbortController(), [endpoint, session]);
   const record = useData(() => getJson(endpoint, badgeCredentialMetadataSchema, { signal: request.signal }), [request]);
-  const [basis, setBasis] = useState<BadgePrintingContext | null>(null);
-  const [operationId, setOperationId] = useState(() => crypto.randomUUID());
+  const [operationId] = useState(() => crypto.randomUUID());
   const [artifact, setArtifact] = useState<{
     owner: AbortController;
     print: z.output<typeof badgePrintResponseSchema>;
     printing: BadgePrintingContext;
-    body: BadgePrintRequest;
+    body: BadgeLabelRequest;
   } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -99,19 +96,7 @@ function SessionBadgePrint({
   }
   async function verify(printResult: z.output<typeof badgePrintResponseSchema>) {
     if (!current()) throw new Error("Sign in again to print this badge.");
-    const fresh = await getJson(endpoint, badgeCredentialMetadataSchema, { signal: request.signal });
-    if (
-      !current() ||
-      fresh.id !== credentialId ||
-      printResult.id !== credentialId ||
-      fresh.eventId !== record.data?.eventId ||
-      fresh.userId !== record.data?.userId ||
-      fresh.status !== "active" ||
-      !fresh.reprintAvailable ||
-      fresh.expiresAt !== printResult.expiresAt ||
-      fresh.displayName !== printResult.displayName ||
-      Date.parse(printResult.expiresAt) <= Date.now()
-    )
+    if (!current() || printResult.id !== credentialId || Date.parse(printResult.expiresAt) <= Date.now())
       throw new Error("This badge changed or is no longer available for printing. Open its record again.");
   }
   async function prepare() {
@@ -121,22 +106,17 @@ function SessionBadgePrint({
     setError("");
     setArtifact(null);
     try {
-      let printing = basis;
-      if (!printing) {
-        printing = await getJson(
-          `/api/v1/events/${encodeURIComponent(slug)}/badges/printing`,
-          badgePrintingResponseSchema,
-          { signal: request.signal },
-        );
-        if (!current()) return;
-        setBasis(printing);
-      }
-      const body = badgePrintRequestSchema.parse({ operationId, printingRevision: printing.revision });
-      const result = await requestJson(`${endpoint}/print`, badgePrintResponseSchema, {
-        method: "POST",
-        body: JSON.stringify(body),
-        signal: request.signal,
-      });
+      const printing = BADGE_LABEL_PRINTING_CONTEXT;
+      const body = badgeLabelRequestSchema.parse({ source: "badge", badgeId: credentialId, operationId });
+      const result = await requestJson(
+        `/api/v1/events/${encodeURIComponent(slug)}/badges/labels`,
+        badgePrintResponseSchema,
+        {
+          method: "POST",
+          body: JSON.stringify(body),
+          signal: request.signal,
+        },
+      );
       await verify(result);
       if (result.printingRevision !== printing.revision)
         throw new Error("The print document changed. Prepare it again.");
@@ -152,13 +132,7 @@ function SessionBadgePrint({
     if (!print || !artifact) return false;
     try {
       if (!current()) throw new Error("Sign in again to print this badge.");
-      await verifyBadgePrintingContext(
-        `/api/v1/events/${encodeURIComponent(slug)}/badges`,
-        artifact.printing,
-        request.signal,
-      );
-      if (!current()) throw new Error("Sign in again to print this badge.");
-      await verifyBadgePrintArtifact(`/api/v1/events/${encodeURIComponent(slug)}/badges`, print, artifact.body);
+      await verifyBadgeLabelArtifact(`/api/v1/events/${encodeURIComponent(slug)}/badges`, print, artifact.body);
       if (!current()) throw new Error("Sign in again to print this badge.");
       return true;
     } catch (cause) {
@@ -167,6 +141,9 @@ function SessionBadgePrint({
       return false;
     }
   }
+  useEffect(() => {
+    if (record.data?.status === "active" && record.data.reprintAvailable) void prepare();
+  }, [request, record.data]);
   if (record.loading) return <Spinner label="Loading badge credential…" />;
   if (!record.data) return <ErrorAlert error={record.error ?? "Badge credential unavailable."} />;
   const available = record.data.status === "active" && record.data.reprintAvailable;
@@ -188,11 +165,14 @@ function SessionBadgePrint({
           badges={[{ ...print, displayName: print.displayName ?? "Attendee name unavailable" }]}
           printing={artifact!.printing}
           beforeRelease={beforeRelease}
+          loadPrintingContext={() =>
+            getJson(`/api/v1/events/${encodeURIComponent(slug)}/badges/printing`, badgePrintingResponseSchema, {
+              signal: request.signal,
+            })
+          }
         />
-      ) : (
-        <Button disabled={busy} onClick={() => void prepare()}>
-          {busy ? "Preparing print preview…" : "Prepare print preview"}
-        </Button>
+      ) : error ? null : (
+        <Spinner label="Loading printable labels…" />
       )}
       {error && (
         <>
@@ -200,13 +180,10 @@ function SessionBadgePrint({
           <Button
             disabled={busy}
             onClick={() => {
-              setArtifact(null);
-              setBasis(null);
-              setOperationId(crypto.randomUUID());
-              setError("");
+              void prepare();
             }}
           >
-            Reload print document
+            Retry loading labels
           </Button>
         </>
       )}

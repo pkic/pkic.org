@@ -9,6 +9,8 @@
 import { render } from "preact";
 
 import { PreviewShell } from "./PreviewShell";
+import { badgeLabelDeskSection } from "./badge-label-desk";
+import { badgePrintingSection } from "./badge-printing";
 import { basicSections } from "./sections-basics";
 import { dataSections } from "./sections-data";
 import { densitySections } from "./sections-density";
@@ -30,6 +32,8 @@ function main(): void {
     ...agendaPickerSections,
     ...speakerProfileReviewSections,
     ...eventParticipationSections,
+    badgePrintingSection,
+    badgeLabelDeskSection,
   ];
   // `?only=<id>` renders one section alone, for a tight screenshot of one control.
   const only = new URLSearchParams(window.location.search).get("only");

@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import { useMeasuredWidth } from "../../hooks/useMeasuredWidth";
+import { useMemo, useRef, useState } from "preact/hooks";
 import type { BadgePrintingContext } from "../../../shared/schemas/route-contracts-event-badges";
 import { Alert } from "../../ui/Alert";
 import { BadgeDocumentFrame } from "./BadgeDocumentFrame";
@@ -7,23 +8,6 @@ import "./BadgePrintPreview.css";
 
 /** CSS pixels per millimeter: the unit the print document is laid out in. */
 const PX_PER_MM = 96 / 25.4;
-
-/** Width of the element, kept current as the layout changes. Null until it has been measured. */
-function useMeasuredWidth() {
-  const element = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState<number | null>(null);
-  useEffect(() => {
-    const target = element.current;
-    if (!target) return;
-    const measure = () => setWidth(target.clientWidth || null);
-    measure();
-    if (typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(measure);
-    observer.observe(target);
-    return () => observer.disconnect();
-  }, []);
-  return { element, width };
-}
 
 /**
  * One badge face exactly as it prints: the print renderer's document, at its

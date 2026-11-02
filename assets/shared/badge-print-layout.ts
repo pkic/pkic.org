@@ -15,9 +15,16 @@ export const badgePrintPresetIdSchema = z.enum([
   "avery_5160",
   "avery_5395",
   "label_100_50",
+  "brother_dk_1208",
   "custom",
 ]);
 export type BadgePrintPresetId = z.infer<typeof badgePrintPresetIdSchema>;
+
+export const BADGE_PRINT_SIDE_LABELS: Readonly<Record<BadgePrintLayout["sides"], string>> = {
+  front_back: "Front and back",
+  front: "Front only",
+  back: "Back only",
+};
 
 /** Twips and PDF points from Avery's official blank templates, not inferred centering. */
 const twipsMm = (value: number) => (value * 25.4) / 1440;
@@ -54,6 +61,11 @@ function sheet(
 }
 
 export const BADGE_PRINT_PRESETS = [
+  {
+    id: "brother_dk_1208",
+    label: "Brother DK-1208 — two 90.3 × 38 mm labels",
+    sourceUrl: "https://www.brother-usa.com/product-support/QL820NWB",
+  },
   { id: "a6", label: "A6 badge — separate front/back pages", sourceUrl: null },
   { id: "a6_front_back_a4", label: "A6 front and back on one A4 sheet", sourceUrl: null },
   { id: "avery_l7163", label: "Avery L7163 — A4, 14 labels", sourceUrl: "https://www.avery.co.uk/template-l7163" },
@@ -126,6 +138,11 @@ export function badgePrintPreset(id: BadgePrintPresetId): BadgePrintLayout {
         pointsMm(27),
         pointsMm((583.524 - 39.124) / 3 - 167.976),
       );
+    case "brother_dk_1208":
+      return {
+        ...sheet({ size: "custom", orientation: "landscape", widthMm: 90.3, heightMm: 38 }, 90.3, 38, 1, 1, 0, 0),
+        sides: "front_back",
+      };
     case "label_100_50":
       return sheet({ size: "custom", orientation: "landscape", widthMm: 100, heightMm: 50 }, 100, 50, 1, 1, 0, 0);
     case "custom":
