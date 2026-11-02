@@ -1,9 +1,11 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
+import { buildOffsetPageSql, queryPage } from "../functions/_lib/db/pagination";
 import { buildEventAttendanceRegistrationsPageQuery } from "../functions/_lib/services/registrations/event-attendance-registrations";
 import { buildEventRegistrationsPageQuery } from "../functions/_lib/services/registrations/event-registrations";
 import { resetDb } from "./helpers/reset-db";
+import { seedEventAndAdmin } from "./helpers/context";
+import { insertOrganization, insertOrgRepresentative } from "./helpers/membership";
 
 beforeEach(resetDb);
 
@@ -33,9 +35,51 @@ describe("event attendance registration D1 query plans", () => {
           expect(details).toMatch(/idx_registrations_event_status(?:_created)?/);
           expect(details).not.toContain("SCAN r");
         }
-        expect(countSql).not.toMatch(/display_name|ORDER BY|LIMIT|OFFSET/i);
+        expect(countSql).not.toMatch(/AS display_name/i);
         expect(countBindings).toEqual(bindings);
       }
     }
+  });
+
+  it.each([
+    { projection: "attendance", build: buildEventAttendanceRegistrationsPageQuery, search: "Example Research Lab" },
+    { projection: "full registration", build: buildEventRegistrationsPageQuery, search: "search-match-" },
+  ])("counts every search match independently of the requested $projection page", async ({ build, search }) => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const organizationId = await insertOrganization(env.DB, "Example Research Lab");
+    for (let index = 0; index < 4; index++) {
+      const { userId } = await insertOrgRepresentative(env.DB, {
+        organizationId,
+        email: `search-match-${index}@example.test`,
+      });
+      await env.DB.prepare(
+        `INSERT INTO registrations
+          (id, event_id, user_id, status, source_type, manage_link_secret, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'test', ?, ?, ?)`,
+      )
+        .bind(
+          `search-match-${index}`,
+          eventId,
+          userId,
+          index === 3 ? "cancelled" : "registered",
+          `secret-${index}`,
+          `2026-10-21T00:00:0${index}.000Z`,
+          `2026-10-21T00:00:0${index}.000Z`,
+        )
+        .run();
+    }
+    const query = build(eventId, {
+      status: "registered",
+      q: search,
+      sort: "created_at",
+      limit: 1,
+      offset: 1,
+    });
+    const page = await queryPage<{ id: string }>(env.DB, query);
+    expect(page.rows.map((row) => row.id)).toEqual(["search-match-1"]);
+    expect(page.total).toBe(3);
+    const beyondLast = await queryPage<{ id: string }>(env.DB, { ...query, offset: 3 });
+    expect(beyondLast.rows).toEqual([]);
+    expect(beyondLast.total).toBe(3);
   });
 });
