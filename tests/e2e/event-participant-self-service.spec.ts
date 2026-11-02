@@ -230,7 +230,7 @@ test("a signed-in user registers from event home without another email challenge
   await registrationPage.getByRole("button", { name: "Continue", exact: true }).click();
   await expect(
     registrationPage.getByRole("group", { name: "Attendance choices", exact: true }),
-  ).toHaveAccessibleDescription("Choose how you'll attend the event.");
+  ).toHaveAccessibleDescription("Choose at least one event day and attendance option to register.");
   await expect(registrationPage.getByRole("group", { name: "Attendance choices", exact: true })).toBeFocused();
   await matrix.getByRole("radio", { name: "In person — Workshop day 1", exact: true }).check();
   await registrationPage.getByRole("button", { name: "Continue", exact: true }).click();
@@ -693,10 +693,9 @@ test("proposer and invited speaker manage their own event records without emaile
     await speaker.goto(`/portal/#/events/${PROPOSAL_EVENT_SLUG}/proposals/${proposal.proposalId}`);
     await expect(speaker.getByRole("button", { name: "Confirm participation", exact: true })).toBeVisible();
     for (const checkbox of await speaker.getByRole("checkbox").all()) await checkbox.check();
-    await speaker.getByRole("button", { name: "Confirm participation", exact: true }).click();
-    await expect(
-      speaker.getByRole("alert").filter({ hasText: "Confirm your speaker identity before confirming participation." }),
-    ).toBeVisible();
+    const confirmParticipation = speaker.getByRole("button", { name: "Confirm participation", exact: true });
+    await expect(confirmParticipation).toBeDisabled();
+    await expect(speaker.getByText(/choose and save your speaker identity before confirming/i)).toBeVisible();
     const profilePath = `/api/v1/proposals/${proposal.proposalId}/participation/profile`;
     const before = speakerSelfServiceReadResponseSchema.parse(
       await (await speaker.request.get(`/api/v1/proposals/${proposal.proposalId}/participation`)).json(),
