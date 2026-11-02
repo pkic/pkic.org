@@ -301,7 +301,7 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
         callApp(
           anonPatch(`https://app.test/api/v1/events/${eventSlug}/registrations/${registrationId}`, {
             action: "update",
-            attendanceType: "virtual",
+            dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
           }),
         ),
     ],
