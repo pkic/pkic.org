@@ -1014,11 +1014,23 @@ it.each([1, 2])("keeps the featured speaker out of long-credit fallback pages wi
       ...data,
       actorId: primary.userId,
       people: [primary, ...remaining],
+      portraits: Object.fromEntries(remaining.map((person) => [person.userId, "data:image/png;base64,portrait"])),
       composition: { ...defaultPromotionComposition(), panels: ["speakers"] },
     },
     "carousel",
   );
   expect(pages[0]!.title).toBe("Featured speaker");
+  if (count === 1) {
+    const speakerPages = pages.slice(1);
+    expect(speakerPages.length).toBeGreaterThan(1);
+    const portrait = speakerPages[0]!.pictures.find((picture) => picture.alt === remaining[0]!.displayName)!;
+    expect(portrait).toBeDefined();
+    expect(speakerPages.slice(1).flatMap((page) => page.pictures)).toHaveLength(0);
+    for (const page of speakerPages)
+      for (const text of page.texts) expect(text.y + text.size * 0.25).toBeLessThan(1050);
+    for (const text of speakerPages[0]!.texts)
+      expect(text.y + text.size * 0.25 <= portrait.y || text.y - text.size >= portrait.y + portrait.height).toBe(true);
+  }
   const lines = pages.flatMap((page) => page.texts.map((line) => line.text));
   expect(lines.filter((line) => line === primary.displayName)).toHaveLength(1);
   for (const person of remaining) expect(lines.filter((line) => line === person.displayName)).toHaveLength(1);

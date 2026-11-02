@@ -149,7 +149,7 @@ export function buildPromotionPages(
   const scale = width / 1080,
     margin = 80 * scale,
     usable = width - margin * 2;
-  const footer = height - (format === "landscape" ? 95 : 210);
+  const footer = format === "carousel" ? 1050 * scale : height - (format === "landscape" ? 95 : 210);
   const sponsorBottom =
     height < 800 ? height - (data.composition?.qrCode ? 180 : 130) : format === "carousel" ? 1050 * scale : footer;
   const pages: PromotionPage[] = [];
@@ -441,7 +441,8 @@ export function buildPromotionPages(
       } else {
         const person = panelPeople[0]!,
           photo = data.portraits?.[person.userId];
-        const page = flow(
+        const firstPageIndex = pages.length;
+        flow(
           "Meet the speaker",
           [
             { text: person.displayName, size: 64 * scale, bold: true, role: "H2" },
@@ -450,7 +451,7 @@ export function buildPromotionPages(
           photo && height >= 1080 ? 740 * scale : 240 * scale,
         );
         if (photo && height >= 1080)
-          page.pictures.push({
+          pages[firstPageIndex]!.pictures.push({
             src: photo,
             x: margin,
             y: 150 * scale,
