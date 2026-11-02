@@ -386,33 +386,15 @@ test("a signed-in user registers from event home without another email challenge
     expect(ratio.displayed).toBeCloseTo(ratio.source, 1);
     await page.screenshot({ path: info.outputPath(`registration-social-badge-${device}.png`) });
   }
-  await page.getByRole("button", { name: "Create promotion materials", exact: true }).click();
-  let release!: () => void;
-  const pending = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  await page.route("**/promotion/renders", async (route) => {
-    await pending;
-    await route.continue();
-  });
-  const prepare = page.getByRole("button", { name: "Prepare downloads", exact: true });
-  await prepare.click();
-  await expect(prepare).toHaveAttribute("aria-busy", "true");
-  for (const [width, height, device] of [
-    [1280, 900, "desktop"],
-    [375, 812, "phone"],
-  ] as const) {
-    await page.setViewportSize({ width, height });
-    await page.screenshot({ path: info.outputPath(`prepare-pending-${device}.png`), animations: "disabled" });
-  }
-  release();
-  await expect(prepare).not.toHaveAttribute("aria-busy", "true");
-  await page.getByRole("button", { name: "Close promotion materials", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Your attendee materials", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Download tall post (JPEG)", exact: true })).toBeVisible();
   const confirmation = await waitForCapturedEmail(email, "confirmed", { since: beforeConfirmationEmail });
   const attachments = confirmation.payload.attachments as Array<{ type: string; content: string }>;
   const attachment = attachments.find((item) => item.type.startsWith("image/"));
   expect(attachment).toBeDefined();
-  const renderedBadge = await page.request.get((await socialBadge.getAttribute("src"))!);
+  const renderedBadge = await page.request.get(
+    (await page.getByRole("link", { name: "Download badge (JPEG)", exact: true }).getAttribute("href"))!,
+  );
   expect(renderedBadge.status()).toBe(200);
   expect(Buffer.from(attachment!.content, "base64")).toEqual(await renderedBadge.body());
   await info.attach("emailed-social-badge", {
