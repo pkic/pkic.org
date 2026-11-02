@@ -7,7 +7,7 @@ import {
   issueEventProposalContinuation,
   verifyEventProposalCapability,
 } from "../functions/_lib/services/event-proposal-proof-capabilities";
-import { createRegistration } from "../functions/_lib/services/registrations/create";
+import { createScheduledRegistration } from "./helpers/scheduled-registration";
 import { addHours, nowIso } from "../functions/_lib/utils/time";
 import { submitProposal } from "../functions/_lib/services/proposal-submission";
 import { startEventProposalProof } from "../functions/_lib/services/event-proposal-proof";
@@ -147,7 +147,7 @@ describe("verified guest same-person additional mailbox", () => {
     await env.DB.prepare("INSERT INTO user_emails(id,user_id,email,normalized_email,created_at) VALUES(?,?,?,?,?)")
       .bind(crypto.randomUUID(), other, "alias@official.example", "alias@official.example", "2026-10-05T00:00:00.000Z")
       .run();
-    const pending = await createRegistration(env.DB, {
+    const pending = await createScheduledRegistration(env.DB, {
       event,
       userId: other,
       sourceType: "direct",

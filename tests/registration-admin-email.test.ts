@@ -1,10 +1,11 @@
+import { createScheduledRegistration } from "./helpers/scheduled-registration";
 import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./helpers/administrator";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { getEventBySlug } from "../functions/_lib/services/events";
-import { changeRegistrationEmail, createRegistration } from "../functions/_lib/services/registrations";
+import { changeRegistrationEmail } from "../functions/_lib/services/registrations";
 import { resendRegistrationEmail } from "../functions/_lib/services/registrations/resend-confirmation";
 import { queueRegistrationStatusEmail } from "../functions/_lib/services/registrations/status-notifications";
 
@@ -19,7 +20,7 @@ async function seedPendingRegistration(): Promise<{ registrationId: string; admi
     .bind(userId)
     .run();
   const event = await getEventBySlug(env.DB, "pqc-2026");
-  const created = await createRegistration(env.DB, {
+  const created = await createScheduledRegistration(env.DB, {
     event,
     userId,
     sourceType: "open_registration",

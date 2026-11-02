@@ -1,13 +1,14 @@
 import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./helpers/administrator";
 import { describe, expect, it, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
+import { createScheduledRegistration } from "./helpers/scheduled-registration";
 import { env } from "cloudflare:workers";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { insertUser } from "./helpers/membership";
 import { sha256Hex } from "../functions/_lib/utils/crypto";
 import { getEventBySlug } from "../functions/_lib/services/events";
-import { createRegistration, confirmRegistrationByToken } from "../functions/_lib/services/registrations";
+import { confirmRegistrationByToken } from "../functions/_lib/services/registrations";
 import { issueDatabaseCapability } from "../functions/_lib/services/capability-links";
 import { signAdminManageJwt } from "../functions/_lib/utils/jwt";
 import app from "./helpers/app";
@@ -165,7 +166,7 @@ describe("manage read endpoints", () => {
     ).run();
 
     const event = await getEventBySlug(env.DB, "pqc-2026");
-    const created = await createRegistration(env.DB, {
+    const created = await createScheduledRegistration(env.DB, {
       event,
       userId: "pending-user",
       sourceType: "direct",
@@ -210,7 +211,7 @@ describe("manage read endpoints", () => {
 
     const event = await getEventBySlug(env.DB, "pqc-2026");
 
-    const first = await createRegistration(env.DB, {
+    const first = await createScheduledRegistration(env.DB, {
       event,
       userId: "user-1",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
@@ -224,7 +225,7 @@ describe("manage read endpoints", () => {
       signingSecret: "test-signing-secret",
     });
 
-    const second = await createRegistration(env.DB, {
+    const second = await createScheduledRegistration(env.DB, {
       event,
       userId: "user-2",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
@@ -272,7 +273,7 @@ describe("manage read endpoints", () => {
     const registrantId = await insertUser(env.DB, "jwt-user@example.test");
 
     const event = await getEventBySlug(env.DB, "pqc-2026");
-    const created = await createRegistration(env.DB, {
+    const created = await createScheduledRegistration(env.DB, {
       event,
       userId: registrantId,
       sourceType: "direct",
