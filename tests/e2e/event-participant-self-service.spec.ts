@@ -317,22 +317,22 @@ test("a signed-in user registers from event home without another email challenge
   await expect(codeViewer).toBeHidden();
   await page.goto(`/portal/#/events/${event.slug}/promotion`);
   await expect(page.getByRole("heading", { name: "Share", exact: true })).toBeVisible();
-  const socialBadge = page.locator("[data-og-badge-img]");
+  const socialBadge = page.getByRole("img", { name: "Preview of your badge", exact: true });
   await expect(socialBadge).toHaveAttribute("src", new RegExp(`layout=${PERSONAL_PROMOTION_RENDERER}`));
   await expect
     .poll(() => socialBadge.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0))
     .toBe(true);
-  await expect(page.getByRole("button", { name: "Download badge (PNG)", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Download badge (JPEG)", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Download badge formats", exact: true }).click();
-  const squareDownload = page.getByRole("menuitem", { name: "Square badge (PNG)", exact: true });
+  const squareDownload = page.getByRole("menuitem", { name: "Square badge (JPEG)", exact: true });
   const downloaded = page.waitForEvent("download");
   await squareDownload.click();
   const squareFile = await downloaded;
-  expect(squareFile.suggestedFilename()).toMatch(/-square\.png$/u);
+  expect(squareFile.suggestedFilename()).toMatch(/-square\.jpe?g$/u);
   const squareBytes = await readFile((await squareFile.path())!);
   const squareMetadata = await sharp(squareBytes).metadata();
   expect({ width: squareMetadata.width, height: squareMetadata.height }).toEqual({ width: 1080, height: 1080 });
-  await info.attach("square-social-badge", { body: squareBytes, contentType: "image/png" });
+  await info.attach("square-social-badge", { body: squareBytes, contentType: "image/jpeg" });
   const agendaBase = `/api/v1/events/${event.slug}/agenda`;
   const roomResponse = await page.request.post(`${agendaBase}/rooms`, {
     data: agendaRoomCreateSchema.parse({
