@@ -1,11 +1,10 @@
 import { isEventDayCapacityConflict, eventDayCapacityChangedError } from "../../db/event-day-capacity-guard";
 export { isEventDayCapacityConflict, eventDayCapacityChangedError } from "../../db/event-day-capacity-guard";
-import { eventEntryOccupiedSql } from "../event-participation/event-entry-capacity";
-import { first } from "../../db/queries";
+import { configuredAttendanceOptions } from "../event-days";
+import { registrationDayHoldsOptionSql } from "../event-attendance-option-sql";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
-import { nowIso } from "../../utils/time";
 import type { EventDayCapacityRow } from "./day-waitlist-types";
 import type { EventParticipantRole } from "../../../../assets/shared/schemas/participant-roles";
 
@@ -20,17 +19,35 @@ export const ROLE_BASED_CAPACITY_EXEMPT_ROLE_SQL = ROLE_BASED_CAPACITY_EXEMPT_RO
   ", ",
 );
 
-/**
- * Shared set-based capacity predicate used when selecting promotion work and
- * when atomically claiming a waitlist seat. The day alias is supplied only by
- * internal SQL builders; validating it prevents an accidental unsafe call.
- */
-export function eventDayHasAvailableCapacitySql(dayAlias: string, nowExpression: string): string {
-  if (!/^[a-z][a-z0-9_]*$/i.test(dayAlias)) {
-    throw new Error("Invalid event-day SQL alias");
-  }
-  return `${dayAlias}.in_person_capacity IS NOT NULL AND ${dayAlias}.in_person_capacity > 0
-    AND ${eventEntryOccupiedSql(`${dayAlias}.event_id`, `${dayAlias}.day_date`, undefined, true, nowExpression)} < ${dayAlias}.in_person_capacity`;
+/** SQL expressions accept only internal aliases and trusted value expressions. */
+export function eventAttendanceOptionCapacitySql(day: string, attendanceType: string): string {
+  const fallback = `CASE WHEN ${attendanceType} = 'in_person' THEN ${day}.in_person_capacity ELSE NULL END`;
+  return `(CASE WHEN json_valid(${day}.attendance_options_json) THEN
+    CASE WHEN json_type(${day}.attendance_options_json) = 'array' AND json_array_length(${day}.attendance_options_json) > 0
+      THEN (SELECT CAST(CASE WHEN json_valid(option.value) THEN json_extract(option.value, '$.capacity') END AS INTEGER)
+            FROM json_each(${day}.attendance_options_json) option
+            WHERE CASE WHEN json_valid(option.value) THEN json_extract(option.value, '$.value') END = ${attendanceType} LIMIT 1)
+      ELSE ${fallback} END
+    ELSE ${fallback} END)`;
+}
+
+export function eventAttendanceOptionOccupiedSql(day: string, attendanceType: string, now: string): string {
+  return `(SELECT COUNT(*) FROM registration_day_attendance capacity_attendance
+    JOIN registrations registration ON registration.id = capacity_attendance.registration_id
+    WHERE capacity_attendance.event_day_id = ${day}.id AND capacity_attendance.attendance_type = ${attendanceType}
+      AND registration.status IN ('pending_email_confirmation', 'registered')
+      AND ${registrationDayHoldsOptionSql("capacity_attendance", now)})`;
+}
+
+export function eventAttendanceOptionHasAvailableCapacitySql(day: string, attendanceType: string, now: string): string {
+  const capacity = eventAttendanceOptionCapacitySql(day, attendanceType);
+  const configured = `(CASE WHEN json_valid(${day}.attendance_options_json) THEN
+    CASE WHEN json_type(${day}.attendance_options_json) = 'array' AND json_array_length(${day}.attendance_options_json) > 0
+      THEN EXISTS (SELECT 1 FROM json_each(${day}.attendance_options_json) option
+        WHERE CASE WHEN json_valid(option.value) THEN json_extract(option.value, '$.value') END = ${attendanceType})
+      ELSE ${attendanceType} IN ('in_person', 'virtual', 'on_demand') END
+    ELSE ${attendanceType} IN ('in_person', 'virtual', 'on_demand') END)`;
+  return `(${configured} AND (${capacity} IS NULL OR ${capacity} <= 0 OR (${eventAttendanceOptionOccupiedSql(day, attendanceType, now)}) < ${capacity}))`;
 }
 
 function rolePriority(role: string): number {
@@ -50,42 +67,9 @@ export async function listCapacityEventDays(db: DatabaseLike, eventId: string): 
 
 export function prepareCapacityEventDays(db: DatabaseLike, eventId: string) {
   return db
-    .prepare(`SELECT id, day_date, in_person_capacity, capacity_revision
+    .prepare(`SELECT id, day_date, in_person_capacity, attendance_options_json, capacity_revision
      FROM event_days WHERE event_id = ? ORDER BY sort_order ASC, day_date ASC`)
     .bind(eventId);
-}
-
-export async function countConfirmedInPersonForDay(
-  db: DatabaseLike,
-  eventDayId: string,
-  excludeRegistrationId?: string,
-): Promise<number> {
-  const row = await first<{ total: number }>(
-    db,
-    `WITH target AS(SELECT COALESCE((SELECT user_id FROM registrations WHERE id=?),'') AS excluded_user_id) SELECT ${eventEntryOccupiedSql("day.event_id", "day.day_date", "target.excluded_user_id", false)} AS total FROM event_days day CROSS JOIN target WHERE day.id=?`,
-    [excludeRegistrationId ?? null, eventDayId],
-  );
-  return Number(row?.total ?? 0);
-}
-
-export async function countActiveOffersForDay(
-  db: DatabaseLike,
-  eventDayId: string,
-  excludeRegistrationId?: string,
-): Promise<number> {
-  const row = await first<{ total: number }>(
-    db,
-    `SELECT COUNT(*) AS total
-     FROM event_day_waitlist_entries w
-     JOIN registrations r ON r.id = w.registration_id
-     WHERE w.event_day_id = ?
-       AND w.status = 'offered'
-       AND (w.offer_expires_at IS NULL OR w.offer_expires_at > ?)
-       AND r.status IN ('pending_email_confirmation', 'registered')
-       AND (? IS NULL OR r.id <> ?)`,
-    [eventDayId, nowIso(), excludeRegistrationId ?? null, excludeRegistrationId ?? null],
-  );
-  return Number(row?.total ?? 0);
 }
 
 /** The same canonical role policy serves ordinary admission and an overlaid proposal acceptance. */
@@ -140,6 +124,16 @@ export async function resolveCapacityExemptReason(
   return roleBasedCapacityExemptReason(db, payload.eventId, payload.userId);
 }
 
+/** Capacity belongs to the selected configured option, not its identifier or access mode. */
+export function attendanceOptionCapacity(day: EventDayCapacityRow, value: string | undefined): number | null {
+  if (!value) return null;
+  const options = configuredAttendanceOptions({
+    attendance_options_json: day.attendance_options_json ?? null,
+    in_person_capacity: day.in_person_capacity,
+  });
+  return options.find((option) => option.value === value)?.capacity ?? null;
+}
+
 /** One guard per day, executed before every participant's reconciliation in the same atomic command. */
 export type EventDayCapacityGuardPlan = Map<string, { expectedRevision: number; statement: StatementLike }>;
 
@@ -184,8 +178,10 @@ export function prepareCapacityGuardStatements(
   return eventDays.flatMap((day) => {
     const claimsOffer = claim?.dayDates.has(day.day_date) ?? false;
     const affectsCapacity =
-      selectedByDate.get(day.day_date) === "in_person" || preservedEventDayIds.has(day.id) || claimsOffer;
-    if (!affectsCapacity || !day.in_person_capacity || day.in_person_capacity <= 0) return [];
+      attendanceOptionCapacity(day, selectedByDate.get(day.day_date)) !== null ||
+      preservedEventDayIds.has(day.id) ||
+      claimsOffer;
+    if (!affectsCapacity) return [];
     const previousGuard = sharedGuards?.get(day.id);
     if (previousGuard) {
       if (previousGuard.expectedRevision !== day.capacity_revision) throw eventDayCapacityChangedError();

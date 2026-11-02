@@ -1,7 +1,7 @@
 import type { EventRegistrationDayAttendanceChange } from "../../../../assets/shared/schemas/event-registration-detail";
 import { dayNotConfiguredError, registrationCancelledDayChangeError } from "../event-day-refusals";
 import type { DatabaseLike, D1StatementResult, StatementLike } from "../../types";
-import { deriveEventAttendanceType, getRegistrationDayAttendance, listEventDays } from "../event-days";
+import { getRegistrationDayAttendance, listEventDays } from "../event-days";
 import type { EventRecord } from "../events";
 import { getRegistrationByIdForEvent } from "./queries";
 import { updateRegistrationByIdWithNotification } from "./update";
@@ -40,7 +40,7 @@ export async function updateRegistrationDayAttendance(
   const next = new Map(current.map((entry) => [entry.dayDate, entry.attendanceType]));
   for (const dayDate of input.change.dayDates) {
     if (input.change.action === "remove") next.delete(dayDate);
-    else next.set(dayDate, input.change.action === "waitlist" ? "in_person" : input.change.action);
+    else if (input.change.action !== "waitlist") next.set(dayDate, input.change.action);
   }
   const dayAttendance = eventDays
     .filter((day) => next.has(day.day_date))
@@ -55,7 +55,6 @@ export async function updateRegistrationDayAttendance(
       eventId: event.id,
       registrationId: registration.id,
       action: "update",
-      attendanceType: deriveEventAttendanceType(dayAttendance) ?? registration.attendance_type,
       dayAttendance,
       forceWaitlistDayDates: input.change.action === "waitlist" ? input.change.dayDates : undefined,
       auditActor: { type: "admin", id: input.actorUserId, action: "registration_day_attendance_updated" },

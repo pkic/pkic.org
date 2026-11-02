@@ -86,17 +86,7 @@ export function GroupEventConfiguration({
         </Panel>
       )}
       {(!section || section === "attendance-days") && (
-        <Panel aria-label="Attendance days">
-          <PanelHeader title="Attendance days" />
-          <PanelBody>
-            <EventDaysEditor
-              groupId={groupId}
-              event={event}
-              expectedUpdatedAt={updatedAt}
-              onRevision={recordRevision}
-            />
-          </PanelBody>
-        </Panel>
+        <EventDaysEditor groupId={groupId} event={event} expectedUpdatedAt={updatedAt} onRevision={recordRevision} />
       )}
     </section>
   );

@@ -83,8 +83,20 @@ describe("proposal speakers tab", () => {
                 registrationStatus: "registered",
                 attendanceType: "in_person",
                 days: [
-                  { dayDate: "2026-12-01", label: "Conference", attendanceType: "in_person", waitlistStatus: null },
-                  { dayDate: "2026-12-02", label: "Workshop", attendanceType: "in_person", waitlistStatus: null },
+                  {
+                    dayDate: "2026-12-01",
+                    label: "Conference",
+                    attendanceType: "in_person",
+                    optionLabel: "Venue pass",
+                    waitlistStatus: null,
+                  },
+                  {
+                    dayDate: "2026-12-02",
+                    label: "Workshop",
+                    attendanceType: "in_person",
+                    optionLabel: "Venue pass",
+                    waitlistStatus: null,
+                  },
                 ],
               },
             ],
@@ -112,7 +124,7 @@ describe("proposal speakers tab", () => {
     expect(page.querySelector("tbody")?.textContent).toContain("Organization security case study");
     expect(page.querySelector("tbody")?.textContent).toContain("Not registered");
     expect(page.querySelector("tbody")?.textContent).toContain("Registered");
-    expect(page.querySelector("tbody")?.textContent).toContain("In-person");
+    expect(page.querySelector("tbody")?.textContent).toContain("Venue pass");
     expect(page.querySelector("tbody")?.textContent).not.toContain("Conference:");
     expect(page.querySelector("tbody .pk-badge--neutral")?.textContent).toBe("Not registered");
     expect(page.querySelector("tbody .pk-badge--ok")?.textContent).toBe("Confirmed");

@@ -162,7 +162,7 @@ for (const colorScheme of ["light", "dark"] as const) {
       await expect(
         page.getByRole("textbox", { name: EMAIL_FIRST_COPY.registration.work.label, exact: true }),
       ).toBeVisible();
-      await expect(page.getByLabel("Event identity")).toHaveCount(0);
+      await expect(page.getByLabel("Representation")).toHaveCount(0);
       if (colorScheme === "dark") {
         const input = page.getByRole("textbox", { name: EMAIL_FIRST_COPY.registration.work.label, exact: true });
         expect(await input.evaluate((element) => getComputedStyle(element).backgroundColor)).not.toBe(

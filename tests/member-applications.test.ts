@@ -1,4 +1,5 @@
 import { membershipApplicationFields } from "../assets/shared/schemas/membership-application-form";
+import { APPLICATION_ALREADY_PENDING } from "../assets/shared/membership-application-refusals";
 import { describe, it, expect, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
@@ -305,7 +306,7 @@ describe("POST /api/v1/members/applications", () => {
 
     expect(second.status).toBe(409);
     const body = (await second.json()) as { error: { code: string } };
-    expect(body.error.code).toBe("DUPLICATE_APPLICATION");
+    expect(body.error.code).toBe(APPLICATION_ALREADY_PENDING);
   });
 
   it("does not 409 when the applicant changes the email domain before submitting", async () => {
@@ -319,8 +320,9 @@ describe("POST /api/v1/members/applications", () => {
     // matches an *exact* domain already present in member_applications, and
     // hasConflictingOrganizationDomain only matches organizations that
     // actually have that domain in organization_domains. Two
-    // submissions for two different, never-before-seen domains — even from
-    // the same applicant/organization name — must both succeed.
+    // submissions for two different, never-before-seen domains must both
+    // succeed. (A second open application for the same organization name is
+    // refused on its own, so the second one names another organization.)
     const testEnv = makeEnv();
     const first = await callEndpoint(
       createApplication,
@@ -342,6 +344,7 @@ describe("POST /api/v1/members/applications", () => {
         await applicationRequest({
           ...validPayload,
           applicantEmail: "dana@second-domain.test",
+          organizationName: "Second Domain Corp",
         }),
         {},
       ),
@@ -639,6 +642,9 @@ describe("GET /api/v1/members/applications/:id/status", () => {
     expect(response.status).toBe(200);
     const body = memberApplicationStatusResponseSchema.parse(await response.json());
     expect(body.stage).toBe("submitted");
+    const label = await testEnv.DB.prepare("SELECT label FROM membership_categories WHERE code = 'A'").first("label");
+    expect(body).toMatchObject({ membershipCategory: "A", membershipCategoryLabel: label });
+    expect(label).toBeTruthy();
   });
 
   it("returns 401 for an invalid token", async () => {

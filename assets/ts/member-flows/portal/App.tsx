@@ -153,7 +153,9 @@ export function App() {
       }
       setVerifying(Boolean(magicLinkToken));
       setVerifyError(null);
-      setAuthChecking();
+      // A session this tab already holds, such as one a link just signed in, is refreshed in place:
+      // covering it with the sign-in check would replace the passkey offer or the portal on screen.
+      if (!portalSession.value) setAuthChecking();
       const pendingLogout = await resumePendingUserLogout();
       if (cancelled) return;
       if (pendingLogout) {
@@ -188,10 +190,12 @@ export function App() {
           return;
         } catch (err) {
           if (!cancelled) {
-            setVerifying(false);
             // A link opened twice is refused the second time, but the first
             // opening may already have signed this browser in: check the
-            // session before saying sign-in failed.
+            // session before saying sign-in failed. Verification stays on
+            // screen until the hash names the destination, so the signed-in
+            // render resolves it (a meeting link included) rather than the
+            // verify route that is about to be replaced.
             const signedIn = await loadPortalSession(() => !cancelled);
             if (cancelled) return;
             if (signedIn && portalSession.value && portalHashPath(window.location.hash) === "/verify") {
@@ -207,6 +211,7 @@ export function App() {
                 err instanceof ApiClientError ? err.message : "The link may have expired or already been used.",
               );
             }
+            setVerifying(false);
             return;
           }
         }

@@ -220,7 +220,7 @@ describe("proposal resend-manage-link endpoint", () => {
     await expect(
       queryAll<{ recipient_email: string }>(
         env.DB,
-        "SELECT recipient_email FROM email_outbox WHERE template_key = 'co_speaker_invite' ORDER BY recipient_email",
+        "SELECT recipient_email FROM email_outbox WHERE template_key = 'user_magic_link' ORDER BY recipient_email",
       ),
     ).resolves.toEqual([{ recipient_email: "confirmed-speaker@example.test" }]);
   });
@@ -261,5 +261,85 @@ describe("proposal resend-manage-link endpoint", () => {
     );
     expect(response.status).toBe(410);
     await expect(response.json()).resolves.toMatchObject({ error: { code: "PROPOSAL_TOKEN_EXPIRED" } });
+  });
+  it("sends one event-app sign-in link for many participations through a verified secondary address", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const now = nowIso();
+    const proposerId = crypto.randomUUID();
+    const speakerId = crypto.randomUUID();
+    const proposalIds = Array.from({ length: 21 }, () => crypto.randomUUID());
+    await run(
+      env.DB,
+      `INSERT INTO users (id, email, normalized_email, email_verified_at, active, created_at, updated_at)
+      VALUES (?, 'owner@example.test', 'owner@example.test', ?, 1, ?, ?),
+             (?, 'new@example.test', 'new@example.test', ?, 1, ?, ?)`,
+      [proposerId, now, now, now, speakerId, now, now, now],
+    );
+    await run(
+      env.DB,
+      `INSERT INTO user_emails (id, user_id, email, normalized_email, verified_at, created_at)
+      VALUES (?, ?, 'old@example.test', 'old@example.test', ?, ?),
+             (?, ?, 'unverified@example.test', 'unverified@example.test', NULL, ?)`,
+      [crypto.randomUUID(), speakerId, now, now, crypto.randomUUID(), speakerId, now],
+    );
+    for (const [index, proposalId] of proposalIds.entries()) {
+      await run(
+        env.DB,
+        `INSERT INTO session_proposals (id, event_id, proposer_user_id, status, proposal_type, title, abstract, manage_link_secret, submitted_at, updated_at)
+        VALUES (?, ?, ?, 'submitted', 'talk', ?, 'Abstract', ?, ?, ?)`,
+        [proposalId, eventId, proposerId, `Proposal ${index}`, `proposal-secret-${index}`, now, now],
+      );
+      await run(
+        env.DB,
+        `INSERT INTO proposal_speakers (id, proposal_id, user_id, role, status, manage_link_secret, created_at)
+        VALUES (?, ?, ?, 'speaker', ?, ?, ?)`,
+        [
+          crypto.randomUUID(),
+          proposalId,
+          speakerId,
+          index === 0 ? "confirmed" : "invited",
+          `speaker-secret-${index}`,
+          now,
+        ],
+      );
+    }
+    const testEnv = { ...env, INTERNAL_SIGNING_SECRET: signingSecret };
+    await run(env.DB, "UPDATE users SET email_verified_at = NULL WHERE id = ?", [speakerId]);
+    const unsafePrimary = await callApi(testEnv, "/api/v1/events/pqc-2026/proposals/resend-speaker-manage-link", {
+      method: "POST",
+      headers: { "content-type": "application/json", "cf-connecting-ip": "203.0.113.85" },
+      body: JSON.stringify({ email: "old@example.test" }),
+    });
+    expect(unsafePrimary.status).toBe(200);
+    expect(await queryAll(env.DB, "SELECT id FROM email_outbox")).toHaveLength(0);
+    await run(env.DB, "UPDATE users SET email_verified_at = ? WHERE id = ?", [now, speakerId]);
+    for (const email of ["unverified@example.test", "old@example.test"]) {
+      const response = await callApi(testEnv, "/api/v1/events/pqc-2026/proposals/resend-speaker-manage-link", {
+        method: "POST",
+        headers: { "content-type": "application/json", "cf-connecting-ip": "203.0.113.86" },
+        body: JSON.stringify({ email }),
+      });
+      expect(response.status).toBe(200);
+      if (email.startsWith("unverified")) expect(await queryAll(env.DB, "SELECT id FROM email_outbox")).toHaveLength(0);
+    }
+    const messages = await queryAll<{ recipient_email: string; payload_json: string }>(
+      env.DB,
+      "SELECT recipient_email, payload_json FROM email_outbox ORDER BY created_at, id",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].recipient_email).toBe("new@example.test");
+    const payload = JSON.parse(messages[0].payload_json) as Record<string, unknown>;
+    expect(payload.magicLinkUrl).toContain(encodeURIComponent("/events/pqc-2026/submissions"));
+    await run(env.DB, "DELETE FROM user_emails WHERE user_id = ? AND normalized_email = ?", [
+      speakerId,
+      "old@example.test",
+    ]);
+    const removed = await callApi(testEnv, "/api/v1/events/pqc-2026/proposals/resend-speaker-manage-link", {
+      method: "POST",
+      headers: { "content-type": "application/json", "cf-connecting-ip": "203.0.113.87" },
+      body: JSON.stringify({ email: "old@example.test" }),
+    });
+    expect(removed.status).toBe(200);
+    expect(await queryAll(env.DB, "SELECT id FROM email_outbox")).toHaveLength(1);
   });
 });

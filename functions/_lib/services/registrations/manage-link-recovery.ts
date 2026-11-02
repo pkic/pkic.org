@@ -20,13 +20,19 @@ interface RegistrationManageLinkMatch {
   user_updated_at: string;
 }
 
-/** Queues one enumeration-safe management-link recovery email when the match remains current. */
+/**
+ * Queues one enumeration-safe management-link recovery email when the match remains current.
+ * `alreadyRegistered` answers a fresh registration attempt: only a held registration matches,
+ * and the email says there is nothing to register again.
+ */
 export async function queueRegistrationManageLinkRecovery(
   db: DatabaseLike,
   event: EventRecord,
   email: string,
   appBaseUrl: string,
+  options: { alreadyRegistered?: boolean } = {},
 ): Promise<string | null> {
+  const alreadyRegistered = options.alreadyRegistered === true;
   const normalizedEmail = normalizeEmail(email);
   const registration = await first<RegistrationManageLinkMatch>(
     db,
@@ -45,9 +51,10 @@ export async function queueRegistrationManageLinkRecovery(
      JOIN registrations r ON r.user_id = u.id
      WHERE u.normalized_email = ?
        AND r.event_id = ?
+       AND (? = 0 OR r.status NOT IN ('cancelled', 'pending_email_confirmation'))
      ORDER BY r.created_at DESC
      LIMIT 1`,
-    [normalizedEmail, event.id],
+    [normalizedEmail, event.id, alreadyRegistered ? 1 : 0],
   );
   if (!registration) return null;
 
@@ -73,6 +80,7 @@ export async function queueRegistrationManageLinkRecovery(
         manageUrl,
         myAgendaUrl: myAgendaPageUrl(appBaseUrl, event),
         status: registration.registration_status,
+        alreadyRegistered,
       },
     },
     {

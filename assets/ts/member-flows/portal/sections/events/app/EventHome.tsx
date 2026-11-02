@@ -1,3 +1,4 @@
+import { eventPlaceSummary } from "../../../../../../shared/event-place";
 import { JoinPrompt } from "../../JoinPrompt";
 /**
  * The event app's home: the event's key visual, then one card per thing an
@@ -29,7 +30,6 @@ import { eventPhase, sessionPhase } from "./event-timing";
 import { attendanceStanding, attendanceStandingParts } from "../../../../../shared/viewer-attendance";
 import {
   eventManagementPath,
-  eventPlaceSummary,
   eventRegistrationStanding,
   registrationOffer,
   type ParticipantEventDetail,
@@ -165,7 +165,7 @@ function TicketCard({ event, ended }: { event: ParticipantEventDetail; ended: bo
         eyebrow="Registration"
         title={offer.kind === "closed" ? "Not registered" : "You're not registered yet"}
       >
-        <RegistrationOfferNotice offer={offer} />
+        <RegistrationOfferNotice offer={offer} slug={event.slug} />
       </EventCard>
     );
   }
@@ -232,7 +232,8 @@ function ProposalsCard({ event }: { event: ParticipantEventDetail }) {
 export function EventHome({ event }: { event: ParticipantEventDetail }) {
   const phase = eventPhase(event.startsAt, event.endsAt);
   const ended = phase.kind === "ended";
-  const current = phase.kind === "live" || phase.kind === "upcoming";
+  const current =
+    (phase.kind === "live" || phase.kind === "upcoming") && eventRegistrationStanding(event).status === "registered";
   const now = useEventNow(event.slug, current);
   // Online attendees are sent to the stream first; everyone else still reaches it from a session's Join online.
   const viewer = "viewer" in event ? event.viewer : null;

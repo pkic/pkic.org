@@ -143,7 +143,7 @@ function ContentEditForm({
     e.preventDefault();
     setError(null);
     const checked = validation.submit();
-    if (!checked.data) return setError(checked.message);
+    if (!checked.data) return setError(checked.formMessage);
     if (Object.keys(changes).length === 0) {
       setError("No changes to submit.");
       return;

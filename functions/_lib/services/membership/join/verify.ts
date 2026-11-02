@@ -1,24 +1,21 @@
 import { emailDomainOf } from "../../../../../assets/shared/schemas/email-domains";
 import type { MemberJoinVerifyResponse } from "./types";
-import { first } from "../../../db/queries";
-import type { DatabaseLike } from "../../../types";
+import type { AuthMember, DatabaseLike } from "../../../types";
 import { nowIso } from "../../../utils/time";
 import { buildFindOrCreateUserStatement } from "../../users";
-import { findUserEmailOwner, isEmailReservationConflict } from "../../user-emails";
+import { isEmailReservationConflict } from "../../user-emails";
+import { provedMailboxUserId } from "../../email-ownership";
 import { prepareVerifyOwnedEmailStatements } from "../../email-verification";
-import { prepareExplicitVerifiedDomainIdentityStatements } from "../../identities";
+import { prepareExplicitVerifiedDomainIdentity } from "../../identities";
 import { prepareAuditLog } from "../../audit";
-import { organizationLinkDomain } from "../organization-domain-claims";
+import { workEmailDomain } from "../../../email-domains/classification";
 import { prepareOneTimeAuditLog } from "../../audit";
 import { prepareUserSession } from "../../../auth/user-session";
 import { AppError } from "../../../errors";
 import { issueMemberJoinApplicationToken, verifyMemberJoinVerificationToken } from "./capabilities";
-import { findExistingJoinMember } from "./existing-member";
-
-interface ClaimedMemberRow {
-  member_id: string;
-  organization_id: string;
-}
+import { readJoinVerification } from "./verification-read";
+import { prepareEligibleMemberRead } from "../../../auth/identity-capacities";
+import { prepareAuthorizationGuard } from "../../../db/authorization-guard";
 
 async function issueApplicationContinuation(
   signingSecret: string,
@@ -46,82 +43,56 @@ export async function verifyMemberJoin(
       memberId: string;
       sessionId: string;
       expiresAt: string;
+      member: AuthMember;
     }
 > {
   const capability = await verifyMemberJoinVerificationToken(input.signingSecret, input.token);
   // A valid mailbox proof can show sign-in guidance even if a previous visit
   // already consumed the join link. It must never mint another session.
-  if (await findExistingJoinMember(db, capability.email)) return { status: "already_member" };
-
-  if (
-    await first<{ id: string }>(db, "SELECT id FROM audit_log WHERE idempotency_key = ?", [
-      `membership_join_link_consumed:${capability.capabilityId}`,
-    ])
-  ) {
+  const observed = await readJoinVerification(db, capability.email, capability.capabilityId);
+  if (observed.existingMembership) return { status: "already_member" };
+  if (observed.consumed) {
     throw new AppError(409, "MEMBER_JOIN_LINK_USED", "Membership verification link already used");
   }
-  // The domain the address links through; free mail links through none.
-  const linkDomain = await organizationLinkDomain(db, capability.email);
-  const domain = linkDomain ?? emailDomainOf(capability.email);
-  const owner = await findUserEmailOwner(db, capability.email);
-  // A previously verified alias is an authentication identity for the same
-  // canonical user. An unverified admin-added alias is only a reservation:
-  // this join link must not turn a potentially mistaken association into
-  // access to that user's unrelated capacities.
-  if (owner?.kind === "pending" || (owner?.kind === "secondary" && owner.verified !== 1)) {
-    return { status: "support_required" };
-  }
-  const claimedMember = linkDomain
-    ? await first<ClaimedMemberRow>(
-        db,
-        `SELECT member.id AS member_id, member.organization_id
-           FROM organization_domain_claims claim
-           JOIN members member
-             ON member.organization_id = claim.organization_id
-            AND member.status = 'active'
-          WHERE claim.domain = ? AND claim.organization_id IS NOT NULL
-          LIMIT 1`,
-        [linkDomain],
-      )
-    : null;
+  const domain = observed.claim?.domain ?? workEmailDomain(capability.email) ?? emailDomainOf(capability.email);
+  const provedUserId = provedMailboxUserId(observed.ownership);
+  const claimedMember = observed.member;
   if (!claimedMember) {
-    if (capability.applicantKind === "individual") {
-      if (owner) {
-        const activeIdentity = await first<{ id: string }>(
-          db,
-          `SELECT id FROM identities
-            WHERE user_id = ? AND started_at IS NOT NULL AND ended_at IS NULL AND blocked_at IS NULL
-            LIMIT 1`,
-          [owner.userId],
-        );
-        if (activeIdentity) return { status: "support_required" };
-      }
+    if (capability.applicantKind === "individual" && observed.state?.individual_conflict) {
+      return { status: "support_required" };
     }
-    return issueApplicationContinuation(
-      input.signingSecret,
-      capability,
-      input.applicationTtlSeconds,
-      owner?.userId ?? null,
-    );
+    return issueApplicationContinuation(input.signingSecret, capability, input.applicationTtlSeconds, provedUserId);
   }
 
-  const preparedUser = await buildFindOrCreateUserStatement(db, { email: capability.email });
-  const existingState = preparedUser.created
-    ? null
-    : await first<{ active: number }>(db, "SELECT active FROM users WHERE id = ?", [preparedUser.user.id]);
-  if (existingState?.active === 0) return { status: "support_required" };
-
-  const blocked = await first<{ id: string }>(
+  const preparedUser = await buildFindOrCreateUserStatement(
     db,
-    `SELECT id FROM identities
-      WHERE organization_id = ? AND user_id = ? AND blocked_at IS NOT NULL`,
-    [claimedMember.organization_id, preparedUser.user.id],
+    { email: capability.email, mailboxVerified: true },
+    { ownership: observed.ownership, existing: observed.person },
   );
-  if (blocked) return { status: "support_required" };
+  if (observed.state?.active === 0 || observed.blocked) return { status: "support_required" };
 
   const verifiedAt = nowIso();
+  const identity = await prepareExplicitVerifiedDomainIdentity(
+    db,
+    {
+      userId: preparedUser.user.id,
+      organizationId: claimedMember.organization_id,
+      normalizedEmail: capability.email,
+      at: verifiedAt,
+    },
+    {
+      domain,
+      member: observed.claim?.application_id ? null : { id: claimedMember.member_id },
+      person: observed.person,
+      address: observed.address,
+      creation: observed.creation,
+    },
+  );
+  const session = await prepareUserSession(db, preparedUser.user.id, input.sessionTtlHours);
+  const projection = prepareEligibleMemberRead(db, preparedUser.user.id, identity.identityId);
+  let member: AuthMember | null;
   try {
-    await db.batch([
+    const results = await db.batch([
       ...preparedUser.statements,
       ...prepareVerifyOwnedEmailStatements(db, {
         userId: preparedUser.user.id,
@@ -129,12 +100,7 @@ export async function verifyMemberJoin(
         method: "magic_link",
         verifiedAt,
       }),
-      ...(await prepareExplicitVerifiedDomainIdentityStatements(db, {
-        userId: preparedUser.user.id,
-        organizationId: claimedMember.organization_id,
-        normalizedEmail: capability.email,
-        at: verifiedAt,
-      })),
+      ...identity.statements,
       prepareAuditLog(
         db,
         "user",
@@ -147,24 +113,11 @@ export async function verifyMemberJoin(
         `membership_join_email_verified:${capability.capabilityId}`,
         { type: "organization", id: claimedMember.member_id },
       ),
-    ]);
-  } catch (error) {
-    if (isEmailReservationConflict(error)) return { status: "support_required" };
-    throw error;
-  }
-
-  const activeIdentity = await first<{ id: string }>(
-    db,
-    `SELECT id FROM identities
-      WHERE organization_id = ? AND user_id = ?
-        AND started_at IS NOT NULL AND ended_at IS NULL AND blocked_at IS NULL`,
-    [claimedMember.organization_id, preparedUser.user.id],
-  );
-  if (!activeIdentity) return { status: "support_required" };
-
-  const session = await prepareUserSession(db, preparedUser.user.id, input.sessionTtlHours);
-  try {
-    await db.batch([
+      prepareAuthorizationGuard(db, {
+        sql: `SELECT 1 FROM identities WHERE id=? AND user_id=? AND organization_id=?
+          AND started_at IS NOT NULL AND ended_at IS NULL AND blocked_at IS NULL`,
+        bindings: [identity.identityId, preparedUser.user.id, claimedMember.organization_id],
+      }),
       prepareOneTimeAuditLog(
         db,
         "user",
@@ -178,8 +131,11 @@ export async function verifyMemberJoin(
         { type: "organization", id: claimedMember.member_id },
       ),
       ...session.statements,
+      ...projection.statements,
     ]);
+    member = projection.decode(results.slice(-projection.statements.length));
   } catch (error) {
+    if (isEmailReservationConflict(error)) return { status: "support_required" };
     if (
       error instanceof Error &&
       (error.message.includes("uq_audit_log_idempotency_key") || error.message.includes("audit_log.idempotency_key"))
@@ -188,10 +144,12 @@ export async function verifyMemberJoin(
     }
     throw error;
   }
+  if (!member) throw new AppError(500, "MEMBER_JOIN_SESSION_FAILED", "Member portal access could not be established");
   return {
     status: "organization_session_ready",
+    member,
     userId: preparedUser.user.id,
-    identityId: activeIdentity.id,
+    identityId: identity.identityId,
     memberId: claimedMember.member_id,
     sessionId: session.sessionId,
     expiresAt: session.expiresAt,

@@ -1,3 +1,6 @@
+import { identityAffiliationContextSchema, identityAffiliationPrepareBaseSchema } from "./identity-affiliation";
+import { consentSelectionIssues } from "../consent-selection";
+import type { RequiredTerm } from "./event-read-models";
 import { z } from "zod";
 import { formAnswersSchema, submittedFormAnswersSchema } from "./form-answers";
 import { databaseIdSchema } from "./identifiers";
@@ -104,9 +107,9 @@ export const registrationHeadshotDeleteRouteSchema = {
 
 export const userHeadshotUploadResponseSchema = headshotUploadResponseSchema.omit({ headshotUrl: true });
 
-export const ATTENDANCE_TYPES = ["in_person", "virtual", "on_demand"] as const;
-export const attendanceTypeSchema = z.enum(ATTENDANCE_TYPES);
-export type AttendanceType = (typeof ATTENDANCE_TYPES)[number];
+/** Attendance options are configured per event day, so a type is a bounded identifier, never a fixed list. */
+export const attendanceTypeSchema = eventAttendanceTypeValueSchema;
+export type AttendanceType = z.infer<typeof attendanceTypeSchema>;
 
 /**
  * Application lifecycle statuses after migration 0030. The deployed base
@@ -131,7 +134,6 @@ export const registrationCapabilitySafeProjectionSchema = z.object({
   user_id: databaseIdSchema,
   invite_id: databaseIdSchema.nullable(),
   status: registrationLifecycleStatusSchema,
-  attendance_type: attendanceTypeSchema,
   source_type: z.string().min(2).max(64),
   source_ref: z.string().nullable(),
   custom_answers_json: z.string().nullable(),
@@ -176,13 +178,14 @@ export const dayAttendanceItemSchema = z.object({
 
 export const dayWaitlistItemSchema = z.object({
   dayDate: dayDateSchema,
-  status: z.enum(["waiting", "offered", "accepted"]),
+  status: z.enum(["waiting", "offered", "accepted", "expired"]),
   priorityLane: z.enum(["continuity", "general"]),
   offerExpiresAt: z.string().trim().nullable(),
 });
 
 export const registrationDayAttendanceResponseItemSchema = dayAttendanceItemSchema.extend({
   label: z.string().nullable(),
+  optionLabel: z.string().nullable().optional(),
   /** When the day was first held on this registration; absent where a builder has no row to read. */
   heldSince: z.string().optional(),
   /** When the day's attendance last changed. */
@@ -200,7 +203,8 @@ export const userProfileSchema = z.object({
   email: normalizedEmailSchema,
 });
 
-const speakerBioSchema = trimmedString(40, 5000);
+export const SPEAKER_BIO_TOO_SHORT = "Write at least 40 characters so attendees know who is speaking.";
+const speakerBioSchema = trimmedString(40, 5000, SPEAKER_BIO_TOO_SHORT);
 export const speakerRoleSchema = proposalSpeakerRoleSchema;
 export type SpeakerRole = z.infer<typeof speakerRoleSchema>;
 
@@ -221,43 +225,52 @@ export const inviteeSchema = z.object({
   lastName: lastNameSchema.optional(),
 });
 
-function requireAttendance(
-  value: { attendanceType?: string; dayAttendance?: unknown[] },
-  context: z.core.$RefinementCtx,
-): void {
-  if (!value.attendanceType && (!value.dayAttendance || value.dayAttendance.length === 0)) {
-    context.addIssue({
-      code: "custom",
-      path: ["attendanceType"],
-      message: "attendanceType or dayAttendance is required",
-      input: value,
-    });
-  }
-}
-
 export const attendeeRegistrationFieldsSchema = z.object({
   firstName: firstNameSchema,
   lastName: lastNameSchema,
   email: normalizedEmailSchema,
   identityId: databaseIdSchema.optional(),
-  attendanceType: attendanceTypeSchema.optional(),
-  dayAttendance: z.array(dayAttendanceItemSchema).max(31).optional(),
+  dayAttendance: z
+    .array(dayAttendanceItemSchema)
+    .min(1, "Choose at least one event day and attendance option to register.")
+    .max(31),
   customAnswers: submittedFormAnswersSchema.optional(),
-  consents: z.array(consentItemSchema).min(1).max(20),
+  consents: z.array(consentItemSchema).min(1, "Review and accept the required terms to register.").max(20),
 });
 export type AttendeeRegistrationFields = z.infer<typeof attendeeRegistrationFieldsSchema>;
+/** Wizard steps use the same fields and attendance policy as the registration request. */
+export const registrationContactFieldsSchema = attendeeRegistrationFieldsSchema.pick({
+  firstName: true,
+  lastName: true,
+  email: true,
+});
+/** A rendered day must be answered explicitly; Not attending is an answer but creates no attendance row. */
+export function withRequiredDayAttendanceChoices<Schema extends z.ZodType>(
+  schema: Schema,
+  choices: () => readonly { dayLabel: string; answered: boolean }[],
+) {
+  return schema.superRefine((_value, context) => {
+    const missing = choices().find((day) => !day.answered);
+    if (missing)
+      context.addIssue({
+        code: "custom",
+        path: ["dayAttendance"],
+        message: `Choose an option for ${missing.dayLabel}. Select Not attending if you will skip this day.`,
+      });
+  });
+}
+
+export const registrationAttendanceFieldsSchema = attendeeRegistrationFieldsSchema.pick({ dayAttendance: true });
 
 /** Authenticated registration payload; identity and profile fields come from the verified session user. */
 export const attendeeRegistrationParticipationSchema = attendeeRegistrationFieldsSchema
   .pick({
     identityId: true,
-    attendanceType: true,
     dayAttendance: true,
     customAnswers: true,
     consents: true,
   })
-  .strict()
-  .superRefine(requireAttendance);
+  .strict();
 export type AttendeeRegistrationParticipation = z.infer<typeof attendeeRegistrationParticipationSchema>;
 
 /**
@@ -265,7 +278,12 @@ export type AttendeeRegistrationParticipation = z.infer<typeof attendeeRegistrat
  * none — asked once, after the mailbox is proved.
  */
 export const registrationConfirmOrganizationSchema = z
-  .object({ name: organizationNameSchema, jobTitle: jobTitleSchema })
+  .object({
+    name: organizationNameSchema,
+    jobTitle: jobTitleSchema,
+    contextToken: identityAffiliationContextSchema.optional(),
+    ...identityAffiliationPrepareBaseSchema.pick({ organizationId: true, domain: true }).partial().shape,
+  })
   .strict();
 export type RegistrationConfirmOrganization = z.infer<typeof registrationConfirmOrganizationSchema>;
 
@@ -285,7 +303,15 @@ export const registrationCreateSchema = attendeeRegistrationFieldsSchema
     emailProof: registrationEmailProofTokenSchema.optional(),
     organization: registrationConfirmOrganizationSchema.optional(),
   })
-  .superRefine(requireAttendance);
+  .strict();
+
+/** The shared request contract resolved against the event's currently offered terms. */
+export function registrationCreateForTermsSchema(terms: readonly RequiredTerm[]) {
+  return registrationCreateSchema.superRefine((body, context) => {
+    for (const issue of consentSelectionIssues(terms, body.consents))
+      context.addIssue({ code: "custom", path: ["consents", issue.termKey], message: issue.message });
+  });
+}
 
 export const registrationConfirmQuerySchema = z.object({ id: databaseIdSchema.optional(), token: tokenSchema });
 
@@ -294,6 +320,7 @@ export const registrationConfirmSchema = registrationConfirmQuerySchema.extend({
 });
 /** Linked through the canonical affiliation rule, or queued for staff review; null when nothing was asked. */
 export const registrationOrganizationOutcomeSchema = z.enum(["linked", "review_required"]).nullable();
+export type RegistrationOrganizationOutcome = NonNullable<z.infer<typeof registrationOrganizationOutcomeSchema>>;
 
 const registrationCompletionResponseBaseSchema = successResponseSchema.merge(registrationDayStateSchema).extend({
   status: registrationLifecycleStatusSchema,
@@ -320,8 +347,9 @@ export const registrationConfirmInfoResponseSchema = z.object({
   lastName: z.string().nullable(),
   email: normalizedEmailSchema.nullable(),
   organizationName: z.string().nullable(),
-  /** A work address whose domain resolves to no organization: the page asks for it once. */
+  /** A verified work address confirms its organization through the shared chooser. */
   asksOrganization: z.boolean().default(false),
+  organizationProof: registrationEmailProofTokenSchema.optional(),
   eventName: z.string().nullable(),
   expired: z.boolean(),
   recoverable: z.boolean(),
@@ -351,7 +379,6 @@ export const okResponseSchema = z.object({ ok: z.boolean() });
 export const registrationManageSchema = z
   .object({
     action: z.enum(["update", "cancel", "report_unauthorized", "withdraw_sponsor_sharing"]),
-    attendanceType: attendanceTypeSchema.optional(),
     dayAttendance: z.array(dayAttendanceItemSchema).max(31).optional(),
     claimDayWaitlistOffers: z.array(dayDateSchema).max(31).optional(),
     customAnswers: submittedFormAnswersSchema.optional(),
@@ -360,6 +387,7 @@ export const registrationManageSchema = z
     firstName: firstNameSchema.optional(),
     lastName: lastNameSchema.optional(),
   })
+  .strict()
   .refine(
     (value) =>
       value.action !== "withdraw_sponsor_sharing" ||
@@ -379,7 +407,6 @@ export const registrationManageRegistrationSchema = z.object({
   event_id: eventSummarySchema.shape.id,
   status: registrationLifecycleStatusSchema,
   cancellation_reason_code: z.string().nullable(),
-  attendance_type: attendanceTypeSchema,
   custom_answers: formAnswersSchema.nullable(),
   isEmailVerified: z.boolean(),
 });
@@ -404,6 +431,8 @@ export const registrationManageReadResponseSchema = successResponseSchema.extend
   dayWaitlist: registrationDayStateSchema.shape.dayWaitlist,
   /** The registrant holds no verified work address, so their waiting days are handled last. */
   waitlistHandledLast: z.boolean(),
+  /** The organization the registrant named that staff have not yet linked to their identity. */
+  pendingOrganizationName: z.string().nullable().default(null),
   shareUrl: httpUrlSchema.nullable(),
   headshotUrl: httpUrlSchema.nullable(),
 });
@@ -479,4 +508,4 @@ export const inviteDeclineSchema = z
     }
   });
 
-export const inviteAcceptAttendeeSchema = attendeeRegistrationFieldsSchema.superRefine(requireAttendance);
+export const inviteAcceptAttendeeSchema = attendeeRegistrationFieldsSchema.strict();

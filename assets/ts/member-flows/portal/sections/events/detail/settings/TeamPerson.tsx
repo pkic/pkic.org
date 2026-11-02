@@ -50,7 +50,7 @@ export function TeamPerson({
   if (person.error) return <ErrorAlert error={person.error} />;
   const row = person.data?.people[0];
   if (!row) return <ErrorAlert error="Team member not found." />;
-  const name = personDisplayName(row.firstName, row.lastName, null);
+  const name = personDisplayName(row, null);
   if (operation === "edit")
     return canEditStaffing ? (
       <TeamStaffingEditor slug={slug} userId={userId} teamPath={teamPath} person={row} />

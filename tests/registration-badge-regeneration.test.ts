@@ -1,14 +1,18 @@
+import { personalPromotionImagePath } from "../assets/shared/personal-promotion-image";
 import { env as workerEnv } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createReferralCode } from "../functions/_lib/services/referrals";
-import app from "./helpers/app";
+import app, { callApi } from "./helpers/app";
+import { readBadgeSource, personalBadgeCacheMetadata } from "../functions/_lib/services/og-badge-source";
 import { getEventBySlug } from "../functions/_lib/services/events";
 import {
-  processBadgeRenderJobById,
-  processPendingBadgeRenders,
   requestRegistrationBadgeRegeneration,
   seedGravatarAndProcessBadgeRenderJob,
 } from "../functions/_lib/services/registration-badge-regeneration";
+import {
+  processPendingPromotionRenders,
+  processPromotionRenderJob,
+} from "../functions/_lib/services/event-agenda/promotion-render-jobs";
 import { prepareBadgeRenderJob } from "../functions/_lib/services/badge-render-job-statements";
 import type { AuthAdmin, Env } from "../functions/_lib/types";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
@@ -37,9 +41,9 @@ async function seedRegistrationWithReferral(): Promise<{
     ).bind(userId),
     env.DB.prepare(
       `INSERT INTO registrations (
-           id, event_id, user_id, status, attendance_type, source_type,
+           id, event_id, user_id, status, source_type,
            manage_link_secret, created_at, updated_at
-         ) VALUES (?, ?, ?, 'registered', 'virtual', 'direct', ?, datetime('now'), datetime('now'))`,
+         ) VALUES (?, ?, ?, 'registered', 'direct', ?, datetime('now'), datetime('now'))`,
     ).bind(registrationId, eventId, userId, crypto.randomUUID()),
   ]);
   const referralCode = await createReferralCode(env.DB, {
@@ -64,6 +68,96 @@ async function seedRegistrationWithReferral(): Promise<{
 describe("registration badge regeneration", () => {
   beforeEach(async () => {
     await resetDb();
+  });
+
+  it("ignores sponsor changes for sponsor-free social cards and serves each format in one request batch", async () => {
+    const fixture = await seedRegistrationWithReferral();
+    const sponsorId = crypto.randomUUID();
+    const at = new Date().toISOString();
+    await env.DB.prepare(
+      "INSERT INTO sponsorships(id,sponsor_type,non_member_name,non_member_logo_r2_key,event_id,tier,pipeline_stage,created_at,updated_at) VALUES(?,'event','Visible sponsor','sponsor-logos/example/logo.svg',?,'Leader','active',?,?)",
+    )
+      .bind(sponsorId, fixture.event!.id, at, at)
+      .run();
+    const before = (await readBadgeSource(env.DB, fixture.referralCode))!;
+
+    await env.ASSETS_BUCKET!.put(`og-badges/${fixture.referralCode}`, validJpegBytes(), {
+      httpMetadata: { contentType: "image/jpeg" },
+      customMetadata: personalBadgeCacheMetadata(fixture.referralCode, before),
+    });
+    const response = await callApi(env, personalPromotionImagePath(fixture.referralCode), {}, { maxRoundTrips: 1 });
+    expect(response.status).toBe(200);
+    const squareKey = `og-badges/${fixture.referralCode}/square`;
+    await env.ASSETS_BUCKET!.put(squareKey, validJpegBytes(), {
+      httpMetadata: { contentType: "image/jpeg" },
+      customMetadata: personalBadgeCacheMetadata(fixture.referralCode, before, "square"),
+    });
+    const square = await callApi(
+      env,
+      personalPromotionImagePath(fixture.referralCode, undefined, "square"),
+      {},
+      { maxRoundTrips: 1 },
+    );
+    expect(square.status).toBe(200);
+    expect(square.headers.get("X-Cache")).toBe("HIT");
+    const invalid = await callApi(
+      env,
+      `${personalPromotionImagePath(fixture.referralCode)}&format=unknown`,
+      {},
+      { maxRoundTrips: 0 },
+    );
+    expect(invalid.status).toBe(400);
+    await env.DB.prepare("UPDATE sponsorships SET non_member_name='Renamed sponsor' WHERE id=?").bind(sponsorId).run();
+    const after = (await readBadgeSource(env.DB, fixture.referralCode))!;
+    expect(personalBadgeCacheMetadata(fixture.referralCode, after).badgeDesignRevision).toBe(
+      personalBadgeCacheMetadata(fixture.referralCode, before).badgeDesignRevision,
+    );
+  });
+
+  it("includes only the person's public sessions from the current publication and invalidates on a new revision", async () => {
+    const fixture = await seedRegistrationWithReferral();
+    const at = new Date().toISOString();
+    const occurrence = (id: string, visibility: string, userId: string) => ({
+      id,
+      title: id,
+      kind: "session",
+      visibility,
+      startAt: "2026-12-01T09:00:00.000Z",
+      speakers: [{ userId }],
+    });
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO event_agenda_state(event_id,revision,published_revision,updated_at) VALUES(?,3,2,?) ON CONFLICT(event_id) DO UPDATE SET revision=3,published_revision=2",
+      ).bind(fixture.event!.id, at),
+      ...[2, 3].map((revision) =>
+        env.DB.prepare(
+          "INSERT INTO event_agenda_publications(id,event_id,revision,snapshot_json,created_by,created_at) VALUES(?,?,?,?,?,?)",
+        ).bind(
+          crypto.randomUUID(),
+          fixture.event!.id,
+          revision,
+          JSON.stringify({
+            occurrences: [
+              occurrence(`Public session revision ${revision}`, "public", fixture.userId),
+              occurrence("Private session", "private", fixture.userId),
+              occurrence("Someone else's session", "public", fixture.actor.id),
+            ],
+          }),
+          fixture.actor.id,
+          at,
+        ),
+      ),
+    ]);
+    const before = (await readBadgeSource(env.DB, fixture.referralCode))!;
+    expect(before.sessions).toEqual([{ title: "Public session revision 2" }]);
+    await env.DB.prepare("UPDATE event_agenda_state SET published_revision=3 WHERE event_id=?")
+      .bind(fixture.event!.id)
+      .run();
+    const after = (await readBadgeSource(env.DB, fixture.referralCode))!;
+    expect(after.sessions).toEqual([{ title: "Public session revision 3" }]);
+    expect(personalBadgeCacheMetadata(fixture.referralCode, after).badgeDesignRevision).not.toBe(
+      personalBadgeCacheMetadata(fixture.referralCode, before).badgeDesignRevision,
+    );
   });
 
   afterEach(() => {
@@ -98,7 +192,11 @@ describe("registration badge regeneration", () => {
       { headshot_r2_key: r2Key },
     ]);
     expect(
-      await queryAll(env.DB, "SELECT id, status FROM badge_render_jobs WHERE referral_code = ?", seeded.referralCode),
+      await queryAll(
+        env.DB,
+        "SELECT id, status FROM event_promotion_renders WHERE id = 'badge:' || ?",
+        seeded.referralCode,
+      ),
     ).toEqual([{ id: `badge:${seeded.referralCode}`, status: "queued" }]);
     expect(
       await queryAll(env.DB, "SELECT actor_type, action FROM audit_log WHERE entity_id = ?", seeded.userId),
@@ -139,7 +237,7 @@ describe("registration badge regeneration", () => {
       { headshot_r2_key: winnerKey },
     ]);
     expect(
-      await queryAll(env.DB, "SELECT id FROM badge_render_jobs WHERE referral_code = ?", seeded.referralCode),
+      await queryAll(env.DB, "SELECT id FROM event_promotion_renders WHERE id = 'badge:' || ?", seeded.referralCode),
     ).toEqual([]);
     expect(
       await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'headshot_seeded_gravatar' AND entity_id = ?", [
@@ -158,11 +256,13 @@ describe("registration badge regeneration", () => {
       appBaseUrl: "https://app.test",
     });
 
-    const jobs = await queryAll<{ id: string; referral_code: string; status: string }>(
+    const jobs = await queryAll<{ id: string; format: string; cache_key: string; status: string }>(
       env.DB,
-      "SELECT id, referral_code, status FROM badge_render_jobs",
+      "SELECT id, format, cache_key, status FROM event_promotion_renders",
     );
-    expect(jobs).toEqual([{ id: requested.jobId, referral_code: seeded.referralCode, status: "queued" }]);
+    expect(jobs).toEqual([
+      { id: requested.jobId, format: "badge", cache_key: `og-badges/${seeded.referralCode}`, status: "queued" },
+    ]);
     expect(
       await queryAll<{ action: string }>(
         env.DB,
@@ -172,9 +272,9 @@ describe("registration badge regeneration", () => {
     ).toEqual([{ action: "og_badge_regeneration_requested" }]);
 
     const render = vi.fn().mockResolvedValue(undefined);
-    await expect(processBadgeRenderJobById(env.DB, env, requested.jobId, render)).resolves.toBe(true);
+    await expect(processPromotionRenderJob(env.DB, env, requested.jobId, undefined, render)).resolves.toBe(true);
     expect(render).toHaveBeenCalledWith(seeded.referralCode, env, "https://app.test");
-    expect(await queryAll<{ status: string }>(env.DB, "SELECT status FROM badge_render_jobs")).toEqual([
+    expect(await queryAll<{ status: string }>(env.DB, "SELECT status FROM event_promotion_renders")).toEqual([
       { status: "rendered" },
     ]);
   });
@@ -203,12 +303,12 @@ describe("registration badge regeneration", () => {
       success: true,
       status: "queued",
       referralCode: seeded.referralCode,
-      badgeUrl: `https://app.test/api/v1/registrations/referrals/${seeded.referralCode}/badge`,
+      badgeUrl: `https://app.test${personalPromotionImagePath(seeded.referralCode)}`,
     });
     expect(background).toHaveLength(1);
     await Promise.allSettled(background);
     expect(
-      await queryAll(env.DB, "SELECT id FROM badge_render_jobs WHERE referral_code = ?", seeded.referralCode),
+      await queryAll(env.DB, "SELECT id FROM event_promotion_renders WHERE id = 'badge:' || ?", seeded.referralCode),
     ).toHaveLength(1);
   });
 
@@ -222,14 +322,14 @@ describe("registration badge regeneration", () => {
     });
     const render = vi.fn().mockRejectedValueOnce(new Error("R2 unavailable")).mockResolvedValueOnce(undefined);
 
-    await expect(processBadgeRenderJobById(env.DB, env, requested.jobId, render)).resolves.toBe(false);
-    expect(await queryAll(env.DB, "SELECT status, attempts, last_error FROM badge_render_jobs")).toEqual([
+    await expect(processPromotionRenderJob(env.DB, env, requested.jobId, undefined, render)).resolves.toBe(false);
+    expect(await queryAll(env.DB, "SELECT status, attempts, last_error FROM event_promotion_renders")).toEqual([
       { status: "retrying", attempts: 1, last_error: "R2 unavailable" },
     ]);
 
-    await env.DB.prepare("UPDATE badge_render_jobs SET next_attempt_at = datetime('now')").run();
-    await expect(processPendingBadgeRenders(env.DB, env, 5, render)).resolves.toEqual({ processed: 1, failed: 0 });
-    expect(await queryAll(env.DB, "SELECT status, attempts, last_error FROM badge_render_jobs")).toEqual([
+    await env.DB.prepare("UPDATE event_promotion_renders SET next_attempt_at = datetime('now')").run();
+    await expect(processPendingPromotionRenders(env.DB, env, 5, render)).resolves.toEqual({ processed: 1, failed: 0 });
+    expect(await queryAll(env.DB, "SELECT status, attempts, last_error FROM event_promotion_renders")).toEqual([
       { status: "rendered", attempts: 1, last_error: null },
     ]);
   });
@@ -250,7 +350,7 @@ describe("registration badge regeneration", () => {
     ).resolves.toBe(false);
 
     expect(
-      await queryAll(env.DB, "SELECT status, attempts, last_error FROM badge_render_jobs WHERE id = ?", job.id),
+      await queryAll(env.DB, "SELECT status, attempts, last_error FROM event_promotion_renders WHERE id = ?", job.id),
     ).toEqual([{ status: "retrying", attempts: 1, last_error: "initial R2 failure" }]);
   });
 
@@ -274,7 +374,7 @@ describe("registration badge regeneration", () => {
           appBaseUrl: "https://app.test",
         }),
       ).rejects.toThrow("forced badge audit failure");
-      expect(await queryAll(env.DB, "SELECT id FROM badge_render_jobs")).toHaveLength(0);
+      expect(await queryAll(env.DB, "SELECT id FROM event_promotion_renders")).toHaveLength(0);
     } finally {
       await env.DB.prepare("DROP TRIGGER reject_badge_regeneration_audit").run();
     }
@@ -291,8 +391,8 @@ describe("registration badge regeneration", () => {
     const render = vi.fn().mockResolvedValue(undefined);
 
     const outcomes = await Promise.all([
-      processBadgeRenderJobById(env.DB, env, requested.jobId, render),
-      processBadgeRenderJobById(env.DB, env, requested.jobId, render),
+      processPromotionRenderJob(env.DB, env, requested.jobId, undefined, render),
+      processPromotionRenderJob(env.DB, env, requested.jobId, undefined, render),
     ]);
 
     expect(outcomes.filter(Boolean)).toHaveLength(1);
@@ -315,11 +415,11 @@ describe("registration badge regeneration", () => {
         }),
     );
 
-    const firstRender = processBadgeRenderJobById(env.DB, env, requested.jobId, render);
+    const firstRender = processPromotionRenderJob(env.DB, env, requested.jobId, undefined, render);
     await vi.waitFor(async () => {
-      expect(await queryAll(env.DB, "SELECT status FROM badge_render_jobs WHERE id = ?", requested.jobId)).toEqual([
-        { status: "rendering" },
-      ]);
+      expect(
+        await queryAll(env.DB, "SELECT status FROM event_promotion_renders WHERE id = ?", requested.jobId),
+      ).toEqual([{ status: "rendering" }]);
     });
     await requestRegistrationBadgeRegeneration(env.DB, {
       actor: seeded.actor,
@@ -330,18 +430,18 @@ describe("registration badge regeneration", () => {
     finishRender();
     await expect(firstRender).resolves.toBe(true);
 
-    expect(
-      await queryAll(env.DB, "SELECT status, requested_generation, claimed_generation FROM badge_render_jobs"),
-    ).toEqual([{ status: "queued", requested_generation: 2, claimed_generation: null }]);
+    expect(await queryAll(env.DB, "SELECT status, revision, processing_token FROM event_promotion_renders")).toEqual([
+      { status: "queued", revision: 2, processing_token: null },
+    ]);
 
     const secondRender = vi.fn().mockResolvedValue(undefined);
-    await expect(processPendingBadgeRenders(env.DB, env, 1, secondRender)).resolves.toEqual({
+    await expect(processPendingPromotionRenders(env.DB, env, 1, secondRender)).resolves.toEqual({
       processed: 1,
       failed: 0,
     });
     expect(secondRender).toHaveBeenCalledWith(seeded.referralCode, env, "https://app.test");
-    expect(await queryAll(env.DB, "SELECT status, requested_generation FROM badge_render_jobs")).toEqual([
-      { status: "rendered", requested_generation: 2 },
+    expect(await queryAll(env.DB, "SELECT status, revision FROM event_promotion_renders")).toEqual([
+      { status: "rendered", revision: 2 },
     ]);
   });
 
@@ -355,22 +455,22 @@ describe("registration badge regeneration", () => {
     });
     const render = vi.fn().mockResolvedValue(undefined);
     await env.DB.prepare(
-      `UPDATE badge_render_jobs
-          SET status = 'rendering', processing_token = 'current', claimed_generation = requested_generation,
+      `UPDATE event_promotion_renders
+          SET status = 'rendering', processing_token = 'current',
               lease_expires_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+5 minutes')
         WHERE id = ?`,
     )
       .bind(requested.jobId)
       .run();
-    await processPendingBadgeRenders(env.DB, env, 10, render);
+    await processPendingPromotionRenders(env.DB, env, 10, render);
     expect(render).not.toHaveBeenCalled();
 
     await env.DB.prepare(
-      "UPDATE badge_render_jobs SET lease_expires_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 minute') WHERE id = ?",
+      "UPDATE event_promotion_renders SET lease_expires_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 minute') WHERE id = ?",
     )
       .bind(requested.jobId)
       .run();
-    await expect(processPendingBadgeRenders(env.DB, env, 10, render)).resolves.toEqual({ processed: 1, failed: 0 });
+    await expect(processPendingPromotionRenders(env.DB, env, 10, render)).resolves.toEqual({ processed: 1, failed: 0 });
     expect(render).toHaveBeenCalledTimes(1);
   });
 });

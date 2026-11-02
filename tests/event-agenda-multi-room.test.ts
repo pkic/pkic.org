@@ -1,6 +1,7 @@
 import { withScannedInput } from "./helpers/scanned-input";
 import { grantAdministrator } from "./helpers/administrator";
 import { beforeEach, describe, it, expect } from "vitest";
+import { seedSessionAttendanceDays } from "./helpers/session-attendance-days";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
 import { getAgenda } from "../functions/_lib/services/event-agenda/read";
@@ -101,7 +102,7 @@ describe("Multi-room registration and advisory scan reporting", () => {
       .run();
     for (const user of users) {
       await env.DB.prepare(
-        "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','in_person','test',?,?,?)",
+        "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','test',?,?,?)",
       )
         .bind(crypto.randomUUID(), eventId, user, crypto.randomUUID(), now, now)
         .run();
@@ -110,6 +111,7 @@ describe("Multi-room registration and advisory scan reporting", () => {
           .credential!,
       );
     }
+    await seedSessionAttendanceDays(env.DB, eventId, [now.slice(0, 10)]);
   });
   it("lists only this event's locations with literal search, stable pages and unlimited capacity", async () => {
     const ids = [

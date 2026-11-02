@@ -12,7 +12,7 @@ import { nowIso } from "../../utils/time";
 import type { IdentityPublicProfile } from "../../../../assets/shared/schemas/identity-public-profile";
 import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
 import { authorizedMembershipMutationDb } from "../membership-authorization";
-import { personDisplayNameSql } from "../event-agenda/speaker-name";
+import { personDisplayNameSql } from "../people/person-name-sql";
 
 interface IdentityRow {
   id: string;

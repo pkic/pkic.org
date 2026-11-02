@@ -46,7 +46,6 @@ describe("proposal decision capacity for a registered panel", () => {
       const registration = await createRegistration(env.DB, {
         event,
         userId: speaker.user_id,
-        attendanceType: "in_person",
         dayAttendance: dayDates.map((dayDate) => ({ dayDate, attendanceType: "in_person" })),
         sourceType: "direct",
         confirmationTtlHours: 48,

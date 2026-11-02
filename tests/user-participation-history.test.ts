@@ -310,6 +310,21 @@ describe("event participation history", () => {
     expect(page.page.total).toBe(1);
   });
 
+  it("leaves out an event that has not started yet", async () => {
+    const person = await seedPerson();
+    const past = await insertEvent("past-event", "Past event", "2026-03-01T09:00:00.000Z");
+    const upcoming = await insertEvent("upcoming-event", "Upcoming event", "2026-12-01T09:00:00.000Z");
+    await participate(past, person.userId, "attendee");
+    await participate(upcoming, person.userId, "organizer");
+
+    const page = userEventParticipationListResponseSchema.parse(
+      await listUserEventParticipation(env.DB, person.userId, query(), new Date("2026-10-31T12:00:00.000Z")),
+    );
+
+    expect(page.events.map((entry) => entry.eventSlug)).toEqual(["past-event"]);
+    expect(page.page.total).toBe(1);
+  });
+
   it("places an event with no schedule at the moment the role was recorded", async () => {
     const person = await seedPerson();
     const unscheduled = await insertEvent("unscheduled", "Unscheduled", null);

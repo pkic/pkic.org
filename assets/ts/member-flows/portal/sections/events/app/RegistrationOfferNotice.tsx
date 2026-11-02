@@ -1,15 +1,13 @@
-/** The reader's way into the existing registration flow, or why there is none. */
+/** Open the shared registration flow at its own event page. */
 import { ButtonLink } from "../../../../../ui/Button";
+import { usePortalHashLocation } from "../../../hash-location";
 import type { RegistrationOffer } from "./event-app-model";
 
-export function RegistrationOfferNotice({ offer }: { offer: RegistrationOffer }) {
+export function RegistrationOfferNotice({ offer, slug }: { offer: RegistrationOffer; slug: string }) {
   if (offer.kind === "closed") return <p class="pk-muted">{offer.reason}</p>;
-  // Both offers lead to the same flow: the registration page, or the event page that links it.
   return (
-    <div class="pk-cluster">
-      <ButtonLink variant="primary" href={offer.href}>
-        Register
-      </ButtonLink>
-    </div>
+    <ButtonLink variant="primary" href={usePortalHashLocation.hrefs(`/events/${encodeURIComponent(slug)}/register/`)}>
+      Register
+    </ButtonLink>
   );
 }

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { EMAIL_AUTH_TOKEN_MAX_LENGTH } from "../constants/email-auth.ts";
 import { databaseIdSchema } from "./identifiers.ts";
+import { asciiEmailDomain, EMAIL_ADDRESS_PATTERN } from "../email-address.ts";
 
 /** Exact base response contract for successful mutations. Extend this for declared domain payloads. */
 export const successResponseSchema = z.object({ success: z.literal(true) }).strict();
@@ -29,6 +30,10 @@ export const apiValidationErrorDetailsSchema = z.object({
   fieldErrors: z.record(z.string(), z.array(z.string())).optional(),
 });
 
+/** Details of a `RATE_LIMITED` (429) refusal: whole seconds until another request may succeed. */
+export const rateLimitErrorDetailsSchema = z.object({ retryAfter: z.number().int().positive() });
+export type RateLimitErrorDetails = z.infer<typeof rateLimitErrorDetailsSchema>;
+
 /**
  * Boolean query parameters arrive as strings. `z.coerce.boolean()` follows
  * JavaScript truthiness and therefore turns the non-empty string `"false"`
@@ -46,7 +51,7 @@ export type EmailContentType = z.infer<typeof emailContentTypeSchema>;
 export const emailMessageTypeSchema = z.enum(["transactional", "promotional"]);
 export type EmailMessageType = z.infer<typeof emailMessageTypeSchema>;
 
-export const namePattern = /^[\p{L}\p{N} .,'’\-()&/]+$/u;
+export const namePattern = /^[\p{L}\p{M}\p{N} .,'’\p{Pd}()&/\u200c\u200d]+$/u;
 export const slugPattern = /^[a-z0-9]+(?:[a-z0-9-]*[a-z0-9])?$/;
 export const termKeyPattern = /^[a-z0-9][a-z0-9._-]{1,127}$/;
 export const versionPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
@@ -78,12 +83,37 @@ export function boundedJsonObject<T extends z.ZodRawShape>(shape: T, maxLength: 
   });
 }
 
+const INVALID_EMAIL_MESSAGE = "Please enter a valid email address (for example: name@example.com).";
+/**
+ * An email address in its stored form. The domain is converted to ASCII before
+ * validation, so an internationalized domain is accepted and kept in the
+ * punycode spelling every other comparison uses.
+ */
 export const normalizedEmailSchema = z
-  .email({ error: "Please enter a valid email address (for example: name@example.com)." })
-  .transform((value) => value.trim().toLowerCase());
+  .string({ error: INVALID_EMAIL_MESSAGE })
+  .trim()
+  .transform(asciiEmailDomain)
+  .pipe(z.email({ pattern: EMAIL_ADDRESS_PATTERN, error: INVALID_EMAIL_MESSAGE }))
+  .transform((value) => value.toLowerCase());
 export const emailRecoveryRequestSchema = z.object({ email: normalizedEmailSchema });
-export const firstNameSchema = trimmedString(1, 80).regex(namePattern, "Contains unsupported characters");
-export const lastNameSchema = trimmedString(1, 120).regex(namePattern, "Contains unsupported characters");
+/** Canonically equivalent Unicode spellings share one representation; never guess a different encoding. */
+function personName(max: number, field: string) {
+  return z
+    .string()
+    .trim()
+    .normalize("NFC")
+    .min(1, `Enter your ${field}.`)
+    .max(max, `Keep your ${field} to ${max} characters or fewer.`)
+    .regex(namePattern, `Check your ${field} and remove unsupported characters.`);
+}
+export const firstNameSchema = personName(80, "first name");
+export const lastNameSchema = personName(120, "last name");
+export const personNamePatchSchema = z
+  .object({ firstName: firstNameSchema.optional(), lastName: lastNameSchema.optional() })
+  .strict()
+  .refine((body) => body.firstName !== undefined || body.lastName !== undefined, {
+    message: "Enter a first or last name.",
+  });
 /** Said wherever an organization name is asked for and left empty. */
 export const ORGANIZATION_NAME_REQUIRED = "Enter your organization.";
 export const organizationNameSchema = z

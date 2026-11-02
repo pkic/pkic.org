@@ -82,8 +82,8 @@ async function dueRegistration(userId: string, due = true) {
       setup.eventId,
       at,
     ),
-    env.DB.prepare(`INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,source_ref,custom_answers_json,manage_link_secret,created_at,updated_at)
-      VALUES (?,?,?,'registered','virtual','direct','Sensitive source','{"sensitive":true}','synthetic-manage',?,?)`).bind(
+    env.DB.prepare(`INSERT INTO registrations(id,event_id,user_id,status,source_type,source_ref,custom_answers_json,manage_link_secret,created_at,updated_at)
+      VALUES (?,?,?,'registered','direct','Sensitive source','{"sensitive":true}','synthetic-manage',?,?)`).bind(
       crypto.randomUUID(),
       setup.eventId,
       userId,

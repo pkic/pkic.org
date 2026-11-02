@@ -615,6 +615,21 @@ describe("email renderer", () => {
     expect(rendered.text).toBe("Note: Dietary details are shared with the venue.");
   });
 
+  it("reads character references and inline marks as plain text in the text fallback", async () => {
+    const rendered = await renderEmail(
+      "<p>Requested for the <strong>PKI Consortium portal</strong>.</p><p>&rarr; Open it &bull; R&amp;D &amp;lt; &#9888;&#65039;&zwnj;&nbsp;done</p>",
+      {},
+      layout,
+    );
+
+    const [arrow, bullet, warning] = [[0x2192], [0x2022], [0x26a0, 0xfe0f]].map((points) =>
+      String.fromCodePoint(...points),
+    );
+    expect(rendered.text).toBe(
+      `Requested for the PKI Consortium portal.\n${arrow} Open it ${bullet} R&D &lt; ${warning} done`,
+    );
+  });
+
   it("keeps local action links while using reachable branding and inline CTA styles", async () => {
     const rendered = await renderEmail(
       '<div class="cta-navy"><a href="{{magicLinkUrl}}">Sign in</a></div>',

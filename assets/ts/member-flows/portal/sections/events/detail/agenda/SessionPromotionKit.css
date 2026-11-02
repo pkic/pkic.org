@@ -1,4 +1,21 @@
 @layer components {
+  .pk-promotion-kit__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--pk-3);
+  }
+  .pk-promotion-kit__panels {
+    padding: 0;
+    margin: 0;
+    list-style: none;
+  }
+  .pk-promotion-kit__panels li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--pk-2);
+    padding-block: var(--pk-1);
+  }
   .pk-promotion-kit__preview {
     display: block;
     width: 100%;

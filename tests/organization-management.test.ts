@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
-import app from "./helpers/app";
+import app, { callApi } from "./helpers/app";
 import "./helpers/app";
 import { createUserBackedAuthAdmin } from "../functions/_lib/auth/admin-identity";
 import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
@@ -20,6 +20,8 @@ function request(path: string, token?: string, init: RequestInit = {}): Request 
 }
 
 async function call(path: string, token?: string, init: RequestInit = {}): Promise<Response> {
+  if (path === "/api/v1/organizations" && (!init.method || init.method === "GET"))
+    return callApi(env, request(path, token, init), undefined, { maxRoundTrips: 1 });
   return app.fetch(
     request(path, token, init),
     env as never,

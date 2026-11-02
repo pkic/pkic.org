@@ -37,6 +37,11 @@
     padding: var(--pk-4);
   }
 
+  .pk-virtual-room__countdown {
+    font-size: clamp(var(--pk-text-xl), 4cqi, var(--pk-text-3xl));
+    font-variant-numeric: tabular-nums;
+  }
+
   .pk-virtual-room__title {
     margin: 0;
     font-size: var(--pk-text-xl);

@@ -7,7 +7,7 @@ import type { DatabaseLike, Env } from "../../types";
 import { badgeAttendeeEligibilitySql } from "./badge-attendees";
 import { findActiveReprintableBadge, issueBadge } from "./badge-lifecycle";
 import { recoverBadgePrintArtifact } from "./badge-print";
-import { getBadgePrintingContext } from "./badge-print-branding";
+import { getBadgeHolderPrintingContext } from "./badge-print-branding";
 import type { BadgePrintEnvironment } from "./badge-print-protection";
 
 export interface BadgeHolder {
@@ -64,7 +64,7 @@ export async function prepareBadgeHolderTicket(
     });
     badgeId = (await issueBadge(guarded, eventId, holder.userId, request, environment)).id;
   }
-  const printing = await getBadgePrintingContext(guarded, environment, eventId);
+  const printing = await getBadgeHolderPrintingContext(guarded, environment, eventId);
   const { artifact, guards } = await recoverBadgePrintArtifact(
     guarded,
     environment,

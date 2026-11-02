@@ -88,7 +88,7 @@ for (const staffReview of [false, true]) {
     }
     await jsonResponse(page.request, "POST", "/api/v1/scheduler/jobs/membership_fee_checkouts/runs", {});
     await page.reload();
-    const pay = page.getByRole("link", { name: "Pay membership fee", exact: true });
+    const pay = page.getByRole("link", { name: /^Pay membership fee/ });
     await expect(pay).toBeVisible();
     const checkoutUrl = await pay.getAttribute("href");
     expect(checkoutUrl).toMatch(/^https:\/\/checkout\.stripe\.com\//);
@@ -104,15 +104,17 @@ for (const staffReview of [false, true]) {
     const captured = (await (await fetch(`${captureBase}/sessions`)).json()) as Array<Record<string, unknown>>;
     const session = membershipPaymentSessionSchema.parse(captured.find((item) => item.url === checkoutUrl));
     const capturedSession = captured.find((item) => item.id === session.id)!;
-    await page.route(checkoutUrl!, (route) =>
+    await page.context().route(checkoutUrl!, (route) =>
       route.fulfill({
         contentType: "text/html",
         body: "<h1>Example Organization membership fee</h1><p>USD 100.00</p><button>Complete synthetic checkout</button>",
       }),
     );
-    await pay.click();
-    await expect(page.getByRole("heading", { name: "Example Organization membership fee" })).toBeVisible();
-    await page.getByRole("button", { name: "Complete synthetic checkout" }).click();
+    // The external checkout opens in its own tab, so the application tab keeps its status page.
+    const [checkout] = await Promise.all([page.waitForEvent("popup"), pay.click()]);
+    await expect(checkout.getByRole("heading", { name: "Example Organization membership fee" })).toBeVisible();
+    await checkout.getByRole("button", { name: "Complete synthetic checkout" }).click();
+    await checkout.close();
     await page.goto(String(capturedSession.success_url));
     await expect(page.locator("[data-status-result]")).toContainText("Processing");
     await expect(page.locator("[data-status-result]")).not.toContainText("Approved");

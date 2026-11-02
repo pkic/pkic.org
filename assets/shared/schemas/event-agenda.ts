@@ -10,7 +10,7 @@ import {
   agendaStaffingPositionAssignmentSchema,
   agendaStaffingPositionPlanSchema,
 } from "./event-agenda-staffing-positions";
-import { promotionCopySchema } from "./event-promotion-kit";
+import { promotionCopySchema } from "./event-promotion-copy";
 import {
   sessionHistoryMetadataSchema,
   publicSessionPortraitUrlSchema,
@@ -438,6 +438,7 @@ export const agendaOccurrenceListItemSchema = agendaOccurrenceSchema.extend({
     coverage: agendaConflictCoverageSchema.default("complete"),
   }),
 });
+export const promotionSessionListSchema = paginatedResponseSchema("occurrences", agendaOccurrenceSchema);
 export const agendaOccurrenceListSchema = paginatedResponseSchema("occurrences", agendaOccurrenceListItemSchema);
 export type AgendaSnapshot = z.infer<typeof agendaSnapshotSchema>;
 export type AgendaOccurrence = z.infer<typeof agendaOccurrenceSchema>;

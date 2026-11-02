@@ -56,7 +56,7 @@ export function SponsorshipTierConfig({ canWrite }: { canWrite: boolean }) {
     if (!canWrite || editingId !== tier.id || saving) return;
     const checked = form.submit();
     if (!checked.data) {
-      setError(checked.message);
+      setError(checked.formMessage);
       return;
     }
     setSaving(true);

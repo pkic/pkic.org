@@ -85,7 +85,7 @@ export function SessionManagementTools({
   }
   async function revoke() {
     if (!user) {
-      setError(revocation.submit().message || "Choose the attendee whose invitation to revoke.");
+      setError(revocation.submit().formMessage ?? "");
       return;
     }
     const name = [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email;
@@ -104,7 +104,7 @@ export function SessionManagementTools({
   async function send(command: typeof invitation) {
     const checked = command.submit();
     if (!checked.data) {
-      setError(checked.message);
+      setError(checked.formMessage ?? "");
       return;
     }
     const sent = checked.data.action;
@@ -145,7 +145,7 @@ export function SessionManagementTools({
     event.preventDefault();
     const checked = delegation.submit();
     if (!checked.data) {
-      setError(checked.message);
+      setError(checked.formMessage ?? "");
       return;
     }
     setBusy(true);

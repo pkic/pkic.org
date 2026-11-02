@@ -10,6 +10,7 @@ function participation(overrides: Partial<EventParticipation> = {}): EventPartic
   return {
     registrationId: null,
     registrationStatus: null,
+    calendarAvailable: false,
     proposals: 0,
     speakerProposals: 0,
     proposalStates: [],

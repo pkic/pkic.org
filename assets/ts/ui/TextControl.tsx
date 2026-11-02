@@ -13,6 +13,7 @@
  */
 
 import type { JSX } from "preact";
+import { forwardRef } from "preact/compat";
 
 import "./Field.css";
 
@@ -22,9 +23,11 @@ function join(base: string, extra?: string | null): string {
 
 export type TextInputProps = JSX.InputHTMLAttributes<HTMLInputElement>;
 
-export function TextInput({ class: className, type = "text", ...rest }: TextInputProps) {
-  return <input {...rest} type={type} class={join("pk-input", className as string | undefined)} />;
-}
+export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
+  ({ class: className, type = "text", ...rest }, ref) => (
+    <input {...rest} ref={ref} type={type} class={join("pk-input", className as string | undefined)} />
+  ),
+);
 
 export type TextareaProps = JSX.TextareaHTMLAttributes<HTMLTextAreaElement>;
 

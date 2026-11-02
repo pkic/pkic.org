@@ -1,14 +1,15 @@
+import { eventReadIdSql, type EventReadSelection } from "../events/selection";
 import type { DatabaseLike } from "../../types";
 
 /** The canonical person ID, rather than credited organization, owns availability. */
-const speakerConflict = `SELECT 1
+const speakerConflict = (eventSql = "?") => `SELECT 1
   FROM event_agenda_occurrences local
   JOIN event_agenda_occurrence_speakers person ON person.occurrence_id=local.id
   JOIN event_agenda_occurrence_speakers other_person ON other_person.user_id=person.user_id
   JOIN event_agenda_occurrences other ON other.id=other_person.occurrence_id AND other.id<>local.id
   LEFT JOIN event_agenda_state local_state ON local_state.event_id=local.event_id
   LEFT JOIN event_agenda_state other_state ON other_state.event_id=other.event_id
- WHERE local.event_id=? AND local.start_at IS NOT NULL AND other.start_at IS NOT NULL
+ WHERE local.event_id=${eventSql} AND local.start_at IS NOT NULL AND other.start_at IS NOT NULL
    AND julianday(local.start_at)<julianday(other.end_at)+
        CASE WHEN person.attendance_mode='physical' AND other_person.attendance_mode='physical' AND (local.event_id<>other.event_id OR COALESCE(person.room_id,local.room_id) IS NOT COALESCE(other_person.room_id,other.room_id))
             THEN MAX(COALESCE(local_state.travel_minutes,0),COALESCE(other_state.travel_minutes,0))/1440.0 ELSE 0 END
@@ -16,7 +17,7 @@ const speakerConflict = `SELECT 1
        CASE WHEN person.attendance_mode='physical' AND other_person.attendance_mode='physical' AND (local.event_id<>other.event_id OR COALESCE(person.room_id,local.room_id) IS NOT COALESCE(other_person.room_id,other.room_id))
             THEN MAX(COALESCE(local_state.travel_minutes,0),COALESCE(other_state.travel_minutes,0))/1440.0 ELSE 0 END`;
 
-const speakerDutyConflict = `SELECT 1
+const speakerDutyConflict = (eventSql = "?") => `SELECT 1
   FROM event_agenda_occurrences occurrence
   JOIN event_agenda_occurrence_speakers speaker ON speaker.occurrence_id=occurrence.id
   JOIN event_agenda_assignments assignment ON assignment.user_id=speaker.user_id
@@ -25,7 +26,7 @@ const speakerDutyConflict = `SELECT 1
   LEFT JOIN event_agenda_role_members duty_person ON duty_person.event_id=shift.event_id AND duty_person.user_id=assignment.user_id
   LEFT JOIN event_agenda_state occurrence_state ON occurrence_state.event_id=occurrence.event_id
   LEFT JOIN event_agenda_state shift_state ON shift_state.event_id=shift.event_id
- WHERE occurrence.event_id=? AND occurrence.start_at IS NOT NULL
+ WHERE occurrence.event_id=${eventSql} AND occurrence.start_at IS NOT NULL
    AND julianday(occurrence.start_at)<julianday(shift.end_at)+
        CASE WHEN speaker.attendance_mode='physical' AND COALESCE(duty_person.attendance_mode,'physical')='physical' AND (occurrence.event_id<>shift.event_id OR COALESCE(speaker.room_id,occurrence.room_id) IS NOT (CASE WHEN duty_post.id IS NULL THEN shift.room_id ELSE duty_post.room_id END))
             THEN MAX(COALESCE(occurrence_state.travel_minutes,0),COALESCE(shift_state.travel_minutes,0))/1440.0 ELSE 0 END
@@ -33,7 +34,7 @@ const speakerDutyConflict = `SELECT 1
        CASE WHEN speaker.attendance_mode='physical' AND COALESCE(duty_person.attendance_mode,'physical')='physical' AND (occurrence.event_id<>shift.event_id OR COALESCE(speaker.room_id,occurrence.room_id) IS NOT (CASE WHEN duty_post.id IS NULL THEN shift.room_id ELSE duty_post.room_id END))
             THEN MAX(COALESCE(occurrence_state.travel_minutes,0),COALESCE(shift_state.travel_minutes,0))/1440.0 ELSE 0 END`;
 
-const dutyConflict = `SELECT 1
+const dutyConflict = (eventSql = "?") => `SELECT 1
   FROM event_agenda_shifts local
   JOIN event_agenda_assignments assignment ON assignment.shift_id=local.id
   JOIN event_agenda_assignments other_assignment ON other_assignment.user_id=assignment.user_id
@@ -44,7 +45,7 @@ const dutyConflict = `SELECT 1
   LEFT JOIN event_agenda_role_members other_person_mode ON other_person_mode.event_id=other.event_id AND other_person_mode.user_id=other_assignment.user_id
   LEFT JOIN event_agenda_state local_state ON local_state.event_id=local.event_id
   LEFT JOIN event_agenda_state other_state ON other_state.event_id=other.event_id
- WHERE local.event_id=? AND (assignment.event_id<>other_assignment.event_id OR assignment.position_id<>other_assignment.position_id)
+ WHERE local.event_id=${eventSql} AND (assignment.event_id<>other_assignment.event_id OR assignment.position_id<>other_assignment.position_id)
    AND NOT(local.id=other.id AND assignment.post_id IS other_assignment.post_id AND assignment.role<>other_assignment.role AND EXISTS(SELECT 1 FROM json_each(local.compatible_roles_json) pair WHERE
      (json_extract(pair.value,'$[0]')=assignment.role AND json_extract(pair.value,'$[1]')=other_assignment.role) OR
      (json_extract(pair.value,'$[1]')=assignment.role AND json_extract(pair.value,'$[0]')=other_assignment.role)))
@@ -56,7 +57,7 @@ const dutyConflict = `SELECT 1
             THEN MAX(COALESCE(local_state.travel_minutes,0),COALESCE(other_state.travel_minutes,0))/1440.0 ELSE 0 END`;
 
 /** A physical track duty follows actual occurrences rather than treating an unspecified room as a location. */
-const trackDutyConflict = `WITH intervals AS (
+const trackDutyConflict = (eventSql = "?") => `WITH intervals AS (
   SELECT assignment.position_id,occurrence.id AS occurrence_id,
     MAX(shift.start_at,occurrence.start_at) AS start_at,MIN(shift.end_at,occurrence.end_at) AS end_at,
     COALESCE(CASE WHEN post.id IS NULL THEN shift.room_id ELSE post.room_id END,occurrence.room_id) AS room_id,
@@ -71,7 +72,7 @@ const trackDutyConflict = `WITH intervals AS (
   LEFT JOIN event_agenda_staffing_posts post ON post.event_id=shift.event_id AND post.id=assignment.post_id
   LEFT JOIN event_agenda_state state ON state.event_id=shift.event_id
   JOIN event_agenda_occurrences occurrence ON occurrence.event_id=shift.event_id AND occurrence.track=shift.track
-  WHERE shift.event_id=? AND shift.track IS NOT NULL AND person.attendance_mode='physical'
+  WHERE shift.event_id=${eventSql} AND shift.track IS NOT NULL AND person.attendance_mode='physical'
     AND occurrence.start_at<shift.end_at AND shift.start_at<occurrence.end_at
     AND (shift.room_id IS NULL OR occurrence.room_id=shift.room_id OR EXISTS(
       SELECT 1 FROM event_agenda_occurrence_rooms room WHERE room.occurrence_id=occurrence.id AND room.room_id=shift.room_id))
@@ -110,33 +111,39 @@ const meetingSources = [
     physical: "1=1",
   },
 ];
-const meetingConflicts = meetingSources.flatMap((source, index) => {
-  const query = `SELECT 1 FROM meeting_agenda_speaker_intervals local
+const meetingConflicts = (eventSql = "?") =>
+  meetingSources.flatMap((source, index) => {
+    const query = `SELECT 1 FROM meeting_agenda_speaker_intervals local
     JOIN ${index === 2 ? source.from : `(${source.from})`} ON ${source.person}=local.user_id
     LEFT JOIN event_agenda_state local_state ON local_state.event_id=local.event_id
     LEFT JOIN event_agenda_state other_state ON other_state.event_id=other.event_id
-    WHERE local.event_id=? AND ${source.self}
+    WHERE local.event_id=${eventSql} AND ${source.self}
       AND julianday(local.start_at)<julianday(other.end_at)+
         CASE WHEN ${source.physical} AND (local.event_id<>other.event_id OR local.room_id IS NOT ${source.location})
           THEN MAX(COALESCE(local_state.travel_minutes,0),COALESCE(other_state.travel_minutes,0))/1440.0 ELSE 0 END
       AND julianday(other.start_at)<julianday(local.end_at)+
         CASE WHEN ${source.physical} AND (local.event_id<>other.event_id OR local.room_id IS NOT ${source.location})
           THEN MAX(COALESCE(local_state.travel_minutes,0),COALESCE(other_state.travel_minutes,0))/1440.0 ELSE 0 END`;
-  return index === 2 ? [query] : [query, query.replace("WHERE local.event_id=?", "WHERE other.event_id=?")];
-});
+    return index === 2
+      ? [query]
+      : [query, query.replace(`WHERE local.event_id=${eventSql}`, `WHERE other.event_id=${eventSql}`)];
+  });
 
 /** Evaluate after all candidate writes, inside their transaction, including swaps and imports. */
-export function prepareAgendaScheduleGuard(db: DatabaseLike, eventId: string) {
-  const id = crypto.randomUUID();
+export function prepareAgendaScheduleGuard(db: DatabaseLike, eventId: EventReadSelection) {
+  const id = crypto.randomUUID(),
+    event = eventReadIdSql(eventId),
+    eventSql = "(SELECT event_id FROM guard_event)",
+    meetings = meetingConflicts(eventSql);
   return [
     db
       .prepare(
-        `INSERT INTO event_agenda_schedule_guards(id,event_id,valid)
-      SELECT ?,?,CASE WHEN EXISTS(${speakerConflict}) OR EXISTS(${speakerDutyConflict})
-        OR EXISTS(${speakerDutyConflict.replace("WHERE occurrence.event_id=?", "WHERE shift.event_id=?")})
-        OR EXISTS(${dutyConflict}) OR EXISTS(${trackDutyConflict}) ${meetingConflicts.map((query) => `OR EXISTS(${query})`).join(" ")} THEN 0 ELSE 1 END`,
+        `WITH guard_event(event_id) AS MATERIALIZED(SELECT ${event.sql}) INSERT INTO event_agenda_schedule_guards(id,event_id,valid)
+      SELECT ?,${eventSql},CASE WHEN EXISTS(${speakerConflict(eventSql)}) OR EXISTS(${speakerDutyConflict(eventSql)})
+        OR EXISTS(${speakerDutyConflict(eventSql).replace(`WHERE occurrence.event_id=${eventSql}`, `WHERE shift.event_id=${eventSql}`)})
+        OR EXISTS(${dutyConflict(eventSql)}) OR EXISTS(${trackDutyConflict(eventSql)}) ${meetings.map((query) => `OR EXISTS(${query})`).join(" ")} THEN 0 ELSE 1 END`,
       )
-      .bind(id, eventId, eventId, eventId, eventId, eventId, eventId, ...meetingConflicts.map(() => eventId)),
+      .bind(...event.bindings, id),
     db.prepare("DELETE FROM event_agenda_schedule_guards WHERE id=?").bind(id),
   ];
 }
@@ -148,8 +155,8 @@ export function isAgendaScheduleGuardFailure(error: unknown) {
 /** Read-side indicators reuse the exact speaker and duty predicates enforced on writes. */
 export function agendaOccurrencePersonConflictSql(alias: string) {
   return {
-    speaker_conflict: `EXISTS(${speakerConflict.replace("local.event_id=?", `local.id=${alias}.id`)})`,
-    speaker_duty_conflict: `(EXISTS(${speakerDutyConflict.replace("occurrence.event_id=?", `occurrence.id=${alias}.id`)}) OR EXISTS(${trackDutyConflict
+    speaker_conflict: `EXISTS(${speakerConflict().replace("local.event_id=?", `local.id=${alias}.id`)})`,
+    speaker_duty_conflict: `(EXISTS(${speakerDutyConflict().replace("occurrence.event_id=?", `occurrence.id=${alias}.id`)}) OR EXISTS(${trackDutyConflict()
       .replace("shift.event_id=?", `shift.event_id=${alias}.event_id`)
       .replace("FROM intervals local WHERE", `FROM intervals local WHERE local.occurrence_id=${alias}.id AND`)}))`,
   };

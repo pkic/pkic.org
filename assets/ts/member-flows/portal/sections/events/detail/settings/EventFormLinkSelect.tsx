@@ -1,6 +1,7 @@
 import { eventFormCatalog } from "../../../../../../shared/management-catalogs";
 import { ServerSearchSelect } from "../../../../../../components/ServerSearchSelect";
 import { Field } from "../../../../../../ui/Field";
+import type { FieldPresentation } from "../../../../../../hooks/useContractForm";
 
 /**
  * One form picker on the event's General tab.
@@ -19,6 +20,7 @@ export function EventFormLinkSelect({
   help,
   autoSelectFirst,
   onChange,
+  presentation,
 }: {
   eventSlug: string;
   purpose: "event_registration" | "proposal_submission";
@@ -28,10 +30,11 @@ export function EventFormLinkSelect({
   help: string;
   autoSelectFirst?: boolean;
   onChange: (value: string) => void;
+  presentation?: FieldPresentation;
 }) {
   return (
     <div class="pk">
-      <Field label={label} help={help}>
+      <Field {...presentation} label={label} help={help}>
         {(control) => (
           <ServerSearchSelect
             {...control}

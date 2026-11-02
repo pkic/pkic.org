@@ -12,11 +12,12 @@ import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
 import { nowIso } from "../../utils/time";
 import { eventContactAccessSql } from "./evidence-retention";
+import { personNameSql } from "../people/person-name-sql";
 
 /** Personal labels are transient portal data; credential references survive label redaction. */
 const projection = `SELECT credential.id,credential.event_id AS eventId,credential.user_id AS userId,
   CASE WHEN person.pii_redacted_at IS NULL AND person.merged_into_user_id IS NULL AND ${eventContactAccessSql("credential.event_id")}
-    THEN NULLIF(TRIM(COALESCE(person.preferred_name,person.first_name,'')||' '||COALESCE(person.last_name,'')),'') ELSE NULL END AS displayName,
+    THEN ${personNameSql("person")} ELSE NULL END AS displayName,
   credential.print_credential_json IS NOT NULL AS reprintAvailable,
   credential.created_at AS createdAt,credential.expires_at AS expiresAt,credential.revoked_at AS revokedAt,
   CASE WHEN credential.revoked_at IS NOT NULL THEN 'revoked' WHEN credential.expires_at IS NOT NULL AND credential.expires_at<=? THEN 'expired' ELSE 'active' END AS status

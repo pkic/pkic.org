@@ -89,6 +89,7 @@ const sponsors = sponsorsDisplayResponseSchema.parse({
 
 let host: HTMLDivElement;
 let streamStatus = 200;
+let waiting = false;
 
 beforeEach(() => {
   window.history.replaceState(null, "", "/portal/#/events/summit/virtual");
@@ -96,18 +97,30 @@ beforeEach(() => {
   vi.setSystemTime(new Date("2027-01-20T09:30:00.000Z"));
   hashLocation.current = "/events/summit/virtual";
   streamStatus = 200;
+  waiting = false;
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL) => {
       const path = new URL(String(input), location.origin).pathname;
       if (path.endsWith("/agenda/streams"))
         return streamStatus === 200
-          ? Response.json(streams)
+          ? Response.json(waiting ? { ...streams, locations: [] } : streams)
           : Response.json(
               { error: { code: "VIRTUAL_ROOM_UNAVAILABLE", message: "A registration is required." } },
               { status: streamStatus },
             );
-      if (path.endsWith("/agenda/participation/program")) return Response.json(program);
+      if (path.endsWith("/agenda/participation/program"))
+        return Response.json(
+          waiting
+            ? {
+                ...program,
+                agenda: {
+                  ...program.agenda,
+                  rooms: program.agenda!.rooms.map((room) => ({ ...room, equipment: ["live_streaming"] })),
+                },
+              }
+            : program,
+        );
       if (path.endsWith("/sponsors/display")) return Response.json(sponsors);
       throw new Error(`Unexpected request: ${path}`);
     }),
@@ -211,6 +224,36 @@ describe("virtual room", () => {
     expect(player()?.getAttribute("src")).toContain(STUDIO_STREAM);
     expect(nowPlaying()).toContain("Hands-on lab");
     expect(chooseLocation(streams.locations, program.agenda, { room: "unknown", session: null })).toBe(HALL);
+  });
+
+  it("opens a planned room before a stream is configured, counts down, and shows disabled interaction controls", async () => {
+    waiting = true;
+    vi.setSystemTime(new Date("2027-01-19T09:00:00.000Z"));
+    await open();
+    expect(player()).toBeNull();
+    expect(host.querySelector('[role="timer"]')?.textContent).toContain("1d");
+    expect(host.textContent).not.toContain("No live streams yet");
+    await act(() => tab("Chat").click());
+    expect(host.querySelector<HTMLTextAreaElement>('textarea[name="text"]')?.disabled).toBe(true);
+    await act(() => tab("Questions").click());
+    expect(host.querySelector<HTMLTextAreaElement>("textarea")?.disabled).toBe(true);
+  });
+
+  it("refreshes stream configuration when the waiting room reaches its first session", async () => {
+    waiting = true;
+    vi.setSystemTime(new Date("2027-01-20T08:59:00.000Z"));
+    await open();
+    expect(player()).toBeNull();
+    waiting = false;
+    await act(async () => {
+      vi.advanceTimersByTime(61_000);
+      await Promise.resolve();
+    });
+    for (let round = 0; round < 5; round += 1)
+      await act(async () => {
+        await Promise.resolve();
+      });
+    expect(player()?.getAttribute("src")).toContain(HALL_STREAM);
   });
 
   it("shows the refusal and no player to a reader who may not watch", async () => {

@@ -112,6 +112,12 @@ export function checkInNotes(result: AttendancePointResult, recorded: boolean): 
         text: `You don't have an in-person place for ${day} yet. ${seen} Ask at the registration desk about a place.`,
       });
       break;
+    case "no_remote_place":
+      notes.push({
+        tone: "warn",
+        text: `You don't have an online place for ${day} yet. ${seen} Review your registration for your next step.`,
+      });
+      break;
   }
   if (target.session && result.booked === false)
     notes.push({

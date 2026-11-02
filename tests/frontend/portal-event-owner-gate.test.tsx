@@ -174,7 +174,8 @@ describe("standalone event views redirect to the owning group", () => {
     await act(() => render(<EventWorkspace view="detail" slug="summit" />, container));
     await settle();
     await vi.waitFor(() => expect(container.querySelector(".pk-event-hero__title")?.textContent).toBe("Summit"));
-    expect(container.textContent).toContain("My agenda");
+    expect(container.textContent).toContain("Agenda");
+    expect(container.textContent).not.toContain("My agenda");
     expect(navigate).not.toHaveBeenCalled();
   });
 
@@ -367,6 +368,30 @@ describe("standalone event views redirect to the owning group", () => {
     await settle();
 
     expect(navigate).not.toHaveBeenCalled();
-    await vi.waitFor(() => expect(container.textContent).toContain("My promotion kits"));
+    await vi.waitFor(() =>
+      expect(
+        vi.mocked(fetch).mock.calls.some(([input]) => String(input).endsWith("/api/v1/events/summit/agenda/promotion")),
+      ).toBe(true),
+    );
+  });
+  it("does not open another speaker's direct link under the current account", async () => {
+    const proposalId = "00000000-0000-4000-8000-000000000010";
+    history.replaceState(
+      {},
+      "",
+      `/#/events/summit/proposals/${proposalId}/participation?speaker=00000000-0000-4000-8000-000000000099`,
+    );
+    stubDetail(null);
+    await act(() =>
+      render(
+        <EventWorkspace view="participant" kind="proposal" slug="summit" resourceId={proposalId} tab="participation" />,
+        container,
+      ),
+    );
+    await vi.waitFor(() => expect(container.textContent).toContain("This invitation is for a different account"));
+    expect(vi.mocked(fetch).mock.calls.some(([input]) => String(input).includes(`/proposals/${proposalId}`))).toBe(
+      false,
+    );
+    history.replaceState({}, "", "/");
   });
 });

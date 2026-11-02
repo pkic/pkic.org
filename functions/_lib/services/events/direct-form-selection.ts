@@ -19,11 +19,12 @@ import {
 } from "../forms/placements";
 import { exactEventFlowPlacementGuard } from "./form-placement";
 import type { EventRecord } from "../events";
+import type { EventSettingsUpdateInput } from "../../../../assets/shared/schemas/event-management";
 
 /** A single preflight snapshot plans the event's explicit selection and window; the caller commits it atomically. */
 export function prepareDirectEventFormSelectionRead(
   db: DatabaseLike,
-  event: EventRecord,
+  event: Pick<EventRecord, "id">,
   purpose: EventFormsPurpose,
   at: string,
   formKey?: string | null,
@@ -120,6 +121,43 @@ export function prepareDirectEventFormSelectionRead(
           at,
         ).statement,
       ];
+    },
+  };
+}
+
+/** Share selection planning across direct and group-authorized event settings commits. */
+export function prepareEventFormSettingsRead(
+  db: DatabaseLike,
+  event: Pick<EventRecord, "id">,
+  settings: Pick<EventSettingsUpdateInput, "registrationFormKey" | "proposalFormKey" | "proposalSubmissionWindow">,
+  at: string,
+) {
+  const reads = [
+    ...(settings.registrationFormKey === undefined
+      ? []
+      : [prepareDirectEventFormSelectionRead(db, event, "event_registration", at, settings.registrationFormKey)]),
+    ...(settings.proposalSubmissionWindow === undefined && settings.proposalFormKey === undefined
+      ? []
+      : [
+          prepareDirectEventFormSelectionRead(
+            db,
+            event,
+            "proposal_submission",
+            at,
+            settings.proposalFormKey,
+            settings.proposalSubmissionWindow,
+          ),
+        ]),
+  ];
+  return {
+    statements: reads.flatMap((read) => read.statements),
+    decode(results: D1StatementResult[]): StatementLike[] {
+      let offset = 0;
+      return reads.flatMap((read) => {
+        const planned = read.decode(results.slice(offset, offset + read.statements.length));
+        offset += read.statements.length;
+        return planned;
+      });
     },
   };
 }

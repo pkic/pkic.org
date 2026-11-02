@@ -191,7 +191,9 @@ export function SessionParticipation({
         eyebrow="Session participation"
         actions={
           <>
-            <SessionStarButton title={session.title} star={star} />
+            {session.availability && session.availability.state !== "registration_required" && (
+              <SessionStarButton title={session.title} star={star} />
+            )}
             <SessionCheckInLink slug={slug} eventId={eventId} occurrenceId={session.id} />
           </>
         }

@@ -96,24 +96,33 @@ describe("indexed audit and attendance query results", () => {
       const userId = await insertUser(env.DB);
       await env.DB.prepare(
         `INSERT INTO registrations
-          (id, event_id, user_id, status, attendance_type, source_type, manage_link_secret, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, 'admin', ?, ?, ?)`,
+          (id, event_id, user_id, status, source_type, manage_link_secret, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'admin', ?, ?, ?)`,
       )
-        .bind(id, eventId, userId, status, attendanceType, id, timestamp, timestamp)
+        .bind(id, eventId, userId, status, id, timestamp, timestamp)
         .run();
       await env.DB.batch(
-        queueStatuses.map((queueStatus, index) =>
+        queueStatuses.flatMap((queueStatus, index) => [
+          env.DB.prepare(`INSERT INTO registration_day_attendance
+            (id, registration_id, event_day_id, attendance_type, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`).bind(
+            `${id}-selection-${index}`,
+            id,
+            `day-${index + 1}`,
+            attendanceType,
+            timestamp,
+            timestamp,
+          ),
           env.DB.prepare(
             `INSERT INTO event_day_waitlist_entries
             (id, event_id, event_day_id, registration_id, user_id, priority_lane, status, position, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, 'general', ?, 1, ?, ?)`,
           ).bind(`${id}-${index}`, eventId, `day-${index + 1}`, id, userId, queueStatus, timestamp, timestamp),
-        ),
+        ]),
       );
     }
     expect(await getAttendanceStatusByType(env.DB, eventId)).toEqual({
-      in_person: { accepted: 1, waitlisted: 1 },
-      virtual: { accepted: 1, waitlisted: 0 },
+      in_person: { accepted: 1, waitlisted: 1, expired: 0 },
+      virtual: { accepted: 0, waitlisted: 0, expired: 1 },
     });
     expect(await getAttendanceStatusByType(env.DB, "other-event")).toEqual({});
   });

@@ -4,8 +4,10 @@ import base from "./playwright.config";
 /** Routine CI exercises cross-system boundaries; the full suite remains opt-in. */
 const criticalJourneys = [
   "covers unified user sign-in via magic link",
+  "an organization contact adds a colleague and can take the access away again",
   "covers proposal submission, speaker invitation, confirmation, and profile updates",
   "verified approved-domain registration affiliates once and an organization identity can be selected for the event",
+  "a proved work address requires organization confirmation and an incorrect shared-domain representation can be removed",
   "a member uploads a headshot through the disclaimer and crop flow",
   "public search accepts focus and closes with Escape",
   "mobile navigation opens and closes with Escape",
@@ -21,6 +23,7 @@ export default defineConfig({
   ...base,
   testMatch: [
     "browser-rendering.spec.ts",
+    "member-colleague-self-service.spec.ts",
     "registration-consent-identity.spec.ts",
     "portal-profile.spec.ts",
     "public-navigation-smoke.spec.ts",

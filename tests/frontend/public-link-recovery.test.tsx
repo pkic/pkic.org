@@ -25,7 +25,7 @@ import { classifyDonationPollResult } from "../../assets/ts/shared/donation/sess
 import { uploadFile } from "../../assets/ts/shared/file-upload";
 import { emailFromSubmitEvent } from "../../assets/ts/shared/form/helpers";
 import { replaceFormWithSuccess } from "../../assets/ts/shared/form/success-panel";
-import { initialsFrom, monogramFrom } from "../../assets/ts/shared/initials";
+import { initialsFrom, monogramFrom } from "../../assets/shared/initials";
 import { ORGANIZATION_CONTENT_FIELD_LABELS } from "../../assets/ts/shared/organization-content";
 import { handleFormInviteSubmitError } from "../../assets/ts/shared/widgets/invite-recovery";
 import { showManageLinkRecoveryForm } from "../../assets/ts/shared/widgets/link-recovery";
@@ -73,7 +73,7 @@ describe("public shared link recovery and flow state", () => {
     expect(document.querySelector<HTMLElement>("[data-speaker-loading]")?.hidden).toBe(true);
     expect(document.querySelector<HTMLElement>("[data-resend-speaker-manage-section]")?.hidden).toBe(false);
     expect(document.querySelector("[data-resend-speaker-manage-status]")?.textContent).toContain(
-      "Missing speaker token",
+      "This speaker link is missing.",
     );
   });
 
@@ -157,7 +157,7 @@ describe("public shared link recovery and flow state", () => {
     expect(button.querySelector(".pk-btn__spinner")).toBeNull();
   });
 
-  it("replaces the link-recovery form with an announced confirmation once the link is sent", async () => {
+  it("announces confirmation and lets a user correct their email after sending", async () => {
     const root = recoveryFixture();
     showRecovery(root);
     vi.stubGlobal(
@@ -178,21 +178,17 @@ describe("public shared link recovery and flow state", () => {
     });
 
     const section = root.querySelector("[data-section]")!;
-    // The confirmation is the design system's Alert, which brings role="status"
-    // with it rather than being a class name the surface wrote by hand.
     expect(section.querySelector('[role="status"]')?.textContent).toContain("A fresh link is on its way.");
-    // The send button stays busy, which is what stops a second request for a
-    // link that is already on its way. Like the design system's Button it
-    // stays focusable: busy is said with aria, not by disabling the control.
+    const input = root.querySelector<HTMLInputElement>("[data-email]")!;
     const sent = root.querySelector<HTMLButtonElement>("[data-btn]")!;
-    expect(sent.getAttribute("aria-busy")).toBe("true");
-    expect(sent.disabled).toBe(false);
-    const requests = vi.mocked(fetch).mock.calls.length;
+    expect(sent.hasAttribute("aria-busy")).toBe(false);
+    input.value = "corrected@example.test";
     await act(async () => {
       sent.click();
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
-    expect(vi.mocked(fetch).mock.calls.length).toBe(requests);
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(fetch).mock.calls[1]?.[1]?.body).toContain("corrected@example.test");
   });
 
   it("uses one invitation-aware error path for event forms", async () => {

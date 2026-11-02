@@ -21,7 +21,8 @@
  */
 
 import type { ComponentChildren } from "preact";
-import { useCallback, useEffect, useId, useRef, useState } from "preact/hooks";
+import { nextDomId } from "./dom-id";
+import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 
 import { Button } from "./Button";
 import { CloseButton, type CloseLabel } from "./CloseButton";
@@ -106,7 +107,8 @@ export function Dialog({
   size = "default",
   children,
 }: DialogProps) {
-  const id = useId();
+  // Dialog portals share the document across independently rendered portal and site roots.
+  const [id] = useState(() => nextDomId("dialog"));
   const titleId = `${id}-title`;
   const descriptionId = `${id}-description`;
   const ref = useRef<HTMLDialogElement>(null);

@@ -137,6 +137,13 @@ describe("attendee check-in screens", () => {
     expect(host.textContent).toContain("You don't have an in-person place for Day 1 yet.");
   });
 
+  it("explains when an online choice is still waiting for a place", async () => {
+    preview = result({ standing: "no_remote_place" });
+    await show(token);
+    expect(host.textContent).toContain("You don't have an online place for Day 1 yet.");
+    expect(host.textContent).toContain("Review your registration for your next step.");
+  });
+
   it("names the session and room a room code checks in to", async () => {
     preview = result({ target: keynote });
     await show(token);

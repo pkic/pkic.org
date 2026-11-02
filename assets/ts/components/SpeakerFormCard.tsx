@@ -20,18 +20,26 @@ export interface SpeakerFieldNames {
   firstName: string;
   lastName: string;
   email: string;
-  bio: string;
   role?: string;
+}
+
+/** The speaker profile a person writes about themselves: their bio and links. */
+export interface SpeakerProfileFields {
+  bioFieldName: string;
+  bioHelp: string;
+  /** The bio the person already has as the identity they take part as. */
+  initialBio?: string;
+  linksFieldName: string;
+  linksRef: Ref<ProfileLinksHandle>;
 }
 
 interface SpeakerFormCardProps {
   title: string;
   idPrefix: string;
   fields: SpeakerFieldNames;
-  linksFieldName: string;
-  linksRef: Ref<ProfileLinksHandle>;
   emailHelp: string;
-  bioHelp: string;
+  /** Only for the person filling in the form; someone they invite writes their own profile. */
+  profile?: SpeakerProfileFields;
   autocomplete?: boolean;
   /** A verified person's summary replaces the duplicate editable personal fields. */
   personSummary?: ComponentChildren;
@@ -80,10 +88,8 @@ export function SpeakerFormCard({
   title,
   idPrefix,
   fields,
-  linksFieldName,
-  linksRef,
   emailHelp,
-  bioHelp,
+  profile,
   autocomplete,
   personSummary,
   defaultRole = "speaker",
@@ -159,24 +165,26 @@ export function SpeakerFormCard({
               </SpeakerField>
             </>
           )}
-          <SpeakerField id={`${idPrefix}-bio`} label="Bio" help={bioHelp} errorPath={errorPaths?.bio}>
-            {/* The shared Markdown editor (#114). It posts the Markdown through
-                a hidden input under the field's name, so the form still reads
-                it the way it reads every other field; the length rule is the
-                server's, reported against the field. */}
-            {(control) => (
-              <MarkdownEditor
-                profile="basic"
-                variant="compact"
-                {...control}
-                required
-                name={fields.bio}
-                label="Bio"
-                initialValue=""
-                onChange={() => {}}
-              />
-            )}
-          </SpeakerField>
+          {profile && (
+            <SpeakerField id={`${idPrefix}-bio`} label="Bio" help={profile.bioHelp} errorPath={errorPaths?.bio}>
+              {/* The shared Markdown editor (#114). It posts the Markdown through
+                  a hidden input under the field's name, so the form still reads
+                  it the way it reads every other field; the length rule is the
+                  server's, reported against the field. */}
+              {(control) => (
+                <MarkdownEditor
+                  profile="basic"
+                  variant="compact"
+                  {...control}
+                  required
+                  name={profile.bioFieldName}
+                  label="Bio"
+                  initialValue={profile.initialBio ?? ""}
+                  onChange={() => {}}
+                />
+              )}
+            </SpeakerField>
+          )}
           {roleField && (
             // A fieldset with a legend names the radio group in the markup,
             // which is what a reader hears on entering it.
@@ -196,13 +204,15 @@ export function SpeakerFormCard({
             </fieldset>
           )}
 
-          <fieldset class="pk-fieldset pk-field">
-            <legend class="pk-field__label">
-              Profile links
-              <span class="pk-small"> (optional)</span>
-            </legend>
-            <ProfileLinksInput ref={linksRef} fieldName={linksFieldName} />
-          </fieldset>
+          {profile && (
+            <fieldset class="pk-fieldset pk-field">
+              <legend class="pk-field__label">
+                Profile links
+                <span class="pk-small"> (optional)</span>
+              </legend>
+              <ProfileLinksInput ref={profile.linksRef} fieldName={profile.linksFieldName} />
+            </fieldset>
+          )}
         </PanelBody>
       </Panel>
     </div>

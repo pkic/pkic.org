@@ -17,6 +17,7 @@ import { MemberEditForm } from "../../assets/ts/member-flows/portal/sections/mem
 import { MembersList } from "../../assets/ts/member-flows/portal/sections/membership-members/MembersList";
 import { Members } from "../../assets/ts/member-flows/portal/sections/membership-members";
 import { catalogEntry } from "./helpers/membership-roll-fixtures";
+import { chooseColumnFilter } from "./helpers/column-menu";
 import { confirmationButton, confirmationConsequences } from "./helpers/confirm-dialog";
 import { controlFor, optionValues, submitForm } from "./helpers/labeled-control";
 import { rowActionControlNames, runRowAction } from "./helpers/row-actions";
@@ -43,6 +44,7 @@ const individual: StaffMemberSummary = {
   membershipCategoryLabel: "Individual supporter",
   status: "active",
   representativeCount: 1,
+  representedOrganizations: [],
   memberSince: "2026-01-01",
 };
 const organization: StaffMemberSummary = {
@@ -137,6 +139,29 @@ describe("the members roll", () => {
     expect(rows[1]?.querySelector('[role="img"]')?.getAttribute("aria-label")).toBe("Organization");
     expect(rows[0]?.textContent).toContain("H6");
     expect(rows[1]?.textContent).toContain("Inactive");
+  });
+
+  it("names the organizations an individual member also represents and finds those people on the server", async () => {
+    const both: StaffMemberSummary = {
+      ...individual,
+      representedOrganizations: [
+        { id: "30000000-0000-4000-8000-000000000002", name: "Acme Corp" },
+        { id: "30000000-0000-4000-8000-000000000003", name: "Beta Labs" },
+      ],
+    };
+    const requests = stubRoll([both, organization]);
+    const root = mount(<MembersList categories={[]} canWrite onEditMember={() => undefined} />);
+    await settle();
+
+    const rows = [...root.querySelectorAll("tbody tr")];
+    expect(rows[0]?.textContent).toContain("Also represents Acme Corp and Beta Labs");
+    expect(rows[1]?.textContent).not.toContain("Also represents");
+    // The row still opens the person's record, where both standings are held.
+    expect(rows[0]?.querySelector("a")?.getAttribute("href")).toContain(`/users/${both.userId}`);
+
+    await chooseColumnFilter(root, "Member", "Individuals who also represent an organization");
+    await settle();
+    expect(requests.at(-1)?.url.searchParams.get("alsoRepresents")).toBe("organization");
   });
 
   it("asks the server for the staff projection and offers no row commands without membership:write", async () => {

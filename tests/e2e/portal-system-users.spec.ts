@@ -1,6 +1,14 @@
+import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-auth";
 import { scopedAuditLogResponseSchema } from "../../assets/shared/schemas/audit-log";
 import { eventRegistrationsListResponseSchema } from "../../assets/shared/schemas/event-registrations";
-import { userUpdateSchema } from "../../assets/shared/schemas/user-management";
+import {
+  organizationCreateSchema,
+  organizationCreateResponseSchema,
+} from "../../assets/shared/schemas/organization-management";
+import { identityMutationResponseSchema } from "../../assets/shared/schemas/identity";
+import { registrationIdentityChangeSchema } from "../../assets/shared/schemas/registration-identity";
+import { registrationManageReadResponseSchema } from "../../assets/shared/schemas/registration";
+import { userUpdateSchema, userDetailResponseSchema } from "../../assets/shared/schemas/user-management";
 import { createRegistrationEvent, registerStateAttendee } from "./helpers/participation-state-fixture";
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
@@ -95,25 +103,16 @@ test("staff view a user's participation history and upload a photograph", async 
   expect(Math.abs(imageBox.width - imageBox.height), "photo stays square").toBeLessThan(1);
   expect(Math.abs(frameBox.width - imageBox.width), "photo fills its circular frame").toBeLessThanOrEqual(2);
   await expect(portrait).toHaveCSS("object-fit", "cover");
-  // #85: the standing must surround only the photo, never editor actions.
+  // #85: the editor's actions never sit in a ring of their own. The record
+  // carries no account standing on its portrait, so there is no ring at all;
+  // the remove action appears with focus, at the portrait's own corner.
   for (const width of [1280, 390]) {
     await page.setViewportSize({ width, height: 900 });
-    const ring = page.locator(".pk-avatar-standing__ring").filter({ has: frame });
-    const ringBox = (await ring.boundingBox())!;
+    await expect(page.locator(".pk-avatar-standing")).toHaveCount(0);
     const pictureBox = (await frame.boundingBox())!;
-    expect(Math.abs(ringBox.width - ringBox.height), "standing stays circular").toBeLessThan(1);
-    expect(ringBox.width - pictureBox.width, "ring hugs the photo").toBeCloseTo(6, 0);
-    await expect(ring.getByRole("button", { name: /^Remove photo of / })).toHaveCount(0);
+    expect(Math.abs(pictureBox.width - pictureBox.height), "photo frame stays circular").toBeLessThan(1);
     await frame.focus();
     await expect(page.getByRole("button", { name: /^Remove photo of / })).toBeVisible();
-    const badge = page.locator(".pk-avatar-standing").filter({ has: frame }).locator(".pk-avatar-standing__label");
-    expect(
-      await badge.evaluate((label) => {
-        const box = label.getBoundingClientRect();
-        return label.contains(document.elementFromPoint(box.x + box.width / 2, box.y + 2));
-      }),
-      "badge paints above the photo where they overlap",
-    ).toBe(true);
     const removeBox = (await page.getByRole("button", { name: /^Remove photo of / }).boundingBox())!;
     expect(removeBox.y, "remove is at the portrait corner, not a separate row").toBeLessThan(pictureBox.y + 10);
     await page.screenshot({ path: `test-results/issue-85-portrait-${width}.png` });
@@ -160,6 +159,167 @@ test("staff read registration and account changes through the shared audit table
     await expect(registrationHistory).toBeVisible();
 
     await page.goto(`/portal/#/users/${record!.user_id}`);
+    await page.getByRole("button", { name: "Actions for Personal", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Edit identity profile…", exact: true }).click();
+    await expect(page.getByRole("heading", { name: /Edit profile:/ })).toBeVisible();
+    await expect(page.locator('[name="jobTitle"]')).toHaveCount(0);
+    for (const width of [1280, 375]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.screenshot({ path: info.outputPath(`personal-editor-${width}.png`), fullPage: true });
+    }
+    await page.goto(`/portal/#/users/${record!.user_id}`);
+    const organizationName = `Identity-only organization ${crypto.randomUUID()}`;
+    const organizationResponse = await page.request.post("/api/v1/organizations", {
+      data: organizationCreateSchema.parse({ name: organizationName }),
+    });
+    expect(organizationResponse.status()).toBe(201);
+    const organization = organizationCreateResponseSchema.parse(await organizationResponse.json()).organization;
+    const original = userDetailResponseSchema.parse(
+      await (await page.request.get(`/api/v1/users/${record!.user_id}`)).json(),
+    ).user;
+    await page.getByRole("button", { name: "Add identity", exact: true }).click();
+    const addIdentity = page.getByRole("dialog", { name: "Add identity", exact: true });
+    await expect(addIdentity.getByLabel("Category", { exact: true })).toHaveCount(0);
+    await addIdentity.getByRole("combobox", { name: /^Organization(?:\s*\(required\))?$/ }).fill(organizationName);
+    await page.getByRole("option").filter({ hasText: organizationName }).click();
+    await addIdentity.getByRole("textbox", { name: /^Job title(?:\s*\(required\))?$/ }).fill("Researcher");
+    await addIdentity.getByRole("checkbox", { name: /^Activate immediately/ }).check();
+    await addIdentity
+      .getByRole("textbox", { name: /^Activation reason(?:\s*\(required\))?$/ })
+      .fill("An omitted organization identity was reviewed.");
+    for (const width of [1280, 375]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.screenshot({ path: info.outputPath(`add-identity-${width}.png`) });
+    }
+    const identityCreated = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname === `/api/v1/organizations/${organization.id}/identities`,
+    );
+    await addIdentity.getByRole("button", { name: "Add identity", exact: true }).click();
+    const identityResponse = await identityCreated;
+    expect(identityResponse.status()).toBe(201);
+    const identity = identityMutationResponseSchema.parse(await identityResponse.json());
+    await expect(addIdentity).not.toBeVisible();
+    const after = userDetailResponseSchema.parse(
+      await (await page.request.get(`/api/v1/users/${record!.user_id}`)).json(),
+    ).user;
+    expect(after.identities.find((entry) => entry.identityId === identity.identityId)?.memberId).toBeNull();
+    expect(after.identities.flatMap((entry) => (entry.memberId ? [entry.memberId] : []))).toEqual(
+      original.identities.flatMap((entry) => (entry.memberId ? [entry.memberId] : [])),
+    );
+    await signInToPortal(attendee, email);
+    const beforeCorrection = registrationManageReadResponseSchema.parse(
+      await (await attendee.request.get(`/api/v1/registrations/${record!.id}`)).json(),
+    );
+    const linked = await attendee.request.put(`/api/v1/registrations/${record!.id}/identity`, {
+      data: registrationIdentityChangeSchema.parse({
+        identityId: identity.identityId,
+        expectedIdentityId: beforeCorrection.identityId ?? null,
+      }),
+    });
+    expect(linked.status()).toBe(200);
+    await page.getByRole("button", { name: `Actions for ${organizationName}`, exact: true }).click();
+    await page.getByRole("menuitem", { name: "Delete identity…", exact: true }).click();
+    const deleted = page.waitForResponse(
+      (response) =>
+        response.request().method() === "DELETE" &&
+        new URL(response.url()).pathname === `/api/v1/users/${record!.user_id}/identities/${identity.identityId}`,
+    );
+    const deletionConfirmation = page.getByRole("alertdialog", { name: "Delete identity?", exact: true });
+    await deletionConfirmation.getByRole("button", { name: "Delete identity", exact: true }).click();
+    expect((await deleted).status()).toBe(409);
+    const correction = page.getByRole("dialog", { name: "Correct identity", exact: true });
+    await expect(correction).toBeVisible();
+    await correction.getByRole("combobox", { name: /^Representation/ }).click();
+    await page
+      .getByRole("option")
+      .filter({ hasText: /^Personal(?: ·|$)/ })
+      .click();
+    await correction
+      .getByRole("textbox", { name: /^Reason for correction/ })
+      .fill("The organization was linked incorrectly.");
+    for (const width of [1280, 375]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.screenshot({ path: info.outputPath(`correct-to-personal-${width}.png`) });
+    }
+    const corrected = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname.endsWith(`/identities/${identity.identityId}/corrections`),
+    );
+    await correction.getByRole("button", { name: "Correct identity", exact: true }).click();
+    expect((await corrected).status()).toBe(200);
+    await expect(correction).not.toBeVisible();
+    await expect(page.getByRole("button", { name: `Actions for ${organizationName}`, exact: true })).toHaveCount(0);
+    const registrationAfter = registrationManageReadResponseSchema.parse(
+      await (await attendee.request.get(`/api/v1/registrations/${record!.id}`)).json(),
+    );
+    expect(registrationAfter.identityId).toBe(
+      original.identities.find((entry) => entry.organizationId === null)!.identityId,
+    );
+    expect(registrationAfter.registration.id).toBe(record!.id);
+    const personalId = registrationAfter.identityId!;
+    const replacementName = `Staff-approved organization ${crypto.randomUUID()}`;
+    const replacementResponse = await page.request.post("/api/v1/organizations", {
+      data: organizationCreateSchema.parse({ name: replacementName }),
+    });
+    expect(replacementResponse.status()).toBe(201);
+    const replacementOrganization = organizationCreateResponseSchema.parse(
+      await replacementResponse.json(),
+    ).organization;
+    await page.getByRole("button", { name: "Actions for Personal", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Delete identity…", exact: true }).click();
+    const personalConfirmation = page.getByRole("alertdialog", { name: "Delete identity?", exact: true });
+    await personalConfirmation.getByRole("button", { name: "Delete identity", exact: true }).click();
+    const personalCorrection = page.getByRole("dialog", { name: "Correct identity", exact: true });
+    await expect(personalCorrection).toBeVisible();
+    await personalCorrection.getByRole("button", { name: "Add identity", exact: true }).click();
+    await expect(addIdentity).toBeVisible();
+    await addIdentity.getByRole("combobox", { name: /^Organization/ }).fill(replacementName);
+    await page.getByRole("option").filter({ hasText: replacementName }).click();
+    await addIdentity.getByRole("textbox", { name: /^Job title/ }).fill("Research lead");
+    await expect(addIdentity.getByRole("checkbox", { name: /^Activate immediately/ })).toBeChecked();
+    await expect(addIdentity.getByRole("alert")).toContainText("even if their email domain differs");
+    await addIdentity
+      .getByRole("textbox", { name: /^Activation reason/ })
+      .fill("The association was independently verified despite the different email domain.");
+    const replacementCreated = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname === `/api/v1/organizations/${replacementOrganization.id}/identities`,
+    );
+    await addIdentity.getByRole("button", { name: "Add identity", exact: true }).click();
+    const replacementResult = await replacementCreated;
+    expect(replacementResult.status()).toBe(201);
+    const replacement = identityMutationResponseSchema.parse(await replacementResult.json());
+    await expect(addIdentity).not.toBeVisible();
+    await expect(personalCorrection.getByRole("combobox", { name: /^Representation/ })).toContainText(replacementName);
+    await personalCorrection
+      .getByRole("textbox", { name: /^Reason for correction/ })
+      .fill("Participation belongs to the verified organization identity.");
+    for (const width of [1280, 375]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.screenshot({ path: info.outputPath(`correct-personal-to-organization-${width}.png`) });
+    }
+    const personalCorrected = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname.endsWith(`/identities/${personalId}/corrections`),
+    );
+    await personalCorrection.getByRole("button", { name: "Correct identity", exact: true }).click();
+    expect((await personalCorrected).status()).toBe(200);
+    await expect(personalCorrection).not.toBeVisible();
+    const finalRegistration = registrationManageReadResponseSchema.parse(
+      await (await attendee.request.get(`/api/v1/registrations/${record!.id}`)).json(),
+    );
+    expect(finalRegistration.identityId).toBe(replacement.identityId);
+    const preservedAccount = userAuthSessionResponseSchema.parse(
+      await (await attendee.request.get("/api/v1/auth/session")).json(),
+    );
+    expect(preservedAccount.identity.id).toBe(record!.user_id);
+    expect(preservedAccount.actingIdentities.some((entry) => entry.id === personalId)).toBe(false);
+
     await expect(page.getByRole("table", { name: "Audit log", exact: true })).toHaveCount(0);
     const auditLoaded = page.waitForResponse((response) =>
       new URL(response.url()).pathname.endsWith(`/users/${record!.user_id}/audit-log`),

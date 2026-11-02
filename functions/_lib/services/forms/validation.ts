@@ -5,9 +5,8 @@ import {
   type EventFormResolutionEvent,
   type FormPurpose,
 } from "./read";
-import { deriveEventAttendanceType, type DayAttendanceSelection } from "../event-days";
+import { type DayAttendanceSelection } from "../event-days";
 import type { DatabaseLike } from "../../types";
-import type { AttendanceType } from "../../../../assets/shared/schemas/registration";
 import { isIdentityOwnedFormKey } from "../../../../assets/shared/schemas/form-answers";
 import { formAnswersContract } from "../../../../assets/shared/schemas/form-answer-contract";
 import type { CustomAnswerValue } from "../../../../assets/shared/form-answer-rules";
@@ -15,7 +14,6 @@ import type { CustomAnswerValue } from "../../../../assets/shared/form-answer-ru
 export type { CustomAnswerValue, DateRangeAnswer } from "../../../../assets/shared/form-answer-rules";
 
 export interface ValidationContext {
-  attendanceType?: AttendanceType;
   dayAttendance?: DayAttendanceSelection[];
 }
 
@@ -68,7 +66,6 @@ export function validateCustomAnswersAgainstForm(
   const context = payload.context ?? {};
   const checked = formAnswersContract(asked, {
     dayAttendanceTypes: context.dayAttendance?.map((entry) => entry.attendanceType),
-    eventAttendanceType: context.attendanceType ?? deriveEventAttendanceType(context.dayAttendance) ?? undefined,
   }).safeParse(answers);
   if (!checked.success) {
     for (const issue of checked.error.issues) addFieldError(fieldErrors, String(issue.path[0] ?? ""), issue.message);

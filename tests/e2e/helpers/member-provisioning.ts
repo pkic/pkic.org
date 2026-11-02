@@ -48,7 +48,7 @@ export async function jsonResponse(
 
 export async function createMember(
   page: Page,
-  options: { individual?: boolean } = {},
+  options: { individual?: boolean; organizationName?: string } = {},
 ): Promise<{ email: string; userId: string; memberId: string; identityId: string }> {
   const identity = crypto.randomUUID();
   const email = `e2e-persona-${identity}@persona-${identity}.test`;
@@ -72,7 +72,9 @@ export async function createMember(
     applicantEmail: email,
     applicantName: "E2E Persona Member",
     membershipCategory: options.individual ? "H5" : "A",
-    ...(options.individual ? {} : { organizationName: `Persona Test Organization ${identity}` }),
+    ...(options.individual
+      ? {}
+      : { organizationName: options.organizationName ?? `Persona Test Organization ${identity}` }),
     joinToken: stringProperty(verified, "joinToken"),
     answers: {
       reason: "Real Worker/D1 portal persona coverage",

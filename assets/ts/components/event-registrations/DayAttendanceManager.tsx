@@ -59,7 +59,7 @@ interface DayRow {
   label: string | null;
   subject: string;
   supportsInPerson: boolean;
-  inPersonCapacity: number | null;
+  selectedCapacity: number | null;
   current: DayOption;
   options: EventDay["attendanceOptions"];
   waitlist: AttendanceDetail["dayWaitlist"][number] | null;
@@ -116,7 +116,7 @@ export function DayAttendanceManager({
       label: day.label,
       subject: day.label ?? formatServiceDate(day.date),
       supportsInPerson: Boolean(inPerson),
-      inPersonCapacity: inPerson?.capacity ?? null,
+      selectedCapacity: day.attendanceOptions.find((option) => option.value === held?.attendanceType)?.capacity ?? null,
       current: held?.attendanceType ?? ("none" as DayOption),
       options: day.attendanceOptions,
       waitlist,
@@ -131,14 +131,13 @@ export function DayAttendanceManager({
   // What each command may act on, so a command that applies to none of the
   // chosen days is absent from the menu rather than failing on the server.
   const canChange = (days: readonly DayRow[]) => changeChoices(days).length > 0;
-  const admittable = (days: readonly DayRow[]) =>
-    days.filter((day) => day.activeWaitlist && day.current === "in_person");
+  const admittable = (days: readonly DayRow[]) => days.filter((day) => day.activeWaitlist && day.current !== "none");
   const returnable = (days: readonly DayRow[]) =>
     days.filter(
       (day) =>
-        !day.activeWaitlist && day.current === "in_person" && day.inPersonCapacity != null && day.inPersonCapacity > 0,
+        !day.activeWaitlist && day.current !== "none" && day.selectedCapacity != null && day.selectedCapacity > 0,
     );
-  const overridable = (days: readonly DayRow[]) => days.filter((day) => day.supportsInPerson);
+  const overridable = (days: readonly DayRow[]) => days.filter((day) => day.current !== "none" || day.supportsInPerson);
   const leavable = (days: readonly DayRow[]) => days.filter((day) => day.current !== "none");
 
   /** The methods every chosen day offers, less the one they all already hold. */
@@ -205,7 +204,7 @@ export function DayAttendanceManager({
     if (targets.length === 0) return;
     const confirmed = await confirmAction({
       title: `Admit ${nameDays(targets)} from the waitlist?`,
-      body: "The attendee takes a seat in person on each of these days.",
+      body: "The attendee receives a place for their selected option on each of these days.",
       consequences: ["One registration update email is sent for the change."],
       confirmLabel: "Admit from waitlist",
       tone: "primary",
@@ -217,7 +216,7 @@ export function DayAttendanceManager({
           `${registrationEndpoint}/admissions`,
           {
             mode: "capacity_exempt",
-            reason: "Event manager approved in-person admission",
+            reason: "Event manager approved attendance admission",
             dayDates: targets.map((day) => day.dayDate),
           },
           eventRegistrationAdmitResponseSchema,
@@ -231,7 +230,7 @@ export function DayAttendanceManager({
     if (targets.length === 0) return;
     const confirmed = await confirmAction({
       title: `Return ${nameDays(targets)} to the waitlist?`,
-      body: "The attendee gives up the in-person seat and waits for one again.",
+      body: "The attendee gives up their place and waits for one again.",
       consequences: ["One registration update email is sent for the change."],
       confirmLabel: "Return to waitlist",
       tone: "primary",
@@ -478,7 +477,7 @@ export function DayAttendanceManager({
         <Dialog
           open
           title="Admit beyond capacity"
-          description={`Seats the attendee in person on ${nameDays(vip.days)} although the day is full, with a recorded reason. This is audited and sends one registration update email.`}
+          description={`Admits the attendee on ${nameDays(vip.days)} beyond the selected option's capacity, with a recorded reason. This is audited and sends one registration update email.`}
           confirmLabel="Apply VIP override"
           confirmDisabled={!vipForm.valid || busy}
           onConfirm={() => void applyVipOverride()}

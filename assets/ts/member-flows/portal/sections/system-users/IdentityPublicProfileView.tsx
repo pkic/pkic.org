@@ -43,7 +43,7 @@ function IdentityPublicProfileForm({ identity, recordPath }: { identity: Identit
     setError(null);
     const checked = form.submit();
     if (!checked.data) {
-      setError(checked.message);
+      setError(checked.formMessage);
       return;
     }
     setSaving(true);

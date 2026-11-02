@@ -7,6 +7,7 @@ import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
 import { prepareAuditLogAfterOneChange } from "./audit";
 import { readOwnEmailAddress } from "./own-email-address-read";
+import { refuseRemovingLastSignInMethod } from "../auth/sign-in-methods";
 
 /** Only the account owner can separately authorize a proved mailbox to unlock the whole account. */
 export async function setOwnEmailSignInPermission(
@@ -45,8 +46,12 @@ export async function setOwnEmailSignInPermission(
   if (Boolean(address.allowed) === input.enabled) return readOwnEmailAddress(db, input.userId, input.emailId);
   const at = nowIso();
   const revision = uuid();
+  const remains = input.enabled
+    ? null
+    : await refuseRemovingLastSignInMethod(db, input.userId, { withdrawnEmailId: input.emailId });
   try {
     await db.batch([
+      ...(remains ? [prepareAuthorizationGuard(db, remains)] : []),
       prepareAuthorizationGuard(db, {
         sql: `SELECT 1 FROM user_emails address JOIN users person ON person.id = address.user_id
           LEFT JOIN user_email_sign_in_permissions permission ON permission.email_id = address.id

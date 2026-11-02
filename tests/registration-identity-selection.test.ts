@@ -28,13 +28,112 @@ import {
 } from "../functions/_lib/services/registrations/selected-identity";
 import { listSponsorAttendeesForExport } from "../functions/_lib/services/sponsorship/sponsor-access";
 import { nowIso, addHours } from "../functions/_lib/utils/time";
+import { preparePromotionSourceRead } from "../functions/_lib/services/event-agenda/promotion-source-read";
 import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
 import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
 import { findEligibleMemberById } from "../functions/_lib/auth/identity-capacities";
 import { mutateBeforeMatchingQuery } from "./helpers/database-races";
 import type { DatabaseLike, Env } from "../functions/_lib/types";
+import {
+  registrationIdentityChangeSchema,
+  registrationIdentityChangeResponseSchema,
+} from "../assets/shared/schemas/registration-identity";
 
 let registrationEnvironment: Env;
+
+describe("registration representation changes", () => {
+  async function setupChange() {
+    const f = await fixture(false);
+    const created = await register(f.body, f.token);
+    expect(created.status, await created.clone().text()).toBe(200);
+    const result = registrationSubmissionResponseSchema.parse(await created.json());
+    const personal = await buildCreateIdentityStatement(env.DB, {
+      userId: f.userId,
+      organizationId: null,
+      source: "account",
+      startImmediately: true,
+    });
+    await env.DB.batch([personal.statement]);
+    const path = `/api/v1/registrations/${result.registrationId}/identity`;
+    return { ...f, registrationId: result.registrationId, personalId: personal.identityId, path };
+  }
+  function change(
+    f: Awaited<ReturnType<typeof setupChange>>,
+    identityId = f.personalId,
+    token: string | null = f.token,
+    expectedIdentityId = f.identityId,
+  ) {
+    return callApi(
+      registrationEnvironment,
+      f.path,
+      {
+        method: "PUT",
+        headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify(registrationIdentityChangeSchema.parse({ identityId, expectedIdentityId })),
+      },
+      { maxRoundTrips: 1 },
+    );
+  }
+  it("changes only the owned registration representation and queues artwork in one complete batch", async () => {
+    const f = await setupChange();
+    const response = await change(f);
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(registrationIdentityChangeResponseSchema.parse(await response.json()).identity).toMatchObject({
+      id: f.personalId,
+      organizationName: null,
+    });
+    expect((await getRegistrationById(env.DB, f.registrationId)).registration_identity_id).toBe(f.personalId);
+    const read = await readAttribution(f.registrationId);
+    expect(read.user.organization_name).toBeNull();
+    const source = preparePromotionSourceRead(env.DB, { slug: read.event.slug }, f.userId, null, undefined, false);
+    const promotion = await source.decode(await env.DB.batch(source.statements));
+    expect(promotion.person?.organization_name).toBeNull();
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT action FROM audit_log WHERE entity_id=? AND action='registration_identity_changed'",
+        [f.registrationId],
+      ),
+    ).toHaveLength(1);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT job.id FROM event_promotion_renders job JOIN referral_codes rc ON job.id='badge:'||rc.code WHERE rc.owner_id=?",
+        [f.registrationId],
+      ),
+    ).toHaveLength(1);
+  });
+  it("rejects another user's identity and a stale selection without recording effects", async () => {
+    const f = await setupChange();
+    const otherId = await insertUser(env.DB, "other-representation@example.test");
+    const other = await buildCreateIdentityStatement(env.DB, {
+      userId: otherId,
+      organizationId: null,
+      source: "account",
+      startImmediately: true,
+    });
+    await env.DB.batch([other.statement]);
+    expect((await change(f, other.identityId)).status).toBe(403);
+    expect((await change(f, f.personalId, f.token, f.personalId)).status).toBe(409);
+    expect((await getRegistrationById(env.DB, f.registrationId)).registration_identity_id).toBe(f.identityId);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT action FROM audit_log WHERE entity_id=? AND action='registration_identity_changed'",
+        [f.registrationId],
+      ),
+    ).toHaveLength(0);
+  });
+  it("requires the owner's live session, including when the caller holds a public manage link", async () => {
+    const f = await setupChange();
+    expect((await change(f, f.personalId, null)).status).toBe(401);
+    const otherId = await insertUser(env.DB, "other-session@example.test");
+    const otherSession = await createMemberSession(env.DB, otherId, crypto.randomUUID());
+    expect((await change(f, f.personalId, otherSession)).status).toBe(403);
+    await env.DB.prepare("UPDATE sessions SET revoked_at=? WHERE user_id=?").bind(nowIso(), f.userId).run();
+    expect((await change(f)).status).toBe(403);
+  });
+});
 
 beforeEach(async () => {
   await resetDb();
@@ -46,7 +145,12 @@ beforeEach(async () => {
 });
 
 async function fixture(withMembership = true) {
-  await seedEventAndAdmin(env.DB);
+  const { eventId } = await seedEventAndAdmin(env.DB);
+  await env.DB.prepare(
+    "INSERT INTO event_days(id,event_id,day_date,created_at,updated_at) VALUES(?,?,'2026-11-30',?,?)",
+  )
+    .bind(crypto.randomUUID(), eventId, new Date().toISOString(), new Date().toISOString())
+    .run();
   const email = `identity-${crypto.randomUUID()}@example.test`;
   const userId = await insertUser(env.DB, email);
   await env.DB.prepare("UPDATE users SET first_name = 'Event', last_name = 'Attendee' WHERE id = ?").bind(userId).run();
@@ -67,7 +171,7 @@ async function fixture(withMembership = true) {
     lastName: "Attendee",
     email,
     identityId,
-    attendanceType: "virtual",
+    dayAttendance: [{ dayDate: "2026-11-30", attendanceType: "virtual" }],
     sourceType: "direct",
     consents: [
       { termKey: "privacy-policy", version: "v1" },
@@ -265,7 +369,11 @@ describe("explicit event identity selection", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ id: result.registrationId, token: confirmationToken }),
     });
-    expect(confirmed.status, await confirmed.clone().text()).toBe(200);
+    expect(confirmed.status, await confirmed.clone().text()).toBe(422);
+    // A legacy confirmed record can lack a recorded identity; its read model remains covered below.
+    await env.DB.prepare("UPDATE registrations SET status='registered',confirmed_at=? WHERE id=?")
+      .bind(nowIso(), result.registrationId)
+      .run();
     const exported = await buildRegistrationCsv(
       env.DB,
       { id: event.id, source_mode: event.source_mode! },
@@ -325,7 +433,15 @@ describe("explicit event identity selection", () => {
       ).bind(f.userId, at, at),
     ]);
     await addPrimaryAffiliation(f.userId);
-    const response = await register({ ...f.body, identityId: identity.identityId }, f.token);
+    await env.DB.prepare(
+      "UPDATE users SET email='independent@gmail.com', normalized_email='independent@gmail.com' WHERE id=?",
+    )
+      .bind(f.userId)
+      .run();
+    const response = await register(
+      { ...f.body, email: "independent@gmail.com", unaffiliatedAttestation: true, identityId: identity.identityId },
+      f.token,
+    );
     expect(response.status, await response.clone().text()).toBe(200);
     const result = registrationSubmissionResponseSchema.parse(await response.json());
     expect((await getRegistrationById(env.DB, result.registrationId)).registration_identity_id).toBe(
@@ -432,7 +548,6 @@ describe("explicit event identity selection", () => {
     const holder = await createRegistration(env.DB, {
       event,
       userId: holderId,
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       signingSecret: env.INTERNAL_SIGNING_SECRET!,
@@ -442,7 +557,6 @@ describe("explicit event identity selection", () => {
     const response = await register(
       registrationCreateSchema.parse({
         ...f.body,
-        attendanceType: "in_person",
         dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       }),
       f.token,

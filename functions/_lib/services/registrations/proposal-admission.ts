@@ -4,12 +4,7 @@ import {
   SPEAKER_ATTENDANCE_PREFERENCE,
   type EventParticipantRole,
 } from "../../../../assets/shared/schemas/participant-roles";
-import {
-  deriveEventAttendanceType,
-  getRegistrationDayAttendance,
-  listEventDays,
-  resolveAttendanceOptions,
-} from "../event-days";
+import { getRegistrationDayAttendance, listEventDays, resolveAttendanceOptions } from "../event-days";
 import { buildCreateRegistration } from "./create";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { prepareAuditLog } from "../audit";
@@ -27,6 +22,8 @@ export async function prepareProposalAdmission(
   },
 ): Promise<StatementLike[]> {
   const days = await listEventDays(db, input.eventId);
+  // Speaker participation is independent of registration when dates are not yet scheduled.
+  if (!days.length) return [];
   const selections = days.flatMap((day) => {
     const options = resolveAttendanceOptions(day);
     const option =
@@ -40,8 +37,6 @@ export async function prepareProposalAdmission(
   const built = await buildCreateRegistration(db, {
     event: { id: input.eventId },
     userId: input.userId,
-    attendanceType:
-      deriveEventAttendanceType(dayAttendance) ?? previous?.attendance_type ?? SPEAKER_ATTENDANCE_PREFERENCE[0],
     dayAttendance,
     customAnswersJson: previous?.custom_answers_json,
     formPlacementId: previous?.form_placement_id,

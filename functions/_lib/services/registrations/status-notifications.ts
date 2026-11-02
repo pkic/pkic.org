@@ -1,4 +1,11 @@
-import { REGISTRATION_ORGANIZATION_SQL, REGISTRATION_JOB_TITLE_SQL } from "./selected-identity";
+import {
+  selectedOrAffiliationOrganizationNameSql,
+  selectedOrAffiliationJobTitleSql,
+} from "../identities/affiliation-projection";
+import {
+  personalPromotionImagePath,
+  personalPromotionSharePath,
+} from "../../../../assets/shared/personal-promotion-image";
 import type { CountryCode } from "../../../../assets/shared/countries";
 import { batchFirst, batchRows } from "../../db/pagination";
 import { AppError } from "../../errors";
@@ -12,7 +19,7 @@ import {
   type AcceptedRegistrationTermRow,
 } from "../../utils/registration-email";
 import { buildAttendanceEmailData, buildRegistrationEmailStatusData } from "../../utils/attendance";
-import { buildRegistrationIcs } from "../../utils/calendar";
+import { buildRegistrationIcs, calendarConfirmedDays } from "../../utils/calendar";
 import { generateSignedRsvpAddress } from "../../email/rsvp";
 import { prepareRegistrationDayAttendance, type RegistrationDayAttendanceRow } from "../event-days";
 import { prepareRegistrationDayWaitlist, type RegistrationDayWaitlistRow } from "./day-waitlist-queries";
@@ -49,7 +56,15 @@ export interface RegistrationStatusEmailEvent {
 }
 
 /** What an email says about a held day; a builder passing its own rows need not carry timestamps. */
-type DayAttendanceForEmail = Array<{ dayDate: string; attendanceType: string; label: string | null }>;
+type DayAttendanceForEmail = Array<{
+  dayDate: string;
+  attendanceType: string;
+  label: string | null;
+  optionLabel?: string | null;
+  accessMode?: import("../../../../assets/shared/event-attendance-access").EventAttendanceAccessMode;
+  startsAt?: string | null;
+  endsAt?: string | null;
+}>;
 
 interface RegistrationEmailOverrides {
   registration?: RegistrationRecord;
@@ -71,14 +86,15 @@ async function loadRegistrationEmailContext(
   customAnswerRows: Awaited<ReturnType<typeof getCustomAnswerRows>>;
   acceptedTermsText: string;
 }> {
+  const selectedIdentity = overrides.registration ? "(SELECT id FROM email_identity)" : "r.registration_identity_id";
   const [registrationResult, userResult, attendanceResult, waitlistResult, termsResult] = await db.batch([
     prepareRegistrationByIdForEvent(db, event.id, registrationId),
     db
-      .prepare(`SELECT u.id, ${REGISTRATION_RECIPIENT_EMAIL_SQL} AS email,
-            u.first_name, u.last_name, ${REGISTRATION_ORGANIZATION_SQL} AS organization_name, ${REGISTRATION_JOB_TITLE_SQL} AS job_title
+      .prepare(`WITH email_identity AS (SELECT ? AS id) SELECT u.id, ${REGISTRATION_RECIPIENT_EMAIL_SQL} AS email,
+            u.first_name, u.last_name, ${selectedOrAffiliationOrganizationNameSql(selectedIdentity, "u.id")} AS organization_name, ${selectedOrAffiliationJobTitleSql(selectedIdentity, "u.id")} AS job_title
        FROM registrations r JOIN users u ON u.id = r.user_id
        WHERE r.id = ? AND r.event_id = ?`)
-      .bind(registrationId, event.id),
+      .bind(overrides.registration?.registration_identity_id ?? null, registrationId, event.id),
     prepareRegistrationDayAttendance(db, registrationId),
     prepareRegistrationDayWaitlist(db, registrationId),
     prepareAcceptedRegistrationTerms(db, registrationId),
@@ -125,7 +141,7 @@ export async function prepareRegistrationStatusEmail(
 ): Promise<{ outboxId: string; statement: StatementLike; manageToken: string; manageUrl: string }> {
   const { registration, user, dayAttendance, dayWaitlist, customAnswerRows, acceptedTermsText } =
     await loadRegistrationEmailContext(db, params.event, params.registrationId, params);
-  const attendanceData = buildAttendanceEmailData(registration.attendance_type, dayAttendance, dayWaitlist);
+  const attendanceData = buildAttendanceEmailData(dayAttendance, dayWaitlist);
   const statusData = buildRegistrationEmailStatusData(registration.status, dayWaitlist);
   const { manageToken, manageUrl } = await registrationManageCapability(params.appBaseUrl, params.event, registration);
   const recipientEmail = params.recipientEmailOverride ?? user.email;
@@ -147,8 +163,15 @@ export async function prepareRegistrationStatusEmail(
       email: recipientEmail,
       organizationName: user.organization_name ?? "",
       jobTitle: user.job_title ?? "",
-      attendanceType: registration.attendance_type,
       attendanceLabel: attendanceData.attendanceLabel,
+      attendanceSummary: attendanceData.dayAttendance.length
+        ? attendanceData.dayAttendance
+            .map(
+              (day) =>
+                `${day.dayLabel}: ${day.attendanceLabel}${day.statusLabel === day.attendanceLabel ? "" : ` — ${day.statusLabel}`}`,
+            )
+            .join("; ")
+        : attendanceData.attendanceLabel,
       dayAttendance: attendanceData.dayAttendance,
       dayWaitlist,
       customAnswerRows,
@@ -193,7 +216,7 @@ export async function prepareRegistrationConfirmedEmail(
   const { registration, user, dayAttendance, dayWaitlist, customAnswerRows, acceptedTermsText } =
     await loadRegistrationEmailContext(db, params.event, params.registrationId, params);
   const recipientEmail = params.recipientEmailOverride ?? user.email;
-  const attendanceData = buildAttendanceEmailData(registration.attendance_type, dayAttendance, dayWaitlist);
+  const attendanceData = buildAttendanceEmailData(dayAttendance, dayWaitlist);
   const statusData = buildRegistrationEmailStatusData(registration.status, dayWaitlist);
   const { manageUrl } = await registrationManageCapability(params.appBaseUrl, params.event, registration);
   const rsvpAddress = params.internalSigningSecret
@@ -203,13 +226,15 @@ export async function prepareRegistrationConfirmedEmail(
     params.event,
     registration.id,
     manageUrl,
-    dayAttendance,
+    calendarConfirmedDays(dayAttendance, dayWaitlist),
     params.appBaseUrl,
     rsvpAddress,
     recipientEmail,
     params.internalSigningSecret,
   );
-  const shareUrl = params.referralCode ? `${params.appBaseUrl}/r/${params.referralCode}` : null;
+  const shareUrl = params.referralCode
+    ? `${params.appBaseUrl}${personalPromotionSharePath(params.referralCode)}`
+    : null;
   const prepared = prepareQueueEmailStatement(db, {
     outboxId: params.outboxId,
     idempotencyKey: params.idempotencyKey,
@@ -232,13 +257,13 @@ export async function prepareRegistrationConfirmedEmail(
         ]
       : undefined,
     data: {
+      hasCalendarInvite: calendar.files.length > 0,
       ...buildEventEmailVariables(params.event, params.appBaseUrl),
       firstName: user.first_name ?? "",
       lastName: user.last_name ?? "",
       email: recipientEmail,
       organizationName: user.organization_name ?? "",
       jobTitle: user.job_title ?? "",
-      attendanceType: registration.attendance_type,
       attendanceLabel: attendanceData.attendanceLabel,
       dayAttendance: attendanceData.dayAttendance,
       dayWaitlist,
@@ -249,9 +274,9 @@ export async function prepareRegistrationConfirmedEmail(
       manageUrl,
       myAgendaUrl: myAgendaPageUrl(params.appBaseUrl, params.event),
       shareUrl,
-      ...(shareUrl
+      ...(shareUrl && params.referralCode
         ? {
-            badgeImageUrl: `${params.appBaseUrl}/api/v1/registrations/referrals/${params.referralCode}/badge`,
+            badgeImageUrl: `${params.appBaseUrl}${personalPromotionImagePath(params.referralCode)}`,
             linkedinShareUrl: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`,
             twitterShareUrl: `https://twitter.com/intent/tweet?text=${encodeURIComponent(`I just registered for ${params.event.name} — join me! ${shareUrl}`)}`,
             blueskyShareUrl: `https://bsky.app/intent/compose?text=${encodeURIComponent(`I just registered for ${params.event.name} — join me!\n${shareUrl}`)}`,
@@ -292,7 +317,7 @@ export async function prepareRegistrationConfirmationEmail(
   const { registration, user, dayAttendance, dayWaitlist, customAnswerRows, acceptedTermsText } =
     await loadRegistrationEmailContext(db, params.event, params.registrationId, params);
   const recipientEmail = params.recipientEmail ?? user.email;
-  const attendanceData = buildAttendanceEmailData(registration.attendance_type, dayAttendance, dayWaitlist);
+  const attendanceData = buildAttendanceEmailData(dayAttendance, dayWaitlist);
   const statusData = buildRegistrationEmailStatusData("pending_email_confirmation", dayWaitlist);
   const kind = params.kind ?? "registration";
   const confirmationUrl = await registrationConfirmationUrl(

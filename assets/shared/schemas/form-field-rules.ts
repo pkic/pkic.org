@@ -122,7 +122,7 @@ export const safeFormFieldPatternSchema = z
 const showWhenSchema = z
   .object({
     dayAttendanceIn: z.array(attendanceOptionSchema).max(20).optional(),
-    eventAttendanceTypeIn: z.array(attendanceTypeSchema).max(3).optional(),
+    eventAttendanceTypeIn: z.array(attendanceTypeSchema).max(20).optional(),
   })
   .strict();
 
@@ -210,7 +210,7 @@ export function parseFormFieldRules(value: unknown): FormFieldRules {
       : undefined;
     const parsed = showWhenSchema.safeParse({
       dayAttendanceIn: dayAttendanceIn?.slice(0, 20),
-      eventAttendanceTypeIn: eventAttendanceTypeIn?.slice(0, 3),
+      eventAttendanceTypeIn: eventAttendanceTypeIn?.slice(0, 20),
     });
     if (parsed.success && (parsed.data.dayAttendanceIn?.length || parsed.data.eventAttendanceTypeIn?.length)) {
       candidate.showWhen = parsed.data;
@@ -273,9 +273,10 @@ export function isFormFieldVisible(rules: FormFieldRules, context: FormFieldVisi
     if (!rules.showWhen.dayAttendanceIn.some((mode) => dayModes.has(mode))) return false;
   }
   if (rules.showWhen.eventAttendanceTypeIn?.length) {
-    if (!context.eventAttendanceType || !rules.showWhen.eventAttendanceTypeIn.includes(context.eventAttendanceType)) {
-      return false;
-    }
+    const selectedTypes = dayModes.size
+      ? dayModes
+      : new Set(context.eventAttendanceType ? [context.eventAttendanceType] : []);
+    if (!rules.showWhen.eventAttendanceTypeIn.some((type) => selectedTypes.has(type))) return false;
   }
   return true;
 }
@@ -292,13 +293,23 @@ export const formFieldOptionSchema = z
   })
   .strict();
 const formFieldOptionInputSchema = z.union([formFieldOptionSchema, legacyFormFieldOptionSchema]);
+/** Readable fallback for identifier-shaped labels; explicit descriptive labels remain verbatim. */
+function optionLabel(value: string, label = value): string {
+  if (!label.includes("_") || label.toLowerCase() !== value.toLowerCase()) return label;
+  const words = label.replace(/_+/g, " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
 export const formFieldOptionsSchema = z
   .array(formFieldOptionInputSchema)
   .max(200)
   .transform((entries) =>
     entries.map((entry) => {
-      if (typeof entry === "string") return { value: entry, label: entry, active: true };
-      return "active" in entry ? entry : { value: entry.value, label: entry.label ?? entry.value, active: true };
+      if (typeof entry === "string") return { value: entry, label: optionLabel(entry), active: true };
+      return {
+        ...entry,
+        label: optionLabel(entry.value, entry.label),
+        active: "active" in entry ? entry.active : true,
+      };
     }),
   )
   .superRefine((options, context) => {
@@ -324,7 +335,7 @@ export function parseFormFieldOptions(value: unknown): FormFieldOption[] {
   for (const entry of value.slice(0, 200)) {
     const canonical = formFieldOptionSchema.safeParse(entry);
     if (canonical.success) {
-      options.push(canonical.data);
+      options.push({ ...canonical.data, label: optionLabel(canonical.data.value, canonical.data.label) });
       continue;
     }
     const legacy = legacyFormFieldOptionSchema.safeParse(entry);
@@ -332,7 +343,7 @@ export function parseFormFieldOptions(value: unknown): FormFieldOption[] {
     const value = typeof legacy.data === "string" ? legacy.data : legacy.data.value;
     options.push({
       value,
-      label: typeof legacy.data === "string" ? value : (legacy.data.label ?? value),
+      label: optionLabel(value, typeof legacy.data === "string" ? undefined : legacy.data.label),
       active: true,
     });
   }

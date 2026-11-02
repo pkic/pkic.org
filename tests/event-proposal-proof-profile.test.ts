@@ -1,9 +1,7 @@
+import { personNamePatchSchema } from "../assets/shared/schemas/api-common";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import {
-  eventProposalPersonNamePatchSchema,
-  eventProposalProofPersonPatchResponseSchema,
-} from "../assets/shared/schemas/event-proposal-proof";
+import { eventProposalProofPersonPatchResponseSchema } from "../assets/shared/schemas/event-proposal-proof";
 import { proposalCreateSchema } from "../assets/shared/schemas/proposal-management";
 import { updateEventProposalProofPerson } from "../functions/_lib/services/event-proposal-proof-profile";
 import { callApi } from "./helpers/app";
@@ -70,14 +68,14 @@ async function unchangedState() {
 }
 describe("confirmed proposal person name editing", () => {
   it("shares strict canonical name validation and excludes representation changes", () => {
-    expect(eventProposalPersonNamePatchSchema.parse({ firstName: "  Saved  " })).toEqual({ firstName: "Saved" });
+    expect(personNamePatchSchema.parse({ firstName: "  Saved  " })).toEqual({ firstName: "Saved" });
     for (const body of [
       {},
       { firstName: "" },
       { firstName: "Valid", organizationName: "Employer" },
       { firstName: "Valid", actingIdentityId: null },
     ])
-      expect(eventProposalPersonNamePatchSchema.safeParse(body).success).toBe(false);
+      expect(personNamePatchSchema.safeParse(body).success).toBe(false);
   });
   it("saves the verified guest's known person and leaves the continuation usable for submission", async () => {
     const { userId, proof } = await fixture();

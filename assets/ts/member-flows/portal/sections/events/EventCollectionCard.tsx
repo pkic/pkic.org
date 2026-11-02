@@ -16,8 +16,7 @@ import "../DiscoveryView.css";
 type EventRow = z.infer<typeof eventsListResponseSchema>["events"][number];
 
 export function eventWhen(event: EventRow): string {
-  const attendanceType = "viewer" in event ? (event.viewer?.attendanceType ?? null) : null;
-  return formatEventWhen(event.startsAt, eventClock(event), null, attendanceType);
+  return formatEventWhen(event.startsAt, eventClock(event), null, null);
 }
 
 /** Public and portal discovery share the website's photo-overlay card. */

@@ -81,7 +81,7 @@ export function ApplicationEditForm({
   async function submit(event: Event) {
     event.preventDefault();
     const checked = contract.submit();
-    if (!checked.data) return setValidationError(checked.message);
+    if (!checked.data) return setValidationError(checked.formMessage ?? "");
     try {
       await onSave(checked.data);
       setValidationError("");

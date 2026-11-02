@@ -453,6 +453,11 @@ it("prints exact canonical front/back sheets and label stock without changing QR
   expect(a4.match(/class="badge-print-sheet"/g)).toHaveLength(1);
   expect(a4).toContain('aria-label="Badge front"');
   expect(a4).toContain('aria-label="Badge back"');
+  const slots = [...document.querySelectorAll<HTMLElement>(".badge-print-slot")];
+  expect(slots).toHaveLength(2);
+  expect(slots.every((slot) => !slot.hasAttribute("style"))).toBe(true);
+  expect(document.querySelector("style")?.textContent).toContain(".badge-print-slot-0{left:");
+  expect(document.querySelector("style")?.textContent).toContain(".badge-print-slot-1{left:");
   expect(a4).toContain("A &lt; B");
   expect(a4).toContain(encodeURIComponent(badges[0].svg));
   expect(badgePrintHtml(badges, badgePrintPreset("avery_5160"), printing, "name_qr")).toContain("size:215.9mm 279.4mm");

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { jsonErrorResponse } from "./api-common";
+import { successResponseSchema, jsonErrorResponse } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import {
   currentUserIdentityCreateSchema,
@@ -8,6 +8,7 @@ import {
   identitiesListResponseSchema,
   identityCreateSchema,
   identityMutationResponseSchema,
+  identityCorrectionSchema,
   identityInvitationLinkRequestSchema,
   identityInvitationPreviewResponseSchema,
   identityReinstatementLinkRequestSchema,
@@ -15,7 +16,7 @@ import {
   identityReinstatementRequestResponseSchema,
   identityUpdateSchema,
 } from "./identity";
-import { requiresSession } from "./route-contract";
+import { authErrors, requiresPermissions, requiresSession } from "./route-contract";
 
 export const organizationIdentityCollectionParamsSchema = z.object({ organizationId: databaseIdSchema });
 export const organizationIdentityParamsSchema = organizationIdentityCollectionParamsSchema.extend({
@@ -110,9 +111,9 @@ export const currentUserIdentitiesListRouteSchema = {
 export const currentUserIdentityCreateRouteSchema = {
   ...requiresSession(),
   tags: ["Users"],
-  summary: "Activate a claimed-domain identity for the current user",
+  summary: "Activate a verified-domain identity for the current user",
   description:
-    "Requires an exact verified email-domain claim and explicit organization-join action. Only this explicit acceptance may activate the canonical Member group enrollments; verifying an account or event email never does so.",
+    "Accepts an explicit claimed-domain organization offer or a prepared representation based on an owned verified work address. The canonical domain policy resolves existing organizations, unclaimed-domain creation, and review. Only explicit acceptance may activate canonical Member group enrollments.",
   request: {
     body: { required: true, content: { "application/json": { schema: currentUserIdentityCreateSchema } } },
   },
@@ -243,5 +244,63 @@ export const currentUserIdentityReinstatementConfirmRouteSchema = {
     "404": jsonErrorResponse("The link is not valid, was replaced by a newer one, or the address changed."),
     "409": jsonErrorResponse("The link was used, or the identity can no longer be reinstated."),
     "410": jsonErrorResponse("The link expired."),
+  },
+};
+
+export const identityRemoveRouteSchema = {
+  ...requiresSession(),
+  tags: ["Users"],
+  summary: "Delete an incorrect identity",
+  description:
+    "Owners delete their own incorrect associations. Staff require membership:write and identities:activate. The user account remains. Linked participation must be reassigned before deletion.",
+  "x-pkic-mcp": { expose: true, scopes: ["membership:write", "identities:activate"], readonly: false },
+  request: { params: z.object({ userId: databaseIdSchema, identityId: databaseIdSchema }) },
+  responses: {
+    "200": {
+      description: "Representation removed.",
+      content: { "application/json": { schema: successResponseSchema } },
+    },
+    "409": jsonErrorResponse(
+      "The representation is blocked, not owned, or has participation records that must be corrected first.",
+    ),
+  },
+};
+
+export const identitiesListRouteSchema = {
+  ...requiresPermissions("membership:read"),
+  tags: ["Identities"],
+  summary: "List identities",
+  request: { query: identitiesListQuerySchema },
+  responses: {
+    "200": {
+      description: "A bounded identity page.",
+      content: { "application/json": { schema: identitiesListResponseSchema } },
+    },
+    ...authErrors({ forbidden: "Membership read permission is required." }),
+  },
+};
+
+export const identityCorrectionRouteSchema = {
+  ...requiresSession(),
+  // Owners use their human session; delegated corrections require both staff permissions.
+  "x-pkic-mcp": { expose: true, scopes: ["membership:write", "identities:activate"], readonly: false },
+  tags: ["Identities"],
+  summary: "Correct an identity's organization association",
+  description:
+    "Replace an incorrect association with another active representation of the same person, move registration and speaker references, and remove the incorrect association without former-role history. Owners correct their own associations; correcting another person requires membership:write and identities:activate. Voting, membership, and succession records require review instead.",
+  request: {
+    params: z.object({ userId: databaseIdSchema, identityId: databaseIdSchema }),
+    body: { required: true, content: { "application/json": { schema: identityCorrectionSchema } } },
+  },
+  responses: {
+    "200": {
+      description: "Representation corrected.",
+      content: { "application/json": { schema: identityMutationResponseSchema } },
+    },
+    ...authErrors({
+      badRequest: "Invalid correction request.",
+      forbidden: "You cannot correct this representation.",
+      conflict: "The representation changed or has protected records requiring review.",
+    }),
   },
 };

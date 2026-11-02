@@ -118,6 +118,7 @@ describe("custom field validation", () => {
   afterEach(() => vi.unstubAllGlobals());
   it("rejects invalid registration custom answers", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
+    await seedEventDay(eventId);
     await seedRegistrationForm(env.DB, eventId);
 
     const response = await callApi(env, "/api/v1/events/pqc-2026/registrations", {
@@ -127,7 +128,7 @@ describe("custom field validation", () => {
         firstName: "Alex",
         lastName: "Tester",
         email: "alex@pkic.org",
-        attendanceType: "virtual",
+        dayAttendance: [{ dayDate: TEST_DAY, attendanceType: "virtual" }],
         consents: [
           { termKey: "privacy-policy", version: "v1" },
           { termKey: "code-of-conduct", version: "v1" },
@@ -261,7 +262,7 @@ describe("custom field validation", () => {
     )[0];
     const details = JSON.parse(auditRow.details_json) as Record<string, { from: unknown; to: unknown }>;
     expect(details.status).toEqual({ from: "pending_email_confirmation", to: "pending_email_confirmation" });
-    expect(details.attendanceType).toEqual({ from: "in_person", to: "in_person" });
+    expect(details.attendanceType).toBeUndefined();
     expect(details.customAnswers).toEqual({
       from: {
         professional_profile: "https://www.linkedin.com/in/morgan-updater",

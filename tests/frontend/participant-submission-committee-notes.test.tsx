@@ -10,11 +10,16 @@ import {
 import { eventFormsResponseSchema } from "../../assets/shared/schemas/forms";
 import { PROPOSAL_COMMITTEE_NOTES_COPY } from "../../assets/shared/proposal-committee-notes-copy";
 import { controlFor } from "./helpers/labeled-control";
+import { expectAbstractShownAsText, MARKUP_LIKE_ABSTRACT } from "./helpers/markup-like-abstract";
 
 const proposalId = "30000000-0000-4000-8000-000000000001";
 const eventId = "10000000-0000-4000-8000-000000000001";
 
-function submission(status: string, notes: string | null) {
+function submission(
+  status: string,
+  notes: string | null,
+  abstract = "A walk through migrating a working certificate authority to post-quantum algorithms.",
+) {
   return proposalAccessReadResponseSchema.parse({
     success: true,
     proposal: {
@@ -24,7 +29,7 @@ function submission(status: string, notes: string | null) {
       status,
       proposal_type: "talk",
       title: "Post-quantum migration",
-      abstract: "A walk through migrating a working certificate authority to post-quantum algorithms.",
+      abstract,
       committee_notes: notes,
       details: null,
     },
@@ -48,13 +53,13 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-async function mount(status: string, notes: string | null) {
+async function mount(status: string, notes: string | null, abstract?: string) {
   host = document.createElement("div");
   document.body.append(host);
   await act(() =>
     render(
       <ParticipantSubmission
-        data={submission(status, notes)}
+        data={submission(status, notes, abstract)}
         forms={forms}
         event={{ startsAt: null, endsAt: null, timezone: "UTC" } as never}
         facet="submission"
@@ -99,5 +104,12 @@ describe("notes for the program committee on the proposer's page", () => {
     expect(host.textContent).toContain(PROPOSAL_COMMITTEE_NOTES_COPY.locked);
     expect(button("Edit")).toBeUndefined();
     expect(host.querySelector('textarea[name="committeeNotes"]')).toBeNull();
+  });
+});
+
+describe("the abstract on the proposer's page", () => {
+  it("shows markup-like characters exactly once, as text", async () => {
+    await mount("submitted", null, MARKUP_LIKE_ABSTRACT);
+    expectAbstractShownAsText(host);
   });
 });

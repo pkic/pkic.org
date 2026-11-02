@@ -24,6 +24,7 @@ import {
 } from "./series-calendar";
 import { occurrenceOrganizerAddress, type OccurrenceNotificationOptions } from "./occurrence-notifications";
 import { memberMeetingLinkUrl, memberMeetingLinkUrls } from "./personal-entry-links";
+import { personNameSql } from "../people/person-name-sql";
 
 export const AUTOMATIC_INVITATION_TEMPLATE_KEY = "meeting-series-invitation";
 export interface AutomaticInvitationOptions extends Pick<OccurrenceNotificationOptions, "signingSecret" | "rsvpEmail"> {
@@ -33,8 +34,7 @@ export interface AutomaticInvitationOptions extends Pick<OccurrenceNotificationO
 /** Identity-backed active group participation, deduplicated by delivery address. */
 const ELIGIBLE = `SELECT series.id AS series_id, MIN(participant.id) AS user_id,
   lower(COALESCE(seat_email.email, participant.email)) AS recipient_email,
-  COALESCE(NULLIF(TRIM(COALESCE(participant.preferred_name, '')), ''),
-    NULLIF(TRIM(COALESCE(participant.first_name, '') || ' ' || COALESCE(participant.last_name, '')), ''), participant.email) AS recipient_name
+  COALESCE(${personNameSql("participant")}, participant.email) AS recipient_name
  FROM event_series series JOIN events event ON event.id = series.event_id
  JOIN group_memberships membership ON membership.group_id = event.owner_group_id AND membership.left_at IS NULL
  JOIN users participant ON participant.id = membership.user_id AND participant.active = 1

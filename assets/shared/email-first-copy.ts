@@ -12,7 +12,7 @@
 export const WORK_EMAIL_STEER = "Please use your work address, so we can connect you to your organization.";
 export const DISPOSABLE_EMAIL_REFUSED = "Disposable email providers are not accepted.";
 
-export type EmailFirstFlow = "registration" | "proposal" | "speaker" | "join";
+export type EmailFirstFlow = "registration" | "proposal" | "speaker" | "join" | "representation";
 
 /** One of the two ways in: the card that explains it, then the field and action it leads to. */
 export interface EmailFirstChoiceCopy {
@@ -98,6 +98,17 @@ export const ORGANIZATION_CONTRIBUTION_RULE =
   "contributing on behalf of an organization requires that organization's representation";
 
 export const EMAIL_FIRST_COPY: Readonly<Record<EmailFirstFlow, EmailFirstCopy>> = {
+  representation: {
+    ...eventCopy,
+    work: {
+      ...eventWork,
+      points: [
+        "Connect to your organization after confirming your email",
+        "Use your organization and job title across the portal",
+      ],
+    },
+    personal: { ...eventPersonal, points: ["Use your personal identity without an organization"] },
+  },
   registration: {
     ...eventCopy,
     work: {
@@ -159,17 +170,10 @@ export const ORGANIZATION_JOB_TITLE_COPY = {
   help: "Your role at the organization you represent, shown with your name.",
 } as const;
 
-/** The identity a signed-in registrant continues as: shown read-only, with a way to choose another they hold. */
-export const REGISTRATION_IDENTITY_COPY = {
-  representing: (organization: string) => `You'll register as ${organization}.`,
-  chooseOther: "Choose a different organization",
-} as const;
-
 /** The organization a verified work address names when its domain resolves to none. */
 export const REGISTRATION_ORGANIZATION_COPY = {
-  question: "Add your organization and job title to confirm your registration.",
-  nameLabel: "Your organization",
-  help: "We'll connect you to it once, so next time we know.",
+  pendingReviewHelp:
+    "You can register while our team reviews your organization affiliation. Your organization will appear on your registration after approval.",
   reviewRequired:
     "Our team will check the organization you named before it appears on your registration. You don't need to do anything.",
 } as const;

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { lookupOgPerson } from "../functions/r/[code]";
-import { getProposalSpeakerBadgeRenderData } from "../functions/_lib/services/og-badge-prerender";
+import { readBadgeSource } from "../functions/_lib/services/og-badge-source";
 import { resetDb } from "./helpers/reset-db";
 import { queryAll } from "./helpers/context";
 import {
@@ -37,9 +37,7 @@ describe("public speaker profiles", () => {
       first_name: "Person",
       last_name: "Own",
     });
-    await expect(
-      getProposalSpeakerBadgeRenderData(env.DB, proposalId, referral.created_by_user_id),
-    ).resolves.toMatchObject({
+    await expect(readBadgeSource(env.DB, referral.code)).resolves.toMatchObject({
       first_name: "Person",
       last_name: "Own",
       headshot_r2_key: headshot,

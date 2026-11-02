@@ -172,7 +172,7 @@ export function App({
     if (!verificationId) return;
     const checked = verification.submit();
     if (!checked.data) {
-      setError(checked.message);
+      setError(checked.formMessage);
       return;
     }
     setSubmitting(true);

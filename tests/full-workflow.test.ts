@@ -1,4 +1,6 @@
+import { confirmWorkRegistration } from "./helpers/registration-confirmation";
 import { prepareProposalProof } from "./helpers/proposal-proof";
+import { seedSessionAttendanceDays } from "./helpers/session-attendance-days";
 import { administratorGrants, grantAdministrator } from "./helpers/administrator";
 import { describe, it, expect, vi } from "vitest";
 import { env } from "cloudflare:workers";
@@ -104,6 +106,7 @@ async function callMountedApp(request: Request): Promise<Response> {
 describe("full workflow", () => {
   it("runs end-to-end attendee and speaker workflows", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
+    await seedSessionAttendanceDays(env.DB, eventId, ["2026-12-01"]);
 
     const adminUser = (
       await queryAll<{ id: string; email: string }>(
@@ -311,7 +314,7 @@ describe("full workflow", () => {
             firstName: "Attendee",
             lastName: "One",
             email: "attendee1@pkic.org",
-            attendanceType: "in_person",
+            dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
             sourceType: "direct",
             consents: [
               { termKey: "privacy-policy", version: "v1" },
@@ -334,14 +337,8 @@ describe("full workflow", () => {
         "confirmationUrl",
       );
 
-      const firstConfirmResponse = await callMountedApp(
-        new Request(
-          `https://app.test/api/v1/events/pqc-2026/registrations/confirm-email?token=${encodeURIComponent(
-            firstConfirmationToken,
-          )}`,
-          { method: "GET" },
-        ),
-      );
+      const firstConfirmResponse = await confirmWorkRegistration(env, firstConfirmationToken);
+      expect(firstConfirmResponse.status, await firstConfirmResponse.clone().text()).toBe(200);
       const firstConfirmPayload = (await firstConfirmResponse.json()) as { status: string; manageToken: string };
       expect(firstConfirmPayload.status).toBe("registered");
 
@@ -369,7 +366,7 @@ describe("full workflow", () => {
             firstName: "Attendee",
             lastName: "Two",
             email: "attendee2@pkic.org",
-            attendanceType: "in_person",
+            dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
             sourceType: "direct",
             consents: [
               { termKey: "privacy-policy", version: "v1" },
@@ -391,14 +388,8 @@ describe("full workflow", () => {
         "confirmationUrl",
       );
 
-      const secondConfirmResponse = await callMountedApp(
-        new Request(
-          `https://app.test/api/v1/events/pqc-2026/registrations/confirm-email?token=${encodeURIComponent(
-            secondConfirmationToken,
-          )}`,
-          { method: "GET" },
-        ),
-      );
+      const secondConfirmResponse = await confirmWorkRegistration(env, secondConfirmationToken);
+      expect(secondConfirmResponse.status, await secondConfirmResponse.clone().text()).toBe(200);
       const secondConfirmPayload = (await secondConfirmResponse.json()) as { status: string };
       expect(secondConfirmPayload.status).toBe("registered");
 

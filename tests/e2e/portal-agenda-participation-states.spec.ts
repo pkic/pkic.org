@@ -65,8 +65,11 @@ async function followPublic(
   await link.focus();
   await expect(link).toBeFocused();
   await page.keyboard.press("Enter");
+  // The portal settles the deep link on the program day that holds the session.
+  if (!occurrence.startAt) throw new Error("The participation fixture requires a scheduled occurrence");
+  const day = instantToCalendarDate(occurrence.startAt, fixture.agenda.timeZone);
   await expect(page).toHaveURL(
-    new URL(`/portal/#/events/${fixture.slug}/agenda?session=${occurrence.id}`, page.url()).href,
+    new URL(`/portal/#/events/${fixture.slug}/agenda/${day}?session=${occurrence.id}`, page.url()).href,
   );
   // The deep link opens the session's own details over the whole program.
   const dialog = page.getByRole("dialog", { name: occurrence.title, exact: true });

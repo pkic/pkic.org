@@ -32,6 +32,18 @@ export const SOCIAL_BADGE_ROLES = [...REGISTRATION_BADGE_ROLES, "proposer", "co_
 export const socialBadgeRoleSchema = z.enum(SOCIAL_BADGE_ROLES);
 export type SocialBadgeRole = z.infer<typeof socialBadgeRoleSchema>;
 
+export const SOCIAL_PROMOTION_HEADLINES: Record<SocialBadgeRole, string> = {
+  attendee: "I’m attending",
+  sponsor: "I’m sponsoring",
+  speaker: "I’m speaking",
+  co_speaker: "I’m speaking",
+  moderator: "I’m moderating",
+  panelist: "I’m joining a panel",
+  organizer: "I’m helping organize",
+  staff: "I’m on the team",
+  proposer: "I’ve submitted a proposal",
+};
+
 export const registrationBadgePatchSchema = z.object({ role: registrationBadgeRoleSchema.nullable() });
 export type RegistrationBadgePatch = z.infer<typeof registrationBadgePatchSchema>;
 

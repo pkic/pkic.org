@@ -33,7 +33,7 @@ export function LiveQuestionRewrite({
 
   function save() {
     const checked = form.submit();
-    if (!checked.data) return setError(checked.message);
+    if (!checked.data) return setError(checked.formMessage);
     if (!onSave(checked.data.text)) return setError("The room is reconnecting. Please try again in a moment.");
     onClose();
   }

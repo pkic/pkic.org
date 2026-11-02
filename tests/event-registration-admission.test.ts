@@ -60,7 +60,6 @@ async function seedWaitlistedVipScenario(): Promise<{
   await createRegistration(env.DB, {
     event,
     userId: holderSeed.userId,
-    attendanceType: "in_person",
     dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
     sourceType: "invite",
     inviteId: holderSeed.inviteId,
@@ -70,7 +69,6 @@ async function seedWaitlistedVipScenario(): Promise<{
   const vipRegistration = await createRegistration(env.DB, {
     event,
     userId: vipSeed.userId,
-    attendanceType: "in_person",
     dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
     sourceType: "invite",
     inviteId: vipSeed.inviteId,
@@ -114,7 +112,9 @@ describe("event-registration admission", () => {
     );
 
     expect(response.status).toBe(200);
-    const admitPayload = eventRegistrationAdmissionResponseSchema.parse(await response.json());
+    const rawPayload = (await response.json()) as { registration: Record<string, unknown> };
+    expect(rawPayload.registration).not.toHaveProperty("attendance_type");
+    const admitPayload = eventRegistrationAdmissionResponseSchema.parse(rawPayload);
     expect(admitPayload.registration).toMatchObject({ id: registrationId, status: "registered" });
     expect(admitPayload.registration).not.toHaveProperty("confirmation_link_secret");
     expect(admitPayload.registration).not.toHaveProperty("manage_link_secret");
@@ -159,11 +159,13 @@ describe("event-registration admission", () => {
     )[0];
     const payload = JSON.parse(outbox.payload_json) as {
       adminAdmitNotice?: boolean;
+      attendanceSummary?: string;
       dayWaitlist?: unknown[];
       dayAttendance?: Array<{ statusLabel: string }>;
     };
     expect(outbox.template_key).toBe("registration_updated");
-    expect(payload.adminAdmitNotice).toBe(true);
+    expect(payload.adminAdmitNotice).toBe(false);
+    expect(payload.attendanceSummary).toContain("Confirmed in-person attendance");
     expect(payload.dayWaitlist).toEqual([]);
     expect(payload.dayAttendance?.[0]?.statusLabel).toBe("Confirmed in-person attendance");
   });

@@ -15,6 +15,8 @@
   .pk-markdown-editor__group { display: flex; align-items: center; gap: var(--pk-1); }
   .pk-markdown-editor__group + .pk-markdown-editor__group { padding-left: var(--pk-2); border-left: 1px solid var(--pk-line-soft); }
   .pk-markdown-editor__group--end { margin-left: auto; }
+  /* A narrow bar moves tools into the overflow; the label itself never breaks across lines. */
+  .pk-markdown-editor__toolbar [data-content-actions] { flex: none; white-space: nowrap; }
   .pk-markdown-editor__canvas { min-height: 18rem; white-space: pre-wrap; padding: var(--pk-5); outline-offset: -3px; }
   .pk-markdown-editor__video { cursor: grab; }
   .pk-markdown-editor__canvas iframe { pointer-events: none; }

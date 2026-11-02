@@ -57,7 +57,7 @@ export function LiveOwnQuestionActions({
   function save() {
     if (pending) return transmit(pending);
     const checked = form.submit();
-    if (!checked.data) return setNotice(checked.message);
+    if (!checked.data) return setNotice(checked.formMessage);
     transmit({
       type: "question.edit",
       questionId: question.id,

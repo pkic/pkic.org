@@ -7,22 +7,23 @@
  * different way of joining. The order puts what needs the attendee first.
  */
 
-export type DayStatusKind = "offered" | "waiting" | "confirmed" | "cancelled";
+export type DayStatusKind = "offered" | "waiting" | "expired" | "confirmed" | "cancelled";
 
 export interface DayStatusGroup {
   kind: DayStatusKind;
-  /** How the confirmed days are joined; null for waiting-list, offered and cancelled groups. */
+  /** The selected option; null only for a cancelled registration. */
   attendanceType: string | null;
+  optionLabel: string | null;
   dayDates: string[];
   /** The earliest offer deadline in an offered group. */
   offerExpiresAt: string | null;
 }
 
-const KIND_ORDER: Record<DayStatusKind, number> = { offered: 0, waiting: 1, confirmed: 2, cancelled: 3 };
+const KIND_ORDER: Record<DayStatusKind, number> = { offered: 0, expired: 1, waiting: 2, confirmed: 3, cancelled: 4 };
 const TYPE_ORDER = ["in_person", "virtual", "on_demand"];
 
 export function groupRegistrationDays(
-  dayAttendance: ReadonlyArray<{ dayDate: string; attendanceType: string }>,
+  dayAttendance: ReadonlyArray<{ dayDate: string; attendanceType: string; optionLabel?: string | null }>,
   dayWaitlist: ReadonlyArray<{ dayDate: string; status: string; offerExpiresAt?: string | null }>,
   { cancelled = false }: { cancelled?: boolean } = {},
 ): DayStatusGroup[] {
@@ -33,6 +34,7 @@ export function groupRegistrationDays(
           {
             kind: "cancelled",
             attendanceType: null,
+            optionLabel: null,
             dayDates: dayAttendance.map((entry) => entry.dayDate).sort(),
             offerExpiresAt: null,
           },
@@ -40,22 +42,31 @@ export function groupRegistrationDays(
       : [];
   const pending = new Map(
     dayWaitlist
-      .filter((entry) => entry.status === "waiting" || entry.status === "offered")
+      .filter((entry) => entry.status === "waiting" || entry.status === "offered" || entry.status === "expired")
       .map((entry) => [entry.dayDate, entry]),
   );
   const groups = new Map<string, DayStatusGroup>();
-  const add = (kind: DayStatusKind, attendanceType: string | null, dayDate: string, expires: string | null) => {
-    const key = `${kind}:${attendanceType ?? ""}`;
-    const group = groups.get(key) ?? { kind, attendanceType, dayDates: [], offerExpiresAt: null };
+  const add = (
+    kind: DayStatusKind,
+    attendanceType: string,
+    optionLabel: string | null,
+    dayDate: string,
+    expires: string | null,
+  ) => {
+    const key = JSON.stringify([kind, attendanceType, optionLabel]);
+    const group = groups.get(key) ?? { kind, attendanceType, optionLabel, dayDates: [], offerExpiresAt: null };
     group.dayDates.push(dayDate);
     if (expires && (!group.offerExpiresAt || expires < group.offerExpiresAt)) group.offerExpiresAt = expires;
     groups.set(key, group);
   };
   for (const entry of dayAttendance) {
     const queued = pending.get(entry.dayDate);
-    if (queued?.status === "offered") add("offered", null, entry.dayDate, queued.offerExpiresAt ?? null);
-    else if (queued) add("waiting", null, entry.dayDate, null);
-    else add("confirmed", entry.attendanceType, entry.dayDate, null);
+    if (queued?.status === "offered")
+      add("offered", entry.attendanceType, entry.optionLabel ?? null, entry.dayDate, queued.offerExpiresAt ?? null);
+    else if (queued?.status === "expired")
+      add("expired", entry.attendanceType, entry.optionLabel ?? null, entry.dayDate, null);
+    else if (queued) add("waiting", entry.attendanceType, entry.optionLabel ?? null, entry.dayDate, null);
+    else add("confirmed", entry.attendanceType, entry.optionLabel ?? null, entry.dayDate, null);
   }
   const typeRank = (type: string | null) => {
     const index = TYPE_ORDER.indexOf(type ?? "");
@@ -67,5 +78,5 @@ export function groupRegistrationDays(
 }
 
 export function hasWaitingDays(groups: readonly DayStatusGroup[]): boolean {
-  return groups.some((group) => group.kind === "waiting" || group.kind === "offered");
+  return groups.some((group) => group.kind === "waiting" || group.kind === "offered" || group.kind === "expired");
 }

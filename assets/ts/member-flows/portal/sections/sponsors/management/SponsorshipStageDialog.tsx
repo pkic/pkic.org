@@ -45,7 +45,7 @@ export function SponsorshipStageDialog({
   });
   async function save() {
     const checked = form.submit();
-    if (!checked.data) return setError(checked.message);
+    if (!checked.data) return setError(checked.formMessage);
     setBusy(true);
     setError(null);
     try {

@@ -3,7 +3,8 @@ import { env } from "cloudflare:workers";
 import { createTestRateLimiter, seedEventAndAdmin } from "./helpers/context";
 import { callApi } from "./helpers/app";
 import { resetDb } from "./helpers/reset-db";
-import { createRegistration } from "../functions/_lib/services/registrations";
+import { createScheduledRegistration } from "./helpers/scheduled-registration";
+import { seedSessionAttendanceDays } from "./helpers/session-attendance-days";
 import { findOrCreateUser } from "../functions/_lib/services/users";
 
 describe("public resend rate limits", () => {
@@ -73,10 +74,9 @@ describe("public resend rate limits", () => {
       lastName: "Limited",
       email: `token-resend-${crypto.randomUUID()}@example.test`,
     });
-    const submitted = await createRegistration(env.DB, {
+    const submitted = await createScheduledRegistration(env.DB, {
       event: { id: eventId },
       userId: user.id,
-      attendanceType: "virtual",
       sourceType: "direct",
       signingSecret: "test-signing-secret",
       confirmationTtlHours: 24,
@@ -95,7 +95,8 @@ describe("public resend rate limits", () => {
   });
 
   it("rate-limits public registration emails before they can become a spam trigger", async () => {
-    await seedEventAndAdmin(env.DB);
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    await seedSessionAttendanceDays(env.DB, eventId, ["2026-12-01"]);
     const limitedEnv = {
       ...env,
       EMAIL_RATE_LIMITER: createTestRateLimiter(3),
@@ -110,7 +111,7 @@ describe("public resend rate limits", () => {
           firstName: "Rate",
           lastName: "Limited",
           email,
-          attendanceType: "virtual",
+          dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
           sourceType: "direct",
           consents: [
             { termKey: "privacy-policy", version: "v1" },
@@ -128,7 +129,8 @@ describe("public resend rate limits", () => {
   });
 
   it("rate-limits repeated bootstrap email corrections to an unverified target", async () => {
-    await seedEventAndAdmin(env.DB);
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    await seedSessionAttendanceDays(env.DB, eventId, ["2026-12-01"]);
     const limitedEnv = {
       ...env,
       EMAIL_RATE_LIMITER: createTestRateLimiter(3),
@@ -141,7 +143,7 @@ describe("public resend rate limits", () => {
         firstName: "Typo",
         lastName: "Correction",
         email: `wrong-${crypto.randomUUID()}@example.test`,
-        attendanceType: "virtual",
+        dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
         sourceType: "direct",
         consents: [
           { termKey: "privacy-policy", version: "v1" },

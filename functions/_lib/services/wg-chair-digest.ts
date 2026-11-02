@@ -234,6 +234,8 @@ async function buildOutboxRows(groups: WgDigestGroup[], window: WgChairDigestWin
             windowEnd: window.end,
             joined: group.joined,
             left: group.left,
+            hasJoined: group.joined.length > 0,
+            hasLeft: group.left.length > 0,
           },
         };
       }),

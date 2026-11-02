@@ -32,6 +32,7 @@ import {
   registrationList,
   attendanceDetail,
 } from "./helpers/group-event-attendance-fixtures";
+import { configuredDays } from "./helpers/configured-days";
 
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", vi.fn()] }));
 
@@ -82,6 +83,7 @@ function installApi(waitlisted: boolean) {
       const method = init.method ?? "GET";
       const body = typeof init.body === "string" ? JSON.parse(init.body) : undefined;
       requests.push({ path: url.pathname, method, body, search: url.search });
+      if (method === "GET" && url.pathname.endsWith(`/events/${EVENT_ID}/days`)) return json(configuredDays());
       if (method === "GET" && url.pathname.endsWith(`/events/${EVENT_ID}/registrations`)) {
         return json(registrationList());
       }
@@ -216,6 +218,7 @@ describe("group event registrations roster", () => {
     expect(badges).toHaveLength(3);
     expect(badges[0]).toContain("In-person");
     expect(badges[1]).toContain("Waitlisted");
+    expect(badges[1]).toContain("Venue pass");
     expect(badges[2]).toContain("Virtual");
     // The raw token never reaches the page.
     expect(container.textContent).not.toContain("in_person");
@@ -238,7 +241,7 @@ describe("group event registrations roster", () => {
       "All types",
       "In-person",
       "Virtual",
-      "On-demand",
+      "Livestream lounge",
     ]);
     await chooseColumnFilter(container, "Attendance type", "In-person");
     await settle();
@@ -393,7 +396,7 @@ describe("group event registration record", () => {
         method: "POST",
         body: {
           mode: "capacity_exempt",
-          reason: "Event manager approved in-person admission",
+          reason: "Event manager approved attendance admission",
           dayDates: ["2026-09-01"],
         },
       }),

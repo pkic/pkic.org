@@ -4,9 +4,17 @@ import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { parseLookupParams, StatusSummary } from "../../assets/ts/member-flows/application-status-page";
 import type { MembershipWorkflowProgress } from "../../assets/shared/schemas/membership-workflows";
+import { applicationStageNextStep } from "../../assets/shared/membership-application-next-steps";
 
 /** A real database identifier: the status schema rejects anything else. */
 const APPLICATION_ID = "0f7d1c1a4b7e4a1e9c2d3f4a5b6c7d8e";
+const statusFields = {
+  id: APPLICATION_ID,
+  membershipCategory: "H6",
+  membershipCategoryLabel: "Independent consultant",
+  createdAt: "2026-02-01T10:00:00.000Z",
+  stageEnteredAt: "2026-03-04T10:00:00.000Z",
+};
 const workflow: MembershipWorkflowProgress = {
   versionId: "1f7d1c1a4b7e4a1e9c2d3f4a5b6c7d8e",
   name: "Individual membership",
@@ -79,10 +87,8 @@ describe("StatusSummary", () => {
       render(
         <StatusSummary
           data={{
-            id: APPLICATION_ID,
+            ...statusFields,
             stage: stage as never,
-            createdAt: "2026-02-01T10:00:00.000Z",
-            stageEnteredAt: "2026-03-04T10:00:00.000Z",
             workflow: progress,
           }}
         />,
@@ -124,6 +130,12 @@ describe("StatusSummary", () => {
 
     expect(root.querySelectorAll(".pk-panel")).toHaveLength(1);
     expect(root.querySelectorAll(".membership-progress__step")).toHaveLength(2);
+    // Each step's state is expected progress: plain words, not a tone badge per step.
+    expect([...root.querySelectorAll(".membership-progress__state")].map((state) => state.textContent)).toEqual([
+      "In progress",
+      "Not started",
+    ]);
+    expect(root.querySelector(".membership-progress__steps .pk-badge")).toBeNull();
     expect(root.textContent).toContain("Required fee: $125.00");
     expect(root.textContent).toContain("Payment will be available after the previous requirements are complete.");
     expect(root.getAttribute("aria-label")).toBeNull();
@@ -146,6 +158,26 @@ describe("StatusSummary", () => {
     const root = mount("processing", ready);
     const link = root.querySelector<HTMLAnchorElement>('a[href="https://checkout.example.test/session"]');
     expect(link?.textContent).toContain("Pay membership fee");
+  });
+
+  it("names the applicant's category and how to reach the membership team", () => {
+    const root = mount("processing");
+    expect(root.querySelector("dl")?.textContent).toContain("H6 — Independent consultant");
+    expect(root.querySelector('a[href="/contact/"]')).not.toBeNull();
+  });
+
+  it.each(["submitted", "processing", "on_hold", "approved", "declined", "withdrawn"] as const)(
+    "says what happens next for a %s application",
+    (stage) => {
+      const root = mount(stage);
+      const heading = [...root.querySelectorAll("h3")].find((element) => element.textContent === "What happens next");
+      expect(heading?.nextElementSibling?.textContent).toBe(applicationStageNextStep(stage));
+    },
+  );
+
+  it("offers sign-in only once the application is approved", () => {
+    expect(mount("approved").querySelector('a[href="/portal/"]')).not.toBeNull();
+    expect(mount("processing").querySelector('a[href="/portal/"]')).toBeNull();
   });
 
   it("reads no Bootstrap class names", () => {
@@ -205,15 +237,10 @@ describe("application status page", () => {
       "fetch",
       vi.fn(() =>
         Promise.resolve(
-          new Response(
-            JSON.stringify({
-              id: APPLICATION_ID,
-              stage: "processing",
-              createdAt: "2026-02-01T10:00:00.000Z",
-              stageEnteredAt: "2026-03-04T10:00:00.000Z",
-            }),
-            { status: 200, headers: { "content-type": "application/json" } },
-          ),
+          new Response(JSON.stringify({ ...statusFields, stage: "processing" }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
         ),
       ),
     );
@@ -276,15 +303,9 @@ describe("application status page", () => {
         }),
       )
       .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            id: APPLICATION_ID,
-            stage: "on_hold",
-            createdAt: "2026-02-01T10:00:00.000Z",
-            stageEnteredAt: "2026-03-04T10:00:00.000Z",
-          }),
-          { headers: { "content-type": "application/json" } },
-        ),
+        new Response(JSON.stringify({ ...statusFields, stage: "on_hold" }), {
+          headers: { "content-type": "application/json" },
+        }),
       );
     vi.stubGlobal("fetch", fetchMock);
     await bootPage();

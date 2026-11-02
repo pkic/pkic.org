@@ -238,9 +238,9 @@ describe("event-owned recording source detail and acquisition catalog", () => {
       .bind(ordinaryId, f.now, f.now)
       .run();
     await env.DB.prepare(
-      `INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,
+      `INSERT INTO registrations(id,event_id,user_id,status,source_type,
         manage_link_secret,created_at,updated_at)
-       VALUES(?,?,?,'registered','in_person','direct',?,?,?)`,
+       VALUES(?,?,?,'registered','direct',?,?,?)`,
     )
       .bind(crypto.randomUUID(), f.eventId, ordinaryId, crypto.randomUUID(), f.now, f.now)
       .run();

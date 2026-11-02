@@ -5,6 +5,7 @@ import { CurrentUserActiveIdentityPut } from "./active";
 import { CurrentUserIdentitiesGet, CurrentUserIdentityPost } from "./index";
 import { CurrentUserIdentityPatch } from "./[identityId]";
 import { CurrentUserIdentityProfileGet, CurrentUserIdentityProfilePatch } from "./profile";
+import { CurrentUserIdentityPreviewPost } from "./preview";
 import {
   CurrentUserIdentityReinstatementConfirmationPost,
   CurrentUserIdentityReinstatementPost,
@@ -21,6 +22,7 @@ export const openapi = fromHono(app);
 
 openapi.get("/", CurrentUserIdentitiesGet);
 openapi.post("/", CurrentUserIdentityPost);
+openapi.post("/preview", CurrentUserIdentityPreviewPost);
 openapi.put("/active", CurrentUserActiveIdentityPut);
 openapi.get("/offer", CurrentUserAffiliationOfferGet);
 openapi.post("/offer/dismissals", CurrentUserAffiliationOfferDismissalPost);

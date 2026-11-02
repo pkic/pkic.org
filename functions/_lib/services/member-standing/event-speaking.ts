@@ -1,11 +1,13 @@
+import { eventReadIdSql, type EventReadSelection } from "../events/selection";
 import { STANDING_REASON_POINTS } from "../../../../assets/shared/member-standing";
 import { PROPOSAL_SPEAKER_ROLES } from "../../../../assets/shared/schemas/participant-roles";
 import type { DatabaseLike, StatementLike } from "../../types";
 
 /** Current agenda credits and all earlier automated awards share one source. */
-function speakingAdjustments(at: string, eventId: string | null, revisionIncrement: number, limit: number) {
+function speakingAdjustments(at: string, eventId: EventReadSelection | null, revisionIncrement: number, limit: number) {
+  const event = eventId === null ? { sql: "?", bindings: [null] } : eventReadIdSql(eventId);
   return {
-    sql: `WITH controls(at,event_id,revision_increment,row_limit,points,roles) AS (VALUES (?,?,?,?,?,?)),
+    sql: `WITH controls(at,event_id,revision_increment,row_limit,points,roles) AS (VALUES (?,${event.sql},?,?,?,?)),
     source_keys AS (
       SELECT speaker.occurrence_id,speaker.user_id,event.ends_at AS awarded_at
       FROM event_agenda_occurrence_speakers speaker
@@ -53,7 +55,7 @@ function speakingAdjustments(at: string, eventId: string | null, revisionIncreme
     ORDER BY awarded_at,occurrence_id,user_id LIMIT (SELECT row_limit FROM controls)`,
     bindings: [
       at,
-      eventId,
+      ...event.bindings,
       revisionIncrement,
       limit,
       STANDING_REASON_POINTS.event_spoke,
@@ -69,7 +71,7 @@ function speakingAdjustments(at: string, eventId: string | null, revisionIncreme
 export function prepareEventSpeakingStanding(
   db: DatabaseLike,
   at: string,
-  options: { eventId?: string; nextAgendaRevision?: boolean; limit?: number } = {},
+  options: { eventId?: EventReadSelection; nextAgendaRevision?: boolean; limit?: number } = {},
 ): StatementLike[] {
   const source = speakingAdjustments(
     at,

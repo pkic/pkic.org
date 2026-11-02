@@ -5,6 +5,8 @@ import { COUNTRIES } from "../countries";
 import { isAllowedProfileUrl } from "../../../shared/schemas/form-field-rules";
 import { ratingScale } from "../../../shared/form-answer-rules";
 import { Button } from "../../ui/Button";
+import { InputGroup } from "../../ui/InputGroup";
+import { TextInput as SharedTextInput } from "../../ui/TextControl";
 import { IconRemove } from "../../ui/MediaIcons";
 // The control classes — `pk-input`, `pk-input--select`, and the three-part
 // check block — are written here as class names rather than reached through
@@ -272,11 +274,10 @@ function TagPicker({ field, rules, initialValue }: { field: FormField; rules: Fi
       </div>
 
       {/* Text input + Add button */}
-      <div class="event-flow-tags-controls">
-        <input
+      <InputGroup>
+        <SharedTextInput
           ref={textRef}
           type="text"
-          class="pk-input"
           // The row's label points at this id. Without it the label named
           // nothing, because the field's value lives in a hidden input.
           id={`custom-${field.key}`}
@@ -298,7 +299,7 @@ function TagPicker({ field, rules, initialValue }: { field: FormField; rules: Fi
         <Button variant="secondary" onClick={() => addValue(inputValue)}>
           Add
         </Button>
-      </div>
+      </InputGroup>
 
       {/* Suggestion chips (shuffled to avoid bias) */}
       {shuffledOptions.length > 0 && (
@@ -407,7 +408,10 @@ function CountrySelect({ field, rules, geoHint }: { field: FormField; rules: Fie
         class="pk-input pk-input--select"
         id={`custom-${field.key}`}
         required={field.required}
-        onChange={() => setHintVisible(false)}
+        onChange={() => {
+          hintApplied.current = true;
+          setHintVisible(false);
+        }}
       >
         <option value="">{rules.placeholder ?? "Select your country"}</option>
         {COUNTRIES.map((c) => (

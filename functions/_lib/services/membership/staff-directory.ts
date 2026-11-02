@@ -12,7 +12,12 @@
  * question for a reader with no standing: active members, and none of the
  * category or status a staff reader needs.
  */
-import type { MembersListQuery, StaffMemberSummary } from "../../../../assets/shared/schemas/members-directory";
+import {
+  staffMemberSummarySchema,
+  type MembersListQuery,
+  type StaffMemberSummary,
+} from "../../../../assets/shared/schemas/members-directory";
+import { parseJsonSafe } from "../../utils/json";
 import { queryPage } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
@@ -35,6 +40,7 @@ interface StaffMemberRow {
   category_label: string;
   status: string;
   representative_count: number;
+  represented_organizations_json: string | null;
   member_since: string;
 }
 
@@ -61,6 +67,9 @@ function mapStaffMember(row: StaffMemberRow): StaffMemberSummary {
     membershipCategoryLabel: row.category_label,
     status: row.status as StaffMemberSummary["status"],
     representativeCount: row.representative_count,
+    representedOrganizations: staffMemberSummarySchema.shape.representedOrganizations.parse(
+      parseJsonSafe<unknown>(row.represented_organizations_json ?? "[]", []),
+    ),
     memberSince: row.member_since,
   };
 }
@@ -93,6 +102,33 @@ const REPRESENTATIVE_COUNT = `(
      AND identity.blocked_at IS NULL
 )`;
 
+/**
+ * An individual member's person also acting for an organization: their own
+ * organization identity, started and neither ended nor blocked. An ended
+ * representation is history, not a second standing.
+ */
+const ACTIVE_ORGANIZATION_REPRESENTATION = `FROM identities representation
+   WHERE representation.user_id = u.id
+     AND representation.organization_id IS NOT NULL
+     AND representation.started_at IS NOT NULL
+     AND representation.ended_at IS NULL
+     AND representation.blocked_at IS NULL`;
+
+const ALSO_REPRESENTS_ORGANIZATION = `(m.member_type = 'individual' AND EXISTS (SELECT 1 ${ACTIVE_ORGANIZATION_REPRESENTATION}))`;
+
+/** Bounds the organizations named on one row; a person rarely represents more than one or two. */
+const REPRESENTED_ORGANIZATIONS_LIMIT = 10;
+
+/** The organizations an individual member's person represents, as `[{id, name}]` by name. */
+const REPRESENTED_ORGANIZATIONS_JSON = `CASE WHEN m.member_type = 'individual' THEN (
+  SELECT json_group_array(json_object('id', represented.id, 'name', represented.name)) FROM (
+    SELECT DISTINCT organization.id, organization.name
+      FROM organizations organization
+     WHERE organization.id IN (SELECT representation.organization_id ${ACTIVE_ORGANIZATION_REPRESENTATION})
+     ORDER BY organization.name, organization.id
+     LIMIT ${REPRESENTED_ORGANIZATIONS_LIMIT}) represented
+) ELSE '[]' END`;
+
 export async function listStaffMembers(
   db: DatabaseLike,
   params: MembersListQuery,
@@ -118,6 +154,7 @@ export async function listStaffMembers(
   if (params.representatives) {
     conditions.push(`${REPRESENTATIVE_COUNT} ${params.representatives === "none" ? "= 0" : "> 0"}`);
   }
+  if (params.alsoRepresents === "organization") conditions.push(ALSO_REPRESENTS_ORGANIZATION);
   if (params.q) {
     const search = buildD1TextSearchFilter(params.q, ["o.name", "u.first_name", "u.last_name", "u.email"]);
     conditions.push(search.sql);
@@ -131,6 +168,7 @@ export async function listStaffMembers(
               o.logo_r2_key AS org_logo_r2_key, u.headshot_r2_key,
               u.first_name, u.last_name, u.email, mca.category_code, mc.label AS category_label, m.status,
               ${REPRESENTATIVE_COUNT} AS representative_count,
+              ${REPRESENTED_ORGANIZATIONS_JSON} AS represented_organizations_json,
               COALESCE(m.member_since, m.created_at) AS member_since`,
       fromSql,
       bindings,

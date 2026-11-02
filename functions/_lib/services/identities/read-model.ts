@@ -8,14 +8,15 @@ import {
 } from "../../../../assets/shared/schemas/identity";
 import { parseLinksJson } from "../../../../assets/shared/schemas/links";
 import { buildPageInfo, type PageInfo } from "../../../../assets/shared/schemas/pagination";
-import { queryPage } from "../../db/pagination";
+import { buildOffsetPageStatements, decodeOffsetPageResults } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
-import type { DatabaseLike } from "../../types";
+import type { DatabaseLike, D1StatementResult } from "../../types";
 import { publicUserHeadshotPath } from "../user-headshot";
 import { identityJobTitleSql } from "./affiliation-projection";
 
 interface IdentityReadRow {
+  state: ActingIdentity["state"];
   id: string;
   member_id: string | null;
   organization_id: string | null;
@@ -50,12 +51,9 @@ const SORT_EXPRESSIONS = {
   updated_at: "identity.updated_at",
 } satisfies Record<(typeof IDENTITY_SORT_COLUMNS)[number], string>;
 
-function identityState(row: IdentityReadRow): ActingIdentity["state"] {
-  if (row.blocked_at) return "blocked";
-  if (row.ended_at) return "ended";
-  if (row.started_at) return "active";
-  return "pending";
-}
+const IDENTITY_STATE_SQL = `CASE WHEN identity.blocked_at IS NOT NULL THEN 'blocked'
+  WHEN identity.ended_at IS NOT NULL THEN 'ended'
+  WHEN identity.started_at IS NOT NULL THEN 'active' ELSE 'pending' END`;
 
 function mapIdentity(row: IdentityReadRow): ActingIdentity {
   return actingIdentitySchema.parse({
@@ -73,7 +71,7 @@ function mapIdentity(row: IdentityReadRow): ActingIdentity {
     links: parseLinksJson(row.links_json),
     headshotUrl: publicUserHeadshotPath(row.user_id, row.headshot_r2_key),
     source: row.source,
-    state: identityState(row),
+    state: row.state,
     showOnOrganizationProfile: row.show_on_organization_profile === 1,
     invitedAt: persistedUtcInstant(row.invited_at),
     startedAt: persistedUtcInstant(row.started_at),
@@ -88,11 +86,11 @@ function mapIdentity(row: IdentityReadRow): ActingIdentity {
 
 type OrganizationContactUserIds = readonly [string | null, string | null, string | null];
 
-async function queryIdentities(
+export function prepareIdentitiesList(
   db: DatabaseLike,
   query: IdentitiesListQuery,
   scope: { organizationId?: string; userId?: string; contactUserIds?: OrganizationContactUserIds },
-): Promise<{ identities: ActingIdentity[]; page: PageInfo }> {
+) {
   const conditions: string[] = [];
   const bindings: unknown[] = [];
   if (scope.organizationId) {
@@ -128,7 +126,23 @@ async function queryIdentities(
     conditions.push("identity.organization_id = ?");
     bindings.push(query.organizationId);
   }
+  if (query.state) {
+    conditions.push(`(${IDENTITY_STATE_SQL}) = ?`);
+    bindings.push(query.state);
+  }
   if (query.organizationOnly) conditions.push("identity.organization_id IS NOT NULL");
+  if (query.identityId) {
+    conditions.push("identity.id=?");
+    bindings.push(query.identityId);
+  }
+  if (query.excludeOrganizationId) {
+    conditions.push("(identity.organization_id IS NULL OR identity.organization_id<>?)");
+    bindings.push(query.excludeOrganizationId);
+  }
+  if (query.excludeIdentityId) {
+    conditions.push("identity.id<>?");
+    bindings.push(query.excludeIdentityId);
+  }
   if (query.userId) {
     conditions.push("identity.user_id = ?");
     bindings.push(query.userId);
@@ -162,9 +176,9 @@ async function queryIdentities(
      AND selected_email.user_id = identity.user_id
      AND selected_email.verified_at IS NOT NULL
    ${conditions.length ? `WHERE ${conditions.join(" AND ")}` : ""}`;
-  const { rows, total } = await queryPage<IdentityReadRow>(db, {
+  const statements = buildOffsetPageStatements(db, {
     source: {
-      selectSql: `SELECT identity.id, capacity.member_id,
+      selectSql: `SELECT identity.id, ${IDENTITY_STATE_SQL} AS state, capacity.member_id,
         identity.organization_id, organization.name AS organization_name,
         capacity.membership_category, identity.user_id, user.first_name, user.last_name,
         COALESCE(selected_email.email, user.email) AS email,
@@ -180,8 +194,23 @@ async function queryIdentities(
     limit: query.limit,
     offset: query.offset,
   });
-  const identities = rows.map(mapIdentity);
-  return { identities, page: buildPageInfo(query.limit, query.offset, total, identities.length) };
+  return {
+    statements,
+    decode(loaded: D1StatementResult[]) {
+      const { rows, total } = decodeOffsetPageResults<IdentityReadRow>(loaded[0]!, loaded[1]!);
+      const identities = rows.map(mapIdentity);
+      return { identities, page: buildPageInfo(query.limit, query.offset, total, identities.length) };
+    },
+  };
+}
+
+async function queryIdentities(
+  db: DatabaseLike,
+  query: IdentitiesListQuery,
+  scope: { organizationId?: string; userId?: string; contactUserIds?: OrganizationContactUserIds },
+) {
+  const read = prepareIdentitiesList(db, query, scope);
+  return read.decode(await db.batch(read.statements));
 }
 
 export function listOrganizationIdentities(

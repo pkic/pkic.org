@@ -6,6 +6,7 @@ import { readSitePublicationSnapshot } from "../functions/_lib/services/site-pub
 import { describe, it, expect, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
+import { seedSessionAttendanceDays } from "./helpers/session-attendance-days";
 import { createAdminSession } from "./helpers/auth";
 import { callApi } from "./helpers/app";
 import { staffingFixture } from "./helpers/agenda-staffing";
@@ -560,10 +561,8 @@ describe("agenda platform", () => {
     )
       .bind(excludedId, '{"sessionKey":null}', admin.id, "2026-10-03T10:00:00.000Z")
       .run();
-    await env.DB.prepare(
-      "INSERT INTO event_agenda_promotion_copy(occurrence_id,copy_json,updated_by,updated_at) VALUES(?,?,?,?)",
-    )
-      .bind(excludedId, '{"title":null}', admin.id, "2026-10-03T10:00:00.000Z")
+    await env.DB.prepare("UPDATE event_agenda_occurrences SET promotion_copy_json=? WHERE id=?")
+      .bind('{"title":null}', excludedId)
       .run();
     const page = await callApi(env, "/api/v1/events/pqc-2026/agenda/occurrences?q=Requested&limit=1", {
       headers: { authorization: `Bearer ${token}` },
@@ -785,9 +784,10 @@ describe("agenda platform", () => {
           "INSERT INTO users(id,email,normalized_email,active,created_at,updated_at) VALUES(?,?,?,1,?,?)",
         ).bind(userId, `${userId}@example.test`, `${userId}@example.test`, now, now),
         env.DB.prepare(
-          "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','in_person','synthetic',?,?,?)",
+          "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','synthetic',?,?,?)",
         ).bind(crypto.randomUUID(), eventId, userId, crypto.randomUUID(), now, now),
       ]);
+    await seedSessionAttendanceDays(env.DB, eventId, ["2026-12-01"]);
     let snapshot = await createAgendaOccurrence(
       env.DB,
       eventId,

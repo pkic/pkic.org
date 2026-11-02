@@ -73,7 +73,7 @@ export function normalizeValidation(error: unknown): ValidationState {
       fields[path] ??= issue.message;
     }
     return {
-      globalMessage: flat.formErrors[0] ?? "Please correct the highlighted fields.",
+      globalMessage: flat.formErrors[0] ?? Object.values(fields)[0] ?? "Please correct the highlighted fields.",
       fields,
     };
   }

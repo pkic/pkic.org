@@ -80,7 +80,7 @@ export function useRoleAssignment({
     }
     const checked = form.submit();
     if (!checked.data) {
-      setFormError(checked.message);
+      setFormError(checked.formMessage);
       return;
     }
     setSubmitting(true);

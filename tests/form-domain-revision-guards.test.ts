@@ -59,13 +59,18 @@ function editFormBeforeCommit(formId: string): DatabaseLike {
 
 async function prepareRegistration(eventId: string, answer: string) {
   const event = await getEventById(env.DB as unknown as DatabaseLike, eventId);
+  await env.DB.prepare(
+    "INSERT INTO event_days(id,event_id,day_date,created_at,updated_at) VALUES(?,?,'2026-12-01',?,?)",
+  )
+    .bind(crypto.randomUUID(), eventId, new Date().toISOString(), new Date().toISOString())
+    .run();
   return prepareValidatedAttendeeRegistration(
     env.DB as unknown as DatabaseLike,
     {
       firstName: "Form",
       lastName: "Attendee",
       email: "form-attendee@example.test",
-      attendanceType: "virtual",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
       customAnswers: { answer },
       consents: [
         { termKey: "privacy-policy", version: "v1" },
@@ -216,7 +221,6 @@ describe("form revision guards on registration and proposal commands", () => {
         actorUserId: prepared.user.id,
         body: {
           action: "update",
-          attendanceType: "virtual",
           customAnswers: { answer: "stale registration answer" },
         },
         appBaseUrl: "https://app.test",
@@ -255,7 +259,6 @@ describe("form revision guards on registration and proposal commands", () => {
       actorUserId: prepared.user.id,
       body: {
         action: "update",
-        attendanceType: "virtual",
         customAnswers: { answer: "current registration answer" },
       },
       appBaseUrl: "https://app.test",

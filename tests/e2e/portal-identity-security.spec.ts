@@ -13,13 +13,13 @@
  */
 import { expect, test } from "@playwright/test";
 import {
-  ownEmailAddressResponseSchema,
+  ownEmailVerificationRequestedResponseSchema,
   ownEmailAddressUpdateSchema,
   ownEmailAddressesListResponseSchema,
 } from "../../assets/shared/schemas/own-email-addresses";
 import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-auth";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
-import { openEmailSignIn, openMyProfile, signInToPortal } from "./helpers/portal-auth";
+import { declinePasskeyOffer, openEmailSignIn, openMyProfile, signInToPortal } from "./helpers/portal-auth";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
 import { ensureAppOrigin, uniqueSuffix } from "./helpers/membership";
 
@@ -28,11 +28,28 @@ async function requestSignInLink(page: import("@playwright/test").Page, email: s
   await page.goto("/portal/");
   await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toBeVisible({ timeout: 10_000 });
   await openEmailSignIn(page);
-  await page.getByLabel("Work email").fill(email);
+  await page.getByLabel("Email").fill(email);
   const since = await capturedEmailCount();
   await page.getByRole("button", { name: "Send sign-in link" }).click();
   const message = await waitForCapturedEmail(email, "sign-in link", { since });
   return extractEmailUrl(message, "/portal/");
+}
+
+/**
+ * Opens a sign-in capability the way a person opens it from their mail: as a fresh page load.
+ *
+ * From the portal itself, the link is a hash-only navigation that does not rerun the one-time verifier, and a reload
+ * on top of it can cancel the first redemption so that the second is refused as already used. Leaving the document
+ * first loads the link once, and the redemption's own response is the condition to wait for.
+ */
+async function openSignInLink(page: import("@playwright/test").Page, link: string) {
+  await page.goto("about:blank");
+  const redeemed = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/api/v1/auth/verify-link" && response.request().method() === "POST",
+  );
+  await page.goto(link);
+  return redeemed;
 }
 
 test("sign-in capabilities require address permission, revoke with it, and cannot be replayed", async ({
@@ -44,9 +61,9 @@ test("sign-in capabilities require address permission, revoke with it, and canno
 
   const link = await requestSignInLink(page, email);
 
-  await page.goto(link);
-  await page.reload();
-  await expect(page.locator("#portal-root")).toBeVisible({ timeout: 15_000 });
+  const redeemed = await openSignInLink(page, link);
+  expect(redeemed.status(), await redeemed.text()).toBe(200);
+  await declinePasskeyOffer(page);
   await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toHaveCount(0);
 
   // The same link, in a browser that never held a session. Redeeming a
@@ -55,8 +72,8 @@ test("sign-in capabilities require address permission, revoke with it, and canno
     .browser()!
     .newContext()
     .then((c) => c.newPage());
-  await replayPage.goto(link);
-  await replayPage.reload();
+  const replayed = await openSignInLink(replayPage, link);
+  expect(replayed.ok(), "a used capability must be refused").toBe(false);
   await expect(replayPage.getByRole("button", { name: "Sign in with a passkey" })).toBeVisible({ timeout: 15_000 });
   const replaySession = await replayPage.evaluate(async () => {
     const response = await fetch("/api/v1/auth/session", { credentials: "same-origin" });
@@ -78,8 +95,12 @@ test("sign-in capabilities require address permission, revoke with it, and canno
       new URL(response.url()).pathname === "/api/v1/users/current/emails" && response.request().method() === "POST",
   );
   await page.getByRole("button", { name: "Send verification link", exact: true }).click();
-  const added = ownEmailAddressResponseSchema.parse(await (await addedResponse).json()).email;
-  expect(added.signInEnabled).toBe(false);
+  const requested = ownEmailVerificationRequestedResponseSchema.parse(await (await addedResponse).json());
+  expect(requested.status).toBe("verification_sent");
+  const pending = ownEmailAddressesListResponseSchema.parse(
+    await (await page.request.get("/api/v1/users/current/emails")).json(),
+  );
+  expect(pending.emails.some((address) => address.email === aliasEmail)).toBe(false);
   const verification = await waitForCapturedEmail(aliasEmail, "Verify your email address", { since });
   const proofPage = await context.newPage();
   await proofPage.goto(extractEmailUrl(verification, "/portal/"));
@@ -89,7 +110,8 @@ test("sign-in capabilities require address permission, revoke with it, and canno
   const addresses = ownEmailAddressesListResponseSchema.parse(
     await (await page.request.get("/api/v1/users/current/emails")).json(),
   );
-  expect(addresses.emails.find((address) => address.id === added.id)).toMatchObject({
+  const added = addresses.emails.find((address) => address.email === aliasEmail)!;
+  expect(added).toMatchObject({
     verifiedAt: expect.any(String),
     signInEnabled: false,
   });
@@ -115,7 +137,8 @@ test("sign-in capabilities require address permission, revoke with it, and canno
   } finally {
     await aliasContext.close();
   }
-  expect((await page.request.delete(path)).status()).toBe(200);
+  const removed = await page.request.delete(path);
+  expect(removed.status(), await removed.text()).toBe(200);
 });
 
 test("the capability is removed from the address bar and not left in history", async ({ page }) => {
@@ -126,9 +149,9 @@ test("the capability is removed from the address bar and not left in history", a
   const capability = new URL(link).hash;
   expect(capability, "the sign-in mail must carry a capability fragment").toContain("verify");
 
-  await page.goto(link);
-  await page.reload();
-  await expect(page.locator("#portal-root")).toBeVisible({ timeout: 15_000 });
+  const redeemed = await openSignInLink(page, link);
+  expect(redeemed.status(), await redeemed.text()).toBe(200);
+  await declinePasskeyOffer(page);
 
   // The token must not survive in the address bar, where it would be shoulder
   // -surfable, copied into a bug report, or synced to another device.
@@ -164,6 +187,8 @@ for (const withoutRandomUUID of [false, true]) {
     await page.getByRole("button", { name: "Account menu" }).click();
     await page.getByRole("menuitem", { name: "Sign out" }).click();
     await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toBeVisible({ timeout: 15_000 });
+    // The device signs out first and then ends the session on the server; the notice changes once the server has.
+    await expect(page.getByText("You are signed out.", { exact: true })).toBeVisible({ timeout: 15_000 });
 
     // Replay the original cookie to prove server revocation. The request context
     // survives the sign-out navigation and does not confuse a cleared cookie with revocation.
@@ -194,9 +219,9 @@ test("a membership join capability cannot be redeemed as a portal sign-in", asyn
   const joinToken = new URLSearchParams(new URL(joinUrl).hash.slice(1)).get("verify");
   expect(joinToken).toBeTruthy();
 
-  // Present it where a portal sign-in capability is expected.
-  await page.goto(`/portal/#verify=${encodeURIComponent(joinToken!)}`);
-  await page.reload();
+  // Present it where a portal sign-in capability is expected, in the portal's own sign-in link form.
+  const presented = await openSignInLink(page, `/portal/#/verify?token=${encodeURIComponent(joinToken!)}`);
+  expect(presented.ok(), "a join capability must be refused as a sign-in").toBe(false);
   await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toBeVisible({ timeout: 15_000 });
   const session = await page.evaluate(async () => {
     const response = await fetch("/api/v1/auth/session", { credentials: "same-origin" });

@@ -32,7 +32,7 @@ function MigrationConfirmation({ preview, onCancel }: { preview: Preview; onCanc
   async function submit(event: Event) {
     event.preventDefault();
     const checked = form.submit();
-    if (!checked.data) return setError(checked.message);
+    if (!checked.data) return setError(checked.formMessage ?? "");
     if (busy) return;
     setBusy(true);
     try {
@@ -103,7 +103,7 @@ export function WorkflowMigrationCard({ applicationId }: { applicationId: string
   async function inspect(event: Event) {
     event.preventDefault();
     const checked = form.submit();
-    if (!checked.data) return setError(checked.message);
+    if (!checked.data) return setError(checked.formMessage ?? "");
     if (busy) return;
     setBusy(true);
     try {

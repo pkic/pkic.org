@@ -7,6 +7,15 @@ description: Build, change, or review PKIC Worker routes, services, D1 queries, 
 
 Apply this skill during ordinary implementation, not only performance investigations. Read the scoped `AGENTS.md` first. Extend canonical domain queries and planners rather than adding a second persistence or authorization model.
 
+## Minimize stored data and independent state
+
+- Before adding a table or column, inspect the existing schema, canonical read/write paths, and shared flows. Reuse or evolve them when they already represent the same responsibility. A new screen, endpoint, or implementation version does not justify another data model.
+- Keep one authoritative source for each fact. Reference canonical records through keys and project values through joins or shared read models instead of copying data into feature tables, JSON, snapshots, or overrides that must be synchronized.
+- Every new stored value needs a concrete product, integrity, or reliable-execution requirement. Challenge whether it can be derived or carried through an existing signed challenge instead. Do not persist speculative features, convenient history, or archive copies by default.
+- Distinguish necessary state from duplication: an immutable publication, an artifact cache, or a durable retry request may be justified, but specify its owner, purpose, invalidation or expiry, and failure recovery. Do not introduce a second queue or lifecycle for the same work merely to support a new caller.
+- A storage replacement must account for unfinished work and remove superseded storage and callers in the coordinated cutover. Do not silently abandon an old queue or retain it as an archive. Preserve canonical business records and follow the migration approval and recovery rules.
+- Prefer the smallest coherent model, not the smallest table count. Do not hide independent entities in unrelated tables, unbounded JSON, audit logs, or delivery records to avoid a justified table. Explain why existing storage cannot satisfy each proposed addition before implementing it.
+
 ## Design the whole request
 
 - Target **at most one D1 binding round trip per complete HTTP request**, including authentication, authorization, resource resolution, response projection, and request-owned background work. A preflight batch followed by a mutation batch is two calls; one call per helper does not meet the request target.
@@ -49,3 +58,16 @@ Compare equivalent journeys and datasets before and after changes. Use Worker pr
 Report the complete request count separately from any preflight or sub-operation count, SQL statement count, and elapsed time. State the instrumented coverage and remaining violations. Local batching results do not establish production geographic latency or completion of the platform-wide audit.
 
 For D1 API semantics or limits, verify current [Cloudflare binding documentation](https://developers.cloudflare.com/d1/worker-api/d1-database/) rather than freezing provider limits in this skill.
+
+## Text integrity and canonical profile corrections
+
+- Decode text bytes as UTF-8 exactly once at transport/import boundaries; reject malformed UTF-8 rather than replacing bytes or treating them as Latin-1. Base64 is a byte encoding, so use the shared capability payload codec for JSON instead of applying `atob`/`btoa` directly to Unicode text.
+- Use `firstNameSchema`, `lastNameSchema`, and `personNamePatchSchema` for naming writes across registration, proposals, own-profile editing, staff editing, and import/service entry points. Normalize canonical Unicode equivalents at the write boundary, preserve combining marks and supported joining characters, and do not normalize while the user types.
+- Read models must still expose legacy invalid values so their owner or authorized staff can correct them. Never silently reinterpret a name as another character encoding, broaden one endpoint's validation to bypass another, or copy corrected names into feature records.
+- A correction updates the canonical user through prepared profile statements, with live ownership/authorization guards, audit, and derived-artwork invalidation in the same atomic command. An email string or caller-supplied user ID is not authority; a scoped proof must be verified and rechecked against current ownership inside the batch.
+- Test round trips for accented, decomposed, and non-Latin names; rejection of malformed encodings and unsupported characters; recovery from invalid saved data; and refusal of wrong-user, wrong-event, expired, or stale proof. Use fully synthetic fixtures. Never reuse customer names, email addresses, or other personal details from support reports, including partially renamed versions. Production data repairs require a reviewed target set and separate authorization; a code fix does not justify a bulk name rewrite.
+
+## Verified email changes and representations
+
+- Reuse the shared verified-domain organization chooser for registration and account email changes. A local-part correction preserves the representation. A domain change requires proof of the new mailbox and an explicit organization selection (or the individual identity for a personal mailbox).
+- End a domain-backed representation only after the new address is verified and no other verified address on the account supports that organization. Unverified aliases never preserve or grant representation access. Keep the promotion, identity selection, access revocation, audit, and outbox in the same guarded atomic command; no additional tables or copied profile fields.

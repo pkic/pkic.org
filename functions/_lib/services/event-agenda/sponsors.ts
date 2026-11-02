@@ -8,7 +8,6 @@ import { buildPublicSponsorReadModel, publicSponsorFromRow, type SponsorRow } fr
 import { buildD1TextSearchFilter } from "../../db/search";
 import { queryPage, batchRows } from "../../db/pagination";
 import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
-import { all } from "../../db/queries";
 import { prepareAuthorizationGuard } from "../../db/authorization-guard";
 import { AppError } from "../../errors";
 import type { DatabaseLike, D1StatementResult } from "../../types";
@@ -209,16 +208,45 @@ export async function prepareAgendaSponsorBrandingRead(db: DatabaseLike, eventId
 }
 
 async function prepareSponsorBrandingRead(db: DatabaseLike, sql: string, bindings: readonly unknown[]) {
-  const rows = await all<AgendaSponsorRow>(db, `${sql} LIMIT ${BADGE_TEMPLATE_SPONSOR_LOGOS_MAX_COUNT + 1}`, [
-    ...bindings,
-  ]);
-  if (rows.length > BADGE_TEMPLATE_SPONSOR_LOGOS_MAX_COUNT)
-    throw new AppError(422, "BADGE_SPONSOR_LIMIT", "Use at most 40 sponsors in one badge template.");
+  const read = prepareSponsorBrandingSnapshot(db, sql, bindings);
+  return read.decode(await db.batch(read.statements));
+}
+function prepareSponsorBrandingSnapshot(db: DatabaseLike, sql: string, bindings: readonly unknown[]) {
   return {
-    rows,
-    guard: prepareAuthorizationGuard(db, {
-      sql: `SELECT 1 WHERE (SELECT json_group_array(json(source_json)) FROM (${sql}))=?`,
-      bindings: [...bindings, JSON.stringify(rows.map((row) => JSON.parse(row.source_json)))],
-    }),
+    statements: [db.prepare(`${sql} LIMIT ${BADGE_TEMPLATE_SPONSOR_LOGOS_MAX_COUNT + 1}`).bind(...bindings)],
+    decode(loaded: D1StatementResult[]) {
+      const rows = batchRows<AgendaSponsorRow>(loaded[0]);
+      if (rows.length > BADGE_TEMPLATE_SPONSOR_LOGOS_MAX_COUNT)
+        throw new AppError(422, "BADGE_SPONSOR_LIMIT", "Use at most 40 sponsors in one badge template.");
+      return {
+        rows,
+        guard: prepareAuthorizationGuard(db, {
+          sql: `SELECT 1 WHERE (SELECT json_group_array(json(source_json)) FROM (${sql}))=?`,
+          bindings: [...bindings, JSON.stringify(rows.map((row) => JSON.parse(row.source_json)))],
+        }),
+      };
+    },
   };
+}
+
+/** The configured tier selection is SQL-owned so it composes with an unresolved event slug. */
+export function prepareConfiguredSponsorBranding(db: DatabaseLike, eventId: EventReadSelection, consortium = false) {
+  const scope = eventReadIdSql(eventId);
+  const selected = `SELECT json_extract(value,'$.tierName') FROM events configured, json_each(COALESCE(json_extract(configured.settings_json,'$.promotionDesign.sponsorGroups'),json_extract(configured.settings_json,'$.badgeTemplate.sponsorGroups'),'[]')) WHERE configured.id=${scope.sql} AND COALESCE(json_extract(value,'$.source'),'event')=?`;
+  if (!consortium) {
+    const read = source(eventId);
+    return prepareSponsorBrandingSnapshot(
+      db,
+      `${read.sql} AND (EXISTS(SELECT 1 FROM events configured WHERE configured.id=${scope.sql} AND COALESCE(json_extract(configured.settings_json,'$.promotionDesign.sponsorSource'),'event')='event') OR public.event_tier IN(${selected})) ORDER BY sp.id`,
+      [...read.bindings, ...scope.bindings, ...scope.bindings, "event"],
+    );
+  }
+  const read = buildPublicSponsorReadModel(typeof eventId === "string" ? { eventId } : { eventSlug: eventId.slug });
+  return prepareSponsorBrandingSnapshot(
+    db,
+    `${read.sql} SELECT public.id,public.name,public.website,public.logo_r2_key,public.sponsorship_logo_r2_key,public.tier,public.event_tier,public.effective_tier,catalog.display_weight AS effective_weight, public.id AS sponsor_id,
+    json_object('publicId',public.id,'name',public.name,'website',public.website,'logo',public.logo_r2_key,'sponsorLogo',public.sponsorship_logo_r2_key,'tier',public.tier,'weight',catalog.display_weight) AS source_json
+    FROM enriched_sponsors public JOIN sponsorship_tier_catalog catalog ON catalog.sponsor_type='consortium' AND catalog.tier=public.tier AND catalog.active=1 AND catalog.display_weight>0 WHERE public.tier IN(${selected}) ORDER BY public.name,public.id`,
+    [...read.bindings, ...scope.bindings, "consortium"],
+  );
 }

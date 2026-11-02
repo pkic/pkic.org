@@ -27,7 +27,12 @@
     border-top: 1px solid var(--pk-line);
   }
 
-  .pk-day-status__row[data-kind="waiting"] {
+  .pk-day-status__row[data-icon="none"] {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .pk-day-status__row[data-kind="waiting"],
+  .pk-day-status__row[data-kind="expired"] {
     border-left-color: var(--pk-warn);
     background: var(--pk-warn-soft);
   }
@@ -57,7 +62,8 @@
     color: var(--pk-accent-ink);
   }
 
-  .pk-day-status__row[data-kind="waiting"] .pk-day-status__icon {
+  .pk-day-status__row[data-kind="waiting"] .pk-day-status__icon,
+  .pk-day-status__row[data-kind="expired"] .pk-day-status__icon {
     background: var(--pk-surface);
     color: var(--pk-warn-ink);
   }

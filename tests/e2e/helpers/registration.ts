@@ -1,10 +1,5 @@
 import { expect, type Page } from "@playwright/test";
-import {
-  EMAIL_FIRST_COPY,
-  ORGANIZATION_JOB_TITLE_COPY,
-  REGISTRATION_IDENTITY_COPY,
-  REGISTRATION_ORGANIZATION_COPY,
-} from "../../../assets/shared/email-first-copy";
+import { EMAIL_FIRST_COPY, ORGANIZATION_JOB_TITLE_COPY } from "../../../assets/shared/email-first-copy";
 import {
   registrationCreateSchema,
   registrationSubmissionResponseSchema,
@@ -21,6 +16,10 @@ const copy = EMAIL_FIRST_COPY.registration;
 export interface RegistrationOrganization {
   organization?: string;
   jobTitle?: string;
+  onContactReady?: (page: Page) => Promise<void>;
+  onReviewReady?: (page: Page) => Promise<void>;
+  onAttendanceReady?: (page: Page) => Promise<void>;
+  onProfileReady?: (page: Page) => Promise<void>;
 }
 
 /**
@@ -29,17 +28,23 @@ export interface RegistrationOrganization {
  * form must ask nothing.
  */
 async function answerOrganization(page: Page, values: RegistrationOrganization): Promise<void> {
-  const asked = page.getByRole("textbox", { name: REGISTRATION_ORGANIZATION_COPY.nameLabel });
-  if (!values.organization) {
-    await expect(asked).toHaveCount(0);
-    return;
+  const chooser = page.getByRole("combobox", { name: /^Organization/ });
+  if (values.organization) {
+    const matching = chooser.getByRole("option", { name: values.organization, exact: true });
+    const name = page.getByRole("textbox", { name: /^Organization name/ });
+    if (await name.isVisible()) await name.fill(values.organization);
+    else if ((await chooser.count()) && (await matching.count()))
+      await chooser.selectOption({ label: values.organization });
+    else {
+      await page.getByRole("button", { name: "Add organization", exact: true }).click();
+      const dialog = page.getByRole("dialog", { name: "Add organization", exact: true });
+      await dialog.getByRole("textbox", { name: /^Organization name/ }).fill(values.organization);
+      await dialog.getByRole("button", { name: "Use organization", exact: true }).click();
+      await expect(dialog).not.toBeVisible();
+    }
   }
-  if ((await asked.count()) === 0) return;
-  await expect(page.getByText(REGISTRATION_ORGANIZATION_COPY.question, { exact: true })).toBeVisible();
-  await asked.fill(values.organization);
-  await page
-    .getByRole("textbox", { name: ORGANIZATION_JOB_TITLE_COPY.label })
-    .fill(values.jobTitle ?? "Conference attendee");
+  const title = page.getByRole("textbox", { name: ORGANIZATION_JOB_TITLE_COPY.label });
+  if (await title.count()) await title.fill(values.jobTitle ?? "Conference attendee");
 }
 
 /**
@@ -72,6 +77,7 @@ export async function continueRegistrationWithEmail(
     await contact.getByLabel("Last name").fill(values.lastName ?? "Attendee");
   }
   await answerOrganization(page, values);
+  await values.onContactReady?.(page);
   await next.click();
 }
 
@@ -98,11 +104,7 @@ export async function confirmRegistration(
 ): Promise<void> {
   const confirm = page.getByRole("button", { name: /Confirm my registration/i });
   await expect(confirm).toBeVisible();
-  const asked = page.getByRole("textbox", { name: REGISTRATION_ORGANIZATION_COPY.nameLabel });
-  if (organization) {
-    await asked.fill(organization);
-    await page.getByRole("textbox", { name: ORGANIZATION_JOB_TITLE_COPY.label }).fill(jobTitle);
-  } else await expect(asked).toHaveCount(0);
+  await answerOrganization(page, { organization, jobTitle });
   await confirm.click();
 }
 
@@ -124,27 +126,32 @@ export async function registerInBrowser(
     const contact = page.locator("[data-registration-contact]");
     await contact.getByLabel(copy.work.label).fill(email);
     await contact.getByRole("button", { name: copy.work.action, exact: true }).click();
-    await expect(contact).toContainText("Event");
-    const representing = contact.getByText(REGISTRATION_IDENTITY_COPY.representing(identityName), { exact: true });
-    if ((await representing.count()) === 0) {
-      const other = contact.getByRole("button", { name: REGISTRATION_IDENTITY_COPY.chooseOther, exact: true });
-      if ((await other.count()) > 0) await other.click();
-      const picker = page.getByRole("combobox", { name: "Event identity", exact: true });
-      await picker.fill(identityName);
-      await page.getByRole("option", { name: identityName, exact: true }).click();
+    await expect(contact.getByText("Representation", { exact: true })).toBeVisible();
+    const change = contact.getByRole("button", { name: "Change representation", exact: true });
+    if (await change.count()) {
+      await change.click();
+      const chooser = page.getByRole("dialog", { name: "Change representation", exact: true });
+      const picker = chooser.getByRole("combobox", { name: "Representation", exact: true });
+      await picker.click();
+      await page.getByRole("option").filter({ hasText: identityName }).click();
+      await chooser.getByRole("button", { name: "Use representation", exact: true }).click();
+      await expect(chooser).not.toBeVisible();
+    } else {
+      await expect(contact).toContainText(identityName);
     }
     await page.locator("[data-event-registration] [data-step-next]").click();
   } else {
     await continueRegistrationWithEmail(page, { email, ...options });
   }
-  for (const day of ["2026-12-01", "2026-12-02", "2026-12-03"]) {
-    await page.locator(`label[for="dayAttendance-${day}-on_demand"]`).click();
-  }
+  await options.onAttendanceReady?.(page);
+  await page.getByRole("button", { name: /^Choose On[- ]demand for every available day$/ }).click();
   await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await options.onProfileReady?.(page);
   await page.getByLabel("Country", { exact: true }).selectOption("US");
-  // A registration carries no organization of its own: it shows the chosen identity, else the affiliation.
-  await expect(page.getByLabel("Organization", { exact: true })).toHaveCount(0);
+  // Organization belongs to the shared contact/representation flow, not the additional profile questions.
+  await expect(page.locator('[data-step-panel="3"]').getByLabel("Organization", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await options.onReviewReady?.(page);
   for (const term of [/privacy policy/i, /code of conduct/i, /photos and videos/i]) {
     await page.getByRole("checkbox", { name: term }).check();
   }

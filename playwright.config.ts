@@ -21,6 +21,8 @@ export default defineConfig({
   // Whole-site republication variants are an explicit audit, not routine UI CI.
   grepInvert: /@publication/,
   timeout: 120_000,
+  // Several shards share one machine, so a portal screen can take longer than Playwright's five-second default to settle.
+  expect: { timeout: 15_000 },
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
@@ -74,18 +76,16 @@ export default defineConfig({
     // Twenty seconds still leaves ample room for a real Worker-backed action.
     actionTimeout: process.env.CI ? 20_000 : 0,
     /*
-     * Recorded only for the runs that need explaining. `video: "on"` wrote a
-     * film of all 111 tests every run — 280MB a run into the system temp
-     * directory, which is on the internal disk and is what ran it out of space
-     * mid-suite, taking the test server down with it. A passing test's video
-     * is watched by nobody.
+     * Opt in to what slows a run down. A film of every test, and a pause after every action, make a
+     * suite that should take minutes take hours; nobody watches a passing test. Set PWVIDEO=1 to
+     * keep a video of each failing test, and PWSLOW=<milliseconds> to pause after each action when
+     * watching a run. Screenshots and traces of failures are always kept.
      */
-    video: "retain-on-failure",
+    video: process.env.PWVIDEO ? "retain-on-failure" : "off",
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
-    // Slow down actions locally so each step is visible; set PWSLOW=0 to disable.
     launchOptions: {
-      slowMo: process.env.CI ? 0 : Number(process.env.PWSLOW ?? 800),
+      slowMo: process.env.CI ? 0 : Number(process.env.PWSLOW ?? 0),
     },
   },
   reporter: process.env.CI ? [["line"], ["html", { open: "never" }]] : "line",

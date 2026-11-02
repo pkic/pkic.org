@@ -30,7 +30,7 @@ function json(value: unknown, status = 200): Response {
   return new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
 }
 
-function installApi(): Captured[] {
+function installApi(workEmail = false, scheduled = true): Captured[] {
   const requests: Captured[] = [];
   vi.stubGlobal(
     "fetch",
@@ -55,7 +55,17 @@ function installApi(): Captured[] {
               },
             ],
             allowedSessionTypes: [],
-            eventDays: [],
+            eventDays: scheduled
+              ? [
+                  {
+                    dayDate: "2026-12-01",
+                    label: "Day one",
+                    sortOrder: 0,
+                    inPersonCapacity: null,
+                    attendanceOptions: [{ value: "virtual", label: "Online" }],
+                  },
+                ]
+              : [],
           }),
         );
       if (url.pathname === "/api/v1/auth/session")
@@ -65,10 +75,26 @@ function installApi(): Captured[] {
         return Promise.resolve(
           json(
             registrationEmailProofVerifyResponseSchema.parse({
-              email: "ada@gmail.com",
-              unaffiliatedAttestation: true,
+              email: workEmail ? "attendee@example.test" : "ada@gmail.com",
+              unaffiliatedAttestation: !workEmail,
               person: null,
-              asksOrganization: false,
+              asksOrganization: workEmail,
+              affiliation: workEmail
+                ? {
+                    email: "attendee@example.test",
+                    domain: "example.test",
+                    domains: [{ domain: "example.test", canLink: false, organizationName: "Example organization" }],
+                    organization: { id: "00000000-0000-4000-8000-000000000044", name: "Example organization" },
+                    organizations: [
+                      {
+                        id: "00000000-0000-4000-8000-000000000044",
+                        name: "Example organization",
+                        identityId: null,
+                        jobTitle: null,
+                      },
+                    ],
+                  }
+                : null,
             }),
           ),
         );
@@ -116,10 +142,10 @@ afterEach(() => {
   window.history.replaceState({}, "", "/");
 });
 
-async function loadPage(): Promise<Captured[]> {
+async function loadPage(workEmail = false, scheduled = true): Promise<Captured[]> {
   document.body.innerHTML = renderToString(<EventRegistrationForm />);
   document.querySelector<HTMLElement>("[data-event-registration]")!.dataset.eventSlug = "pqc-2026";
-  const requests = installApi();
+  const requests = installApi(workEmail, scheduled);
   await act(async () => {
     await import("../../assets/ts/event-flows/registration-page");
   });
@@ -128,6 +154,14 @@ async function loadPage(): Promise<Captured[]> {
 }
 
 describe("registration email-first entry", () => {
+  it("explains that registration is unavailable until event days are scheduled", async () => {
+    const requests = await loadPage(false, false);
+    expect(document.body.textContent).toContain("Registration opens when the event days are scheduled.");
+    expect(document.querySelector('[aria-label="Registration progress"]')).toBeNull();
+    expect(document.querySelector<HTMLInputElement>('input[type="email"]')).toBeNull();
+    expect(requests.some((request) => request.path === REGISTRATIONS)).toBe(false);
+  });
+
   it("opens on the email alone and sends a verification link before asking anything else", async () => {
     const requests = await loadPage();
     const next = document.querySelector<HTMLButtonElement>("[data-step-next]")!;
@@ -152,6 +186,34 @@ describe("registration email-first entry", () => {
     expect(next.hidden).toBe(true);
   });
 
+  it("does not validate on arrival and focuses missing contact fields before the job title", async () => {
+    history.replaceState({}, "", "/events/2026/pqc-2026/register/#verify=synthetic-proof-0123456789abcdefghijklmnop");
+    await loadPage(true);
+    const first = controlFor(document.body, "First name");
+    const last = controlFor(document.body, "Last name");
+    const title = controlFor(document.body, "Job title");
+    expect(document.querySelector('[aria-invalid="true"]')).toBeNull();
+    expect(document.activeElement).not.toBe(title);
+    const next = document.querySelector<HTMLButtonElement>("[data-step-next]")!;
+    await act(() => next.click());
+    await settle();
+    expect(document.activeElement).toBe(first);
+    expect(title.getAttribute("aria-invalid")).not.toBe("true");
+    for (const [control, value] of [
+      [first, "Test"],
+      [last, "Attendee"],
+    ] as const) {
+      await act(() => {
+        control.value = value;
+        control.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    }
+    await act(() => next.click());
+    await settle();
+    expect(document.activeElement).toBe(title);
+    expect(title.getAttribute("aria-invalid")).toBe("true");
+  });
+
   it("continues from the opened link and registers with the proof and the chosen capacity", async () => {
     window.history.replaceState(
       {},
@@ -167,11 +229,17 @@ describe("registration email-first entry", () => {
       ["Last name", "Lovelace"],
     ]) {
       const control = controlFor(step, label);
-      control.value = value;
-      control.dispatchEvent(new Event("input", { bubbles: true }));
+      await act(() => {
+        control.value = value;
+        control.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      await settle();
     }
 
+    expect(controlFor(step, "First name").value).toBe("Ada");
+    expect(controlFor(step, "Last name").value).toBe("Lovelace");
     await act(async () => {
+      form.querySelector<HTMLInputElement>('input[name="dayAttendance.2026-12-01"]')!.click();
       form.querySelector<HTMLInputElement>("[data-term-key] input")!.checked = true;
       form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     });
@@ -184,7 +252,13 @@ describe("registration email-first entry", () => {
       lastName: "Lovelace",
       unaffiliatedAttestation: true,
       emailProof: "proof-token-0123456789abcdefghijklmnop",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
     });
+    expect(submitted!.body).not.toHaveProperty("attendanceType");
+    expect(
+      registrationCreateSchema.safeParse({ ...registrationCreateSchema.parse(submitted!.body), dayAttendance: [] })
+        .success,
+    ).toBe(false);
     expect(document.body.textContent).toContain("You're registered, Ada!");
     // The proof is spent: registering someone else in this tab starts from the email again.
     expect(Object.keys(sessionStorage).filter((key) => key.startsWith("pkic.registration.emailProof"))).toEqual([]);

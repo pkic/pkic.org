@@ -77,7 +77,7 @@ export function useEventSubmissionWindow({
     if (saving) return false;
     const checked = form.submit();
     if (!checked.data) {
-      setError(checked.message);
+      setError(checked.formMessage ?? "");
       return false;
     }
     setSaving(true);

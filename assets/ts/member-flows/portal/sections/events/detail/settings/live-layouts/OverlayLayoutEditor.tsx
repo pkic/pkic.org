@@ -119,7 +119,7 @@ export function OverlayLayoutEditor({
     if (busy) return;
     const checked = form.submit();
     if (!checked.data) {
-      setNotice({ tone: "danger", text: checked.message });
+      setNotice(checked.formMessage ? { tone: "danger", text: checked.formMessage } : null);
       return;
     }
     setBusy(true);

@@ -1,3 +1,4 @@
+import { waitForCapturedEmail } from "./helpers/sendgrid";
 import { completeSyntheticMembershipReview, prepareSyntheticMembershipReview } from "./helpers/member-provisioning";
 /**
  * E2E coverage for: a real-browser verification pass on
@@ -58,41 +59,6 @@ async function outboxLength(): Promise<number> {
   const resp = await fetch(`${sendgridServer()}/outbox`);
   const emails = (await resp.json()) as CapturedEmail[];
   return emails.length;
-}
-
-/**
- * `since` (an outbox length captured before triggering the send) restricts
- * matches to entries appended after that point. Without it, a test that
- * signs the same address in more than once (e.g. admin@pkic.org, reused
- * across every test in this file) can match an older, already-consumed
- * magic link that's still the most recent match at the moment this starts
- * polling — the new one hasn't landed yet — and then fail downstream with
- * "Magic link already used".
- */
-async function waitForEmail(
-  to: string,
-  subjectFragment: string,
-  opts: { timeoutMs?: number; since?: number } = {},
-): Promise<CapturedEmail> {
-  const timeoutMs = opts.timeoutMs ?? 15_000;
-  const since = opts.since ?? 0;
-  const deadline = Date.now() + timeoutMs;
-  let lastEmails: CapturedEmail[] = [];
-  while (Date.now() < deadline) {
-    const resp = await fetch(`${sendgridServer()}/outbox`);
-    lastEmails = (await resp.json()) as CapturedEmail[];
-    for (let i = lastEmails.length - 1; i >= since; i--) {
-      const e = lastEmails[i];
-      if (e.to === to && e.subject.toLowerCase().includes(subjectFragment.toLowerCase())) {
-        return e;
-      }
-    }
-    await new Promise((r) => setTimeout(r, 300));
-  }
-  throw new Error(
-    `No email to <${to}> with subject containing "${subjectFragment}" within ${timeoutMs}ms. ` +
-      `Outbox has ${lastEmails.length} email(s) (since=${since}).`,
-  );
 }
 
 async function signInAsAdmin(page: Page): Promise<void> {
@@ -175,7 +141,7 @@ test.describe("Portal management browser-verification pass", () => {
     await page.getByRole("button", { name: "Role actions", exact: true }).click();
     await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
     await expect(page.getByRole("textbox", { name: "Name", exact: true })).toHaveCount(0);
-    const permission = page.getByRole("checkbox", { name: "donations:read", exact: true });
+    const permission = page.getByRole("checkbox", { name: "Read: Donations", exact: true });
     const wasGranted = original.permissions.includes("donations:read");
     await permission.setChecked(!wasGranted);
     for (const width of [1440, 375]) {
@@ -866,7 +832,7 @@ test.describe("Portal management browser-verification pass", () => {
     await detail.getByRole("button", { name: "Reject" }).click();
     const reviewerNote = detail.getByLabel("Reviewer note");
     await expect(reviewerNote).toHaveAttribute("aria-invalid", "true");
-    await expect(detail.getByRole("alert").filter({ hasText: "Write the reason for the rejection" })).toBeVisible();
+    await expect(reviewerNote).toHaveAccessibleDescription(/Write the reason for the rejection/);
 
     await detail.getByRole("button", { name: "Approve" }).click();
     await expect(page.locator(".my-toast", { hasText: "Approved and applied" })).toBeVisible();
@@ -993,7 +959,8 @@ test.describe("Portal management browser-verification pass", () => {
     const applicantHeading = page.getByRole("heading", { name, level: 1 });
     await expect(applicantHeading).toBeVisible({ timeout: 10_000 });
     const header = page.locator("div").filter({ has: applicantHeading }).last();
-    await expect(header.getByText("Processing", { exact: true })).toBeVisible();
+    // The badge names the requirement the application waits on, not the generic stage.
+    await expect(header.getByText("Review organization and user", { exact: true })).toBeVisible();
 
     await page.getByRole("link", { name: "Review workflow and objections", exact: true }).click();
     await page.getByLabel("Review decision and reason").fill("Verified the organization and applicant authority.");
@@ -1053,6 +1020,6 @@ test.describe("Portal management browser-verification pass", () => {
     // approveApplication's own outbox side effects — actually landed,
     // proving the background outbox delivery this route kicks off also ran,
     // not just the synchronous D1 writes.
-    await waitForEmail(email, "Welcome to the PKI Consortium", { since });
+    await waitForCapturedEmail(email, "Welcome to the PKI Consortium", { since });
   });
 });

@@ -11,6 +11,7 @@ import { userAuthLogoutResponseSchema, userAuthSessionResponseSchema } from "../
 import { scanRecoverySchema } from "../../assets/shared/schemas/event-scan-recovery";
 import { enrolledOfflineEligibilityResponseSchema } from "../../assets/shared/schemas/event-offline-eligibility";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
+import { definitionFor } from "./helpers/definition-list";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
 import {
   downloadScannerRecovery,
@@ -72,8 +73,7 @@ test("real pending scanner storage survives reload and logout without crossing a
     ["Last eligibility check", snapshot.serverNow],
     ["Snapshot expires", snapshot.expiresAt],
   ]) {
-    const term = page.locator("dt").filter({ hasText: new RegExp(`^${label}$`) });
-    await expect(term.locator("xpath=following-sibling::dd[1]")).toHaveText(formatDateTime(timestamp));
+    await expect(definitionFor(page, label)).toHaveText(formatDateTime(timestamp));
   }
   await expect.poll(() => page.evaluate(() => navigator.serviceWorker.controller?.scriptURL ?? "")).not.toBe("");
   await expect(diagnostics.getByRole("button", { name: "Close scanner session", exact: true })).toBeEnabled();
@@ -82,7 +82,8 @@ test("real pending scanner storage survives reload and logout without crossing a
       exact: true,
     }),
   ).toBeVisible();
-  await diagnostics.getByText("Recovery and diagnostics", { exact: true }).click();
+  // The diagnostics tab lists its sections open; there is no disclosure left to expand.
+  await expect(diagnostics.getByRole("heading", { name: "Eligibility data", exact: true })).toBeVisible();
   for (const [name, width, height] of [
     ["desktop", 1280, 900],
     ["phone", 390, 844],
@@ -109,7 +110,7 @@ test("real pending scanner storage survives reload and logout without crossing a
   const clearedBadge = manual.getByLabel("Badge code", { exact: true });
   await expect(clearedBadge).toHaveValue("");
   await expect(clearedBadge).not.toHaveAttribute("aria-invalid", "true");
-  const badgeField = page.locator(".pk-field").filter({ has: clearedBadge });
+  const badgeField = manual.locator(".pk-field").filter({ has: page.getByLabel("Badge code", { exact: true }) });
   await expect(badgeField).not.toHaveClass(/pk-field--invalid/);
   await expect(badgeField.getByRole("alert")).toHaveCount(0);
   await manual.getByRole("button", { name: "Cancel", exact: true }).click();
@@ -127,7 +128,7 @@ test("real pending scanner storage survives reload and logout without crossing a
   const pendingFile = await downloadScannerRecoveryFile(page);
   const pendingBackup = pendingFile.payload;
   expect(pendingBackup.operatorUserId).toBe(owner.identity.id);
-  expect(pendingBackup.pending).toEqual([{ eventId: slug, scan: original }]);
+  expect(pendingBackup.pending).toEqual([{ kind: "scan", eventId: slug, scan: original }]);
   expect(pendingBackup.records).toHaveLength(0);
   expect(pendingBackup.scannerEpochs.map((epoch) => epoch.epochId)).toContain(original.scannerSession.epochId);
   await scrollScannerToTop(page);
@@ -194,7 +195,7 @@ test("real pending scanner storage survives reload and logout without crossing a
   const checkedOther = userAuthSessionResponseSchema.parse(await checkingOtherResponse.json());
   expect(checkedOther.sessionId).toBe(other.sessionId);
   expect(checkedOther.identity.id).toBe(other.identity.id);
-  await expect(page.getByRole("heading", { name: "Badge scanner", exact: true })).toBeVisible();
+  await expect(page.getByRole("tablist", { name: "Badge scanner views", exact: true })).toBeVisible();
   await openScannerDiagnostics(page);
   await expect(page.locator(".pk-event-scanner")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Close scanner session", exact: true })).toBeEnabled();
@@ -250,7 +251,7 @@ test("real pending scanner storage survives reload and logout without crossing a
   const receipt = eventScanResponseSchema.parse(await uploaded.json());
   expect(receipt).toMatchObject({ operationId: original.operationId, outcome: "unknown", attendanceRecorded: false });
   await expect.poll(async () => (await scannerStorage(page)).pending.length).toBe(0);
-  await expect(page.getByRole("heading", { name: "Badge scanner", exact: true })).toBeVisible();
+  await expect(page.getByRole("tablist", { name: "Badge scanner views", exact: true })).toBeVisible();
   await expect(page.locator(".pk-event-scanner")).toHaveCount(0);
   const recovered = await scannerStorage(page);
   expect(recovered.pending).toHaveLength(0);
@@ -341,7 +342,7 @@ test("real pending scanner storage survives reload and logout without crossing a
     expect(enrolledEventScanRequestSchema.parse(importedResponse.request().postDataJSON())).toEqual(original);
     expect(eventScanResponseSchema.parse(await importedResponse.json())).toEqual(receipt);
     await expect.poll(async () => (await scannerStorage(recoveredPage)).pending.length).toBe(0);
-    await expect(recoveredPage.getByRole("heading", { name: "Badge scanner", exact: true })).toBeVisible();
+    await expect(recoveredPage.getByRole("tablist", { name: "Badge scanner views", exact: true })).toBeVisible();
     await expect(recoveredPage.locator(".pk-event-scanner")).toHaveCount(0);
     const imported = await scannerStorage(recoveredPage);
     expect(imported.pending).toHaveLength(0);
@@ -362,7 +363,7 @@ test("real pending scanner storage survives reload and logout without crossing a
     // A valid file with the same operation/sequence but substituted immutable badge data must fail atomically.
     const conflicting = scanRecoverySchema.parse({
       ...pendingBackup,
-      pending: [{ eventId: slug, scan: { ...original, badgeId: generateBadgeCredential() } }],
+      pending: [{ kind: "scan", eventId: slug, scan: { ...original, badgeId: generateBadgeCredential() } }],
     });
     const conflictPath = testInfo.outputPath("scanner-recovery-conflict.json");
     await writeFile(conflictPath, JSON.stringify(conflicting));

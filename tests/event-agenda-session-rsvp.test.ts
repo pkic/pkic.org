@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import ICAL from "ical.js";
 import { resetDb } from "./helpers/reset-db";
+import { clearSessionAttendanceDays, seedSessionAttendanceDays } from "./helpers/session-attendance-days";
 import { getAgenda } from "../functions/_lib/services/event-agenda/read";
 import { setSessionInvitation } from "../functions/_lib/services/event-participation/invitations";
 import { recordSessionInvitationRsvp } from "../functions/_lib/services/event-participation/session-rsvp";
@@ -91,10 +92,11 @@ describe("Signed recipient session calendar replies", () => {
       .run();
     for (const id of [userId, otherId])
       await env.DB.prepare(
-        "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','in_person','test',?,?,?)",
+        "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','test',?,?,?)",
       )
         .bind(crypto.randomUUID(), eventId, id, crypto.randomUUID(), now, now)
         .run();
+    await seedSessionAttendanceDays(env.DB, eventId, [start.slice(0, 10)]);
     await env.DB.prepare("INSERT INTO event_agenda_rooms(id,event_id,name,capacity) VALUES(?,?,'Selected room',1)")
       .bind(roomId, eventId)
       .run();
@@ -284,7 +286,40 @@ describe("Signed recipient session calendar replies", () => {
     expect((await recordSessionInvitationRsvp(db, reply(id)))?.participationStatus).toBe("waitlisted");
     expect(await status()).toBe("waitlisted");
   });
+  it("accepts a calendar reply using the configured access of a custom option", async () => {
+    await clearSessionAttendanceDays(env.DB, eventId);
+    const session = await env.DB.prepare("SELECT start_at FROM event_agenda_occurrences WHERE id=?")
+      .bind(sessionId)
+      .first<{ start_at: string }>();
+    const now = new Date().toISOString();
+    const day = crypto.randomUUID();
+    await env.DB.prepare(
+      "INSERT INTO event_days(id,event_id,day_date,attendance_options_json,created_at,updated_at) VALUES(?,?,?,?,?,?)",
+    )
+      .bind(
+        day,
+        eventId,
+        session!.start_at.slice(0, 10),
+        JSON.stringify([{ value: "moon_lounge", label: "Moon lounge", accessMode: "remote" }]),
+        now,
+        now,
+      )
+      .run();
+    await env.DB.prepare(
+      "INSERT INTO registration_day_attendance(id,registration_id,event_day_id,attendance_type,created_at,updated_at) SELECT ?,id,?,'moon_lounge',?,? FROM registrations WHERE event_id=? AND user_id=?",
+    )
+      .bind(crypto.randomUUID(), day, now, now, eventId, userId)
+      .run();
+    const id = await invite("remote");
+    expect(await recordSessionInvitationRsvp(env.DB, reply(id))).toMatchObject({
+      disposition: "applied",
+      participationStatus: "reserved",
+    });
+    expect(await status()).toBe("reserved");
+  });
+
   it("records configured-day refusal and missing registration without inventing admission, and SMTP retry is idempotent", async () => {
+    await clearSessionAttendanceDays(env.DB, eventId);
     const session = await env.DB.prepare("SELECT start_at FROM event_agenda_occurrences WHERE id=?")
       .bind(sessionId)
       .first<{ start_at: string }>();

@@ -1,7 +1,12 @@
+import { nowIso } from "../utils/time";
+import type { EventAffiliationContext } from "./identities/event-affiliation-context";
+import { planRegistrationAffiliation } from "./registrations/affiliation-plan";
+import type { IdentityRepresentation } from "./identities/selection";
+import { findUserEmailOwner } from "./user-emails";
 import { first } from "../db/queries";
 import { AppError } from "../errors";
 import type { DatabaseLike, StatementLike } from "../types";
-import type { AttendanceType } from "../../../assets/shared/schemas/registration";
+import type { RegistrationOrganizationOutcome } from "../../../assets/shared/schemas/registration";
 import { prepareAuditLog } from "./audit";
 import { prepareConsentStatements } from "./consent";
 import { prepareAcceptInviteStatements, prepareRevokeDuplicateInvitesStatement, type InviteRecord } from "./invites";
@@ -11,7 +16,13 @@ import { buildCreateRegistration } from "./registrations/create";
 import { isEventDayCapacityConflict, type PlannedDayWaitlistEntry } from "./registrations/day-waitlist";
 import type { RegistrationRecord, VerifiedRegistrationIdentityContext } from "./registrations";
 import type { DayAttendanceSelection } from "./event-days";
-import { buildFindOrCreateUserStatement, type FindOrCreateUserPayload, type UserRecord } from "./users";
+import {
+  buildFindOrCreateUserStatement,
+  prepareIndividualIdentityStatement,
+  type FindOrCreateUserPayload,
+  type UserRecord,
+} from "./users";
+import { workEmailDomain } from "../email-domains/classification";
 import {
   formSubmissionContextChangedError,
   isFormSubmissionContextConflict,
@@ -25,6 +36,8 @@ import { normalizeEmail } from "../validation";
 
 export interface PreparedRegistrationSubmission {
   user: UserRecord;
+  representation?: IdentityRepresentation;
+  organizationOutcome?: RegistrationOrganizationOutcome;
   /** True only when this submission created a new, unprivileged identity. */
   identityWasCreated: boolean;
   registration: RegistrationRecord;
@@ -32,7 +45,14 @@ export interface PreparedRegistrationSubmission {
   confirmationToken: string | null;
   reactivated: boolean;
   referralCode: string;
-  dayAttendance: Array<{ dayDate: string; attendanceType: string; label: string | null }>;
+  dayAttendance: Array<{
+    dayDate: string;
+    attendanceType: string;
+    label: string | null;
+    accessMode: import("../../../assets/shared/event-attendance-access").EventAttendanceAccessMode;
+    startsAt: string | null;
+    endsAt: string | null;
+  }>;
   plannedDayWaitlist: PlannedDayWaitlistEntry[];
   statements: StatementLike[];
 }
@@ -42,7 +62,6 @@ export async function prepareRegistrationSubmission(
   payload: {
     eventId: string;
     user: FindOrCreateUserPayload;
-    attendanceType: AttendanceType;
     dayAttendance?: DayAttendanceSelection[];
     sourceType: string;
     sourceRef?: string | null;
@@ -63,18 +82,65 @@ export async function prepareRegistrationSubmission(
     authorizationGuards?: readonly StatementLike[];
     termsSnapshotGuard?: StatementLike | null;
     verifiedIdentity?: VerifiedRegistrationIdentityContext;
+    affiliationContext?: EventAffiliationContext;
     /** The registrant opened the verification link for this address; it is recorded as verified with the registration. */
     mailboxVerified?: boolean;
   },
 ): Promise<PreparedRegistrationSubmission> {
-  const preparedUser = await buildFindOrCreateUserStatement(db, payload.user);
+  if (!payload.mailboxVerified && !payload.verifiedIdentity) {
+    const claim = await findUserEmailOwner(db, normalizeEmail(payload.user.email));
+    if (claim?.kind === "pending" || (claim?.kind === "secondary" && !claim.verified))
+      throw new AppError(422, "REGISTRATION_EMAIL_PROOF_REQUIRED", "Verify your email before continuing registration.");
+  }
+  const preparedUser = await buildFindOrCreateUserStatement(db, {
+    ...payload.user,
+    mailboxVerified: payload.mailboxVerified,
+    identityInBatch: Boolean(
+      payload.mailboxVerified &&
+      !payload.verifiedIdentity?.selectedIdentity &&
+      !payload.affiliationContext &&
+      !workEmailDomain(payload.user.email),
+    ),
+  });
   if (payload.verifiedIdentity && preparedUser.user.id !== payload.verifiedIdentity.userId) {
     throw new AppError(403, "REGISTRATION_IDENTITY_MISMATCH", "Registration identity does not match the session");
   }
+  const affiliation = payload.affiliationContext
+    ? await planRegistrationAffiliation(
+        db,
+        {
+          userId: preparedUser.user.id,
+          proofEvidence: {
+            sql: "SELECT 1 WHERE ?>strftime('%Y-%m-%dT%H:%M:%fZ','now')",
+            bindings: [new Date(payload.affiliationContext.exp * 1000).toISOString()],
+          },
+        },
+        payload.affiliationContext.input,
+        payload.affiliationContext.basis,
+        nowIso(),
+      )
+    : null;
+  const personalIdentity =
+    payload.mailboxVerified &&
+    !payload.verifiedIdentity?.selectedIdentity &&
+    !affiliation &&
+    !workEmailDomain(payload.user.email)
+      ? ((
+          await first<{ id: string }>(
+            db,
+            `SELECT id FROM identities WHERE user_id=? AND organization_id IS NULL AND started_at IS NOT NULL AND ended_at IS NULL AND blocked_at IS NULL LIMIT 1`,
+            [preparedUser.user.id],
+          )
+        )?.id ?? crypto.randomUUID())
+      : null;
+  const verifiedIdentity = affiliation?.identityId
+    ? { ...payload.verifiedIdentity, userId: preparedUser.user.id, selectedIdentity: { id: affiliation.identityId } }
+    : personalIdentity
+      ? { ...payload.verifiedIdentity, userId: preparedUser.user.id, selectedIdentity: { id: personalIdentity } }
+      : payload.verifiedIdentity;
   const builtRegistration = await buildCreateRegistration(db, {
     event: { id: payload.eventId },
     userId: preparedUser.user.id,
-    attendanceType: payload.attendanceType,
     dayAttendance: payload.dayAttendance,
     sourceType: payload.sourceType,
     sourceRef: payload.sourceRef,
@@ -86,7 +152,7 @@ export async function prepareRegistrationSubmission(
     confirmationTtlHours: payload.confirmationTtlHours,
     signingSecret: payload.signingSecret,
     unverifiedEmailCorrectionAllowed: preparedUser.created,
-    verifiedIdentity: payload.verifiedIdentity,
+    verifiedIdentity,
     mailboxVerified: payload.mailboxVerified,
   });
   const existingReferral = await first<{ code: string }>(db, firstReferralCodeQuerySql("registration", "?"), [
@@ -121,16 +187,21 @@ export async function prepareRegistrationSubmission(
   if (payload.termsSnapshotGuard) statements.push(payload.termsSnapshotGuard);
   if (payload.formRevisionGuard) statements.push(payload.formRevisionGuard);
   statements.push(...preparedUser.statements);
+  if (personalIdentity)
+    statements.push(prepareIndividualIdentityStatement(db, preparedUser.user.id, nowIso(), personalIdentity));
   if (payload.mailboxVerified)
     statements.push(
       ...prepareVerifyOwnedEmailStatements(db, {
         userId: preparedUser.user.id,
         normalizedEmail: normalizeEmail(payload.user.email),
         method: "registration_confirmation",
+        excludeRegistrationId: builtRegistration.registration.id,
       }),
     );
   statements.push(
+    ...(affiliation?.statements ?? []),
     ...builtRegistration.statements,
+    ...(affiliation?.prepareReview?.(builtRegistration.registration.id) ?? []),
     ...(formSubmission?.statements ?? []),
     ...(await prepareConsentStatements(db, {
       registrationId: builtRegistration.registration.id,
@@ -166,7 +237,7 @@ export async function prepareRegistrationSubmission(
         eventId: payload.eventId,
         status: builtRegistration.registration.status,
         registrationGroupId: payload.verifiedIdentity?.registrationGroupId ?? null,
-        registrationIdentityId: payload.verifiedIdentity?.selectedIdentity?.id ?? null,
+        registrationIdentityId: verifiedIdentity?.selectedIdentity?.id ?? null,
       },
       undefined,
       null,
@@ -178,6 +249,8 @@ export async function prepareRegistrationSubmission(
 
   return {
     user: preparedUser.user,
+    representation: affiliation?.representation,
+    organizationOutcome: affiliation?.outcome,
     identityWasCreated: preparedUser.created,
     registration: builtRegistration.registration,
     manageToken: builtRegistration.manageToken,

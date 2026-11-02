@@ -59,6 +59,7 @@ async function parseJson(response: Response, signal?: AbortSignal): Promise<unkn
 
 export interface JsonRequestInit extends RequestInit {
   mapError?: (payload: ApiErrorPayload, status: number) => ApiErrorPayload;
+  responseType?: "json" | "blob";
 }
 
 export type UnauthorizedHandler = (status: number) => void;
@@ -115,7 +116,7 @@ async function sendJsonRequest<Schema extends z.ZodType>(
   schema: Schema,
   init?: JsonRequestInit,
 ): Promise<z.output<Schema>> {
-  const { mapError, ...requestInit } = init ?? {};
+  const { mapError, responseType = "json", ...requestInit } = init ?? {};
   const known = serviceAvailability.value;
   const path = new URL(url, typeof window === "undefined" ? "https://app.test" : window.location.href).pathname;
   if (known && known.mode !== "normal" && path.startsWith("/api/") && path !== "/api/v1/" && path !== "/api/v1") {
@@ -137,7 +138,9 @@ async function sendJsonRequest<Schema extends z.ZodType>(
   };
   let response = await send();
 
-  let body = await parseJson(response, requestInit.signal ?? undefined);
+  const readBody = (value: Response) =>
+    responseType === "blob" && value.ok ? value.blob() : parseJson(value, requestInit.signal ?? undefined);
+  let body = await readBody(response);
   const refusal = apiErrorPayloadSchema.safeParse(body);
   if (
     response.status === 403 &&
@@ -154,7 +157,7 @@ async function sendJsonRequest<Schema extends z.ZodType>(
     headers.set(TURNSTILE_TOKEN_HEADER, token);
     // The server's challenge refusal guarantees the handler has not run. Retry once only.
     response = await send();
-    body = await parseJson(response, requestInit.signal ?? undefined);
+    body = await readBody(response);
   }
   if (!response.ok) {
     const fallback: ApiErrorPayload = {
@@ -293,4 +296,9 @@ export function putValidated<RequestSchema extends z.ZodType, ResponseSchema ext
   headers?: Record<string, string>,
 ): Promise<z.output<ResponseSchema>> {
   return putJson(url, parseRequestBody(url, requestSchema, body), responseSchema, headers);
+}
+
+/** Binary downloads share JSON requests' authentication, availability, cancellation, and error handling. */
+export function getBlob(url: string, init?: Pick<RequestInit, "signal">): Promise<Blob> {
+  return requestJson(url, z.instanceof(Blob), { method: "GET", ...init, responseType: "blob" });
 }

@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { countryName, countryOptions, ISO_COUNTRY_CODES } from "../../assets/shared/countries";
 import { eventClock } from "../../assets/shared/event-clock";
-import { eventPlaceIncomplete, eventPlaceNeeded, formatEventPlace } from "../../assets/shared/event-place";
+import {
+  eventPlaceSummary,
+  eventPlaceIncomplete,
+  eventPlaceNeeded,
+  formatEventPlace,
+} from "../../assets/shared/event-place";
 import { formatClockName } from "../../assets/shared/format-date";
 import { eventSettingsUpdateSchema } from "../../assets/shared/schemas/event-management";
 import { groupEventCreateSchema } from "../../assets/shared/schemas/group-events";
@@ -17,6 +22,15 @@ describe("an event's place", () => {
     expect(formatEventPlace({ city: " Ottawa ", country: null }, "en")).toBe("Ottawa");
     expect(formatEventPlace({ city: null, country: "CA" }, "en")).toBe("Canada");
     expect(formatEventPlace({ city: "  ", country: null })).toBeNull();
+  });
+
+  it("shares the compact venue summary with promotion artwork without repeating the postal address or city", () => {
+    expect(
+      eventPlaceSummary({ venue: "Meervaart, Meer en Vaart 300, 1068 LE, Amsterdam, Netherlands", city: "Amsterdam" }),
+    ).toBe("Meervaart · Amsterdam");
+    expect(eventPlaceSummary({ venue: "Amsterdam", city: "Amsterdam" })).toBe("Amsterdam");
+    expect(eventPlaceSummary({ venue: null, city: " Toronto " })).toBe("Toronto");
+    expect(eventPlaceSummary({ venue: null, city: null })).toBeNull();
   });
 
   it("asks for a city and a country until both are set", () => {

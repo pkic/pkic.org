@@ -94,7 +94,7 @@ function PolicyForm({ event, canWrite }: { event: RetentionEvent; canWrite: bool
     setMessageTone("danger");
     const checked = form.submit();
     if (!checked.data) {
-      setMessage(checked.message);
+      setMessage(checked.formMessage);
       return;
     }
     setSaving(true);

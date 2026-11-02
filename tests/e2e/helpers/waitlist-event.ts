@@ -40,7 +40,9 @@ export async function createPortalWaitlistEvent(page: Page, slug: string) {
       slug,
       name: `E2E waitlist event ${slug}`,
       timezone: "Europe/Amsterdam",
-      startsAt: dateTimeLocalToIso("2026-12-01T09:00", "Europe/Amsterdam"),
+      // An hour after the seeded conference opens: an equal start would tie, and the id tie-break would then
+      // randomly put this fixture ahead of the conference in "next event" listings such as portal Home.
+      startsAt: dateTimeLocalToIso("2026-12-01T10:00", "Europe/Amsterdam"),
       endsAt: dateTimeLocalToIso("2026-12-03T17:00", "Europe/Amsterdam"),
       profileKey: "workshop",
       registrationPolicy: "no_registration",
@@ -77,7 +79,7 @@ export async function createPortalWaitlistEvent(page: Page, slug: string) {
         days: ["Tuesday", "Wednesday", "Thursday"].map((label, index) => ({
           date: `2026-12-0${index + 1}`,
           label: `${label} ${index + 1} December 2026`,
-          startTime: "09:00",
+          startTime: "10:00",
           endTime: "17:00",
           sortOrder: index,
           attendanceOptions:

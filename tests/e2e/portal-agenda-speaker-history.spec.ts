@@ -43,6 +43,7 @@ import {
 import { dateTimeLocalToIso } from "../../assets/shared/timezone";
 import { canonicalSessionCredits } from "../../assets/shared/session-public-credits";
 import { agendaSessionContent } from "../../assets/shared/public-agenda-content";
+import { personDisplayName } from "../../assets/shared/person-display";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
 import { publishE2eSite } from "./helpers/site-publication";
@@ -182,7 +183,8 @@ test("public repeats retain event-specific employer credits through profile edit
     const document = agendaTransferSchema.parse({
       format: "pkic-agenda",
       version: 1,
-      source: { kind: "hugo", eventRef: slug, exportedAt: new Date().toISOString(), sourceDigest },
+      // A Hugo source is past evidence and is refused for a future interval; a portable export is not.
+      source: { kind: "portable", eventRef: slug, exportedAt: new Date().toISOString(), sourceDigest },
       people: [
         {
           ref: authored.personRef,
@@ -292,9 +294,14 @@ test("public repeats retain event-specific employer credits through profile edit
   });
   const creditB = sessionAppearanceSchema.parse({
     ...creditA,
-    actingIdentityId: secondIdentity.identityId,
-    jobTitle: roleB,
-    organizationName: organizationB.name,
+    affiliations: [
+      {
+        identityId: secondIdentity.identityId,
+        title: roleB,
+        organizationId: null,
+        organizationName: organizationB.name,
+      },
+    ],
     biography: biographyB,
   });
   const saveCredit = async (event: typeof eventA, id: string, credit: SessionAppearance, expectedRevision?: number) => {
@@ -329,8 +336,11 @@ test("public repeats retain event-specific employer credits through profile edit
   expect(personSlug).toBeDefined();
   expect(frozenB.speakerProfileSlugs?.[userId]).toBe(personSlug);
   const personPath = `/people/${personSlug}/`;
-  const paths = [eventA.originalId, repeatedId].map((id) => `/events/${eventA.slug}/sessions/${id}/`);
-  paths.push(`/events/${eventB.slug}/sessions/${eventB.originalId}/`);
+  // A session page lives at its current readable address, not its id.
+  const sessionPath = (event: typeof eventA, frozen: typeof frozenA, id: string) =>
+    `/events/${event.slug}/sessions/${frozen.sessionSlugs?.[id] ?? id}/`;
+  const paths = [eventA.originalId, repeatedId].map((id) => sessionPath(eventA, frozenA, id));
+  paths.push(sessionPath(eventB, frozenB, eventB.originalId));
   expect(new Set(paths).size).toBe(3);
   const publicContext = await browser.newContext({
     baseURL: new URL(page.url()).origin,
@@ -351,15 +361,18 @@ test("public repeats retain event-specific employer credits through profile edit
     const appearances = publicPage.locator("[data-pagefind-body]");
     await expect(appearances.getByRole("heading", { level: 1 })).toHaveText(personName);
     await expect(appearances.locator(".pk-agenda-speaker-profile__sessions")).toHaveCount(2);
-    await expect(appearances.locator(".pk-agenda-speaker-profile__sessions li")).toHaveCount(3);
-    await expect(appearances).not.toContainText("Later current profile");
-    for (const [index, path] of paths.entries()) {
-      const link = appearances.locator(`a[href="${path}"]`);
-      await expect(link).toHaveCount(1);
-      await expect(link.locator("xpath=ancestor::li")).toContainText(
-        index === 2 ? organizationB.name : organizationA.name,
+    await expect(appearances.locator(".pk-agenda-speaker-profile__sessions .pk-agenda-session-row")).toHaveCount(3);
+    // The profile shows the person's current experience; the listed appearances stay as approved.
+    for (const section of [0, 1])
+      await expect(appearances.locator(".pk-agenda-speaker-profile__sessions").nth(section)).not.toContainText(
+        "Later current profile",
       );
-      await expect(link.locator("xpath=ancestor::li")).toContainText(
+    for (const [index, path] of paths.entries()) {
+      await expect(appearances.locator(`a[href="${path}"]`)).toHaveCount(1);
+      // A `has` locator is matched inside each list item, so it names the link alone, not its page ancestors.
+      const appearance = appearances.getByRole("listitem").filter({ has: publicPage.locator(`a[href="${path}"]`) });
+      await expect(appearance).toContainText(index === 2 ? organizationB.name : organizationA.name);
+      await expect(appearance).toContainText(
         index === 2 ? roleB : corrected && index === 0 ? "Reviewed occurrence correction" : roleA,
       );
     }
@@ -436,6 +449,15 @@ test("public repeats retain event-specific employer credits through profile edit
     ).user;
     expect(currentPerson.id).toBe(userId);
     expect(currentPerson.preferred_name).toBe("Later current profile name");
+    // The agenda names the person by the one rule: the preferred name, then the last name.
+    const laterDisplayName = personDisplayName(
+      {
+        preferredName: currentPerson.preferred_name,
+        firstName: currentPerson.first_name,
+        lastName: currentPerson.last_name,
+      },
+      null,
+    );
     const currentIdentity = currentPerson.identities.find((identity) => identity.identityId === identityA);
     expect(currentIdentity?.jobTitle).toBe("Later current profile role");
     expect(await read(eventA.slug, true)).toEqual(frozenA);
@@ -447,7 +469,10 @@ test("public repeats retain event-specific employer credits through profile edit
     const current = await read(eventA.slug);
     const correctedCredit = sessionAppearanceSchema.parse({
       ...creditA,
-      jobTitle: "Reviewed occurrence correction",
+      affiliations: creditA.affiliations.map((affiliation) => ({
+        ...affiliation,
+        title: "Reviewed occurrence correction",
+      })),
       biography: "Explicitly reviewed correction for this occurrence only.",
       approvedAt: new Date().toISOString(),
     });
@@ -473,11 +498,11 @@ test("public repeats retain event-specific employer credits through profile edit
     const repeated = occurrence(newlyApproved, repeatedId);
     const originalRepeat = occurrence(frozenA, repeatedId);
     expect(repeated.publicationStatus).toBe("changed");
-    expect(repeated.speakers).toEqual([{ userId, role: "speaker", displayName: "Later current profile name" }]);
+    expect(repeated.speakers).toEqual([{ userId, role: "speaker", displayName: laterDisplayName }]);
     expect(repeated).toEqual({
       ...originalRepeat,
       publicationStatus: "changed",
-      speakers: originalRepeat.speakers.map((speaker) => ({ ...speaker, displayName: "Later current profile name" })),
+      speakers: originalRepeat.speakers.map((speaker) => ({ ...speaker, displayName: laterDisplayName })),
     });
     expect(repeated.history).toEqual(originalRepeat.history);
     expect(canonicalSessionCredits(repeated)).toEqual(canonicalSessionCredits(originalRepeat));

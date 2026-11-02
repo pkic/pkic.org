@@ -13,6 +13,8 @@ import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { insertIndividualMember } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
+import { seedSessionAttendanceDays } from "./helpers/session-attendance-days";
+import { instantToCalendarDate } from "../assets/shared/timezone";
 
 beforeEach(resetDb);
 async function fixture(policy: "reservation" | "approval" = "reservation") {
@@ -29,10 +31,14 @@ async function fixture(policy: "reservation" | "approval" = "reservation") {
     .bind(start, end, eventId)
     .run();
   await env.DB.prepare(
-    "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','in_person','test',?,?,?)",
+    "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','test',?,?,?)",
   )
     .bind(crypto.randomUUID(), eventId, userId, crypto.randomUUID(), now, now)
     .run();
+  const event = await env.DB.prepare("SELECT timezone FROM events WHERE id=?")
+    .bind(eventId)
+    .first<{ timezone: string }>();
+  await seedSessionAttendanceDays(env.DB, eventId, [instantToCalendarDate(start, event!.timezone)]);
   await env.DB.prepare("INSERT INTO event_agenda_rooms(id,event_id,name,capacity) VALUES(?,?,'Meeting room',4)")
     .bind(roomId, eventId)
     .run();

@@ -22,6 +22,7 @@ import {
 } from "../../assets/shared/schemas/event-session-history";
 import { sessionPageAddress } from "../../assets/shared/public-agenda-pages";
 import type { AgendaSnapshot } from "../../assets/shared/schemas/event-agenda";
+import { runScheduledWork } from "./helpers/scheduled-work";
 const slug = "pqc-conference-amsterdam-nl";
 const title = "Historic cryptographic operations and practical migration lessons";
 const media = {
@@ -45,7 +46,8 @@ test("approved archive corrections and promotion exports remain tied to a frozen
   page,
   browser,
 }, testInfo) => {
-  test.setTimeout(300_000);
+  // Two complete Astro publications (approval, then withdrawal) each take minutes on a busy machine.
+  test.setTimeout(600_000);
   await mkdir(artifacts, { recursive: true });
   await signInAsE2eStaff(page, e2eAdminEmail("default"));
   const identity = userAuthSessionResponseSchema.parse(
@@ -286,6 +288,7 @@ test("approved archive corrections and promotion exports remain tied to a frozen
   await expect(sessions).toBeVisible();
   await runRowAction(page, sessionRow, "Speaker promotion kit");
   await expect(page.getByRole("heading", { name: `Promotion kit · ${title}`, exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Edit shared promotion copy", exact: true }).click();
   await page
     .getByRole("textbox", { name: /^Why attend/ })
     .fill(
@@ -308,7 +311,7 @@ test("approved archive corrections and promotion exports remain tied to a frozen
   await expect(sessions).toHaveCount(0);
   await page.getByRole("button", { name: "Approve for publication", exact: true }).click();
   await expect(page.getByRole("button", { name: "Approve for publication", exact: true })).toBeDisabled();
-  await page.getByRole("button", { name: "Back to agenda", exact: true }).click();
+  await agendaViews.getByRole("tab", { name: "Planner", exact: true }).click();
 
   snapshot = agendaSnapshotSchema.parse(await (await page.request.get(`/api/v1/events/${slug}/agenda`)).json());
   const approved = agendaSnapshotSchema.parse(
@@ -437,9 +440,8 @@ test("approved archive corrections and promotion exports remain tied to a frozen
   await agendaViews.getByRole("tab", { name: "Schedule", exact: true }).click();
   await runRowAction(page, sessionRow, "Speaker promotion kit");
   await expect(page.getByRole("heading", { name: `Promotion kit · ${title}`, exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Prepare published kit", exact: true }).click();
-  const pdf = page.getByRole("link", { name: "LinkedIn carousel PDF", exact: true });
-  await expect(pdf).toBeVisible({ timeout: 120_000 });
+  await page.getByRole("button", { name: "Prepare downloads", exact: true }).click();
+  const pdf = page.getByRole("link", { name: "Carousel PDF", exact: true });
   const renderDiagnostics = async (name: string) => {
     const state = process.env.E2E_PREPARED_STATE_DIR ?? (await readFile("test-results/e2e-state-dir", "utf8")).trim();
     const result = await promisify(execFile)(
@@ -456,16 +458,31 @@ test("approved archive corrections and promotion exports remain tied to a frozen
         `--persist-to=${state}`,
         "--json",
         "--command",
-        `SELECT format,status,attempts,next_attempt_at,last_error FROM event_agenda_promotion_render_jobs WHERE occurrence_id='${occurrence.id}' ORDER BY format`,
+        `SELECT format,status,attempts,next_attempt_at,last_error FROM event_promotion_renders WHERE occurrence_id='${occurrence.id}' ORDER BY format`,
       ],
       { maxBuffer: 1024 * 1024 },
     );
     await testInfo.attach(name, { body: result.stdout, contentType: "application/json" });
   };
+  try {
+    await expect
+      .poll(
+        async () => {
+          if (await pdf.isVisible()) return true;
+          await runScheduledWork(page);
+          return pdf.isVisible();
+        },
+        { timeout: 120_000, intervals: [1000, 2000, 5000] },
+      )
+      .toBe(true);
+  } catch (error) {
+    await renderDiagnostics("promotion-render-not-ready");
+    throw error;
+  }
   await renderDiagnostics("promotion-render-first-attempt");
-  // Local Wrangler does not run the production cron. A normal authorized
-  // artifact request executes the same due-time and lease guarded retry path.
-  const previewUrl = `/api/v1/events/${slug}/agenda/occurrences/${occurrence.id}/promotion/artifact?format=landscape&revision=${snapshot.publishedRevision}&download=false`;
+  const previewImage = page.getByRole("img", { name: "Preview of your promotion materials", exact: true });
+  await expect(previewImage).toBeVisible();
+  const previewUrl = (await previewImage.getAttribute("src"))!;
   try {
     await expect
       .poll(
@@ -480,9 +497,9 @@ test("approved archive corrections and promotion exports remain tied to a frozen
         { timeout: 120_000, intervals: [1000, 2000, 5000] },
       )
       .toBe(true);
-    await expect(
-      page.getByRole("img", { name: `First landscape promotion card for ${title}`, exact: true }),
-    ).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole("img", { name: "Preview of your promotion materials", exact: true })).toBeVisible({
+      timeout: 20_000,
+    });
   } finally {
     await renderDiagnostics("promotion-render-final-attempt");
   }
@@ -492,12 +509,12 @@ test("approved archive corrections and promotion exports remain tied to a frozen
   expect(response.headers()["content-type"]).toContain("application/pdf");
   expect((await response.body()).subarray(0, 5).toString()).toBe("%PDF-");
   await page.setViewportSize({ width: 390, height: 844 });
-  const preview = page.getByRole("img", { name: `First landscape promotion card for ${title}`, exact: true });
+  const preview = page.getByRole("img", { name: "Preview of your promotion materials", exact: true });
   await expect
     .poll(async () =>
       preview.evaluate((image) => {
         const box = image.getBoundingClientRect();
-        return Math.abs(box.width / box.height - 1200 / 630);
+        return Math.abs(box.width / box.height - 1080 / 1350);
       }),
     )
     .toBeLessThan(0.02);

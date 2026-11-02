@@ -1,34 +1,21 @@
-import type { ComponentChildren } from "preact";
 import { Alert } from "../ui/Alert";
 import { liveRoomOpenFailure } from "./live-room-copy";
 import { useLiveRoom, type LiveSocketFactory } from "./useLiveRoom";
-import { useLiveWindow } from "./useLiveWindow";
-import { LiveChat } from "./LiveChat";
+import { SessionInteractionWindow, type SessionInteractionProps } from "./SessionInteractionWindow";
+import { ChatComposer, LiveChat } from "./LiveChat";
 
 /** Chat joins only during the same canonical attendee window as questions. */
-export function SessionChat({
-  slug,
-  occurrenceId,
-  startAt,
-  endAt,
-  createSocket,
-  closed = null,
-  labelledBy,
-}: {
-  slug: string;
-  occurrenceId: string;
-  startAt: string;
-  endAt: string;
-  createSocket?: LiveSocketFactory;
-  closed?: ComponentChildren;
-  labelledBy?: string;
-}) {
-  const open = useLiveWindow(startAt, endAt);
-  if (!open) return <>{closed}</>;
+export function SessionChat(props: SessionInteractionProps) {
+  const { slug, occurrenceId, createSocket, labelledBy } = props;
   return (
-    <section aria-labelledby={labelledBy}>
-      <SessionChatRoom slug={slug} occurrenceId={occurrenceId} createSocket={createSocket} />
-    </section>
+    <SessionInteractionWindow
+      {...props}
+      disabledControls={<ChatComposer channel="attendee" compact={false} disabled send={() => false} refusal={null} />}
+    >
+      <section aria-labelledby={labelledBy}>
+        <SessionChatRoom slug={slug} occurrenceId={occurrenceId} createSocket={createSocket} />
+      </section>
+    </SessionInteractionWindow>
   );
 }
 function SessionChatRoom({

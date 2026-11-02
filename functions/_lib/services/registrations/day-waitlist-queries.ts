@@ -1,9 +1,9 @@
 import { all } from "../../db/queries";
 import type { DatabaseLike } from "../../types";
 import type { DayWaitlistLane } from "./day-waitlist-types";
-import { NON_CAPACITY_CONSUMING_DAY_WAITLIST_SQL } from "./day-waitlist-policy";
+import { dayWaitlistStatusSql, NON_CAPACITY_CONSUMING_DAY_WAITLIST_SQL } from "./day-waitlist-policy";
 
-export async function listInPersonEventDayIdsForRegistration(
+export async function listAttendanceEventDayIdsForRegistration(
   db: DatabaseLike,
   registrationId: string,
 ): Promise<string[]> {
@@ -11,13 +11,13 @@ export async function listInPersonEventDayIdsForRegistration(
     db,
     `SELECT event_day_id
      FROM registration_day_attendance
-     WHERE registration_id = ? AND attendance_type = 'in_person'`,
+     WHERE registration_id = ?`,
     [registrationId],
   );
   return rows.map((row) => row.event_day_id);
 }
 
-export async function listConfirmedInPersonEventDayIdsForRegistration(
+export async function listConfirmedAttendanceEventDayIdsForRegistration(
   db: DatabaseLike,
   registrationId: string,
 ): Promise<string[]> {
@@ -29,7 +29,7 @@ export async function listConfirmedInPersonEventDayIdsForRegistration(
        ON w.event_day_id = rda.event_day_id
       AND w.registration_id = rda.registration_id
       AND ${NON_CAPACITY_CONSUMING_DAY_WAITLIST_SQL}
-     WHERE rda.registration_id = ? AND rda.attendance_type = 'in_person' AND w.id IS NULL`,
+     WHERE rda.registration_id = ? AND w.id IS NULL`,
     [registrationId],
   );
   return rows.map((row) => row.event_day_id);
@@ -44,11 +44,11 @@ export interface RegistrationDayWaitlistRow {
 
 export function prepareRegistrationDayWaitlist(db: DatabaseLike, registrationId: string) {
   return db
-    .prepare(`SELECT ed.day_date AS dayDate, w.status AS status,
+    .prepare(`SELECT ed.day_date AS dayDate, ${dayWaitlistStatusSql("w")} AS status,
             w.priority_lane AS priorityLane, w.offer_expires_at AS offerExpiresAt
      FROM event_day_waitlist_entries w
      JOIN event_days ed ON ed.id = w.event_day_id
-     WHERE w.registration_id = ? AND w.status IN ('waiting', 'offered', 'accepted')
+     WHERE w.registration_id = ? AND w.status IN ('waiting', 'offered', 'accepted', 'expired')
      ORDER BY ed.sort_order ASC, ed.day_date ASC`)
     .bind(registrationId);
 }

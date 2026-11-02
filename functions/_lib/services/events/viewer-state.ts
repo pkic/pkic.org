@@ -3,8 +3,9 @@ import { eventReadSelectionSql, type EventReadSelection } from "./read-selection
 import { toBool } from "../../db/queries";
 import type { DatabaseLike } from "../../types";
 import { holdsWorkAddress } from "../../email-domains/contact-kind";
-import { NON_CAPACITY_CONSUMING_DAY_WAITLIST_SQL } from "../registrations/day-waitlist-policy";
+import { dayWaitlistStatusSql, NON_CAPACITY_CONSUMING_DAY_WAITLIST_SQL } from "../registrations/day-waitlist-policy";
 import { parseVerifiedAddresses, verifiedAddressesJsonSql } from "../user-emails";
+import { eventDayOptionAccessSql } from "../event-participation/session-access";
 
 /**
  * Day waitlist rows are the sole authoritative waitlist state (see
@@ -17,18 +18,21 @@ import { parseVerifiedAddresses, verifiedAddressesJsonSql } from "../user-emails
  */
 const VIEWER_STATE_SELECT = `SELECT r.event_id AS event_id,
     r.status AS status,
-    r.attendance_type AS attendance_type,
     EXISTS (
       SELECT 1 FROM event_day_waitlist_entries w
        WHERE w.registration_id = r.id
-         AND ${NON_CAPACITY_CONSUMING_DAY_WAITLIST_SQL}
+         AND w.status IN ('waiting', 'offered')
+         AND (w.status <> 'offered' OR w.offer_expires_at IS NULL
+              OR w.offer_expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
     ) AS waitlisted,
     COALESCE((
-      SELECT JSON_GROUP_ARRAY(JSON_OBJECT('date', day_date, 'attendanceType', day_attendance_type, 'state', state))
+      SELECT JSON_GROUP_ARRAY(JSON_OBJECT('date', day_date, 'attendanceType', day_attendance_type, 'accessMode', access_mode, 'state', state))
       FROM (
         SELECT ed.day_date AS day_date,
                rda.attendance_type AS day_attendance_type,
-               CASE WHEN w.id IS NOT NULL THEN 'waitlisted' ELSE 'registered' END AS state
+               ${eventDayOptionAccessSql("ed", "rda.attendance_type")} AS access_mode,
+               CASE WHEN ${dayWaitlistStatusSql("w")} = 'expired' THEN 'expired'
+                    WHEN w.id IS NOT NULL THEN 'waitlisted' ELSE 'registered' END AS state
           FROM registration_day_attendance rda
           JOIN event_days ed ON ed.id = rda.event_day_id
           LEFT JOIN event_day_waitlist_entries w
@@ -45,7 +49,6 @@ const VIEWER_STATE_SELECT = `SELECT r.event_id AS event_id,
 export interface EventViewerStateRow {
   event_id: string;
   status: string;
-  attendance_type: string;
   waitlisted: number;
   days_json: string;
   verified_addresses: string | null;
@@ -54,7 +57,6 @@ export interface EventViewerStateRow {
 function mapViewerStateRow(row: EventViewerStateRow): EventViewerState {
   return eventViewerStateSchema.parse({
     registrationStatus: row.status,
-    attendanceType: row.attendance_type,
     waitlisted: toBool(row.waitlisted),
     days: JSON.parse(row.days_json) as unknown,
     holdsWorkAddress: holdsWorkAddress(parseVerifiedAddresses(row.verified_addresses)),

@@ -1,3 +1,4 @@
+import { eventDayOptionAccessSql } from "../event-participation/session-access";
 import { all, run } from "../../db/queries";
 import { first } from "../../db/queries";
 import { nowIso } from "../../utils/time";
@@ -6,7 +7,10 @@ import { listEventDays } from "../event-days";
 import { listDayWaitlistForRegistration } from "./day-waitlist-queries";
 import { prepareRegistrationStatusEmail, type RegistrationStatusEmailEvent } from "./status-notifications";
 import { promoteDayWaitlistIfCapacity } from "./day-waitlist";
-import { eventDayHasAvailableCapacitySql, ROLE_BASED_CAPACITY_EXEMPT_ROLE_SQL } from "./day-waitlist-capacity";
+import {
+  eventAttendanceOptionHasAvailableCapacitySql,
+  ROLE_BASED_CAPACITY_EXEMPT_ROLE_SQL,
+} from "./day-waitlist-capacity";
 import type { DatabaseLike, StatementLike } from "../../types";
 
 export interface WaitlistPromotionEvent extends RegistrationStatusEmailEvent {
@@ -103,7 +107,7 @@ export async function promoteEventWaitlistWithNotifications(
             registrationId: promotion.registration_id,
             appBaseUrl: payload.appBaseUrl,
             templateKey: "registration_waitlist_offer",
-            subject: `In-person spot available — ${payload.event.name}`,
+            subject: `A spot is available — ${payload.event.name}`,
             noticeKind: "waitlist_offer",
             outboxId:
               `waitlist-offer:${payload.event.id}:${promotion.registration_id}:` +
@@ -153,7 +157,11 @@ export async function runWaitlistPromotionCycle(
        AND datetime(offer_expires_at) <= datetime('now')`,
   );
 
-  const availableCapacitySql = eventDayHasAvailableCapacitySql("ed", "datetime('now')");
+  const availableCapacitySql = eventAttendanceOptionHasAvailableCapacitySql(
+    "ed",
+    "selected.attendance_type",
+    "strftime('%Y-%m-%dT%H:%M:%fZ','now')",
+  );
   const events = await all<WaitlistPromotionEvent>(
     db,
     `SELECT DISTINCT
@@ -176,16 +184,18 @@ export async function runWaitlistPromotionCycle(
          SELECT 1
          FROM event_days ed
          WHERE ed.event_id = e.id
-           AND ${availableCapacitySql}
            AND EXISTS (
              SELECT 1
              FROM event_day_waitlist_entries candidate
              JOIN registrations candidate_registration
                ON candidate_registration.id = candidate.registration_id
+             JOIN registration_day_attendance selected ON selected.registration_id = candidate.registration_id
+               AND selected.event_day_id = candidate.event_day_id
              WHERE candidate.event_day_id = ed.id
+               AND ${availableCapacitySql}
                AND candidate.status = 'waiting'
                AND candidate_registration.status IN ('pending_email_confirmation', 'registered')
-               AND (candidate.reason_code = 'admin_returned_to_waitlist' OR NOT EXISTS (
+               AND (candidate.reason_code = 'admin_returned_to_waitlist' OR ${eventDayOptionAccessSql("ed", "selected.attendance_type")} <> 'physical' OR NOT EXISTS (
                  SELECT 1 FROM effective_event_participant_roles role
                  WHERE role.event_id = candidate.event_id AND role.user_id = candidate.user_id
                    AND role.status = 'active' AND role.role IN (${ROLE_BASED_CAPACITY_EXEMPT_ROLE_SQL})

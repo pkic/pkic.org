@@ -1,3 +1,6 @@
+import { processPendingPromotionRenders } from "../functions/_lib/services/event-agenda/promotion-render-jobs";
+import { prepareBadgeRenderJob } from "../functions/_lib/services/badge-render-job-statements";
+import { createReferralCode } from "../functions/_lib/services/referrals";
 import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./helpers/administrator";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
@@ -71,6 +74,10 @@ async function queueN(db: typeof env.DB, eventId: string, count: number): Promis
 }
 
 describe("email outbox batch processing", () => {
+  it("keeps unmocked email delivery on a local-only test endpoint", () => {
+    expect(new URL(env.SENDGRID_API_BASE!).hostname).toBe("127.0.0.1");
+  });
+
   let eventId: string;
   let adminId: string;
 
@@ -102,6 +109,103 @@ describe("email outbox batch processing", () => {
     expect(rows.every((r) => r.status === "sent")).toBe(true);
   });
 
+  it("retries a required social badge until its current image exists, then sends it once", async () => {
+    const fetchMock = makeSendgridMock();
+    vi.stubGlobal("fetch", fetchMock);
+    const badge = buildBadgeAttachment({ badgeCode: crypto.randomUUID(), badgeType: "attendee" });
+    const bucket = env.ASSETS_BUCKET!;
+    const id = await queueEmail(env.DB, {
+      eventId,
+      templateKey: "attendee_invite",
+      recipientEmail: "badge-ready@example.test",
+      messageType: "transactional",
+      data: { firstName: "Example" },
+      attachments: [badge],
+    });
+    const due = () =>
+      env.DB.prepare("UPDATE email_outbox SET send_after=? WHERE id=?").bind("2000-01-01T00:00:00.000Z", id).run();
+    expect(await processPendingOutbox(env.DB, env, 10)).toEqual({ processed: 1, failed: 1 });
+    expect(fetchMock).not.toHaveBeenCalled();
+    await bucket.put(badge.r2Key, validPngBytes(), {
+      httpMetadata: { contentType: "image/png" },
+      customMetadata: { badgeRenderer: "previous-renderer" },
+    });
+    await due();
+    expect(await processPendingOutbox(env.DB, env, 10)).toEqual({ processed: 1, failed: 1 });
+    expect(fetchMock).not.toHaveBeenCalled();
+    await bucket.put(badge.r2Key, validPngBytes(), {
+      httpMetadata: { contentType: "image/png" },
+      customMetadata: { badgeRenderer: badge.renderer! },
+    });
+    await due();
+    expect(await processPendingOutbox(env.DB, env, 10)).toEqual({ processed: 1, failed: 0 });
+    await processOutboxById(env.DB, env, id);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body)).attachments).toEqual([
+      expect.objectContaining({ filename: "attendee-badge.png", type: "image/png", disposition: "attachment" }),
+    ]);
+  });
+
+  it("recovers a completed older-renderer badge through its existing job before delivering the waiting email", async () => {
+    const fetchMock = makeSendgridMock();
+    vi.stubGlobal("fetch", fetchMock);
+    // A badge row belongs to the registration's user, so the code needs a real owner.
+    const userId = crypto.randomUUID();
+    const registrationId = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO users (id,email,normalized_email,created_at,updated_at) VALUES (?,'waiting@example.test','waiting@example.test',datetime('now'),datetime('now'))",
+      ).bind(userId),
+      env.DB.prepare(
+        "INSERT INTO registrations (id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES (?,?,?,'registered','test','synthetic-secret',datetime('now'),datetime('now'))",
+      ).bind(registrationId, eventId, userId),
+    ]);
+    const code = await createReferralCode(env.DB, {
+      eventId,
+      ownerType: "registration",
+      ownerId: registrationId,
+      length: 10,
+    });
+    const badge = buildBadgeAttachment({ badgeCode: code, badgeType: "attendee" });
+    const job = prepareBadgeRenderJob(env.DB, code, "2000-01-01T00:00:00.000Z");
+    await job.statement.run();
+    await env.DB.prepare("UPDATE event_promotion_renders SET status='rendered',updated_at=? WHERE id=?")
+      .bind("2000-01-01T00:00:00.000Z", job.id)
+      .run();
+    await env.ASSETS_BUCKET!.put(badge.r2Key, validPngBytes(), {
+      httpMetadata: { contentType: "image/png" },
+      customMetadata: { badgeRenderer: "promotion-scene-v5" },
+    });
+    const id = await queueEmail(env.DB, {
+      eventId,
+      templateKey: "attendee_invite",
+      recipientEmail: "waiting@example.test",
+      messageType: "transactional",
+      data: { firstName: "Waiting" },
+      attachments: [{ ...badge, renderer: "promotion-scene-v5" }],
+    });
+    expect(await processPendingOutbox(env.DB, env, 10)).toEqual({ processed: 1, failed: 1 });
+    expect(fetchMock).not.toHaveBeenCalled();
+    const render = vi.fn(async () => {
+      await env.ASSETS_BUCKET!.put(badge.r2Key, validPngBytes(), {
+        httpMetadata: { contentType: "image/png" },
+        customMetadata: { badgeRenderer: badge.renderer! },
+      });
+    });
+    expect(await processPendingPromotionRenders(env.DB, env, 1, render)).toEqual({ processed: 1, failed: 0 });
+    expect(await processPendingPromotionRenders(env.DB, env, 1, render)).toEqual({ processed: 0, failed: 0 });
+    expect(render).toHaveBeenCalledOnce();
+    expect(await queryAll(env.DB, "SELECT revision,status FROM event_promotion_renders WHERE id=?", job.id)).toEqual([
+      { revision: 2, status: "rendered" },
+    ]);
+    await env.DB.prepare("UPDATE email_outbox SET send_after=? WHERE id=?").bind("2000-01-01T00:00:00.000Z", id).run();
+    expect(await processPendingOutbox(env.DB, env, 10)).toEqual({ processed: 1, failed: 0 });
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body)).attachments).toHaveLength(1);
+  });
+
   it("leaves future mail unchanged without a timer and sends its cached badge once when due", async () => {
     const fetchMock = makeSendgridMock();
     vi.stubGlobal("fetch", fetchMock);
@@ -113,8 +217,8 @@ describe("email outbox batch processing", () => {
     const mailEnv = { ...env, ASSETS_BUCKET: { ...assetsBucket, get } };
     const now = new Date().toISOString();
     await env.DB.prepare(
-      `INSERT INTO registrations (id, event_id, user_id, status, attendance_type, source_type, manage_link_secret, created_at, updated_at)
-       VALUES (?, ?, ?, 'registered', 'virtual', 'test', ?, ?, ?)`,
+      `INSERT INTO registrations (id, event_id, user_id, status, source_type, manage_link_secret, created_at, updated_at)
+       VALUES (?, ?, ?, 'registered', 'test', ?, ?, ?)`,
     )
       .bind(registrationId, eventId, adminId, manageSecret, now, now)
       .run();
@@ -156,7 +260,10 @@ describe("email outbox batch processing", () => {
     expect(await processSelectedOutbox(env.DB, env, [outboxId])).toEqual({ processed: 0, failed: 0, skipped: 1 });
 
     const png = validPngBytes();
-    await assetsBucket.put(badge.r2Key, png, { httpMetadata: { contentType: "image/png" } });
+    await assetsBucket.put(badge.r2Key, png, {
+      httpMetadata: { contentType: "image/png" },
+      customMetadata: { badgeRenderer: badge.renderer! },
+    });
     await env.DB.prepare("UPDATE email_outbox SET send_after = ? WHERE id = ?")
       .bind("2000-01-01T00:00:00.000Z", outboxId)
       .run();

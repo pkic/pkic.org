@@ -19,6 +19,7 @@ import { readSessionDemand } from "../functions/_lib/services/event-participatio
 import { sessionBookingsResponseSchema } from "../assets/shared/schemas/event-participation-reporting";
 import { physicalOccupiedSql } from "../functions/_lib/services/event-participation/capacity-accounting";
 import { createEventScannerFixture } from "./helpers/event-scanner-fixture";
+import { clearSessionAttendanceDays, seedSessionAttendanceDays } from "./helpers/session-attendance-days";
 import { grantAdministrator } from "./helpers/administrator";
 import { createAdminSession } from "./helpers/auth";
 import { callApi } from "./helpers/app";
@@ -156,6 +157,7 @@ beforeEach(async () => {
   await env.DB.prepare("UPDATE event_agenda_occurrences SET start_at=?,end_at=?,room_id=?,remote_capacity=1 WHERE id=?")
     .bind(start, end, roomId, f.occurrenceId)
     .run();
+  await seedSessionAttendanceDays(env.DB, f.eventId, [start.slice(0, 10)]);
   await env.DB.prepare("UPDATE events SET settings_json=json_set(settings_json,?,?) WHERE id=?")
     .bind(`$.agenda.sessionMedia.${JSON.stringify(f.occurrenceId)}.joinUrl`, joinUrl, f.eventId)
     .run();
@@ -175,10 +177,11 @@ describe("optional capacity-backed session registration", () => {
       ).bind(laterId, now, now),
       ...[f.operatorId, laterId].map((userId) =>
         env.DB.prepare(
-          "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','in_person','test',?,?,?)",
+          "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','test',?,?,?)",
         ).bind(crypto.randomUUID(), f.eventId, userId, crypto.randomUUID(), now, now),
       ),
     ]);
+    await seedSessionAttendanceDays(env.DB, f.eventId, [start.slice(0, 10)]);
     await grantAdministrator(env.DB, laterId);
     const laterToken = await createAdminSession(env.DB, laterId, crypto.randomUUID());
     expect(await accepted("reserve")).toMatchObject({ status: "reserved" });
@@ -205,10 +208,11 @@ describe("optional capacity-backed session registration", () => {
     expect(await accepted("reserve")).toMatchObject({ status: "reserved" });
     const now = new Date().toISOString();
     await env.DB.prepare(
-      "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','in_person','test',?,?,?)",
+      "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','test',?,?,?)",
     )
       .bind(crypto.randomUUID(), f.eventId, f.operatorId, crypto.randomUUID(), now, now)
       .run();
+    await seedSessionAttendanceDays(env.DB, f.eventId, [start.slice(0, 10)]);
     expect(await accepted("reserve", f.token)).toMatchObject({ status: "waitlisted" });
     expect((await allocations()).occupied).toBe(1);
     expect(await accepted("cancel")).toMatchObject({ status: "canceled" });
@@ -269,7 +273,8 @@ describe("optional capacity-backed session registration", () => {
     ).toBe(1);
   });
 
-  it("uses the selected event day rather than the event-wide summary and rejects a different physical location", async () => {
+  it("uses the selected event day and rejects a different physical location", async () => {
+    await clearSessionAttendanceDays(env.DB, f.eventId);
     const dayId = crypto.randomUUID();
     await env.DB.prepare(
       "INSERT INTO event_days(id,event_id,day_date,label,sort_order,created_at,updated_at) VALUES(?,?,?,'Session day',0,?,?)",
@@ -280,9 +285,6 @@ describe("optional capacity-backed session registration", () => {
       "INSERT INTO registration_day_attendance(id,registration_id,event_day_id,attendance_type,created_at,updated_at) SELECT ?,id,?,'in_person',?,? FROM registrations WHERE event_id=? AND user_id=?",
     )
       .bind(crypto.randomUUID(), dayId, start, start, f.eventId, f.userId)
-      .run();
-    await env.DB.prepare("UPDATE registrations SET attendance_type='virtual' WHERE event_id=? AND user_id=?")
-      .bind(f.eventId, f.userId)
       .run();
     expect((await manifest()).sessionEligible).toBe(true);
     expect(await scan()).toMatchObject({ outcome: "eligible", admissionDecision: "allowed" });

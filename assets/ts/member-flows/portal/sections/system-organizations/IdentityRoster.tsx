@@ -52,7 +52,7 @@ async function createIdentity(
 ): Promise<boolean> {
   const checked = form.submit();
   if (!checked.data) {
-    setError(checked.message);
+    setError(checked.formMessage ?? "");
     return false;
   }
   try {

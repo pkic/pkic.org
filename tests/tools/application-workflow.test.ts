@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { isMap, isSeq, parseDocument } from "yaml";
+import { isMap, isSeq, parseDocument, parseAllDocuments } from "yaml";
 
 const workflow = parseDocument(
   readFileSync(new URL("../../.github/workflows/backend-tests.yml", import.meta.url), "utf8"),
@@ -58,6 +58,18 @@ describe("application validation coverage", () => {
     }
     for (const suite of ["unit", "frontend", "tools"]) expect(commands).toContain(`pnpm run test:${suite} --bail=1`);
     expect(commands).toContain("pnpm run test:e2e:ci");
+  });
+
+  it("uses a preinstalled browser image matching the locked Playwright version", () => {
+    const documents = parseAllDocuments(readFileSync(new URL("../../pnpm-lock.yaml", import.meta.url), "utf8"));
+    const version = documents
+      .map((document) => document.getIn(["importers", ".", "devDependencies", "@playwright/test", "version"]))
+      .find((value) => typeof value === "string");
+    expect(version).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(workflow.getIn(["jobs", "browser", "container", "image"])).toBe(
+      `mcr.microsoft.com/playwright:v${version}-noble`,
+    );
+    expect(workflow.getIn(["jobs", "browser", "container", "options"])).toContain("--ipc=host");
   });
 
   it("runs even after a prerequisite fails and includes every validation family", () => {

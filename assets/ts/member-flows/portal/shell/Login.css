@@ -242,4 +242,70 @@
     overflow-wrap: anywhere;
     text-align: center;
   }
+
+  /*
+   * An identity to continue as: the consortium's mark for a membership, the name, and what the
+   * membership is. It reads left to right so the names line up down the card, whatever each holds.
+   */
+  /* Every choice is the height of the tallest, so the cards read as a set. */
+  .pk-identity-choices {
+    display: grid;
+    gap: var(--pk-3);
+    grid-auto-rows: 1fr;
+  }
+  .pk-login__controls .pk-btn:has(.pk-identity-choice) {
+    position: relative;
+    overflow: hidden;
+    block-size: auto;
+    padding-block: var(--pk-3);
+    text-align: start;
+  }
+  .pk-identity-choice {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-4);
+    inline-size: 100%;
+  }
+  .pk-identity-choice .pk-avatar {
+    flex: none;
+  }
+  /* A membership is felt, not read: the consortium's mark, barely there, clipped inside the card's far edge. */
+  .pk-identity-choice__mark {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  .pk-identity-choice__mark svg {
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline-end: 0;
+    inline-size: 6rem;
+    block-size: 6rem;
+    transform: translateY(-50%);
+    opacity: 0.045;
+  }
+  .pk-identity-choice__body {
+    display: grid;
+    min-inline-size: 0;
+    flex: 1;
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: start;
+    gap: 0.125rem;
+    text-align: start;
+  }
+  /* The name leads; what the person does there and what the membership is follow, quieter and on one line. */
+  .pk-identity-choice__name {
+    font-size: var(--pk-text-xl);
+    font-weight: 600;
+    line-height: 1.2;
+  }
+  .pk-identity-choice__detail {
+    display: -webkit-box;
+    overflow: hidden;
+    font-size: var(--pk-text-md);
+    opacity: 0.8;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
 }

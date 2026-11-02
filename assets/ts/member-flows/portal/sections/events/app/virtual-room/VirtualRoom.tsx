@@ -1,3 +1,4 @@
+import { agendaMediaCapabilities, agendaOccurrenceMedia } from "../../../../../../../shared/event-agenda-media";
 /**
  * The event app's virtual room: one location's live stream, large, with what is on now and next, the
  * session's questions and the event's sponsors beside it (below it on a phone, under a player that stays in
@@ -6,7 +7,7 @@
  * Streams come from the attendee endpoint, which releases them only to registered attendees and staff; the
  * running session comes from the published agenda compared with the browser clock at session boundaries.
  */
-import { useCallback, useMemo } from "preact/hooks";
+import { useCallback, useEffect, useMemo, useRef } from "preact/hooks";
 import { useHashLocation } from "wouter/use-hash-location";
 import { agendaTimeZones } from "../../../../../../../shared/agenda-time-display";
 import { eventVirtualRoomRoute } from "../../../../../../../shared/event-participation-link";
@@ -42,7 +43,21 @@ export function VirtualRoom({ slug, eventName }: { slug: string; eventName: stri
   const { streams, program } = useVirtualRoomData(slug);
   const sponsors = useSponsorDisplay("/api/v1", { eventSlug: slug });
   const agenda = program.data?.agenda ?? null;
-  const locations = streams.data?.locations ?? [];
+  const locations = useMemo(() => {
+    const configured = streams.data?.locations ?? [];
+    if (!agenda) return configured;
+    const waiting = agenda.rooms
+      .filter(
+        (room) =>
+          !configured.some((item) => item.id === room.id) &&
+          (agendaMediaCapabilities(room.equipment).liveStreaming ||
+            agenda.occurrences.some(
+              (session) => session.roomId === room.id && agendaOccurrenceMedia(agenda.rooms, session).liveStreaming,
+            )),
+      )
+      .map((room) => ({ id: room.id, name: room.name, stream: null, days: [] }));
+    return [...configured, ...waiting];
+  }, [streams.data, agenda]);
   const roomId = chooseLocation(locations, agenda, { room: query.get("room"), session: query.get("session") });
   const room = locations.find((candidate) => candidate.id === roomId) ?? null;
   const timeZone = streams.data?.timeZone ?? agenda?.timeZone ?? "UTC";
@@ -50,17 +65,25 @@ export function VirtualRoom({ slug, eventName }: { slug: string; eventName: stri
   const now = useBoundaryClock(
     useCallback((at: number) => nextRoomBoundary(sessions, at, timeZone), [sessions, timeZone]),
   );
+  const startsAt = sessions[0]?.startAt;
+  const waiting = Boolean(startsAt && now < Date.parse(startsAt));
+  const previousCountdown = useRef({ roomId, waiting });
+  useEffect(() => {
+    const previous = previousCountdown.current;
+    previousCountdown.current = { roomId, waiting };
+    if (previous.roomId === roomId && previous.waiting && !waiting) void streams.reload();
+  }, [roomId, waiting, streams.reload]);
   if (streams.loading || program.loading) return <Spinner label="Opening the virtual room…" />;
   if (streams.error) return <ErrorAlert error={streams.error} />;
   if (!room)
     return (
       <EmptyState
-        title="No live streams yet"
-        body="Live streams appear here when the organizers start broadcasting a location."
+        title="No virtual locations are scheduled"
+        body="Check the agenda for this event’s online sessions."
       />
     );
   const stream = locationStreamOn(room, instantToCalendarDate(new Date(now).toISOString(), timeZone));
-  const moment = roomMoment(sessions, now, timeZone);
+  const moment = roomMoment(sessions, now);
   const viewerZone = agendaTimeZones(timeZone, viewerTimeZone(), "remote").primary.zone;
   const formatTime = (startAt: string, endAt: string) => formatTimeRangeInZone(startAt, endAt, viewerZone);
   return (
@@ -78,7 +101,11 @@ export function VirtualRoom({ slug, eventName }: { slug: string; eventName: stri
         />
       )}
       <div class="pk-virtual-room__stage">
-        <VirtualRoomPlayer stream={stream} locationName={room.name} />
+        <VirtualRoomPlayer
+          stream={waiting ? null : stream}
+          locationName={room.name}
+          startsAt={waiting ? startsAt : undefined}
+        />
         <VirtualRoomNowPlaying slug={slug} moment={moment} stream={stream} formatTime={formatTime} />
       </div>
       {program.error && <ErrorAlert error={program.error} />}

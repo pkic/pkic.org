@@ -7,7 +7,7 @@ import type { AuthenticatedIdentity } from "../auth/user-session";
 import { prepareProposalSubmitter } from "./proposal-submitter";
 import { prepareIdentityProfileCompletion } from "./identities/profile-completion";
 import { buildFindOrCreateUserStatement } from "./users";
-import { readAffiliation } from "./identities/affiliation-projection";
+import { normalizeEmail } from "../validation";
 import { buildAddProposalSpeaker, buildCreateProposal, formatInvitePerson } from "./proposals";
 import { prepareConsentStatements, prepareActiveTermsSnapshotGuard, validateRequiredConsents } from "./consent";
 import { prepareAcceptInviteStatements, type InviteRecord } from "./invites";
@@ -15,7 +15,7 @@ import { prepareReferralCodeStatement } from "./referrals";
 import { prepareQueueEmailStatement } from "../email/outbox";
 import { emailPlainText } from "../email/plain-text";
 import { buildEventEmailVariables, getRequiredTerms } from "./events";
-import { proposalManagePageUrl, speakerManagePageUrl } from "./frontend-links";
+import { proposalManagePageUrl, speakerParticipationPageUrl } from "./frontend-links";
 import { queuedCapabilityToken } from "./capability-links";
 import { requireConfiguredSessionType } from "./events";
 import { isRegistrationTransitionConflict, registrationChangedError } from "./registrations/transition-guard";
@@ -34,6 +34,7 @@ import {
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../db/authorization-guard";
 import { AppError } from "../errors";
 import { proposalInviteEmailTextVariables } from "./proposal-invite-email-context";
+import { formatProposalSpeakerLineup } from "./proposal-invite-person";
 import { eventInviteWindowEvidence, resolveEventInviteExpiry } from "../invite-validity";
 import { nowIso } from "../utils/time";
 import { sha256Hex } from "../utils/crypto";
@@ -181,7 +182,7 @@ export async function submitProposal(
     }),
   );
 
-  const coSpeakers: Array<{ user: UserRecord; organizationName: string | null; manageToken: string }> = [];
+  const coSpeakers: Array<{ user: UserRecord; manageToken: string }> = [];
   for (const speaker of input.body.speakers) {
     const userWrite = await buildFindOrCreateUserStatement(db, profileWrite(speaker));
     statements.push(...userWrite.statements);
@@ -194,34 +195,15 @@ export async function submitProposal(
       proposalId: created.proposal.id,
       userId: userWrite.user.id,
       role: speaker.role,
+      invitedEmail: normalizeEmail(speaker.email),
       inviteExpiresAt: coSpeakerExpiresAt,
       proposalContext,
       actingIdentity,
     });
+    // A co-speaker's bio, links and photo are their own to write when they confirm; the proposer
+    // only names who to invite.
     statements.push(...preparedSpeaker.statements);
-    // What the proposer wrote about a co-speaker starts the profile of an account made by this
-    // submission; an existing person's identity is theirs alone to edit.
-    if (userWrite.created)
-      statements.push(
-        ...prepareIdentityProfileCompletion(db, {
-          userId: userWrite.user.id,
-          identityId: null,
-          biography: speaker.bio,
-          links: speaker.links,
-          at: inviteNow,
-          actor: { type: "user", id: proposer.id },
-          scope: { type: "proposal", id: created.proposal.id },
-        }),
-      );
-    // Attached to the representation their address links to, or, until they choose one, their affiliation.
-    const organizationName = actingIdentity
-      ? actingIdentity.representation.organizationName
-      : (await readAffiliation(db, userWrite.user.id)).organizationName;
-    coSpeakers.push({
-      user: userWrite.user,
-      organizationName,
-      manageToken: preparedSpeaker.manageToken,
-    });
+    coSpeakers.push({ user: userWrite.user, manageToken: preparedSpeaker.manageToken });
   }
 
   statements.push(
@@ -253,43 +235,51 @@ export async function submitProposal(
     ...proposer,
     organization_name: actingIdentity ? actingIdentity.representation.organizationName : null,
   };
-  const allPeople = [
+  // An invitation names only confirmed speakers: the proposer, once they speak as a chosen representation.
+  const confirmedLineupText = formatProposalSpeakerLineup(actingIdentity ? [proposerRepresentation] : []);
+  // The proposer is told the names they typed for the people they invited, never a stored profile.
+  const proposerLineupText = formatProposalSpeakerLineup([
     proposerRepresentation,
-    ...coSpeakers.map(({ user, organizationName }) => ({ ...user, organization_name: organizationName })),
-  ];
-  const speakerLineupText = allPeople
-    .map(
-      (person) =>
-        `- ${formatInvitePerson(person.first_name, person.last_name, person.organization_name, person.email)}`,
-    )
-    .join("\n");
-  const invitedByDisplay = formatInvitePerson(
-    proposer.first_name,
-    proposer.last_name,
-    proposerRepresentation.organization_name,
-    proposer.email,
-  );
-  const inviteEmailText = proposalInviteEmailTextVariables({
+    ...input.body.speakers.map((speaker) => ({
+      first_name: speaker.firstName,
+      last_name: speaker.lastName,
+      organization_name: null,
+    })),
+  ]);
+  const invitedByDisplay =
+    formatInvitePerson(proposer.first_name, proposer.last_name, proposerRepresentation.organization_name) ||
+    "The proposer";
+  const inviteEmailContext = {
     invitedByDisplay,
     inviterFirstName: proposer.first_name ?? "",
     proposalTitle: created.proposal.title,
     proposalAbstract: created.proposal.abstract,
-    speakerLineupText,
+  };
+  const inviteEmailText = proposalInviteEmailTextVariables({
+    ...inviteEmailContext,
+    speakerLineupText: confirmedLineupText,
+  });
+  const proposerEmailText = proposalInviteEmailTextVariables({
+    ...inviteEmailContext,
+    speakerLineupText: proposerLineupText,
   });
   const eventVariables = buildEventEmailVariables(input.event, input.appBaseUrl);
   const outboxIds: string[] = [];
 
   for (const { user, manageToken } of coSpeakers) {
-    const manageUrl = speakerManagePageUrl(input.appBaseUrl, input.event, manageToken);
+    const manageUrl = speakerParticipationPageUrl(input.appBaseUrl, input.event, created.proposal.id, user.id);
     const email = prepareQueueEmailStatement(db, {
       eventId: input.event.id,
       templateKey: "co_speaker_invite",
       recipientEmail: user.email,
       recipientUserId: user.id,
       messageType: "transactional",
-      subject: `You have been added as a speaker — ${input.event.name}`,
-      capabilityLinkValues: [manageUrl],
+      subject: `Speaker invitation: please confirm — ${input.event.name}`,
+      capabilityLinkValues: [manageToken],
       data: {
+        __speakerCapability: manageToken,
+        proposalId: created.proposal.id,
+        speakerUserId: user.id,
         ...eventVariables,
         firstName: emailPlainText(user.first_name ?? ""),
         lastName: emailPlainText(user.last_name ?? ""),
@@ -306,7 +296,7 @@ export async function submitProposal(
     input.event,
     queuedCapabilityToken("proposal_manage", created.proposal.id),
   );
-  const speakerManageUrl = speakerManagePageUrl(input.appBaseUrl, input.event, proposerSpeaker.manageToken);
+  const speakerManageUrl = speakerParticipationPageUrl(input.appBaseUrl, input.event, created.proposal.id, proposer.id);
   const proposerEmail = prepareQueueEmailStatement(db, {
     eventId: input.event.id,
     templateKey: "proposal_submitted",
@@ -314,12 +304,13 @@ export async function submitProposal(
     recipientUserId: proposer.id,
     messageType: "transactional",
     subject: `Proposal submitted: ${created.proposal.title}`,
-    capabilityLinkValues: [queuedManageUrl, speakerManageUrl],
+    capabilityLinkValues: [queuedManageUrl, proposerSpeaker.manageToken],
     data: {
+      __speakerCapability: proposerSpeaker.manageToken,
       ...eventVariables,
       firstName: emailPlainText(proposer.first_name ?? ""),
       lastName: emailPlainText(proposer.last_name ?? ""),
-      ...inviteEmailText,
+      ...proposerEmailText,
       proposalType: emailPlainText(created.proposal.proposal_type),
       manageUrl: queuedManageUrl,
       speakerManageUrl,
@@ -338,8 +329,9 @@ export async function submitProposal(
       recipientUserId: proposer.id,
       messageType: "transactional",
       subject: `Review your speaker representation — ${input.event.name}`,
-      capabilityLinkValues: [speakerManageUrl],
+      capabilityLinkValues: [proposerSpeaker.manageToken],
       data: {
+        __speakerCapability: proposerSpeaker.manageToken,
         ...eventVariables,
         firstName: emailPlainText(proposer.first_name ?? ""),
         proposalTitle: emailPlainText(created.proposal.title),

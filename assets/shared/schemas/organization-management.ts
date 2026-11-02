@@ -94,7 +94,10 @@ export type OrganizationDetail = z.infer<typeof organizationDetailSchema>;
 /** Allowlisted sort columns for GET /api/v1/organizations — see listOrganizations. */
 export const ORGANIZATIONS_SORT_COLUMNS = ["name", "membership_category", "created_at", "identity_count"] as const;
 
-export const organizationsListQuerySchema = listQuerySchema(ORGANIZATIONS_SORT_COLUMNS);
+export const organizationsListQuerySchema = listQuerySchema(ORGANIZATIONS_SORT_COLUMNS).extend({
+  /** Organizations connected through a proved email domain or an overlapping subdomain. */
+  relatedToOrganizationId: databaseIdSchema.optional(),
+});
 export type OrganizationsListQuery = z.infer<typeof organizationsListQuerySchema>;
 export const organizationsListResponseSchema = paginatedResponseSchema("organizations", organizationSummarySchema);
 

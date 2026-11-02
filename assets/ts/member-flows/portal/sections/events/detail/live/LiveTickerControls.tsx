@@ -188,7 +188,7 @@ export function LiveTickerControls({ targets }: { targets: LiveTargets }) {
               setConfig(checked.data);
               setDraft(null);
               setError(null);
-            } else setError(checked.message);
+            } else setError(checked.formMessage);
           }}
           onCancel={() => setDraft(null)}
         >

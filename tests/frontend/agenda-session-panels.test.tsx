@@ -73,6 +73,10 @@ it("opens editable archive and promotion panels from the loaded agenda while the
   expect(host.querySelector("form textarea")).not.toBeNull();
   await act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Close session archive"]')!.click());
   await runRowAction(host, "Cryptographic operations", "Speaker promotion kit");
-  expect([...host.querySelectorAll("label")].some((label) => label.textContent?.startsWith("Why attend"))).toBe(true);
-  expect(host.querySelector("form textarea")).not.toBeNull();
+  expect(host.querySelector("form")).toBeNull();
+  await act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Edit shared promotion copy"]')!.click());
+  const dialog = host.querySelector("dialog[open]")!;
+  expect(dialog).not.toBeNull();
+  expect([...dialog.querySelectorAll("label")].some((label) => label.textContent?.startsWith("Why attend"))).toBe(true);
+  expect(dialog.querySelector("form textarea")).not.toBeNull();
 });

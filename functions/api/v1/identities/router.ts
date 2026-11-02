@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { fromHono } from "chanfana";
+import { IdentitiesGet } from "./index";
 import invitations_Router from "./invitations/router";
 import {
   AffiliationReviewGroupApprove,
@@ -13,6 +14,7 @@ import { IdentityGet, IdentityPatch } from "./[identityId]";
 const app = new Hono();
 export const openapi = fromHono(app);
 
+openapi.get("/", IdentitiesGet);
 openapi.route("/invitations", invitations_Router);
 openapi.get("/reviews", AffiliationReviewsList);
 openapi.get("/reviews/groups", AffiliationReviewGroupsList);

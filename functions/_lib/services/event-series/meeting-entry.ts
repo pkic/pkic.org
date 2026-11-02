@@ -13,6 +13,7 @@ import { hmacSha256Hex, verifyHmacSha256Hex } from "../../utils/crypto";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { openProviderJoinUrl } from "./provider-url";
+import { personNameSql } from "../people/person-name-sql";
 
 type JoinConfirmInput = z.infer<typeof meetingJoinConfirmSchema>;
 
@@ -63,9 +64,7 @@ const JOIN_CONTEXT_SELECT = `SELECT occurrence.id AS occurrence_id, occurrence.s
   COALESCE(occurrence.location_override, series.location) AS location,
   COALESCE(occurrence.provider_join_url_ciphertext,
     json_extract(series.provider_data_json, '$.joinUrlCiphertext')) AS provider_join_url_ciphertext,
-  COALESCE(user.preferred_name,
-           NULLIF(trim(COALESCE(user.first_name, '') || ' ' || COALESCE(user.last_name, '')), ''),
-           user.email) AS user_name,
+  COALESCE(${personNameSql("user")}, user.email) AS user_name,
   COALESCE(
     (SELECT GROUP_CONCAT(affiliation.name, ', ')
        FROM (

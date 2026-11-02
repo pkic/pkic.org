@@ -10,6 +10,7 @@ import {
 } from "../functions/_lib/services/referrals";
 import { createTemplateVersion, activateTemplateVersion } from "../functions/_lib/email/templates";
 import { buildBadgeAttachment } from "../functions/_lib/email/attachments";
+import { PERSONAL_PROMOTION_RENDERER } from "../assets/shared/personal-promotion-image";
 import { queueEmail, processOutboxById } from "../functions/_lib/email/outbox";
 import type { Env } from "../functions/_lib/types";
 
@@ -169,11 +170,11 @@ describe("referral, waitlist, and calendar flows", () => {
       `),
       env.DB.prepare(`
         INSERT INTO registrations (
-          id, event_id, user_id, invite_id, status, attendance_type, source_type, source_ref,
+          id, event_id, user_id, invite_id, status, source_type, source_ref,
           custom_answers_json, referred_by_code, confirmation_link_secret,
           manage_link_secret, confirmed_at, cancelled_at, created_at, updated_at
         ) VALUES (
-          '${registrationId}', '${eventId}', '${userId}', NULL, 'registered', 'virtual',
+          '${registrationId}', '${eventId}', '${userId}', NULL, 'registered',
           'direct', NULL, NULL, NULL, NULL, 'manage-hash', datetime('now'), NULL, datetime('now'), datetime('now')
         )
       `),
@@ -488,6 +489,7 @@ describe("referral, waitlist, and calendar flows", () => {
           arrayBuffer: vi
             .fn()
             .mockResolvedValue(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).buffer),
+          customMetadata: { badgeRenderer: PERSONAL_PROMOTION_RENDERER },
         }),
       },
     };

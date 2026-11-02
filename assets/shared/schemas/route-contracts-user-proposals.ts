@@ -6,7 +6,7 @@ export const currentUserProposalsListRouteSchema = {
   tags: ["Users", "Proposals"],
   summary: "List the current identity's event proposals",
   description:
-    "Identity-first participation record (see IMPLEMENTATION_TRACKER.md section 13): a READ-ONLY projection of every proposal the caller submitted or is a listed speaker on, matched to their own user id. Gated on the authenticated identity alone, not member capacity. CRITICAL BOUNDARY: proposal self-service authority lives entirely in signed capability links, which never leak through a session — this response carries no token, no capability URL, and enables no mutation; the portal pairs it with a separate resend-access-link action through the existing capability machinery. Newest-updated first; filtering, counting, and pagination run in D1.",
+    "A read-only list of proposals the signed-in person submitted or is a speaker on. The response includes their participation status and no capability links. Proposal and speaker actions use their own authorization checks. Filtering, sorting, and pagination run in D1.",
   request: { query: currentUserProposalsListQuerySchema },
   responses: {
     "200": {

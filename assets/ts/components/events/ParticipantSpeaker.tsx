@@ -23,7 +23,7 @@ import { headshotFormEndpoint } from "../../shared/headshot/endpoints";
 import { showHeadshotDisclaimer } from "../../shared/headshot/upload";
 import { IdentityProfileForm } from "../identities/IdentityProfileForm";
 import { ConsentCard } from "../ConsentCard";
-import { Badge } from "../Badge";
+import { Badge, PlainStatus } from "../Badge";
 import { confirmAction } from "../ConfirmDialog";
 import { Alert } from "../../ui/Alert";
 import { Button } from "../../ui/Button";
@@ -37,7 +37,7 @@ import { normalizeProfileLinks } from "../../shared/widgets/profile-links";
 import { Markdown } from "../../ui/Markdown";
 import { Menu } from "../../ui/Menu";
 import { SpeakerParticipationIdentity } from "../SpeakerParticipationIdentity";
-import { newAffiliationDetails, type ProposalEntrySelection } from "../useProposalEntryIdentity";
+import { newAffiliationDetails, prepareProposalEntry, type ProposalEntrySelection } from "../useProposalEntryIdentity";
 import {
   eventProposalProofIdentityPatchSchema,
   eventProposalProofIdentityPatchResponseSchema,
@@ -144,7 +144,11 @@ export function ParticipantSpeaker({
         <PanelBody>
           <div class="pk-stack">
             <div class="pk-cluster">
-              <Badge status={data.speaker.status} />
+              {data.speaker.status === "confirmed" || data.speaker.status === "invited" ? (
+                <PlainStatus status={data.speaker.status} />
+              ) : (
+                <Badge status={data.speaker.status} />
+              )}
             </div>
             {!editable && (
               <Alert>Participation changes are unavailable because you declined or the proposal is closed.</Alert>
@@ -162,7 +166,7 @@ export function ParticipantSpeaker({
                   event.preventDefault();
                   const checked = participation.submit();
                   if (!checked.data) {
-                    setError(checked.message);
+                    setError(checked.formMessage ?? "");
                     return;
                   }
                   void perform(
@@ -181,7 +185,12 @@ export function ParticipantSpeaker({
                       )}
                     />
                   ))}
-                  <Button type="submit" loading={busy}>
+                  {!data.currentRepresentation && (
+                    <p class="pk-small pk-muted">
+                      Accept the terms, then choose and save your speaker identity before confirming.
+                    </p>
+                  )}
+                  <Button type="submit" loading={busy} disabled={!termsAccepted || !data.currentRepresentation}>
                     Confirm participation
                   </Button>
                 </fieldset>
@@ -209,6 +218,9 @@ export function ParticipantSpeaker({
         <PanelBody>
           <div class="pk-stack">
             <p>{data.profile.email}</p>
+            {editable && !data.profile.headshotUrl && (
+              <p>Please upload a headshot so attendees can recognize you and we can promote your session.</p>
+            )}
             {(editable || data.profile.headshotUrl) && (
               <HeadshotTile
                 name={speakerName}
@@ -236,22 +248,23 @@ export function ParticipantSpeaker({
                 }
                 const checked = form.submit();
                 if (!checked.data) {
-                  setError(checked.message);
+                  setError(checked.formMessage ?? "");
                   return;
                 }
                 void perform(async () => {
+                  const submittedEntry = identityChanged && entry ? await prepareProposalEntry(entry) : null;
                   await patchJson(
                     path("profile"),
                     speakerSelfProfilePatchSchema.parse({
                       ...checked.data,
-                      ...(identityChanged && entry
+                      ...(submittedEntry
                         ? {
-                            actingIdentityId: entry.actingIdentityId,
-                            continuationToken: entry.continuationToken,
-                            unaffiliatedAttestation: entry.unaffiliatedAttestation,
-                            independentCapacity: entry.independentCapacity,
+                            actingIdentityId: submittedEntry.actingIdentityId,
+                            continuationToken: submittedEntry.continuationToken,
+                            unaffiliatedAttestation: submittedEntry.unaffiliatedAttestation,
+                            independentCapacity: submittedEntry.independentCapacity,
                             consents: acceptedConsents(),
-                            ...newAffiliationDetails(entry),
+                            ...newAffiliationDetails(submittedEntry),
                           }
                         : {}),
                     }),
@@ -282,6 +295,10 @@ export function ParticipantSpeaker({
                   consents={acceptedConsents}
                   onChange={onIdentityChange}
                   onEditing={onEditing}
+                  onCancelEditing={() => {
+                    setEntry(null);
+                    setIdentityChanged(false);
+                  }}
                   onTermsRecorded={setConsents}
                   savePersonalDetails={async (names) => {
                     const saved = await patchJson(

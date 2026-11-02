@@ -12,6 +12,7 @@ import { speakerProfileUpdateResponseSchema } from "../assets/shared/schemas/spe
 import { identitiesListResponseSchema } from "../assets/shared/schemas/identity";
 import { verifyEventProposalCapability } from "../functions/_lib/services/event-proposal-proof-capabilities";
 import { issueDatabaseCapability } from "../functions/_lib/services/capability-links";
+import { signUserSessionToken } from "../functions/_lib/auth/user-session";
 import type { DatabaseLike } from "../functions/_lib/types";
 import { callApi } from "./helpers/app";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
@@ -145,6 +146,47 @@ async function profile(f: Awaited<ReturnType<typeof fixture>>, continuationToken
 }
 
 describe("authenticated speaker resource mailbox proof", () => {
+  it("requires a pending invitation address to be verified by the signed-in account", async () => {
+    const f = await fixture();
+    const emailId = crypto.randomUUID();
+    const proposerId = await insertUser(env.DB, "other-proposer@example.test");
+    await env.DB.prepare("UPDATE session_proposals SET proposer_user_id=? WHERE id=?")
+      .bind(proposerId, f.proposalId)
+      .run();
+    await env.DB.prepare(
+      "INSERT INTO user_emails (id,user_id,email,normalized_email,created_at) VALUES (?,?,'invited@example.test','invited@example.test',?)",
+    )
+      .bind(emailId, f.userId, new Date().toISOString())
+      .run();
+    await env.DB.prepare(
+      "UPDATE proposal_speakers SET status='invited', invited_email='invited@example.test' WHERE id=?",
+    )
+      .bind(f.speakerId)
+      .run();
+    const read = () =>
+      callApi(env, `/api/v1/proposals/${f.proposalId}/participation`, {
+        headers: { authorization: `Bearer ${f.session}` },
+      });
+    const list = async () =>
+      (await (
+        await callApi(env, "/api/v1/users/current/proposals", {
+          headers: { authorization: `Bearer ${f.session}` },
+        })
+      ).json()) as { proposals: Array<{ id: string }> };
+    expect((await list()).proposals).toHaveLength(0);
+    const blocked = await read();
+    expect(blocked.status).toBe(403);
+    await expect(blocked.json()).resolves.toMatchObject({ error: { code: "SPEAKER_INVITED_EMAIL_UNVERIFIED" } });
+    await env.DB.prepare("UPDATE user_emails SET verified_at=? WHERE id=?")
+      .bind(new Date().toISOString(), emailId)
+      .run();
+    expect((await read()).status).toBe(200);
+    expect((await list()).proposals.map((proposal) => proposal.id)).toEqual([f.proposalId]);
+    await env.DB.prepare("UPDATE proposal_speakers SET status='confirmed' WHERE id=?").bind(f.speakerId).run();
+    await env.DB.prepare("DELETE FROM user_emails WHERE id=?").bind(emailId).run();
+    expect((await read()).status).toBe(200);
+  });
+
   it("proves the exact secondary mailbox and records the owned representation without a manage token or duplicate person", async () => {
     const f = await fixture();
     const proof = await ready(f);
@@ -232,6 +274,83 @@ describe("authenticated speaker resource mailbox proof", () => {
     expect(response.status, await response.clone().text()).toBe(200);
     const saved = speakerProfileUpdateResponseSchema.parse(await response.json());
     expect(saved.currentRepresentation?.actingIdentityId).toBeTruthy();
+  });
+
+  it("treats a session the server no longer accepts as no session for an invited guest", async () => {
+    const f = await fixture();
+    const token = await issueDatabaseCapability({
+      db: env.DB,
+      signingSecret: env.INTERNAL_SIGNING_SECRET!,
+      purpose: "speaker_manage",
+      resourceId: f.speakerId,
+    });
+    const proof = await prepareProposalProof({
+      environment: env,
+      eventSlug: "pqc-2026",
+      email: "speaker@official.example",
+      consents,
+      unaffiliatedAttestation: false,
+      speakerManagementToken: token,
+    });
+    const response = await request(
+      `/api/v1/proposals/speakers/access/${proof.speakerManagementToken}/profile`,
+      speakerSelfProfilePatchSchema.parse({
+        continuationToken: proof.continuationToken,
+        unaffiliatedAttestation: false,
+        consents,
+        jobTitle: "Invited role",
+      }),
+      "expired-or-unknown-session",
+      env.DB,
+      "PATCH",
+    );
+    expect(response.status, await response.clone().text()).toBe(200);
+  });
+
+  it("lets an invited guest proceed when the browser still carries an idle staff session", async () => {
+    const f = await fixture();
+    // A live staff session whose staff activity is two hours old: past the one-hour staff idle limit.
+    const staffSession = await env.DB.prepare(
+      "SELECT s.id, s.user_id, s.expires_at FROM sessions s JOIN users u ON u.id=s.user_id WHERE u.email='admin@pkic.org'",
+    ).first<{ id: string; user_id: string; expires_at: string }>();
+    const now = Math.floor(Date.now() / 1000);
+    const idleStaffToken = await signUserSessionToken(env.INTERNAL_SIGNING_SECRET!, {
+      sub: staffSession!.user_id,
+      sid: staffSession!.id,
+      exp: Math.floor(new Date(staffSession!.expires_at).getTime() / 1000),
+      lastActivityAt: now,
+      staffLastActivityAt: now - 2 * 60 * 60,
+    });
+    const cookie = `pkic_session=${idleStaffToken}`;
+    const sessionCheck = await callApi(env, "/api/v1/auth/session", { headers: { cookie } });
+    expect(sessionCheck.status).toBe(401);
+    const token = await issueDatabaseCapability({
+      db: env.DB,
+      signingSecret: env.INTERNAL_SIGNING_SECRET!,
+      purpose: "speaker_manage",
+      resourceId: f.speakerId,
+    });
+    const proof = await prepareProposalProof({
+      environment: env,
+      eventSlug: "pqc-2026",
+      email: "speaker@official.example",
+      consents,
+      unaffiliatedAttestation: false,
+      speakerManagementToken: token,
+    });
+    const response = await callApi(env, `/api/v1/proposals/speakers/access/${proof.speakerManagementToken}/profile`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify(
+        speakerSelfProfilePatchSchema.parse({
+          continuationToken: proof.continuationToken,
+          unaffiliatedAttestation: false,
+          consents,
+          jobTitle: "Invited role",
+        }),
+      ),
+    });
+    expect(response.status, await response.clone().text()).toBe(200);
   });
 
   it.each(["anonymous", "other_owner", "other_event", "ambiguous"] as const)(

@@ -1,4 +1,6 @@
+import { portalSession } from "../../state";
 import { lazy, Suspense } from "preact/compat";
+import { useEffect } from "preact/hooks";
 import { useHashLocation } from "wouter/use-hash-location";
 import {
   eventAgendaRoute,
@@ -20,7 +22,7 @@ import { ParticipantRegistration } from "../../../../components/events/Participa
 import { ParticipantSubmission } from "../../../../components/events/ParticipantSubmission";
 import { ParticipantSpeaker } from "../../../../components/events/ParticipantSpeaker";
 import { Spinner } from "../../../../components/Spinner";
-import { Badge } from "../../../../components/Badge";
+import { Badge, PlainStatus } from "../../../../components/Badge";
 import { Tabs } from "../../../../ui/Tabs";
 import { ParticipantEventNavigation, ParticipantLeadScanner } from "./ParticipantEventNavigation";
 import { Alert } from "../../../../ui/Alert";
@@ -31,8 +33,9 @@ import { SectionHeading } from "../../../../ui/SectionHeading";
 import { EventTicket } from "./app/EventTicket";
 import { EventMore } from "./app/EventMore";
 import { eventRegistrationStanding } from "./app/event-app-model";
-import { participantEventAppSubject } from "./app/event-app-tabs";
+import { hasEventProposals, hasEventPromotionMaterials, participantEventAppSubject } from "./app/event-app-tabs";
 
+const EventRegister = lazy(() => import("./app/EventRegister").then((module) => ({ default: module.EventRegister })));
 const MyAgenda = lazy(() => import("./detail/participation/MyAgenda").then((module) => ({ default: module.MyAgenda })));
 const EventCheckIn = lazy(() => import("./app/EventCheckIn").then((module) => ({ default: module.EventCheckIn })));
 const VirtualRoom = lazy(() =>
@@ -45,14 +48,19 @@ const MySessionManagement = lazy(() =>
   import("./detail/participation/MySessionManagement").then((module) => ({ default: module.MySessionManagement })),
 );
 type EventDetail = z.infer<typeof eventDetailResponseSchema>["event"];
-type Selection = { kind?: "registration" | "proposal"; resourceId?: string; tab?: string; pointToken?: string };
+type Selection = {
+  kind?: "registration" | "proposal";
+  resourceId?: string;
+  tab?: string;
+  pointToken?: string;
+};
 const href = usePortalHashLocation.hrefs;
 /** The compact header's title for each participant page other than the event home. */
 const PAGE_LABELS: Record<string, string> = {
   registration: "Registration",
   program: "Agenda",
   agenda: "My agenda",
-  promotion: "Promotion kits",
+  promotion: "Share",
   "lead-scanner": "Lead scanner",
   "session-management": "My sessions",
   ticket: "Ticket",
@@ -68,38 +76,56 @@ export function ParticipantEventPage({ slug, ...selection }: Selection & { slug:
   );
   if (loaded.loading) return <Spinner label="Loading event…" />;
   if (!loaded.data) return <Alert tone="danger">{loaded.error}</Alert>;
-  return <ParticipantEvent event={loaded.data.event} {...selection} />;
+  return <ParticipantEvent event={loaded.data.event} {...selection} onRegistered={loaded.reload} />;
 }
 
-export function ParticipantEvent({ event, kind, resourceId, tab, pointToken }: Selection & { event: EventDetail }) {
-  const [location] = useHashLocation();
+export function ParticipantEvent({
+  event,
+  kind,
+  resourceId,
+  tab,
+  pointToken,
+  onRegistered,
+}: Selection & { event: EventDetail; onRegistered?: () => Promise<void> }) {
+  const [location, navigate] = useHashLocation();
   // One agenda route: the whole program, or with `?mine=1` the same view filtered to the reader's sessions.
   const mine = isMyAgendaQuery(new URLSearchParams(location.split("?", 2)[1] ?? ""));
   const base = `/events/${encodeURIComponent(event.slug)}`;
+  // The ticket page follows the rule that lists its tab. A reader without a
+  // registration lands on the event home, which offers registration instead.
+  const ticketless = tab === "ticket" && !eventRegistrationStanding(event).registered;
+  useEffect(() => {
+    if (ticketless) navigate(base, { replace: true });
+  }, [ticketless, base, navigate]);
   const registrationId = event.participation?.registrationId;
-  const hasProposals = Boolean(event.participation?.proposals || event.participation?.speakerProposals);
+  const hasProposals = hasEventProposals(event);
   const active =
     kind === "registration"
       ? "registration"
       : kind === "proposal" || tab === "submissions"
         ? "proposals"
-        : tab === "agenda"
-          ? mine
-            ? "agenda"
-            : "program"
-          : tab === "promotion"
-            ? "promotion"
-            : tab === "lead-scanner"
-              ? "lead-scanner"
-              : tab === "session-management"
-                ? "session-management"
-                : tab === "ticket" || tab === "more" || tab === "virtual" || tab === "check-in"
-                  ? tab
-                  : "overview";
+        : tab === "register"
+          ? "register"
+          : tab === "agenda"
+            ? mine
+              ? "agenda"
+              : "program"
+            : tab === "promotion"
+              ? "promotion"
+              : tab === "lead-scanner"
+                ? "lead-scanner"
+                : tab === "session-management"
+                  ? "session-management"
+                  : (tab === "ticket" && !ticketless) || tab === "more" || tab === "virtual" || tab === "check-in"
+                    ? tab
+                    : "overview";
   const tabs = [
     { id: "overview", label: "Overview", href: href(base) },
     { id: "program", label: "Agenda", href: href(eventAgendaRoute(event.slug)) },
-    { id: "agenda", label: "My agenda", href: href(eventAgendaRoute(event.slug, { mine: true })) },
+    ...(tab === "register" ? [{ id: "register", label: "Register", href: href(base + "/register/") }] : []),
+    ...(eventRegistrationStanding(event).status === "registered"
+      ? [{ id: "agenda", label: "My agenda", href: href(eventAgendaRoute(event.slug, { mine: true })) }]
+      : []),
     ...(eventRegistrationStanding(event).registered
       ? [
           { id: "ticket", label: "Ticket", href: href(base + "/ticket") },
@@ -115,6 +141,9 @@ export function ParticipantEvent({ event, kind, resourceId, tab, pointToken }: S
           },
         ]
       : []),
+    ...(hasEventPromotionMaterials(event)
+      ? [{ id: "promotion", label: "Share", href: href(base + "/promotion") }]
+      : []),
     ...(hasProposals
       ? [
           {
@@ -122,7 +151,6 @@ export function ParticipantEvent({ event, kind, resourceId, tab, pointToken }: S
             label: "Proposals",
             href: href(base + "/submissions"),
           },
-          { id: "promotion", label: "Promotion kits", href: href(base + "/promotion") },
           { id: "session-management", label: "My sessions", href: href(base + "/session-management") },
         ]
       : []),
@@ -135,8 +163,8 @@ export function ParticipantEvent({ event, kind, resourceId, tab, pointToken }: S
     <>
       <EventAppHero event={event} />
       {navigation}
-      {active !== "overview" && (
-        <SectionHeading level={3}>
+      {active !== "overview" && active !== "register" && (
+        <SectionHeading level={3} class={kind === "proposal" ? undefined : "pk-participant-event__page-title"}>
           {kind === "proposal" ? (recordTitle ?? "Proposal") : (PAGE_LABELS[active] ?? "Proposals")}
         </SectionHeading>
       )}
@@ -154,17 +182,41 @@ export function ParticipantEvent({ event, kind, resourceId, tab, pointToken }: S
         />
       ) : kind === "proposal" && resourceId ? (
         <ParticipantProposal event={event} proposalId={resourceId} facet={tab} header={header} />
+      ) : tab === "register" ? (
+        <Suspense fallback={<Spinner label="Loading registration…" />}>
+          <EventRegister event={event} onRegistered={onRegistered} />
+        </Suspense>
       ) : tab === "agenda" ? (
         <Suspense fallback={<Spinner />}>
-          <MyAgenda slug={event.slug} eventId={event.id} eventName={event.name} mine={mine} />
+          <MyAgenda
+            slug={event.slug}
+            eventId={event.id}
+            eventName={event.name}
+            mine={mine}
+            canPersonalize={eventRegistrationStanding(event).status === "registered"}
+          />
         </Suspense>
       ) : tab === "session-management" ? (
         <Suspense fallback={<Spinner />}>
           <MySessionManagement slug={event.slug} />
         </Suspense>
-      ) : tab === "promotion" ? (
+      ) : tab === "promotion" && hasEventPromotionMaterials(event) ? (
         <Suspense fallback={<Spinner />}>
-          <MyPromotionKits slug={event.slug} />
+          <MyPromotionKits
+            slug={event.slug}
+            attendeeEligible={eventRegistrationStanding(event).status === "registered"}
+            speakerEligible={hasProposals}
+            share={
+              event.participation?.promotion
+                ? {
+                    shareUrl: new URL(event.participation.promotion.sharePath, window.location.origin).href,
+                    badgeVersion: event.participation.promotion.badgeVersion,
+                    eventName: event.name,
+                    eventSlug: event.slug,
+                  }
+                : undefined
+            }
+          />
         </Suspense>
       ) : tab === "lead-scanner" ? (
         <ParticipantLeadScanner eventId={event.id} slug={event.slug} scannerAccess={event.scannerAccess} />
@@ -174,7 +226,7 @@ export function ParticipantEvent({ event, kind, resourceId, tab, pointToken }: S
         <Suspense fallback={<Spinner />}>
           <VirtualRoom slug={event.slug} eventName={event.name} />
         </Suspense>
-      ) : tab === "ticket" ? (
+      ) : tab === "ticket" && !ticketless ? (
         <EventTicket event={event} />
       ) : tab === "check-in" ? (
         <Suspense fallback={<Spinner />}>
@@ -207,7 +259,18 @@ function ParticipantProposals({ event }: { event: EventDetail }) {
             <a href={href(eventParticipantRecordPath(event.slug, "proposal", proposal.id))}>{proposal.title}</a>
           ),
         },
-        { header: "Status", cell: (proposal) => <Badge status={proposal.status} /> },
+        { header: "Proposal status", cell: (proposal) => <Badge status={proposal.status} /> },
+        {
+          header: "Your participation",
+          cell: (proposal) =>
+            proposal.speakerStatus === "confirmed" ? (
+              <PlainStatus status={proposal.speakerStatus} />
+            ) : proposal.speakerStatus ? (
+              <Badge status={proposal.speakerStatus} />
+            ) : (
+              "—"
+            ),
+        },
         { header: "Your role", cell: (proposal) => (proposal.role === "submitter" ? "Submitter" : "Speaker") },
       ]}
     />
@@ -235,7 +298,14 @@ function ParticipantProposal({
   header: (title?: string) => ComponentChildren;
 }) {
   const base = `/api/v1/proposals/${encodeURIComponent(proposalId)}`;
+  const intendedSpeaker = facet === "participation" ? portalHashParam(window.location.hash, "speaker") : null;
+  const activeUserId = portalSession.value?.identity.id;
   const loaded = useData(async () => {
+    if (intendedSpeaker && intendedSpeaker !== activeUserId) {
+      throw new Error(
+        "This invitation is for a different account. Sign out and sign in with the account invited to speak.",
+      );
+    }
     const [submission, speaker, forms, speakerTerms] = await Promise.all([
       optionalRecord(getJson(base + "/submission", proposalAccessReadResponseSchema)),
       optionalRecord(getJson(base + "/participation", speakerSelfServiceReadResponseSchema)),
@@ -250,9 +320,11 @@ function ParticipantProposal({
       (submission?.proposal.event_id && submission.proposal.event_id !== event.id) ||
       (speaker?.proposal.eventId && speaker.proposal.eventId !== event.id)
     )
-      throw new Error("Proposal not found for this event.");
+      throw new Error(
+        "This proposal is unavailable for this account. Sign in with the account invited to participate, or contact the proposer.",
+      );
     return { submission, speaker, forms, speakerTerms };
-  }, [proposalId, event.id]);
+  }, [proposalId, event.id, intendedSpeaker, activeUserId]);
   if (loaded.loading)
     return (
       <>

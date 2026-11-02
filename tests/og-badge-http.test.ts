@@ -23,10 +23,39 @@ describe("badge regeneration cache boundary", () => {
     expect(await readCachedBadge(cachedBadge("1"))).toBeNull();
     expect(await readCachedBadge(cachedBadge())).toBeNull();
   });
+  it("rejects legacy layouts and a previous event design even at the current generation", async () => {
+    const options = cachedBadge("2");
+    const expected = {
+      ...options,
+      cacheMetadata: { ...options.cacheMetadata, badgeRenderer: "promotion-scene-v1", badgeDesignRevision: "design-2" },
+    };
+    expect(await readCachedBadge(expected)).toBeNull();
+    expected.bucket = {
+      get: async () => ({
+        arrayBuffer: async () => new Uint8Array([1]).buffer,
+        customMetadata: { badgeGeneration: "2", badgeRenderer: "promotion-scene-v1", badgeDesignRevision: "design-1" },
+      }),
+    } as unknown as R2Bucket;
+    expect(await readCachedBadge(expected)).toBeNull();
+  });
   it("serves the matching generation without regenerating it", async () => {
     const response = await readCachedBadge(cachedBadge("2"));
     expect(response?.headers.get("X-Cache")).toBe("HIT");
     expect(response?.headers.get("Content-Type")).toBe("image/png");
     expect(new Uint8Array(await response!.arrayBuffer())).toEqual(new Uint8Array([1, 2, 3]));
+  });
+  it("revalidates personal images so an event design change reaches existing share links", async () => {
+    const options = cachedBadge("2");
+    const response = await readCachedBadge({
+      ...options,
+      cacheMetadata: { ...options.cacheMetadata, badgeRenderer: "promotion-scene-v1" },
+      bucket: {
+        get: async () => ({
+          arrayBuffer: async () => new Uint8Array([1]).buffer,
+          customMetadata: { badgeGeneration: "2", badgeRenderer: "promotion-scene-v1" },
+        }),
+      } as unknown as R2Bucket,
+    });
+    expect(response?.headers.get("Cache-Control")).toBe("public, no-cache");
   });
 });

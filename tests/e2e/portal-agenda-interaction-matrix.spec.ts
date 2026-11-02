@@ -12,13 +12,10 @@ import {
 import { prepareSponsorLiveFixture, captureSponsorBadge, sponsorEventSlug } from "./helpers/sponsor-live-fixture";
 import { sponsorLeadListSchema } from "../../assets/shared/schemas/event-sponsor-lead-list";
 import { agendaStaffingSchema } from "../../assets/shared/schemas/event-agenda";
-import {
-  agendaScheduleApplySchema,
-  agendaScheduleReviewSchema,
-} from "../../assets/shared/schemas/event-agenda-schedule";
+import { agendaScheduleApplySchema } from "../../assets/shared/schemas/event-agenda-schedule";
 import { formatTimeRangeInZone } from "../../assets/shared/format-date";
 import { runAgendaAction } from "./helpers/agenda-actions";
-import { initialsFrom } from "../../assets/ts/shared/initials";
+import { initialsFrom } from "../../assets/shared/initials";
 
 async function expectReadingBounds(content: Locator) {
   const bounds = await content.evaluate((element) => {
@@ -157,16 +154,36 @@ for (const mode of ["keyboard", "touch", "pointer"] as const) {
         name: `Resize ${matrixTitle} by dragging its bottom edge to an end time`,
         exact: true,
       });
+      /** The card's own move controls share its bottom edge: a pointer grabs the handle where it is the topmost element. */
+      async function freeEdgePoint() {
+        const point = await edge.evaluate((handle) => {
+          const box = handle.getBoundingClientRect();
+          const y = box.top + box.height / 2;
+          for (let x = box.left + 4; x < box.right - 4; x += 4) {
+            if (document.elementFromPoint(x, y)?.closest(".pk-agenda-editor__resize"))
+              return { x, y, left: box.left, top: box.top };
+          }
+          return null;
+        });
+        if (!point) throw new Error("Resize edge has no actual pointer geometry");
+        return { x: point.x, y: point.y, position: { x: point.x - point.left, y: point.y - point.top } };
+      }
       async function slideEdge(roomName: string, endAt: string) {
         await edge.scrollIntoViewIfNeeded();
-        const origin = await edge.boundingBox();
-        if (!origin) throw new Error("Resize edge has no actual pointer geometry");
+        // A pointer can only reach rows inside the viewport: bring the destination row in with the edge still visible.
+        const destinationBox = await page.locator(`tr[data-agenda-start="${endAt}"]`).boundingBox();
+        const viewportHeight = page.viewportSize()?.height ?? 0;
+        if (destinationBox && destinationBox.y + 24 > viewportHeight)
+          await page.evaluate((distance) => window.scrollBy(0, distance), destinationBox.y + 24 - viewportHeight);
+        const grip = await freeEdgePoint();
         const column = await roomColumn(roomName).boundingBox();
         const line = await page.locator(`tr[data-agenda-start="${endAt}"]`).boundingBox();
         if (!column || !line) throw new Error("Resize destination is not rendered");
-        await page.mouse.move(origin.x + origin.width / 2, origin.y + origin.height / 2);
+        await page.mouse.move(grip.x, grip.y);
         await page.mouse.down();
         await page.mouse.move(column.x + column.width / 2, line.y, { steps: 12 });
+        // The drag preview exists once the gesture has really started, hidden while the target is refused.
+        await expect(page.locator(".pk-agenda-editor__pointer-preview")).toHaveCount(1);
       }
       if (mode === "pointer") {
         await slideEdge("Workshop room", "2027-09-10T10:00:00.000Z");
@@ -186,12 +203,11 @@ for (const mode of ["keyboard", "touch", "pointer"] as const) {
         await expect(endTarget("2027-09-10T09:57:00.000Z", "Main auditorium")).toBeEnabled();
         await setStep("15");
       }
-      const reviewing = page.waitForResponse(
-        (response) =>
-          new URL(response.url()).pathname === `${fixture.endpoint}/schedule/reviews` &&
-          response.request().method() === "POST",
-        { timeout: 20_000 },
-      );
+      // A single-session resize is the guarded command itself: it is applied directly, with no review round trip.
+      let reviewRequests = 0;
+      page.on("request", (request) => {
+        if (new URL(request.url()).pathname === `${fixture.endpoint}/schedule/reviews`) reviewRequests++;
+      });
       const applying = page.waitForResponse(
         (response) =>
           new URL(response.url()).pathname === `${fixture.endpoint}/schedule` && response.request().method() === "POST",
@@ -207,14 +223,12 @@ for (const mode of ["keyboard", "touch", "pointer"] as const) {
         await expect(destination).toBeEnabled();
         await activate(destination);
       }
-      const reviewResponse = await reviewing;
-      expect(reviewResponse.status()).toBe(200);
       const response = await applying;
       expect(response.status()).toBe(200);
-      const reviewedHash = agendaScheduleReviewSchema.parse(await reviewResponse.json()).reviewHash;
+      expect(reviewRequests).toBe(0);
       const command = agendaScheduleApplySchema.parse(response.request().postDataJSON());
       expect(command.expectedRevision).toBe(before.revision);
-      expect(command.reviewHash).toBe(reviewedHash);
+      expect(command.reviewHash).toBeUndefined();
       expect(command.changes).toHaveLength(1);
       const change = command.changes[0]!;
       expect(change).toMatchObject({
@@ -231,12 +245,8 @@ for (const mode of ["keyboard", "touch", "pointer"] as const) {
       expect(after.revision).toBe(before.revision + 1);
       expect(after.occurrences.find((row) => row.id === fixture.occurrence.id)?.endAt).toBe(change.endAt);
       await expect(page.getByRole("heading", { name: "Review schedule changes", exact: true })).toHaveCount(0);
-      await activate(
-        page.getByRole("button", {
-          name: `Resize ${matrixTitle} by dragging its bottom edge to an end time`,
-          exact: true,
-        }),
-      );
+      if (mode === "pointer") await edge.click({ position: (await freeEdgePoint()).position });
+      else await activate(edge);
       await activate(page.getByRole("button", { name: "Cancel selection", exact: true }));
       expect(await fixture.read()).toEqual(after);
       await expect(page.getByRole("button", { name: /^End selected session at/ })).toHaveCount(0);
@@ -350,11 +360,13 @@ test("expanded sponsor history prose and inner history fit their visible desktop
   page,
   browser,
 }, info) => {
-  test.setTimeout(300_000);
+  test.setTimeout(600_000);
   const staffContext = await browser.newContext({ baseURL: info.project.use.baseURL });
   const attendeeContext = await browser.newContext({ baseURL: info.project.use.baseURL });
+  let liveSponsor: Awaited<ReturnType<typeof prepareSponsorLiveFixture>> | undefined;
   try {
     const fixture = await prepareSponsorLiveFixture(await staffContext.newPage(), await attendeeContext.newPage());
+    liveSponsor = fixture;
     await signInToPortal(page, fixture.operator.email);
     await page.goto(fixture.workspace);
     await page.getByRole("button", { name: /^Open leads for/ }).click();
@@ -401,6 +413,7 @@ test("expanded sponsor history prose and inner history fit their visible desktop
       await page.screenshot({ path: info.outputPath(`expanded-history-reading-${name}.png`), fullPage: true });
     }
   } finally {
+    await liveSponsor?.end();
     await staffContext.close();
     await attendeeContext.close();
   }

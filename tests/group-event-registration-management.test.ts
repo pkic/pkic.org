@@ -1,3 +1,12 @@
+import { getEventAnalytics } from "../functions/_lib/services/events/analytics";
+import {
+  prepareAttendanceChangeStatisticsStatements,
+  decodeAttendanceChangeStatistics,
+} from "../functions/_lib/services/registrations/attendance-statistics";
+import { buildEventRegistrationsPageQuery } from "../functions/_lib/services/registrations/event-registrations";
+import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
+import { attendeeCampaignSelection } from "../functions/_lib/services/event-email-campaign/audience";
+import { getEventBySlug } from "../functions/_lib/services/events";
 import { eventAttendanceRegistrationsListResponseSchema } from "../assets/shared/schemas/event-registrations";
 import { eventRegistrationAttendanceDetailResponseSchema } from "../assets/shared/schemas/event-registration-detail";
 import {
@@ -126,8 +135,8 @@ async function seedAttendees(eventId: string): Promise<{ registrationId: string;
     dayRows.flatMap(([id, userId]) => [
       env.DB.prepare(
         `INSERT INTO registrations
-             (id, event_id, user_id, status, attendance_type, source_type, manage_link_secret, created_at, updated_at)
-           VALUES (?, ?, ?, 'registered', 'in_person', 'direct', ?, datetime('now'), datetime('now'))`,
+             (id, event_id, user_id, status, source_type, manage_link_secret, created_at, updated_at)
+           VALUES (?, ?, ?, 'registered', 'direct', ?, datetime('now'), datetime('now'))`,
       ).bind(id, eventId, userId, `manage-${crypto.randomUUID()}`),
       env.DB.prepare(
         `INSERT INTO registration_day_attendance
@@ -142,6 +151,153 @@ async function seedAttendees(eventId: string): Promise<{ registrationId: string;
 
 describe("group event attendee management", () => {
   beforeEach(resetDb);
+
+  it("matches mixed-day registrations by each selected type in lists and campaigns", async () => {
+    const fixture = await createFixture();
+    const event = await createEvent(fixture);
+    const { registrationId, holderId } = await seedAttendees(event.id);
+    const legacyUserId = await insertUser(env.DB, "legacy-attendee@example.test");
+    const legacyRegistrationId = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(`INSERT INTO registrations (id, event_id, user_id, status, source_type, manage_link_secret, created_at, updated_at)
+        VALUES (?, ?, ?, 'registered', 'direct', ?, datetime('now'), datetime('now'))`).bind(
+        legacyRegistrationId,
+        event.id,
+        legacyUserId,
+        crypto.randomUUID(),
+      ),
+      env.DB.prepare(`INSERT INTO event_days (id, event_id, day_date, label, attendance_options_json, sort_order, created_at, updated_at)
+        VALUES ('mixed-day', ?, '2027-04-13', 'Day 2', '[{"value":"moon_physical","label":"Moon venue","accessMode":"physical"},{"value":"moon_base_42","label":"Moon recording","accessMode":"none"}]', 2, datetime('now'), datetime('now'))`).bind(
+        event.id,
+      ),
+      env.DB.prepare(`INSERT INTO registration_day_attendance (id, registration_id, event_day_id, attendance_type, created_at, updated_at)
+        VALUES ('mixed-selection', ?, 'mixed-day', 'moon_base_42', datetime('now'), datetime('now'))`).bind(
+        registrationId,
+      ),
+      env.DB.prepare(`INSERT INTO registration_attendance_history (id, registration_id, event_day_id, from_type, to_type, changed_by, changed_at)
+        VALUES ('mixed-change', ?, 'mixed-day', 'moon_physical', 'moon_base_42', 'admin:test', datetime('now'))`).bind(
+        registrationId,
+      ),
+    ]);
+    const target = await env.DB.prepare("SELECT user_id FROM registrations WHERE id = ?")
+      .bind(registrationId)
+      .first<{ user_id: string }>();
+    await env.DB.prepare(`INSERT INTO event_day_waitlist_entries (id, event_id, event_day_id, registration_id, user_id, priority_lane, status, position, created_at, updated_at)
+      SELECT 'mixed-waitlist', ?, id, ?, ?, 'general', 'waiting', 1, datetime('now'), datetime('now') FROM event_days WHERE event_id = ? AND day_date = '2027-04-12'`)
+      .bind(event.id, registrationId, target!.user_id, event.id)
+      .run();
+    const history = decodeAttendanceChangeStatistics(
+      await env.DB.batch(prepareAttendanceChangeStatisticsStatements(env.DB, event.id)),
+    );
+    expect(history).toMatchObject({ leftInPersonAttendees: 1, leftInPersonDayChanges: 1 });
+    const filtered = buildOffsetPageSql(
+      buildEventRegistrationsPageQuery(event.id, { attendance_change: "left_in_person", limit: 25, offset: 0 }),
+    );
+    const page = await env.DB.prepare(filtered.pageSql)
+      .bind(...filtered.bindings, 25, 0)
+      .all<{ id: string }>();
+    expect(page.results.map((row) => row.id)).toEqual([registrationId]);
+    const analytics = await getEventAnalytics(
+      env.DB,
+      { id: event.id, slug: "mixed", name: "Mixed attendance" },
+      { includeProposalStats: false },
+    );
+    expect(analytics.registrations.total).toBe(3);
+    expect(analytics.registrations.byAttendanceType).toMatchObject({ in_person: 2, moon_base_42: 1 });
+    expect(analytics.registrations.byAttendanceType).not.toHaveProperty("virtual");
+    expect(analytics.registrations.byStatusAndType).toContainEqual({
+      status: "registered",
+      attendance_type: "moon_base_42",
+      count: 1,
+    });
+    for (const [type, expectedIds] of [
+      ["in_person", [registrationId, holderId]],
+      ["moon_base_42", [registrationId]],
+      ["virtual", []],
+    ] as const) {
+      const response = await request(
+        fixture.ownerLeaderToken,
+        `/api/v1/groups/${fixture.ownerGroupId}/events/${event.id}/registrations?attendance_type=${type}`,
+      );
+      expect(response.status, await response.clone().text()).toBe(200);
+      const body = eventAttendanceRegistrationsListResponseSchema.parse(await response.json());
+      expect(body.registrations.map((row) => row.id).sort()).toEqual([...expectedIds].sort());
+      expect(body.stats.byAttendanceType).toMatchObject({ in_person: 2, moon_base_42: 1 });
+      expect(body.stats.byAttendanceType).not.toHaveProperty("virtual");
+      expect(body.stats.byStatus).toMatchObject({ registered: 3 });
+      expect(body.stats.attendanceStatusByType).toMatchObject({
+        in_person: { accepted: 1, waitlisted: 1 },
+        moon_base_42: { accepted: 1, waitlisted: 0 },
+      });
+      const row = await env.DB.prepare("SELECT slug FROM events WHERE id = ?").bind(event.id).first<{ slug: string }>();
+      const campaign = attendeeCampaignSelection(
+        await getEventBySlug(env.DB, row!.slug),
+        { audience: "attendees", attendanceType: type },
+        null,
+      );
+      const recipients = await env.DB.prepare(campaign.sql)
+        .bind(...campaign.bindings)
+        .all<{ registration_id: string }>();
+      expect(recipients.results.map((item) => item.registration_id).sort()).toEqual([...expectedIds].sort());
+    }
+  });
+
+  it("admits and requeues the selected configured option without changing it", async () => {
+    const fixture = await createFixture();
+    const event = await createEvent(fixture);
+    const { registrationId } = await seedAttendees(event.id);
+    const target = await env.DB.prepare("SELECT user_id FROM registrations WHERE id = ?")
+      .bind(registrationId)
+      .first<{ user_id: string }>();
+    await env.DB.batch([
+      env.DB.prepare("UPDATE event_days SET attendance_options_json = ? WHERE event_id = ?").bind(
+        JSON.stringify([{ value: "moon_base", label: "Moon base", accessMode: "remote", capacity: 1 }]),
+        event.id,
+      ),
+      env.DB.prepare(
+        "UPDATE registration_day_attendance SET attendance_type = 'moon_base' WHERE registration_id = ?",
+      ).bind(registrationId),
+      env.DB.prepare(`INSERT INTO event_day_waitlist_entries (id,event_id,event_day_id,registration_id,user_id,priority_lane,status,position,created_at,updated_at)
+        SELECT ?, ?, id, ?, ?, 'general', 'waiting', 1, datetime('now'), datetime('now') FROM event_days WHERE event_id = ?`).bind(
+        crypto.randomUUID(),
+        event.id,
+        registrationId,
+        target!.user_id,
+        event.id,
+      ),
+    ]);
+    const base = `/api/v1/groups/${fixture.ownerGroupId}/events/${event.id}/registrations/${registrationId}`;
+    const admit = await request(fixture.ownerLeaderToken, `${base}/admissions`, {
+      method: "POST",
+      body: JSON.stringify({ mode: "capacity_exempt", reason: "Approved attendance", dayDates: ["2027-04-12"] }),
+    });
+    expect(admit.status, await admit.clone().text()).toBe(200);
+    expect(
+      await env.DB.prepare("SELECT attendance_type FROM registration_day_attendance WHERE registration_id = ?")
+        .bind(registrationId)
+        .first(),
+    ).toEqual({ attendance_type: "moon_base" });
+    expect(
+      await env.DB.prepare("SELECT status FROM event_day_waitlist_entries WHERE registration_id = ?")
+        .bind(registrationId)
+        .first(),
+    ).toEqual({ status: "accepted" });
+    const requeue = await request(fixture.ownerLeaderToken, `${base}/day-attendance`, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "waitlist", dayDates: ["2027-04-12"] }),
+    });
+    expect(requeue.status, await requeue.clone().text()).toBe(200);
+    expect(
+      await env.DB.prepare("SELECT attendance_type FROM registration_day_attendance WHERE registration_id = ?")
+        .bind(registrationId)
+        .first(),
+    ).toEqual({ attendance_type: "moon_base" });
+    expect(
+      await env.DB.prepare("SELECT status FROM event_day_waitlist_entries WHERE registration_id = ?")
+        .bind(registrationId)
+        .first(),
+    ).toEqual({ status: "waiting" });
+  });
 
   it("opens the attendance details of a registration created from an accepted proposal", async () => {
     const fixture = await createFixture();
@@ -162,6 +318,11 @@ describe("group event attendee management", () => {
   it("shows an explicitly selected individual identity instead of the member's organization identity", async () => {
     const fixture = await createFixture();
     const event = await createEvent(fixture);
+    await env.DB.prepare(
+      "INSERT INTO event_days(id,event_id,day_date,created_at,updated_at) VALUES(?,?,'2027-04-12',?,?)",
+    )
+      .bind(crypto.randomUUID(), event.id, new Date().toISOString(), new Date().toISOString())
+      .run();
     await env.DB.prepare("UPDATE events SET registration_mode='optional' WHERE id=?").bind(event.id).run();
     await env.DB.prepare(
       "INSERT INTO event_terms(id,event_id,audience_type,term_key,version,required,active,created_at) VALUES(?,?,'attendee','privacy-policy','v1',1,1,?)",
@@ -195,7 +356,7 @@ describe("group event attendee management", () => {
         body: JSON.stringify(
           attendeeRegistrationParticipationSchema.parse({
             identityId: identity!.id,
-            attendanceType: "virtual",
+            dayAttendance: [{ dayDate: "2027-04-12", attendanceType: "virtual" }],
             consents: [{ termKey: "privacy-policy", version: "v1" }],
           }),
         ),
@@ -304,7 +465,7 @@ describe("group event attendee management", () => {
       .bind(
         JSON.stringify([
           { value: "in_person", label: "In-person", capacity: 1 },
-          { value: "livestream", label: "Live stream", capacity: null },
+          { value: "livestream_lounge", label: "Live stream", capacity: null },
         ]),
         event.id,
       )
@@ -314,7 +475,7 @@ describe("group event attendee management", () => {
       `/api/v1/groups/${fixture.ownerGroupId}/events/${event.id}/registrations/${registrationId}/day-attendance`,
       {
         method: "PATCH",
-        body: JSON.stringify({ action: "livestream", dayDates: ["2027-04-12"] }),
+        body: JSON.stringify({ action: "livestream_lounge", dayDates: ["2027-04-12"] }),
       },
     );
     expect(customAttendance.status, await customAttendance.clone().text()).toBe(200);
@@ -325,7 +486,7 @@ describe("group event attendee management", () => {
       )
         .bind(registrationId)
         .first(),
-    ).toEqual({ attendance_type: "livestream" });
+    ).toEqual({ attendance_type: "livestream_lounge" });
     const unsupportedAttendance = await request(
       fixture.ownerLeaderToken,
       `/api/v1/groups/${fixture.ownerGroupId}/events/${event.id}/registrations/${registrationId}/day-attendance`,
@@ -342,7 +503,7 @@ describe("group event attendee management", () => {
       )
         .bind(registrationId)
         .first(),
-    ).toEqual({ attendance_type: "livestream" });
+    ).toEqual({ attendance_type: "livestream_lounge" });
 
     for (const body of [
       { mode: "vip", reason: "x", dayDates: ["2027-04-12"] },
@@ -386,6 +547,13 @@ describe("group event attendee management", () => {
         .bind(event.id)
         .first<{ count: number }>(),
     ).toEqual(outboxBeforeUnwaitlistedAdmit);
+
+    const returnToInPerson = await request(
+      fixture.ownerLeaderToken,
+      `/api/v1/groups/${fixture.ownerGroupId}/events/${event.id}/registrations/${registrationId}/day-attendance`,
+      { method: "PATCH", body: JSON.stringify({ action: "in_person", dayDates: ["2027-04-12"] }) },
+    );
+    expect(returnToInPerson.status, await returnToInPerson.clone().text()).toBe(200);
 
     const waitlist = await request(
       fixture.ownerLeaderToken,
@@ -496,12 +664,12 @@ describe("group event attendee management", () => {
     expect(await vipResponse.json()).toMatchObject({ error: { code: "REGISTRATION_CANCELLED" } });
     expect(
       await env.DB.prepare(
-        `SELECT status, cancellation_reason_code, attendance_type
+        `SELECT status, cancellation_reason_code
            FROM registrations WHERE id = ?`,
       )
         .bind(registrationId)
         .first(),
-    ).toEqual({ status: "cancelled", cancellation_reason_code: "attendee_cancelled", attendance_type: "in_person" });
+    ).toEqual({ status: "cancelled", cancellation_reason_code: "attendee_cancelled" });
     expect(
       await env.DB.prepare("SELECT COUNT(*) AS count FROM audit_log WHERE entity_id = ?")
         .bind(registrationId)

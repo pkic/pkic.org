@@ -1,7 +1,21 @@
+import {
+  PERSONAL_PROMOTION_RENDERER,
+  personalPromotionImageCacheKey,
+  personalPromotionRendererIsCurrent,
+} from "../../../assets/shared/personal-promotion-image";
+
+/** Durable outbox refusals consumed by the existing badge-render retry owner. */
+export const BADGE_ATTACHMENT_WAIT_REASONS = {
+  missing: "Required badge attachment is not ready",
+  stale: "Required badge attachment is waiting for the current renderer",
+} as const;
+
 export interface QueuedBadgeAttachment {
   kind: "r2-badge-image";
   r2Key: string;
   filenameBase: string;
+  required?: boolean;
+  renderer?: string;
 }
 
 export type QueuedEmailAttachment = QueuedBadgeAttachment;
@@ -34,8 +48,12 @@ export function buildBadgeAttachment(payload: {
 
   return {
     kind: "r2-badge-image",
-    r2Key: `og-badges/${payload.badgeCode}`,
+    r2Key:
+      payload.badgeType === "attendee"
+        ? personalPromotionImageCacheKey(payload.badgeCode)
+        : `og-badges/${payload.badgeCode}`,
     filenameBase: namePart ? `${filenamePrefix}-${namePart}` : filenamePrefix,
+    ...(payload.badgeType === "attendee" ? { required: true, renderer: PERSONAL_PROMOTION_RENDERER } : {}),
   };
 }
 
@@ -56,10 +74,16 @@ export function parseQueuedEmailAttachments(payload: Record<string, unknown>): Q
         typeof candidate.r2Key === "string" &&
         candidate.r2Key.length > 0 &&
         typeof candidate.filenameBase === "string" &&
-        candidate.filenameBase.length > 0
+        candidate.filenameBase.length > 0 &&
+        (candidate.required === undefined || typeof candidate.required === "boolean") &&
+        (candidate.renderer === undefined || typeof candidate.renderer === "string")
       );
     }
 
     return false;
   });
+}
+
+export function queuedBadgeRendererIsCurrent(attachment: QueuedBadgeAttachment, actual: string | undefined): boolean {
+  return !attachment.renderer || personalPromotionRendererIsCurrent(attachment.renderer, actual);
 }

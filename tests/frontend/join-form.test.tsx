@@ -7,6 +7,7 @@ import { installLiveValidation, validateBeforeSubmit } from "../../assets/ts/sha
 import { afterEach, describe, expect, it } from "vitest";
 import {
   buildApplicationPayload,
+  applicantNamePartsSchema,
   applyCategoryUI,
   configureMembershipLegalFields,
   filterApplicationFieldsForApplicantKind,
@@ -150,7 +151,7 @@ describe("join-form helpers", () => {
 
     const container = document.createElement("div");
     renderMembershipCategories(container, filterCategoriesForApplicantKind(categories, "individual"));
-    expect(container.querySelectorAll('input[name="category"]')).toHaveLength(1);
+    expect(container.querySelectorAll('input[name="membershipCategory"]')).toHaveLength(1);
     expect(container.textContent).toContain("Independent consultant");
     expect(container.textContent).not.toContain("Certification authority");
     expect(container.textContent).toContain("Required fee: $125.00");
@@ -176,6 +177,23 @@ describe("join-form helpers", () => {
       expect(input?.id).not.toBe("");
     }
     expect(container.querySelector(".pk-check__hint")?.textContent).toBe("An organization category.");
+  });
+
+  it("takes the applicant to an unanswered category on submit and reports it in the category's own slot", () => {
+    document.body.innerHTML = renderToString(<JoinFlow documents={[]} />);
+    const form = document.querySelector<HTMLFormElement>("form[data-join-application-form]")!;
+    renderMembershipCategories(form.querySelector<HTMLElement>("[data-membership-categories]")!, categories);
+    form.querySelector<HTMLInputElement>('input[name="firstName"]')!.value = "Ada";
+    form.querySelector<HTMLInputElement>('input[name="lastName"]')!.value = "Lovelace";
+
+    expect(validateBeforeSubmit(form, document.createElement("p"))).toBe(false);
+
+    const firstCategory = form.querySelector<HTMLInputElement>('input[type="radio"]')!;
+    // The control name is the request contract's field, so a server refusal
+    // and the browser's own check land in the same message slot.
+    expect(firstCategory.name).toBe("membershipCategory");
+    expect(document.activeElement).toBe(firstCategory);
+    expect(form.querySelector('[data-field-error="membershipCategory"]')?.textContent).not.toBe("");
   });
 
   it("defaults participation to active and preserves an applicant's choice when questions are rendered again", () => {
@@ -416,5 +434,20 @@ describe("join-form helpers", () => {
     renderMembershipCategorySummary(container, []);
     expect(container.querySelector("ul")).toBeNull();
     expect(container.textContent).toBe("No eligible individual categories are currently available.");
+  });
+});
+
+describe("applicant name parts", () => {
+  it("requires both the first and the last name", () => {
+    expect(applicantNamePartsSchema.safeParse({ firstName: "Ada", lastName: "Lovelace" }).success).toBe(true);
+    const missing = applicantNamePartsSchema.safeParse({ firstName: " ", lastName: "" });
+    expect(missing.error?.issues.map((issue) => [issue.path[0], issue.message])).toEqual([
+      ["firstName", "First name is required"],
+      ["applicantName", "Last name is required"],
+    ]);
+    const last = applicantNamePartsSchema.safeParse({ firstName: "Ada", lastName: " " });
+    expect(last.error?.issues.map((issue) => [issue.path[0], issue.message])).toEqual([
+      ["applicantName", "Last name is required"],
+    ]);
   });
 });

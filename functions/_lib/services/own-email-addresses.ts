@@ -1,20 +1,25 @@
+import { refuseIneligibleWorkEmail } from "../email-domains/work-email-screen";
 import { prepareJobWake } from "./scheduled-jobs/dispatcher";
 import { prepareMailingListEmailChange } from "./mailing-list-subscriptions/queue-email-change";
 import { setOwnEmailSignInPermission } from "./own-email-sign-in";
+import { refuseRemovingLastSignInMethod } from "../auth/sign-in-methods";
 /**
  * The signed-in person manages their own email addresses.
  *
- * Addresses are the same `user_emails` rows staff manage (user-emails.ts
- * builds the shared insert and removal statements), so one global
- * reservation, one identity-ownership rule and one audit trail cover both.
- * Adding an address sends its verification link in the same command
- * (own-email-verification.ts redeems it). Making an address primary swaps it
+ * Verification requests use the shared signed email challenge and outbox. No
+ * address is saved until mailbox proof and the intended account's explicit
+ * confirmation. Saved addresses are canonical user_emails records, shared
+ * with staff-managed addresses. Making a verified address primary swaps it
  * with the current primary address while every organization identity keeps
  * the address it follows. An address an active organization identity uses
  * cannot be removed: the identity would silently fall back to another one.
  */
 import {
   OWN_EMAIL_ADDRESS_LIMIT,
+  OWN_EMAIL_ALREADY_ON_ACCOUNT,
+  OWN_EMAIL_ALREADY_ON_ACCOUNT_MESSAGES,
+  ownEmailInUseMessage,
+  type OwnEmailHolding,
   type OwnEmailAddress,
   type OwnEmailAddressUpdate,
   type OwnEmailAddressesListQuery,
@@ -22,17 +27,19 @@ import {
 import { buildPageInfo, type PageInfo } from "../../../assets/shared/schemas/pagination";
 import { prepareAuthorizationGuard, isAuthorizationGuardFailure } from "../db/authorization-guard";
 import { first } from "../db/queries";
-import { queryPage } from "../db/pagination";
+import { buildOffsetPageStatements, decodeOffsetPageResults } from "../db/pagination";
 import { buildD1TextSearchFilter } from "../db/search";
 import { resolveMappedOrderBy } from "../db/sort";
 import { AppError } from "../errors";
-import type { DatabaseLike } from "../types";
+import type { DatabaseLike, D1StatementResult } from "../types";
 import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
 import { normalizeEmail } from "../validation";
-import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "./audit";
+import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange, prepareAuditLog } from "./audit";
 import {
   ADDRESS_SORT_EXPRESSIONS,
+  addressUsedByJsonSql,
+  decodeAddressUsedBy,
   OWN_ADDRESSES_SQL,
   OWN_ADDRESS_COLUMNS,
   readOwnEmailAddress,
@@ -40,26 +47,36 @@ import {
   type OwnAddressRow,
 } from "./own-email-address-read";
 import { prepareOwnEmailVerificationMessage, type OwnEmailVerificationDelivery } from "./own-email-verification";
-import {
-  emailTakenError,
-  findUserEmailOwner,
-  isEmailReservationConflict,
-  prepareInsertUserEmail,
-  prepareRemoveUserEmailStatements,
-} from "./user-emails";
+import { isEmailReservationConflict, prepareRemoveUserEmailStatements } from "./user-emails";
+import { domainBackedIdentitySql, identityEmailDomainSupportSql } from "./identities/email-domain-support";
+import { identityOrganizationEmailDomainSql } from "./identities/affiliation-projection";
 
-export async function listOwnEmailAddresses(
+export function prepareOwnEmailAddressesList(
   db: DatabaseLike,
   userId: string,
   query: OwnEmailAddressesListQuery,
-): Promise<{ emails: OwnEmailAddress[]; page: PageInfo }> {
+  availableToIdentityId?: string,
+) {
   const search = query.q ? buildD1TextSearchFilter(query.q, ["email"]) : null;
-  const { rows, total } = await queryPage<OwnAddressRow>(db, {
+  const conditions = [...(search ? [search.sql] : [])];
+  const bindings: unknown[] = [userId, userId, ...(search?.bindings ?? [])];
+  if (availableToIdentityId) {
+    conditions.push("verified_at IS NOT NULL AND (identity_id IS NULL OR identity_id=?)");
+    bindings.push(availableToIdentityId);
+    conditions.push(`EXISTS (SELECT 1 FROM identities identity WHERE identity.id=? AND
+      (NOT ${domainBackedIdentitySql()} OR ${identityEmailDomainSupportSql(
+        "lower(addresses.email)",
+        "identity",
+        identityOrganizationEmailDomainSql("identity.id"),
+      )}))`);
+    bindings.push(availableToIdentityId);
+  }
+  const statements = buildOffsetPageStatements(db, {
     source: {
       withSql: OWN_ADDRESSES_SQL,
       selectSql: `SELECT ${OWN_ADDRESS_COLUMNS}`,
-      fromSql: `FROM addresses${search ? ` WHERE ${search.sql}` : ""}`,
-      bindings: [userId, userId, ...(search?.bindings ?? [])],
+      fromSql: `FROM addresses${conditions.length ? ` WHERE ${conditions.join(" AND ")}` : ""}`,
+      bindings,
     },
     // The primary address leads whatever order the reader picks.
     orderBy: resolveMappedOrderBy(query.sort, ADDRESS_SORT_EXPRESSIONS, "created_at ASC", "id ASC").replace(
@@ -69,56 +86,98 @@ export async function listOwnEmailAddresses(
     limit: query.limit,
     offset: query.offset,
   });
-  const emails = rows.map(toAddress);
-  return { emails, page: buildPageInfo(query.limit, query.offset, total, emails.length) };
+  return {
+    statements,
+    decode(loaded: D1StatementResult[]) {
+      const { rows, total } = decodeOffsetPageResults<OwnAddressRow>(loaded[0]!, loaded[1]!);
+      const emails = rows.map(toAddress);
+      return { emails, page: buildPageInfo(query.limit, query.offset, total, emails.length) };
+    },
+  };
 }
 
-/** Adds an unverified address and sends its verification link in one command. */
+export async function listOwnEmailAddresses(
+  db: DatabaseLike,
+  userId: string,
+  query: OwnEmailAddressesListQuery,
+): Promise<{ emails: OwnEmailAddress[]; page: PageInfo }> {
+  const read = prepareOwnEmailAddressesList(db, userId, query);
+  return read.decode(await db.batch(read.statements));
+}
+
+/** The person's own verified addresses that equal one requested address; bind user id and address twice. */
+const OWN_VERIFIED_HOLDING_SQL = `SELECT 'primary' AS holding FROM users WHERE id=? AND normalized_email=?
+  UNION ALL
+  SELECT 'verified' FROM user_emails WHERE user_id=? AND normalized_email=? AND verified_at IS NOT NULL`;
+
+/**
+ * Request proof without reserving the address or associating its owner with
+ * this account. An address this account already holds verified is refused
+ * before any mail goes out, since its link could only fail once opened. A
+ * saved address still waiting for proof may be requested again. Only the
+ * person's own addresses are named; another account's reservation stays
+ * undisclosed.
+ */
 export async function addOwnEmailAddress(
   db: DatabaseLike,
-  input: { userId: string; email: string } & OwnEmailVerificationDelivery,
-): Promise<{ email: OwnEmailAddress; outboxId: string }> {
-  const [user, count] = await Promise.all([
-    first<{ updated_at: string }>(
-      db,
-      "SELECT updated_at FROM users WHERE id = ? AND active = 1 AND pii_redacted_at IS NULL AND merged_into_user_id IS NULL",
-      [input.userId],
-    ),
-    first<{ count: number }>(db, "SELECT COUNT(*) AS count FROM user_emails WHERE user_id = ?", [input.userId]),
-  ]);
-  if (!user) throw new AppError(404, "USER_NOT_FOUND", "User not found");
-  if (Number(count?.count ?? 0) >= OWN_EMAIL_ADDRESS_LIMIT)
-    throw new AppError(
-      409,
-      "USER_EMAIL_LIMIT_REACHED",
-      `You can keep up to ${OWN_EMAIL_ADDRESS_LIMIT} addresses besides your primary one; remove one first`,
-    );
-  if (await findUserEmailOwner(db, normalizeEmail(input.email))) throw emailTakenError();
+  input: {
+    userId: string;
+    email: string;
+    purpose?: "representation";
+    unaffiliatedAttestation?: boolean;
+  } & OwnEmailVerificationDelivery,
+): Promise<{ status: "verification_sent"; email: string; requestId: string; outboxId: string }> {
+  if (input.purpose === "representation")
+    refuseIneligibleWorkEmail({ email: input.email, unaffiliatedAttestation: input.unaffiliatedAttestation ?? false });
   const id = uuid();
   const at = nowIso();
-  const message = await prepareOwnEmailVerificationMessage(db, { ...input, emailId: id, at });
+  const normalizedEmail = normalizeEmail(input.email);
+  const message = await prepareOwnEmailVerificationMessage(db, { ...input, emailId: id, addressRequest: true, at });
   try {
     await db.batch([
-      prepareInsertUserEmail(db, { id, userId: input.userId, email: input.email, at, userUpdatedAt: user.updated_at }),
-      prepareAuditLogAfterOneChange(
+      ...(input.authorizationEvidence ? [prepareAuthorizationGuard(db, input.authorizationEvidence)] : []),
+      prepareAuthorizationGuard(db, {
+        sql: "SELECT 1 FROM users WHERE id=? AND active=1 AND email_verified_at IS NOT NULL AND pii_redacted_at IS NULL AND merged_into_user_id IS NULL",
+        bindings: [input.userId],
+      }),
+      prepareAuthorizationGuard(db, {
+        sql: "SELECT 1 WHERE (SELECT COUNT(*) FROM user_emails WHERE user_id=?) < ?",
+        bindings: [input.userId, OWN_EMAIL_ADDRESS_LIMIT],
+      }),
+      prepareAuthorizationGuard(db, {
+        sql: `SELECT 1 WHERE NOT EXISTS (${OWN_VERIFIED_HOLDING_SQL})`,
+        bindings: [input.userId, normalizedEmail, input.userId, normalizedEmail],
+      }),
+      prepareAuditLog(
         db,
         "user",
         input.userId,
-        "user_email_added",
+        "user_email_requested",
         "user",
         input.userId,
-        { emailId: id, email: input.email },
+        { requestId: id, email: input.email },
         at,
       ),
       ...message.statements,
     ]);
   } catch (error) {
-    if (isEmailReservationConflict(error)) throw emailTakenError();
-    if (isAuditChangeGuardFailure(error))
-      throw new AppError(409, "USER_LIFECYCLE_CHANGED", "Your account changed while the address was being added");
-    throw error;
+    if (!isAuthorizationGuardFailure(error)) throw error;
+    // Only a refused request pays for reading which reason applies.
+    const held = await first<{ holding: OwnEmailHolding }>(db, `${OWN_VERIFIED_HOLDING_SQL} LIMIT 1`, [
+      input.userId,
+      normalizedEmail,
+      input.userId,
+      normalizedEmail,
+    ]);
+    if (held)
+      throw new AppError(409, OWN_EMAIL_ALREADY_ON_ACCOUNT, OWN_EMAIL_ALREADY_ON_ACCOUNT_MESSAGES[held.holding]);
+    throw new AppError(
+      409,
+      "EMAIL_REQUEST_NOT_ALLOWED",
+      "Confirm your sign-in email and check your saved email addresses before requesting another link.",
+    );
   }
-  return { email: await readOwnEmailAddress(db, input.userId, id), outboxId: message.outboxId };
+  return { status: "verification_sent", email: input.email, requestId: id, outboxId: message.outboxId };
 }
 
 interface SwapParty {
@@ -156,7 +215,9 @@ export async function makeOwnEmailAddressPrimary(
       WHERE address.id = ? AND address.user_id = ? AND person.active = 1`,
     [input.emailId, input.userId],
   );
-  if (!party) throw new AppError(404, "EMAIL_NOT_FOUND", "Email address not found");
+  if (!party) {
+    throw new AppError(404, "EMAIL_NOT_FOUND", "Email address not found");
+  }
   if (!party.verified_at)
     throw new AppError(409, "EMAIL_UNVERIFIED", "Verify this address before making it your primary address");
   if (party.pending_email)
@@ -242,27 +303,21 @@ export async function removeOwnEmailAddress(
   db: DatabaseLike,
   input: { userId: string; emailId: string },
 ): Promise<void> {
-  const address = await first<{ email: string; organization_name: string | null }>(
+  const address = await first<{ email: string; used_by_json: string }>(
     db,
-    `SELECT address.email,
-            (SELECT organization.name FROM identities identity
-               JOIN organizations organization ON organization.id = identity.organization_id
-              WHERE identity.user_id = address.user_id AND identity.ended_at IS NULL
-                AND (identity.email_id = address.id OR identity.id = address.identity_id)
-              LIMIT 1) AS organization_name
+    `SELECT address.email, ${addressUsedByJsonSql("address")} AS used_by_json
        FROM user_emails address WHERE address.id = ? AND address.user_id = ?`,
     [input.emailId, input.userId],
   );
   if (!address) throw new AppError(404, "EMAIL_NOT_FOUND", "Email address not found");
-  if (address.organization_name)
-    throw new AppError(
-      409,
-      "USER_EMAIL_IN_USE",
-      `This address identifies you at ${address.organization_name}; end that relationship first`,
-    );
+  const usedBy = decodeAddressUsedBy(address.used_by_json);
+  if (usedBy.length)
+    throw new AppError(409, "USER_EMAIL_IN_USE", ownEmailInUseMessage(usedBy.map((organization) => organization.name)));
+  const remains = await refuseRemovingLastSignInMethod(db, input.userId, { removedEmailId: input.emailId });
   const at = nowIso();
   try {
     await db.batch([
+      prepareAuthorizationGuard(db, remains),
       prepareAuthorizationGuard(db, {
         sql: `SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM identities identity WHERE identity.user_id = ?
                 AND identity.email_id = ? AND identity.ended_at IS NULL)`,
@@ -282,8 +337,11 @@ export async function removeOwnEmailAddress(
       prepareJobWake(db, "google_groups_sync"),
     ]);
   } catch (error) {
-    if (isAuthorizationGuardFailure(error))
+    if (isAuthorizationGuardFailure(error)) {
+      // The batch rolled back; asking again names the guard that refused.
+      await refuseRemovingLastSignInMethod(db, input.userId, { removedEmailId: input.emailId });
       throw new AppError(409, "USER_EMAIL_IN_USE", "An organization identity started using this address meanwhile");
+    }
     if (isAuditChangeGuardFailure(error)) throw new AppError(404, "EMAIL_NOT_FOUND", "Email address not found");
     throw error;
   }

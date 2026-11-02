@@ -2,7 +2,7 @@ import { z } from "zod";
 import { describe, expect, it } from "vitest";
 import { ALLOWED_PRESENTATION_MIME_TYPES } from "../assets/shared/presentation-upload";
 import { registrationConfirmResponseSchema } from "../assets/shared/schemas/registration";
-import { AUTH_EXTENSION, decorateOpenApiSpec } from "../functions/_lib/openapi/mcp";
+import { AUTH_EXTENSION, decorateOpenApiSpec, filterOpenApiSpecForMcp } from "../functions/_lib/openapi/mcp";
 import { openapi } from "../functions/http-router";
 
 describe("OpenAPI schema generation", () => {
@@ -25,6 +25,17 @@ describe("OpenAPI schema generation", () => {
       expect(spec.paths[`${agenda}/{occurrenceId}/${action}`]).toBeUndefined();
     }
     expect(spec.paths[`${agenda}/participation`]?.get).toBeDefined();
+  });
+
+  it("exposes identity corrections through MCP with their delegated permissions", () => {
+    const spec = filterOpenApiSpecForMcp(openapi.schema);
+    expect(spec.paths["/api/v1/identities"].get.security).toEqual([{ McpSession: ["membership:read"] }]);
+    const correction = spec.paths["/api/v1/users/{userId}/identities/{identityId}/corrections"].post;
+    expect(correction.security).toEqual([{ McpSession: ["membership:write", "identities:activate"] }]);
+    const email = spec.paths["/api/v1/users/{userId}/identities/{identityId}/email"];
+    expect(email.get.security).toEqual([{ McpSession: ["users:read"] }]);
+    expect(email.put.security).toEqual([{ McpSession: ["membership:write"] }]);
+    expect(correction["x-pkic-mcp"].readonly).toBe(false);
   });
 
   it("generates the full API document", () => {

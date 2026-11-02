@@ -12,3 +12,11 @@
 export function hostWithinDomainSql(hostSql: string, domainSql: string): string {
   return `(instr('.' || ${hostSql} || '/', '.' || ${domainSql} || '/') > 0)`;
 }
+
+/** A host follows its most specific current claim, including an application that holds it. */
+export function governingDomainClaimSql(hostSql: string, claimAlias = "claim"): string {
+  return `${hostWithinDomainSql(hostSql, `${claimAlias}.domain`)} AND NOT EXISTS (
+    SELECT 1 FROM organization_domain_claims more_specific
+    WHERE length(more_specific.domain)>length(${claimAlias}.domain)
+      AND ${hostWithinDomainSql(hostSql, "more_specific.domain")})`;
+}

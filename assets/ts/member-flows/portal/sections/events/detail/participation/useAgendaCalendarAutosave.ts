@@ -23,7 +23,7 @@ export function useAgendaCalendarAutosave(
     if (request === 0) return;
     const checked = form.submit();
     if (!checked.data) {
-      toast(checked.message, "error");
+      if (checked.formMessage) toast(checked.formMessage, "error");
       return;
     }
     setSaving(true);

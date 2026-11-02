@@ -1,0 +1,251 @@
+@layer components {
+  .pk-attendance-settings {
+    min-inline-size: 0;
+  }
+  .pk-attendance-settings[data-read-only] {
+    padding-block-end: 0;
+  }
+  .pk-attendance-settings[data-read-only] .pk-attendance-settings__options .pk-table th:last-child {
+    width: auto;
+  }
+  .pk-attendance-settings .pk-table {
+    table-layout: fixed;
+  }
+  .pk-attendance-settings .pk-table th {
+    text-transform: none;
+    letter-spacing: normal;
+    white-space: normal;
+  }
+  .pk-attendance-settings .pk-table td {
+    vertical-align: top;
+    padding: var(--pk-3);
+    border-inline-end: 1px solid var(--pk-line);
+  }
+  .pk-attendance-settings .pk-table__value {
+    overflow: visible;
+    white-space: normal;
+  }
+  .pk-attendance-settings__options .pk-table th:first-child {
+    width: 10rem;
+  }
+  .pk-attendance-settings__options .pk-table th:nth-child(2),
+  .pk-attendance-settings__options .pk-table th:nth-child(3) {
+    width: 20%;
+  }
+  .pk-attendance-settings__options .pk-table th:last-child {
+    width: 3.75rem;
+  }
+  .pk-attendance-settings__schedule .pk-table th:first-child {
+    width: 15rem;
+  }
+  .pk-attendance-settings__schedule .pk-table {
+    table-layout: auto;
+  }
+  .pk-attendance-settings__schedule .pk-table td:not(:first-child) {
+    min-inline-size: 10rem;
+  }
+  .pk-attendance-settings__icon-field,
+  .pk-attendance-settings__column-name,
+  .pk-attendance-settings__option-name,
+  .pk-attendance-settings__date-row {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-2);
+    min-inline-size: 0;
+  }
+  .pk-attendance-settings__icon-field > svg,
+  .pk-attendance-settings__column-name > svg,
+  .pk-attendance-settings__option-name > svg {
+    flex: none;
+  }
+  .pk-attendance-settings__icon-field > .pk-field,
+  .pk-attendance-settings__date-row > .pk-field {
+    flex: 1;
+    min-inline-size: 0;
+  }
+  .pk-attendance-settings__times {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--pk-2);
+  }
+  .pk-attendance-settings__day-fields input {
+    min-inline-size: 0;
+  }
+  .pk-attendance-settings__capacity {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pk-2);
+    min-block-size: 8rem;
+  }
+  .pk-attendance-settings__capacity-controls {
+    display: grid;
+    gap: var(--pk-2);
+  }
+  .pk-attendance-settings__capacity[data-unavailable] {
+    justify-content: center;
+    background: repeating-linear-gradient(135deg, var(--pk-surface-sunk) 0, var(--pk-surface-sunk) 0.25rem, var(--pk-surface) 0.25rem, var(--pk-surface) 0.5rem);
+  }
+  .pk-attendance-settings__capacity[data-full] {
+    background: var(--pk-warn-soft);
+  }
+  .pk-attendance-settings__capacity[data-full] .pk-attendance-settings__capacity-status {
+    color: var(--pk-warn-ink);
+  }
+  .pk-attendance-settings__capacity > .pk-cluster {
+    gap: var(--pk-1);
+  }
+  .pk-attendance-settings__capacity .pk-btn {
+    padding-inline: var(--pk-1);
+  }
+  .pk-attendance-settings__footer {
+    position: sticky;
+    inset-block-end: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--pk-3);
+    padding: var(--pk-3);
+    border: 1px solid var(--pk-line);
+    border-radius: var(--pk-radius);
+    background: var(--pk-surface);
+    z-index: 2;
+  }
+  .pk-attendance-settings__actions {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-3);
+  }
+  .pk-attendance-settings__definitions {
+    margin: 0 var(--pk-3) var(--pk-3);
+    border: 1px solid var(--pk-line);
+    border-radius: var(--pk-radius);
+    overflow: hidden;
+  }
+  .pk-attendance-settings__definition + .pk-attendance-settings__definition {
+    border-block-start: 1px solid var(--pk-line);
+  }
+  .pk-attendance-settings__definition > summary {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-3);
+    padding: var(--pk-3);
+    cursor: pointer;
+    min-block-size: 3.5rem;
+  }
+  .pk-attendance-settings__definition > summary > span:nth-child(2) {
+    display: grid;
+    flex: 1;
+  }
+  .pk-attendance-settings__definition > summary::after {
+    content: "⌄";
+  }
+  .pk-attendance-settings__definition[open] > summary::after {
+    content: "⌃";
+  }
+  .pk-attendance-settings__definition-fields {
+    padding: var(--pk-3);
+    padding-block-start: 0;
+  }
+  .pk-attendance-settings__phone-schedule {
+    padding: var(--pk-3);
+  }
+  .pk-attendance-settings__day-picker {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-2);
+  }
+  .pk-attendance-settings__day-picker > .pk-tabs {
+    min-inline-size: 0;
+    flex: 1;
+  }
+  .pk-attendance-settings__day-picker .pk-tabs__list {
+    gap: var(--pk-2);
+    border: 0;
+  }
+  .pk-attendance-settings__day-picker .pk-tabs__link {
+    min-inline-size: 4rem;
+    min-block-size: 3.5rem;
+    border: 1px solid var(--pk-line);
+    border-radius: var(--pk-radius);
+    white-space: normal;
+    flex: 0 0 4rem;
+    padding: var(--pk-2);
+    font-size: var(--pk-text-xs);
+  }
+  .pk-attendance-settings__day-picker .pk-tabs__link > span {
+    display: grid;
+    gap: var(--pk-1);
+  }
+  .pk-attendance-settings__day-picker .pk-tabs__link[aria-selected="true"] {
+    color: var(--pk-on-solid);
+    background: var(--pk-accent-strong);
+  }
+  @media (max-width: 52rem) {
+    .pk-attendance-settings {
+      padding-block-end: calc(8rem + env(safe-area-inset-bottom, 0px));
+    }
+    .pk-attendance-settings .pk-input,
+    .pk-attendance-settings .pk-btn,
+    .pk-attendance-settings .pk-check {
+      min-block-size: 2.75rem;
+    }
+    .pk-attendance-settings__capacity .pk-check {
+      min-inline-size: 2.75rem;
+      align-items: center;
+      justify-content: flex-end;
+    }
+    .pk-attendance-settings__capacity .pk-check__input {
+      margin-block-start: 0;
+    }
+    .pk-attendance-settings__schedule > .pk-panel__header,
+    .pk-attendance-settings__schedule > .pk-panel__body:first-of-type {
+      display: none;
+    }
+    .pk-attendance-settings__day-fields {
+      padding: var(--pk-3);
+      border: 1px solid var(--pk-line);
+      border-radius: var(--pk-radius);
+    }
+    .pk-attendance-settings__day-options {
+      overflow: hidden;
+      border: 1px solid var(--pk-line);
+      border-radius: var(--pk-radius);
+    }
+    .pk-attendance-settings__day-options > .pk-attendance-settings__capacity {
+      padding: var(--pk-3);
+    }
+    .pk-attendance-settings__day-options > .pk-attendance-settings__capacity + .pk-attendance-settings__capacity {
+      border-block-start: 1px solid var(--pk-line);
+    }
+    .pk-attendance-settings__capacity-controls {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      align-items: center;
+      gap: var(--pk-3);
+    }
+    .pk-attendance-settings__capacity-status {
+      color: var(--pk-accent-ink);
+    }
+    .pk-attendance-settings__capacity[data-full] .pk-attendance-settings__capacity-status {
+      color: var(--pk-warn-ink);
+    }
+    .pk-attendance-settings__footer {
+      position: fixed;
+      inset-inline: 0;
+      inset-block-end: var(--pk-viewport-shift-bottom, 0px);
+      padding-block-end: max(var(--pk-3), env(safe-area-inset-bottom, 0px));
+      border-radius: 0;
+      flex-direction: column;
+      align-items: stretch;
+      text-align: center;
+      z-index: 190;
+    }
+    .pk-attendance-settings__actions {
+      display: grid;
+      grid-template-columns: 1fr 2fr;
+    }
+    .pk-attendance-settings__actions > .pk-btn {
+      inline-size: 100%;
+    }
+  }
+}

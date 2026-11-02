@@ -17,15 +17,15 @@ import { AppError } from "../../errors";
 import { prepareAuthorizationGuard, isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import { remoteOccupiedSql } from "./capacity-accounting";
 import {
-  registrationDayAttendanceSql,
+  registrationDaySessionAccessSql,
   registrationSessionDayOptionsSql,
   registrationSessionAttendance,
 } from "./session-access";
 import { prepareScopedAuditLogAfterOneChange, isAuditChangeGuardFailure } from "../audit";
-import { HELD_PARTICIPATION_STATUSES } from "./personal-agenda-membership";
 import { eventReadIdSql, type EventReadSelection } from "../events/selection";
 import { readParticipantEvent } from "./participant-read-context";
 import { participantSessionDatabase } from "./self-authorization";
+import { prepareSessionPreference, refuseSessionPreference } from "./session-preference";
 
 interface ParticipationBasis {
   event_id: string;
@@ -43,7 +43,6 @@ interface ParticipationBasis {
   booking_closes_at: string | null;
   invited: number;
   registered: number;
-  registration_default_mode: string | null;
   registration_days_json: string | null;
 }
 
@@ -53,7 +52,7 @@ function prepareParticipationBasis(db: DatabaseLike, event: EventReadSelection, 
     statements: [
       db
         .prepare(`SELECT s.event_id,s.published_revision,s.visibility,p.id AS prior_participation_id,s.admission_policy,s.start_at,s.timezone,p.status AS prior_status,p.attendance_mode AS prior_mode,p.approval_state,s.access_policy,s.booking_opens_at,s.booking_closes_at,EXISTS(SELECT 1 FROM agenda_session_invitations invitation WHERE invitation.occurrence_id=s.id AND invitation.user_id=p.user_id AND invitation.revoked_at IS NULL) AS invited,
-      reg.id IS NOT NULL AS registered,reg.attendance_type AS registration_default_mode,${registrationSessionDayOptionsSql("reg", "s")} AS registration_days_json
+      reg.id IS NOT NULL AS registered,${registrationSessionDayOptionsSql("reg", "s")} AS registration_days_json
       FROM (${publishedSessionsSql}) s LEFT JOIN agenda_session_participations p ON p.occurrence_id=s.id AND p.user_id=?
       LEFT JOIN registrations reg ON reg.event_id=s.event_id AND reg.user_id=? AND reg.status='registered'
       WHERE s.id=? AND s.event_id=${scope.sql}`)
@@ -67,7 +66,7 @@ function prepareParticipationBasis(db: DatabaseLike, event: EventReadSelection, 
   };
 }
 
-/** Preflight is one authenticated snapshot; the second call retains the atomic primary command. */
+/** Resolve the session and its day before applying a preference or seat allocation. */
 export async function setSessionParticipationRequest(
   db: DatabaseLike,
   request: Request,
@@ -76,7 +75,9 @@ export async function setSessionParticipationRequest(
   occurrenceId: string,
   input: unknown,
 ) {
-  const basis = await readParticipantEvent(db, request, env, eventSlug, "audience", (userId, event, sessionId) => {
+  const command = sessionParticipationCommandSchema.parse(input);
+  const visibility = command.action === "save" || command.action === "unsave" ? "existing" : "audience";
+  const basis = await readParticipantEvent(db, request, env, eventSlug, visibility, (userId, event, sessionId) => {
     const read = prepareParticipationBasis(db, event, occurrenceId, userId);
     return {
       statements: read.statements,
@@ -129,6 +130,19 @@ async function applySessionParticipation(
   preparedSession?: ParticipationBasis,
 ) {
   const input = sessionParticipationCommandSchema.parse(raw);
+  if (input.action === "save" || input.action === "unsave") {
+    const read = prepareParticipationBasis(db, eventId, occurrenceId, userId);
+    const basis = preparedSession ?? read.decode(await db.batch(read.statements));
+    const mode = sessionAttendanceModeForDay(
+      registrationSessionAttendance({ ...basis, startAt: basis.start_at, timeZone: basis.timezone }),
+    );
+    const plan = prepareSessionPreference(db, eventId, occurrenceId, userId, input.action, input, mode);
+    try {
+      return plan.decode(await db.batch(plan.statements));
+    } catch (error) {
+      return refuseSessionPreference(error);
+    }
+  }
   const requiresReconfirmation =
     ["reserve", "request"].includes(input.action) && input.expectedPublishedRevision !== undefined;
   const stalePublication = () =>
@@ -149,7 +163,7 @@ async function applySessionParticipation(
     );
   if (input.action === "request" && session.admission_policy !== "approval")
     throw new AppError(409, "APPROVAL_NOT_REQUIRED", "This session does not require approval.");
-  if (!["save", "unsave", "cancel"].includes(input.action)) {
+  if (input.action !== "cancel") {
     const clock = nowIso();
     if (
       (session.booking_opens_at && session.booking_opens_at > clock) ||
@@ -160,21 +174,16 @@ async function applySessionParticipation(
       throw new AppError(403, "SESSION_INVITATION_REQUIRED", "An invitation is required for this session.");
   }
   const date = session.start_at ? instantToDateTimeLocal(session.start_at, session.timezone).slice(0, 10) : null;
-  const holding = Boolean(
-    session.prior_status && (HELD_PARTICIPATION_STATUSES as readonly string[]).includes(session.prior_status),
-  );
-  const retainingAllocation = ["save", "unsave"].includes(input.action) && holding;
   const attendanceMode = resolveAttendanceMode();
   function resolveAttendanceMode(): "physical" | "remote" {
-    if (retainingAllocation && session!.prior_mode) return session!.prior_mode;
     if (input.attendanceMode) return input.attendanceMode;
-    if (["save", "unsave", "cancel"].includes(input.action) && session!.prior_mode) return session!.prior_mode;
+    if (input.action === "cancel" && session!.prior_mode) return session!.prior_mode;
     const derived = sessionAttendanceModeForDay(
       registrationSessionAttendance({ ...session!, startAt: session!.start_at, timeZone: session!.timezone }),
     );
     if (derived) return derived;
-    // A star or a release holds no seat, so its mode is inert.
-    if (["save", "unsave", "cancel"].includes(input.action)) return "physical";
+    // A release holds no seat, so its mode is inert.
+    if (input.action === "cancel") return "physical";
     throw new AppError(
       409,
       "SESSION_ATTENDANCE_DAY_REQUIRED",
@@ -185,14 +194,12 @@ async function applySessionParticipation(
   const target =
     input.action === "cancel"
       ? "canceled"
-      : input.action === "save" || input.action === "unsave"
-        ? (session.prior_status ?? "saved")
-        : session.admission_policy === "approval" &&
-            session.approval_state !== "approved" &&
-            !management &&
-            !historicalReservation
-          ? "approval_pending"
-          : "reserved";
+      : session.admission_policy === "approval" &&
+          session.approval_state !== "approved" &&
+          !management &&
+          !historicalReservation
+        ? "approval_pending"
+        : "reserved";
   if (session.prior_status === "reserved" && target === "approval_pending")
     throw new AppError(
       409,
@@ -220,14 +227,14 @@ async function applySessionParticipation(
   const statement = db
     .prepare(
       `WITH actor AS (SELECT ? AS user_id,? AS replacement_id) INSERT INTO agenda_session_participations (id,event_id,occurrence_id,user_id,attendance_mode,status,created_at,updated_at,approval_state,waitlisted_at,attendance_day_date,saved)
- SELECT ?,s.event_id,s.id,?,?,CASE WHEN ?='reserved' AND NOT ${available} THEN 'waitlisted' ELSE ? END,?,?,CASE WHEN ?='approval_pending' THEN 'pending' WHEN ?=1 THEN 'approved' ELSE 'none' END,?,?,CASE WHEN ? IN ('save','reserve','request') THEN 1 ELSE 0 END
+ SELECT ?,s.event_id,s.id,?,?,CASE WHEN ?='reserved' AND NOT ${available} THEN 'waitlisted' ELSE ? END,?,?,CASE WHEN ?='approval_pending' THEN 'pending' WHEN ?=1 THEN 'approved' ELSE 'none' END,?,?,CASE WHEN ? IN ('reserve','request') THEN 1 ELSE 0 END
  FROM (${publishedSessionsSql}) s
  WHERE s.id=? AND s.event_id=? AND (?=0 OR s.published_revision=?) AND s.start_at IS ? AND s.timezone=? AND s.admission_policy=? AND (SELECT id FROM agenda_session_participations previous WHERE previous.occurrence_id=s.id AND previous.user_id=(SELECT user_id FROM actor)) IS ? AND (SELECT status FROM agenda_session_participations previous WHERE previous.occurrence_id=s.id AND previous.user_id=(SELECT user_id FROM actor)) IS ? AND (SELECT approval_state FROM agenda_session_participations approval WHERE approval.occurrence_id=s.id AND approval.user_id=(SELECT user_id FROM actor)) IS ?
  AND (?<>'reserve' OR s.admission_policy<>'preference' OR EXISTS(SELECT 1 FROM agenda_session_participations grandfathered WHERE grandfathered.occurrence_id=s.id AND grandfathered.user_id=(SELECT user_id FROM actor) AND grandfathered.status='reserved'))
- AND ${target === "canceled" || input.action === "save" || input.action === "unsave" ? "1" : operationalAllocationCompatibleSql("s.id", "(SELECT user_id FROM actor)", `'${attendanceMode}'`)}
+ AND ${target === "canceled" ? "1" : operationalAllocationCompatibleSql("s.id", "(SELECT user_id FROM actor)", `'${attendanceMode}'`)}
  AND (s.visibility='public' OR EXISTS(SELECT 1 FROM agenda_session_participations access WHERE access.occurrence_id=s.id AND access.user_id=? AND access.status IN ('reserved','approval_pending')) OR EXISTS(SELECT 1 FROM agenda_session_invitations invitation WHERE invitation.occurrence_id=s.id AND invitation.user_id=(SELECT user_id FROM actor) AND invitation.revoked_at IS NULL))
- AND (? IN ('save','unsave','cancel') OR ((s.booking_opens_at IS NULL OR s.booking_opens_at<=strftime('%Y-%m-%dT%H:%M:%fZ','now')) AND (s.booking_closes_at IS NULL OR s.booking_closes_at>strftime('%Y-%m-%dT%H:%M:%fZ','now')) AND (s.access_policy='open' OR EXISTS(SELECT 1 FROM agenda_session_invitations invitation WHERE invitation.occurrence_id=s.id AND invitation.user_id=(SELECT user_id FROM actor) AND invitation.revoked_at IS NULL))))
- AND (? IN ('save','unsave','cancel') OR EXISTS(SELECT 1 FROM registrations reg WHERE reg.event_id=s.event_id AND reg.user_id=? AND reg.status='registered' AND ${registrationDayAttendanceSql("reg", "?")}=?))
+ AND (?='cancel' OR ((s.booking_opens_at IS NULL OR s.booking_opens_at<=strftime('%Y-%m-%dT%H:%M:%fZ','now')) AND (s.booking_closes_at IS NULL OR s.booking_closes_at>strftime('%Y-%m-%dT%H:%M:%fZ','now')) AND (s.access_policy='open' OR EXISTS(SELECT 1 FROM agenda_session_invitations invitation WHERE invitation.occurrence_id=s.id AND invitation.user_id=(SELECT user_id FROM actor) AND invitation.revoked_at IS NULL))))
+ AND (?='cancel' OR EXISTS(SELECT 1 FROM registrations reg WHERE reg.event_id=s.event_id AND reg.user_id=? AND reg.status='registered' AND ${registrationDaySessionAccessSql("reg", "?")}=?))
  AND (?<>'reserved' OR NOT EXISTS(SELECT 1 FROM agenda_session_participations other JOIN (${publishedSessionsSql}) time ON time.id=other.occurrence_id
    WHERE other.user_id=? AND other.status='reserved' AND other.occurrence_id<>s.id AND other.occurrence_id IS NOT (SELECT replacement_id FROM actor) AND time.start_at<s.end_at AND time.end_at>s.start_at))
  AND NOT (?='reserved' AND NOT ${available} AND ((SELECT replacement_id FROM actor) IS NOT NULL OR EXISTS(SELECT 1 FROM agenda_session_participations prior WHERE prior.occurrence_id=s.id AND prior.user_id=? AND prior.status='reserved' AND prior.attendance_mode<>?)))
@@ -264,7 +271,6 @@ async function applySessionParticipation(
       input.action,
       input.action,
       userId,
-      date,
       date,
       attendanceMode === "physical" ? "in_person" : "virtual",
       target,
@@ -333,13 +339,9 @@ async function applySessionParticipation(
       : []),
     ...preparePersonalCalendarEntries(db, eventId, userId),
     prepareParticipationWork(db, eventId),
-    ...(!["save", "unsave"].includes(input.action)
-      ? [
-          input.replaceOccurrenceId
-            ? prepareEventBookingNotifications(db, eventId, userId)
-            : prepareBookingNotification(db, eventId, occurrenceId, userId),
-        ]
-      : []),
+    input.replaceOccurrenceId
+      ? prepareEventBookingNotifications(db, eventId, userId)
+      : prepareBookingNotification(db, eventId, occurrenceId, userId),
   ];
   const response = db
     .prepare(

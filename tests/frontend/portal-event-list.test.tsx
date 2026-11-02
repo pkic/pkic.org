@@ -174,7 +174,7 @@ describe("portal event list", () => {
     const status = card.querySelector('[aria-label="Your status"]')!;
     // Expected states are words, not pills: nothing here needs the viewer.
     expect([...status.querySelectorAll(".pk-collection-status__fact")].map((fact) => fact.textContent)).toEqual([
-      "You're registered (in person)",
+      "You're registered",
       "2 proposals (accepted)",
       "Speaker",
     ]);
@@ -303,7 +303,7 @@ describe("portal event list", () => {
     await settle();
 
     const row = container.querySelector("tbody tr")!;
-    expect(row.querySelector(".pk-collection-status__fact")?.textContent).toBe("You're registered (in person)");
+    expect(row.querySelector(".pk-collection-status__fact")?.textContent).toBe("You're registered");
 
     const viewerLink = [...row.querySelectorAll("a")].find((a) => a.getAttribute("href") === "#/events/pqc-2026");
     expect(viewerLink).toBeTruthy();

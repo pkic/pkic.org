@@ -10,6 +10,7 @@ import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./helpers/administrator";
 
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
+import { seedSessionAttendanceDays } from "./helpers/session-attendance-days";
 import { env } from "cloudflare:workers";
 import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { seedWorkflowEmailTemplates } from "./helpers/event-workflow";
@@ -274,6 +275,7 @@ describe("invite accept endpoint", () => {
 
   it("accepts an attendee invite with valid consents", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
+    await seedSessionAttendanceDays(env.DB, eventId, ["2026-12-01"]);
     const adminUser = (await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0];
     await seedWorkflowEmailTemplates(env.DB, adminUser.id);
 
@@ -295,7 +297,7 @@ describe("invite accept endpoint", () => {
             email: "attendee@example.test",
             firstName: "Alice",
             lastName: "Test",
-            attendanceType: "virtual",
+            dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
             consents: [
               { termKey: "privacy-policy", version: "v1" },
               { termKey: "code-of-conduct", version: "v1" },
@@ -320,6 +322,7 @@ describe("invite accept endpoint", () => {
 
   it("rejects attendee accept with mismatched email", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
+    await seedSessionAttendanceDays(env.DB, eventId, ["2026-12-01"]);
 
     const { token } = await createInvite(env.DB, {
       eventId,
@@ -338,7 +341,7 @@ describe("invite accept endpoint", () => {
             email: "wrong@example.test",
             firstName: "Alice",
             lastName: "Test",
-            attendanceType: "virtual",
+            dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
             consents: [
               { termKey: "privacy-policy", version: "v1" },
               { termKey: "code-of-conduct", version: "v1" },

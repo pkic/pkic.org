@@ -57,3 +57,24 @@ export function eventPlaceNeeded(
     return false;
   return eventPlaceIncomplete(event);
 }
+
+/** The first part of an address line: a venue's name. */
+function leadingPart(value: string | null | undefined): string | null {
+  return value?.split(",")[0]?.trim() || null;
+}
+
+/**
+ * Where the event is, once: the venue's name and the city ("Meervaart ·
+ * Amsterdam"), not the venue's postal address followed by the city again.
+ * The full address belongs on the event's venue details (More).
+ */
+export function eventPlaceSummary(event: {
+  readonly venue?: string | null;
+  readonly city?: string | null;
+}): string | null {
+  const venue = "venue" in event ? event.venue : null;
+  const parts: string[] = [];
+  for (const part of [leadingPart(venue), event.city?.trim() || null])
+    if (part && !parts.some((seen) => seen.toLocaleLowerCase() === part.toLocaleLowerCase())) parts.push(part);
+  return parts.length ? parts.join(" · ") : null;
+}

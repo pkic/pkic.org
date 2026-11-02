@@ -1,3 +1,4 @@
+import type { z } from "zod";
 import { ZodError } from "zod";
 import {
   eventBadgeTemplateSchema,
@@ -33,7 +34,11 @@ function sourceTier(row: BrandingRow, source: BadgeSponsorSource): string | null
 }
 
 /** Cheap database basis is rechecked for each badge; artwork is loaded once per document. */
-export async function prepareBadgePrintingBasis(db: DatabaseLike, eventId: string) {
+export async function prepareBadgePrintingBasis(
+  db: DatabaseLike,
+  eventId: string,
+  sponsorGroups?: z.infer<typeof badgeTemplateSponsorGroupSchema>[],
+) {
   const event = await first<{ name: string; settings_json: string }>(
     db,
     "SELECT name,settings_json FROM events WHERE id=?",
@@ -45,14 +50,19 @@ export async function prepareBadgePrintingBasis(db: DatabaseLike, eventId: strin
     rawSettings && typeof rawSettings === "object" && !Array.isArray(rawSettings)
       ? (rawSettings as Record<string, unknown>)
       : {};
-  const parsed = eventBadgeTemplateSchema.nullable().safeParse(settings.badgeTemplate ?? null);
+  const parsed = eventBadgeTemplateSchema.nullable().safeParse(sponsorGroups ? null : (settings.badgeTemplate ?? null));
   if (!parsed.success)
     throw new AppError(
       422,
       "BADGE_TEMPLATE_INVALID",
       "The event badge template is invalid. Update it before printing.",
     );
-  const override = parsed.data;
+  const override = sponsorGroups
+    ? {
+        ...(parsed.data ?? createGenericBadgeTemplate({ eventName: event.name, sponsorGroups: [] })),
+        sponsorGroups: sponsorGroups.map((group) => badgeTemplateSponsorGroupSchema.parse(group)),
+      }
+    : parsed.data;
   const tiersOf = (source: BadgeSponsorSource) =>
     (override?.sponsorGroups ?? []).filter((group) => badgeSponsorGroupSource(group) === source).map((g) => g.tierName);
   const eventPopulation = override
@@ -107,14 +117,12 @@ export async function prepareBadgePrintingBasis(db: DatabaseLike, eventId: strin
       );
     }
   }
-  const revision = await sha256Hex(
-    JSON.stringify({
-      eventId,
-      eventName: event.name,
-      settings: event.settings_json,
-      sponsors: populations.event.map((row) => JSON.parse(row.source_json)),
-      consortiumSponsors: populations.consortium.map((row) => JSON.parse(row.source_json)),
-    }),
+  const revision = await badgePrintingBasisRevision(
+    eventId,
+    event.name,
+    event.settings_json,
+    populations.event,
+    populations.consortium,
   );
   return {
     revision,
@@ -142,8 +150,9 @@ export async function getBadgePrintingContext(
   db: DatabaseLike,
   environment: Pick<Env, "ASSETS_BUCKET">,
   eventId: string,
+  sponsorGroups?: z.infer<typeof badgeTemplateSponsorGroupSchema>[],
 ) {
-  const basis = await prepareBadgePrintingBasis(db, eventId);
+  const basis = await prepareBadgePrintingBasis(db, eventId, sponsorGroups);
   const logos = new Map<string, { id: string; name: string; svg: string }>();
   const capturedObjects: { key: string; etag: string }[] = [];
   let totalBytes = 0;
@@ -218,4 +227,51 @@ export async function getBadgePrintingContext(
   }
   await db.batch(basis.guards);
   return { revision: basis.revision, template: basis.template, branding: checkedBranding.data };
+}
+
+/** Refusals that name a sponsor's stored artwork: organizers fix these, attendees cannot. */
+const SPONSOR_ARTWORK_REFUSALS = new Set([
+  "BADGE_SPONSOR_SVG_REQUIRED",
+  "BADGE_SPONSOR_LOGO_TOO_LARGE",
+  "BADGE_SPONSOR_ARTWORK_TOO_LARGE",
+  "BADGE_SPONSOR_ARTWORK_INVALID",
+]);
+
+/**
+ * The holder's ticket design. Sponsor artwork an organizer still has to replace must not hide the attendee's QR or
+ * show them organizer instructions, so the ticket falls back to the same template without sponsor logos. The
+ * organizer print document keeps refusing through {@link getBadgePrintingContext}.
+ */
+export async function getBadgeHolderPrintingContext(
+  db: DatabaseLike,
+  environment: Pick<Env, "ASSETS_BUCKET">,
+  eventId: string,
+) {
+  try {
+    return await getBadgePrintingContext(db, environment, eventId);
+  } catch (error) {
+    if (!(error instanceof AppError) || !SPONSOR_ARTWORK_REFUSALS.has(error.code)) throw error;
+    const basis = await prepareBadgePrintingBasis(db, eventId);
+    await db.batch(basis.guards);
+    return { revision: basis.revision, template: basis.template, branding: [] };
+  }
+}
+
+/** One canonical fingerprint for badge and promotion sponsor populations. */
+export function badgePrintingBasisRevision(
+  eventId: string,
+  eventName: string,
+  settings: string,
+  sponsors: readonly BrandingRow[],
+  consortiumSponsors: readonly BrandingRow[],
+) {
+  return sha256Hex(
+    JSON.stringify({
+      eventId,
+      eventName,
+      settings,
+      sponsors: sponsors.map((row) => JSON.parse(row.source_json)),
+      consortiumSponsors: consortiumSponsors.map((row) => JSON.parse(row.source_json)),
+    }),
+  );
 }

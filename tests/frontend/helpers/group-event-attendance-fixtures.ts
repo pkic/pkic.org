@@ -29,7 +29,13 @@ export function registrationList() {
         attendance_type: "in_person",
         days: [
           { dayDate: "2026-09-01", label: "Day one", attendanceType: "in_person", waitlistStatus: null },
-          { dayDate: "2026-09-02", label: "Day two", attendanceType: "in_person", waitlistStatus: "waiting" },
+          {
+            dayDate: "2026-09-02",
+            label: "Day two",
+            attendanceType: "in_person",
+            optionLabel: "Venue pass",
+            waitlistStatus: "waiting",
+          },
           { dayDate: "2026-09-03", label: "Day three", attendanceType: "virtual", waitlistStatus: null },
         ],
         created_at: "2026-08-01T00:00:00.000Z",

@@ -351,3 +351,17 @@ export async function bulkQueueInviteEmails(db: DatabaseLike, rows: InviteEmailQ
   const statements = prepareBulkQueueInviteEmailChunkStatements(db, rows).map((chunk) => chunk.statement);
   if (statements.length > 0) await db.batch(statements);
 }
+
+/** Queue a notice from a trusted bounded projection; capability mail uses the authorized payload builder instead. */
+export function prepareQueueNoticeFromSelection(
+  db: DatabaseLike,
+  input: { outboxId: string; templateKey: string; idempotencyKey: string; at: string },
+  source: { sql: string; bindings: unknown[] },
+): StatementLike {
+  return db
+    .prepare(`INSERT INTO email_outbox (${EMAIL_OUTBOX_COLUMNS})
+    SELECT ?,NULL,?,NULL,notice.recipient_user_id,notice.recipient_email,notice.subject,notice.payload_json,
+      'transactional','sendgrid',NULL,'queued',0,?,NULL,?,?,NULL,?
+    FROM (${source.sql}) notice WHERE 1 ${EMAIL_OUTBOX_CONFLICT_SQL}`)
+    .bind(input.outboxId, input.templateKey, input.at, input.at, input.at, input.idempotencyKey, ...source.bindings);
+}

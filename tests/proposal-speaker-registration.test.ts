@@ -44,6 +44,34 @@ describe("accepted proposal speaker registration", () => {
       minReviewsRequired: 0,
     });
 
+  it("accepts a speaker without creating registrations when no event days are scheduled", async () => {
+    const { proposalId } = await inviteSpeakerAndSubmitCapacityProposal(adminSessionToken);
+    await env.DB.prepare("DELETE FROM event_days WHERE event_id=?").bind(eventId).run();
+    await accept(proposalId);
+    expect(await queryAll(env.DB, "SELECT id FROM registrations WHERE event_id=?", eventId)).toEqual([]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM session_proposals WHERE id=? AND status='accepted'", proposalId),
+    ).toHaveLength(1);
+  });
+
+  it("does not confirm a pending speaker registration after the event days are removed", async () => {
+    const { proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitCapacityProposal(adminSessionToken);
+    const { registration } = await createRegistration(env.DB, {
+      event: { id: eventId },
+      userId: coSpeakerUserId,
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
+      sourceType: "direct",
+      signingSecret: "test-signing-secret",
+    });
+    expect(registration.status).toBe("pending_email_confirmation");
+    await env.DB.prepare("DELETE FROM registration_day_attendance WHERE registration_id=?").bind(registration.id).run();
+    await env.DB.prepare("DELETE FROM event_days WHERE event_id=?").bind(eventId).run();
+    await accept(proposalId);
+    expect(
+      await env.DB.prepare("SELECT status FROM registrations WHERE id=?").bind(registration.id).first("status"),
+    ).toBe("pending_email_confirmation");
+  });
+
   it("lists unregistered speakers with bounded search and rejects invalid or unauthorized reads", async () => {
     await inviteSpeakerAndSubmitCapacityProposal(adminSessionToken);
     const request = (suffix: string, authorized = true) =>
@@ -94,20 +122,20 @@ describe("accepted proposal speaker registration", () => {
     };
     expect((await proposalSpeakers()).map((speaker) => speaker.registration)).toEqual([null, null]);
     await accept(proposalId);
-    const registrations = await queryAll<{ id: string; status: string; attendance_type: string }>(
+    const registrations = await queryAll<{ id: string; status: string }>(
       env.DB,
-      "SELECT id, status, attendance_type FROM registrations WHERE event_id = ?",
+      "SELECT id, status FROM registrations WHERE event_id = ?",
       eventId,
     );
     // The roster names each speaker's registration, so the card can open it.
     const rosterRegistrations = (await proposalSpeakers()).map((speaker) => speaker.registration);
     expect(rosterRegistrations.map((registration) => registration?.status)).toEqual(["registered", "registered"]);
-    expect(rosterRegistrations.map((registration) => registration?.attendanceType)).toEqual(["in_person", "in_person"]);
+    expect(rosterRegistrations.map((registration) => registration?.status)).toEqual(["registered", "registered"]);
     expect(rosterRegistrations.map((registration) => registration?.id).sort()).toEqual(
       registrations.map((row) => row.id).sort(),
     );
     expect(registrations).toHaveLength(2);
-    expect(registrations.every((row) => row.status === "registered" && row.attendance_type === "in_person")).toBe(true);
+    expect(registrations.every((row) => row.status === "registered")).toBe(true);
     expect(await queryAll(env.DB, "SELECT id FROM registration_day_attendance")).toHaveLength(4);
     expect(
       await queryAll(env.DB, "SELECT id FROM event_day_waitlist_entries WHERE status IN ('waiting', 'offered')"),
@@ -174,17 +202,16 @@ describe("accepted proposal speaker registration", () => {
     await accept(proposalId);
     const rows = await queryAll<{ attendance_type: string }>(
       env.DB,
-      "SELECT attendance_type FROM registrations WHERE event_id = ?",
+      "SELECT rda.attendance_type FROM registration_day_attendance rda JOIN registrations r ON r.id=rda.registration_id WHERE r.event_id = ? ORDER BY rda.event_day_id",
       eventId,
     );
-    expect(rows).toEqual([{ attendance_type: "virtual" }]);
+    expect(rows).toEqual([{ attendance_type: "virtual" }, { attendance_type: "virtual" }]);
   });
   it("confirms a pending registration while preserving selected days and form answers", async () => {
     const { proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitCapacityProposal(adminSessionToken);
     const { registration } = await createRegistration(env.DB, {
       event: { id: eventId },
       userId: coSpeakerUserId,
-      attendanceType: "virtual",
       dayAttendance: [{ dayDate: "2026-12-02", attendanceType: "virtual" }],
       sourceType: "public",
       customAnswersJson: '{"diet":"vegetarian"}',
@@ -218,7 +245,6 @@ describe("accepted proposal speaker registration", () => {
     const { registration } = await createRegistration(env.DB, {
       event: { id: eventId },
       userId: coSpeakerUserId,
-      attendanceType: "virtual",
       sourceType: "public",
       customAnswersJson: '{"diet":"vegetarian"}',
       dayAttendance: [{ dayDate: "2026-12-02", attendanceType: "virtual" }],
@@ -258,7 +284,6 @@ describe("accepted proposal speaker registration", () => {
         createRegistration(env.DB, {
           event: { id: eventId },
           userId: coSpeakerUserId,
-          attendanceType: "virtual",
           sourceType: "public",
           dayAttendance: [{ dayDate: "2026-12-02", attendanceType: "virtual" }],
         }),
@@ -288,19 +313,22 @@ describe("accepted proposal speaker registration", () => {
       await queryAll(env.DB, "SELECT id FROM registrations WHERE event_id = ? AND status = 'registered'", eventId),
     ).toHaveLength(2);
   });
-  it("preserves a canceled scalar-only virtual registration without adding days", async () => {
+  it("preserves a canceled registration without selected days without inventing attendance", async () => {
     const { proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitCapacityProposal(adminSessionToken);
     const { registration } = await createRegistration(env.DB, {
       event: { id: eventId },
       userId: coSpeakerUserId,
-      attendanceType: "virtual",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
       sourceType: "public",
     });
+    await env.DB.prepare("DELETE FROM registration_day_attendance WHERE registration_id = ?")
+      .bind(registration.id)
+      .run();
     await env.DB.prepare("UPDATE registrations SET status = 'cancelled' WHERE id = ?").bind(registration.id).run();
     await accept(proposalId);
-    expect(
-      await queryAll(env.DB, "SELECT status, attendance_type FROM registrations WHERE id = ?", registration.id),
-    ).toEqual([{ status: "registered", attendance_type: "virtual" }]);
+    expect(await queryAll(env.DB, "SELECT status FROM registrations WHERE id = ?", registration.id)).toEqual([
+      { status: "registered" },
+    ]);
     expect(
       await queryAll(env.DB, "SELECT id FROM registration_day_attendance WHERE registration_id = ?", registration.id),
     ).toEqual([]);
@@ -311,7 +339,7 @@ describe("accepted proposal speaker registration", () => {
     const { registration } = await createRegistration(env.DB, {
       event: { id: eventId },
       userId: coSpeakerUserId,
-      attendanceType: "virtual",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
       sourceType: "public",
     });
     await env.DB.prepare(

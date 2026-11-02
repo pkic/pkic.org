@@ -241,7 +241,7 @@ export function SessionEditor({
     const checked = form.submit();
     if (!checked.data) {
       tabs.revealErrors();
-      setError(checked.message);
+      setError(checked.formMessage ?? "");
       return;
     }
     setBusy(true);

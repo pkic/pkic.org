@@ -84,7 +84,7 @@ export function MembershipCategoryForm({
     if (!canWrite || saving) return;
     const checked = form.submit();
     if (!checked.data) {
-      setError(checked.message);
+      setError(checked.formMessage ?? "");
       return;
     }
     setError("");

@@ -10,7 +10,6 @@ import { requestDb } from "../../../../../../_lib/db/context";
 import { processOutboxByIdBackground } from "../../../../../../_lib/email/outbox";
 import { json } from "../../../../../../_lib/http";
 import { openApiRoute } from "../../../../../../_lib/openapi/route";
-import { deriveEventAttendanceType } from "../../../../../../_lib/services/event-days";
 import {
   prepareReplaceContextFormSubmission,
   toEventFormResolutionEvent,
@@ -56,7 +55,6 @@ async function handleEventRegistrationPatch(
           purpose: "event_registration",
           customAnswers: body.customAnswers,
           context: {
-            attendanceType: body.attendanceType ?? deriveEventAttendanceType(body.dayAttendance) ?? undefined,
             dayAttendance: body.dayAttendance,
           },
         })
@@ -87,12 +85,12 @@ async function handleEventRegistrationPatch(
     eventId: event.id,
     registrationId,
     action: body.action,
-    attendanceType: body.attendanceType,
     dayAttendance: body.dayAttendance,
     waitlistClaimWindowHours: config.waitlistClaimWindowHours,
     customAnswersJson: body.customAnswers !== undefined ? JSON.stringify(customAnswers) : undefined,
     formPlacementId: validatedForm?.form?.placement?.id ?? null,
     sourceRef: body.sourceRef,
+    profileActor: actor,
     profilePatch:
       body.action === "update"
         ? {

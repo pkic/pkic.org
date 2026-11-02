@@ -7,6 +7,7 @@
  */
 import { ButtonLink } from "../../ui/Button";
 import { DescriptionList } from "../../ui/DescriptionList";
+import { registrationRepresentationLabel } from "../../shared/acting-identity-catalog";
 
 /** The portal page where a person reviews and edits their identities. */
 export const MANAGE_IDENTITIES_HREF = "/portal/#/users/current";
@@ -14,16 +15,20 @@ export const MANAGE_IDENTITIES_HREF = "/portal/#/users/current";
 export function RegistrationAffiliation({
   organizationName,
   jobTitle,
+  pendingOrganizationName = null,
 }: {
   organizationName: string | null;
   jobTitle: string | null;
+  pendingOrganizationName?: string | null;
 }) {
   return (
     <div class="pk-stack pk-stack--snug">
       <DescriptionList
         items={[
-          { term: "Organization", value: organizationName },
-          { term: "Job title", value: jobTitle },
+          {
+            term: "Representation",
+            value: registrationRepresentationLabel({ organizationName, jobTitle }, pendingOrganizationName),
+          },
         ]}
       />
       <p class="pk-muted pk-small">Your organization and job title come from your identity.</p>

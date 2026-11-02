@@ -7,7 +7,7 @@ import {
   proposalSpeakerProfileSchema,
 } from "./proposal-management";
 import { proposalStatusSchema } from "./proposal-status";
-import { attendanceTypeSchema, registrationLifecycleStatusSchema } from "./registration";
+import { registrationLifecycleStatusSchema } from "./registration";
 import { independentCapacityReviewSchema } from "./independent-capacity";
 
 /** Canonical transport contract for a proposal's bounded speaker roster. */
@@ -32,7 +32,6 @@ export const proposalSpeakerSchema = proposalSpeakerProfileSchema.extend({
 export const proposalSpeakerRegistrationSchema = z.object({
   id: databaseIdSchema,
   status: registrationLifecycleStatusSchema,
-  attendanceType: attendanceTypeSchema,
 });
 
 export const proposalSpeakersResponseSchema = z.object({

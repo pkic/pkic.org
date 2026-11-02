@@ -1,5 +1,14 @@
 import type { z } from "zod";
-import type { eventProposalProofStartSchema } from "../../../assets/shared/schemas/event-proposal-proof";
+import type {
+  eventProposalProofStartSchema,
+  eventProposalProofVerifySchema,
+} from "../../../assets/shared/schemas/event-proposal-proof";
+import { identityAffiliationPrepareSchema } from "../../../assets/shared/schemas/identity-affiliation";
+import { prepareVerifiedAffiliationRead } from "./identities/verified-affiliation-read";
+import { verifiedAffiliationPreview } from "./identities/verified-affiliation-preview";
+import { planVerifiedAffiliation } from "./identities/verified-affiliation-plan";
+import { signEventAffiliationContext } from "./identities/event-affiliation-context";
+import { nowIso } from "../utils/time";
 import type { IdentitiesListQuery } from "../../../assets/shared/schemas/identity";
 import { buildPageInfo } from "../../../assets/shared/schemas/pagination";
 import { readAffiliation } from "./identities/affiliation-projection";
@@ -7,8 +16,6 @@ import { assertProposalProofCurrent, prepareCurrentEventProposalProof } from "./
 export { assertProposalProofCurrent } from "./event-proposal-proof-current";
 import type { DatabaseLike } from "../types";
 import type { AuthenticatedIdentity } from "../auth/user-session";
-import { all, first } from "../db/queries";
-import { resolveVerifiedEmailDomainOrganization } from "./identities";
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../db/authorization-guard";
 import { AppError } from "../errors";
 import { randomToken } from "../utils/crypto";
@@ -24,6 +31,7 @@ import {
   resumeEventProposalSpeakerProof,
 } from "./event-proposal-proof-context";
 import { listUserIdentities } from "./identities/read-model";
+import { isInvitationMailbox } from "./proposal-speaker-account-authority";
 import {
   prepareInvitedSpeakerAccountClaim,
   isProposalProofAddressOwnedElsewhere,
@@ -36,6 +44,7 @@ import {
 } from "./event-proposal-proof-entry";
 import {
   issueEventProposalContinuation,
+  issueEventProposalProofToken,
   proposalTermsDigest,
   queuedEventProposalProofToken,
   verifyEventProposalCapability,
@@ -144,6 +153,12 @@ export async function startEventProposalProof(
       signingSecret: input.signingSecret,
     }));
   const entryGuards = (await prepareEventProposalEntry(db, input.event.id, entryContext)).statements;
+  // A speaker link reaches only the mailbox it was sent to. When this is that address, opening the
+  // link proved it: the speaker continues at once instead of confirming it twice.
+  const invitationMailbox =
+    context?.kind === "speaker" &&
+    !context.sessionId &&
+    (await isInvitationMailbox(db, { speakerId: context.speakerId, userId: context.userId, email: input.body.email }));
   const payload: EventProposalProofPayload = {
     eventId: input.event.id,
     email: input.body.email,
@@ -154,6 +169,7 @@ export async function startEventProposalProof(
     operation: speakerAuthority ? "speaker_profile" : "proposal_submission",
     context,
     ...(entryContext ? { entryContext } : {}),
+    ...(invitationMailbox ? { basis: "invitation" as const } : {}),
   };
   const contextTtl =
     payload.context?.kind === "speaker" || payload.context?.kind === "mailbox"
@@ -166,16 +182,18 @@ export async function startEventProposalProof(
   const verificationUrl = input.body.speakerProposalId
     ? `${speakerParticipationPageUrl(input.appBaseUrl, input.event, input.body.speakerProposalId)}?verify=${verificationToken}`
     : `${context?.kind === "speaker" ? speakerManagePageUrl(input.appBaseUrl, input.event, "") : proposalPageUrl(input.appBaseUrl, input.event)}#verify=${verificationToken}`;
-  const email = prepareQueueEmailStatement(db, {
-    eventId: input.event.id,
-    templateKey: "event_proposal_verify",
-    recipientEmail: payload.email,
-    recipientUserId: null,
-    messageType: "transactional",
-    subject: `Verify your email for ${input.event.name}`,
-    capabilityLinkValues: [verificationUrl],
-    data: { verificationUrl, eventName: emailPlainText(input.event.name) },
-  });
+  const email = invitationMailbox
+    ? null
+    : prepareQueueEmailStatement(db, {
+        eventId: input.event.id,
+        templateKey: "event_proposal_verify",
+        recipientEmail: payload.email,
+        recipientUserId: null,
+        messageType: "transactional",
+        subject: `Verify your email for ${input.event.name}`,
+        capabilityLinkValues: [verificationUrl],
+        data: { verificationUrl, eventName: emailPlainText(input.event.name) },
+      });
   try {
     await db.batch([
       ...sourceGuards,
@@ -191,7 +209,7 @@ export async function startEventProposalProof(
           })
         : []),
       prepareActiveTermsSnapshotGuard(db, input.event.id, terms, audience),
-      email.statement,
+      ...(email ? [email.statement] : []),
     ]);
   } catch (error) {
     if (source && isAuthorizationGuardFailure(error))
@@ -209,6 +227,12 @@ export async function startEventProposalProof(
       );
     throw error;
   }
+  if (!email)
+    return {
+      status: "verified" as const,
+      token: await issueEventProposalProofToken(input.signingSecret, payload, proofTtl),
+      outboxId: null,
+    };
   return { status: "verification_sent" as const, outboxId: email.id };
 }
 
@@ -223,7 +247,7 @@ export async function verifyEventProposalProof(
     speakerProposalId?: string;
     event: EventRecord;
     appBaseUrl: string;
-  },
+  } & Pick<z.infer<typeof eventProposalProofVerifySchema>, "domain" | "affiliation">,
 ) {
   const payload = await verifyEventProposalCapability(input.signingSecret, input.token, input.eventId, false);
   await assertProposalProofCurrent(db, payload);
@@ -272,55 +296,70 @@ export async function verifyEventProposalProof(
     proofExpiresAt: payload.expiresAt,
   });
   const { expiresAt, ...receipt } = payload;
-  let organization: { id: string; name: string } | null = null;
-  if (payload.applicantKind === "organization") {
-    // Existing approved own relationships remain selectable even when neutral global domain evidence needs review.
-    const owned = resolved.user
-      ? await all<{ id: string; name: string }>(
-          db,
-          `
-      SELECT organization.id,organization.name FROM identities identity
-      JOIN organizations organization ON organization.id=identity.organization_id
-      JOIN users person ON person.id=identity.user_id
-      LEFT JOIN user_emails address ON address.id=identity.email_id AND address.user_id=identity.user_id
-      WHERE identity.user_id=? AND identity.started_at IS NOT NULL AND identity.ended_at IS NULL AND identity.blocked_at IS NULL
-        AND CASE WHEN identity.email_id IS NULL THEN person.normalized_email ELSE address.normalized_email END=?
-        AND (identity.email_id IS NULL OR address.verified_at IS NOT NULL)
-      ORDER BY identity.id LIMIT 2`,
-          [resolved.user.id, payload.email],
-        )
-      : [];
-    try {
-      organization = await resolveVerifiedEmailDomainOrganization(db, payload.email);
-    } catch (error) {
-      if (
-        !(error instanceof AppError) ||
-        !["ORGANIZATION_DOMAIN_IN_USE", "ORGANIZATION_AFFILIATION_REVIEW_REQUIRED"].includes(error.code)
-      )
-        throw error;
-      if (!owned.length) return { status: "support_required" as const };
-      organization = owned.length === 1 ? owned[0] : null;
-    }
-  }
-  // An affiliation the person already holds with this organization is reused as it is, job title included.
-  const represented =
-    organization && resolved.user
-      ? await first<{ job_title: string | null }>(
-          db,
-          `SELECT job_title FROM identities WHERE user_id=? AND organization_id=? AND started_at IS NOT NULL
-             AND ended_at IS NULL AND blocked_at IS NULL ORDER BY invited_at DESC,id DESC LIMIT 1`,
-          [resolved.user.id, organization.id],
-        )
-      : null;
   // The person's biography and links are those of the identity they are shown with.
   const spokenAs = resolved.user ? await readAffiliation(db, resolved.user.id) : null;
+  const affiliationRead =
+    payload.applicantKind === "organization"
+      ? prepareVerifiedAffiliationRead(
+          db,
+          resolved.user?.id ?? "",
+          {
+            email: payload.email,
+            emailId: null,
+            domain: input.affiliation?.domain ?? input.domain,
+            organizationName: input.affiliation?.organizationName,
+          },
+          { verifiedAt: nowIso() },
+        )
+      : null;
+  const observed = affiliationRead?.decode(await db.batch(affiliationRead.statements));
+  // A new mailbox has no recorded address; that is not the person's primary one, whose identities carry no address id.
+  const affiliation = observed
+    ? verifiedAffiliationPreview(observed.basis, observed.address, {
+        unrecordedAddress:
+          observed.address.id === null && Boolean(resolved.user) && resolved.user?.normalized_email !== payload.email,
+      })
+    : undefined;
+  if (input.affiliation && observed && affiliation) {
+    const selection = identityAffiliationPrepareSchema.parse({
+      ...input.affiliation,
+      phase: "prepare",
+      email: payload.email,
+      emailId: observed.address.id,
+    });
+    if (selection.organizationId && !affiliation.organizations.some((item) => item.id === selection.organizationId))
+      throw new AppError(
+        422,
+        "IDENTITY_DOMAIN_MISMATCH",
+        "Choose an organization confirmed by your verified work domain.",
+      );
+    await planVerifiedAffiliation(
+      db,
+      { userId: resolved.user?.id ?? crypto.randomUUID(), proofEvidence: { sql: "SELECT 1", bindings: [] } },
+      selection,
+      observed.basis,
+      nowIso(),
+    );
+    affiliation.contextToken = await signEventAffiliationContext(
+      input.signingSecret,
+      {
+        eventId: input.eventId,
+        input: selection,
+        basis: observed.basis,
+      },
+      "proposal-affiliation",
+    );
+  }
+  const organization = affiliation?.organization;
+  const represented = affiliation?.organizations.find((item) => item.id === organization?.id);
   return {
     status: "ready" as const,
     email: payload.email,
+    affiliation,
     applicantKind: payload.applicantKind,
     consents: payload.consents,
     organization: organization
-      ? { id: organization.id, name: organization.name, jobTitle: represented?.job_title ?? null }
+      ? { id: organization.id, name: organization.name, jobTitle: represented?.jobTitle ?? null }
       : null,
     ...(entryContext ? { entryContext } : {}),
     ...(speakerManagementToken

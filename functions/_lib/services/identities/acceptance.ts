@@ -1,4 +1,4 @@
-import { prepareOrganizationIdentityPublication } from "./lifecycle-publication";
+import { preparePendingIdentityActivation } from "./pending-activation";
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../db/authorization-guard";
 import { first } from "../../db/queries";
 import {
@@ -10,12 +10,7 @@ import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { nowIso } from "../../utils/time";
 import { isAuditChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "../audit";
-import { prepareAutomaticGroupEnrollmentForUserStatements } from "../groups/automatic-enrollment";
-import {
-  loadIdentityNotificationContext,
-  prepareIdentityNotification,
-  type IdentityNotificationContext,
-} from "./notifications";
+import { loadIdentityNotificationContext } from "./notifications";
 
 import { organizationIdentityAuditScope } from "./authorization";
 
@@ -51,21 +46,15 @@ async function loadPendingIdentity(db: DatabaseLike, identityId: string, userId?
 function prepareAcceptanceStatements(
   db: DatabaseLike,
   identity: PendingIdentityRow,
-  context: IdentityNotificationContext,
   at: string,
   includeAudit: boolean,
 ): StatementLike[] {
-  return [
-    db
-      .prepare(
-        `UPDATE identities
-            SET started_at = ?, updated_at = ?
-          WHERE id = ? AND user_id = ?
-            AND started_at IS NULL AND ended_at IS NULL AND blocked_at IS NULL
-            AND updated_at = ?`,
-      )
-      .bind(at, at, identity.id, identity.user_id, identity.updated_at),
-    ...(includeAudit
+  return preparePendingIdentityActivation(db, {
+    identityId: identity.id,
+    userId: identity.user_id,
+    at,
+    expectedUpdatedAt: identity.updated_at,
+    audit: includeAudit
       ? [
           prepareScopedAuditLogAfterOneChange(
             db,
@@ -79,17 +68,8 @@ function prepareAcceptanceStatements(
             at,
           ),
         ]
-      : []),
-    prepareOrganizationIdentityPublication(db, identity.id, at),
-    prepareIdentityNotification(db, {
-      identityId: identity.id,
-      userId: identity.user_id,
-      context,
-      action: "activated",
-      at,
-    }),
-    ...prepareAutomaticGroupEnrollmentForUserStatements(db, identity.user_id, at),
-  ];
+      : [],
+  });
 }
 
 /**
@@ -104,7 +84,6 @@ export async function acceptPendingIdentity(
   const identity = await loadPendingIdentity(db, input.identityId, input.userId);
 
   const at = nowIso();
-  const context = await loadIdentityNotificationContext(db, identity.organization_id, identity.user_id, true);
   try {
     await db.batch([
       prepareAuthorizationGuard(db, {
@@ -122,7 +101,7 @@ export async function acceptPendingIdentity(
                  AND identity.blocked_at IS NULL`,
         bindings: [input.sessionId, input.userId, identity.id],
       }),
-      ...prepareAcceptanceStatements(db, identity, context, at, true),
+      ...prepareAcceptanceStatements(db, identity, at, true),
     ]);
   } catch (error) {
     if (isAuthorizationGuardFailure(error)) {
@@ -194,7 +173,7 @@ export async function acceptIdentityInvitationLink(
                AND identity.blocked_at IS NULL AND user.email = ?`,
       bindings: [identity.id, identity.user_id, identity.updated_at, context.email],
     },
-    statements: prepareAcceptanceStatements(db, identity, context, at, false),
+    statements: prepareAcceptanceStatements(db, identity, at, false),
   });
   return { identityId: identity.id, state: "active" };
 }

@@ -1,7 +1,7 @@
 import { all } from "../../db/queries";
 import { eventCommunicationSettingsSql } from "../events/communication-settings";
 import { emailPlainText } from "../../email/plain-text";
-import { speakerManagePageUrl } from "../frontend-links";
+import { speakerParticipationPageUrl } from "../frontend-links";
 import { buildEventEmailVariables } from "../events";
 import { type DueSpeakerInviteRow, type EventRouteRow, type ReminderCandidatePreview } from "../reminders-support";
 import { batchQueueEmailsAndUpdateState, prepareCoSpeakerInviteReminderGuard } from "./shared";
@@ -104,7 +104,7 @@ export async function runCoSpeakerInviteReminders(
         const reminderNumber = Number(row.reminder_count ?? 0) + 1;
         const subject = `Reminder: please confirm speaker participation — ${event.name}`;
         const manageToken = await queuedSpeakerManageToken(db, row.speaker_id, row.manage_link_secret);
-        const manageUrl = speakerManagePageUrl(appBaseUrl, event, manageToken);
+        const manageUrl = speakerParticipationPageUrl(appBaseUrl, event, row.proposal_id, row.user_id);
         const ctx = proposalContexts.get(row.proposal_id);
         return {
           eventId: row.event_id,
@@ -112,8 +112,11 @@ export async function runCoSpeakerInviteReminders(
           recipientUserId: row.user_id,
           templateKey: "co_speaker_invite",
           subject,
-          capabilityLinkValues: [manageUrl],
+          capabilityLinkValues: [manageToken],
           data: {
+            __speakerCapability: manageToken,
+            proposalId: row.proposal_id,
+            speakerUserId: row.user_id,
             ...buildEventEmailVariables(event, appBaseUrl),
             firstName: emailPlainText(row.first_name ?? ""),
             lastName: emailPlainText(row.last_name ?? ""),

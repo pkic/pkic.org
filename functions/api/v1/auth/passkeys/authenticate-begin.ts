@@ -5,7 +5,7 @@
  * login screen calls before the user has a session.
  */
 import { jsonNoStore } from "../../../../_lib/http";
-import { beginPasskeyAuthentication } from "../../../../_lib/services/passkeys";
+import { beginPasskeyAuthentication } from "../../../../_lib/services/passkey-authentication";
 import { passkeyAuthenticateBeginRouteSchema } from "../../../../../assets/shared/schemas/passkeys";
 import type { AdminContext } from "../../../../_lib/db/context";
 import { openApiRoute } from "../../../../_lib/openapi/route";

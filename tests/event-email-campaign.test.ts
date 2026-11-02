@@ -238,10 +238,10 @@ describe("event email campaign recipients", () => {
       users.map((user) =>
         env.DB.prepare(
           `INSERT INTO registrations (
-               id, event_id, user_id, status, attendance_type, source_type,
+               id, event_id, user_id, status, source_type,
                manage_link_secret, created_at, updated_at
-             ) VALUES (?, ?, ?, 'registered', ?, 'direct', ?, datetime('now'), datetime('now'))`,
-        ).bind(user.registrationId, eventId, user.id, user.attendanceType, user.manageTokenHash),
+             ) VALUES (?, ?, ?, 'registered', 'direct', ?, datetime('now'), datetime('now'))`,
+        ).bind(user.registrationId, eventId, user.id, user.manageTokenHash),
       ),
     );
 
@@ -249,14 +249,21 @@ describe("event email campaign recipients", () => {
     if (!enrichedUser) throw new Error("Expected the 101st campaign user to exist");
     await env.DB.batch([
       env.DB.prepare(
-        `INSERT INTO event_days (id, event_id, day_date, label, sort_order, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-      ).bind("campaign-day-101", eventId, "2026-12-02", "Day 2", 10),
+        `INSERT INTO event_days (id, event_id, day_date, label, sort_order, attendance_options_json, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+      ).bind(
+        "campaign-day-101",
+        eventId,
+        "2026-12-02",
+        "Day 2",
+        10,
+        JSON.stringify([{ value: "moon_base", label: "Moon base", capacity: 1, accessMode: "physical" }]),
+      ),
       env.DB.prepare(
         `INSERT INTO registration_day_attendance (
              id, registration_id, event_day_id, attendance_type, created_at, updated_at
            ) VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))`,
-      ).bind("campaign-attendance-101", enrichedUser.registrationId, "campaign-day-101", "in_person"),
+      ).bind("campaign-attendance-101", enrichedUser.registrationId, "campaign-day-101", "moon_base"),
       env.DB.prepare(
         `INSERT INTO event_day_waitlist_entries (
              id, event_id, event_day_id, registration_id, user_id, priority_lane,
@@ -275,12 +282,15 @@ describe("event email campaign recipients", () => {
 
     expect(recipients).toHaveLength(users.length);
     expect(recipients[0].templateData.dayWaitlist).toEqual([]);
+    expect(recipients[0].templateData.attendanceLabel).toBe("");
+    expect(recipients[0].templateData).not.toHaveProperty("attendanceType");
     const enrichedRecipient = recipients.find((recipient) => recipient.email === enrichedUser.email);
+    expect(enrichedRecipient?.templateData).not.toHaveProperty("attendanceType");
     expect(enrichedRecipient?.templateData.dayAttendance).toEqual([
       {
         dayLabel: "Day 2",
-        attendanceLabel: "In person",
-        statusLabel: "Waitlisted for in-person attendance",
+        attendanceLabel: "Moon base",
+        statusLabel: "Waitlisted",
         waitlistStatus: "waiting",
         isWaitlisted: true,
         isWaitlistOffer: false,
@@ -306,9 +316,9 @@ describe("event email campaign recipients", () => {
         ).bind(user.id, user.email, user.email),
         env.DB.prepare(
           `INSERT INTO registrations (
-             id, event_id, user_id, status, attendance_type, source_type,
+             id, event_id, user_id, status, source_type,
              manage_link_secret, created_at, updated_at
-           ) VALUES (?, ?, ?, 'registered', 'virtual', 'direct', ?, datetime('now'), datetime('now'))`,
+           ) VALUES (?, ?, ?, 'registered', 'direct', ?, datetime('now'), datetime('now'))`,
         ).bind(user.registrationId, eventId, user.id, `limited-token-${user.id}`),
       ]),
     );
@@ -351,9 +361,9 @@ describe("event email campaign recipients", () => {
         ...slice.map((user) =>
           env.DB.prepare(
             `INSERT INTO registrations (
-                 id, event_id, user_id, status, attendance_type, source_type,
+                 id, event_id, user_id, status, source_type,
                  manage_link_secret, created_at, updated_at
-               ) VALUES (?, ?, ?, 'registered', 'virtual', 'direct', ?, datetime('now'), datetime('now'))`,
+               ) VALUES (?, ?, ?, 'registered', 'direct', ?, datetime('now'), datetime('now'))`,
           ).bind(user.registrationId, eventId, user.id, `original-manage-token-${user.id}`),
         ),
       ]);
@@ -494,8 +504,8 @@ describe("event email campaign recipients", () => {
       const userId = await insertUser(env.DB, `bcc-${index}@example.test`);
       await env.DB.prepare(
         `INSERT INTO registrations
-        (id, event_id, user_id, status, attendance_type, source_type, manage_link_secret, created_at, updated_at)
-        VALUES (?, ?, ?, 'registered', 'virtual', 'direct', ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
+        (id, event_id, user_id, status, source_type, manage_link_secret, created_at, updated_at)
+        VALUES (?, ?, ?, 'registered', 'direct', ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
       )
         .bind(`bcc-registration-${index}`, eventId, userId, crypto.randomUUID())
         .run();
@@ -546,8 +556,8 @@ describe("event email campaign recipients", () => {
     const attendeeId = await insertUser(env.DB, `campaign-attendee-${crypto.randomUUID()}@example.test`);
     await env.DB.prepare(
       `INSERT INTO registrations
-         (id, event_id, user_id, status, attendance_type, source_type, manage_link_secret, created_at, updated_at)
-       VALUES (?, ?, ?, 'registered', 'virtual', 'direct', ?, datetime('now'), datetime('now'))`,
+         (id, event_id, user_id, status, source_type, manage_link_secret, created_at, updated_at)
+       VALUES (?, ?, ?, 'registered', 'direct', ?, datetime('now'), datetime('now'))`,
     )
       .bind(crypto.randomUUID(), eventId, attendeeId, crypto.randomUUID())
       .run();

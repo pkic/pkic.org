@@ -1,7 +1,9 @@
+import { eventAttendanceAccessMode, eventAttendanceAccessModeSchema } from "../assets/shared/event-attendance-access";
 import { describe, expect, it } from "vitest";
 import { eventEmailCampaignPreviewInputSchema } from "../assets/shared/schemas/event-email-campaigns";
 import {
   formFieldRulesSchema,
+  formFieldOptionsSchema,
   formFieldOptionValues,
   isSafeFormFieldPattern,
   isAllowedProfileUrl,
@@ -9,15 +11,12 @@ import {
   parseFormFieldOptions,
   parseFormFieldRules,
 } from "../assets/shared/schemas/form-field-rules";
-import {
-  ATTENDANCE_TYPES as CANONICAL_ATTENDANCE_TYPES,
-  attendanceTypeSchema as canonicalAttendanceTypeSchema,
-} from "../assets/shared/schemas/registration";
+import { attendanceTypeSchema as canonicalAttendanceTypeSchema } from "../assets/shared/schemas/registration";
 
 describe("canonical form-field rules", () => {
   it("uses the canonical attendance vocabulary across registration, form rules, and campaigns", () => {
-    expect(CANONICAL_ATTENDANCE_TYPES).toEqual(["in_person", "virtual", "on_demand"]);
-    for (const attendanceType of CANONICAL_ATTENDANCE_TYPES) {
+    // Attendance options are configured per event day, so any configured identifier is a valid type.
+    for (const attendanceType of ["in_person", "virtual", "on_demand", "livestream_lounge"]) {
       expect(canonicalAttendanceTypeSchema.safeParse(attendanceType).success).toBe(true);
       expect(formFieldRulesSchema.safeParse({ showWhen: { eventAttendanceTypeIn: [attendanceType] } }).success).toBe(
         true,
@@ -29,7 +28,7 @@ describe("canonical form-field rules", () => {
         }).success,
       ).toBe(true);
     }
-    expect(canonicalAttendanceTypeSchema.safeParse("future_mode").success).toBe(false);
+    expect(canonicalAttendanceTypeSchema.safeParse("Future Mode").success).toBe(false);
   });
 
   it("normalizes the one persisted rule shape used by frontend and backend", () => {
@@ -38,7 +37,7 @@ describe("canonical form-field rules", () => {
         format: "professional_profile",
         maxLength: 200,
         allowedDomains: ["example.com", 42],
-        showWhen: { dayAttendanceIn: ["in_person", null], eventAttendanceTypeIn: ["virtual", "invalid"] },
+        showWhen: { dayAttendanceIn: ["in_person", null], eventAttendanceTypeIn: ["virtual", "Not Valid"] },
         ignored: true,
       }),
     ).toEqual({
@@ -55,6 +54,27 @@ describe("canonical form-field rules", () => {
     expect(isFormFieldVisible(rules, { dayAttendanceTypes: ["virtual"] })).toBe(false);
   });
 
+  it("evaluates event attendance rules against all selected days", () => {
+    const rules = parseFormFieldRules({ showWhen: { eventAttendanceTypeIn: ["moon_base_42"] } });
+    expect(
+      isFormFieldVisible(rules, {
+        dayAttendanceTypes: ["in_person", "moon_base_42"],
+        eventAttendanceType: "in_person",
+      }),
+    ).toBe(true);
+    expect(isFormFieldVisible(rules, { dayAttendanceTypes: ["in_person"], eventAttendanceType: "moon_base_42" })).toBe(
+      false,
+    );
+    expect(isFormFieldVisible(rules, { eventAttendanceType: "moon_base_42" })).toBe(true);
+  });
+
+  it("retains configured visibility options beyond the legacy three", () => {
+    const rules = parseFormFieldRules({
+      showWhen: { eventAttendanceTypeIn: ["alpha", "beta", "gamma", "moon_base_42"] },
+    });
+    expect(isFormFieldVisible(rules, { dayAttendanceTypes: ["moon_base_42"] })).toBe(true);
+  });
+
   it("uses one tolerant option codec", () => {
     const raw = ["one", { value: "two", label: " Second " }, { ignored: true }];
     expect(parseFormFieldOptions(raw)).toEqual([
@@ -62,6 +82,23 @@ describe("canonical form-field rules", () => {
       { value: "two", label: "Second", active: true },
     ]);
     expect(formFieldOptionValues(raw)).toEqual(["one", "two"]);
+  });
+  it("shows readable identifier labels without changing saved values or explicit wording", () => {
+    const raw = [
+      "gluten_free",
+      { value: "lactose_free", label: "Lactose_free" },
+      { value: "nut_allergy", label: "Nut_allergy", active: true },
+      { value: "other", label: "Something_else", active: false },
+    ];
+    const expected = [
+      { value: "gluten_free", label: "Gluten free", active: true },
+      { value: "lactose_free", label: "Lactose free", active: true },
+      { value: "nut_allergy", label: "Nut allergy", active: true },
+      { value: "other", label: "Something_else", active: false },
+    ];
+    expect(parseFormFieldOptions(raw)).toEqual(expected);
+    expect(formFieldOptionsSchema.parse(raw)).toEqual(expected);
+    expect(formFieldOptionValues(raw)).toEqual(["gluten_free", "lactose_free", "nut_allergy"]);
   });
 
   it("allows only HTTP profile URLs on configured domains or subdomains", () => {
@@ -93,5 +130,36 @@ describe("canonical form-field rules", () => {
     expect(parseFormFieldRules({ pattern: "^(a+)+$", patternMessage: "Nope", maxLength: 200 })).toEqual({
       maxLength: 200,
     });
+  });
+});
+
+describe("configurable attendance types", () => {
+  it("lets the viewer state carry a type the event configures", async () => {
+    const { eventViewerStateSchema } = await import("../assets/shared/schemas/event-management");
+    expect(
+      eventViewerStateSchema.safeParse({
+        registrationStatus: "registered",
+        waitlisted: false,
+        days: [{ date: "2026-12-01", attendanceType: "livestream_lounge", accessMode: "remote", state: "registered" }],
+        holdsWorkAddress: true,
+      }).success,
+    ).toBe(true);
+  });
+});
+
+describe("configured attendance session access", () => {
+  it("uses each option's configured mode regardless of its identifier", () => {
+    expect(eventAttendanceAccessMode({ value: "moon_base_42", accessMode: "physical" })).toBe("physical");
+    expect(eventAttendanceAccessMode({ value: "in_person", accessMode: "remote" })).toBe("remote");
+    expect(eventAttendanceAccessMode({ value: "virtual", accessMode: "none" })).toBe("none");
+  });
+
+  it("preserves legacy core defaults without granting unknown options access", () => {
+    expect(eventAttendanceAccessMode({ value: "in_person" })).toBe("physical");
+    expect(eventAttendanceAccessMode({ value: "virtual" })).toBe("remote");
+    expect(eventAttendanceAccessMode({ value: "on_demand" })).toBe("none");
+    expect(eventAttendanceAccessMode({ value: "moon_base_42" })).toBe("none");
+    expect(eventAttendanceAccessMode({ value: "constructor" })).toBe("none");
+    expect(eventAttendanceAccessModeSchema.safeParse("automatic").success).toBe(false);
   });
 });

@@ -9,8 +9,12 @@
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { organizationDetailResponseSchema } from "../../assets/shared/schemas/organization-management";
+import {
+  organizationDetailResponseSchema,
+  organizationsListResponseSchema,
+} from "../../assets/shared/schemas/organization-management";
 import { identitiesListResponseSchema } from "../../assets/shared/schemas/identity";
+import { OrganizationRelated } from "../../assets/ts/member-flows/portal/sections/system-organizations/OrganizationRelated";
 import { OrganizationDetail } from "../../assets/ts/member-flows/portal/sections/system-organizations/OrganizationDetail";
 
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["/organizations", vi.fn()] }));
@@ -297,6 +301,45 @@ describe("organization detail shell", () => {
     );
     expect(container.querySelector('section[aria-label="Representatives"]')).not.toBeNull();
   });
+
+  it.each([true, false])(
+    "shows a named domain connection section only when related organizations exist: %s",
+    async (connected) => {
+      const organization = detail().organization;
+      organization.emailDomains = [{ domain: "example.test", people: 1 }];
+      const requested: URL[] = [];
+      vi.stubGlobal(
+        "fetch",
+        vi.fn((input: RequestInfo | URL) => {
+          requested.push(
+            new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url, location.origin),
+          );
+          return Promise.resolve(
+            json(
+              organizationsListResponseSchema.parse({
+                organizations: connected
+                  ? [{ ...organization, id: "00000000-0000-4000-8000-000000000099", name: "Related Organization" }]
+                  : [],
+                page: { limit: 25, offset: 0, total: connected ? 1 : 0, hasMore: false },
+              }),
+            ),
+          );
+        }),
+      );
+      const container = mount(<OrganizationRelated organization={organization} />);
+      await waitFor(() => requested.length > 0);
+      await settle();
+      await settle();
+      expect(requested[0]!.searchParams.get("relatedToOrganizationId")).toBe(organizationId);
+      expect((container.firstElementChild as HTMLElement).hidden).toBe(!connected);
+      if (connected) {
+        expect(container.querySelector("header")?.textContent).toBe("Email domain connections");
+        expect(
+          container.querySelector('a[href="#/organizations/00000000-0000-4000-8000-000000000099"]')?.textContent,
+        ).toContain("Related Organization");
+      }
+    },
+  );
 
   it("announces a failed load as an alert instead of an empty record", async () => {
     vi.stubGlobal(

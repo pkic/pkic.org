@@ -16,7 +16,7 @@ import { statusLabel } from "../../../../../components/Badge";
 import { friendlyErrorMessage } from "../../../../../components/ErrorAlert";
 import { getJson } from "../../../../../shared/api-client";
 import { eventAnalyticsResponseSchema } from "../../../../../../shared/schemas/event-analytics";
-import { ATTENDANCE_TYPE_LABELS, attendanceTypeLabel } from "../../../../../shared/attendance";
+import { attendanceTypeLabel } from "../../../../../shared/attendance";
 import { StackedBarChart } from "../../../../../ui/StackedBarChart";
 import { formatDayAndMonth } from "../../../../../../shared/format-date";
 import { isoDateRange } from "../../../../../components/analytics/date-range";
@@ -217,16 +217,15 @@ function EventStatsData({
     recent: [],
   };
   const registrationsByEventDay = s.registrationsByEventDay ?? [];
-  const attendanceTypes = new Set(
-    [...Object.keys(ATTENDANCE_TYPE_LABELS), ...Object.keys(s.registrations?.attendanceStatusByType ?? {})].filter(
-      (type) => type !== "not_attending",
-    ),
+  const attendanceTypes = Object.keys(s.registrations?.attendanceStatusByType ?? {}).filter(
+    (type) => type !== "not_attending",
   );
   const attendanceStatuses = [...attendanceTypes].map((type) => ({
     type,
     label: attendanceTypeLabel(type),
     accepted: s.registrations?.attendanceStatusByType?.[type]?.accepted ?? 0,
     waitlisted: s.registrations?.attendanceStatusByType?.[type]?.waitlisted ?? 0,
+    expired: s.registrations?.attendanceStatusByType?.[type]?.expired ?? 0,
   }));
   const waitlistedAttendees = attendanceStatuses.reduce((sum, item) => sum + item.waitlisted, 0);
   const acceptedAttendees = attendanceStatuses.reduce((sum, item) => sum + item.accepted, 0);
@@ -238,7 +237,7 @@ function EventStatsData({
    * system's own device for it.
    */
   const needsAttention = [
-    waitlistedAttendees > 0 ? `${formatNumber(waitlistedAttendees)} attendees are on an active day waitlist` : null,
+    waitlistedAttendees > 0 ? `${formatNumber(waitlistedAttendees)} waitlisted attendance choices` : null,
     pendingConfirmation > 0
       ? `${formatNumber(pendingConfirmation)} registrations have not confirmed their email`
       : null,
@@ -344,15 +343,15 @@ function EventStatsData({
                 {/* Each card's tone says what its number is — seated, waiting,
                     unconfirmed — beside the label that says so in words (#110). */}
                 <StatCard
-                  label="Accepted attendees"
+                  label="Accepted by option"
                   value={formatNumber(acceptedAttendees)}
-                  note="not on an active waitlist"
+                  note="one count per selected option"
                   tone="ok"
                 />
                 <StatCard
-                  label="Waitlisted attendees"
+                  label="Waitlisted by option"
                   value={formatNumber(waitlistedAttendees)}
-                  note="unique people with an active day waitlist"
+                  note="one count per selected option"
                   tone={waitlistedAttendees > 0 ? "warn" : "neutral"}
                 />
                 <StatCard
@@ -388,14 +387,22 @@ function EventStatsData({
           <Panel>
             <PanelHeader title="Attendance status" />
             <PanelBody>
+              {attendanceStatuses.length === 0 && <p class="pk-muted">No attendance choices yet.</p>}
               <div class="pk-stat-row">
-                {attendanceStatuses.map(({ type, label, accepted, waitlisted }) => (
+                {attendanceStatuses.map(({ type, label, accepted, waitlisted, expired }) => (
                   <StatCard
                     key={type}
                     label={`${label} accepted`}
                     value={formatNumber(accepted)}
-                    note={waitlisted > 0 ? `+${formatNumber(waitlisted)} waitlisted` : "No active waitlist"}
-                    tone={waitlisted > 0 ? "warn" : undefined}
+                    note={
+                      [
+                        waitlisted > 0 ? `${formatNumber(waitlisted)} waitlisted` : null,
+                        expired > 0 ? `${formatNumber(expired)} with expired offers` : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ") || "No active waitlist"
+                    }
+                    tone={waitlisted > 0 || expired > 0 ? "warn" : undefined}
                   />
                 ))}
               </div>
@@ -411,7 +418,7 @@ function EventStatsData({
                     tone as a shape, so it does not rest on color alone. */}
                 <div class="pk-cluster">
                   <Badge tone="ok">solid = accepted</Badge>
-                  <Badge tone="neutral">light = pending/waitlisted</Badge>
+                  <Badge tone="neutral">light = pending/waitlisted/expired</Badge>
                 </div>
                 {daySeries.length > 0 ? (
                   <StackedBarChart

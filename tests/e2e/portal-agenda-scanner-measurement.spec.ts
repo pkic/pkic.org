@@ -13,7 +13,8 @@ import { registrationManageReadResponseSchema } from "../../assets/shared/schema
 import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-auth";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
 import { scannerStorage, reconnectScannerBrowser, openScannerDiagnostics } from "./helpers/scanner-recovery-storage";
-import { expectNoStoredSponsorContacts, captureDeviceConsole } from "./helpers/sponsor-live-fixture";
+import { expectNoStoredSponsorContacts } from "./helpers/sponsor-live-fixture";
+import { captureDeviceConsole } from "./helpers/device-console";
 import {
   measurementApi,
   prepareScannerMeasurement,

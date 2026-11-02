@@ -74,11 +74,7 @@ export function EventTeamSettings({
           width: "primary",
           sort: { asc: "person", desc: "-person" },
           cell: (person) => (
-            <PersonCell
-              name={personDisplayName(person.firstName, person.lastName, null)}
-              avatarSrc={person.headshotUrl}
-              size="sm"
-            />
+            <PersonCell name={personDisplayName(person, null)} avatarSrc={person.headshotUrl} size="sm" />
           ),
         },
         ...(canManage
@@ -101,7 +97,7 @@ export function EventTeamSettings({
       ]}
       rowKey={(person) => person.userId}
       rowAction={(person) => ({
-        label: `Open ${personDisplayName(person.firstName, person.lastName, null)}`,
+        label: `Open ${personDisplayName(person, null)}`,
         href: usePortalHashLocation.hrefs(`${teamPath}/${encodeURIComponent(person.userId)}`),
       })}
       empty={<EmptyState title="No team members yet" body="Add people to configure their event duties or access." />}

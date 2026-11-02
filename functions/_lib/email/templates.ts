@@ -4,7 +4,11 @@ import { sha256Hex } from "../utils/crypto";
 import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
 import type { DatabaseLike, StatementLike } from "../types";
-import type { EmailContentType, EmailMessageType } from "../../../assets/shared/schemas/email-templates";
+import type {
+  EmailContentType,
+  EmailMessageType,
+  EmailTemplateUnavailableCode,
+} from "../../../assets/shared/schemas/email-templates";
 
 export interface ResolvedEmailTemplate {
   version: number;
@@ -19,7 +23,7 @@ export interface ResolvedEmailTemplate {
 
 export type EmailTemplateResolution =
   | { ok: true; template: ResolvedEmailTemplate }
-  | { ok: false; code: "EMAIL_TEMPLATE_NOT_FOUND" | "EMAIL_TEMPLATE_MISSING_BODY"; message: string };
+  | { ok: false; code: EmailTemplateUnavailableCode; message: string };
 
 export interface TemplateVersionRow {
   id: string;

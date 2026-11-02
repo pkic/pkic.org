@@ -50,7 +50,7 @@ async function effects() {
       "SELECT id,event_id,user_id,credential_hash,created_at,expires_at,revoked_at FROM event_badge_credentials ORDER BY id",
       "SELECT id,actor_id,action,entity_id,details_json,idempotency_key,scope_type,scope_id FROM audit_log ORDER BY id",
       "SELECT event_id,generation,active_run_id,capture_closed_at FROM event_evidence_retention_state ORDER BY event_id",
-      "SELECT id,status,attendance_type FROM registrations ORDER BY id",
+      "SELECT id,status FROM registrations ORDER BY id",
       "SELECT id,status,approval_state FROM agenda_session_participations ORDER BY id",
       "SELECT id FROM event_attendance_observations ORDER BY id",
       "SELECT id FROM event_session_admissions ORDER BY id",
@@ -66,7 +66,7 @@ async function registeredPerson() {
     .bind(id, `${id}@example.test`, `${id}@example.test`)
     .run();
   await env.DB.prepare(
-    "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','in_person','test',?,?,?)",
+    "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','test',?,?,?)",
   )
     .bind(crypto.randomUUID(), fixture.eventId, id, crypto.randomUUID(), now, now)
     .run();
@@ -361,11 +361,16 @@ describe("Event-owned badge lifecycle", () => {
             .run();
         else if (change === "actor")
           await env.DB.prepare("UPDATE users SET active=0 WHERE id=?").bind(fixture.operatorId).run();
-        else if (change === "registration")
+        else if (change === "registration") {
+          await env.DB.prepare(
+            "DELETE FROM registration_day_attendance WHERE registration_id IN (SELECT id FROM registrations WHERE event_id=? AND user_id=?)",
+          )
+            .bind(fixture.eventId, fixture.userId)
+            .run();
           await env.DB.prepare("DELETE FROM registrations WHERE event_id=? AND user_id=?")
             .bind(fixture.eventId, fixture.userId)
             .run();
-        else if (change === "predecessor")
+        } else if (change === "predecessor")
           await env.DB.prepare("UPDATE event_badge_credentials SET revoked_at=? WHERE id=?")
             .bind(new Date().toISOString(), previous)
             .run();
@@ -398,7 +403,7 @@ describe("Event-owned badge lifecycle", () => {
       .bind(new Date().toISOString(), fixture.operatorId)
       .run();
     await env.DB.prepare(
-      "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','in_person','test',?,?,?)",
+      "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','test',?,?,?)",
     )
       .bind(crypto.randomUUID(), fixture.eventId, fixture.operatorId, crypto.randomUUID(), now, now)
       .run();

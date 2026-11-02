@@ -4,12 +4,12 @@ import {
   type TokenExchangeCallbackOptions,
   type TokenExchangeCallbackResult,
 } from "@cloudflare/workers-oauth-provider";
-import { getCurrentUserBackedAdmin } from "../admin";
+import { prepareCurrentUserBackedAdmin } from "../admin";
 import { signMcpSessionToken } from "../mcp-session";
 import { AppError } from "../../errors";
 import type { Env } from "../../types";
 import { parseMcpOauthProps, type McpOAuthProps } from "./props";
-import { readActiveOauthAuthorization } from "./authorization-ceiling";
+import { prepareActiveOauthAuthorization } from "./authorization-ceiling";
 import { mcpOauthLifetimes } from "./policy";
 import { effectiveMcpPermissionContexts } from "./grantable-permissions";
 
@@ -19,16 +19,25 @@ export async function resolveActiveMcpSession(env: Env, props: McpOAuthProps, cl
   const idleExpiresAt = Date.parse(props.sessionIdleExpiresAt);
   if (!Number.isFinite(idleExpiresAt) || idleExpiresAt <= Date.now())
     throw new AppError(401, "AUTH_EXPIRED", "Your MCP authorization session expired. Sign in again.");
-  const authorization =
+  const authorizationRead =
     props.authTransport === "oauth"
-      ? await readActiveOauthAuthorization(env.DB, {
+      ? prepareActiveOauthAuthorization(env.DB, {
           id: props.authorizationId,
           userId: props.id,
           sessionId: props.sessionId,
           clientId,
         })
       : null;
-  const admin = await getCurrentUserBackedAdmin(env.DB, props.id, props.sessionId, authorization?.memberId);
+  const adminRead = prepareCurrentUserBackedAdmin(
+    env.DB,
+    props.id,
+    props.sessionId,
+    props.authTransport === "oauth" ? { authorizationId: props.authorizationId } : null,
+  );
+  const loaded = await env.DB.batch([...(authorizationRead?.statements ?? []), ...adminRead.statements]);
+  const authorization = authorizationRead?.decode(loaded.slice(0, authorizationRead.statements.length));
+  const admin = adminRead.decode(loaded.slice(authorizationRead?.statements.length ?? 0));
+
   const expiresAt = Math.min(
     Date.parse(props.sessionExpiresAt),
     idleExpiresAt,
@@ -123,4 +132,15 @@ export async function authorizationHeaderForMcp(
     ...(oauthProps.authTransport === "oauth" ? { authorizationId: oauthProps.authorizationId } : {}),
   });
   return `Bearer ${token}`;
+}
+
+/** The API operation composes the live grant with its own resource batch. Frozen deadlines still bound its credential. */
+export async function deferredAuthorizationHeaderForMcp(request: Request, env: Env, props?: McpOAuthProps) {
+  if (!props || props.identityType === "service") return request.headers.get("authorization");
+  const expiry = Math.min(Date.parse(props.sessionExpiresAt), Date.parse(props.sessionIdleExpiresAt));
+  if (!Number.isFinite(expiry) || expiry <= Date.now())
+    throw new AppError(401, "AUTH_EXPIRED", "Your MCP authorization session expired. Sign in again.");
+  if (!env.INTERNAL_SIGNING_SECRET)
+    throw new AppError(500, "INTERNAL_SECRET_MISSING", "INTERNAL_SIGNING_SECRET is not configured");
+  return `Bearer ${await signMcpSessionToken(env.INTERNAL_SIGNING_SECRET, { sub: props.id, sid: props.sessionId, exp: Math.floor(expiry / 1000), email: props.email, state: props.state ?? undefined, scopes: props.scopes, ...(props.authTransport === "oauth" ? { authorizationId: props.authorizationId } : {}) })}`;
 }

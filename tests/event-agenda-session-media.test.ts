@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { seedSessionAttendanceDays } from "./helpers/session-attendance-days";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   agendaOccurrenceCreateSchema,
@@ -271,10 +272,11 @@ async function approvedVirtualRoom(
   const registrationId = crypto.randomUUID();
   async function register() {
     await env.DB.prepare(
-      "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','virtual','test',?,datetime('now'),datetime('now'))",
+      "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','test',?,datetime('now'),datetime('now'))",
     )
       .bind(registrationId, f.eventId, f.adminId, crypto.randomUUID())
       .run();
+    await seedSessionAttendanceDays(env.DB, f.eventId, ["2026-12-01"], "virtual");
   }
   return { ...f, id, snapshot, registrationId, register, path: `${base}/occurrences/${id}/virtual-room` };
 }
@@ -461,10 +463,11 @@ describe("sessions follow their location's virtual room unless they override it"
     snapshot = agendaSnapshotSchema.parse(await published.json());
     const registrationId = crypto.randomUUID();
     await env.DB.prepare(
-      "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','virtual','test',?,datetime('now'),datetime('now'))",
+      "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','test',?,datetime('now'),datetime('now'))",
     )
       .bind(registrationId, f.eventId, f.adminId, crypto.randomUUID())
       .run();
+    await seedSessionAttendanceDays(env.DB, f.eventId, ["2026-12-01"], "virtual");
     return { ...f, roomId, snapshot, id: occurrence.id, path: `${base}/occurrences/${occurrence.id}/virtual-room` };
   }
 

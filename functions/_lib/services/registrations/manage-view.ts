@@ -19,6 +19,7 @@ import { publicUserHeadshotUrl } from "../user-headshot";
 import { eventDayReadModels } from "../event-read-models";
 import { AppError } from "../../errors";
 import { registrationManageReadResponseSchema } from "../../../../assets/shared/schemas/registration";
+import { personalPromotionSharePath } from "../../../../assets/shared/personal-promotion-image";
 import {
   prepareRegistrationSponsorSharing,
   decodeRegistrationSponsorSharing,
@@ -52,6 +53,7 @@ export async function buildRegistrationManageView(
     waitlistResult,
     countsResult,
     sharingResult,
+    pendingReviewResult,
   ] = await db.batch([
     prepareEventById(db, registration.event_id),
     db
@@ -68,6 +70,13 @@ export async function buildRegistrationManageView(
     prepareRegistrationDayWaitlist(db, registration.id),
     prepareRegisteredEventDayCounts(db, registration.event_id),
     prepareRegistrationSponsorSharing(db, registration),
+    db
+      .prepare(
+        `SELECT organization_name FROM affiliation_reviews
+          WHERE user_id = ? AND source_type = 'registration' AND source_id = ? AND resolved_at IS NULL
+          ORDER BY created_at DESC LIMIT 1`,
+      )
+      .bind(registration.user_id, registration.id),
   ]);
   const event = batchFirst<EventRecord>(eventResult);
   if (!event) throw new AppError(404, "EVENT_NOT_FOUND", "Event not found");
@@ -81,6 +90,9 @@ export async function buildRegistrationManageView(
     throw new AppError(409, "REGISTRATION_USER_MISSING", "The registration identity is no longer available");
   }
   const referral = batchFirst<{ code: string }>(referralResult);
+  const pendingOrganizationName = batchFirst<{ organization_name: string | null }>(
+    pendingReviewResult,
+  )?.organization_name;
   const headshotUrl = publicUserHeadshotUrl(appBaseUrl, user.id, user.headshot_r2_key);
 
   return registrationManageReadResponseSchema.parse({
@@ -93,7 +105,6 @@ export async function buildRegistrationManageView(
       event_id: registration.event_id,
       status: registration.status,
       cancellation_reason_code: registration.cancellation_reason_code,
-      attendance_type: registration.attendance_type,
       custom_answers: parseJsonSafe<Record<string, unknown> | null>(registration.custom_answers_json, null),
       isEmailVerified: registration.confirmed_at !== null,
     },
@@ -106,10 +117,15 @@ export async function buildRegistrationManageView(
       job_title: user.job_title,
     },
     headshotUrl,
-    shareUrl: referral ? `${appBaseUrl}/r/${referral.code}` : null,
-    eventDays: eventDayReadModels(eventDays, registeredCounts),
+    shareUrl: referral ? `${appBaseUrl}${personalPromotionSharePath(referral.code)}` : null,
+    eventDays: eventDayReadModels(
+      eventDays,
+      registeredCounts,
+      registration.status === "cancelled" ? [] : dayAttendance,
+    ),
     dayAttendance,
     dayWaitlist,
     waitlistHandledLast: !holdsWorkAddress(parseVerifiedAddresses(user.verified_addresses)),
+    pendingOrganizationName: user.organization_name ? null : (pendingOrganizationName ?? null),
   });
 }

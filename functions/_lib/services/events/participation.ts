@@ -3,14 +3,21 @@ import {
   type EventParticipation,
 } from "../../../../assets/shared/schemas/event-participation";
 import { batchFirst, batchRows } from "../../db/pagination";
+import { toBool } from "../../db/queries";
 import { prepareEventProposalCall, type EventProposalCallRow } from "./proposal-call";
 import { eventReadSelectionSql, type EventReadSelection } from "./read-selection";
 import type { DatabaseLike } from "../../types";
+import { firstReferralCodeForOwnerSql } from "../referral-code-projection";
+import { personalPromotionSharePath } from "../../../../assets/shared/personal-promotion-image";
+import { eventDayOptionAccessSql } from "../event-attendance-option-sql";
 
 export interface EventParticipationRow {
   id: string;
   registrationId: string | null;
   registrationStatus: string | null;
+  calendarAvailable: number;
+  referralCode?: string | null;
+  registrationUpdatedAt?: string | null;
   proposalStates: string;
   speakerStates: string;
   proposals: number;
@@ -22,6 +29,16 @@ export function prepareEventParticipation(db: DatabaseLike, userId: string | nul
   return db
     .prepare(
       `${filter.withSql ? `WITH ${filter.withSql} ` : ""}SELECT e.id, r.id AS registrationId, r.status AS registrationStatus,
+      CASE WHEN r.status='registered' AND EXISTS (
+        SELECT 1 FROM registration_day_attendance rda JOIN event_days ed ON ed.id=rda.event_day_id
+        WHERE rda.registration_id=r.id AND ed.event_id=e.id
+          AND ${eventDayOptionAccessSql("ed", "rda.attendance_type")}<>'none'
+          AND NOT EXISTS (SELECT 1 FROM event_day_waitlist_entries waiting
+            WHERE waiting.registration_id=r.id AND waiting.event_day_id=ed.id
+              AND waiting.status IN ('waiting','offered','expired'))
+      ) THEN 1 ELSE 0 END AS calendarAvailable,
+      CASE WHEN r.status='registered' THEN ${firstReferralCodeForOwnerSql("registration", "r.id", "r.event_id")} END AS referralCode,
+      r.updated_at AS registrationUpdatedAt,
       (SELECT group_concat(DISTINCT p.status) FROM session_proposals p WHERE p.event_id = e.id AND p.deleted_at IS NULL AND p.proposer_user_id = ?) AS proposalStates,
       (SELECT group_concat(DISTINCT ps.status) FROM proposal_speakers ps JOIN session_proposals p ON p.id = ps.proposal_id AND p.deleted_at IS NULL WHERE p.event_id = e.id AND ps.user_id = ?) AS speakerStates,
       (SELECT COUNT(*) FROM session_proposals p WHERE p.event_id = e.id AND p.deleted_at IS NULL
@@ -49,6 +66,11 @@ export function decodeEventParticipation(rows: EventParticipationRow[]) {
       row.id,
       eventParticipationSchema.parse({
         ...row,
+        calendarAvailable: toBool(row.calendarAvailable),
+        promotion:
+          row.referralCode && row.registrationUpdatedAt
+            ? { sharePath: personalPromotionSharePath(row.referralCode), badgeVersion: row.registrationUpdatedAt }
+            : null,
         proposalStates: row.proposalStates?.split(",") ?? [],
         speakerStates: row.speakerStates?.split(",") ?? [],
       }),

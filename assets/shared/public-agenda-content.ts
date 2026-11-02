@@ -77,6 +77,8 @@ export function agendaSpeakerContent(
  */
 export interface AgendaContentOptions {
   participant?: boolean;
+  /** The signed-in event app permits personal actions only after event registration. */
+  personalAgenda?: boolean;
 }
 
 function listedOccurrence(organizer: boolean, options: AgendaContentOptions) {
@@ -120,6 +122,7 @@ export function agendaSessionContent(
     publicAnchor: occurrence.publicAnchor ?? undefined,
     legacyFragments,
     participation:
+      options.personalAgenda !== false &&
       timing &&
       !timing.endNotRecorded &&
       occurrence.kind !== "break" &&

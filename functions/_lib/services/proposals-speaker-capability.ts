@@ -16,6 +16,8 @@ import { parseLinksJson } from "../../../assets/shared/schemas/links";
 import { identityJobTitleSql } from "./identities/affiliation-projection";
 import { proposalSpeakerIdentityIdSql } from "./proposal-speaker-profile-projection";
 import { proposalActingIdentityReadModel } from "./proposal-speaker-identity";
+import { unclaimedAccountSql } from "./proposal-speaker-account-authority";
+import { speakerInvitedAddressOwnedSql } from "./proposal-speaker-invited-address";
 import {
   speakerCurrentRepresentationSchema,
   speakerSelfServiceProfileSchema,
@@ -28,6 +30,8 @@ export interface SpeakerWithContext {
   currentRepresentation: SpeakerCurrentRepresentation | null;
   user: ProposalSpeakerUserProfile & {
     id: string;
+    /** The account has proved a mailbox, so a speaker link alone no longer changes its name or headshot. */
+    account_claimed: boolean;
   };
 }
 
@@ -37,14 +41,26 @@ export async function getSpeakerByManageToken(
   signingSecret: string,
 ): Promise<SpeakerWithContext> {
   if (typeof manageToken !== "string") {
-    return getSpeakerByProposalUser(db, manageToken.resourceId, manageToken.userId);
+    const context = await getSpeakerByProposalUser(db, manageToken.resourceId, manageToken.userId);
+    const verified = await first(
+      db,
+      `SELECT 1 FROM proposal_speakers ps WHERE ps.id = ? AND ${speakerInvitedAddressOwnedSql("ps")}`,
+      [context.speaker.id],
+    );
+    if (!verified)
+      throw new AppError(
+        403,
+        "SPEAKER_INVITED_EMAIL_UNVERIFIED",
+        "Verify the email address used for this invitation in your profile before managing your participation.",
+      );
+    return context;
   }
   const verified = await verifyDatabaseCapability({ db, signingSecret, purpose: "speaker_manage", token: manageToken });
   if (!verified.ok) {
     throw new AppError(
       verified.reason === "expired" ? 410 : 404,
       verified.reason === "expired" ? "SPEAKER_TOKEN_EXPIRED" : "SPEAKER_TOKEN_NOT_FOUND",
-      verified.reason === "expired" ? "Speaker manage link has expired" : "Invalid speaker token",
+      verified.reason === "expired" ? "Speaker manage link has expired" : "This speaker link is no longer available.",
     );
   }
 
@@ -81,6 +97,7 @@ async function getSpeakerById(db: DatabaseLike, speakerId: string, userId?: stri
     ps_created_at: string;
     ps_invite_generation: number;
     ps_invite_expires_at: string | null;
+    ps_invited_email: string | null;
     ps_invite_expired: number;
     sp_id: string;
     sp_event_id: string;
@@ -108,6 +125,7 @@ async function getSpeakerById(db: DatabaseLike, speakerId: string, userId?: stri
     u_links_json: string | null;
     u_headshot_r2_key: string | null;
     u_headshot_updated_at: string | null;
+    u_account_claimed: number;
     ps_acting_identity_id: string | null;
     ps_acting_identity_selected_at: string | null;
   }>(
@@ -126,6 +144,7 @@ async function getSpeakerById(db: DatabaseLike, speakerId: string, userId?: stri
        ps.created_at      AS ps_created_at,
        ps.invite_generation AS ps_invite_generation,
        ps.invite_expires_at AS ps_invite_expires_at,
+       ps.invited_email   AS ps_invited_email,
        CASE
          WHEN ps.status IN ('invited', 'pending')
            AND (${inactiveEffectiveInviteExpirySql(
@@ -154,6 +173,7 @@ async function getSpeakerById(db: DatabaseLike, speakerId: string, userId?: stri
        u.email            AS u_email,
        ${proposalSpeakerProfileColumns("u", "ps", "u_")},
        ${proposalSpeakerHeadshotColumns("u", "u_")},
+       CASE WHEN ${unclaimedAccountSql("u")} THEN 0 ELSE 1 END AS u_account_claimed,
        ps.acting_identity_id AS ps_acting_identity_id
        , ps.acting_identity_selected_at AS ps_acting_identity_selected_at
      FROM proposal_speakers ps
@@ -165,7 +185,7 @@ async function getSpeakerById(db: DatabaseLike, speakerId: string, userId?: stri
   );
 
   if (!row || (userId !== undefined && row.ps_user_id !== userId)) {
-    throw new AppError(404, "SPEAKER_TOKEN_NOT_FOUND", "Invalid or expired speaker token");
+    throw new AppError(404, "SPEAKER_TOKEN_NOT_FOUND", "This speaker link is no longer available.");
   }
   if (row.ps_invite_expired === 1) {
     throw new AppError(410, "SPEAKER_INVITATION_EXPIRED", "Speaker invitation has expired");
@@ -187,6 +207,7 @@ async function getSpeakerById(db: DatabaseLike, speakerId: string, userId?: stri
       created_at: row.ps_created_at,
       invite_generation: row.ps_invite_generation,
       invite_expires_at: row.ps_invite_expires_at,
+      invited_email: row.ps_invited_email,
       acting_identity_id: row.ps_acting_identity_id,
       acting_identity_selected_at: row.ps_acting_identity_selected_at,
     },
@@ -219,6 +240,7 @@ async function getSpeakerById(db: DatabaseLike, speakerId: string, userId?: stri
       links_json: row.u_links_json,
       headshot_r2_key: row.u_headshot_r2_key,
       headshot_updated_at: row.u_headshot_updated_at,
+      account_claimed: row.u_account_claimed === 1,
     },
   };
   context.currentRepresentation = await currentSpeakerRepresentation(db, context.speaker);
@@ -281,9 +303,14 @@ async function currentSpeakerRepresentation(
 }
 
 /** How the speaker appears: the person's name and photo, and the profile of the identity they speak as. */
-export function speakerSelfServiceProfileReadModel(context: SpeakerWithContext, headshotUrl: string | null) {
+export function speakerSelfServiceProfileReadModel(
+  context: SpeakerWithContext,
+  headshotUrl: string | null,
+  personalDetailsEditable: boolean,
+) {
   const { speaker, user } = context;
   return speakerSelfServiceProfileSchema.parse({
+    personalDetailsEditable,
     ...proposalActingIdentityReadModel(speaker),
     firstName: user.first_name,
     lastName: user.last_name,

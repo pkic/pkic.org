@@ -7,7 +7,7 @@ import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { sha256Hex } from "../../utils/crypto";
 import { prepareAuditLog } from "../audit";
-import { deriveEventAttendanceType, listEventDays } from "../event-days";
+import { configuredAttendanceOptions, listEventDays } from "../event-days";
 import { buildRegistrationDayWaitlistSync, roleBasedCapacityExemptReason, withDayCapacityRetry } from "./day-waitlist";
 import { ADMIN_DAY_CAPACITY_EXEMPT_REASON_CODE } from "./day-waitlist-policy";
 import { getRegistrationById } from "./queries";
@@ -100,13 +100,33 @@ async function buildAdmission(db: DatabaseLike, payload: AdmissionPayload): Prom
     [registration.id, payload.event.id],
   );
   const existingAttendanceByDayId = new Map(existingRows.map((row) => [row.event_day_id, row.attendance_type]));
-  const dayAttendanceChanged = admittedDayDates.some(
-    (dayDate) => existingAttendanceByDayId.get(dayByDate.get(dayDate)!.id) !== "in_person",
-  );
+  if (
+    payload.requireActiveWaitlist &&
+    admittedDayDates.some((date) => !existingAttendanceByDayId.has(dayByDate.get(date)!.id))
+  ) {
+    throw new AppError(
+      409,
+      "REGISTRATION_DAY_NOT_WAITLISTED",
+      "The selected attendance option is no longer available.",
+    );
+  }
   const attendanceByDayId = new Map(existingAttendanceByDayId);
   for (const dayDate of admittedDayDates) {
-    attendanceByDayId.set(dayByDate.get(dayDate)!.id, "in_person");
+    const dayId = dayByDate.get(dayDate)!.id;
+    if (!attendanceByDayId.has(dayId)) {
+      const day = dayByDate.get(dayDate)!;
+      if (
+        !configuredAttendanceOptions(day).some((option) => option.value === "in_person" && option.enabled !== false)
+      ) {
+        throw new AppError(409, "REGISTRATION_ATTENDANCE_REQUIRED", "Choose an attendance option for this day first.");
+      }
+      attendanceByDayId.set(dayId, "in_person");
+    }
   }
+  const dayAttendanceChanged = admittedDayDates.some((date) => {
+    const dayId = dayByDate.get(date)!.id;
+    return existingAttendanceByDayId.get(dayId) !== attendanceByDayId.get(dayId);
+  });
   const selections = eventDays
     .filter((day) => attendanceByDayId.has(day.id))
     .map((day) => ({ dayDate: day.day_date, attendanceType: attendanceByDayId.get(day.id)! }));
@@ -115,7 +135,6 @@ async function buildAdmission(db: DatabaseLike, payload: AdmissionPayload): Prom
   const roleExemptReason = await roleBasedCapacityExemptReason(db, payload.event.id, registration.user_id);
   const updated: RegistrationRecord = {
     ...registration,
-    attendance_type: deriveEventAttendanceType(selections) ?? registration.attendance_type,
     updated_at: now,
   };
   const waitlist = await buildRegistrationDayWaitlistSync(db, {
@@ -152,38 +171,39 @@ async function buildAdmission(db: DatabaseLike, payload: AdmissionPayload): Prom
     db
       .prepare(
         `UPDATE registrations
-         SET attendance_type = ?, updated_at = ?
+         SET updated_at = ?
          WHERE id = ? AND event_id = ?`,
       )
-      .bind(updated.attendance_type, now, registration.id, payload.event.id),
+      .bind(now, registration.id, payload.event.id),
   ];
   const dayOverrideStatements: StatementLike[] = [];
   for (const dayDate of admittedDayDates) {
     const day = dayByDate.get(dayDate)!;
     const fromType = existingRows.find((row) => row.event_day_id === day.id)?.attendance_type ?? "not_attending";
+    const toType = attendanceByDayId.get(day.id)!;
     statements.push(
       db
         .prepare(
           `INSERT INTO registration_day_attendance (
              id, registration_id, event_day_id, attendance_type, created_at, updated_at
-           ) VALUES (?, ?, ?, 'in_person', ?, ?)
+           ) VALUES (?, ?, ?, ?, ?, ?)
            ON CONFLICT(registration_id, event_day_id)
-           DO UPDATE SET attendance_type = 'in_person', updated_at = excluded.updated_at`,
+           DO UPDATE SET attendance_type = excluded.attendance_type, updated_at = excluded.updated_at`,
         )
-        .bind(uuid(), registration.id, day.id, now, now),
+        .bind(uuid(), registration.id, day.id, toType, now, now),
     );
-    if (fromType !== "in_person") {
+    if (fromType !== toType) {
       statements.push(
         db
           .prepare(
             `INSERT INTO registration_attendance_history (
                id, registration_id, event_day_id, from_type, to_type, changed_by, changed_at
-             ) VALUES (?, ?, ?, ?, 'in_person', ?, ?)`,
+             ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
           )
-          .bind(uuid(), registration.id, day.id, fromType, payload.actorUserId, now),
+          .bind(uuid(), registration.id, day.id, fromType, toType, payload.actorUserId, now),
       );
     }
-    if (!roleExemptReason) {
+    if (!roleExemptReason || payload.requireActiveWaitlist) {
       dayOverrideStatements.push(
         db
           .prepare(
@@ -220,11 +240,7 @@ async function buildAdmission(db: DatabaseLike, payload: AdmissionPayload): Prom
   const waitlistAdmissionChanged = waitlist.activeRows.some(
     (row) => admittedDayDateSet.has(row.dayDate) && row.status !== "accepted",
   );
-  const changed =
-    dayAttendanceChanged ||
-    registration.attendance_type !== updated.attendance_type ||
-    waitlist.changed ||
-    waitlistAdmissionChanged;
+  const changed = dayAttendanceChanged || waitlist.changed || waitlistAdmissionChanged;
   if (!changed) return { registration, admittedDayDates, statements: [], outboxId: null };
 
   statements.push(
@@ -251,8 +267,8 @@ async function buildAdmission(db: DatabaseLike, payload: AdmissionPayload): Prom
     registration: updated,
     appBaseUrl: payload.appBaseUrl,
     templateKey: "registration_updated",
-    subject: `In-person registration accepted — ${payload.event.name}`,
-    noticeKind: "admin_admit",
+    subject: `Registration updated — ${payload.event.name}`,
+    noticeKind: "status_update",
     outboxId: (await sha256Hex(idempotencyKey)).slice(0, 32),
     idempotencyKey,
     dayAttendance: eventDays
@@ -261,6 +277,9 @@ async function buildAdmission(db: DatabaseLike, payload: AdmissionPayload): Prom
         dayDate: day.day_date,
         attendanceType: attendanceByDayId.get(day.id)!,
         label: day.label,
+        optionLabel:
+          configuredAttendanceOptions(day).find((option) => option.value === attendanceByDayId.get(day.id))?.label ??
+          null,
       })),
     dayWaitlist: [],
   });

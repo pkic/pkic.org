@@ -111,10 +111,12 @@ export function ProposalManageSpeakerCard({
       <PanelBody class="pk-stack pk-stack--snug">
         <Avatar name={speakerName} src={speaker.headshotUrl ?? undefined} size="lg" />
         <div class="pk-cluster">
-          <span>{speaker.email}</span>
+          {/* An invited speaker without a name is titled by the address already; it is not repeated. */}
+          {speakerName !== speaker.email && <span>{speaker.email}</span>}
           <Badge tone="neutral">{roleLabel}</Badge>
           <Badge tone={statusTone(speaker.status)}>{formatStatusLabel(speaker.status)}</Badge>
         </div>
+        {speaker.declineReason && <p class="pk-small">Reason for declining: {speaker.declineReason}</p>}
         {(speaker.organizationName || speaker.jobTitle) && (
           <p class="pk-small">{[speaker.jobTitle, speaker.organizationName].filter(Boolean).join(" · ")}</p>
         )}

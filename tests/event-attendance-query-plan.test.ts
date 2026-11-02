@@ -9,7 +9,7 @@ beforeEach(resetDb);
 
 describe("event attendance registration D1 query plans", () => {
   it("uses qualified shared sorting and the event/status index in both list projections", async () => {
-    const sorts = ["display_name", "-status", "attendance_type", "-created_at"] as const;
+    const sorts = ["display_name", "-status", "-created_at"] as const;
     for (const build of [buildEventAttendanceRegistrationsPageQuery, buildEventRegistrationsPageQuery]) {
       for (const sort of sorts) {
         const query = build("event-id", {

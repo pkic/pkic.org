@@ -1,3 +1,5 @@
+import { selectedAttendanceTypeSql } from "../registrations/day-states";
+import { dayWaitlistStatusSql } from "../registrations/day-waitlist-policy";
 import { isInvitationCampaignAudience } from "../../../../assets/shared/schemas/event-email-campaigns";
 import { listInvitationCampaignRecipients } from "./invitation-audience";
 import { REGISTRATION_ORGANIZATION_SQL, REGISTRATION_JOB_TITLE_SQL } from "../registrations/selected-identity";
@@ -37,17 +39,17 @@ function dayWaitlistFilterSql(scope: "registration" | "day"): string {
            OR (? = 'none' AND NOT EXISTS (
              SELECT 1 FROM event_day_waitlist_entries w
              WHERE w.registration_id = r.id
-               AND w.status IN ('waiting', 'offered', 'accepted')${dayClause}
+               AND ${dayWaitlistStatusSql("w")} IN ('waiting', 'offered', 'accepted')${dayClause}
            ))
            OR (? = 'active' AND EXISTS (
              SELECT 1 FROM event_day_waitlist_entries w
              WHERE w.registration_id = r.id
-               AND w.status IN ('waiting', 'offered')${dayClause}
+               AND ${dayWaitlistStatusSql("w")} IN ('waiting', 'offered')${dayClause}
            ))
            OR (? IN ('waiting', 'offered', 'accepted') AND EXISTS (
              SELECT 1 FROM event_day_waitlist_entries w
              WHERE w.registration_id = r.id
-               AND w.status = ?${dayClause}
+               AND ${dayWaitlistStatusSql("w")} = ?${dayClause}
            ))
          )`;
 }
@@ -81,13 +83,13 @@ export function attendeeCampaignSelection(
     : "";
   const attendanceFilter = filter.dayDate
     ? "AND (? = 'all' OR rda.attendance_type = ?)"
-    : "AND (? = 'all' OR r.attendance_type = ?)";
+    : `AND (? = 'all' OR ${selectedAttendanceTypeSql("r")})`;
 
   return {
     sql: `WITH ranked_recipients AS (
            SELECT r.id AS registration_id, r.manage_link_secret, u.id AS user_id,
                   u.email, u.first_name, u.last_name, ${REGISTRATION_ORGANIZATION_SQL} AS organization_name, ${REGISTRATION_JOB_TITLE_SQL} AS job_title,
-                  r.status, r.attendance_type, r.custom_answers_json, r.form_placement_id,
+                  r.status, r.custom_answers_json, r.form_placement_id,
                   ROW_NUMBER() OVER (
                     PARTITION BY lower(trim(u.email))
                     ORDER BY datetime(r.created_at) DESC, r.id ASC
@@ -105,7 +107,7 @@ export function attendeeCampaignSelection(
              AND (? IS NULL OR lower(trim(u.email)) IN (SELECT value FROM json_each(?)))
          )
          SELECT registration_id, manage_link_secret, user_id, email, first_name, last_name, organization_name,
-                job_title, status, attendance_type, custom_answers_json, form_placement_id
+                job_title, status, custom_answers_json, form_placement_id
          FROM ranked_recipients
          WHERE recipient_rank = 1
          ORDER BY lower(email) ASC

@@ -109,6 +109,7 @@ function installApi(options: { fails?: boolean } = {}): Captured[] {
 function mount(
   overrides: Partial<{
     dayWaitlist: Detail["dayWaitlist"];
+    dayAttendance: Detail["dayAttendance"];
     eventDays: EventDay[];
     canVip: boolean;
     onReload: () => void | Promise<void>;
@@ -122,7 +123,7 @@ function mount(
       <>
         <ConfirmDialogHost />
         <DayAttendanceManager
-          dayAttendance={dayAttendance}
+          dayAttendance={overrides.dayAttendance ?? dayAttendance}
           dayWaitlist={overrides.dayWaitlist ?? waiting}
           eventDays={overrides.eventDays ?? eventDays}
           registrationEndpoint={REGISTRATION_ENDPOINT}
@@ -211,6 +212,23 @@ describe("day attendance manager", () => {
     expect(body.dayDates).toEqual([DAY]);
     expect(reload).toHaveBeenCalledTimes(1);
     expect(container.textContent).toContain("registration update email was queued");
+  });
+
+  it("offers waitlist admission and requeue actions for a configured custom option", async () => {
+    const requests = installApi();
+    const customDays = [
+      {
+        ...eventDays[0],
+        attendanceOptions: [{ value: "moon_base", label: "Moon base", accessMode: "remote" as const, capacity: 1 }],
+      },
+    ];
+    const customAttendance = [{ ...dayAttendance[0], attendanceType: "moon_base" }];
+    const container = mount({ eventDays: customDays, dayAttendance: customAttendance });
+    await runRowAction(container, "Day one", "Admit from waitlist…");
+    await click(confirmButton("Admit from waitlist"));
+    expect(
+      eventRegistrationSelectedDayAdmitSchema.parse(requests.find((item) => item.path.endsWith("/admissions"))?.body),
+    ).toMatchObject({ dayDates: [DAY] });
   });
 
   it("returns an accepted day to its waitlist through the day-attendance contract", async () => {

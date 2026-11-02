@@ -3,10 +3,14 @@ import { proposalStatusSchema } from "./proposal-status";
 import { proposalAccessSpeakerStatusSchema } from "./proposal-management";
 import { databaseIdSchema } from "./identifiers";
 import { registrationLifecycleStatusSchema } from "./registration";
+import { sameOriginPathSchema } from "./urls";
+import { utcInstantSchema } from "./api-common";
 
 export const eventParticipationSchema = z.object({
   registrationId: databaseIdSchema.nullable(),
   registrationStatus: registrationLifecycleStatusSchema.nullable(),
+  calendarAvailable: z.boolean().default(false),
+  promotion: z.object({ sharePath: sameOriginPathSchema, badgeVersion: utcInstantSchema }).nullable().optional(),
   proposalStates: z.array(proposalStatusSchema).default([]),
   speakerStates: z.array(proposalAccessSpeakerStatusSchema).default([]),
   proposals: z.number().int().nonnegative(),

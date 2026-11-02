@@ -19,12 +19,27 @@ export function renderDayAttendance(container: HTMLElement, days: EventFormsResp
   render(<DayAttendancePicker days={days} lowCapacityThreshold={lowCapacityThreshold} />, container);
 }
 
+/** Read every day in column order, including days intentionally left out. */
+export function readDayAttendanceChoices(form: HTMLFormElement) {
+  const days = form.querySelectorAll<HTMLInputElement>('input[name^="dayAttendance."][value=""]');
+  const selected = Array.from(form.querySelectorAll<HTMLInputElement>('input[name^="dayAttendance."]:checked'));
+  return Array.from(days).map((day) => {
+    const field = selected.find((field) => field.name === day.name);
+    return {
+      answered: Boolean(field),
+      dayDate: day.name.replace(/^dayAttendance\./, ""),
+      dayLabel: day.dataset.dayLabel || day.name.replace(/^dayAttendance\./, ""),
+      attendanceType: field?.value || "",
+      optionLabel: field?.value ? field.dataset.optionLabel || field.value : "Not attending",
+      waitlisted: field?.hasAttribute("data-waitlist") ?? false,
+    };
+  });
+}
+
 export function readDayAttendance(form: HTMLFormElement): DayAttendanceValue[] {
-  const fields = form.querySelectorAll<HTMLInputElement>("input[name^='dayAttendance.']:checked");
-  return Array.from(fields).map((field) => ({
-    dayDate: field.name.replace(/^dayAttendance\./, ""),
-    attendanceType: field.value,
-  }));
+  return readDayAttendanceChoices(form)
+    .filter((day) => day.attendanceType !== "")
+    .map(({ dayDate, attendanceType }) => ({ dayDate, attendanceType }));
 }
 
 export function writeDayAttendance(form: HTMLFormElement, values: DayAttendanceValue[]): void {
@@ -33,7 +48,7 @@ export function writeDayAttendance(form: HTMLFormElement, values: DayAttendanceV
       `input[name='dayAttendance.${value.dayDate}'][value='${value.attendanceType}']`,
     );
     if (field) {
-      field.checked = true;
+      if (!field.checked) field.click();
     }
   }
 }

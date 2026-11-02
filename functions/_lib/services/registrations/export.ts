@@ -1,3 +1,4 @@
+import { loadRegistrationDayStates } from "./day-states";
 import { REGISTRATION_ORGANIZATION_SQL, REGISTRATION_JOB_TITLE_SQL } from "./selected-identity";
 import { encodeBoundedCsv } from "../../csv";
 import { all } from "../../db/queries";
@@ -14,7 +15,6 @@ import { PERSONAL_EMAIL_ADDRESS_LABEL } from "../../../../assets/shared/email-fi
 interface ExportRow {
   id: string;
   status: string;
-  attendance_type: string | null;
   source_type: string | null;
   created_at: string;
   user_email: string | null;
@@ -72,7 +72,7 @@ export async function buildRegistrationCsv(
 ): Promise<{ csv: string; recordCount: number }> {
   const rows = await all<ExportRow>(
     db,
-    `SELECT r.id, r.status, r.attendance_type, r.source_type, r.created_at,
+    `SELECT r.id, r.status, r.source_type, r.created_at,
             u.email AS user_email,
             COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS display_name,
             ${REGISTRATION_ORGANIZATION_SQL} AS organization,
@@ -92,16 +92,22 @@ export async function buildRegistrationCsv(
     throw new AppError(413, "CSV_EXPORT_ROW_LIMIT_EXCEEDED", `CSV export is limited to ${limits.maxRows} records`);
   }
 
-  const responseByRegistration = await resolveEventFormResponses(
-    db,
-    rows.map((row) => ({
-      source: "registration" as const,
-      sourceId: row.id,
-      event,
-      formPlacementId: row.form_placement_id,
-      answersJson: row.custom_answers_json,
-    })),
-  );
+  const [responseByRegistration, dayStates] = await Promise.all([
+    resolveEventFormResponses(
+      db,
+      rows.map((row) => ({
+        source: "registration" as const,
+        sourceId: row.id,
+        event,
+        formPlacementId: row.form_placement_id,
+        answersJson: row.custom_answers_json,
+      })),
+    ),
+    loadRegistrationDayStates(
+      db,
+      rows.map((row) => row.id),
+    ),
+  ]);
   const formColumns = exportFormColumns(rows.map((row) => responseByRegistration.get(row.id) ?? null));
   const header = [
     "ID",
@@ -120,6 +126,20 @@ export async function buildRegistrationCsv(
     const response = responseByRegistration.get(row.id) ?? null;
     const customAnswers = response ? response.answers : null;
     const affiliation = contactAffiliation(row.user_email, row.organization);
+    const selectedDays = dayStates.get(row.id) ?? [];
+    const attendance = selectedDays
+      .map((day) => {
+        const status =
+          day.waitlistStatus === "waiting"
+            ? " (waitlisted)"
+            : day.waitlistStatus === "offered"
+              ? " (place offered)"
+              : day.waitlistStatus === "expired"
+                ? " (offer expired)"
+                : "";
+        return `${day.dayDate}: ${day.optionLabel ?? day.attendanceType}${status}`;
+      })
+      .join("; ");
     return [
       row.id,
       row.display_name,
@@ -127,7 +147,7 @@ export async function buildRegistrationCsv(
       affiliation.personalEmail ? PERSONAL_EMAIL_ADDRESS_LABEL : affiliation.organization,
       row.job_title,
       row.status,
-      row.attendance_type,
+      attendance,
       row.source_type,
       row.created_at,
       row.sponsor_consent ? "Yes" : "No",

@@ -75,14 +75,19 @@ async function openPreview(page: Page): Promise<void> {
   await expect(page.locator("main.pk-preview__main")).toBeVisible();
   // The preview is rendered by a lazy chunk; wait for a primitive to exist
   // rather than for a timeout.
-  await expect(page.locator(".pk-btn").first()).toBeVisible();
+  // Scoped to the preview itself: the site chrome carries its own, hidden
+  // `.pk-btn` (the search panel's close button) ahead of the specimens.
+  await expect(page.locator("main.pk-preview__main .pk-btn").first()).toBeVisible();
 }
 
 test.describe("design system rendering", () => {
   test("loads without Bootstrap and without console errors", async ({ page }) => {
     const errors: string[] = [];
     page.on("console", (message) => {
-      if (message.type() === "error") errors.push(message.text());
+      // The site's account menu asks every page for a session; an anonymous visitor's 401 is its answer, not a defect.
+      const anonymousSessionProbe =
+        message.location().url.endsWith("/api/v1/auth/session") && message.text().includes("401");
+      if (message.type() === "error" && !anonymousSessionProbe) errors.push(message.text());
     });
     page.on("pageerror", (error) => errors.push(error.message));
 
@@ -237,7 +242,8 @@ test.describe("design system rendering", () => {
 
     const oversized = await page.evaluate(() => {
       const limits: Record<string, number> = {
-        ".pk-avatar": 64,
+        ".pk-avatar:not(.pk-avatar--xl)": 64,
+        ".pk-avatar--xl": 96,
         ".pk-spinner__circle": 64,
         ".pk-badge": 320,
         ".pk-chip": 320,
@@ -283,7 +289,12 @@ test("agenda list cards expand without overlap and print every day as a readable
   const agenda = page.locator("#agenda .pk-content-agenda");
   await expect(agenda.locator("[data-agenda-controls]")).toBeVisible();
   // Exercise the wide toolbar rather than the gallery shell's deliberately narrow specimen column.
-  await page.addStyleTag({ content: ".pk-preview__main { max-width: none; }" });
+  // The page's CSP refuses injected style elements; the CSSOM is not subject to it.
+  await page.evaluate(() => {
+    const sheet = new CSSStyleSheet();
+    sheet.replaceSync(".pk-preview__main { max-width: none; }");
+    document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+  });
   for (const width of [1440, 375]) {
     await page.setViewportSize({ width, height: 1000 });
     await agenda.getByRole("button", { name: "List", exact: true }).click();

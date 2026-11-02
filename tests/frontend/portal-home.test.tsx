@@ -294,6 +294,25 @@ describe("portal landing", () => {
     expect(events.textContent).not.toContain("No current or upcoming events right now.");
   });
 
+  it("lists several events in the order they take place, each once", async () => {
+    portalSession.value = { ...portalSessionFixture({ member: false }), eventParticipation: true };
+    const later = audienceEventRow({
+      id: "10000000-0000-4000-8000-000000000003",
+      slug: "later-2027",
+      name: "Later Summit",
+      startsAt: "2027-03-01T09:00:00.000Z",
+      endsAt: "2027-03-01T17:00:00.000Z",
+    });
+    const soon = audienceEventRow();
+    stubFeeds(feeds({ "/api/v1/events": { events: [later, soon], page: onePage } }));
+
+    const container = mount();
+    await settle();
+
+    const links = [...panelNamed(container, "Events").querySelectorAll("li a[href^='#/events/']")];
+    expect(links.map((link) => link.textContent)).toEqual(["PQC Conference 2026", "Later Summit"]);
+  });
+
   it("renders upcoming events using the shared discovery card", async () => {
     portalSession.value = { ...portalSessionFixture({ member: false }), eventParticipation: true };
     stubFeeds(feeds({ "/api/v1/events": { events: [audienceEventRow()], page: onePage } }));
@@ -309,6 +328,35 @@ describe("portal landing", () => {
     expect(events.classList.contains("pk-panel")).toBe(false);
     expect(events.querySelector("ul")?.getAttribute("aria-label")).toBe("Now and next events");
     expect(vi.mocked(fetch).mock.calls.some(([input]) => String(input).includes("kind=standalone"))).toBe(true);
+  });
+
+  it("shows a personal calendar action only when the registration has a calendar day", async () => {
+    portalSession.value = { ...portalSessionFixture({ member: false }), eventParticipation: true };
+    const row = audienceEventRow({
+      participation: {
+        registrationId: "20000000-0000-4000-8000-000000000001",
+        registrationStatus: "registered",
+        calendarAvailable: false,
+        proposals: 0,
+        speakerProposals: 0,
+      },
+    });
+    stubFeeds(feeds({ "/api/v1/events": { events: [row], page: onePage } }));
+
+    const container = mount();
+    await settle();
+    const events = panelNamed(container, "Events");
+    expect(events.querySelector('a[aria-label*="personal calendar"]')).toBeNull();
+
+    row.participation = { ...(row.participation as object), calendarAvailable: true };
+    stubFeeds(feeds({ "/api/v1/events": { events: [row], page: onePage } }));
+    const available = mount();
+    await settle();
+    expect(
+      panelNamed(available, "Events")
+        .querySelector<HTMLAnchorElement>('a[aria-label*="personal calendar"]')
+        ?.getAttribute("href"),
+    ).toBe("/api/v1/events/pqc-2026/registrations/20000000-0000-4000-8000-000000000001/calendar.ics");
   });
 
   it("shows a current event and the next event without embedding the events catalog", async () => {
@@ -400,6 +448,44 @@ describe("portal landing", () => {
     expect(occurrences).toHaveLength(1);
     const attention = panelNamed(container, "Needs your voice");
     expect(attention.textContent).toContain("Vote on: Adopt the 2027 budget");
+  });
+
+  it("opens a form shared with one of my groups under that group, not under its owner", async () => {
+    portalSession.value = portalSessionFixture({ member: true });
+    const placementId = "70000000-0000-4000-8000-000000000001";
+    const sharedWithGroupId = "10000000-0000-4000-8000-000000000002";
+    stubFeeds(
+      feeds({
+        "/api/v1/users/current/forms": {
+          forms: [
+            {
+              placementId,
+              formId: "70000000-0000-4000-8000-000000000002",
+              title: "Workshop feedback",
+              purpose: "survey",
+              ownerGroupId: "10000000-0000-4000-8000-000000000001",
+              ownerGroupName: "Organizing committee",
+              accessGroupId: sharedWithGroupId,
+              opensAt: null,
+              closesAt: "2026-11-15T17:00:00.000Z",
+              acceptingResponses: true,
+              hasSubmitted: false,
+            },
+          ],
+          page: onePage,
+        },
+      }),
+    );
+
+    const container = mount();
+    await settle();
+
+    const link = [...panelNamed(container, "Needs your voice").querySelectorAll("a")].find(
+      (anchor) => anchor.textContent === "Respond: Workshop feedback",
+    );
+    expect(link?.getAttribute("href")).toContain(`/groups/${sharedWithGroupId}/forms/${placementId}`);
+    // The asking group and the deadline are separate facts, not "committee closes …".
+    expect(link?.parentElement?.textContent).toContain("Organizing committee · closes ");
   });
 
   it("keeps an organization's standing in words, not in the badge color alone", async () => {

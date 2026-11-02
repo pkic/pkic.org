@@ -44,7 +44,7 @@ export function ParticipationRepresentation({
   async function submit(): Promise<void> {
     const checked = form.submit();
     if (!checked.data || !save) {
-      setError(checked.message);
+      setError(checked.formMessage);
       return;
     }
     setSaving(true);

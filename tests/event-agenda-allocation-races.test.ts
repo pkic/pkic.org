@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { seedSessionAttendanceDays } from "./helpers/session-attendance-days";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   agendaOccurrencePatchSchema,
@@ -163,10 +164,11 @@ async function fixture(policy: "reservation" | "approval" = "reservation", capac
   const now = new Date().toISOString();
   for (const person of people)
     await env.DB.prepare(
-      "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','in_person','test',?,?,?)",
+      "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','test',?,?,?)",
     )
       .bind(crypto.randomUUID(), pilot.eventId, person.userId, crypto.randomUUID(), now, now)
       .run();
+  await seedSessionAttendanceDays(env.DB, pilot.eventId, ["2026-12-01"]);
   const adminToken = await createAdminSession(env.DB, pilot.operatorId, crypto.randomUUID());
   async function request(path: string, body: unknown, token: string, db = env.DB as DatabaseLike, method = "PUT") {
     return callApi({ ...env, DB: db }, `${base}${path}`, {
@@ -259,7 +261,9 @@ describe("Prepared allocation transitions retain live capacity invariants", () =
     const f = await fixture();
     await expectParticipation(await f.book(0), "reserved");
     for (const person of f.people.slice(0, 2))
-      await env.DB.prepare("UPDATE registrations SET attendance_type='virtual' WHERE event_id=? AND user_id=?")
+      await env.DB.prepare(
+        "UPDATE registration_day_attendance SET attendance_type='virtual' WHERE registration_id=(SELECT id FROM registrations WHERE event_id=? AND user_id=?)",
+      )
         .bind(f.pilot.eventId, person.userId)
         .run();
     const gate = allocationGate("WITH actor AS");

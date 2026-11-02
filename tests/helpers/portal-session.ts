@@ -21,7 +21,16 @@ export function portalSessionFixture(capacities: PortalSessionFixtureOptions): P
     sponsors: [],
     pendingIdentityCount: capacities.pendingIdentityCount ?? 0,
     actingIdentities: capacities.member
-      ? [{ id: "00000000-0000-4000-8000-000000000003", organizationId: null, organizationName: null, jobTitle: null }]
+      ? [
+          {
+            id: "00000000-0000-4000-8000-000000000003",
+            organizationId: null,
+            organizationName: null,
+            jobTitle: null,
+            membershipCategory: null,
+            membershipLabel: null,
+          },
+        ]
       : [],
     actingIdentityId: capacities.member ? "00000000-0000-4000-8000-000000000003" : null,
     ...(capacities.staff

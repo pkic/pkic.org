@@ -4,7 +4,6 @@ import { activeFormSummarySchema } from "./forms";
 import { databaseIdSchema } from "./identifiers";
 import { registrationRecordContextSchema } from "./registration-record";
 import {
-  attendanceTypeSchema,
   dayAttendanceTypeSchema,
   dayDateSchema,
   dayWaitlistItemSchema,
@@ -31,7 +30,6 @@ export const eventRegistrationDetailSchema = registrationRecordContextSchema.ext
   user_id: databaseIdSchema,
   status: z.string(),
   cancellation_reason_code: z.string().nullable(),
-  attendance_type: attendanceTypeSchema,
   source_type: registrationSourceTypeSchema,
   rsvp_status: z.string().nullable(),
   rsvpByDay: z.array(eventRegistrationRsvpDaySchema),
@@ -49,7 +47,6 @@ export const eventRegistrationAttendanceDetailSchema = registrationRecordContext
     event_id: eventIdSchema,
     user_id: databaseIdSchema,
     status: z.string(),
-    attendance_type: attendanceTypeSchema,
     source_type: registrationSourceTypeSchema,
   });
 

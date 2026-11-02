@@ -13,7 +13,7 @@ export interface AuthOperationMetadata {
 }
 
 export interface McpOperationMetadata {
-  expose: true;
+  expose: boolean;
   scopes?: AuthScope[];
   scopesAnyOf?: AuthScope[][];
   readonly?: boolean;
@@ -99,20 +99,20 @@ function operationAuthMetadata(path: string, method: string, operation: JsonObje
   return undefined;
 }
 
-function hasMcpMetadata(operation: unknown): operation is JsonObject & { [MCP_EXTENSION]: McpOperationMetadata } {
-  if (!operation || typeof operation !== "object") return false;
-  const metadata = (operation as JsonObject)[MCP_EXTENSION];
-  return metadata?.expose === true;
-}
-
+/** Scoped JSON operations use the same contract as HTTP; transport exceptions remain explicit. */
 function shouldExposeToMcp(path: string, method: string, operation: JsonObject): boolean {
-  if (hasMcpMetadata(operation)) {
-    return true;
-  }
-
-  // Exposure is opt-in. It was previously implicit for admin-prefix reads,
-  // which no longer exist.
-  return false;
+  const metadata = operation[MCP_EXTENSION] as McpOperationMetadata | undefined;
+  if (metadata?.expose === false) return false;
+  const auth = operationAuthMetadata(path, method, operation);
+  if (!metadata?.expose && !auth?.scopes?.length && !auth?.scopesAnyOf?.length) return false;
+  const supportsJson = (content: unknown) =>
+    !content ||
+    (typeof content === "object" &&
+      Object.keys(content).every((type) => type === "application/json" || type.endsWith("+json")));
+  if (!supportsJson(operation.requestBody?.content)) return false;
+  return Object.entries(operation.responses ?? {}).every(
+    ([status, response]) => !/^2\d\d$/.test(status) || supportsJson((response as JsonObject)?.content),
+  );
 }
 
 export function decorateOpenApiSpec(spec: JsonObject): JsonObject {

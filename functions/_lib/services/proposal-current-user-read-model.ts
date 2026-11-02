@@ -19,7 +19,7 @@
  * `proposer_user_id = ?` branch is a plain table scan (confirmed by EXPLAIN
  * QUERY PLAN: `SCAN sp`); the closest existing access path is the
  * `UNIQUE(proposal_id, user_id)` auto-index on `proposal_speakers`, which the
- * `EXISTS` branch's correlated subquery uses (`SEARCH ps USING COVERING
+ * `EXISTS` branch's correlated subquery uses (`SEARCH ps USING
  * INDEX sqlite_autoindex_proposal_speakers_2`). That branch also covers the
  * common case, since submitting a proposal always adds the proposer as a
  * `proposal_speakers` row too. Flagging rather than adding a migration per
@@ -36,6 +36,7 @@ import { resolveMappedOrderBy } from "../db/sort";
 import { queryPage } from "../db/pagination";
 import type { DatabaseLike } from "../types";
 import { persistedUtcInstant } from "../utils/time";
+import { speakerInvitedAddressOwnedSql } from "./proposal-speaker-invited-address";
 
 interface CurrentUserProposalRow {
   id: string;
@@ -46,6 +47,7 @@ interface CurrentUserProposalRow {
   event_slug: string;
   event_name: string;
   role: "submitter" | "speaker";
+  speaker_status: string | null;
 }
 
 function toCurrentUserProposal(row: CurrentUserProposalRow): CurrentUserProposal {
@@ -55,6 +57,7 @@ function toCurrentUserProposal(row: CurrentUserProposalRow): CurrentUserProposal
     title: row.title,
     status: row.status,
     role: row.role,
+    speakerStatus: row.speaker_status,
     updatedAt: persistedUtcInstant(row.updated_at),
   });
 }
@@ -68,15 +71,24 @@ export function buildCurrentUserProposalsPageQuery(
   return {
     sql: `SELECT sp.id AS id, sp.title AS title, sp.status AS status, sp.updated_at AS updated_at,
             e.id AS event_id, e.slug AS event_slug, e.name AS event_name,
-            CASE WHEN sp.proposer_user_id = ? THEN 'submitter' ELSE 'speaker' END AS role
+            CASE WHEN sp.proposer_user_id = ? THEN 'submitter' ELSE 'speaker' END AS role,
+            (SELECT ps.status FROM proposal_speakers ps WHERE ps.proposal_id = sp.id AND ps.user_id = ?) AS speaker_status
           FROM session_proposals sp
           JOIN events e ON e.id = sp.event_id
           WHERE sp.deleted_at IS NULL AND (? IS NULL OR sp.event_id = ?) AND (sp.proposer_user_id = ?
              OR EXISTS (
                   SELECT 1 FROM proposal_speakers ps
-                   WHERE ps.proposal_id = sp.id AND ps.user_id = ?
+                   WHERE ps.proposal_id = sp.id AND ps.user_id = ? AND ${speakerInvitedAddressOwnedSql("ps")}
                 )) ${search ? `AND ${search.sql}` : ""}`,
-    bindings: [userId, query.eventId ?? null, query.eventId ?? null, userId, userId, ...(search?.bindings ?? [])],
+    bindings: [
+      userId,
+      userId,
+      query.eventId ?? null,
+      query.eventId ?? null,
+      userId,
+      userId,
+      ...(search?.bindings ?? []),
+    ],
     orderBy: resolveMappedOrderBy(
       query.sort,
       {

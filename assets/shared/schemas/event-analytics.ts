@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
 import { eventSummarySchema } from "./event-read-models";
+import { attendanceStatusCountSchema } from "./event-registrations";
 
 const countMapSchema = z.record(z.string(), z.number());
 
@@ -39,7 +40,7 @@ export const eventAnalyticsResponseSchema = z.object({
   registrations: z.object({
     byStatus: countMapSchema,
     byAttendanceType: countMapSchema,
-    attendanceStatusByType: z.record(z.string(), z.object({ accepted: z.number(), waitlisted: z.number() })),
+    attendanceStatusByType: z.record(z.string(), attendanceStatusCountSchema),
     byStatusAndType: z.array(z.object({ status: z.string(), attendance_type: z.string(), count: z.number() })),
     sponsorConsent: z.object({ granted: z.number(), notGranted: z.number() }),
     total: z.number(),
@@ -85,7 +86,7 @@ export const eventAnalyticsResponseSchema = z.object({
       label: z.string().nullable(),
       sort_order: z.number(),
       attendance_type: z.string(),
-      attendance_status: z.enum(["accepted", "waitlisted", "pending"]),
+      attendance_status: z.enum(["accepted", "waitlisted", "expired", "pending"]),
       count: z.number(),
     }),
   ),

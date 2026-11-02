@@ -1,3 +1,4 @@
+import { selectedAttendanceTypeSql } from "../registrations/day-states";
 import { REGISTRATION_ORGANIZATION_SQL, registrationOrganizationSql } from "../registrations/selected-identity";
 /**
  * Canonical SQL population shared by the submissions page, its count, and
@@ -53,6 +54,10 @@ export const MERGED_SUBMISSION_COLUMNS = `id, source, source_id, context_type, c
 
 function optionalEquality(expression: string, value: string | undefined): SqlFragment {
   return value ? { sql: `AND ${expression} = ?`, bindings: [value] } : { sql: "", bindings: [] };
+}
+
+function optionalAttendanceType(alias: string, value: string | undefined): SqlFragment {
+  return value ? { sql: `AND ${selectedAttendanceTypeSql(alias)}`, bindings: [value] } : { sql: "", bindings: [] };
 }
 
 function optionalSearch(query: string | undefined, expressions: readonly string[]): SqlFragment {
@@ -122,7 +127,7 @@ function nativeSubmissionBranch(params: {
       : "";
   const status = optionalEquality(canonicalStatus, params.status);
   const attendance = isRegistration
-    ? optionalEquality("source_registration.attendance_type", params.attendanceType)
+    ? optionalAttendanceType("source_registration", params.attendanceType)
     : { sql: "", bindings: [] };
   const eventScope =
     params.eventId && isRegistration
@@ -202,7 +207,7 @@ function legacyRegistrationBranch(params: {
   unownedOnly?: boolean;
 }): SqlFragment {
   const status = optionalEquality("r.status", params.status);
-  const attendance = optionalEquality("r.attendance_type", params.attendanceType);
+  const attendance = optionalAttendanceType("r", params.attendanceType);
   const search = optionalSearch(params.q, [
     "u.email",
     "u.first_name",

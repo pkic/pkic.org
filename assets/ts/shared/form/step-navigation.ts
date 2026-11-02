@@ -8,6 +8,10 @@
  */
 import { clearStatus, isNativelyValidated } from "./validation";
 import { findFieldErrorTarget } from "./validation-map";
+import { splitHash, subscribeUrlQuery, writeUrlQuery } from "../../ui/url-query";
+
+export const REGISTRATION_STEP_PARAM = "registrationStep";
+type StepHistory = { source: "hash" | "search"; ownerPath: string; param: string };
 
 /**
  * Installs step navigation on the given root element.
@@ -27,7 +31,10 @@ export function installStepNavigation(
   statusEl: HTMLElement,
   onBeforeNext?: (currentStep: number) => boolean | void,
   onStepChange?: (currentStep: number) => void,
-): { continueFrom: (step: number) => void } {
+  stepHistory?: StepHistory,
+): { continueFrom: (step: number) => void; dispose: () => void } {
+  const events = new window.AbortController();
+  const listenerOptions = { signal: events.signal };
   const stepEls = Array.from(root.querySelectorAll<HTMLElement>("[data-step]")).sort(
     (a, b) => Number(a.dataset.step) - Number(b.dataset.step),
   );
@@ -36,10 +43,35 @@ export function installStepNavigation(
   const nextBtn = root.querySelector<HTMLButtonElement>("[data-step-next]");
   const submitBtn = form.querySelector<HTMLButtonElement>("button[type='submit']");
 
-  if (stepEls.length < 2) return { continueFrom: () => {} };
+  if (stepEls.length < 2) return { continueFrom: () => {}, dispose: () => {} };
 
   const total = stepEls.length;
   let current = 1;
+  let completed = 1;
+  function readHistory() {
+    return stepHistory?.source === "hash"
+      ? splitHash()
+      : { path: location.pathname, params: new URLSearchParams(location.search) };
+  }
+  function writeStep(step: number, mode: "push" | "replace") {
+    if (!stepHistory) return;
+    const { params } = readHistory();
+    params.set(stepHistory.param, String(step));
+    writeUrlQuery({ ...stepHistory, params, mode });
+  }
+  const unsubscribe = stepHistory
+    ? subscribeUrlQuery(() => {
+        const { path, params } = readHistory();
+        if (path !== stepHistory.ownerPath) return;
+        const raw = params.get(stepHistory.param);
+        const step = raw === null ? 1 : Number(raw);
+        if (!Number.isInteger(step) || step < 1 || step > completed) return;
+        if (step === current) return;
+        current = step;
+        clearStatus(statusEl);
+        applyState();
+      })
+    : () => {};
 
   function applyState(): void {
     stepEls.forEach((el, i) => {
@@ -126,13 +158,19 @@ export function installStepNavigation(
     clearStatus(statusEl);
     if (current < total) {
       current++;
+      completed = Math.max(completed, current);
       applyState();
+      writeStep(current, "push");
       root.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   }
 
   function goBack(): void {
     if (current > 1) {
+      if (stepHistory) {
+        window.history.back();
+        return;
+      }
       clearStatus(statusEl);
       current--;
       applyState();
@@ -142,40 +180,67 @@ export function installStepNavigation(
 
   function goToCompletedStep(step: number): void {
     if (step >= current || step < 1 || step > total) return;
+    if (stepHistory) {
+      window.history.go(step - current);
+      return;
+    }
     clearStatus(statusEl);
     current = step;
     applyState();
     root.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  nextBtn?.addEventListener("click", goNext);
-  backBtn?.addEventListener("click", goBack);
-  root.addEventListener("click", (event) => {
-    const trigger = event.target instanceof HTMLElement ? event.target.closest<HTMLElement>("[data-step-jump]") : null;
-    if (!trigger) return;
-    goToCompletedStep(Number(trigger.dataset.stepJump));
-  });
+  nextBtn?.addEventListener("click", goNext, listenerOptions);
+  backBtn?.addEventListener("click", goBack, listenerOptions);
+  root.addEventListener(
+    "click",
+    (event) => {
+      const trigger =
+        event.target instanceof HTMLElement ? event.target.closest<HTMLElement>("[data-step-jump]") : null;
+      if (!trigger) return;
+      goToCompletedStep(Number(trigger.dataset.stepJump));
+    },
+    listenerOptions,
+  );
   stepItems.forEach((item) => {
-    item.addEventListener("click", () => {
-      goToCompletedStep(Number(item.dataset.stepItem));
-    });
-    item.addEventListener("keydown", (event) => {
-      if (event.key !== "Enter" && event.key !== " ") return;
-      event.preventDefault();
-      goToCompletedStep(Number(item.dataset.stepItem));
-    });
+    item.addEventListener(
+      "click",
+      () => {
+        goToCompletedStep(Number(item.dataset.stepItem));
+      },
+      listenerOptions,
+    );
+    item.addEventListener(
+      "keydown",
+      (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        goToCompletedStep(Number(item.dataset.stepItem));
+      },
+      listenerOptions,
+    );
   });
 
   // Allow pressing Enter in step 1 inputs to advance (feels natural).
-  stepEls[0]?.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !(e.target instanceof HTMLTextAreaElement)) {
-      e.preventDefault();
-      goNext();
-    }
-  });
+  stepEls[0]?.addEventListener(
+    "keydown",
+    (e) => {
+      if (e.key === "Enter" && !(e.target instanceof HTMLTextAreaElement)) {
+        e.preventDefault();
+        goNext();
+      }
+    },
+    listenerOptions,
+  );
 
   applyState();
+  // A fresh form cannot jump past verification via a copied or reloaded URL.
+  if (stepHistory && readHistory().params.has(stepHistory.param)) writeStep(1, "replace");
   return {
+    dispose: () => {
+      events.abort();
+      unsubscribe();
+    },
     continueFrom: (step) => {
       if (step === current) goNext();
     },

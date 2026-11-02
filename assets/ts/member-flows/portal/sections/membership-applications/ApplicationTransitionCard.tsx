@@ -58,7 +58,7 @@ export function ApplicationTransitionCard({
     setError("");
     const checked = form.submit();
     if (!checked.data) {
-      setError(checked.message);
+      setError(checked.formMessage ?? "");
       return;
     }
     setTransitioning(true);

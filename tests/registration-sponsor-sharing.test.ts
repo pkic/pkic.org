@@ -43,8 +43,8 @@ async function fixture() {
     ),
     env.DB.prepare(
       `INSERT INTO registrations
-      (id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,confirmed_at,created_at,updated_at)
-      VALUES(?,?,?,'registered','in_person','test',?,?,?,?)`,
+      (id,event_id,user_id,status,source_type,manage_link_secret,confirmed_at,created_at,updated_at)
+      VALUES(?,?,?,'registered','test',?,?,?,?)`,
     ).bind(registrationId, eventId, userId, crypto.randomUUID(), at, at, at),
     env.DB.prepare(
       `INSERT INTO event_terms(id,event_id,audience_type,term_key,version,required,active,created_at)

@@ -244,8 +244,7 @@ describe("changing an accepted speaker's attendance", () => {
     });
     expect(scalarOnly.status).toBe(400);
     expect(await refusal(scalarOnly)).toMatchObject({
-      code: "DAY_ATTENDANCE_REQUIRED",
-      message: "Choose how you attend each day of this event.",
+      code: "VALIDATION_ERROR",
     });
   });
 });

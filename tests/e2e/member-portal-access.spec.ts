@@ -59,7 +59,7 @@ test("a sign-in request for an unknown address creates no session", async ({ pag
 
   await page.goto("/portal/");
   await openEmailSignIn(page);
-  await page.getByLabel("Work email").fill(email);
+  await page.getByLabel("Email").fill(email);
   await page.getByRole("button", { name: "Send sign-in link" }).click();
 
   // The response must not disclose whether the address is known, so the same

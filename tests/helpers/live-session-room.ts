@@ -74,7 +74,7 @@ export function createLiveRoomFixture() {
       ["outsider", "cancelled"],
     ] as const)
       await env.DB.prepare(
-        "INSERT INTO registrations (id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES (?,?,?,?,'in_person','test',?,?,?)",
+        "INSERT INTO registrations (id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES (?,?,?,?,'test',?,?,?)",
       )
         .bind(crypto.randomUUID(), eventId, users[person], status, crypto.randomUUID(), now, now)
         .run();
@@ -203,14 +203,19 @@ export function createLiveRoomFixture() {
           ),
         );
       },
-      /** The latest message of a type once it has arrived. */
+      /**
+       * The latest message of a type once it has arrived. `after` skips the messages
+       * received before that count, so an earlier match cannot stand in for a later one.
+       */
       async next<T extends LiveRoomServerMessage["type"]>(
         type: T,
         where: (message: Extract<LiveRoomServerMessage, { type: T }>) => boolean = () => true,
+        { after = 0 }: { after?: number } = {},
       ) {
         return vi.waitFor(
           () => {
-            const found = [...received]
+            const found = received
+              .slice(after)
               .reverse()
               .find(
                 (message): message is Extract<LiveRoomServerMessage, { type: T }> =>

@@ -63,7 +63,6 @@ export interface SponsorAttendeeRow {
   organizationName: string | null;
   personalEmail: boolean;
   jobTitle: string | null;
-  attendanceType: string | null;
 }
 
 const SPONSOR_ATTENDEES_FROM = `
@@ -80,7 +79,6 @@ function toAttendeeRow(r: {
   email: string | null;
   organization_name: string | null;
   job_title: string | null;
-  attendance_type: string | null;
 }): SponsorAttendeeRow {
   const affiliation = contactAffiliation(r.email, r.organization_name);
   return {
@@ -91,7 +89,6 @@ function toAttendeeRow(r: {
     organizationName: affiliation.organization,
     personalEmail: affiliation.personalEmail,
     jobTitle: r.job_title,
-    attendanceType: r.attendance_type,
   };
 }
 
@@ -102,14 +99,13 @@ type SponsorAttendeeDatabaseRow = {
   email: string | null;
   organization_name: string | null;
   job_title: string | null;
-  attendance_type: string | null;
 };
 
 function prepareSponsorAttendeeExport(db: DatabaseLike, eventId: string, maxRows: number): StatementLike {
   return db
     .prepare(
       `SELECT r.id AS registration_id, u.first_name, u.last_name, u.email,
-              ${REGISTRATION_ORGANIZATION_SQL} AS organization_name, ${REGISTRATION_JOB_TITLE_SQL} AS job_title, r.attendance_type
+              ${REGISTRATION_ORGANIZATION_SQL} AS organization_name, ${REGISTRATION_JOB_TITLE_SQL} AS job_title
        ${SPONSOR_ATTENDEES_FROM}
        ORDER BY u.last_name ASC, u.first_name ASC
        LIMIT ?`,
@@ -142,7 +138,6 @@ function buildSponsorAttendeesPageQuery(eventId: string, params: SponsorAttendee
         "u.email",
         REGISTRATION_ORGANIZATION_SQL,
         REGISTRATION_JOB_TITLE_SQL,
-        "r.attendance_type",
       ])
     : null;
   const searchSql = search ? `AND ${search.sql}` : "";
@@ -153,14 +148,13 @@ function buildSponsorAttendeesPageQuery(eventId: string, params: SponsorAttendee
       name: "LOWER(COALESCE(u.last_name, '') || ' ' || COALESCE(u.first_name, ''))",
       email: "u.email COLLATE NOCASE",
       organizationName: `${REGISTRATION_ORGANIZATION_SQL} COLLATE NOCASE`,
-      attendanceType: "r.attendance_type",
     },
     "u.last_name ASC, u.first_name ASC",
     "r.id ASC",
   );
   return {
     sql: `SELECT r.id AS registration_id, u.first_name, u.last_name, u.email,
-              ${REGISTRATION_ORGANIZATION_SQL} AS organization_name, ${REGISTRATION_JOB_TITLE_SQL} AS job_title, r.attendance_type
+              ${REGISTRATION_ORGANIZATION_SQL} AS organization_name, ${REGISTRATION_JOB_TITLE_SQL} AS job_title
        ${SPONSOR_ATTENDEES_FROM}
        ${searchSql}
        `,

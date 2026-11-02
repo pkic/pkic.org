@@ -1,6 +1,14 @@
+import { bytesToBase64 as uint8ToBase64 } from "../../../assets/shared/base64";
+export { bytesToBase64 as uint8ToBase64 } from "../../../assets/shared/base64";
+import { resolveHeroImageUrl } from "./event-presentation";
 import type { Env } from "../types";
 import { readBoundedStream } from "../utils/bounded-stream";
-import { SUPPORTED_RASTER_IMAGE_CONTENT_TYPES, validateRasterImage } from "../utils/image-format";
+import {
+  SUPPORTED_RASTER_IMAGE_CONTENT_TYPES,
+  validateRasterImage,
+  type EmbeddedRasterImage,
+  type ValidatedRasterImage,
+} from "../utils/image-format";
 import { resolveHeroImageSource } from "../utils/hero-image-url";
 
 export { resolveHeroImageSource } from "../utils/hero-image-url";
@@ -23,25 +31,26 @@ export async function fetchStaticAsset(
   return binding ? binding.fetch(request) : fetch(request);
 }
 
-/** Fast Uint8Array to base64 without quadratic string reallocation. */
-export function uint8ToBase64(bytes: Uint8Array): string {
-  const chunkSize = 0x8000;
-  let binary = "";
-  for (let index = 0; index < bytes.length; index += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
-  }
-  return btoa(binary);
-}
-
 export const MAX_HERO_IMAGE_BYTES = 5 * 1024 * 1024;
+// Images accepts sources up to 20 MB; only the compact, validated result enters the SVG.
+export const MAX_HERO_IMAGE_SOURCE_BYTES = 20 * 1024 * 1024;
 export const HERO_IMAGE_FETCH_TIMEOUT_MS = 5_000;
 const HERO_IMAGE_CONTENT_TYPES = new Set<string>(SUPPORTED_RASTER_IMAGE_CONTENT_TYPES);
 
-/** Buffers only a small, explicitly supported image response for SVG embedding. */
-export async function imageResponseToDataUrl(
+interface HeroImageSourceBytes {
+  bytes: Uint8Array<ArrayBuffer>;
+  image: ValidatedRasterImage;
+}
+
+function embeddedImage({ bytes, image }: HeroImageSourceBytes): EmbeddedRasterImage {
+  return { ...image, dataUrl: `data:${image.contentType};base64,${uint8ToBase64(bytes)}` };
+}
+
+/** Bound encoded bytes and decoded dimensions before conversion or SVG embedding. */
+async function readHeroImageResponse(
   response: Response,
   maxBytes = MAX_HERO_IMAGE_BYTES,
-): Promise<string | null> {
+): Promise<HeroImageSourceBytes | null> {
   if (!response.ok || !response.body) return null;
   const mime = (response.headers.get("content-type") ?? "").split(";", 1)[0].trim().toLowerCase();
   if (!HERO_IMAGE_CONTENT_TYPES.has(mime)) return null;
@@ -58,16 +67,15 @@ export async function imageResponseToDataUrl(
   const bytes = result.bytes;
   const validation = validateRasterImage(bytes);
   if (!validation.ok || validation.image.contentType !== mime) return null;
-  return `data:${validation.image.contentType};base64,${uint8ToBase64(bytes)}`;
+  return { bytes, image: validation.image };
 }
 
-function extractHeroImageUrl(settingsJson: string): string | null {
-  try {
-    const settings = JSON.parse(settingsJson) as Record<string, unknown>;
-    return typeof settings.heroImageUrl === "string" && settings.heroImageUrl ? settings.heroImageUrl : null;
-  } catch {
-    return null;
-  }
+export async function imageResponseToDataUrl(
+  response: Response,
+  maxBytes = MAX_HERO_IMAGE_BYTES,
+): Promise<string | null> {
+  const image = await readHeroImageResponse(response, maxBytes);
+  return image ? embeddedImage(image).dataUrl : null;
 }
 
 export async function fetchHeroImage(
@@ -75,8 +83,8 @@ export async function fetchHeroImage(
   origin: string,
   env: HeroImageEnv,
   timeoutMs = HERO_IMAGE_FETCH_TIMEOUT_MS,
-): Promise<string | null> {
-  const raw = extractHeroImageUrl(settingsJson);
+): Promise<EmbeddedRasterImage | null> {
+  const raw = resolveHeroImageUrl({ settings_json: settingsJson });
   if (!raw) return null;
   const source = resolveHeroImageSource(raw, origin, env.HERO_IMAGE_ALLOWED_HOSTS);
   if (!source) return null;
@@ -87,21 +95,24 @@ export async function fetchHeroImage(
     if (source.assetPath) {
       response = await fetchStaticAsset(env, origin, source.assetPath, signal);
       if (!response.ok) return null;
-      if (env.IMAGES && response.body) {
-        const transformed = await env.IMAGES.input(response.body)
-          .transform({ width: 1200, height: 630, fit: "cover" })
-          .output({ format: "jpeg", quality: 95 });
-        response = await transformed.response();
-      }
     } else {
-      const requestInit: RequestInit & { cf: { image: Record<string, string | number> } } = {
-        signal,
-        redirect: "manual",
-        cf: { image: { width: 1200, height: 630, fit: "cover", format: "jpeg", quality: 95 } },
-      };
+      const requestInit: RequestInit = { signal, redirect: "manual" };
       response = await fetch(source.url, requestInit);
     }
-    return imageResponseToDataUrl(response);
+    const original = await readHeroImageResponse(
+      response,
+      env.IMAGES ? MAX_HERO_IMAGE_SOURCE_BYTES : MAX_HERO_IMAGE_BYTES,
+    );
+    if (!original) return null;
+    if (original.image.contentType !== "image/webp" && original.bytes.byteLength <= MAX_HERO_IMAGE_BYTES)
+      return embeddedImage(original);
+    // Keep the original aspect ratio: only the scene's final cover operation crops the photo.
+    if (!env.IMAGES) return null;
+    const normalized = await env.IMAGES.input(new Response(original.bytes).body!)
+      .transform({})
+      .output({ format: "image/jpeg", quality: 95 });
+    const compact = await readHeroImageResponse(await normalized.response());
+    return compact ? embeddedImage(compact) : null;
   } catch {
     return null;
   }

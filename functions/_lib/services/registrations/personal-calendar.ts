@@ -2,8 +2,9 @@ import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
 import { first } from "../../db/queries";
 import { generateSignedRsvpAddress } from "../../email/rsvp";
-import { buildRegistrationIcs } from "../../utils/calendar";
+import { buildRegistrationIcs, calendarConfirmedDays } from "../../utils/calendar";
 import { getEventBySlug } from "../events";
+import { listDayWaitlistForRegistration } from "./day-waitlist-queries";
 import { getRegistrationDayAttendance } from "../event-days";
 
 /** Rebuild the same registration calendar that confirmation mail attaches. */
@@ -35,11 +36,17 @@ export async function personalEventCalendar(
     event,
     registrationId,
     manageUrl,
-    dayAttendance,
+    calendarConfirmedDays(dayAttendance, await listDayWaitlistForRegistration(db, registrationId)),
     origin,
     organizerEmail,
     attendeeEmail,
     signingSecret,
   );
+  if (!calendar.files.length)
+    throw new AppError(
+      404,
+      "CALENDAR_NOT_AVAILABLE",
+      "No confirmed live attendance days are available for this registration",
+    );
   return { content: calendar.files[0].content, filename: `${eventSlug}-personal.ics` };
 }

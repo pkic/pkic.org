@@ -98,8 +98,10 @@ export function JoinFlow({ documents }: { documents: MembershipDocument[] }) {
         </p>
         <ButtonLink href="/contact/">Contact the PKI Consortium</ButtonLink>
       </section>
+      {/* A signed-in person applies as one of their identities instead of typing their details. */}
+      <div data-join-signed-in hidden />
       <form data-join-application-form class="join-application-form pk-stack needs-validation" noValidate hidden>
-        <div class="membership-verified-context">
+        <div class="membership-verified-context" data-join-verified-context>
           <p>
             <strong data-verified-application-kind /> using verified email address{" "}
             <strong data-verified-application-email />.
@@ -108,6 +110,7 @@ export function JoinFlow({ documents }: { documents: MembershipDocument[] }) {
             Your verified email address and application path are fixed for this application. Start again if either is
             incorrect.
           </p>
+          <ButtonLink href="/join/">Start a new application</ButtonLink>
         </div>
         <p class="pk-muted pk-small">
           Only eligibility categories permitted for this verified application path are available below. Any required fee
@@ -121,13 +124,15 @@ export function JoinFlow({ documents }: { documents: MembershipDocument[] }) {
         >
           {() => <div data-membership-categories />}
         </Field>
-        <div class="join-application-identity-grid">
-          <Field id="firstName" label="First name" errorSlot="firstName">
-            {(control) => <TextInput {...control} name="firstName" autoComplete="given-name" required />}
-          </Field>
-          <Field id="lastName" label="Last name" errorSlot="applicantName">
-            {(control) => <TextInput {...control} name="lastName" autoComplete="family-name" required />}
-          </Field>
+        <div class="pk-stack" data-join-typed-identity>
+          <div class="join-application-identity-grid">
+            <Field id="firstName" label="First name" errorSlot="firstName">
+              {(control) => <TextInput {...control} name="firstName" autoComplete="given-name" required />}
+            </Field>
+            <Field id="lastName" label="Last name" errorSlot="applicantName">
+              {(control) => <TextInput {...control} name="lastName" autoComplete="family-name" required />}
+            </Field>
+          </div>
           <div data-organization-name-field>
             <Field
               id="organizationName"

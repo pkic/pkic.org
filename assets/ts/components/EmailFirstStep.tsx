@@ -1,5 +1,5 @@
 import type { JSX } from "preact";
-import { useId, useRef, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import type { z } from "zod";
 import {
   EMAIL_FIRST_ADVISORY_COPY,
@@ -13,6 +13,7 @@ import { workEmailStepSchema } from "../../shared/schemas/work-email";
 import { useContractForm } from "../hooks/useContractForm";
 import { useMailboxKind } from "../hooks/useMailboxKind";
 import { normalizeValidation } from "../shared/form/validation-map";
+import { nextDomId } from "../ui/dom-id";
 import { Alert } from "../ui/Alert";
 import { Button } from "../ui/Button";
 import { ChoiceCard, ChoiceCards } from "../ui/ChoiceCard";
@@ -20,6 +21,10 @@ import { Field, StateIcon } from "../ui/Field";
 import { TextInput } from "../ui/TextControl";
 import { IconOrganization } from "./icons";
 import { IconPerson } from "./icons/app-navigation";
+
+export interface EmailFirstController {
+  continue?: () => Promise<void>;
+}
 
 type WorkEmailContract = z.ZodType<{ email: string; unaffiliatedAttestation: boolean }>;
 
@@ -65,6 +70,8 @@ export function EmailFirstStep<Schema extends WorkEmailContract>({
   onContinue,
   sentTo,
   onChangeEmail,
+  controller,
+  onBusy,
 }: {
   flow: EmailFirstFlow;
   schema?: Schema;
@@ -78,6 +85,8 @@ export function EmailFirstStep<Schema extends WorkEmailContract>({
   /** The address a confirmation link went to; the step then says so instead of asking. */
   sentTo?: string | null;
   onChangeEmail?: () => void;
+  controller?: EmailFirstController;
+  onBusy?: (busy: boolean) => void;
 }) {
   const copy = EMAIL_FIRST_COPY[flow];
   const choice = individual ? copy.personal : copy.work;
@@ -87,19 +96,31 @@ export function EmailFirstStep<Schema extends WorkEmailContract>({
     unaffiliatedAttestation: individual,
   });
   const [busy, setBusy] = useState(false);
+  // State lags a render behind, so two clicks, or Enter and a click, in one tick would both send.
+  const sending = useRef(false);
+  useEffect(() => onBusy?.(busy), [busy]);
+  if (controller) controller.continue = proceed;
+  useEffect(
+    () => () => {
+      if (controller) delete controller.continue;
+    },
+    [controller],
+  );
   const root = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
-  const group = useId();
+  const [group] = useState(() => nextDomId("email-choice"));
   // The address the reader finished typing: classified once, not per keystroke.
   const [settled, setSettled] = useState("");
   const kind = useMailboxKind(individual && settled === email.trim() ? settled : null);
 
   async function proceed(): Promise<void> {
+    if (sending.current) return;
     const checked = form.submit();
     if (!checked.data) {
       setError(null);
       return;
     }
+    sending.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -109,6 +130,7 @@ export function EmailFirstStep<Schema extends WorkEmailContract>({
       const message = form.refuse(caught);
       setError(Object.keys(normalizeValidation(caught).fields).length > 0 ? null : message);
     } finally {
+      sending.current = false;
       setBusy(false);
     }
   }
@@ -220,9 +242,11 @@ export function EmailFirstStep<Schema extends WorkEmailContract>({
           </>
         ) : (
           <>
-            <Button type="button" variant="primary" loading={busy} onClick={() => void proceed()}>
-              {choice.action}
-            </Button>
+            {!controller && (
+              <Button type="button" variant="primary" loading={busy} onClick={() => void proceed()}>
+                {choice.action}
+              </Button>
+            )}
             {looksWork && (
               <Button type="button" variant="secondary" onClick={() => switchCard(false)}>
                 {EMAIL_FIRST_ADVISORY_COPY.useAsWork}

@@ -16,18 +16,24 @@ export interface IdentityEmailOwnershipInput {
   identityId: string | null;
   /** An identity whose ownership may pass to this one (a successor's predecessor). */
   transferFromIdentityId?: string | null;
+  /** An explicitly corrected selection to release; unrelated aliases stay associated. */
+  previousEmailId?: string | null;
 }
 
 export async function requireIdentityEmailAssignable(
   db: DatabaseLike,
   input: IdentityEmailOwnershipInput,
+  observed?: { identity_id: string | null } | null,
 ): Promise<void> {
   if (!input.emailId) return;
-  const address = await first<{ identity_id: string | null }>(
-    db,
-    "SELECT identity_id FROM user_emails WHERE id = ? AND user_id = ?",
-    [input.emailId, input.userId],
-  );
+  const address =
+    observed === undefined
+      ? await first<{ identity_id: string | null }>(
+          db,
+          "SELECT identity_id FROM user_emails WHERE id = ? AND user_id = ?",
+          [input.emailId, input.userId],
+        )
+      : observed;
   // An unknown or foreign address is refused by the identities email trigger.
   if (!address?.identity_id) return;
   if (address.identity_id === input.identityId || address.identity_id === input.transferFromIdentityId) return;
@@ -48,8 +54,18 @@ export function prepareIdentityEmailOwnershipStatements(
   db: DatabaseLike,
   input: IdentityEmailOwnershipInput & { identityId: string },
 ): StatementLike[] {
-  if (!input.emailId) return [];
+  if (input.emailId === undefined) return [];
+  const release =
+    input.previousEmailId && input.previousEmailId !== input.emailId
+      ? [
+          db
+            .prepare("UPDATE user_emails SET identity_id=NULL WHERE id=? AND user_id=? AND identity_id=?")
+            .bind(input.previousEmailId, input.userId, input.identityId),
+        ]
+      : [];
+  if (input.emailId === null) return release;
   return [
+    ...release,
     db
       .prepare(
         `UPDATE user_emails SET identity_id = ?

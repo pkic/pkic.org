@@ -1,3 +1,6 @@
+import { ServerSelectPreview } from "./ServerSelectPreview";
+import { RegistrationFieldsPreview } from "./RegistrationFieldsPreview";
+import { VerifiedOrganizationPreview, ProposalIdentityPreview } from "./VerifiedOrganizationPreview";
 import { ContentVersionNoticePreview } from "./ContentVersionNoticePreview";
 import { ModelNavigationPreview } from "./ModelNavigationPreview";
 import { contentContributionPreview } from "./ContentContributionPreview";
@@ -13,6 +16,7 @@ import { contentSections } from "./sections-content";
  */
 
 import { useState } from "preact/hooks";
+import "../Content.css";
 import "../../components/member-wall.css";
 import "../../components/site-footer.css";
 import { useHashQueryParam } from "../../hooks/useHashQueryParam";
@@ -26,6 +30,7 @@ import { Avatar } from "../Avatar";
 import { Badge } from "../Badge";
 import { DataTable } from "../DataTable";
 import { Button } from "../Button";
+import { Checkbox, Radio } from "../Checkbox";
 import { EmptyState } from "../EmptyState";
 import { Field } from "../Field";
 import { InputGroup } from "../InputGroup";
@@ -190,6 +195,16 @@ function InputGroupSpecimen() {
           </InputGroup>
         )}
       </Field>
+      <Field label="Organization" state="invalid" message="Choose an organization.">
+        {(control) => (
+          <InputGroup>
+            <TextInput {...control} placeholder="Organization" />
+            <Button variant="secondary" icon aria-label="Add organization" title="Add organization">
+              <IconPlus />
+            </Button>
+          </InputGroup>
+        )}
+      </Field>
       <Field label="Profile link" labelHidden>
         {(control) => (
           <InputGroup>
@@ -242,6 +257,57 @@ function RowListSpecimen() {
 const wallLogo = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="16" viewBox="0 0 100 40"><path fill="currentColor" d="M0 0h28v40H0zm36 0h28v40H36zm36 0h28v40H72z"/></svg>')}`;
 
 export const patternSections: PreviewSection[] = [
+  {
+    id: "choice-controls",
+    title: "Choice controls",
+    render: () => (
+      <div class="pk-stack">
+        <Radio name="preview-choice" value="selected" label="Selected option" defaultChecked />
+        <Radio name="preview-choice" value="available" label="Available option" />
+        <Radio name="preview-disabled-choice" label="Unavailable option" disabled />
+        <Checkbox label="Selected checkbox" defaultChecked />
+        <Checkbox label="Enabled switch" role="switch" defaultChecked />
+      </div>
+    ),
+  },
+  {
+    id: "framed-image",
+    title: "Framed image",
+    note: "A framed image fills the available width and retains its original proportions.",
+    render: () => (
+      <img
+        class="pk-framed"
+        width={600}
+        height={315}
+        alt="A circle centered in a landscape image"
+        src={`data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630"><rect width="1200" height="630" fill="#f1f5f9"/><circle cx="600" cy="315" r="200" fill="#0c4b38"/></svg>')}`}
+      />
+    ),
+  },
+  {
+    id: "registration-fields",
+    title: "Questionnaire fields",
+    note: "Configured dietary and topic controls, shared by public and portal registration.",
+    render: () => <RegistrationFieldsPreview />,
+  },
+  {
+    id: "verified-organization",
+    title: "Verified organization",
+    note: "One chooser for registration, identities, and speaker affiliations.",
+    render: () => <VerifiedOrganizationPreview />,
+  },
+  {
+    id: "proposal-identity",
+    title: "Proposal identity",
+    note: "The actual public proposal identity step embeds the shared verified-domain chooser.",
+    render: () => <ProposalIdentityPreview />,
+  },
+  {
+    id: "server-select",
+    title: "Server identity picker",
+    note: "The current value remains visible, long labels stay inside the field, and choices use the top layer above dialogs.",
+    render: () => <ServerSelectPreview />,
+  },
   { id: "content-version-notice", title: "Content version notice", render: () => <ContentVersionNoticePreview /> },
   { id: "model-navigation", title: "Model navigation", render: () => <ModelNavigationPreview /> },
   {

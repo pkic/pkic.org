@@ -21,7 +21,13 @@ import {
   seedMemberApplication,
   verifiedMemberApplicationPayload,
 } from "./helpers/member-applications";
-import { insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
+import { insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
+import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
+import {
+  INDIVIDUAL_WHILE_REPRESENTING,
+  ORGANIZATION_ALREADY_MEMBER,
+} from "../assets/shared/membership-application-refusals";
+import { normalizeOrgName } from "../assets/shared/organization-name";
 import { approveApplication } from "../functions/_lib/services/membership/applications/approve";
 import { evaluateMembershipApplication } from "../functions/_lib/services/membership/workflows/evaluate";
 import type { AuthAdmin, DatabaseLike } from "../functions/_lib/types";
@@ -78,6 +84,7 @@ async function createReviewedApplication(
     organizationDomain:
       "organization_domain" in overrides ? (overrides.organization_domain as string | null) : "acme.test",
     membershipCategory: (overrides.membership_category as string) ?? "F",
+    applicantUserId: (overrides.applicant_user_id as string | undefined) ?? null,
     formSubmissionId,
     stage: "processing",
   });
@@ -237,6 +244,70 @@ describe("Post-approval onboarding", () => {
     expect(links).toEqual(["https://linkedin.com/in/newmember"]);
   });
 
+  describe("carries the applicant's 'about yourself' answer to the biography of the identity they act as", () => {
+    const about = "I lead the PKI program at Acme.";
+
+    async function approve(id: string): Promise<{ userId: string }> {
+      const response = await call(adminToken, `/api/v1/members/applications/${id}/approve`, { method: "POST" });
+      expect(response.status).toBe(200);
+      return (await response.json()) as { userId: string };
+    }
+
+    async function biographies(userId: string): Promise<(string | null)[]> {
+      const rows = await queryAll<{ biography: string | null }>(
+        env.DB,
+        "SELECT biography FROM identities WHERE user_id = ? AND started_at IS NOT NULL AND ended_at IS NULL",
+        userId,
+      );
+      return rows.map((row) => row.biography);
+    }
+
+    /** An applicant who already acts for the applying organization, which is not yet a member. */
+    async function seedExistingAffiliation(biography: string | null): Promise<string> {
+      const userId = await insertUser(env.DB, "newmember@acme.test");
+      const organizationId = await insertOrganization(env.DB, "Acme Corp");
+      await env.DB.prepare("UPDATE organizations SET normalized_name = ? WHERE id = ?")
+        .bind(normalizeOrgName("Acme Corp"), organizationId)
+        .run();
+      const at = new Date().toISOString();
+      await env.DB.prepare(
+        `INSERT INTO identities (id, user_id, organization_id, source, job_title, biography,
+           show_on_organization_profile, invited_at, started_at, created_at, updated_at)
+         VALUES (?, ?, ?, 'staff', 'Engineer', ?, 0, ?, ?, ?, ?)`,
+      )
+        .bind(crypto.randomUUID(), userId, organizationId, biography, at, at, at, at)
+        .run();
+      return userId;
+    }
+
+    it("on a new organization identity", async () => {
+      const { id } = await createReviewedApplication({}, { job_title: "Engineer", about_yourself: about });
+      expect(await biographies((await approve(id)).userId)).toEqual([about]);
+    });
+
+    it("on a new individual identity", async () => {
+      const { id } = await createReviewedApplication(
+        { organization_name: null, organization_domain: null, membership_category: "H6" },
+        { about_yourself: about },
+      );
+      expect(await biographies((await approve(id)).userId)).toEqual([about]);
+    });
+
+    it("on a reused organization affiliation with no biography yet", async () => {
+      const userId = await seedExistingAffiliation(null);
+      const { id } = await createReviewedApplication({}, { job_title: "Engineer", about_yourself: about });
+      expect((await approve(id)).userId).toBe(userId);
+      expect(await biographies(userId)).toEqual([about]);
+    });
+
+    it("never over an existing biography", async () => {
+      const userId = await seedExistingAffiliation("Already written by the member.");
+      const { id } = await createReviewedApplication({}, { job_title: "Engineer", about_yourself: about });
+      await approve(id);
+      expect(await biographies(userId)).toEqual(["Already written by the member."]);
+    });
+  });
+
   it("creates no organization for an individual (H6) application", async () => {
     const { id } = await createReviewedApplication(
       { organization_name: null, membership_category: "H6" },
@@ -249,6 +320,37 @@ describe("Post-approval onboarding", () => {
 
     const orgCount = await queryAll(env.DB, "SELECT id FROM organizations");
     expect(orgCount).toHaveLength(0);
+  });
+
+  it("refuses approving an organization that became a member while its application waited", async () => {
+    const { id } = await createReviewedApplication({}, { working_groups: [], job_title: "Representative" });
+    await seedOrganizationAggregate(env.DB, await insertOrganization(env.DB, "Acme Corp"), "A");
+    const response = await call(adminToken, `/api/v1/members/applications/${id}/approve`, { method: "POST" });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: { code: ORGANIZATION_ALREADY_MEMBER } });
+    expect(await queryAll(env.DB, "SELECT stage FROM member_applications WHERE id = ?", [id])).toEqual([
+      { stage: "processing" },
+    ]);
+  });
+
+  it("refuses approving an individual application once the applicant represents an organization", async () => {
+    const userId = await insertUser(env.DB, "newmember@acme.test");
+    const { id } = await createReviewedApplication(
+      { organization_name: null, organization_domain: null, membership_category: "H6", applicant_user_id: userId },
+      { working_groups: [] },
+    );
+    const representation = await buildCreateIdentityStatement(env.DB, {
+      userId,
+      organizationId: await insertOrganization(env.DB, "Later Employer"),
+      source: "staff",
+      jobTitle: "Engineer",
+      startImmediately: true,
+    });
+    await env.DB.batch([representation.statement]);
+    const response = await call(adminToken, `/api/v1/members/applications/${id}/approve`, { method: "POST" });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: { code: INDIVIDUAL_WHILE_REPRESENTING } });
+    expect(await queryAll(env.DB, "SELECT id FROM members")).toEqual([]);
   });
 
   it("adds the requested group capacity and reconciles mailing-list subscriptions", async () => {

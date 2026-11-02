@@ -83,8 +83,8 @@ async function registerUserForEvent(
   const registrationId = crypto.randomUUID();
   await env.DB.prepare(
     `INSERT INTO registrations
-       (id, event_id, user_id, status, attendance_type, source_type, manage_link_secret, created_at, updated_at)
-     VALUES (?, ?, ?, ?, 'in_person', 'direct', ?, datetime('now'), datetime('now'))`,
+       (id, event_id, user_id, status, source_type, manage_link_secret, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'direct', ?, datetime('now'), datetime('now'))`,
   )
     .bind(registrationId, eventId, userId, status, `manage-${crypto.randomUUID()}`)
     .run();
@@ -104,11 +104,7 @@ async function insertEventDay(eventId: string, dayDate: string, sortOrder: numbe
 }
 
 /** Records that a registration selected a day, at `in_person` attendance. */
-async function insertDayAttendance(
-  registrationId: string,
-  eventDayId: string,
-  attendanceType: "in_person" | "virtual" = "in_person",
-) {
+async function insertDayAttendance(registrationId: string, eventDayId: string, attendanceType: string = "in_person") {
   await env.DB.prepare(
     `INSERT INTO registration_day_attendance (id, registration_id, event_day_id, attendance_type, created_at, updated_at)
      VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))`,
@@ -363,7 +359,6 @@ describe("event audience viewer state", () => {
     const listEvent = list.events.find((event) => event.slug === "registered-event");
     expect(listEvent?.viewer).toEqual({
       registrationStatus: "registered",
-      attendanceType: "in_person",
       waitlisted: false,
       days: [],
       holdsWorkAddress: true,
@@ -372,7 +367,6 @@ describe("event audience viewer state", () => {
     const detail = await requestAudienceDetail("/api/v1/events/registered-event", memberToken);
     expect(detail.viewer).toEqual({
       registrationStatus: "registered",
-      attendanceType: "in_person",
       waitlisted: false,
       days: [],
       holdsWorkAddress: true,
@@ -412,20 +406,22 @@ describe("event audience viewer state", () => {
     const dayThree = await insertEventDay(eventId, "2027-03-03", 2);
     await insertDayAttendance(registrationId, dayOne);
     await insertDayAttendance(registrationId, dayTwo);
-    await insertDayAttendance(registrationId, dayThree, "virtual");
+    await env.DB.prepare("UPDATE event_days SET attendance_options_json=? WHERE id=?")
+      .bind(JSON.stringify([{ value: "moon_lounge", label: "Moon lounge", accessMode: "remote" }]), dayThree)
+      .run();
+    await insertDayAttendance(registrationId, dayThree, "moon_lounge");
     // An accepted offer holds its seat; a waiting entry does not.
     await insertActiveDayWaitlistEntry(eventId, dayOne, registrationId, member.userId, "accepted");
     await insertActiveDayWaitlistEntry(eventId, dayTwo, registrationId, member.userId);
 
     const days = [
-      { date: "2027-03-01", attendanceType: "in_person", state: "registered" },
-      { date: "2027-03-02", attendanceType: "in_person", state: "waitlisted" },
-      { date: "2027-03-03", attendanceType: "virtual", state: "registered" },
+      { date: "2027-03-01", attendanceType: "in_person", accessMode: "physical", state: "registered" },
+      { date: "2027-03-02", attendanceType: "in_person", accessMode: "physical", state: "waitlisted" },
+      { date: "2027-03-03", attendanceType: "moon_lounge", accessMode: "remote", state: "registered" },
     ];
     const detail = await requestAudienceDetail("/api/v1/events/day-event", memberToken);
     expect(detail.viewer).toEqual({
       registrationStatus: "registered",
-      attendanceType: "in_person",
       waitlisted: true,
       days,
       holdsWorkAddress: true,

@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act } from "preact/test-utils";
 import { bootstrap } from "../../assets/ts/event-flows/boot";
-import { registrationInvitation } from "../../assets/ts/event-flows/registration-invitation";
+import { registrationInvitation } from "../../assets/ts/components/events/registration-invitation";
 import { ApiClientError } from "../../assets/ts/shared/api-client";
 import { inviteResendLinkSchema } from "../../assets/shared/schemas/proposal-management";
 

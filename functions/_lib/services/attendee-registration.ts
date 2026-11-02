@@ -1,7 +1,6 @@
+import type { EventAffiliationContext } from "./identities/event-affiliation-context";
 import type { AttendeeRegistrationFields } from "../../../assets/shared/schemas/registration";
 import type { DatabaseLike, StatementLike } from "../types";
-import { AppError } from "../errors";
-import { deriveEventAttendanceType } from "./event-days";
 import { prepareActiveTermsSnapshotGuard, validateRequiredConsents } from "./consent";
 import { prepareRequiredTerms, type EventTermRecord } from "./events";
 import { batchRows } from "../db/pagination";
@@ -30,6 +29,7 @@ export async function prepareValidatedAttendeeRegistration(
     confirmationTtlHours: number;
     referralCodeLength: number;
     verifiedIdentity?: VerifiedRegistrationIdentityContext;
+    affiliationContext?: EventAffiliationContext;
     mailboxVerified?: boolean;
     authorizationGuards?: readonly StatementLike[];
     /** Every registration flow supplies the loaded event so portal isolation cannot be skipped. */
@@ -37,10 +37,6 @@ export async function prepareValidatedAttendeeRegistration(
   },
 ) {
   const event = toEventFormResolutionEvent(options.event);
-  const attendanceType = input.attendanceType ?? deriveEventAttendanceType(input.dayAttendance);
-  if (!attendanceType) {
-    throw new AppError(400, "ATTENDANCE_REQUIRED", "attendanceType or dayAttendance is required");
-  }
 
   const formRead = prepareEventFormDefinitionRead(db, event, "event_registration");
   const [termsResult, ...formResults] = await db.batch([
@@ -52,7 +48,7 @@ export async function prepareValidatedAttendeeRegistration(
   const form = formRead.decode(formResults);
   const validatedForm = validateCustomAnswersForResolvedForm(form, {
     customAnswers: input.customAnswers,
-    context: { attendanceType, dayAttendance: input.dayAttendance },
+    context: { dayAttendance: input.dayAttendance },
   });
   const customAnswers = validatedForm.answers;
 
@@ -63,7 +59,6 @@ export async function prepareValidatedAttendeeRegistration(
       firstName: input.firstName,
       lastName: input.lastName,
     },
-    attendanceType,
     dayAttendance: input.dayAttendance,
     sourceType: options.sourceType,
     sourceRef: options.sourceRef,
@@ -83,6 +78,7 @@ export async function prepareValidatedAttendeeRegistration(
     authorizationGuards: options.authorizationGuards,
     termsSnapshotGuard: prepareActiveTermsSnapshotGuard(db, event.id, requiredTerms),
     verifiedIdentity: options.verifiedIdentity,
+    affiliationContext: options.affiliationContext,
     mailboxVerified: options.mailboxVerified,
   });
   return { prepared, requiredTerms, formResponse: validatedForm };

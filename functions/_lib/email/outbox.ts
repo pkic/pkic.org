@@ -1,3 +1,4 @@
+import { assertRequiredEmailActions } from "./required-actions";
 import { validateEmailDeliveryGuard } from "./delivery-guard";
 import { getAvailability } from "../availability";
 import { all, first, run } from "../db/queries";
@@ -13,14 +14,24 @@ import { loadEmailRenderResources } from "./partials";
 import { sendViaSendgrid } from "./sendgrid";
 import { applyCampaignCustomText } from "./campaign-custom";
 import { readDirectEmailBody } from "./direct-body";
-import { parseQueuedEmailAttachments } from "./attachments";
+import {
+  BADGE_ATTACHMENT_WAIT_REASONS,
+  parseQueuedEmailAttachments,
+  queuedBadgeRendererIsCurrent,
+} from "./attachments";
 import { materializeQueuedCapabilityLinks } from "../auth/capability-links";
 import type { DatabaseLike, Env } from "../types";
-import type { EmailContentType, EmailMessageType } from "../../../assets/shared/schemas/email-templates";
+import {
+  emailTemplateUnavailableCodeSchema,
+  type EmailContentType,
+  type EmailMessageType,
+} from "../../../assets/shared/schemas/email-templates";
 import type { CalendarPayload } from "./outbox-queue";
 import { createDurableJobLease } from "../jobs/lease";
 import { resolveImageAttachmentFormat } from "../utils/image-format";
-import type { EmailOutboxStatus } from "../../../assets/shared/schemas/email-outbox";
+import type { EmailOutboxStatus, ImmediateEmailDelivery } from "../../../assets/shared/schemas/email-outbox";
+
+const EMAIL_TEMPLATE_UNAVAILABLE_CODES: ReadonlySet<string> = new Set(emailTemplateUnavailableCodeSchema.options);
 
 export * from "./outbox-queue";
 
@@ -307,6 +318,8 @@ async function processOutboxRow(
       emailBaseUrl,
     );
 
+    assertRequiredEmailActions(row.template_key, payload, rendered);
+
     let attachments: Array<{ filename: string; contentType: string; base64Content: string }> | undefined;
     const calendar = payload.__calendarInvite as CalendarPayload | undefined;
     // A template that names its sender sends from there; a direct body has
@@ -326,13 +339,19 @@ async function processOutboxRow(
     // content-type from the R2 object's httpMetadata to use the correct extension.
     const queuedAttachments = parseQueuedEmailAttachments(payload);
     const badgeAttachments = queuedAttachments.filter((a) => a.kind === "r2-badge-image");
+    if (badgeAttachments.some((attachment) => attachment.required) && !env.ASSETS_BUCKET)
+      throw new Error("Required badge attachment storage is unavailable");
     if (badgeAttachments.length > 0 && env.ASSETS_BUCKET) {
       try {
         for (const badgeAttachment of badgeAttachments) {
           const badgeObj = await env.ASSETS_BUCKET.get(badgeAttachment.r2Key);
           if (!badgeObj) {
+            if (badgeAttachment.required) throw new Error(BADGE_ATTACHMENT_WAIT_REASONS.missing);
             continue;
           }
+
+          if (!queuedBadgeRendererIsCurrent(badgeAttachment, badgeObj.customMetadata?.badgeRenderer))
+            throw new Error(BADGE_ATTACHMENT_WAIT_REASONS.stale);
 
           const declaredType = badgeObj.httpMetadata?.contentType ?? "image/jpeg";
           const buf = await badgeObj.arrayBuffer();
@@ -345,8 +364,9 @@ async function processOutboxRow(
             { filename: badgeFilename, contentType: format.contentType, base64Content: base64 },
           ];
         }
-      } catch {
-        // Badge not yet rendered — send email without attachment (non-fatal)
+      } catch (error) {
+        if (badgeAttachments.some((attachment) => attachment.required)) throw error;
+        // Optional attachments do not hold up their email.
       }
     }
 
@@ -382,27 +402,54 @@ async function processOutboxRow(
       await markOutboxDeliveryUnknown(db, row, processingToken, error, acceptedMessageId, resolvedTemplateVersion);
     } else {
       await markOutboxFailed(db, row, processingToken, error);
+      // A missing template is configuration, not a transient failure: say so in the logs as well as in last_error,
+      // and GET /api/v1/email/templates/requirements lists every required template in this state.
+      if (error instanceof AppError && EMAIL_TEMPLATE_UNAVAILABLE_CODES.has(error.code))
+        logError("EMAIL_TEMPLATE_UNAVAILABLE", { outboxId: row.id, templateKey: row.template_key, code: error.code });
     }
     throw error;
   }
 }
 
-export async function processOutboxById(db: DatabaseLike, env: Env, outboxId: string): Promise<void> {
-  if (getAvailability(env, Date.now(), "email").mode !== "normal") return;
+/** Sends one queued message now; true when the provider accepted it during this call. */
+export async function processOutboxById(db: DatabaseLike, env: Env, outboxId: string): Promise<boolean> {
+  if (getAvailability(env, Date.now(), "email").mode !== "normal") return false;
   const row = await first<OutboxRow>(db, `SELECT ${OUTBOX_ROW_COLUMNS} FROM email_outbox WHERE id = ?`, [outboxId]);
   if (!row) {
     throw new AppError(404, "OUTBOX_NOT_FOUND", "Outbox message not found");
   }
-  await processOutboxRow(db, env, row, createOutboxProcessingContext());
+  return processOutboxRow(db, env, row, createOutboxProcessingContext());
+}
+
+function logOutboxProcessFailure(outboxId: string, error: unknown): void {
+  const message = error instanceof Error ? error.message : "Unknown background email error";
+  const details = error instanceof AppError ? error.details : undefined;
+  logError("EMAIL_OUTBOX_PROCESS_FAILED", { outboxId, error: message, ...(details ? { details } : {}) });
 }
 
 export async function processOutboxByIdBackground(db: DatabaseLike, env: Env, outboxId: string): Promise<void> {
   try {
     await processOutboxById(db, env, outboxId);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown background email error";
-    const details = error instanceof AppError ? error.details : undefined;
-    logError("EMAIL_OUTBOX_PROCESS_FAILED", { outboxId, error: message, ...(details ? { details } : {}) });
+    logOutboxProcessFailure(outboxId, error);
+  }
+}
+
+/**
+ * Sends one message within the request so the caller can say truthfully
+ * whether it went out. A message that did not go out stays in the outbox,
+ * whose scheduled processor remains its one retry owner.
+ */
+export async function deliverOutboxMessageNow(
+  db: DatabaseLike,
+  env: Env,
+  outboxId: string,
+): Promise<ImmediateEmailDelivery> {
+  try {
+    return (await processOutboxById(db, env, outboxId)) ? "sent" : "delayed";
+  } catch (error) {
+    logOutboxProcessFailure(outboxId, error);
+    return "delayed";
   }
 }
 

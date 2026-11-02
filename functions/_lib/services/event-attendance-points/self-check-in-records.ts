@@ -19,10 +19,10 @@ import { effectiveAttendanceSql } from "../event-participation/attendance-correc
 import { assertEventContactAccess, eventContactAccessSql } from "../event-participation/evidence-retention";
 import { publishedRoomsSql, publishedSessionsSql } from "../event-participation/published-schedule";
 import type { EventRecord } from "../event-types";
-import { personDisplayNameSql } from "../event-agenda/speaker-name";
+import { personNameSql } from "../people/person-name-sql";
 
 /** A person's name, or null when they have not given one. */
-export const displayNameSql = (alias: string) => `NULLIF(${personDisplayNameSql(alias, "")},'')`;
+export const displayNameSql = personNameSql;
 
 /** A check-in the organizers expected: a registered person with any seat their session asks for. */
 export const expectedCheckInSql = (attempt: string) =>

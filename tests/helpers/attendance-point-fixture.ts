@@ -58,12 +58,12 @@ export function createAttendancePointFixture() {
       .bind(elsewhere, now, now)
       .run();
     await env.DB.prepare(
-      "INSERT INTO registrations (id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES (?,?,?,'registered','in_person','test',?,?,?)",
+      "INSERT INTO registrations (id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES (?,?,?,'registered','test',?,?,?)",
     )
       .bind(crypto.randomUUID(), elsewhere, ids.stranger, crypto.randomUUID(), now, now)
       .run();
     await env.DB.prepare(
-      "INSERT INTO events (id,slug,name,timezone,starts_at,ends_at,registration_mode,settings_json,created_at,updated_at) VALUES (?,?,'Check-in test','UTC',?,?,'invite_or_open','{}',?,?)",
+      "INSERT INTO events (id,slug,name,timezone,starts_at,ends_at,capacity_in_person,registration_mode,settings_json,created_at,updated_at) VALUES (?,?,'Check-in test','UTC',?,?,2,'invite_or_open','{}',?,?)",
     )
       .bind(ids.event, slug, `${dates.today}T00:00:00.000Z`, `${dates.tomorrow}T23:00:00.000Z`, now, now)
       .run();
@@ -83,9 +83,9 @@ export function createAttendancePointFixture() {
     ] as const) {
       const registration = crypto.randomUUID();
       await env.DB.prepare(
-        "INSERT INTO registrations (id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES (?,?,?,'registered',?,'test',?,?,?)",
+        "INSERT INTO registrations (id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES (?,?,?,'registered','test',?,?,?)",
       )
-        .bind(registration, ids.event, ids[user], type, crypto.randomUUID(), now, now)
+        .bind(registration, ids.event, ids[user], crypto.randomUUID(), now, now)
         .run();
       for (const day of [ids.today, ids.tomorrow])
         await env.DB.prepare(

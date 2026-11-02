@@ -33,7 +33,6 @@ export function AccountOnlyHome() {
         </PanelHeader>
         <PanelBody>
           <p>Keep your name, email addresses, and notification choices up to date.</p>
-          <ButtonLink href={usePortalHashLocation.hrefs("/application")}>My applications</ButtonLink>
         </PanelBody>
       </Panel>
       <JoinPrompt />

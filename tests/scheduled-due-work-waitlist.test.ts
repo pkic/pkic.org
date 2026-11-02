@@ -51,7 +51,6 @@ describe("scheduled due work waitlist promotions", () => {
     const holder = await createRegistration(baseEnv.DB, {
       event,
       userId: "user-1",
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -66,7 +65,6 @@ describe("scheduled due work waitlist promotions", () => {
     const waiting = await createRegistration(baseEnv.DB, {
       event,
       userId: "user-2",
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -135,7 +133,6 @@ describe("scheduled due work waitlist promotions", () => {
     const registration = await createRegistration(baseEnv.DB, {
       event,
       userId: "user-expired-offer",
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -181,7 +178,7 @@ describe("scheduled due work waitlist promotions", () => {
         baseEnv.DB.prepare(
           `INSERT INTO events (
              id, slug, name, timezone, starts_at, settings_json, created_at, updated_at
-           ) VALUES (?, ?, ?, 'UTC', '2026-01-01T00:00:00.000Z', '{}', datetime('now'), datetime('now'))`,
+           ) VALUES (?, ?, ?, 'UTC', '2026-01-01T00:00:00.000Z', '{}', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
         ).bind(`blocked-event-${index}`, `blocked-${index}`, `Blocked event ${String(index).padStart(2, "0")}`),
       ),
     );
@@ -190,8 +187,8 @@ describe("scheduled due work waitlist promotions", () => {
         baseEnv.DB.prepare(
           `INSERT INTO event_days (
              id, event_id, day_date, label, in_person_capacity, sort_order, created_at, updated_at
-           ) VALUES (?, ?, ?, 'Blocked day', 0, 0, datetime('now'), datetime('now'))`,
-        ).bind(`blocked-day-${index}`, `blocked-event-${index}`, `2026-01-${String(index).padStart(2, "0")}`),
+           ) VALUES (?, ?, ?, 'Blocked day', 1, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
+        ).bind(`blocked-day-${index}`, `blocked-event-${index}`, "2026-01-01"),
       ),
     );
     await baseEnv.DB.batch(
@@ -199,7 +196,7 @@ describe("scheduled due work waitlist promotions", () => {
         baseEnv.DB.prepare(
           `INSERT INTO users (
              id, email, normalized_email, created_at, updated_at
-           ) VALUES (?, ?, ?, datetime('now'), datetime('now'))`,
+           ) VALUES (?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
         ).bind(`blocked-user-${index}`, `blocked-${index}@example.test`, `blocked-${index}@example.test`),
       ),
     );
@@ -207,9 +204,9 @@ describe("scheduled due work waitlist promotions", () => {
       blocked.map((index) =>
         baseEnv.DB.prepare(
           `INSERT INTO registrations (
-             id, event_id, user_id, status, attendance_type, source_type,
+             id, event_id, user_id, status, source_type,
              manage_link_secret, created_at, updated_at
-           ) VALUES (?, ?, ?, 'registered', 'in_person', 'direct', ?, datetime('now'), datetime('now'))`,
+           ) VALUES (?, ?, ?, 'registered', 'direct', ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
         ).bind(
           `blocked-registration-${index}`,
           `blocked-event-${index}`,
@@ -224,7 +221,7 @@ describe("scheduled due work waitlist promotions", () => {
           `INSERT INTO event_day_waitlist_entries (
              id, event_id, event_day_id, registration_id, user_id,
              priority_lane, status, position, created_at, updated_at
-           ) VALUES (?, ?, ?, ?, ?, 'general', 'waiting', 1, datetime('now'), datetime('now'))`,
+           ) VALUES (?, ?, ?, ?, ?, 'general', 'waiting', 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
         ).bind(
           `blocked-waitlist-${index}`,
           `blocked-event-${index}`,
@@ -239,22 +236,22 @@ describe("scheduled due work waitlist promotions", () => {
       baseEnv.DB.prepare(
         `INSERT INTO event_days (
            id, event_id, day_date, label, in_person_capacity, sort_order, created_at, updated_at
-         ) VALUES ('promotable-day', ?, '2026-12-01', 'Promotable day', 1, 0, datetime('now'), datetime('now'))`,
+         ) VALUES ('promotable-day', ?, '2026-12-01', 'Promotable day', 1, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
       ).bind(eventId),
       baseEnv.DB.prepare(
         `INSERT INTO users (
            id, email, normalized_email, created_at, updated_at
          ) VALUES (
-           'promotable-user', 'promotable@example.test', 'promotable@example.test', datetime('now'), datetime('now')
+           'promotable-user', 'promotable@example.test', 'promotable@example.test', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
          )`,
       ),
       baseEnv.DB.prepare(
         `INSERT INTO registrations (
-           id, event_id, user_id, status, attendance_type, source_type,
+           id, event_id, user_id, status, source_type,
            manage_link_secret, created_at, updated_at
          ) VALUES (
-           'promotable-registration', ?, 'promotable-user', 'registered', 'in_person', 'direct',
-           'promotable-manage-token', datetime('now'), datetime('now')
+           'promotable-registration', ?, 'promotable-user', 'registered', 'direct',
+           'promotable-manage-token', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
          )`,
       ).bind(eventId),
       baseEnv.DB.prepare(
@@ -263,10 +260,28 @@ describe("scheduled due work waitlist promotions", () => {
            priority_lane, status, position, created_at, updated_at
          ) VALUES (
            'promotable-waitlist', ?, 'promotable-day', 'promotable-registration', 'promotable-user',
-           'general', 'waiting', 1, datetime('now'), datetime('now')
+           'general', 'waiting', 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')
          )`,
       ).bind(eventId),
     ]);
+
+    await baseEnv.DB.batch([
+      baseEnv.DB.prepare(`INSERT INTO users (id,email,normalized_email,created_at,updated_at)
+        VALUES ('blocked-holder','blocked-holder@example.test','blocked-holder@example.test',
+          strftime('%Y-%m-%dT%H:%M:%fZ','now'),strftime('%Y-%m-%dT%H:%M:%fZ','now'))`),
+      baseEnv.DB.prepare(`INSERT INTO registrations
+        (id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at)
+        SELECT 'holder-'||event.id,event.id,'blocked-holder','registered','direct','holder-manage-'||event.id,
+          strftime('%Y-%m-%dT%H:%M:%fZ','now'),strftime('%Y-%m-%dT%H:%M:%fZ','now')
+        FROM events event WHERE event.id LIKE 'blocked-event-%'`),
+    ]);
+    await baseEnv.DB.prepare(`INSERT INTO registration_day_attendance
+      (id,registration_id,event_day_id,attendance_type,created_at,updated_at)
+      SELECT 'attendance-'||registration.id,registration.id,day.id,'in_person',
+        strftime('%Y-%m-%dT%H:%M:%fZ','now'),strftime('%Y-%m-%dT%H:%M:%fZ','now')
+      FROM registrations registration JOIN event_days day ON day.event_id=registration.event_id
+      WHERE registration.id LIKE 'blocked-registration-%' OR registration.id LIKE 'holder-blocked-event-%'
+        OR registration.id='promotable-registration'`).run();
 
     const result = await runWaitlistPromotionCycle(baseEnv.DB, {
       appBaseUrl: "https://app.test",

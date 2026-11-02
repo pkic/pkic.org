@@ -17,7 +17,7 @@ import { useContractForm } from "../../hooks/useContractForm";
 import { Button } from "../../ui/Button";
 import { DayAttendancePicker, NOT_ATTENDING } from "../DayAttendancePicker";
 import { RegistrationDayStatusSummary } from "../RegistrationDayStatusSummary";
-import { IN_PERSON, registrationDays, type RegistrationDayView } from "./registration-day-changes";
+import { registrationDays, type RegistrationDayView } from "./registration-day-changes";
 import { ReleaseSeatDialog, releasableDays } from "./ReleaseSeatDialog";
 import { PersonalAddressPrompt } from "./PersonalAddressPrompt";
 import "./RegistrationDays.css";
@@ -50,10 +50,21 @@ function DaysForm({
     .map((day) => ({ dayDate: day.dayDate, attendanceType: draft[day.dayDate]! }));
   const form = useContractForm(registrationManageSchema, { action: "update", dayAttendance });
   // Only a confirmed seat is released; a day still waiting holds none.
+  const hasLimit = (dayDate: string, value: string | null | undefined) => {
+    const option = data.eventDays
+      .find((day) => day.dayDate === dayDate)
+      ?.attendanceOptions.find((item) => item.value === value);
+    return option?.spotsRemainingPercent != null;
+  };
   const releasing = days.some(
-    (day) => day.state.kind === "attending" && currentType(day) === IN_PERSON && draft[day.dayDate] !== IN_PERSON,
+    (day) =>
+      day.state.kind === "attending" &&
+      draft[day.dayDate] !== currentType(day) &&
+      hasLimit(day.dayDate, currentType(day)),
   );
-  const joining = days.some((day) => draft[day.dayDate] === IN_PERSON && currentType(day) !== IN_PERSON);
+  const joining = days.some(
+    (day) => draft[day.dayDate] !== currentType(day) && hasLimit(day.dayDate, draft[day.dayDate]),
+  );
 
   return (
     <form
@@ -69,18 +80,18 @@ function DaysForm({
       <DayAttendancePicker
         days={data.eventDays}
         value={draft}
-        onChange={(dayDate, attendanceType) => setDraft({ ...draft, [dayDate]: attendanceType })}
-        allowNotAttending
+        onChange={(dayDate, attendanceType) => setDraft((current) => ({ ...current, [dayDate]: attendanceType }))}
       />
       {joining && (
         <p class="pk-small">
-          In-person seats are limited. If a day is full, you join its waiting list and we email you when a seat opens.
+          Some options have limited places. If your choice is full, you join its waiting list and we email you when a
+          place is available.
         </p>
       )}
       {releasing && (
         <p class="pk-small">
-          Your in-person seat goes to the next person on the waiting list as soon as you save. If you change your mind
-          later, you join the waiting list again.
+          Your place may go to the next person on the waiting list as soon as you save. If you change your mind later,
+          you join the waiting list again.
         </p>
       )}
       <div class="pk-cluster">

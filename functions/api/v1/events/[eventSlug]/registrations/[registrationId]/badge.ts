@@ -11,10 +11,8 @@ import type { AdminContext } from "../../../../../../_lib/db/context";
 import { requestDb } from "../../../../../../_lib/db/context";
 import { json } from "../../../../../../_lib/http";
 import { openApiRoute } from "../../../../../../_lib/openapi/route";
-import {
-  processBadgeRenderJobById,
-  requestRegistrationBadgeRegeneration,
-} from "../../../../../../_lib/services/registration-badge-regeneration";
+import { requestRegistrationBadgeRegeneration } from "../../../../../../_lib/services/registration-badge-regeneration";
+import { processPromotionRenderJob } from "../../../../../../_lib/services/event-agenda/promotion-render-jobs";
 import { getRegistrationBadge, setRegistrationBadge } from "../../../../../../_lib/services/registrations/badge-role";
 import { requireEventRegistrationManagement } from "../authorization";
 
@@ -53,7 +51,7 @@ export const EventRegistrationBadgeCreate = openApiRoute(
       registrationId: data.params.registrationId,
       appBaseUrl: resolveAppBaseUrl(c.env, c.req.raw),
     });
-    c.executionCtx.waitUntil(processBadgeRenderJobById(requestDb(c), c.env, result.jobId));
+    c.executionCtx.waitUntil(processPromotionRenderJob(requestDb(c), c.env, result.jobId));
     return json(
       eventRegistrationBadgeRegenerationResponseSchema.parse({ success: true, status: "queued", ...result }),
       202,

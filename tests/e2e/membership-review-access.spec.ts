@@ -14,7 +14,7 @@ import {
   membershipWorkflowObjectionResolveSchema,
   membershipWorkflowVersionResponseSchema,
 } from "../../assets/shared/schemas/membership-workflows";
-import { jsonResponse } from "./helpers/member-provisioning";
+import { createMember, jsonResponse } from "./helpers/member-provisioning";
 
 test("applicant opens status emails and staff record an attributed consensus objection by keyboard", async ({
   page,
@@ -61,34 +61,26 @@ test("applicant opens status emails and staff record an attributed consensus obj
     await anonymous.close();
   }
 
-  // The synthetic local staff record is seated on the Executive Council the
-  // way any council member is: an individual capacity, then a seat in the
-  // council group. There is no EC checkbox on the account any more (#104).
-  const designated = await page.evaluate(async (email) => {
-    const post = (path: string, body: unknown) =>
-      fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-    const users = (await (await fetch(`/api/v1/users?q=${encodeURIComponent(email)}`)).json()) as {
-      users: Array<{ id: string; email: string }>;
-    };
-    const user = users.users.find((user) => user.email === email)!;
-    const named = await fetch(`/api/v1/users/${user.id}`, {
+  // The reviewer is a real individual member, seated on the Executive Council
+  // the way any council member is: a Member capacity, then a seat in the
+  // council group. The staff account cannot be seated itself, because it
+  // already holds a personal identity and so cannot be granted a capacity.
+  const reviewer = await createMember(page, { individual: true });
+  const designated = await page.evaluate(async (userId) => {
+    const named = await fetch(`/api/v1/users/${userId}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ firstName: "Sam", lastName: "Reviewer" }),
     });
-    const capacity = await post("/api/v1/members/capacities", {
-      userId: user.id,
-      membershipCategory: "H5",
-      activationReason: "Seated on the Executive Council for the review-access journey.",
+    const seated = await fetch(`/api/v1/groups/executive-council/memberships/${userId}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ capacitySelection: { mode: "all_eligible", confirmed: true } }),
     });
-    const seated = await post(`/api/v1/groups/executive-council/memberships/${user.id}`, {
-      capacitySelection: { mode: "all_eligible", confirmed: true },
-    });
-    return { status: named.status, capacity: capacity.status, seated: seated.status, id: user.id };
-  }, adminEmail);
+    return { status: named.status, seated: seated.status, seatedBody: await seated.text(), id: userId };
+  }, reviewer.userId);
   expect(designated.status).toBe(200);
-  expect([200, 201, 409]).toContain(designated.capacity);
-  expect(designated.seated).toBe(200);
+  expect(designated.seated, designated.seatedBody).toBe(200);
   const version = membershipWorkflowVersionResponseSchema.parse(
     await jsonResponse(page.request, "POST", "/api/v1/membership/workflows/versions", {
       definition: {
@@ -125,13 +117,14 @@ test("applicant opens status emails and staff record an attributed consensus obj
   await transitionStageInUi(page, "processing");
   await jsonResponse(page.request, "POST", "/api/v1/scheduler/jobs/membership_workflows/runs", {});
   await page.goto(`/portal/#/membership/applications/${application.applicationId}/review`);
-  await page.getByLabel("Record a response received outside the portal").check();
+  // Staff who are not council members can only record a response for a reviewer, so the form opens on it.
+  await expect(page.getByLabel("Record a response received outside the portal")).toHaveCount(0);
   const card = page;
   const picker = card.getByRole("textbox", { name: /^Reviewer/ });
   await picker.fill("no-such-reviewer");
   await expect(card.getByText("No eligible reviewers match", { exact: false })).toBeVisible();
-  await picker.fill(adminEmail);
-  const match = card.getByRole("button", { name: new RegExp(adminEmail.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) });
+  await picker.fill(reviewer.email);
+  const match = card.getByRole("button", { name: /^Sam Reviewer/ });
   await expect(match).toBeVisible();
   await expect(match).toContainText("Sam Reviewer");
   await picker.press("Tab");
@@ -155,7 +148,14 @@ test("applicant opens status emails and staff record an attributed consensus obj
   await expect(card.getByRole("cell", { name: /Sam Reviewer/ })).toBeVisible();
   await expect(card.getByRole("cell", { name: designated.id, exact: true })).toHaveCount(0);
 
+  // The objections load after the review itself; wait for the server's list rather than for an assertion's default.
+  const listed = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === `/api/v1/members/applications/${application.applicationId}/objections` &&
+      response.request().method() === "GET",
+  );
   await page.reload();
+  expect((await listed).status()).toBe(200);
   await expect(card.getByRole("cell", { name: /Sam Reviewer/ })).toBeVisible();
 
   await page.getByRole("row").filter({ hasText: "Awaiting eligibility evidence." }).click();

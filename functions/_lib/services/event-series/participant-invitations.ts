@@ -27,6 +27,7 @@ import {
 } from "./occurrence-notifications";
 import { getManagedSeriesOccurrence } from "./occurrences";
 import { memberMeetingLinkUrl, memberMeetingLinkUrls } from "./personal-entry-links";
+import { personNameSql } from "../people/person-name-sql";
 
 /**
  * The largest group this may be sent to in one request.
@@ -61,11 +62,7 @@ function listParticipants(db: DatabaseLike, groupId: string): Promise<Participan
     db,
     `SELECT membership.user_id,
             COALESCE(seat_email.email, participant.email) AS recipient_email,
-            COALESCE(
-              NULLIF(TRIM(COALESCE(participant.preferred_name, '')), ''),
-              NULLIF(TRIM(COALESCE(participant.first_name, '') || ' ' || COALESCE(participant.last_name, '')), ''),
-              participant.email
-            ) AS recipient_name
+            COALESCE(${personNameSql("participant")}, participant.email) AS recipient_name
        FROM group_memberships membership
        JOIN users participant ON participant.id = membership.user_id AND participant.active = 1
        JOIN members member ON member.id = membership.member_id AND member.status = 'active'

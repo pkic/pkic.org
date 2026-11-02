@@ -16,9 +16,8 @@ import {
   DEFAULT_USER_SESSION_IDLE_TTL_HOURS,
   sessionIdleExpiresAt,
   STAFF_SESSION_IDLE_TTL_HOURS,
+  STAFF_CAPACITY_TTL_HOURS,
 } from "./session-policy";
-
-const STAFF_CAPACITY_TTL_HOURS = 8;
 
 export interface UserSessionResult {
   identity: { id: string; email: string };

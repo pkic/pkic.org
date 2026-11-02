@@ -38,6 +38,8 @@ export interface DescriptionListProps {
    */
   density?: "default" | "compact";
   layout?: "default" | "status";
+  /** Align text with values that include inline actions. */
+  align?: "start" | "baseline";
 }
 
 /**
@@ -49,11 +51,17 @@ function isAbsent(value: ComponentChildren): boolean {
   return value === undefined || value === null || value === "" || value === false;
 }
 
-export function DescriptionList({ items, density = "default", layout = "default" }: DescriptionListProps) {
+export function DescriptionList({
+  items,
+  density = "default",
+  layout = "default",
+  align = "start",
+}: DescriptionListProps) {
   const classes = [
     "pk-datalist",
     density === "compact" ? "pk-datalist--compact" : null,
     layout === "status" ? "pk-datalist--status" : null,
+    align === "baseline" ? "pk-datalist--baseline" : null,
   ]
     .filter(Boolean)
     .join(" ");

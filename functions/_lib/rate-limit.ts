@@ -1,3 +1,4 @@
+import type { RateLimitErrorDetails } from "../../assets/shared/schemas/api-common";
 import { AppError } from "./errors";
 import { sha256Hex } from "./utils/crypto";
 
@@ -24,9 +25,8 @@ export async function enforceRateLimit(options: RateLimitOptions): Promise<void>
 
   const outcome = await options.binding.limit({ key: await bucketKey(options) });
   if (!outcome.success) {
-    throw new AppError(429, "RATE_LIMITED", "Too many requests. Please try again later.", {
-      retryAfter: options.retryAfterSeconds ?? 60,
-    });
+    const details: RateLimitErrorDetails = { retryAfter: options.retryAfterSeconds ?? 60 };
+    throw new AppError(429, "RATE_LIMITED", "Too many requests. Please try again later.", details);
   }
 }
 

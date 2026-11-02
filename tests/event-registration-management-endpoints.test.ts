@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import app from "./helpers/app";
 import type { DatabaseLike, Env } from "../functions/_lib/types";
 import { getEventBySlug } from "../functions/_lib/services/events";
-import { createRegistration } from "../functions/_lib/services/registrations";
+import { createScheduledRegistration as createRegistration } from "./helpers/scheduled-registration";
 import { eventRegistrationDetailResponseSchema } from "../assets/shared/schemas/event-registration-detail";
 import { eventRegistrationsListResponseSchema } from "../assets/shared/schemas/event-registrations";
 import { eventRegistrationManagementUpdateSchema } from "../assets/shared/schemas/route-contracts-event-registration-management";
@@ -53,7 +53,6 @@ async function registrationFixture(dayAttendance?: Parameters<typeof createRegis
   const created = await createRegistration(env.DB, {
     event,
     userId,
-    attendanceType: "virtual",
     dayAttendance,
     sourceType: "direct",
     confirmationTtlHours: 48,
@@ -98,6 +97,30 @@ describe("canonical event registration management", () => {
     expect(allowed.status).toBe(200);
   });
 
+  it("lets an event-only manager update attendance but refuses canonical name changes", async () => {
+    const { event, registrationId, userId } = await registrationFixture();
+    const manager = await scopedToken(event.id, "events:manage");
+    const path = `/api/v1/events/pqc-2026/registrations/${registrationId}`;
+    const before = await env.DB.prepare("SELECT first_name,last_name FROM users WHERE id=?").bind(userId).first();
+    const refused = await callApi(path, manager.token, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "update", firstName: "Changed" }),
+    });
+    expect(refused.status, await refused.clone().text()).toBe(403);
+    expect(await env.DB.prepare("SELECT first_name,last_name FROM users WHERE id=?").bind(userId).first()).toEqual(
+      before,
+    );
+    const allowed = await callApi(path, manager.token, {
+      method: "PATCH",
+      body: JSON.stringify({
+        action: "update",
+        dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "on_demand" }],
+        firstName: before!.first_name,
+      }),
+    });
+    expect(allowed.status, await allowed.clone().text()).toBe(200);
+  });
+
   it("retains the same day-transition history in the list and dedicated detail without changing evidence on read", async () => {
     const event = await getEventBySlug(env.DB, "pqc-2026");
     await env.DB.prepare(
@@ -114,7 +137,6 @@ describe("canonical event registration management", () => {
       body: JSON.stringify(
         eventRegistrationManagementUpdateSchema.parse({
           action: "update",
-          attendanceType: "on_demand",
           dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "on_demand" }],
         }),
       ),
@@ -126,11 +148,9 @@ describe("canonical event registration management", () => {
         "SELECT id,registration_id,event_day_id,from_type,to_type,changed_by,changed_at FROM registration_attendance_history WHERE registration_id=? ORDER BY id",
         [fixture.registrationId],
       ),
-      registration: await queryAll(
-        env.DB,
-        "SELECT id,attendance_type,transition_revision,updated_at FROM registrations WHERE id=?",
-        [fixture.registrationId],
-      ),
+      registration: await queryAll(env.DB, "SELECT id,transition_revision,updated_at FROM registrations WHERE id=?", [
+        fixture.registrationId,
+      ]),
       audit: await queryAll(env.DB, "SELECT id FROM audit_log ORDER BY id"),
       outbox: await queryAll(env.DB, "SELECT id FROM email_outbox ORDER BY id"),
     });
@@ -165,6 +185,10 @@ describe("canonical event registration management", () => {
   it("rolls back when event-management authority is revoked after preflight", async () => {
     const fixture = await registrationFixture();
     const manager = await scopedToken(fixture.event.id, "events:manage");
+    await env.DB.prepare(`INSERT INTO permission_grants(id,user_id,permission,granted_by_user_id,created_at)
+      SELECT ?,?,'users:write',id,? FROM users WHERE email='admin@pkic.org'`)
+      .bind(crypto.randomUUID(), manager.userId, new Date().toISOString())
+      .run();
     const racedDb = mutateBeforeMatchingQuery(
       env.DB,
       (sql) => /^\s*(?:INSERT|UPDATE|DELETE)/u.test(sql),

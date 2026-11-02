@@ -11,6 +11,8 @@ import {
   ownEmailAddressAddRouteSchema,
   ownEmailAddressRemoveRouteSchema,
   ownEmailAddressResponseSchema,
+  ownEmailVerificationRequestedResponseSchema,
+  ownEmailVerificationSentResponseSchema,
   ownEmailAddressUpdateRouteSchema,
   ownEmailAddressVerificationRequestRouteSchema,
   ownEmailAddressesListResponseSchema,
@@ -20,7 +22,7 @@ import { successResponseSchema } from "../../../../../../assets/shared/schemas/a
 import { prepareMagicLinkRequestHttp } from "../../../../../_lib/auth/http-flow";
 import { requireIdentityFromRequest } from "../../../../../_lib/auth/user-session";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
-import { processOutboxByIdBackground } from "../../../../../_lib/email/outbox";
+import { deliverOutboxMessageNow } from "../../../../../_lib/email/outbox";
 import { jsonPrivate } from "../../../../../_lib/http";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
 import {
@@ -35,6 +37,9 @@ import { requestOwnEmailVerification } from "../../../../../_lib/services/own-em
  * Verification mail is limited per person and per network through the
  * shared magic-link controls: the signed-in person is who asks for it.
  */
+import { verifyUserSessionRequest } from "../../../../../_lib/auth/user-session-request";
+import { userSessionRequestAuthorizationEvidence } from "../../../../../_lib/auth/user-session-evidence";
+
 const VERIFICATION_MAIL_RATE_LIMIT_NAMESPACE = "user-email-verification";
 
 async function currentUser(c: AdminContext) {
@@ -50,31 +55,33 @@ export const OwnEmailAddressesGet = openApiRoute(ownEmailAddressesListRouteSchem
 });
 
 export const OwnEmailAddressPost = openApiRoute(ownEmailAddressAddRouteSchema, async (c: AdminContext, data) => {
-  const { actor } = await currentUser(c);
-  const http = await prepareMagicLinkRequestHttp(c, actor.userId, VERIFICATION_MAIL_RATE_LIMIT_NAMESPACE);
+  const claims = await verifyUserSessionRequest(c.req.raw, c.env);
+  const http = await prepareMagicLinkRequestHttp(c, claims.sub, VERIFICATION_MAIL_RATE_LIMIT_NAMESPACE);
   const added = await addOwnEmailAddress(http.db, {
-    userId: actor.userId,
-    email: data.body.email,
+    userId: claims.sub,
+    authorizationEvidence: userSessionRequestAuthorizationEvidence(claims),
+    ...data.body,
     signingSecret: http.secret,
     appBaseUrl: http.appBaseUrl,
   });
-  c.executionCtx.waitUntil(processOutboxByIdBackground(http.db, c.env, added.outboxId));
-  return jsonPrivate(ownEmailAddressResponseSchema.parse({ email: added.email }), 201);
+  const delivery = await deliverOutboxMessageNow(http.db, c.env, added.outboxId);
+  return jsonPrivate(ownEmailVerificationRequestedResponseSchema.parse({ ...added, delivery }), 202);
 });
 
 export const OwnEmailAddressVerificationPost = openApiRoute(
   ownEmailAddressVerificationRequestRouteSchema,
   async (c: AdminContext, data) => {
-    const { actor } = await currentUser(c);
-    const http = await prepareMagicLinkRequestHttp(c, actor.userId, VERIFICATION_MAIL_RATE_LIMIT_NAMESPACE);
+    const claims = await verifyUserSessionRequest(c.req.raw, c.env);
+    const http = await prepareMagicLinkRequestHttp(c, claims.sub, VERIFICATION_MAIL_RATE_LIMIT_NAMESPACE);
     const sent = await requestOwnEmailVerification(http.db, {
-      userId: actor.userId,
+      userId: claims.sub,
+      authorizationEvidence: userSessionRequestAuthorizationEvidence(claims),
       emailId: data.params.emailId,
       signingSecret: http.secret,
       appBaseUrl: http.appBaseUrl,
     });
-    c.executionCtx.waitUntil(processOutboxByIdBackground(http.db, c.env, sent.outboxId));
-    return jsonPrivate(successResponseSchema.parse({ success: true }), 202);
+    const delivery = await deliverOutboxMessageNow(http.db, c.env, sent.outboxId);
+    return jsonPrivate(ownEmailVerificationSentResponseSchema.parse({ delivery }), 202);
   },
 );
 

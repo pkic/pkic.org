@@ -1,3 +1,6 @@
+import { userAuthSessionResponseSchema } from "../../../../../shared/schemas/user-auth";
+import { notifyActingIdentityChanged } from "../../acting-identity";
+import { removeIncorrectRepresentation } from "./remove-representation";
 import { useMembershipCategoryCatalog } from "../../../../hooks/useMembershipCategoryCatalog";
 import { useMembershipCategoryLabels } from "../../../../hooks/useMembershipCategoryLabels";
 /**
@@ -17,12 +20,12 @@ import { useRef, useState } from "preact/hooks";
 import { confirmAction } from "../../../../components/ConfirmDialog";
 import { memberCapacityMutationResponseSchema } from "../../../../../shared/schemas/membership-management";
 import { MEMBER_STATUSES, memberStatusSchema } from "../../../../../shared/schemas/membership-categories";
-import { deleteJson, patchJson } from "../../../../shared/api-client";
+import { deleteJson, getJson, patchJson } from "../../../../shared/api-client";
 import { successResponseSchema } from "../../../../../shared/schemas/api-common";
 import { identityMutationResponseSchema } from "../../../../../shared/schemas/identity";
 import { JOB_TITLE_NEEDED_LABEL, needsOrganizationJobTitle } from "../../../../../shared/schemas/identity-job-title";
 import { myProfileSchema, myProfileUpdateSchema } from "../../../../../shared/schemas/me";
-import { profile as profileSignal, saveProfile } from "../../state";
+import { portalSession, profile as profileSignal, savePortalSession, saveProfile } from "../../state";
 import { CURRENT_USER_API } from "./current-user-api";
 import { Badge as ToneBadge } from "../../../../ui/Badge";
 import { toast } from "../../ui";
@@ -30,6 +33,7 @@ import { formatTenure } from "../../../../shared/ui";
 import { Badge, statusLabel } from "../../../../components/Badge";
 import { AffiliationRow } from "../../../../ui/AffiliationRow";
 import { Avatar } from "../../../../ui/Avatar";
+import { Markdown } from "../../../../ui/Markdown";
 import { Field } from "../../../../ui/Field";
 import { Menu, type MenuItem } from "../../../../ui/Menu";
 import { Select } from "../../../../ui/TextControl";
@@ -74,14 +78,19 @@ export function UserAffiliationRow({
   membership,
   onChanged,
   canManage,
+  canRemoveIdentity = false,
   summarized = false,
   viewerIsSubject = false,
   subjectName,
   seats = [],
   acting = false,
+  onCorrect,
+  onEditEmail,
 }: {
   /** The group seats held as this identity, current and past. */
   seats?: readonly UserGroupParticipation[];
+  onCorrect?: () => void;
+  onEditEmail?: () => void;
   /** The signed-in person is acting as this identity right now. */
   acting?: boolean;
   /** The person the record is about. */
@@ -91,6 +100,7 @@ export function UserAffiliationRow({
   membership: UserMembership;
   onChanged: () => Promise<void> | void;
   canManage: boolean;
+  canRemoveIdentity?: boolean;
   /** The person reading the record is the person it is about. */
   viewerIsSubject?: boolean;
   /**
@@ -332,6 +342,23 @@ export function UserAffiliationRow({
       onSelect: openMembershipEditor,
     });
   }
+  if (membership.organizationId && onEditEmail)
+    rowActions.push({ id: "change-email", label: "Change representation email…", onSelect: onEditEmail });
+  if (onCorrect)
+    rowActions.push({
+      id: "correct-organization",
+      label: "Correct identity…",
+      disabled: busy,
+      onSelect: onCorrect,
+    });
+  if (canManage || viewerIsSubject)
+    rowActions.push({
+      id: "remove-incorrect",
+      label: "Delete identity…",
+      danger: true,
+      disabled: busy || !(viewerIsSubject || canRemoveIdentity),
+      onSelect: () => void removeIncorrectRepresentation(membership.identityId, userId, onChanged, setBusy, onCorrect),
+    });
   // The person ends their own representation; staff end someone else's.
   if (membership.organizationId && (viewerIsSubject || canManage))
     rowActions.push({
@@ -416,7 +443,7 @@ export function UserAffiliationRow({
           ) : undefined
         }
       >
-        {summarized ? undefined : (membership.biography ?? undefined)}
+        {summarized || !membership.biography ? undefined : <Markdown markdown={membership.biography} />}
       </AffiliationRow>
       <Dialog
         open={editingMembership && (categoryEditable || statusEditable)}
@@ -487,6 +514,19 @@ export function UserAffiliationRow({
           startedAt={membership.createdAt}
           onEnd={async (endedAt) => {
             await endRepresentation(membership, viewerIsSubject, endedAt);
+            if (viewerIsSubject && portalSession.value) {
+              const sessionId = portalSession.value.sessionId;
+              notifyActingIdentityChanged(portalSession.value.identity.id);
+              try {
+                const next = await getJson("/api/v1/auth/session", userAuthSessionResponseSchema);
+                if (portalSession.value?.sessionId === sessionId && next.sessionId === sessionId)
+                  savePortalSession(next);
+              } catch {
+                // The change succeeded; reload instead of keeping an outdated identity in the shell.
+                window.location.reload();
+                return;
+              }
+            }
             toast("Representation ended", "success");
             await onChanged();
           }}

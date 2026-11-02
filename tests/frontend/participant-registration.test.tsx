@@ -121,7 +121,7 @@ function installApi(
         new Response(JSON.stringify(value), { status: 200, headers: { "content-type": "application/json" } });
       if (method === "GET" && url.pathname === ENDPOINT) return json(read);
       if (method === "GET" && url.pathname.endsWith("/forms/placements/event_registration")) {
-        return json(options.forms ?? FORMS);
+        return json({ ...(options.forms ?? FORMS), eventDays: read.eventDays });
       }
       if (method === "PATCH" && url.pathname === ENDPOINT && options.refusePatch) {
         return new Response(JSON.stringify(options.refusePatch), {
@@ -163,7 +163,11 @@ async function mount(): Promise<HTMLElement> {
 }
 
 function button(root: ParentNode, label: string): HTMLButtonElement | null {
-  return [...root.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.trim() === label) ?? null;
+  return (
+    [...root.querySelectorAll<HTMLButtonElement>("button")].find(
+      (b) => b.textContent?.trim() === label && !b.closest("[hidden]"),
+    ) ?? null
+  );
 }
 
 function facts(root: ParentNode): Record<string, string> {
@@ -183,6 +187,7 @@ afterEach(() => {
     container.remove();
   }
   vi.unstubAllGlobals();
+  history.replaceState(null, "", "/");
 });
 
 describe("ParticipantRegistration", () => {
@@ -196,8 +201,7 @@ describe("ParticipantRegistration", () => {
     expect(facts(container)).toMatchObject({
       Name: "Ada Lovelace",
       "Email address": expect.stringContaining("ada@example.test"),
-      Organization: "Analytical Engines",
-      "Job title": "Engineer",
+      Representation: "Analytical Engines · Engineer",
       "Dietary requirements": "Vegetarian",
     });
     // A confirmed address carries a tick after it instead of a separate "Email confirmed" line.
@@ -236,6 +240,7 @@ describe("ParticipantRegistration", () => {
     });
     await click(button(container, "Discard changes"));
 
+    await vi.waitFor(() => expect(button(container, "Edit details")).not.toBeNull());
     expect(container.querySelectorAll("input, select, textarea")).toHaveLength(0);
     expect(facts(container)["Name"]).toBe("Ada Lovelace");
     await click(button(container, "Edit details"));
@@ -249,9 +254,40 @@ describe("ParticipantRegistration", () => {
 
     await click(button(container, "Edit details"));
     expect(container.querySelector('input[name="organizationName"], input[name="jobTitle"]')).toBeNull();
-    expect(facts(container)).toMatchObject({ Organization: "Analytical Engines", "Job title": "Engineer" });
+    expect(facts(container)).toMatchObject({ Representation: "Analytical Engines · Engineer" });
     const manage = Array.from(container.querySelectorAll("a")).find((link) => link.textContent === "Manage identities");
     expect(manage?.getAttribute("href")).toBe("/portal/#/users/current");
+  });
+
+  it("names an organization awaiting staff review instead of showing Personal", async () => {
+    installApi(
+      readResponse({
+        user: { ...readResponse().user, organization_name: null, job_title: "Engineer" },
+        pendingOrganizationName: "Analytical Engines",
+      }),
+    );
+    const container = await mount();
+
+    expect(facts(container)).toMatchObject({ Representation: "Analytical Engines · Engineer · awaiting review" });
+  });
+
+  it("preserves the registration update draft through browser Back and Forward", async () => {
+    const requests = installApi();
+    const container = await mount();
+    await click(button(container, "Edit details"));
+    const lastName = container.querySelector<HTMLInputElement>('input[name="lastName"]')!;
+    await act(() => {
+      lastName.value = "Draft name";
+      lastName.dispatchEvent(new Event("input", { bubbles: true }));
+      history.back();
+    });
+    await vi.waitFor(() => expect(button(container, "Edit details")).not.toBeNull());
+    await act(() => history.forward());
+    await vi.waitFor(() => expect(button(container, "Save changes")).not.toBeNull());
+    expect(container.querySelector<HTMLInputElement>('input[name="lastName"]')!.value).toBe("Draft name");
+    expect(requests.some(({ method }) => method === "PATCH")).toBe(false);
+    await click(button(container, "Discard changes"));
+    await vi.waitFor(() => expect(button(container, "Edit details")).not.toBeNull());
   });
 
   it("saves through the shared contract and returns to the read view with the outcome", async () => {
@@ -271,9 +307,13 @@ describe("ParticipantRegistration", () => {
     await settle();
 
     const patch = requests.find(({ method }) => method === "PATCH");
-    expect(registrationManageSchema.parse(patch?.body)).toMatchObject({ action: "update", lastName: "Byron" });
+    expect(registrationManageSchema.parse(patch?.body)).toMatchObject({
+      action: "update",
+      lastName: "Byron",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
+    });
+    await vi.waitFor(() => expect(container.textContent).toContain("Registration updated."));
     expect(container.querySelectorAll("input, select, textarea")).toHaveLength(0);
-    expect(container.textContent).toContain("Registration updated.");
   });
 
   it("cancels only after the confirmation, and Keep registration sends nothing", async () => {
@@ -330,7 +370,7 @@ describe("ParticipantRegistration", () => {
     );
     const container = await mount();
 
-    await click(button(container, "Claim seat"));
+    await click(button(container, "Claim place"));
     expect(registrationManageSchema.parse(requests.find(({ method }) => method === "PATCH")?.body)).toEqual({
       action: "update",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
@@ -353,7 +393,7 @@ describe("ParticipantRegistration", () => {
     const container = await mount();
     const rows = [...container.querySelectorAll<HTMLElement>(".pk-day-status__row")];
     expect(rows.map((row) => row.dataset.kind)).toEqual(["waiting", "confirmed"]);
-    expect(rows[0]!.textContent).toContain("On the waiting list for an in-person seat");
+    expect(rows[0]!.textContent).toContain("On the waiting list: In-person");
   });
 
   it("keeps a waiting day in the queue when the days are saved unchanged", async () => {
@@ -417,19 +457,61 @@ describe("ParticipantRegistration", () => {
     });
   });
 
-  it("treats giving up the only day as cancelling, behind the cancellation confirmation", async () => {
-    const requests = installApi();
+  it("offers the release flow for a custom physical option", async () => {
+    const day = readResponse().eventDays[0]!;
+    const requests = installApi(
+      readResponse({
+        eventDays: [
+          {
+            ...day,
+            attendanceOptions: [
+              { value: "moon_base", label: "Moon base", accessMode: "physical" },
+              { value: "live_lounge", label: "Live lounge", accessMode: "remote" },
+            ],
+          },
+        ],
+        dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "moon_base", optionLabel: "Moon base", label: null }],
+      }),
+    );
     const container = await mount();
-
     await click(button(container, "Can't make it in person?"));
     const dialog = openConfirmation()!;
-    await click(dialog.querySelector<HTMLInputElement>('input[name="joinInstead"][value=""]'));
-    await click([...dialog.querySelectorAll("button")].find((b) => b.textContent?.startsWith("Release"))!);
+    await click(dialog.querySelector<HTMLInputElement>('input[name="joinInstead"][value="live_lounge"]'));
+    await click([...dialog.querySelectorAll("button")].find((item) => item.textContent?.startsWith("Release"))!);
     await settle();
-    expect(openConfirmation()?.textContent).toContain("Cancel your registration?");
-    await click(confirmationButton("Keep registration"));
-    expect(requests.some(({ method }) => method === "PATCH")).toBe(false);
+    expect(registrationManageSchema.parse(requests.find(({ method }) => method === "PATCH")?.body)).toEqual({
+      action: "update",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "live_lounge" }],
+    });
   });
+
+  it.each(["release", "details"])(
+    "treats giving up the only day as cancelling from the %s editor, behind the same confirmation",
+    async (editor) => {
+      const data = readResponse();
+      const requests = installApi(data, {
+        forms: eventFormsResponseSchema.parse({ ...FORMS, eventDays: data.eventDays }),
+      });
+      const container = await mount();
+
+      if (editor === "release") {
+        await click(button(container, "Can't make it in person?"));
+        const dialog = openConfirmation()!;
+        await click(dialog.querySelector<HTMLInputElement>('input[name="joinInstead"][value=""]'));
+        await click([...dialog.querySelectorAll("button")].find((b) => b.textContent?.startsWith("Release"))!);
+      } else {
+        await click(button(container, "Edit details"));
+        await click(container.querySelector<HTMLInputElement>('input[name^="dayAttendance."][value=""]'));
+        await act(() => {
+          container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+        });
+      }
+      await settle();
+      expect(openConfirmation()?.textContent).toContain("Cancel your registration?");
+      await click(confirmationButton("Keep registration"));
+      expect(requests.some(({ method }) => method === "PATCH")).toBe(false);
+    },
+  );
 
   // A speaker whose registration the talk's acceptance created has answered
   // none of the event's questions. Saving the details asks them, on the

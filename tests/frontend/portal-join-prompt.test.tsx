@@ -47,7 +47,12 @@ function stubStatus({ member = false, applications = 0, fail = false } = {}) {
       if (fail) throw new Error("Unavailable");
       const url = new URL(String(input), location.origin);
       const body = url.pathname.endsWith("/applications")
-        ? { applications: [], page: { limit: 1, offset: 0, total: applications, hasMore: applications > 0 } }
+        ? {
+            applications: applications
+              ? [{ id: "a1", stage: "submitted", membershipCategory: "H6", createdAt: "2026-10-29T10:00:00.000Z" }]
+              : [],
+            page: { limit: 1, offset: 0, total: applications, hasMore: applications > 0 },
+          }
         : person;
       return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
     }),
@@ -76,6 +81,14 @@ it.each([{ member: true }, { applications: 1 }, { fail: true }])(
     expect(host.querySelector('a[href="/join/"]')).toBeNull();
   },
 );
+it("shows someone who has applied their application and where to follow it, not the invitation", async () => {
+  stubStatus({ applications: 1 });
+  await mount();
+  expect(host.textContent).toContain("Your membership application");
+  expect(host.textContent).toContain("Status: Submitted");
+  expect(host.querySelector('a[href$="#/application"]')?.textContent).toBe("View application");
+  expect(host.querySelector('a[href="/join/"]')).toBeNull();
+});
 it("does not query eligibility or flash an invitation for an existing member", async () => {
   stubStatus();
   portalSession.value = portalSessionFixture({ member: true });

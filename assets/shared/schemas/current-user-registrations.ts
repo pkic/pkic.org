@@ -10,7 +10,8 @@ import { utcInstantSchema } from "./api-common";
 import { eventResourceCoreSchema } from "./event-management";
 import { databaseIdSchema } from "./identifiers";
 import { paginatedResponseSchema, paginationQuerySchemaWithDefaults } from "./pagination";
-import { attendanceTypeSchema, registrationLifecycleStatusSchema } from "./registration";
+import { registrationLifecycleStatusSchema } from "./registration";
+import { registrationDayStateSchema } from "./event-registrations";
 
 /** Minimal event identity/scheduling projection — composed from the canonical event base, never restated. */
 export const currentUserRegistrationEventSchema = eventResourceCoreSchema.pick({
@@ -27,7 +28,7 @@ export const currentUserRegistrationSchema = z.object({
   id: databaseIdSchema,
   event: currentUserRegistrationEventSchema,
   status: registrationLifecycleStatusSchema,
-  attendanceType: attendanceTypeSchema,
+  days: z.array(registrationDayStateSchema),
   /**
    * True when at least one of this registration's day-waitlist rows is
    * still active — the sole authoritative waitlist state (see

@@ -60,6 +60,12 @@ export function parseEventFlowPath(pathname: string): EventFlowPathContext | nul
   return null;
 }
 
+/** Capability and management pages are private; the two public entry forms remain revalidatable. */
+export function isPrivateEventFlowPath(pathname: string): boolean {
+  const flow = parseEventFlowPath(pathname)?.flow;
+  return flow !== undefined && flow !== "registration" && flow !== "proposal";
+}
+
 export const EVENT_FLOW_SHELL_PATHS: Readonly<Record<EventFlowKind, string>> = {
   registration: "/_event-flow-shells/registration/",
   registrationConfirm: "/_event-flow-shells/registration-confirm/",

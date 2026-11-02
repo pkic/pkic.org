@@ -142,7 +142,7 @@ export function LiveQuestionThread({
                     event.preventDefault();
                     if (pending?.type === "question.answer.accept") return;
                     const checked = form.submit();
-                    if (!checked.data) return setNotice(checked.message);
+                    if (!checked.data) return setNotice(checked.formMessage);
                     transmit(
                       pending ?? {
                         type: "question.answer",

@@ -150,8 +150,7 @@ export function RegistrationsList({
       // registration with one confirmed and two waitlisted days as plainly
       // "in-person". The filter narrows to those still waiting for a seat.
       header: "Attendance",
-      cell: (r) => <RegistrationDayStates days={r.days} attendanceType={r.attendance_type} />,
-      sort: { asc: "attendance_type", desc: "-attendance_type" },
+      cell: (r) => <RegistrationDayStates days={r.days} />,
       filter: {
         param: "waitlisted",
         options: [

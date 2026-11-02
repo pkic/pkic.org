@@ -45,7 +45,7 @@ export async function reviewSessionParticipation(
      AND (approved.booking_opens_at IS NULL OR approved.booking_opens_at<=strftime('%Y-%m-%dT%H:%M:%fZ','now')) AND (approved.booking_closes_at IS NULL OR approved.booking_closes_at>strftime('%Y-%m-%dT%H:%M:%fZ','now'))
      AND (approved.access_policy='open' OR EXISTS(SELECT 1 FROM agenda_session_invitations invite WHERE invite.occurrence_id=approved.id AND invite.user_id=pending.user_id AND invite.revoked_at IS NULL))))
    AND (${decision === "reject" ? "1" : "0"}=1 OR ${operationalAllocationCompatibleSql("pending.occurrence_id", "pending.user_id", "pending.attendance_mode")})
-   AND (?='reject' OR EXISTS(SELECT 1 FROM registrations reg WHERE reg.event_id=pending.event_id AND reg.user_id=pending.user_id AND reg.status='registered' AND COALESCE((SELECT attendance.attendance_type FROM registration_day_attendance attendance JOIN event_days day ON day.id=attendance.event_day_id WHERE attendance.registration_id=reg.id AND day.day_date=?),CASE WHEN EXISTS(SELECT 1 FROM event_days day WHERE day.event_id=pending.event_id AND day.day_date=?) THEN 'none' ELSE reg.attendance_type END)=CASE pending.attendance_mode WHEN 'physical' THEN 'in_person' ELSE 'virtual' END))
+   AND (?='reject' OR EXISTS(SELECT 1 FROM registrations reg WHERE reg.event_id=pending.event_id AND reg.user_id=pending.user_id AND reg.status='registered' AND ${registrationDaySessionAccessSql("reg", "?")}=CASE pending.attendance_mode WHEN 'physical' THEN 'in_person' ELSE 'virtual' END))
    AND (?='reject' OR NOT EXISTS(SELECT 1 FROM agenda_session_participations other JOIN (${publishedSessionsSql}) conflict ON conflict.id=other.occurrence_id JOIN (${publishedSessionsSql}) target ON target.id=pending.occurrence_id WHERE other.user_id=pending.user_id AND other.status='reserved' AND other.occurrence_id<>pending.occurrence_id AND conflict.start_at<target.end_at AND conflict.end_at>target.start_at))`,
     )
     .bind(
@@ -61,7 +61,6 @@ export async function reviewSessionParticipation(
       published?.start_at ?? null,
       published?.timezone ?? "UTC",
       decision,
-      date,
       date,
       decision,
     );
@@ -112,3 +111,4 @@ export async function reviewSessionParticipation(
     ),
   );
 }
+import { registrationDaySessionAccessSql } from "./session-access";

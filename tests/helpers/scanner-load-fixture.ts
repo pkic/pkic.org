@@ -69,7 +69,7 @@ export async function createScannerLoadFixture(population: number, mode: "servic
         "INSERT INTO users(id,email,normalized_email,active,created_at,updated_at) SELECT json_extract(value,'$.userId'),json_extract(value,'$.userId')||'@example.test',json_extract(value,'$.userId')||'@example.test',1,?,? FROM json_each(?)",
       ).bind(observedAt, observedAt, json),
       env.DB.prepare(
-        "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) SELECT json_extract(value,'$.registrationId'),?,json_extract(value,'$.userId'),'registered','in_person','synthetic',json_extract(value,'$.registrationId'),?,? FROM json_each(?)",
+        "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) SELECT json_extract(value,'$.registrationId'),?,json_extract(value,'$.userId'),'registered','synthetic',json_extract(value,'$.registrationId'),?,? FROM json_each(?)",
       ).bind(eventId, observedAt, observedAt, json),
       env.DB.prepare(
         "INSERT INTO registration_day_attendance(id,registration_id,event_day_id,attendance_type,created_at,updated_at) SELECT lower(hex(randomblob(16))),json_extract(value,'$.registrationId'),?,'in_person',?,? FROM json_each(?)",

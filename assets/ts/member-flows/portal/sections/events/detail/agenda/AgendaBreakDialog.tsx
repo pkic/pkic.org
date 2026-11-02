@@ -68,7 +68,7 @@ export function AgendaBreakDialog({
     if (busy) return;
     const checked = form.submit();
     if (!checked.data) {
-      setError(conversionError || checked.message);
+      setError(conversionError || (checked.formMessage ?? ""));
       return;
     }
     setBusy(true);

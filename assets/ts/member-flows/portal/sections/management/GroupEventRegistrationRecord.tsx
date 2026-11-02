@@ -36,7 +36,6 @@ import { DescriptionList } from "../../../../ui/DescriptionList";
 import { Menu } from "../../../../ui/Menu";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { ProfileHeader } from "../../../../ui/ProfileHeader";
-import { attendanceTypeLabel } from "../../../../shared/attendance";
 import { usePortalHashLocation } from "../../hash-location";
 import { fmt } from "../../ui";
 import { RegistrationAuditLogSection } from "../events/detail/registration-detail/RegistrationPanels";
@@ -234,7 +233,7 @@ export function GroupEventRegistrationRecord({
           lede={registration.user_email && registration.user_email !== name ? registration.user_email : undefined}
           context={<Badge status={registration.status} />}
           facts={[
-            describeRegistrationDays(days, registration.attendance_type),
+            describeRegistrationDays(days),
             `Registered ${fmt(registration.created_at)}`,
             sourceLabel(registration.source_type),
           ]}
@@ -283,7 +282,6 @@ export function GroupEventRegistrationRecord({
                       density="compact"
                       items={[
                         { term: "Status", value: <Badge status={registration.status} /> },
-                        { term: "Attendance", value: attendanceTypeLabel(registration.attendance_type) },
                         { term: "Source", value: sourceLabel(registration.source_type) },
                         { term: "Registered", value: fmt(registration.created_at) },
                         { term: "Last updated", value: fmt(registration.updated_at) },

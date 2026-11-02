@@ -81,6 +81,7 @@ export const eventImportCreateRouteSchema = {
 };
 
 export const eventSettingsPatchRouteSchema = {
+  "x-pkic-mcp": { expose: true },
   tags: ["Events"],
   summary: "Update direct event settings",
   description:

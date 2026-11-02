@@ -25,7 +25,14 @@ describe("fresh remote migration orchestration", () => {
         );
       } else if (args.includes("--file")) {
         const sql = readFileSync(args[args.indexOf("--file") + 1], "utf8");
-        db.exec(sql);
+        db.exec("BEGIN");
+        try {
+          db.exec(sql);
+          db.exec("COMMIT");
+        } catch (error) {
+          db.exec("ROLLBACK");
+          throw error;
+        }
         imported.push(sql.match(/INSERT INTO d1_migrations \(name\) VALUES \('([^']+)'\)/)![1]);
       } else if (args.includes("migrations") && args.includes("apply")) {
         const recorded = new Set(
@@ -54,10 +61,10 @@ describe("fresh remote migration orchestration", () => {
     try {
       apply("production");
       expect(execute.mock.calls[0][1]).toContain("list");
-      const lastGuardedMigration = "0037_retire_legacy_account_role.sql";
+      const lastGuardedMigration = "0039_event_promotion_kits.sql";
       expect(imported).toEqual(migrationNames.filter((name) => name <= lastGuardedMigration));
       expect(normallyApplied).toEqual(migrationNames.filter((name) => name > lastGuardedMigration));
-      expect(normallyApplied).toContain("0038_event_agenda_platform.sql");
+      expect(imported).toContain("0038_event_agenda_platform.sql");
       expect(db.prepare("SELECT name FROM d1_migrations ORDER BY name").all()).toEqual(
         migrationNames.map((name) => ({ name })),
       );

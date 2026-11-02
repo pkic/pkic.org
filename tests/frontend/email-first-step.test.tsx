@@ -92,7 +92,9 @@ async function type(label: string, value: string) {
 }
 async function leave(label: string) {
   await act(() => {
-    controlFor(host!, label).dispatchEvent(new FocusEvent("blur"));
+    const control = controlFor(host!, label);
+    control.focus();
+    control.blur();
   });
 }
 const buttonTexts = () => [...host!.querySelectorAll("button")].map((button) => button.textContent);
@@ -278,6 +280,24 @@ describe("email-first step", () => {
       ),
     );
     expect(controlFor(host!, join.work.label).getAttribute("aria-invalid")).toBe("true");
+  });
+
+  it("sends once when the action is activated twice before the page updates", async () => {
+    const sent: unknown[] = [];
+    await mount("join", async (step) => {
+      sent.push(step);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    const join = EMAIL_FIRST_COPY.join;
+    await type(join.work.label, "ada@official.example");
+    await act(async () => {
+      const button = [...host!.querySelectorAll("button")].find(
+        (candidate) => candidate.textContent === join.work.action,
+      );
+      button!.click();
+      button!.click();
+    });
+    await vi.waitFor(() => expect(sent).toHaveLength(1));
   });
 
   it("has no automatically detectable accessibility defects on either card", async () => {

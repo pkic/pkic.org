@@ -1,3 +1,5 @@
+import { personDisplayName } from "../../../../../shared/person-display";
+import { Markdown } from "../../../../ui/Markdown";
 import { RefreshNotice } from "../../../../components/RefreshNotice";
 import { useData } from "../../../../hooks/useData";
 import { useEffect, useState } from "preact/hooks";
@@ -183,7 +185,10 @@ export function UserDetail({
   if (error && !user) return <ErrorAlert error={error} />;
   if (!user) return null;
 
-  const displayName = [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email;
+  const displayName = personDisplayName(
+    { firstName: user.first_name, lastName: user.last_name, preferredName: user.preferred_name },
+    user.email,
+  );
   /*
    * Who may change the photograph. The same reach the photo panel has
    * always had — staff who may write the record, and the record's own
@@ -335,7 +340,7 @@ export function UserDetail({
       */}
       <div class="pk-record pk-user-record">
         <div class="pk-stack pk-user-record__main">
-          {isSelf && session?.pendingIdentityCount ? <IdentityInvitationsPanel /> : null}
+          {isSelf ? <IdentityInvitationsPanel /> : null}
 
           {/* A personal introduction spans roles; otherwise About attributes the primary role's bio.
               Only the identity supplying About suppresses its repeated paragraph below. */}
@@ -350,9 +355,13 @@ export function UserDetail({
                   <p class="pk-small pk-muted">From the {aboutIdentity.organizationName} profile.</p>
                 )}
                 {aboutIdentity?.biography ? (
-                  <p class="pk-affiliation__summary">{aboutIdentity.biography}</p>
+                  <Markdown markdown={aboutIdentity.biography} className="pk-affiliation__summary" />
                 ) : (
-                  <p class="pk-muted">Add a general introduction covering your interests and roles.</p>
+                  <p class="pk-muted">
+                    {isSelf
+                      ? "Add a general introduction covering your interests and roles."
+                      : `${displayName} has not added a general introduction yet.`}
+                  </p>
                 )}
               </PanelBody>
             </Panel>
@@ -389,7 +398,7 @@ export function UserDetail({
         {/* Your own record says who you are acting as, with the switch beside it:
             at the head of the aside on a wide screen, and first of all on a
             narrow one, where the aside would otherwise put it below everything. */}
-        {isSelf && session && (
+        {isSelf && session && session.actingIdentities.some((identity) => identity.id === session.actingIdentityId) && (
           <div class="pk-user-record__acting">
             <ActingIdentityPanel
               session={session}

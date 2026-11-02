@@ -8,7 +8,7 @@ import { publicUserSession } from "../../../../_lib/auth/public-user-session";
  */
 import { createSessionEstablishedResponse } from "../../../../_lib/auth/http-flow";
 import { serializeUserSessionCookie } from "../../../../_lib/auth/user-session";
-import { completePasskeyAuthentication } from "../../../../_lib/services/passkeys";
+import { completePasskeyAuthentication } from "../../../../_lib/services/passkey-authentication";
 import {
   passkeyAuthenticateCompleteResponseSchema,
   passkeyAuthenticateCompleteRouteSchema,

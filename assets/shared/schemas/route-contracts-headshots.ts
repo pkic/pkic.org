@@ -4,6 +4,7 @@ import { proposalAccessTokenParamsSchema } from "./proposal-management";
 import { headshotImageUploadFormSchema, headshotUploadResponseSchema } from "./registration";
 import { publicErrors, publicOperation } from "./route-contract";
 import { HEADSHOT_VARIANT_WIDTHS } from "../headshot-variants";
+import { speakerMailboxProofHeadersSchema } from "./event-proposal-proof";
 
 const rawHeadshotImageSchema = z.any().describe("Raw JPEG, PNG, or WebP image bytes");
 const headshotUploadRequestContent = {
@@ -120,6 +121,10 @@ type HeadshotRouteOptions = {
   accessResponses?: Partial<Record<"401" | "403", { description: string }>>;
   notFoundDescription?: string;
 };
+const speakerAccountAuthorityResponse = {
+  description:
+    "The account's mailbox is proved: the link alone does not change its photo without a live session or the mailbox proof made on this link.",
+};
 const headshotUploadSuccessResponse = {
   description: "Headshot uploaded successfully.",
   content: { "application/json": { schema: headshotUploadResponseSchema } },
@@ -155,10 +160,12 @@ function headshotPutRouteSchema<TParams extends HeadshotParamsSchema>(
     ...(options.auth ? { "x-pkic-auth": options.auth } : publicOperation()),
     request: {
       params,
+      headers: speakerMailboxProofHeadersSchema,
       body: { content: headshotUploadRequestContent, required: true },
     },
     responses: {
       "200": headshotUploadSuccessResponse,
+      "403": speakerAccountAuthorityResponse,
       ...options.accessResponses,
       "400": { description: "Invalid upload." },
       "404": { description: options.notFoundDescription ?? "Speaker not found." },
@@ -178,12 +185,13 @@ function headshotDeleteRouteSchema<TParams extends HeadshotParamsSchema>(
     tags: options.tags ?? ["Proposals", "Headshots"],
     summary,
     ...(options.auth ? { "x-pkic-auth": options.auth } : publicOperation()),
-    request: { params },
+    request: { params, headers: speakerMailboxProofHeadersSchema },
     responses: {
       "200": {
         description: "Headshot removed successfully.",
         content: { "application/json": { schema: successResponseSchema } },
       },
+      "403": speakerAccountAuthorityResponse,
       ...options.accessResponses,
       "404": { description: options.notFoundDescription ?? "Speaker not found." },
     },

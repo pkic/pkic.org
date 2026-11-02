@@ -228,7 +228,7 @@ describe("audit actor", () => {
     const container = document.createElement("div");
     document.body.append(container);
     mounted.push(container);
-    const person = { ...auditEntry("audit-actor", "profile_updated", "Paul van Brouwershaven"), actor_id: "user-1" };
+    const person = { ...auditEntry("audit-actor", "profile_updated", "Example Participant"), actor_id: "user-1" };
     const rendered = async (entry: AuditLogEntry) => {
       await act(() => render(<AuditActor entry={entry} href={null} />, container));
       return container.textContent;
@@ -236,10 +236,10 @@ describe("audit actor", () => {
 
     expect(
       await rendered({ ...person, actor_identity_id: "identity-1", actor_organization_name: "PKI Consortium" }),
-    ).toBe("Paul van Brouwershaven · PKI Consortium");
+    ).toBe("Example Participant · PKI Consortium");
     expect(await rendered({ ...person, actor_identity_id: "identity-2", actor_organization_name: null })).toBe(
-      "Paul van Brouwershaven · Personal",
+      "Example Participant · Personal",
     );
-    expect(await rendered(person)).toBe("Paul van Brouwershaven");
+    expect(await rendered(person)).toBe("Example Participant");
   });
 });

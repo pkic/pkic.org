@@ -72,7 +72,7 @@ test.describe("Groups: catalog, creation, self-service participation, and the Me
 
   test("staff search, sort, and filter the groups catalog, then open a group", async ({ page }) => {
     await gotoAsAdmin(page);
-    await page.goto("/portal/#/groups");
+    await page.goto("/portal/#/groups?view=list");
     await expect(page.getByRole("heading", { name: "Groups" })).toBeVisible();
     await expect(page.getByRole("button", { name: "New group" })).toBeVisible();
 
@@ -195,7 +195,7 @@ test.describe("Groups: catalog, creation, self-service participation, and the Me
 
     await page.context().clearCookies();
     await signInToPortal(page, email);
-    await page.goto("/portal/#/groups");
+    await page.goto("/portal/#/groups?view=list");
 
     const row = catalogRow(page, "Post-Quantum Cryptography Working Group");
     await expect(row).toBeVisible({ timeout: 10_000 });
@@ -272,7 +272,7 @@ test.describe("Groups: catalog, creation, self-service participation, and the Me
 
     await page.context().clearCookies();
     await signInToPortal(page, email);
-    await page.goto("/portal/#/groups");
+    await page.goto("/portal/#/groups?view=list");
     const row = catalogRow(page, "Post-Quantum Cryptography Working Group");
     await expect(row).toBeVisible({ timeout: 10_000 });
 
@@ -323,6 +323,9 @@ test.describe("Groups: catalog, creation, self-service participation, and the Me
     await gotoAsAdmin(page);
     await approveMemberThroughReview(page, { email, name, organizationName: `Roster Org ${suffix}` });
 
+    // The roster sits beside the Representation panel; below this width its table collapses into
+    // record cards, which have no column heads to choose columns from.
+    await page.setViewportSize({ width: 1800, height: 1000 });
     await page.goto(`/portal/#/groups/${PQC_GROUP_ID}/members`);
     await expect(page.getByRole("region", { name: "Members" })).toBeVisible({ timeout: 10_000 });
     await page.getByRole("button", { name: "Add person" }).click();
@@ -334,7 +337,7 @@ test.describe("Groups: catalog, creation, self-service participation, and the Me
     await expect(page.getByRole("region", { name: "Members" })).toHaveCount(0);
     await addForm.getByLabel("Search for a user").fill(email);
     await expect(page.getByRole("group", { name: "Matching users" })).toBeVisible({ timeout: 10_000 });
-    await page.getByRole("button", { name: new RegExp(email) }).click();
+    await page.getByRole("button", { name: new RegExp(name) }).click();
 
     const added = page.waitForResponse(
       (response) =>
@@ -406,7 +409,8 @@ test.describe("Groups: catalog, creation, self-service participation, and the Me
     await expect(page.getByRole("columnheader", { name: "Category" })).toHaveCount(0);
     await expect(page.getByRole("columnheader", { name: "Joined through" })).toHaveCount(0);
     await expect(page.getByRole("columnheader", { name: "Member" })).toBeVisible();
-    await expect(page.getByRole("columnheader", { name: "Represents" })).toBeVisible();
+    // The represented organization is stated under each member's name.
+    await expect(page.getByRole("row").filter({ hasText: orgName })).toBeVisible();
   });
 
   test("workspace navigation: an unreachable tab shows the permission-denied fallback", async ({ page }) => {

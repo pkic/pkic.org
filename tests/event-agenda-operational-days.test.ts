@@ -7,7 +7,6 @@ import { getAgenda } from "../functions/_lib/services/event-agenda/read";
 import { publishAgenda } from "../functions/_lib/services/event-agenda/mutations";
 import { individualAppearanceFixture, seedApprovedSessionAppearances } from "./helpers/agenda-appearances";
 import { operationalDays, operationalIntervalDays } from "../functions/_lib/services/event-agenda/operational-days";
-import { eventEntryOccupiedSql } from "../functions/_lib/services/event-participation/event-entry-capacity";
 const eventId = crypto.randomUUID(),
   sessionId = crypto.randomUUID(),
   staffId = crypto.randomUUID(),
@@ -18,7 +17,7 @@ const start = "2027-01-20T09:00:00.000Z",
 async function registration(user: string) {
   const now = new Date().toISOString();
   await env.DB.prepare(
-    "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','in_person','test',?,?,?)",
+    "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','test',?,?,?)",
   )
     .bind(crypto.randomUUID(), eventId, user, crypto.randomUUID(), now, now)
     .run();
@@ -86,10 +85,15 @@ describe("Private approved event-day operational capacity", () => {
     expect(
       await env.DB.prepare("SELECT COUNT(*) AS count FROM registrations WHERE event_id=?").bind(eventId).first(),
     ).toMatchObject({ count: 0 });
-    const expression = eventEntryOccupiedSql(`'${eventId}'`, "'2027-01-20'");
-    expect(await env.DB.prepare(`SELECT ${expression} AS occupied`).first()).toMatchObject({ occupied: 1 });
+    const operationalCount = () =>
+      env.DB.prepare(
+        "SELECT COUNT(*) AS count FROM event_agenda_operational_days WHERE event_id=? AND revision=1 AND day_date='2027-01-20'",
+      )
+        .bind(eventId)
+        .first();
+    expect(await operationalCount()).toMatchObject({ count: 1 });
     await registration(staffId);
-    expect(await env.DB.prepare(`SELECT ${expression} AS occupied`).first()).toMatchObject({ occupied: 1 });
+    expect(await operationalCount()).toMatchObject({ count: 1 });
     await env.DB.prepare("UPDATE event_agenda_role_members SET attendance_mode='remote' WHERE event_id=? AND user_id=?")
       .bind(eventId, staffId)
       .run();
@@ -123,8 +127,12 @@ describe("Private approved event-day operational capacity", () => {
       await env.DB.prepare("SELECT published_revision FROM event_agenda_state WHERE event_id=?").bind(eventId).first(),
     ).toMatchObject({ published_revision: 1 });
     expect(
-      await env.DB.prepare(`SELECT ${eventEntryOccupiedSql(`'${eventId}'`, "'2027-01-20'")} AS occupied`).first(),
-    ).toMatchObject({ occupied: 2 });
+      await env.DB.prepare(
+        "SELECT user_id FROM event_agenda_operational_days WHERE event_id=? AND revision=1 AND day_date='2027-01-20'",
+      )
+        .bind(eventId)
+        .first(),
+    ).toMatchObject({ user_id: staffId });
   });
   it("excludes remote credits and staff while deduplicating physical credit and block duties", async () => {
     const snapshot = await getAgenda(env.DB, eventId, "operational-days");

@@ -19,14 +19,15 @@ export const currentBadgeRouteSchema = {
   summary: "Ensure and read the signed-in attendee's own badge",
   description:
     "Returns the caller's newest active badge. When a confirmed registration holds none, one credential is issued once; " +
-    "an organizer revocation stands until organizers issue a replacement. Other attendees' badges are never reachable.",
+    "an organizer revocation stands until organizers issue a replacement. Other attendees' badges are never reachable. " +
+    "Sponsor artwork that organizers must replace is left off the ticket instead of refusing it.",
   request: { params: eventSlugParamsSchema },
   responses: {
     ...ok("The caller's badge artifact and its print design", currentBadgeResponseSchema),
     ...authErrors({
       notFound: "Event unavailable",
       conflict: "No confirmed registration, revoked badge, ended event, or changed badge details",
-      unprocessable: "Badge template or sponsor artwork is invalid",
+      unprocessable: "Badge template is invalid",
     }),
     "503": jsonErrorResponse("Badge print encryption or asset storage is unavailable"),
   },

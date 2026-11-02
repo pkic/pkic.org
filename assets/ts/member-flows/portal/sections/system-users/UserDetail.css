@@ -14,14 +14,6 @@
     border-block-start: 1px solid var(--pk-line-soft);
   }
 
-  /* The portal sidebar still occupies width at tablet sizes. A two-column
-     record there leaves the participation table too narrow to read. */
-  @media (min-width: 64rem) and (max-width: 80rem) {
-    .pk-record.pk-user-record {
-      grid-template-columns: minmax(0, 1fr);
-    }
-  }
-
   /* The acting identity leads a single column, and heads the aside beside the
      record when there are two. */
   .pk-user-record__acting {
@@ -63,4 +55,16 @@
     width: 1rem;
     height: 1rem;
   }
+}
+
+/* Override the shared record utility in its own cascade layer. */
+@layer utilities {
+  /* The portal sidebar still occupies width at tablet sizes. A two-column
+     record there leaves the participation table too narrow to read. */
+  @media (min-width: 64rem) and (max-width: 80rem) {
+    .pk-record.pk-user-record {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
 }

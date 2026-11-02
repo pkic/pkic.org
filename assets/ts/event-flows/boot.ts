@@ -18,8 +18,7 @@ export interface FlowBoot {
   form: HTMLFormElement;
 }
 
-export function bootstrap(selector: string): FlowBoot | null {
-  const root = document.querySelector<HTMLElement>(selector);
+export function eventFlowContext(root: HTMLElement | null): Omit<FlowBoot, "form" | "statusEl"> | null {
   if (!root) {
     return null;
   }
@@ -29,13 +28,6 @@ export function bootstrap(selector: string): FlowBoot | null {
   const eventSlug = root.dataset.eventSlug?.trim() || pathContext?.eventSlug || query.eventSlug;
   if (!eventSlug) {
     root.textContent = "Missing event configuration.";
-    return null;
-  }
-
-  const form = root.querySelector<HTMLFormElement>("form");
-  const statusEl = root.querySelector<HTMLElement>("[data-flow-status]");
-  if (!form || !statusEl) {
-    root.textContent = "Invalid flow markup.";
     return null;
   }
 
@@ -49,7 +41,17 @@ export function bootstrap(selector: string): FlowBoot | null {
     eventPagePath,
     apiBase: root.dataset.apiBase ?? "/api/v1",
     query,
-    statusEl,
-    form,
   };
+}
+
+export function bootstrap(selector: string): FlowBoot | null {
+  const context = eventFlowContext(document.querySelector<HTMLElement>(selector));
+  if (!context) return null;
+  const form = context.root.querySelector<HTMLFormElement>("form");
+  const statusEl = context.root.querySelector<HTMLElement>("[data-flow-status]");
+  if (!form || !statusEl) {
+    context.root.textContent = "Invalid flow markup.";
+    return null;
+  }
+  return { ...context, form, statusEl };
 }

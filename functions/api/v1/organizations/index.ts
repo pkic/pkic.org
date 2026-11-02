@@ -1,3 +1,5 @@
+import { listOrganizationsRequest } from "../../../_lib/services/organization-management/list-request";
+import { requestDb } from "../../../_lib/db/context";
 import {
   organizationCreateResponseSchema,
   organizationCreateRouteSchema,
@@ -7,14 +9,13 @@ import {
 import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
 import { json } from "../../../_lib/http";
 import { openApiRoute } from "../../../_lib/openapi/route";
-import { createOrganization, listOrganizations } from "../../../_lib/services/organization-management";
+import { createOrganization } from "../../../_lib/services/organization-management";
 import type { AdminContext } from "../../../_lib/db/context";
 import { requireOrganizationStaffPermission } from "./authorization";
 import { requirePermission } from "../../../_lib/auth/permissions";
 
 export const OrganizationsList = openApiRoute(organizationManagementListRouteSchema, async (c: AdminContext, data) => {
-  const { db } = await requireOrganizationStaffPermission(c, "organizations:read");
-  const { organizations, total } = await listOrganizations(db, data.query);
+  const { organizations, total } = await listOrganizationsRequest(requestDb(c), c.req.raw, c.env, data.query);
   return json(
     organizationsListResponseSchema.parse({
       organizations,

@@ -1,6 +1,6 @@
 import { resolveEligibleMembershipRows } from "../../../auth/member";
 import type { DatabaseLike } from "../../../types";
-import { findUserEmailOwner } from "../../user-emails";
+import { readEmailOwnership, provedMailboxUserId } from "../../email-ownership";
 
 /**
  * Only recognized sign-in addresses may receive membership-specific guidance.
@@ -11,8 +11,8 @@ export async function findExistingJoinMember(
   db: DatabaseLike,
   email: string,
 ): Promise<{ userId: string; memberId: string } | null> {
-  const owner = await findUserEmailOwner(db, email);
-  if (!owner || owner.kind === "pending" || (owner.kind === "secondary" && owner.verified !== 1)) return null;
-  const [membership] = await resolveEligibleMembershipRows(db, owner.userId);
+  const ownerId = provedMailboxUserId(await readEmailOwnership(db, email));
+  if (!ownerId) return null;
+  const [membership] = await resolveEligibleMembershipRows(db, ownerId);
   return membership ? { userId: membership.id, memberId: membership.member_id } : null;
 }

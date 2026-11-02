@@ -33,7 +33,7 @@ import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
 import { usePortalHashLocation } from "../hash-location";
 import { portalSession } from "../state";
 import { toast } from "../ui";
-import { addEmailAddressPath } from "./email-address-paths";
+import { addEmailAddressPath } from "../../../shared/email-address-paths";
 
 const OFFER_ENDPOINT = "/api/v1/users/current/identities/offer";
 

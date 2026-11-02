@@ -144,6 +144,7 @@ describe("permission-derived attendee scanner navigation", () => {
     participant.participation = {
       registrationId: roomIds[0]!,
       registrationStatus: "registered",
+      calendarAvailable: false,
       proposals: 0,
       speakerProposals: 0,
       proposalStates: [],
@@ -165,6 +166,7 @@ describe("permission-derived attendee scanner navigation", () => {
     attendee.participation = {
       registrationId: roomIds[0]!,
       registrationStatus: "registered",
+      calendarAvailable: false,
       proposals: 1,
       speakerProposals: 1,
       proposalStates: [],

@@ -56,11 +56,13 @@ export function MyAgenda({
   eventId,
   eventName,
   mine = false,
+  canPersonalize = false,
 }: {
   slug: string;
   eventId?: string;
   eventName?: string;
   mine?: boolean;
+  canPersonalize?: boolean;
 }) {
   const rawLocation = useSyncExternalStore(subscribeHashQuery, hashQuerySnapshot);
   const { path, params: query } = splitHash(rawLocation);
@@ -72,6 +74,15 @@ export function MyAgenda({
     if (values.view) next.set("view", values.view);
     return path + (next.size ? `?${next}` : "");
   };
+  if (!canPersonalize && (mine || query.get("view") === "calendar"))
+    return (
+      <EmptyState
+        title="Register to create your agenda"
+        body="After registering for this event, you can save sessions and build your own schedule."
+      >
+        <ButtonLink href={usePortalHashLocation.hrefs(`/events/${encodeURIComponent(slug)}`)}>View event</ButtonLink>
+      </EmptyState>
+    );
   if (query.get("view") === "calendar") return <AgendaCalendarSettings slug={slug} eventName={eventName} />;
   return (
     <PersonalAgenda
@@ -79,6 +90,7 @@ export function MyAgenda({
       eventId={eventId}
       focus={focus.success ? focus.data : undefined}
       mine={mine}
+      canPersonalize={canPersonalize}
       calendarHref={usePortalHashLocation.hrefs(destination({ view: "calendar" }))}
       onFocusClosed={() => {
         const current = splitHash();
@@ -96,6 +108,7 @@ function PersonalAgenda({
   eventId,
   focus,
   mine,
+  canPersonalize,
   calendarHref,
   onFocusClosed,
 }: {
@@ -103,6 +116,7 @@ function PersonalAgenda({
   eventId?: string;
   focus?: string;
   mine: boolean;
+  canPersonalize: boolean;
   calendarHref: string;
   onFocusClosed: () => void;
 }) {
@@ -117,8 +131,9 @@ function PersonalAgenda({
   const snapshot = program.data?.agenda;
   // The server scoped private sessions to the ones this reader is invited to or booked on.
   const content = useMemo(
-    () => (snapshot ? agendaContent(snapshot, false, { participant: true }) : undefined),
-    [snapshot],
+    () =>
+      snapshot ? agendaContent(snapshot, false, { participant: true, personalAgenda: canPersonalize }) : undefined,
+    [snapshot, canPersonalize],
   );
   // Each listed session's scheduled window, for its live questions while it runs.
   const agendaSessions = useMemo(
@@ -309,14 +324,14 @@ function PersonalAgenda({
           speakers={content.speakers}
           timeZone={contractClock(snapshot)}
           legacySpeakerFragments={content.legacySpeakerFragments}
-          personal={personal}
+          personal={canPersonalize ? personal : undefined}
           openOccurrence={focus ?? revised ?? undefined}
         />
       ) : (
         <Panel>
           <PanelBody>
             <p>{snapshot ? "No public sessions are scheduled yet." : "The agenda has not been published yet."}</p>
-            <ButtonLink href={calendarHref}>{AGENDA_CALENDAR_TITLE}</ButtonLink>
+            {canPersonalize && <ButtonLink href={calendarHref}>{AGENDA_CALENDAR_TITLE}</ButtonLink>}
           </PanelBody>
         </Panel>
       )}

@@ -7,7 +7,7 @@
 import type { AttendanceStandingForDay } from "../../../../assets/shared/attendance-points";
 import { first } from "../../db/queries";
 import type { DatabaseLike } from "../../types";
-import { registrationDayAttendanceSql } from "../event-participation/session-access";
+import { registrationDayAttendanceSql, registrationDaySessionAccessSql } from "../event-participation/session-access";
 import { NON_CAPACITY_CONSUMING_DAY_WAITLIST_SQL } from "../registrations/day-waitlist-policy";
 
 const waitlistedSql = `EXISTS(SELECT 1 FROM event_day_waitlist_entries w JOIN event_days waiting_day ON waiting_day.id=w.event_day_id
@@ -15,6 +15,10 @@ const waitlistedSql = `EXISTS(SELECT 1 FROM event_day_waitlist_entries w JOIN ev
 
 const registrationSql = `FROM (SELECT ? AS day_date) target JOIN registrations reg ON reg.event_id=? AND reg.user_id=?
  JOIN users person ON person.id=reg.user_id AND person.active=1`;
+
+const standingAttendanceSql = `CASE WHEN ${registrationDaySessionAccessSql("reg", "target.day_date", false)} = 'none'
+ AND ${registrationDayAttendanceSql("reg", "target.day_date")} = 'on_demand' THEN 'on_demand'
+ ELSE ${registrationDaySessionAccessSql("reg", "target.day_date", false)} END`;
 
 export async function readDayStanding(
   db: DatabaseLike,
@@ -24,7 +28,7 @@ export async function readDayStanding(
 ): Promise<AttendanceStandingForDay | null> {
   const row = await first<{ status: string; day_attendance: string; waitlisted: number }>(
     db,
-    `SELECT reg.status,${registrationDayAttendanceSql("reg", "target.day_date")} AS day_attendance,${waitlistedSql} AS waitlisted
+    `SELECT reg.status,${standingAttendanceSql} AS day_attendance,${waitlistedSql} AS waitlisted
      ${registrationSql} ORDER BY reg.created_at DESC LIMIT 1`,
     [dayDate, eventId, userId],
   );
@@ -46,7 +50,7 @@ export async function readDayStanding(
  */
 export function remoteStandingSql(eventId: string, userId: string, dayDate: string) {
   return {
-    sql: `COALESCE((SELECT reg.status='registered' AND ${registrationDayAttendanceSql("reg", "target.day_date")} IN ('virtual','on_demand')
+    sql: `COALESCE((SELECT reg.status='registered' AND NOT ${waitlistedSql} AND ${standingAttendanceSql} IN ('virtual','on_demand')
  ${registrationSql} ORDER BY reg.created_at DESC LIMIT 1),0)`,
     bindings: [dayDate, eventId, userId],
   };

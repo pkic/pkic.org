@@ -9,6 +9,13 @@ import { Panel, PanelBody, PanelHeader } from "../ui/Panel";
 import "./MembershipWorkflowProgress.css";
 import { SectionHeading } from "../ui/SectionHeading";
 
+/** A step's state is expected progress, so it reads as plain text; the numbered marker carries its color. */
+const STEP_STATE_LABEL: Record<Progress["steps"][number]["state"], string> = {
+  waiting: "Not started",
+  active: "In progress",
+  complete: "Complete",
+};
+
 export function MembershipWorkflowProgress({ progress }: { progress: Progress }) {
   return (
     <Panel class="membership-progress" aria-label="Membership requirements">
@@ -26,7 +33,7 @@ export function MembershipWorkflowProgress({ progress }: { progress: Progress })
               <div class="membership-progress__content pk-stack pk-stack--snug">
                 <div class="membership-progress__heading">
                   <SectionHeading level={4}>{step.label}</SectionHeading>
-                  <Badge status={step.state} />
+                  <span class="membership-progress__state pk-small">{STEP_STATE_LABEL[step.state]}</span>
                 </div>
                 <p>{step.instructions}</p>
                 {step.review && (

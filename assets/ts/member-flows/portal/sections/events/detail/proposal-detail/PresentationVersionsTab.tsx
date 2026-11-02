@@ -148,7 +148,7 @@ function PresentationVersions({
   async function handleReview(versionId: string) {
     const checked = review.submit();
     if (!checked.data) {
-      setReviewError(checked.message);
+      setReviewError(checked.formMessage);
       return;
     }
     setSavingReview(true);

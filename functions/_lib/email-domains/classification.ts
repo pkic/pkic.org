@@ -96,8 +96,8 @@ export function workEmailDomain(emailOrDomain: string): string | null {
  * The domains an organization's claim could hold for a work address, most
  * specific first: the host and each parent down to its registrable domain
  * (`a.mail.ibm.com`, `mail.ibm.com`, `ibm.com`). A claim normally holds the
- * registrable domain; staff may claim a subdomain explicitly, and the most
- * specific claim wins. Empty for free and disposable mail.
+ * registrable domain; an explicitly linked subdomain takes precedence over
+ * a broader claim. Empty for free and disposable mail.
  */
 export function organizationDomainCandidates(emailOrDomain: string): string[] {
   const registrable = workEmailDomain(emailOrDomain);

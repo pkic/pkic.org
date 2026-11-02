@@ -15,7 +15,7 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const scannedTrees = ["assets", "functions", "scripts", "site", "static", "tests", ":(glob)*.md"];
@@ -69,10 +69,20 @@ export function copyTermFindings(line) {
 }
 
 function trackedFiles() {
-  const output = execFileSync("git", ["ls-files", "-z", "--", ...scannedTrees], { encoding: "utf8" });
+  const output = execFileSync(
+    "git",
+    ["ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", ...scannedTrees],
+    { encoding: "utf8" },
+  );
   return output
     .split("\0")
-    .filter((file) => file && !ownFiles.has(file) && !/\.(png|jpe?g|gif|webp|ico|woff2?|ttf|otf|pdf)$/i.test(file));
+    .filter(
+      (file) =>
+        file &&
+        existsSync(file) &&
+        !ownFiles.has(file) &&
+        !/\.(png|jpe?g|gif|webp|ico|woff2?|ttf|otf|pdf)$/i.test(file),
+    );
 }
 
 function main(files) {

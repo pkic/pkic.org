@@ -145,8 +145,8 @@ describe("event participant role sources", () => {
     await env.DB.batch([
       env.DB.prepare(
         `INSERT INTO registrations
-           (id, event_id, user_id, status, attendance_type, source_type, manage_link_secret, created_at, updated_at)
-         VALUES (?, ?, ?, 'registered', 'virtual', 'direct', ?, datetime('now'), datetime('now'))`,
+           (id, event_id, user_id, status, source_type, manage_link_secret, created_at, updated_at)
+         VALUES (?, ?, ?, 'registered', 'direct', ?, datetime('now'), datetime('now'))`,
       ).bind(registrationId, eventId, userId, crypto.randomUUID()),
       env.DB.prepare(
         `INSERT INTO event_participants
@@ -161,9 +161,18 @@ describe("event participant role sources", () => {
         "SELECT source_kind, subrole, status FROM event_participant_role_sources WHERE event_id = ? AND user_id = ? AND role = 'attendee'",
         [eventId, userId],
       ),
-    ).resolves.toEqual([{ source_kind: "registration", subrole: "virtual", status: "active" }]);
-    await env.DB.prepare("UPDATE registrations SET attendance_type = 'in_person' WHERE id = ?")
-      .bind(registrationId)
+    ).resolves.toEqual([{ source_kind: "registration", subrole: null, status: "active" }]);
+    const dayId = crypto.randomUUID();
+    const at = new Date().toISOString();
+    await env.DB.prepare(
+      "INSERT INTO event_days(id,event_id,day_date,created_at,updated_at) VALUES(?,?,'2026-12-01',?,?)",
+    )
+      .bind(dayId, eventId, at, at)
+      .run();
+    await env.DB.prepare(
+      "INSERT INTO registration_day_attendance(id,registration_id,event_day_id,attendance_type,created_at,updated_at) VALUES(?,?,?,'in_person',?,?)",
+    )
+      .bind(crypto.randomUUID(), registrationId, dayId, at, at)
       .run();
     await expect(
       queryAll(
@@ -171,7 +180,7 @@ describe("event participant role sources", () => {
         "SELECT source_kind, subrole, status FROM event_participant_role_sources WHERE event_id = ? AND user_id = ? AND role = 'attendee'",
         [eventId, userId],
       ),
-    ).resolves.toEqual([{ source_kind: "registration", subrole: "in_person", status: "active" }]);
+    ).resolves.toEqual([{ source_kind: "registration", subrole: null, status: "active" }]);
     await env.DB.prepare("UPDATE registrations SET status = 'cancelled' WHERE id = ?").bind(registrationId).run();
     await expect(
       queryAll(

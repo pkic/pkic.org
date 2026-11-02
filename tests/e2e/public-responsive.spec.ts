@@ -88,7 +88,7 @@ test.describe("public site at every width", () => {
   test("gives standard public pages the full desktop content measure", async ({ page }) => {
     await page.setViewportSize({ width: 1552, height: 900 });
     await page.goto("/about/");
-    const contentContainer = page.locator("#content").locator("xpath=..");
+    const contentContainer = page.locator("*:has(> #content)");
     expect((await contentContainer.boundingBox())?.width).toBeGreaterThan(1280);
     expect(await horizontalOverflow(page)).toBe(0);
   });

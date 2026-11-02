@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { EMAIL_FIRST_COPY } from "../../assets/shared/email-first-copy";
 import { memberJoinStartSchema } from "../../assets/shared/schemas/member-join";
 
 test("maintenance refusal preserves a public form and recovery never replays it", async ({ page }) => {
@@ -33,14 +34,14 @@ test("maintenance refusal preserves a public form and recovery never replays it"
     else await route.continue();
   });
   await page.goto("/join/");
-  const email = page.getByLabel("Your official work or organization email address");
+  const email = page.getByLabel(EMAIL_FIRST_COPY.join.work.label);
   const address = `maintenance-${Date.now()}@organization.test`;
   await email.fill(address);
   paused = true;
-  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page.getByRole("button", { name: EMAIL_FIRST_COPY.join.work.action, exact: true }).click();
   await expect(page.getByText("Maintenance in progress", { exact: true })).toBeVisible();
   await expect(email).toHaveValue(address);
-  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page.getByRole("button", { name: EMAIL_FIRST_COPY.join.work.action, exact: true }).click();
   expect(attempts).toBe(1);
   await page.getByText("Maintenance in progress", { exact: true }).scrollIntoViewIfNeeded();
   await page.screenshot({ path: test.info().outputPath("pkic-maintenance-notice.png") });
@@ -49,8 +50,8 @@ test("maintenance refusal preserves a public form and recovery never replays it"
   await expect(page.getByText("Online services restored", { exact: true })).toBeVisible();
   await expect(email).toHaveValue(address);
   expect(attempts).toBe(1);
-  await page.getByRole("button", { name: "Continue", exact: true }).click();
-  await expect(page.getByText(/We sent an email/)).toBeVisible();
+  await page.getByRole("button", { name: EMAIL_FIRST_COPY.join.work.action, exact: true }).click();
+  await expect(page.getByText(EMAIL_FIRST_COPY.join.sentTitle, { exact: true })).toBeVisible();
   expect(attempts).toBe(2);
 });
 

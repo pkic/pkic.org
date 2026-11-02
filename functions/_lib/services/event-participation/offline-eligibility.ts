@@ -42,7 +42,6 @@ interface ManifestEntry {
   expiresAt: string | null;
   eventRegistered: number;
   registered: number;
-  registration_default_mode: string | null;
   registration_days_json: string | null;
   allocationCompatible: number;
   privateAccess: number;
@@ -84,7 +83,7 @@ export function prepareOfflineEligibility(db: DatabaseLike, event: EventReadSele
           FROM manifest_event event LEFT JOIN (${publishedSessionsSql}) s ON s.event_id=event.id AND s.id=?)
         SELECT b.id AS badgeId,b.user_id AS userId,b.credential_hash AS credentialHash,
           b.revoked_at IS NOT NULL AS revoked,b.expires_at AS expiresAt,COALESCE(r.status='registered',0) AS eventRegistered,
-          r.id IS NOT NULL AS registered,r.attendance_type AS registration_default_mode,
+          r.id IS NOT NULL AS registered,
           ${registrationSessionDayOptionsSql("r", "target")} AS registration_days_json,
           ${operationalAllocationCompatibleSql("target.occurrence_id", "b.user_id", "'physical'", "target.room_id")} AS allocationCompatible,
           (s.id IS NULL OR ${sessionAccessEligibleSql("s", "b.user_id", "'physical'", false)}) AS privateAccess,

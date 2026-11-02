@@ -24,7 +24,7 @@ function ignoredReason(
 ): "ignored_newer_accept" | "ignored_unresolved_day" | "ignored_no_longer_in_person" | null {
   if (!candidate.event_day_id || !candidate.day_starts_at) return "ignored_unresolved_day";
   if (candidate.has_newer_accept === 1) return "ignored_newer_accept";
-  if (candidate.current_attendance_type !== "in_person") return "ignored_no_longer_in_person";
+  if (candidate.current_access_mode !== "physical") return "ignored_no_longer_in_person";
   return null;
 }
 

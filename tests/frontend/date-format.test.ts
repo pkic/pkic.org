@@ -104,6 +104,9 @@ describe("friendly date formatting", () => {
       new Date("2026-09-04T00:00:00Z").toLocaleString(undefined, { dateStyle: "medium", timeZone: "UTC" }),
     );
     expect(formatCalendarDate("2026-09-04")).toContain("4");
+    expect(formatCalendarDate("2026-09-04", "long")).toBe(
+      new Date("2026-09-04T00:00:00Z").toLocaleString(undefined, { dateStyle: "long", timeZone: "UTC" }),
+    );
     // Not date-only: treated as an instant in the viewer's zone.
     expect(formatCalendarDate("2026-09-04T10:00:00.000Z")).toBe(formatDate("2026-09-04T10:00:00.000Z"));
     expect(formatCalendarDate(null)).toBe("—");
@@ -245,4 +248,13 @@ describe("friendly date formatting", () => {
     expect(spoken).toMatch(/\d/);
     expect(spoken).not.toContain(",");
   });
+});
+
+it("formats the social-card header with the handoff's compact date range", () => {
+  expect(
+    formatDateRange("2026-12-01T08:00:00.000Z", "2026-12-03T17:00:00.000Z", "Europe/Amsterdam", {
+      locale: "en-GB",
+      month: "short",
+    }),
+  ).toMatch(/1.*3 Dec 2026/u);
 });

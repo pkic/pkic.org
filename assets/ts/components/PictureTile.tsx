@@ -3,8 +3,9 @@
  *
  * The picture when there is one, the name's initials when there is not. For
  * someone who may change it, the tile itself is the control: hovering or
- * focusing it says "Change photo", activating it opens the file chooser, and
- * a small corner button removes it. No panel header, no button standing open
+ * focusing it says "Change photo", a pencil in its corner says so at rest for
+ * touch, activating it opens the file chooser, and a small corner button
+ * removes it. No panel header, no button standing open
  * next to the picture.
  *
  * It was called `LogoTile` and served organizations only, while a person's
@@ -16,6 +17,7 @@
  */
 import { useId, useRef } from "preact/hooks";
 import { Avatar, AvatarStanding, type AvatarStatus } from "../ui/Avatar";
+import { IconPencil } from "../ui/MediaIcons";
 import { usePictureCommands, type PictureCommandOptions } from "./usePictureCommands";
 import "./PictureTile.css";
 
@@ -109,6 +111,10 @@ export function PictureTile(props: PictureTileProps) {
           onClick={() => inputRef.current?.click()}
         >
           {picture}
+          {/* Touch has no hover, so the tile says it is a control at rest too. */}
+          <span class="pk-picture-tile__cue" aria-hidden="true">
+            <IconPencil />
+          </span>
           <span class="pk-picture-tile__veil" aria-hidden="true">
             {busy ? "Uploading…" : label}
           </span>

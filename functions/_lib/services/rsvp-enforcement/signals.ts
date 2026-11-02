@@ -6,6 +6,7 @@ import {
   RSVP_NEAR_EVENT_LEAD_HOURS,
   RSVP_WARNING_DELAY_HOURS,
 } from "../../../../assets/shared/constants/rsvp-enforcement";
+import { eventDayOptionAccessSql } from "../event-attendance-option-sql";
 import { prepareQueueEmailStatement } from "../../email/outbox";
 import type { DatabaseLike, Env, StatementLike } from "../../types";
 import { nowIso } from "../../utils/time";
@@ -61,10 +62,10 @@ export async function ignoreRsvpCandidate(
   }
   if (reason === "ignored_no_longer_in_person") {
     extraPredicate = `event_day_id IS NOT NULL AND NOT EXISTS (
-      SELECT 1 FROM registration_day_attendance rda
+      SELECT 1 FROM registration_day_attendance rda JOIN event_days ed ON ed.id=rda.event_day_id
       WHERE rda.registration_id = calendar_rsvp_events.registration_id
         AND rda.event_day_id = calendar_rsvp_events.event_day_id
-        AND rda.attendance_type = 'in_person'
+        AND ${eventDayOptionAccessSql("ed", "rda.attendance_type")} = 'physical'
     )`;
   }
   const at = nowIso();

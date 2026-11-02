@@ -8,8 +8,8 @@ export function eventAnalyticsFixture(overrides: Partial<EventAnalyticsResponse>
       byStatus: { registered: 9, pending_email_confirmation: 2 },
       byAttendanceType: { in_person: 6, virtual: 5 },
       attendanceStatusByType: {
-        in_person: { accepted: 4, waitlisted: 2 },
-        virtual: { accepted: 3, waitlisted: 0 },
+        in_person: { accepted: 4, waitlisted: 2, expired: 0 },
+        virtual: { accepted: 3, waitlisted: 0, expired: 0 },
       },
       byStatusAndType: [{ status: "registered", attendance_type: "in_person", count: 6 }],
       sponsorConsent: { granted: 3, notGranted: 1 },

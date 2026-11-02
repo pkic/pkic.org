@@ -20,6 +20,14 @@ export function activeOrganizationMemberRepresentationPredicate(userIdSql: strin
   )`;
 }
 
+/** Account/attendee identities are reusable; an existing membership is the conflict. */
+export function individualMembershipConflictPredicate(userIdSql: string): string {
+  return `(${activeOrganizationMemberRepresentationPredicate(userIdSql)} OR EXISTS (
+    SELECT 1 FROM identities personal JOIN members held ON held.identity_id=personal.id
+      WHERE personal.user_id=${userIdSql} AND personal.organization_id IS NULL
+  ))`;
+}
+
 const ACTIVE_USER_CAPACITIES_BODY = `
   SELECT input.user_id, identity.id AS identity_id, member.id AS member_id, member.member_type,
          NULL AS organization_name, category.category_code AS membership_category

@@ -42,7 +42,7 @@ export function RoleEditForm({
   async function handleSave(e: Event) {
     e.preventDefault();
     const checked = form.submit();
-    if (!checked.data) return setError(checked.message);
+    if (!checked.data) return setError(checked.formMessage);
     setSubmitting(true);
     setError(null);
     try {

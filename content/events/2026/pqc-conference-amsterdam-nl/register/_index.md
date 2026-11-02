@@ -14,9 +14,8 @@ params:
 
 ## Secure your spot
 
-We start by verifying your email address. After you register, you'll receive a confirmation, a calendar invite, and a personal link to update your details at any time.
+We start by verifying your email address. After you register, you'll receive a confirmation and a personal link to update your details at any time. Confirmed live attendance days include a calendar invitation.
 
-> In-person is full — choose In-person to join the waitlist. Waitlisted attendees can always watch live online.
-{.callout-warning}
+Availability and waitlists are shown for each attendance option and day below.
 
 {{< event-registration slug="pqc-conference-amsterdam-nl" >}}

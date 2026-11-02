@@ -146,13 +146,13 @@ export const basicSections: PreviewSection[] = [
             src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect fill='%2348bb78' width='32' height='32'/%3E%3C/svg%3E"
           />
           {/* A picture that fails to load falls back to initials, never a broken circle. */}
-          <Avatar name="Frank Ito" src="/missing-headshot.jpg" />
+          <Avatar name="Frank Ito" src="data:image/png;base64,AAAA" />
           <Avatar name="Grace Hopper" status={{ label: "Chair" }} />
         </div>
 
         <div class="pk-preview__shelf">
           <Avatar name="Example Trust Services" shape="square" />
-          <Avatar name="Example Trust Services" shape="square" size="lg" src="/missing-logo.png" />
+          <Avatar name="Example Trust Services" shape="square" size="lg" src="data:image/png;base64,AAAA" />
           <Avatar
             name="Example Trust Services"
             shape="square"

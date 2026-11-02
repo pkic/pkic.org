@@ -22,7 +22,7 @@ describe.skipIf(process.platform === "win32")("email template seed CLI", () => {
 const fs = require("node:fs");
 const args = process.argv.slice(2);
 if (args.includes("--json")) {
-  console.log(JSON.stringify([{ results: [{ id: "synthetic-admin" }] }]));
+  fs.writeSync(1, JSON.stringify([{ results: [{ id: "synthetic-admin" }] }]));
 } else {
   const file = args[args.indexOf("--file") + 1];
   const sql = fs.readFileSync(file, "utf8");

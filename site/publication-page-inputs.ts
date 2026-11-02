@@ -11,6 +11,7 @@ import { memberCounts, publication } from "./publication";
 import { PUBLICATION_SITE_ORIGIN, publicationImageInputs } from "./publication-cache";
 import { preparePublicationImages } from "../assets/ts/site/SiteImage";
 import { socialCardDescriptor } from "./social-card";
+import { isPrivateEventFlowPath } from "../assets/shared/event-flow-paths";
 
 type SocialContent = Pick<
   SiteContentPage,
@@ -22,7 +23,7 @@ export async function publicationPageInputs({
   route,
   title,
   description,
-  privatePage = false,
+  privatePage: requestedPrivatePage = false,
   accent,
   robots,
   content,
@@ -41,6 +42,7 @@ export async function publicationPageInputs({
   structuredData?: unknown;
   imageRefs?: Parameters<typeof preparePublicationImages>[0];
 }) {
+  const privatePage = requestedPrivatePage || isPrivateEventFlowPath(route);
   const socialCard =
     privatePage || robots?.includes("noindex")
       ? undefined

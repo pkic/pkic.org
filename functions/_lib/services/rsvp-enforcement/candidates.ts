@@ -1,5 +1,6 @@
 import { RSVP_WARNING_DELAY_HOURS } from "../../../../assets/shared/constants/rsvp-enforcement";
 import { all } from "../../db/queries";
+import { eventDayOptionAccessSql } from "../event-attendance-option-sql";
 import { eventCommunicationSettingsSql } from "../events/communication-settings";
 import type { DatabaseLike } from "../../types";
 
@@ -26,6 +27,7 @@ export interface RsvpEnforcementCandidate {
   attendance_options_json: string | null;
   in_person_capacity: number | null;
   current_attendance_type: string | null;
+  current_access_mode: "physical" | "remote" | "none";
   user_email: string;
   first_name: string | null;
   has_newer_accept: number;
@@ -39,6 +41,7 @@ const CANDIDATE_PROJECTION = `rsvp.id, rsvp.registration_id, r.manage_link_secre
   ed.day_date, ed.label AS day_label, ed.starts_at AS day_starts_at,
   ed.attendance_options_json, ed.in_person_capacity,
   rda.attendance_type AS current_attendance_type,
+  ${eventDayOptionAccessSql("ed", "rda.attendance_type")} AS current_access_mode,
   u.email AS user_email, u.first_name,
   CASE WHEN EXISTS (
     SELECT 1

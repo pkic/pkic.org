@@ -5,6 +5,7 @@ import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { nowIso } from "../functions/_lib/utils/time";
+import { seedSessionAttendanceDays } from "./helpers/session-attendance-days";
 import { createManagedForm, updateManagedForm } from "../functions/_lib/services/forms";
 import { buildFormsPageQuery } from "../functions/_lib/services/forms/list";
 import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
@@ -247,9 +248,9 @@ describe("canonical Forms resource endpoints", () => {
     });
     await env.DB.prepare(
       `INSERT INTO registrations (
-         id, event_id, user_id, status, attendance_type, source_type, custom_answers_json,
+         id, event_id, user_id, status, source_type, custom_answers_json,
          manage_link_secret, created_at, updated_at
-       ) VALUES (?, ?, ?, 'registered', 'virtual', 'admin', ?, ?, ?, ?)`,
+       ) VALUES (?, ?, ?, 'registered', 'admin', ?, ?, ?, ?)`,
     )
       .bind(
         doubleCountRegistrationContextRef,
@@ -685,10 +686,10 @@ describe("canonical Forms resource endpoints", () => {
     const inPersonRegistrationId = crypto.randomUUID();
     await env.DB.prepare(
       `INSERT INTO registrations (
-         id, event_id, user_id, status, attendance_type, source_type, custom_answers_json,
+         id, event_id, user_id, status, source_type, custom_answers_json,
          manage_link_secret, created_at, updated_at
-       ) VALUES (?, ?, ?, 'registered', 'virtual', 'admin', ?, ?, ?, ?),
-                (?, ?, ?, 'registered', 'in_person', 'admin', ?, ?, ?, ?)`,
+       ) VALUES (?, ?, ?, 'registered', 'admin', ?, ?, ?, ?),
+                (?, ?, ?, 'registered', 'admin', ?, ?, ?, ?)`,
     )
       .bind(
         registrationId,
@@ -706,6 +707,11 @@ describe("canonical Forms resource endpoints", () => {
         timestamp,
         timestamp,
       )
+      .run();
+
+    await seedSessionAttendanceDays(env.DB, eventId, ["2026-12-01"], "virtual");
+    await env.DB.prepare("UPDATE registration_day_attendance SET attendance_type='in_person' WHERE registration_id=?")
+      .bind(inPersonRegistrationId)
       .run();
 
     const proposalId = crypto.randomUUID();

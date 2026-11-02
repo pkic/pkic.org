@@ -1,3 +1,4 @@
+import { readEmailOwnership, provedMailboxUserId, prepareEmailOwnershipClaim } from "./email-ownership";
 import { first } from "../db/queries";
 import { prepareAuthorizationGuard, type AuthorizationEvidence } from "../db/authorization-guard";
 import { AppError } from "../errors";
@@ -20,20 +21,18 @@ export async function resolveProposalProofPerson(
   email: string,
   expectedUserId?: string,
 ): Promise<{ user: UserRecord | null; emailId: string | null } | null> {
-  const owner = await findUserEmailOwner(db, email);
-  if (
-    owner?.kind === "pending" ||
-    (owner?.kind === "secondary" && owner.verified !== 1 && owner.userId !== expectedUserId)
-  )
-    return null;
-  if (expectedUserId && owner && owner.userId !== expectedUserId) return null;
-  if (!owner && !expectedUserId) return { user: null, emailId: null };
+  const ownership = await readEmailOwnership(db, email);
+  const canonicalUserId = provedMailboxUserId(ownership);
+  if (expectedUserId && canonicalUserId && canonicalUserId !== expectedUserId) return null;
+  if (!canonicalUserId && !expectedUserId) return { user: null, emailId: null };
+  const owner = canonicalUserId ? await findUserEmailOwner(db, email) : null;
   const user = await first<UserRecord>(
     db,
     `SELECT ${userRecordColumns()} FROM users WHERE id=? AND active=1 AND pii_redacted_at IS NULL AND merged_into_user_id IS NULL`,
-    [expectedUserId ?? owner!.userId],
+    [expectedUserId ?? canonicalUserId!],
   );
   if (!user) return null;
+  if (ownership?.userId === user.id && ownership.kind === "secondary") return { user, emailId: ownership.emailId };
   if (!owner) return { user, emailId: uuid() };
   if (owner.kind === "secondary" && owner.verified !== 1) {
     const address = await first<{ id: string }>(
@@ -93,9 +92,14 @@ export async function prepareProposalProofPerson(
       "PROPOSAL_PERSON_CHANGED",
       "The confirmed email's account changed. Confirm your email again.",
     );
+  const ownership = await readEmailOwnership(db, payload.email);
   const prepared = resolved.user
-    ? { user: resolved.user, created: false, statements: [] }
-    : await buildFindOrCreateUserStatement(db, { ...profile, email: payload.email });
+    ? {
+        user: resolved.user,
+        created: false,
+        statements: prepareEmailOwnershipClaim(db, payload.email, resolved.user.id, ownership),
+      }
+    : await buildFindOrCreateUserStatement(db, { ...profile, email: payload.email, mailboxVerified: true });
   // The broad attribution helper cannot choose an account that appeared after safe resolution.
   if (!resolved.user && !prepared.created)
     throw new AppError(
@@ -115,7 +119,7 @@ export async function prepareProposalProofPerson(
     statements: [
       ...prepared.statements,
       prepareAuthorizationGuard(db, evidence),
-      ...(resolved.emailId && !(await findUserEmailOwner(db, payload.email))
+      ...(resolved.emailId && !(ownership?.kind === "secondary" && ownership.userId === prepared.user.id)
         ? [
             db
               .prepare(
@@ -129,6 +133,14 @@ export async function prepareProposalProofPerson(
         normalizedEmail: payload.email,
         method: "magic_link",
         verifiedAt: at,
+        // This exact invitation is independently bound into the verified continuation.
+        // Preserve its scoped flow while revoking the account's earlier access.
+        provedSpeakerId:
+          payload.operation === "speaker_profile" &&
+          payload.context?.kind === "speaker" &&
+          payload.context.userId === prepared.user.id
+            ? payload.context.speakerId
+            : undefined,
       }),
       // Verify and recheck only the exact address authorized by this same-person proof.
       prepareAuthorizationGuard(

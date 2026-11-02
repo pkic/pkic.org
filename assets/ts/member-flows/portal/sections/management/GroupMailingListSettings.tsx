@@ -103,7 +103,7 @@ function SettingsSection({
     event.preventDefault();
     const checked = form.submit();
     if (!checked.data) {
-      setError(new Error(checked.message));
+      setError(checked.formMessage ? new Error(checked.formMessage) : null);
       return;
     }
     setSaving(true);

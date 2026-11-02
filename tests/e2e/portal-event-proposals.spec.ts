@@ -128,8 +128,11 @@ test("portal proposal detail registers accepted speakers through canonical resou
 
   const adminRequests: string[] = [];
   const proposalRequests: string[] = [];
+  const identityRequests: string[] = [];
   page.on("request", (request) => {
     const pathname = new URL(request.url()).pathname;
+    if (pathname.startsWith("/api/v1/identities/") && request.method() !== "GET")
+      identityRequests.push(`${request.method()} ${pathname}`);
     if (pathname.startsWith("/api/v1/admin/")) adminRequests.push(`${request.method()} ${pathname}`);
     if (
       pathname.startsWith("/api/v1/proposals/") ||
@@ -145,8 +148,8 @@ test("portal proposal detail registers accepted speakers through canonical resou
   await expect(page.getByRole("table", { name: "Event proposals" })).toBeVisible();
   const row = page.getByRole("row").filter({ hasText: "Canonical portal proposal journey" });
   await expect(row).toBeVisible();
-  await expect(row.getByRole("img", { name: "Submitted", exact: true })).toHaveClass(/pk-badge--neutral/);
-  await expect(row.getByRole("img", { name: "Talk", exact: true })).toBeVisible();
+  await expect(row.getByText("Submitted", { exact: true }).first()).toHaveClass(/pk-badge--neutral/);
+  await expect(row.getByRole("cell", { name: "Talk", exact: true })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "Proposer" })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "Speaker registration" })).toHaveCount(0);
   // A row is a link to the proposal's own page, so the address bar follows.
@@ -170,14 +173,16 @@ test("portal proposal detail registers accepted speakers through canonical resou
   await expect(page.getByRole("heading", { name: "Speakers", exact: true })).toBeVisible();
   const speakerPanel = page.getByRole("region", { name: "Proposal speakers" });
   await expect(speakerPanel.getByText("Portal Proposer", { exact: true })).toBeVisible();
-  await expect(speakerPanel.getByText("Not registered", { exact: true })).toBeVisible();
-  // A speaker's commands sit behind the card's own menu; editing turns the
-  // card's values into inputs in place.
+  await expect(speakerPanel.getByText(/· Not registered$/)).toBeVisible();
+  // A speaker's commands sit behind the card's own menu; the profile is the
+  // speaker's identity, edited in a dialog and saved to that identity.
   await page.getByRole("button", { name: "Actions for Portal Proposer" }).click();
-  await page.getByRole("menuitem", { name: "Edit profile" }).click();
-  await page.getByRole("textbox", { name: "Biography" }).fill("Updated through the canonical group portal.");
-  await page.getByRole("button", { name: "Save profile" }).click();
-  await expect(page.getByText("Updated through the canonical group portal.", { exact: true })).toBeVisible();
+  await page.getByRole("menuitem", { name: "Edit identity" }).click();
+  const identityDialog = page.getByRole("dialog", { name: "Edit Portal Proposer's identity" });
+  await identityDialog.getByRole("textbox", { name: "About you" }).fill("Updated through the canonical group portal.");
+  await identityDialog.getByRole("button", { name: "Save changes" }).click();
+  await expect(page.getByText("Identity updated", { exact: true })).toBeVisible();
+  await expect(identityDialog).toBeHidden();
   await page.getByRole("button", { name: "Actions for Portal Proposer" }).click();
   await page.getByRole("menuitem", { name: "Send profile reminder" }).click();
   await expect(page.getByText("Profile reminder sent", { exact: true })).toBeVisible();
@@ -208,7 +213,13 @@ test("portal proposal detail registers accepted speakers through canonical resou
   // Sending returns to the roster, which now lists the invitee.
   await expect(page).toHaveURL(/\/speakers$/);
   await expect(speakerPanel.locator("strong").filter({ hasText: /^Portal Co Speaker$/ })).toBeVisible();
-  await expect(speakerPanel.getByText(coSpeakerEmail, { exact: true })).toBeVisible();
+  // The card keeps the address out of the roster; it is one menu item away.
+  await page.getByRole("button", { name: "Actions for Portal Co Speaker" }).click();
+  await page.getByRole("menuitem", { name: "View profile details" }).click();
+  const coSpeakerDetails = page.getByRole("dialog", { name: "Portal Co Speaker" });
+  await expect(coSpeakerDetails.getByText(coSpeakerEmail, { exact: true })).toBeVisible();
+  await coSpeakerDetails.getByRole("button", { name: "Close" }).click();
+  await expect(coSpeakerDetails).toBeHidden();
   await expect(invitation).resolves.toEqual({
     success: true,
     email: coSpeakerEmail,
@@ -226,25 +237,21 @@ test("portal proposal detail registers accepted speakers through canonical resou
   await expect(page.getByRole("button", { name: "Change decision", exact: true })).toBeVisible();
   await page.goto(`/portal/#/groups/${GROUP_ID}/events/${event.id}/proposals`);
   const acceptedRow = page.getByRole("row").filter({ hasText: "Canonical portal proposal journey" });
-  await expect(acceptedRow.getByRole("img", { name: "Accepted", exact: true })).toBeVisible();
+  await expect(acceptedRow.getByText("Accepted", { exact: true }).first()).toHaveClass(/pk-badge--ok/);
   await openRow(acceptedRow, "Open Canonical portal proposal journey");
   await tab(page.getByRole("navigation", { name: "Proposal sections" }), "Speakers").click();
-  await expect(
-    page.getByRole("region", { name: "Proposal speakers" }).getByText("Registered", { exact: true }),
-  ).toHaveCount(2);
+  await expect(page.getByRole("region", { name: "Proposal speakers" }).getByText(/(^|· )Registered \(/)).toHaveCount(2);
   await page.goto(`/portal/#/groups/${GROUP_ID}/events/${event.id}/proposals`);
   await expect(page.getByRole("columnheader", { name: /^Decision/ })).toHaveCount(0);
   await expect(page.getByRole("columnheader", { name: /^Reviews/ })).toHaveCount(0);
   const title = acceptedRow.getByText("Canonical portal proposal journey", { exact: true });
-  await expect(title).toHaveCSS("white-space", "nowrap");
-  await expect(acceptedRow.getByRole("cell", { name: "Portal Proposer", exact: true })).toBeVisible();
+  // A long title takes two lines before the cut and keeps its full text as the hover label.
+  await expect(title).toHaveCSS("-webkit-line-clamp", "2");
+  await expect(title).toHaveAttribute("title", "Canonical portal proposal journey");
+  await expect(
+    acceptedRow.getByRole("cell", { name: "Portal Proposer with Portal Co Speaker", exact: true }),
+  ).toBeVisible();
   await expect(acceptedRow).not.toContainText(proposerEmail);
-  // The shared row link forwards each icon's hover label through its overlay.
-  await acceptedRow.getByRole("img", { name: "Accepted", exact: true }).hover({ force: true });
-  await expect(acceptedRow.getByRole("link", { name: "Open Canonical portal proposal journey" })).toHaveAttribute(
-    "title",
-    "Accepted",
-  );
   const sections = page.getByRole("navigation", { name: "Proposal sections" });
   await tab(sections, "Speakers").click();
   await expect(page).toHaveURL(/\/proposals\/speakers$/);
@@ -264,6 +271,8 @@ test("portal proposal detail registers accepted speakers through canonical resou
   await page.screenshot({ path: testInfo.outputPath("proposal-speakers-mobile.png"), fullPage: true });
 
   expect(adminRequests, "portal proposals must not call admin APIs").toEqual([]);
+  // The speaker's profile is their identity's, so the edit is saved on that resource.
+  expect(identityRequests).toEqual([expect.stringMatching(/^PATCH \/api\/v1\/identities\/[^/]+$/)]);
   expect(proposalRequests).toEqual(
     expect.arrayContaining([
       `GET /api/v1/events/${event.slug}/proposals`,
@@ -272,7 +281,6 @@ test("portal proposal detail registers accepted speakers through canonical resou
       `GET /api/v1/proposals/${proposalId}/audit-log`,
       `GET /api/v1/proposals/${proposalId}/speakers`,
       `POST /api/v1/proposals/${proposalId}/speakers`,
-      expect.stringMatching(new RegExp(`^PATCH /api/v1/proposals/${proposalId}/speakers/`)),
       expect.stringMatching(new RegExp(`^POST /api/v1/proposals/${proposalId}/speakers/.*/reminders$`)),
     ]),
   );

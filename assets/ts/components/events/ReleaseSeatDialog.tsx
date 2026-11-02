@@ -11,7 +11,7 @@ import { formatDayList } from "../../../shared/format-date";
 import { formatNumber } from "../../../shared/format-number";
 import { Checkbox, Radio } from "../../ui/Checkbox";
 import { Dialog } from "../../ui/Dialog";
-import { IN_PERSON } from "./registration-day-changes";
+import { physicalAttendance } from "./registration-day-changes";
 
 type DayAttendance = Array<{ dayDate: string; attendanceType: string }>;
 
@@ -23,7 +23,7 @@ export function releasableDays(data: RegistrationManageReadResponse): string[] {
     data.dayWaitlist.filter((entry) => entry.status === "waiting" || entry.status === "offered").map((e) => e.dayDate),
   );
   return data.dayAttendance
-    .filter((entry) => entry.attendanceType === IN_PERSON && !pending.has(entry.dayDate))
+    .filter((entry) => physicalAttendance(data, entry.dayDate, entry.attendanceType) && !pending.has(entry.dayDate))
     .map((entry) => entry.dayDate)
     .sort();
 }
@@ -35,7 +35,15 @@ function alternatives(data: RegistrationManageReadResponse, dayDates: string[]) 
   );
   const [first = [], ...rest] = options;
   return first.filter(
-    (option) => option.value !== IN_PERSON && rest.every((other) => other.some((o) => o.value === option.value)),
+    (option) =>
+      !physicalAttendance(data, dayDates[0], option.value) &&
+      option.enabled !== false &&
+      rest.every((other, index) =>
+        other.some(
+          (o) =>
+            o.value === option.value && o.enabled !== false && !physicalAttendance(data, dayDates[index + 1], o.value),
+        ),
+      ),
   );
 }
 

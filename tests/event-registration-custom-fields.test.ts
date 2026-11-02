@@ -60,9 +60,9 @@ describe("event registration list generic form contract", () => {
         ).bind(userId, `generic-${index}@example.test`, `generic-${index}@example.test`, `Attendee${index}`),
         env.DB.prepare(
           `INSERT INTO registrations
-             (id, event_id, user_id, status, attendance_type, source_type, custom_answers_json,
+             (id, event_id, user_id, status, source_type, custom_answers_json,
               manage_link_secret, created_at, updated_at)
-           VALUES (?, ?, ?, 'registered', 'virtual', 'self', ?, ?, datetime('now'), datetime('now'))`,
+           VALUES (?, ?, ?, 'registered', 'self', ?, ?, datetime('now'), datetime('now'))`,
         ).bind(registrationId, eventId, userId, JSON.stringify(customAnswers), `manage-${registrationId}`),
       ];
     });

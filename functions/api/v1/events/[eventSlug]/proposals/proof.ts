@@ -13,7 +13,7 @@ import {
 } from "../../../../../../assets/shared/schemas/event-proposal-proof";
 import { identitiesListResponseSchema } from "../../../../../../assets/shared/schemas/identity";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
-import { json, jsonPrivate } from "../../../../../_lib/http";
+import { jsonPrivate } from "../../../../../_lib/http";
 import { getEventBySlug } from "../../../../../_lib/services/events";
 import { requireInternalSecret } from "../../../../../_lib/request";
 import { resolveAppBaseUrl } from "../../../../../_lib/config";
@@ -35,8 +35,10 @@ export const EventProposalProofPost = openApiRoute(eventProposalProofStartRouteS
     signingSecret: requireInternalSecret(c.env),
     actor: await resolveOptionalIdentityFromRequest(c.env.DB, c.req.raw, c.env),
   });
-  if (result.outboxId) c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, result.outboxId));
-  return json(eventProposalProofStartResponseSchema.parse({ status: result.status }));
+  const { outboxId, ...response } = result;
+  if (outboxId) c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outboxId));
+  // A proved mailbox answers with its proof token, which no shared cache may keep.
+  return jsonPrivate(eventProposalProofStartResponseSchema.parse(response));
 });
 
 export const EventProposalProofVerifyPost = openApiRoute(eventProposalProofVerifyRouteSchema, async (c, data) => {
@@ -46,6 +48,8 @@ export const EventProposalProofVerifyPost = openApiRoute(eventProposalProofVerif
       await verifyEventProposalProof(c.env.DB, {
         eventId: event.id,
         token: data.body.token,
+        domain: data.body.domain,
+        affiliation: data.body.affiliation,
         event,
         appBaseUrl: resolveAppBaseUrl(c.env, c.req.raw),
         signingSecret: requireInternalSecret(c.env),

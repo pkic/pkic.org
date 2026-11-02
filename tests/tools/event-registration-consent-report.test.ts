@@ -33,13 +33,12 @@ describe("historical event-confirmation identity review", () => {
         at,
       );
       db.prepare(
-        "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,confirmed_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,confirmed_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)",
       ).run(
         "review-registration",
         "review-event",
         "review-user",
         "registered",
-        "virtual",
         "public",
         "synthetic-review-secret",
         at,

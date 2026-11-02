@@ -34,6 +34,8 @@ export default defineConfig(async () => {
           keys: { "synthetic-test-v1": "synthetic-test-only-badge-print-key-at-least-32-characters" },
         }),
         SENDGRID_API_KEY: "test-key",
+        // Unmocked test sends must fail locally, never reach an external provider.
+        SENDGRID_API_BASE: "http://127.0.0.1:9/mail/send",
         FEEDBACK_IDENTITY_SECRET_V1: "feedback-secret",
         ADMIN_API_KEY: "test-admin-key",
         STRIPE_SECRET_KEY: "sk_test_fake",

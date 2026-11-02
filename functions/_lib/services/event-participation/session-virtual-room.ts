@@ -29,7 +29,7 @@ export function prepareSessionVirtualRoom(
   const statement = db
     .prepare(
       `
-    SELECT ${approvedVirtualRoomUrlSql("approved")} AS url,1 AS registered,registration.attendance_type AS registration_default_mode,
+    SELECT ${approvedVirtualRoomUrlSql("approved")} AS url,1 AS registered,
       ${registrationSessionDayOptionsSql("registration", "access_session")} AS registration_days_json,
       access_session.start_at AS startAt,event.timezone AS timeZone
     FROM event_agenda_state state

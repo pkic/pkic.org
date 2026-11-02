@@ -40,6 +40,11 @@ async function vectorBytes(bytes) {
   }
 }
 
+/** Where published image derivatives are kept between builds of one environment. */
+export function publicMediaCacheDirectory() {
+  return resolve(publicationCacheDirectory("publication-media", process.env.CLOUDFLARE_ENV ?? "local"));
+}
+
 /** Native R2 binding reads; private object keys never enter public output. */
 export async function copyPublicMedia({
   snapshot,
@@ -59,7 +64,7 @@ export async function copyPublicMedia({
     .update(await readFile(createRequire(import.meta.url).resolve("@resvg/resvg-wasm/index_bg.wasm")))
     .digest("hex");
   const cache = await publicMediaCache(
-    resolve(cacheDirectory ?? publicationCacheDirectory("publication-media", process.env.CLOUDFLARE_ENV ?? "local")),
+    resolve(cacheDirectory ?? publicMediaCacheDirectory()),
     revision,
     getObject,
     manifest,

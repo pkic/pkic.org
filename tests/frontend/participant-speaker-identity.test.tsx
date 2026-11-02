@@ -44,6 +44,7 @@ const data = speakerSelfServiceReadResponseSchema.parse({
     headshotUploaded: false,
     headshotUpdatedAt: null,
     headshotUrl: null,
+    personalDetailsEditable: true,
     actingIdentityId: null,
     actingIdentitySelectedAt: null,
     actingIdentitySelection: "unrecorded",
@@ -156,6 +157,11 @@ it("requires speaker terms before resolving identity, preserves refusal, and sav
     ).toBeDefined(),
   );
   const forms = host.querySelectorAll("form");
+  const confirm = Array.from(host.querySelectorAll("button")).find(
+    (button) => button.textContent === "Confirm participation",
+  );
+  expect(confirm?.disabled).toBe(true);
+  expect(host.textContent).toContain("choose and save your speaker identity before confirming");
   await act(async () => {
     forms[0]!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
   });

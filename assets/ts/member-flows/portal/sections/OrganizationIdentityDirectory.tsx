@@ -1,3 +1,9 @@
+import { identityInvitationManagementSchema } from "../../../../shared/schemas/identity-invitation-management";
+import { successResponseSchema } from "../../../../shared/schemas/api-common";
+import { ActivateIdentityInvitationDialog } from "../../../components/identities/ActivateIdentityInvitationDialog";
+import { confirmAction } from "../../../components/ConfirmDialog";
+import { portalSession } from "../state";
+import { portalHasGlobalPermission } from "../shell/portal-navigation";
 import type { ComponentChildren } from "preact";
 import { useRef, useState, type MutableRef } from "preact/hooks";
 import { usePortalHashLocation } from "../hash-location";
@@ -16,7 +22,7 @@ import { ReinstateRepresentationDialog } from "../../../components/identities/Re
 import { EndRepresentationDialog } from "../../../components/identities/EndRepresentationDialog";
 import type { DataTableRowAction } from "../../../ui/DataTable";
 import { portalEntityHref } from "../entity-links";
-import { patchJson } from "../../../shared/api-client";
+import { patchJson, postJson } from "../../../shared/api-client";
 import { PersonCellPreview } from "../../../components/identities/PersonCellPreview";
 import { toast } from "../ui";
 export interface ActiveActingIdentity {
@@ -121,6 +127,7 @@ export function ActingIdentityDirectory({
   const localTableRef = useRef<ApiTableActions | null>(null);
   const tableRef = actionsRef ?? localTableRef;
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
+  const [activating, setActivating] = useState<ActingIdentity | null>(null);
   const [ending, setEnding] = useState<ActingIdentity | null>(null);
   const [reinstating, setReinstating] = useState<ActingIdentity | null>(null);
 
@@ -189,11 +196,59 @@ export function ActingIdentityDirectory({
     await refresh();
   }
 
+  async function cancelInvitation(identity: ActingIdentity) {
+    if (
+      !(await confirmAction({
+        title: "Cancel invitation?",
+        body: `Remove the pending representation for ${identity.userName}. Their account and other representations stay available.`,
+        confirmLabel: "Cancel invitation",
+        tone: "danger",
+      }))
+    )
+      return;
+    setBusyUserId(identity.id);
+    try {
+      await postJson(
+        `/api/v1/organizations/${encodeURIComponent(organizationId)}/identities/${encodeURIComponent(identity.id)}/invitation`,
+        identityInvitationManagementSchema.parse({ action: "cancel", userId: identity.userId }),
+        successResponseSchema,
+      );
+      toast("Invitation cancelled", "success");
+      await refresh();
+    } catch (cause) {
+      toast(cause instanceof Error ? cause.message : "Could not cancel the invitation.", "error");
+    } finally {
+      setBusyUserId(null);
+    }
+  }
+
   function rowActions(identity: ActingIdentity): MenuItem[] {
     const status = statusLabel(identity);
     const busy = busyUserId === identity.id;
     if (identity.state === "ended" && canBlock(identity.userId)) {
       return [{ id: "reinstate", label: "Reinstate representation…", onSelect: () => setReinstating(identity) }];
+    }
+    if (identity.state === "pending") {
+      if (!canBlock(identity.userId)) return [];
+      const actions: MenuItem[] = [];
+      if (
+        portalHasGlobalPermission(portalSession.value, "membership:write") &&
+        portalHasGlobalPermission(portalSession.value, "identities:activate")
+      )
+        actions.push({
+          id: "activate",
+          label: "Activate representation…",
+          disabled: busy,
+          onSelect: () => setActivating(identity),
+        });
+      actions.push({
+        id: "cancel",
+        label: "Cancel invitation…",
+        danger: true,
+        disabled: busy,
+        onSelect: () => void cancelInvitation(identity),
+      });
+      return actions;
     }
     if (status !== "Active") return [];
     const actions: MenuItem[] = [
@@ -218,6 +273,16 @@ export function ActingIdentityDirectory({
 
   return (
     <>
+      {activating && (
+        <ActivateIdentityInvitationDialog
+          organizationId={organizationId}
+          identityId={activating.id}
+          userId={activating.userId}
+          name={activating.userName}
+          onChanged={refresh}
+          onClose={() => setActivating(null)}
+        />
+      )}
       {reinstating && (
         <ReinstateRepresentationDialog
           organizationName="this organization"

@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
+import { definitionFor } from "./definition-list";
 import { uploadThroughControl } from "./file-upload";
 import { expect, type Page, type APIResponse, type BrowserContext, type Request, type Route } from "@playwright/test";
 import { z } from "zod";
@@ -9,6 +10,14 @@ import { archivedScanSchema, scanRecoverySchema } from "../../../assets/shared/s
 import { SCAN_STORAGE_VERSION } from "../../../assets/ts/member-flows/portal/sections/events/detail/scanner/outbox-storage";
 
 export const queuedScanSchema = scannerQueueRecordSchema.options[0].extend({
+  leaseUntil: z.number(),
+  owner: z.string().nullable(),
+  attempts: z.number().optional(),
+  nextAttemptAt: z.number().optional(),
+});
+
+/** A refused attempt (malformed code, unsupported code) the scanner audits in the same ledger as accepted scans. */
+export const queuedFailureSchema = scannerQueueRecordSchema.options[1].extend({
   leaseUntil: z.number(),
   owner: z.string().nullable(),
   attempts: z.number().optional(),
@@ -52,8 +61,10 @@ export async function scannerStorage(page: Page) {
       db.close();
     }
   }, SCAN_STORAGE_VERSION);
+  const failureKind = (record: unknown) => (record as { kind?: unknown } | null)?.kind === "failure";
   return {
-    pending: stored.pending.map((record) => queuedScanSchema.parse(record)),
+    pending: stored.pending.filter((record) => !failureKind(record)).map((record) => queuedScanSchema.parse(record)),
+    failures: stored.pending.filter(failureKind).map((record) => queuedFailureSchema.parse(record)),
     history: stored.history.map((record) => archivedScanSchema.parse(record)),
   };
 }
@@ -84,7 +95,7 @@ export async function openScannerManualEntry(page: Page): Promise<void> {
       const controls = page.getByRole("dialog", { name: "Scanner operator controls", exact: true });
       if (await controls.isVisible())
         await controls.getByRole("button", { name: "Close operator controls", exact: true }).click();
-      await continuous.getByRole("button", { name: "Enter or paste code", exact: true }).click();
+      await continuous.getByRole("button", { name: "Manual entry", exact: true }).click();
     } else {
       const scan = page.getByRole("tab", { name: "Setup", exact: true });
       if ((await scan.isVisible()) && (await scan.getAttribute("aria-selected")) === "false") await scan.click();
@@ -145,11 +156,14 @@ export async function scannerSessionState(page: Page): Promise<unknown> {
   });
 }
 
+/** The phone event app has no account menu, so the account control is used in the same page's desktop layout. */
 export async function signOutThroughPortal(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Open navigation", exact: true }).click();
+  const original = page.viewportSize();
+  if (original && original.width < 1024) await page.setViewportSize({ width: 1280, height: 900 });
   await page.getByRole("button", { name: "Account menu", exact: true }).click();
   await page.getByRole("menuitem", { name: "Sign out", exact: true }).click();
   await expect(page.getByRole("button", { name: "Sign in with a passkey", exact: true })).toBeVisible();
+  if (original) await page.setViewportSize(original);
 }
 
 export async function importScannerRecoveryFile(page: Page, path: string): Promise<void> {
@@ -238,8 +252,7 @@ export async function holdGuardedLogout(page: Page, sessionId: string) {
 }
 
 export async function expectScannerSyncTime(page: Page, text: string): Promise<void> {
-  const term = page.locator("dt").filter({ hasText: /^Last successful scan sync$/ });
-  await expect(term.locator("xpath=following-sibling::dd[1]")).toHaveText(text);
+  await expect(definitionFor(page, "Last successful scan sync")).toHaveText(text);
 }
 
 export async function scannerEligibilityCount(page: Page): Promise<number> {

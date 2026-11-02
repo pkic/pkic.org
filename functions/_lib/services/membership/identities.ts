@@ -8,6 +8,7 @@ import type { DatabaseLike, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { prepareIdentityEmailOwnershipStatements, requireIdentityEmailAssignable } from "../identities/email-ownership";
+import { identityCreationSelections } from "../identities/creation-read";
 
 export type IdentitySource = z.infer<typeof identitySourceSchema>;
 
@@ -106,21 +107,24 @@ export async function buildCreateIdentityStatement(
     now?: string;
     condition?: AuthorizationEvidence;
   },
+  observed?: {
+    unresolved: { id: string; started_at: string | null; blocked_at: string | null } | null;
+    latest: { id: string } | null;
+    emailOwner: { identity_id: string | null } | null;
+  },
 ): Promise<{ identityId: string; statement: StatementLike; emailOwnership: StatementLike[] }> {
   if (input.verifiedEmailDomain != null && (input.source !== "verified_email" || input.organizationId === null))
     throw new AppError(422, "IDENTITY_PROOF_DOMAIN_INVALID", "Only verified-email affiliations retain a proof domain");
   const at = input.now ?? nowIso();
   const scope = sameScopePredicate(input.organizationId);
-  const unresolved = await first<{ id: string; started_at: string | null; blocked_at: string | null }>(
-    db,
-    `SELECT id, started_at, blocked_at
-       FROM identities
-      WHERE user_id = ? AND ${scope.sql}
-        AND ended_at IS NULL
-      ORDER BY invited_at DESC, id DESC
-      LIMIT 1`,
-    [input.userId, ...scope.binding],
-  );
+  const reads = identityCreationSelections(input.userId, input.organizationId);
+  const unresolved = observed
+    ? observed.unresolved
+    : await first<{ id: string; started_at: string | null; blocked_at: string | null }>(
+        db,
+        reads.unresolved.sql,
+        reads.unresolved.bindings,
+      );
   if (unresolved?.blocked_at) {
     throw new AppError(409, "IDENTITY_BLOCKED", "This identity is blocked and requires an explicit reviewed successor");
   }
@@ -132,13 +136,7 @@ export async function buildCreateIdentityStatement(
     );
   }
 
-  const latest = await first<{ id: string }>(
-    db,
-    `SELECT id FROM identities
-      WHERE user_id = ? AND ${scope.sql}
-      ORDER BY COALESCE(ended_at, invited_at) DESC, id DESC LIMIT 1`,
-    [input.userId, ...scope.binding],
-  );
+  const latest = observed ? observed.latest : await first<{ id: string }>(db, reads.latest.sql, reads.latest.bindings);
   const identityId = uuid();
   const predecessorIdentityId = input.predecessorIdentityId ?? latest?.id ?? null;
   const ownership = {
@@ -147,7 +145,7 @@ export async function buildCreateIdentityStatement(
     identityId,
     transferFromIdentityId: predecessorIdentityId,
   };
-  await requireIdentityEmailAssignable(db, { ...ownership, identityId: null });
+  await requireIdentityEmailAssignable(db, { ...ownership, identityId: null }, observed?.emailOwner);
   const showOnOrganizationProfile = input.organizationId !== null && input.showOnOrganizationProfile !== false ? 1 : 0;
   const values = [
     identityId,

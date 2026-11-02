@@ -1,3 +1,5 @@
+import { confirmWorkRegistration } from "./helpers/registration-confirmation";
+import { validateEmailDeliveryGuard } from "../functions/_lib/email/delivery-guard";
 import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
 import { addRepresentative, seedOrganizationAggregate, insertOrganization } from "./helpers/membership";
 import { declineSpeakerParticipation } from "../functions/_lib/services/proposal-speaker-decline";
@@ -45,7 +47,10 @@ import {
   uploadProposalSpeakerSelfHeadshot,
 } from "../functions/_lib/services/proposal-speaker-self-headshot";
 import type { DatabaseLike } from "../functions/_lib/types";
-import { speakerSelfServiceReadResponseSchema } from "../assets/shared/schemas/speaker-self-service";
+import {
+  speakerProfileUpdateResponseSchema,
+  speakerSelfServiceReadResponseSchema,
+} from "../assets/shared/schemas/speaker-self-service";
 import {
   inviteSpeakerAndSubmitCapacityProposal,
   setupProposalSpeakerCapacityWorkflow,
@@ -55,6 +60,8 @@ import { prepareRotateUserProposalSpeakerManageSecrets } from "../functions/_lib
 import { setSpeakerPresentationReminderPreference } from "../functions/_lib/services/speaker-presentation-reminder-preferences";
 import { createRegistration, confirmRegistrationByToken } from "../functions/_lib/services/registrations";
 import { presentationUploadRequest } from "../assets/shared/presentation-upload";
+import { createMemberSession } from "./helpers/auth";
+import { seedSessionAttendanceDays } from "./helpers/session-attendance-days";
 
 function mountedSpeakerRoute(c: any): Promise<Response> {
   return app.fetch(c.req.raw, c.env, { passThroughOnException: () => {}, waitUntil: () => {} } as any);
@@ -123,13 +130,14 @@ async function setupWorkflow() {
   return { eventId, adminUserId: adminUser.id };
 }
 
-async function inviteSpeakerAndSubmitProposal(): Promise<{
+/** By default the invited co-speaker's account has a proved mailbox; `unclaimed` leaves it as only the invitation made it. */
+async function inviteSpeakerAndSubmitProposal(options: { unclaimed?: boolean } = {}): Promise<{
   speakerManageToken: string;
   proposalId: string;
   coSpeakerUserId: string;
   proposalManageToken: string;
 }> {
-  return inviteSpeakerAndSubmitCapacityProposal(adminSessionToken);
+  return inviteSpeakerAndSubmitCapacityProposal(adminSessionToken, { speakerEmailVerified: !options.unclaimed });
 }
 
 describe("speaker self-management endpoints", () => {
@@ -230,7 +238,10 @@ describe("speaker self-management endpoints", () => {
 
   it("records an added speaker's consent only when they accept for themselves", async () => {
     await setupWorkflow();
-    const { speakerManageToken, proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    const { speakerManageToken, proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitCapacityProposal(
+      adminSessionToken,
+      { speakerEmailVerified: false },
+    );
     const consentHolders = () =>
       queryAll<{ user_id: string }>(
         env.DB,
@@ -245,6 +256,22 @@ describe("speaker self-management endpoints", () => {
         coSpeakerUserId,
       ]),
     ).resolves.toEqual([{ status: "invited" }]);
+    const otherProposalId = crypto.randomUUID(),
+      otherSpeakerId = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(`INSERT INTO session_proposals(id,event_id,proposer_user_id,status,proposal_type,title,abstract,manage_link_secret,submitted_at,updated_at)
+        SELECT ?,event_id,proposer_user_id,'submitted','talk','Another invitation','Abstract','other-proposal-secret',submitted_at,updated_at FROM session_proposals WHERE id=?`).bind(
+        otherProposalId,
+        proposalId,
+      ),
+      env.DB.prepare(`INSERT INTO proposal_speakers(id,proposal_id,user_id,role,status,manage_link_secret,created_at)
+        SELECT ?,?,user_id,role,'invited','other-speaker-secret',created_at FROM proposal_speakers WHERE proposal_id=? AND user_id=?`).bind(
+        otherSpeakerId,
+        otherProposalId,
+        proposalId,
+        coSpeakerUserId,
+      ),
+    ]);
     await selectIndividualSpeakerRepresentation({
       environment: env,
       eventSlug: "pqc-2026",
@@ -252,6 +279,11 @@ describe("speaker self-management endpoints", () => {
       consents: [{ termKey: "speaker-terms", version: "v1" }],
       speakerManagementToken: speakerManageToken,
     });
+    expect(
+      await env.DB.prepare("SELECT manage_link_secret FROM proposal_speakers WHERE id=?")
+        .bind(otherSpeakerId)
+        .first("manage_link_secret"),
+    ).not.toBe("other-speaker-secret");
     // Choosing a representation is not acceptance: the speaker is still pending and has accepted nothing.
     expect((await consentHolders()).map((row) => row.user_id)).not.toContain(coSpeakerUserId);
     const confirmation = await speakerPost(
@@ -418,6 +450,19 @@ describe("speaker self-management endpoints", () => {
       ),
     ).resolves.toEqual([]);
     await expect(queryAll(env.DB, "SELECT id FROM users WHERE id = ?", [coSpeakerUserId])).resolves.toHaveLength(1);
+    const removalNotices = await queryAll<{ recipient_user_id: string; payload_json: string }>(
+      env.DB,
+      "SELECT recipient_user_id, payload_json FROM email_outbox WHERE template_key = '__direct__' AND recipient_user_id = ?",
+      [coSpeakerUserId],
+    );
+    expect(removalNotices).toHaveLength(1);
+    expect(JSON.parse(removalNotices[0].payload_json).__directBodyContent).toContain("removed as a speaker");
+    const noticePayload = JSON.parse(removalNotices[0].payload_json) as Record<string, unknown>;
+    await expect(validateEmailDeliveryGuard(env.DB, noticePayload)).resolves.toBeUndefined();
+    await env.DB.prepare("UPDATE users SET email = ?, normalized_email = ? WHERE id = ?")
+      .bind("changed@example.test", "changed@example.test", coSpeakerUserId)
+      .run();
+    await expect(validateEmailDeliveryGuard(env.DB, noticePayload)).rejects.toThrow("no longer deliverable");
     await expect(
       queryAll<{ scope_type: string | null; scope_id: string | null }>(
         env.DB,
@@ -1108,6 +1153,7 @@ describe("speaker self-management endpoints", () => {
         manageToken: proposalManageToken,
         signingSecret: env.INTERNAL_SIGNING_SECRET!,
         userId: coSpeakerUserId,
+        appBaseUrl: "https://example.test",
       }),
     ).rejects.toMatchObject({ code: "PROPOSAL_SPEAKER_CONFLICT" });
     await expect(
@@ -1293,6 +1339,66 @@ describe("speaker self-management endpoints", () => {
     const body = (await response.json()) as { success: boolean; status: string };
     expect(body.success).toBe(true);
     expect(body.status).toBe("declined");
+
+    // The proposer is told in the same commit, by the address they invited and with the reason.
+    const notices = await queryAll<{ recipient_email: string; speaker: string; reason: string }>(
+      env.DB,
+      `SELECT recipient_email,
+              json_extract(payload_json, '$.speakerName.__pkicEmailPlainText') AS speaker,
+              json_extract(payload_json, '$.declineReason.__pkicEmailPlainText') AS reason
+         FROM email_outbox WHERE template_key = 'proposal_speaker_declined'`,
+    );
+    expect(notices).toEqual([
+      { recipient_email: "speaker@example.test", speaker: "cospeaker@example.test", reason: "Schedule conflict" },
+    ]);
+  });
+
+  it("POST decline — names the speaker to the proposer by the invited address, not the account's primary one", async () => {
+    await setupWorkflow();
+    const { speakerManageToken, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    // The invited address is an alias of an account whose primary address the proposer never typed.
+    await env.DB.prepare("UPDATE users SET email = ?, normalized_email = ? WHERE id = ?")
+      .bind("cospeaker-primary@example.test", "cospeaker-primary@example.test", coSpeakerUserId)
+      .run();
+
+    const response = await speakerPost(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerManageToken}/participation`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ status: "declined" }),
+        }),
+        { token: speakerManageToken },
+      ),
+    );
+    expect(response.status, await response.clone().text()).toBe(200);
+
+    const notices = await queryAll<{ speaker: string }>(
+      env.DB,
+      `SELECT json_extract(payload_json, '$.speakerName.__pkicEmailPlainText') AS speaker
+         FROM email_outbox WHERE template_key = 'proposal_speaker_declined'`,
+    );
+    expect(notices).toEqual([{ speaker: "cospeaker@example.test" }]);
+  });
+
+  it("POST decline — sends the proposer's notice at once instead of leaving it queued", async () => {
+    await setupWorkflow();
+    const { speakerManageToken } = await inviteSpeakerAndSubmitProposal();
+
+    const response = await callApi(env, `/api/v1/proposals/speakers/access/${speakerManageToken}/participation`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ status: "declined" }),
+    });
+    expect(response.status, await response.clone().text()).toBe(200);
+
+    const notices = await queryAll<{ status: string }>(
+      env.DB,
+      "SELECT status FROM email_outbox WHERE template_key = 'proposal_speaker_declined'",
+    );
+    expect(notices).toHaveLength(1);
+    expect(notices[0]!.status).not.toBe("queued");
   });
 
   it("POST decline — rejects a capability after the proposal closes", async () => {
@@ -1329,10 +1435,12 @@ describe("speaker self-management endpoints", () => {
     const { speakerManageToken, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
     const memberId = await seedOrganizationAggregate(env.DB, await insertOrganization(env.DB));
     await addRepresentative(env.DB, memberId, coSpeakerUserId);
+    // A member's account has a proved mailbox, so their own sign-in goes with the link.
+    const session = await createMemberSession(env.DB, coSpeakerUserId, crypto.randomUUID(), undefined, null);
     const save = () =>
       callApi(env, `/api/v1/proposals/speakers/access/${speakerManageToken}/profile`, {
         method: "PATCH",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", authorization: `Bearer ${session}` },
         body: JSON.stringify({ firstName: "Published", lastName: "Speaker" }),
       });
     const saved = await save();
@@ -1345,9 +1453,44 @@ describe("speaker self-management endpoints", () => {
     expect(await queryAll(env.DB, "SELECT id FROM site_publication_requests")).toHaveLength(1);
   });
 
-  it("PATCH updates speaker profile fields", async () => {
+  it("PATCH refuses a link-only rename of an account whose mailbox was proved", async () => {
     await setupWorkflow();
-    const { speakerManageToken } = await inviteSpeakerAndSubmitProposal();
+    const { speakerManageToken, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    const rename = (headers: Record<string, string> = {}) =>
+      callApi(env, `/api/v1/proposals/speakers/access/${speakerManageToken}/profile`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json", ...headers },
+        body: JSON.stringify({ firstName: "Hijacked", lastName: "Name" }),
+      });
+
+    const refused = await rename();
+    expect(refused.status).toBe(403);
+    await expect(refused.json()).resolves.toMatchObject({ error: { code: "SPEAKER_ACCOUNT_SIGN_IN_REQUIRED" } });
+    await expect(queryAll(env.DB, "SELECT first_name FROM users WHERE id = ?", [coSpeakerUserId])).resolves.toEqual([
+      { first_name: "Co" },
+    ]);
+    const read = speakerSelfServiceReadResponseSchema.parse(
+      await (await callApi(env, `/api/v1/proposals/speakers/access/${speakerManageToken}`)).json(),
+    );
+    expect(read.profile.personalDetailsEditable).toBe(false);
+
+    // Someone else's session is not the person's own.
+    const otherUser = await findOrCreateUser(env.DB, { email: "other-person@example.test" });
+    const otherSession = await createMemberSession(env.DB, otherUser.id, crypto.randomUUID());
+    expect((await rename({ authorization: `Bearer ${otherSession}` })).status).toBe(403);
+
+    const ownSession = await createMemberSession(env.DB, coSpeakerUserId, crypto.randomUUID());
+    const saved = await rename({ authorization: `Bearer ${ownSession}` });
+    expect(saved.status, await saved.clone().text()).toBe(200);
+    expect(speakerProfileUpdateResponseSchema.parse(await saved.json()).profile).toMatchObject({
+      firstName: "Hijacked",
+      personalDetailsEditable: true,
+    });
+  });
+
+  it("PATCH lets the link name an account only the invitation made", async () => {
+    await setupWorkflow();
+    const { speakerManageToken } = await inviteSpeakerAndSubmitProposal({ unclaimed: true });
 
     const response = await speakerPatch(
       createContext(
@@ -1427,7 +1570,7 @@ describe("speaker self-management endpoints", () => {
 
   it("rejects a stale speaker profile patch when the speaker's identity choice changed", async () => {
     await setupWorkflow();
-    const { proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    const { proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal({ unclaimed: true });
     const [speaker] = await queryAll<{
       id: string;
       status: string;
@@ -1459,6 +1602,7 @@ describe("speaker self-management endpoints", () => {
           userId: coSpeakerUserId,
           currentStatus: speaker.status,
           inviteGeneration: speaker.invite_generation,
+          accountAuthority: "unclaimed",
         },
       ),
     ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_SPEAKER_CONFLICT" });
@@ -1473,7 +1617,7 @@ describe("speaker self-management endpoints", () => {
 
   it("rolls back an account profile patch when the proposal closes after authorization", async () => {
     await setupWorkflow();
-    const { proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    const { proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal({ unclaimed: true });
     const [speaker] = await queryAll<{
       id: string;
       status: string;
@@ -1503,6 +1647,7 @@ describe("speaker self-management endpoints", () => {
           userId: coSpeakerUserId,
           currentStatus: speaker.status,
           inviteGeneration: speaker.invite_generation,
+          accountAuthority: "unclaimed",
         },
       ),
     ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_SPEAKER_CONFLICT" });
@@ -1513,7 +1658,7 @@ describe("speaker self-management endpoints", () => {
 
   it("rolls back a speaker profile patch when canonical-email revocation wins the commit race", async () => {
     await setupWorkflow();
-    const { speakerManageToken, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    const { speakerManageToken, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal({ unclaimed: true });
     const { speaker, proposal, user } = await getSpeakerByManageToken(
       env.DB,
       speakerManageToken,
@@ -1535,6 +1680,7 @@ describe("speaker self-management endpoints", () => {
           userId: user.id,
           currentStatus: speaker.status,
           inviteGeneration: speaker.invite_generation,
+          accountAuthority: "unclaimed",
         },
       ),
     ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_SPEAKER_CONFLICT" });
@@ -1562,6 +1708,9 @@ describe("speaker self-management endpoints", () => {
         coSpeakerUserId,
       ]),
     ).resolves.toEqual([{ status: "invited" }]);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key = 'proposal_speaker_declined'"),
+    ).resolves.toEqual([]);
   });
 
   it("rolls back reminder preferences when canonical-email revocation wins the commit race", async () => {
@@ -1943,6 +2092,21 @@ describe("speaker self-management endpoints", () => {
       invitedUser.id,
     );
     expect(speaker).toMatchObject({ status: "invited", invite_generation: 0 });
+    const invitationEmail = (
+      await queryAll<{ payload_json: string }>(
+        env.DB,
+        "SELECT payload_json FROM email_outbox WHERE template_key = 'co_speaker_invite' AND recipient_user_id = ?",
+        invitedUser.id,
+      )
+    )[0];
+    const invitationPayload = await deliveredEmailPayload<{ manageUrl: string; __speakerCapability: string }>(
+      env.DB,
+      env,
+      invitationEmail.payload_json,
+    );
+    expect(new URL(invitationPayload.manageUrl).hash).toContain(`/proposals/${proposalId}/participation`);
+    expect(invitationPayload.manageUrl).not.toContain("token=");
+    expect(invitationPayload.__speakerCapability).toBeTruthy();
     const oldManageToken = await issueDatabaseCapability({
       db: env.DB,
       signingSecret: env.INTERNAL_SIGNING_SECRET!,
@@ -2077,7 +2241,7 @@ describe("speaker self-management endpoints", () => {
 
   it("speaker manage token uploads and serves the person's own headshot", async () => {
     await setupWorkflow();
-    const { speakerManageToken, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    const { speakerManageToken, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal({ unclaimed: true });
     const bucket = new FakeUploadsBucket();
 
     const file = new File([validJpegBytes()], "headshot.jpg", { type: "image/jpeg" });
@@ -2118,9 +2282,39 @@ describe("speaker self-management endpoints", () => {
     expect(serveResponse.headers.get("content-type")).toBe("image/jpeg");
   });
 
-  it("compensates a self headshot upload when canonical-email revocation wins the D1 race", async () => {
+  it("refuses a link-only headshot change on an account whose mailbox was proved", async () => {
     await setupWorkflow();
     const { speakerManageToken, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    const existingKey = `headshots/${coSpeakerUserId}/existing.jpg`;
+    await env.DB.prepare("UPDATE users SET headshot_r2_key = ? WHERE id = ?").bind(existingKey, coSpeakerUserId).run();
+    const bucket = new FakeUploadsBucket();
+    const send = (method: "PUT" | "DELETE") => {
+      const body = new FormData();
+      body.append("file", new File([validJpegBytes()], "headshot.jpg", { type: "image/jpeg" }));
+      return app.fetch(
+        new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerManageToken}/headshot`, {
+          method,
+          ...(method === "PUT" ? { body } : {}),
+        }),
+        { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
+        { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+      );
+    };
+
+    for (const method of ["PUT", "DELETE"] as const) {
+      const refused = await send(method);
+      expect(refused.status, method).toBe(403);
+      await expect(refused.json()).resolves.toMatchObject({ error: { code: "SPEAKER_ACCOUNT_SIGN_IN_REQUIRED" } });
+    }
+    expect(bucket.keys()).toEqual([]);
+    await expect(
+      queryAll(env.DB, "SELECT headshot_r2_key FROM users WHERE id = ?", [coSpeakerUserId]),
+    ).resolves.toEqual([{ headshot_r2_key: existingKey }]);
+  });
+
+  it("compensates a self headshot upload when canonical-email revocation wins the D1 race", async () => {
+    await setupWorkflow();
+    const { speakerManageToken, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal({ unclaimed: true });
     const { speaker, proposal, user } = await getSpeakerByManageToken(
       env.DB,
       speakerManageToken,
@@ -2128,7 +2322,7 @@ describe("speaker self-management endpoints", () => {
     );
     const [{ total: badgeJobsBeforeUpload }] = await queryAll<{ total: number }>(
       env.DB,
-      "SELECT COUNT(*) AS total FROM badge_render_jobs",
+      "SELECT COUNT(*) AS total FROM event_promotion_renders",
     );
     const bucket = new FakeUploadsBucket();
     const scopedEnv = { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket } as any;
@@ -2160,6 +2354,7 @@ describe("speaker self-management endpoints", () => {
           currentStatus: speaker.status,
           inviteGeneration: speaker.invite_generation,
           headshotKey: user.headshot_r2_key,
+          accountAuthority: "unclaimed",
         },
         { buffer: new Uint8Array([0xff, 0xd8, 0xff, 0xd9]).buffer, contentType: "image/jpeg" },
       ),
@@ -2177,12 +2372,14 @@ describe("speaker self-management endpoints", () => {
     await expect(
       queryAll(env.DB, "SELECT object_key FROM storage_deletion_outbox WHERE object_key LIKE 'headshots/%'"),
     ).resolves.toHaveLength(0);
-    await expect(queryAll(env.DB, "SELECT id FROM badge_render_jobs")).resolves.toHaveLength(badgeJobsBeforeUpload);
+    await expect(queryAll(env.DB, "SELECT id FROM event_promotion_renders")).resolves.toHaveLength(
+      badgeJobsBeforeUpload,
+    );
   });
 
   it("rolls back a self headshot delete when roster authority is revoked before D1 commit", async () => {
     await setupWorkflow();
-    const { speakerManageToken } = await inviteSpeakerAndSubmitProposal();
+    const { speakerManageToken } = await inviteSpeakerAndSubmitProposal({ unclaimed: true });
     const { speaker, proposal, user } = await getSpeakerByManageToken(
       env.DB,
       speakerManageToken,
@@ -2190,7 +2387,7 @@ describe("speaker self-management endpoints", () => {
     );
     const [{ total: badgeJobsBeforeDelete }] = await queryAll<{ total: number }>(
       env.DB,
-      "SELECT COUNT(*) AS total FROM badge_render_jobs",
+      "SELECT COUNT(*) AS total FROM event_promotion_renders",
     );
     const existingKey = `headshots/${user.id}/existing.jpg`;
     const bucket = new FakeUploadsBucket();
@@ -2226,6 +2423,7 @@ describe("speaker self-management endpoints", () => {
         currentStatus: speaker.status,
         inviteGeneration: speaker.invite_generation,
         headshotKey: existingKey,
+        accountAuthority: "unclaimed",
       }),
     ).rejects.toMatchObject({ status: 409, code: "HEADSHOT_CHANGED" });
 
@@ -2238,13 +2436,15 @@ describe("speaker self-management endpoints", () => {
     await expect(
       queryAll(env.DB, "SELECT object_key FROM storage_deletion_outbox WHERE object_key = ?", [existingKey]),
     ).resolves.toHaveLength(0);
-    await expect(queryAll(env.DB, "SELECT id FROM badge_render_jobs")).resolves.toHaveLength(badgeJobsBeforeDelete);
+    await expect(queryAll(env.DB, "SELECT id FROM event_promotion_renders")).resolves.toHaveLength(
+      badgeJobsBeforeDelete,
+    );
     expect(await bucket.get(existingKey)).not.toBeNull();
   });
 
   it("rejects MIME-spoofed headshots through the speaker capability", async () => {
     await setupWorkflow();
-    const { speakerManageToken } = await inviteSpeakerAndSubmitProposal();
+    const { speakerManageToken } = await inviteSpeakerAndSubmitProposal({ unclaimed: true });
     const bucket = new FakeUploadsBucket();
     const formData = new FormData();
     formData.append("file", new File(["not an image"], "headshot.jpg", { type: "image/jpeg" }));
@@ -2310,7 +2510,7 @@ describe("speaker self-management endpoints", () => {
     expect(outboxRows[0].payload_json).toContain("profileUrl");
   });
 
-  it("admin remind speaker issues a valid token that the speaker can use", async () => {
+  it("admin reminder links to the event app and retains its delivery guard", async () => {
     await setupWorkflow();
     const { proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
 
@@ -2327,24 +2527,26 @@ describe("speaker self-management endpoints", () => {
     );
     expect(remindResponse.status).toBe(200);
 
-    // Extract the token from the queued email's profileUrl
+    // The email opens the account-owned participation; its private guard is not in the link.
     const outboxRows = await queryAll<{ template_key: string; payload_json: string }>(
       env.DB,
       "SELECT template_key, payload_json FROM email_outbox ORDER BY created_at DESC LIMIT 1",
     );
     expect(outboxRows[0].template_key).toBe("speaker_profile_reminder");
-    const payload = await deliveredEmailPayload<{ profileUrl?: string; requiresConfirmation?: boolean }>(
-      env.DB,
-      env,
-      outboxRows[0].payload_json,
-    );
+    const payload = await deliveredEmailPayload<{
+      profileUrl?: string;
+      requiresConfirmation?: boolean;
+      __speakerCapability?: string;
+    }>(env.DB, env, outboxRows[0].payload_json);
     expect(payload.requiresConfirmation).toBe(true);
     expect(payload.profileUrl).toBeDefined();
     const profileUrl = new URL(payload.profileUrl!);
-    const token = profileUrl.searchParams.get("token");
+    expect(profileUrl.hash).toContain(`/proposals/${proposalId}/participation`);
+    expect(profileUrl.searchParams.get("token")).toBeNull();
+    const token = payload.__speakerCapability;
     expect(token).toBeTruthy();
 
-    // The token from the email must be usable to access the speaker endpoint
+    // Delivery still validates the speaker capability against the live invitation.
     const speakerResponse = await speakerGet(
       createContext(env, new Request(`https://app.test/api/v1/proposals/speakers/access/${token}`, { method: "GET" }), {
         token: token!,
@@ -2589,7 +2791,8 @@ describe("speaker nomination by attendees", () => {
   });
 
   async function registerAndConfirmAttendee(): Promise<string> {
-    await setupWorkflow();
+    const { eventId } = await setupWorkflow();
+    await seedSessionAttendanceDays(env.DB, eventId, ["2026-12-01"]);
 
     const regResponse = await mountedSpeakerRoute(
       createContext(
@@ -2601,7 +2804,7 @@ describe("speaker nomination by attendees", () => {
             firstName: "Attendee",
             lastName: "Nominator",
             email: "nominator@pkic.org",
-            attendanceType: "in_person",
+            dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
             sourceType: "direct",
             consents: [
               { termKey: "privacy-policy", version: "v1" },
@@ -2612,7 +2815,7 @@ describe("speaker nomination by attendees", () => {
         { eventSlug: "pqc-2026" },
       ),
     );
-    expect(regResponse.status).toBe(200);
+    expect(regResponse.status, await regResponse.clone().text()).toBe(200);
     await regResponse.json();
 
     const outbox = await queryAll<{ payload_json: string }>(
@@ -2623,21 +2826,15 @@ describe("speaker nomination by attendees", () => {
     const confirmUrl = new URL(emailPayload.confirmationUrl);
     const confirmToken = confirmUrl.searchParams.get("token") as string;
 
-    const confirmResponse = await mountedSpeakerRoute(
-      createContext(
-        env,
-        new Request(
-          `https://app.test/api/v1/events/pqc-2026/registrations/confirm-email?token=${encodeURIComponent(confirmToken)}`,
-        ),
-        { eventSlug: "pqc-2026" },
-      ),
-    );
+    const confirmResponse = await confirmWorkRegistration(env, confirmToken);
+    expect(confirmResponse.status, await confirmResponse.clone().text()).toBe(200);
     const confirmPayload = (await confirmResponse.json()) as { manageToken: string };
     return confirmPayload.manageToken;
   }
 
   async function registerAndConfirmAttendeeDirect(): Promise<string> {
     const { eventId } = await setupWorkflow();
+    await seedSessionAttendanceDays(env.DB, eventId, ["2026-12-01"]);
     const attendee = await findOrCreateUser(env.DB, {
       email: `nominator-${crypto.randomUUID()}@pkic.org`,
       firstName: "Attendee",
@@ -2646,7 +2843,7 @@ describe("speaker nomination by attendees", () => {
     const created = await createRegistration(env.DB, {
       event: { id: eventId },
       userId: attendee.id,
-      attendanceType: "virtual",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
       signingSecret: env.INTERNAL_SIGNING_SECRET!,

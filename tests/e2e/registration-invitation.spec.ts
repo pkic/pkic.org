@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import { registrationCreateSchema } from "../../assets/shared/schemas/registration";
 import { EMAIL_FIRST_COPY } from "../../assets/shared/email-first-copy";
 import { continueRegistrationWithEmail } from "./helpers/registration";
@@ -6,7 +6,27 @@ import { continueRegistrationWithEmail } from "./helpers/registration";
 const slug = "pqc-conference-amsterdam-nl";
 const registrationPath = `/events/2026/${slug}/register/`;
 
-test("checks invitation access before signup and preserves the review on late expiry", async ({ page }) => {
+async function captureStep(page: Page, info: TestInfo, step: number, name: string) {
+  const panel = page.locator(`[data-step='${step}']`);
+  await expect(panel).toBeVisible();
+  await expect(panel).toHaveCSS("opacity", "1");
+  for (const [width, height, device] of [
+    [1280, 900, "desktop"],
+    [375, 812, "phone"],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.evaluate(() => window.scrollTo(0, 0));
+    const form = await page.locator("[data-event-registration] form").boundingBox();
+    expect(form).not.toBeNull();
+    await page.screenshot({
+      path: info.outputPath(`public-registration-${name}-${device}.png`),
+      fullPage: true,
+      clip: form!,
+    });
+  }
+}
+
+test("checks invitation access before signup and preserves the review on late expiry", async ({ page }, info) => {
   await page.route("**/invites/*/info*", (route) => route.fulfill({ json: { status: "expired" } }));
   await page.goto(`${registrationPath}?invite=expired-invitation-test-token`);
   await expect(page.getByRole("heading", { name: "This invitation has expired" })).toBeVisible();
@@ -33,6 +53,7 @@ test("checks invitation access before signup and preserves the review on late ex
   await page.goto(`${registrationPath}?invite=valid-invitation-test-token`);
   await expect(page.getByLabel(EMAIL_FIRST_COPY.registration.work.label)).toBeVisible();
   await expect(page.getByLabel("First name")).toHaveCount(0);
+  await captureStep(page, info, 1, "email");
   await page.screenshot({ path: "test-results/registration-shared-fields.png", fullPage: true });
   await continueRegistrationWithEmail(page, {
     email: "signup-review@example.com",
@@ -40,16 +61,17 @@ test("checks invitation access before signup and preserves the review on late ex
     lastName: "Review",
     organization: "Signup Review Org",
   });
-  for (const date of ["2026-12-01", "2026-12-02", "2026-12-03"]) {
-    await page.locator(`label[for='dayAttendance-${date}-on_demand']`).click();
-  }
+  await captureStep(page, info, 2, "attendance");
+  await page.getByRole("button", { name: /^Choose On[- ]demand for every available day$/ }).click();
   await page.getByRole("button", { name: /Continue/ }).click();
   await page.getByLabel("Country").selectOption("US");
+  await captureStep(page, info, 3, "questions");
   await page.getByRole("button", { name: /Continue/ }).click();
   const terms = page.locator("[data-term-key] input[required]");
   for (const term of await terms.all()) await term.check();
   const read = page.getByRole("link", { name: /Read:/ }).first();
   await expect(read).toBeVisible();
+  await captureStep(page, info, 4, "review");
   await page.screenshot({ path: "test-results/registration-shared-consents.png", fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: "test-results/registration-shared-consents-mobile.png", fullPage: true });

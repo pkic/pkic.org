@@ -24,6 +24,8 @@ import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { profileD1Flow } from "./helpers/d1-flow-profile";
 import { insertUser } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
+import { seedSessionAttendanceDays } from "./helpers/session-attendance-days";
+import { instantToCalendarDate } from "../assets/shared/timezone";
 
 const groupId = "20000000-0000-4000-8000-000000000003";
 const nativeEventContext = nativeEventCaptureContextSchema.parse({
@@ -76,9 +78,7 @@ async function scan(extra: Record<string, unknown> = {}, environment: Env = env)
 }
 async function invariants() {
   return {
-    registration: await queryAll(env.DB, "SELECT id,status,attendance_type,updated_at FROM registrations WHERE id=?", [
-      registrationId,
-    ]),
+    registration: await queryAll(env.DB, "SELECT id,status,updated_at FROM registrations WHERE id=?", [registrationId]),
     participation: await queryAll(env.DB, "SELECT id,status FROM agenda_session_participations WHERE user_id=?", [
       userId,
     ]),
@@ -186,10 +186,14 @@ describe("Native meeting event-wide captured calendar context", () => {
     userId = await insertUser(env.DB, "native-attendee@example.test");
     registrationId = crypto.randomUUID();
     await env.DB.prepare(
-      "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','in_person','test',?,?,?)",
+      "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','test',?,?,?)",
     )
       .bind(registrationId, eventId, userId, crypto.randomUUID(), nowIso(), nowIso())
       .run();
+    await seedSessionAttendanceDays(env.DB, eventId, [
+      instantToCalendarDate(observedAt, nativeEventContext.timeZone),
+      instantToCalendarDate(nowIso(), nativeEventContext.timeZone),
+    ]);
     // Keep the badge valid while preserving the fixed calendar and DST observations.
     const issued = await request("/api/v1/events/native-capture/badges", {
       operationId: crypto.randomUUID(),

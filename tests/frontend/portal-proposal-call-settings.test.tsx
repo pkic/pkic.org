@@ -97,7 +97,7 @@ it("shows the saved website call first and sends the event wall clock as UTC aft
   });
   expect(root.querySelector('input[type="datetime-local"]')).toBeNull();
   expect(root.textContent).toContain("Europe/Amsterdam");
-  await beginRecordEdit(root, "Call for proposals actions");
+  await beginRecordEdit(root, "Call for proposals actions", "Edit CFP settings");
   const opens = controlFor<HTMLInputElement>(root, "Opens");
   expect(opens.value).toBe("2026-10-15T10:00");
   await typeInto(opens, "2026-10-16T10:00");
@@ -109,3 +109,41 @@ it("shows the saved website call first and sends the event wall clock as UTC aft
     closesAt: "2026-11-15T09:00:00.000Z",
   });
 });
+
+it.each([true, false])(
+  "offers CFP setup without a linked form only to an authorized group manager (can edit: %s)",
+  async (canEdit) => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        json({
+          event: { id, slug: event.slug, name: event.name },
+          purpose: "proposal_submission",
+          registrationPolicy: "public",
+          requiredTerms: [],
+          allowedSessionTypes: [],
+          eventDays: [],
+          form: null,
+        }),
+      ),
+    );
+    root = document.createElement("div");
+    document.body.append(root);
+    await act(() =>
+      render(
+        <ProposalCallSettings
+          event={{ ...event, capabilities: ["read"] }}
+          onUpdated={() => {}}
+          groupSettings={{ groupId: id, eventId: id, canEdit, onSaved: () => {} }}
+        />,
+        root,
+      ),
+    );
+    await vi.waitFor(() => expect(root.textContent).toContain("No proposal form"));
+    expect(Boolean(root.querySelector('button[aria-label="Call for proposals actions"]'))).toBe(canEdit);
+    if (canEdit) {
+      await beginRecordEdit(root, "Call for proposals actions", "Edit CFP settings");
+      expect(root.querySelector('[role="combobox"]')).not.toBeNull();
+    }
+  },
+);

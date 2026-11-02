@@ -77,7 +77,7 @@ export function ProposalCoSpeakerInviteForm({
     formEvent.preventDefault();
     const checked = form.submit();
     if (!checked.data) {
-      setError(checked.message);
+      setError(checked.formMessage ?? "");
       return;
     }
     setSubmitting(true);

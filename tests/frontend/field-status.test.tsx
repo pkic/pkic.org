@@ -1,9 +1,12 @@
 import { render } from "preact";
 import { useState } from "preact/hooks";
 import { act } from "preact/test-utils";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { useContractForm } from "../../assets/ts/hooks/useContractForm";
+import { ChoiceCard } from "../../assets/ts/ui/ChoiceCard";
+import { Button } from "../../assets/ts/ui/Button";
+import { InputGroup } from "../../assets/ts/ui/InputGroup";
 import { Field } from "../../assets/ts/ui/Field";
 import { FieldStatus } from "../../assets/ts/ui/FieldStatus";
 import { TextInput } from "../../assets/ts/ui/TextControl";
@@ -103,5 +106,77 @@ describe("a field reporting to a status line", () => {
     const message = host.querySelector(".pk-field__message")!;
     expect(message.textContent).toContain("Write your name.");
     expect(input.getAttribute("aria-describedby")).toBe(message.id);
+  });
+});
+
+it("keeps field labels distinct across independently rendered dialog roots", () => {
+  const roots = [mount(), mount()];
+  const controls = roots.map((host) => host.querySelector("input")!);
+  expect(controls[0].id).not.toBe(controls[1].id);
+  for (const [index, host] of roots.entries()) {
+    expect(host.querySelector("label")!.control).toBe(controls[index]);
+  }
+});
+
+it("keeps choice titles distinct across independently rendered dialog roots", () => {
+  const roots = [document.createElement("div"), document.createElement("div")];
+  for (const [index, host] of roots.entries()) {
+    hosts.push(host);
+    document.body.append(host);
+    void act(() => render(<ChoiceCard icon={null} name={`choice-${index}`} title={`Choice ${index}`} />, host));
+  }
+  const titleIds = roots.map((host) => host.querySelector("input")!.getAttribute("aria-labelledby")!);
+  expect(titleIds[0]).not.toBe(titleIds[1]);
+  for (const [index, host] of roots.entries()) {
+    expect(host.contains(document.getElementById(titleIds[index]))).toBe(true);
+  }
+});
+
+it("keeps server template identifiers separate from a fresh browser runtime", async () => {
+  vi.resetModules();
+  vi.stubGlobal("document", undefined);
+  let serverId: string;
+  try {
+    const server = await import("../../assets/ts/ui/dom-id");
+    serverId = server.nextDomId("field");
+  } finally {
+    vi.unstubAllGlobals();
+  }
+  vi.resetModules();
+  const client = await import("../../assets/ts/ui/dom-id");
+  expect(client.nextDomId("field")).not.toBe(serverId!);
+});
+
+describe("a field with an input and action", () => {
+  it("keeps its validation mark inside the input and retains the control as validation changes", () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    hosts.push(host);
+    function specimen(state?: "invalid" | "ok") {
+      return (
+        <Field label="Organization" state={state} message={state ? "Choose an organization." : undefined}>
+          {(control) => (
+            <InputGroup>
+              <TextInput {...control} />
+              <Button aria-label="Add organization">+</Button>
+            </InputGroup>
+          )}
+        </Field>
+      );
+    }
+    void act(() => render(specimen(), host));
+    const input = host.querySelector("input")!;
+    input.focus();
+    for (const state of ["invalid", "ok", undefined] as const) {
+      void act(() => render(specimen(state), host));
+      expect(host.querySelector("input")).toBe(input);
+      expect(document.activeElement).toBe(input);
+      expect(input.getAttribute("aria-invalid")).toBe(state === "invalid" ? "true" : null);
+      const wrapper = host.querySelector(".pk-input-group__control")!;
+      expect(wrapper.contains(input)).toBe(true);
+      expect(wrapper.querySelector(".pk-field__state") !== null).toBe(Boolean(state));
+      expect(wrapper.querySelector("button")).toBeNull();
+      expect(host.querySelector(".pk-input-group > button")).not.toBeNull();
+    }
   });
 });

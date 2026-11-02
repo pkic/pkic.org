@@ -282,13 +282,27 @@ describe("live session questions", () => {
 describe("live session reactions", () => {
   beforeEach(() => f.setup());
 
-  it("broadcasts reactions as one aggregated burst and limits each person", async () => {
+  it("broadcasts exact reaction totals across scheduled bursts and limits each person", async () => {
     const watcher = await f.connect({ person: "secondAttendee" });
     const reactor = await f.connect({ person: "attendee" });
     reactor.send({ type: "reaction.send", reaction: "applause" });
+    expect((await watcher.next("reaction.burst")).counts).toEqual({ applause: 1 });
     reactor.send({ type: "reaction.send", reaction: "applause" });
     reactor.send({ type: "reaction.send", reaction: "love" });
-    expect((await watcher.next("reaction.burst")).counts).toEqual({ applause: 2, love: 1 });
+    // Worker scheduling can put these messages in different broadcast windows.
+    // The delivered total must still contain every reaction exactly once.
+    await vi.waitFor(
+      () => {
+        const totals: Record<string, number> = {};
+        for (const message of watcher.received) {
+          if (message.type !== "reaction.burst") continue;
+          for (const [reaction, count] of Object.entries(message.counts))
+            totals[reaction] = (totals[reaction] ?? 0) + count;
+        }
+        expect(totals).toEqual({ applause: 2, love: 1 });
+      },
+      { timeout: 3000 },
+    );
     for (let index = 0; index < LIVE_ROOM_POLICY.reactionsPerPerson.limit; index += 1)
       reactor.send({ type: "reaction.send", reaction: "laugh" });
     expect((await reactor.next("room.refused")).code).toBe("LIVE_ROOM_RATE_LIMITED");
@@ -471,7 +485,7 @@ describe("live room passive access revocation", () => {
   });
   it("requires reconnect when operator access becomes attendee access instead of using stale audience tags", async () => {
     await env.DB.prepare(
-      "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) SELECT ?,event_id,?,'registered',attendance_type,source_type,?,created_at,updated_at FROM registrations WHERE user_id=?",
+      "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) SELECT ?,event_id,?,'registered',source_type,?,created_at,updated_at FROM registrations WHERE user_id=?",
     )
       .bind(crypto.randomUUID(), f.users.operator, crypto.randomUUID(), f.users.attendee)
       .run();

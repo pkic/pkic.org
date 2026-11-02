@@ -87,19 +87,29 @@ async function insertRegistration(options: {
   const id = crypto.randomUUID();
   await env.DB.prepare(
     `INSERT INTO registrations
-       (id, event_id, user_id, status, attendance_type, source_type, custom_answers_json,
+       (id, event_id, user_id, status, source_type, custom_answers_json,
         manage_link_secret, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, 'admin', ?, ?, datetime('now'), datetime('now'))`,
+     VALUES (?, ?, ?, ?, 'admin', ?, ?, datetime('now'), datetime('now'))`,
   )
     .bind(
       id,
       options.eventId,
       options.userId,
       options.status,
-      options.attendanceType,
       JSON.stringify({ food: options.answer }),
       crypto.randomUUID(),
     )
+    .run();
+  const at = new Date().toISOString();
+  await env.DB.prepare(
+    "INSERT INTO event_days(id,event_id,day_date,created_at,updated_at) VALUES(?,?,'2026-12-01',?,?) ON CONFLICT(event_id,day_date) DO NOTHING",
+  )
+    .bind(crypto.randomUUID(), options.eventId, at, at)
+    .run();
+  await env.DB.prepare(
+    "INSERT INTO registration_day_attendance(id,registration_id,event_day_id,attendance_type,created_at,updated_at) SELECT ?,?,id,?,?,? FROM event_days WHERE event_id=? AND day_date='2026-12-01'",
+  )
+    .bind(crypto.randomUUID(), id, options.attendanceType, at, at, options.eventId)
     .run();
   return id;
 }
@@ -250,6 +260,43 @@ describe("form-submission read-model population", () => {
     expect((await readPopulation("identity-population", { q: "Account organization" })).list.page.total).toBe(0);
   });
 
+  it("filters form submissions using any selected attendance day before and after backfill", async () => {
+    const formId = await insertForm("mixed-attendance-population", "event_registration", "food", null, true);
+    const userId = await insertUser("mixed-attendance@example.test");
+    const registrationId = await insertRegistration({
+      eventId,
+      userId,
+      status: "registered",
+      attendanceType: "in_person",
+      answer: "Vegetarian",
+    });
+    await env.DB.batch([
+      env.DB.prepare(`INSERT INTO event_days (id, event_id, day_date, sort_order, created_at, updated_at)
+        VALUES ('mixed-form-day', ?, '2026-12-02', 1, datetime('now'), datetime('now'))`).bind(eventId),
+      env.DB.prepare(`INSERT INTO registration_day_attendance (id, registration_id, event_day_id, attendance_type, created_at, updated_at)
+        VALUES ('mixed-form-attendance', ?, 'mixed-form-day', 'virtual', datetime('now'), datetime('now'))`).bind(
+        registrationId,
+      ),
+    ]);
+    const filters = { attendanceType: "virtual" };
+    const before = await readPopulation("mixed-attendance-population", filters);
+    expect(before.list.page.total).toBe(1);
+    expect(before.stats.total).toBe(1);
+    expect((await readPopulation("mixed-attendance-population", { attendanceType: "in_person" })).list.page.total).toBe(
+      1,
+    );
+    await backfillSourceAnswer({
+      formId,
+      contextType: "registration",
+      contextRef: registrationId,
+      fieldKey: "food",
+      answer: "Vegetarian",
+    });
+    const after = await readPopulation("mixed-attendance-population", filters);
+    expect(after.list.page.total).toBe(1);
+    expect(after.stats.total).toBe(1);
+  });
+
   it("keeps registration filters, page totals, and statistics identical before and after backfill", async () => {
     const formId = await insertForm("registration-population", "event_registration", "food", null, true);
     const legacyUser = await insertUser("needle-legacy@example.test");
@@ -316,6 +363,22 @@ describe("form-submission read-model population", () => {
       fieldKey: "food",
       answer: "Elsewhere",
     });
+    await env.DB.batch([
+      env.DB.prepare(`INSERT INTO event_days (id, event_id, day_date, sort_order, created_at, updated_at)
+        VALUES ('population-day', ?, '2027-01-01', 0, datetime('now'), datetime('now'))`).bind(eventId),
+      env.DB.prepare(`INSERT INTO event_days (id, event_id, day_date, sort_order, created_at, updated_at)
+        VALUES ('population-other-day', ?, '2027-01-01', 0, datetime('now'), datetime('now'))`).bind(otherEventId),
+      env.DB.prepare(`INSERT INTO registration_day_attendance
+        (id, registration_id, event_day_id, attendance_type, created_at, updated_at)
+        SELECT 'selection-' || id, id, CASE WHEN event_id = ? THEN 'population-day' ELSE 'population-other-day' END,
+          CASE WHEN user_id = ? THEN 'in_person' ELSE 'virtual' END,
+          datetime('now'), datetime('now') FROM registrations WHERE event_id IN (?, ?)`).bind(
+        eventId,
+        inPersonUser,
+        eventId,
+        otherEventId,
+      ),
+    ]);
 
     const result = await readPopulation("registration-population", {
       eventSlug: "pqc-2026",

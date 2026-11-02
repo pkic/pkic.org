@@ -73,7 +73,6 @@ describe("day waitlist priorities", () => {
     const holder = await createRegistration(env.DB, {
       event,
       userId: seeded["holder@example.test"].userId,
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "invite",
       inviteId: seeded["holder@example.test"].inviteId,
@@ -84,7 +83,6 @@ describe("day waitlist priorities", () => {
     const continuity = await createRegistration(env.DB, {
       event,
       userId: seeded["continuity@example.test"].userId,
-      attendanceType: "in_person",
       dayAttendance: [
         { dayDate: "2026-12-01", attendanceType: "in_person" },
         { dayDate: "2026-12-02", attendanceType: "in_person" },
@@ -98,7 +96,6 @@ describe("day waitlist priorities", () => {
     const general = await createRegistration(env.DB, {
       event,
       userId: seeded["general@example.test"].userId,
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "invite",
       inviteId: seeded["general@example.test"].inviteId,
@@ -176,7 +173,6 @@ describe("day waitlist priorities", () => {
       registrations[email] = await createRegistration(env.DB, {
         event,
         userId: seeded[email].userId,
-        attendanceType: "in_person",
         dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
         sourceType: "invite",
         inviteId: seeded[email].inviteId,
@@ -239,7 +235,6 @@ describe("day waitlist priorities", () => {
     const holderOne = await createRegistration(env.DB, {
       event,
       userId: seeded["holder-one@example.test"].userId,
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "invite",
       inviteId: seeded["holder-one@example.test"].inviteId,
@@ -250,7 +245,6 @@ describe("day waitlist priorities", () => {
     const holderTwo = await createRegistration(env.DB, {
       event,
       userId: seeded["holder-two@example.test"].userId,
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-02", attendanceType: "in_person" }],
       sourceType: "invite",
       inviteId: seeded["holder-two@example.test"].inviteId,
@@ -261,7 +255,6 @@ describe("day waitlist priorities", () => {
     const multi = await createRegistration(env.DB, {
       event,
       userId: seeded["multi@example.test"].userId,
-      attendanceType: "in_person",
       dayAttendance: [
         { dayDate: "2026-12-01", attendanceType: "in_person" },
         { dayDate: "2026-12-02", attendanceType: "in_person" },
@@ -275,7 +268,6 @@ describe("day waitlist priorities", () => {
     const backup = await createRegistration(env.DB, {
       event,
       userId: seeded["backup@example.test"].userId,
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-02", attendanceType: "in_person" }],
       sourceType: "invite",
       inviteId: seeded["backup@example.test"].inviteId,
@@ -355,7 +347,6 @@ describe("day waitlist priorities", () => {
     const holderOne = await createRegistration(env.DB, {
       event,
       userId: seeded["race-holder-one@example.test"].userId,
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "invite",
       inviteId: seeded["race-holder-one@example.test"].inviteId,
@@ -365,7 +356,6 @@ describe("day waitlist priorities", () => {
     const holderTwo = await createRegistration(env.DB, {
       event,
       userId: seeded["race-holder-two@example.test"].userId,
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-02", attendanceType: "in_person" }],
       sourceType: "invite",
       inviteId: seeded["race-holder-two@example.test"].inviteId,
@@ -375,7 +365,6 @@ describe("day waitlist priorities", () => {
     const multi = await createRegistration(env.DB, {
       event,
       userId: seeded["race-multi@example.test"].userId,
-      attendanceType: "in_person",
       dayAttendance: [
         { dayDate: "2026-12-01", attendanceType: "in_person" },
         { dayDate: "2026-12-02", attendanceType: "in_person" },
@@ -428,7 +417,6 @@ describe("day waitlist priorities", () => {
     const holder = await createRegistration(env.DB, {
       event,
       userId: seeded["failure-holder@example.test"].userId,
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "invite",
       inviteId: seeded["failure-holder@example.test"].inviteId,
@@ -438,7 +426,6 @@ describe("day waitlist priorities", () => {
     const waiting = await createRegistration(env.DB, {
       event,
       userId: seeded["failure-waiting@example.test"].userId,
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "invite",
       inviteId: seeded["failure-waiting@example.test"].inviteId,
@@ -506,7 +493,6 @@ describe("day waitlist priorities", () => {
     const holder = await createRegistration(env.DB, {
       event,
       userId: seeded["holder@example.test"].userId,
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "invite",
       inviteId: seeded["holder@example.test"].inviteId,
@@ -517,7 +503,6 @@ describe("day waitlist priorities", () => {
     const waiting = await createRegistration(env.DB, {
       event,
       userId: seeded["waiting@example.test"].userId,
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "invite",
       inviteId: seeded["waiting@example.test"].inviteId,
@@ -583,7 +568,6 @@ describe("day waitlist priorities", () => {
     const holder = await createRegistration(env.DB, {
       event,
       userId: seeded["holder@example.test"].userId,
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "invite",
       inviteId: seeded["holder@example.test"].inviteId,
@@ -594,7 +578,6 @@ describe("day waitlist priorities", () => {
     await createRegistration(env.DB, {
       event,
       userId: seeded["first-waiting@example.test"].userId,
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "invite",
       inviteId: seeded["first-waiting@example.test"].inviteId,
@@ -605,7 +588,6 @@ describe("day waitlist priorities", () => {
     await createRegistration(env.DB, {
       event,
       userId: seeded["second-waiting@example.test"].userId,
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "invite",
       inviteId: seeded["second-waiting@example.test"].inviteId,
@@ -687,7 +669,6 @@ describe("day waitlist priorities", () => {
     await createRegistration(env.DB, {
       event,
       userId: seeded["holder@example.test"].userId,
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "invite",
       inviteId: seeded["holder@example.test"].inviteId,
@@ -698,7 +679,6 @@ describe("day waitlist priorities", () => {
     const organizer = await createRegistration(env.DB, {
       event,
       userId: seeded["organizer@example.test"].userId,
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "invite",
       inviteId: seeded["organizer@example.test"].inviteId,

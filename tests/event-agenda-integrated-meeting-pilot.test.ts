@@ -30,7 +30,7 @@ it("joins native recurring agenda edits, publication, pinned event staffing and 
   const group = "20000000-0000-4000-8000-000000000003";
   await ensureGroupMembershipCapacity(env.DB, group, pilot.person.userId);
   const slug = "joined-native-pilot",
-    startsAt = addHours(nowIso(), 24);
+    startsAt = addHours(nowIso(), 7 * 24);
   const series = (
     await pilot.api(
       `/api/v1/groups/${group}/meetings/series`,

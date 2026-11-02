@@ -14,6 +14,8 @@ import { hashBadgeCredential } from "../functions/_lib/services/event-participat
 import { createEventScannerFixture } from "./helpers/event-scanner-fixture";
 import { callApi } from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
+import { seedSessionAttendanceDays } from "./helpers/session-attendance-days";
+import { instantToCalendarDate } from "../assets/shared/timezone";
 
 const fixture = createEventScannerFixture();
 const base = "/api/v1/events/scan-test/badges";
@@ -41,7 +43,7 @@ async function person(status = "registered") {
       "INSERT INTO individual_job_titles(user_id,job_title,created_at,updated_at) VALUES(?,'Rear admiral',?,?)",
     ).bind(id, now, now),
     env.DB.prepare(
-      "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,?,'in_person','test',?,?,?)",
+      "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,?,'test',?,?,?)",
     ).bind(crypto.randomUUID(), fixture.eventId, id, status, crypto.randomUUID(), now, now),
   ]);
   return id;
@@ -99,6 +101,7 @@ describe("The holder's own badge ticket", () => {
 
   it("issues one credential to a confirmed registration without a badge, and the scanner admits its code", async () => {
     const userId = await person();
+    await seedSessionAttendanceDays(env.DB, fixture.eventId, [instantToCalendarDate(fixture.observedAt, "UTC")]);
     const token = await sessionFor(userId);
     const [first, concurrent] = await Promise.all([ticket(token), ticket(token)]);
     expect(first.status, await first.clone().text()).toBe(200);
@@ -199,6 +202,30 @@ describe("The holder's own badge ticket", () => {
       expect(await badges(fixture.userId)).toEqual(before);
     },
   );
+
+  it("keeps the QR and leaves sponsor artwork off when a sponsor logo needs replacing", async () => {
+    const sponsorId = crypto.randomUUID(),
+      key = `sponsor-logos/${sponsorId}/logo.svg`,
+      now = new Date().toISOString();
+    await env.ASSETS_BUCKET!.put(key, "not SVG raster bytes", { httpMetadata: { contentType: "image/svg+xml" } });
+    await env.DB.prepare(
+      "INSERT INTO sponsorships(id,sponsor_type,non_member_name,non_member_logo_r2_key,event_id,tier,pipeline_stage,created_at,updated_at) VALUES(?,'event','Broken Logo Sponsor',?,?,'Leader','active',?,?)",
+    )
+      .bind(sponsorId, key, fixture.eventId, now, now)
+      .run();
+    const organizer = await call(`${base}/printing`, fixture.token);
+    expect(organizer.status).toBe(422);
+    expect(await organizer.json()).toMatchObject({ error: { code: "BADGE_SPONSOR_SVG_REQUIRED" } });
+
+    const response = await ticket(await sessionFor(fixture.userId));
+    const text = await response.clone().text();
+    expect(response.status, text).toBe(200);
+    expect(text).not.toContain("Broken Logo Sponsor");
+    const body = currentBadgeResponseSchema.parse(await response.json());
+    expect(printedCode(body.badge.svg)).toBe(fixture.badgeId);
+    expect(body.printing.branding).toEqual([]);
+    expect(body.badge.printingRevision).toBe(body.printing.revision);
+  });
 
   it("lets organizer printing reuse the holder's active badge instead of adding a credential", async () => {
     const userId = await person();

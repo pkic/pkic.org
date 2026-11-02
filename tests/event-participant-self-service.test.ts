@@ -5,6 +5,7 @@ import { createMemberSession } from "./helpers/auth";
 import { seedEventAndAdmin, deliveredEmailPayload } from "./helpers/context";
 import { insertIndividualMember, insertUser } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
+import { seedSessionAttendanceDays } from "./helpers/session-attendance-days";
 import { createProposal, getProposalById, updateProposalForVerifiedOwner } from "../functions/_lib/services/proposals";
 import { registrationManageReadResponseSchema } from "../assets/shared/schemas/registration";
 import { proposalAccessReadResponseSchema } from "../assets/shared/schemas/proposal-management";
@@ -22,7 +23,7 @@ async function fixture() {
   );
   const registrationId = crypto.randomUUID();
   await env.DB.prepare(
-    "INSERT INTO registrations (id, event_id, user_id, status, attendance_type, source_type, manage_link_secret, created_at, updated_at) VALUES (?, ?, ?, 'registered', 'virtual', 'self_service', ?, ?, ?)",
+    "INSERT INTO registrations (id, event_id, user_id, status, source_type, manage_link_secret, created_at, updated_at) VALUES (?, ?, ?, 'registered', 'self_service', ?, ?, ?)",
   )
     .bind(registrationId, eventId, owner, crypto.randomUUID(), new Date().toISOString(), new Date().toISOString())
     .run();
@@ -95,6 +96,7 @@ describe("session-owned event participation", () => {
 
   it("preserves registration verification, cancellation and restore rules", async () => {
     const f = await fixture();
+    await seedSessionAttendanceDays(env.DB, f.eventId, ["2026-12-01"]);
     const path = `/api/v1/registrations/${f.registrationId}`;
     const update = await request(path, f.tokens[0], { action: "update", firstName: "Updated attendee" });
     expect(update.status, await update.clone().text()).toBe(200);
@@ -143,7 +145,7 @@ describe("session-owned event participation", () => {
     const holder = await insertUser(env.DB, "seat-holder@example.test");
     const holderRegistration = crypto.randomUUID();
     await env.DB.prepare(
-      "INSERT INTO registrations (id, event_id, user_id, status, attendance_type, source_type, manage_link_secret, confirmed_at, created_at, updated_at) VALUES (?, ?, ?, 'registered', 'in_person', 'self_service', ?, datetime('now'), datetime('now'), datetime('now'))",
+      "INSERT INTO registrations (id, event_id, user_id, status, source_type, manage_link_secret, confirmed_at, created_at, updated_at) VALUES (?, ?, ?, 'registered', 'self_service', ?, datetime('now'), datetime('now'), datetime('now'))",
     )
       .bind(holderRegistration, f.eventId, holder, crypto.randomUUID())
       .run();

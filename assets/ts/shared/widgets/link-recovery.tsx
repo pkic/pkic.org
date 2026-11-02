@@ -1,8 +1,6 @@
-import { render } from "preact";
 import { postJson } from "../api-client";
 import { successResponseSchema } from "../../../shared/schemas/api-common";
 import { clearButtonBusy, isButtonBusy, setButtonBusy } from "../form/button-busy";
-import { Alert } from "../../ui/Alert";
 // The status line is an element the template already rendered, so its tone is
 // written here as class names rather than reached through `Alert`. Component
 // CSS ships in a lazy chunk, so this module has to pull the stylesheet into
@@ -29,9 +27,10 @@ interface ManageLinkRecoveryOptions {
  * region role as well — `alert` for a failure, which interrupts, and `status`
  * for the opening explanation, which does not — and the words say which it is.
  */
-function announce(statusEl: HTMLElement, message: string, tone: "intro" | "danger"): void {
+function announce(statusEl: HTMLElement, message: string, tone: "intro" | "danger" | "success"): void {
   statusEl.textContent = message;
-  statusEl.className = tone === "danger" ? "pk-alert pk-alert--danger" : "pk-small";
+  statusEl.className =
+    tone === "danger" ? "pk-alert pk-alert--danger" : tone === "success" ? "pk-alert pk-alert--ok" : "pk-small";
   statusEl.setAttribute("role", tone === "danger" ? "alert" : "status");
 }
 
@@ -82,13 +81,8 @@ export function showManageLinkRecoveryForm(options: ManageLinkRecoveryOptions): 
     setButtonBusy(resendBtn);
     try {
       await postJson(endpoint, { email }, successResponseSchema);
-      // The outcome is the design system's Alert rather than its class names:
-      // it carries `role="status"` with it, so the confirmation is announced
-      // rather than merely shown in green. It is appended to the section the
-      // template rendered — Preact only owns what it put there — and the send
-      // button is deliberately left in its loading state, which is what stops
-      // a second request for a link that is already on its way.
-      if (sectionEl) render(<Alert tone="ok">{successMessage}</Alert>, sectionEl);
+      if (statusEl) announce(statusEl, successMessage, "success");
+      clearButtonBusy(resendBtn);
     } catch {
       if (statusEl) announce(statusEl, "Something went wrong. Please try again.", "danger");
       clearButtonBusy(resendBtn);

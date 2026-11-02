@@ -1,4 +1,6 @@
 import {
+  MEMBER_ALSO_REPRESENTS,
+  MEMBER_ALSO_REPRESENTS_LABELS,
   MEMBER_GROUP_LABELS,
   MEMBER_GROUPS,
   MEMBER_REPRESENTATION_LABELS,
@@ -6,13 +8,14 @@ import {
   memberUpdateResponseSchema,
   staffMembersListResponseSchema,
 } from "../../../../../shared/schemas/members-directory";
+import { formatConjunction } from "../../../../../shared/format-list";
 import { MEMBER_STATUSES } from "../../../../../shared/schemas/membership-categories";
 import type { MembershipCategoryCatalogEntry } from "../../../../../shared/schemas/membership-categories";
 import type { StaffMemberSummary } from "../../../../../shared/schemas/members-directory";
 import { useRef } from "preact/hooks";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { confirmAction } from "../../../../components/ConfirmDialog";
-import { Badge, statusLabel } from "../../../../components/Badge";
+import { Badge, PlainStatus, statusLabel } from "../../../../components/Badge";
 import { IconOrganization } from "../../../../components/icons";
 import { IconPerson } from "../../../../components/icons/app-navigation";
 // `pk-muted` and `pk-small` are written here as class names rather than
@@ -145,10 +148,25 @@ export function MembersList({
               avatarSrc={member.imageUrl ?? undefined}
               shape={member.memberType === "organization" ? "square" : "round"}
               size="sm"
+              // An individual member who also acts for an organization says
+              // so here: allowed, but staff settle which membership should
+              // stand, and the person's record holds both.
+              detail={
+                member.representedOrganizations.length
+                  ? `Also represents ${formatConjunction(member.representedOrganizations.map(({ name }) => name))}`
+                  : undefined
+              }
             />
           ),
           width: "primary",
           sort: { asc: "name", desc: "-name" },
+          filter: {
+            param: "alsoRepresents",
+            options: [
+              { value: "", label: "Every member" },
+              ...MEMBER_ALSO_REPRESENTS.map((value) => ({ value, label: MEMBER_ALSO_REPRESENTS_LABELS[value] })),
+            ],
+          },
         },
         {
           // How many people act for this one membership: an organization's
@@ -202,7 +220,8 @@ export function MembersList({
         },
         {
           header: "Status",
-          cell: (member) => <Badge status={member.status} />,
+          cell: (member) =>
+            member.status === "active" ? <PlainStatus status={member.status} /> : <Badge status={member.status} />,
           width: "fit",
           sort: { asc: "status", desc: "-status" },
           filter: {

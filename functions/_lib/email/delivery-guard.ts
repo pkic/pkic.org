@@ -8,6 +8,24 @@ export const emailDeliveryGuardSchema = z
   .strict();
 /** Infrastructure consumes a declarative database policy, without importing domain services. */
 export async function validateEmailDeliveryGuard(db: DatabaseLike, payload: Record<string, unknown>) {
+  if (payload.__currentRecipient !== undefined) {
+    const recipient = z
+      .object({ userId: databaseIdSchema, email: z.string().email() })
+      .strict()
+      .safeParse(payload.__currentRecipient);
+    if (!recipient.success)
+      throw new AppError(409, "CAPABILITY_RESOURCE_STALE", "This notification is no longer deliverable.");
+    const currentRecipient = await first<{ id: string }>(
+      db,
+      `SELECT id FROM users WHERE id = ? AND active = 1 AND normalized_email = ?
+        AND (email_verified_at IS NOT NULL OR NOT EXISTS (
+          SELECT 1 FROM user_emails WHERE user_id = users.id AND verified_at IS NOT NULL
+        ))`,
+      [recipient.data.userId, recipient.data.email.toLowerCase()],
+    );
+    if (!currentRecipient)
+      throw new AppError(409, "CAPABILITY_RESOURCE_STALE", "This notification is no longer deliverable.");
+  }
   if (payload.__deliveryGuard === undefined) return;
   const parsed = emailDeliveryGuardSchema.safeParse(payload.__deliveryGuard);
   if (!parsed.success)

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { identityAffiliationContextSchema } from "./identity-affiliation";
 import { databaseIdSchema } from "./identifiers";
 import { linksSchema } from "./links";
 import {
@@ -15,7 +16,7 @@ import {
   trimmedString,
   utcInstantSchema,
 } from "./api-common";
-import { consentItemSchema, participantProfileSchema, proposerProfileSchema, speakerRoleSchema } from "./registration";
+import { consentItemSchema, proposerProfileSchema, speakerRoleSchema, userProfileSchema } from "./registration";
 import { proposalDecisionStatusSchema, proposalStatusSchema } from "./proposal-status";
 import { addDuplicateStringIssues } from "./refinements";
 import { httpCapabilityUrlSchema, httpUrlSchema } from "./urls";
@@ -67,6 +68,7 @@ export const MAX_PROPOSAL_PARTICIPANTS = MAX_PROPOSAL_ADDITIONAL_SPEAKERS + 1;
 export const proposalNewAffiliationShape = {
   organizationName: optionalNullableOrEmpty(organizationNameSchema),
   jobTitle: optionalNullableOrEmpty(jobTitleSchema),
+  organizationContextToken: identityAffiliationContextSchema.optional(),
 };
 
 /**
@@ -144,9 +146,8 @@ export const proposalCreateSchema = boundedJsonObject(
     }),
     speakers: z
       .array(
-        participantProfileSchema.extend({
-          role: speakerRoleSchema.default("speaker"),
-        }),
+        /** Who to invite; each co-speaker writes their own bio, links and photo when they confirm. */
+        userProfileSchema.extend({ role: speakerRoleSchema.default("speaker") }),
       )
       .max(MAX_PROPOSAL_ADDITIONAL_SPEAKERS)
       .default([]),
@@ -267,6 +268,8 @@ export const proposalSpeakerProfileSchema = proposalActingIdentitySchema.extend(
 export const proposalAccessSpeakerSchema = proposalSpeakerProfileSchema.extend({
   confirmedAt: z.string().nullable(),
   declinedAt: z.string().nullable(),
+  /** What a speaker who declined told the proposer, if anything. */
+  declineReason: z.string().nullable(),
   bio: z.string().nullable(),
   headshotUploaded: z.boolean(),
 });

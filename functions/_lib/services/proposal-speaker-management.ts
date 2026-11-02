@@ -115,8 +115,7 @@ export async function getProposalSpeakerRoster(
   const speakerRows = batchRows<ProposalSpeakerWithIdentity>(speakersResult);
   const registrationRows = await db
     .prepare(
-      `SELECT ps.user_id AS userId, r.id AS registrationId, r.status AS registrationStatus,
-              r.attendance_type AS attendanceType
+      `SELECT ps.user_id AS userId, r.id AS registrationId, r.status AS registrationStatus
        FROM proposal_speakers ps
        JOIN session_proposals sp ON sp.id = ps.proposal_id
        LEFT JOIN registrations r ON r.event_id = sp.event_id AND r.user_id = ps.user_id
@@ -127,14 +126,11 @@ export async function getProposalSpeakerRoster(
       userId: string;
       registrationId: string | null;
       registrationStatus: NonNullable<ProposalSpeakersResponse["speakers"][number]["registration"]>["status"] | null;
-      attendanceType:
-        | NonNullable<ProposalSpeakersResponse["speakers"][number]["registration"]>["attendanceType"]
-        | null;
     }>();
   const registrationByUser = new Map(
     (registrationRows.results ?? []).flatMap((row) =>
-      row.registrationId && row.registrationStatus && row.attendanceType
-        ? [[row.userId, { id: row.registrationId, status: row.registrationStatus, attendanceType: row.attendanceType }]]
+      row.registrationId && row.registrationStatus
+        ? [[row.userId, { id: row.registrationId, status: row.registrationStatus }]]
         : [],
     ),
   );

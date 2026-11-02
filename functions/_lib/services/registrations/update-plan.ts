@@ -1,17 +1,19 @@
+import { eventAttendanceAccessMode } from "../../../../assets/shared/event-attendance-access";
+import { attendanceOptionCapacity } from "./day-waitlist-capacity";
 import { prepareParticipationReconciliation } from "../event-participation/reconciliation";
 import { assertRegistrationRestorationAllowed } from "./restoration";
 import { AppError } from "../../errors";
 import {
-  dayAttendanceRequiredError,
   dayCapacityUnlimitedError,
-  waitlistRequiresInPersonError,
+  eventDaysNotScheduledError,
+  waitlistRequiresAttendanceError,
 } from "../event-day-refusals";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { parseJsonSafe } from "../../utils/json";
 import { nowIso } from "../../utils/time";
 import { prepareAuditLog } from "../audit";
 import {
-  deriveEventAttendanceType,
+  configuredAttendanceOptions,
   listEventDays,
   getRegistrationDayAttendance,
   prepareReplaceRegistrationDayAttendanceStatements,
@@ -21,21 +23,21 @@ import { prepareUserProfileStatements, userProfilePatchWouldChange, type UserPro
 import {
   buildRegistrationDayWaitlistSync,
   dayWaitlistOfferUnavailableError,
-  listConfirmedInPersonEventDayIdsForRegistration,
-  listInPersonEventDayIdsForRegistration,
+  listConfirmedAttendanceEventDayIdsForRegistration,
+  listAttendanceEventDayIdsForRegistration,
   prepareRemoveAllDayWaitlistStatement,
   resolveCapacityExemptReason,
   type DayWaitlistLane,
 } from "./day-waitlist";
 import type { RegistrationRecord } from "./types";
-import type { AttendanceType } from "../../../../assets/shared/schemas/registration";
 import { prepareClearRegistrationEmailChangeStatement } from "./change-email";
-import { prepareRegistrationTransitionGuard } from "./transition-guard";
+import { prepareRegistrationTransitionGuard, prepareScheduledRegistrationTransitionGuard } from "./transition-guard";
 import { newCapabilityLinkSecret } from "../capability-links";
+import type { AuthAdmin } from "../../types";
+import { requirePermission, preparePermissionsAuthorizationGuard } from "../../auth/permissions";
 
 export interface RegistrationUpdatePayload {
   action: "update" | "cancel" | "report_unauthorized";
-  attendanceType?: AttendanceType;
   dayAttendance?: DayAttendanceSelection[];
   /** Offered day seats are accepted only when the caller explicitly names them. */
   claimDayWaitlistOffers?: string[];
@@ -46,6 +48,8 @@ export interface RegistrationUpdatePayload {
   sourceRef?: string | null;
   waitlistClaimWindowHours?: number;
   profilePatch?: UserProfilePatch;
+  /** Staff adapters must authorize canonical person changes independently of event management. */
+  profileActor?: AuthAdmin;
   auditActor?: { type: "admin" | "user"; id: string; action: string };
   /** Validates the form revision in the same D1 batch as customAnswersJson. */
   formRevisionGuard?: StatementLike | null;
@@ -70,7 +74,6 @@ function prepareRegistrationUpdateAudit(
     {
       action: { from: null, to: payload.action },
       status: { from: registration.status, to: updated.status },
-      attendanceType: { from: registration.attendance_type, to: updated.attendance_type },
       customAnswers: {
         from: parseJsonSafe<Record<string, unknown> | null>(registration.custom_answers_json, null),
         to: parseJsonSafe<Record<string, unknown> | null>(updated.custom_answers_json, null),
@@ -84,7 +87,14 @@ export interface BuiltRegistrationUpdate {
   statements: StatementLike[];
   notificationChanged: boolean;
   notificationRevision: number;
-  dayAttendance?: Array<{ dayDate: string; attendanceType: string; label: string | null }>;
+  dayAttendance?: Array<{
+    dayDate: string;
+    attendanceType: string;
+    label: string | null;
+    accessMode: import("../../../../assets/shared/event-attendance-access").EventAttendanceAccessMode;
+    startsAt: string | null;
+    endsAt: string | null;
+  }>;
   dayWaitlist?: Array<{
     dayDate: string;
     status: string;
@@ -213,27 +223,12 @@ export async function buildRegistrationUpdate(
       };
   }
 
-  const [previousInPersonDayIds, previousConfirmedInPersonDayIds, configuredEventDays] = await Promise.all([
-    listInPersonEventDayIdsForRegistration(db, registration.id),
-    listConfirmedInPersonEventDayIdsForRegistration(db, registration.id),
+  const [previousAttendanceDayIds, previousConfirmedAttendanceDayIds, configuredEventDays] = await Promise.all([
+    listAttendanceEventDayIdsForRegistration(db, registration.id),
+    listConfirmedAttendanceEventDayIdsForRegistration(db, registration.id),
     listEventDays(db, registration.event_id),
   ]);
-  // Once an event has day-level attendance, that selection is the canonical
-  // source of truth. A scalar-only update cannot safely infer whether omitted
-  // days should be preserved, removed, or changed, so reject it rather than
-  // leaving registration_day_attendance and its waitlist projection stale.
-  if (
-    payload.attendanceType !== undefined &&
-    payload.dayAttendance === undefined &&
-    (configuredEventDays.length > 0 || previousInPersonDayIds.length > 0)
-  ) {
-    throw dayAttendanceRequiredError();
-  }
-  const effectiveAttendanceType =
-    payload.attendanceType ?? deriveEventAttendanceType(payload.dayAttendance) ?? registration.attendance_type;
-  if (!effectiveAttendanceType) {
-    throw new AppError(400, "ATTENDANCE_TYPE_REQUIRED", "Choose how you will attend this event.");
-  }
+  if (isCancelled && configuredEventDays.length === 0) throw eventDaysNotScheduledError();
   const capacityExemptReason = await resolveCapacityExemptReason(db, {
     eventId: registration.event_id,
     userId: registration.user_id,
@@ -245,12 +240,12 @@ export async function buildRegistrationUpdate(
     for (const dayDate of forceWaitlistDayDates) {
       const day = dayByDate.get(dayDate);
       const named = day ?? { day_date: dayDate, label: null };
-      if (selectionByDate.get(dayDate) !== "in_person") throw waitlistRequiresInPersonError(named);
-      if (!day?.in_person_capacity || day.in_person_capacity <= 0) throw dayCapacityUnlimitedError(named);
+      if (!selectionByDate.get(dayDate)) throw waitlistRequiresAttendanceError(named);
+      if (!day || !attendanceOptionCapacity(day, selectionByDate.get(dayDate))) throw dayCapacityUnlimitedError(named);
     }
   }
   const hasPerDayAttendanceInput = Boolean(payload.dayAttendance?.length);
-  const hasPerDayAttendanceContext = hasPerDayAttendanceInput || previousInPersonDayIds.length > 0;
+  const hasPerDayAttendanceContext = hasPerDayAttendanceInput || previousAttendanceDayIds.length > 0;
   let newStatus = isCancelled
     ? registration.confirmed_at || changedBy !== "self"
       ? "registered"
@@ -261,10 +256,6 @@ export async function buildRegistrationUpdate(
   if (newStatus !== "pending_email_confirmation") {
     if (hasPerDayAttendanceContext || capacityExemptReason) {
       newStatus = "registered";
-    } else if (effectiveAttendanceType !== registration.attendance_type) {
-      if (effectiveAttendanceType === "in_person" || registration.attendance_type === "in_person") {
-        newStatus = "registered";
-      }
     }
   }
   const now = nowIso();
@@ -276,11 +267,13 @@ export async function buildRegistrationUpdate(
     ...(payload.customAnswersJson !== undefined && payload.formRevisionGuard && !payload.formSubmissionStatements
       ? [payload.formRevisionGuard]
       : []),
-    prepareRegistrationTransitionGuard(db, registration),
+    isCancelled
+      ? prepareScheduledRegistrationTransitionGuard(db, registration)
+      : prepareRegistrationTransitionGuard(db, registration),
     db
       .prepare(
         `UPDATE registrations
-         SET attendance_type = ?, status = ?, confirmation_link_secret = ?, cancellation_reason_code = NULL,
+         SET status = ?, confirmation_link_secret = ?, cancellation_reason_code = NULL,
              custom_answers_json = CASE WHEN ? = 1 THEN ? ELSE custom_answers_json END,
              form_placement_id = CASE WHEN ? = 1 THEN ? ELSE form_placement_id END,
              source_ref = CASE WHEN ? = 1 THEN ? ELSE source_ref END,
@@ -288,7 +281,6 @@ export async function buildRegistrationUpdate(
          WHERE id = ?`,
       )
       .bind(
-        effectiveAttendanceType,
         newStatus,
         confirmationLinkSecret,
         payload.customAnswersJson !== undefined ? 1 : 0,
@@ -314,7 +306,7 @@ export async function buildRegistrationUpdate(
       userId: registration.user_id,
       selections: payload.dayAttendance,
       capacityExemptReason,
-      preserveConfirmedEventDayIds: isCancelled ? [] : previousConfirmedInPersonDayIds,
+      preserveConfirmedEventDayIds: isCancelled ? [] : previousConfirmedAttendanceDayIds,
       registrationStatus: newStatus,
       configuredEventDays,
       forceWaitlistDayDates: payload.forceWaitlistDayDates,
@@ -336,17 +328,21 @@ export async function buildRegistrationUpdate(
     statements.push(...dayAttendanceStatements, ...waitlist.statements);
     const claimedInPersonDates = new Set(
       payload.dayAttendance
-        .filter(
-          (selection) =>
-            selection.attendanceType === "in_person" && payload.claimDayWaitlistOffers?.includes(selection.dayDate),
-        )
+        .filter((selection) => payload.claimDayWaitlistOffers?.includes(selection.dayDate))
         .map((selection) => selection.dayDate),
     );
-    plannedDayAttendance = payload.dayAttendance.map((selection) => ({
-      dayDate: selection.dayDate,
-      attendanceType: selection.attendanceType,
-      label: configuredEventDays.find((day) => day.day_date === selection.dayDate)?.label ?? null,
-    }));
+    plannedDayAttendance = payload.dayAttendance.map((selection) => {
+      const day = configuredEventDays.find((entry) => entry.day_date === selection.dayDate);
+      const option = day && configuredAttendanceOptions(day).find((entry) => entry.value === selection.attendanceType);
+      return {
+        dayDate: selection.dayDate,
+        attendanceType: selection.attendanceType,
+        label: day?.label ?? null,
+        accessMode: eventAttendanceAccessMode(option ?? { value: selection.attendanceType }),
+        startsAt: day?.starts_at ?? null,
+        endsAt: day?.ends_at ?? null,
+      };
+    });
     plannedDayWaitlist = waitlist.activeRows.map((row) =>
       row.status === "offered" && claimedInPersonDates.has(row.dayDate)
         ? { ...row, status: "accepted", offerExpiresAt: null }
@@ -357,7 +353,6 @@ export async function buildRegistrationUpdate(
     ...registration,
     status: newStatus,
     confirmation_link_secret: confirmationLinkSecret,
-    attendance_type: effectiveAttendanceType,
     cancellation_reason_code: null,
     custom_answers_json:
       payload.customAnswersJson === undefined ? registration.custom_answers_json : payload.customAnswersJson,
@@ -369,7 +364,6 @@ export async function buildRegistrationUpdate(
   };
   const scalarChanged =
     registration.status !== updated.status ||
-    registration.attendance_type !== updated.attendance_type ||
     registration.cancellation_reason_code !== updated.cancellation_reason_code ||
     registration.custom_answers_json !== updated.custom_answers_json ||
     registration.form_placement_id !== updated.form_placement_id ||
@@ -379,6 +373,10 @@ export async function buildRegistrationUpdate(
     ? await userProfilePatchWouldChange(db, updated.user_id, payload.profilePatch)
     : false;
   if (payload.profilePatch && profileChanged) {
+    if (payload.profileActor) {
+      requirePermission(payload.profileActor, "users:write");
+      statements.push(preparePermissionsAuthorizationGuard(db, payload.profileActor, [{ permission: "users:write" }]));
+    }
     statements.push(...prepareUserProfileStatements(db, updated.user_id, payload.profilePatch));
   }
   const notificationChanged = scalarChanged || dayAttendanceChanged || waitlistChanged || profileChanged;

@@ -140,6 +140,11 @@ async function createFixture(): Promise<Fixture> {
   await env.DB.prepare("UPDATE events SET links_json = ? WHERE id = ?")
     .bind(JSON.stringify(["https://example.test/workshop"]), series.eventId)
     .run();
+  await env.DB.prepare(
+    "INSERT INTO event_days(id,event_id,day_date,created_at,updated_at) VALUES(?,?,'2027-01-10',?,?)",
+  )
+    .bind(crypto.randomUUID(), series.eventId, new Date().toISOString(), new Date().toISOString())
+    .run();
   await replaceEventTerms(env.DB, series.eventId, "attendee", [
     { termKey: "meeting-terms", version: "1", displayText: "I accept the meeting terms" },
   ]);
@@ -1008,7 +1013,7 @@ describe("group event sharing", () => {
       method: "POST",
       body: JSON.stringify({
         email: "someone-else@example.test",
-        attendanceType: "virtual",
+        dayAttendance: [{ dayDate: "2027-01-10", attendanceType: "virtual" }],
         consents: [{ termKey: "meeting-terms", version: "1" }],
       }),
     });
@@ -1017,7 +1022,7 @@ describe("group event sharing", () => {
     const registered = await authenticatedRequest(fixture.memberToken, path, {
       method: "POST",
       body: JSON.stringify({
-        attendanceType: "virtual",
+        dayAttendance: [{ dayDate: "2027-01-10", attendanceType: "virtual" }],
         consents: [{ termKey: "meeting-terms", version: "1" }],
       }),
     });
@@ -1131,7 +1136,7 @@ describe("group event sharing", () => {
   it("rolls back the canonical group adapter when grant, membership, or ownership changes before commit", async () => {
     const fixture = await createFixture();
     const input = {
-      attendanceType: "virtual" as const,
+      dayAttendance: [{ dayDate: "2027-01-10", attendanceType: "virtual" }],
       consents: [{ termKey: "meeting-terms", version: "1" }],
     };
     const viewer = { userId: fixture.memberId };
@@ -1226,7 +1231,7 @@ describe("group event sharing", () => {
     const fixture = await createFixture();
     const groupPath = `/api/v1/groups/${fixture.granteeId}/events/${fixture.eventId}/registrations`;
     const payload = {
-      attendanceType: "virtual" as const,
+      dayAttendance: [{ dayDate: "2027-01-10", attendanceType: "virtual" }],
       consents: [{ termKey: "meeting-terms", version: "1" }],
     };
     const ungranted = await authenticatedRequest(fixture.memberToken, groupPath, {
@@ -1329,7 +1334,7 @@ describe("group event sharing", () => {
       {
         method: "POST",
         body: JSON.stringify({
-          attendanceType: "virtual",
+          dayAttendance: [{ dayDate: "2027-01-10", attendanceType: "virtual" }],
           consents: [{ termKey: "not-an-active-term", version: "1" }],
         }),
       },
@@ -1343,7 +1348,7 @@ describe("group event sharing", () => {
       {
         method: "POST",
         body: JSON.stringify({
-          attendanceType: "virtual",
+          dayAttendance: [{ dayDate: "2027-01-10", attendanceType: "virtual" }],
           customAnswers: { global_only: "must not be accepted" },
           consents: [{ termKey: "meeting-terms", version: "1" }],
         }),
@@ -1373,7 +1378,7 @@ describe("group event sharing", () => {
       {
         method: "POST",
         body: JSON.stringify({
-          attendanceType: "virtual",
+          dayAttendance: [{ dayDate: "2027-01-10", attendanceType: "virtual" }],
           customAnswers: { global_only: "exact placement" },
           consents: [{ termKey: "meeting-terms", version: "1" }],
         }),
@@ -1399,7 +1404,7 @@ describe("group event sharing", () => {
       {
         method: "POST",
         body: JSON.stringify({
-          attendanceType: "virtual",
+          dayAttendance: [{ dayDate: "2027-01-10", attendanceType: "virtual" }],
           customAnswers: { global_only: "Hugo compatibility" },
           consents: [{ termKey: "meeting-terms", version: "1" }],
         }),
@@ -1423,7 +1428,7 @@ describe("group event sharing", () => {
       firstName: "Test",
       lastName: "Member",
       email: fixture.memberEmail,
-      attendanceType: "virtual" as const,
+      dayAttendance: [{ dayDate: "2027-01-10", attendanceType: "virtual" }],
       consents: [{ termKey: "meeting-terms", version: "1" }],
     };
     const buildOptions = async () => {
@@ -1527,7 +1532,7 @@ describe("group event sharing", () => {
       {
         method: "POST",
         body: JSON.stringify({
-          attendanceType: "virtual",
+          dayAttendance: [{ dayDate: "2027-01-10", attendanceType: "virtual" }],
           consents: [{ termKey: "meeting-terms", version: "1" }],
         }),
       },

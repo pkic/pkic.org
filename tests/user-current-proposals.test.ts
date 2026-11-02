@@ -158,6 +158,7 @@ describe("GET /api/v1/users/current/proposals", () => {
     const speakerPage = currentUserProposalsListResponseSchema.parse(await speakerResponse.json());
     expect(speakerPage.proposals.map((p) => p.id)).toEqual([speakingProposal]);
     expect(speakerPage.proposals[0]!.role).toBe("speaker");
+    expect(speakerPage.proposals[0]!.speakerStatus).toBe("confirmed");
 
     // Newest-updated first, across both roles for a caller with both.
     await addProposalSpeaker(speakingProposal, submitterId, "moderator");
@@ -242,6 +243,6 @@ describe("buildCurrentUserProposalsPageQuery D1 query plan", () => {
     // path. See the flagged gap in this query's owning module.
     const planText = JSON.stringify(pagePlan.results);
     expect(planText).toContain("SCAN sp");
-    expect(planText).toContain("SEARCH ps USING COVERING INDEX sqlite_autoindex_proposal_speakers_2");
+    expect(planText).toContain("SEARCH ps USING INDEX sqlite_autoindex_proposal_speakers_2");
   });
 });

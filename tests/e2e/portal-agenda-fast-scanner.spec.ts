@@ -65,7 +65,7 @@ test("continuous local eligibility checks queue a burst while attempt uploads ar
   // A verified registration is final when submitted: no confirmation step follows.
   await waitForCapturedEmail(templateEmail, "registration is confirmed", { since: templateSince });
   const emails = Array.from({ length: 3 }, () => ownDomainEmail("fast-attendee"));
-  for (const email of emails) {
+  for (const [index, email] of emails.entries()) {
     const since = await capturedEmailCount();
     const body = registrationCreateSchema.parse({
       ...template.request,
@@ -79,7 +79,8 @@ test("continuous local eligibility checks queue a burst while attempt uploads ar
     expect(registered.status(), await registered.text()).toBe(200);
     const confirmation = await waitForCapturedEmail(email, "Confirm your registration", { since });
     await page.goto(extractEmailUrl(confirmation, "/register/confirm"));
-    await confirmRegistration(page, "Fast Scanner Attendee Org");
+    // Each address has its own domain, and a named organization belongs to the one domain that claimed it.
+    await confirmRegistration(page, `Fast Scanner Attendee Org ${index + 1}`);
     await waitForCapturedEmail(email, "registration is confirmed", { since });
   }
   await signInAsE2eStaff(page, e2eAdminEmail("portal-agenda-fast-scanner-burst"));

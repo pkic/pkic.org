@@ -1,4 +1,8 @@
-import { secondaryEmailSignInAllowedSql, signInEmailAuthorizationEvidence } from "./email-sign-in-policy";
+import {
+  primaryEmailProofMayAuthenticateSql,
+  secondaryEmailSignInAllowedSql,
+  signInEmailAuthorizationEvidence,
+} from "./email-sign-in-policy";
 import { prepareMonthlyActivity, recordMonthlyActivity } from "../services/member-standing/activity";
 import { hasEventParticipation } from "./event-participation";
 /**
@@ -33,7 +37,7 @@ import {
   SIGN_IN_LINK_REFUSALS,
   verifyEmailAuthCapabilityToken,
 } from "./email-auth-capabilities";
-import { prepareVerifyPrimaryEmailStatement } from "../services/email-verification";
+import { prepareVerifyPrimaryEmailStatements } from "../services/email-verification";
 import { linkVerifiedAddressToDomainOrganization } from "../services/identities/email-domain-link";
 import { findActiveSponsorCapacitiesByUserId } from "./sponsor-capacity";
 import {
@@ -86,7 +90,7 @@ async function findActiveIdentityBySignInEmail(db: DatabaseLike, email: string):
             u.email AS sign_in_email, u.normalized_email AS normalized_sign_in_email,
             NULL AS sign_in_email_id, NULL AS sign_in_permission_revision
        FROM users u
-      WHERE u.normalized_email = ? AND u.active = 1 AND u.pii_redacted_at IS NULL AND u.merged_into_user_id IS NULL
+      WHERE u.normalized_email = ? AND u.active = 1 AND u.pii_redacted_at IS NULL AND u.merged_into_user_id IS NULL AND ${primaryEmailProofMayAuthenticateSql("u")}
      UNION ALL
      SELECT u.id, u.email, u.normalized_email,
             ue.email AS sign_in_email, ue.normalized_email AS normalized_sign_in_email,
@@ -125,7 +129,7 @@ async function findCapabilitySignInIdentity(
           u.email AS sign_in_email, u.normalized_email AS normalized_sign_in_email,
           NULL AS sign_in_email_id, NULL AS sign_in_permission_revision
          FROM users u WHERE u.id = ? AND u.active = 1
-          AND u.pii_redacted_at IS NULL AND u.merged_into_user_id IS NULL LIMIT 1`,
+          AND u.pii_redacted_at IS NULL AND u.merged_into_user_id IS NULL AND ${primaryEmailProofMayAuthenticateSql("u")} LIMIT 1`,
     capability.authorizationRevision ? [capability.authorizationRevision, subjectId] : [subjectId],
   );
   return address &&
@@ -406,7 +410,7 @@ export async function redeemUserSignInCapability(
     statements: [
       ...(signInIdentity.sign_in_email_id === null
         ? [
-            prepareVerifyPrimaryEmailStatement(db, {
+            ...prepareVerifyPrimaryEmailStatements(db, {
               userId: identity.id,
               normalizedEmail: signInIdentity.normalized_sign_in_email,
               method: "magic_link",

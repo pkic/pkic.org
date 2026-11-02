@@ -1,8 +1,4 @@
-import {
-  ATTENDANCE_TYPE_LABELS,
-  buildAttendanceEmailData,
-  buildRegistrationEmailStatusData,
-} from "../../utils/attendance";
+import { buildAttendanceEmailData, buildRegistrationEmailStatusData } from "../../utils/attendance";
 import { buildCustomAnswerRows, buildCustomAnswerVariables } from "../../utils/registration-email";
 import type { FormFieldDefinition } from "../forms/read";
 import type {
@@ -69,12 +65,16 @@ export function buildAttendeeCampaignRecipients(
 
 function buildAttendeeTemplateData(
   row: ResolvedAttendeeCampaignRow,
-  dayAttendanceRaw: Array<{ dayDate: string; attendanceType: string; label: string | null }>,
+  dayAttendanceRaw: Array<{
+    dayDate: string;
+    attendanceType: string;
+    label: string | null;
+    optionLabel?: string | null;
+  }>,
   dayWaitlist: Array<{ dayDate: string; status: string }>,
 ): Record<string, unknown> {
   const customAnswers = row.formResponse.answers;
-  const attendanceType = row.attendance_type ?? "";
-  const attendanceData = buildAttendanceEmailData(attendanceType, dayAttendanceRaw, dayWaitlist);
+  const attendanceData = buildAttendanceEmailData(dayAttendanceRaw, dayWaitlist);
   const { customAnswerRows, customAnswerVariables } = buildSafeCustomAnswerData(
     customAnswers,
     row.formResponse.fields ?? undefined,
@@ -87,8 +87,7 @@ function buildAttendeeTemplateData(
     organizationName: emailPlainText(row.organization_name ?? ""),
     jobTitle: emailPlainText(row.job_title ?? ""),
     ...buildRegistrationEmailStatusData(row.status, dayWaitlist),
-    attendanceType,
-    attendanceLabel: attendanceData.attendanceLabel || (ATTENDANCE_TYPE_LABELS[attendanceType] ?? attendanceType),
+    attendanceLabel: attendanceData.attendanceLabel,
     dayAttendance: attendanceData.dayAttendance,
     dayWaitlist,
     manageUrl: undefined,

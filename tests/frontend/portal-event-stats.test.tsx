@@ -100,8 +100,8 @@ describe("portal event statistics", () => {
 
     const text = container.textContent ?? "";
     for (const label of [
-      "Accepted attendees",
-      "Waitlisted attendees",
+      "Accepted by option",
+      "Waitlisted by option",
       "Pending confirmation",
       "Total registrations",
       "Proposals",
@@ -118,8 +118,8 @@ describe("portal event statistics", () => {
     }));
     expect(values).toEqual(
       expect.arrayContaining([
-        { label: "Accepted attendees", value: "7" },
-        { label: "Waitlisted attendees", value: "2" },
+        { label: "Accepted by option", value: "7" },
+        { label: "Waitlisted by option", value: "2" },
         { label: "Pending confirmation", value: "2" },
         { label: "Total registrations", value: "11" },
         { label: "Sponsor consent", value: "3" },
@@ -161,6 +161,15 @@ describe("portal event statistics", () => {
     expect(container.querySelectorAll(".pk-chart__bars").length).toBeGreaterThan(0);
   });
 
+  it("shows expired offers separately from accepted attendance", async () => {
+    const data = analytics();
+    data.registrations.attendanceStatusByType.virtual = { accepted: 0, waitlisted: 0, expired: 1 };
+    stubAnalyticsFetch(() => jsonResponse(data));
+    mount(<EventStats slug={SLUG} />);
+    await settle();
+    expect(container.textContent).toContain("1 with expired offers");
+  });
+
   it("states the actionable counts in words rather than as a color alone", async () => {
     stubAnalyticsFetch(() => jsonResponse(analytics()));
 
@@ -168,7 +177,7 @@ describe("portal event statistics", () => {
     await settle();
 
     const alert = container.querySelector('[role="alert"]');
-    expect(alert?.textContent).toContain("2 attendees are on an active day waitlist");
+    expect(alert?.textContent).toContain("2 waitlisted attendance choices");
     expect(alert?.textContent).toContain("2 registrations have not confirmed their email");
   });
 

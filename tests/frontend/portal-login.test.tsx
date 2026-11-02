@@ -11,6 +11,7 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { RateLimitErrorDetails } from "../../assets/shared/schemas/api-common";
 
 const authenticateWithPasskey = vi.fn<() => Promise<unknown>>();
 const browserSupportsWebAuthn = vi.fn<() => boolean>();
@@ -70,7 +71,7 @@ function submitForm(): Promise<void> {
 
 async function enterEmail(value: string): Promise<void> {
   await act(() => {
-    const control = controlLabeled("Work email");
+    const control = controlLabeled("Email");
     control.value = value;
     control.dispatchEvent(new Event("input", { bubbles: true }));
   });
@@ -102,7 +103,7 @@ describe("portal login", () => {
 
     await act(() => render(<Login onSignedIn={vi.fn()} />, container));
 
-    const email = controlLabeled("Work email");
+    const email = controlLabeled("Email");
     expect(email.type).toBe("email");
     expect(email.required).toBe(true);
     expect(email.getAttribute("autocomplete")).toBe("email");
@@ -143,6 +144,36 @@ describe("portal login", () => {
     expect(container.querySelector("form")).not.toBeNull();
   });
 
+  it("tells a throttled request how long to wait and keeps the address it sent", async () => {
+    const details: RateLimitErrorDetails = { retryAfter: 90 };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json(
+          { error: { code: "RATE_LIMITED", message: "Too many requests. Please try again later.", details } },
+          { status: 429 },
+        ),
+      ),
+    );
+
+    await act(() => render(<Login onSignedIn={vi.fn()} />, container));
+    await enterEmail("member@example.test");
+    await submitForm();
+    await waitFor(() => container.querySelector('[role="alert"]') !== null, "the throttle was never announced");
+
+    expect(container.querySelector('[role="alert"]')!.textContent).toBe(
+      "Too many links requested. Try again in about 2 minutes.",
+    );
+    // Nothing failed: the wait reads as a warning, not a "Sign-in failed" error.
+    expect(container.querySelector('[role="alert"]')!.classList.contains("pk-alert--warn")).toBe(true);
+    // Nothing was sent, so there is no "check your email" confirmation.
+    expect(container.querySelector('[role="status"]')).toBeNull();
+    const email = controlLabeled("Email");
+    expect(email.value).toBe("member@example.test");
+    // The address was not at fault; the field must not be marked invalid.
+    expect(email.getAttribute("aria-invalid")).toBeNull();
+  });
+
   it("offers the passkey ceremony as a real button and reports its failure", async () => {
     browserSupportsWebAuthn.mockReturnValue(true);
     authenticateWithPasskey.mockRejectedValue(new Error("No passkey was selected."));
@@ -175,7 +206,7 @@ describe("portal login", () => {
         (el.textContent ?? "").includes("Sign in with a passkey"),
       ),
     ).toBe(false);
-    expect(controlLabeled("Work email")).toBeTruthy();
+    expect(controlLabeled("Email")).toBeTruthy();
   });
 
   it("folds the email route behind the passkey, and opens it on request", async () => {
@@ -191,7 +222,7 @@ describe("portal login", () => {
       await Promise.resolve();
     });
 
-    expect(controlLabeled("Work email").type).toBe("email");
+    expect(controlLabeled("Email").type).toBe("email");
   });
 
   it("reopens a sent link with the same email and reports a refused second request", async () => {
@@ -214,7 +245,7 @@ describe("portal login", () => {
     await waitFor(() => container.textContent!.includes("Check your email"), "first request was not confirmed");
     await act(() => buttonLabeled("Request another link").click());
     expect(container.textContent).not.toContain("Check your email");
-    expect(controlLabeled("Work email").value).toBe("member@example.test");
+    expect(controlLabeled("Email").value).toBe("member@example.test");
     expect(bodies).toHaveLength(1);
     await submitForm();
     await waitFor(
@@ -224,7 +255,7 @@ describe("portal login", () => {
     expect(bodies).toHaveLength(2);
     expect(bodies[1]).toEqual(bodies[0]);
     expect(container.textContent).not.toContain("Check your email");
-    expect(controlLabeled("Work email").value).toBe("member@example.test");
+    expect(controlLabeled("Email").value).toBe("member@example.test");
     expect(buttonLabeled("Send sign-in link").disabled).toBe(false);
   });
 
@@ -250,7 +281,7 @@ describe("portal login", () => {
     await act(() => buttonLabeled("Back to passkey").click());
     expect(container.querySelector('[role="alert"]')).toBeNull();
     await act(() => buttonLabeled("Sign in with an email link").click());
-    expect(controlLabeled("Work email").value).toBe("member@example.test");
+    expect(controlLabeled("Email").value).toBe("member@example.test");
     expect(container.querySelector('[role="alert"]')).toBeNull();
     expect(authenticateWithPasskey).toHaveBeenCalledTimes(1);
   });
@@ -408,7 +439,7 @@ describe("portal login", () => {
     await act(() => render(<Login busy status="Checking your sign-in…" onSignedIn={vi.fn()} />, container));
     expect(container.querySelector(".pk-login__backdrop")).not.toBeNull();
     expect(container.querySelector(".pk-login__card [role='status']")?.textContent).toContain("Checking your sign-in…");
-    expect(controlLabeled("Work email").matches(":disabled")).toBe(true);
+    expect(controlLabeled("Email").matches(":disabled")).toBe(true);
     await enterEmail("synthetic@example.test");
     await submitForm();
     expect(fetcher).not.toHaveBeenCalled();
@@ -419,6 +450,14 @@ describe("portal login", () => {
     expect(authenticateWithPasskey).not.toHaveBeenCalled();
   });
 
+  it("opens the email form while the session check runs, with its actions disabled", async () => {
+    browserSupportsWebAuthn.mockReturnValue(true);
+    await act(() => render(<Login busy status="Checking your sign-in…" onSignedIn={vi.fn()} />, container));
+    await act(() => buttonLabeled("Sign in with an email link").click());
+    expect(controlLabeled("Email").matches(":disabled")).toBe(true);
+    expect(buttonLabeled("Send sign-in link").matches(":disabled")).toBe(true);
+  });
+
   it("keeps a verification notice in the existing card and enables the same email field after checking", async () => {
     const onSignedIn = vi.fn();
     await act(() => render(<Login busy status="Checking your sign-in…" onSignedIn={onSignedIn} />, container));
@@ -427,8 +466,8 @@ describe("portal login", () => {
       render(<Login notice={<p role="alert">The link has expired.</p>} onSignedIn={onSignedIn} />, container),
     );
     expect(container.querySelector(".pk-login__card [role='alert']")?.textContent).toBe("The link has expired.");
-    expect(controlLabeled("Work email").value).toBe("synthetic@example.test");
-    expect(controlLabeled("Work email").matches(":disabled")).toBe(false);
+    expect(controlLabeled("Email").value).toBe("synthetic@example.test");
+    expect(controlLabeled("Email").matches(":disabled")).toBe(false);
     expect(container.querySelector("[role='status']")).toBeNull();
   });
 });

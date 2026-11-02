@@ -38,12 +38,8 @@ export function dayAttendanceTypeNotConfiguredError(day: NamedDay, method: strin
   );
 }
 
-export function waitlistRequiresInPersonError(day: NamedDay): AppError {
-  return new AppError(
-    400,
-    "WAITLIST_REQUIRES_IN_PERSON",
-    `Only in-person attendance has a waitlist. Choose in-person for ${dayName(day)} first.`,
-  );
+export function waitlistRequiresAttendanceError(day: NamedDay): AppError {
+  return new AppError(400, "WAITLIST_REQUIRES_ATTENDANCE", `Choose an attendance option for ${dayName(day)} first.`);
 }
 
 export function dayCapacityUnlimitedError(day: NamedDay): AppError {
@@ -54,8 +50,16 @@ export function dayCapacityUnlimitedError(day: NamedDay): AppError {
   );
 }
 
+export function eventDaysNotScheduledError(): AppError {
+  return new AppError(409, "EVENT_DAYS_NOT_SCHEDULED", "Registration opens when the event days are scheduled.");
+}
+
 export function dayAttendanceRequiredError(): AppError {
-  return new AppError(400, "DAY_ATTENDANCE_REQUIRED", "Choose how you attend each day of this event.");
+  return new AppError(
+    400,
+    "DAY_ATTENDANCE_REQUIRED",
+    "Choose at least one event day and attendance option to register.",
+  );
 }
 
 export function registrationCancelledDayChangeError(): AppError {

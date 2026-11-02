@@ -1,14 +1,19 @@
+import { prepareConfirmRegistrationByToken } from "../functions/_lib/services/registrations/confirm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
 import { deliveredEmailPayload, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { callApi } from "./helpers/app";
-import { registrationManageUpdateResponseSchema } from "../assets/shared/schemas/registration";
+import {
+  registrationConfirmInfoResponseSchema,
+  registrationManageUpdateResponseSchema,
+} from "../assets/shared/schemas/registration";
+import { registrationEmailProofVerifyResponseSchema } from "../assets/shared/schemas/registration-email-proof";
 import { sha256Hex } from "../functions/_lib/utils/crypto";
 import { getEventBySlug } from "../functions/_lib/services/events";
 import { createInvite } from "../functions/_lib/services/invites";
 import {
-  createRegistration as createRegistrationService,
+  createRegistration as createRegistrationRaw,
   confirmRegistrationByToken,
   updateRegistrationByManageToken,
   updateRegistrationById,
@@ -36,19 +41,71 @@ async function extractConfirmationToken(payloadJson: string): Promise<string> {
   return url.searchParams.get("token") as string;
 }
 
-function postRegistration(body: unknown): Promise<Response> {
+async function ensureRegistrationFixtureDay(eventId: string): Promise<string> {
+  const [existing] = await queryAll<{ day_date: string }>(
+    env.DB,
+    "SELECT day_date FROM event_days WHERE event_id=? ORDER BY day_date LIMIT 1",
+    eventId,
+  );
+  if (existing) return existing.day_date;
+  await env.DB.prepare(
+    "INSERT INTO event_days(id,event_id,day_date,created_at,updated_at) VALUES(?,?,'2026-12-01',?,?)",
+  )
+    .bind(crypto.randomUUID(), eventId, new Date().toISOString(), new Date().toISOString())
+    .run();
+  return "2026-12-01";
+}
+async function createRegistrationService(
+  db: Parameters<typeof createRegistrationRaw>[0],
+  payload: Parameters<typeof createRegistrationRaw>[1],
+) {
+  if (payload.dayAttendance) return createRegistrationRaw(db, payload);
+  const dayDate = await ensureRegistrationFixtureDay(payload.event.id);
+  return createRegistrationRaw(db, { ...payload, dayAttendance: [{ dayDate, attendanceType: "virtual" }] });
+}
+async function postRegistration(body: unknown, ip?: string): Promise<Response> {
+  const [event] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM events WHERE slug='pqc-2026'");
+  if (event) await ensureRegistrationFixtureDay(event.id);
   return callApi(env, "/api/v1/events/pqc-2026/registrations", {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...(ip ? { "cf-connecting-ip": ip } : {}) },
     body: JSON.stringify(body),
   });
 }
 
-function postConfirmation(body: unknown): Promise<Response> {
+async function postConfirmation(body: {
+  token: string | null;
+  id?: string;
+  organization?: { name: string; jobTitle: string };
+}): Promise<Response> {
+  if (!body.token) throw new Error("Expected a registration confirmation token");
+  const query = new URLSearchParams({ token: body.token, ...(body.id ? { id: body.id } : {}) });
+  const info = registrationConfirmInfoResponseSchema.parse(
+    await (await callApi(env, `/api/v1/events/pqc-2026/registrations/confirm-info?${query}`)).json(),
+  );
+  let organization: Record<string, unknown> | undefined;
+  if (info.organizationProof) {
+    const read = async (affiliation?: object) =>
+      registrationEmailProofVerifyResponseSchema.parse(
+        await (
+          await callApi(env, "/api/v1/events/pqc-2026/registrations/proof/verify", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ token: info.organizationProof, affiliation }),
+          })
+        ).json(),
+      ).affiliation!;
+    const resolved = await read();
+    const id = body.organization ? null : (resolved.organization?.id ?? null);
+    const name = body.organization?.name ?? resolved.organization?.name ?? `Organization for ${resolved.domain}`;
+    const jobTitle = body.organization?.jobTitle ?? "Engineer";
+    const prepared = await read({ organizationId: id, ...(id ? {} : { organizationName: name }), jobTitle });
+    organization = { name, jobTitle, organizationId: id, contextToken: prepared.contextToken };
+  }
   return callApi(env, "/api/v1/events/pqc-2026/registrations/confirm-email", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ ...body, ...(organization ? { organization } : {}) }),
   });
 }
 
@@ -69,6 +126,63 @@ describe("registration workflows", () => {
   });
 
   afterEach(() => vi.unstubAllGlobals());
+
+  it.each(["livestream_lounge", "moon_base_42", "interactive_hologram"])(
+    "registers and confirms the configured attendance type %s",
+    async (attendanceType) => {
+      const { eventId } = await seedEventAndAdmin(env.DB);
+      await env.DB.prepare(
+        `INSERT INTO event_days (id, event_id, day_date, label, attendance_options_json, sort_order, created_at, updated_at)
+       VALUES (?, ?, '2026-12-01', 'Day 1', ?, 10, datetime('now'), datetime('now'))`,
+      )
+        .bind(
+          crypto.randomUUID(),
+          eventId,
+          JSON.stringify([{ value: attendanceType, label: "Configured option", capacity: null }]),
+        )
+        .run();
+
+      const body = {
+        firstName: "Lounge",
+        lastName: "Attendee",
+        email: `${attendanceType}@example.test`,
+        dayAttendance: [{ dayDate: "2026-12-01", attendanceType }],
+        sourceType: "direct",
+        consents: [
+          { termKey: "privacy-policy", version: "v1" },
+          { termKey: "code-of-conduct", version: "v1" },
+        ],
+      };
+      const unconfiguredType = attendanceType === "livestream_lounge" ? "moon_base_42" : "livestream_lounge";
+      const testIp = `192.0.2.${["livestream_lounge", "moon_base_42", "interactive_hologram"].indexOf(attendanceType) + 1}`;
+      const unconfigured = await postRegistration(
+        {
+          ...body,
+          dayAttendance: [{ dayDate: "2026-12-01", attendanceType: unconfiguredType }],
+        },
+        testIp,
+      );
+      expect(unconfigured.status, await unconfigured.clone().text()).toBe(400);
+      const response = await postRegistration(body, testIp);
+      expect(response.status, await response.clone().text()).toBe(200);
+      const { registrationId } = (await response.json()) as { registrationId: string };
+      const [email] = await queryAll<{ payload_json: string }>(
+        env.DB,
+        "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirm_email' ORDER BY created_at DESC LIMIT 1",
+      );
+      const confirmation = await postConfirmation({ token: await extractConfirmationToken(email.payload_json) });
+      expect(confirmation.status, await confirmation.clone().text()).toBe(200);
+      expect(
+        await queryAll(
+          env.DB,
+          `SELECT day.attendance_type AS day_attendance_type
+      FROM registrations registration JOIN registration_day_attendance day ON day.registration_id = registration.id
+      WHERE registration.id = ?`,
+          registrationId,
+        ),
+      ).toEqual([{ day_attendance_type: attendanceType }]);
+    },
+  );
 
   /** Registration creates no membership; verified approved domains establish affiliation. */
   it.each([true, false])(
@@ -91,7 +205,7 @@ describe("registration workflows", () => {
         firstName: "New",
         lastName: "Comer",
         email: attendeeEmail,
-        attendanceType: "virtual",
+        dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
         sourceType: "direct",
         consents: [
           { termKey: "privacy-policy", version: "v1" },
@@ -172,6 +286,75 @@ describe("registration workflows", () => {
     15_000,
   );
 
+  it("does not confirm a pending registration after all event days are removed", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const created = await postRegistration({
+      firstName: "Pending",
+      lastName: "Attendee",
+      email: "pending-days@example.test",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
+      sourceType: "direct",
+      consents: [
+        { termKey: "privacy-policy", version: "v1" },
+        { termKey: "code-of-conduct", version: "v1" },
+      ],
+    });
+    expect(created.status).toBe(200);
+    const [mail] = await queryAll<{ payload_json: string }>(
+      env.DB,
+      "SELECT payload_json FROM email_outbox WHERE template_key='registration_confirm_email' LIMIT 1",
+    );
+    const token = await extractConfirmationToken(mail.payload_json);
+    await env.DB.prepare(
+      "DELETE FROM registration_day_attendance WHERE event_day_id IN (SELECT id FROM event_days WHERE event_id=?)",
+    )
+      .bind(eventId)
+      .run();
+    await env.DB.prepare("DELETE FROM event_days WHERE event_id=?").bind(eventId).run();
+    const result = await postConfirmation({ token });
+    expect(result.status).toBe(409);
+    expect(await result.json()).toMatchObject({ error: { code: "EVENT_DAYS_NOT_SCHEDULED" } });
+    expect(await queryAll(env.DB, "SELECT status FROM registrations")).toEqual([
+      { status: "pending_email_confirmation" },
+    ]);
+  });
+
+  it("rolls back confirmation if the event schedule is removed after preparation", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const created = await postRegistration({
+      firstName: "Pending",
+      lastName: "Attendee",
+      email: "pending-schedule-race@example.test",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
+      sourceType: "direct",
+      consents: [
+        { termKey: "privacy-policy", version: "v1" },
+        { termKey: "code-of-conduct", version: "v1" },
+      ],
+    });
+    expect(created.status).toBe(200);
+    const [mail] = await queryAll<{ payload_json: string }>(
+      env.DB,
+      "SELECT payload_json FROM email_outbox WHERE template_key='registration_confirm_email' LIMIT 1",
+    );
+    const token = await extractConfirmationToken(mail.payload_json);
+    const prepared = await prepareConfirmRegistrationByToken(env.DB, {
+      token,
+      signingSecret: env.INTERNAL_SIGNING_SECRET!,
+      waitlistClaimWindowHours: 24,
+    });
+    await env.DB.prepare(
+      "DELETE FROM registration_day_attendance WHERE event_day_id IN (SELECT id FROM event_days WHERE event_id=?)",
+    )
+      .bind(eventId)
+      .run();
+    await env.DB.prepare("DELETE FROM event_days WHERE event_id=?").bind(eventId).run();
+    await expect(env.DB.batch(prepared.statements)).rejects.toThrow("REGISTRATION_CHANGED");
+    expect(await queryAll(env.DB, "SELECT status FROM registrations")).toEqual([
+      { status: "pending_email_confirmation" },
+    ]);
+  });
+
   it("enforces consent and supports double opt-in", async () => {
     await seedEventAndAdmin(env.DB);
 
@@ -179,7 +362,7 @@ describe("registration workflows", () => {
       firstName: "Alice",
       lastName: "Doe",
       email: "alice@pkic.org",
-      attendanceType: "virtual",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
       sourceType: "direct",
       consents: [{ termKey: "privacy-policy", version: "v1" }],
     });
@@ -190,7 +373,7 @@ describe("registration workflows", () => {
       firstName: "Alice",
       lastName: "Doe",
       email: "alice@pkic.org",
-      attendanceType: "virtual",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
       sourceType: "direct",
       consents: [
         { termKey: "privacy-policy", version: "v1" },
@@ -211,8 +394,8 @@ describe("registration workflows", () => {
       await queryAll<{ id: string }>(
         env.DB,
         `SELECT brj.id
-           FROM badge_render_jobs brj
-           JOIN referral_codes rc ON rc.code = brj.referral_code
+           FROM event_promotion_renders brj
+           JOIN referral_codes rc ON brj.id = 'badge:' || rc.code
           WHERE rc.owner_type = 'registration' AND rc.owner_id = ?`,
         [createdPayload.registrationId],
       ),
@@ -244,7 +427,7 @@ describe("registration workflows", () => {
       firstName: "Indie",
       lastName: "Attendee",
       email: "indie@gmail.com",
-      attendanceType: "virtual",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
       sourceType: "direct",
       consents: [
         { termKey: "privacy-policy", version: "v1" },
@@ -267,7 +450,7 @@ describe("registration workflows", () => {
       firstName: "Claimed",
       lastName: "Admin",
       email: "admin@pkic.org",
-      attendanceType: "virtual",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
       sourceType: "direct",
       consents: [
         { termKey: "privacy-policy", version: "v1" },
@@ -330,7 +513,6 @@ describe("registration workflows", () => {
     const created = await createRegistrationService(env.DB, {
       event: { id: eventId },
       userId,
-      attendanceType: "virtual",
       sourceType: "direct",
       confirmationTtlHours: 48,
       signingSecret: "test-signing-secret",
@@ -389,7 +571,6 @@ describe("registration workflows", () => {
     const created = await createRegistrationService(env.DB, {
       event: { id: eventId },
       userId: targetUserId,
-      attendanceType: "virtual",
       sourceType: "direct",
       confirmationTtlHours: 48,
       signingSecret: "test-signing-secret",
@@ -437,7 +618,7 @@ describe("registration workflows", () => {
       firstName: "Confirm",
       lastName: "Rollback",
       email: "confirm-rollback@pkic.org",
-      attendanceType: "virtual",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
       sourceType: "direct",
       consents: [
         { termKey: "privacy-policy", version: "v1" },
@@ -490,7 +671,7 @@ describe("registration workflows", () => {
       firstName: "Confirm",
       lastName: "Concurrent",
       email: "confirm-concurrent@pkic.org",
-      attendanceType: "virtual",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
       sourceType: "direct",
       consents: [
         { termKey: "privacy-policy", version: "v1" },
@@ -546,7 +727,7 @@ describe("registration workflows", () => {
         firstName: "Atomic",
         lastName: "Rollback",
         email: "atomic-rollback@pkic.org",
-        attendanceType: "virtual",
+        dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
         sourceType: "direct",
         consents: [
           { termKey: "privacy-policy", version: "v1" },
@@ -583,7 +764,7 @@ describe("registration workflows", () => {
       firstName: "Match",
       lastName: "Invite",
       email: "matching-invite@pkic.org",
-      attendanceType: "virtual",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
       sourceType: "direct",
       consents: [
         { termKey: "privacy-policy", version: "v1" },
@@ -625,6 +806,7 @@ describe("registration workflows", () => {
 
   it("commits an invite-acceptance badge render intent with the registration", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
+    await ensureRegistrationFixtureDay(eventId);
     const createdInvite = await createInvite(env.DB, {
       eventId,
       inviteeEmail: "durable-invite-badge@pkic.org",
@@ -640,7 +822,7 @@ describe("registration workflows", () => {
         firstName: "Durable",
         lastName: "Invite",
         email: "durable-invite-badge@pkic.org",
-        attendanceType: "virtual",
+        dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
         consents: [
           { termKey: "privacy-policy", version: "v1" },
           { termKey: "code-of-conduct", version: "v1" },
@@ -654,8 +836,8 @@ describe("registration workflows", () => {
       await queryAll<{ id: string }>(
         env.DB,
         `SELECT brj.id
-           FROM badge_render_jobs brj
-           JOIN referral_codes rc ON rc.code = brj.referral_code
+           FROM event_promotion_renders brj
+           JOIN referral_codes rc ON brj.id = 'badge:' || rc.code
           WHERE rc.owner_type = 'registration' AND rc.owner_id = ?`,
         [payload.registrationId],
       ),
@@ -683,7 +865,7 @@ describe("registration workflows", () => {
       lastName: "User",
       email: "email-user@example.test",
       inviteToken: tokenInvite.token,
-      attendanceType: "virtual",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
       sourceType: "direct",
       consents: [
         { termKey: "privacy-policy", version: "v1" },
@@ -731,11 +913,11 @@ describe("registration workflows", () => {
       `),
       env.DB.prepare(`
         INSERT INTO registrations (
-          id, event_id, user_id, invite_id, status, attendance_type, source_type, source_ref,
+          id, event_id, user_id, invite_id, status, source_type, source_ref,
           custom_answers_json, referred_by_code, confirmation_link_secret,
           manage_link_secret, confirmed_at, cancelled_at, created_at, updated_at
         ) VALUES (
-          '${registrationId}', '${eventId}', '${userId}', NULL, 'registered', 'virtual',
+          '${registrationId}', '${eventId}', '${userId}', NULL, 'registered',
           'direct', NULL, NULL, NULL, NULL, '${manageLinkSecret}', datetime('now'), NULL, datetime('now'), datetime('now')
         )
       `),
@@ -776,8 +958,8 @@ describe("registration workflows", () => {
       env.DB.prepare(`
         INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
         VALUES
-          ('user-1', 'day-one@example.test', 'day-one@example.test', 'Day', 'One', datetime('now'), datetime('now')),
-          ('user-2', 'day-two@example.test', 'day-two@example.test', 'Day', 'Two', datetime('now'), datetime('now'))
+          ('00000000-0000-4000-8000-000000000101', 'day-one@example.test', 'day-one@example.test', 'Day', 'One', datetime('now'), datetime('now')),
+          ('00000000-0000-4000-8000-000000000102', 'day-two@example.test', 'day-two@example.test', 'Day', 'Two', datetime('now'), datetime('now'))
       `),
     ]);
 
@@ -785,8 +967,7 @@ describe("registration workflows", () => {
 
     const first = await createRegistrationService(env.DB, {
       event,
-      userId: "user-1",
-      attendanceType: "in_person",
+      userId: "00000000-0000-4000-8000-000000000101",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -800,8 +981,7 @@ describe("registration workflows", () => {
 
     const second = await createRegistrationService(env.DB, {
       event,
-      userId: "user-2",
-      attendanceType: "in_person",
+      userId: "00000000-0000-4000-8000-000000000102",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -859,6 +1039,7 @@ describe("registration workflows", () => {
       myAgendaUrl: string;
     };
     expect(emailPayload.status).toBe("registered");
+    expect(emailPayload).not.toHaveProperty("attendanceType");
     // The confirmation links the attendee's own portal agenda.
     expect(new URL(emailPayload.myAgendaUrl).hash).toMatch(/^#\/events\/[^/]+\/agenda\?mine=1$/);
     expect(emailPayload.registrationStatus).toBe("registered");
@@ -900,9 +1081,9 @@ describe("registration workflows", () => {
       env.DB.prepare(`
         INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
         VALUES
-          ('holder-1', 'holder1@example.test', 'holder1@example.test', 'Holder', 'One', datetime('now'), datetime('now')),
-          ('holder-2', 'holder2@example.test', 'holder2@example.test', 'Holder', 'Two', datetime('now'), datetime('now')),
-          ('wait-all', 'wait-all@example.test', 'wait-all@example.test', 'Wait', 'All', datetime('now'), datetime('now'))
+          ('00000000-0000-4000-8000-000000000103', 'holder1@example.test', 'holder1@example.test', 'Holder', 'One', datetime('now'), datetime('now')),
+          ('00000000-0000-4000-8000-000000000104', 'holder2@example.test', 'holder2@example.test', 'Holder', 'Two', datetime('now'), datetime('now')),
+          ('00000000-0000-4000-8000-000000000105', '00000000-0000-4000-8000-000000000105@example.test', '00000000-0000-4000-8000-000000000105@example.test', 'Wait', 'All', datetime('now'), datetime('now'))
       `),
     ]);
 
@@ -910,8 +1091,7 @@ describe("registration workflows", () => {
 
     const holder1 = await createRegistrationService(env.DB, {
       event,
-      userId: "holder-1",
-      attendanceType: "in_person",
+      userId: "00000000-0000-4000-8000-000000000103",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -925,8 +1105,7 @@ describe("registration workflows", () => {
 
     const holder2 = await createRegistrationService(env.DB, {
       event,
-      userId: "holder-2",
-      attendanceType: "in_person",
+      userId: "00000000-0000-4000-8000-000000000104",
       dayAttendance: [{ dayDate: "2026-12-02", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -940,8 +1119,7 @@ describe("registration workflows", () => {
 
     const waiting = await createRegistrationService(env.DB, {
       event,
-      userId: "wait-all",
-      attendanceType: "in_person",
+      userId: "00000000-0000-4000-8000-000000000105",
       dayAttendance: [
         { dayDate: "2026-12-01", attendanceType: "in_person" },
         { dayDate: "2026-12-02", attendanceType: "in_person" },
@@ -965,7 +1143,7 @@ describe("registration workflows", () => {
 
     const outboxRows = await queryAll<{ payload_json: string }>(
       env.DB,
-      "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirmed' AND recipient_email = 'wait-all@example.test' ORDER BY created_at DESC LIMIT 1",
+      "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirmed' AND recipient_email = '00000000-0000-4000-8000-000000000105@example.test' ORDER BY created_at DESC LIMIT 1",
     );
     const emailPayload = JSON.parse(outboxRows[0].payload_json) as {
       isWaitlisted: boolean;
@@ -1002,7 +1180,6 @@ describe("registration workflows", () => {
     const holder = await createRegistrationService(env.DB, {
       event,
       userId: "holder",
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -1017,7 +1194,6 @@ describe("registration workflows", () => {
     const acceptCandidate = await createRegistrationService(env.DB, {
       event,
       userId: "accept-user",
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -1032,7 +1208,6 @@ describe("registration workflows", () => {
     const expiredCandidate = await createRegistrationService(env.DB, {
       event,
       userId: "expired-user",
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -1084,7 +1259,6 @@ describe("registration workflows", () => {
 
     const acceptResponse = await patchManage(offeredManageToken, {
       action: "update",
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       claimDayWaitlistOffers: ["2026-12-01"],
     });
@@ -1114,7 +1288,6 @@ describe("registration workflows", () => {
 
     const expiredResponse = await patchManage(expiredConfirmed.manageToken, {
       action: "update",
-      attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       claimDayWaitlistOffers: ["2026-12-01"],
     });
@@ -1148,7 +1321,6 @@ describe("registration workflows", () => {
     const created = await createRegistrationService(env.DB, {
       event,
       userId: "cancel-atomic-user",
-      attendanceType: "virtual",
       sourceType: "direct",
       confirmationTtlHours: 48,
       signingSecret: "test-signing-secret",
@@ -1210,7 +1382,6 @@ describe("registration workflows", () => {
     const created = await createRegistrationService(env.DB, {
       event,
       userId: "unauthorized-user",
-      attendanceType: "virtual",
       sourceType: "direct",
       customAnswersJson: JSON.stringify({ confidential: "remove me" }),
       signingSecret: "test-signing-secret",
@@ -1293,12 +1464,11 @@ describe("registration workflows", () => {
     const created = await createRegistrationService(env.DB, {
       event,
       userId: "self-cas-user",
-      attendanceType: "virtual",
       sourceType: "direct",
       confirmationTtlHours: 48,
       signingSecret: "test-signing-secret",
     });
-    await confirmRegistrationByToken(env.DB, {
+    const confirmed = await confirmRegistrationByToken(env.DB, {
       token: created.confirmationToken as string,
       waitlistClaimWindowHours: 24,
       signingSecret: "test-signing-secret",
@@ -1306,9 +1476,8 @@ describe("registration workflows", () => {
 
     const gate = gateNextBatch(env.DB);
     const staleUpdate = updateRegistrationByManageToken(gate.db, {
-      manageToken: created.manageToken,
+      manageToken: confirmed.manageToken,
       action: "update",
-      attendanceType: "on_demand",
       waitlistClaimWindowHours: 24,
       signingSecret: "test-signing-secret",
     });
@@ -1321,7 +1490,7 @@ describe("registration workflows", () => {
     await expect(staleUpdate).rejects.toMatchObject({ status: 409, code: "REGISTRATION_CHANGED" });
     const [stored] = await queryAll<{ status: string; attendance_type: string }>(
       env.DB,
-      "SELECT status, attendance_type FROM registrations WHERE id = ?",
+      "SELECT r.status, d.attendance_type FROM registrations r JOIN registration_day_attendance d ON d.registration_id=r.id WHERE r.id = ?",
       [created.registration.id],
     );
     expect(stored).toEqual({ status: "cancelled", attendance_type: "virtual" });
@@ -1334,7 +1503,6 @@ describe("registration workflows", () => {
     const created = await createRegistrationService(env.DB, {
       event,
       userId: person.userId,
-      attendanceType: "virtual",
       sourceType: "direct",
       confirmationTtlHours: 48,
       signingSecret: "test-signing-secret",
@@ -1373,7 +1541,6 @@ describe("registration workflows", () => {
     const created = await createRegistrationService(env.DB, {
       event,
       userId: "a382ed00-0000-4000-8000-000000000001",
-      attendanceType: "virtual",
       sourceType: "direct",
       confirmationTtlHours: 48,
       signingSecret: "test-signing-secret",
@@ -1397,13 +1564,13 @@ describe("registration workflows", () => {
     try {
       const response = await patchManage(confirmed.manageToken, {
         action: "update",
-        attendanceType: "on_demand",
+        dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "on_demand" }],
         firstName: "After",
       });
       expect(response.status).toBe(500);
       const [registration] = await queryAll<{ attendance_type: string; status: string }>(
         env.DB,
-        "SELECT attendance_type, status FROM registrations WHERE id = ?",
+        "SELECT d.attendance_type, r.status FROM registrations r JOIN registration_day_attendance d ON d.registration_id=r.id WHERE r.id = ?",
         [created.registration.id],
       );
       const [user] = await queryAll<{ first_name: string }>(env.DB, "SELECT first_name FROM users WHERE id = ?", [
@@ -1434,7 +1601,6 @@ describe("registration workflows", () => {
     const created = await createRegistrationService(env.DB, {
       event,
       userId: "a382ed00-0000-4000-8000-000000000002",
-      attendanceType: "virtual",
       sourceType: "direct",
       confirmationTtlHours: 48,
       signingSecret: "test-signing-secret",
@@ -1445,7 +1611,11 @@ describe("registration workflows", () => {
       signingSecret: "test-signing-secret",
     });
     const request = () =>
-      patchManage(confirmed.manageToken, { action: "update", attendanceType: "on_demand", firstName: "After" });
+      patchManage(confirmed.manageToken, {
+        action: "update",
+        dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "on_demand" }],
+        firstName: "After",
+      });
 
     expect((await request()).status).toBe(200);
     expect((await request()).status).toBe(200);
@@ -1473,7 +1643,6 @@ describe("registration workflows", () => {
     const created = await createRegistrationService(env.DB, {
       event,
       userId,
-      attendanceType: "virtual",
       sourceType: "direct",
       confirmationTtlHours: 48,
       signingSecret: "test-signing-secret",
@@ -1498,7 +1667,7 @@ describe("registration workflows", () => {
         confirmed.manageToken,
         {
           action: "update",
-          attendanceType: "on_demand",
+          dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "on_demand" }],
           firstName: "After",
           email: "email-after@example.test",
         },
@@ -1509,9 +1678,11 @@ describe("registration workflows", () => {
         attendance_type: string;
         status: string;
         confirmation_link_secret: string | null;
-      }>(env.DB, "SELECT attendance_type, status, confirmation_link_secret FROM registrations WHERE id = ?", [
-        created.registration.id,
-      ]);
+      }>(
+        env.DB,
+        "SELECT d.attendance_type, r.status, r.confirmation_link_secret FROM registrations r JOIN registration_day_attendance d ON d.registration_id=r.id WHERE r.id = ?",
+        [created.registration.id],
+      );
       const [user] = await queryAll<{ first_name: string; pending_email: string | null }>(
         env.DB,
         "SELECT first_name, pending_email FROM users WHERE id = ?",

@@ -20,6 +20,11 @@ import { callApi } from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { resetDb } from "./helpers/reset-db";
+import { clearSessionAttendanceDays, seedSessionAttendanceDays } from "./helpers/session-attendance-days";
+import {
+  sessionParticipationRequestSchema,
+  sessionParticipationResponseSchema,
+} from "../assets/shared/schemas/event-participation-scanning";
 
 const eventId = crypto.randomUUID(),
   occurrenceId = crypto.randomUUID(),
@@ -123,11 +128,15 @@ beforeEach(async () => {
     .run();
   for (const id of [speakerId, attendeeId, otherPersonId]) {
     await env.DB.prepare(
-      "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','in_person','test',?,?,?)",
+      "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','test',?,?,?)",
     )
       .bind(crypto.randomUUID(), eventId, id, crypto.randomUUID(), now, now)
       .run();
   }
+  await seedSessionAttendanceDays(env.DB, eventId, [
+    new Date(Date.now() + 3600000).toISOString().slice(0, 10),
+    new Date(Date.now() + 3 * 3600000).toISOString().slice(0, 10),
+  ]);
   for (const [index, id] of [occurrenceId, otherOccurrenceId].entries()) {
     await env.DB.prepare(
       "INSERT INTO event_agenda_occurrences(id,event_id,title,start_at,end_at,admission_policy,capacity) VALUES(?,?,?,?,?,'approval',1)",
@@ -162,6 +171,39 @@ beforeEach(async () => {
 });
 
 describe("Canonical occurrence action routes", () => {
+  it("requires event registration before saving a session after resolving the event's local day", async () => {
+    for (const [userId, expected] of [
+      [unregisteredId, 403],
+      [attendeeId, 200],
+    ] as const) {
+      const token = await createAdminSession(env.DB, userId, crypto.randomUUID());
+      const response = await callApi(
+        env,
+        `/api/v1/events/${slug}/agenda/occurrences/${occurrenceId}/participation`,
+        {
+          method: "PUT",
+          headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+          body: JSON.stringify(sessionParticipationRequestSchema.parse({ action: "save" })),
+        },
+        { maxRoundTrips: 2 },
+      );
+      expect(response.status, await response.clone().text()).toBe(expected);
+      if (expected === 200)
+        expect(sessionParticipationResponseSchema.parse(await response.json())).toMatchObject({ status: "saved" });
+    }
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS n FROM agenda_session_participations WHERE user_id=?")
+        .bind(unregisteredId)
+        .first("n"),
+    ).toBe(0);
+    expect(
+      await env.DB.prepare(
+        "SELECT COUNT(*) AS n FROM audit_log WHERE actor_id=? AND action='session_preference_changed'",
+      )
+        .bind(unregisteredId)
+        .first("n"),
+    ).toBe(0);
+  });
   const actions = [
     ["GET", "holds"],
     ["POST", "holds"],
@@ -364,6 +406,7 @@ describe("Audited participant management for assigned sessions", () => {
   });
 
   it("refuses managed Add for the wrong event-day mode without changing registration or effects", async () => {
+    await clearSessionAttendanceDays(env.DB, eventId);
     const now = nowIso(),
       dayId = crypto.randomUUID();
     const start = await env.DB.prepare("SELECT start_at FROM event_agenda_occurrences WHERE id=?")

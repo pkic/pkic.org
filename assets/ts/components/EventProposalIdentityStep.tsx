@@ -1,29 +1,38 @@
+import { personNamePatchSchema } from "../../shared/schemas/api-common";
+import { useDialogQueryState } from "../hooks/useDialogQueryState";
 import type { ComponentChildren } from "preact";
 import type { z } from "zod";
-import { useEffect, useMemo, useState } from "preact/hooks";
+import { useEffect, useMemo, useState, useRef } from "preact/hooks";
 import type { RequiredTerm } from "../../shared/schemas/forms";
 import type { ProposalEntryContext } from "../../shared/schemas/proposal-entry";
 import type { ConsentItem } from "../../shared/schemas/registration";
 import {
   eventProposalProofStartSchema,
-  eventProposalPersonNamePatchSchema,
   eventProposalProofStartResponseSchema,
   eventProposalProofIdentitiesSchema,
+  eventProposalProofVerifySchema,
+  eventProposalProofVerifyResponseSchema,
 } from "../../shared/schemas/event-proposal-proof";
+import {
+  VerifiedOrganizationDetails,
+  type VerifiedOrganizationController,
+} from "./identities/VerifiedOrganizationDetails";
 import type { CollectionLoader } from "../hooks/useServerCollection";
-import { actingIdentityCatalog, actingIdentityLabel } from "../shared/acting-identity-catalog";
-import { postJson, requestJson } from "../shared/api-client";
+import { getJson, postJson, requestJson } from "../shared/api-client";
+import { userAuthSessionResponseSchema } from "../../shared/schemas/user-auth";
+import { identitiesListResponseSchema } from "../../shared/schemas/identity";
+import { IdentityCreateDialog } from "./identities/IdentityCreateDialog";
 import { Alert } from "../ui/Alert";
 import { Button, ButtonLink } from "../ui/Button";
 import { Field } from "../ui/Field";
 import { TextInput } from "../ui/TextControl";
 import { FormSection } from "../ui/FormSection";
 import { EmailFirstStep } from "./EmailFirstStep";
-import { ADDRESS_IN_USE_COPY, EMAIL_FIRST_COPY, ORGANIZATION_JOB_TITLE_COPY } from "../../shared/email-first-copy";
+import { ADDRESS_IN_USE_COPY, EMAIL_FIRST_COPY } from "../../shared/email-first-copy";
 import { ParticipationRepresentation } from "./ParticipationRepresentation";
 import { ParticipationPersonalDetails } from "./ParticipationPersonalDetails";
 import { ParticipationIdentitySummary } from "./ParticipationIdentitySummary";
-import { ServerSearchSelect } from "./ServerSearchSelect";
+import { RepresentationSelect } from "./identities/RepresentationSelect";
 import {
   IndependentCapacityDisclosure,
   completedIndependentCapacity,
@@ -50,8 +59,11 @@ export function EventProposalIdentityStep({
   personalDetails,
   startWithEmailProof,
   initialProof,
+  invitedEmail,
 }: {
   enabled: boolean;
+  /** The address a speaker was invited at, offered first; their invitation link may already have proved it. */
+  invitedEmail?: string;
   personalDetails?: ComponentChildren;
   startWithEmailProof?: boolean;
   initialProof?: VerifiedProposalEntry;
@@ -64,7 +76,7 @@ export function EventProposalIdentityStep({
   speakerProposalId?: string;
   expectedSpeakerUserId?: string | null;
   entryContext?: ProposalEntryContext;
-  onSavePersonalDetails?: (names: z.infer<typeof eventProposalPersonNamePatchSchema>) => Promise<ParticipationPerson>;
+  onSavePersonalDetails?: (names: z.infer<typeof personNamePatchSchema>) => Promise<ParticipationPerson>;
 }) {
   const endpoint = `/api/v1/events/${encodeURIComponent(eventSlug)}/proposals/proof`;
   const identity = useProposalEntryIdentity(
@@ -76,10 +88,14 @@ export function EventProposalIdentityStep({
     startWithEmailProof,
     speakerProposalId,
     initialProof,
+    invitedEmail,
   );
   const [sent, setSent] = useState(false);
   const [changing, setChanging] = useState(false);
+  const [adding, showAdding, closeAdding] = useDialogQueryState("identity");
   const flow = speakerManagementToken || speakerProposalId ? "speaker" : "proposal";
+  // Each page names its own save, not the other flow's.
+  const savedWhen = flow === "speaker" ? "when you save your speaker identity" : "when you submit your proposal";
   const proofBody = {
     consents: consents(),
     speakerManagementToken: identity.proofOwnerToken ? undefined : speakerManagementToken,
@@ -91,21 +107,47 @@ export function EventProposalIdentityStep({
         : (identity.entryContext ?? entryContext),
   };
   const [disclosure, setDisclosure] = useState<IndependentCapacityDraft>({});
+  const organization = useRef<VerifiedOrganizationController>({});
+  const [organizationDraftRevision, setOrganizationDraftRevision] = useState(0);
+  const usesOrganizationChooser = Boolean(
+    identity.affiliation && !identity.selected && identity.kind === "organization",
+  );
   // Taking part as an individual is complete only with the independence disclosure the contract accepts.
   const entry = useMemo<ProposalEntrySelection | null>(() => {
     // On behalf of an organization, a chosen representation needs its job title before the person continues.
     if (identity.selection && identity.kind === "organization" && identity.selected && !identity.selected.jobTitle)
       return null;
+    if (identity.selection && usesOrganizationChooser)
+      return {
+        ...identity.selection,
+        validateAffiliation: () => organization.current.validate?.() ?? false,
+        prepareAffiliation: async () => {
+          if (!(await organization.current.prepare?.()))
+            throw new Error("Check your organization details before continuing.");
+          const chosen = organization.current.read?.();
+          if (!chosen || "refused" in chosen) throw new Error("Check your organization details before continuing.");
+          return {
+            organizationName: chosen.organizationName,
+            jobTitle: chosen.input.jobTitle,
+            organizationContextToken: chosen.contextToken,
+          };
+        },
+      };
     if (!identity.selection || identity.kind !== "individual") return identity.selection;
     const independentCapacity = completedIndependentCapacity(disclosure);
     return independentCapacity ? { ...identity.selection, independentCapacity } : null;
-  }, [identity.selection, identity.kind, identity.selected, disclosure]);
+  }, [identity.selection, identity.kind, identity.selected, disclosure, usesOrganizationChooser]);
   useEffect(() => {
     onChange(entry);
   }, [entry, onChange]);
   useEffect(() => {
     if (identity.recordedConsents) onTermsRecorded?.(identity.recordedConsents);
   }, [identity.recordedConsents, onTermsRecorded]);
+  // The banner sits below the step; bring a new error into view instead of leaving it off screen.
+  const errorBanner = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (identity.error) errorBanner.current?.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
+  }, [identity.error]);
   const load = useMemo<CollectionLoader | undefined>(
     () =>
       identity.continuationToken
@@ -127,8 +169,18 @@ export function EventProposalIdentityStep({
   if (!enabled) return null;
   async function sendProof(proof: z.output<typeof eventProposalProofStartSchema>): Promise<void> {
     identity.setError(undefined);
-    await postJson(endpoint, proof, eventProposalProofStartResponseSchema);
-    setSent(true);
+    const started = await postJson(endpoint, proof, eventProposalProofStartResponseSchema);
+    // The speaker's own invitation link already proved this address: continue without a second email.
+    if (started.status === "verified") await identity.verify(started.token);
+    else setSent(true);
+  }
+  function addRepresentation() {
+    if (identity.authenticated) showAdding();
+    else {
+      identity.useDifferentEmail();
+      setSent(false);
+      setChanging(false);
+    }
   }
   const person = identity.person;
   const knownPerson = identity.knownPerson;
@@ -143,58 +195,31 @@ export function EventProposalIdentityStep({
   const resolved = Boolean(identity.selection);
   const needsFirstName = person && !identity.knownPerson?.firstName;
   const needsLastName = person && !identity.knownPerson?.lastName;
-  const needsOrganization =
-    person &&
-    identity.kind === "organization" &&
-    !identity.knownPerson?.organizationName &&
-    !identity.selected?.organizationName;
-  // A new affiliation on behalf of an organization says what the person does there; a chosen representation carries its own.
-  const needsJobTitle =
-    person && identity.kind === "organization" && !identity.selected && !identity.knownPerson?.jobTitle;
   const catalogEndpoint = identity.continuationToken ? `${endpoint}/identities` : "/api/v1/users/current/identities";
   const selector = (
-    <Field
-      label="Your organization representation"
-      help="Choose an identity you already own, or verify an email to set up another organization affiliation."
-    >
-      {(control) => (
-        <ServerSearchSelect
-          {...control}
-          catalog={actingIdentityCatalog(catalogEndpoint, actingIdentityLabel, {
-            active: "true",
-            organizationOnly: "true",
-          })}
-          load={load}
-          allowEmpty={false}
-          searchLabel="Your organization identities"
-          value={identity.selected?.id ?? null}
-          selectedLabel={identity.selected ? actingIdentityLabel(identity.selected) : undefined}
-          placeholder="Choose an existing representation"
-          onChange={(value) => {
-            if (value && identity.kind !== "organization") identity.setKind("organization");
-            identity.choose(value);
-            if (value) setChanging(false);
-          }}
-        />
-      )}
-    </Field>
+    <RepresentationSelect
+      endpoint={catalogEndpoint}
+      load={load}
+      organizationOnly
+      value={identity.selected ?? null}
+      onAdd={addRepresentation}
+      onSelect={(value) => {
+        if (identity.kind !== "organization") identity.setKind("organization");
+        identity.choose(value);
+        setChanging(false);
+      }}
+    />
   );
   const representationActions = identity.storedPerson && (
     <div class="pk-cluster">
       <Button type="button" variant="secondary" onClick={() => setChanging(!changing)}>
         Choose another representation
       </Button>
-      <Button
-        type="button"
-        variant="secondary"
-        onClick={() => {
-          identity.useDifferentEmail();
-          setSent(false);
-          setChanging(false);
-        }}
-      >
-        Add representation
-      </Button>
+      {!changing && (
+        <Button type="button" variant="secondary" onClick={addRepresentation}>
+          Add representation
+        </Button>
+      )}
     </div>
   );
   return (
@@ -214,18 +239,6 @@ export function EventProposalIdentityStep({
                     <Button type="button" variant="link" onClick={() => identity.setKind("individual")}>
                       {EMAIL_FIRST_COPY[flow].individualSwitch}
                     </Button>
-                    {identity.authenticated && identity.kind === "organization" && (
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        onClick={() => {
-                          identity.useDifferentEmail();
-                          setSent(false);
-                        }}
-                      >
-                        Add representation
-                      </Button>
-                    )}
                   </div>
                 </>
               ) : (
@@ -262,7 +275,7 @@ export function EventProposalIdentityStep({
                   person={knownPerson ?? { ...person, firstName: null, lastName: null }}
                   description={
                     needsFirstName || needsLastName
-                      ? "These new details are not saved yet. They will be saved when you submit your proposal or save your speaker profile."
+                      ? `These new details are not saved yet. They will be saved ${savedWhen}.`
                       : undefined
                   }
                   save={
@@ -315,52 +328,69 @@ export function EventProposalIdentityStep({
               ) : (
                 <FormSection
                   title="Your representation for this proposal"
+                  layout="stack"
                   description={
-                    identity.storedPerson && identity.kind === "organization" && !needsOrganization
-                      ? "No existing representation is selected. Choose one to reuse its saved details, or add a representation with a verified organization email."
-                      : needsOrganization || needsJobTitle
-                        ? "Any details entered below are unsaved until you submit your proposal or save your speaker profile."
+                    usesOrganizationChooser
+                      ? `Your representation is saved ${savedWhen}.`
+                      : identity.storedPerson && identity.kind === "organization"
+                        ? "Choose an existing representation or verify your organization email to add one."
                         : undefined
                   }
                 >
                   {knownPerson && (
                     <ParticipationIdentitySummary
-                      person={knownPerson}
+                      person={
+                        usesOrganizationChooser
+                          ? { ...knownPerson, email: person.email, organizationName: null, jobTitle: null }
+                          : knownPerson
+                      }
                       applicantKind={identity.kind}
                       knownOnly
                       scope="representation"
                     />
                   )}
-                  {needsOrganization && (
-                    <Field label="Organization name" errorSlot="proposer.organizationName">
-                      {(control) => (
-                        <TextInput
-                          {...control}
-                          name="organizationName"
-                          required
-                          value={person.organizationName ?? ""}
-                          onInput={(event) => identity.complete("organizationName", event.currentTarget.value)}
-                        />
-                      )}
-                    </Field>
-                  )}
-                  {needsJobTitle && (
-                    <Field
-                      label={ORGANIZATION_JOB_TITLE_COPY.label}
-                      help={ORGANIZATION_JOB_TITLE_COPY.help}
-                      errorSlot="proposer.jobTitle"
-                      required
-                    >
-                      {(control) => (
-                        <TextInput
-                          {...control}
-                          name="jobTitle"
-                          autoComplete="organization-title"
-                          value={person.jobTitle ?? ""}
-                          onInput={(event) => identity.complete("jobTitle", event.currentTarget.value)}
-                        />
-                      )}
-                    </Field>
+                  {usesOrganizationChooser && identity.affiliation && (
+                    <VerifiedOrganizationDetails
+                      key={`${identity.verificationToken}:${organizationDraftRevision}`}
+                      initial={identity.affiliation}
+                      emailId={null}
+                      controller={organization.current}
+                      onDraftChange={(draft) => {
+                        identity.complete("organizationName", draft.organizationName);
+                        identity.complete("jobTitle", draft.jobTitle);
+                      }}
+                      resolve={async (domain) => {
+                        const result = await postJson(
+                          `${endpoint}/verify`,
+                          eventProposalProofVerifySchema.parse({
+                            token: identity.verificationToken,
+                            speakerManagementToken,
+                            speakerProposalId,
+                            domain,
+                          }),
+                          eventProposalProofVerifyResponseSchema,
+                        );
+                        if (result.status !== "ready" || !result.affiliation)
+                          throw new Error("Confirm your organization details again.");
+                        return result.affiliation;
+                      }}
+                      prepare={async (input) => {
+                        const { phase: _phase, email: _email, emailId: _emailId, ...affiliation } = input;
+                        const result = await postJson(
+                          `${endpoint}/verify`,
+                          eventProposalProofVerifySchema.parse({
+                            token: identity.verificationToken,
+                            speakerManagementToken,
+                            speakerProposalId,
+                            affiliation,
+                          }),
+                          eventProposalProofVerifyResponseSchema,
+                        );
+                        if (result.status !== "ready" || !result.affiliation)
+                          throw new Error("Confirm your organization details again.");
+                        return result.affiliation;
+                      }}
+                    />
                   )}
                   {representationActions}
                 </FormSection>
@@ -379,7 +409,14 @@ export function EventProposalIdentityStep({
                 />
               )}
               {Object.keys(identity.selection?.missingDetails ?? {}).length > 0 && (
-                <Button type="button" variant="secondary" onClick={identity.clearUnsaved}>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    identity.clearUnsaved();
+                    setOrganizationDraftRevision((revision) => revision + 1);
+                  }}
+                >
                   Clear unsaved changes
                 </Button>
               )}
@@ -395,7 +432,33 @@ export function EventProposalIdentityStep({
           </ButtonLink>
         </Alert>
       )}
-      {identity.error && <Alert tone="danger">{identity.error}</Alert>}
+      {identity.error && (
+        <div ref={errorBanner}>
+          <Alert tone="danger">{identity.error}</Alert>
+        </div>
+      )}
+      {identity.authenticated && (
+        <IdentityCreateDialog
+          open={adding}
+          onClose={() => closeAdding()}
+          onCreated={async (identityId) => {
+            const session = await getJson("/api/v1/auth/session", userAuthSessionResponseSchema);
+            const summary = session.actingIdentities.find((item) => item.id === identityId);
+            if (!summary?.organizationId)
+              throw new Error("Your new identity is not available yet. Close and reopen this step to refresh it.");
+            const result = await getJson(
+              `/api/v1/users/current/identities?organizationId=${encodeURIComponent(summary.organizationId)}&active=true&limit=1`,
+              identitiesListResponseSchema,
+            );
+            const created = result.identities.find((item) => item.id === identityId);
+            if (!created)
+              throw new Error("Your new identity is not available yet. Close and reopen this step to refresh it.");
+            if (identity.kind !== "organization") identity.setKind("organization");
+            identity.choose(created);
+            setChanging(false);
+          }}
+        />
+      )}
     </div>
   );
 }

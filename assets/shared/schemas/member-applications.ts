@@ -102,6 +102,35 @@ export function memberApplicationCreateSchemaForCategory(
 
 export type MemberApplicationCreateInput = z.infer<typeof memberApplicationCreateSchema>;
 
+/**
+ * A signed-in person applies as one of the identities they hold. Their name,
+ * address, organization, title, bio and links come from that identity on the
+ * server, so the request carries only the choice and the remaining answers.
+ */
+export const memberApplicationCreateAsIdentitySchema = z.object({
+  identityId: databaseIdSchema,
+  membershipCategory: membershipCategorySchema,
+  answers: formAnswersSchema.optional(),
+});
+export type MemberApplicationCreateAsIdentityInput = z.infer<typeof memberApplicationCreateAsIdentitySchema>;
+
+export function memberApplicationCreateAsIdentitySchemaForCategory(
+  category: MemberApplicationFormResponse["categories"][number],
+  fields: FormFieldDefinition[],
+) {
+  const answers = formAnswersContract(membershipApplicationFields(fields, category, { fromIdentity: true }));
+  return memberApplicationCreateAsIdentitySchema.superRefine((input, context) => {
+    const checked = answers.safeParse(input.answers ?? {});
+    if (!checked.success)
+      for (const issue of checked.error.issues) context.addIssue({ ...issue, path: ["answers", ...issue.path] });
+  });
+}
+
+/** True when a submission is made as a signed-in identity rather than through a verified-email link. */
+export function isMemberApplicationAsIdentity(body: unknown): boolean {
+  return typeof body === "object" && body !== null && "identityId" in body;
+}
+
 export const memberApplicationCreateResponseSchema = z.object({
   applicationId: z.string(),
   stage: applicationStageSchema,
@@ -113,16 +142,28 @@ export const memberApplicationCreateRouteSchema = {
   tags: ["Members"],
   summary: "Submit a membership application",
   description:
-    "Creates a member_applications record and queues the application-received confirmation email through the durable outbox.",
+    "Creates a member_applications record and queues the application-received confirmation email through the durable outbox. A verified-email link or a signed-in identity authorizes the applicant.",
   request: {
-    body: { content: { "application/json": { schema: memberApplicationCreateSchema } }, required: true },
+    body: {
+      content: {
+        "application/json": {
+          schema: z.union([memberApplicationCreateSchema, memberApplicationCreateAsIdentitySchema]),
+        },
+      },
+      required: true,
+    },
   },
   responses: {
     "201": {
       description: "Application created.",
       content: { "application/json": { schema: memberApplicationCreateResponseSchema } },
     },
-    "409": { description: "An active application already exists for this organization domain." },
+    "401": { description: "Applying as an identity requires a session." },
+    "403": { description: "The session does not hold the chosen identity." },
+    "409": {
+      description:
+        "The organization or applicant is already a member, the applicant represents an organization, or an application is already in progress.",
+    },
     "422": { description: "Missing or invalid required fields." },
   },
 };
@@ -131,6 +172,9 @@ export const memberApplicationStatusResponseSchema = z.object({
   workflow: membershipWorkflowProgressSchema.nullable().optional(),
   id: databaseIdSchema,
   stage: applicationStageSchema,
+  membershipCategory: membershipCategorySchema,
+  /** The category's current catalog label; null once the category has left the catalog. */
+  membershipCategoryLabel: z.string().nullable(),
   stageEnteredAt: z.string(),
   createdAt: z.string(),
 });

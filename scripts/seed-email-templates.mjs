@@ -140,6 +140,14 @@ export const DEFAULT_TEMPLATES = [
     messageType: "transactional",
   },
   {
+    key: "agenda_session_reminder",
+    subjectTemplate: "Starting soon: {{sessionTitle}}",
+    content:
+      "Your reserved session **{{sessionTitle}}** at **{{eventName}}** starts at {{sessionStart}}. Location: {{sessionLocation}}. Open your event agenda for the latest information.",
+    contentType: "markdown",
+    messageType: "transactional",
+  },
+  {
     key: "email_layout",
     subjectTemplate: null,
     contentType: "html",
@@ -225,6 +233,28 @@ Below you will find the complete application details:
 Best regards,
 
 PKI Consortium`,
+  },
+  // Weekly working group membership changes for the group's chairs.
+  {
+    key: "wg-chair-membership-digest",
+    subjectTemplate: "{{workingGroupName}}: weekly membership update",
+    contentType: "markdown",
+    content: `Hello {{recipientName}},
+
+Here are last week's membership changes in **{{workingGroupName}}**, which you lead as {{recipientRole}}.
+
+{{#if hasJoined}}**Joined**
+
+{{#each joined}}- {{name}}{{#if organizationName}} ({{organizationName}}){{/if}}
+{{/each}}
+{{/if}}{{#if hasLeft}}**Left**
+
+{{#each left}}- {{name}}{{#if organizationName}} ({{organizationName}}){{/if}}
+{{/each}}
+{{/if}}
+You can turn off this weekly update in your notification settings.
+
+The PKI Consortium team`,
   },
   {
     key: "partial_membership_review_summary",
@@ -366,7 +396,7 @@ Know someone who should attend? Share your personal referral link: [{{shareUrl}}
   // ─────────────────────────────────────────────────────────────────────────
   // 2. Registration confirmed
   // Variables: eventName, eventUrl, firstName, lastName, email, organizationName,
-  //            jobTitle, attendanceType, venue, status, manageUrl, myAgendaUrl, shareUrl,
+  //            jobTitle, dayAttendance, venue, status, manageUrl, myAgendaUrl, shareUrl,
   //            sponsorsImageUrl, heroImageUrl, customAnswerRows, acceptedTermsText
   // Partials:  {{> reg_details}}, {{> sponsors_block}}
   // ─────────────────────────────────────────────────────────────────────────
@@ -381,16 +411,14 @@ Know someone who should attend? Share your personal referral link: [{{shareUrl}}
 We are delighted to confirm that **your registration for {{eventName}} has been successfully processed**.
 {{/if}}
 
-{{#if eq attendanceType "in_person"}}
-<div class="notice notice-success">&#128197; A <strong>calendar invitation</strong> is attached to this email — please add it to your calendar.</div>
+{{#if hasCalendarInvite}}
+<div class="notice notice-success">A calendar invitation is attached for your confirmed live attendance days.</div>
 {{/if}}
+
 {{#if venue}}
 <div class="notice notice-info">&#128205; The conference will be held at <strong>{{venue}}</strong>. Enhance your conference experience by staying at the official venue hotel(s), see the <a href="{{eventUrl}}">event website</a> for more details.</div>
 {{/if}}
 
-{{#if eq attendanceType "virtual"}}
-<div class="notice notice-info">&#128187; You are registered for <strong>virtual / online</strong> attendance. Livestream access details will be shared closer to the event.</div>
-{{/if}}
 {{#if eq status "waitlisted"}}
 <div class="notice notice-warning">&#9203; Your registration is currently <strong>waitlisted</strong>, which means the event has not yet fully confirmed your attendance. One of the limiting factors for in-person capacity is the event budget — we will be able to admit more attendees as sponsors commit to the conference. If {{#if organizationName}}<strong>{{organizationName}}</strong>{{else}}your organization{{/if}} is willing and able to sponsor this conference, please <a href="mailto:contact@pkic.org">contact us</a>. We will notify you as soon as the remaining seats become available.</div>
 {{/if}}
@@ -536,7 +564,7 @@ We apologise for any inconvenience.
     subjectTemplate: "Your management link for {{eventName}}",
     content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Registrant,{{/if}}
 
-Here is your management link for **{{eventName}}**. Use it to review, update, or cancel your registration at any time.
+{{#if alreadyRegistered}}You're already registered for **{{eventName}}**, so there's no need to register again. Use this link to review, update, or cancel your registration.{{else}}Here is your management link for **{{eventName}}**. Use it to review, update, or cancel your registration at any time.{{/if}}
 
 <div class="cta"><a href="{{manageUrl}}">Manage your registration &rarr;</a></div>
 
@@ -547,6 +575,8 @@ Plan the sessions you want to attend in [My agenda &rarr;]({{myAgendaUrl}})
 {{/if}}
 
 If you did not request this email, you can safely ignore it.
+
+{{> sponsors_block}}
 `,
   },
 
@@ -830,6 +860,24 @@ Speaker identity: {{speakerName}}{{#if organizationName}}, {{organizationName}}{
 `,
   },
   {
+    key: "proposal_speaker_declined",
+    subjectTemplate: "A speaker declined your proposal — {{eventName}}",
+    content: `{{#if firstName}}Hello {{firstName}},{{else}}Hello,{{/if}}
+
+{{speakerName}} declined to speak on your proposal **{{proposalTitle}}** for **{{eventName}}**.
+
+{{#if declineReason}}
+They gave this reason:
+
+> {{declineReason}}
+{{/if}}
+
+You can invite another speaker or change the proposal on its page.
+
+[Manage my proposal]({{manageUrl}})
+`,
+  },
+  {
     key: "proposal_organizational_representation_request",
     subjectTemplate: "Please speak on behalf of your organization — {{eventName}}",
     content: `Hello {{firstName}},
@@ -907,7 +955,7 @@ Thank you for your interest in contributing to **{{eventName}}**.
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "co_speaker_invite",
-    subjectTemplate: `{{#if isReminder}}Reminder: please confirm speaker participation — {{eventName}}{{else}}You have been added as a speaker — {{eventName}}{{/if}}`,
+    subjectTemplate: `{{#if isReminder}}Reminder: please confirm speaker participation — {{eventName}}{{else}}Speaker invitation: please confirm — {{eventName}}{{/if}}`,
     content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Speaker,{{/if}}
 
 {{#if isReminder}}
@@ -953,7 +1001,7 @@ If you have questions, please [contact us](mailto:contact@pkic.org).
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "speaker_profile_request",
-    subjectTemplate: "Action required: complete your speaker profile — {{eventName}}",
+    subjectTemplate: "Please complete your speaker profile — {{eventName}}",
     content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Speaker,{{/if}}
 
 Great news — your session **{{proposalTitle}}** has been accepted for **{{eventName}}**!
@@ -961,8 +1009,8 @@ Great news — your session **{{proposalTitle}}** has been accepted for **{{even
 To help us promote your session, please take a moment to complete your speaker profile.
 
 {{#unless hasBio}}<div class="notice notice-warning">&#9997;&#65039; Your <strong>biography</strong> is missing. Please add a short speaker bio so we can introduce you properly.</div>{{/unless}}
-{{#unless hasHeadshot}}<div class="notice notice-warning">&#128247; No <strong>headshot</strong> on file. Please upload a high-resolution photo (JPEG / PNG / WebP, min 1000 &times; 1000 px, max 20 MB).</div>{{/unless}}
-{{#if and hasBio hasHeadshot}}<div class="notice notice-success">&#10003; Your profile looks complete — but you can update it at any time before the event.</div>{{/if}}
+{{#unless hasHeadshot}}<div class="notice notice-warning">&#128247; Please upload a <strong>headshot</strong> so attendees can recognize you and we can promote your session (JPEG / PNG / WebP, min 1000 &times; 1000 px, max 20 MB).</div>{{/unless}}
+{{#if hasBio}}<div class="notice notice-success">&#10003; Your biography is on file and can be updated before the event.</div>{{/if}}
 
 <div class="cta"><a href="{{profileUrl}}">Review &amp; update my speaker profile &rarr;</a></div>
 
@@ -985,7 +1033,8 @@ Your profile can be updated at any time up until the event.
 {{/if}}
 {{/if}}
 
-{{#if requiresConfirmation}}You have been invited to participate as a speaker. Follow the link below to confirm or decline your participation and review your profile.{{else}}Please check that your biography and headshot are up to date.{{/if}}
+{{#if requiresConfirmation}}You have been invited to participate as a speaker. Follow the link below to confirm or decline your participation and review your profile.{{else}}Please review your biography.{{/if}}
+{{#unless hasHeadshot}}Please upload a headshot so attendees can recognize you and we can promote your session.{{/unless}}
 
 [Review my speaker profile]({{profileUrl}})
 `,

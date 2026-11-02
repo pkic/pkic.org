@@ -79,7 +79,9 @@ describe("Scanner admission decisions are independent evidence", () => {
           .bind(eventId, userId)
           .run();
       if (reason === "wrong_attendance_mode")
-        await env.DB.prepare("UPDATE registrations SET attendance_type='virtual' WHERE event_id=? AND user_id=?")
+        await env.DB.prepare(
+          "UPDATE registration_day_attendance SET attendance_type='virtual' WHERE registration_id IN (SELECT id FROM registrations WHERE event_id=? AND user_id=?)",
+        )
           .bind(eventId, userId)
           .run();
       const body = scanBody({ action: "admission", occurrenceId: occurrence });

@@ -12,6 +12,7 @@ import { sessionParticipationRequestSchema } from "../assets/shared/schemas/even
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { resetDb } from "./helpers/reset-db";
+import { seedSessionAttendanceDays } from "./helpers/session-attendance-days";
 import { queryAll } from "./helpers/context";
 import {
   prepareSitePublicationRequest,
@@ -417,10 +418,11 @@ describe("approved agenda constraint guards at provider activation", () => {
     );
     const attendee = await insertIndividualMember(env.DB);
     await env.DB.prepare(
-      "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','in_person','test',?,?,?)",
+      "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','test',?,?,?)",
     )
       .bind(crypto.randomUUID(), fixture.eventId, attendee.userId, crypto.randomUUID(), nowIso(), nowIso())
       .run();
+    await seedSessionAttendanceDays(env.DB, fixture.eventId, ["2026-12-01"]);
     const token = await createAdminSession(env.DB, attendee.userId, crypto.randomUUID());
     const displayed = await callApi(
       env,

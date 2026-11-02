@@ -274,8 +274,8 @@ describe("admin user headshot upload", () => {
     const registrationId = crypto.randomUUID();
     await env.DB.prepare(
       `INSERT INTO registrations
-         (id, event_id, user_id, status, attendance_type, source_type, manage_link_secret, created_at, updated_at)
-       VALUES (?, ?, ?, 'registered', 'virtual', 'direct', ?, datetime('now'), datetime('now'))`,
+         (id, event_id, user_id, status, source_type, manage_link_secret, created_at, updated_at)
+       VALUES (?, ?, ?, 'registered', 'direct', ?, datetime('now'), datetime('now'))`,
     )
       .bind(registrationId, eventId, targetUserId, crypto.randomUUID())
       .run();
@@ -321,7 +321,7 @@ describe("admin user headshot upload", () => {
       ),
     ).toEqual([{ action: "headshot_imported_gravatar" }]);
     expect(
-      await queryAll(env.DB, "SELECT id, status FROM badge_render_jobs WHERE referral_code = ?", referralCode),
+      await queryAll(env.DB, "SELECT id, status FROM event_promotion_renders WHERE id = 'badge:' || ?", referralCode),
     ).toEqual([{ id: `badge:${referralCode}`, status: "queued" }]);
     expect(
       await queryAll(env.DB, "SELECT object_key FROM storage_deletion_outbox WHERE object_key = ?", oldKey),

@@ -109,6 +109,11 @@ describe("Independent scanner capabilities and badge expiry", () => {
     await env.DB.prepare("UPDATE event_badge_credentials SET expires_at=?,revoked_at=? WHERE event_id=?")
       .bind(expired, expired, eventId)
       .run();
+    await env.DB.prepare(
+      "DELETE FROM registration_day_attendance WHERE registration_id IN (SELECT id FROM registrations WHERE event_id=?)",
+    )
+      .bind(eventId)
+      .run();
     await env.DB.prepare("DELETE FROM registrations WHERE event_id=?").bind(eventId).run();
     const response = await scan(scanBody({ action: "check" }));
     expect(response.status).toBe(200);

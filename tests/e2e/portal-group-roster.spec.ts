@@ -39,7 +39,7 @@ for (const group of [
     // section's pages are listed in the sidebar now rather than on a strip
     // inside the hub, so that is where the absence is read.
     await page.goto("/portal/#/settings/access-control");
-    const sidebar = page.getByRole("complementary", { name: "Portal navigation" });
+    const sidebar = page.getByRole("navigation", { name: "Portal navigation" });
     await expect(sidebar.getByRole("link", { name: "Access control" })).toBeVisible();
     await expect(sidebar.getByRole("link", { name: "Leadership" })).toHaveCount(0);
 
@@ -65,7 +65,10 @@ for (const group of [
     const addPerson = page.getByRole("region", { name: "Add a person" });
     await expect(members).toHaveCount(0);
     await addPerson.getByPlaceholder("Search by email or name…").fill(director.email);
-    await addPerson.getByRole("button", { name: new RegExp(director.email, "i") }).click();
+    // Matches show a person's name and role, not the address searched for; the unique address leaves one match.
+    const matches = addPerson.getByRole("group", { name: "Matching users", exact: true }).getByRole("button");
+    await expect(matches).toHaveCount(1);
+    await matches.click();
     await expect(addPerson.getByLabel("Seat title")).toHaveCount(0);
     await expect(addPerson.getByRole("link", { name: "Leadership", exact: true })).toHaveAttribute(
       "href",
@@ -95,7 +98,8 @@ for (const group of [
     expect(organizationName).toBeTruthy();
     // And it returns to the roster it added to.
     await expect(page).toHaveURL(new RegExp(`#/groups/${groupId}/members$`));
-    const seat = members.getByRole("row").filter({ hasText: director.email });
+    // A roster row names the person and the organization they represent, never their address.
+    const seat = members.getByRole("row").filter({ hasText: organizationName! });
     await expect(seat).toContainText("Aug 28, 2026");
 
     await seat.getByRole("button", { name: /^Actions for/ }).click();
@@ -159,14 +163,15 @@ for (const group of [
 
     /*
      * Current or former is a property of the seat, so the choice between the two
-     * rosters lives in the Seat column's own menu rather than in a pair of
-     * buttons above the table. This spec drove the old buttons and hung on one
-     * that no longer exists.
+     * rosters lives in the Membership dates filter rather than in a pair of
+     * buttons above the table. The roster draws its rows as cards beside the
+     * Representation panel, so that filter is reached from the list's own
+     * "Sort and filter" menu; the column head that carries it is out of sight.
      */
-    await members.getByRole("button", { name: "Membership dates column options" }).click();
+    await members.getByRole("button", { name: "Sort and filter members" }).click();
     await page.getByRole("menuitem", { name: "Filter", exact: false }).click();
     await page.getByRole("menuitemradio", { name: "Former members" }).click();
-    await expect(members.getByRole("row").filter({ hasText: director.email })).toBeVisible();
+    await expect(seat).toBeVisible();
 
     expect(removedRequests).toEqual([]);
     expect((await page.request.get(`${REMOVED_LEADERSHIP_API}/board`)).status()).toBe(404);

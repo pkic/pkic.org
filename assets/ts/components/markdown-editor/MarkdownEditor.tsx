@@ -5,7 +5,7 @@ import { useStickyToolbar } from "../../ui/use-sticky-toolbar";
 import { formatNumber } from "../../../shared/format-number";
 import { codeLanguageItems } from "./code-language-menu";
 import { TemplateHighlighting } from "./template-highlighting";
-import { restoreTemplateMarkdown } from "./template-markdown";
+import { plainAmpersands, restoreTemplateMarkdown } from "./template-markdown";
 import { Editor } from "@tiptap/core";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { Menu, type MenuItem } from "../../ui/Menu";
@@ -162,7 +162,7 @@ export function MarkdownEditor({
         },
       },
       onUpdate({ editor: updated }) {
-        const serialized = updated.getMarkdown();
+        const serialized = plainAmpersands(updated.getMarkdown());
         const next = templateInsertions ? restoreTemplateMarkdown(serialized) : serialized;
         setValue(next);
         current.current.onChange(next);

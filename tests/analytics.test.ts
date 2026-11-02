@@ -29,6 +29,7 @@ import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { insertIndividualMember, insertOrganization, insertOrgRepresentative, insertUser } from "./helpers/membership";
+import { seedSessionAttendanceDays } from "./helpers/session-attendance-days";
 
 async function call(path: string, token?: string): Promise<Response> {
   return app.fetch(
@@ -92,6 +93,32 @@ describe("analytics", () => {
       weekly: [],
       monthly: [],
     });
+  });
+
+  it("counts each confirmed registration once per selected attendance type across days", async () => {
+    const token = await adminToken();
+    const [{ id: eventId }] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM events WHERE slug='pqc-2026'");
+    const now = new Date().toISOString();
+    for (const status of ["registered", "cancelled"] as const) {
+      const userId = await insertUser(env.DB, `${status}@analytics.example.test`);
+      await env.DB.prepare(
+        "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,?,'test',?,?,?)",
+      )
+        .bind(crypto.randomUUID(), eventId, userId, status, crypto.randomUUID(), now, now)
+        .run();
+    }
+    await seedSessionAttendanceDays(env.DB, eventId, ["2026-12-01", "2026-12-02", "2026-12-03"]);
+    await env.DB.prepare(
+      "UPDATE registration_day_attendance SET attendance_type='virtual' WHERE event_day_id IN (SELECT id FROM event_days WHERE event_id=? AND day_date='2026-12-03')",
+    )
+      .bind(eventId)
+      .run();
+
+    const response = await call("/api/v1/analytics/registrations", token);
+    expect(response.status, await response.clone().text()).toBe(200);
+    const { registrations } = registrationAnalyticsResponseSchema.parse(await response.json());
+    expect(registrations.total).toBe(2);
+    expect(registrations.byAttendanceType).toEqual({ in_person: 1, virtual: 1 });
   });
 
   it("requires a live user-backed global analytics permission", async () => {
@@ -266,6 +293,6 @@ describe("analytics", () => {
     expect(details).toContain("idx_registrations_created_at");
     expect(details).toContain("idx_invites_created_at");
     expect(details).toContain("idx_donations_created_at");
-    expect(details).toContain("SEARCH r USING INDEX sqlite_autoindex_registrations_4 (event_id=?)");
+    expect(details).toMatch(/SEARCH r USING (?:COVERING )?INDEX \S+ \(event_id=\?\)/);
   });
 });

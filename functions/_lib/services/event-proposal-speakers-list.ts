@@ -59,7 +59,7 @@ export function buildEventProposalSpeakersPageQuery(eventId: string, query: Even
         ${SPEAKER_FIRST_NAME} AS firstName,
         ${SPEAKER_LAST_NAME} AS lastName,
         ${SPEAKER_ORGANIZATION} AS organizationName,
-        r.id AS registrationId, r.status AS registrationStatus, r.attendance_type AS attendanceType,
+        r.id AS registrationId, r.status AS registrationStatus,
         disclosure.review_status AS independentCapacityStatus`,
       fromSql: `FROM proposal_speakers ps
         JOIN session_proposals sp ON sp.id = ps.proposal_id

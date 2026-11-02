@@ -31,7 +31,9 @@ import {
   filteredBadgePrintScope,
   type BadgePrintScope,
 } from "../../../../components/event-badges/badge-print-population";
-import { ATTENDANCE_TYPES } from "../../../../../shared/schemas/registration";
+import { groupEventDaysResponseSchema } from "../../../../../shared/schemas/group-events";
+import { getJson } from "../../../../shared/api-client";
+import { useData } from "../../../../hooks/useData";
 import { BADGE_DISPLAY_ROLE_LABELS, badgeDisplayRoleSchema } from "../../../../../shared/schemas/participant-roles";
 import { attendanceTypeLabel } from "../../../../shared/attendance";
 import { usePortalHashLocation } from "../../hash-location";
@@ -65,6 +67,18 @@ export function GroupEventRegistrations({
   });
   const [stats, setStats] = useState<EventAttendanceRegistrationsStats | null>(null);
   const tableRef = useRef<ApiTableActions | null>(null);
+  // The types a registration can hold are the ones this event configures per day.
+  const days = useData(
+    () =>
+      getJson(
+        `/api/v1/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(eventId)}/days`,
+        groupEventDaysResponseSchema,
+      ),
+    [groupId, eventId],
+  );
+  const attendanceTypes = [
+    ...new Set((days.data?.days ?? []).flatMap((day) => day.attendanceOptions.map((option) => option.value))),
+  ];
   const registrationEndpoint = `/api/v1/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(eventId)}/registrations`;
 
   return (
@@ -180,9 +194,7 @@ export function GroupEventRegistrations({
             // what a manager is looking for. The filter narrows to the rows
             // still waiting for a seat on any day.
             header: "Attendance",
-            cell: (registration) => (
-              <RegistrationDayStates days={registration.days} attendanceType={registration.attendance_type} />
-            ),
+            cell: (registration) => <RegistrationDayStates days={registration.days} />,
             filter: {
               param: "waitlisted",
               options: [
@@ -193,21 +205,18 @@ export function GroupEventRegistrations({
             },
           },
           {
-            // The whole-registration type: in-person when any day is. The
-            // Attendance column already shows it day by day, so it is hidden
-            // until asked for; it stays as a column because its filter is how
-            // a badge print run is scoped to one type.
+            // The option filter also scopes badge print runs; each row still
+            // shows its actual day choices.
             header: "Attendance type",
-            cell: (registration) => attendanceTypeLabel(registration.attendance_type),
+            cell: (registration) => <RegistrationDayStates days={registration.days} />,
             width: "fit",
             className: "pk-small",
             defaultHidden: true,
-            sort: { asc: "attendance_type", desc: "-attendance_type" },
             filter: {
               param: "attendance_type",
               options: [
                 { value: "", label: "All types" },
-                ...ATTENDANCE_TYPES.map((type) => ({ value: type as string, label: attendanceTypeLabel(type) })),
+                ...attendanceTypes.map((type) => ({ value: type, label: attendanceTypeLabel(type) })),
               ],
             },
           },

@@ -115,7 +115,7 @@ export function RecordingSourceEditor({
   async function link() {
     const checked = linkForm.submit();
     if (!checked.data || busy) {
-      setError(checked.message ?? "");
+      setError(checked.formMessage ?? "");
       return;
     }
     setBusy(true);
@@ -133,7 +133,7 @@ export function RecordingSourceEditor({
     event.preventDefault();
     const checked = form.submit();
     if (!checked.data || busy) {
-      setError(checked.message ?? "");
+      setError(checked.formMessage ?? "");
       return;
     }
     setBusy(true);

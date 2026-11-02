@@ -52,9 +52,14 @@ export async function submitProposal(
     if (!unaffiliatedAttestation && options.actingIdentityId === undefined)
       throw new Error("Organization proposal fixtures require an explicit reviewed identity.");
     const proofSince = await capturedEmailCount();
-    const started = await proposerRequest.post(`${endpoint}/proof`, {
-      data: eventProposalProofStartSchema.parse({ email: options.proposerEmail, consents, unaffiliatedAttestation }),
-    });
+    const startProof = () =>
+      proposerRequest.post(`${endpoint}/proof`, {
+        data: eventProposalProofStartSchema.parse({ email: options.proposerEmail, consents, unaffiliatedAttestation }),
+      });
+    let started = await startProof();
+    // The local D1 binding occasionally drops its connection under load; the refused start sent no mail, so asking once more is safe.
+    if (started.status() === 500 && (await started.text()).includes("Network connection lost"))
+      started = await startProof();
     expect(started.status(), await started.text()).toBe(200);
     expect(eventProposalProofStartResponseSchema.parse(await started.json()).status).toBe("verification_sent");
     const proofMail = await waitForCapturedEmail(options.proposerEmail, "Verify your email for", { since: proofSince });

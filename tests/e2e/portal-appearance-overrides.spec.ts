@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
+import { openOrganizerAgenda } from "./helpers/organizer-agenda";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
 import { agendaSnapshotSchema, agendaOccurrenceCreateSchema } from "../../assets/shared/schemas/event-agenda";
 import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-auth";
@@ -33,10 +34,11 @@ test("historical display correction requires an independent reviewer and stays i
   expect(create.status()).toBe(200);
   snapshot = agendaSnapshotSchema.parse(await create.json());
   const occurrence = snapshot.occurrences.find((r) => r.title === title)!;
-  await page.goto(`/portal/#/events/${slug}/agenda`);
+  await openOrganizerAgenda(page, slug);
   await page.getByRole("tab", { name: "Schedule", exact: true }).click();
   await page.getByRole("button", { name: `Actions for ${title}`, exact: true }).click();
   await page.getByRole("menuitem", { name: "Materials and archive", exact: true }).click();
+  await page.getByRole("tab", { name: "Speaker representation", exact: true }).click();
   await page.getByLabel("Add a representation", { exact: true }).selectOption("__credited");
   await page.getByLabel("Organization at this event", { exact: true }).fill("Historical employer from the program");
   const stageAppearance = page.getByRole("button", { name: /^Approve representation for / });
@@ -64,7 +66,12 @@ test("historical display correction requires an independent reviewer and stays i
   expect(requested.status()).toBe(200);
   expect(appearanceOverrideRequestSchema.parse(requested.request().postDataJSON())).toMatchObject({
     expectedRevision: snapshot.revision,
-    appearance: { userId: user.id, actingIdentityId: null, organizationName: "Historical employer from the program" },
+    appearance: {
+      userId: user.id,
+      affiliations: [
+        expect.objectContaining({ identityId: null, organizationName: "Historical employer from the program" }),
+      ],
+    },
     reason: "Employer changed after this historical event",
     evidence: "Archived program explicitly confirms the historical employer",
   });
@@ -92,7 +99,7 @@ test("historical display correction requires an independent reviewer and stays i
   try {
     const reviewer = await reviewerContext.newPage();
     await signInAsE2eStaff(reviewer, e2eAdminEmail("browser-auth"));
-    await reviewer.goto(`/portal/#/events/${slug}/agenda`);
+    await openOrganizerAgenda(reviewer, slug);
     await reviewer.getByRole("tab", { name: "Schedule", exact: true }).click();
     await reviewer.getByRole("button", { name: `Actions for ${title}`, exact: true }).click();
     await reviewer.getByRole("menuitem", { name: "Materials and archive", exact: true }).click();
@@ -112,7 +119,7 @@ test("historical display correction requires an independent reviewer and stays i
     expect(result.agenda.publishedRevision).toBe(snapshot.publishedRevision);
     expect(result.agenda.occurrences.find((r) => r.id === occurrence.id)!.history!.appearances[0]).toMatchObject({
       userId: user.id,
-      organizationName: "Historical employer from the program",
+      affiliations: [expect.objectContaining({ organizationName: "Historical employer from the program" })],
     });
   } finally {
     await reviewerContext.close();

@@ -123,13 +123,17 @@ const PORTAL_SECTIONS: readonly PortalSectionDef[] = [
     access: (session) => Boolean(session?.member || session?.staff),
   },
   {
-    // Program-committee reviewers reach their proposal programs through the
-    // Events domain even without a generic event grant.
+    // Every signed-in person can open an event page: Home lists events to
+    // anyone with an account and the event API serves them, while each tab's
+    // own endpoint decides what the caller may see. The sidebar entry stays
+    // with participants and the grants below; program-committee reviewers
+    // reach their proposal programs here even without a generic event grant.
     section: "events",
     path: "/events",
     label: "Events",
     sidebar: true,
-    access: (session) =>
+    access: (session) => Boolean(session?.identity.id),
+    sidebarAccess: (session) =>
       Boolean(session?.eventParticipation) ||
       portalHasPermissionAtAnyScope(session, "events:read") ||
       portalHasPermissionAtAnyScope(session, "proposals:read") ||

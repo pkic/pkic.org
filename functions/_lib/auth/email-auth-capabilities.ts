@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { databaseIdSchema } from "../../../assets/shared/schemas/identifiers";
+import { normalizedEmailSchema } from "../../../assets/shared/schemas/api-common";
 import { normalizeEmail } from "../validation";
 import { hmacSha256Hex, randomToken, verifyHmacSha256Hex } from "../utils/crypto";
 import { AppError } from "../errors";
@@ -36,6 +38,14 @@ const emailAuthCapabilityPayloadSchema = z
   .object({
     subjectId: z.string().min(1).max(128),
     authorizationRevision: z.string().uuid().optional(),
+    addressRequest: z
+      .object({
+        userId: databaseIdSchema,
+        email: normalizedEmailSchema,
+        purpose: z.literal("representation").optional(),
+      })
+      .strict()
+      .optional(),
     capabilityId: z.string().min(16).max(64),
     emailFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
     ipHash: z
@@ -66,6 +76,7 @@ export async function queueEmailAuthCapability(options: {
   subjectId: string;
   email: string;
   authorizationRevision?: string;
+  addressRequest?: { userId: string; email: string; purpose?: "representation" };
   ttlSeconds: number;
   ipHash?: string | null;
   userAgentHash?: string | null;
@@ -75,6 +86,7 @@ export async function queueEmailAuthCapability(options: {
   const capabilityId = randomToken(18);
   const payload = emailAuthCapabilityPayloadSchema.parse({
     subjectId: options.subjectId,
+    ...(options.addressRequest ? { addressRequest: options.addressRequest } : {}),
     ...(options.authorizationRevision ? { authorizationRevision: options.authorizationRevision } : {}),
     capabilityId,
     emailFingerprint: await hmacSha256Hex(options.signingSecret, emailFingerprintInput(options.email)),

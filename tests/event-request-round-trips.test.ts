@@ -4,6 +4,7 @@ import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { eventDetailResponseSchema, eventsListResponseSchema } from "../assets/shared/schemas/event-management";
 import { createEventScannerFixture } from "./helpers/event-scanner-fixture";
+import { clearSessionAttendanceDays } from "./helpers/session-attendance-days";
 import { readEventAdminContext } from "../functions/_lib/services/events/authorized-context";
 import { buildRegistrationManageView } from "../functions/_lib/services/registrations/manage-view";
 import { getRegistrationById } from "../functions/_lib/services/registrations/queries";
@@ -40,6 +41,7 @@ describe("one D1 round trip for event configuration endpoints", () => {
   });
 
   it("includes live authorization, the event, days, and registered counts in one read", async () => {
+    await clearSessionAttendanceDays(env.DB, f.eventId);
     await env.DB.batch([
       env.DB.prepare(`INSERT INTO event_days(id,event_id,day_date,label,in_person_capacity,sort_order,created_at,updated_at)
         VALUES('budget-day',?,'2026-12-01','First day',2,0,?,?)`).bind(
@@ -58,8 +60,8 @@ describe("one D1 round trip for event configuration endpoints", () => {
     ]);
     const pendingId = crypto.randomUUID();
     await env.DB.batch([
-      env.DB.prepare(`INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at)
-        VALUES(?,?,?,'pending_email_confirmation','in_person','test',?,?,?)`).bind(
+      env.DB.prepare(`INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at)
+        VALUES(?,?,?,'pending_email_confirmation','test',?,?,?)`).bind(
         pendingId,
         f.eventId,
         f.operatorId,
@@ -134,6 +136,11 @@ describe("one D1 round trip includes JWT context and event data", () => {
       await env.DB.prepare("UPDATE events SET visibility='public', settings_json=? WHERE id=?")
         .bind(JSON.stringify({ internal: "never-audience", virtualUrl: "https://private.test" }), f.eventId)
         .run();
+      await env.DB.prepare(
+        "INSERT INTO referral_codes(code,event_id,owner_type,owner_id,created_at) SELECT 'ownshare',event_id,'registration',id,created_at FROM registrations WHERE event_id=? AND user_id=?",
+      )
+        .bind(f.eventId, f.userId)
+        .run();
       const token =
         capacity === "anonymous"
           ? null
@@ -149,6 +156,8 @@ describe("one D1 round trip includes JWT context and event data", () => {
       );
       expect(response.status).toBe(200);
       const event = eventDetailResponseSchema.parse(await response.json()).event;
+      if (capacity === "attendee") expect(event.participation?.promotion).toMatchObject({ sharePath: "/r/ownshare" });
+      else expect(event.participation?.promotion ?? null).toBeNull();
       expect("capabilities" in event).toBe(capacity === "management");
       if (capacity !== "management") expect(JSON.stringify(event)).not.toMatch(/never-audience|private.test/);
       expect(profile.summary().roundTrips).toBe(1);

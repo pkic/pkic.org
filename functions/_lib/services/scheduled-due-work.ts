@@ -4,7 +4,7 @@ import { runReminderCycle } from "./reminders";
 import { runRsvpEnforcer } from "./rsvp-enforcer";
 import { runWaitlistPromotionCycle } from "./registrations/waitlist-promotions";
 import { processPendingStorageDeletions, type StorageDeletionResult } from "./storage-deletion-outbox";
-import { processPendingBadgeRenders, type BadgeRenderResult } from "./registration-badge-regeneration";
+import { processPendingPromotionRenders } from "./event-agenda/promotion-render-jobs";
 import { queueOrganizationContentReviewDigests } from "./organization-content";
 import type { Env } from "../types";
 import type { D1QueryBudget } from "../db/query-budget";
@@ -13,12 +13,13 @@ type ReminderCycleResult = Awaited<ReturnType<typeof runReminderCycle>>;
 type OutboxResult = Awaited<ReturnType<typeof processPendingOutbox>>;
 type RsvpEnforcementResult = Awaited<ReturnType<typeof runRsvpEnforcer>>;
 type WaitlistPromotionResult = Awaited<ReturnType<typeof runWaitlistPromotionCycle>>;
+type RenderResult = Awaited<ReturnType<typeof processPendingPromotionRenders>>;
 
 // The notification drain is deliberately opportunistic in this shared pass.
-// Keep room for the normal outbox, storage-deletion, and badge-render
-// selection statements that follow it, even when the invocation-wide D1
+// Keep room for the normal outbox, storage-deletion, and render
+// recovery/selection statements that follow it, even when the invocation-wide D1
 // budget is nearly exhausted by the earlier reminder/RSVP/waitlist work.
-const NOTIFICATION_DRAIN_DOWNSTREAM_D1_RESERVE = 4;
+const NOTIFICATION_DRAIN_DOWNSTREAM_D1_RESERVE = 5;
 
 interface ReminderCycleTotals {
   inviteRemindersQueued: number;
@@ -36,7 +37,7 @@ interface ScheduledDueWorkPass {
   rsvpEnforcement: RsvpEnforcementResult;
   outbox: OutboxResult;
   storageDeletions: StorageDeletionResult;
-  badgeRenders: BadgeRenderResult;
+  renders: RenderResult;
   durationMs: number;
   elapsedMs: number;
   remainingBudgetMs: number;
@@ -56,7 +57,7 @@ export interface ScheduledDueWorkResult {
   rsvpEnforcement: RsvpEnforcementResult;
   outbox: OutboxResult;
   storageDeletions: StorageDeletionResult;
-  badgeRenders: BadgeRenderResult;
+  renders: RenderResult;
 }
 
 function emptyReminderCycleTotals(): ReminderCycleTotals {
@@ -125,7 +126,7 @@ function addStorageDeletionTotals(total: StorageDeletionResult, next: StorageDel
   total.failed += next.failed;
 }
 
-function addBadgeRenderTotals(total: BadgeRenderResult, next: BadgeRenderResult): void {
+function addRenderTotals(total: RenderResult, next: RenderResult): void {
   total.processed += next.processed;
   total.failed += next.failed;
 }
@@ -135,13 +136,13 @@ function didPassReachWorkLimit(
   waitlistPromotions: WaitlistPromotionResult,
   outbox: OutboxResult,
   storageDeletions: StorageDeletionResult,
-  badgeRenders: BadgeRenderResult,
+  renders: RenderResult,
   rsvp: RsvpEnforcementResult,
   limits: {
     scheduledReminderLimit: number;
     scheduledOutboxLimit: number;
     scheduledStorageDeletionLimit: number;
-    scheduledBadgeRenderLimit: number;
+    scheduledRenderLimit: number;
   },
 ): boolean {
   const filledReminderBatch = limits.scheduledReminderLimit > 0 && reminders.processed >= limits.scheduledReminderLimit;
@@ -149,9 +150,8 @@ function didPassReachWorkLimit(
   const filledStorageDeletionBatch =
     limits.scheduledStorageDeletionLimit > 0 &&
     storageDeletions.processed + storageDeletions.failed >= limits.scheduledStorageDeletionLimit;
-  const filledBadgeRenderBatch =
-    limits.scheduledBadgeRenderLimit > 0 &&
-    badgeRenders.processed + badgeRenders.failed >= limits.scheduledBadgeRenderLimit;
+  const filledRenderBatch =
+    limits.scheduledRenderLimit > 0 && renders.processed + renders.failed >= limits.scheduledRenderLimit;
   const promotedWaitlist = waitlistPromotions.dayRegistrationOffers > 0;
   const rsvpQueuedEmails = rsvp.warningsSent + rsvp.downgradesProcessed;
   const rsvpProcessedWork = rsvp.bouncesProcessed + rsvp.ignored + rsvpQueuedEmails;
@@ -159,7 +159,7 @@ function didPassReachWorkLimit(
     filledReminderBatch ||
     filledOutboxBatch ||
     filledStorageDeletionBatch ||
-    filledBadgeRenderBatch ||
+    filledRenderBatch ||
     promotedWaitlist ||
     rsvpProcessedWork > 0 ||
     rsvp.limitReached
@@ -231,11 +231,11 @@ export async function runScheduledDueWork(
   };
   const outbox: OutboxResult = { processed: 0, failed: 0 };
   const storageDeletions: StorageDeletionResult = { processed: 0, failed: 0 };
-  const badgeRenders: BadgeRenderResult = { processed: 0, failed: 0 };
+  const renders: RenderResult = { processed: 0, failed: 0 };
   const passes: ScheduledDueWorkPass[] = [];
   const passDurations: number[] = [];
   const passD1Queries: number[] = [];
-  let remainingBadgeRenderAllowance = config.scheduledBadgeRenderLimit;
+  let remainingRenderAllowance = config.scheduledRenderLimit;
   const initialD1Queries = invocationBudget?.d1QueryBudget?.usedQueries() ?? 0;
   let stoppedReason: ScheduledDueWorkResult["stoppedReason"] = "max_passes";
 
@@ -286,12 +286,9 @@ export async function runScheduledDueWork(
     }
     const outboxPass = await processPendingOutbox(env.DB, env, config.scheduledOutboxLimit);
     const storageDeletionPass = await processPendingStorageDeletions(env.DB, env, config.scheduledStorageDeletionLimit);
-    const badgeRenderPassLimit = remainingBadgeRenderAllowance;
-    const badgeRenderPass = await processPendingBadgeRenders(env.DB, env, badgeRenderPassLimit);
-    remainingBadgeRenderAllowance = Math.max(
-      0,
-      remainingBadgeRenderAllowance - badgeRenderPass.processed - badgeRenderPass.failed,
-    );
+    const renderPassLimit = remainingRenderAllowance;
+    const renderPass = await processPendingPromotionRenders(env.DB, env, renderPassLimit);
+    remainingRenderAllowance = Math.max(0, remainingRenderAllowance - renderPass.processed - renderPass.failed);
     const durationMs = Date.now() - passStartedAt;
     const elapsedMs = Date.now() - startedAt;
     const passQueryCount = (invocationBudget?.d1QueryBudget?.usedQueries() ?? 0) - passStartedD1Queries;
@@ -303,7 +300,7 @@ export async function runScheduledDueWork(
     addRsvpEnforcementTotals(rsvpEnforcement, rsvpPass);
     addOutboxTotals(outbox, outboxPass);
     addStorageDeletionTotals(storageDeletions, storageDeletionPass);
-    addBadgeRenderTotals(badgeRenders, badgeRenderPass);
+    addRenderTotals(renders, renderPass);
 
     passes.push({
       pass,
@@ -312,7 +309,7 @@ export async function runScheduledDueWork(
       rsvpEnforcement: rsvpPass,
       outbox: outboxPass,
       storageDeletions: storageDeletionPass,
-      badgeRenders: badgeRenderPass,
+      renders: renderPass,
       durationMs,
       elapsedMs,
       remainingBudgetMs: Math.max(0, deadline - Date.now()),
@@ -321,11 +318,11 @@ export async function runScheduledDueWork(
     });
 
     if (
-      !didPassReachWorkLimit(cycleTotals, waitlistPass, outboxPass, storageDeletionPass, badgeRenderPass, rsvpPass, {
+      !didPassReachWorkLimit(cycleTotals, waitlistPass, outboxPass, storageDeletionPass, renderPass, rsvpPass, {
         scheduledReminderLimit: config.scheduledReminderLimit,
         scheduledOutboxLimit: config.scheduledOutboxLimit,
         scheduledStorageDeletionLimit: config.scheduledStorageDeletionLimit,
-        scheduledBadgeRenderLimit: remainingBadgeRenderAllowance > 0 ? badgeRenderPassLimit : 0,
+        scheduledRenderLimit: remainingRenderAllowance > 0 ? renderPassLimit : 0,
       })
     ) {
       stoppedReason = "caught_up";
@@ -349,6 +346,6 @@ export async function runScheduledDueWork(
     rsvpEnforcement,
     outbox,
     storageDeletions,
-    badgeRenders,
+    renders,
   };
 }

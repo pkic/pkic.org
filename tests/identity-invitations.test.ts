@@ -1,9 +1,14 @@
+import { processOutboxById } from "../functions/_lib/email/outbox";
+import { createTemplateVersion, activateTemplateVersion } from "../functions/_lib/email/templates";
+import { seedWorkflowEmailTemplates } from "./helpers/event-workflow";
+import { IDENTITY_NOTIFICATION_EMAIL_TEMPLATE } from "../assets/shared/email-template-actions";
+import { nowIso } from "../functions/_lib/utils/time";
 import { env } from "cloudflare:workers";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { acceptPendingIdentity } from "../functions/_lib/services/identities";
-import { deliveredEmailPayload } from "./helpers/context";
+import { deliveredEmailPayload, seedEventAndAdmin } from "./helpers/context";
 import { callApi } from "./helpers/app";
-import { createMemberSession } from "./helpers/auth";
+import { createMemberSession, createAdminSession } from "./helpers/auth";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import {
   REPRESENTATIVE_ROLE_IDS,
@@ -85,8 +90,91 @@ async function deliveredInvitationToken(identityId: string): Promise<string> {
 }
 
 beforeEach(resetDb);
+afterEach(() => vi.unstubAllGlobals());
 
 describe("identity invitation acceptance", () => {
+  it("refuses to send an invitation using an old linkless template, then delivers a usable link after the template is repaired", async () => {
+    const provider = vi.fn<typeof fetch>(
+      async () => new Response(null, { status: 202, headers: { "x-message-id": "synthetic-invitation" } }),
+    );
+    vi.stubGlobal("fetch", provider);
+    const f = await inviteIdentity();
+    await seedWorkflowEmailTemplates(env.DB, f.invitedUserId);
+    const key = "organization-identity-changed";
+    const legacy = await createTemplateVersion(env.DB, {
+      templateKey: key,
+      subjectTemplate: "Invitation",
+      content:
+        "Hi {{recipientName}},\n\n{{changeMessage}}\n\nInvitations require the recipient to sign in and accept them.",
+      contentType: "markdown",
+      createdByUserId: f.invitedUserId,
+    });
+    await activateTemplateVersion(env.DB, { templateKey: key, version: legacy.version });
+    const row = await env.DB.prepare(
+      "SELECT id FROM email_outbox WHERE template_key=? AND substr(idempotency_key,1,length(?))=? LIMIT 1",
+    )
+      .bind(key, `organization-identity:${f.identityId}:invited:`, `organization-identity:${f.identityId}:invited:`)
+      .first<{ id: string }>();
+    const retry = () =>
+      env.DB.prepare("UPDATE email_outbox SET status='queued',send_after=? WHERE id=?").bind(nowIso(), row!.id).run();
+    await retry();
+    provider.mockClear();
+    await expect(processOutboxById(env.DB, env, row!.id)).rejects.toThrow("required action link");
+    expect(provider).not.toHaveBeenCalled();
+    expect(await env.DB.prepare("SELECT status FROM email_outbox WHERE id=?").bind(row!.id).first("status")).toBe(
+      "retrying",
+    );
+    const correct = IDENTITY_NOTIFICATION_EMAIL_TEMPLATE;
+    const version = await createTemplateVersion(env.DB, {
+      templateKey: key,
+      subjectTemplate: correct.subjectTemplate,
+      content: correct.content,
+      contentType: "markdown",
+      createdByUserId: f.invitedUserId,
+    });
+    await activateTemplateVersion(env.DB, { templateKey: key, version: version.version });
+    await retry();
+    await processOutboxById(env.DB, env, row!.id);
+    expect(provider).toHaveBeenCalledTimes(1);
+    const delivery = JSON.parse(String(provider.mock.calls[0]![1]?.body)) as {
+      personalizations: Array<{ to: Array<{ email: string }> }>;
+      content: Array<{ type: string; value: string }>;
+    };
+    expect(delivery.personalizations[0]!.to[0]!.email).toBe("invited@invitation-lifecycle.example");
+    const html = delivery.content.find((part) => part.type === "text/html")!.value;
+    const text = delivery.content.find((part) => part.type === "text/plain")!.value;
+    const url = html.match(/href="([^"]*\/portal\/#\/identity-invitations\?token=[^"]+)"/)?.[1];
+    expect(url).toBeTruthy();
+    expect(text).toContain(url!);
+    const token = new URL(url!).hash.split("token=")[1]!;
+    const preview = await callApi(env, "/api/v1/identities/invitations/preview", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token: decodeURIComponent(token) }),
+    });
+    expect(preview.status, await preview.clone().text()).toBe(200);
+    expect(
+      await env.DB.prepare("SELECT started_at FROM identities WHERE id=?").bind(f.identityId).first("started_at"),
+    ).toBeNull();
+  });
+
+  it("lists pending invitations directly in one complete request", async () => {
+    const f = await inviteIdentity();
+    const response = await callApi(
+      env,
+      "/api/v1/users/current/identities?state=pending",
+      { headers: { authorization: `Bearer ${f.invitedToken}` } },
+      { maxRoundTrips: 1 },
+    );
+    expect(response.status, await response.clone().text()).toBe(200);
+    const body = (await response.json()) as {
+      identities: Array<{ id: string; state: string }>;
+      page: { total: number };
+    };
+    expect(body.identities).toMatchObject([{ id: f.identityId, state: "pending" }]);
+    expect(body.page.total).toBe(1);
+  });
+
   it("reviews and accepts an emailed invitation without signing in, only after an explicit POST", async () => {
     const { identityId, invitedUserId } = await inviteIdentity();
     const token = await deliveredInvitationToken(identityId);
@@ -424,5 +512,109 @@ describe("identity invitation acceptance", () => {
         .first<{ total: number }>();
       expect(Number(open?.total)).toBe(0);
     });
+  });
+});
+
+describe("pending invitation management", () => {
+  async function command(
+    f: Awaited<ReturnType<typeof inviteIdentity>>,
+    token: string,
+    action: "cancel" | "activate",
+    options: { userId?: string; organizationId?: string; reason?: string } = {},
+  ) {
+    return callApi(
+      env,
+      `/api/v1/organizations/${options.organizationId ?? f.organizationId}/identities/${f.identityId}/invitation`,
+      {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({
+          action,
+          userId: options.userId ?? f.invitedUserId,
+          ...(action === "activate"
+            ? { reason: options.reason ?? "Verified the representative through the organization contact." }
+            : {}),
+        }),
+      },
+      { maxRoundTrips: 1 },
+    );
+  }
+  it("lets the organization contact cancel an unaccepted invitation without former experience", async () => {
+    const f = await inviteIdentity();
+    const token = await deliveredInvitationToken(f.identityId);
+    const response = await command(f, f.contactToken, "cancel");
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(await env.DB.prepare("SELECT id FROM identities WHERE id=?").bind(f.identityId).first()).toBeNull();
+    expect(await env.DB.prepare("SELECT id FROM users WHERE id=?").bind(f.invitedUserId).first()).not.toBeNull();
+    expect(
+      (
+        await callApi(env, "/api/v1/identities/invitations/preview", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ token }),
+        })
+      ).status,
+    ).not.toBe(200);
+    expect(
+      await env.DB.prepare(
+        "SELECT COUNT(*) AS count FROM email_outbox WHERE recipient_user_id=? AND status IN ('queued','retrying')",
+      )
+        .bind(f.invitedUserId)
+        .first("count"),
+    ).toBe(0);
+  });
+  it("lets authorized staff activate the same invitation and queues the canonical activation notice", async () => {
+    const f = await inviteIdentity();
+    const { admin: staff } = await seedEventAndAdmin(env.DB);
+    const adminId = staff.id;
+    const admin = await createAdminSession(env.DB, adminId, crypto.randomUUID());
+    const response = await command(f, admin, "activate");
+    expect(response.status, await response.clone().text()).toBe(200);
+    const row = await env.DB.prepare("SELECT id,organization_id,user_id,started_at,ended_at FROM identities WHERE id=?")
+      .bind(f.identityId)
+      .first();
+    expect(row).toMatchObject({
+      id: f.identityId,
+      organization_id: f.organizationId,
+      user_id: f.invitedUserId,
+      ended_at: null,
+    });
+    expect(row?.started_at).toBeTruthy();
+    const notice = await env.DB.prepare("SELECT recipient_email,payload_json FROM email_outbox WHERE idempotency_key=?")
+      .bind(`organization-identity:${f.identityId}:activated:${row!.started_at}`)
+      .first<{ recipient_email: string; payload_json: string }>();
+    expect(notice?.recipient_email).toBe("invited@invitation-lifecycle.example");
+    expect(JSON.parse(notice!.payload_json)).toMatchObject({ organizationName: "Invitation Lifecycle Organization" });
+    const audit = await env.DB.prepare(
+      "SELECT details_json FROM audit_log WHERE entity_id=? AND action='organization_identity_activated'",
+    )
+      .bind(f.identityId)
+      .first<string>("details_json");
+    expect(JSON.parse(audit!)).toMatchObject({
+      reason: { from: null, to: "Verified the representative through the organization contact." },
+    });
+    expect((await command(f, admin, "cancel")).status).toBe(409);
+  });
+  it("refuses activation by an organization contact and requires the staff reason", async () => {
+    const f = await inviteIdentity();
+    expect((await command(f, f.contactToken, "activate")).status).toBe(409);
+    const { admin: staff } = await seedEventAndAdmin(env.DB);
+    const adminId = staff.id;
+    const admin = await createAdminSession(env.DB, adminId, crypto.randomUUID());
+    expect((await command(f, admin, "activate", { reason: "" })).status).toBe(400);
+    expect(
+      await env.DB.prepare("SELECT started_at FROM identities WHERE id=?").bind(f.identityId).first("started_at"),
+    ).toBeNull();
+  });
+  it("refuses foreign callers, wrong owner snapshots, and a different organization atomically", async () => {
+    const f = await inviteIdentity();
+    for (const [token, options] of [
+      [f.invitedToken, {}],
+      [f.contactToken, { userId: crypto.randomUUID() }],
+      [f.contactToken, { organizationId: crypto.randomUUID() }],
+    ] as const) {
+      expect((await command(f, token, "cancel", options)).status).toBe(409);
+    }
+    expect(await env.DB.prepare("SELECT id FROM identities WHERE id=?").bind(f.identityId).first()).not.toBeNull();
   });
 });

@@ -7,6 +7,9 @@
  * back to one line per event and carries the roles as a set, because a
  * history of events is read as a list of events, not of role grants.
  *
+ * An event that has not started yet has not been attended, so the history
+ * lists only events that have begun, and events with no schedule.
+ *
  * Only `status = 'active'` counts. The other three states are not
  * participation: `invited` is an unanswered offer, `waitlisted` is a place in
  * a queue, and `inactive` is a role that was taken away.
@@ -51,6 +54,7 @@ const EVENT_PARTICIPATION_FROM = `FROM event_participants participant
 export function buildUserEventParticipationPageQuery(
   userId: string,
   query: ParticipationHistoryListQuery,
+  now: Date = new Date(),
 ): OffsetPageQuery {
   return buildParticipationHistoryPageQuery(query, {
     selectSql: `SELECT event.id AS event_id, event.slug AS event_slug, event.name AS event_name,
@@ -59,8 +63,12 @@ export function buildUserEventParticipationPageQuery(
          group_concat(DISTINCT participant.role) AS roles,
          ${EVENT_OCCURRED_AT} AS occurred_at`,
     fromSql: EVENT_PARTICIPATION_FROM,
-    conditions: ["participant.user_id = ?", "participant.status = 'active'"],
-    bindings: [userId],
+    conditions: [
+      "participant.user_id = ?",
+      "participant.status = 'active'",
+      "(event.starts_at IS NULL OR event.starts_at <= ?)",
+    ],
+    bindings: [userId, now.toISOString()],
     searchColumns: ["event.name", "event.slug"],
     groupBySql: "GROUP BY event.id",
     countSelectSql: "SELECT COUNT(DISTINCT event.id) AS total",
@@ -96,12 +104,13 @@ export async function listUserEventParticipation(
   db: DatabaseLike,
   userId: string,
   query: ParticipationHistoryListQuery,
+  now: Date = new Date(),
 ): Promise<UserEventParticipationListResponse> {
   return userEventParticipationListResponseSchema.parse(
     await loadParticipationHistoryPage<EventParticipationRow, UserEventParticipation>(
       db,
       "events",
-      buildUserEventParticipationPageQuery(userId, query),
+      buildUserEventParticipationPageQuery(userId, query, now),
       toEventParticipation,
     ),
   );

@@ -1,3 +1,4 @@
+import { PromotionDesignSettings } from "./settings/PromotionDesignSettings";
 import { EventLiveSettings } from "./settings/EventLiveSettings";
 import { hasEventAgendaPermission } from "../event-agenda-access";
 import { Tabs } from "../../../../../components/Tabs";
@@ -89,8 +90,12 @@ export function Settings({
         />
       )}
 
-      {tab === "general" &&
-        (event.seriesId ? <SeriesManagedNotice event={event} /> : <GeneralTab event={event} onUpdated={onUpdated} />)}
+      {tab === "general" && (
+        <>
+          {event.seriesId ? <SeriesManagedNotice event={event} /> : <GeneralTab event={event} onUpdated={onUpdated} />}
+          <PromotionDesignSettings event={event} onUpdated={onUpdated} />
+        </>
+      )}
       {(tab === "location" || tab === "session-types" || tab === "registration") && (
         <GeneralTab event={event} section={tab} onUpdated={onUpdated} />
       )}

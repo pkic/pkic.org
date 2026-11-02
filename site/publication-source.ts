@@ -36,7 +36,8 @@ import { requireProfileImageBucket } from "../functions/_lib/services/profile-im
 import type { Env } from "../functions/_lib/types";
 import { publicationBindingConfig } from "../scripts/publication/binding-config.mjs";
 import { listPublicMedia } from "../scripts/publication/list-public-media.mjs";
-import { copyPublicMedia } from "../scripts/publication/copy-public-media.mjs";
+import { copyPublicMedia, publicMediaCacheDirectory } from "../scripts/publication/copy-public-media.mjs";
+import { stageCachedPublishedMedia } from "../scripts/publication/public-media-cache.mjs";
 import { siteDiscoveryRedirectEntries } from "../functions/_lib/services/site-discovery";
 import {
   publishedSiteRoutes,
@@ -84,6 +85,10 @@ export async function readPublicationSource() {
     await writeFile(resolve(output, "retained-documents.json"), "[]");
     await writeFile(resolve(output, "repair-aliases.json"), "[]");
     await writeFile(resolve(output, "retained-repair-aliases.json"), "[]");
+    await stageCachedPublishedMedia(fixture, publicMediaCacheDirectory(), [
+      resolve(output, "media"),
+      resolve(output, "public"),
+    ]);
     return fixture;
   }
   if (!environment) throw new Error("Select CLOUDFLARE_ENV or provide a synthetic publication snapshot");

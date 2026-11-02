@@ -1,3 +1,7 @@
+import {
+  representationEmailChangeSchema,
+  representationEmailOptionsResponseSchema,
+} from "../../assets/shared/schemas/representation-email";
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { exampleMembershipCategories } from "./helpers/membership-category-catalog";
@@ -14,11 +18,14 @@ import { act } from "preact/test-utils";
 const navigate = vi.fn();
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", navigate] }));
 import { UserAffiliationsPanel } from "../../assets/ts/member-flows/portal/sections/system-users/UserAffiliationsPanel";
-import { identityCreateSchema } from "../../assets/shared/schemas/identity";
-import { individualMembershipGrantSchema } from "../../assets/shared/schemas/membership-management";
+import {
+  actingIdentitySchema,
+  identitiesListResponseSchema,
+  identityCreateSchema,
+} from "../../assets/shared/schemas/identity";
 import { organizationIdentityCreateRequestSchema } from "../../assets/shared/schemas/route-contracts-identities";
 import { normalizeValidation } from "../../assets/ts/shared/form/validation-map";
-import { buttonNamed, chooseComboboxOption, chooseOption, controlFor, typeInto } from "./helpers/labeled-control";
+import { buttonNamed, chooseComboboxOption, controlFor, typeInto } from "./helpers/labeled-control";
 import {
   membership,
   MEMBER_ID,
@@ -28,6 +35,7 @@ import {
   errorResponse,
   fieldOf,
   fieldRefusal,
+  identityMutation,
   jsonResponse,
   mount,
   press,
@@ -35,12 +43,14 @@ import {
   stubFetch,
   toastArea,
   userWith,
+  runRowMenuAction,
   organizationDetail,
   organizationList,
 } from "./helpers/affiliation-fixtures";
 
 describe("UserAffiliationsPanel", () => {
   beforeEach(() => {
+    history.replaceState({}, "", "/");
     // jsdom has the element but not its modal behavior; mirror the platform's open state.
     HTMLDialogElement.prototype.showModal = function showModal(this: HTMLDialogElement) {
       this.setAttribute("open", "");
@@ -55,6 +65,23 @@ describe("UserAffiliationsPanel", () => {
     void act(() => render(<UserAffiliationsPanel user={userWith([])} onChanged={vi.fn()} canManage />, container));
 
     expect(container.querySelector('[role="status"]')?.textContent).toContain("No active identities.");
+  });
+
+  it.each([true, false])("keeps Add identity available for an individual member (self: %s)", (self) => {
+    const container = mount();
+    const individual = membership({ organizationId: null, organizationName: null, memberId: MEMBER_ID });
+    void act(() =>
+      render(
+        <UserAffiliationsPanel
+          user={userWith([individual])}
+          onChanged={vi.fn()}
+          canManage={!self}
+          viewerIsSubject={self}
+        />,
+        container,
+      ),
+    );
+    expect(container.querySelector('button[aria-label="Add identity"]')).not.toBeNull();
   });
 
   it("shows organization experience without an unused personal account profile", () => {
@@ -108,8 +135,127 @@ describe("UserAffiliationsPanel", () => {
     expect(container.textContent).toContain("Personal profile content");
   });
 
+  it("changes the address on the selected representation through the shared verified-email form", async () => {
+    const selected = "00000000-0000-4000-8000-000000000088";
+    const at = "2026-01-01T00:00:00.000Z";
+    const transport = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "PUT") return jsonResponse({ success: true });
+      return jsonResponse(
+        representationEmailOptionsResponseSchema.parse({
+          emailId: null,
+          emails: [
+            {
+              id: selected,
+              email: "person@organization-a.example",
+              primary: false,
+              identityId: null,
+              verifiedAt: at,
+              verificationMethod: "magic_link",
+              signInEnabled: false,
+              createdAt: at,
+            },
+          ],
+          page: { limit: 25, offset: 0, total: 1, hasMore: false },
+        }),
+      );
+    });
+    vi.stubGlobal("fetch", transport);
+    const changed = vi.fn();
+    const container = mount();
+    await act(async () =>
+      render(
+        <UserAffiliationsPanel user={userWith([membership()])} onChanged={changed} canManage={false} viewerIsSubject />,
+        container,
+      ),
+    );
+    runRowMenuAction(container, "Organization A", "Change representation email…");
+    await settle();
+    await chooseComboboxOption(container, "Representation email", selected);
+    await press(container, "Save email");
+    const write = transport.mock.calls.find(([, init]) => init?.method === "PUT")!;
+    expect(String(write[0])).toBe(`/api/v1/users/${USER_ID}/identities/${membership().identityId}/email`);
+    expect(representationEmailChangeSchema.parse(JSON.parse(String(write[1]!.body)))).toMatchObject({
+      previousEmailId: null,
+      emailId: selected,
+    });
+    expect(changed).toHaveBeenCalledTimes(1);
+  });
+
+  it("preselects the identity the person acts as when correcting another, and confirms the correction", async () => {
+    const acting = "00000000-0000-4000-8000-000000000077";
+    const at = "2026-01-01T00:00:00.000Z";
+    const actingIdentity = actingIdentitySchema.parse({
+      id: acting,
+      userId: USER_ID,
+      userName: "Person",
+      memberId: null,
+      organizationId: PICKED_ORGANIZATION_ID,
+      organizationName: "Organization B",
+      membershipCategory: null,
+      emailId: null,
+      email: "person@organization-b.example",
+      jobTitle: null,
+      biography: null,
+      links: [],
+      headshotUrl: null,
+      source: "verified_email",
+      state: "active",
+      showOnOrganizationProfile: true,
+      invitedAt: at,
+      startedAt: at,
+      endedAt: null,
+      blockedAt: null,
+      blockedByUserId: null,
+      predecessorIdentityId: null,
+      createdAt: at,
+      updatedAt: at,
+    });
+    const requests = stubFetch((url) =>
+      url.pathname.endsWith("/corrections")
+        ? identityMutation("active")
+        : jsonResponse(
+            identitiesListResponseSchema.parse({
+              identities: [actingIdentity],
+              page: { limit: 25, offset: 0, total: 1, hasMore: false },
+            }),
+          ),
+    );
+    const area = toastArea();
+    const changed = vi.fn();
+    const container = mount();
+    const wrong = membership();
+    const other = membership({
+      identityId: acting,
+      organizationId: PICKED_ORGANIZATION_ID,
+      organizationName: "Organization B",
+    });
+    await act(async () =>
+      render(
+        <UserAffiliationsPanel
+          user={userWith([wrong, other])}
+          onChanged={changed}
+          canManage={false}
+          viewerIsSubject
+          actingIdentityId={acting}
+        />,
+        container,
+      ),
+    );
+    runRowMenuAction(container, "Organization A", "Correct identity…");
+    await settle();
+    await settle();
+    const dialog = document.querySelector<HTMLDialogElement>("dialog[open]")!;
+    await typeInto(controlFor<HTMLTextAreaElement>(dialog, "Reason for correction"), "Joined the wrong organization");
+    await press(document.body, "Correct identity");
+    const write = requests.find((request) => request.method === "POST")!;
+    expect(write.pathname).toBe(`/api/v1/users/${USER_ID}/identities/${wrong.identityId}/corrections`);
+    expect(write.body).toMatchObject({ replacementIdentityId: acting });
+    expect(area.textContent).toContain("Identity corrected to Organization B");
+    expect(changed).toHaveBeenCalledTimes(1);
+  });
+
   // The grant form is the body of the dialog the panel's header button opens.
-  function openGrantForm(): HTMLElement {
+  function openCreateForm(): HTMLElement {
     const container = mount();
     void act(() =>
       render(
@@ -118,10 +264,10 @@ describe("UserAffiliationsPanel", () => {
       ),
     );
     void act(() => container.querySelector<HTMLButtonElement>('button[aria-label="Add identity"]')!.click());
-    return container;
+    return document.querySelector<HTMLDialogElement>("dialog[open]")!;
   }
 
-  it("opens the grant form in a dialog from the header button, and Cancel closes it", () => {
+  it("opens the identity form in a dialog from the header button, and Cancel closes it", async () => {
     const container = mount();
     void act(() =>
       render(<UserAffiliationsPanel user={userWith([])} onChanged={async () => {}} canManage />, container),
@@ -131,7 +277,7 @@ describe("UserAffiliationsPanel", () => {
     if (!add) throw new Error('the panel offers no "Add identity" button');
     expect(add.title).toBe("Add identity");
     void act(() => add.click());
-    const dialog = container.querySelector("dialog");
+    const dialog = document.querySelector("dialog");
     expect(dialog?.hasAttribute("open")).toBe(true);
     expect(dialog?.getAttribute("aria-labelledby")).toBeTruthy();
     expect(dialog?.textContent).toContain("Add identity");
@@ -139,9 +285,8 @@ describe("UserAffiliationsPanel", () => {
     // The dialog owns the actions; the form carries no buttons of its own.
     expect(dialog?.querySelector("form button[type=submit]")).toBeNull();
     expect(navigate).not.toHaveBeenCalled();
-    void act(() => buttonNamed(container, "Cancel").click());
-    expect(container.querySelector("form")).toBeNull();
-    expect(container.querySelector("dialog")?.hasAttribute("open")).toBe(false);
+    void act(() => buttonNamed(document.body, "Cancel").click());
+    await vi.waitFor(() => expect(dialog?.hasAttribute("open")).toBe(false));
   });
 
   // The organization is found by typing into one picker: no separate search
@@ -155,9 +300,9 @@ describe("UserAffiliationsPanel", () => {
 
   it("refuses an unpicked organization at the field, in the contract's words, and sends nothing", async () => {
     const requests = stubFetch(() => jsonResponse({ success: true }));
-    const container = openGrantForm();
+    const container = openCreateForm();
 
-    await press(container, "Grant");
+    await press(container, "Add identity");
 
     expect(requests.filter((request) => request.method !== "GET")).toHaveLength(0);
     const organization = controlFor<HTMLInputElement>(container, "Organization");
@@ -179,47 +324,38 @@ describe("UserAffiliationsPanel", () => {
     expect(document.activeElement).toBe(organization);
   });
 
-  it("grants an individual capacity through the member capacities contract, refusing a blank reason first", async () => {
-    const requests = stubFetch(() =>
-      jsonResponse({
-        member: {
-          id: MEMBER_ID,
-          userId: USER_ID,
-          organizationId: null,
-          membershipCategory: "H5",
-          status: "active",
-          showOnOrgProfile: false,
-        },
-      }),
-    );
-    const container = openGrantForm();
-
-    await chooseOption(controlFor<HTMLSelectElement>(container, "Category"), "H5");
-    // Whitespace clears the browser's own `required` check, so the grant
-    // contract is what refuses the blank reason — on its field, sending nothing.
-    const reason = controlFor(container, "Activation reason");
-    await typeInto(reason, "   ");
-    await press(container, "Grant");
-
-    expect(fieldOf(reason).classList.contains("pk-field--invalid")).toBe(true);
-    expect(fieldOf(reason).querySelector('[role="alert"]')?.textContent).toContain(
-      "Document why this identity is being activated immediately.",
-    );
-    expect(requests.filter((request) => request.method === "POST")).toHaveLength(0);
-
-    await typeInto(reason, "  Individual member since the 2026 AGM  ");
-    await press(container, "Grant");
-
-    const post = requests.find((request) => request.method === "POST");
-    expect(post?.pathname, container.textContent ?? "").toBe("/api/v1/members/capacities");
-    // Parsed through the route's own contract rather than compared to a
-    // literal copy of what the form sent.
-    expect(individualMembershipGrantSchema.parse(post?.body)).toEqual({
-      userId: USER_ID,
-      membershipCategory: "H5",
-      activationReason: "Individual member since the 2026 AGM",
-    });
-  });
+  it.each([null, "A"])(
+    "adds an identity without a membership operation (organization category: %s)",
+    async (category) => {
+      const requests = stubFetch((url) =>
+        url.pathname === "/api/v1/organizations"
+          ? jsonResponse({
+              ...organizationList,
+              organizations: organizationList.organizations.map((organization) => ({
+                ...organization,
+                membershipCategory: category,
+              })),
+            })
+          : jsonResponse({ success: true, identityId: "00000000-0000-4000-8000-000000000099", state: "pending" }),
+      );
+      const container = openCreateForm();
+      await pickOrganizationOne(container);
+      expect(container.querySelector('select[name="membershipCategory"]')).toBeNull();
+      expect([...container.querySelectorAll("label")].some((label) => label.textContent === "Category")).toBe(false);
+      await typeInto(controlFor(container, "Job title"), "Standards lead");
+      await press(container, "Add identity");
+      const writes = requests.filter((request) => request.method === "POST");
+      expect(writes).toHaveLength(1);
+      expect(writes[0]!.pathname).toBe(`/api/v1/organizations/${PICKED_ORGANIZATION_ID}/identities`);
+      expect(identityCreateSchema.parse(writes[0]!.body)).toMatchObject({
+        userReference: "existing_user",
+        userId: USER_ID,
+        jobTitle: "Standards lead",
+        activation: { mode: "invitation" },
+      });
+      expect(requests.some((request) => request.pathname.startsWith("/api/v1/members"))).toBe(false);
+    },
+  );
 
   it("marks the field a server refusal names, and keeps the form open", async () => {
     stubFetch((url) => {
@@ -227,28 +363,28 @@ describe("UserAffiliationsPanel", () => {
       if (url.pathname === `/api/v1/organizations/${PICKED_ORGANIZATION_ID}`) return jsonResponse(organizationDetail);
       return fieldRefusal({ organizationId: ["That organization cannot take identities."] });
     });
-    const container = openGrantForm();
+    const container = openCreateForm();
 
     const organization = await pickOrganizationOne(container);
     await typeInto(controlFor(container, "Job title"), "Standards lead");
-    await press(container, "Grant");
+    await press(container, "Add identity");
 
     expect(fieldOf(organization).classList.contains("pk-field--invalid")).toBe(true);
     expect(fieldOf(organization).querySelector('[role="alert"]')?.textContent).toContain(
       "That organization cannot take identities.",
     );
     expect(document.activeElement).toBe(organization);
-    expect(buttonNamed(container, "Grant")).toBeDefined();
+    expect(buttonNamed(container, "Add identity")).toBeDefined();
   });
 
   it("requires a documented reason before activating an identity immediately", async () => {
     const requests = stubFetch((url) =>
       url.pathname === "/api/v1/organizations" ? jsonResponse(organizationList) : jsonResponse(organizationDetail),
     );
-    const container = openGrantForm();
+    const container = openCreateForm();
 
     await pickOrganizationOne(container);
-    expect(container.textContent).toContain("Example A (A)");
+    expect(controlFor(container, "Organization").value).toBe("Organization One");
     // An organization identity is never granted without a job title.
     const jobTitle = controlFor(container, "Job title");
     expect(jobTitle.required).toBe(true);
@@ -263,10 +399,11 @@ describe("UserAffiliationsPanel", () => {
     // Whitespace clears the browser's own `required` check, so the surface's
     // trim is the only thing standing between this and an undocumented
     // immediate activation.
+    expect(container.textContent).toContain("even if their email domain differs");
     const reason = controlFor(container, "Activation reason");
     expect(reason.getAttribute("required")).not.toBeNull();
     await typeInto(reason, "   ");
-    await press(container, "Grant");
+    await press(container, "Add identity");
 
     expect(fieldOf(reason).classList.contains("pk-field--invalid")).toBe(true);
     expect(reason.getAttribute("aria-invalid")).toBe("true");
@@ -274,7 +411,7 @@ describe("UserAffiliationsPanel", () => {
     expect(requests.filter((request) => request.method === "POST")).toHaveLength(0);
 
     await typeInto(reason, "Board approved on 2026-08-30");
-    await press(container, "Grant");
+    await press(container, "Add identity");
 
     const post = requests.find((request) => request.method === "POST");
     expect(post?.pathname).toBe(`/api/v1/organizations/${PICKED_ORGANIZATION_ID}/identities`);
@@ -294,11 +431,11 @@ describe("UserAffiliationsPanel", () => {
       if (url.pathname === `/api/v1/organizations/${PICKED_ORGANIZATION_ID}`) return jsonResponse(organizationDetail);
       return errorResponse("This user already holds an identity here", 409);
     });
-    const container = openGrantForm();
+    const container = openCreateForm();
 
     const organization = await pickOrganizationOne(container);
     await typeInto(controlFor(container, "Job title"), "Standards lead");
-    await press(container, "Grant");
+    await press(container, "Add identity");
 
     expect(container.querySelector('[role="alert"]')?.textContent).toContain(
       "This user already holds an identity here",

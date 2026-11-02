@@ -6,14 +6,13 @@ import {
   type EventAttendanceRegistrationsQuery,
   type EventAttendanceRegistrationsStats,
 } from "../../../../assets/shared/schemas/event-registrations";
-import { all } from "../../db/queries";
 import { queryPage } from "../../db/pagination";
 import { registrationPopulationFilter } from "./registration-population-filter";
 import type { DatabaseLike } from "../../types";
 import { publicUserHeadshotPath } from "../user-headshot";
 import { getAttendanceStatusByType } from "./attendance-statistics";
 import { loadRegistrationDayStates } from "./day-states";
-import { aggregateEventRegistrationStats, type EventRegistrationStatsRow } from "./event-registration-stats";
+import { getEventRegistrationStats } from "./event-registration-stats";
 import { resolveEventRegistrationOrderBy } from "./event-registration-sort";
 import { contactAffiliation } from "../../email-domains/contact-kind";
 import { waitlistHandledLast } from "../../email-domains/contact-kind";
@@ -23,7 +22,6 @@ interface AttendanceRegistrationRow {
   id: string;
   user_id: string;
   status: string;
-  attendance_type: string | null;
   created_at: string;
   updated_at: string;
   user_email: string | null;
@@ -49,7 +47,7 @@ export function buildEventAttendanceRegistrationsPageQuery(eventId: string, para
   const population = registrationPopulationFilter(eventId, params);
   return {
     source: {
-      selectSql: `SELECT r.id, r.user_id, r.status, r.attendance_type, r.created_at, r.updated_at,
+      selectSql: `SELECT r.id, r.user_id, r.status, r.created_at, r.updated_at,
                          u.email AS user_email,
                          COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS display_name,
                          u.headshot_r2_key AS headshot_r2_key,
@@ -77,17 +75,10 @@ export async function listEventAttendanceRegistrations(
       db,
       rows.map((row) => row.id),
     ),
-    all<EventRegistrationStatsRow>(
-      db,
-      `SELECT attendance_type, status, COUNT(*) AS count
-         FROM registrations
-        WHERE event_id = ?
-        GROUP BY attendance_type, status`,
-      [eventId],
-    ),
+    getEventRegistrationStats(db, eventId),
     getAttendanceStatusByType(db, eventId),
   ]);
-  const { byAttendanceType, byStatus } = aggregateEventRegistrationStats(statRows);
+  const { byAttendanceType, byStatus } = statRows;
   return {
     registrations: rows.map((row) =>
       eventAttendanceRegistrationSummarySchema.parse({
