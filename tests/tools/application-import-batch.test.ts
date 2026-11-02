@@ -185,6 +185,12 @@ describe("checkpointed execution", () => {
     run.manifest.actorUserId = "33333333-3333-4333-8333-333333333333";
     expect(() => resumeReport(run.report, run.manifest, contracts)).toThrow();
   });
+  it("resumes source comparison failures using the same reviewed manifest", async () => {
+    const run = execution();
+    Object.assign(run.report.entries[0], { status: "failed", error: "source_changed", attempts: 1 });
+    expect(await executeBatch({ ...run, report: resumeReport(run.report, run.manifest, contracts) })).toBe(0);
+    expect(run.perform).toHaveBeenCalledTimes(2);
+  });
   it("does not start work after interruption", async () => {
     const run = execution();
     const controller = new AbortController();
@@ -194,24 +200,7 @@ describe("checkpointed execution", () => {
   });
 });
 
-describe("live source revalidation", () => {
-  it("refuses changed evidence before any D1 command", async () => {
-    const input = manifest();
-    const entry = input.entries[0];
-    const fresh = structuredClone(entry.source);
-    fresh.issue.body = "Changed";
-    const command = vi.fn();
-    const result = await importEntry({
-      manifest: input,
-      entry,
-      directory: "/tmp",
-      signal: new AbortController().signal,
-      command,
-      readSource: async () => fresh,
-    });
-    expect(result).toMatchObject({ status: "failed", error: "source_changed" });
-    expect(command).not.toHaveBeenCalled();
-  });
+describe("GitHub evidence export", () => {
   it("reads all comment pages and rereads the issue, without forwarding source access to the portal", async () => {
     const source = manifest().entries[0].source;
     source.timeline.push(...crossReferenceEvents());

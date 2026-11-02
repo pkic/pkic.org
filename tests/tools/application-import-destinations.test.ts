@@ -19,32 +19,6 @@ describe("application backfill destinations", () => {
     const input = { ...reviewedManifest("/tmp/example"), environment, sourceData: "private" };
     expect(() => parseManifest(input, contracts, databaseId)).toThrow("synthetic");
   });
-  it("allows private local rehearsal and revalidates its GitHub evidence", async () => {
-    const manifest = parseManifest(
-      { ...reviewedManifest("/tmp/example"), sourceData: "private" },
-      contracts,
-      databaseId,
-    );
-    const entry = manifest.entries[0]!;
-    if (entry.decision !== "import") throw new Error("Expected reviewed fixture");
-    const readSource = vi.fn(async () => ({
-      ...entry.source,
-      issue: { ...entry.source.issue, title: "Changed source" },
-    }));
-    const command = vi.fn();
-    expect(
-      await importEntry({
-        manifest,
-        entry,
-        directory: "/tmp/example",
-        signal: new AbortController().signal,
-        readSource,
-        command,
-      }),
-    ).toMatchObject({ status: "failed", error: "source_changed" });
-    expect(readSource).toHaveBeenCalledWith(entry.sourceIssueNumber, expect.any(AbortSignal), command);
-    expect(command).not.toHaveBeenCalled();
-  });
   it("requires an explicit local path and rejects local paths on remote targets", () => {
     expect(() =>
       parseManifest({ ...reviewedManifest(), environment: "local", sourceData: "synthetic" }, contracts, databaseId),
@@ -84,48 +58,41 @@ describe("application backfill destinations", () => {
       resumeReport(report, parseManifest(previewManifest(), contracts, previewDatabaseId), contracts),
     ).toThrow();
   });
-  it("executes preview using embedded synthetic evidence and verifies the remote write", async () => {
-    const manifest = parseManifest(previewManifest(), contracts, previewDatabaseId);
-    const entry = manifest.entries[0];
-    if (entry.decision !== "import") throw new Error("Expected reviewed fixture");
-    const directory = await mkdtemp(join(tmpdir(), "backfill-preview-routing-"));
-    const readSource = vi.fn();
-    let written = false;
-    const command = vi.fn(async (name: string, args: string[]) => {
-      expect(name).toBe("pnpm");
-      expect(args.slice(0, 10)).toEqual([
-        "exec",
-        "wrangler",
-        "d1",
-        "execute",
-        "DB",
-        "--env",
-        "production",
-        "--preview",
-        "--remote",
-        "--json",
-      ]);
-      expect(args).not.toContain("--local");
-      expect(args).not.toContain("--persist-to");
-      if (args.includes("--file")) {
-        const sql = await readFile(args[args.indexOf("--file") + 1], "utf8");
-        expect(sql).toContain("Example User");
-        expect(sql).toContain("INSERT INTO member_applications");
-        written = true;
-        return "[]";
+  it.each(["local", "preview", "production"])(
+    "executes %s from reviewed JSON without GitHub access",
+    async (environment) => {
+      const input =
+        environment === "preview"
+          ? previewManifest()
+          : { ...reviewedManifest(environment === "local" ? "/tmp/example" : undefined), sourceData: "private" };
+      const manifest = parseManifest(input, contracts, environment === "preview" ? previewDatabaseId : databaseId);
+      const entry = manifest.entries[0];
+      if (entry.decision !== "import") throw new Error("Expected reviewed fixture");
+      const directory = await mkdtemp(join(tmpdir(), "backfill-preview-routing-"));
+      let written = false;
+      const command = vi.fn(async (name: string, args: string[]) => {
+        expect(name).toBe("pnpm");
+        const expectedArguments = databaseArguments(manifest);
+        expect(args.slice(0, expectedArguments.length)).toEqual(expectedArguments);
+        if (args.includes("--file")) {
+          const sql = await readFile(args[args.indexOf("--file") + 1], "utf8");
+          expect(sql).toContain("Example User");
+          expect(sql).toContain("INSERT INTO member_applications");
+          written = true;
+          return "[]";
+        }
+        return JSON.stringify([
+          { success: true, results: written ? [{ id: sourceId(entry.source), source_note: 1 }] : [] },
+        ]);
+      });
+      try {
+        expect(
+          await importEntry({ manifest, entry, directory, signal: new AbortController().signal, command }),
+        ).toMatchObject({ status: "imported", resultId: sourceId(entry.source) });
+        expect(command).toHaveBeenCalledTimes(3);
+      } finally {
+        await rm(directory, { recursive: true, force: true });
       }
-      return JSON.stringify([
-        { success: true, results: written ? [{ id: sourceId(entry.source), source_note: 1 }] : [] },
-      ]);
-    });
-    try {
-      expect(
-        await importEntry({ manifest, entry, directory, signal: new AbortController().signal, command, readSource }),
-      ).toMatchObject({ status: "imported", resultId: sourceId(entry.source) });
-      expect(command).toHaveBeenCalledTimes(3);
-      expect(readSource).not.toHaveBeenCalled();
-    } finally {
-      await rm(directory, { recursive: true, force: true });
-    }
-  });
+    },
+  );
 });

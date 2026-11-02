@@ -172,17 +172,17 @@ describe("failure phases and resume", () => {
     },
   );
 
-  it("routes GitHub failures through the same diagnostic command runner", async () => {
+  it("reports database lookup failures for private JSON imports", async () => {
     const input = fixture();
     input.manifest.sourceData = "private";
     const command = vi.fn(async () => {
-      throw new Error("Synthetic gh failure");
+      throw new Error("Synthetic database lookup failure");
     });
     const onFailure = vi.fn(async () => {});
     const result = await importEntry({ ...input, command, onFailure });
     expect(result.status).toBe("failed");
-    expect(command).toHaveBeenCalledWith("gh", expect.any(Array), expect.any(AbortSignal));
-    expect(onFailure).toHaveBeenCalledWith(expect.objectContaining({ phase: "read_source" }));
+    expect(command).toHaveBeenCalledWith("pnpm", expect.any(Array), expect.any(AbortSignal));
+    expect(onFailure).toHaveBeenCalledWith(expect.objectContaining({ phase: "check_existing" }));
   });
 
   it("keeps diagnostic details outside reports and reconciles a committed uncertain write on resume", async () => {
@@ -238,15 +238,19 @@ it("connects CLI execution failures to the private diagnostic file without acces
   const manifestPath = join(directory, "manifest.json");
   const reportPath = join(directory, "execution.json");
   await writeFile(manifestPath, JSON.stringify(input.manifest), { mode: 0o600 });
-  await writeFile(join(directory, "gh"), "#!/bin/sh\necho 'HTTP 401: synthetic authentication failure' >&2\nexit 5\n", {
-    mode: 0o700,
-  });
+  await writeFile(
+    join(directory, "pnpm"),
+    "#!/bin/sh\necho 'HTTP 401: synthetic authentication failure' >&2\nexit 5\n",
+    {
+      mode: 0o700,
+    },
+  );
   vi.stubEnv("PATH", `${directory}:${process.env.PATH}`);
   const log = vi.spyOn(console, "log").mockImplementation(() => {});
   try {
     expect(await runCli(["--manifest", manifestPath, "--report", reportPath, "--execute"])).toBe(2);
     const diagnostic = JSON.parse((await readFile(`${reportPath}.diagnostics.jsonl`, "utf8")).trim());
-    expect(diagnostic).toMatchObject({ phase: "read_source", command: "gh", exitCode: 5, status: "failed" });
+    expect(diagnostic).toMatchObject({ phase: "check_existing", command: "pnpm", exitCode: 5, status: "failed" });
     expect(diagnostic.stderr).toContain("synthetic authentication failure");
     expect(JSON.stringify(consoleError.mock.calls)).toContain("HTTP 401");
     expect(JSON.stringify(consoleError.mock.calls)).toContain(`${reportPath}.diagnostics.jsonl`);

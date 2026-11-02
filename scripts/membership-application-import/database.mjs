@@ -1,9 +1,7 @@
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { applicationBackfillSql, confirmationQuery, sourceId } from "./sql.mjs";
-import { readGithubSource } from "./github.mjs";
 import { runCommand } from "./process.mjs";
-import { digest } from "./manifest.mjs";
 import { wranglerTargetArgs } from "../lib/wrangler-target.mjs";
 
 export function databaseArguments(manifest) {
@@ -26,18 +24,13 @@ export async function importEntry({
   signal,
   timeoutMs = 120_000,
   command = runCommand,
-  readSource = readGithubSource,
   onFailure = /** @type {import("./diagnostics.mjs").ImportFailureListener | undefined} */ (undefined),
 }) {
   const deadline = AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]);
   let writing = false;
-  let phase = "read_source";
+  let phase = "check_existing";
   let temporary;
   try {
-    if (manifest.environment === "production" || manifest.sourceData === "private") {
-      const fresh = await readSource(entry.sourceIssueNumber, deadline, command);
-      if (digest(fresh) !== digest(entry.source)) return { status: "failed", error: "source_changed", stop: false };
-    }
     const args = databaseArguments(manifest);
     const confirm = async () => {
       const results = JSON.parse(
@@ -47,7 +40,6 @@ export async function importEntry({
         throw new Error("Invalid database result");
       return results[0].results;
     };
-    phase = "check_existing";
     const existing = await confirm();
     if (existing.length)
       return existing[0].id === sourceId(entry.source) && existing[0].source_note === 1

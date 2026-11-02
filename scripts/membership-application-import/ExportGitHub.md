@@ -79,7 +79,7 @@ The manifest supports up to 2,000 entries. If the inventory exceeds this, divide
 
 ## 3. Export the full evidence for every issue
 
-The issue list is not enough for an import. Each source needs its issue, comments, and timeline. This command reuses the CLI's existing reader and timestamp normalization.
+The issue list is not enough for an import. Each source needs its issue, comments, and timeline. This command uses the evidence export reader and timestamp normalization.
 
 It creates `source-123.json` for issue #123. It reads GitHub and writes private local files only; it does not access D1 or import anything into the portal.
 
@@ -314,7 +314,7 @@ Every destination must already have the current application schema, reference ca
 
 ### Local import
 
-Keep `sourceData: "private"` when copying the reviewed production manifest. Private local execution requires read access to `pkic/members` through `gh` and revalidates the source before writing, just like production. Local D1 writes do not require Cloudflare credentials. Keep the persistence directory private as it will contain original applicant data and discussion.
+Keep `sourceData: "private"` when copying the reviewed production manifest. The reviewed JSON is authoritative; local and production execution do not fetch or compare live GitHub evidence. Local D1 writes do not require Cloudflare credentials. Keep the persistence directory private as it will contain original applicant data and discussion.
 
 Use the persistence root used by the local development server, usually `.wrangler/state`, not its nested `v3/d1` directory. Initialize the local database first, then obtain its canonical path:
 
@@ -358,7 +358,7 @@ Neither destination can resume another destination's report. A changed manifest 
 
 Complete the local rehearsal and verification checklist below before the production run. Confirm the production manifest still has its production actor, binding, and reviewed user links; do not promote local IDs or reuse local reports. Production execution remains a separately authorized operation. Setting `environment` to `production` in the manifest does not itself execute anything.
 
-The CLI requires the operator's existing GitHub and Wrangler credentials for execution. It uses the existing database schema; it does not apply migrations or deploy code.
+The CLI requires the operator's Wrangler credentials for remote execution. Importing reviewed JSON does not require GitHub credentials. It uses the existing database schema; it does not apply migrations or deploy code.
 
 For an authorized production run only:
 
@@ -378,7 +378,7 @@ pnpm import:applications \
   --execute --resume
 ```
 
-Execution rereads GitHub evidence. If the source changed, refresh and review it instead of bypassing the check. A revised manifest needs a new report. Do not edit reports to mark records successful.
+Execution imports the reviewed JSON without rereading GitHub evidence. Review any intended changes in the manifest before importing. A revised manifest needs a new report. Do not edit reports to mark records successful.
 
 ## 9. Verify and reconcile the result
 

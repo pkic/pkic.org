@@ -2,7 +2,7 @@
 
 `pnpm import:applications` is an operator-run batch CLI for writing supported GitHub history into the **existing** portal application records. It needs no application deployment, new API endpoint, Worker secret, or schema migration. Applications use the normal list, stage filters, detail screen, and private internal notes.
 
-The default is an offline dry run. Execution is explicit, checkpointed, and resumable. The CLI writes only `member_applications`, `application_communications` with `kind = note`, and the existing audit log. It does not create users, organizations, memberships, form answers, workflows, outbox messages, domain claims, or GitHub comments. Original application-form content and source evidence are retained as internal notes; missing current-form answers and consent stay unknown.
+The default is an offline dry run. Execution is explicit, checkpointed, and resumable. The reviewed JSON is the authoritative source for every destination; execution does not fetch or compare live GitHub data. The CLI writes only `member_applications`, `application_communications` with `kind = note`, and the existing audit log. It does not create users, organizations, memberships, form answers, workflows, outbox messages, domain claims, or GitHub comments. Original application-form content and source evidence are retained as internal notes; missing current-form answers and consent stay unknown.
 
 ## Supported records and unresolved work
 
@@ -66,13 +66,13 @@ For decisions not ready for import, use:
 pnpm import:applications --manifest /secure/reviewed.json --report /secure/dry-run.json
 ```
 
-No GitHub or Cloudflare access is used. The report distinguishes ready, excluded, and unresolved entries and includes safe reason codes for automatically unresolved imports. `ready` means the offline contract and evidence checks passed; it does not confirm current GitHub state, database identities, or category availability. Unresolved work returns exit code 2.
+No GitHub or Cloudflare access is used. The report distinguishes ready, excluded, and unresolved entries and includes safe reason codes for automatically unresolved imports. `ready` means the offline contract and evidence checks passed; it does not confirm database identities or category availability. Unresolved work returns exit code 2.
 
 ## Choose a local or preview database
 
 The destination comes from the manifest, not a CLI override. Local and production use their exact `DB.database_id` in `wrangler.jsonc`; preview uses `env.production` DB `preview_database_id`, matching `env.production.previews` DB `database_id`. Unknown environments and mismatched IDs are rejected before execution. Use a distinct reviewed manifest, run ID, and report for each destination; an execution report cannot be resumed against another environment or local directory.
 
-Local runs accept reviewed private production application evidence for rehearsal, as well as synthetic fixtures. Private local execution revalidates the source through `gh`, just like production. Keep the local database and evidence private.
+Local runs accept reviewed private production application evidence for rehearsal, as well as synthetic fixtures. Keep the local database and evidence private.
 
 Preview runs require **synthetic evidence throughout the manifest**, including original form text, comments, timeline metadata, names, and email addresses. Do not relabel a private GitHub export as synthetic. Use Example User and Example Organization fixtures prepared independently of production data. Both targets need their own existing active staff actor and valid category; the importer does not seed users, categories, or apply migrations.
 
@@ -126,16 +126,16 @@ pnpm import:applications --manifest /secure/preview-reviewed.json --report /secu
 
 ## Execute and resume
 
-Production backfill remains a separately authorized data operation. Authenticate the operator's existing `gh` and Wrangler sessions for read-only access to `pkic/members` and the intended D1 database. Do not put credentials in arguments, source files, manifests, or reports. No portal session token or deployed GitHub import secret is used. The target database must already have the existing application schema, for applications, notes, and audit records; this CLI never applies migrations.
+Production backfill remains a separately authorized data operation. Authenticate the operator's Wrangler session for access to the intended remote D1 database. GitHub credentials are needed only for exporting evidence, not importing reviewed JSON. Do not put credentials in arguments, source files, manifests, or reports. No portal session token or deployed GitHub import secret is used. The target database must already have the existing application schema, for applications, notes, and audit records; this CLI never applies migrations.
 
 ```sh
 pnpm import:applications --manifest /secure/reviewed.json --report /secure/results.json --execute
 pnpm import:applications --manifest /secure/reviewed.json --report /secure/results.json --execute --resume
 ```
 
-Production and private local execution reread every source's issue, comments, and timeline using `gh`, and verify it matches the reviewed evidence. Synthetic local and preview execution use embedded evidence without fetching GitHub sources. It checks for an existing source-derived application identity, then submits one bounded SQL file per source through Wrangler's D1 import command. The file uses the existing tables and constraints. All dependent inserts are guarded so replay cannot change an existing application, restore removed notes, or duplicate the audit. Existing records with a conflicting identity stop the run for reconciliation. Database constraints also protect category, user, and duplicate-match checks within the write boundary.
+Every destination imports the evidence and mappings in the reviewed JSON without accessing GitHub. The importer checks for an existing source-derived application identity, then submits one bounded SQL file per source through Wrangler's D1 import command. The file uses the existing tables and constraints. All dependent inserts are guarded so replay cannot change an existing application, restore removed notes, or duplicate the audit. Existing records with a conflicting identity stop the run for reconciliation. Database constraints also protect category, user, and duplicate-match checks within the write boundary.
 
-A source change is recorded as a failure without writing it. Operational failures stop the batch; a write whose result cannot be confirmed is `uncertain`. Resolve the problem, then resume the exact manifest and report. Confirmed rows are skipped. Stable source-derived record IDs protect against repeating a committed write after a lost response. An `already_present` result confirms an earlier record, not that its mapping equals a later proposal. Corrections require a separately reviewed normal data correction, not another import.
+Operational failures stop the batch; a write whose result cannot be confirmed is `uncertain`. Resolve the problem, then resume the exact manifest and report. Confirmed rows are skipped. Stable source-derived record IDs protect against repeating a committed write after a lost response. An `already_present` result confirms an earlier record, not that its mapping equals a later proposal. Corrections require a separately reviewed normal data correction, not another import.
 
 Ctrl+C and SIGTERM stop child processes and checkpoint when possible. A remote import already submitted may still complete; resume reconciles its identity. `--timeout-seconds` sets a per-source bound (default 120, range 1–600). There is no automatic retry. An exclusive `.lock` beside the report prevents concurrent runs using that report; after a hard termination, verify its PID is no longer running before removing a stale lock. Keep files on a filesystem supporting reliable exclusive creation and atomic rename.
 

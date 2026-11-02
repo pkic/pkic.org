@@ -18,8 +18,8 @@ Default: offline dry-run. --dry-run makes this explicit.
 --help             Show help.
 
 Use reviewed version-2 manifests. Unsupported history and active work remain unresolved.
-Production and private local imports revalidate sources through gh. Remote destinations use Wrangler credentials.
-Synthetic local and preview imports use embedded evidence. No portal token is needed.
+The reviewed JSON is authoritative for every destination; execution does not access GitHub.
+Remote destinations use Wrangler credentials. No GitHub credentials or portal token are needed.
 The manifest selects production, preview, or local. Preview requires synthetic data; local and production allow private data.
 Production requires separately authorized data backfill.
 The command does not deploy code, change schema, activate workflows, or edit GitHub issues.
@@ -110,7 +110,7 @@ export async function runCli(argv) {
     console.log(`Results report: ${paths.report}`);
     if (!options.execute)
       console.log(
-        "Offline validation only; execution rechecks existing records, identities, and categories. Production and private local imports also recheck GitHub evidence.",
+        "Offline validation only; execution checks existing database records, identities, and categories using the reviewed JSON.",
       );
     return exitCode;
   } finally {
