@@ -130,10 +130,12 @@ export function BadgeCredentials({
       initialSort="-createdAt"
       searchPlaceholder="name or credential reference"
       toolbar={() => (
-        <Menu
-          label="Badge collection actions"
-          items={[{ id: "design", label: "Badge design", onSelect: () => navigate(`${basePath}/design`) }]}
-        />
+        <>
+          <Menu
+            label="Badge collection actions"
+            items={[{ id: "design", label: "Badge design", onSelect: () => navigate(`${basePath}/design`) }]}
+          />
+        </>
       )}
       createAction={{ label: "Create badge", onSelect: () => navigate(`${basePath}/new${scopeQuery}`) }}
       rowKey={(badge) => badge.id}

@@ -215,3 +215,20 @@ export const badgePrintRouteSchema = {
     "503": jsonErrorResponse("Badge print encryption is unavailable"),
   },
 };
+
+/** Resolve a scanned ticket or a selected badge directly into an authorized, transient label. */
+export const badgeLabelRequestSchema = z.discriminatedUnion("source", [
+  z.object({ source: z.literal("scan"), credential: badgeCredentialSchema, operationId: databaseIdSchema }).strict(),
+  z.object({ source: z.literal("badge"), badgeId: databaseIdSchema, operationId: databaseIdSchema }).strict(),
+]);
+export type BadgeLabelRequest = z.infer<typeof badgeLabelRequestSchema>;
+export const badgeLabelRouteSchema = {
+  ...requiresPermissions("events:manage"),
+  tags: ["Events"],
+  summary: "Read a printable attendee label directly without event artwork or a render job",
+  request: {
+    params: eventSlugParamsSchema,
+    body: { content: { "application/json": { schema: badgeLabelRequestSchema } }, required: true },
+  },
+  responses: badgePrintRouteSchema.responses,
+};

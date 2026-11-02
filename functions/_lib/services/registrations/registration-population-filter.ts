@@ -1,3 +1,4 @@
+import { REGISTRATION_ORGANIZATION_SQL } from "./selected-identity";
 import type { EventAttendanceRegistrationsQuery } from "../../../../assets/shared/schemas/event-registrations";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { registrationBadgeDisplayRoleSql } from "./badge-role";
@@ -6,13 +7,20 @@ import { activeDayWaitlistExistsSql, selectedAttendanceTypeSql } from "./day-sta
 /** One predicate for the group registration table and its badge-print population. */
 export function registrationPopulationFilter(
   eventId: string,
-  params: Pick<EventAttendanceRegistrationsQuery, "q" | "status" | "waitlisted" | "attendance_type" | "badge_role">,
+  params: Pick<
+    EventAttendanceRegistrationsQuery,
+    "q" | "status" | "waitlisted" | "attendance_type" | "badge_role" | "created_since"
+  >,
 ) {
   const conditions = ["r.event_id = ?"];
   const bindings: unknown[] = [eventId];
   if (params.status) {
     conditions.push("r.status = ?");
     bindings.push(params.status);
+  }
+  if (params.created_since) {
+    conditions.push("r.created_at >= ?");
+    bindings.push(params.created_since);
   }
   if (params.attendance_type) {
     conditions.push(selectedAttendanceTypeSql("r"));
@@ -28,6 +36,7 @@ export function registrationPopulationFilter(
   if (search) {
     const filter = buildD1TextSearchFilter(search, [
       "u.email",
+      REGISTRATION_ORGANIZATION_SQL,
       "u.first_name",
       "u.last_name",
       "u.first_name || ' ' || u.last_name",

@@ -1,0 +1,44 @@
+@layer components {
+  .pk-label-desk {
+    inline-size: 100%;
+    max-inline-size: 24rem;
+    margin-inline: 0;
+  }
+
+  .pk-label-desk__camera {
+    display: flex;
+    aspect-ratio: 4 / 3;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--pk-3);
+    border-radius: var(--pk-radius-lg);
+    background: var(--pk-ink);
+    color: var(--pk-canvas);
+  }
+
+  .pk-label-desk__camera .pk-icon {
+    inline-size: 2.5rem;
+    block-size: 2.5rem;
+  }
+
+  .pk-label-desk__camera p {
+    margin: 0;
+  }
+
+  .pk-label-desk__camera video:not(.pk-event-scanner__camera--concealed) {
+    inline-size: 100%;
+    block-size: 100%;
+    max-block-size: none;
+    object-fit: cover;
+  }
+
+  .pk-label-desk__print-document {
+    position: fixed;
+    inset-inline-start: -2rem;
+    inline-size: 1px;
+    block-size: 1px;
+    border: 0;
+    pointer-events: none;
+  }
+}

@@ -1,3 +1,8 @@
+import { escapeCsvField } from "../../../shared/csv";
+import { splitBadgePrintSvg } from "../../../shared/badge-print-svg";
+import { badgeCredentialSchema, formatBadgeCredential } from "../../../shared/schemas/badge-credential";
+import { BADGE_DISPLAY_ROLE_LABELS } from "../../../shared/schemas/participant-roles";
+import { badgeLabelSvg } from "../../../shared/badge-label-svg";
 import { BADGE_GENERIC_FONT_LICENSE } from "../../../shared/badge-generic-template-assets";
 import { compileBadgeTemplate, BADGE_PRINT_CONTENT_SECURITY_POLICY } from "../../../shared/badge-template-render";
 import type { BadgePrintingContext } from "../../../shared/schemas/route-contracts-event-badges";
@@ -13,6 +18,7 @@ import {
 /** Printable bearers remain transient; only an explicit download saves them. */
 export interface PrintableBadgePrint {
   id: string;
+  credential?: string;
   displayName: string;
   svg: string;
   firstName: string | null;
@@ -53,7 +59,7 @@ export function badgePrintHtml(
           const badge = badges[slot.itemIndex];
           const body = compiled
             ? `<div class="badge-template-surface">${compiled.renderSide(slot.side, badge)}</div>`
-            : `<div class="name">${escapeHtml(badge.displayName)}</div><img alt="Attendee badge QR code" src="data:image/svg+xml;charset=utf-8,${encodeURIComponent(badge.svg)}">`;
+            : `<img class="badge-label" alt="${escapeHtml(badge.displayName)}" src="data:image/svg+xml;charset=utf-8,${encodeURIComponent(badgeLabelSvg({ ...badge, jobTitle: badge.jobTitle ?? null }, slot.widthMm, slot.heightMm))}">`;
           const slotClass = `badge-print-slot-${slotStyles.length}`;
           slotStyles.push(
             `.${slotClass}{left:${slot.xMm}mm;top:${slot.yMm}mm;width:${slot.widthMm}mm;height:${slot.heightMm}mm}`,
@@ -64,7 +70,7 @@ export function badgePrintHtml(
     );
   }
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${BADGE_PRINT_CONTENT_SECURITY_POLICY}"><meta name="referrer" content="no-referrer"><meta name="viewport" content="width=device-width"><title>Attendee badges</title><style>
-@page{size:${dimensions.widthMm}mm ${dimensions.heightMm}mm;margin:0}*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;color:#111;background:white}.badge-print-sheet{width:${dimensions.widthMm}mm;height:${dimensions.heightMm}mm;position:relative;break-after:page;break-inside:avoid}.badge-print-sheet:last-child{break-after:auto}.badge-print-slot{position:absolute;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2mm;padding:3mm;overflow:hidden}.badge-print-slot:not(.badge--template) img{width:75%;max-height:70%;object-fit:contain;min-height:0}.name{font-size:14pt;font-weight:bold;overflow-wrap:anywhere;text-align:center}.badge-side{font-size:8pt}@media screen{body{background:#eee}.badge-print-sheet{background:white;margin:10px auto;box-shadow:0 1px 5px #aaa}}
+@page{size:${dimensions.widthMm}mm ${dimensions.heightMm}mm;margin:0}*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;color:#111;background:white}.badge-print-sheet{width:${dimensions.widthMm}mm;height:${dimensions.heightMm}mm;position:relative;break-after:page;break-inside:avoid}.badge-print-sheet:last-child{break-after:auto}.badge-print-slot{position:absolute;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2mm;padding:3mm;overflow:hidden}.badge-print-slot:has(.badge-label){padding:0}.badge-print-slot .badge-label{width:100%;height:100%;object-fit:contain;min-height:0}@media screen{body{background:#eee}.badge-print-sheet{background:white;margin:10px auto;box-shadow:0 1px 5px #aaa}}
 ${compiled?.css ?? ""}
 ${slotStyles.join("\n")}
 .badge--template{display:block;padding:0}.badge-template-surface{width:${template?.widthMm ?? layout.label.widthMm}mm;height:${template?.heightMm ?? layout.label.heightMm}mm}
@@ -88,12 +94,33 @@ export function badgeFaceHtml(
   };
 }
 
-export function badgePrintCsv(badges: readonly FreshBadgePrint[]): string {
-  const cell = (value: string) => `"${(/^[=+@\-\t\r]/.test(value) ? "'" : "") + value.replaceAll('"', '""')}"`;
-  return [
-    "Name,Credential,Reference",
-    ...badges.map((badge) => [badge.displayName, badge.credential, badge.id].map(cell).join(",")),
-  ].join("\r\n");
+/** Recovered print documents contain the same code as newly issued badges. */
+export function badgePrintCredential(badge: PrintableBadgePrint): string | null {
+  const encoded = splitBadgePrintSvg(badge.svg)?.code;
+  const supplied = badge.credential;
+  const parsed = badgeCredentialSchema.safeParse(encoded ?? supplied);
+  if (!parsed.success) return null;
+  if (supplied && badgeCredentialSchema.safeParse(supplied).data !== parsed.data) return null;
+  return parsed.data;
+}
+
+export function badgePrintCsv(badges: readonly PrintableBadgePrint[]): string {
+  // Exact column names from the printer’s supplied personalization template.
+  const header = ["role", "first_name", "last_name", "job_title", "organisation", "attendee_id", "qr_content"];
+  const rows = badges.map((badge) => {
+    const credential = badgePrintCredential(badge);
+    if (!credential) throw new Error("This badge has no printable QR code. Reload its print document.");
+    return [
+      BADGE_DISPLAY_ROLE_LABELS[badge.badgeRole],
+      badge.firstName,
+      badge.lastName,
+      badge.jobTitle,
+      badge.organization,
+      formatBadgeCredential(credential),
+      credential,
+    ];
+  });
+  return "\uFEFF" + [header, ...rows].map((row) => row.map(escapeCsvField).join(",")).join("\r\n");
 }
 
 export { downloadFile as downloadBadgeArtifact } from "../../shared/download-file";

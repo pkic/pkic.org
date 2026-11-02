@@ -353,7 +353,15 @@ export function GroupEventWorkspace({
                   />
                 </Suspense>
               )}
-              {activeTab === "scanner" && <EventStaffScanner eventId={event.id} slug={event.slug} />}
+              {activeTab === "scanner" && (
+                <EventStaffScanner
+                  eventId={event.id}
+                  slug={event.slug}
+                  basePath={tabPath("scanner")}
+                  section={detailId}
+                  canPrintLabels={canManage}
+                />
+              )}
               {activeTab === "live" && (
                 <Suspense fallback={<Spinner />}>
                   <EventLiveControlRoom

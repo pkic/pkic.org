@@ -1,3 +1,4 @@
+import { BADGE_LABEL_PRINTING_CONTEXT } from "../../../../assets/shared/badge-label-policy";
 import { composeBadgePrintSvg } from "../../../../assets/shared/badge-print-svg";
 import QRCode from "qrcode";
 import {
@@ -38,7 +39,7 @@ export async function recoverBadgePrintArtifact(
   environment: BadgePrintEnvironment,
   eventId: string,
   badgeId: string,
-  printingRevision: string,
+  printingRevision: string | null,
 ) {
   const row = await first<PrintRow>(
     db,
@@ -55,8 +56,8 @@ export async function recoverBadgePrintArtifact(
       "BADGE_PRINT_UNAVAILABLE",
       "This badge has no recoverable print file. Use a saved original file or explicitly replace it.",
     );
-  const printing = await prepareBadgePrintingBasis(db, eventId);
-  if (printing.revision !== printingRevision)
+  const printing = printingRevision === null ? null : await prepareBadgePrintingBasis(db, eventId);
+  if (printing && printing.revision !== printingRevision)
     throw new AppError(
       409,
       "BADGE_PRINTING_CHANGED",
@@ -97,7 +98,7 @@ export async function recoverBadgePrintArtifact(
     }),
     prepareAuthorizationGuard(db, badgeCredentialDisplayEvidence(eventId, row.id, metadata.displayName)),
     ...labels.guards,
-    ...printing.guards,
+    ...(printing?.guards ?? []),
   ];
   const artifact = badgePrintResponseSchema.parse({
     id: row.id,
@@ -108,7 +109,7 @@ export async function recoverBadgePrintArtifact(
     organization: labels.organization,
     jobTitle: labels.jobTitle,
     badgeRole: labels.badgeRole,
-    printingRevision: printing.revision,
+    printingRevision: printing?.revision ?? BADGE_LABEL_PRINTING_CONTEXT.revision,
     expiresAt: row.expires_at,
   });
   return { artifact, guards };
@@ -121,7 +122,7 @@ export async function prepareBadgePrint(
   eventId: string,
   badgeId: string,
   actorId: string,
-  request: BadgePrintRequest,
+  request: Omit<BadgePrintRequest, "printingRevision"> & { printingRevision: string | null },
 ) {
   const { artifact, guards } = await recoverBadgePrintArtifact(
     db,

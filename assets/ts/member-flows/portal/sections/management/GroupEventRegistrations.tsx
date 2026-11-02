@@ -1,3 +1,6 @@
+import { RegistrationSinceDialog } from "../../../../components/event-registrations/RegistrationSinceDialog";
+import { registrationRosterExportUrl } from "../../../../components/event-registrations/registration-roster-export";
+import { DownloadAction } from "../../../../ui/DownloadAction";
 /**
  * The attendee roster for one group event.
  *
@@ -65,6 +68,8 @@ export function GroupEventRegistrations({
     rowKey: (row) => row.id,
     rowLabel: (row) => row.display_name ?? row.user_email ?? "attendee",
   });
+  const [sinceOpen, setSinceOpen] = useState(false);
+  const [query, setQuery] = useState<Readonly<Record<string, string>>>({});
   const [stats, setStats] = useState<EventAttendanceRegistrationsStats | null>(null);
   const tableRef = useRef<ApiTableActions | null>(null);
   // The types a registration can hold are the ones this event configures per day.
@@ -95,7 +100,10 @@ export function GroupEventRegistrations({
           setStats(response.stats);
           selection.onRows(response.registrations);
         }}
-        onQueryChange={selection.onQueryChange}
+        onQueryChange={(next) => {
+          selection.onQueryChange();
+          setQuery(next);
+        }}
         selection={canManage && eventSlug && onPrint ? selection.selection : undefined}
         bulkBar={
           canManage && eventSlug && onPrint ? (
@@ -104,8 +112,18 @@ export function GroupEventRegistrations({
                 onClick={() => startPrinting({ kind: "selected", rows: selection.selectedRows })}
                 disabled={selection.selectedRows.some((row) => row.status !== "registered")}
               >
-                Create / print selected badges
+                Print selected labels
               </Button>
+              {selection.selectedRows.length > 0 && (
+                <DownloadAction
+                  label="Download selected registrations (CSV)"
+                  href={registrationRosterExportUrl(
+                    `${registrationEndpoint}/exports`,
+                    query,
+                    selection.selectedRows.map((row) => row.id),
+                  )}
+                />
+              )}
             </BulkBar>
           ) : undefined
         }
@@ -115,7 +133,7 @@ export function GroupEventRegistrations({
             ? (_actions, query) => (
                 <RegistrationRosterActions
                   promotionsEndpoint={`${registrationEndpoint}/promotions`}
-                  exportsEndpoint={`${registrationEndpoint}/exports`}
+                  exportsEndpoint={registrationRosterExportUrl(`${registrationEndpoint}/exports`, query)}
                   onPromoted={() => tableRef.current?.reload()}
                   notify={toast}
                   onPrintAllMatching={
@@ -128,7 +146,7 @@ export function GroupEventRegistrations({
             : undefined
         }
         paginate
-        searchPlaceholder="name or email"
+        searchPlaceholder="name, email, or organization"
         initialSort="-created_at"
         columns={[
           {
@@ -225,6 +243,18 @@ export function GroupEventRegistrations({
             cell: (registration) => fmtDate(registration.created_at),
             width: "fit",
             sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" },
+            filter: {
+              param: "created_since",
+              options: [
+                { value: "", label: "All dates" },
+                ...(query.created_since
+                  ? [{ value: query.created_since, label: `Since ${fmtDate(query.created_since)}` }]
+                  : []),
+              ],
+              optionNavigation: [
+                { id: "registered-since", label: "Choose start date…", onSelect: () => setSinceOpen(true) },
+              ],
+            },
           },
           ...(canManage && badgesPath
             ? [
@@ -258,6 +288,13 @@ export function GroupEventRegistrations({
           href: usePortalHashLocation.hrefs(groupEventRegistrationPath(groupId, eventId, registration.id)),
         })}
       />
+      {sinceOpen && (
+        <RegistrationSinceDialog
+          value={query.created_since}
+          onApply={(value) => tableRef.current?.setFilter?.("created_since", value)}
+          onClose={() => setSinceOpen(false)}
+        />
+      )}
     </div>
   );
 }

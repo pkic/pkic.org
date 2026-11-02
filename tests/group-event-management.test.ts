@@ -568,6 +568,74 @@ describe("group event management routes", () => {
     });
   });
 
+  it("uses the same date, attendance, search, and selection scope for the roster, label population, and CSV", async () => {
+    const fixture = await createFixture();
+    const event = await createGroupEvent(fixture);
+    const base = `/api/v1/groups/${fixture.ownerGroupId}/events/${event.id}/registrations`;
+    const day = crypto.randomUUID();
+    await env.DB.prepare(`INSERT INTO event_days (id,event_id,day_date,sort_order,attendance_options_json,created_at,updated_at)
+      VALUES (?,?,'2027-04-12',1,?,'2026-10-01T00:00:00.000Z','2026-10-01T00:00:00.000Z')`)
+      .bind(
+        day,
+        event.id,
+        JSON.stringify([
+          { value: "in_person", label: "In person" },
+          { value: "virtual", label: "Online" },
+        ]),
+      )
+      .run();
+    const ids: string[] = [];
+    for (const [index, type, date] of [
+      [1, "in_person", "2026-10-01T09:00:00.000Z"],
+      [2, "in_person", "2026-11-01T09:00:00.000Z"],
+      [3, "virtual", "2026-11-01T09:00:00.000Z"],
+    ] as const) {
+      const user = await insertUser(env.DB, `batch-export-${index}@example.test`);
+      const id = crypto.randomUUID();
+      ids.push(id);
+      await env.DB.prepare(`INSERT INTO registrations
+        (id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at)
+        VALUES (?,?,?,'registered','direct',?,?,?)`)
+        .bind(id, event.id, user, crypto.randomUUID(), date, date)
+        .run();
+      await env.DB.prepare(`INSERT INTO registration_day_attendance (id,registration_id,event_day_id,attendance_type,created_at,updated_at)
+        VALUES (?,?,?,?,?,?)`)
+        .bind(crypto.randomUUID(), id, day, type, date, date)
+        .run();
+    }
+    const filters = new URLSearchParams({
+      q: "batch-export",
+      attendance_type: "in_person",
+      created_since: "2026-11-01T00:00:00.000Z",
+    });
+    const roster = await request(fixture.ownerLeaderToken, `${base}?${filters}`);
+    expect(roster.status).toBe(200);
+    expect(await roster.json()).toMatchObject({ registrations: [{ id: ids[1] }], page: { total: 1 } });
+    const labels = await request(fixture.ownerLeaderToken, `${base}/badges/population?${filters}`);
+    expect(labels.status).toBe(200);
+    expect(await labels.json()).toMatchObject({ registrations: [{ id: ids[1] }], page: { total: 1 } });
+    const exported = await request(fixture.ownerLeaderToken, `${base}/exports?${filters}`);
+    expect(exported.status).toBe(200);
+    const csv = await exported.text();
+    expect(csv).toContain("batch-export-2@example.test");
+    expect(csv).not.toContain("batch-export-1@example.test");
+    expect(csv).not.toContain("batch-export-3@example.test");
+    const selected = await request(fixture.ownerLeaderToken, `${base}/exports?ids=${ids[0]}`);
+    expect(selected.status).toBe(200);
+    const selectedCsv = await selected.text();
+    expect(selectedCsv).toContain("batch-export-1@example.test");
+    expect(selectedCsv).not.toContain("batch-export-2@example.test");
+    await env.DB.prepare("UPDATE registrations SET status='cancelled' WHERE id=?").bind(ids[2]).run();
+    const selectedCancelled = await request(fixture.ownerLeaderToken, `${base}/exports?ids=${ids[2]}`);
+    expect(selectedCancelled.status).toBe(200);
+    expect(await selectedCancelled.text()).toContain("batch-export-3@example.test");
+    const invalid = await request(fixture.ownerLeaderToken, `${base}/exports?created_since=yesterday`);
+    expect(invalid.status).toBe(400);
+    const foreign = await request(fixture.ownerLeaderToken, `${base}/exports?ids=${crypto.randomUUID()}`);
+    expect(foreign.status).toBe(200);
+    expect(await foreign.text()).not.toContain("batch-export-");
+  });
+
   it("configures terms and attendance days through one guarded selected-group contract", async () => {
     const fixture = await createFixture();
     const created = await createGroupEvent(fixture);

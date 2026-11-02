@@ -118,6 +118,7 @@ import {
   EventBadgesGet,
   EventBadgeGet,
   EventBadgePrint,
+  EventBadgeLabel,
   EventBadgePrintingGet,
 } from "./badges";
 import {
@@ -241,6 +242,7 @@ openapi.delete("/agenda/occurrences/:occurrenceId/holds/:holdId", SessionHoldDel
 openapi.get("/badges/attendees", EventBadgeAttendeesGet);
 openapi.get("/badges", EventBadgesGet);
 openapi.get("/badges/printing", EventBadgePrintingGet);
+openapi.post("/badges/labels", EventBadgeLabel);
 openapi.put("/badges/current", EventBadgeCurrentPut);
 openapi.get("/badges/:badgeId", EventBadgeGet);
 openapi.post("/badges", EventBadgeCreate);

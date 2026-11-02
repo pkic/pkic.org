@@ -8,7 +8,7 @@ import { formatBadgeCredential, badgeCredentialSchema } from "../../assets/share
 import {
   badgeCredentialMetadataSchema,
   badgeCredentialsResponseSchema,
-  badgePrintRequestSchema,
+  badgeLabelRequestSchema,
   badgePrintResponseSchema,
 } from "../../assets/shared/schemas/route-contracts-event-badges";
 import { enrolledOfflineEligibilityResponseSchema } from "../../assets/shared/schemas/event-offline-eligibility";
@@ -49,72 +49,134 @@ async function decodeRenderedQr(image: Locator) {
 }
 
 /** Decodes only the rendered protected SVG's actual pixels, without supplying an expected credential. */
-async function preparePrintedBadge(page: Page, endpoint: string, credential: string) {
+async function preparePrintedBadge(page: Page, endpoint: string, credential: string, open: () => Promise<unknown>) {
+  const labelsEndpoint = endpoint.slice(0, endpoint.lastIndexOf("/")) + "/labels";
   const printing = page
     .waitForResponse(
-      (response) => new URL(response.url()).pathname === endpoint + "/print" && response.request().method() === "POST",
+      (response) => new URL(response.url()).pathname === labelsEndpoint && response.request().method() === "POST",
     )
     .then(async (response) => {
       expect(response.status()).toBe(200);
       expect(response.headers()["cache-control"]).toContain("no-store");
       return {
-        request: badgePrintRequestSchema.parse(response.request().postDataJSON()),
+        request: badgeLabelRequestSchema.parse(response.request().postDataJSON()),
         artifact: badgePrintResponseSchema.parse(await response.json()),
       };
     });
-  await page.getByRole("button", { name: "Prepare print preview", exact: true }).click();
+  await open();
   const printed = await printing;
-  const image = page.getByRole("img", { name: "Attendee badge QR code", exact: true });
-  await expect(image).toBeVisible();
-  await expect.poll(() => image.evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
-  expect(await image.getAttribute("src")).toBe(
-    "data:image/svg+xml;charset=utf-8," + encodeURIComponent(printed.artifact.svg),
-  );
-  expect(await decodeRenderedQr(image)).toBe(credential);
-  const text = await image.evaluate((element) => {
-    const source = (element as HTMLImageElement).src;
-    const svg = decodeURIComponent(source.slice(source.indexOf(",") + 1));
-    return [...new DOMParser().parseFromString(svg, "image/svg+xml").querySelectorAll("text")].map(
-      (node) => node.textContent,
-    );
-  });
-  expect(text).toEqual(["Badge code", formatBadgeCredential(credential)]);
+  expect(printed.request).toMatchObject({ source: "badge", badgeId: endpoint.slice(endpoint.lastIndexOf("/") + 1) });
+  await expect(page.getByRole("button", { name: "Prepare print preview", exact: true })).toHaveCount(0);
   const preview = page.frameLocator('iframe[title="Attendee badge print preview"]');
-  // The template splits the QR-only SVG from the visible manual-entry code on both sides.
   for (const label of ["Badge front", "Badge back"]) {
     const side = preview.getByLabel(label, { exact: true });
-    const qr = side.getByRole("img", { name: "Attendee badge QR code", exact: true });
-    await expect(qr).toHaveCount(1);
-    await expect(qr).toBeVisible();
-    await expect.poll(() => qr.evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
-    const svg = await qr.evaluate((element) => {
+    const image = side.getByRole("img");
+    await expect(image).toHaveCount(1);
+    await expect(image).toBeVisible();
+    await expect.poll(() => image.evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+    expect(await decodeRenderedQr(image), `${label} must encode the original credential`).toBe(credential);
+    const vector = await image.evaluate((element) => {
       const source = (element as HTMLImageElement).src;
-      const prefix = "data:image/svg+xml;charset=utf-8,";
-      if (!source.startsWith(prefix)) throw new Error("Printed QR must use an owned SVG data image");
       const document = new DOMParser().parseFromString(
-        decodeURIComponent(source.slice(prefix.length)),
+        decodeURIComponent(source.slice(source.indexOf(",") + 1)),
         "image/svg+xml",
       );
-      const root = document.documentElement;
       return {
-        name: root.localName,
-        namespace: root.namespaceURI,
-        parseErrors: document.querySelectorAll("parsererror").length,
-        paths: document.querySelectorAll("path").length,
-        viewBox: (root.getAttribute("viewBox") ?? "").trim().split(/[ ,]+/).map(Number),
+        errors: document.querySelectorAll("parsererror").length,
+        width: document.documentElement.getAttribute("width"),
+        height: document.documentElement.getAttribute("height"),
+        text: [...document.querySelectorAll("text")].map((node) => node.textContent).join(" "),
       };
     });
-    expect(svg).toMatchObject({ name: "svg", namespace: "http://www.w3.org/2000/svg", parseErrors: 0 });
-    expect(svg.paths).toBeGreaterThan(0);
-    expect(svg.viewBox).toHaveLength(4);
-    expect(svg.viewBox.every(Number.isFinite)).toBe(true);
-    expect(svg.viewBox[2]).toBeGreaterThan(0);
-    expect(svg.viewBox[3]).toBeGreaterThan(0);
-    expect(await decodeRenderedQr(qr), `${label} must encode the issued credential`).toBe(credential);
-    await expect(side.getByText(formatBadgeCredential(credential), { exact: true })).toBeVisible();
+    expect(vector).toMatchObject({ errors: 0, width: "90.3mm", height: "38mm" });
+    expect(vector.text).toContain(formatBadgeCredential(credential));
+    if (printed.artifact.firstName) expect(vector.text).toContain(printed.artifact.firstName);
+    if (printed.artifact.lastName) expect(vector.text).toContain(printed.artifact.lastName);
   }
   return printed;
 }
+
+test("the registration desk switches between immediate labels and full badges", async ({ page }, info) => {
+  const fixture = await prepareScannerTermination(page);
+  const { event } = eventManagementDetailResponseSchema.parse(await (await page.request.get(fixture.api)).json());
+  if (!event.ownerGroupId) throw new Error("The fixture event requires its owning group");
+  const labelsPage = `/portal/#/groups/${event.ownerGroupId}/events/${event.id}/scanner/labels`;
+  const artwork: string[] = [];
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname.endsWith("/badges/printing")) artwork.push(request.url());
+  });
+  // Observe the native print handoff while keeping this synthetic test unattended.
+  await page.addInitScript(() => {
+    window.print = () => {
+      window.frameElement?.setAttribute("data-print-called", "1");
+      window.dispatchEvent(new Event("afterprint"));
+    };
+  });
+  await page.setViewportSize({ width: 375, height: 844 });
+  await page.goto(labelsPage);
+  await expect(page.getByRole("heading", { name: "Print badge labels", exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Two labels per attendee. Printing opens your phone’s print dialog.", { exact: true }),
+  ).toHaveCount(0);
+  await page.screenshot({ path: info.outputPath("label-desk-phone.png"), fullPage: true });
+  await page.getByRole("textbox", { name: "Find an attendee", exact: true }).fill(fixture.forbidden[0]!);
+  const matched = page.getByRole("button").filter({ hasText: "Synthetic Termination attendee" });
+  await expect(matched).toHaveCount(1);
+  const returned = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === `${fixture.api}/badges/labels` && response.request().method() === "POST",
+  );
+  await matched.click();
+  const response = await returned;
+  expect(response.status()).toBe(200);
+  expect(badgeLabelRequestSchema.parse(response.request().postDataJSON())).toMatchObject({
+    source: "badge",
+    badgeId: fixture.eligibleBadgeId,
+  });
+  expect(badgePrintResponseSchema.parse(await response.json()).id).toBe(fixture.eligibleBadgeId);
+  const document = page.locator('iframe[title="Attendee label print document"]');
+  await expect(document).toHaveAttribute("data-print-called", "1");
+  await expect(page.frameLocator('iframe[title="Attendee label print document"]').getByRole("img")).toHaveCount(2);
+  await page.getByRole("button", { name: "Print settings", exact: true }).click();
+  await page.getByRole("menuitemradio", { name: "1 label", exact: true }).click();
+  await page.getByRole("button", { name: "Print labels again", exact: true }).click();
+  await expect(document).toHaveAttribute("data-print-called", "1");
+  await expect(page.frameLocator('iframe[title="Attendee label print document"]').getByRole("img")).toHaveCount(1);
+  expect(artwork).toEqual([]);
+  const inventory = badgeCredentialsResponseSchema.parse(
+    await (await page.request.get(`${fixture.api}/badges`)).json(),
+  );
+  expect(inventory.badges.map((badge) => badge.id)).toEqual([fixture.eligibleBadgeId]);
+  await page.getByRole("button", { name: "Print settings", exact: true }).click();
+  await page.getByRole("menuitemradio", { name: "Full badges", exact: true }).click();
+  await page.getByRole("button", { name: "Print badges again", exact: true }).click();
+  const fullDocument = page.locator('iframe[title="Attendee badge print document"]');
+  await expect(fullDocument).toHaveAttribute("data-print-called", "1");
+  const full = page.frameLocator('iframe[title="Attendee badge print document"]');
+  await expect(full.locator(".badge-print-sheet")).toHaveCount(2);
+  await expect(full.locator(".badge-template-surface")).toHaveCount(2);
+  expect(artwork).toHaveLength(1);
+  await page.getByRole("button", { name: "Print settings", exact: true }).click();
+  await page.getByRole("menuitemradio", { name: "Back only", exact: true }).click();
+  await page.getByRole("button", { name: "Print badges again", exact: true }).click();
+  await expect(fullDocument).toHaveAttribute("data-print-called", "1");
+  await expect(full.locator(".badge-print-sheet")).toHaveCount(1);
+  await expect(full.locator('[aria-label="Badge back"]')).toHaveCount(1);
+  await expect(full.locator('[aria-label="Badge front"]')).toHaveCount(0);
+  expect(artwork).toHaveLength(1);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.getByRole("button", { name: "Print settings", exact: true }).click();
+  await page.screenshot({ path: info.outputPath("print-mode-settings-desktop.png"), fullPage: true });
+  await page.setViewportSize({ width: 375, height: 900 });
+  await page.screenshot({ path: info.outputPath("print-mode-settings-phone.png"), fullPage: true });
+  await page.getByRole("menuitemradio", { name: "Labels", exact: true }).click();
+  await page.getByRole("button", { name: "Print labels again", exact: true }).click();
+  await expect(document).toHaveAttribute("data-print-called", "1");
+  await expect(page.frameLocator('iframe[title="Attendee label print document"]').getByRole("img")).toHaveCount(1);
+  expect(artwork).toHaveLength(1);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.screenshot({ path: info.outputPath("label-desk-desktop.png"), fullPage: true });
+});
 
 test("the protected printed short code works through manual offline capture and exact original-operation replay", async ({
   page,
@@ -141,9 +203,8 @@ test("the protected printed short code works through manual offline capture and 
     await (await page.request.get(fixture.api + "/attendance/summary")).json(),
   );
   const agendaBefore = agendaSnapshotSchema.parse(await (await page.request.get(fixture.api + "/agenda")).json());
-  await page.goto(printPage);
+  const firstPrint = await preparePrintedBadge(page, endpoint, credential, () => page.goto(printPage));
   await expect(page.getByRole("heading", { name: "Reprint badge", exact: true })).toBeVisible();
-  const firstPrint = await preparePrintedBadge(page, endpoint, credential);
   expect(firstPrint.artifact.id).toBe(fixture.eligibleBadgeId);
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({
@@ -156,10 +217,7 @@ test("the protected printed short code works through manual offline capture and 
     [...fixture.forbidden, firstPrint.artifact.svg],
     await readConsole(),
   );
-  await page.reload();
-  await expect(page.getByRole("button", { name: "Prepare print preview", exact: true })).toBeVisible();
-  await expect(page.getByRole("img", { name: "Attendee badge QR code", exact: true })).toHaveCount(0);
-  const repeatedPrint = await preparePrintedBadge(page, endpoint, credential);
+  const repeatedPrint = await preparePrintedBadge(page, endpoint, credential, () => page.reload());
   expect(repeatedPrint.artifact).toEqual(firstPrint.artifact);
   expect(repeatedPrint.request.operationId).not.toBe(firstPrint.request.operationId);
   expect(await metadata(page, endpoint, credential)).toEqual(before);

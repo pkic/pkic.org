@@ -1,7 +1,12 @@
 import { badgePrintDesignSchema, type EventBadgeTemplate } from "../../../shared/schemas/event-badge-template";
 import { FormSection } from "../../ui/FormSection";
 import { useState } from "preact/hooks";
-import { BADGE_PRINT_PRESETS, badgePrintPreset, badgePrintPresetIdSchema } from "../../../shared/badge-print-layout";
+import {
+  BADGE_PRINT_SIDE_LABELS,
+  BADGE_PRINT_PRESETS,
+  badgePrintPreset,
+  badgePrintPresetIdSchema,
+} from "../../../shared/badge-print-layout";
 import {
   badgePrintSettingsForTemplate,
   badgePrintPageSizeSchema,
@@ -71,7 +76,7 @@ export function BadgePrintLayoutEditor({
             }
           >
             {badgePrintDesignSchema.options.map((value) => (
-              <option key={value} value={value}>
+              <option key={value} value={value} disabled={value === "event_badge" && !template}>
                 {value === "event_badge" ? "Complete badges" : "Labels only (for preprinted badges)"}
               </option>
             ))}
@@ -225,7 +230,7 @@ export function BadgePrintLayoutEditor({
             >
               {badgePrintSidesSchema.options.map((value) => (
                 <option key={value} value={value}>
-                  {value === "front_back" ? "Front and back" : value === "front" ? "Front only" : "Back only"}
+                  {BADGE_PRINT_SIDE_LABELS[value]}
                 </option>
               ))}
             </Select>

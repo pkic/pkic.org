@@ -3,7 +3,12 @@ import { z } from "zod";
 import { jsonErrorResponse } from "./api-common";
 import { groupEventParamsSchema, groupEventRegistrationParamsSchema } from "./group-events";
 import { requiresSession } from "./route-contract";
-import { eventRegistrationPromotionsResponseSchema } from "./event-registrations";
+import { databaseIdSchema } from "./identifiers";
+import { MAX_PAGE_LIMIT } from "./pagination";
+import {
+  eventAttendanceRegistrationsQuerySchema,
+  eventRegistrationPromotionsResponseSchema,
+} from "./event-registrations";
 
 export const groupEventRegistrationPromotionsCreateRouteSchema = {
   ...requiresSession(),
@@ -22,11 +27,24 @@ export const groupEventRegistrationPromotionsCreateRouteSchema = {
   },
 };
 
+export const groupEventRegistrationExportQuerySchema = eventAttendanceRegistrationsQuerySchema
+  .omit({ limit: true, offset: true, sort: true })
+  .extend({
+    ids: z
+      .string()
+      .max(MAX_PAGE_LIMIT * 37)
+      .transform((value) => value.split(","))
+      .pipe(z.array(databaseIdSchema).min(1).max(MAX_PAGE_LIMIT))
+      .optional(),
+  })
+  .strict();
+export type GroupEventRegistrationExportQuery = z.infer<typeof groupEventRegistrationExportQuerySchema>;
+
 export const groupEventRegistrationExportRouteSchema = {
   ...requiresSession(),
   tags: ["Groups"],
   summary: "Export group event registrations",
-  request: { params: groupEventParamsSchema },
+  request: { params: groupEventParamsSchema, query: groupEventRegistrationExportQuerySchema },
   responses: {
     "200": {
       description: "Bounded CSV representation of event registrations.",

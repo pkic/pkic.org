@@ -20,6 +20,7 @@ import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { portalOfflineAssetsPlugin } from "./lib/portal-offline-assets.mjs";
 import { publicAssetsDirectory } from "./publication/build-context.mjs";
+import { frontendOutputFiles } from "./lib/frontend-output-files.mjs";
 import { entryStylesheets } from "./lib/frontend-entry-assets.mjs";
 import { assertFrontendBundleBudget } from "./lib/frontend-bundle-budget.mjs";
 import { preactAlias, preactEsbuild } from "./lib/preact-vite.mjs";
@@ -28,16 +29,17 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
 const outDir = resolve(publicAssetsDirectory(), "js", "built");
 
+// The hot-reloading rehearsal sets PKIC_CLIENT_DEV so the publication it prerenders links the
+// stable entry names. Dependencies keep content hashes so open tabs retain a consistent module graph.
+const isDev =
+  process.argv.includes("--dev") || process.argv.includes("--client-dev") || process.env.PKIC_CLIENT_DEV === "1";
 const entries = {
   loader: resolve(root, "assets/ts/loader.ts"),
+  ...(isDev ? { portalPage: resolve(root, "assets/ts/member-flows/portal-page.tsx") } : {}),
   publicSite: resolve(root, "assets/ts/public-site.ts"),
 };
 
-// The hot-reloading rehearsal sets PKIC_CLIENT_DEV so the publication it prerenders links the
-// same stable development names that the watching rebuild keeps rewriting.
-const isDev =
-  process.argv.includes("--dev") || process.argv.includes("--client-dev") || process.env.PKIC_CLIENT_DEV === "1";
-// The hot-reloading dev server rebuilds on every source change; dev names keep the URLs stable.
+// Watching builds retain older hashed dependencies for tabs that loaded an earlier entry.
 const isWatch = isDev && process.argv.includes("--watch");
 
 /** @type {import('vite').UserConfig} */
@@ -54,8 +56,8 @@ const config = {
   esbuild: preactEsbuild,
   build: {
     outDir,
-    // Keep prepared assets available while the dev server indexes its public directory.
-    emptyOutDir: !isWatch,
+    // Open local tabs may still import a previous build’s hashed dependencies.
+    emptyOutDir: !isDev,
     minify: !isDev,
     sourcemap: isDev ? "inline" : false,
     rollupOptions: {
@@ -67,12 +69,7 @@ const config = {
       external: ["/pagefind/pagefind.js"],
       output: {
         strictExecutionOrder: true,
-        entryFileNames: isDev ? "[name].js" : "[name].[hash].js",
-        chunkFileNames: isDev ? "chunks/[name].js" : "chunks/[name].[hash].js",
-        // Stylesheets follow the same rule as the scripts: stable names in a
-        // dev build so the served files can be inspected, hashed in
-        // production so they can be cached indefinitely.
-        assetFileNames: isDev ? "[name][extname]" : "[name].[hash][extname]",
+        ...frontendOutputFiles(isDev),
         // Rolldown's automatic chunking groups zod (and the runtime helpers
         // it pulls in) into a shared chunk whenever two or more modules
         // import it, then names that chunk after whichever constituent

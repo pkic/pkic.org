@@ -167,7 +167,7 @@ describe("group event registrations roster", () => {
     const trigger = container.querySelector<HTMLButtonElement>('button[aria-label="Registration actions"]');
     expect(trigger).not.toBeNull();
     await act(async () => trigger!.click());
-    await act(async () => menuItemNamed(container, "Create / print all matching badges")!.click());
+    await act(async () => menuItemNamed(container, "Print all matching labels")!.click());
     expect(onPrint).toHaveBeenCalledWith({
       kind: "filtered",
       endpoint: `/api/v1/groups/${GROUP_ID}/events/${EVENT_ID}/registrations/badges/population`,

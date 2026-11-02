@@ -1,22 +1,20 @@
+import { BADGE_LABEL_PRINTING_CONTEXT } from "../../../shared/badge-label-policy";
 import type { z } from "zod";
-import { verifyBadgePrintingContext, verifyBadgePrintArtifact } from "./badge-print-context";
+import { verifyBadgeLabelArtifact } from "./badge-print-context";
 import { useEffect, useRef, useState } from "preact/hooks";
 import {
   badgePrintingResponseSchema,
-  type BadgePrintingContext,
   type BadgeIssueResponse,
   badgeIssueRequestSchema,
   badgeIssueResponseSchema,
-  badgePrintRequestSchema,
+  badgeLabelRequestSchema,
   badgePrintResponseSchema,
   badgeCredentialMetadataSchema,
   type BadgeIssueRequest,
-  type BadgePrintRequest,
+  type BadgeLabelRequest,
 } from "../../../shared/schemas/route-contracts-event-badges";
 import { formatNumber } from "../../../shared/format-number";
 import { ApiClientError, getJson, postJson } from "../../shared/api-client";
-import { confirmAction } from "../ConfirmDialog";
-import { Alert } from "../../ui/Alert";
 import { Button } from "../../ui/Button";
 import { PageHeader } from "../../ui/PageHeader";
 import { ErrorAlert } from "../ErrorAlert";
@@ -39,9 +37,9 @@ export function RegistrationBadgePrinting({
   onBack: () => void;
 }) {
   const [requests, setRequests] = useState<
-    Array<{ row: BadgePrintPopulationRow; request: BadgeIssueRequest; printRequest: BadgePrintRequest }>
+    Array<{ row: BadgePrintPopulationRow; request: BadgeIssueRequest; printOperationId: string }>
   >([]);
-  const [printing, setPrinting] = useState<BadgePrintingContext | null>(null);
+  const printing = BADGE_LABEL_PRINTING_CONTEXT;
   const [loading, setLoading] = useState(true);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [loadError, setLoadError] = useState("");
@@ -54,18 +52,12 @@ export function RegistrationBadgePrinting({
     setLoading(true);
     setLoadError("");
     setProgress(0);
-    void Promise.all([
-      getJson(`/api/v1/events/${encodeURIComponent(slug)}/badges/printing`, badgePrintingResponseSchema, {
-        signal: controller.signal,
-      }),
-      loadBadgePrintPopulation(scope, controller.signal, (count) => {
-        if (!controller.signal.aborted) setProgress(count);
-      }),
-    ])
-      .then(([context, rows]) => {
+    void loadBadgePrintPopulation(scope, controller.signal, (count) => {
+      if (!controller.signal.aborted) setProgress(count);
+    })
+      .then((rows) => {
         if (controller.signal.aborted) return;
         requireCurrent();
-        setPrinting(context);
         setRequests(
           rows.map((row) => ({
             row,
@@ -76,10 +68,7 @@ export function RegistrationBadgePrinting({
               userId: row.user_id,
               reuseActive: true,
             }),
-            printRequest: badgePrintRequestSchema.parse({
-              operationId: crypto.randomUUID(),
-              printingRevision: context.revision,
-            }),
+            printOperationId: crypto.randomUUID(),
           })),
         );
         setLoading(false);
@@ -98,7 +87,7 @@ export function RegistrationBadgePrinting({
   }, [scope, loadAttempt]);
   const issued = useRef(new Map<string, BadgeIssueResponse>());
   const recovered = useRef(
-    new Map<string, { print: z.infer<typeof badgePrintResponseSchema>; request: BadgePrintRequest }>(),
+    new Map<string, { print: z.infer<typeof badgePrintResponseSchema>; request: BadgeLabelRequest }>(),
   );
   const [printed, setPrinted] = useState<PrintableBadgePrint[]>([]);
   const [completed, setCompleted] = useState<ReadonlySet<string>>(new Set());
@@ -117,10 +106,9 @@ export function RegistrationBadgePrinting({
     try {
       if (!printing) return false;
       requireCurrent();
-      await verifyBadgePrintingContext(badgeEndpoint, printing);
       for (const prepared of recovered.current.values()) {
         requireCurrent();
-        await verifyBadgePrintArtifact(badgeEndpoint, prepared.print, prepared.request);
+        await verifyBadgeLabelArtifact(badgeEndpoint, prepared.print, prepared.request);
         requireCurrent();
       }
       requireCurrent();
@@ -140,19 +128,13 @@ export function RegistrationBadgePrinting({
     setError("");
     try {
       requireCurrent();
-      const context = await getJson(`${badgeEndpoint}/printing`, badgePrintingResponseSchema);
-      requireCurrent();
-      setPrinting(context);
       setPrinted([]);
       setCompleted(new Set());
       recovered.current.clear();
       setRequests((previous) =>
         previous.map((item) => ({
           ...item,
-          printRequest: badgePrintRequestSchema.parse({
-            operationId: crypto.randomUUID(),
-            printingRevision: context.revision,
-          }),
+          printOperationId: crypto.randomUUID(),
         })),
       );
     } catch (cause) {
@@ -166,26 +148,10 @@ export function RegistrationBadgePrinting({
     if (running.current || loading || loadError || !requests.length) return;
     running.current = true;
     setBusy(true);
-    if (
-      completed.size === 0 &&
-      issued.current.size === 0 &&
-      !(await confirmAction({
-        title:
-          scope.kind === "selected"
-            ? "Create badges for selected registrations?"
-            : "Create badges for all matching registrations?",
-        body: `Prepare badges for ${formatNumber(requests.length)} registrations. An attendee with an active badge gets that badge reprinted; the others receive one new credential. Save the print files before leaving this page.`,
-        confirmLabel: scope.kind === "selected" ? "Create selected badges" : "Create all matching badges",
-      }))
-    ) {
-      setBusy(false);
-      running.current = false;
-      return;
-    }
     setError("");
     try {
       requireCurrent();
-      for (const { row, request, printRequest } of requests) {
+      for (const { row, request, printOperationId } of requests) {
         requireCurrent();
         if (completed.has(row.id)) continue;
         let issuance = issued.current.get(row.id);
@@ -194,11 +160,12 @@ export function RegistrationBadgePrinting({
           requireCurrent();
           issued.current.set(row.id, issuance);
         }
-        const print = await postJson(
-          `${badgeEndpoint}/${encodeURIComponent(issuance.id)}/print`,
-          printRequest,
-          badgePrintResponseSchema,
-        );
+        const printRequest = badgeLabelRequestSchema.parse({
+          source: "badge",
+          badgeId: issuance.id,
+          operationId: printOperationId,
+        });
+        const print = await postJson(`${badgeEndpoint}/labels`, printRequest, badgePrintResponseSchema);
         requireCurrent();
         const metadata = await getJson(
           `${badgeEndpoint}/${encodeURIComponent(issuance.id)}`,
@@ -225,12 +192,6 @@ export function RegistrationBadgePrinting({
         )
           throw new Error("This badge is no longer available for printing.");
         recovered.current.set(issuance.id, { print, request: printRequest });
-        const printable = {
-          ...print,
-          displayName: print.displayName ?? "Attendee name unavailable",
-          ...(issuance.result === "issued" ? { credential: issuance.credential } : {}),
-        };
-        setPrinted((previous) => [...previous, printable]);
         setCompleted((previous) => new Set([...previous, row.id]));
       }
     } catch (cause) {
@@ -242,34 +203,40 @@ export function RegistrationBadgePrinting({
         );
     } finally {
       running.current = false;
-      if (active.current) setBusy(false);
+      if (active.current) {
+        setBusy(false);
+        // Publish once per run so a large batch does not rebuild every preceding label after each response.
+        setPrinted(
+          requests.flatMap(({ row }) => {
+            const issuance = issued.current.get(row.id);
+            const print = issuance ? recovered.current.get(issuance.id)?.print : null;
+            return print && issuance
+              ? [
+                  {
+                    ...print,
+                    displayName: print.displayName ?? "Attendee name unavailable",
+                    ...(issuance.result === "issued" ? { credential: issuance.credential } : {}),
+                  },
+                ]
+              : [];
+          }),
+        );
+      }
     }
   }
+  useEffect(() => {
+    if (!loading && !loadError && requests.length) void create();
+  }, [loading, requests]);
   return (
     <div class="pk-stack">
-      <PageHeader
-        title={scope.kind === "selected" ? "Print selected attendee badges" : "Print all matching attendee badges"}
-      />
-      <p>
-        {scope.kind === "selected"
-          ? "Scope: selected registrations on the loaded page."
-          : "Scope: all matching active, registered attendees across every result page, using the captured search and filters."}{" "}
-        An attendee who already holds an active badge gets that same badge reprinted, so the printed code matches the
-        ticket on their phone; the others receive one new credential. A completed request can recover its print file.
-      </p>
+      <PageHeader title={scope.kind === "selected" ? "Print selected labels" : "Print all matching labels"} />
+      <p>Labels use each attendee’s existing badge code. Attendees without a badge receive one automatically.</p>
       {loading && <p role="status">Loading matching registrations… {formatNumber(progress)} found.</p>}
       {loadError && <ErrorAlert error={loadError} />}
       {!loading && !loadError && !requests.length && <p>No matching registrations to print.</p>}
       <p>
         {formatNumber(completed.size)} of {formatNumber(requests.length)} requests completed.
       </p>
-      {printed.some((badge) => !("credential" in badge)) && (
-        <Alert tone="info">
-          {formatNumber(printed.filter((badge) => !("credential" in badge)).length)} completed badge print files were
-          recovered without replacing their credentials. Printing CSV is available only when all original codes were
-          returned during this session.
-        </Alert>
-      )}
       {error && (
         <>
           <ErrorAlert error={error} />
@@ -281,25 +248,26 @@ export function RegistrationBadgePrinting({
       <div class="pk-cluster">
         {loadError ? (
           <Button onClick={() => setLoadAttempt((previous) => previous + 1)}>Retry loading registrations</Button>
-        ) : (
+        ) : error ? (
           <Button
             loading={busy}
             disabled={loading || !requests.length || completed.size === requests.length}
             onClick={() => void create()}
           >
-            {completed.size
-              ? "Retry remaining requests"
-              : scope.kind === "selected"
-                ? "Create selected badges"
-                : "Create all matching badges"}
+            Retry remaining requests
           </Button>
-        )}
+        ) : null}
         <Button disabled={busy} onClick={onBack}>
           Back to badges
         </Button>
       </div>
       {printed.length > 0 && printing && (
-        <BadgePrintPreview badges={printed} printing={printing} beforeRelease={beforeRelease} />
+        <BadgePrintPreview
+          badges={printed}
+          printing={printing}
+          beforeRelease={beforeRelease}
+          loadPrintingContext={() => getJson(`${badgeEndpoint}/printing`, badgePrintingResponseSchema)}
+        />
       )}
     </div>
   );

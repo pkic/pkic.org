@@ -1,3 +1,4 @@
+import { addRepresentative, insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
 import { composeBadgePrintSvg } from "../assets/shared/badge-print-svg";
 import { formatBadgeCredential } from "../assets/shared/schemas/badge-credential";
 import { sealBadgeCredential } from "../functions/_lib/services/event-participation/badge-print-protection";
@@ -6,8 +7,10 @@ import { env } from "cloudflare:workers";
 import QRCode from "qrcode";
 import {
   badgeCredentialMetadataSchema,
+  badgeAttendeesResponseSchema,
   badgeCredentialsResponseSchema,
   badgeIssueResponseSchema,
+  badgeLabelRequestSchema,
   badgePrintRequestSchema,
   badgePrintResponseSchema,
   badgePrintingResponseSchema,
@@ -95,6 +98,96 @@ describe("Authenticated recovery of the same active badge print", () => {
     await env.DB.prepare("UPDATE users SET first_name='Ada',last_name='Lovelace' WHERE id=?")
       .bind(fixture.userId)
       .run();
+  });
+  it("finds registered attendees by name, email or their selected organization", async () => {
+    const organization = await insertOrganization(env.DB, "Synthetic Cryptography Research");
+    const member = await seedOrganizationAggregate(env.DB, organization, "A");
+    const identity = await addRepresentative(env.DB, member, fixture.userId);
+    await env.DB.prepare("UPDATE registrations SET registration_identity_id=? WHERE event_id=? AND user_id=?")
+      .bind(identity, fixture.eventId, fixture.userId)
+      .run();
+    for (const query of ["Ada Lovelace", `${fixture.userId}@example.test`, "cryptography research"]) {
+      const response = await request(`${base}/attendees?q=${encodeURIComponent(query)}&limit=1&offset=0&sort=email`);
+      expect(response.status).toBe(200);
+      const result = badgeAttendeesResponseSchema.parse(await response.json());
+      expect(result.users.map((user) => user.id)).toEqual([fixture.userId]);
+      expect(result.users[0].organization_name).toBe("Synthetic Cryptography Research");
+      expect(result.page.total).toBe(1);
+    }
+    await env.DB.prepare("UPDATE registrations SET status='cancelled' WHERE event_id=? AND user_id=?")
+      .bind(fixture.eventId, fixture.userId)
+      .run();
+    const absent = await request(`${base}/attendees?q=cryptography&limit=1&offset=0&sort=email`);
+    expect(badgeAttendeesResponseSchema.parse(await absent.json()).users).toEqual([]);
+  });
+  it("resolves a scanned ticket or selected badge into the same immediate label without loading badge artwork", async () => {
+    const id = await badge();
+    // Invalid complete artwork must never prevent printing a label for preprinted stock.
+    await env.DB.prepare("UPDATE events SET settings_json=? WHERE id=?")
+      .bind(JSON.stringify({ badgeTemplate: { invalid: true } }), fixture.eventId)
+      .run();
+    const before = await state();
+    const results = [];
+    for (const target of [
+      { source: "scan", credential: fixture.badgeId },
+      { source: "badge", badgeId: id },
+    ]) {
+      const response = await request(`${base}/labels`, {
+        method: "POST",
+        body: JSON.stringify(badgeLabelRequestSchema.parse({ ...target, operationId: crypto.randomUUID() })),
+      });
+      expect(response.status, await response.clone().text()).toBe(200);
+      expect(response.headers.get("cache-control")).toContain("no-store");
+      results.push(badgePrintResponseSchema.parse(await response.json()));
+    }
+    expect(results[0]).toEqual(results[1]);
+    expect(results[0]).toMatchObject({ id, firstName: "Ada", lastName: "Lovelace", printingRevision: "0".repeat(64) });
+    expect(await state()).toEqual(before);
+  });
+  it("refuses unauthorized scans, unknown codes, wrong events and revoked badges on the immediate label path", async () => {
+    const id = await badge();
+    const body = badgeLabelRequestSchema.parse({
+      source: "scan",
+      credential: fixture.badgeId,
+      operationId: crypto.randomUUID(),
+    });
+    const token = await createAdminSession(env.DB, fixture.userId, crypto.randomUUID());
+    expect((await request(`${base}/labels`, { method: "POST", body: JSON.stringify(body) }, {}, token)).status).toBe(
+      403,
+    );
+    expect(
+      (
+        await callApi(env, `${base}/labels`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        })
+      ).status,
+    ).toBe(401);
+    expect(
+      (
+        await request(`${base}/labels`, {
+          method: "POST",
+          body: JSON.stringify({ ...body, credential: "ZZZZZZZZZZZZZZZZ" }),
+        })
+      ).status,
+    ).toBe(404);
+    const now = new Date().toISOString();
+    await env.DB.prepare(
+      "INSERT INTO events(id,slug,name,timezone,settings_json,created_at,updated_at) VALUES(?,'label-other','Other','UTC','{}',?,?)",
+    )
+      .bind(crypto.randomUUID(), now, now)
+      .run();
+    expect(
+      (await request("/api/v1/events/label-other/badges/labels", { method: "POST", body: JSON.stringify(body) }))
+        .status,
+    ).toBe(404);
+    await env.DB.prepare("UPDATE event_badge_credentials SET revoked_at=? WHERE id=?").bind(now, id).run();
+    const before = await state(),
+      log = await audits();
+    expect((await request(`${base}/labels`, { method: "POST", body: JSON.stringify(body) })).status).toBe(409);
+    expect(await state()).toEqual(before);
+    expect(await audits()).toEqual(log);
   });
   it("recovers the exact original QR after metadata reload, without rotating or storing a plaintext credential", async () => {
     const id = await badge(),

@@ -128,6 +128,7 @@ export const GroupEventRegistrationExportGet = openApiRoute(
       { id: context.event.id, source_mode: context.event.source_mode ?? null },
       context.actor.id,
       getCsvExportLimits(c.env),
+      data.query,
     );
     return csvResponse(result.csv, `${context.event.slug}-attendees.csv`);
   },
