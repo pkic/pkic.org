@@ -1,3 +1,4 @@
+import { pqcBadgeDotGridSvg } from "./badge-pqc-dot-grid";
 import { z } from "zod";
 import { constants } from "../design/tokens";
 import { BADGE_GENERIC_FONT_CSS } from "./badge-generic-template-assets";
@@ -110,15 +111,6 @@ function inkCanalHouses(): string {
   return source
     .replace(root, `viewBox="-6 -20 457 326" fill="none" stroke="${constants["pqc-ink"]}" stroke-width="9"`)
     .replace(windows, '<g stroke-width="7">');
-}
-
-/** The key visual's fine dot grid, fading in toward the right edge of the header field. */
-function dotGrid(): string {
-  const token = constants["pqc-dots-fine"];
-  const read = (name: string) => new RegExp(`${name}='([^']+)'`).exec(token)?.[1];
-  const [size, cx, radius, fill] = [read("width"), read("cx"), read("r"), read("fill")];
-  if (!size || !cx || !radius || !fill) throw new Error("The PQC dot grid token changed; review the badge preset.");
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 232"><defs><pattern id="dots" width="${size}" height="${size}" patternUnits="userSpaceOnUse"><circle cx="${cx}" cy="${cx}" r="${radius}" fill="${fill}"/></pattern><linearGradient id="fade" x1="0" y1="0" x2="1" y2="0"><stop offset="0.4" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#fff" stop-opacity="1"/></linearGradient><mask id="reveal"><rect width="420" height="232" fill="url(#fade)"/></mask></defs><rect width="420" height="232" fill="url(#dots)" mask="url(#reveal)"/></svg>`;
 }
 
 function tiles(asset: string, count: number, className: string): string {
@@ -267,7 +259,7 @@ export function createPqcConferenceBadgeTemplate(input: PqcConferenceBadgeTempla
       mark: BADGE_PQC_ARTWORK_ASSETS.mark,
       canal_houses: BADGE_PQC_ARTWORK_ASSETS.canal_houses,
       canal_houses_ink: badgeTemplateVectorAsset(inkCanalHouses()),
-      dot_grid: badgeTemplateVectorAsset(dotGrid()),
+      dot_grid: badgeTemplateVectorAsset(pqcBadgeDotGridSvg()),
     },
     sponsorGroups,
   });

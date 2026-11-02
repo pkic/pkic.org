@@ -1,3 +1,4 @@
+import { creditAffiliations } from "../../../../assets/shared/agenda-speaker-affiliations";
 import { personalPromotionSharePath } from "../../../../assets/shared/personal-promotion-image";
 import type { PromotionSourceBasis } from "./promotion-source-read";
 import { agendaOccurrenceSchema } from "../../../../assets/shared/schemas/event-agenda";
@@ -9,6 +10,7 @@ import {
 import { sha256Hex } from "../../utils/crypto";
 import { AppError } from "../../errors";
 import { publicUserHeadshotPath } from "../user-headshot";
+/** Build an attendee kit from current registration facts and the selected published sessions. */
 export async function buildAttendeePromotionSource(basis: PromotionSourceBasis, userId: string, origin: string) {
   if (!basis.registered)
     throw new AppError(
@@ -51,6 +53,7 @@ export async function buildAttendeePromotionSource(basis: PromotionSourceBasis, 
       userId,
       displayName: person.display_name,
       affiliation: [person.job_title, person.organization_name].filter(Boolean).join(" · "),
+      affiliations: creditAffiliations({ jobTitle: person.job_title, organizationName: person.organization_name }),
       photoUrl: publicUserHeadshotPath(userId, person.headshot_r2_key),
       role: "attendee",
     },

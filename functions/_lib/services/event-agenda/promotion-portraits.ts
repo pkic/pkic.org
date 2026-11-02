@@ -1,9 +1,9 @@
 import { USER_HEADSHOT_PATH } from "../../../../assets/shared/headshot-variants";
 import { currentUserHeadshotResponse } from "../user-headshot";
 import type { Env } from "../../types";
-import { resolveHeroImageSource, fetchStaticAsset, uint8ToBase64 } from "../og-badge-hero-image";
+import { resolveHeroImageSource, fetchStaticAsset } from "../og-badge-hero-image";
 import { readBoundedStream } from "../../utils/bounded-stream";
-import { validateRasterImage } from "../../utils/image-format";
+import { svgRasterImage } from "../../utils/svg-raster-image";
 import type { PromotionRenderData } from "./promotion-render";
 /** Resolve current profile portraits through their canonical service; optional images remain bounded. */
 export async function promotionPortraits(
@@ -37,9 +37,9 @@ export async function promotionPortraits(
           if (!response.ok || !response.body) return;
           const result = await readBoundedStream(response.body, 256 * 1024, "Portrait exceeds export byte budget");
           if (!result.ok) return;
-          const image = validateRasterImage(result.bytes);
-          if (!image.ok || image.image.width * image.image.height > 512 * 512) return;
-          output[person.userId] = `data:${image.image.contentType};base64,${uint8ToBase64(result.bytes)}`;
+          const image = await svgRasterImage(result.bytes, env.IMAGES, 256 * 1024);
+          if (!image || image.width * image.height > 512 * 512) return;
+          output[person.userId] = image.dataUrl;
         } catch {
           /* Optional portrait failure must not block approved copy. */
         }

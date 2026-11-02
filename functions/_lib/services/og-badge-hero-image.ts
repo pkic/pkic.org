@@ -1,6 +1,7 @@
 import { bytesToBase64 as uint8ToBase64 } from "../../../assets/shared/base64";
 export { bytesToBase64 as uint8ToBase64 } from "../../../assets/shared/base64";
 import { resolveHeroImageUrl } from "./event-presentation";
+import { svgRasterImage } from "../utils/svg-raster-image";
 import type { Env } from "../types";
 import { readBoundedStream } from "../utils/bounded-stream";
 import {
@@ -104,15 +105,8 @@ export async function fetchHeroImage(
       env.IMAGES ? MAX_HERO_IMAGE_SOURCE_BYTES : MAX_HERO_IMAGE_BYTES,
     );
     if (!original) return null;
-    if (original.image.contentType !== "image/webp" && original.bytes.byteLength <= MAX_HERO_IMAGE_BYTES)
-      return embeddedImage(original);
-    // Keep the original aspect ratio: only the scene's final cover operation crops the photo.
-    if (!env.IMAGES) return null;
-    const normalized = await env.IMAGES.input(new Response(original.bytes).body!)
-      .transform({})
-      .output({ format: "image/jpeg", quality: 95 });
-    const compact = await readHeroImageResponse(await normalized.response());
-    return compact ? embeddedImage(compact) : null;
+    // Preserve the source aspect ratio; the scene owns the final cover crop.
+    return await svgRasterImage(original.bytes, env.IMAGES, MAX_HERO_IMAGE_BYTES, "image/jpeg");
   } catch {
     return null;
   }

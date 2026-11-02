@@ -81,16 +81,25 @@ export async function renderPromotionArtifact(
     );
   const fallbackNames = /\p{Extended_Pictographic}/u.test(text) ? ["NotoEmoji-Regular.ttf"] : [];
   const fonts = await Promise.all(
-    ["Roboto-Regular.ttf", "Roboto-Bold.ttf", ...fallbackNames].map((name) => promotionFont(env, origin, name)),
+    [
+      "PromotionRoboto-Regular.ttf",
+      "PromotionRoboto-Bold.ttf",
+      "PromotionRobotoMono-Medium.ttf",
+      "PromotionRobotoMono-SemiBold.ttf",
+      "PromotionRoboto-Medium.ttf",
+      ...fallbackNames,
+    ].map((name) => promotionFont(env, origin, name)),
   );
   const Resvg = await ensureResvgWasm();
   const logo = await promotionLogo(env, origin, Resvg);
+  const fontAssets = { mono: fonts[2]!, monoBold: fonts[3]!, medium: fonts[4]! };
   const source = {
+    fontAssets,
     ...data,
     portraits: await promotionPortraits(env, origin, data),
     logoPng: logo.png,
     logoDataUrl: logo.bytes ? `data:image/svg+xml;base64,${uint8ToBase64(logo.bytes)}` : undefined,
-    measure: promotionFontMeasure(fonts),
+    measure: promotionFontMeasure(fonts, fontAssets),
   };
   const rasterize = async (svg: string) => {
     const renderer = new Resvg(svg, { font: { fontBuffers: fonts, defaultFontFamily: "Roboto" } });
@@ -103,7 +112,7 @@ export async function renderPromotionArtifact(
   if (format === "carousel") {
     const [cover] = buildPromotionPages(source, "carousel");
     return {
-      body: await renderPromotionPdf(source, fonts[0]!, fonts[1]!, fonts.slice(2), rasterize),
+      body: await renderPromotionPdf(source, fonts[0]!, fonts[1]!, fonts.slice(5), rasterize),
       contentType: "application/pdf",
       count: 1,
       // The first slide, so a gallery shows the carousel's own cover instead of another format.

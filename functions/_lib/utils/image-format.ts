@@ -206,6 +206,41 @@ export function validateRasterImage(
   return { ok: true, image: { ...format, ...dimensions } };
 }
 
+/** Reports declared transparency; unknown or malformed headers never authorize flattening. */
+export function rasterImageHasTransparency(bytes: Uint8Array): boolean | null {
+  const validated = validateRasterImage(bytes);
+  if (!validated.ok) return null;
+  if (validated.image.contentType === "image/jpeg") return false;
+  if (validated.image.contentType === "image/png") {
+    if (bytes[25] === 4 || bytes[25] === 6) return true;
+    if (![0, 2, 3].includes(bytes[25]!)) return null;
+    let offset = 33;
+    while (offset + 12 <= bytes.length) {
+      const end = offset + 12 + readUint32BE(bytes, offset);
+      if (end > bytes.length) return null;
+      if (tagAt(bytes, offset + 4, "tRNS")) return true;
+      if (tagAt(bytes, offset + 4, "IDAT")) return false;
+      offset = end;
+    }
+    return null;
+  }
+  let offset = 12;
+  while (offset + 8 <= bytes.length) {
+    const size = readUint32LE(bytes, offset + 4);
+    const start = offset + 8;
+    const end = start + size + (size % 2);
+    if (end > bytes.length) return null;
+    // Animated backgrounds can be transparent even without the alpha flag.
+    if (tagAt(bytes, offset, "VP8X")) return size >= 10 ? (bytes[start]! & 0x12) !== 0 : null;
+    if (tagAt(bytes, offset, "ALPH")) return true;
+    if (tagAt(bytes, offset, "VP8L"))
+      return size >= 5 && bytes[start] === 0x2f ? (bytes[start + 4]! & 0x10) !== 0 : null;
+    if (tagAt(bytes, offset, "VP8 ")) return false;
+    offset = end;
+  }
+  return null;
+}
+
 export function imageExtensionForContentType(contentType: string): RasterImageExtension {
   if (contentType === "image/png") return "png";
   if (contentType === "image/webp") return "webp";

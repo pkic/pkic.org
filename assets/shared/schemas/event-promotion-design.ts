@@ -1,10 +1,13 @@
+import { pqcBadgeDotGridSvg } from "../badge-pqc-dot-grid";
+import { PQC_PROMOTION_ARTWORK } from "../promotion-pqc-artwork";
+import { BADGE_PQC_ARTWORK_ASSETS } from "../badge-pqc-template-assets";
 import { z } from "zod";
 import {
   eventBadgeTemplateSchema,
   badgeTemplateAssetSchema,
   badgeTemplateSponsorGroupSchema,
 } from "./event-badge-template";
-import { validateBadgeTemplateAsset } from "../badge-template-policy";
+import { validateBadgeTemplateAsset, badgeTemplateVectorAsset } from "../badge-template-policy";
 
 export const promotionPanelSchema = z.enum([
   "cover",
@@ -96,9 +99,18 @@ export function defaultEventPromotionDesign(
     colors: [...DEFAULT_PROMOTION_COLORS],
     assets: {
       logo: badge?.assets.logo_white,
-      mark: badge?.assets.mark,
-      motif: badge?.assets.canal_houses,
-      texture: badge?.assets.dot_grid,
+      mark:
+        badge?.assets.mark?.base64 === BADGE_PQC_ARTWORK_ASSETS.mark.base64
+          ? PQC_PROMOTION_ARTWORK.mark
+          : badge?.assets.mark,
+      motif:
+        badge?.assets.canal_houses?.base64 === BADGE_PQC_ARTWORK_ASSETS.canal_houses.base64
+          ? PQC_PROMOTION_ARTWORK.skyline
+          : badge?.assets.canal_houses,
+      texture:
+        badge?.assets.dot_grid?.base64 === badgeTemplateVectorAsset(pqcBadgeDotGridSvg()).base64
+          ? PQC_PROMOTION_ARTWORK.roundDots
+          : badge?.assets.dot_grid,
     },
     sponsorGroups: badge?.sponsorGroups ?? [],
     panels: [...DEFAULT_PROMOTION_PANELS],

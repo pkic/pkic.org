@@ -1,3 +1,4 @@
+import { promotionIdentityAffiliations } from "./promotion-speaker-credit";
 import { personalPromotionSharePath } from "../../../../assets/shared/personal-promotion-image";
 import type { PromotionSourceBasis } from "./promotion-source-read";
 import { promotionMediaWording } from "../../../../assets/shared/promotion-media";
@@ -10,6 +11,7 @@ import {
   promotionKitSchema,
 } from "../../../../assets/shared/schemas/event-promotion-kit";
 import { AppError } from "../../errors";
+/** Project current speaker identities and approved copy into a personally attributed promotion kit. */
 export async function buildSpeakerPromotionSource(basis: PromotionSourceBasis, actorId: string, origin: string) {
   const { agenda, code, personal, visual } = basis;
   const occurrenceId = basis.occurrenceId!;
@@ -45,6 +47,7 @@ export async function buildSpeakerPromotionSource(basis: PromotionSourceBasis, a
     .map((person) => ({
       userId: person.userId,
       displayName: person.displayName,
+      affiliations: promotionIdentityAffiliations(person),
       affiliation: (person.profileCandidates ?? (person.profileCandidate ? [person.profileCandidate] : []))
         .map((identity) => [identity.jobTitle, identity.organizationName].filter(Boolean).join(" · "))
         .filter(Boolean)

@@ -1,3 +1,4 @@
+import { promotionFooterTexts, promotionFooterArrows } from "./promotion-footer";
 import { PDFDocument, PDFString, rgb, type PDFFont } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import { buildPromotionPages } from "./promotion-scene";
@@ -19,10 +20,39 @@ export async function renderPromotionPdf(
   pdf.setTitle(`${data.occurrence.title} · ${data.agenda.eventName ?? "PKI Consortium"}`);
   pdf.setLanguage("en-US");
   pdf.setCreator("PKI Consortium");
-  const font = await pdf.embedFont(fontBytes, { subset: true }),
-    bold = await pdf.embedFont(boldBytes, { subset: true });
-  const fallbacks = await Promise.all(fallbackBytes.map((bytes) => pdf.embedFont(bytes, { subset: false })));
-  const fonts = [font, bold, ...fallbacks],
+  // English uses base glyphs: localized alternates are absent from pdf-lib’s CID width table.
+  const font = await pdf.embedFont(fontBytes, {
+      subset: false,
+      features: { locl: false, liga: false, clig: false, calt: false },
+    }),
+    bold = await pdf.embedFont(boldBytes, {
+      subset: false,
+      features: { locl: false, liga: false, clig: false, calt: false },
+    });
+  const fallbacks = await Promise.all(
+    fallbackBytes.map((bytes) =>
+      pdf.embedFont(bytes, { subset: false, features: { locl: false, liga: false, clig: false, calt: false } }),
+    ),
+  );
+  const mono = data.fontAssets
+    ? await pdf.embedFont(data.fontAssets.mono, {
+        subset: false,
+        features: { locl: false, liga: false, clig: false, calt: false },
+      })
+    : font;
+  const monoBold = data.fontAssets
+    ? await pdf.embedFont(data.fontAssets.monoBold, {
+        subset: false,
+        features: { locl: false, liga: false, clig: false, calt: false },
+      })
+    : bold;
+  const medium = data.fontAssets
+    ? await pdf.embedFont(data.fontAssets.medium, {
+        subset: false,
+        features: { locl: false, liga: false, clig: false, calt: false },
+      })
+    : font;
+  const fonts = [font, bold, mono, monoBold, medium, ...fallbacks],
     sets = new Map(fonts.map((f) => [f, new Set(f.getCharacterSet())]));
   const runs = (text: string, primary: PDFFont) => {
     const result: { text: string; font: PDFFont }[] = [];
@@ -37,30 +67,41 @@ export async function renderPromotionPdf(
   };
   const measure = (text: string, size: number, strong: boolean) =>
     runs(text, strong ? bold : font).reduce((width, run) => width + run.font.widthOfTextAtSize(run.text, size), 0);
-  const scenes = buildPromotionPages(data, "carousel", measure),
+  const scenes = buildPromotionPages(data, "carousel", data.measure ?? measure),
     structure = promotionPdfStructure(pdf);
   let mainHeading: import("pdf-lib").PDFDict | undefined;
   const elements = new Map<string, import("pdf-lib").PDFDict>();
+  const scale = 0.5;
+  // Each PDF page is a clipped frame of the shared panorama, preserving its global artwork coordinates.
   for (const scene of scenes) {
-    const scale = 0.5,
-      page = pdf.addPage([scene.width * scale, scene.height * scale]),
-      tags = structure.page(page);
+    const page = pdf.addPage([scene.width * scale, scene.height * scale]);
+    const tags = structure.page(page);
     if (rasterize) {
       const image = await pdf.embedPng(await rasterize(promotionSceneSvg(data, scene, false)));
-      tags.artifact(() => page.drawImage(image, { x: 0, y: 0, width: page.getWidth(), height: page.getHeight() }));
+      tags.artifact(() => page.drawImage(image, { x: 0, y: 0, width: scene.width * scale, height: page.getHeight() }));
     } else {
       tags.artifact(() => {
         page.drawRectangle({
           x: 0,
           y: 0,
-          width: page.getWidth(),
+          width: scene.width * scale,
           height: page.getHeight(),
           color: ink(scene.light ? "#ffffff" : "#125c3c"),
         });
       });
+      for (const arrow of promotionFooterArrows(scene))
+        tags.artifact(() => {
+          const x = arrow.x * scale,
+            y = (scene.height - arrow.y) * scale,
+            end = x + arrow.length * scale;
+          const options = { thickness: 2 * scale, color: ink(arrow.color) };
+          page.drawLine({ start: { x, y }, end: { x: end, y }, ...options });
+          page.drawLine({ start: { x: end - 5 * scale, y: y + 5 * scale }, end: { x: end, y }, ...options });
+          page.drawLine({ start: { x: end - 5 * scale, y: y - 5 * scale }, end: { x: end, y }, ...options });
+        });
       if (data.logoPng && scene.index === 0) {
         const logo = await pdf.embedPng(data.logoPng);
-        tags.artifact(() => page.drawImage(logo, { x: 40, y: page.getHeight() - 50, width: 118, height: 31 }));
+        tags.artifact(() => page.drawImage(logo, { x: 44, y: page.getHeight() - 74, width: 118, height: 31 }));
       }
     }
     const drawText = (text: (typeof scene.texts)[number]) => {
@@ -77,7 +118,25 @@ export async function renderPromotionPdf(
       }
       tags.content(node, () => {
         let x = text.x * scale;
-        for (const run of runs(text.text, text.bold ? bold : font)) {
+        const primary = text.mono
+          ? text.bold
+            ? monoBold
+            : mono
+          : text.weight === 500
+            ? medium
+            : text.bold
+              ? bold
+              : font;
+        const tracking = (text.letterSpacing ?? 0) * scale;
+        const laidOut = runs(text.text, primary).flatMap((run) =>
+          tracking ? Array.from(run.text).map((character) => ({ text: character, font: run.font })) : [run],
+        );
+        const textWidth =
+          laidOut.reduce((width, run) => width + run.font.widthOfTextAtSize(run.text, text.size * scale), 0) +
+          Math.max(0, laidOut.length - 1) * tracking;
+        if (text.anchor === "end") x -= textWidth;
+        else if (text.anchor === "middle") x -= textWidth / 2;
+        for (const run of laidOut) {
           page.drawText(run.text, {
             x,
             y: (scene.height - text.y) * scale,
@@ -85,7 +144,7 @@ export async function renderPromotionPdf(
             font: run.font,
             color: ink(text.color ?? (scene.light ? "#0b0d0c" : "#ffffff")),
           });
-          x += run.font.widthOfTextAtSize(run.text, text.size * scale);
+          x += run.font.widthOfTextAtSize(run.text, text.size * scale) + tracking;
         }
       });
     };
@@ -103,39 +162,31 @@ export async function renderPromotionPdf(
       tags.content(figure, () => {});
     }
     for (const text of scene.texts) if (!existing.includes(text)) drawText(text);
-    const footer = tags.element("P");
-    tags.content(footer, () =>
-      page.drawText(`${scene.index + 1} / ${scene.total}`, { x: 40, y: 90, size: 11, font, color: rgb(1, 1, 1) }),
-    );
-    if (scene.index === 0 && scene.total > 1)
-      tags.content(footer, () =>
-        page.drawText("SWIPE", { x: (scene.width - 380) * scale, y: 90, size: 11, font, color: rgb(1, 1, 1) }),
-      );
+    for (const text of promotionFooterTexts(scene, data.registrationUrl, data.measure ?? measure)) drawText(text);
     if (scene.qr) {
       const qr = tags.element("Figure", undefined, `QR code: register for this event at ${data.registrationUrl}`);
       tags.content(qr, () => {});
     }
     const link = tags.element("Link");
+    const card = scene.registrationCard;
     const annotation = pdf.context.register(
       pdf.context.obj({
         Type: "Annot",
         Subtype: "Link",
-        Rect: [40, 35, page.getWidth() - 40, 65],
+        Rect: card
+          ? [
+              card.x * scale,
+              (scene.height - card.y - card.height) * scale,
+              (card.x + card.width) * scale,
+              (scene.height - card.y) * scale,
+            ]
+          : [44, 124, scene.width * scale - 44, 144],
         Border: [0, 0, 0],
         A: { Type: "Action", S: "URI", URI: PDFString.of(data.registrationUrl) },
       }),
     );
     page.node.addAnnot(annotation);
     tags.annotation(link, annotation);
-    tags.content(link, () =>
-      page.drawText(data.registrationUrl, {
-        x: 40,
-        y: 45,
-        size: Math.min(10, (page.getWidth() - 80) / Math.max(1, measure(data.registrationUrl, 1, false))),
-        font,
-        color: rgb(1, 1, 1),
-      }),
-    );
   }
   structure.finish();
   return pdf.save();

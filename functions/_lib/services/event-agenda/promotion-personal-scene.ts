@@ -1,3 +1,4 @@
+import { layoutPromotionSpeakerCredit } from "./promotion-speaker-credit";
 import { initialsFrom } from "../../../../assets/shared/initials";
 import type { PersonalPromotionRenderData, PromotionMeasure, PromotionPage, PromotionText } from "./promotion-scene";
 import { promotionBalancedLines, promotionMeasuredLines } from "./promotion-text";
@@ -116,10 +117,11 @@ export function layoutPersonalPromotion(
       { size: baseName * factor, weight: 700, lineHeight: 1, tracking: -0.03, balance: true },
       square ? width - 144 : 620,
     );
-    const affiliation = block(
-      person?.affiliation ?? "",
-      { size: (square ? 30 : 28) * factor, weight: 500, lineHeight: 1.25 },
+    const affiliation = layoutPromotionSpeakerCredit(
+      person ?? { affiliation: "" },
       square ? width - 144 : 620,
+      (square ? 30 : 28) * factor,
+      measure,
     );
     const count =
       sessions.length > 1
@@ -212,7 +214,13 @@ export function layoutPersonalPromotion(
   bar(square ? (width - 160) / 2 : 72, y, 160, 8, "url(#accent)");
   y += 8 + p.gap;
   if (p.affiliation.lines.length) {
-    put(p.affiliation, square ? width / 2 : 72, y, "#ffffff", "P", square);
+    for (const line of p.affiliation.lines)
+      page.texts.push({
+        ...line,
+        x: square ? width / 2 : 72,
+        y: y + line.y,
+        ...(square ? { anchor: "middle" as const } : {}),
+      });
     y += p.affiliation.height + p.gap;
   }
   if (p.topicBlocks.length) {
