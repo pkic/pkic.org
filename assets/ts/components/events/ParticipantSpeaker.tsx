@@ -218,6 +218,9 @@ export function ParticipantSpeaker({
         <PanelBody>
           <div class="pk-stack">
             <p>{data.profile.email}</p>
+            {editable && !data.profile.headshotUrl && (
+              <p>Add a photo to help us promote your session. A photo is optional.</p>
+            )}
             {(editable || data.profile.headshotUrl) && (
               <HeadshotTile
                 name={speakerName}

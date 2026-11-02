@@ -5,6 +5,7 @@ import { AppError } from "../../../../_lib/errors";
 import {
   selectRegistrationIdentity,
   prepareSelectedRegistrationIdentityGuard,
+  requireRegistrationWorkRepresentation,
 } from "../../../../_lib/services/registrations/selected-identity";
 import type { ValidatedData } from "chanfana";
 import { registrationSubmissionResponseSchema } from "../../../../../assets/shared/schemas/registration";
@@ -53,6 +54,13 @@ async function handlePublicRegistration(
       email: data.body.email,
       unaffiliatedAttestation: data.body.unaffiliatedAttestation,
     });
+  requireRegistrationWorkRepresentation({
+    email: data.body.email,
+    verified: Boolean(data.body.emailProof || sessionOwnsAddress),
+    organizationId: selectedIdentity?.organizationId,
+    organizationIdSubmitted: data.body.organization?.organizationId !== undefined,
+    organizationContextToken: data.body.organization?.contextToken,
+  });
   const result = await submitPublicRegistration(c.env.DB, c.env, data.body, {
     eventSlug: data.params.eventSlug,
     verifiedIdentity: selectedIdentity

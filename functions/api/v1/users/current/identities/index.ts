@@ -9,7 +9,10 @@ import { jsonPrivate } from "../../../../../_lib/http";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { createCurrentUserIdentityFromDomain } from "../../../../../_lib/services/identities";
 import { listOwnIdentitiesRequest } from "../../../../../_lib/services/identities/list-request";
-import { commitOwnAffiliation } from "../../../../../_lib/services/identities/own-affiliation";
+import {
+  commitOwnAffiliation,
+  createOwnPersonalIdentity,
+} from "../../../../../_lib/services/identities/own-affiliation";
 
 export const CurrentUserIdentitiesGet = openApiRoute(
   currentUserIdentitiesListRouteSchema,
@@ -23,6 +26,11 @@ export const CurrentUserIdentityPost = openApiRoute(
   currentUserIdentityCreateRouteSchema,
   async (c: AdminContext, data) => {
     const db = requestDb(c);
+    if ("personalEmail" in data.body)
+      return jsonPrivate(
+        identityMutationResponseSchema.parse(await createOwnPersonalIdentity(db, c.req.raw, c.env, data.body)),
+        201,
+      );
     if ("contextToken" in data.body)
       return jsonPrivate(
         identityMutationResponseSchema.parse(await commitOwnAffiliation(db, c.req.raw, c.env, data.body.contextToken)),

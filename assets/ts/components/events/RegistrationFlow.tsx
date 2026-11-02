@@ -420,7 +420,7 @@ export function RegistrationFlow(props: Props) {
             <section data-step="4" class="event-flow-step pk-stack" hidden>
               <p class="event-flow-step-intro">Check your details, then accept the terms to register.</p>
               <div data-registration-review ref={review} />
-              <Field group label="Terms and conditions" {...contract.ofGroup("consents")}>
+              <Field group label="Terms and conditions">
                 {() => (
                   <div data-consents>
                     <ConsentList terms={forms.requiredTerms} presentationOf={(key) => contract.of(`consents.${key}`)} />

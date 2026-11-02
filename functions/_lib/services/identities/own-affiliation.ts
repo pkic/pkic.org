@@ -19,6 +19,9 @@ import { prepareOwnAffiliationReviewResolution } from "./affiliation-offer";
 import { isConcurrentIdentityConflict } from "./conflicts";
 import { verifiedAffiliationBasisSchema } from "./verified-affiliation-basis";
 import { prepareVerifiedAffiliationRead } from "./verified-affiliation-read";
+import { ownedIdentityEmailEvidence } from "./owned-email";
+import { prepareIndividualIdentityStatement } from "../users";
+import { first } from "../../db/queries";
 
 const contextSchema = z.object({
   typ: z.literal("verified-affiliation"),
@@ -51,19 +54,13 @@ export async function previewOwnAffiliation(
     const identity = basis.identities.find(
       (item) => item.organization_id === null && item.started_at && item.ended_at === null && item.blocked_at === null,
     );
-    if (!identity)
-      throw new AppError(
-        409,
-        "PERSONAL_IDENTITY_REQUIRED",
-        "Refresh your profile before selecting your personal identity.",
-      );
     return identityAffiliationPreviewResponseSchema.parse({
       email: address.email,
       domain: basis.domain,
       organization: null,
       organizations: [],
       domains: [],
-      identityId: identity.id,
+      identityId: identity?.id,
     });
   }
   const preview = verifiedAffiliationPreview(basis, address);
@@ -102,6 +99,44 @@ export async function previewOwnAffiliation(
     );
   }
   return { ...preview, ...(contextToken ? { contextToken } : {}) };
+}
+
+/** Create the person's individual identity only after verifying their selected address and session. */
+export async function createOwnPersonalIdentity(
+  db: DatabaseLike,
+  request: Request,
+  env: Pick<Env, "INTERNAL_SIGNING_SECRET">,
+  input: { personalEmail: string; emailId: string | null },
+) {
+  const actor = await prepareUserSessionRequest(db, request, env);
+  const at = nowIso();
+  try {
+    await db.batch([
+      prepareAuthorizationGuard(db, userSessionRequestAuthorizationEvidence(actor.claims)),
+      prepareAuthorizationGuard(
+        db,
+        ownedIdentityEmailEvidence({
+          userId: actor.claims.sub,
+          emailId: input.emailId,
+          normalizedEmail: input.personalEmail,
+          requireVerifiedPrimary: true,
+        }),
+      ),
+      prepareIndividualIdentityStatement(db, actor.claims.sub, at),
+    ]);
+  } catch (error) {
+    if (isAuthorizationGuardFailure(error))
+      throw new AppError(409, "IDENTITY_CONTEXT_CHANGED", "Verify your email address and try again.");
+    throw error;
+  }
+  const identity = await first<{ id: string }>(
+    db,
+    `SELECT id FROM identities WHERE user_id=? AND organization_id IS NULL
+       AND started_at IS NOT NULL AND started_at<=? AND ended_at IS NULL AND blocked_at IS NULL LIMIT 1`,
+    [actor.claims.sub, at],
+  );
+  if (!identity) throw new AppError(409, "PERSONAL_IDENTITY_UNAVAILABLE", "Your personal identity is unavailable.");
+  return { success: true, identityId: identity.id, state: "active" as const };
 }
 
 export async function commitOwnAffiliation(

@@ -191,22 +191,9 @@ test("a signed-in user registers from event home without another email challenge
   await expect(registrationPage).toBeVisible();
   await registrationPage.getByRole("button", { name: "Change representation", exact: true }).click();
   await representationChooser.getByRole("combobox", { name: "Representation", exact: true }).click();
-  await page
-    .getByRole("option")
-    .filter({ hasText: /^Personal(?: ·|$)/ })
-    .first()
-    .click();
+  await expect(page.getByRole("option").filter({ hasText: /^Personal(?: ·|$)/ })).toHaveCount(0);
+  await page.getByRole("option").filter({ hasText: representations[0].name }).click();
   await representationChooser.getByRole("button", { name: "Use representation", exact: true }).click();
-  const personalWarning = registrationPage.getByRole("img", { name: /Please use your work address/ });
-  await expect(personalWarning).toBeVisible();
-  await expect(personalWarning).toHaveAttribute("title", /personal email address.*handled last/);
-  for (const [width, height, device] of [
-    [1280, 900, "desktop"],
-    [375, 812, "phone"],
-  ] as const) {
-    await page.setViewportSize({ width, height });
-    await page.screenshot({ path: info.outputPath(`personal-representation-warning-${device}.png`) });
-  }
   await page.reload();
   await expect(page).toHaveURL(new RegExp(`#/events/${event.slug}/register/$`));
   await expect(registrationPage.getByText(email, { exact: true })).toBeVisible();

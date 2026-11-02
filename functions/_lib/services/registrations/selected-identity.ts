@@ -1,4 +1,6 @@
 import {
+  identityJobTitleSql,
+  identityOrganizationNameSql,
   selectedOrAffiliationJobTitleSql,
   selectedOrAffiliationOrganizationNameSql,
 } from "../identities/affiliation-projection";
@@ -7,6 +9,25 @@ import { prepareAuthorizationGuard } from "../../db/authorization-guard";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
+import { workEmailDomain } from "../../email-domains/classification";
+
+/** A verified organization address needs an organization representation before registering. */
+export function requireRegistrationWorkRepresentation(input: {
+  email: string;
+  verified: boolean;
+  organizationId?: string | null;
+  organizationContextToken?: string;
+  organizationIdSubmitted?: boolean;
+}) {
+  if (input.organizationIdSubmitted && !input.organizationContextToken)
+    throw new AppError(409, "IDENTITY_CONTEXT_REQUIRED", "Confirm your organization details again before registering.");
+  if (input.verified && workEmailDomain(input.email) && !input.organizationId && !input.organizationContextToken)
+    throw new AppError(
+      422,
+      "REGISTRATION_REPRESENTATION_REQUIRED",
+      "Choose your organization representation for this work email before registering.",
+    );
+}
 
 interface SelectedIdentityRow {
   id: string;
@@ -81,13 +102,30 @@ export function prepareSelectedRegistrationIdentityGuard(
  * record that names it.
  */
 export function registrationOrganizationSql(registration: "r" | "source_registration" | "reg"): string {
-  return selectedOrAffiliationOrganizationNameSql(
+  const selected = selectedOrAffiliationOrganizationNameSql(
     `${registration}.registration_identity_id`,
     `${registration}.user_id`,
   );
+  return reviewedRegistrationProjection(registration, selected, identityOrganizationNameSql);
 }
 export function registrationJobTitleSql(registration: "r" | "source_registration" | "reg"): string {
-  return selectedOrAffiliationJobTitleSql(`${registration}.registration_identity_id`, `${registration}.user_id`);
+  const selected = selectedOrAffiliationJobTitleSql(
+    `${registration}.registration_identity_id`,
+    `${registration}.user_id`,
+  );
+  return reviewedRegistrationProjection(registration, selected, identityJobTitleSql);
+}
+
+/** A review is attribution evidence; never substitute an unrelated current affiliation while it is pending. */
+function reviewedRegistrationProjection(
+  registration: "r" | "source_registration" | "reg",
+  selected: string,
+  identityValue: (id: string) => string,
+): string {
+  const review = `(SELECT resolved_identity_id FROM affiliation_reviews WHERE source_type='registration' AND source_id=${registration}.id)`;
+  return `CASE WHEN ${registration}.registration_identity_id IS NULL AND EXISTS
+    (SELECT 1 FROM affiliation_reviews WHERE source_type='registration' AND source_id=${registration}.id)
+    THEN ${identityValue(review)} ELSE ${selected} END`;
 }
 export const REGISTRATION_ORGANIZATION_SQL = registrationOrganizationSql("r");
 export const REGISTRATION_JOB_TITLE_SQL = registrationJobTitleSql("r");

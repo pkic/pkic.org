@@ -47,7 +47,7 @@ type Stage =
   /** A verification link went to this address; the person continues from the email. */
   | { kind: "sent"; email: string }
   /** Signed in with the same address: verified already, and continues with saved details. */
-  | { kind: "known"; step: WorkEmailStep; person: KnownPerson };
+  | { kind: "known"; step: WorkEmailStep; person: KnownPerson; workEmail: boolean };
 
 /** The signed-in person, or null when this browser has no session; asked only once the visitor continues. */
 async function readSession() {
@@ -294,10 +294,16 @@ export function RegistrationContactStep({
       try {
         const session = await readSession();
         const person = await readKnownPerson(session);
+        const domain =
+          session &&
+          (await getJson(emailDomainUrl(emailDomainOf(session.identity.email)), emailDomainResponseSchema).catch(
+            () => null,
+          ));
         if (active && session)
           setStage({
             kind: "known",
             person,
+            workEmail: domain?.kind === "work",
             step: { email: session.identity.email, unaffiliatedAttestation: person.identity?.organizationId === null },
           });
       } catch {
@@ -321,6 +327,7 @@ export function RegistrationContactStep({
       setStage({
         kind: "known",
         person,
+        workEmail: domain?.kind === "work",
         step: person.identity ? { ...step, unaffiliatedAttestation: person.identity.organizationId === null } : step,
       });
       return;
@@ -355,9 +362,15 @@ export function RegistrationContactStep({
     );
 
   if (stage.kind === "known") {
-    const { person, step } = stage;
+    const { person, step, workEmail } = stage;
     return (
       <div class="pk-stack">
+        {workEmail && !person.identity?.organizationId && (
+          <Alert tone="info">
+            This email address uses an organization domain. Choose or add the organization you represent for this
+            registration.
+          </Alert>
+        )}
         <AddressFields step={step} />
         <Details
           email={step.email}
@@ -371,18 +384,21 @@ export function RegistrationContactStep({
               kind: "known",
               person: { ...person, firstName: saved.firstName ?? "", lastName: saved.lastName ?? "" },
               step,
+              workEmail,
             });
           }}
           representation={
             <RegistrationIdentityField
               preferred={person.identity}
               available={person.identities}
+              organizationOnly={workEmail}
               userId={person.userId}
               onSelect={(identity) => {
                 setStage({
                   kind: "known",
                   person: { ...person, identity },
                   step: { ...step, unaffiliatedAttestation: identity?.organizationId === null },
+                  workEmail,
                 });
               }}
             />

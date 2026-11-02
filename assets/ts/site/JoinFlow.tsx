@@ -110,6 +110,7 @@ export function JoinFlow({ documents }: { documents: MembershipDocument[] }) {
             Your verified email address and application path are fixed for this application. Start again if either is
             incorrect.
           </p>
+          <ButtonLink href="/join/">Start a new application</ButtonLink>
         </div>
         <p class="pk-muted pk-small">
           Only eligibility categories permitted for this verified application path are available below. Any required fee

@@ -105,7 +105,6 @@ function NextSteps({ manageUrl, hasPartialDayWaitlist }: { manageUrl: string; ha
         ) : (
           <div class="pk-cluster">
             <ButtonLink href={manageUrl}>Manage registration</ButtonLink>
-            <ButtonLink href={`${manageUrl}#manage-headshot`}>Add your photo</ButtonLink>
           </div>
         )}
       </PanelBody>

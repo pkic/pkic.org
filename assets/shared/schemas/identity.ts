@@ -139,6 +139,7 @@ export const identityCreateSchema = z.discriminatedUnion("userReference", [
 
 /** The current user explicitly activates one exact claimed-domain identity. */
 export const currentUserIdentityCreateSchema = z.union([
+  z.object({ personalEmail: normalizedEmailSchema, emailId: databaseIdSchema.nullable() }).strict(),
   z
     .object({
       emailId: databaseIdSchema.nullable(),

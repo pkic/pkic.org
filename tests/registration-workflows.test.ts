@@ -4,7 +4,11 @@ import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
 import { deliveredEmailPayload, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { callApi } from "./helpers/app";
-import { registrationManageUpdateResponseSchema } from "../assets/shared/schemas/registration";
+import {
+  registrationConfirmInfoResponseSchema,
+  registrationManageUpdateResponseSchema,
+} from "../assets/shared/schemas/registration";
+import { registrationEmailProofVerifyResponseSchema } from "../assets/shared/schemas/registration-email-proof";
 import { sha256Hex } from "../functions/_lib/utils/crypto";
 import { getEventBySlug } from "../functions/_lib/services/events";
 import { createInvite } from "../functions/_lib/services/invites";
@@ -69,11 +73,39 @@ async function postRegistration(body: unknown, ip?: string): Promise<Response> {
   });
 }
 
-function postConfirmation(body: unknown): Promise<Response> {
+async function postConfirmation(body: {
+  token: string | null;
+  id?: string;
+  organization?: { name: string; jobTitle: string };
+}): Promise<Response> {
+  if (!body.token) throw new Error("Expected a registration confirmation token");
+  const query = new URLSearchParams({ token: body.token, ...(body.id ? { id: body.id } : {}) });
+  const info = registrationConfirmInfoResponseSchema.parse(
+    await (await callApi(env, `/api/v1/events/pqc-2026/registrations/confirm-info?${query}`)).json(),
+  );
+  let organization: Record<string, unknown> | undefined;
+  if (info.organizationProof) {
+    const read = async (affiliation?: object) =>
+      registrationEmailProofVerifyResponseSchema.parse(
+        await (
+          await callApi(env, "/api/v1/events/pqc-2026/registrations/proof/verify", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ token: info.organizationProof, affiliation }),
+          })
+        ).json(),
+      ).affiliation!;
+    const resolved = await read();
+    const id = body.organization ? null : (resolved.organization?.id ?? null);
+    const name = body.organization?.name ?? resolved.organization?.name ?? `Organization for ${resolved.domain}`;
+    const jobTitle = body.organization?.jobTitle ?? "Engineer";
+    const prepared = await read({ organizationId: id, ...(id ? {} : { organizationName: name }), jobTitle });
+    organization = { name, jobTitle, organizationId: id, contextToken: prepared.contextToken };
+  }
   return callApi(env, "/api/v1/events/pqc-2026/registrations/confirm-email", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ ...body, ...(organization ? { organization } : {}) }),
   });
 }
 
@@ -926,8 +958,8 @@ describe("registration workflows", () => {
       env.DB.prepare(`
         INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
         VALUES
-          ('user-1', 'day-one@example.test', 'day-one@example.test', 'Day', 'One', datetime('now'), datetime('now')),
-          ('user-2', 'day-two@example.test', 'day-two@example.test', 'Day', 'Two', datetime('now'), datetime('now'))
+          ('00000000-0000-4000-8000-000000000101', 'day-one@example.test', 'day-one@example.test', 'Day', 'One', datetime('now'), datetime('now')),
+          ('00000000-0000-4000-8000-000000000102', 'day-two@example.test', 'day-two@example.test', 'Day', 'Two', datetime('now'), datetime('now'))
       `),
     ]);
 
@@ -935,7 +967,7 @@ describe("registration workflows", () => {
 
     const first = await createRegistrationService(env.DB, {
       event,
-      userId: "user-1",
+      userId: "00000000-0000-4000-8000-000000000101",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -949,7 +981,7 @@ describe("registration workflows", () => {
 
     const second = await createRegistrationService(env.DB, {
       event,
-      userId: "user-2",
+      userId: "00000000-0000-4000-8000-000000000102",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -1049,9 +1081,9 @@ describe("registration workflows", () => {
       env.DB.prepare(`
         INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
         VALUES
-          ('holder-1', 'holder1@example.test', 'holder1@example.test', 'Holder', 'One', datetime('now'), datetime('now')),
-          ('holder-2', 'holder2@example.test', 'holder2@example.test', 'Holder', 'Two', datetime('now'), datetime('now')),
-          ('wait-all', 'wait-all@example.test', 'wait-all@example.test', 'Wait', 'All', datetime('now'), datetime('now'))
+          ('00000000-0000-4000-8000-000000000103', 'holder1@example.test', 'holder1@example.test', 'Holder', 'One', datetime('now'), datetime('now')),
+          ('00000000-0000-4000-8000-000000000104', 'holder2@example.test', 'holder2@example.test', 'Holder', 'Two', datetime('now'), datetime('now')),
+          ('00000000-0000-4000-8000-000000000105', '00000000-0000-4000-8000-000000000105@example.test', '00000000-0000-4000-8000-000000000105@example.test', 'Wait', 'All', datetime('now'), datetime('now'))
       `),
     ]);
 
@@ -1059,7 +1091,7 @@ describe("registration workflows", () => {
 
     const holder1 = await createRegistrationService(env.DB, {
       event,
-      userId: "holder-1",
+      userId: "00000000-0000-4000-8000-000000000103",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -1073,7 +1105,7 @@ describe("registration workflows", () => {
 
     const holder2 = await createRegistrationService(env.DB, {
       event,
-      userId: "holder-2",
+      userId: "00000000-0000-4000-8000-000000000104",
       dayAttendance: [{ dayDate: "2026-12-02", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -1087,7 +1119,7 @@ describe("registration workflows", () => {
 
     const waiting = await createRegistrationService(env.DB, {
       event,
-      userId: "wait-all",
+      userId: "00000000-0000-4000-8000-000000000105",
       dayAttendance: [
         { dayDate: "2026-12-01", attendanceType: "in_person" },
         { dayDate: "2026-12-02", attendanceType: "in_person" },
@@ -1111,7 +1143,7 @@ describe("registration workflows", () => {
 
     const outboxRows = await queryAll<{ payload_json: string }>(
       env.DB,
-      "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirmed' AND recipient_email = 'wait-all@example.test' ORDER BY created_at DESC LIMIT 1",
+      "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirmed' AND recipient_email = '00000000-0000-4000-8000-000000000105@example.test' ORDER BY created_at DESC LIMIT 1",
     );
     const emailPayload = JSON.parse(outboxRows[0].payload_json) as {
       isWaitlisted: boolean;

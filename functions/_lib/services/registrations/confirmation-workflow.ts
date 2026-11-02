@@ -15,6 +15,7 @@ import { nowIso } from "../../utils/time";
 import type { RegistrationConfirmOrganization } from "../../../../assets/shared/schemas/registration";
 import { linkConfirmedRegistrationOrganization } from "./confirmation-organization";
 import { linkVerifiedAddressToDomainOrganization } from "../identities/email-domain-link";
+import { workEmailDomain } from "../../email-domains/classification";
 
 export interface ConfirmRegistrationWorkflowPayload {
   event: EventRecord;
@@ -113,6 +114,12 @@ async function confirmRegistrationWithNotificationOnce(
     signingSecret: payload.signingSecret,
     organization: payload.organization,
   });
+  if (workEmailDomain(prepared.verifiedAddress.normalizedEmail) && !payload.organization?.contextToken)
+    throw new AppError(
+      422,
+      "REGISTRATION_REPRESENTATION_REQUIRED",
+      "Confirm your organization representation for this work email before registering.",
+    );
   const referral = await first<{ code: string }>(db, firstReferralCodeQuerySql("registration", "?"), [
     prepared.registration.id,
   ]);

@@ -78,10 +78,20 @@ async function verifyOrganization(
 }
 
 async function confirm(body: unknown) {
+  const parsed = registrationConfirmSchema.parse(body);
+  if (parsed.organization && !parsed.organization.contextToken) {
+    const confirmation = await info(parsed.token);
+    const prepared = await verifyOrganization(confirmation.organizationProof!, {
+      organizationId: null,
+      organizationName: parsed.organization.name,
+      jobTitle: parsed.organization.jobTitle,
+    });
+    parsed.organization = { ...parsed.organization, organizationId: null, contextToken: prepared.contextToken };
+  }
   const response = await callApi(env, "/api/v1/events/pqc-2026/registrations/confirm-email", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(registrationConfirmSchema.parse(body)),
+    body: JSON.stringify(parsed),
   });
   expect(response.status, await response.clone().text()).toBe(200);
   return registrationConfirmResponseSchema.parse(await response.json());

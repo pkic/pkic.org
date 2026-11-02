@@ -20,6 +20,7 @@ import {
   registrationEmailProofVerifyResponseSchema,
 } from "../assets/shared/schemas/registration-email-proof";
 import { registrationCreateSchema, registrationSubmissionResponseSchema } from "../assets/shared/schemas/registration";
+import { REGISTRATION_ORGANIZATION_SQL } from "../functions/_lib/services/registrations/selected-identity";
 
 const API = "/api/v1/events/pqc-2026/registrations";
 const consents = [
@@ -31,7 +32,14 @@ const post = (path: string, body: unknown) =>
   callApi(
     env,
     `${API}${path}`,
-    { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) },
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "CF-Connecting-IP": `2001:db8::${crypto.getRandomValues(new Uint16Array(1))[0].toString(16)}`,
+      },
+      body: JSON.stringify(body),
+    },
     path === "/proof/verify" ? { maxRoundTrips: 1 } : undefined,
   );
 
@@ -62,6 +70,16 @@ async function emailedLink(email: string, body: Record<string, unknown> = {}, { 
 }
 
 const tokenOf = (link: URL) => new URLSearchParams(link.hash.slice(1)).get("verify")!;
+
+async function organizationChoice(token: string, name: string, organizationId: string | null = null) {
+  const result = await post("/proof/verify", {
+    token,
+    affiliation: { organizationId, ...(organizationId ? {} : { organizationName: name }), jobTitle: "Engineer" },
+  });
+  expect(result.status, await result.clone().text()).toBe(200);
+  const affiliation = registrationEmailProofVerifyResponseSchema.parse(await result.json()).affiliation!;
+  return { name, jobTitle: "Engineer", organizationId, contextToken: affiliation.contextToken };
+}
 
 function registration(email: string, emailProof: string | undefined, extra: Record<string, unknown> = {}) {
   return registrationCreateSchema.parse({
@@ -103,6 +121,33 @@ describe("registration verifies the email address first", () => {
       }),
     );
     expect(registered.status, await registered.clone().text()).toBe(200);
+    const [attribution] = await queryAll<{ identity_id: string | null; organization_id: string | null }>(
+      env.DB,
+      `SELECT registration.registration_identity_id AS identity_id, identity.organization_id
+       FROM registrations registration JOIN users person ON person.id=registration.user_id
+       LEFT JOIN identities identity ON identity.id=registration.registration_identity_id
+       WHERE person.normalized_email=?`,
+      [email],
+    );
+    expect(attribution.identity_id).toBeTruthy();
+    expect(attribution.organization_id).toBeNull();
+    const personId = await env.DB.prepare("SELECT id FROM users WHERE normalized_email=?")
+      .bind(email)
+      .first<string>("id");
+    const organizationId = await insertOrganization(env.DB, "A later organization");
+    const laterIdentity = await buildCreateIdentityStatement(env.DB, {
+      userId: personId!,
+      organizationId,
+      source: "account",
+      startImmediately: true,
+    });
+    await laterIdentity.statement.run();
+    const [after] = await queryAll<{ organization: string | null }>(
+      env.DB,
+      `SELECT ${REGISTRATION_ORGANIZATION_SQL} AS organization FROM registrations r WHERE r.user_id=?`,
+      [personId],
+    );
+    expect(after.organization).toBeNull();
 
     await startProof(email, { unaffiliatedAttestation: true });
     const mails = await queryAll<{ template_key: string; payload_json: string }>(
@@ -145,17 +190,28 @@ describe("registration verifies the email address first", () => {
     });
   });
 
+  it("asks for representation after verifying an organization address entered as personal", async () => {
+    const token = tokenOf(await emailedLink("person@new-org.example", { unaffiliatedAttestation: true }));
+    const response = await post("/proof/verify", { token });
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(registrationEmailProofVerifyResponseSchema.parse(await response.json())).toMatchObject({
+      unaffiliatedAttestation: false,
+      asksOrganization: true,
+      affiliation: expect.objectContaining({ email: "person@new-org.example" }),
+    });
+  });
+
   it("lets proof reclaim a seconds-old unverified alias without adopting its requesting account", async () => {
-    const email = "casey@claimed.example";
+    const email = "casey.claimed@gmail.com";
     const attacker = await insertUser(env.DB, "attacker@other.example");
     const at = new Date().toISOString();
     await env.DB.prepare("INSERT INTO user_emails(id,user_id,email,normalized_email,created_at) VALUES(?,?,?,?,?)")
       .bind(crypto.randomUUID(), attacker, email, email, at)
       .run();
-    const proof = tokenOf(await emailedLink(email));
+    const proof = tokenOf(await emailedLink(email, { unaffiliatedAttestation: true }));
     const preview = await post("/proof/verify", { token: proof });
     expect(registrationEmailProofVerifyResponseSchema.parse(await preview.json()).person).toBeNull();
-    const response = await post("", registration(email, proof));
+    const response = await post("", registration(email, proof, { unaffiliatedAttestation: true }));
     expect(response.status, await response.clone().text()).toBe(200);
     const [owner] = await queryAll<{ id: string; email_verified_at: string }>(
       env.DB,
@@ -171,7 +227,7 @@ describe("registration verifies the email address first", () => {
   });
 
   it("recovers an unverified primary account without inheriting its passkey or browser session", async () => {
-    const email = "casey@unverified.example";
+    const email = "casey.unverified@gmail.com";
     const userId = await insertUser(env.DB, email);
     const at = new Date().toISOString();
     await env.DB.batch([
@@ -181,7 +237,12 @@ describe("registration verifies the email address first", () => {
       ).bind(crypto.randomUUID(), userId, "untrusted-old-passkey", "untrusted-key", at),
     ]);
     await createMemberSession(env.DB, userId, "untrusted-old-session");
-    const response = await post("", registration(email, tokenOf(await emailedLink(email))));
+    const response = await post(
+      "",
+      registration(email, tokenOf(await emailedLink(email, { unaffiliatedAttestation: true })), {
+        unaffiliatedAttestation: true,
+      }),
+    );
     expect(response.status, await response.clone().text()).toBe(200);
     expect(
       await queryAll(env.DB, "SELECT id FROM passkey_credentials WHERE user_id=? AND revoked_at IS NULL", [userId]),
@@ -193,7 +254,7 @@ describe("registration verifies the email address first", () => {
   });
 
   it("preserves an already verified account under its owned address when its unverified primary is claimed", async () => {
-    const email = "casey@unproved-primary.example";
+    const email = "casey.unproved@gmail.com";
     const established = await insertUser(env.DB, email);
     const at = new Date().toISOString();
     await env.DB.batch([
@@ -202,7 +263,12 @@ describe("registration verifies the email address first", () => {
         "INSERT INTO user_emails(id,user_id,email,normalized_email,verified_at,verification_method,created_at) VALUES(?,?,?,?,?,'magic_link',?)",
       ).bind(crypto.randomUUID(), established, "owner@established.example", "owner@established.example", at, at),
     ]);
-    const response = await post("", registration(email, tokenOf(await emailedLink(email))));
+    const response = await post(
+      "",
+      registration(email, tokenOf(await emailedLink(email, { unaffiliatedAttestation: true })), {
+        unaffiliatedAttestation: true,
+      }),
+    );
     expect(response.status, await response.clone().text()).toBe(200);
     const [original] = await queryAll<{ normalized_email: string }>(
       env.DB,
@@ -217,10 +283,11 @@ describe("registration verifies the email address first", () => {
 
   it("registers a verified address at once, verifies it, and links the organization the form named", async () => {
     const email = "casey@unknown-org.example";
+    const token = tokenOf(await emailedLink(email));
     const response = await post(
       "",
-      registration(email, tokenOf(await emailedLink(email)), {
-        organization: { name: "Unknown Org Labs", jobTitle: "Engineer" },
+      registration(email, token, {
+        organization: await organizationChoice(token, "Unknown Org Labs"),
       }),
     );
     expect(response.status, await response.clone().text()).toBe(200);
@@ -265,7 +332,13 @@ describe("registration verifies the email address first", () => {
       asksOrganization: true,
       affiliation: { organization: { id: organizationId, name: "Open Domain Co" } },
     });
-    const response = await post("", registration(email, tokenOf(await emailedLink(email))));
+    const token = tokenOf(await emailedLink(email));
+    const response = await post(
+      "",
+      registration(email, token, {
+        organization: await organizationChoice(token, "Open Domain Co", organizationId),
+      }),
+    );
     expect(response.status, await response.clone().text()).toBe(200);
     expect(registrationSubmissionResponseSchema.parse(await response.json()).status).toBe("registered");
     expect(
@@ -294,16 +367,40 @@ describe("registration verifies the email address first", () => {
   });
 
   it("registers a signed-in person with their own address without a link", async () => {
-    const userId = await insertUser(env.DB, "signed-in@new-org.example");
+    const userId = await insertUser(env.DB, "signed.in@gmail.com");
     await prepareAccountIdentityStatement(env.DB, userId, new Date().toISOString()).run();
     const session = await createMemberSession(env.DB, userId, "registration-session-token");
     const response = await callApi(env, API, {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${session}` },
-      body: JSON.stringify(registration("signed-in@new-org.example", undefined)),
+      body: JSON.stringify(registration("signed.in@gmail.com", undefined, { unaffiliatedAttestation: true })),
     });
     expect(response.status, await response.clone().text()).toBe(200);
     expect(registrationSubmissionResponseSchema.parse(await response.json()).status).toBe("registered");
+  });
+
+  it("requires a signed-in registrant using a work address to choose an organization identity", async () => {
+    const email = "signed-in@new-org.example";
+    const userId = await insertUser(env.DB, email);
+    await prepareAccountIdentityStatement(env.DB, userId, new Date().toISOString()).run();
+    const session = await createMemberSession(env.DB, userId, "work-registration-session");
+    const send = (identityId?: string) =>
+      callApi(env, API, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${session}` },
+        body: JSON.stringify(registration(email, undefined, identityId ? { identityId } : {})),
+      });
+    expect((await send()).status).toBe(422);
+    const organizationId = await insertOrganization(env.DB, "Signed-in organization");
+    const identity = await buildCreateIdentityStatement(env.DB, {
+      userId,
+      organizationId,
+      source: "account",
+      startImmediately: true,
+    });
+    await identity.statement.run();
+    const accepted = await send(identity.identityId);
+    expect(accepted.status, await accepted.clone().text()).toBe(200);
   });
 
   it("still waits for email confirmation when a registration arrives without proof", async () => {
@@ -380,6 +477,32 @@ describe("registration verifies the email address first", () => {
     expect(await queryAll(env.DB, "SELECT application_id,organization_id FROM organization_domain_claims")).toEqual([
       { application_id: applicationId, organization_id: null },
     ]);
+    const personId = await env.DB.prepare("SELECT user_id FROM registrations WHERE id=?")
+      .bind(result.registrationId)
+      .first<string>("user_id");
+    const unrelatedOrg = await insertOrganization(env.DB, "Unrelated existing organization");
+    const unrelated = await buildCreateIdentityStatement(env.DB, {
+      userId: personId!,
+      organizationId: unrelatedOrg,
+      source: "account",
+      startImmediately: true,
+    });
+    await unrelated.statement.run();
+    const attribution = async () =>
+      (
+        await queryAll<{ organization: string | null }>(
+          env.DB,
+          `SELECT ${REGISTRATION_ORGANIZATION_SQL} AS organization FROM registrations r WHERE r.id=?`,
+          [result.registrationId],
+        )
+      )[0].organization;
+    expect(await attribution()).toBeNull();
+    await env.DB.prepare(
+      "UPDATE affiliation_reviews SET resolved_identity_id=?,resolved_at=?,resolved_by_user_id=? WHERE source_type='registration' AND source_id=?",
+    )
+      .bind(unrelated.identityId, new Date().toISOString(), personId, result.registrationId)
+      .run();
+    expect(await attribution()).toBe("Unrelated existing organization");
   });
 
   it("shows the domain default but honors another organization through the same affiliation flow", async () => {

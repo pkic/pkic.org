@@ -58,31 +58,36 @@ export function RegistrationConfirmOrganization({
   if (proof) controller.prepare = () => details.current.prepare?.() ?? Promise.resolve(false);
   else delete controller.prepare;
   return (
-    <VerifiedOrganizationDetails
-      initial={initial}
-      emailId={null}
-      controller={details.current}
-      resolve={async (domain) => {
-        if (!proof) return initial;
-        const result = await postJson(
-          proof.endpoint,
-          registrationEmailProofVerifySchema.parse({ token: proof.token, domain }),
-          registrationEmailProofVerifyResponseSchema,
-        );
-        if (!result.affiliation) throw new Error("Confirm your organization details again.");
-        return result.affiliation;
-      }}
-      prepare={async (input) => {
-        if (!proof) return initial;
-        const { email: _email, emailId: _id, phase: _phase, ...selection } = input;
-        const result = await postJson(
-          proof.endpoint,
-          registrationEmailProofVerifySchema.parse({ token: proof.token, affiliation: selection }),
-          registrationEmailProofVerifyResponseSchema,
-        );
-        if (!result.affiliation) throw new Error("Confirm your organization details again.");
-        return result.affiliation;
-      }}
-    />
+    <div class="pk-stack">
+      <p>
+        This email address uses an organization domain. Confirm the organization you represent for this registration.
+      </p>
+      <VerifiedOrganizationDetails
+        initial={initial}
+        emailId={null}
+        controller={details.current}
+        resolve={async (domain) => {
+          if (!proof) return initial;
+          const result = await postJson(
+            proof.endpoint,
+            registrationEmailProofVerifySchema.parse({ token: proof.token, domain }),
+            registrationEmailProofVerifyResponseSchema,
+          );
+          if (!result.affiliation) throw new Error("Confirm your organization details again.");
+          return result.affiliation;
+        }}
+        prepare={async (input) => {
+          if (!proof) return initial;
+          const { email: _email, emailId: _id, phase: _phase, ...selection } = input;
+          const result = await postJson(
+            proof.endpoint,
+            registrationEmailProofVerifySchema.parse({ token: proof.token, affiliation: selection }),
+            registrationEmailProofVerifyResponseSchema,
+          );
+          if (!result.affiliation) throw new Error("Confirm your organization details again.");
+          return result.affiliation;
+        }}
+      />
+    </div>
   );
 }

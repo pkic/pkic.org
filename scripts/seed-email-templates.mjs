@@ -1001,7 +1001,7 @@ If you have questions, please [contact us](mailto:contact@pkic.org).
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "speaker_profile_request",
-    subjectTemplate: "Action required: complete your speaker profile — {{eventName}}",
+    subjectTemplate: "Please review your speaker profile — {{eventName}}",
     content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Speaker,{{/if}}
 
 Great news — your session **{{proposalTitle}}** has been accepted for **{{eventName}}**!
@@ -1009,8 +1009,8 @@ Great news — your session **{{proposalTitle}}** has been accepted for **{{even
 To help us promote your session, please take a moment to complete your speaker profile.
 
 {{#unless hasBio}}<div class="notice notice-warning">&#9997;&#65039; Your <strong>biography</strong> is missing. Please add a short speaker bio so we can introduce you properly.</div>{{/unless}}
-{{#unless hasHeadshot}}<div class="notice notice-warning">&#128247; No <strong>headshot</strong> on file. Please upload a high-resolution photo (JPEG / PNG / WebP, min 1000 &times; 1000 px, max 20 MB).</div>{{/unless}}
-{{#if and hasBio hasHeadshot}}<div class="notice notice-success">&#10003; Your profile looks complete — but you can update it at any time before the event.</div>{{/if}}
+{{#unless hasHeadshot}}<div class="notice notice-warning">&#128247; A <strong>headshot</strong> helps us promote your session. Adding one is optional (JPEG / PNG / WebP, min 1000 &times; 1000 px, max 20 MB).</div>{{/unless}}
+{{#if hasBio}}<div class="notice notice-success">&#10003; Your biography is on file and can be updated before the event.</div>{{/if}}
 
 <div class="cta"><a href="{{profileUrl}}">Review &amp; update my speaker profile &rarr;</a></div>
 
@@ -1033,7 +1033,7 @@ Your profile can be updated at any time up until the event.
 {{/if}}
 {{/if}}
 
-{{#if requiresConfirmation}}You have been invited to participate as a speaker. Follow the link below to confirm or decline your participation and review your profile.{{else}}Please check that your biography and headshot are up to date.{{/if}}
+{{#if requiresConfirmation}}You have been invited to participate as a speaker. Follow the link below to confirm or decline your participation and review your profile.{{else}}Please review your biography and consider adding an optional headshot.{{/if}}
 
 [Review my speaker profile]({{profileUrl}})
 `,

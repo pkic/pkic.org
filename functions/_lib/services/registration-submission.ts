@@ -16,7 +16,13 @@ import { buildCreateRegistration } from "./registrations/create";
 import { isEventDayCapacityConflict, type PlannedDayWaitlistEntry } from "./registrations/day-waitlist";
 import type { RegistrationRecord, VerifiedRegistrationIdentityContext } from "./registrations";
 import type { DayAttendanceSelection } from "./event-days";
-import { buildFindOrCreateUserStatement, type FindOrCreateUserPayload, type UserRecord } from "./users";
+import {
+  buildFindOrCreateUserStatement,
+  prepareIndividualIdentityStatement,
+  type FindOrCreateUserPayload,
+  type UserRecord,
+} from "./users";
+import { workEmailDomain } from "../email-domains/classification";
 import {
   formSubmissionContextChangedError,
   isFormSubmissionContextConflict,
@@ -89,6 +95,12 @@ export async function prepareRegistrationSubmission(
   const preparedUser = await buildFindOrCreateUserStatement(db, {
     ...payload.user,
     mailboxVerified: payload.mailboxVerified,
+    identityInBatch: Boolean(
+      payload.mailboxVerified &&
+      !payload.verifiedIdentity?.selectedIdentity &&
+      !payload.affiliationContext &&
+      !workEmailDomain(payload.user.email),
+    ),
   });
   if (payload.verifiedIdentity && preparedUser.user.id !== payload.verifiedIdentity.userId) {
     throw new AppError(403, "REGISTRATION_IDENTITY_MISMATCH", "Registration identity does not match the session");
@@ -108,9 +120,24 @@ export async function prepareRegistrationSubmission(
         nowIso(),
       )
     : null;
+  const personalIdentity =
+    payload.mailboxVerified &&
+    !payload.verifiedIdentity?.selectedIdentity &&
+    !affiliation &&
+    !workEmailDomain(payload.user.email)
+      ? ((
+          await first<{ id: string }>(
+            db,
+            `SELECT id FROM identities WHERE user_id=? AND organization_id IS NULL AND started_at IS NOT NULL AND ended_at IS NULL AND blocked_at IS NULL LIMIT 1`,
+            [preparedUser.user.id],
+          )
+        )?.id ?? crypto.randomUUID())
+      : null;
   const verifiedIdentity = affiliation?.identityId
     ? { ...payload.verifiedIdentity, userId: preparedUser.user.id, selectedIdentity: { id: affiliation.identityId } }
-    : payload.verifiedIdentity;
+    : personalIdentity
+      ? { ...payload.verifiedIdentity, userId: preparedUser.user.id, selectedIdentity: { id: personalIdentity } }
+      : payload.verifiedIdentity;
   const builtRegistration = await buildCreateRegistration(db, {
     event: { id: payload.eventId },
     userId: preparedUser.user.id,
@@ -160,6 +187,8 @@ export async function prepareRegistrationSubmission(
   if (payload.termsSnapshotGuard) statements.push(payload.termsSnapshotGuard);
   if (payload.formRevisionGuard) statements.push(payload.formRevisionGuard);
   statements.push(...preparedUser.statements);
+  if (personalIdentity)
+    statements.push(prepareIndividualIdentityStatement(db, preparedUser.user.id, nowIso(), personalIdentity));
   if (payload.mailboxVerified)
     statements.push(
       ...prepareVerifyOwnedEmailStatements(db, {

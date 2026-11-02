@@ -119,6 +119,18 @@ describe("proposal participants", () => {
     await resetDb();
   });
 
+  it("shows the proposer's own canonical speaker profile while keeping an invitee's profile private", async () => {
+    const { proposerId, existingId, read } = await submitPanelWithExistingInvitee();
+    const speakers = await read();
+    expect(speakers.find((speaker) => speaker.userId === proposerId)).toMatchObject({
+      status: "invited",
+      firstName: "View",
+      lastName: "Lead",
+      bio: "Leads cross-industry cryptography migration planning and public policy coordination programs.",
+    });
+    expect(speakers.find((speaker) => speaker.userId === existingId)).toMatchObject(hiddenProfile);
+  });
+
   it("accepts event-configured session types and rejects unconfigured values", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     await env.DB.prepare("UPDATE events SET settings_json = ? WHERE id = ?")

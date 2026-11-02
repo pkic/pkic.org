@@ -369,7 +369,11 @@ describe("explicit event identity selection", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ id: result.registrationId, token: confirmationToken }),
     });
-    expect(confirmed.status, await confirmed.clone().text()).toBe(200);
+    expect(confirmed.status, await confirmed.clone().text()).toBe(422);
+    // A legacy confirmed record can lack a recorded identity; its read model remains covered below.
+    await env.DB.prepare("UPDATE registrations SET status='registered',confirmed_at=? WHERE id=?")
+      .bind(nowIso(), result.registrationId)
+      .run();
     const exported = await buildRegistrationCsv(
       env.DB,
       { id: event.id, source_mode: event.source_mode! },
@@ -429,7 +433,15 @@ describe("explicit event identity selection", () => {
       ).bind(f.userId, at, at),
     ]);
     await addPrimaryAffiliation(f.userId);
-    const response = await register({ ...f.body, identityId: identity.identityId }, f.token);
+    await env.DB.prepare(
+      "UPDATE users SET email='independent@gmail.com', normalized_email='independent@gmail.com' WHERE id=?",
+    )
+      .bind(f.userId)
+      .run();
+    const response = await register(
+      { ...f.body, email: "independent@gmail.com", unaffiliatedAttestation: true, identityId: identity.identityId },
+      f.token,
+    );
     expect(response.status, await response.clone().text()).toBe(200);
     const result = registrationSubmissionResponseSchema.parse(await response.json());
     expect((await getRegistrationById(env.DB, result.registrationId)).registration_identity_id).toBe(

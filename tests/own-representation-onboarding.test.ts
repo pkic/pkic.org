@@ -88,6 +88,30 @@ async function claim(domain: string, organizationId: string) {
     .run();
 }
 describe("email-first own representation", () => {
+  it("creates a missing personal identity only for a verified address owned by the signed-in person", async () => {
+    const p = await person("personal@gmail.com");
+    await env.DB.prepare("DELETE FROM identities WHERE user_id=?").bind(p.userId).run();
+    const resolved = await preview(p, {
+      phase: "resolve",
+      email: p.email,
+      emailId: null,
+      unaffiliatedAttestation: true,
+    });
+    expect(resolved.status, await resolved.clone().text()).toBe(200);
+    expect(identityAffiliationPreviewResponseSchema.parse(await resolved.json()).identityId).toBeUndefined();
+    const submit = (personalEmail: string) =>
+      callApi(env, CREATE, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${p.token}` },
+        body: JSON.stringify(currentUserIdentityCreateSchema.parse({ personalEmail, emailId: null })),
+      });
+    expect((await submit("someone-else@gmail.com")).status).toBe(409);
+    const created = await submit(p.email);
+    expect(created.status, await created.clone().text()).toBe(201);
+    const identity = identityMutationResponseSchema.parse(await created.json());
+    const repeated = await submit(p.email);
+    expect(identityMutationResponseSchema.parse(await repeated.json()).identityId).toBe(identity.identityId);
+  });
   it("uses the existing personal identity only after explicit personal choice and mailbox proof", async () => {
     const p = await person("person@gmail.com");
     const response = await preview(p, {
@@ -172,15 +196,19 @@ describe("email-first own representation", () => {
     expect((await env.DB.prepare("SELECT id FROM organization_domain_claims").all()).results).toHaveLength(0);
     expect((await env.DB.prepare("SELECT id FROM members").all()).results).toHaveLength(0);
   });
-  it.each(["person@gmail.com", "person@outlook.com", "person@sub.gmail.com", "person@xs4all.nl", "person@proton.me"])(
-    "refuses shared/private providers after proof: %s",
-    async (email) => {
-      const p = await person(email);
-      const response = await preview(p, { phase: "resolve", email: p.email, emailId: null });
-      expect(response.status).toBe(422);
-      expect(await response.text()).not.toContain('"organization":');
-    },
-  );
+  it.each([
+    "person@gmail.com",
+    "person@yahoo.com",
+    "person@outlook.com",
+    "person@sub.gmail.com",
+    "person@xs4all.nl",
+    "person@proton.me",
+  ])("refuses shared/private providers after proof: %s", async (email) => {
+    const p = await person(email);
+    const response = await preview(p, { phase: "resolve", email: p.email, emailId: null });
+    expect(response.status).toBe(422);
+    expect(await response.text()).not.toContain('"organization":');
+  });
   it("rejects another account's address and invalidates a context when the domain is claimed before commit", async () => {
     const p = await person();
     const foreign = await preview(p, { phase: "resolve", email: "other@northstar-work.test", emailId: null });

@@ -78,9 +78,16 @@ export function SelfIdentityCreateForm({
     setResolved(result);
     setError("");
     contract.reset();
-    if (individual && result.identityId)
-      await onCreated({ success: true, identityId: result.identityId, state: "active" });
-    else setStage("details");
+    if (individual) {
+      const identity = result.identityId
+        ? { success: true as const, identityId: result.identityId, state: "active" as const }
+        : await postJson(
+            "/api/v1/users/current/identities",
+            currentUserIdentityCreateSchema.parse({ personalEmail: value.email, emailId: value.id }),
+            identityMutationResponseSchema,
+          );
+      await onCreated(identity);
+    } else setStage("details");
   }
   if (stage === "email")
     return (

@@ -395,7 +395,7 @@ describe("Registration Email Change", () => {
       });
       const change = await changeRegistrationEmail(env.DB, {
         registrationId: owner.registration.id,
-        newEmail: "bound-new@example.com",
+        newEmail: "bound-new@gmail.com",
         authority: { kind: "event_manager", actorUserId: owner.registration.user_id },
         confirmationTtlHours: 24,
         signingSecret,
@@ -403,7 +403,7 @@ describe("Registration Email Change", () => {
       expect(other.confirmationToken).not.toBeNull();
       expect(
         await getRegistrationConfirmationInfo(env.DB, `event-${ownerEventId.slice(0, 8)}`, owner.registration.id),
-      ).toMatchObject({ email: "bound-new@example.com" });
+      ).toMatchObject({ email: "bound-new@gmail.com" });
       expect(
         await getRegistrationConfirmationInfo(env.DB, `event-${otherEventId.slice(0, 8)}`, other.registration.id),
       ).toMatchObject({ email: "bound-original@example.com" });
@@ -424,7 +424,7 @@ describe("Registration Email Change", () => {
         ]),
       ).toEqual({
         email: "bound-original@example.com",
-        pending_email: "bound-new@example.com",
+        pending_email: "bound-new@gmail.com",
         pending_email_change_registration_id: owner.registration.id,
       });
 
@@ -497,7 +497,7 @@ describe("Registration Email Change", () => {
           user.id,
         ]),
       ).toEqual({
-        email: "bound-new@example.com",
+        email: "bound-new@gmail.com",
         pending_email: null,
         pending_email_change_registration_id: null,
       });

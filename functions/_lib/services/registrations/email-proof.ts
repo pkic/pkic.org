@@ -38,6 +38,7 @@ import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
 import type { EventRecord } from "../events";
 import { registrationPageUrl } from "../frontend-links";
+import { workEmailDomain } from "../../email-domains/classification";
 
 const PURPOSE = "registration_email_verify";
 
@@ -108,7 +109,7 @@ export async function startRegistrationEmailProof(
   const payload: RegistrationEmailProof = {
     eventId: input.event.id,
     email: input.body.email,
-    unaffiliatedAttestation: input.body.unaffiliatedAttestation,
+    unaffiliatedAttestation: input.body.unaffiliatedAttestation && !workEmailDomain(input.body.email),
   };
   const expiresAt = Math.floor(Date.now() / 1000) + input.ttlSeconds;
   // Delivery signs this marker with the Worker secret; D1 never stores a usable link.

@@ -17,12 +17,37 @@ export async function planRegistrationAffiliation(
   at: string,
 ) {
   const pendingClaim = basis.claims.find((claim) => claim.applicationId);
-  if (!pendingClaim)
-    return {
-      ...(await planVerifiedAffiliation(db, authority, input, basis, at)),
-      outcome: "linked" as const,
-      prepareReview: undefined,
-    };
+  if (!pendingClaim) {
+    try {
+      return {
+        ...(await planVerifiedAffiliation(db, authority, input, basis, at)),
+        outcome: "linked" as const,
+        prepareReview: undefined,
+      };
+    } catch (error) {
+      if (
+        !(error instanceof AppError) ||
+        error.code !== "ORGANIZATION_AFFILIATION_REVIEW_REQUIRED" ||
+        !input.organizationName
+      )
+        throw error;
+      const organizationName = input.organizationName;
+      return {
+        identityId: null,
+        representation: { organizationName: null, jobTitle: null },
+        outcome: "review_required" as const,
+        statements: [prepareAuthorizationGuard(db, authority.proofEvidence)],
+        prepareReview: (registrationId: string) =>
+          prepareRegistrationOrganizationReview(db, {
+            registrationId,
+            userId: authority.userId,
+            organization: { name: organizationName, jobTitle: input.jobTitle },
+            domain: basis.domain,
+            at,
+          }),
+      };
+    }
+  }
   if (input.organizationId !== null || !input.organizationName)
     throw new AppError(422, "ORGANIZATION_NAME_REQUIRED", "Provide the organization name for review.");
   const organizationName = input.organizationName;

@@ -36,7 +36,9 @@ export function RegistrationIdentityField({
   presentation = "summary",
   onUpdated,
   personalAdvisory = true,
+  organizationOnly = false,
 }: {
+  organizationOnly?: boolean;
   /** The registration waiting-list advisory on a personal identity; off where no waiting list applies. */
   personalAdvisory?: boolean;
   preferred?: SessionActingIdentity | null;
@@ -111,7 +113,7 @@ export function RegistrationIdentityField({
               title="Change representation"
               closeLabel="Close change representation"
               confirmLabel="Use representation"
-              confirmDisabled={!draft}
+              confirmDisabled={!draft || (organizationOnly && !draft.organizationId)}
               onCancel={closeChoosing}
               onConfirm={() => {
                 setSelected(draft);
@@ -124,6 +126,7 @@ export function RegistrationIdentityField({
                 preferred={draft}
                 available={identities}
                 userId={userId}
+                organizationOnly={organizationOnly}
                 onSelect={setDraft}
                 onUpdated={(identity) => {
                   setIdentities((current) => current.map((item) => (item.id === identity.id ? identity : item)));
@@ -142,6 +145,7 @@ export function RegistrationIdentityField({
   return (
     <div class="pk-stack pk-stack--snug">
       <RepresentationSelect
+        organizationOnly={organizationOnly}
         value={selected}
         onAdd={userId ? showAdding : undefined}
         onEdit={
