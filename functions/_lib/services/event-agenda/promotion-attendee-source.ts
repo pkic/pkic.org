@@ -10,6 +10,7 @@ import {
 import { sha256Hex } from "../../utils/crypto";
 import { AppError } from "../../errors";
 import { publicUserHeadshotPath } from "../user-headshot";
+/** Build an attendee kit from current registration facts and the selected published sessions. */
 export async function buildAttendeePromotionSource(basis: PromotionSourceBasis, userId: string, origin: string) {
   if (!basis.registered)
     throw new AppError(

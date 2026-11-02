@@ -29,6 +29,7 @@ interface SessionStillContent extends Omit<PromotionStillContent, "details"> {
   details: PromotionDetail[];
 }
 
+/** Compose an adaptive single-image session card with bounded secondary labels and a sponsor footer. */
 export function layoutPromotionStill(
   content: SessionStillContent,
   data: PromotionRenderData,
@@ -47,7 +48,7 @@ export function layoutPromotionStill(
   const gap = (compact ? 14 : densePanel || square ? 20 : 24) * scale;
   const sponsorGroups = (data.sponsors ?? []).filter((group) => group.sponsors.length);
   const sponsorCount = sponsorGroups.reduce((count, group) => count + group.sponsors.length, 0);
-  // The strip carries the leading tiers; the complete sponsor boards retain every eligible logo.
+  // Single-image cards carry the leading tiers; the carousel sponsor boards retain every eligible logo.
   const sponsors = composition.panels.includes("sponsors")
     ? (sponsorCount > 6 ? sponsorGroups.slice(0, 2) : sponsorGroups).flatMap((group) => group.sponsors).slice(0, 6)
     : [];

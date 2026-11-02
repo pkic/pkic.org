@@ -1,3 +1,6 @@
+import { defaultEventPromotionDesign } from "../../assets/shared/schemas/event-promotion-design";
+import { PQC_PROMOTION_ARTWORK } from "../../assets/shared/promotion-pqc-artwork";
+import { badgeTemplateVectorAsset } from "../../assets/shared/badge-template-policy";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -318,4 +321,16 @@ describe("PQC conference badge preset", () => {
       expect(snapshot).not.toMatch(/<style|\bclass=|\bstyle=/);
     }
   });
+});
+
+it("uses promotion dots only for the canonical PQC texture and preserves custom or absent artwork", () => {
+  expect(defaultEventPromotionDesign("Example", template).assets.texture).toEqual(PQC_PROMOTION_ARTWORK.roundDots);
+  const custom = badgeTemplateVectorAsset(sponsorSvg("#123456"));
+  expect(
+    defaultEventPromotionDesign("Example", { ...template, assets: { ...template.assets, dot_grid: custom } }).assets
+      .texture,
+  ).toEqual(custom);
+  const withoutTexture = { ...template, assets: { ...template.assets } };
+  delete withoutTexture.assets.dot_grid;
+  expect(defaultEventPromotionDesign("Example", withoutTexture).assets.texture).toBeUndefined();
 });

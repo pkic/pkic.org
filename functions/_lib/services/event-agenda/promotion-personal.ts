@@ -32,6 +32,7 @@ export interface PersonalPromotionData {
   logoDataUrl?: string;
   measure?: PromotionMeasure;
 }
+/** Render personal sharing artwork from the canonical event and identity projection. */
 export function renderPersonalPromotionSvg(data: PersonalPromotionData): string {
   const person = {
     userId: "participant",

@@ -993,3 +993,39 @@ describe("promotion exports", () => {
     if (process.env.PKIC_PROMOTION_REVIEW_PDF) writeFileSync(process.env.PKIC_PROMOTION_REVIEW_PDF, bytes);
   });
 });
+
+it.each([1, 2])("keeps the featured speaker out of long-credit fallback pages with %i remaining panelists", (count) => {
+  const primary = {
+    userId: "featured",
+    displayName: "Featured Reader",
+    affiliation: "Director",
+    role: "speaker",
+    photoUrl: null,
+  };
+  const remaining = Array.from({ length: count }, (_, index) => ({
+    userId: `remaining-${index}`,
+    displayName: `Panelist ${index}`,
+    affiliation: "Long organization credit ".repeat(100),
+    role: "speaker",
+    photoUrl: null,
+  }));
+  const pages = buildPromotionPages(
+    {
+      ...data,
+      actorId: primary.userId,
+      people: [primary, ...remaining],
+      composition: { ...defaultPromotionComposition(), panels: ["speakers"] },
+    },
+    "carousel",
+  );
+  expect(pages[0]!.title).toBe("Featured speaker");
+  const lines = pages.flatMap((page) => page.texts.map((line) => line.text));
+  expect(lines.filter((line) => line === primary.displayName)).toHaveLength(1);
+  for (const person of remaining) expect(lines.filter((line) => line === person.displayName)).toHaveLength(1);
+  expect(
+    pages
+      .slice(1)
+      .map((page) => page.texts.map((line) => line.text).join(" "))
+      .join(" "),
+  ).toContain("Long organization credit");
+});

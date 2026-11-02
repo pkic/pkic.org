@@ -84,6 +84,7 @@ function getFontBuffers(origin: string, env: Pick<Env, "ASSETS" | "ASSETS_PUBLIC
   return fontBuffersCache;
 }
 
+/** Load a canonical profile photo and normalize it into a bounded raster the SVG renderer can decode. */
 export async function loadValidatedHeadshotDataUrl(
   r2Key: string | null,
   env: Pick<Env, "SPEAKER_UPLOADS_BUCKET" | "ASSETS_BUCKET" | "IMAGES">,

@@ -387,6 +387,7 @@ export function buildPromotionPages(
       }
     }
     if (panel === "speakers" && data.audience !== "attendee" && people.length) {
+      let panelPeople = people;
       if (format === "carousel") {
         const featured = layoutPromotionFeaturedSpeaker(people, data, add, measure, scale, reservedRight);
         if (featured) {
@@ -394,6 +395,7 @@ export function buildPromotionPages(
           if (previous && composition.panels[0] === "cover")
             previous.pictures.push({ ...featured.picture, x: width + featured.picture.x });
           const remaining = people.filter((person) => person.userId !== featured.primary.userId);
+          panelPeople = remaining;
           if (
             !remaining.length ||
             layoutPromotionPanel(
@@ -410,15 +412,15 @@ export function buildPromotionPages(
         }
       }
 
-      if (people.length > 1) {
+      if (panelPeople.length > 1) {
         if (
           format === "carousel" &&
-          layoutPromotionPanel(people, data.portraits ?? {}, add, measure, scale, reservedRight)
+          layoutPromotionPanel(panelPeople, data.portraits ?? {}, add, measure, scale, reservedRight)
         )
           continue;
         flow(
           "Meet the speakers",
-          people.flatMap((person) => [
+          panelPeople.flatMap((person) => [
             {
               text: person.displayName,
               size: 40 * scale,
@@ -434,10 +436,10 @@ export function buildPromotionPages(
               indent: data.portraits?.[person.userId] ? 150 * scale : 0,
             },
           ]),
-          selected[0] === "cover" && data.portraits?.[people[0]!.userId] ? 430 * scale : 210 * scale,
+          selected[0] === "cover" && data.portraits?.[panelPeople[0]!.userId] ? 430 * scale : 210 * scale,
         );
       } else {
-        const person = people[0]!,
+        const person = panelPeople[0]!,
           photo = data.portraits?.[person.userId];
         const page = flow(
           "Meet the speaker",
@@ -540,11 +542,7 @@ export function buildPromotionPages(
       layoutPromotionRegistrationCard(page, data.registrationUrl, scale, reservedRight);
       page.qr = composition.qrCode;
     }
-    if (
-      panel === "sponsors" &&
-      data.sponsors?.some((group) => group.sponsors.length) &&
-      (format === "carousel" || data.sponsors.reduce((count, group) => count + group.sponsors.length, 0) > 6)
-    ) {
+    if (panel === "sponsors" && data.sponsors?.some((group) => group.sponsors.length)) {
       layoutPromotionSponsors(data.sponsors, add, put, scale, sponsorBottom);
     }
   }

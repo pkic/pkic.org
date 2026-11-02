@@ -32,6 +32,7 @@ export function promotionFontMeasure(
   });
 }
 
+/** Wrap complete text to measured line widths, splitting an oversized word only when necessary. */
 export function promotionMeasuredLines(text: string, width: number, measure: (text: string) => number): string[] {
   const result: string[] = [];
   let line = "";

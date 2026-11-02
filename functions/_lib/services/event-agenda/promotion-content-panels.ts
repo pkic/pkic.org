@@ -195,6 +195,7 @@ export function layoutPromotionRegistrationCard(
   });
 }
 
+/** Fit the cover title, event label, and complete metadata fields beside the overlapping portrait. */
 export function layoutPromotionCover(
   title: string,
   eyebrow: string,

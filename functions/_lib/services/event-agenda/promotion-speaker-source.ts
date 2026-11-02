@@ -11,6 +11,7 @@ import {
   promotionKitSchema,
 } from "../../../../assets/shared/schemas/event-promotion-kit";
 import { AppError } from "../../errors";
+/** Project current speaker identities and approved copy into a personally attributed promotion kit. */
 export async function buildSpeakerPromotionSource(basis: PromotionSourceBasis, actorId: string, origin: string) {
   const { agenda, code, personal, visual } = basis;
   const occurrenceId = basis.occurrenceId!;
