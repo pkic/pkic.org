@@ -504,6 +504,7 @@ describe("a person's own email addresses", () => {
       signingSecret,
     });
     await getRegistrationByManageToken(env.DB, created.manageToken, signingSecret);
+    if (!created.confirmationToken) throw new Error("Expected a registration confirmation token");
     const confirmed = await confirmWorkRegistration(environment, created.confirmationToken);
     expect(confirmed.status, await confirmed.clone().text()).toBe(200);
     await expect(getRegistrationByManageToken(env.DB, created.manageToken, signingSecret)).rejects.toThrow();
