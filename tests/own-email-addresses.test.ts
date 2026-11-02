@@ -4,6 +4,7 @@
  * organization identity uses. A verified work address joins the organization
  * its domain belongs to through the shared rule.
  */
+import { confirmWorkRegistration } from "./helpers/registration-confirmation";
 import { env } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { affiliationOfferResponseSchema } from "../assets/shared/schemas/affiliation-offer";
@@ -493,7 +494,7 @@ describe("a person's own email addresses", () => {
 
   it("does not preserve an unverified creator's manage link after the mailbox owner confirms", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
-    const bootstrap = await findOrCreateUser(env.DB, { email: "victim.confirmation@gmail.com" });
+    const bootstrap = await findOrCreateUser(env.DB, { email: "victim@confirmation.example" });
     const signingSecret = environment.INTERNAL_SIGNING_SECRET!;
     const created = await createScheduledRegistration(env.DB, {
       event: { id: eventId },
@@ -503,11 +504,7 @@ describe("a person's own email addresses", () => {
       signingSecret,
     });
     await getRegistrationByManageToken(env.DB, created.manageToken, signingSecret);
-    const confirmed = await callApi(environment, "/api/v1/events/pqc-2026/registrations/confirm-email", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ token: created.confirmationToken }),
-    });
+    const confirmed = await confirmWorkRegistration(environment, created.confirmationToken);
     expect(confirmed.status, await confirmed.clone().text()).toBe(200);
     await expect(getRegistrationByManageToken(env.DB, created.manageToken, signingSecret)).rejects.toThrow();
   });

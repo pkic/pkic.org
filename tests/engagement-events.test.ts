@@ -1,3 +1,4 @@
+import { confirmWorkRegistration } from "./helpers/registration-confirmation";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
@@ -24,8 +25,7 @@ describe("engagement events", () => {
       body: JSON.stringify({
         firstName: "Jamie",
         lastName: "Example",
-        email: "jamie.engagement@gmail.com",
-        unaffiliatedAttestation: true,
+        email: "jamie@pkic.org",
         dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
         sourceType: "direct",
         consents: [
@@ -56,10 +56,7 @@ describe("engagement events", () => {
     const token = new URL(confirmationUrl).searchParams.get("token");
     expect(token).toBeTruthy();
 
-    const confirmResponse = await callApi(
-      env,
-      `/api/v1/events/pqc-2026/registrations/confirm-email?token=${encodeURIComponent(token as string)}`,
-    );
+    const confirmResponse = await confirmWorkRegistration(env, token as string);
 
     expect(confirmResponse.status).toBe(200);
 

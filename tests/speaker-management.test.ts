@@ -1,3 +1,4 @@
+import { confirmWorkRegistration } from "./helpers/registration-confirmation";
 import { validateEmailDeliveryGuard } from "../functions/_lib/email/delivery-guard";
 import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
 import { addRepresentative, seedOrganizationAggregate, insertOrganization } from "./helpers/membership";
@@ -2802,8 +2803,7 @@ describe("speaker nomination by attendees", () => {
           body: JSON.stringify({
             firstName: "Attendee",
             lastName: "Nominator",
-            email: "nominator@gmail.com",
-            unaffiliatedAttestation: true,
+            email: "nominator@pkic.org",
             dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
             sourceType: "direct",
             consents: [
@@ -2826,15 +2826,7 @@ describe("speaker nomination by attendees", () => {
     const confirmUrl = new URL(emailPayload.confirmationUrl);
     const confirmToken = confirmUrl.searchParams.get("token") as string;
 
-    const confirmResponse = await mountedSpeakerRoute(
-      createContext(
-        env,
-        new Request(
-          `https://app.test/api/v1/events/pqc-2026/registrations/confirm-email?token=${encodeURIComponent(confirmToken)}`,
-        ),
-        { eventSlug: "pqc-2026" },
-      ),
-    );
+    const confirmResponse = await confirmWorkRegistration(env, confirmToken);
     expect(confirmResponse.status, await confirmResponse.clone().text()).toBe(200);
     const confirmPayload = (await confirmResponse.json()) as { manageToken: string };
     return confirmPayload.manageToken;
