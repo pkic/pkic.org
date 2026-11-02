@@ -219,7 +219,7 @@ export function ParticipantSpeaker({
           <div class="pk-stack">
             <p>{data.profile.email}</p>
             {editable && !data.profile.headshotUrl && (
-              <p>Add a photo to help us promote your session. A photo is optional.</p>
+              <p>Please upload a headshot so attendees can recognize you and we can promote your session.</p>
             )}
             {(editable || data.profile.headshotUrl) && (
               <HeadshotTile

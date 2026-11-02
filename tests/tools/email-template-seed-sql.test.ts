@@ -235,6 +235,11 @@ describe("buildTemplateSqlStatements", () => {
       expect(rendered.text.includes("confirm or decline")).toBe(requiresConfirmation);
     },
   );
+  it.each([true, false])("asks for a headshot only when one is missing: %s", async (hasHeadshot) => {
+    const reminder = DEFAULT_TEMPLATES.find((item) => item.key === "speaker_profile_reminder")!;
+    const rendered = await renderEmail(reminder.content, { hasHeadshot }, DEFAULT_LAYOUT_HTML);
+    expect(rendered.text.includes("Please upload a headshot")).toBe(!hasHeadshot);
+  });
   it.each([
     ["accepted", "has been accepted"],
     ["waitlisted", "on the waitlist"],
