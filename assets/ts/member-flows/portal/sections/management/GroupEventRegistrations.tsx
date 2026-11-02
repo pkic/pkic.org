@@ -85,6 +85,11 @@ export function GroupEventRegistrations({
     ...new Set((days.data?.days ?? []).flatMap((day) => day.attendanceOptions.map((option) => option.value))),
   ];
   const registrationEndpoint = `/api/v1/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(eventId)}/registrations`;
+  const selectedExportUrl = registrationRosterExportUrl(
+    `${registrationEndpoint}/exports`,
+    query,
+    selection.selectedRows.map((row) => row.id),
+  );
 
   return (
     <div class="pk-stack pk-stack--snug">
@@ -117,11 +122,8 @@ export function GroupEventRegistrations({
               {selection.selectedRows.length > 0 && (
                 <DownloadAction
                   label="Download selected registrations (CSV)"
-                  href={registrationRosterExportUrl(
-                    `${registrationEndpoint}/exports`,
-                    query,
-                    selection.selectedRows.map((row) => row.id),
-                  )}
+                  href={selectedExportUrl ?? ""}
+                  disabled={selectedExportUrl === null}
                 />
               )}
             </BulkBar>

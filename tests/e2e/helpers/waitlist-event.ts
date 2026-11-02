@@ -13,7 +13,8 @@ import {
 } from "../../../assets/shared/schemas/group-events";
 
 /** Create the public capacity fixture through the same contracts and routes as the portal. */
-export async function createPortalWaitlistEvent(page: Page, slug: string) {
+export async function createPortalWaitlistEvent(page: Page, slug: string, dayDates?: readonly string[]) {
+  const dates = dayDates ?? ["2026-12-01", "2026-12-02", "2026-12-03"];
   const groupId = "20000000-0000-4000-8000-000000000001";
   const base = `/api/v1/groups/${groupId}/events`;
   async function mutate<Request extends z.ZodType, Response extends z.ZodType>(
@@ -42,8 +43,8 @@ export async function createPortalWaitlistEvent(page: Page, slug: string) {
       timezone: "Europe/Amsterdam",
       // An hour after the seeded conference opens: an equal start would tie, and the id tie-break would then
       // randomly put this fixture ahead of the conference in "next event" listings such as portal Home.
-      startsAt: dateTimeLocalToIso("2026-12-01T10:00", "Europe/Amsterdam"),
-      endsAt: dateTimeLocalToIso("2026-12-03T17:00", "Europe/Amsterdam"),
+      startsAt: dateTimeLocalToIso(`${dates[0]}T${dayDates ? "00:00" : "10:00"}`, "Europe/Amsterdam"),
+      endsAt: dateTimeLocalToIso(`${dates.at(-1)}T${dayDates ? "23:59" : "17:00"}`, "Europe/Amsterdam"),
       profileKey: "workshop",
       registrationPolicy: "no_registration",
       visibility: "public",
@@ -76,9 +77,9 @@ export async function createPortalWaitlistEvent(page: Page, slug: string) {
     {
       expectedUpdatedAt: terms.eventUpdatedAt,
       configuration: {
-        days: ["Tuesday", "Wednesday", "Thursday"].map((label, index) => ({
-          date: `2026-12-0${index + 1}`,
-          label: `${label} ${index + 1} December 2026`,
+        days: dates.map((date, index) => ({
+          date,
+          label: dayDates ? "Scanner day" : `${["Tuesday", "Wednesday", "Thursday"][index]} ${index + 1} December 2026`,
           startTime: "10:00",
           endTime: "17:00",
           sortOrder: index,

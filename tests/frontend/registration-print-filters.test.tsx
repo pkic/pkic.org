@@ -6,6 +6,7 @@ import { groupEventRegistrationExportQuerySchema } from "../../assets/shared/sch
 import { eventAttendanceRegistrationsQuerySchema } from "../../assets/shared/schemas/event-registrations";
 import { dateTimeLocalToIso, viewerTimeZone } from "../../assets/shared/timezone";
 import { GroupEventRegistrations } from "../../assets/ts/member-flows/portal/sections/management/GroupEventRegistrations";
+import { registrationRosterExportUrl } from "../../assets/ts/components/event-registrations/registration-roster-export";
 import { openColumnFilterMenu } from "./helpers/column-menu";
 import { menuItemNamed } from "./helpers/row-actions";
 import { controlFor } from "./helpers/labeled-control";
@@ -76,4 +77,27 @@ it("applies a local start time through the shared contract and includes that UTC
   const exported = groupEventRegistrationExportQuerySchema.parse(Object.fromEntries(new URL(link.href).searchParams));
   expect(exported.created_since).toBe(query.created_since);
   expect(location.hash).toContain("registrations.f.created_since");
+});
+
+it("keeps the roster available and disables CSV export for an invalid restored filter", async () => {
+  history.replaceState({}, "", "/#/registrations?registrations.f.created_since=yesterday");
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => json({ error: { message: "Invalid start date" } }, 400)),
+  );
+  const container = mount(<GroupEventRegistrations groupId={GROUP_ID} eventId={EVENT_ID} canManage />);
+  await settle();
+  const download = container.querySelector<HTMLButtonElement>('button[aria-label="Download registrations (CSV)"]');
+  expect(download?.disabled).toBe(true);
+  expect(container.querySelector('a[aria-label="Download registrations (CSV)"]')).toBeNull();
+  expect(container.querySelector('input[type="search"]')).not.toBeNull();
+});
+
+it.each<{ query: Record<string, string>; ids?: string[] }>([
+  { query: { created_since: "yesterday" }, ids: undefined },
+  { query: { status: "unknown" }, ids: undefined },
+  { query: {}, ids: ["not-a-registration-id"] },
+  { query: {}, ids: [] },
+])("refuses invalid CSV scopes instead of exporting an unfiltered population: %j", ({ query, ids }) => {
+  expect(registrationRosterExportUrl("/registrations/exports", query, ids)).toBeNull();
 });
