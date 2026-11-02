@@ -26,7 +26,7 @@ import type { Env } from "../functions/_lib/types";
 import { LAST_SIGN_IN_METHOD, LAST_SIGN_IN_METHOD_MESSAGE } from "../assets/shared/auth-errors";
 import { activateTemplateVersion, createTemplateVersion } from "../functions/_lib/email/templates";
 import { findOrCreateUser } from "../functions/_lib/services/users";
-import { createRegistration, changeRegistrationEmail } from "../functions/_lib/services/registrations";
+import { changeRegistrationEmail } from "../functions/_lib/services/registrations";
 import { getRegistrationByManageToken } from "../functions/_lib/services/registrations/queries";
 import { nowIso } from "../functions/_lib/utils/time";
 import { callApi } from "./helpers/app";
@@ -35,6 +35,7 @@ import { createTestRateLimiter, deliveredEmailPayload, queryAll, seedEventAndAdm
 import { insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
 import { gateNextBatch } from "./helpers/d1-batch-gate";
 import { resetDb } from "./helpers/reset-db";
+import { createScheduledRegistration } from "./helpers/scheduled-registration";
 
 let environment: Env;
 let tokenCounter = 0;
@@ -162,7 +163,7 @@ describe("a person's own email addresses", () => {
         source.id,
       ),
     ]);
-    const registration = await createRegistration(env.DB, {
+    const registration = await createScheduledRegistration(env.DB, {
       event: { id: eventId },
       userId: source.id,
       sourceType: "web",
@@ -184,7 +185,7 @@ describe("a person's own email addresses", () => {
         source.id,
       ),
     ]);
-    const ownRegistration = await createRegistration(env.DB, {
+    const ownRegistration = await createScheduledRegistration(env.DB, {
       event: { id: eventId },
       userId: account.userId,
       sourceType: "web",
@@ -462,7 +463,7 @@ describe("a person's own email addresses", () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const bootstrap = await findOrCreateUser(env.DB, { email: "victim@original.example" });
     const signingSecret = environment.INTERNAL_SIGNING_SECRET!;
-    const created = await createRegistration(env.DB, {
+    const created = await createScheduledRegistration(env.DB, {
       event: { id: eventId },
       userId: bootstrap.id,
       sourceType: "web",
@@ -494,7 +495,7 @@ describe("a person's own email addresses", () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const bootstrap = await findOrCreateUser(env.DB, { email: "victim@confirmation.example" });
     const signingSecret = environment.INTERNAL_SIGNING_SECRET!;
-    const created = await createRegistration(env.DB, {
+    const created = await createScheduledRegistration(env.DB, {
       event: { id: eventId },
       userId: bootstrap.id,
       sourceType: "web",

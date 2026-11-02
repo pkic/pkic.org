@@ -121,7 +121,7 @@ function installApi(
         new Response(JSON.stringify(value), { status: 200, headers: { "content-type": "application/json" } });
       if (method === "GET" && url.pathname === ENDPOINT) return json(read);
       if (method === "GET" && url.pathname.endsWith("/forms/placements/event_registration")) {
-        return json(options.forms ?? FORMS);
+        return json({ ...(options.forms ?? FORMS), eventDays: read.eventDays });
       }
       if (method === "PATCH" && url.pathname === ENDPOINT && options.refusePatch) {
         return new Response(JSON.stringify(options.refusePatch), {
@@ -307,7 +307,11 @@ describe("ParticipantRegistration", () => {
     await settle();
 
     const patch = requests.find(({ method }) => method === "PATCH");
-    expect(registrationManageSchema.parse(patch?.body)).toMatchObject({ action: "update", lastName: "Byron" });
+    expect(registrationManageSchema.parse(patch?.body)).toMatchObject({
+      action: "update",
+      lastName: "Byron",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
+    });
     await vi.waitFor(() => expect(container.textContent).toContain("Registration updated."));
     expect(container.querySelectorAll("input, select, textarea")).toHaveLength(0);
   });
