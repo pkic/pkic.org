@@ -60,6 +60,7 @@ import { setSpeakerPresentationReminderPreference } from "../functions/_lib/serv
 import { createRegistration, confirmRegistrationByToken } from "../functions/_lib/services/registrations";
 import { presentationUploadRequest } from "../assets/shared/presentation-upload";
 import { createMemberSession } from "./helpers/auth";
+import { seedSessionAttendanceDays } from "./helpers/session-attendance-days";
 
 function mountedSpeakerRoute(c: any): Promise<Response> {
   return app.fetch(c.req.raw, c.env, { passThroughOnException: () => {}, waitUntil: () => {} } as any);
@@ -2789,7 +2790,8 @@ describe("speaker nomination by attendees", () => {
   });
 
   async function registerAndConfirmAttendee(): Promise<string> {
-    await setupWorkflow();
+    const { eventId } = await setupWorkflow();
+    await seedSessionAttendanceDays(env.DB, eventId, ["2026-12-01"]);
 
     const regResponse = await mountedSpeakerRoute(
       createContext(
@@ -2801,7 +2803,7 @@ describe("speaker nomination by attendees", () => {
             firstName: "Attendee",
             lastName: "Nominator",
             email: "nominator@pkic.org",
-            attendanceType: "in_person",
+            dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
             sourceType: "direct",
             consents: [
               { termKey: "privacy-policy", version: "v1" },
@@ -2812,7 +2814,7 @@ describe("speaker nomination by attendees", () => {
         { eventSlug: "pqc-2026" },
       ),
     );
-    expect(regResponse.status).toBe(200);
+    expect(regResponse.status, await regResponse.clone().text()).toBe(200);
     await regResponse.json();
 
     const outbox = await queryAll<{ payload_json: string }>(
@@ -2838,6 +2840,7 @@ describe("speaker nomination by attendees", () => {
 
   async function registerAndConfirmAttendeeDirect(): Promise<string> {
     const { eventId } = await setupWorkflow();
+    await seedSessionAttendanceDays(env.DB, eventId, ["2026-12-01"]);
     const attendee = await findOrCreateUser(env.DB, {
       email: `nominator-${crypto.randomUUID()}@pkic.org`,
       firstName: "Attendee",
@@ -2846,6 +2849,7 @@ describe("speaker nomination by attendees", () => {
     const created = await createRegistration(env.DB, {
       event: { id: eventId },
       userId: attendee.id,
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
       signingSecret: env.INTERNAL_SIGNING_SECRET!,

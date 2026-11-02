@@ -1165,50 +1165,114 @@ describe("Participation capacity and private calendar lifecycle", () => {
     const feed = await callApi(env, new URL(link.url).pathname);
     expect(feed.status).toBe(200);
   });
-  it("delivers an eligible reminder through the real outbox provider path", async () => {
-    await setSessionParticipation(env.DB, eventId, occurrenceId, firstUser, {
-      action: "reserve",
-      attendanceMode: "physical",
-    });
-    await updateAgendaCalendarSettings(env.DB, eventId, firstUser, {
-      includeTentative: false,
-      reminderEnabled: true,
-      reminderMinutes: 10,
-    });
-    await runAgendaSessionReminders(env.DB);
-    for (const key of [
-      "agenda_session_reminder",
-      "email_layout",
-      "partial_reg_details",
-      "partial_sponsors_block",
-      "partial_about_pkic",
-      "partial_donation_request",
-    ]) {
-      const template = await createTemplateVersion(env.DB, {
-        templateKey: key,
-        content:
-          key === "email_layout"
-            ? "{{{body_html}}}"
-            : key === "agenda_session_reminder"
-              ? "Your session {{sessionTitle}} starts at {{sessionStart}}."
-              : "Details",
-        createdByUserId: admin,
-        subjectTemplate: "Details",
+  it.each([
+    ["in_person", undefined, "physical"],
+    ["virtual", undefined, "remote"],
+    ["conference_seat", "physical", "physical"],
+    ["stream_access", "remote", "remote"],
+    ["in_person", "remote", "remote"],
+  ] as const)(
+    "delivers an eligible reminder through the real outbox provider path (%s, %s, %s)",
+    async (value, accessMode, attendanceMode) => {
+      await env.DB.batch([
+        env.DB.prepare("UPDATE event_days SET attendance_options_json=? WHERE event_id=?").bind(
+          JSON.stringify([{ value, label: "Configured attendance", accessMode }]),
+          eventId,
+        ),
+        env.DB.prepare(`UPDATE registration_day_attendance SET attendance_type=?
+        WHERE registration_id=(SELECT id FROM registrations WHERE event_id=? AND user_id=?)`).bind(
+          value,
+          eventId,
+          firstUser,
+        ),
+      ]);
+      await setSessionParticipation(env.DB, eventId, occurrenceId, firstUser, {
+        action: "reserve",
+        attendanceMode,
       });
-      await activateTemplateVersion(env.DB, { templateKey: key, version: template.version });
-    }
-    const row = await env.DB.prepare("SELECT id FROM email_outbox WHERE template_key='agenda_session_reminder'").first<{
-      id: string;
-    }>();
-    const provider = vi.fn().mockResolvedValue(new Response(null, { status: 202 }));
-    vi.stubGlobal("fetch", provider);
-    await processSelectedOutbox(env.DB, env as unknown as Env, [row!.id]);
-    const delivery = await env.DB.prepare("SELECT status,last_error FROM email_outbox WHERE id=?")
-      .bind(row!.id)
-      .first();
-    expect(delivery, JSON.stringify(delivery)).toMatchObject({ status: "sent" });
-    expect(provider).toHaveBeenCalledTimes(1);
-  });
+      await updateAgendaCalendarSettings(env.DB, eventId, firstUser, {
+        includeTentative: false,
+        reminderEnabled: true,
+        reminderMinutes: 10,
+      });
+      await runAgendaSessionReminders(env.DB);
+      for (const key of [
+        "agenda_session_reminder",
+        "email_layout",
+        "partial_reg_details",
+        "partial_sponsors_block",
+        "partial_about_pkic",
+        "partial_donation_request",
+      ]) {
+        const template = await createTemplateVersion(env.DB, {
+          templateKey: key,
+          content:
+            key === "email_layout"
+              ? "{{{body_html}}}"
+              : key === "agenda_session_reminder"
+                ? "Your session {{sessionTitle}} starts at {{sessionStart}}."
+                : "Details",
+          createdByUserId: admin,
+          subjectTemplate: "Details",
+        });
+        await activateTemplateVersion(env.DB, { templateKey: key, version: template.version });
+      }
+      const row = await env.DB.prepare(
+        "SELECT id FROM email_outbox WHERE template_key='agenda_session_reminder'",
+      ).first<{
+        id: string;
+      }>();
+      const provider = vi.fn().mockResolvedValue(new Response(null, { status: 202 }));
+      vi.stubGlobal("fetch", provider);
+      await processSelectedOutbox(env.DB, env as unknown as Env, [row!.id]);
+      const delivery = await env.DB.prepare("SELECT status,last_error FROM email_outbox WHERE id=?")
+        .bind(row!.id)
+        .first();
+      expect(delivery, JSON.stringify(delivery)).toMatchObject({ status: "sent" });
+      expect(provider).toHaveBeenCalledTimes(1);
+    },
+  );
+  it.each(["waiting", "offered", "expired", "accepted", "on_demand", "no_selection"] as const)(
+    "rechecks %s day attendance before delivering a queued reminder",
+    async (status) => {
+      await setSessionParticipation(env.DB, eventId, occurrenceId, firstUser, {
+        action: "reserve",
+        attendanceMode: "physical",
+      });
+      await updateAgendaCalendarSettings(env.DB, eventId, firstUser, {
+        includeTentative: false,
+        reminderEnabled: true,
+        reminderMinutes: 10,
+      });
+      expect((await runAgendaSessionReminders(env.DB)).queued).toBe(1);
+      const reminder = await env.DB.prepare(
+        "SELECT payload_json FROM email_outbox WHERE template_key='agenda_session_reminder'",
+      ).first<{ payload_json: string }>();
+      if (status === "on_demand") {
+        await env.DB.prepare(`UPDATE registration_day_attendance SET attendance_type='on_demand'
+          WHERE registration_id=(SELECT id FROM registrations WHERE event_id=? AND user_id=?)`)
+          .bind(eventId, firstUser)
+          .run();
+      } else if (status === "no_selection") {
+        await env.DB.prepare(`DELETE FROM registration_day_attendance
+          WHERE registration_id=(SELECT id FROM registrations WHERE event_id=? AND user_id=?)`)
+          .bind(eventId, firstUser)
+          .run();
+      } else {
+        const now = new Date().toISOString();
+        await env.DB.prepare(`INSERT INTO event_day_waitlist_entries
+        (id,event_id,event_day_id,registration_id,user_id,priority_lane,status,position,created_at,updated_at)
+        SELECT ?,r.event_id,attendance.event_day_id,r.id,r.user_id,'general',?,1,?,?
+        FROM registrations r JOIN registration_day_attendance attendance ON attendance.registration_id=r.id
+        WHERE r.event_id=? AND r.user_id=?`)
+          .bind(crypto.randomUUID(), status, now, now, eventId, firstUser)
+          .run();
+      }
+      const validation = validateEmailDeliveryGuard(env.DB, JSON.parse(reminder!.payload_json));
+      if (status === "accepted") await expect(validation).resolves.toBeUndefined();
+      else await expect(validation).rejects.toThrow("no longer deliverable");
+    },
+  );
   it("suppresses queued reminders after a live registration cancellation", async () => {
     await setSessionParticipation(env.DB, eventId, occurrenceId, firstUser, {
       attendanceMode: "physical",

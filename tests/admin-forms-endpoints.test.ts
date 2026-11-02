@@ -5,6 +5,7 @@ import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { nowIso } from "../functions/_lib/utils/time";
+import { seedSessionAttendanceDays } from "./helpers/session-attendance-days";
 import { createManagedForm, updateManagedForm } from "../functions/_lib/services/forms";
 import { buildFormsPageQuery } from "../functions/_lib/services/forms/list";
 import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
@@ -706,6 +707,11 @@ describe("canonical Forms resource endpoints", () => {
         timestamp,
         timestamp,
       )
+      .run();
+
+    await seedSessionAttendanceDays(env.DB, eventId, ["2026-12-01"], "virtual");
+    await env.DB.prepare("UPDATE registration_day_attendance SET attendance_type='in_person' WHERE registration_id=?")
+      .bind(inPersonRegistrationId)
       .run();
 
     const proposalId = crypto.randomUUID();

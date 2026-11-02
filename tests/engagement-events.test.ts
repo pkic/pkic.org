@@ -5,6 +5,7 @@ import { deliveredEmailPayload, seedEventAndAdmin, queryAll } from "./helpers/co
 import { callApi } from "./helpers/app";
 import { recordEngagement } from "../functions/_lib/services/engagement";
 import { stubSuccessfulMxLookup } from "./helpers/mx-lookup";
+import { seedSessionAttendanceDays } from "./helpers/session-attendance-days";
 
 describe("engagement events", () => {
   beforeEach(async () => {
@@ -14,7 +15,8 @@ describe("engagement events", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it("records registration lifecycle points", async () => {
-    await seedEventAndAdmin(env.DB);
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    await seedSessionAttendanceDays(env.DB, eventId, ["2026-12-01"], "virtual");
 
     const createResponse = await callApi(env, "/api/v1/events/pqc-2026/registrations", {
       method: "POST",
@@ -23,7 +25,7 @@ describe("engagement events", () => {
         firstName: "Jamie",
         lastName: "Example",
         email: "jamie@pkic.org",
-        attendanceType: "virtual",
+        dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
         sourceType: "direct",
         consents: [
           { termKey: "privacy-policy", version: "v1" },
@@ -32,7 +34,7 @@ describe("engagement events", () => {
       }),
     });
 
-    expect(createResponse.status).toBe(200);
+    expect(createResponse.status, await createResponse.clone().text()).toBe(200);
 
     const createdActions = await queryAll<{ action_type: string }>(
       env.DB,
