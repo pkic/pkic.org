@@ -105,15 +105,26 @@ test("the registration desk switches between immediate labels and full badges", 
   page.on("request", (request) => {
     if (new URL(request.url()).pathname.endsWith("/badges/printing")) artwork.push(request.url());
   });
-  // Observe the native print handoff while keeping this synthetic test unattended.
-  await page.addInitScript(() => {
-    window.print = () => {
-      window.frameElement?.setAttribute("data-print-called", "1");
-      window.dispatchEvent(new Event("afterprint"));
-    };
-  });
   await page.setViewportSize({ width: 375, height: 844 });
   await page.goto(labelsPage);
+  // Patch the parent document after hash navigation, before an iframe can print.
+  await page.evaluate(() => {
+    const descriptor = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, "contentWindow");
+    if (!descriptor?.get) throw new Error("The browser must expose iframe windows");
+    Object.defineProperty(HTMLIFrameElement.prototype, "contentWindow", {
+      ...descriptor,
+      get(this: HTMLIFrameElement) {
+        const frameWindow = descriptor.get!.call(this) as Window | null;
+        if (frameWindow) {
+          frameWindow.print = () => {
+            this.setAttribute("data-print-called", "1");
+            frameWindow.dispatchEvent(new Event("afterprint"));
+          };
+        }
+        return frameWindow;
+      },
+    });
+  });
   await expect(page.getByRole("heading", { name: "Print badge labels", exact: true })).toBeVisible();
   await expect(
     page.getByText("Two labels per attendee. Printing opens your phone’s print dialog.", { exact: true }),

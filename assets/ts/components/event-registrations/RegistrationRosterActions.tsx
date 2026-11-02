@@ -12,7 +12,7 @@ export function RegistrationRosterActions({
   onPrintAllMatching,
 }: {
   promotionsEndpoint: string;
-  exportsEndpoint: string;
+  exportsEndpoint: string | null;
   onPromoted: () => void | Promise<void>;
   notify: (message: string, kind: "success" | "error") => void;
   onPrintAllMatching?: () => void;
@@ -49,7 +49,11 @@ export function RegistrationRosterActions({
           },
         ]}
       />
-      <DownloadAction label="Download registrations (CSV)" href={exportsEndpoint} />
+      <DownloadAction
+        label="Download registrations (CSV)"
+        href={exportsEndpoint ?? ""}
+        disabled={exportsEndpoint === null}
+      />
     </>
   );
 }

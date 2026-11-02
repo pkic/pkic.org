@@ -1,7 +1,12 @@
 import { randomUUID } from "node:crypto";
+import { instantToCalendarDate } from "../../../assets/shared/timezone";
 import { expect, chromium, type BrowserContext, type Route, type Page } from "@playwright/test";
 import { agendaRevisionSchema, agendaSnapshotSchema } from "../../../assets/shared/schemas/event-agenda";
 import { eventFormsResponseSchema } from "../../../assets/shared/schemas/forms";
+import {
+  registrationEmailProofVerifySchema,
+  registrationEmailProofVerifyResponseSchema,
+} from "../../../assets/shared/schemas/registration-email-proof";
 import {
   registrationCreateSchema,
   registrationConfirmQuerySchema,
@@ -36,7 +41,7 @@ export async function prepareScannerTermination(page: Page) {
   await signInAsE2eStaff(page, operatorEmail);
   const owner = userAuthSessionResponseSchema.parse(await (await page.request.get("/api/v1/auth/session")).json());
   const slug = `scanner-termination-${randomUUID()}`;
-  await createPortalWaitlistEvent(page, slug);
+  await createPortalWaitlistEvent(page, slug, [instantToCalendarDate(new Date(), "Europe/Amsterdam")]);
   const api = `/api/v1/events/${slug}`;
   const draft = agendaSnapshotSchema.parse(await (await page.request.get(`${api}/agenda`)).json());
   const published = await page.request.post(`${api}/agenda/publications`, {
@@ -74,9 +79,6 @@ export async function prepareScannerTermination(page: Page) {
         email,
         firstName: "Synthetic",
         lastName: "Termination attendee",
-        organizationName: "Synthetic attribution",
-        jobTitle: "Attendee",
-        attendanceType: "in_person",
         dayAttendance: placement.eventDays.map((day, index) => ({
           dayDate: day.dayDate,
           attendanceType: index === 0 ? "in_person" : "on_demand",
@@ -100,15 +102,37 @@ export async function prepareScannerTermination(page: Page) {
     // capability at the same mounted endpoints the confirmation page uses.
     const info = await attendeePage.request.get(`${api}/registrations/confirm-info`, { params: confirmation });
     expect(info.status()).toBe(200);
-    expect(registrationConfirmInfoResponseSchema.parse(await info.json())).toMatchObject({
+    const confirmationInfo = registrationConfirmInfoResponseSchema.parse(await info.json());
+    expect(confirmationInfo).toMatchObject({
       email,
       firstName: "Synthetic",
       lastName: "Termination attendee",
       expired: false,
       recoverable: false,
     });
+    if (!confirmationInfo.organizationProof) throw new Error("The work address needs its organization proof");
+    const proof = { token: confirmationInfo.organizationProof };
+    const offered = await attendeePage.request.post(`${api}/registrations/proof/verify`, {
+      data: registrationEmailProofVerifySchema.parse(proof),
+    });
+    expect(offered.status()).toBe(200);
+    const { affiliation } = registrationEmailProofVerifyResponseSchema.parse(await offered.json());
+    const organizationId = affiliation?.organization?.id ?? null;
+    const name = affiliation?.organization?.name ?? "Synthetic attribution";
+    const chosen = await attendeePage.request.post(`${api}/registrations/proof/verify`, {
+      data: registrationEmailProofVerifySchema.parse({
+        ...proof,
+        affiliation: { organizationId, ...(organizationId ? {} : { organizationName: name }), jobTitle: "Attendee" },
+      }),
+    });
+    expect(chosen.status()).toBe(200);
+    const selected = registrationEmailProofVerifyResponseSchema.parse(await chosen.json()).affiliation;
+    if (!selected?.contextToken) throw new Error("The organization selection needs its verified context");
     const confirmed = await attendeePage.request.post(`${api}/registrations/confirm-email`, {
-      data: registrationConfirmSchema.parse(confirmation),
+      data: registrationConfirmSchema.parse({
+        ...confirmation,
+        organization: { name, organizationId, jobTitle: "Attendee", contextToken: selected.contextToken },
+      }),
     });
     expect(confirmed.status()).toBe(200);
     const confirmedRegistration = registrationConfirmResponseSchema.parse(await confirmed.json());

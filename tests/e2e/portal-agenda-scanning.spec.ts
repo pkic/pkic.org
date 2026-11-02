@@ -4,6 +4,7 @@ import {
   generateBadgeCredential,
 } from "../../assets/shared/schemas/badge-credential";
 import { SCAN_STORAGE_VERSION } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/outbox-storage";
+import { instantToCalendarDate } from "../../assets/shared/timezone";
 import { archivedScanSchema } from "../../assets/shared/schemas/event-scan-recovery";
 import { expect, test, type Page, type Response, type TestInfo } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
@@ -71,19 +72,26 @@ async function issueRenderedBadge(page: Page, decoderUrl: string, email?: string
   await expect(qr).toBeVisible();
   await expect.poll(() => qr.evaluate((image) => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
   // Decode the displayed image's actual pixels with the shipped camera fallback, without supplying the expected code.
-  const decoded = await qr.evaluate(async (element, moduleUrl) => {
-    Reflect.deleteProperty(globalThis, "BarcodeDetector");
-    const image = element as HTMLImageElement;
-    const canvas = document.createElement("canvas");
-    canvas.width = 512;
-    canvas.height = Math.round((512 * image.naturalHeight) / image.naturalWidth);
-    const context = canvas.getContext("2d");
-    if (!context) throw new Error("Could not read rendered badge pixels");
-    context.drawImage(image, 0, 0, canvas.width, canvas.height);
-    const { default: scanner } = await import(moduleUrl);
-    const result = await scanner.scanImage(canvas, { returnDetailedScanResult: true });
-    return result.data as string;
-  }, decoderUrl);
+  const imageSource = await qr.getAttribute("src");
+  if (!imageSource) throw new Error("The rendered badge needs its QR image");
+  const decoded = await page.evaluate(
+    async ({ source, moduleUrl }) => {
+      Reflect.deleteProperty(globalThis, "BarcodeDetector");
+      const image = new Image();
+      image.src = source;
+      await image.decode();
+      const canvas = document.createElement("canvas");
+      canvas.width = 512;
+      canvas.height = Math.round((512 * image.naturalHeight) / image.naturalWidth);
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Could not read rendered badge pixels");
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      const { default: scanner } = await import(moduleUrl);
+      const result = await scanner.scanImage(canvas, { returnDetailedScanResult: true });
+      return result.data as string;
+    },
+    { source: imageSource, moduleUrl: decoderUrl },
+  );
   expect(decoded).toBe(badge.credential);
   expect(badge.credential).not.toBe(badge.id);
   // A printed badge carries the same QR on its front and its back, each with the badge code the scanner's
@@ -381,7 +389,6 @@ test("organizer reloads two independent QR credentials, replaces only one and re
     data: registrationCreateSchema.parse({
       ...template.request,
       email,
-      attendanceType: "in_person",
       dayAttendance: template.request.dayAttendance?.map((day) => ({ ...day, attendanceType: "in_person" })),
     }),
   });
@@ -483,15 +490,27 @@ test("organizer reloads two independent QR credentials, replaces only one and re
     attendanceRecorded: false,
   });
   await expect(page.getByText("Badge not valid", { exact: true })).toBeVisible();
+  // This fixture's conference has fixed dates. An active badge still records
+  // attendance outside those dates, with the expected attendance-mode notice.
+  const scanningOnSelectedDay = template.request.dayAttendance?.some(
+    (day) => day.dayDate === instantToCalendarDate(new Date(), basis.timeZone),
+  );
+  const attendanceEligibility = {
+    outcome: scanningOnSelectedDay ? "eligible" : "warning",
+    reason: scanningOnSelectedDay ? "eligible" : "wrong_attendance_mode",
+  };
   for (const credential of [replacement.badge.credential, second.badge.credential]) {
     expect(await scanAttendance(page, credential, publishedRevision)).toMatchObject({
-      outcome: "eligible",
-      reason: "eligible",
+      ...attendanceEligibility,
       recorded: true,
       attendanceRecorded: true,
       admissionRecorded: false,
     });
-    await expect(page.getByText("Registered · attendance recorded", { exact: true })).toBeVisible();
+    await expect(
+      page.getByText(scanningOnSelectedDay ? "Registered · attendance recorded" : "Known badge · attendance notice", {
+        exact: true,
+      }),
+    ).toBeVisible();
   }
   expect(await selectReloadedBadge(page, replacement.badge.id, credentials)).toMatchObject({ status: "active" });
   await captureBadgeScreens(page, testInfo, "selected-credential");
@@ -528,8 +547,7 @@ test("organizer reloads two independent QR credentials, replaces only one and re
     attendanceRecorded: false,
   });
   expect(await scanAttendance(page, second.badge.credential, publishedRevision)).toMatchObject({
-    outcome: "eligible",
-    reason: "eligible",
+    ...attendanceEligibility,
     recorded: true,
     attendanceRecorded: true,
   });

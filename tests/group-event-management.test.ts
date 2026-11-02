@@ -626,6 +626,19 @@ describe("group event management routes", () => {
     expect(selectedCsv).toContain("batch-export-1@example.test");
     expect(selectedCsv).not.toContain("batch-export-2@example.test");
     await env.DB.prepare("UPDATE registrations SET status='cancelled' WHERE id=?").bind(ids[2]).run();
+    for (const query of ["", "?q=batch-export"]) {
+      const defaultExport = await request(fixture.ownerLeaderToken, `${base}/exports${query}`);
+      expect(defaultExport.status).toBe(200);
+      const defaultCsv = await defaultExport.text();
+      expect(defaultCsv).toContain("batch-export-1@example.test");
+      expect(defaultCsv).toContain("batch-export-2@example.test");
+      expect(defaultCsv).not.toContain("batch-export-3@example.test");
+    }
+    const cancelledExport = await request(fixture.ownerLeaderToken, `${base}/exports?status=cancelled`);
+    expect(cancelledExport.status).toBe(200);
+    const cancelledCsv = await cancelledExport.text();
+    expect(cancelledCsv).toContain("batch-export-3@example.test");
+    expect(cancelledCsv).not.toContain("batch-export-1@example.test");
     const selectedCancelled = await request(fixture.ownerLeaderToken, `${base}/exports?ids=${ids[2]}`);
     expect(selectedCancelled.status).toBe(200);
     expect(await selectedCancelled.text()).toContain("batch-export-3@example.test");
