@@ -12,6 +12,7 @@ import { insertUser } from "./helpers/membership";
 import { buildRegistrationIcs, calendarConfirmedDays } from "../functions/_lib/utils/calendar";
 import { seedSessionAttendanceDays } from "./helpers/session-attendance-days";
 import { resetDb } from "./helpers/reset-db";
+import { fetchEventParticipation } from "../functions/_lib/services/events/participation";
 
 const signingSecret = "personal-event-calendar-test-secret";
 
@@ -69,16 +70,37 @@ describe("personal event calendar", () => {
     const event = await getEventBySlug(env.DB, "pqc-2026");
     const attendeeEmail = `calendar-attendee-${crypto.randomUUID()}@example.test`;
     const attendeeId = await insertUser(env.DB, attendeeEmail);
+    await seedSessionAttendanceDays(env.DB, event.id, ["2026-05-20"], "on_demand");
+    await env.DB.prepare("UPDATE event_days SET attendance_options_json=? WHERE event_id=?")
+      .bind(
+        JSON.stringify([
+          { value: "on_demand", label: "On demand", accessMode: "none" },
+          { value: "virtual", label: "Virtual", accessMode: "remote" },
+        ]),
+        event.id,
+      )
+      .run();
     const [other] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org'");
     const created = await createRegistration(env.DB, {
       event,
       userId: attendeeId,
+      dayAttendance: [{ dayDate: "2026-05-20", attendanceType: "on_demand" }],
       sourceType: "direct",
       signingSecret,
     });
     const registrationId = created.registration.id;
-    await seedSessionAttendanceDays(env.DB, event.id, ["2026-05-20"], "virtual");
     await env.DB.prepare("UPDATE registrations SET status = 'registered' WHERE id = ?").bind(registrationId).run();
+    expect(
+      (await fetchEventParticipation(env.DB, attendeeId, [event.id]).then((rows) => rows.get(event.id)))
+        ?.calendarAvailable,
+    ).toBe(false);
+    await env.DB.prepare("UPDATE registration_day_attendance SET attendance_type='virtual' WHERE registration_id=?")
+      .bind(registrationId)
+      .run();
+    expect(
+      (await fetchEventParticipation(env.DB, attendeeId, [event.id]).then((rows) => rows.get(event.id)))
+        ?.calendarAvailable,
+    ).toBe(true);
     const attendeeToken = await createAdminSession(env.DB, attendeeId, crypto.randomUUID(), signingSecret);
     const otherToken = await createAdminSession(env.DB, other.id, crypto.randomUUID(), signingSecret);
 

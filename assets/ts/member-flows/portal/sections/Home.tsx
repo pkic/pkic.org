@@ -295,7 +295,9 @@ function EventsPanel() {
                 headingLevel={4}
                 event={event}
                 actions={
-                  event.participation?.registrationId && event.participation.registrationStatus === "registered" ? (
+                  event.participation?.registrationId &&
+                  event.participation.registrationStatus === "registered" &&
+                  event.participation.calendarAvailable ? (
                     <ButtonLink
                       variant="ghost"
                       icon

@@ -330,6 +330,35 @@ describe("portal landing", () => {
     expect(vi.mocked(fetch).mock.calls.some(([input]) => String(input).includes("kind=standalone"))).toBe(true);
   });
 
+  it("shows a personal calendar action only when the registration has a calendar day", async () => {
+    portalSession.value = { ...portalSessionFixture({ member: false }), eventParticipation: true };
+    const row = audienceEventRow({
+      participation: {
+        registrationId: "20000000-0000-4000-8000-000000000001",
+        registrationStatus: "registered",
+        calendarAvailable: false,
+        proposals: 0,
+        speakerProposals: 0,
+      },
+    });
+    stubFeeds(feeds({ "/api/v1/events": { events: [row], page: onePage } }));
+
+    const container = mount();
+    await settle();
+    const events = panelNamed(container, "Events");
+    expect(events.querySelector('a[aria-label*="personal calendar"]')).toBeNull();
+
+    row.participation = { ...(row.participation as object), calendarAvailable: true };
+    stubFeeds(feeds({ "/api/v1/events": { events: [row], page: onePage } }));
+    const available = mount();
+    await settle();
+    expect(
+      panelNamed(available, "Events")
+        .querySelector<HTMLAnchorElement>('a[aria-label*="personal calendar"]')
+        ?.getAttribute("href"),
+    ).toBe("/api/v1/events/pqc-2026/registrations/20000000-0000-4000-8000-000000000001/calendar.ics");
+  });
+
   it("shows a current event and the next event without embedding the events catalog", async () => {
     portalSession.value = { ...portalSessionFixture({ member: false }), eventParticipation: true };
     const at = Date.now();
