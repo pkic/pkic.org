@@ -74,6 +74,30 @@ const EXPECTED_BASELINE_TEMPLATE_KEYS = [
 ] as const;
 
 describe("buildTemplateSqlStatements", () => {
+  it.each(["Room A", "Remote"])("renders the seeded session reminder for %s", async (sessionLocation) => {
+    const reminder = DEFAULT_TEMPLATES.find((item) => item.key === "agenda_session_reminder")!;
+    const data = {
+      eventName: "Example conference",
+      sessionTitle: "Certificate lifecycle",
+      sessionStart: "2026-11-02T15:00:00.000Z",
+      sessionLocation,
+    };
+    const rendered = await renderEmail(
+      reminder.content,
+      data,
+      DEFAULT_LAYOUT_HTML,
+      reminder.contentType,
+      "https://example.test",
+    );
+    expect(reminder).toMatchObject({ messageType: "transactional" });
+    for (const value of Object.values(data)) {
+      expect(rendered.text).toContain(value);
+      expect(rendered.html).toContain(value);
+    }
+    expect(rendered.html).not.toContain("{{");
+    expect(rendered.text).not.toContain("{{");
+  });
+
   it("renders registration verification as the shared email CTA with a usable plain-text link", async () => {
     const template = DEFAULT_TEMPLATES.find((item) => item.key === "registration_email_verify")!;
     const url = "https://example.test/register/#verify=synthetic-proof";

@@ -140,6 +140,14 @@ export const DEFAULT_TEMPLATES = [
     messageType: "transactional",
   },
   {
+    key: "agenda_session_reminder",
+    subjectTemplate: "Starting soon: {{sessionTitle}}",
+    content:
+      "Your reserved session **{{sessionTitle}}** at **{{eventName}}** starts at {{sessionStart}}. Location: {{sessionLocation}}. Open your event agenda for the latest information.",
+    contentType: "markdown",
+    messageType: "transactional",
+  },
+  {
     key: "email_layout",
     subjectTemplate: null,
     contentType: "html",
