@@ -493,7 +493,7 @@ describe("a person's own email addresses", () => {
 
   it("does not preserve an unverified creator's manage link after the mailbox owner confirms", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
-    const bootstrap = await findOrCreateUser(env.DB, { email: "victim@confirmation.example" });
+    const bootstrap = await findOrCreateUser(env.DB, { email: "victim.confirmation@gmail.com" });
     const signingSecret = environment.INTERNAL_SIGNING_SECRET!;
     const created = await createScheduledRegistration(env.DB, {
       event: { id: eventId },

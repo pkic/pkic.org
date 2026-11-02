@@ -24,7 +24,8 @@ describe("engagement events", () => {
       body: JSON.stringify({
         firstName: "Jamie",
         lastName: "Example",
-        email: "jamie@pkic.org",
+        email: "jamie.engagement@gmail.com",
+        unaffiliatedAttestation: true,
         dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
         sourceType: "direct",
         consents: [
