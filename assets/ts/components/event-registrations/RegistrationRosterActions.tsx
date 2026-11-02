@@ -7,12 +7,14 @@ import { Menu } from "../../ui/Menu";
 export function RegistrationRosterActions({
   promotionsEndpoint,
   exportsEndpoint,
+  exportHasStatusFilter = false,
   onPromoted,
   notify,
   onPrintAllMatching,
 }: {
   promotionsEndpoint: string;
-  exportsEndpoint: string;
+  exportsEndpoint: string | null;
+  exportHasStatusFilter?: boolean;
   onPromoted: () => void | Promise<void>;
   notify: (message: string, kind: "success" | "error") => void;
   onPrintAllMatching?: () => void;
@@ -49,7 +51,13 @@ export function RegistrationRosterActions({
           },
         ]}
       />
-      <DownloadAction label="Download registrations (CSV)" href={exportsEndpoint} />
+      <DownloadAction
+        label={
+          exportHasStatusFilter ? "Download registrations (CSV)" : "Download registered and pending registrations (CSV)"
+        }
+        href={exportsEndpoint ?? ""}
+        disabled={exportsEndpoint === null}
+      />
     </>
   );
 }

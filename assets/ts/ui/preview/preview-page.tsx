@@ -11,6 +11,7 @@ import { render } from "preact";
 import { PreviewShell } from "./PreviewShell";
 import { badgeLabelDeskSection } from "./badge-label-desk";
 import { badgePrintingSection } from "./badge-printing";
+import { registrationRosterActionsSection } from "./registration-roster-actions";
 import { basicSections } from "./sections-basics";
 import { dataSections } from "./sections-data";
 import { densitySections } from "./sections-density";
@@ -33,6 +34,7 @@ function main(): void {
     ...speakerProfileReviewSections,
     ...eventParticipationSections,
     badgePrintingSection,
+    registrationRosterActionsSection,
     badgeLabelDeskSection,
   ];
   // `?only=<id>` renders one section alone, for a tight screenshot of one control.
