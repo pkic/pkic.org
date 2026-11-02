@@ -1,4 +1,5 @@
 import { prepareProposalProof } from "./helpers/proposal-proof";
+import { seedSessionAttendanceDays } from "./helpers/session-attendance-days";
 import { administratorGrants, grantAdministrator } from "./helpers/administrator";
 import { describe, it, expect, vi } from "vitest";
 import { env } from "cloudflare:workers";
@@ -104,6 +105,7 @@ async function callMountedApp(request: Request): Promise<Response> {
 describe("full workflow", () => {
   it("runs end-to-end attendee and speaker workflows", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
+    await seedSessionAttendanceDays(env.DB, eventId, ["2026-12-01"]);
 
     const adminUser = (
       await queryAll<{ id: string; email: string }>(
@@ -311,7 +313,7 @@ describe("full workflow", () => {
             firstName: "Attendee",
             lastName: "One",
             email: "attendee1@pkic.org",
-            attendanceType: "in_person",
+            dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
             sourceType: "direct",
             consents: [
               { termKey: "privacy-policy", version: "v1" },
@@ -369,7 +371,7 @@ describe("full workflow", () => {
             firstName: "Attendee",
             lastName: "Two",
             email: "attendee2@pkic.org",
-            attendanceType: "in_person",
+            dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
             sourceType: "direct",
             consents: [
               { termKey: "privacy-policy", version: "v1" },

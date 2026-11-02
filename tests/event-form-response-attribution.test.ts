@@ -20,6 +20,7 @@ import { deliveredEmailPayload, queryAll, seedEventAndAdmin } from "./helpers/co
 import { callApi } from "./helpers/app";
 import { stubSuccessfulMxLookup } from "./helpers/mx-lookup";
 import { resetDb } from "./helpers/reset-db";
+import { seedSessionAttendanceDays } from "./helpers/session-attendance-days";
 
 type EventFormPurpose = "event_registration" | "proposal_submission";
 
@@ -183,6 +184,7 @@ describe("historical event form response attribution", () => {
     "queues the newly submitted answers before committing registration (restore: %s)",
     async (restore) => {
       const { eventId } = await seedEventAndAdmin(env.DB);
+      await seedSessionAttendanceDays(env.DB, eventId, ["2026-12-01"]);
       const form = await seedEventForm(eventId, "event_registration", "Current question", "current_answer");
       if (restore) {
         await seedRegistrationResponse({
@@ -207,7 +209,7 @@ describe("historical event form response attribution", () => {
           firstName: "Submitted",
           lastName: "Attendee",
           email: "submitted@example.test",
-          attendanceType: "virtual",
+          dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
           sourceType: "direct",
           customAnswers: { current_answer: "new answer" },
           consents: [
