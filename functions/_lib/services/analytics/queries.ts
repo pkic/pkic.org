@@ -1,3 +1,5 @@
+import { registrationAttendanceTypesSql } from "../registrations/event-registration-stats";
+
 export interface AnalyticsQuery {
   sql: string;
   values: unknown[];
@@ -35,8 +37,9 @@ export const REGISTRATIONS_BY_STATUS_SQL = `
   GROUP BY status`;
 
 export const REGISTRATIONS_BY_ATTENDANCE_TYPE_SQL = `
+  WITH registration_types AS (${registrationAttendanceTypesSql})
   SELECT attendance_type, COUNT(*) AS count
-  FROM registrations
+  FROM registration_types
   WHERE status = 'registered'
   GROUP BY attendance_type`;
 

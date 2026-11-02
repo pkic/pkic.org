@@ -2,10 +2,11 @@ import type { DatabaseLike } from "../../types";
 import { all } from "../../db/queries";
 
 /** Distinct registration/type pairs from day selections. */
-export const eventRegistrationAttendanceTypesSql = `
+export const registrationAttendanceTypesSql = `
   SELECT DISTINCT r.id, r.status, r.created_at, day.attendance_type
-    FROM registrations r JOIN registration_day_attendance day ON day.registration_id = r.id
-   WHERE r.event_id = ?`;
+    FROM registrations r JOIN registration_day_attendance day ON day.registration_id = r.id`;
+
+export const eventRegistrationAttendanceTypesSql = `${registrationAttendanceTypesSql} WHERE r.event_id = ?`;
 
 interface EventRegistrationStatsRow {
   kind: "status" | "type";
