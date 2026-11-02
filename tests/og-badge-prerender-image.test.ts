@@ -1,6 +1,6 @@
 import { personalPromotionRoleStyle, BADGE_DISPLAY_ROLE_COLORS } from "../assets/shared/badge-role-colors";
 import { personalPromotionImagePath, PERSONAL_PROMOTION_RENDERER } from "../assets/shared/personal-promotion-image";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { STANDARD_HEADSHOT_MAX_BYTES } from "../assets/shared/schemas/images";
 import { loadValidatedHeadshotDataUrl } from "../functions/_lib/services/og-badge-prerender";
 import { renderPersonalPromotionSvg } from "../functions/_lib/services/event-agenda/promotion-personal";
@@ -112,25 +112,41 @@ describe("personal promotion scenes", () => {
 describe("OG badge legacy headshot boundary", () => {
   it("embeds structurally valid stored images using their inspected MIME type", async () => {
     const bytes = validPngBytes();
-    await expect(loadValidatedHeadshotDataUrl("headshots/user/legacy.jpg", bucketWith(bytes))).resolves.toBe(
-      `data:image/png;base64,${btoa(String.fromCharCode(...bytes))}`,
-    );
+    await expect(
+      loadValidatedHeadshotDataUrl("headshots/user/legacy.jpg", { SPEAKER_UPLOADS_BUCKET: bucketWith(bytes) }),
+    ).resolves.toBe(`data:image/png;base64,${btoa(String.fromCharCode(...bytes))}`);
   });
 
+  it("loads migrated member portraits from their canonical assets storage", async () => {
+    const bytes = validPngBytes();
+    const wrongBucket = { get: vi.fn() } as unknown as R2Bucket;
+    const image = await loadValidatedHeadshotDataUrl("member-photos/example/member.png", {
+      ASSETS_BUCKET: bucketWith(bytes),
+      SPEAKER_UPLOADS_BUCKET: wrongBucket,
+    });
+    expect(image).toMatch(/^data:image\/png;base64,/);
+    expect(wrongBucket.get).not.toHaveBeenCalled();
+    await expect(
+      loadValidatedHeadshotDataUrl("member-photos/example/member.png", { SPEAKER_UPLOADS_BUCKET: bucketWith(bytes) }),
+    ).resolves.toBeNull();
+  });
   it("does not embed a stored image with truncated or oversized dimensions", async () => {
     await expect(
-      loadValidatedHeadshotDataUrl("headshots/user/legacy.png", bucketWith(validPngBytes().slice(0, 24))),
+      loadValidatedHeadshotDataUrl("headshots/user/legacy.png", {
+        SPEAKER_UPLOADS_BUCKET: bucketWith(validPngBytes().slice(0, 24)),
+      }),
     ).resolves.toBeNull();
 
     const oversized = validPngBytes();
     new DataView(oversized.buffer).setUint32(16, 4097);
-    await expect(loadValidatedHeadshotDataUrl("headshots/user/legacy.png", bucketWith(oversized))).resolves.toBeNull();
+    await expect(
+      loadValidatedHeadshotDataUrl("headshots/user/legacy.png", { SPEAKER_UPLOADS_BUCKET: bucketWith(oversized) }),
+    ).resolves.toBeNull();
 
     await expect(
-      loadValidatedHeadshotDataUrl(
-        "headshots/user/legacy.png",
-        bucketWith(validPngBytes(), STANDARD_HEADSHOT_MAX_BYTES + 1),
-      ),
+      loadValidatedHeadshotDataUrl("headshots/user/legacy.png", {
+        SPEAKER_UPLOADS_BUCKET: bucketWith(validPngBytes(), STANDARD_HEADSHOT_MAX_BYTES + 1),
+      }),
     ).resolves.toBeNull();
   });
 });

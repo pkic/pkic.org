@@ -1,3 +1,4 @@
+import type { SessionAffiliation } from "../../../../assets/shared/schemas/event-session-history";
 import type { PromotionCopy } from "../../../../assets/shared/schemas/event-promotion-kit";
 import type { AgendaOccurrence, AgendaSnapshot } from "../../../../assets/shared/schemas/event-agenda";
 import type {
@@ -16,6 +17,7 @@ export { promotionDimensions, buildPromotionPages } from "./promotion-scene";
 export { promotionMeasuredLines } from "./promotion-text";
 export { renderPromotionPdf } from "./promotion-pdf";
 export interface PromotionRenderData {
+  fontAssets?: { mono: Uint8Array; monoBold: Uint8Array; medium: Uint8Array };
   heroImage?: import("../../utils/image-format").EmbeddedRasterImage | null;
   agenda: AgendaSnapshot;
   occurrence: AgendaOccurrence;
@@ -29,7 +31,14 @@ export interface PromotionRenderData {
   place?: string;
   mediaWording?: string;
   picks?: AgendaOccurrence[];
-  people?: { userId: string; displayName: string; affiliation: string; photoUrl: string | null; role: string }[];
+  people?: {
+    userId: string;
+    displayName: string;
+    affiliation: string;
+    affiliations?: SessionAffiliation[];
+    photoUrl: string | null;
+    role: string;
+  }[];
   sponsors?: {
     tierName: string;
     label?: string;

@@ -1,5 +1,5 @@
 import type { PromotionPage, PromotionText, PromotionMeasure } from "./promotion-scene";
-import { promotionMeasuredLines } from "./promotion-text";
+import { promotionMeasuredLines, promotionSegmentLines } from "./promotion-text";
 
 type AddPage = (title: string) => PromotionPage;
 function text(
@@ -116,4 +116,144 @@ export function layoutPromotionDetails(
     }
     offset = end;
   }
+}
+
+/** Fit the complete abstract before continuing, retaining readable type and balanced overflow. */
+export function layoutPromotionAbstract(
+  summary: string,
+  add: AddPage,
+  measure: PromotionMeasure,
+  scale: number,
+  rightInset: number,
+) {
+  const width = 904 * scale - rightInset;
+  const bodyHeight = 760 * scale;
+  const minimumSize = 24 * scale;
+  let size = 52 * scale;
+  const wrap = () => promotionMeasuredLines(summary, width, (line) => measure(line, size, false));
+  let lines = wrap();
+  while (size > minimumSize && lines.length * size * 1.25 > bodyHeight) {
+    size -= scale;
+    lines = wrap();
+  }
+  const lineHeight = size * 1.25;
+  const capacity = Math.max(1, Math.floor(bodyHeight / lineHeight));
+  const count = Math.max(1, Math.ceil(lines.length / capacity));
+  for (let index = 0; index < count; index++) {
+    const offset = Math.floor((index * lines.length) / count);
+    const page = add("About this session");
+    const body = lines.slice(offset, Math.floor(((index + 1) * lines.length) / count));
+    const top = Math.max(210 * scale, 952 * scale - body.length * lineHeight);
+    text(
+      page,
+      offset ? "ABOUT THIS SESSION · CONTINUED" : "ABOUT THIS SESSION",
+      88 * scale,
+      top - 70 * scale,
+      22 * scale,
+      "H2",
+      true,
+    );
+    for (const [index, line] of body.entries())
+      text(page, line, 88 * scale, top + index * lineHeight, size, "P", false, "session-abstract");
+  }
+}
+
+/** A high-contrast referral card follows the registration copy without colliding with it. */
+export function layoutPromotionRegistrationCard(
+  page: PromotionPage,
+  registrationUrl: string,
+  scale: number,
+  rightInset: number,
+) {
+  const margin = 80 * scale;
+  const usable = page.width - margin * 2;
+  let url = page.texts.find((value) => value.text === registrationUrl);
+  if (!url) {
+    text(page, registrationUrl, margin, 0, 28 * scale);
+    url = page.texts.at(-1)!;
+  }
+  const cardTop = 844 * scale;
+  // Raise a details grid as one unit so its registration action sits inside the shared content box.
+  if (page.title === "When & where") {
+    const bottom = Math.max(...page.texts.filter((value) => value !== url).map((value) => value.y));
+    const shift = Math.max(0, bottom - 784 * scale);
+    for (const value of page.texts) if (value !== url) value.y -= shift;
+    for (const bar of page.bars ?? []) bar.y -= shift;
+  }
+  const cardWidth = Math.min(usable - rightInset, 760 * scale);
+  page.registrationCard = { x: margin, y: cardTop, width: cardWidth, height: 108 * scale };
+  (page.bars ??= []).push({ ...page.registrationCard, color: "#ffffff" });
+  text(page, "Register", margin + 36 * scale, cardTop + 40 * scale, 34 * scale, "P", true);
+  page.texts.at(-1)!.color = "#0b0d0c";
+  (page.arrows ??= []).push({ x: margin + 220 * scale, y: cardTop + 29 * scale, length: 36 * scale, color: "#0b0d0c" });
+  Object.assign(url, {
+    x: margin + 36 * scale,
+    y: cardTop + 82 * scale,
+    size: 28 * scale,
+    color: "#0b0d0c",
+    mono: true,
+  });
+}
+
+export function layoutPromotionCover(
+  title: string,
+  eyebrow: string,
+  byline: string,
+  metadata: string,
+  add: AddPage,
+  measure: PromotionMeasure,
+  scale: number,
+  rightInset: number,
+) {
+  const page = add(title);
+  const width = 720 * scale - rightInset;
+  let size = (title.length > 48 ? 84 : 96) * scale;
+  const wrap = () =>
+    promotionMeasuredLines(
+      title,
+      width,
+      (line) => measure(line, size, true) - Math.max(0, line.length - 1) * size * 0.035,
+    );
+  let lines = wrap();
+  while (lines.length * size > 590 * scale && size > 56 * scale) {
+    size -= 2 * scale;
+    lines = wrap();
+  }
+  const labelWidth = (line: string) => measure(line, 26 * scale, false, true) + Array.from(line).length * 3.64 * scale;
+  const labelText = eyebrow.toUpperCase();
+  const label =
+    labelWidth(labelText) <= width
+      ? [labelText]
+      : labelText.split(" · ").flatMap((section) => promotionMeasuredLines(section, width, labelWidth));
+  const meta = promotionSegmentLines(
+    metadata.split(" · "),
+    904 * scale - rightInset,
+    (line) => measure(line, 26 * scale, false, true) + line.length * 2.08 * scale,
+  );
+  let y =
+    952 * scale -
+    (label.length * 34 + 28 + (lines.length * size) / scale + 28 + 10 + 28 + 48 + 28 + meta.length * 34) * scale;
+  for (const line of label) {
+    y += 34 * scale;
+    text(page, line, 88 * scale, y, 26 * scale);
+    Object.assign(page.texts.at(-1)!, { mono: true, weight: 500, letterSpacing: 3.64 * scale });
+  }
+  y += 28 * scale;
+  for (const line of lines) {
+    y += size;
+    text(page, line, 88 * scale, y, size, "H1", true, "heading");
+    page.texts.at(-1)!.letterSpacing = -size * 0.035;
+  }
+  y += 28 * scale;
+  (page.bars ??= []).push({ x: 88 * scale, y, width: 240 * scale, height: 10 * scale, color: "url(#portrait-accent)" });
+  y += (10 + 28 + 38) * scale;
+  text(page, byline, 88 * scale, y, 38 * scale);
+  page.texts.at(-1)!.weight = 500;
+  y += 38 * scale;
+  for (const line of meta) {
+    y += 34 * scale;
+    text(page, line, 88 * scale, y, 26 * scale);
+    Object.assign(page.texts.at(-1)!, { mono: true, letterSpacing: 2.08 * scale });
+  }
+  return page;
 }

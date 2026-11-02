@@ -70,3 +70,38 @@ export function promotionBalancedLines(text: string, width: number, measure: (te
   }
   return promotionMeasuredLines(text, high, measure);
 }
+
+/** Prefer breaks between complete metadata fields, preserving short room names and clock labels. */
+export function promotionSegmentLines(segments: string[], width: number, measure: (text: string) => number): string[] {
+  const lines: string[] = [];
+  let line = "";
+  for (const segment of segments.map((value) => value.trim()).filter(Boolean)) {
+    const candidate = line ? `${line} · ${segment}` : segment;
+    if (measure(candidate) <= width) {
+      line = candidate;
+      continue;
+    }
+    if (line) lines.push(line);
+    const wrapped = promotionMeasuredLines(segment, width, measure);
+    lines.push(...wrapped.slice(0, -1));
+    line = wrapped.at(-1) ?? "";
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+/** Make a bounded image label visibly abbreviated rather than spilling onto another image. */
+export function promotionEllipsisLines(
+  lines: string[],
+  maxLines: number,
+  width: number,
+  measure: (text: string) => number,
+): string[] {
+  if (lines.length <= maxLines) return lines;
+  if (maxLines < 1) return [];
+  const result = lines.slice(0, maxLines);
+  let last = result.at(-1)!;
+  while (last && measure(`${last}…`) > width) last = Array.from(last).slice(0, -1).join("");
+  result[result.length - 1] = `${last.trimEnd()}…`;
+  return result;
+}

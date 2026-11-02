@@ -1,10 +1,19 @@
+import { promotionIdentityAffiliations } from "./promotion-speaker-credit";
+import { layoutPromotionPanel, layoutPromotionFeaturedSpeaker } from "./promotion-speakers";
 import { layoutPersonalPromotion } from "./promotion-personal-scene";
-import { promotionStillBlocks, type PromotionStillContent } from "./promotion-still";
-import { layoutPromotionTakeaways, layoutPromotionDetails } from "./promotion-content-panels";
+import { layoutPromotionStill, type PromotionStillContent } from "./promotion-still";
+import {
+  layoutPromotionTakeaways,
+  layoutPromotionDetails,
+  layoutPromotionAbstract,
+  layoutPromotionRegistrationCard,
+  layoutPromotionCover,
+} from "./promotion-content-panels";
 import { layoutPromotionSponsors } from "./promotion-sponsors";
 import { plainText } from "../../../../assets/shared/markdown-plain-text";
 import {
   formatClockInZone,
+  formatEventDayInZone,
   formatTimeRangeInZone,
   formatDateRange,
   formatClockRangeInZone,
@@ -15,7 +24,7 @@ import {
   defaultPromotionComposition,
   type PromotionComposition,
 } from "../../../../assets/shared/schemas/event-promotion-design";
-import { creditAffiliationLabels } from "../../../../assets/shared/agenda-speaker-affiliations";
+import { creditAffiliationLabels, creditAffiliations } from "../../../../assets/shared/agenda-speaker-affiliations";
 import { promotionMeasuredLines } from "./promotion-text";
 import type { PromotionRenderData } from "./promotion-render";
 
@@ -45,6 +54,8 @@ export interface PromotionPicture {
   alt: string;
 }
 export interface PromotionPage {
+  carousel?: boolean;
+  still?: { bandTop: number; logoY: number; logoHeight: number; motifHeight: number };
   title: string;
   texts: PromotionText[];
   pictures: PromotionPicture[];
@@ -56,6 +67,7 @@ export interface PromotionPage {
   qr?: boolean;
   social?: { bandTop: number; focalPoint: { x: number; y: number } };
   bars?: { x: number; y: number; width: number; height: number; color: string; opacity?: number }[];
+  registrationCard?: { x: number; y: number; width: number; height: number };
   sponsorBoard?: { x: number; y: number; width: number; height: number };
   markX?: number;
   rules?: { x: number; y: number; width: number }[];
@@ -120,6 +132,7 @@ export function promotionPeople(data: PromotionRenderData) {
         userId: person.userId,
         displayName: person.displayName,
         affiliation: creditAffiliationLabels(person).join("; "),
+        affiliations: "affiliations" in person ? creditAffiliations(person) : promotionIdentityAffiliations(person),
         photoUrl: "photoUrl" in person && typeof person.photoUrl === "string" ? person.photoUrl : null,
         role: "role" in person && typeof person.role === "string" ? person.role : "speaker",
       }),
@@ -137,7 +150,8 @@ export function buildPromotionPages(
     margin = 80 * scale,
     usable = width - margin * 2;
   const footer = height - (format === "landscape" ? 95 : 210);
-  const sponsorBottom = height < 800 ? height - (data.composition?.qrCode ? 180 : 130) : footer;
+  const sponsorBottom =
+    height < 800 ? height - (data.composition?.qrCode ? 180 : 130) : format === "carousel" ? 1050 * scale : footer;
   const pages: PromotionPage[] = [];
   const composition: PromotionComposition =
     data.composition ?? defaultPromotionComposition(data.audience === "attendee");
@@ -145,7 +159,17 @@ export function buildPromotionPages(
   const add = (title: string, light = false) => {
     if (pages.length >= 128)
       throw new Error("Promotion material exceeds 128 pages. Select fewer panels or shorter reviewed copy.");
-    const page: PromotionPage = { title, texts: [], pictures: [], index: pages.length, total: 0, width, height, light };
+    const page: PromotionPage = {
+      title,
+      texts: [],
+      pictures: [],
+      index: pages.length,
+      total: 0,
+      width,
+      height,
+      light,
+      carousel: format === "carousel",
+    };
     pages.push(page);
     return page;
   };
@@ -237,6 +261,7 @@ export function buildPromotionPages(
     data.occurrence.format ??
     data.occurrence.sourceProposalType;
   const dates = formatDateRange(data.occurrence.startAt, data.occurrence.endAt, data.agenda.timeZone);
+  const sessionDay = data.occurrence.startAt ? formatEventDayInZone(data.occurrence.startAt, clock) : "";
   const location = data.agenda.rooms.find((room) => room.id === data.occurrence.roomId)?.name;
   const heading =
     data.audience === "attendee" ? `I’m attending ${data.agenda.eventName ?? "this event"}` : data.occurrence.title;
@@ -252,33 +277,80 @@ export function buildPromotionPages(
         (composition.content === "abstract" ? data.occurrence.description : data.copy.whyAttend) ||
         data.occurrence.description
       : undefined;
-    const blocks = promotionStillBlocks(
+    layoutPromotionStill(
       {
         heading,
+        eyebrow:
+          data.audience === "attendee"
+            ? "I’m attending"
+            : [formatLabel, data.agenda.eventName].filter(Boolean).join(" · "),
+        dates: [
+          formatDateRange(data.occurrence.startAt, data.occurrence.endAt, data.agenda.timeZone, { month: "short" }),
+          data.agenda.clockCity,
+        ]
+          .filter(Boolean)
+          .join(" · "),
         people: selected.includes("speakers") || data.audience === "attendee" ? credits : [],
         summary,
         details: selected.includes("details")
-          ? [dates, time, location, data.place, data.mediaWording].filter(Boolean).join(" · ")
-          : undefined,
+          ? [
+              ...(sessionDay ? [{ label: "Day", value: sessionDay }] : []),
+              ...(detailTime ? [{ label: "Time", value: detailTime, sub: formatClockName(clock) }] : []),
+              ...(location || data.place
+                ? [{ label: "Room", value: location ?? data.place!, sub: location ? data.place : undefined }]
+                : []),
+              ...(formatLabel || data.mediaWording
+                ? [{ label: "Format", value: formatLabel ?? "Session", sub: data.mediaWording }]
+                : []),
+            ]
+          : [],
         picks: selected.includes("picks") ? data.picks : undefined,
         callToAction: composition.callToAction,
       },
-      composition,
-      scale,
+      data,
+      width,
       height,
-      data.portraits,
+      measure,
+      composition,
+      add,
     );
-    flow(data.agenda.eventName ?? "PKI Consortium", blocks, 220 * scale);
   }
-  for (const panel of format === "carousel" ? selected : selected.filter((panel) => panel === "sponsors")) {
+  for (const panel of format === "carousel" ? selected : []) {
     reservedRight =
       format === "carousel" &&
       selected[selected.indexOf(panel) + 1] === "sponsors" &&
       data.sponsors?.some((group) => group.sponsors.length)
         ? (composition.overlap === "bold" ? 220 : 90) * scale
         : 0;
+    if (panel === "cover" && format === "carousel") {
+      const shortDate = formatDateRange(data.occurrence.startAt, data.occurrence.endAt, data.agenda.timeZone, {
+        month: "short",
+      });
+      layoutPromotionCover(
+        heading,
+        [data.agenda.eventName, formatLabel].filter(Boolean).join(" · "),
+        people.length > 2
+          ? `${people.length} voices, one stage`
+          : `with ${people.map((person) => person.displayName).join(" & ")}`,
+        [shortDate, time, location].filter(Boolean).join(" · "),
+        add,
+        measure,
+        scale,
+        reservedRight,
+      );
+      continue;
+    }
     if (panel === "cover") {
-      const size = (height < 800 ? 52 : 84) * scale;
+      let size = (height < 800 ? 52 : 84) * scale;
+      const coverWidth = Math.min(usable - reservedRight, 760 * scale);
+      // Fit a complete title and its credits on the cover before adding continuation pages.
+      if (format === "carousel")
+        while (
+          size > 56 * scale &&
+          promotionMeasuredLines(heading, coverWidth, (line) => measure(line, size, true)).length * size * 1.25 >
+            470 * scale
+        )
+          size -= 2 * scale;
       const page = flow(
         data.agenda.eventName ?? "PKI Consortium",
         [
@@ -300,7 +372,7 @@ export function buildPromotionPages(
         height < 800 ? 100 : 355,
       );
       const primary = people.find((p) => p.userId === data.actorId) ?? people[0];
-      if (primary && height >= 1080) {
+      if (primary && people.length === 1 && height >= 1080) {
         const photo = data.portraits?.[primary.userId];
         if (photo)
           page.pictures.push({
@@ -315,7 +387,35 @@ export function buildPromotionPages(
       }
     }
     if (panel === "speakers" && data.audience !== "attendee" && people.length) {
+      if (format === "carousel") {
+        const featured = layoutPromotionFeaturedSpeaker(people, data, add, measure, scale, reservedRight);
+        if (featured) {
+          const previous = pages[featured.previous];
+          if (previous && composition.panels[0] === "cover")
+            previous.pictures.push({ ...featured.picture, x: width + featured.picture.x });
+          const remaining = people.filter((person) => person.userId !== featured.primary.userId);
+          if (
+            !remaining.length ||
+            layoutPromotionPanel(
+              remaining,
+              data.portraits ?? {},
+              add,
+              measure,
+              scale,
+              reservedRight,
+              "ALSO ON THE PANEL",
+            )
+          )
+            continue;
+        }
+      }
+
       if (people.length > 1) {
+        if (
+          format === "carousel" &&
+          layoutPromotionPanel(people, data.portraits ?? {}, add, measure, scale, reservedRight)
+        )
+          continue;
         flow(
           "Meet the speakers",
           people.flatMap((person) => [
@@ -367,12 +467,12 @@ export function buildPromotionPages(
         (composition.content === "abstract" ? data.occurrence.description : data.copy.whyAttend) ||
         data.occurrence.description;
       if (useTake) layoutPromotionTakeaways(takeaways, add, measure, scale, reservedRight);
-      else if (summary) flow("About this session", [{ text: summary, size: 38 * scale }]);
+      else if (summary) layoutPromotionAbstract(plainText(summary), add, measure, scale, reservedRight);
     }
     if (panel === "details" && data.audience !== "attendee")
       layoutPromotionDetails(
         [
-          ...(dates ? [{ label: "Day", value: dates }] : []),
+          ...(sessionDay ? [{ label: "Day", value: sessionDay }] : []),
           ...(detailTime
             ? [
                 {
@@ -423,14 +523,28 @@ export function buildPromotionPages(
         ]),
       );
     if (panel === "register") {
+      const previous = pages.at(-1);
+      if (
+        format === "carousel" &&
+        previous?.title === "When & where" &&
+        selected[selected.indexOf(panel) - 1] === "details"
+      ) {
+        layoutPromotionRegistrationCard(previous, data.registrationUrl, scale, reservedRight);
+        continue;
+      }
       const page = flow(composition.callToAction, [
         { text: data.agenda.eventName ?? "", size: 64 * scale, bold: true, role: "H2" },
         { text: [data.place, dates].filter(Boolean).join(" · "), size: 32 * scale },
         { text: data.registrationUrl, size: 24 * scale },
       ]);
+      layoutPromotionRegistrationCard(page, data.registrationUrl, scale, reservedRight);
       page.qr = composition.qrCode;
     }
-    if (panel === "sponsors" && data.sponsors?.some((group) => group.sponsors.length)) {
+    if (
+      panel === "sponsors" &&
+      data.sponsors?.some((group) => group.sponsors.length) &&
+      (format === "carousel" || data.sponsors.reduce((count, group) => count + group.sponsors.length, 0) > 6)
+    ) {
       layoutPromotionSponsors(data.sponsors, add, put, scale, sponsorBottom);
     }
   }
@@ -453,40 +567,11 @@ export function buildPromotionPages(
     if (overlap && previous && !previous.light) previous.sponsorBoard = { ...board, x: width - overlap };
   }
   // Artwork occupies one panorama coordinate system, clipped by each exported page.
-  const registerIndex = pages.findIndex((page) => page.title === composition.callToAction);
-  if (format === "carousel" && registerIndex >= 2 && !pages[registerIndex - 1]!.light) {
-    const x = (composition.overlap === "bold" ? 800 : 940) * scale;
-    pages[registerIndex - 1]!.markX = x;
-    pages[registerIndex]!.markX = x - width;
+  const featuredIndex = pages.findIndex((page) => page.title === "Featured speaker");
+  if (featuredIndex >= 0 && featuredIndex + 1 < pages.length) {
+    pages[featuredIndex]!.markX = 860 * scale;
+    pages[featuredIndex + 1]!.markX = -220 * scale;
   }
-  const first = pages[0],
-    next = pages[1],
-    primary = people.find((person) => person.userId === data.actorId) ?? people[0];
-  const photo = primary ? data.portraits?.[primary.userId] : undefined;
-  if (format === "carousel" && selected[0] === "cover" && selected[1] === "speakers" && first && next && photo) {
-    const size = (people.length > 1 ? 280 : 560) * scale,
-      overlap = (composition.overlap === "bold" ? 280 : 140) * scale;
-    first.pictures = first.pictures.filter((picture) => picture.alt !== primary!.displayName);
-    next.pictures = next.pictures.filter((picture) => picture.alt !== primary!.displayName);
-    first.pictures.push({
-      src: photo,
-      x: width - overlap,
-      y: 60 * scale,
-      width: size,
-      height: size,
-      circle: true,
-      alt: primary!.displayName,
-    });
-    for (const text of next.texts) if (text.y === 120 * scale) text.x = Math.max(margin, size - overlap + 40 * scale);
-    next.pictures.push({
-      src: photo,
-      x: -overlap,
-      y: 60 * scale,
-      width: size,
-      height: size,
-      circle: true,
-      alt: primary!.displayName,
-    });
-  }
+
   return pages;
 }

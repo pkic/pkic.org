@@ -31,7 +31,8 @@ import { AppError } from "../errors";
 import { fetchGravatar } from "./gravatar";
 import type { Env } from "../types";
 import { fetchHeroImage, fetchStaticAsset, uint8ToBase64 } from "./og-badge-hero-image";
-import { validateRasterImage } from "../utils/image-format";
+import { requireProfileImageBucket } from "./profile-image-storage";
+import { svgRasterImage } from "../utils/svg-raster-image";
 import { STANDARD_HEADSHOT_MAX_BYTES } from "../../../assets/shared/schemas/images";
 import { socialBadgeRoleSchema } from "../../../assets/shared/schemas/participant-roles";
 import { eventPlaceSummary } from "../../../assets/shared/event-place";
@@ -85,18 +86,16 @@ function getFontBuffers(origin: string, env: Pick<Env, "ASSETS" | "ASSETS_PUBLIC
 
 export async function loadValidatedHeadshotDataUrl(
   r2Key: string | null,
-  bucket: Env["SPEAKER_UPLOADS_BUCKET"],
+  env: Pick<Env, "SPEAKER_UPLOADS_BUCKET" | "ASSETS_BUCKET" | "IMAGES">,
 ): Promise<string | null> {
-  if (!r2Key || !bucket) return null;
+  if (!r2Key) return null;
   try {
-    const obj = await bucket.get(r2Key);
+    const obj = await requireProfileImageBucket(env, r2Key).get(r2Key);
     if (!obj) return null;
     if (obj.size > STANDARD_HEADSHOT_MAX_BYTES) return null;
     const buf = await obj.arrayBuffer();
     if (buf.byteLength > STANDARD_HEADSHOT_MAX_BYTES) return null;
-    const validation = validateRasterImage(buf);
-    if (!validation.ok) return null;
-    return `data:${validation.image.contentType};base64,${uint8ToBase64(new Uint8Array(buf))}`;
+    return (await svgRasterImage(new Uint8Array(buf), env.IMAGES, STANDARD_HEADSHOT_MAX_BYTES))?.dataUrl ?? null;
   } catch {
     return null;
   }
@@ -119,7 +118,7 @@ export async function renderBadgeSourcePng(
   const [Resvg, fontBuffers, headshotDataUrl, logoResponse, heroImage] = await Promise.all([
     ensureWasm(),
     getFontBuffers(origin, env),
-    loadValidatedHeadshotDataUrl(source.headshot_r2_key, env.SPEAKER_UPLOADS_BUCKET),
+    loadValidatedHeadshotDataUrl(source.headshot_r2_key, env),
     fetchStaticAsset(env, origin, "/img/logo.svg"),
     fetchHeroImage(source.settings_json, origin, env),
   ]);

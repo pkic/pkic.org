@@ -1,3 +1,4 @@
+import { creditAffiliations } from "../../../../assets/shared/agenda-speaker-affiliations";
 import type { PersonalPromotionImageFormat } from "../../../../assets/shared/personal-promotion-image";
 import { personalPromotionRoleStyle } from "../../../../assets/shared/badge-role-colors";
 /** A personal social preview is a compact still from the promotion scene system. */
@@ -36,6 +37,7 @@ export function renderPersonalPromotionSvg(data: PersonalPromotionData): string 
     userId: "participant",
     displayName: [data.firstName, data.lastName].filter(Boolean).join(" ") || "Event participant",
     affiliation: [data.jobTitle, data.organization].filter(Boolean).join(" · "),
+    affiliations: creditAffiliations({ jobTitle: data.jobTitle, organizationName: data.organization }),
   };
   const style = personalPromotionRoleStyle(data.role);
   return renderPromotionSvg(
