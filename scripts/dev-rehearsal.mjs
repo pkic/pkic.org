@@ -7,6 +7,7 @@ import { rehearsalOrigin, rehearsalInboxOrigin } from "./rehearsal/network.mjs";
 import { parseRehearsalOptions } from "./rehearsal/options.mjs";
 import { agendaPlanArguments, agendaPlanFiles } from "./rehearsal/plans.mjs";
 import { exportD1Backup } from "./backup-d1.mjs";
+import { restoreRehearsalDump } from "./rehearsal/restore.mjs";
 import {
   copyBundledWorker,
   readBundledWorker,
@@ -113,7 +114,9 @@ async function main() {
     fs.copyFileSync(dump, copy, fs.constants.COPYFILE_EXCL);
     fs.chmodSync(copy, 0o600);
     run(process.execPath, ["scripts/reorder-d1-dump.mjs", copy]);
-    run(process.execPath, [...wrangler, "d1", "execute", "DB", ...flags, "--file", copy, "--yes"], state);
+    // Provision and close the isolated database before restoring it offline.
+    run(process.execPath, [...wrangler, "d1", "execute", "DB", ...flags, "--command", "SELECT 1", "--yes"], state);
+    restoreRehearsalDump(state, copy);
     fs.writeFileSync(manifestPath, JSON.stringify({ ...manifest, ready: true }), { mode: 0o600 });
     if (command === "init") {
       console.log(`Imported the dump locally into ${state}. No migrations or seeders ran.`);
