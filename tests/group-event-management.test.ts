@@ -544,6 +544,8 @@ describe("group event management routes", () => {
     expect(manageView.eventDays[0].attendanceOptions).toContainEqual({
       value: "virtual",
       label: "Live online",
+      accessMode: "remote",
+      enabled: false,
       spotsRemainingPercent: 99,
     });
     expect(
@@ -560,6 +562,8 @@ describe("group event management routes", () => {
     expect(restored.eventDays[0].attendanceOptions).toContainEqual({
       value: "virtual",
       label: "Live online",
+      accessMode: "remote",
+      enabled: true,
       spotsRemainingPercent: 99,
     });
   });
@@ -695,6 +699,8 @@ describe("group event management routes", () => {
     expect(registrationConfiguration.eventDays[0].attendanceOptions).toContainEqual({
       value: "virtual",
       label: "Virtual",
+      accessMode: "remote",
+      enabled: true,
       icon: "video_people",
       description: "Watch together at a partner venue",
       spotsRemainingPercent: null,
