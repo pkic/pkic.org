@@ -1,4 +1,5 @@
 import { profileD1Flow } from "./helpers/d1-flow-profile";
+import { apiValidationErrorDetailsSchema } from "../assets/shared/schemas/api-common";
 import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./helpers/administrator";
 import { grantAdministrator } from "./helpers/administrator";
 import {
@@ -214,6 +215,68 @@ describe("event email campaign recipients", () => {
     );
     expect(outbox.status).toBe(200);
     expect(emailOutboxResponseSchema.parse(await outbox.json()).outbox).toHaveLength(4);
+  });
+
+  it("refuses a preview whose message names an unknown variable, so it cannot be sent", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const [admin] = await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL);
+    await seedCampaignTemplates(admin.id);
+    const token = await createAdminSession(env.DB, admin.id, "campaign-unknown-variable");
+    await env.DB.prepare(
+      `INSERT INTO invites (id, event_id, invitee_email, invite_type, link_secret, status, source_type, created_at)
+       VALUES (?, ?, 'invited@example.test', 'attendee', ?, 'sent', 'direct', '2026-01-01T00:00:00.000Z')`,
+    )
+      .bind(crypto.randomUUID(), eventId, crypto.randomUUID())
+      .run();
+
+    const preview = await campaignRequest(env.DB, token, "/api/v1/events/pqc-2026/email/campaigns/previews", {
+      subjectOverride: "Update",
+      bodyContent: "Hello {{firstName}}. Missing: {{doesNotExist}}",
+      sendMode: "personal",
+      batchSize: 50,
+      filter: { audience: "attendee_invitations" },
+    });
+
+    expect(preview.status).toBe(422);
+    const refusal = (await preview.json()) as { error: { code: string; details: unknown } };
+    expect(refusal.error.code).toBe("CAMPAIGN_TEMPLATE_UNRESOLVED");
+    // The shared validation shape, so the form marks the message field.
+    expect(apiValidationErrorDetailsSchema.parse(refusal.error.details).fieldErrors?.bodyContent?.[0]).toContain(
+      "{{doesNotExist}}",
+    );
+
+    // A branch the sample recipient does not take still cannot hide an unknown variable.
+    const hidden = await campaignRequest(env.DB, token, "/api/v1/events/pqc-2026/email/campaigns/previews", {
+      subjectOverride: "Update",
+      bodyContent: "Hello {{firstName}}.{{#if lastName}} Missing: {{doesNotExist}}{{/if}}",
+      sendMode: "personal",
+      batchSize: 50,
+      filter: { audience: "attendee_invitations" },
+    });
+    expect(hidden.status).toBe(422);
+
+    const subject = await campaignRequest(env.DB, token, "/api/v1/events/pqc-2026/email/campaigns/previews", {
+      subjectOverride: "Update {{unknownSubject}}",
+      bodyContent: "Hello {{firstName}}.",
+      sendMode: "personal",
+      batchSize: 50,
+      filter: { audience: "attendee_invitations" },
+    });
+    expect(subject.status).toBe(422);
+    const subjectRefusal = (await subject.json()) as { error: { details: unknown } };
+    const subjectFields = apiValidationErrorDetailsSchema.parse(subjectRefusal.error.details).fieldErrors;
+    expect(subjectFields?.subjectOverride?.[0]).toContain("{{unknownSubject}}");
+    expect(subjectFields?.bodyContent).toBeUndefined();
+
+    // Known variables in any branch are fine.
+    const known = await campaignRequest(env.DB, token, "/api/v1/events/pqc-2026/email/campaigns/previews", {
+      subjectOverride: "Update for {{eventName}}",
+      bodyContent: "Hello {{firstName}}.{{#if lastName}} Dear {{lastName}}.{{/if}} See {{eventUrl}}.",
+      sendMode: "personal",
+      batchSize: 50,
+      filter: { audience: "attendee_invitations" },
+    });
+    expect(known.status, await known.clone().text()).toBe(200);
   });
 
   it("loads attendee details for a large event without per-recipient query batches", async () => {

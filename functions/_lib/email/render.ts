@@ -562,3 +562,27 @@ export function renderSubject(template: string | null, fallback: string, data: R
   const rendered = compileSimpleTemplateWithBudget(template, subjectData, budget, 0);
   return rendered.replace(/[\r\n]+/g, " ").trim();
 }
+
+/**
+ * Every variable an authored template can print, in any branch, as the engine
+ * substitutes them (`{{name}}`). Loop bodies are skipped, since they read the
+ * looped item's fields; `else`, `this` and `@` loop values are not variables.
+ */
+export function templateVariableNames(...templates: string[]): string[] {
+  const names = new Set<string>();
+  for (const template of templates) {
+    const outsideLoops = template.replace(/\{\{#each\s+\w+\}\}[\s\S]*?\{\{\/each\}\}/g, "");
+    for (const match of outsideLoops.matchAll(/\{\{([@\w.]+)\}\}/g)) {
+      const name = match[1]!;
+      if (name !== "else" && name !== "this" && !name.startsWith("@") && !name.startsWith("this.")) names.add(name);
+    }
+  }
+  return [...names];
+}
+
+/** Unknown variables and unclosed blocks left visible by the renderer. */
+export function unresolvedTemplateTokens(...rendered: string[]): string[] {
+  const tokens = new Set<string>();
+  for (const text of rendered) for (const match of text.matchAll(/\{\{[^{}]{1,120}\}\}/g)) tokens.add(match[0]);
+  return [...tokens];
+}

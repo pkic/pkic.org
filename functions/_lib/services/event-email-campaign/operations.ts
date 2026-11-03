@@ -12,7 +12,9 @@ import {
 import type { EmailContentType } from "../../../../assets/shared/schemas/email-templates";
 import { applyCampaignCustomText } from "../../email/campaign-custom";
 import { loadEmailRenderResources } from "../../email/partials";
-import { renderEmail, renderSubject } from "../../email/render";
+import { renderEmail, renderSubject, templateVariableNames, unresolvedTemplateTokens } from "../../email/render";
+import type { z } from "zod";
+import type { apiValidationErrorDetailsSchema } from "../../../../assets/shared/schemas/api-common";
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
 import { buildEventEmailVariables, type EventRecord } from "../events";
@@ -79,10 +81,13 @@ export async function previewEventEmailCampaign(
 
   let subject: string;
   let rendered: { html: string; text: string };
+  /** What the author wrote, every branch of it, before any one recipient's data chooses a path. */
+  let authored: [string, string];
   if (input.bodyContent) {
     const data = { ...sampleData, _partials: partials };
     subject = renderSubject(input.subjectOverride ?? null, `Update: ${event.name}`, data);
     rendered = await renderEmail(input.bodyContent, data, layoutHtml, "markdown", options.appBaseUrl);
+    authored = [input.bodyContent, input.subjectOverride ?? ""];
   } else {
     if (!template) {
       throw new AppError(400, "CAMPAIGN_TEMPLATE_REQUIRED", "Select a template or provide a message body.");
@@ -92,7 +97,46 @@ export async function previewEventEmailCampaign(
     const contentType = template.contentType as EmailContentType;
     const content = applyCampaignCustomText(template.content, contentType, input.customText ?? null);
     rendered = await renderEmail(content, data, layoutHtml, contentType, options.appBaseUrl);
+    authored = [content, input.subjectOverride ?? template.subjectTemplate ?? ""];
   }
+
+  // A message that would reach anyone with "{{doesNotExist}}" in it is refused here, where the
+  // author can fix it: without a preview there is no token, so it cannot be sent either. The
+  // authored text is checked against every recipient's variables, so a branch the sample
+  // recipient skips cannot hide one; the sample rendering still catches unclosed blocks.
+  const known = new Set([
+    ...Object.keys(sampleData),
+    ...recipients.flatMap((recipient) => Object.keys(recipient.templateData ?? {})),
+    "customText",
+    // The renderer adds these itself.
+    "baseUrl",
+    "brandBaseUrl",
+  ]);
+  const unresolvedIn = (source: string, output: string) => [
+    ...new Set([
+      ...templateVariableNames(source)
+        .filter((name) => !known.has(name))
+        .map((name) => `{{${name}}}`),
+      ...unresolvedTemplateTokens(output),
+    ]),
+  ];
+  const subjectTokens = unresolvedIn(authored[1], subject);
+  const bodyTokens = unresolvedIn(authored[0], rendered.text);
+  const unresolved = [...new Set([...subjectTokens, ...bodyTokens])];
+  if (unresolved.length)
+    throw new AppError(
+      422,
+      "CAMPAIGN_TEMPLATE_UNRESOLVED",
+      `Fix the message before sending: ${unresolved.join(", ")} ${unresolved.length === 1 ? "is" : "are"} not a known variable or a closed block.`,
+      {
+        fieldErrors: {
+          ...(subjectTokens.length ? { subjectOverride: [`Unknown or unclosed: ${subjectTokens.join(", ")}`] } : {}),
+          ...(bodyTokens.length
+            ? { [input.bodyContent ? "bodyContent" : "templateKey"]: [`Unknown or unclosed: ${bodyTokens.join(", ")}`] }
+            : {}),
+        },
+      } satisfies z.infer<typeof apiValidationErrorDetailsSchema>,
+    );
 
   return eventEmailCampaignPreviewResponseSchema.parse({
     success: true,
