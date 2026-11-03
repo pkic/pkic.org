@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { BROTHER_DK_1208_PAPER } from "./badge-label-policy";
 import {
   badgePrintLayoutSchema,
   badgePrintPageDimensions,
@@ -140,7 +141,20 @@ export function badgePrintPreset(id: BadgePrintPresetId): BadgePrintLayout {
       );
     case "brother_dk_1208":
       return {
-        ...sheet({ size: "custom", orientation: "landscape", widthMm: 90.3, heightMm: 38 }, 90.3, 38, 1, 1, 0, 0),
+        ...sheet(
+          {
+            size: "custom",
+            orientation: "portrait",
+            widthMm: BROTHER_DK_1208_PAPER.widthMm,
+            heightMm: BROTHER_DK_1208_PAPER.heightMm,
+          },
+          BROTHER_DK_1208_PAPER.widthMm,
+          BROTHER_DK_1208_PAPER.heightMm,
+          1,
+          1,
+          0,
+          0,
+        ),
         sides: "front_back",
       };
     case "label_100_50":

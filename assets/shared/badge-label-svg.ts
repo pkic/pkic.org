@@ -1,5 +1,6 @@
 import { splitBadgePrintSvg } from "./badge-print-svg";
 import { BADGE_TEXT_FIT_CHARACTER_EM } from "./badge-template-text-fit";
+import { BROTHER_DK_1208_PAPER, isBrotherDk1208Paper } from "./badge-label-policy";
 import type { badgePrintResponseSchema } from "./schemas/route-contracts-event-badges";
 import type { z } from "zod";
 
@@ -51,6 +52,20 @@ export function badgeLabelSvg(badge: BadgeLabelContent, widthMm = 90.3, heightMm
   const parts = splitBadgePrintSvg(badge.svg);
   const width = 90.3;
   const height = 38;
+  const portrait = heightMm > widthMm;
+  const brother = isBrotherDk1208Paper({ widthMm, heightMm });
+  const crossFeedMargin = brother ? BROTHER_DK_1208_PAPER.crossFeedMarginMm : 0;
+  const feedMargin = brother ? BROTHER_DK_1208_PAPER.feedMarginMm : 0;
+  const artworkWidth = portrait ? height : width;
+  const artworkHeight = portrait ? width : height;
+  const scale = Math.min((widthMm - crossFeedMargin * 2) / artworkWidth, (heightMm - feedMargin * 2) / artworkHeight);
+  const fittedWidth = artworkWidth * scale;
+  const fittedHeight = artworkHeight * scale;
+  const left = (widthMm - fittedWidth) / 2;
+  const top = (heightMm - fittedHeight) / 2;
+  const transform = portrait
+    ? `translate(${left + fittedWidth} ${top}) rotate(90) scale(${scale})`
+    : `translate(${left} ${top}) scale(${scale})`;
   const textWidth = 53;
   const firstName = badge.firstName?.trim() || (badge.lastName?.trim() ? "" : badge.displayName?.trim()) || "";
   const name = firstName || badge.lastName?.trim() || "Attendee name unavailable";
@@ -65,5 +80,5 @@ export function badgeLabelSvg(badge: BadgeLabelContent, widthMm = 90.3, heightMm
   const code = parts
     ? `<text x="72.5" y="35" text-anchor="middle" font-family="monospace" font-size="2.85">${escapeXml(parts.code)}</text>`
     : "";
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${widthMm}mm" height="${heightMm}mm" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeXml(badge.displayName ?? name)}"><rect width="${width}" height="${height}" fill="#fff"/><g fill="#000" font-family="Arial,Helvetica,sans-serif">${text}<image x="57.5" y="1.5" width="30" height="30" href="data:image/svg+xml;charset=utf-8,${escapeXml(encodeURIComponent(qr))}"/>${code}</g></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${widthMm}mm" height="${heightMm}mm" viewBox="0 0 ${widthMm} ${heightMm}" role="img" aria-label="${escapeXml(badge.displayName ?? name)}"><rect width="${widthMm}" height="${heightMm}" fill="#fff"/><g transform="${transform}" fill="#000" font-family="Arial,Helvetica,sans-serif">${text}<image x="57.5" y="1.5" width="30" height="30" href="data:image/svg+xml;charset=utf-8,${escapeXml(encodeURIComponent(qr))}"/>${code}</g></svg>`;
 }
