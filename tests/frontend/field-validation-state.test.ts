@@ -122,27 +122,39 @@ describe("validation state on server-rendered fields", () => {
     expect(document.activeElement).toBe(form.querySelector('[name="firstName"]'));
   });
 
-  it("focuses a required consent on the first submit before its error marker renders", () => {
-    const form = buildForm('<div data-consents></div><button type="submit">Submit</button>');
-    render(
-      createElement(ConsentCard, {
-        term: {
-          termKey: "code-of-conduct",
-          version: "v1",
-          required: true,
-          contentRef: null,
-          displayText: "Code of conduct",
-        },
-      }),
-      form.querySelector("[data-consents]")!,
-    );
-    const consent = form.querySelector<HTMLInputElement>('[name="consents"]')!;
-    form.querySelector<HTMLButtonElement>("button")!.focus();
-    expect(form.querySelector(".pk-field--invalid, [aria-invalid='true']")).toBeNull();
-    expect(validateBeforeSubmit(form, document.createElement("p"))).toBe(false);
-    expect(document.activeElement).toBe(consent);
-    render(null, form.querySelector("[data-consents]")!);
-  });
+  it.each(["alone", "before title", "after title"])(
+    "focuses the first refused control before consent errors render: consent %s",
+    (position) => {
+      const title =
+        '<div class="pk-field"><input name="title" required /><p data-field-error="title" hidden></p></div>';
+      const consentMarkup = "<div data-consents></div>";
+      const fields =
+        position === "alone"
+          ? consentMarkup
+          : position === "before title"
+            ? consentMarkup + title
+            : title + consentMarkup;
+      const form = buildForm(`${fields}<button type="submit">Submit</button>`);
+      render(
+        createElement(ConsentCard, {
+          term: {
+            termKey: "code-of-conduct",
+            version: "v1",
+            required: true,
+            contentRef: null,
+            displayText: "Code of conduct",
+          },
+        }),
+        form.querySelector("[data-consents]")!,
+      );
+      const consent = form.querySelector<HTMLInputElement>('[name="consents"]')!;
+      form.querySelector<HTMLButtonElement>("button")!.focus();
+      expect(form.querySelector(".pk-field--invalid, [aria-invalid='true']")).toBeNull();
+      expect(validateBeforeSubmit(form, document.createElement("p"))).toBe(false);
+      expect(document.activeElement).toBe(position === "after title" ? form.querySelector('[name="title"]') : consent);
+      render(null, form.querySelector("[data-consents]")!);
+    },
+  );
 
   it("does not use native constraints to focus a field owned by its contract", () => {
     const form = buildForm(

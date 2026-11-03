@@ -19,7 +19,6 @@ const FORMAT_MESSAGES: Record<string, string> = {
   datetime: "Enter a valid date and time.",
   date: "Enter a valid date.",
   time: "Enter a valid time.",
-  uuid: "Choose one from the list.",
   regex: "Use only the characters this field allows.",
 };
 
@@ -29,8 +28,10 @@ export function plainValidationMessage(issue: Issue): string | undefined {
       return issue.input === undefined || issue.input === null ? "This field is required." : undefined;
     case "too_small": {
       const minimum = Number(issue.minimum);
-      if (issue.origin === "string")
+      if (issue.origin === "string") {
+        if (issue.exact) return `Enter exactly ${minimum} characters.`;
         return minimum <= 1 ? "This field is required." : `Enter at least ${minimum} characters.`;
+      }
       if (issue.origin === "array" || issue.origin === "set")
         return minimum <= 1 ? "Choose at least one." : `Choose at least ${minimum}.`;
       if (issue.origin === "number" || issue.origin === "int" || issue.origin === "bigint")
@@ -39,7 +40,8 @@ export function plainValidationMessage(issue: Issue): string | undefined {
     }
     case "too_big": {
       const maximum = Number(issue.maximum);
-      if (issue.origin === "string") return `Use at most ${maximum} characters.`;
+      if (issue.origin === "string")
+        return issue.exact ? `Enter exactly ${maximum} characters.` : `Use at most ${maximum} characters.`;
       if (issue.origin === "array" || issue.origin === "set") return `Choose at most ${maximum}.`;
       if (issue.origin === "number" || issue.origin === "int" || issue.origin === "bigint")
         return issue.inclusive === false ? `Enter less than ${maximum}.` : `Enter ${maximum} or less.`;
