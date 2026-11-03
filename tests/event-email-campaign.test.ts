@@ -1,3 +1,4 @@
+import { resolveEmailTemplateData } from "../functions/_lib/email/plain-text";
 import { profileD1Flow } from "./helpers/d1-flow-profile";
 import { apiValidationErrorDetailsSchema } from "../assets/shared/schemas/api-common";
 import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./helpers/administrator";
@@ -278,6 +279,106 @@ describe("event email campaign recipients", () => {
     });
     expect(known.status, await known.clone().text()).toBe(200);
   });
+
+  it.each([1, 10])(
+    "refuses optional answers missing at recipient %i but allows guarded references",
+    async (missingIndex) => {
+      const { eventId } = await seedEventAndAdmin(env.DB);
+      const [admin] = await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL);
+      await seedCampaignTemplates(admin.id);
+      const token = await createAdminSession(env.DB, admin.id, "campaign-optional-answer");
+      const formId = crypto.randomUUID();
+      await env.DB.batch([
+        env.DB.prepare(`INSERT INTO forms
+        (id, key, scope_type, scope_ref, purpose, status, title, created_at, updated_at)
+        VALUES (?, ?, 'event', ?, 'event_registration', 'active', 'Optional answers', ?, ?)`).bind(
+          formId,
+          `optional-${formId}`,
+          eventId,
+          "2026-01-01T00:00:00.000Z",
+          "2026-01-01T00:00:00.000Z",
+        ),
+        env.DB.prepare(`INSERT INTO form_fields
+        (id, form_id, key, label, field_type, required, sort_order, created_at)
+        VALUES (?, ?, 'dietary', 'Dietary needs', 'text', 0, 0, ?)`).bind(
+          crypto.randomUUID(),
+          formId,
+          "2026-01-01T00:00:00.000Z",
+        ),
+      ]);
+      await env.DB.prepare(`INSERT INTO form_placements
+      (id, form_id, context_type, context_ref, audience, active, created_at, updated_at)
+      VALUES (?, ?, 'event', ?, 'attendee', 1, ?, ?)`)
+        .bind(crypto.randomUUID(), formId, eventId, "2026-01-01T00:00:00.000Z", "2026-01-01T00:00:00.000Z")
+        .run();
+      const answersByRecipient = Array.from({ length: 11 }, (_, index) =>
+        index === missingIndex ? {} : { dietary: "Vegetarian" },
+      );
+      for (const [index, answers] of answersByRecipient.entries()) {
+        const userId = await insertUser(env.DB, `optional-${String(index).padStart(2, "0")}@example.test`);
+        await env.DB.prepare(`INSERT INTO registrations
+        (id, event_id, user_id, status, source_type, custom_answers_json, manage_link_secret, created_at, updated_at)
+        VALUES (?, ?, ?, 'registered', 'direct', ?, ?, ?, ?)`)
+          .bind(
+            crypto.randomUUID(),
+            eventId,
+            userId,
+            JSON.stringify(answers),
+            crypto.randomUUID(),
+            "2026-01-01T00:00:00.000Z",
+            "2026-01-01T00:00:00.000Z",
+          )
+          .run();
+      }
+      const event = await getEventBySlug(env.DB, "pqc-2026");
+      const recipients = await listCampaignRecipients(env.DB, event, "https://app.test", { audience: "attendees" });
+      expect(
+        recipients.map((recipient) => resolveEmailTemplateData(recipient.templateData ?? {}, "text").dietary),
+      ).toEqual(answersByRecipient.map((answers) => answers.dietary));
+
+      const preview = (subjectOverride: string, bodyContent: string, templateKey?: string) =>
+        campaignRequest(env.DB, token, "/api/v1/events/pqc-2026/email/campaigns/previews", {
+          subjectOverride,
+          ...(templateKey ? { templateKey } : { bodyContent }),
+          sendMode: "personal",
+          batchSize: 50,
+          filter: { audience: "attendees" },
+        });
+      for (const [subject, body, field] of [
+        ["Update", "Your dietary needs: {{dietary}}", "bodyContent"],
+        ["Your dietary needs: {{dietary}}", "Hello {{firstName}}.", "subjectOverride"],
+      ]) {
+        const response = await preview(subject, body);
+        expect(response.status, await response.clone().text()).toBe(422);
+        const refusal = (await response.json()) as { error: { code: string; details: unknown } };
+        expect(refusal.error.code).toBe("CAMPAIGN_TEMPLATE_UNRESOLVED");
+        expect(apiValidationErrorDetailsSchema.parse(refusal.error.details).fieldErrors?.[field]?.[0]).toContain(
+          "{{dietary}}",
+        );
+      }
+      const version = await createTemplateVersion(env.DB, {
+        templateKey: "registration_confirmation",
+        content: "Your dietary needs: {{dietary}}",
+        subjectTemplate: "Update",
+        createdByUserId: admin.id,
+      });
+      await activateTemplateVersion(env.DB, { templateKey: "registration_confirmation", version: version.version });
+      const templateResponse = await preview("Update", "", "registration_confirmation");
+      expect(templateResponse.status, await templateResponse.clone().text()).toBe(422);
+      const templateRefusal = (await templateResponse.json()) as { error: { details: unknown } };
+      expect(
+        apiValidationErrorDetailsSchema.parse(templateRefusal.error.details).fieldErrors?.templateKey?.[0],
+      ).toContain("{{dietary}}");
+
+      const guarded = await preview(
+        "Update",
+        "Hello {{firstName}}.{{#if dietary}} Your dietary needs: {{dietary}}{{/if}}",
+      );
+      expect(guarded.status, await guarded.clone().text()).toBe(200);
+      expect(eventEmailCampaignPreviewResponseSchema.parse(await guarded.json()).text).toContain("Vegetarian");
+      expect(await queryAll(env.DB, "SELECT id FROM email_outbox WHERE event_id=?", [eventId])).toHaveLength(0);
+    },
+  );
 
   it("loads attendee details for a large event without per-recipient query batches", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);

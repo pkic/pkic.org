@@ -66,7 +66,6 @@ export async function prepareOwnEmailVerificationMessage(
     at: string;
   } & OwnEmailVerificationDelivery,
 ): Promise<{ outboxId: string; statements: StatementLike[] }> {
-  await requireDeliverableTemplate(db, "user_email_verification");
   const capability = await queueEmailAuthCapability({
     signingSecret: input.signingSecret,
     purpose: PURPOSE,
@@ -143,6 +142,7 @@ export async function requestOwnEmailVerification(
 ): Promise<{ outboxId: string }> {
   const address = await ownAddress(db, input.userId, input.emailId);
   if (address.verified_at) throw new AppError(409, "EMAIL_ALREADY_VERIFIED", "This address is already verified");
+  await requireDeliverableTemplate(db, "user_email_verification");
   const at = nowIso();
   const prepared = await prepareOwnEmailVerificationMessage(db, {
     ...input,

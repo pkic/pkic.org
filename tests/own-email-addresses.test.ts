@@ -26,6 +26,8 @@ import {
 import type { Env } from "../functions/_lib/types";
 import { LAST_SIGN_IN_METHOD, LAST_SIGN_IN_METHOD_MESSAGE } from "../assets/shared/auth-errors";
 import { activateTemplateVersion, createTemplateVersion } from "../functions/_lib/email/templates";
+import { profileD1Flow } from "./helpers/d1-flow-profile";
+import { prepareOwnEmailVerificationMessage } from "../functions/_lib/services/own-email-verification";
 import { findOrCreateUser } from "../functions/_lib/services/users";
 import { changeRegistrationEmail } from "../functions/_lib/services/registrations";
 import { getRegistrationByManageToken } from "../functions/_lib/services/registrations/queries";
@@ -145,6 +147,37 @@ describe("a person's own email addresses", () => {
     ).toHaveLength(0);
     expect(
       await queryAll(env.DB, "SELECT id FROM user_emails WHERE normalized_email='template-extra@example.test'"),
+    ).toHaveLength(0);
+  });
+
+  it("builds address verification statements without executing database work", async () => {
+    const { userId } = await signedIn("statement-owner@example.test");
+    const profile = profileD1Flow(env.DB);
+    const prepared = await prepareOwnEmailVerificationMessage(profile.db, {
+      userId,
+      emailId: crypto.randomUUID(),
+      email: "statement-extra@example.test",
+      addressRequest: true,
+      signingSecret: environment.INTERNAL_SIGNING_SECRET!,
+      appBaseUrl: "https://app.test",
+      at: nowIso(),
+    });
+    expect(prepared.statements).toHaveLength(2);
+    expect(profile.summary().roundTrips).toBe(0);
+  });
+
+  it("refuses to resend verification when its template is unavailable", async () => {
+    const { userId, token } = await signedIn("resend-template-owner@example.test");
+    const emailId = crypto.randomUUID();
+    await env.DB.prepare("INSERT INTO user_emails(id,user_id,email,normalized_email,created_at) VALUES(?,?,?,?,?)")
+      .bind(emailId, userId, "resend-extra@example.test", "resend-extra@example.test", nowIso())
+      .run();
+    await env.DB.prepare("DELETE FROM email_template_versions WHERE template_key = 'user_email_verification'").run();
+    const response = await call(token, `/${emailId}/verification`, "POST");
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ error: { code: "EMAIL_TEMPLATE_UNAVAILABLE" } });
+    expect(
+      await queryAll(env.DB, "SELECT id FROM email_outbox WHERE recipient_email=?", ["resend-extra@example.test"]),
     ).toHaveLength(0);
   });
 

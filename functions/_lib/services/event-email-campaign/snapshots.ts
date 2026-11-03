@@ -36,6 +36,30 @@ export async function campaignSnapshotDigest(input: EventEmailCampaignPreviewInp
   return computeCampaignDigest({ ...eventEmailCampaignPreviewInputSchema.parse(input), snapshotId });
 }
 
+/** Reads one bounded recipient page from the frozen campaign audience. */
+export async function loadCampaignSnapshotRecipients(
+  db: DatabaseLike,
+  event: CampaignEvent,
+  input: EventEmailCampaignPreviewInput,
+  appBaseUrl: string,
+  snapshotId: string,
+  afterEmail = "",
+  limit = 100,
+) {
+  const emails = await all<{ email: string }>(
+    db,
+    "SELECT email FROM event_email_campaign_recipients WHERE campaign_id = ? AND email > ? ORDER BY email LIMIT ?",
+    [snapshotId, afterEmail, limit],
+  );
+  const recipients = emails.length
+    ? await listCampaignRecipients(db, event, appBaseUrl, input.filter, {
+        maxRecipients: limit,
+        recipientEmails: emails.map((row) => row.email),
+      })
+    : [];
+  return { recipients, cursor: emails.at(-1)?.email ?? afterEmail, hasMore: emails.length === limit };
+}
+
 export async function createCampaignSnapshot(
   db: DatabaseLike,
   event: CampaignEvent,
@@ -90,15 +114,7 @@ export async function createCampaignSnapshot(
     [id],
   );
   if (!snapshot) throw new Error("Campaign snapshot was not persisted");
-  const emails = await all<{ email: string }>(
-    db,
-    "SELECT email FROM event_email_campaign_recipients WHERE campaign_id = ? ORDER BY email LIMIT 10",
-    [id],
-  );
-  const recipients = await listCampaignRecipients(db, event, options.appBaseUrl, input.filter, {
-    maxRecipients: 10,
-    recipientEmails: emails.map((row) => row.email),
-  });
+  const { recipients } = await loadCampaignSnapshotRecipients(db, event, input, options.appBaseUrl, id, "", 10);
   const template = !input.bodyContent && input.templateKey ? await resolveTemplate(db, input.templateKey) : null;
   return { ...snapshot, recipients, template, token, digest };
 }
