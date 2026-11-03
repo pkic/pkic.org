@@ -307,6 +307,33 @@ describe("event email campaign UI", () => {
     expect(send.disabled).toBe(true);
   });
 
+  it.each(["subjectOverride", "bodyContent"] as const)(
+    "marks the %s field after an unknown-variable refusal",
+    async (field) => {
+      const requests = stubCampaignFetch({
+        previews: () =>
+          json(
+            {
+              error: {
+                code: "CAMPAIGN_TEMPLATE_UNRESOLVED",
+                message: "Fix the message before sending.",
+                details: { fieldErrors: { [field]: ["Unknown variable: {{doesNotExist}}"] } },
+              },
+            },
+            422,
+          ),
+      });
+      const container = mount(<EventEmailCampaign campaignsPath={CAMPAIGN_PATH} daysPath={`${EVENT_PATH}/days`} />);
+      await composeAndPreview(container);
+      const control = controlFor(container, field === "subjectOverride" ? "Subject" : "Message");
+      expect(control.getAttribute("aria-invalid")).toBe("true");
+      expect(container.textContent).toContain("{{doesNotExist}}");
+      expect(confirmationBox(container)).toBeNull();
+      const preview = requests.find(({ path }) => path === `${CAMPAIGN_PATH}/previews`);
+      eventEmailCampaignPreviewInputSchema.parse(preview?.body);
+    },
+  );
+
   it("reports a rejected send and leaves the composed message intact", async () => {
     const notify = vi.fn();
     stubCampaignFetch({

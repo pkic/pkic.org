@@ -23,6 +23,7 @@ import {
   verifyEmailAuthCapabilityToken,
 } from "../auth/email-auth-capabilities";
 import { prepareQueueEmailStatement } from "../email/outbox-queue";
+import { requireDeliverableTemplate } from "../email/templates";
 import { first } from "../db/queries";
 import { AppError } from "../errors";
 import {
@@ -141,6 +142,7 @@ export async function requestOwnEmailVerification(
 ): Promise<{ outboxId: string }> {
   const address = await ownAddress(db, input.userId, input.emailId);
   if (address.verified_at) throw new AppError(409, "EMAIL_ALREADY_VERIFIED", "This address is already verified");
+  await requireDeliverableTemplate(db, "user_email_verification");
   const at = nowIso();
   const prepared = await prepareOwnEmailVerificationMessage(db, {
     ...input,

@@ -10,6 +10,22 @@ interface PortalSessionFixtureOptions {
   grants?: Array<{ permission: string; contextType: string | null; contextId: string | null }>;
 }
 
+/** A person's organization and individual identities for the portal choice flow. */
+export const portalIdentityChoiceFixtures = {
+  organization: {
+    id: "00000000-0000-4000-8000-0000000000a1",
+    organizationId: "00000000-0000-4000-8000-0000000000b1",
+    organizationName: "Alpha Org",
+    jobTitle: "Delegate",
+  },
+  individual: {
+    id: "00000000-0000-4000-8000-0000000000a2",
+    organizationId: null,
+    organizationName: null,
+    jobTitle: null,
+  },
+};
+
 export function portalSessionFixture(capacities: PortalSessionFixtureOptions): PortalSession {
   const identity = { id: "00000000-0000-4000-8000-000000000001", email: "person@example.test" };
   return {

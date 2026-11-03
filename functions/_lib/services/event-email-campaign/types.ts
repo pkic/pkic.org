@@ -107,7 +107,9 @@ export type CampaignTemplate = Pick<
   "subjectTemplate" | "content" | "contentType" | "messageType"
 >;
 
-export interface CampaignDeliveryPage {
+import type { EmailRenderResources } from "../../email/partials";
+
+export interface CampaignDeliveryPage extends Pick<EmailRenderResources, "partials"> {
   template: CampaignTemplate | null;
   messageType: EmailMessageType;
   recipients: CampaignRecipient[];

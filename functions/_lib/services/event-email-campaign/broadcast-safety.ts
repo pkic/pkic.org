@@ -1,13 +1,17 @@
 import { AppError } from "../../errors";
 import type { CampaignRecipient, CampaignTemplate, EventEmailCampaignInput } from "./types";
 
-function escapeRegex(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+import { analyzeTemplateReferences } from "../../email/template-references";
+
+interface CampaignReferenceOptions {
+  recipientVariables?: readonly string[];
+  partials?: Record<string, string>;
 }
 
 export function findBroadcastOnlyTemplateRefs(
   recipients: CampaignRecipient[],
   parts: Array<string | null | undefined>,
+  options: CampaignReferenceOptions = {},
 ): string[] {
   const disallowed = new Set<string>([
     "firstName",
@@ -24,31 +28,21 @@ export function findBroadcastOnlyTemplateRefs(
     "manageUrl",
   ]);
 
-  for (const recipient of recipients) {
-    for (const key of Object.keys(recipient.templateData ?? {})) {
-      if (key === "registrationUrl" || key === "proposalUrl") continue;
-      disallowed.add(key);
-    }
+  for (const key of [
+    ...recipients.flatMap((recipient) => Object.keys(recipient.templateData ?? {})),
+    ...(options.recipientVariables ?? []),
+  ]) {
+    if (key !== "registrationUrl" && key !== "proposalUrl") disallowed.add(key);
   }
-
-  const content = parts.filter((part): part is string => Boolean(part && part.trim()));
   const found = new Set<string>();
-  const regexMap = new Map<string, RegExp>();
-  for (const key of disallowed) {
-    regexMap.set(
-      key,
-      key === "reg_details"
-        ? /\{\{>\s*reg_details\s*\}\}/
-        : new RegExp(`\\{\\{[^}]*\\b${escapeRegex(key)}\\b[^}]*\\}\\}`),
-    );
-  }
-
-  for (const part of content) {
-    for (const key of disallowed) {
-      if (regexMap.get(key)?.test(part)) found.add(key);
+  for (const part of parts) {
+    if (!part) continue;
+    const analysis = analyzeTemplateReferences(part, options.partials);
+    for (const reference of analysis.references) {
+      if (disallowed.has(reference.name)) found.add(reference.name);
     }
+    if (analysis.includedPartials.includes("reg_details")) found.add("reg_details");
   }
-
   return Array.from(found).sort();
 }
 
@@ -56,15 +50,14 @@ export function assertCampaignBroadcastSafety(
   input: Pick<EventEmailCampaignInput, "sendMode" | "subjectOverride" | "bodyContent" | "customText">,
   recipients: CampaignRecipient[],
   template: CampaignTemplate | null,
+  options: CampaignReferenceOptions = {},
 ): void {
   if (input.sendMode !== "bcc_batch") return;
-  const unsafeRefs = findBroadcastOnlyTemplateRefs(recipients, [
-    input.subjectOverride,
-    input.bodyContent,
-    input.customText,
-    template?.subjectTemplate,
-    template?.content,
-  ]);
+  const unsafeRefs = findBroadcastOnlyTemplateRefs(
+    recipients,
+    [input.subjectOverride, input.bodyContent, input.customText, template?.subjectTemplate, template?.content],
+    options,
+  );
   if (unsafeRefs.length > 0) {
     throw new AppError(
       400,

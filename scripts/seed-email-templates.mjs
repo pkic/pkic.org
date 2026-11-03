@@ -1269,6 +1269,9 @@ function parseArgs(argv) {
       if (arg === "--replace") {
         parsed.ifMissing = false;
       }
+      if (arg === "--check") {
+        parsed.check = true;
+      }
       return 0;
     },
   );
@@ -1384,10 +1387,48 @@ function ensureAdminExists(cli) {
   }
 }
 
+/**
+ * Read-only: lists catalog templates that have no active version with content
+ * in the target database, and fails when any is missing. Run it against
+ * preview and production after a deployment that adds a template.
+ */
+function checkActiveTemplates(cli, templates) {
+  const output = runWrangler(
+    [
+      ...buildWranglerD1ExecuteArgs(cli),
+      "--command",
+      `WITH active_versions AS (
+         SELECT template_key, body,
+                ROW_NUMBER() OVER (PARTITION BY template_key ORDER BY version DESC) AS active_rank
+           FROM email_template_versions WHERE status = 'active'
+       )
+       SELECT template_key FROM active_versions WHERE active_rank = 1 AND length(coalesce(body, '')) > 0;`,
+      "--json",
+    ],
+    { captureOutput: true },
+  );
+  const active = new Set((parseWranglerJsonOutput(output)?.[0]?.results ?? []).map((row) => row.template_key));
+  const missing = templates.map((template) => template.key).filter((key) => !active.has(key));
+  if (missing.length === 0) {
+    console.log(`All ${templates.length} catalog email template(s) have an active version in ${cli.mode} mode.`);
+    return;
+  }
+  console.error(`Missing active email template(s) in ${cli.mode} mode: ${missing.join(", ")}`);
+  console.error(
+    "Seed them with: pnpm exec node scripts/seed-email-templates.mjs --if-missing (plus the same target flags).",
+  );
+  console.error("For an active version without a body, review and activate a new version in the template editor.");
+  process.exitCode = 1;
+}
+
 function main() {
   const cli = parseArgs(process.argv.slice(2));
   const config = loadConfig(cli.configPath);
   const seed = seedConfig(config, cli);
+  if (cli.check) {
+    checkActiveTemplates(cli, seed.templates);
+    return;
+  }
 
   if (seed.templates.length === 0) {
     throw new Error("No email templates selected for seeding.");

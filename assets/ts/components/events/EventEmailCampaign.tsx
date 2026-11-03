@@ -227,7 +227,8 @@ export function EventEmailCampaign({
       setPreview(res);
       setStatus(`Preview ready — ${res.recipientCount} recipients.`);
     } catch (e) {
-      const msg = (e as Error).message;
+      // A refusal that names a field (an unknown variable in the message) shows on that field.
+      const msg = form.refuse(e);
       setStatus(msg);
       notify(msg, "error");
     }

@@ -1,9 +1,11 @@
+import { analyzeTemplateReferences } from "../functions/_lib/email/template-references";
 import { describe, it, expect } from "vitest";
 import {
   EMAIL_TEMPLATE_RENDER_MAX_EXPANSIONS,
   compileSimpleTemplate,
   renderEmail,
   renderSubject,
+  unresolvedTemplateTokens,
 } from "../functions/_lib/email/render";
 
 function expectRenderLimit(action: () => unknown): void {
@@ -17,6 +19,32 @@ function expectRenderLimit(action: () => unknown): void {
 }
 
 describe("email template engine (compileSimpleTemplate)", () => {
+  it("finds long unresolved loop tokens and deduplicates them across rendered outputs", () => {
+    const token = `{{${"missing".repeat(100)}}}`;
+    const output = compileSimpleTemplate(`{{#each rows}}${token}{{/each}}`, { rows: [{}, {}] });
+    expect(unresolvedTemplateTokens(output, token, "{{short}}", "{{short}}")).toEqual([token, "{{short}}"]);
+    expect(unresolvedTemplateTokens("No placeholders", "{unclosed")).toEqual([]);
+  });
+
+  it("collects condition operands and loop-scoped expressions from branches that may never run", () => {
+    const analysis = analyzeTemplateReferences(
+      '{{#if eq missing "literal words"}}Yes{{/if}}{{#unless absent}}No{{/unless}}{{#each customAnswerRows}}{{#if and label firstName}}{{this.missing}}{{@index}}{{/if}}{{/each}}',
+    );
+    expect(analysis.invalidTokens).toEqual([]);
+    expect(analysis.references.map(({ name, collection }) => [name, collection])).toEqual([
+      ["missing", null],
+      ["absent", null],
+      ["customAnswerRows", null],
+      ["label", "customAnswerRows"],
+      ["firstName", "customAnswerRows"],
+      ["this.missing", "customAnswerRows"],
+      ["@index", "customAnswerRows"],
+    ]);
+    expect(analyzeTemplateReferences("{{#if firstName}}{{#unless lastName}}x{{/if}}").invalidTokens).not.toHaveLength(
+      0,
+    );
+  });
+
   describe("variable substitution", () => {
     it("continues fragment blockquotes only in Markdown mode", () => {
       const template = "> **{{author}}:** {{body}}";

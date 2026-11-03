@@ -55,6 +55,7 @@ async function seedRequiredEmailTemplates(adminId: string): Promise<void> {
     "User sign-in link",
   );
   await seedTemplate(adminId, "speaker_invite", "Submit your talk: {{proposalUrl}}", "Speaker invitation");
+  await seedTemplate(adminId, "event_proposal_verify", "Verify: {{verificationUrl}}", "Verify your email");
   await seedTemplate(
     adminId,
     "proposal_submitted",

@@ -289,6 +289,26 @@ describe("buildTemplateSqlStatements", () => {
     expect(rendered.html).not.toContain("http://localhost:8788/img/logo-white.png");
   });
 
+  it.each(["registration_email_verify", "event_proposal_verify"])(
+    "renders the %s verification link as a button and keeps the plain-text URL on one line",
+    async (key) => {
+      const template = DEFAULT_TEMPLATES.find((item) => item.key === key);
+      const verificationUrl = `http://localhost:8788/events/2026/summit/register/#verify=${"a".repeat(400)}`;
+      expect(template).toBeDefined();
+
+      const rendered = await renderEmail(
+        template!.content,
+        { eventName: "Summit 2026", verificationUrl },
+        DEFAULT_LAYOUT_HTML,
+        template!.contentType ?? "markdown",
+        "http://localhost:8788",
+      );
+
+      expect(rendered.html.split(`href="${verificationUrl}"`)).toHaveLength(2);
+      expect(rendered.text.split("\n").filter((line) => line.includes(verificationUrl))).toHaveLength(1);
+    },
+  );
+
   it("guards missing-only seeds without archiving the active version", () => {
     const sql = buildTemplateSqlStatements({ adminEmail: " Admin@Example.test ", ifMissing: true }, [template]);
     expect(sql).toContain("WHERE NOT EXISTS");

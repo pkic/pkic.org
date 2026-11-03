@@ -6,6 +6,8 @@ import { sha256Hex } from "../utils/crypto";
 import { buildEventEmailVariables, type EventRecord } from "./events";
 import { proposalPageUrl, registrationPageUrl } from "./frontend-links";
 import { registrationManageCapability } from "./registrations/capability-urls";
+import { campaignAuthoredTemplates } from "./event-email-campaign/template-content";
+import { templateVariableNames } from "../email/template-references";
 import { buildPersonalCampaignTemplateData } from "./event-email-campaign/template-data";
 import { chunkRecipients } from "./event-email-campaign/batching";
 import { findBroadcastOnlyTemplateRefs } from "./event-email-campaign/broadcast-safety";
@@ -34,15 +36,19 @@ export async function prepareEventEmailCampaignPage(
     ? { registrationUrl: registrationPageUrl(appBaseUrl, event, { source: "event_email" }) }
     : { proposalUrl: proposalPageUrl(appBaseUrl, event, { source: "event_email" }) };
   const sharedEventVars = buildEventEmailVariables(event, appBaseUrl);
+  // These authored names were accepted by preview. Re-derive the defaults from its
+  // digest-bound content so later recipients with different forms render absent values empty.
+  const defaultVariableNames = templateVariableNames(campaignAuthoredTemplates(input, template), {
+    includeLoopBodies: true,
+    partials: campaign.partials,
+  });
   const usesManageUrl =
     input.filter.audience === "attendees" &&
-    findBroadcastOnlyTemplateRefs(recipients, [
-      input.subjectOverride,
-      input.bodyContent,
-      input.customText,
-      template?.subjectTemplate,
-      template?.content,
-    ]).includes("manageUrl");
+    findBroadcastOnlyTemplateRefs(
+      recipients,
+      [input.subjectOverride, input.bodyContent, input.customText, template?.subjectTemplate, template?.content],
+      { partials: campaign.partials },
+    ).includes("manageUrl");
 
   const rows = [] as Parameters<typeof prepareBulkQueueEmailChunkStatements>[1];
   let queuedRecipients = 0;
@@ -68,7 +74,7 @@ export async function prepareEventEmailCampaignPage(
         subject: input.subjectOverride ?? `Update: ${event.name}`,
         capabilityLinkValues: manageUrl ? [manageUrl] : [],
         data: {
-          ...buildPersonalCampaignTemplateData(recipient, { ...sharedEventVars, ...routeVars }),
+          ...buildPersonalCampaignTemplateData(recipient, { ...sharedEventVars, ...routeVars }, defaultVariableNames),
           ...(manageUrl ? { manageUrl } : {}),
           __eventCampaignCustomText: input.customText ?? null,
           ...directEmailBodyPayload(input.bodyContent),

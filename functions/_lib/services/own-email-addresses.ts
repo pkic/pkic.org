@@ -31,6 +31,7 @@ import { buildOffsetPageStatements, decodeOffsetPageResults } from "../db/pagina
 import { buildD1TextSearchFilter } from "../db/search";
 import { resolveMappedOrderBy } from "../db/sort";
 import { AppError } from "../errors";
+import { requireDeliverableTemplate } from "../email/templates";
 import type { DatabaseLike, D1StatementResult } from "../types";
 import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
@@ -129,6 +130,7 @@ export async function addOwnEmailAddress(
 ): Promise<{ status: "verification_sent"; email: string; requestId: string; outboxId: string }> {
   if (input.purpose === "representation")
     refuseIneligibleWorkEmail({ email: input.email, unaffiliatedAttestation: input.unaffiliatedAttestation ?? false });
+  await requireDeliverableTemplate(db, "user_email_verification");
   const id = uuid();
   const at = nowIso();
   const normalizedEmail = normalizeEmail(input.email);

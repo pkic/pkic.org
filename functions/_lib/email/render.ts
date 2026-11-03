@@ -1,4 +1,5 @@
 import { marked } from "marked";
+import { evaluateIfCondition, isTruthy } from "./template-conditions";
 import type { EmailContentType } from "../../../assets/shared/schemas/email-templates";
 import { resolveEmailTemplateData } from "./plain-text";
 import {
@@ -50,55 +51,6 @@ function replaceTemplateBounded(
 }
 
 // ─── Conditional template helpers ────────────────────────────────────────────
-
-function isTruthy(value: unknown): boolean {
-  return Boolean(value) && value !== "false" && value !== "0" && value !== "";
-}
-
-function evaluateIfCondition(condition: string, data: Record<string, unknown>): boolean {
-  // {{#if and var1 var2 ...}}
-  if (condition.startsWith("and ")) {
-    return condition
-      .slice(4)
-      .trim()
-      .split(/\s+/)
-      .filter(Boolean)
-      .every((c) => isTruthy(data[c]));
-  }
-  // {{#if or var1 var2 ...}}
-  if (condition.startsWith("or ")) {
-    return condition
-      .slice(3)
-      .trim()
-      .split(/\s+/)
-      .filter(Boolean)
-      .some((c) => isTruthy(data[c]));
-  }
-  // {{#if eq|ne|gt|gte|lt|lte var "literal"}}
-  const cmpMatch = /^(eq|ne|gt|gte|lt|lte)\s+(\w+)\s+"([^"]*)"$/.exec(condition);
-  if (cmpMatch) {
-    const [, op, variable, literal] = cmpMatch;
-    const value = String(data[variable] ?? "");
-    const n = parseFloat(value),
-      nl = parseFloat(literal);
-    switch (op) {
-      case "eq":
-        return value === literal;
-      case "ne":
-        return value !== literal;
-      case "gt":
-        return !isNaN(n) && !isNaN(nl) && n > nl;
-      case "gte":
-        return !isNaN(n) && !isNaN(nl) && n >= nl;
-      case "lt":
-        return !isNaN(n) && !isNaN(nl) && n < nl;
-      case "lte":
-        return !isNaN(n) && !isNaN(nl) && n <= nl;
-    }
-  }
-  // {{#if var}} — truthy check
-  return isTruthy(data[condition]);
-}
 
 /**
  * Finds the position of the close tag that matches the already-open block,
@@ -561,4 +513,11 @@ export function renderSubject(template: string | null, fallback: string, data: R
 
   const rendered = compileSimpleTemplateWithBudget(template, subjectData, budget, 0);
   return rendered.replace(/[\r\n]+/g, " ").trim();
+}
+
+/** Unknown variables and unclosed blocks left visible by the renderer. */
+export function unresolvedTemplateTokens(...rendered: string[]): string[] {
+  const tokens = new Set<string>();
+  for (const text of rendered) for (const match of text.matchAll(/\{\{[^{}]+\}\}/g)) tokens.add(match[0]);
+  return [...tokens];
 }

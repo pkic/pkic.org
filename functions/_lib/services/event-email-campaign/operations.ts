@@ -10,7 +10,6 @@ import {
   eventEmailCampaignResponseSchema,
 } from "../../../../assets/shared/schemas/event-email-campaigns";
 import type { EmailContentType } from "../../../../assets/shared/schemas/email-templates";
-import { applyCampaignCustomText } from "../../email/campaign-custom";
 import { loadEmailRenderResources } from "../../email/partials";
 import { renderEmail, renderSubject } from "../../email/render";
 import { AppError } from "../../errors";
@@ -25,6 +24,10 @@ import {
   acceptCampaignSnapshot,
 } from "./snapshots";
 import { verifyCampaignPreviewToken } from "./preview-token";
+import { analyzeTemplateReferences } from "../../email/template-references";
+import { prepareEventFormFieldKeys } from "../forms/event-field-catalog";
+import { assertCampaignAuthoredReferences, assertCampaignRenderedReferences } from "./template-validation";
+import { campaignAuthoredTemplates } from "./template-content";
 import { buildPersonalCampaignTemplateData } from "./template-data";
 import { dispatchEventEmailCampaignPage } from "./dispatch";
 
@@ -60,19 +63,45 @@ export async function previewEventEmailCampaign(
   if (!input.bodyContent && !input.templateKey) {
     throw new AppError(400, "CAMPAIGN_NO_CONTENT", "Provide a message body or select a template before previewing.");
   }
-  assertCampaignBroadcastSafety(input, recipients, template);
 
   const { partials, layoutHtml } = await loadEmailRenderResources(db);
   const sample = recipients[0];
   const routeVariables = isAttendeeCampaignAudience(input.filter.audience)
     ? { registrationUrl: registrationPageUrl(options.appBaseUrl, event, { source: "event_email" }) }
     : { proposalUrl: proposalPageUrl(options.appBaseUrl, event, { source: "event_email" }) };
-  const sampleData = buildPersonalCampaignTemplateData(sample, {
+  const canonicalData = {
     ...buildEventEmailVariables(event, options.appBaseUrl),
     recipientCount,
     audience: input.filter.audience,
     ...routeVariables,
+  };
+  const known = new Set([
+    ...Object.keys(canonicalData),
+    "firstName",
+    "lastName",
+    ...recipients.flatMap((recipient) => Object.keys(recipient.templateData ?? {})),
+    "customText",
+    "baseUrl",
+    "brandBaseUrl",
+  ]);
+  const authored = campaignAuthoredTemplates(input, template);
+  const templateReferences = authored.map((source) => analyzeTemplateReferences(source, partials));
+  const referencedNames = templateReferences.flatMap((analysis) =>
+    analysis.references.map((reference) => reference.name),
+  );
+  const fields = await prepareEventFormFieldKeys(
+    db,
+    event.id,
+    isAttendeeCampaignAudience(input.filter.audience) ? "event_registration" : "proposal_submission",
+    referencedNames,
+  ).all<{ key: string }>();
+  for (const field of fields.results) known.add(field.key);
+  assertCampaignBroadcastSafety(input, recipients, template, {
+    recipientVariables: fields.results.map((field) => field.key),
+    partials,
   });
+  assertCampaignAuthoredReferences(input, known, templateReferences);
+  const sampleData = buildPersonalCampaignTemplateData(sample, canonicalData, known);
   if (input.filter.audience === "attendees") {
     sampleData.manageUrl = registrationManagePageUrl(options.appBaseUrl, event, "preview-token");
   }
@@ -90,9 +119,11 @@ export async function previewEventEmailCampaign(
     const data = { ...sampleData, customText: input.customText ?? "", _partials: partials };
     subject = renderSubject(template.subjectTemplate, input.subjectOverride ?? `Update: ${event.name}`, data);
     const contentType = template.contentType as EmailContentType;
-    const content = applyCampaignCustomText(template.content, contentType, input.customText ?? null);
+    const content = authored[0];
     rendered = await renderEmail(content, data, layoutHtml, contentType, options.appBaseUrl);
   }
+
+  assertCampaignRenderedReferences(input, subject, rendered);
 
   return eventEmailCampaignPreviewResponseSchema.parse({
     success: true,
