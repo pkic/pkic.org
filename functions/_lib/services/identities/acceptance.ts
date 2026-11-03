@@ -10,9 +10,10 @@ import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { nowIso } from "../../utils/time";
 import { isAuditChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "../audit";
-import { loadIdentityNotificationContext } from "./notifications";
+import type { IdentityNotificationContext } from "./notifications";
 
 import { organizationIdentityAuditScope } from "./authorization";
+import { IDENTITY_INVITATION_VIEWERS } from "../../../../assets/shared/schemas/identity";
 
 interface PendingIdentityRow {
   id: string;
@@ -22,13 +23,24 @@ interface PendingIdentityRow {
   updated_at: string;
 }
 
-async function loadPendingIdentity(db: DatabaseLike, identityId: string, userId?: string): Promise<PendingIdentityRow> {
-  const identity = await first<PendingIdentityRow>(
+type PendingInvitationContext = PendingIdentityRow & IdentityNotificationContext & { user_active: number };
+
+async function loadPendingIdentity(
+  db: DatabaseLike,
+  identityId: string,
+  userId?: string,
+): Promise<PendingInvitationContext> {
+  const identity = await first<PendingInvitationContext>(
     db,
     `SELECT identity.id, capacity.member_id, identity.user_id,
-            identity.organization_id, identity.updated_at
+            identity.organization_id, identity.updated_at,
+            user.email, user.active AS user_active,
+            trim(COALESCE(user.first_name, '') || ' ' || COALESCE(user.last_name, '')) AS recipient_name,
+            organization.name AS organization_name
        FROM identities identity
        LEFT JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
+       JOIN users user ON user.id = identity.user_id
+       JOIN organizations organization ON organization.id = identity.organization_id
       WHERE identity.id = ?
         AND (? IS NULL OR identity.user_id = ?)
         AND identity.organization_id IS NOT NULL
@@ -126,7 +138,8 @@ async function resolveInvitationLink(db: DatabaseLike, input: { token: string; s
     purpose: "identity_invitation",
   });
   const identity = await loadPendingIdentity(db, capability.subjectId);
-  const context = await loadIdentityNotificationContext(db, identity.organization_id, identity.user_id, true);
+  if (!identity.user_active) throw new AppError(404, "USER_NOT_FOUND", "Active user not found");
+  const context = identity;
   await assertEmailAuthCapabilityEmail({
     signingSecret: input.signingSecret,
     capability,
@@ -138,18 +151,40 @@ async function resolveInvitationLink(db: DatabaseLike, input: { token: string; s
 /** Preview is read-only: mail scanners may follow the URL but cannot accept it. */
 export async function previewIdentityInvitation(
   db: DatabaseLike,
-  input: { token: string; signingSecret: string },
-): Promise<{ organizationName: string; recipientEmail: string }> {
-  const { context } = await resolveInvitationLink(db, input);
-  return { organizationName: context.organization_name, recipientEmail: context.email };
+  input: { token: string; signingSecret: string; signedInUserId?: string },
+): Promise<{ organizationName: string; recipientEmail: string; viewer: IdentityInvitationViewer }> {
+  const { identity, context } = await resolveInvitationLink(db, input);
+  return {
+    organizationName: context.organization_name,
+    recipientEmail: context.email,
+    viewer: invitationViewer(identity.user_id, input.signedInUserId),
+  };
 }
 
-/** The emailed capability accepts one pending identity without establishing a login session. */
+type IdentityInvitationViewer = (typeof IDENTITY_INVITATION_VIEWERS)[number];
+
+function invitationViewer(inviteeUserId: string, signedInUserId: string | undefined): IdentityInvitationViewer {
+  if (!signedInUserId) return "signed_out";
+  return signedInUserId === inviteeUserId ? "invitee" : "another_person";
+}
+
+/**
+ * The emailed capability accepts one pending identity without establishing a
+ * login session. Someone signed in as another person cannot accept it: a
+ * forwarded link would otherwise activate the invitee's identity from an
+ * account that is not theirs, without either person noticing.
+ */
 export async function acceptIdentityInvitationLink(
   db: DatabaseLike,
-  input: { token: string; signingSecret: string },
+  input: { token: string; signingSecret: string; signedInUserId?: string },
 ): Promise<{ identityId: string; state: "active" }> {
   const { identity, context, capability } = await resolveInvitationLink(db, input);
+  if (invitationViewer(identity.user_id, input.signedInUserId) === "another_person")
+    throw new AppError(
+      409,
+      "IDENTITY_INVITATION_OTHER_ACCOUNT",
+      "This invitation is for another person. Sign out, then open the link again.",
+    );
   const at = nowIso();
   await commitEmailAuthRedemption(db, {
     purpose: "identity_invitation",

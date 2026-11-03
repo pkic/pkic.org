@@ -21,6 +21,7 @@ export interface SearchPickerProps<Data, Row> {
   onClear: () => void;
   endpoint: string;
   responseSchema: z.ZodType<Data>;
+  querySchema?: z.ZodType;
   /** The rows of one page of the server's answer. */
   rows: (data: Data) => Row[];
   rowKey: (row: Row) => string;
@@ -56,6 +57,7 @@ export function SearchPicker<Data, Row>({
   onClear,
   endpoint,
   responseSchema,
+  querySchema,
   rows,
   rowKey,
   renderRow,
@@ -115,7 +117,8 @@ export function SearchPicker<Data, Row>({
     }
     cancelPendingSearch();
     const term = next.trim();
-    if (!term) {
+    const parameters = { limit: "8", offset: "0", sort, q: term };
+    if (!term || (querySchema && !querySchema.safeParse(parameters).success)) {
       setResults([]);
       setOpen(false);
       return;
@@ -124,11 +127,9 @@ export function SearchPicker<Data, Row>({
       timerRef.current = null;
       const request = requestGate.current!.start();
       try {
-        const data = await getJson(
-          buildServerCollectionUrl(endpoint, { limit: "8", offset: "0", sort, q: term }),
-          responseSchema,
-          { signal: request.signal },
-        );
+        const data = await getJson(buildServerCollectionUrl(endpoint, parameters), responseSchema, {
+          signal: request.signal,
+        });
         if (!request.isCurrent()) return;
         setResults(rows(data));
         setOpen(true);

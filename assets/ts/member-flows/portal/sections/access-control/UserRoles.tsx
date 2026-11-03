@@ -11,7 +11,11 @@ import { ServerSearchSelect } from "../../../../components/ServerSearchSelect";
 import { UserPicker } from "../../../../components/UserPicker";
 import { deleteJson } from "../../../../shared/api-client";
 import { successResponseSchema } from "../../../../../shared/schemas/api-common";
-import { userRolesListResponseSchema, type UserRoleAssignment } from "../../../../../shared/schemas/access-control";
+import {
+  userRolesListResponseSchema,
+  type Role,
+  type UserRoleAssignment,
+} from "../../../../../shared/schemas/access-control";
 import { fmt, fmtDate, toast } from "../../ui";
 import { TargetPicker } from "./TargetPicker";
 import { useRoleAssignment } from "./use-role-assignment";
@@ -25,8 +29,9 @@ import "../../../../ui/Content.css";
 /** People with assigned roles: permissioned users (often community members, not staff). */
 export function UserRoles({ canGrant = true, canRevoke = true }: { canGrant?: boolean; canRevoke?: boolean } = {}) {
   const tableRef = useRef<ApiTableActions | null>(null);
-  const [roleId, setRoleId] = useState("");
-  const [roleLabel, setRoleLabel] = useState<string>();
+  // No role is picked until the reader picks one: a default would make the
+  // first role in the catalog, often a global administrator, one click away.
+  const [role, setRole] = useState<Role | null>(null);
   /*
    * The whole assignment — the draft, the contract, the request and what a
    * refusal says — is one command, shared with the role-first surface. What
@@ -35,9 +40,10 @@ export function UserRoles({ canGrant = true, canRevoke = true }: { canGrant?: bo
    */
   const { form, submitting, formError, user, setUser, target, setTarget, expiresAt, setExpiresAt, handleAssign } =
     useRoleAssignment({
-      roleId,
+      role,
       onAssigned: async () => {
         toast("Role assigned", "success");
+        setRole(null);
         await tableRef.current?.reload();
       },
     });
@@ -92,17 +98,15 @@ export function UserRoles({ canGrant = true, canRevoke = true }: { canGrant?: bo
                       {(control) => (
                         <ServerSearchSelect
                           {...control}
+                          name="roleId"
                           searchLabel="Role"
                           catalog={roleCatalog}
-                          value={roleId}
-                          selectedLabel={roleLabel}
+                          value={role?.id ?? ""}
+                          selectedLabel={role?.name}
+                          placeholder="Select role…"
                           disabled={submitting}
                           allowEmpty={false}
-                          autoSelectFirst
-                          onChange={(role) => {
-                            setRoleId(role?.id ?? "");
-                            setRoleLabel(role?.name);
-                          }}
+                          onChange={setRole}
                         />
                       )}
                     </Field>
@@ -123,7 +127,8 @@ export function UserRoles({ canGrant = true, canRevoke = true }: { canGrant?: bo
                   {formError && <Alert tone="danger">{formError}</Alert>}
 
                   <div class="pk-cluster">
-                    <Button type="submit" variant="primary" loading={submitting} disabled={!roleId}>
+                    {/* Not disabled without a role: submitting says which field is missing. */}
+                    <Button type="submit" variant="primary" loading={submitting}>
                       {submitting ? "Assigning…" : "Assign"}
                     </Button>
                   </div>

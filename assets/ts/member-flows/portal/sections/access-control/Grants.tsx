@@ -15,7 +15,8 @@ import { successResponseSchema } from "../../../../../shared/schemas/api-common"
 import { fmt, fmtDate, toast } from "../../ui";
 import { PERMISSIONS } from "../../../../../shared/schemas/permissions";
 import { UserPicker, type PickedUser } from "../../../../components/UserPicker";
-import { TargetPicker, type PickedTarget } from "./TargetPicker";
+import { confirmPrivilegedAccess } from "./confirm-privileged-access";
+import { NO_TARGET, TargetPicker, type PickedTarget } from "./TargetPicker";
 import type { AccessGrant } from "../../../../../shared/schemas/access-control";
 import {
   accessGrantCreateResponseSchema,
@@ -58,8 +59,10 @@ export function Grants({
   const tableRef = useRef<ApiTableActions | null>(null);
   const creating = grantSegment === NEW_GRANT_SEGMENT;
   const [user, setUser] = useState<PickedUser | null>(null);
-  const [permission, setPermission] = useState<string>(PERMISSIONS[0]);
-  const [target, setTarget] = useState<PickedTarget>({ targetType: null, targetId: null });
+  // No permission is picked until the reader picks one, so a grant is never
+  // whatever happened to be listed first.
+  const [permission, setPermission] = useState("");
+  const [target, setTarget] = useState<PickedTarget>(NO_TARGET);
   const [expiresAt, setExpiresAt] = useState("");
   const [submitting, setSubmitting] = useState(false);
   /*
@@ -122,12 +125,19 @@ export function Grants({
       setFormError(checked.formMessage);
       return;
     }
+    const { permission: granted } = checked.data;
+    if (
+      !(await confirmPrivilegedAccess({ grant: `the "${granted}" permission`, permissions: [granted], user, target }))
+    ) {
+      return;
+    }
     setSubmitting(true);
     try {
       await postJson("/api/v1/permissions/grants", checked.data, accessGrantCreateResponseSchema);
       toast("Permission granted", "success");
       setUser(null);
-      setTarget({ targetType: null, targetId: null });
+      setPermission("");
+      setTarget(NO_TARGET);
       setExpiresAt("");
       form.reset();
       closeForm();
@@ -178,10 +188,12 @@ export function Grants({
                   {(control) => (
                     <Select
                       {...control}
+                      name="permission"
                       value={permission}
                       onChange={(e) => setPermission((e.target as HTMLSelectElement).value)}
                       disabled={submitting}
                     >
+                      <option value="">Select permission…</option>
                       {PERMISSIONS.map((p) => (
                         <option key={p} value={p}>
                           {p}

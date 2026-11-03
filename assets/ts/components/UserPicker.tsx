@@ -22,6 +22,7 @@ export function UserPicker({
   endpoint = "/api/v1/users",
   inputProps,
   responseSchema = userCatalogListResponseSchema,
+  querySchema,
   sort = "email",
   emptyMessage = "No matching users found.",
 }: {
@@ -31,6 +32,7 @@ export function UserPicker({
   placeholder?: string;
   endpoint?: string;
   responseSchema?: z.ZodType<z.infer<typeof userCatalogListResponseSchema>>;
+  querySchema?: z.ZodType;
   sort?: string;
   inputProps?: FieldControlProps & { name?: string };
   emptyMessage?: string;
@@ -55,6 +57,7 @@ export function UserPicker({
       onClear={() => onChange(null)}
       endpoint={endpoint}
       responseSchema={responseSchema}
+      querySchema={querySchema}
       rows={(data) => data.users}
       rowKey={(user) => user.id}
       rowText={(user) => user.email || nameOf(user)}

@@ -188,6 +188,7 @@ describe("identity invitation acceptance", () => {
       success: true,
       organizationName: "Invitation Lifecycle Organization",
       recipientEmail: "invited@invitation-lifecycle.example",
+      viewer: "signed_out",
     });
     expect(await env.DB.prepare("SELECT started_at FROM identities WHERE id = ?").bind(identityId).first()).toEqual({
       started_at: null,
@@ -260,6 +261,29 @@ describe("identity invitation acceptance", () => {
     const retried = await accept();
     expect(retried.status, await retried.clone().text()).toBe(200);
     expect(await publicationCount(identityId)).toBe(1);
+  });
+
+  it("tells who has the invitation open and refuses acceptance by someone signed in as another person", async () => {
+    const { identityId, contactToken, invitedToken } = await inviteIdentity();
+    const token = await deliveredInvitationToken(identityId);
+    const as = (sessionToken: string) => ({
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${sessionToken}` },
+      body: JSON.stringify({ token }),
+    });
+
+    const byColleague = await callApi(env, "/api/v1/identities/invitations/preview", as(contactToken));
+    expect(await byColleague.json()).toMatchObject({ viewer: "another_person" });
+    const refused = await callApi(env, "/api/v1/identities/invitations/accept", as(contactToken));
+    expect(refused.status).toBe(409);
+    expect(await refused.json()).toMatchObject({ error: { code: "IDENTITY_INVITATION_OTHER_ACCOUNT" } });
+    expect(await env.DB.prepare("SELECT started_at FROM identities WHERE id = ?").bind(identityId).first()).toEqual({
+      started_at: null,
+    });
+
+    const byInvitee = await callApi(env, "/api/v1/identities/invitations/preview", as(invitedToken));
+    expect(await byInvitee.json()).toMatchObject({ viewer: "invitee" });
+    expect((await callApi(env, "/api/v1/identities/invitations/accept", as(invitedToken))).status).toBe(200);
   });
 
   it("rejects an invitation link after the recipient account email changes", async () => {

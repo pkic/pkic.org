@@ -5,7 +5,7 @@ import { Field } from "../../../../../ui/Field";
 import { TextInput } from "../../../../../ui/TextControl";
 import { toast } from "../../../ui";
 import { TargetPicker } from "../TargetPicker";
-import { useRoleAssignment } from "../use-role-assignment";
+import { useRoleAssignment, type AssignableRole } from "../use-role-assignment";
 
 /**
  * Assigns the fixed role of an open RoleDetail — the same endpoint/schema
@@ -18,10 +18,10 @@ import { useRoleAssignment } from "../use-role-assignment";
  * were `<label>` elements with no `for` at all — a label pointing at nothing
  * names nothing — so each group is now named by a legend or by its own Field.
  */
-export function RoleAssignForm({ roleId, onAssigned }: { roleId: string; onAssigned: () => void }) {
+export function RoleAssignForm({ role, onAssigned }: { role: AssignableRole; onAssigned: () => void }) {
   const { form, submitting, formError, user, setUser, target, setTarget, expiresAt, setExpiresAt, handleAssign } =
     useRoleAssignment({
-      roleId,
+      role,
       onAssigned: () => {
         toast("Role assigned", "success");
         setUser(null);

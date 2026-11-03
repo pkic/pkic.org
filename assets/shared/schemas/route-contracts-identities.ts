@@ -180,7 +180,7 @@ export const identityInvitationAcceptRouteSchema = {
       content: { "application/json": { schema: identityMutationResponseSchema } },
     },
     "404": jsonErrorResponse("Invitation link or pending identity not found."),
-    "409": jsonErrorResponse("Invitation was already used or changed."),
+    "409": jsonErrorResponse("Invitation was already used or changed, or another person is signed in."),
     "410": jsonErrorResponse("Invitation link expired."),
   },
 };

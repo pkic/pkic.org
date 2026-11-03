@@ -25,6 +25,7 @@ import { seedEventAndAdmin } from "./helpers/context";
  */
 interface DeclaredOperation {
   path: string;
+  requestPath: string;
   method: "get";
   scopes: string[];
 }
@@ -65,8 +66,14 @@ function declaredOperations(): DeclaredOperation[] {
     if (auth?.required !== true) continue;
     const scopes = auth.scopes ?? [];
     if (scopes.length === 0) continue; // Session-only; no permission boundary to sweep.
-    if (!fillPath(path)) continue;
-    operations.push({ path, method: "get", scopes });
+    const filled = fillPath(path);
+    if (!filled) continue;
+    const requestUrl = new URL(filled, "https://app.test");
+    const parameters = operation.parameters as { in: string; name: string; required?: boolean }[] | undefined;
+    if (parameters?.some((parameter) => parameter.in === "query" && parameter.name === "q" && parameter.required)) {
+      requestUrl.searchParams.set("q", "absent@example.test");
+    }
+    operations.push({ path, requestPath: `${requestUrl.pathname}${requestUrl.search}`, method: "get", scopes });
   }
   return operations.sort((a, b) => a.path.localeCompare(b.path));
 }
@@ -114,7 +121,7 @@ describe("declared permissions are enforced", () => {
   it("refuses an anonymous caller on every declaring route", async () => {
     const allowed: string[] = [];
     for (const operation of operations) {
-      const response = await call(new Request(new URL(fillPath(operation.path)!, "https://app.test")));
+      const response = await call(new Request(new URL(operation.requestPath, "https://app.test")));
       if (response.status !== 401) allowed.push(`${operation.path} -> ${response.status}`);
     }
     expect(allowed).toEqual([]);
@@ -126,7 +133,7 @@ describe("declared permissions are enforced", () => {
       const allowed: string[] = [];
       for (const operation of operations) {
         if (operation.scopes.includes("analytics:read")) continue; // The outsider holds this one.
-        const response = await call(personaRequest(outsider, fillPath(operation.path)!));
+        const response = await call(personaRequest(outsider, operation.requestPath));
         // 403 is the boundary. 404 is acceptable only where the resource is
         // resolved first and genuinely absent; anything 2xx means the declared
         // permission is not actually enforced.
@@ -152,7 +159,7 @@ describe("declared permissions are enforced", () => {
           operation.scopes.map((scope) => onlyPersona(scope as Permission)),
           { groupId: TEST_GROUPS.pqc, eventId: sweepEventId },
         );
-        const response = await call(personaRequest(holder, fillPath(operation.path)!));
+        const response = await call(personaRequest(holder, operation.requestPath));
         // 404 is fine: the identifiers match no row on purpose. 401 or 403 means
         // the declared permission is not sufficient, so the declaration is wrong.
         if (response.status === 401 || response.status === 403) {

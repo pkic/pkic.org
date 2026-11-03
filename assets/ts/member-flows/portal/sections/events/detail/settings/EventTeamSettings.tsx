@@ -29,11 +29,13 @@ export function EventTeamSettings({
   canReadStaffing?: boolean;
 }) {
   const [, navigate] = usePortalHashLocation();
+  // Adding someone new starts with event access, for anyone who may grant it: the access
+  // form searches every portal user, while scheduling duties are set on the person afterwards.
   if (section === "new")
-    return canEditStaffing ? (
-      <TeamStaffingEditor slug={slug} teamPath={teamPath} />
-    ) : canManage ? (
+    return canManage ? (
       <AddTeamMemberPage slug={slug} teamPath={teamPath} timeZone={timeZone} />
+    ) : canEditStaffing ? (
+      <TeamStaffingEditor slug={slug} teamPath={teamPath} />
     ) : (
       <ErrorAlert error="Adding team members is not available to your current identity." />
     );

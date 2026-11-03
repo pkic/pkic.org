@@ -70,7 +70,7 @@ describe("permission target picker", () => {
     );
 
     await chooseOption(controlFor(container, "Target"), "organization");
-    expect(changes).toEqual([{ targetType: "organization", targetId: null }]);
+    expect(changes).toEqual([{ targetType: "organization", targetId: null, targetName: null }]);
   });
 
   it("says what went wrong when the target catalog cannot be loaded", async () => {

@@ -1,5 +1,6 @@
 /** Public, explicit confirmation for a mailbox-bound identity invitation. */
 import { useEffect, useState } from "preact/hooks";
+import type { z } from "zod";
 import {
   identityInvitationLinkRequestSchema,
   identityInvitationPreviewResponseSchema,
@@ -13,10 +14,7 @@ import { setAuthChecking } from "../state";
 import { LoginBackdrop } from "./LoginBackdrop";
 import "./Login.css";
 
-type InvitationPreview = {
-  organizationName: string;
-  recipientEmail: string;
-};
+type InvitationPreview = z.infer<typeof identityInvitationPreviewResponseSchema>;
 
 function invitationError(error: unknown): string {
   if (error instanceof ApiClientError && [404, 409, 410].includes(error.status)) {
@@ -27,10 +25,15 @@ function invitationError(error: unknown): string {
 
 export function IdentityInvitationAcceptance() {
   const token = portalIdentityInvitationToken(window.location.hash);
+  return <InvitationAcceptance key={token} token={token} />;
+}
+
+function InvitationAcceptance({ token }: { token: string | null }) {
   const [preview, setPreview] = useState<InvitationPreview | null>(null);
   const [error, setError] = useState<string | null>(token ? null : "This invitation link is incomplete.");
   const [loading, setLoading] = useState(Boolean(token));
   const [accepting, setAccepting] = useState(false);
+  const [accepted, setAccepted] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -66,10 +69,13 @@ export function IdentityInvitationAcceptance() {
         identityInvitationLinkRequestSchema.parse({ token }),
         identityMutationResponseSchema,
       );
-      setAuthChecking();
-      window.location.replace("/portal/#/users/current");
+      setAccepted(true);
     } catch (reason) {
-      setError(invitationError(reason));
+      if (reason instanceof ApiClientError && reason.code === "IDENTITY_INVITATION_OTHER_ACCOUNT") {
+        setPreview({ ...preview, viewer: "another_person" });
+      } else {
+        setError(invitationError(reason));
+      }
     } finally {
       setAccepting(false);
     }
@@ -90,7 +96,28 @@ export function IdentityInvitationAcceptance() {
                   {error}
                 </Alert>
               )}
-              {preview && (
+              {preview && accepted && (
+                <div class="pk-stack pk-stack--snug">
+                  <Alert tone="ok" title="Invitation accepted">
+                    You now act for <strong>{preview.organizationName}</strong> as {preview.recipientEmail}.
+                  </Alert>
+                  <ButtonLink href="/portal/#/users/current" variant="primary" onClick={() => setAuthChecking()}>
+                    {preview.viewer === "invitee" ? "Continue to the portal" : "Sign in to continue"}
+                  </ButtonLink>
+                </div>
+              )}
+              {preview && !accepted && preview.viewer === "another_person" && (
+                <div class="pk-stack pk-stack--snug">
+                  <Alert tone="warn" title="You are signed in as someone else">
+                    This invitation is for <strong>{preview.recipientEmail}</strong>. Sign out from the account menu,
+                    then open this link again to accept it.
+                  </Alert>
+                  <ButtonLink href="/portal/" variant="secondary">
+                    Open the portal
+                  </ButtonLink>
+                </div>
+              )}
+              {preview && !accepted && preview.viewer !== "another_person" && (
                 <div class="pk-stack pk-stack--snug">
                   <p>
                     Accept the invitation to act for <strong>{preview.organizationName}</strong> as{" "}

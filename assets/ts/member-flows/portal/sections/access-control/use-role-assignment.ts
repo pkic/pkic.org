@@ -14,12 +14,15 @@ import { postJson } from "../../../../shared/api-client";
 import {
   userRoleAssignSchema,
   userRoleResponseEnvelopeSchema,
+  type Role,
   type UserRoleAssignInput,
 } from "../../../../../shared/schemas/access-control";
 import type { PickedUser } from "../../../../components/UserPicker";
-import type { PickedTarget } from "./TargetPicker";
+import { confirmPrivilegedAccess } from "./confirm-privileged-access";
+import { NO_TARGET, type PickedTarget } from "./TargetPicker";
 
-const NO_TARGET: PickedTarget = { targetType: null, targetId: null };
+/** What the assignment needs to know about the role: what it is called and what it grants. */
+export type AssignableRole = Pick<Role, "id" | "name" | "permissions">;
 
 export interface RoleAssignment {
   /** The contract's live view of the draft, for the form and its fields. */
@@ -39,12 +42,12 @@ export interface RoleAssignment {
 }
 
 export function useRoleAssignment({
-  roleId,
+  role,
   initialUser = null,
   onAssigned,
 }: {
-  /** Fixed where the surface opens on a role; picked where it opens on a person. */
-  roleId: string;
+  /** Fixed where the surface opens on a role; picked, starting from none, where it opens on a person. */
+  role: AssignableRole | null;
   /** Fixed where the surface opens on a person. */
   initialUser?: PickedUser | null;
   onAssigned: () => void | Promise<void>;
@@ -62,7 +65,7 @@ export function useRoleAssignment({
    * in their own words, where the two could drift apart.
    */
   const form = useContractForm(userRoleAssignSchema, {
-    roleId,
+    roleId: role?.id ?? "",
     contextType: target.targetType,
     contextId: target.targetId,
     expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined,
@@ -81,6 +84,17 @@ export function useRoleAssignment({
     const checked = form.submit();
     if (!checked.data) {
       setFormError(checked.formMessage);
+      return;
+    }
+    if (
+      role &&
+      !(await confirmPrivilegedAccess({
+        grant: `the "${role.name}" role`,
+        permissions: role.permissions,
+        user,
+        target,
+      }))
+    ) {
       return;
     }
     setSubmitting(true);

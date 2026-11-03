@@ -95,6 +95,20 @@ export const PERMISSION_METADATA = {
 
 export type PermissionDomain = keyof typeof PERMISSION_DOMAINS;
 
+/**
+ * Permissions that let their holder widen anyone's access or change the
+ * platform itself. Granting a role that carries one is never a single click.
+ */
+export const PRIVILEGED_PERMISSIONS = [
+  "access:grant",
+  "admin:write",
+] as const satisfies readonly (keyof typeof PERMISSION_METADATA)[];
+
+/** The privileged permissions a bundle includes, in catalog order; empty when it holds none. */
+export function privilegedPermissionsIn(permissions: readonly string[]): (typeof PRIVILEGED_PERMISSIONS)[number][] {
+  return PRIVILEGED_PERMISSIONS.filter((permission) => permissions.includes(permission));
+}
+
 /** Permissions grouped by their area in catalog order, each with its label and access; areas with none are left out. */
 export function permissionAreas<P extends keyof typeof PERMISSION_METADATA>(permissions: readonly P[]) {
   return (Object.entries(PERMISSION_DOMAINS) as [PermissionDomain, string][]).flatMap(([key, label]) => {

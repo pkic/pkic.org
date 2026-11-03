@@ -71,7 +71,7 @@ import {
   EventLiveOverlayPositionsPut,
 } from "./live-overlay-layouts";
 import { EventDaysGet, EventDaysPut } from "./days";
-import { EventTeamRosterList, EventTeamRoleCreate, EventTeamRolesList } from "./roles";
+import { EventTeamRoleCandidatesList, EventTeamRosterList, EventTeamRoleCreate, EventTeamRolesList } from "./roles";
 import { EventTeamRoleDelete } from "./roles/[roleAssignmentId]";
 import { EventPromotersList } from "./promoters";
 import { EventPresentationArchiveGet } from "./presentations/archive";
@@ -166,6 +166,7 @@ openapi.get("/sponsors/tiers", EventSponsorTiersGet);
 openapi.put("/sponsors/tiers", EventSponsorTiersPut);
 openapi.get("/team", EventTeamRosterList);
 openapi.get("/roles", EventTeamRolesList);
+openapi.get("/roles/candidates", EventTeamRoleCandidatesList);
 openapi.post("/roles", EventTeamRoleCreate);
 openapi.delete("/roles/:roleAssignmentId", EventTeamRoleDelete);
 openapi.get("/promoters", EventPromotersList);

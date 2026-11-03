@@ -17,7 +17,7 @@ import { ALL_ACTIVE_USER_CAPACITIES_CTE } from "./membership/capacity-query";
 import { getGroup } from "./groups/read-model";
 import { buildUserIdentitySearchFilter } from "./user-search";
 
-interface UserCatalogRow {
+export interface UserCatalogRow {
   id: string;
   email: string;
   first_name: string | null;
@@ -39,6 +39,7 @@ export function buildUserCatalogPageQuery(
   query: UserCatalogListQuery,
   seatableInGroupId?: string,
   eligibility?: AuthorizationEvidence,
+  searchMatch: "identity" | "exactEmail" = "identity",
 ): OffsetPageQuery {
   const conditions = ["u.active = 1", "u.pii_redacted_at IS NULL", "u.merged_into_user_id IS NULL"];
   const bindings: unknown[] = [];
@@ -47,7 +48,17 @@ export function buildUserCatalogPageQuery(
     bindings.push(...eligibility.bindings);
   }
   if (query.q) {
-    const search = buildUserIdentitySearchFilter(query.q);
+    const search =
+      searchMatch === "exactEmail"
+        ? {
+            sql: `u.id IN (
+              SELECT id FROM users WHERE normalized_email = ?
+              UNION
+              SELECT user_id FROM user_emails WHERE normalized_email = ?
+            )`,
+            bindings: [query.q.toLowerCase(), query.q.toLowerCase()],
+          }
+        : buildUserIdentitySearchFilter(query.q);
     conditions.push(search.sql);
     bindings.push(...search.bindings);
   }

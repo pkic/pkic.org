@@ -38,8 +38,10 @@ import type { CapturedEmail } from "./global-setup";
 import type { Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { roleResponseEnvelopeSchema } from "../../assets/shared/schemas/access-control";
+import { userCreateSchema, userCreateResponseSchema } from "../../assets/shared/schemas/user-create";
+import { eventTeamRoleCreateSchema } from "../../assets/shared/schemas/event-team";
 import { membershipApplicationDetailSchema } from "../../assets/shared/schemas/membership-application-management";
-import { acceptConfirmDialog } from "./helpers/confirm-dialog";
+import { acceptConfirmDialog, cancelConfirmDialog, confirmDialog } from "./helpers/confirm-dialog";
 import { verifyMembershipJoinEmail } from "./helpers/member-join";
 import { signInToPortal } from "./helpers/portal-auth";
 import { expectStaffSessionLanding, signInAsE2eStaff } from "./helpers/staff-auth";
@@ -144,6 +146,15 @@ test.describe("Portal management browser-verification pass", () => {
     const permission = page.getByRole("checkbox", { name: "Read: Donations", exact: true });
     const wasGranted = original.permissions.includes("donations:read");
     await permission.setChecked(!wasGranted);
+    await page.getByRole("button", { name: "Roles and permissions permissions", exact: true }).click();
+    const privileged = page.getByRole("checkbox", { name: "Grant permissions and roles", exact: true });
+    expect(original.permissions).not.toContain("access:grant");
+    await privileged.check();
+    await page.getByRole("button", { name: "Save changes", exact: true }).click();
+    await expect(confirmDialog(page)).toContainText("Everyone who holds this role");
+    await cancelConfirmDialog(page);
+    const unchanged = roleResponseEnvelopeSchema.parse(await (await page.request.get(path)).json()).role;
+    expect([...unchanged.permissions].sort()).toEqual([...original.permissions].sort());
     for (const width of [1440, 375]) {
       await page.setViewportSize({ width, height: 1000 });
       await page.evaluate(async () => {
@@ -158,15 +169,19 @@ test.describe("Portal management browser-verification pass", () => {
       (response) => new URL(response.url()).pathname === path && response.request().method() === "PATCH",
     );
     await page.getByRole("button", { name: "Save changes", exact: true }).click();
+    await acceptConfirmDialog(page, "Add access");
     expect((await saved).status()).toBe(200);
     const updated = roleResponseEnvelopeSchema.parse(await (await page.request.get(path)).json()).role;
     expect(updated.id).toBe(original.id);
     expect(updated.name).toBe(original.name);
     expect(updated.isSystemRole).toBe(true);
     expect(updated.permissions.includes("donations:read")).toBe(!wasGranted);
+    expect(updated.permissions).toContain("access:grant");
     await page.getByRole("button", { name: "Role actions", exact: true }).click();
     await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
     await permission.setChecked(wasGranted);
+    await page.getByRole("button", { name: "Roles and permissions permissions", exact: true }).click();
+    await privileged.uncheck();
     const restored = page.waitForResponse(
       (response) => new URL(response.url()).pathname === path && response.request().method() === "PATCH",
     );
@@ -591,10 +606,13 @@ test.describe("Portal management browser-verification pass", () => {
   });
 
   test("event team: assign and revoke a role through the canonical event resource", async ({ page }) => {
-    // The team is one roster of people with event access or scheduling duties.
-    // Adding someone to it starts from the event's people; granting access to a
-    // user the portal knows is the canonical event resource, which this walk
-    // calls directly before revoking through the person's own page.
+    // A new person joins through event access before any staffing duties are assigned.
+    const email = `event-team-${crypto.randomUUID()}@example.test`;
+    const created = await page.request.post("/api/v1/users", {
+      data: userCreateSchema.parse({ email, firstName: "Casey", lastName: "Team" }),
+    });
+    expect(created.status()).toBe(201);
+    const userId = userCreateResponseSchema.parse(await created.json()).userId;
     const legacyRequests: string[] = [];
     page.on("request", (request) => {
       const pathname = new URL(request.url()).pathname;
@@ -608,15 +626,35 @@ test.describe("Portal management browser-verification pass", () => {
     await page.getByRole("button", { name: "Add team member" }).click();
     // Adding is a page of its own: the list it adds to is not underneath it.
     await expect(page).toHaveURL(new RegExp(`#/groups/${EVENT_GROUP_ID}/events/[^/]+/settings/team/new$`));
-    await expect(page.getByRole("heading", { name: "Add team member" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Grant event access" })).toBeVisible();
     await expect(page.getByRole("table", { name: "Event team" })).toHaveCount(0);
 
-    const session = await (await page.request.get("/api/v1/auth/session")).json();
-    const userId: string = session.identity.id;
-    const assigned = await page.request.post(`/api/v1/events/${EVENT_SLUG}/roles`, {
-      data: { userId, role: "program_committee" },
+    await page.getByRole("textbox", { name: /^Person/ }).fill(email);
+    await page
+      .getByRole("group", { name: "Matching users" })
+      .getByRole("button", { name: /Casey Team/ })
+      .click();
+    const role = page.getByRole("combobox", { name: "Role", exact: true });
+    await expect(role).toHaveValue("");
+    await page.getByRole("button", { name: "Grant event access", exact: true }).click();
+    await expect(role).toHaveAttribute("aria-invalid", "true");
+    for (const width of [1280, 375]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.screenshot({ path: test.info().outputPath(`event-role-required-${width}.png`) });
+    }
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await role.selectOption("program_committee");
+    const assigned = page.waitForResponse(
+      (response) =>
+        response.url().endsWith(`/api/v1/events/${EVENT_SLUG}/roles`) && response.request().method() === "POST",
+    );
+    await page.getByRole("button", { name: "Grant event access", exact: true }).click();
+    const assignment = await assigned;
+    expect(assignment.status()).toBe(201);
+    expect(eventTeamRoleCreateSchema.parse(assignment.request().postDataJSON())).toMatchObject({
+      userId,
+      role: "program_committee",
     });
-    expect(assigned.status()).toBe(201);
 
     await page.goto(`/portal/#/events/${EVENT_SLUG}/settings/team`);
     const member = page.locator(`a[href$="/settings/team/${userId}"]`).first();

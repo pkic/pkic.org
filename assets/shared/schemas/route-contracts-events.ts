@@ -1,5 +1,6 @@
 import { eventSlugParamsSchema, jsonErrorResponse, successResponseSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
+import { userCatalogListResponseSchema } from "./user-catalog";
 import {
   eventDaysManagementReplaceResponseSchema,
   eventDaysManagementReplaceSchema,
@@ -13,6 +14,7 @@ import {
   eventsListResponseSchema,
 } from "./event-management";
 import {
+  eventTeamCandidateQuerySchema,
   eventTeamRosterQuerySchema,
   eventTeamRosterResponseSchema,
   eventTeamListQuerySchema,
@@ -153,6 +155,27 @@ export const eventTeamRolesListRouteSchema = {
     "200": {
       description: "Event team role assignments.",
       content: { "application/json": { schema: eventTeamRolesResponseSchema } },
+    },
+    "401": jsonErrorResponse("An authenticated user session is required."),
+    "403": jsonErrorResponse("Event management permission is required."),
+    "404": jsonErrorResponse("Event not found."),
+  },
+  "x-pkic-auth": { required: true, scopes: ["events:manage"] },
+};
+
+/**
+ * Who can be given an event role: any active portal user, minimized to the
+ * fields needed to pick them. It answers whoever may assign event roles, so an
+ * event organizer adds someone new without global user access.
+ */
+export const eventTeamRoleCandidatesRouteSchema = {
+  tags: ["Events"],
+  summary: "Find an event team candidate by exact email address",
+  request: { params: eventSlugParamsSchema, query: eventTeamCandidateQuerySchema },
+  responses: {
+    "200": {
+      description: "At most one active user matching the complete email address, case-insensitively.",
+      content: { "application/json": { schema: userCatalogListResponseSchema } },
     },
     "401": jsonErrorResponse("An authenticated user session is required."),
     "403": jsonErrorResponse("Event management permission is required."),

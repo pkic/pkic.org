@@ -136,7 +136,7 @@ export function RoleDetail({ roleId, canGrant, canRevoke }: { roleId: string; ca
                   Member capacity is selected explicitly.
                 </Alert>
               ) : canGrant ? (
-                <RoleAssignForm roleId={role.id} onAssigned={() => void assignmentsRef.current?.reload()} />
+                <RoleAssignForm role={role} onAssigned={() => void assignmentsRef.current?.reload()} />
               ) : null}
             </PanelBody>
             <ApiDataTable

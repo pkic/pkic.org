@@ -12,6 +12,7 @@ import {
 } from "../../../../../../shared/schemas/access-control";
 import type { Permission } from "../../../../../../shared/schemas/permissions";
 import { RolePermissions } from "./RolePermissions";
+import { confirmPrivilegedRoleChange } from "../confirm-privileged-access";
 
 /** Edits a role's name/description/permission bundle behind an explicit Edit action on RoleDetail. */
 export function RoleEditForm({
@@ -43,6 +44,14 @@ export function RoleEditForm({
     e.preventDefault();
     const checked = form.submit();
     if (!checked.data) return setError(checked.formMessage);
+    if (
+      !(await confirmPrivilegedRoleChange({
+        roleName: role.name,
+        before: role.permissions,
+        after: checked.data.permissions ?? [],
+      }))
+    )
+      return;
     setSubmitting(true);
     setError(null);
     try {
