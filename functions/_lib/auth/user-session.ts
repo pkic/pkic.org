@@ -192,6 +192,7 @@ export async function refreshUserSessionFromRequest(
     exp: claims.exp,
     identityId: claims.iid,
     state: claims.state,
+    passkeyAuthentication: claims.passkeyAuthentication,
     lastActivityAt: activityAt,
     staffLastActivityAt: session.staff ? activityAt : (claims.staffLastActivityAt ?? 0),
   });

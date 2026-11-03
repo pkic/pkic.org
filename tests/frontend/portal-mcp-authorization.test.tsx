@@ -20,7 +20,8 @@ vi.mock("wouter/use-hash-location", () => ({
   ],
 }));
 
-const OAUTH_AUTHORIZE_PATH = "/api/v1/auth/oauth/authorize";
+const REQUEST_ID = "00000000-0000-4000-8000-000000000001";
+const onSessionExpired = vi.fn(async () => {});
 const RETURN_TO =
   "/api/v1/auth/oauth/authorize?client_id=client-1&redirect_uri=https%3A%2F%2Fclient.example%2Fcallback";
 const CONTEXT_BASE = {
@@ -181,98 +182,20 @@ afterEach(() => {
 });
 
 describe("portal MCP authorization", () => {
-  it("offers canonical sign-in for an unauthenticated user", async () => {
-    window.location.hash = `#/auth/oauth?${new URLSearchParams({ return_to: RETURN_TO })}`;
-    const requests: Array<{ path: string; method: string; body: unknown }> = [];
+  it("returns an expired session to the portal login without offering another login form", async () => {
+    window.location.hash = `#/auth/oauth?request=${REQUEST_ID}`;
+    onSessionExpired.mockClear();
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = requestUrl(input);
-        const method = init?.method ?? "GET";
-        requests.push({ path: url.pathname, method, body: init?.body ? JSON.parse(String(init.body)) : null });
-        if (method === "GET") return Response.json(contextWithout({ clientName: "Test client" }));
-        return Response.json({ success: true, sentTo: "staff@example.test" });
-      }),
+      vi.fn(async () => Response.json(contextWithout({ clientName: "Test client" }))),
     );
-
-    await act(() => render(<McpAuthorization />, container));
-    await waitFor(() => controlLabeled("Portal email") !== null);
-    const email = controlLabeled("Portal email")!;
-    expect(email.type).toBe("email");
-    expect(email.required).toBe(true);
-    // The control is on the shared contract, so typing is modelled as an input event.
-    await act(() => {
-      email.value = "staff@example.test";
-      email.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    await act(() => {
-      container.querySelector<HTMLFormElement>("form")!.dispatchEvent(new Event("submit"));
-    });
-    await waitFor(() => container.textContent?.includes("you'll receive a sign-in link") ?? false);
-
-    expect(container.querySelector('[role="status"]')?.textContent).toContain("you'll receive a sign-in link");
-    expect(requests.some(({ path, method }) => path === OAUTH_AUTHORIZE_PATH && method === "GET")).toBe(true);
-    const posted = requests.find(({ method }) => method === "POST");
-    expect(posted?.path).toBe(OAUTH_AUTHORIZE_PATH);
-    // Parsing through the shared contract proves the server would accept it.
-    expect(mcpOauthAuthorizeActionSchema.parse(posted?.body)).toEqual({
-      action: "request-link",
-      email: "staff@example.test",
-      return_to: RETURN_TO,
-    });
-  });
-
-  it.each([false, true])("redeems the standard user capability with same-tab navigation %s", async (sameTab) => {
-    window.location.hash = `#/auth/oauth?${new URLSearchParams({ return_to: RETURN_TO, token: "user-token" })}`;
-    const tokenHash = window.location.hash;
-    if (sameTab) window.location.hash = `#/auth/oauth?${new URLSearchParams({ return_to: RETURN_TO })}`;
-    let verified = false;
-    const requests: Array<{ path: string; method: string }> = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = requestUrl(input);
-        const method = init?.method ?? "GET";
-        requests.push({ path: url.pathname, method });
-        if (url.pathname === "/api/v1/auth/verify-link") {
-          verified = true;
-          return Response.json({ ...portalSessionFixture({ staff: true }), expiresAt: "2026-08-30T00:00:00.000Z" });
-        }
-        return (
-          accountResponse(url.pathname) ??
-          Response.json(verified ? AUTHORIZED_CONTEXT : contextWithout({ clientName: "Test client" }))
-        );
-      }),
-    );
-
-    await act(() => render(<McpAuthorization />, container));
-    await flush();
-    await flush();
-    if (sameTab) {
-      await waitFor(() => controlLabeled("Portal email") !== null);
-      await act(() => {
-        window.location.hash = tokenHash;
-        window.dispatchEvent(new HashChangeEvent("hashchange"));
-      });
-    }
-    await waitFor(() => buttonLabeled("Authorize") !== undefined);
-
-    expect(requests).toContainEqual({ path: "/api/v1/auth/verify-link", method: "POST" });
-    expect(container.querySelector("h1")?.textContent).toBe(
-      `${AUTHORIZED_CONTEXT.clientName} wants to access your account`,
-    );
-    expect(container.textContent).toContain("Returns to client.example");
-    expect(container.textContent).toContain("Robin Example");
-    expect(container.textContent).toContain("person@example.test");
-    expect(container.textContent).toContain("Acting asPersonal");
-    expect(buttonLabeled("Authorize")?.disabled).toBe(false);
-    expect(buttonLabeled("Cancel")).toBeTruthy();
-    expect(window.location.pathname).toBe("/portal/");
-    expect(window.location.hash).not.toContain("token=");
+    await act(() => render(<McpAuthorization onSessionExpired={onSessionExpired} />, container));
+    await waitFor(() => onSessionExpired.mock.calls.length === 1);
+    expect(container.querySelector("form")).toBeNull();
   });
 
   it("sets read and write per area and for every area, and reads a partial choice as custom", async () => {
-    window.location.hash = `#/auth/oauth?${new URLSearchParams({ return_to: RETURN_TO })}`;
+    window.location.hash = `#/auth/oauth?${new URLSearchParams({ request: REQUEST_ID })}`;
     vi.stubGlobal(
       "fetch",
       vi.fn(
@@ -280,7 +203,7 @@ describe("portal MCP authorization", () => {
           accountResponse(requestUrl(input).pathname) ?? Response.json(AUTHORIZED_CONTEXT),
       ),
     );
-    await act(() => render(<McpAuthorization />, container));
+    await act(() => render(<McpAuthorization onSessionExpired={onSessionExpired} />, container));
     await waitFor(() => buttonLabeled("Authorize") !== undefined);
 
     // Everything the client asked for and this person can delegate starts chosen.
@@ -326,7 +249,7 @@ describe("portal MCP authorization", () => {
       ],
     };
     const scopes = [...ALL_SCOPES, "events:read", "events:write", "events:manage"];
-    window.location.hash = `#/auth/oauth?${new URLSearchParams({ return_to: RETURN_TO })}`;
+    window.location.hash = `#/auth/oauth?${new URLSearchParams({ request: REQUEST_ID })}`;
     vi.stubGlobal(
       "fetch",
       vi.fn(
@@ -340,7 +263,7 @@ describe("portal MCP authorization", () => {
           }),
       ),
     );
-    await act(() => render(<McpAuthorization />, container));
+    await act(() => render(<McpAuthorization onSessionExpired={onSessionExpired} />, container));
     await waitFor(() => buttonLabeled("Authorize") !== undefined);
 
     // One read and one write: the columns already say it all.
@@ -354,7 +277,7 @@ describe("portal MCP authorization", () => {
   });
 
   it("authorizes the chosen permissions and follows the completed redirect", async () => {
-    window.location.hash = `#/auth/oauth?${new URLSearchParams({ return_to: RETURN_TO })}`;
+    window.location.hash = `#/auth/oauth?${new URLSearchParams({ request: REQUEST_ID })}`;
     let decision: unknown;
     let polls = 0;
     vi.stubGlobal(
@@ -373,13 +296,13 @@ describe("portal MCP authorization", () => {
           return Response.json(
             polls < 2
               ? { status: "pending" }
-              : { status: "active", redirectTo: `${window.location.origin}/portal/#/returned` },
+              : { status: "active", redirectTo: `${window.location.href.split("#", 1)[0]}#/returned` },
           );
         }
         return accountResponse(path) ?? Response.json(AUTHORIZED_CONTEXT);
       }),
     );
-    await act(() => render(<McpAuthorization />, container));
+    await act(() => render(<McpAuthorization onSessionExpired={onSessionExpired} />, container));
     await waitFor(() => buttonLabeled("Authorize") !== undefined);
     await act(() => toggle("Write: Forms").click());
     await act(() => buttonLabeled("Authorize")!.click());
@@ -395,18 +318,18 @@ describe("portal MCP authorization", () => {
 
     // The next request from the same app starts from this choice.
     await act(() => render(null, container));
-    window.location.hash = `#/auth/oauth?${new URLSearchParams({ return_to: RETURN_TO })}`;
-    await act(() => render(<McpAuthorization />, container));
+    window.location.hash = `#/auth/oauth?${new URLSearchParams({ request: REQUEST_ID })}`;
+    await act(() => render(<McpAuthorization onSessionExpired={onSessionExpired} />, container));
     await waitFor(() => buttonLabeled("Authorize") !== undefined);
     expect(toggle("Write: Forms").checked).toBe(false);
     expect(toggle("Read: Forms").checked).toBe(true);
     expect(toggle("Read: Users").checked).toBe(true);
   });
 
-  it.each(["context", "verification", "missing"])(
+  it.each(["context", "missing"])(
     "clears previous consent when a new authorization has a %s failure",
     async (failure) => {
-      window.location.hash = `#/auth/oauth?${new URLSearchParams({ return_to: RETURN_TO })}`;
+      window.location.hash = `#/auth/oauth?request=${REQUEST_ID}`;
       let available = true;
       vi.stubGlobal(
         "fetch",
@@ -419,98 +342,47 @@ describe("portal MCP authorization", () => {
               ),
         ),
       );
-      await act(() => render(<McpAuthorization />, container));
+      await act(() => render(<McpAuthorization onSessionExpired={onSessionExpired} />, container));
       await waitFor(() => buttonLabeled("Authorize") !== undefined);
-      expect(container.textContent).toContain(AUTHORIZED_CONTEXT.clientName);
-
       available = false;
-      const query = new URLSearchParams({ return_to: RETURN_TO.replace("client-1", "client-2") });
-      if (failure === "verification") query.set("token", "new-email-token");
       await act(() => {
-        window.location.hash = failure === "missing" ? "#/auth/oauth" : `#/auth/oauth?${query}`;
+        window.location.hash =
+          failure === "missing" ? "#/auth/oauth" : "#/auth/oauth?request=00000000-0000-4000-8000-000000000002";
         window.dispatchEvent(new HashChangeEvent("hashchange"));
       });
       if (failure !== "missing")
         await waitFor(() => container.textContent?.includes("New consent unavailable.") ?? false);
       else await flush();
-
       expect(buttonLabeled("Authorize")).toBeUndefined();
       expect(buttonLabeled("Cancel")).toBeUndefined();
       expect(container.textContent).not.toContain(AUTHORIZED_CONTEXT.clientName);
     },
   );
 
-  it("removes a redeemed email token before a failed consent lookup and retries without replaying it", async () => {
-    window.location.hash = `#/auth/oauth?${new URLSearchParams({ return_to: RETURN_TO, token: "email-token" })}`;
-    let verifications = 0;
-    let consentUnavailable = true;
+  it("clears consent and delegates expired approval recovery to the normal portal session", async () => {
+    window.location.hash = `#/auth/oauth?request=${REQUEST_ID}`;
+    onSessionExpired.mockClear();
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        const path = requestUrl(input).pathname;
-        if (path === "/api/v1/auth/verify-link") {
-          verifications += 1;
-          return Response.json(portalSessionFixture({ staff: true }));
-        }
-        return consentUnavailable
-          ? Response.json({ error: { code: "UPSTREAM_UNAVAILABLE", message: "Consent unavailable." } }, { status: 503 })
-          : (accountResponse(path) ?? Response.json(AUTHORIZED_CONTEXT));
-      }),
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) =>
+        init?.method === "POST"
+          ? Response.json({ error: { code: "AUTH_EXPIRED", message: "Sign in again." } }, { status: 401 })
+          : (accountResponse(requestUrl(input).pathname) ?? Response.json(AUTHORIZED_CONTEXT)),
+      ),
     );
-    await act(() => render(<McpAuthorization />, container));
-    await waitFor(() => container.textContent?.includes("Consent unavailable.") ?? false);
-    expect(new URLSearchParams(window.location.hash.split("?", 2)[1]).has("token")).toBe(false);
-    expect(buttonLabeled("Authorize")).toBeUndefined();
-
-    consentUnavailable = false;
-    await act(() => render(null, container));
-    await act(() => render(<McpAuthorization />, container));
-    await waitFor(() => buttonLabeled("Authorize") !== undefined);
-    expect(verifications).toBe(1);
-  });
-
-  it.each([false, true])("returns to sign-in after expiry when context recovery fails: %s", async (recoveryFails) => {
-    window.location.hash = `#/auth/oauth?${new URLSearchParams({ return_to: RETURN_TO })}`;
-    let expired = false;
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-        if (init?.method === "POST") {
-          expired = true;
-          return Response.json(
-            { error: { code: "AUTH_EXPIRED", message: "Your authorization session expired. Sign in again." } },
-            { status: 401 },
-          );
-        }
-        if (expired && recoveryFails) {
-          return Response.json(
-            { error: { code: "UPSTREAM_UNAVAILABLE", message: "Temporary consent failure." } },
-            { status: 503 },
-          );
-        }
-        return (
-          (expired ? null : accountResponse(requestUrl(input).pathname)) ??
-          Response.json(expired ? contextWithout({ clientName: AUTHORIZED_CONTEXT.clientName }) : AUTHORIZED_CONTEXT)
-        );
-      }),
-    );
-
-    await act(() => render(<McpAuthorization />, container));
+    await act(() => render(<McpAuthorization onSessionExpired={onSessionExpired} />, container));
     await waitFor(() => buttonLabeled("Authorize") !== undefined);
     await act(() => buttonLabeled("Authorize")!.click());
-    await waitFor(() => controlLabeled("Portal email") !== null);
-
+    await waitFor(() => onSessionExpired.mock.calls.length === 1);
     expect(buttonLabeled("Authorize")).toBeUndefined();
     expect(buttonLabeled("Cancel")).toBeUndefined();
-    if (recoveryFails) expect(container.textContent).not.toContain(AUTHORIZED_CONTEXT.clientName);
-    expect(container.textContent).not.toContain("View forms and responses");
+    expect(container.querySelector("form")).toBeNull();
     expect(container.textContent).not.toContain("person@example.test");
-    expect(container.querySelector('[role="alert"]')?.textContent).toContain("Sign in again.");
-    expect(window.location.hash).toContain(encodeURIComponent(RETURN_TO));
+    expect(window.location.hash).toContain(REQUEST_ID);
   });
 
   it("hides approval and login controls from a signed-in identity without staff authorization", async () => {
-    window.location.hash = `#/auth/oauth?${new URLSearchParams({ return_to: RETURN_TO })}`;
+    window.location.hash = `#/auth/oauth?${new URLSearchParams({ request: REQUEST_ID })}`;
     vi.stubGlobal(
       "fetch",
       vi.fn(async () =>
@@ -520,7 +392,7 @@ describe("portal MCP authorization", () => {
       ),
     );
 
-    await act(() => render(<McpAuthorization />, container));
+    await act(() => render(<McpAuthorization onSessionExpired={onSessionExpired} />, container));
     await waitFor(() => container.querySelector('[role="alert"]') !== null);
 
     const refusal = container.querySelector('[role="alert"]');
@@ -532,7 +404,7 @@ describe("portal MCP authorization", () => {
   });
 
   it("announces a failed context lookup and offers nothing to approve", async () => {
-    window.location.hash = `#/auth/oauth?${new URLSearchParams({ return_to: RETURN_TO })}`;
+    window.location.hash = `#/auth/oauth?${new URLSearchParams({ request: REQUEST_ID })}`;
     vi.stubGlobal(
       "fetch",
       vi.fn(async () =>
@@ -543,7 +415,7 @@ describe("portal MCP authorization", () => {
       ),
     );
 
-    await act(() => render(<McpAuthorization />, container));
+    await act(() => render(<McpAuthorization onSessionExpired={onSessionExpired} />, container));
     await waitFor(() => container.querySelector('[role="alert"]') !== null);
 
     expect(container.querySelector('[role="alert"]')?.textContent).toContain(

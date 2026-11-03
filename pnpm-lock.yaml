@@ -194,8 +194,8 @@ importers:
         specifier: ^0.3.8
         version: 0.3.8(@modelcontextprotocol/sdk@1.32.0(@cfworker/json-schema@4.1.1)(supports-color@10.2.2)(zod@4.6.5))(ai@6.0.253(zod@4.6.5))(zod@4.6.5)
       '@cloudflare/workers-oauth-provider':
-        specifier: ^0.7.0
-        version: 0.7.2
+        specifier: ^1.2.4
+        version: 1.2.4
       '@modelcontextprotocol/sdk':
         specifier: 1.32.0
         version: 1.32.0(@cfworker/json-schema@4.1.1)(supports-color@10.2.2)(zod@4.6.5)
@@ -947,8 +947,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@cloudflare/workers-oauth-provider@0.7.2':
-    resolution: {integrity: sha512-GcSc2lTPYO/r9Zxyuvw8KNAk640LP5XTnBWVuI13hA6XcEWQbyH9KuO9WiN5pXUcO2Gn7pBmRTNU4uIMpgmw2w==}
+  '@cloudflare/workers-oauth-provider@1.2.4':
+    resolution: {integrity: sha512-ayo6Z8DBHdAxwDpplFU8BrEoxoSn6wNo+E7ypTENRHUOc8R89A8/+nZ+a8pMZjjXzF0JXfpYXhw/7qqG+DC18Q==}
 
   '@cloudflare/workers-types@5.20260918.1':
     resolution: {integrity: sha512-bUGc9gIdooYPi6lAUoB/eBXmy/ev9ok0XvDLzfJZQVCT8WCEQwv9f6smz6XeE83JzpX6ZSVi9CG1aDORnErYRQ==}
@@ -7139,7 +7139,7 @@ snapshots:
   '@cloudflare/workerd-windows-64@1.20261012.1':
     optional: true
 
-  '@cloudflare/workers-oauth-provider@0.7.2': {}
+  '@cloudflare/workers-oauth-provider@1.2.4': {}
 
   '@cloudflare/workers-types@5.20260918.1': {}
 

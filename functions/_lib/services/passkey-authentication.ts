@@ -216,7 +216,7 @@ export async function completePasskeyAuthentication(
     expiresAt: prepared.expiresAt,
     capacities,
   });
-  const session: UserSessionResult = await createEstablishedUserSessionResult(db, prepared, {
+  const established = await createEstablishedUserSessionResult(db, prepared, {
     identity: resolved.identity,
     staff: resolved.staff,
     memberships: resolved.memberships,
@@ -225,7 +225,10 @@ export async function completePasskeyAuthentication(
     eventParticipation: resolved.eventParticipation,
     actingIdentities: resolved.actingIdentities,
   });
+  const passkeyAuthentication = { credentialId: credentialRow.id, authenticatedAt: prepared.createdAt };
+  const session: UserSessionResult = { ...established, passkeyAuthentication };
   const token = await signUserSessionToken(signingSecret, {
+    passkeyAuthentication,
     sub: resolved.identity.id,
     sid: prepared.sessionId,
     exp: sessionExpiresAtToExp(prepared.expiresAt),

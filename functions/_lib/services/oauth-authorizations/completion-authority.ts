@@ -1,3 +1,9 @@
+import type { SessionPasskeyAuthentication } from "../../../../assets/shared/schemas/session-authentication";
+import { mcpSessionDeadline } from "../../auth/oauth/props";
+import {
+  passkeySessionAuthenticationEvidence,
+  requireSessionPasskeyAuthentication,
+} from "../../auth/passkey-session-authentication";
 import { oauthScopeRequirements } from "../../auth/oauth/grantable-permissions";
 import { all, first } from "../../db/queries";
 import { prepareAuthorizationGuard } from "../../db/authorization-guard";
@@ -43,12 +49,7 @@ export async function completionAuthority(
   row: ClaimedOauthCompletion,
   payload: OauthCompletionPayload,
 ) {
-  const expiry = Math.min(
-    Date.parse(row.expiresAt),
-    Date.parse(row.attemptUntil),
-    Date.parse(payload.props.sessionIdleExpiresAt),
-    Date.parse(payload.props.sessionExpiresAt),
-  );
+  const expiry = Math.min(Date.parse(row.expiresAt), Date.parse(row.attemptUntil), mcpSessionDeadline(payload.props));
   if (
     payload.props.id !== row.userId ||
     payload.props.sessionId !== row.sessionId ||
@@ -57,6 +58,8 @@ export async function completionAuthority(
     expiry <= Date.now()
   )
     throw new AppError(401, "MCP_AUTHORIZATION_INACTIVE", "Authorize the MCP client again");
+  if (payload.props.passkeyAuthentication)
+    await requireSessionPasskeyAuthentication(db, row.userId, row.sessionId, payload.props.passkeyAuthentication);
   const actor = await getCurrentUserBackedAdmin(db, row.userId, row.sessionId, row.memberId);
   if (!actor) throw new AppError(401, "MCP_AUTHORIZATION_INACTIVE", "Authorize the MCP client again");
   const scopes = oauthAuthorizationScopesSchema.parse(
@@ -76,9 +79,18 @@ export function pendingOauthCompletionGuards(
   token: string,
   actor: UserBackedAuthAdmin,
   scopes: Awaited<ReturnType<typeof completionAuthority>>["scopes"],
+  passkeyAuthentication?: SessionPasskeyAuthentication,
 ) {
   return [
     preparePermissionsAuthorizationGuard(db, actor, oauthScopeRequirements(scopes)),
+    ...(passkeyAuthentication
+      ? [
+          prepareAuthorizationGuard(
+            db,
+            passkeySessionAuthenticationEvidence(row.userId, row.sessionId, passkeyAuthentication),
+          ),
+        ]
+      : []),
     prepareAuthorizationGuard(db, {
       sql: `SELECT 1 FROM oauth_authorizations authorization
     WHERE authorization.id=? AND authorization.user_id=? AND authorization.session_id=? AND authorization.client_id=?

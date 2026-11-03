@@ -1,18 +1,20 @@
 import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
-import { parseCapabilityToken } from "../functions/_lib/auth/capability-token";
 import {
   MCP_OAUTH_AUTHORIZE_PATH,
   buildMcpOauthUiUrl,
   describeMcpAuthorization,
-  sendMcpAuthorizeMagicLink,
   type McpOAuthEnv,
 } from "../functions/_lib/auth/oauth/authorization";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
-import { deliveredEmailPayload, queryAll, seedEventAndAdmin } from "./helpers/context";
+import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { insertIndividualMember } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
+import {
+  createMcpAuthorizationContinuation,
+  readMcpAuthorizationContinuation,
+} from "../functions/_lib/auth/oauth/continuation";
 import { createMcpAuthorizeHandler } from "../functions/_lib/auth/oauth/consent";
 import { Hono } from "hono";
 import { addRepresentative, insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
@@ -128,55 +130,62 @@ describe("MCP authorization through canonical portal authentication", () => {
     });
   });
 
-  it("queues the canonical user sign-in capability back to the portal authorization screen", async () => {
-    await seedEventAndAdmin(env.DB);
+  it("preserves a validated request through a short reference without granting a session", async () => {
     const testEnv = oauthEnv();
-    const background: Promise<unknown>[] = [];
-    await sendMcpAuthorizeMagicLink({
-      request: new Request(`https://app.test${MCP_OAUTH_AUTHORIZE_PATH}`, {
-        headers: { "cf-connecting-ip": "203.0.113.10", "user-agent": "oauth-test" },
-      }),
-      env: testEnv,
-      executionCtx: {
-        waitUntil: (promise: Promise<unknown>) => {
-          background.push(Promise.resolve(promise));
-        },
-      } as unknown as ExecutionContext,
-      email: "admin@pkic.org",
-      returnTo: RETURN_TO,
+    const request = new Request(`https://app.test${RETURN_TO}`);
+    const id = await createMcpAuthorizationContinuation(request, testEnv);
+    const lookup = new Request(`https://app.test${MCP_OAUTH_AUTHORIZE_PATH}?request=${id}`);
+    expect(await readMcpAuthorizationContinuation(lookup, testEnv)).toBe(RETURN_TO);
+    expect((await describeMcpAuthorization(lookup, testEnv, RETURN_TO)).authenticated).toBe(false);
+    await testEnv.OAUTH_KV!.delete(`mcp-authorization-request:${id}`);
+    await expect(readMcpAuthorizationContinuation(lookup, testEnv)).rejects.toMatchObject({
+      code: "OAUTH_REQUEST_EXPIRED",
     });
+    await expect(
+      readMcpAuthorizationContinuation(
+        new Request(`https://app.test${MCP_OAUTH_AUTHORIZE_PATH}?request=invalid`),
+        testEnv,
+      ),
+    ).rejects.toMatchObject({ code: "OAUTH_REQUEST_EXPIRED" });
+  });
 
-    const [outbox] = await queryAll<{ template_key: string; payload_json: string }>(
-      env.DB,
-      "SELECT template_key, payload_json FROM email_outbox ORDER BY rowid DESC LIMIT 1",
-    );
-    expect(outbox.template_key).toBe("user_magic_link");
-    const delivered = await deliveredEmailPayload<{ magicLinkUrl: string }>(env.DB, env, outbox.payload_json);
-    const url = new URL(delivered.magicLinkUrl);
-    const params = new URLSearchParams(url.hash.split("?", 2)[1]);
-    expect(`${url.pathname}${url.hash.split("?", 1)[0]}`).toBe("/portal/#/auth/oauth");
-    expect(params.get("return_to")).toBe(RETURN_TO);
-    expect(parseCapabilityToken(params.get("token") ?? "", "user_sign_in")).not.toBeNull();
-    expect(background).toHaveLength(1);
+  it("limits anonymous continuation creation before writing to KV", async () => {
+    const testEnv = oauthEnv();
+    const write = vi.spyOn(testEnv.OAUTH_KV, "put");
+    try {
+      await expect(
+        createMcpAuthorizationContinuation(new Request(`https://app.test${RETURN_TO}`), {
+          ...testEnv,
+          IP_RATE_LIMITER: { limit: async () => ({ success: false }) },
+        }),
+      ).rejects.toMatchObject({ status: 429 });
+      expect(write).not.toHaveBeenCalled();
+    } finally {
+      write.mockRestore();
+    }
   });
 
   it("builds only the portal UI link and keeps authorization state in the fragment", () => {
     const url = new URL(
-      buildMcpOauthUiUrl({ APP_BASE_URL: "https://app.test" }, new Request("https://app.test"), RETURN_TO),
+      buildMcpOauthUiUrl(
+        { APP_BASE_URL: "https://app.test" },
+        new Request("https://app.test"),
+        "00000000-0000-4000-8000-000000000001",
+      ),
     );
     expect(url.pathname).toBe("/portal/");
     expect(url.search).toBe("");
     expect(url.hash).toContain("#/auth/oauth?");
-    expect(new URLSearchParams(url.hash.split("?", 2)[1]).get("return_to")).toBe(RETURN_TO);
+    expect(new URLSearchParams(url.hash.split("?", 2)[1]).get("request")).toBe("00000000-0000-4000-8000-000000000001");
   });
 
-  it("rejects an invalid sign-in address before queueing email", async () => {
+  it("removes the parallel MCP email sign-in action", async () => {
     const handler = createMcpAuthorizeHandler({ app: new Hono() });
     const response = await handler.fetch(
       new Request(`https://app.test${MCP_OAUTH_AUTHORIZE_PATH}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "request-link", email: "not-an-email", return_to: RETURN_TO }),
+        body: JSON.stringify({ action: "request-link", email: "admin@pkic.org", return_to: RETURN_TO }),
       }),
       oauthEnv(),
       { waitUntil() {} } as unknown as ExecutionContext,

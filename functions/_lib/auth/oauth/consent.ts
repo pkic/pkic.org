@@ -1,3 +1,4 @@
+import { mcpPasskeyAuthorizationTtlSeconds } from "./policy";
 import type { Hono } from "hono";
 import type { Env } from "../../types";
 import { MCP_AUTHORIZE_MAX_BYTES, readBoundedFormData, readBoundedJsonBody } from "../../http-body";
@@ -15,17 +16,15 @@ import {
   redirectToMcpOauthUi,
   redirectAuthorizationDenied,
   resolveMcpOauthSession,
-  resolveAuthorizeReturnTo,
   sanitizeAuthorizeReturnTo,
-  sendMcpAuthorizeMagicLink,
   toOAuthErrorResponse,
   type McpOAuthEnv,
   wantsJsonResponse,
 } from "./authorization";
+import { createMcpAuthorizationContinuation, readMcpAuthorizationContinuation } from "./continuation";
 import {
   mcpOauthAuthorizeActionSchema,
   mcpOauthContextSchema,
-  mcpOauthMagicLinkResponseSchema,
   mcpOauthRedirectResponseSchema,
 } from "../../../../assets/shared/schemas/mcp-oauth";
 
@@ -47,7 +46,6 @@ async function parseAuthorizePayload(request: Request) {
     const form = await readBoundedFormData(request, MCP_AUTHORIZE_MAX_BYTES);
     raw = {
       action: form.get("action"),
-      email: form.get("email"),
       return_to: form.get("return_to"),
       scopes: form.getAll("scopes"),
       actingIdentityId: form.get("actingIdentityId") || null,
@@ -60,23 +58,13 @@ async function parseAuthorizePayload(request: Request) {
 }
 
 async function handleAuthorizeGet(request: Request, env: McpOAuthEnv): Promise<Response> {
-  const returnTo = resolveAuthorizeReturnTo(request);
   if (!wantsJsonResponse(request)) {
-    return redirectToMcpOauthUi(env, request, returnTo);
+    const requestId = await createMcpAuthorizationContinuation(request, env);
+    return redirectToMcpOauthUi(env, request, requestId);
   }
 
+  const returnTo = await readMcpAuthorizationContinuation(request, env);
   return jsonResponse(mcpOauthContextSchema.parse(await describeMcpAuthorization(request, env, returnTo)));
-}
-
-async function handleMagicLinkRequest(
-  request: Request,
-  env: McpOAuthEnv,
-  ctx: ExecutionContext,
-  email: string,
-  returnTo: string,
-): Promise<Response> {
-  await sendMcpAuthorizeMagicLink({ request, env, executionCtx: ctx, email, returnTo });
-  return jsonResponse(mcpOauthMagicLinkResponseSchema.parse({ success: true, sentTo: email || null }));
 }
 
 async function handleAuthorizeApproval(
@@ -103,6 +91,8 @@ async function handleAuthorizeApproval(
     actor: session.staff,
     member: session.member ?? null,
     staffIdleExpiresAt: session.staffIdleExpiresAt,
+    passkeyAuthentication: session.passkeyAuthentication,
+    passkeyAuthorizationTtlSeconds: mcpPasskeyAuthorizationTtlSeconds(env),
     clientName: client?.clientName ?? authRequest.clientId,
     selectedScopes,
     actingIdentityId: session.actingIdentityId,
@@ -117,10 +107,6 @@ async function handleAuthorizePost(request: Request, env: McpOAuthEnv, ctx: Exec
   assertSameOriginRequest(request, new URL(request.url).origin, "oauth_authorization");
   const payload = await parseAuthorizePayload(request);
   const { action, returnTo } = payload;
-
-  if (action === "request-link") {
-    return handleMagicLinkRequest(request, env, ctx, payload.email, returnTo);
-  }
 
   if (action === "deny") {
     const authRequest = await parseOauthRequestFromReturnTo(request, env.OAUTH_PROVIDER, returnTo);

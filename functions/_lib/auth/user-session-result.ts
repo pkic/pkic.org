@@ -1,3 +1,4 @@
+import type { SessionPasskeyAuthentication } from "../../../assets/shared/schemas/session-authentication";
 import type { SponsorCapacity } from "../../../assets/shared/schemas/sponsor-access";
 import {
   resolveSessionActingIdentityId,
@@ -20,6 +21,8 @@ import {
 } from "./session-policy";
 
 export interface UserSessionResult {
+  /** Authentication provenance from the verified session token, never a browser request field. */
+  passkeyAuthentication?: SessionPasskeyAuthentication;
   identity: { id: string; email: string };
   sessionId: string;
   expiresAt: string;

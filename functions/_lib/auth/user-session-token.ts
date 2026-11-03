@@ -1,3 +1,7 @@
+import {
+  sessionPasskeyAuthenticationSchema,
+  type SessionPasskeyAuthentication,
+} from "../../../assets/shared/schemas/session-authentication";
 import { signJwt, verifyJwt, type JwtVerifyResult } from "../utils/jwt";
 import {
   getBearerToken,
@@ -11,6 +15,7 @@ const USER_SESSION_TOKEN_TYPE = "user-session";
 
 export interface UserSessionTokenClaims {
   typ: typeof USER_SESSION_TOKEN_TYPE;
+  passkeyAuthentication?: SessionPasskeyAuthentication;
   sub: string;
   sid: string;
   exp: number;
@@ -28,6 +33,8 @@ function isUserSessionClaims(claims: object): claims is UserSessionTokenClaims {
   const candidate = claims as Partial<UserSessionTokenClaims>;
   return (
     candidate.typ === USER_SESSION_TOKEN_TYPE &&
+    (candidate.passkeyAuthentication === undefined ||
+      sessionPasskeyAuthenticationSchema.safeParse(candidate.passkeyAuthentication).success) &&
     typeof candidate.sub === "string" &&
     typeof candidate.sid === "string" &&
     typeof candidate.exp === "number" &&
@@ -43,6 +50,7 @@ function isUserSessionClaims(claims: object): claims is UserSessionTokenClaims {
 export async function signUserSessionToken(
   secret: string,
   payload: Pick<UserSessionTokenClaims, "sub" | "sid" | "exp"> & {
+    passkeyAuthentication?: SessionPasskeyAuthentication;
     identityId?: string | null;
     state?: string | null;
     lastActivityAt?: number;
@@ -52,6 +60,7 @@ export async function signUserSessionToken(
   const issuedAt = Math.floor(Date.now() / 1000);
   return signJwt(secret, {
     typ: USER_SESSION_TOKEN_TYPE,
+    ...(payload.passkeyAuthentication ? { passkeyAuthentication: payload.passkeyAuthentication } : {}),
     sub: payload.sub,
     sid: payload.sid,
     exp: payload.exp,

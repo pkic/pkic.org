@@ -15,7 +15,8 @@ const payloadSchema = z.object({
     state: z.string(),
     codeChallenge: z.string().optional(),
     codeChallengeMethod: z.literal("S256").optional(),
-    resource: z.union([z.string(), z.array(z.string())]).optional(),
+    resource: z.string().optional(),
+    issuer: z.url().optional(),
   }),
   props: mcpDelegatedOAuthPropsSchema,
 });

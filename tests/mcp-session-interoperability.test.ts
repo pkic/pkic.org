@@ -1,3 +1,12 @@
+import { signMcpSessionToken } from "../functions/_lib/auth/mcp-session";
+import { signInWithPasskey } from "./helpers/passkey-sign-in";
+import { createAdminSession } from "./helpers/auth";
+import { mutateBeforeMatchingQuery } from "./helpers/database-races";
+import {
+  createMcpOauthTestClient,
+  MCP_TEST_ORIGIN as origin,
+  MCP_TEST_VERIFIER as verifier,
+} from "./helpers/mcp-oauth";
 import { promotionKitSchema } from "../assets/shared/schemas/event-promotion-kit";
 import { organizationsListResponseSchema } from "../assets/shared/schemas/organization-management";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -6,124 +15,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { env as workerEnv } from "cloudflare:workers";
 import "../functions/http-router";
 const env = { ...workerEnv, INTERNAL_SIGNING_SECRET: "synthetic-oauth-test-signing-secret-32-plus" };
-import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import app, { callApi } from "./helpers/app";
+import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import { MCP_PATH } from "../functions/_lib/api-tools/mcp-worker";
-import {
-  MCP_OAUTH_AUTHORIZE_PATH,
-  MCP_OAUTH_REGISTER_PATH,
-  MCP_OAUTH_TOKEN_PATH,
-  resolveMcpExternalToken,
-} from "../functions/_lib/auth/oauth/authorization";
+import { resolveMcpExternalToken } from "../functions/_lib/auth/oauth/authorization";
 import { resolveActiveMcpSession } from "../functions/_lib/auth/oauth/session-authorization";
 import { AppError } from "../functions/_lib/errors";
-import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
 
-const origin = "https://app.test";
 const redirectUri = "http://127.0.0.1:1455/callback";
-const verifier = "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-async function call(path: string, init?: RequestInit): Promise<Response> {
-  const context = createExecutionContext();
-  const response = await app.fetch(new Request(`${origin}${path}`, init), env, context);
-  await waitOnExecutionContext(context);
-  return response;
-}
-
-async function createAuthorization(userToken?: string) {
-  const [user] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE normalized_email = ?", [
-    "admin@pkic.org",
-  ]);
-  const session =
-    userToken ?? (await createAdminSession(env.DB, user.id, crypto.randomUUID(), env.INTERNAL_SIGNING_SECRET));
-  const registration = await call(MCP_OAUTH_REGISTER_PATH, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      client_name: "MCP interoperability test",
-      redirect_uris: [redirectUri],
-      token_endpoint_auth_method: "none",
-      grant_types: ["authorization_code", "refresh_token"],
-      response_types: ["code"],
-    }),
-  });
-  expect(registration.status).toBe(201);
-  const { client_id: clientId } = (await registration.json()) as { client_id: string };
-  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)));
-  const challenge = btoa(String.fromCharCode(...digest))
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
-  const returnTo = `${MCP_OAUTH_AUTHORIZE_PATH}?${new URLSearchParams({ client_id: clientId, redirect_uri: redirectUri, response_type: "code", scope: "forms:read forms:write organizations:read users:read", state: "test-state", code_challenge: challenge, code_challenge_method: "S256", resource: `${origin}${MCP_PATH}` })}`;
-  const approval = await call(MCP_OAUTH_AUTHORIZE_PATH, {
-    method: "POST",
-    headers: { "content-type": "application/json", cookie: `pkic_session=${session}` },
-    body: JSON.stringify({
-      action: "approve",
-      return_to: returnTo,
-      scopes: ["forms:read", "organizations:read", "users:read"],
-      actingIdentityId: null,
-    }),
-  });
-  expect(approval.status, await approval.clone().text()).toBe(202);
-  const { authorizationId } = (await approval.json()) as { authorizationId: string };
-  const completed = await call(`/api/v1/auth/oauth/authorizations/${authorizationId}/completion`, {
-    headers: { cookie: `pkic_session=${session}` },
-  });
-  expect(completed.status).toBe(200);
-  const { redirectTo, status } = (await completed.json()) as { redirectTo: string; status: string };
-  expect(status).toBe("active");
-  const callback = new URL(redirectTo);
-  expect(callback.searchParams.get("state")).toBe("test-state");
-  return { authorizationId, clientId, userToken: session, userId: user.id, code: callback.searchParams.get("code")! };
-}
-
-function redeemCode(grant: Awaited<ReturnType<typeof createAuthorization>>) {
-  return exchange({
-    grant_type: "authorization_code",
-    client_id: grant.clientId,
-    redirect_uri: redirectUri,
-    code: grant.code,
-    code_verifier: verifier,
-    resource: `${origin}${MCP_PATH}`,
-  });
-}
-
-async function authorize(userToken?: string) {
-  const grant = await createAuthorization(userToken);
-  const tokens = await redeemCode(grant);
-  expect(tokens.status).toBe(200);
-  return {
-    ...grant,
-    ...((await tokens.json()) as { access_token: string; refresh_token: string; expires_in: number; scope: string }),
-  };
-}
-
-function exchange(body: Record<string, string>) {
-  return call(MCP_OAUTH_TOKEN_PATH, {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams(body),
-  });
-}
-
-function initialize(token: string) {
-  return call(MCP_PATH, {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${token}`,
-      "content-type": "application/json",
-      accept: "application/json, text/event-stream",
-    },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      id: 1,
-      method: "initialize",
-      params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test-client", version: "1" } },
-    }),
-  });
-}
+const { call, createAuthorization, redeemCode, authorize, exchange, initialize } = createMcpOauthTestClient(env);
 
 async function withAuthorizedMcpClient(
   run: (client: Client, grant: Awaited<ReturnType<typeof authorize>>) => Promise<void>,
@@ -187,6 +89,7 @@ describe("MCP OAuth session interoperability", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   beforeEach(async () => {
@@ -194,15 +97,88 @@ describe("MCP OAuth session interoperability", () => {
     await seedEventAndAdmin(env.DB);
   });
 
-  it("discovers the canonical resource and completes public-client PKCE login and refresh", async () => {
-    for (const path of ["/.well-known/oauth-protected-resource", `/.well-known/oauth-protected-resource${MCP_PATH}`]) {
-      const response = await call(path);
-      expect(response.status).toBe(200);
-      expect(await response.json()).toMatchObject({
+  it.each(["ChatGPT", "Codex"])(
+    "connects and refreshes with %s CIMD metadata without a client secret",
+    async (name) => {
+      const clientId =
+        name === "ChatGPT"
+          ? "https://chatgpt.com/oauth/client.json"
+          : "https://chatgpt.com/oauth/codex/synthetic/client.json";
+      const callbackUri =
+        name === "ChatGPT"
+          ? "https://chatgpt.com/connector_platform_oauth_redirect"
+          : "http://127.0.0.1:59326/callback/synthetic";
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: RequestInfo | URL) => {
+          expect(String(input)).toBe(clientId);
+          return Response.json({
+            client_id: clientId,
+            client_name: name,
+            redirect_uris: [name === "Codex" ? "http://127.0.0.1/callback/synthetic" : callbackUri],
+            token_endpoint_auth_method: name === "ChatGPT" ? "private_key_jwt" : "none",
+            token_endpoint_auth_methods_supported: ["none", "private_key_jwt"],
+            jwks_uri: "https://chatgpt.com/oauth/jwks.json",
+            grant_types: ["authorization_code", "refresh_token"],
+            response_types: ["code"],
+          });
+        }),
+      );
+      const grant = await createAuthorization(undefined, { clientId, redirectUri: callbackUri });
+      const refused = await exchange({
+        grant_type: "authorization_code",
+        client_id: grant.clientId,
+        redirect_uri: callbackUri,
+        code: grant.code,
+        code_verifier: "wrong-synthetic-verifier",
         resource: `${origin}${MCP_PATH}`,
-        authorization_servers: [origin],
       });
-    }
+      expect(refused.status).toBe(400);
+      expect(await refused.json()).toMatchObject({ error: "invalid_grant" });
+      const response = await redeemCode(grant);
+      expect(response.status).toBe(200);
+      const tokens = (await response.json()) as { access_token: string; refresh_token: string };
+      expect((await initialize(tokens.access_token)).status).toBe(200);
+      const refreshed = await exchange({
+        grant_type: "refresh_token",
+        client_id: clientId,
+        refresh_token: tokens.refresh_token,
+      });
+      expect(refreshed.status).toBe(200);
+      expect((await initialize(((await refreshed.json()) as { access_token: string }).access_token)).status).toBe(200);
+    },
+  );
+
+  it("does not treat a signed-only CIMD client as an unauthenticated public client", async () => {
+    const clientId = "https://client.example/signed-only.json";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({
+          client_id: clientId,
+          client_name: "Signed-only client",
+          redirect_uris: [redirectUri],
+          token_endpoint_auth_method: "private_key_jwt",
+          token_endpoint_auth_methods_supported: ["private_key_jwt"],
+          jwks_uri: "https://client.example/jwks.json",
+        }),
+      ),
+    );
+    const response = await exchange({
+      grant_type: "authorization_code",
+      client_id: clientId,
+      code: "synthetic-invalid-code",
+      code_verifier: verifier,
+    });
+    expect(response.status).toBe(401);
+    expect(await response.json()).toMatchObject({ error: "invalid_client" });
+  });
+
+  it("discovers the canonical resource and completes public-client PKCE login and refresh", async () => {
+    expect((await call("/.well-known/oauth-protected-resource")).status).toBe(404);
+    const response = await call(`/.well-known/oauth-protected-resource${MCP_PATH}`);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ resource: `${origin}${MCP_PATH}`, authorization_servers: [origin] });
     const grant = await authorize();
     expect((await initialize(grant.access_token)).status).toBe(200);
     const refreshed = await exchange({
@@ -397,6 +373,126 @@ describe("MCP OAuth session interoperability", () => {
         ).toEqual(referencePermissions);
       }
     });
+  });
+  it.each([false, true])(
+    "executes longer passkey-authorized MCP writes unless revocation wins the command: %s",
+    async (revokeAtWrite) => {
+      const [user] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE normalized_email=?", [
+        "admin@pkic.org",
+      ]);
+      await env.DB.prepare("UPDATE users SET email_verified_at=? WHERE id=?")
+        .bind(new Date().toISOString(), user.id)
+        .run();
+      const emailToken = await createAdminSession(env.DB, user.id, crypto.randomUUID(), env.INTERNAL_SIGNING_SECRET);
+      const passkey = await signInWithPasskey(env, emailToken);
+      const grant = await authorize(passkey.token);
+      const kit = await prepareAttendeePromotion(grant);
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(Date.now() + 65 * 60000);
+      const refreshed = await exchange({
+        grant_type: "refresh_token",
+        client_id: grant.clientId,
+        refresh_token: grant.refresh_token,
+      });
+      expect(refreshed.status).toBe(200);
+      const { access_token: accessToken } = (await refreshed.json()) as { access_token: string };
+      let revoked = false;
+      const db = mutateBeforeMatchingQuery(
+        env.DB,
+        (sql) => revokeAtWrite && sql.includes("INSERT INTO authorization_guards"),
+        async () => {
+          await env.DB.prepare("UPDATE passkey_credentials SET revoked_at=? WHERE id=?")
+            .bind(new Date().toISOString(), passkey.credentialId)
+            .run();
+          revoked = true;
+        },
+      );
+      const refused = await callApi({ ...env, DB: db }, MCP_PATH, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${accessToken}`,
+          "content-type": "application/json",
+          accept: "application/json, text/event-stream",
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 3,
+          method: "tools/call",
+          params: {
+            name: "execute",
+            arguments: {
+              code: `async () => codemode.request(${JSON.stringify(promotionSaveOperation(kit))})`,
+            },
+          },
+        }),
+      });
+      expect(revoked).toBe(revokeAtWrite);
+      expect(refused.status, await refused.clone().text()).toBe(revokeAtWrite ? 401 : 200);
+      if (revokeAtWrite) expect(refused.headers.get("www-authenticate")).toContain("invalid_token");
+      expect(
+        await env.DB.prepare("SELECT COUNT(*) AS count FROM event_promotion_kits WHERE user_id=?")
+          .bind(user.id)
+          .first(),
+      ).toEqual({ count: revokeAtWrite ? 0 : 1 });
+      expect(
+        await env.DB.prepare(
+          "SELECT COUNT(*) AS count FROM audit_log WHERE actor_id=? AND action='promotion_composition_saved'",
+        )
+          .bind(user.id)
+          .first(),
+      ).toEqual({ count: revokeAtWrite ? 0 : 1 });
+    },
+  );
+  it("refuses a write when its signed token expires after verification but before the command", async () => {
+    const grant = await authorize();
+    const kit = await prepareAttendeePromotion(grant);
+    const [session] = await queryAll<{ session_id: string }>(
+      env.DB,
+      "SELECT session_id FROM oauth_authorizations WHERE id=?",
+      [grant.authorizationId],
+    );
+    const now = Date.now();
+    // The verifier observes the request before expiry; D1 observes the commit after expiry.
+    const expiresAt = Math.floor(now / 1000) - 1;
+    const token = await signMcpSessionToken(env.INTERNAL_SIGNING_SECRET, {
+      sub: grant.userId,
+      sid: session.session_id,
+      email: "admin@pkic.org",
+      scopes: ["forms:read", "organizations:read", "users:read"],
+      authorizationId: grant.authorizationId,
+      exp: expiresAt,
+    });
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime((expiresAt - 1) * 1000);
+    let reachedCommand = false;
+    const db = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => sql.includes("INSERT INTO event_promotion_kits"),
+      async () => {
+        vi.setSystemTime(now);
+        reachedCommand = true;
+      },
+    );
+    const operation = promotionSaveOperation(kit);
+    const refused = await callApi({ ...env, DB: db }, operation.path, {
+      method: operation.method,
+      headers: { authorization: `Bearer ${token}`, "x-pkic-machine-auth": "mcp", "content-type": "application/json" },
+      body: JSON.stringify(operation.body),
+    });
+    expect(reachedCommand).toBe(true);
+    expect(refused.status, await refused.clone().text()).toBe(409);
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS count FROM event_promotion_kits WHERE user_id=?")
+        .bind(grant.userId)
+        .first(),
+    ).toEqual({ count: 0 });
+    expect(
+      await env.DB.prepare(
+        "SELECT COUNT(*) AS count FROM audit_log WHERE actor_id=? AND action='promotion_composition_saved'",
+      )
+        .bind(grant.userId)
+        .first(),
+    ).toEqual({ count: 0 });
   });
   it("issues only the approved subset and keeps refresh downscoping", async () => {
     const grant = await authorize();
