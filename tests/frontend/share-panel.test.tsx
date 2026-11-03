@@ -183,10 +183,15 @@ describe("share panel", () => {
     const url = new URL(String(fetcher.mock.calls[0][0]));
     expect(url.searchParams.get("format")).toBe("square");
     expect(url.pathname).toContain("/referrals/AbC123/badge");
-    await act(async () => finish(new Response("synthetic image", { headers: { "content-type": "image/png" } })));
-    await settle();
-    expect(main.hasAttribute("aria-busy")).toBe(false);
-    expect(downloadFile).toHaveBeenCalledWith(expect.any(Blob), "image/png", expect.stringMatching(/-square\.png$/u));
+    const image = new Response(null, { headers: { "content-type": "image/png" } });
+    // jsdom's Blob is the browser contract; Node's Response.blob() produces
+    // a different constructor even though the data is otherwise identical.
+    vi.spyOn(image, "blob").mockResolvedValue(new Blob(["synthetic image"], { type: "image/png" }));
+    await act(async () => finish(image));
+    await vi.waitFor(() => {
+      expect(main.hasAttribute("aria-busy")).toBe(false);
+      expect(downloadFile).toHaveBeenCalledWith(expect.any(Blob), "image/png", expect.stringMatching(/-square\.png$/u));
+    });
   });
 
   it("shows a download refusal and leaves the control available to retry", async () => {

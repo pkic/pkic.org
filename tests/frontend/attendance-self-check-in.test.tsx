@@ -55,8 +55,14 @@ function result(value: Partial<AttendancePointResult>): AttendancePointResult {
 }
 
 async function flush() {
-  await act(async () => {
-    for (let index = 0; index < 5; index++) await Promise.resolve();
+  await vi.waitFor(async () => {
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect([...host.querySelectorAll('[role="status"]')].map((status) => status.textContent)).not.toContain(
+      "Reading the code…",
+    );
+    expect(host.querySelector('button[aria-busy="true"]')).toBeNull();
   });
 }
 
