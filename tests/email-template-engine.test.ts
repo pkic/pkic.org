@@ -4,6 +4,7 @@ import {
   compileSimpleTemplate,
   renderEmail,
   renderSubject,
+  unresolvedTemplateTokens,
 } from "../functions/_lib/email/render";
 
 function expectRenderLimit(action: () => unknown): void {
@@ -17,6 +18,13 @@ function expectRenderLimit(action: () => unknown): void {
 }
 
 describe("email template engine (compileSimpleTemplate)", () => {
+  it("finds long unresolved loop tokens and deduplicates them across rendered outputs", () => {
+    const token = `{{${"missing".repeat(100)}}}`;
+    const output = compileSimpleTemplate(`{{#each rows}}${token}{{/each}}`, { rows: [{}, {}] });
+    expect(unresolvedTemplateTokens(output, token, "{{short}}", "{{short}}")).toEqual([token, "{{short}}"]);
+    expect(unresolvedTemplateTokens("No placeholders", "{unclosed")).toEqual([]);
+  });
+
   describe("variable substitution", () => {
     it("continues fragment blockquotes only in Markdown mode", () => {
       const template = "> **{{author}}:** {{body}}";

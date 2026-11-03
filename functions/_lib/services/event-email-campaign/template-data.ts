@@ -17,29 +17,32 @@ import { emailPlainText } from "../../email/plain-text";
 export function buildPersonalCampaignTemplateData(
   recipient: Pick<CampaignRecipient, "firstName" | "lastName" | "templateData"> | undefined,
   canonicalData: Record<string, unknown>,
+  defaultVariableNames: Iterable<string> = [],
 ): Record<string, unknown> {
-  return {
+  const data: Record<string, unknown> = {
     ...(recipient?.templateData ?? {}),
     ...canonicalData,
     firstName: emailPlainText(recipient?.firstName || "Member"),
     lastName: emailPlainText(recipient?.lastName || ""),
   };
+  for (const name of defaultVariableNames) {
+    if (!Object.hasOwn(data, name) || data[name] === null || data[name] === undefined) data[name] = "";
+  }
+  return data;
 }
 
 function buildSafeCustomAnswerData(
   customAnswers: Record<string, unknown> | null,
   formFields: FormFieldDefinition[] | undefined,
 ): { customAnswerRows: Array<Record<string, unknown>>; customAnswerVariables: Record<string, unknown> } {
+  const variables = new Map(Object.entries(buildCustomAnswerVariables(customAnswers, formFields)));
   return {
     customAnswerRows: buildCustomAnswerRows(customAnswers, formFields).map((answer) => ({
       label: emailPlainText(answer.label),
       displayValue: emailPlainText(answer.displayValue),
     })),
     customAnswerVariables: Object.fromEntries(
-      Object.entries(buildCustomAnswerVariables(customAnswers, formFields)).map(([key, value]) => [
-        key,
-        emailPlainText(value),
-      ]),
+      (formFields ?? []).map((field) => [field.key, emailPlainText(variables.get(field.key) ?? "")]),
     ),
   };
 }

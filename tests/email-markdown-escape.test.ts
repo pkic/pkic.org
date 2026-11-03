@@ -34,6 +34,23 @@ describe("untrusted Markdown email text", () => {
     expect(rendered.html).not.toMatch(/<(?:h1|blockquote|ul)\b/i);
   });
 
+  it("renders accepted fields missing from a recipient's form empty without defaulting unknown names", async () => {
+    const data = buildPersonalCampaignTemplateData(
+      { firstName: "Alex", lastName: "", templateData: { otherAnswer: "Present" } },
+      { eventName: "Conference" },
+      ["dietary", "constructor"],
+    );
+    const rendered = await renderEmail(
+      "Dietary: {{dietary}}. Other: {{otherAnswer}}. {{constructor}}{{unknown}}",
+      data,
+      LAYOUT,
+      "text",
+    );
+    expect(rendered.text).toContain("Dietary: . Other: Present. {{unknown}}");
+    expect(rendered.text).not.toContain("{{dietary}}");
+    expect(rendered.text).toContain("{{unknown}}");
+  });
+
   it("resolves serialized plain-text values by body content type while preserving trusted URLs and subjects", async () => {
     const malicious = '[review](https://attacker.invalid/link)\n<img src="https://attacker.invalid/pixel.gif">';
     const serialized = JSON.parse(JSON.stringify(emailPlainText(malicious))) as unknown;

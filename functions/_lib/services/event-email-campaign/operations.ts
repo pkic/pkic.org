@@ -10,17 +10,8 @@ import {
   eventEmailCampaignResponseSchema,
 } from "../../../../assets/shared/schemas/event-email-campaigns";
 import type { EmailContentType } from "../../../../assets/shared/schemas/email-templates";
-import { applyCampaignCustomText } from "../../email/campaign-custom";
-import { resolveEmailTemplateData } from "../../email/plain-text";
-import { resolveEmailBrandBaseUrl } from "../../email/render-components";
 import { loadEmailRenderResources } from "../../email/partials";
-import {
-  compileSimpleTemplate,
-  renderEmail,
-  renderSubject,
-  templateVariableNames,
-  unresolvedTemplateTokens,
-} from "../../email/render";
+import { renderEmail, renderSubject, templateVariableNames, unresolvedTemplateTokens } from "../../email/render";
 import type { z } from "zod";
 import type { apiValidationErrorDetailsSchema } from "../../../../assets/shared/schemas/api-common";
 import { AppError } from "../../errors";
@@ -30,12 +21,12 @@ import { proposalPageUrl, registrationManagePageUrl, registrationPageUrl } from 
 import { assertCampaignBroadcastSafety } from "./broadcast-safety";
 import {
   createCampaignSnapshot,
-  loadCampaignSnapshotRecipients,
   findCampaignSnapshot,
   campaignSnapshotDigest,
   acceptCampaignSnapshot,
 } from "./snapshots";
 import { verifyCampaignPreviewToken } from "./preview-token";
+import { campaignAuthoredTemplates } from "./template-content";
 import { buildPersonalCampaignTemplateData } from "./template-data";
 import { dispatchEventEmailCampaignPage } from "./dispatch";
 
@@ -84,7 +75,16 @@ export async function previewEventEmailCampaign(
     audience: input.filter.audience,
     ...routeVariables,
   };
-  const sampleData = buildPersonalCampaignTemplateData(sample, canonicalData);
+  const known = new Set([
+    ...Object.keys(canonicalData),
+    "firstName",
+    "lastName",
+    ...recipients.flatMap((recipient) => Object.keys(recipient.templateData ?? {})),
+    "customText",
+    "baseUrl",
+    "brandBaseUrl",
+  ]);
+  const sampleData = buildPersonalCampaignTemplateData(sample, canonicalData, known);
   if (input.filter.audience === "attendees") {
     sampleData.manageUrl = registrationManagePageUrl(options.appBaseUrl, event, "preview-token");
   }
@@ -92,12 +92,11 @@ export async function previewEventEmailCampaign(
   let subject: string;
   let rendered: { html: string; text: string };
   /** What the author wrote, every branch of it, before any one recipient's data chooses a path. */
-  let authored: [string, string];
+  const authored = campaignAuthoredTemplates(input, template);
   if (input.bodyContent) {
     const data = { ...sampleData, _partials: partials };
     subject = renderSubject(input.subjectOverride ?? null, `Update: ${event.name}`, data);
     rendered = await renderEmail(input.bodyContent, data, layoutHtml, "markdown", options.appBaseUrl);
-    authored = [input.bodyContent, input.subjectOverride ?? ""];
   } else {
     if (!template) {
       throw new AppError(400, "CAMPAIGN_TEMPLATE_REQUIRED", "Select a template or provide a message body.");
@@ -105,58 +104,22 @@ export async function previewEventEmailCampaign(
     const data = { ...sampleData, customText: input.customText ?? "", _partials: partials };
     subject = renderSubject(template.subjectTemplate, input.subjectOverride ?? `Update: ${event.name}`, data);
     const contentType = template.contentType as EmailContentType;
-    const content = applyCampaignCustomText(template.content, contentType, input.customText ?? null);
+    const content = authored[0];
     rendered = await renderEmail(content, data, layoutHtml, contentType, options.appBaseUrl);
-    authored = [content, input.subjectOverride ?? template.subjectTemplate ?? ""];
   }
 
-  // A message that would reach anyone with "{{doesNotExist}}" in it is refused here, where the
-  // author can fix it: without a preview there is no token, so it cannot be sent either. The
-  // authored text catches unknown names even in skipped branches. Compiling for each
-  // recipient also catches optional values missing beyond the sample recipient.
-  const known = new Set([
-    ...Object.keys(sampleData),
-    ...recipients.flatMap((recipient) => Object.keys(recipient.templateData ?? {})),
-    "customText",
-    // The renderer adds these itself.
-    "baseUrl",
-    "brandBaseUrl",
-  ]);
-  const recipientTokens = [new Set<string>(), new Set<string>()];
-  let page = { recipients, cursor: recipients.at(-1)?.email ?? "", hasMore: recipientCount > recipients.length };
-  while (true) {
-    for (const recipient of page.recipients) {
-      for (const key of Object.keys(recipient.templateData ?? {})) known.add(key);
-      const data = {
-        ...buildPersonalCampaignTemplateData(recipient, canonicalData),
-        ...(input.filter.audience === "attendees" ? { manageUrl: sampleData.manageUrl } : {}),
-        customText: input.customText ?? "",
-        _partials: partials,
-        baseUrl: options.appBaseUrl,
-        brandBaseUrl: resolveEmailBrandBaseUrl(options.appBaseUrl),
-      };
-      for (const [index, source] of authored.entries()) {
-        const contentType = input.bodyContent ? "markdown" : (template!.contentType as EmailContentType);
-        const resolvedData = resolveEmailTemplateData(data, index === 1 ? "subject" : contentType);
-        for (const token of unresolvedTemplateTokens(compileSimpleTemplate(source, resolvedData, contentType))) {
-          recipientTokens[index].add(token);
-        }
-      }
-    }
-    if (!page.hasMore) break;
-    page = await loadCampaignSnapshotRecipients(db, event, input, options.appBaseUrl, campaign.id, page.cursor);
-  }
-  const unresolvedIn = (source: string, output: string, tokens: Set<string>) => [
+  // Check authored names even in skipped branches. Optional recipient values render empty;
+  // validation only loads the bounded sample, regardless of the snapshot audience size.
+  const unresolvedIn = (source: string, output: string) => [
     ...new Set([
-      ...templateVariableNames(source)
+      ...templateVariableNames([source])
         .filter((name) => !known.has(name))
         .map((name) => `{{${name}}}`),
       ...unresolvedTemplateTokens(output),
-      ...tokens,
     ]),
   ];
-  const subjectTokens = unresolvedIn(authored[1], subject, recipientTokens[1]);
-  const bodyTokens = unresolvedIn(authored[0], rendered.text, recipientTokens[0]);
+  const subjectTokens = unresolvedIn(authored[1], subject);
+  const bodyTokens = unresolvedIn(authored[0], rendered.text);
   const unresolved = [...new Set([...subjectTokens, ...bodyTokens])];
   if (unresolved.length)
     throw new AppError(

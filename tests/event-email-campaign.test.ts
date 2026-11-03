@@ -1,3 +1,5 @@
+import { renderEmail, renderSubject } from "../functions/_lib/email/render";
+import { readDirectEmailBody } from "../functions/_lib/email/direct-body";
 import { resolveEmailTemplateData } from "../functions/_lib/email/plain-text";
 import { profileD1Flow } from "./helpers/d1-flow-profile";
 import { apiValidationErrorDetailsSchema } from "../assets/shared/schemas/api-common";
@@ -280,9 +282,14 @@ describe("event email campaign recipients", () => {
     expect(known.status, await known.clone().text()).toBe(200);
   });
 
-  it.each([1, 10])(
-    "refuses optional answers missing at recipient %i but allows guarded references",
-    async (missingIndex) => {
+  it.each([
+    { missingIndex: 0, retireField: false },
+    { missingIndex: 1, retireField: false },
+    { missingIndex: 10, retireField: false },
+    { missingIndex: 10, retireField: true },
+  ])(
+    "renders absent campaign values empty (recipient $missingIndex, retired field $retireField)",
+    async ({ missingIndex, retireField }) => {
       const { eventId } = await seedEventAndAdmin(env.DB);
       const [admin] = await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL);
       await seedCampaignTemplates(admin.id);
@@ -334,7 +341,7 @@ describe("event email campaign recipients", () => {
       const recipients = await listCampaignRecipients(env.DB, event, "https://app.test", { audience: "attendees" });
       expect(
         recipients.map((recipient) => resolveEmailTemplateData(recipient.templateData ?? {}, "text").dietary),
-      ).toEqual(answersByRecipient.map((answers) => answers.dietary));
+      ).toEqual(answersByRecipient.map((answers) => answers.dietary ?? ""));
 
       const preview = (subjectOverride: string, bodyContent: string, templateKey?: string) =>
         campaignRequest(env.DB, token, "/api/v1/events/pqc-2026/email/campaigns/previews", {
@@ -344,17 +351,14 @@ describe("event email campaign recipients", () => {
           batchSize: 50,
           filter: { audience: "attendees" },
         });
-      for (const [subject, body, field] of [
-        ["Update", "Your dietary needs: {{dietary}}", "bodyContent"],
-        ["Your dietary needs: {{dietary}}", "Hello {{firstName}}.", "subjectOverride"],
+      for (const [subject, body] of [
+        ["Update", "Your dietary needs: {{dietary}}"],
+        ["Your dietary needs: {{dietary}}", "Hello {{firstName}}."],
       ]) {
         const response = await preview(subject, body);
-        expect(response.status, await response.clone().text()).toBe(422);
-        const refusal = (await response.json()) as { error: { code: string; details: unknown } };
-        expect(refusal.error.code).toBe("CAMPAIGN_TEMPLATE_UNRESOLVED");
-        expect(apiValidationErrorDetailsSchema.parse(refusal.error.details).fieldErrors?.[field]?.[0]).toContain(
-          "{{dietary}}",
-        );
+        expect(response.status, await response.clone().text()).toBe(200);
+        const result = eventEmailCampaignPreviewResponseSchema.parse(await response.json());
+        expect(result.subject + result.text).not.toContain("{{dietary}}");
       }
       const version = await createTemplateVersion(env.DB, {
         templateKey: "registration_confirmation",
@@ -364,19 +368,44 @@ describe("event email campaign recipients", () => {
       });
       await activateTemplateVersion(env.DB, { templateKey: "registration_confirmation", version: version.version });
       const templateResponse = await preview("Update", "", "registration_confirmation");
-      expect(templateResponse.status, await templateResponse.clone().text()).toBe(422);
-      const templateRefusal = (await templateResponse.json()) as { error: { details: unknown } };
-      expect(
-        apiValidationErrorDetailsSchema.parse(templateRefusal.error.details).fieldErrors?.templateKey?.[0],
-      ).toContain("{{dietary}}");
-
-      const guarded = await preview(
-        "Update",
-        "Hello {{firstName}}.{{#if dietary}} Your dietary needs: {{dietary}}{{/if}}",
+      expect(templateResponse.status, await templateResponse.clone().text()).toBe(200);
+      expect(eventEmailCampaignPreviewResponseSchema.parse(await templateResponse.json()).text).not.toContain(
+        "{{dietary}}",
       );
-      expect(guarded.status, await guarded.clone().text()).toBe(200);
-      expect(eventEmailCampaignPreviewResponseSchema.parse(await guarded.json()).text).toContain("Vegetarian");
-      expect(await queryAll(env.DB, "SELECT id FROM email_outbox WHERE event_id=?", [eventId])).toHaveLength(0);
+
+      const subjectOverride = "Dietary: {{dietary}}";
+      const bodyContent = "Hello {{firstName}}. Your dietary needs: {{dietary}}.{{#if dietary}} Answered.{{/if}}";
+      const finalPreviewResponse = await preview(subjectOverride, bodyContent);
+      expect(finalPreviewResponse.status, await finalPreviewResponse.clone().text()).toBe(200);
+      const finalPreview = eventEmailCampaignPreviewResponseSchema.parse(await finalPreviewResponse.json());
+      expect(finalPreview.text.includes("Answered.")).toBe(missingIndex !== 0);
+      if (retireField) {
+        await env.DB.prepare("DELETE FROM form_fields WHERE form_id=?").bind(formId).run();
+      }
+      const sent = await campaignRequest(env.DB, token, "/api/v1/events/pqc-2026/email/campaigns", {
+        subjectOverride,
+        bodyContent,
+        previewToken: finalPreview.previewToken,
+        sendMode: "personal",
+        batchSize: 50,
+        filter: { audience: "attendees" },
+      });
+      expect(sent.status, await sent.clone().text()).toBe(202);
+      const queued = await queryAll<{ recipient_email: string; payload_json: string }>(
+        env.DB,
+        "SELECT recipient_email, payload_json FROM email_outbox WHERE event_id=? ORDER BY recipient_email",
+        [eventId],
+      );
+      expect(queued).toHaveLength(11);
+      for (const [index, row] of queued.entries()) {
+        const data = JSON.parse(row.payload_json) as Record<string, unknown>;
+        const rendered = await renderEmail(readDirectEmailBody(data)!, data, "{{{body_html}}}", "markdown");
+        expect(rendered.text).not.toContain("{{dietary}}");
+        const answered = !retireField && index !== missingIndex;
+        expect(rendered.text.includes("Vegetarian")).toBe(answered);
+        expect(rendered.text.includes("Answered.")).toBe(answered);
+        expect(renderSubject(subjectOverride, "Update", data)).toBe(answered ? "Dietary: Vegetarian" : "Dietary:");
+      }
     },
   );
 
@@ -552,9 +581,10 @@ describe("event email campaign recipients", () => {
           body: JSON.stringify(requestBody),
         },
       );
+    const previewProfile = profileD1Flow(env.DB);
     const previewResponse = await app.fetch(
       makeRequest(body, "preview"),
-      env as any,
+      { ...env, DB: previewProfile.db } as any,
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );
     const preview = (await previewResponse.json()) as {
@@ -565,6 +595,7 @@ describe("event email campaign recipients", () => {
     expect(preview.recipientCount).toBe(users.length);
     expect(preview.sampleRecipients).toHaveLength(10);
     expect(previewResponse.status).toBe(200);
+    expect(attendeeEnrichmentQueryCounts(previewProfile)).toEqual({ dayAttendance: 1, dayWaitlist: 1 });
 
     const changedSettings = await app.fetch(
       makeRequest({ ...body, subjectOverride: "Changed after review", previewToken: preview.previewToken }, "create"),
