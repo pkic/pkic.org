@@ -182,6 +182,8 @@ describe("join-form helpers", () => {
   it("takes the applicant to an unanswered category on submit and reports it in the category's own slot", () => {
     document.body.innerHTML = renderToString(<JoinFlow documents={[]} />);
     const form = document.querySelector<HTMLFormElement>("form[data-join-application-form]")!;
+    // Verification shows the application form before the applicant can submit it.
+    form.hidden = false;
     renderMembershipCategories(form.querySelector<HTMLElement>("[data-membership-categories]")!, categories);
     form.querySelector<HTMLInputElement>('input[name="firstName"]')!.value = "Ada";
     form.querySelector<HTMLInputElement>('input[name="lastName"]')!.value = "Lovelace";

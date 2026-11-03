@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from "vitest";
 import { installLiveValidation, validateBeforeSubmit } from "../../assets/ts/shared/form/validation";
-import { applyFieldErrors, setFieldMessage } from "../../assets/ts/shared/form/validation-map";
+import { applyFieldErrors, focusFirstInvalidField, setFieldMessage } from "../../assets/ts/shared/form/validation-map";
+import { handleSubmitError } from "../../assets/ts/shared/form/submit";
+import { ApiClientError } from "../../assets/ts/shared/api-client";
 
 /**
  * The state a server-rendered form shows.
@@ -104,6 +106,87 @@ describe("validation state on server-rendered fields", () => {
     applyFieldErrors(form, {});
     expect(field(form).classList.contains("pk-field--invalid")).toBe(false);
     expect(message(form).hidden).toBe(true);
+  });
+
+  it("takes the reader to the first refused field in reading order, not the submit button", () => {
+    const form = buildForm(`
+      <div class="pk-field"><div class="pk-field__control"><input name="firstName" required /></div>
+        <p data-field-error="firstName" class="pk-field__message" hidden></p></div>
+      ${emailField}
+      <button type="submit">Submit</button>`);
+    const submit = form.querySelector<HTMLButtonElement>("button")!;
+    submit.focus();
+    expect(validateBeforeSubmit(form, document.createElement("p"))).toBe(false);
+    expect(document.activeElement).toBe(form.querySelector('[name="firstName"]'));
+  });
+
+  it("focuses the field a server refusal names, or the refusal message when it names none", () => {
+    const form = buildForm(`${emailField}<button type="submit">Submit</button>`);
+    const status = document.createElement("p");
+    status.className = "pk-alert pk-sr-only";
+    document.body.append(status);
+    handleSubmitError(
+      new ApiClientError(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Refused",
+            details: { fieldErrors: { email: ["Already registered."] } },
+          },
+        },
+        400,
+      ),
+      form,
+      status,
+    );
+    expect(document.activeElement).toBe(form.querySelector('[name="email"]'));
+
+    handleSubmitError(
+      new ApiClientError(
+        { error: { code: "DUPLICATE", message: "An application from this address is already in progress." } },
+        409,
+      ),
+      form,
+      status,
+    );
+    expect(document.activeElement).toBe(status);
+    expect(status.textContent).toContain("already in progress");
+  });
+
+  it("skips a refused field that cannot take focus for the next one", () => {
+    const form = buildForm(`
+      <div class="pk-field pk-field--invalid" hidden><input name="hiddenField" /></div>
+      <div inert><div class="pk-field pk-field--invalid"><input name="inertField" /></div></div>
+      <div class="pk-field pk-field--invalid"><input name="disabledField" disabled /></div>
+      <div class="pk-field pk-field--invalid"><input name="reachable" /></div>`);
+    expect(focusFirstInvalidField(form)).toBe(true);
+    expect(document.activeElement).toBe(form.querySelector('[name="reachable"]'));
+  });
+
+  it("focuses the refusal message when no refused field can take focus", () => {
+    const form = buildForm(`
+      <div class="pk-field" hidden><input name="email" />
+        <p data-field-error="email" class="pk-field__message" hidden></p></div>
+      <button type="submit">Submit</button>`);
+    const status = document.createElement("p");
+    status.className = "pk-alert pk-sr-only";
+    document.body.append(status);
+    form.querySelector<HTMLButtonElement>("button")!.focus();
+    handleSubmitError(
+      new ApiClientError(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Refused",
+            details: { fieldErrors: { email: ["Already registered."] } },
+          },
+        },
+        400,
+      ),
+      form,
+      status,
+    );
+    expect(document.activeElement).toBe(status);
   });
 
   it("does nothing when the message slot is missing rather than throwing", () => {

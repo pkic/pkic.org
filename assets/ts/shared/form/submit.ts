@@ -4,7 +4,7 @@
  */
 
 import { clearButtonBusy, setButtonBusy } from "./button-busy";
-import { applyFieldErrors, normalizeValidation } from "./validation-map";
+import { applyFieldErrors, focusFirstInvalidField, normalizeValidation } from "./validation-map";
 import { setStatus } from "./helpers";
 
 /**
@@ -40,4 +40,10 @@ export function handleSubmitError(error: unknown, form: HTMLFormElement | null, 
   const normalized = normalizeValidation(error);
   if (statusEl) setStatus(statusEl, normalized.globalMessage, true);
   if (form) applyFieldErrors(form, normalized.fields);
+  // The reader is taken to what was refused: the first marked field, else the refusal itself.
+  if (form && focusFirstInvalidField(form)) return;
+  if (statusEl && !statusEl.hidden) {
+    statusEl.tabIndex = -1;
+    statusEl.focus();
+  }
 }

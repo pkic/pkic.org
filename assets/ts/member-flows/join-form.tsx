@@ -13,6 +13,7 @@ import { withLoadingButton, handleSubmitError } from "../shared/form/submit";
 import { setStatus, readField, findSubmitButton } from "../shared/form/helpers";
 import { SuccessPanel } from "../components/SuccessPanel";
 import { replaceFormWithSuccess } from "../shared/form/success-panel";
+import { focusFirstInvalidField } from "../shared/form/validation-map";
 import { formatCurrencyAmount } from "../../shared/format-currency";
 import {
   filterApplicationFieldsForApplicantKind,
@@ -479,7 +480,11 @@ async function main(): Promise<void> {
     event.preventDefault();
     const fieldsValid = applicationValidation.validate();
     const agreementsValid = legalValidation?.validate() ?? true;
-    if (!fieldsValid || !agreementsValid) return;
+    if (!fieldsValid || !agreementsValid) {
+      // The agreements are checked after the fields, so the first refusal in reading order gets focus again.
+      focusFirstInvalidField(applicationForm);
+      return;
+    }
     const category = readSelectedCategory(applicationForm);
     const context = applicationContext;
     const identity = signedInIdentity;

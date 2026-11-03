@@ -135,6 +135,35 @@ export function clearFieldErrors(form: HTMLFormElement): void {
   }
 }
 
+const FOCUSABLE_CONTROL =
+  "input:not([type=hidden]):not([disabled]), select:not([disabled]), textarea:not([disabled]), [contenteditable='true']";
+
+/** Moves focus to the control and reports whether it arrived; `focus()` itself fails silently. */
+function moveFocusTo(control: HTMLElement): boolean {
+  if (control.closest("[hidden], [inert]")) return false;
+  control.focus();
+  return control.ownerDocument.activeElement === control;
+}
+
+/**
+ * Moves focus to the first refused field that can take it, in reading order, so
+ * the reader lands on what to fix instead of on a distant button. A marked field
+ * can be hidden, inert, or hold only disabled controls, so it is skipped. Returns
+ * whether focus moved; when it did not, the caller falls back to the refusal
+ * message, and a visible marked field is at least scrolled into view.
+ */
+export function focusFirstInvalidField(form: HTMLFormElement): boolean {
+  const marked = [...form.querySelectorAll<HTMLElement>(".pk-field--invalid, [aria-invalid='true']")];
+  for (const field of marked) {
+    const controls = field.matches(FOCUSABLE_CONTROL)
+      ? [field]
+      : [...field.querySelectorAll<HTMLElement>(FOCUSABLE_CONTROL)];
+    if (controls.some(moveFocusTo)) return true;
+  }
+  marked.find((field) => !field.closest("[hidden], [inert]"))?.scrollIntoView({ block: "center" });
+  return false;
+}
+
 export function applyFieldErrors(form: HTMLFormElement, fields: Record<string, string>): void {
   clearFieldErrors(form);
   for (const [field, message] of Object.entries(fields)) {

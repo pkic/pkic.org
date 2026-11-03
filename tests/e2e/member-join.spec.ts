@@ -63,8 +63,16 @@ test("verifies an organization email before submitting the D1-backed membership 
   await expect(page.locator("[data-verified-application-kind]")).toHaveText("Organization application");
   await expect(page.locator("[data-join-application-form] input[type='email']")).toHaveCount(0);
   await expect(page.getByLabel(/H6/)).toHaveCount(0);
+  await expect(page.locator("[data-membership-legal-field]").first().getByRole("status")).toHaveText(
+    "Agreement required",
+  );
   await page.getByLabel(/F —/).check();
-  await page.getByLabel("First name").fill("Morgan");
+  // Checking the later agreements must not leave focus below earlier unanswered fields.
+  await page.getByRole("button", { name: "Submit membership application", exact: true }).click();
+  await expect(page.getByLabel("First name", { exact: true })).toBeFocused();
+  await page.getByLabel("First name", { exact: true }).fill("Morgan");
+  await page.getByRole("button", { name: "Submit membership application", exact: true }).click();
+  await expect(page.getByLabel("Last name", { exact: true })).toBeFocused();
   await page.getByLabel("Last name").fill("Member");
   await page.getByLabel("Organization name").fill(`E2E Organization ${unique}`);
   await page.locator('[name="custom.reason"]').fill("We want to contribute to the PKI community.");
@@ -78,7 +86,6 @@ test("verifies an organization email before submitting the D1-backed membership 
   expect(await firstDocument.evaluate((container) => container.scrollHeight > container.clientHeight)).toBe(true);
   expect(await firstAgreement.evaluate((input) => Boolean(input.closest(".membership-legal-card-scroll")))).toBe(true);
   const headerStatus = firstLegalCard.getByRole("status");
-  await expect(headerStatus).toHaveText("Agreement required");
   await page.getByRole("button", { name: "Submit membership application", exact: true }).click();
   await expect(headerStatus).toHaveText("Agree to continue");
   await firstLegalCard.scrollIntoViewIfNeeded();
