@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import * as time from "../functions/_lib/utils/time";
 import { env } from "cloudflare:workers";
 import { badgeLabelBatchResponseSchema } from "../assets/shared/schemas/event-badge-label-batches";
 import { prepareBadgeLabelBatch } from "../functions/_lib/services/event-participation/badge-label-batches";
@@ -83,6 +84,44 @@ describe("Compact authorized bulk label data", () => {
     expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM event_badge_credentials").first<{ n: number }>())?.n).toBe(
       1,
     );
+  });
+  it.each(["missing", "existing"])("checks planned expiry at commit while handling %s badges", async (kind) => {
+    const databaseNow = Date.now();
+    const eventEnd = new Date(databaseNow - 60_000).toISOString();
+    await env.DB.prepare("UPDATE events SET ends_at=? WHERE id=?").bind(eventEnd, fixture.eventId).run();
+    if (kind === "missing")
+      await env.DB.prepare("UPDATE event_badge_credentials SET revoked_at=? WHERE event_id=?")
+        .bind(new Date(databaseNow).toISOString(), fixture.eventId)
+        .run();
+    // Planning occurs before the event ends; real D1 time at commit is already past expiry.
+    const planningClock = vi.spyOn(time, "nowIso").mockReturnValue(new Date(databaseNow - 120_000).toISOString());
+    let response: Response;
+    try {
+      response = await request(input());
+    } finally {
+      planningClock.mockRestore();
+    }
+    expect(response.status).toBe(kind === "missing" ? 409 : 200);
+    if (kind === "existing")
+      expect(badgeLabelBatchResponseSchema.parse(await response.json()).labels[0].credential).toBe(fixture.badgeId);
+    expect(
+      (
+        await env.DB.prepare("SELECT COUNT(*) AS n FROM event_badge_credentials WHERE event_id=?")
+          .bind(fixture.eventId)
+          .first<{ n: number }>()
+      )?.n,
+    ).toBe(1);
+    expect(
+      (await env.DB.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE action='badge_issued'").first<{ n: number }>())
+        ?.n,
+    ).toBe(1);
+    expect(
+      (
+        await env.DB.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE action='badge_label_batch_prepared'").first<{
+          n: number;
+        }>()
+      )?.n,
+    ).toBe(kind === "missing" ? 0 : 1);
   });
   it.each(["cancelled", "inactive", "capture closed"])("refuses %s selections", async (failure) => {
     if (failure === "cancelled")

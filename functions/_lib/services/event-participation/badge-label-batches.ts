@@ -184,13 +184,14 @@ export async function prepareBadgeLabelBatch(
       await db.batch([
         captureGuard(db, eventId),
         prepareStateGuard(db, {
-          sql: `SELECT 1 WHERE EXISTS(SELECT 1 FROM events WHERE id=? AND ends_at IS ?) AND NOT EXISTS(
+          sql: `SELECT 1 WHERE EXISTS(SELECT 1 FROM events WHERE id=? AND ends_at IS ?)
+            AND (?=0 OR ?>${currentTime}) AND NOT EXISTS(
             SELECT 1 FROM json_each(?) expected LEFT JOIN registrations r
             ON r.id=json_extract(expected.value,'$.registrationId') AND r.event_id=?
             LEFT JOIN users u ON u.id=r.user_id
             WHERE r.id IS NULL OR NOT (${badgeAttendeeEligibilitySql("r", "u")}) OR u.id IS NULL OR r.user_id!=json_extract(expected.value,'$.userId')
             OR ${latestBadge} IS NOT json_extract(expected.value,'$.badgeId'))`,
-          bindings: [eventId, event.ends_at, JSON.stringify(selected), eventId],
+          bindings: [eventId, event.ends_at, additions.length, expiresAt, JSON.stringify(selected), eventId],
         }),
         prepareOneTimeAuditLog(
           db,
