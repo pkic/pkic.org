@@ -13,7 +13,12 @@ import { participantSessionDatabase } from "../functions/_lib/services/event-par
 import { createAdminSession } from "./helpers/auth";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import { guardAuthorizedDatabase } from "../functions/_lib/db/authorization-guard";
+import {
+  guardAuthorizedDatabase,
+  prepareStateGuard,
+  isStateGuardFailure,
+  isAuthorizationGuardFailure,
+} from "../functions/_lib/db/authorization-guard";
 import { isReadOnlySql } from "../functions/_lib/db/read-only-sql";
 import { AppError } from "../functions/_lib/errors";
 import { profileD1Flow } from "./helpers/d1-flow-profile";
@@ -49,6 +54,40 @@ async function fixture() {
 }
 
 describe("replica-compatible authorization batches", () => {
+  it("rolls back stale business state without converting it into a permission error", async () => {
+    const { db, id } = await fixture();
+    let failure: unknown;
+    try {
+      await db.batch([
+        db.prepare("UPDATE users SET first_name='Tentative' WHERE id=?").bind(id),
+        prepareStateGuard(db, { sql: "SELECT 1 WHERE ?=1", bindings: [0] }),
+      ]);
+    } catch (error) {
+      failure = error;
+    }
+    expect(isStateGuardFailure(failure)).toBe(true);
+    expect(isAuthorizationGuardFailure(failure)).toBe(false);
+    expect(await env.DB.prepare("SELECT first_name FROM users WHERE id=?").bind(id).first("first_name")).not.toBe(
+      "Tentative",
+    );
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM authorization_guards").first("count")).toBe(0);
+  });
+
+  it("releases successful state guards and preserves actual permission refusals", async () => {
+    const { db, id } = await fixture();
+    await db.batch([
+      prepareStateGuard(db, { sql: "SELECT 1 WHERE ?=1", bindings: [1] }),
+      db.prepare("UPDATE users SET first_name='Accepted' WHERE id=?").bind(id),
+    ]);
+    expect(await env.DB.prepare("SELECT first_name FROM users WHERE id=?").bind(id).first("first_name")).toBe(
+      "Accepted",
+    );
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM authorization_guards").first("count")).toBe(0);
+    await env.DB.prepare("UPDATE users SET active=0 WHERE id=?").bind(id).run();
+    await expect(db.batch([prepareStateGuard(db, { sql: "SELECT 1 WHERE 0", bindings: [] })])).rejects.toMatchObject({
+      code: "AUTHORIZATION_CONTEXT_CHANGED",
+    });
+  });
   it("checks single and batched reads without any guard writes and preserves separate bindings", async () => {
     const { db, profile } = await fixture();
     const query = db.prepare("WITH requested(value) AS(SELECT ?) SELECT value FROM requested");

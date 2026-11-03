@@ -64,7 +64,7 @@ function sheet(
 export const BADGE_PRINT_PRESETS = [
   {
     id: "brother_dk_1208",
-    label: "Brother DK-1208 — two 90.3 × 38 mm labels",
+    label: "Brother DK-1208 — two 38 × 90 mm portrait labels",
     sourceUrl: "https://www.brother-usa.com/product-support/QL820NWB",
   },
   { id: "a6", label: "A6 badge — separate front/back pages", sourceUrl: null },

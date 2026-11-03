@@ -6,13 +6,15 @@ import type { DatabaseLike, StatementLike } from "../functions/_lib/types";
 import { createEventScannerFixture } from "./helpers/event-scanner-fixture";
 import { callApi } from "./helpers/app";
 import { mutateBeforeMatchingQuery } from "./helpers/database-races";
+import { issueBadge } from "../functions/_lib/services/event-participation/badge-lifecycle";
+import { profileD1Flow } from "./helpers/d1-flow-profile";
 
 const fixture = createEventScannerFixture();
 const endpoint = "/api/v1/events/scan-test/badges/labels/batches";
 let registrationId: string;
 const input = () => ({ operationId: crypto.randomUUID(), registrationIds: [registrationId] });
-function request(body: unknown, token = fixture.token) {
-  return callApi(env, endpoint, {
+function request(body: unknown, token = fixture.token, db: DatabaseLike = env.DB) {
+  return callApi({ ...env, DB: db as typeof env.DB }, endpoint, {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
     body: JSON.stringify(body),
@@ -90,7 +92,9 @@ describe("Compact authorized bulk label data", () => {
       await env.DB.prepare("UPDATE event_evidence_retention_state SET capture_closed_at=? WHERE event_id=?")
         .bind(new Date().toISOString(), fixture.eventId)
         .run();
-    expect((await request(input())).status).toBe(failure === "capture closed" ? 403 : 409);
+    const response = await request(input());
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: { code: "BADGE_BATCH_CHANGED" } });
   });
   it.each(["profile", "revocation", "registration", "role", "redaction"])(
     "guards %s changes during credential recovery",
@@ -119,11 +123,56 @@ describe("Compact authorized bulk label data", () => {
               .run();
         },
       );
-      await expect(
-        prepareBadgeLabelBatch(raced, env, fixture.eventId, fixture.operatorId, input()),
-      ).rejects.toMatchObject({ status: 409 });
+      const response = await request(input(), fixture.token, raced);
+      expect(response.status).toBe(409);
+      expect(await response.json()).toMatchObject({ error: { code: "BADGE_BATCH_CHANGED" } });
     },
   );
+  it("retries concurrent issuance through the permission-wrapped route and preserves the winning badge", async () => {
+    await env.DB.prepare("UPDATE event_badge_credentials SET revoked_at=? WHERE event_id=?")
+      .bind(new Date().toISOString(), fixture.eventId)
+      .run();
+    let winner: Awaited<ReturnType<typeof issueBadge>> | undefined;
+    const db = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => sql.includes("SELECT 1 WHERE EXISTS(SELECT 1 FROM events"),
+      async () => {
+        winner = await issueBadge(
+          env.DB,
+          fixture.eventId,
+          fixture.operatorId,
+          {
+            userId: fixture.userId,
+            reuseActive: true,
+            operationId: crypto.randomUUID(),
+          },
+          env,
+        );
+      },
+    );
+    const body = input();
+    const response = await request(body, fixture.token, db);
+    expect(response.status).toBe(200);
+    const data = badgeLabelBatchResponseSchema.parse(await response.json());
+    expect(winner?.result).toBe("issued");
+    expect(data.labels[0]).toMatchObject({ id: winner!.id, credential: winner!.credential });
+    expect(
+      (
+        await env.DB.prepare("SELECT COUNT(*) AS n FROM event_badge_credentials WHERE event_id=?")
+          .bind(fixture.eventId)
+          .first<{ n: number }>()
+      )?.n,
+    ).toBe(2);
+    expect(
+      (
+        await env.DB.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE action='badge_label_batch_prepared'").first<{
+          n: number;
+        }>()
+      )?.n,
+    ).toBe(1);
+    const replay = await request(body);
+    expect(await replay.json()).toEqual(data);
+  });
   it.each(["session", "permission"])("refuses %s loss before releasing QR credentials", async (kind) => {
     const db = mutateBeforeMatchingQuery(
       env.DB,
@@ -203,6 +252,20 @@ describe("Compact authorized bulk label data", () => {
     expect(Math.max(...valueBytes)).toBeLessThan(2_000_000);
     const replay = await prepareBadgeLabelBatch(measured, env, fixture.eventId, fixture.operatorId, body);
     expect(replay).toEqual(first);
+    const httpProfile = profileD1Flow(env.DB, { measurePayloadBytes: true });
+    const response = await request(body, fixture.token, httpProfile.db);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual(first);
+    const profile = httpProfile.summary();
+    expect(profile.queries.every((query) => query.requestBytes! < 1_500_000 && query.resultBytes! < 1_000_000)).toBe(
+      true,
+    );
+    console.info("Mounted 1000-label replay D1 budget", {
+      roundTrips: profile.roundTrips,
+      statements: profile.statements,
+      maxRequestBytes: Math.max(...profile.queries.map((query) => query.requestBytes!)),
+      maxResultBytes: Math.max(...profile.queries.map((query) => query.resultBytes!)),
+    });
     expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM event_badge_credentials").first<{ n: number }>())?.n).toBe(
       1001,
     );

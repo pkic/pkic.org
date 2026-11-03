@@ -4,7 +4,7 @@ import {
 } from "../../../../assets/shared/schemas/event-badge-label-batches";
 import { generateBadgeCredential } from "../../../../assets/shared/schemas/badge-credential";
 import { all } from "../../db/queries";
-import { prepareAuthorizationGuard, isAuthorizationGuardFailure } from "../../db/authorization-guard";
+import { prepareStateGuard, isStateGuardFailure } from "../../db/authorization-guard";
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
 import { nowIso } from "../../utils/time";
@@ -104,8 +104,9 @@ function changed(): never {
     "The selected registrations or badges changed. Reload the print document.",
   );
 }
+/** Recheck event capture state independently of the caller's management permission. */
 function captureGuard(db: DatabaseLike, eventId: string) {
-  return prepareAuthorizationGuard(db, {
+  return prepareStateGuard(db, {
     sql: `SELECT 1 FROM events WHERE id=? AND NOT EXISTS(SELECT 1 FROM event_evidence_retention_state WHERE event_id=? AND (active_run_id IS NOT NULL OR capture_closed_at IS NOT NULL))`,
     bindings: [eventId, eventId],
   });
@@ -182,7 +183,7 @@ export async function prepareBadgeLabelBatch(
     try {
       await db.batch([
         captureGuard(db, eventId),
-        prepareAuthorizationGuard(db, {
+        prepareStateGuard(db, {
           sql: `SELECT 1 WHERE EXISTS(SELECT 1 FROM events WHERE id=? AND ends_at IS ?) AND NOT EXISTS(
             SELECT 1 FROM json_each(?) expected LEFT JOIN registrations r
             ON r.id=json_extract(expected.value,'$.registrationId') AND r.event_id=?
@@ -215,10 +216,7 @@ export async function prepareBadgeLabelBatch(
       mappings = planned;
     } catch (error) {
       // A concurrent issuance or a lost-response retry reuses the committed mapping on the next read.
-      if (
-        isAuthorizationGuardFailure(error) ||
-        (error instanceof Error && error.message.includes("audit_log.idempotency_key"))
-      )
+      if (isStateGuardFailure(error) || (error instanceof Error && error.message.includes("audit_log.idempotency_key")))
         continue;
       throw error;
     }
@@ -259,7 +257,7 @@ export async function prepareBadgeLabelBatch(
     await db.batch([
       captureGuard(db, eventId),
       ...guardGroups(rows).map((group) =>
-        prepareAuthorizationGuard(db, {
+        prepareStateGuard(db, {
           sql: `SELECT 1 WHERE (SELECT COUNT(*) FROM (${projection}))=? AND NOT EXISTS(
           SELECT 1 FROM json_each(?) captured WHERE NOT EXISTS(SELECT 1 FROM (${projection}) live
           WHERE ${rowKeys.map((key) => `live.${key} IS json_extract(captured.value,'$.${key}')`).join(" AND ")}))`,
@@ -287,7 +285,7 @@ export async function prepareBadgeLabelBatch(
       ),
     ]);
   } catch (error) {
-    if (isAuthorizationGuardFailure(error)) changed();
+    if (isStateGuardFailure(error)) changed();
     throw error;
   }
   const byRegistration = new Map(labels.map((row) => [row.registrationId, row]));

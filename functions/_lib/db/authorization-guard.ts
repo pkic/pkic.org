@@ -14,13 +14,28 @@ export interface AuthorizationEvidence {
  * so no durable authorization cache or duplicate policy model is introduced.
  */
 export function prepareAuthorizationGuard(db: DatabaseLike, evidence: AuthorizationEvidence): StatementLike {
+  return prepareEvidenceGuard(db, evidence, "0");
+}
+
+/**
+ * Rolls back stale business state without labeling it as permission loss. A NULL
+ * failure skips the authorization trigger's `<> 1` predicate, then the existing
+ * NOT NULL constraint aborts the batch with a distinct marker. Successful guards
+ * use the same transient row and release trigger; no state is retained.
+ */
+export function prepareStateGuard(db: DatabaseLike, evidence: AuthorizationEvidence): StatementLike {
+  return prepareEvidenceGuard(db, evidence, "NULL");
+}
+
+/** Build either guard from trusted internal evidence, preserving its failure category. */
+function prepareEvidenceGuard(db: DatabaseLike, evidence: AuthorizationEvidence, failure: "0" | "NULL"): StatementLike {
   if (!/^\s*(?:WITH\b|SELECT\b)/i.test(evidence.sql)) {
     throw new Error("Authorization evidence must be an internal SELECT");
   }
   return db
     .prepare(
       `INSERT INTO authorization_guards (id, authorized, created_at)
-       SELECT ?, CASE WHEN EXISTS (${evidence.sql}) THEN 1 ELSE 0 END,
+       SELECT ?, CASE WHEN EXISTS (${evidence.sql}) THEN 1 ELSE ${failure} END,
               strftime('%Y-%m-%dT%H:%M:%fZ','now')`,
     )
     .bind(uuid(), ...evidence.bindings);
@@ -28,6 +43,13 @@ export function prepareAuthorizationGuard(db: DatabaseLike, evidence: Authorizat
 
 export function isAuthorizationGuardFailure(error: unknown): boolean {
   return error instanceof Error && error.message.includes("AUTHORIZATION_CONTEXT_CHANGED");
+}
+
+/** Recognize only the intentional state-guard failure, leaving permission errors distinct. */
+export function isStateGuardFailure(error: unknown): boolean {
+  return (
+    error instanceof Error && error.message.includes("NOT NULL constraint failed: authorization_guards.authorized")
+  );
 }
 
 /** Read authorization shares the replica batch; mutations retain a rollback-capable primary guard. */
