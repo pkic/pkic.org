@@ -5,7 +5,7 @@ import { databaseIdSchema } from "./identifiers";
 import { paginatedResponseSchema, searchableListQuerySchema, sortColumnSchema } from "./pagination";
 
 export const EVENT_TEAM_ROLES = ["organizer", "program_committee", "moderator", "volunteer"] as const;
-export const eventTeamRoleSchema = z.enum(EVENT_TEAM_ROLES);
+export const eventTeamRoleSchema = z.enum(EVENT_TEAM_ROLES, { error: "Choose an event role." });
 export type EventTeamRole = z.infer<typeof eventTeamRoleSchema>;
 
 /** Canonical API role names map one-to-one to the persisted RBAC catalog. */

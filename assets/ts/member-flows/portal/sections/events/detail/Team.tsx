@@ -52,7 +52,8 @@ export function AddTeamMemberPage({
 }) {
   const [, navigate] = usePortalHashLocation();
   const [picked, setPicked] = useState<PickedUser | null>(person ?? null);
-  const [role, setRole] = useState<EventTeamRole>("organizer");
+  // No role until one is chosen: organizer would be full event management by default.
+  const [role, setRole] = useState<EventTeamRole | "">("");
   const [expiresAt, setExpiresAt] = useState("");
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState("");
@@ -105,7 +106,13 @@ export function AddTeamMemberPage({
               {...form.of("userId")}
             >
               {(control) => (
-                <UserPicker value={picked} onChange={setPicked} disabled={Boolean(person)} inputProps={control} />
+                <UserPicker
+                  endpoint={`/api/v1/events/${encodeURIComponent(slug)}/roles/candidates`}
+                  value={picked}
+                  onChange={setPicked}
+                  disabled={Boolean(person)}
+                  inputProps={control}
+                />
               )}
             </Field>
             <Field label="Role" {...form.of("role")}>
@@ -114,8 +121,9 @@ export function AddTeamMemberPage({
                   {...control}
                   name="role"
                   value={role}
-                  onChange={(e) => setRole(e.currentTarget.value as EventTeamRole)}
+                  onChange={(e) => setRole(e.currentTarget.value as EventTeamRole | "")}
                 >
+                  <option value="">Select role…</option>
                   {EVENT_TEAM_ROLES.map((option) => (
                     <option key={option} value={option}>
                       {ROLE_LABELS[option]}

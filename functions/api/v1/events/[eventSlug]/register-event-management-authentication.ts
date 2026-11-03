@@ -21,7 +21,12 @@ export function registerEventManagementAuthentication(app: Hono<RequestDbContext
   });
   app.use("/team", requireEventManagementIdentity);
   app.use("/roles", requireEventManagementIdentity);
-  app.use("/roles/*", requireEventManagementIdentity);
+  app.use("/roles/*", async (c, next) => {
+    // The candidate read batches its own live authentication with the event and catalog.
+    if ((c.req.method === "GET" || c.req.method === "HEAD") && /\/roles\/candidates\/?$/.test(c.req.path)) {
+      await next();
+    } else await requireEventManagementIdentity(c, next);
+  });
   app.use("/promoters", requireEventManagementIdentity);
   app.use("/presentations/archive", requireEventManagementIdentity);
   app.use("/analytics", requireEventManagementIdentity);

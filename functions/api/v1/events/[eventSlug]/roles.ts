@@ -10,9 +10,11 @@ import {
   eventTeamRolesResponseSchema,
 } from "../../../../../assets/shared/schemas/event-team";
 import {
+  eventTeamRoleCandidatesRouteSchema,
   eventTeamRoleCreateRouteSchema,
   eventTeamRolesListRouteSchema,
 } from "../../../../../assets/shared/schemas/route-contracts-events";
+import { listEventTeamRoleCandidates } from "../../../../_lib/services/events/team-candidates";
 import type { AdminContext } from "../../../../_lib/db/context";
 import { json } from "../../../../_lib/http";
 import { openApiRoute } from "../../../../_lib/openapi/route";
@@ -23,6 +25,13 @@ export const EventTeamRolesList = openApiRoute(eventTeamRolesListRouteSchema, as
   const { actor, db } = await requireEventPermission(c, data.params.eventSlug, "events:manage");
   return json(eventTeamRolesResponseSchema.parse(await listEventTeam(db, actor, data.params.eventSlug, data.query)));
 });
+
+export const EventTeamRoleCandidatesList = openApiRoute(
+  eventTeamRoleCandidatesRouteSchema,
+  async (c: AdminContext, data: ValidatedData<typeof eventTeamRoleCandidatesRouteSchema>) => {
+    return json(await listEventTeamRoleCandidates(requestDb(c), c.req.raw, c.env, data.params.eventSlug, data.query));
+  },
+);
 
 export const EventTeamRoleCreate = openApiRoute(
   eventTeamRoleCreateRouteSchema,

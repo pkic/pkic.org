@@ -17,7 +17,7 @@ import { ALL_ACTIVE_USER_CAPACITIES_CTE } from "./membership/capacity-query";
 import { getGroup } from "./groups/read-model";
 import { buildUserIdentitySearchFilter } from "./user-search";
 
-interface UserCatalogRow {
+export interface UserCatalogRow {
   id: string;
   email: string;
   first_name: string | null;

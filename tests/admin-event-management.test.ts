@@ -1,9 +1,10 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
-import app from "./helpers/app";
+import app, { callApi } from "./helpers/app";
 import { resetDb } from "./helpers/reset-db";
 import { seedPersona } from "./personas/seed";
 import { createAdminSession } from "./helpers/auth";
+import { userCatalogListResponseSchema } from "../assets/shared/schemas/user-catalog";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { getEventBySlug } from "../functions/_lib/services/events";
 import { buildManagedEventsPageQuery, listManagedEvents } from "../functions/_lib/services/events/catalog";
@@ -728,6 +729,27 @@ describe("admin event management endpoints", () => {
         assignment.role.id,
       ]),
     ).toEqual([{ revoked_at: null }]);
+  });
+
+  it("lets an event-scoped organizer find anyone to add to the team without global user access", async () => {
+    const { baseEventId } = await setupAdmin();
+    const newcomer = await insertUser(env.DB, "newcomer-for-team@example.test");
+    const manager = await createScopedEventManager(baseEventId);
+    ADMIN_TOKEN = await createAdminSession(env.DB, manager.userId, `event-team-search-${crypto.randomUUID()}`);
+
+    expect((await callAdmin("/api/v1/users?q=newcomer&limit=10&offset=0")).status).toBe(403);
+    const found = await callApi(
+      env,
+      "/api/v1/events/pqc-2026/roles/candidates?q=newcomer&limit=8&offset=0",
+      { headers: { authorization: `Bearer ${ADMIN_TOKEN}` } },
+      { maxRoundTrips: 1 },
+    );
+    expect(found.status, await found.clone().text()).toBe(200);
+    expect(userCatalogListResponseSchema.parse(await found.json()).users.map((user) => user.id)).toEqual([newcomer]);
+
+    const readerId = await insertUser(env.DB, `event-team-candidate-reader-${crypto.randomUUID()}@example.test`);
+    ADMIN_TOKEN = await createAdminSession(env.DB, readerId, `event-team-candidate-reader-${crypto.randomUUID()}`);
+    expect((await callAdmin("/api/v1/events/pqc-2026/roles/candidates?q=newcomer&limit=8&offset=0")).status).toBe(403);
   });
 
   it("rolls back an event-team grant when the scoped manager loses authority before commit", async () => {

@@ -8,6 +8,7 @@ import {
   eventTeamRosterResponseSchema,
 } from "../../assets/shared/schemas/event-team";
 import { EventTeamSettings } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/EventTeamSettings";
+import { chooseOption, controlFor } from "./helpers/labeled-control";
 const navigate = vi.fn();
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", navigate] }));
 const USER_ID = "10000000-0000-4000-8000-000000000002";
@@ -125,16 +126,42 @@ describe("one event team roster", () => {
   it("grants access explicitly to the selected person with the canonical contract", async () => {
     setup();
     await mount({ section: USER_ID, personId: "access" });
-    const form = container.querySelector("form")!;
-    await act(async () => {
-      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-    });
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
+    // No role is chosen for the reader: submitting first is refused and sends nothing.
+    await submitForm();
+    expect(controlFor(container, "Role").getAttribute("aria-invalid")).toBe("true");
+    expect(requests.some((request) => request.method === "POST")).toBe(false);
+
+    await chooseOption(controlFor(container, "Role"), "volunteer");
+    await submitForm();
     const request = requests.find((request) => request.method === "POST");
     expect(request).toBeDefined();
-    expect(eventTeamRoleCreateSchema.parse(request!.body)).toMatchObject({ userId: USER_ID, role: "organizer" });
+    expect(eventTeamRoleCreateSchema.parse(request!.body)).toMatchObject({ userId: USER_ID, role: "volunteer" });
     expect(request!.url).toContain("/roles");
   });
+  it("adds a new person through event access when the reader may grant it, even with staffing rights", async () => {
+    setup();
+    await mount({ section: "new", canEditStaffing: true });
+    const form = container.querySelector<HTMLFormElement>('form[aria-label="Grant event access"]');
+    expect(form).not.toBeNull();
+    // The search is the event's own candidate catalog, which an event organizer may read.
+    const search = controlFor<HTMLInputElement>(container, "Person");
+    await act(async () => {
+      search.value = "Ada";
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await vi.waitFor(() =>
+      expect(requests.some((request) => request.url.startsWith("/api/v1/events/workshop/roles/candidates"))).toBe(true),
+    );
+    expect(requests.some((request) => request.url.startsWith("/api/v1/users"))).toBe(false);
+  });
 });
+
+async function submitForm(): Promise<void> {
+  const form = container.querySelector("form")!;
+  await act(async () => {
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  });
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
