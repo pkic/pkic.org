@@ -59,9 +59,7 @@ async function flush() {
     await act(async () => {
       await Promise.resolve();
     });
-    expect([...host.querySelectorAll('[role="status"]')].map((status) => status.textContent)).not.toContain(
-      "Reading the code…",
-    );
+    expect(host.querySelector('[role="status"].pk-spinner')).toBeNull();
     expect(host.querySelector('button[aria-busy="true"]')).toBeNull();
   });
 }
