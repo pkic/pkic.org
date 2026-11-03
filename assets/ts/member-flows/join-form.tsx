@@ -9,10 +9,11 @@ import { getJson, postJson } from "../shared/api-client";
 import { renderCustomFields, readCustomFieldValues } from "../shared/widgets/custom-fields";
 import { render } from "preact";
 import { useState } from "preact/hooks";
-import { withLoadingButton, handleSubmitError } from "../shared/form/submit";
+import { withLoadingButton, focusSubmitError } from "../shared/form/submit";
 import { setStatus, readField, findSubmitButton } from "../shared/form/helpers";
 import { SuccessPanel } from "../components/SuccessPanel";
 import { replaceFormWithSuccess } from "../shared/form/success-panel";
+import { focusFirstInvalidField, normalizeValidation } from "../shared/form/validation-map";
 import { formatCurrencyAmount } from "../../shared/format-currency";
 import {
   filterApplicationFieldsForApplicantKind,
@@ -479,7 +480,11 @@ async function main(): Promise<void> {
     event.preventDefault();
     const fieldsValid = applicationValidation.validate();
     const agreementsValid = legalValidation?.validate() ?? true;
-    if (!fieldsValid || !agreementsValid) return;
+    if (!fieldsValid || !agreementsValid) {
+      // The agreements are checked after the fields, so the first refusal in reading order gets focus again.
+      focusFirstInvalidField(applicationForm);
+      return;
+    }
     const category = readSelectedCategory(applicationForm);
     const context = applicationContext;
     const identity = signedInIdentity;
@@ -514,9 +519,10 @@ async function main(): Promise<void> {
         );
         showSuccessPanel(root, applicationForm, result.applicationId, result.manageToken, applicantName);
       } catch (error) {
-        handleSubmitError(error, null, statusEl);
         applicationValidation.refuse(error);
         legalValidation?.refuse(error);
+        setStatus(statusEl, normalizeValidation(error).globalMessage, true);
+        focusSubmitError(applicationForm, statusEl);
       }
     });
   });

@@ -15,11 +15,11 @@ import {
   normalizedEmailSchema,
   registrationManageTokenParamsSchema,
   successResponseSchema,
-  termKeyPattern,
+  termKeySchema,
   tokenSchema,
   trimmedString,
   utcInstantSchema,
-  versionPattern,
+  termVersionSchema,
 } from "./api-common";
 import { linksSchema } from "./links";
 import { workEmailStepSchema } from "./work-email";
@@ -164,8 +164,8 @@ export const declineReasonCodeSchema = z.enum([
 ]);
 
 export const consentItemSchema = z.object({
-  termKey: z.string().trim().regex(termKeyPattern),
-  version: z.string().trim().regex(versionPattern),
+  termKey: termKeySchema,
+  version: termVersionSchema,
 });
 export type ConsentItem = z.infer<typeof consentItemSchema>;
 

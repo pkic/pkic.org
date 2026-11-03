@@ -70,6 +70,7 @@ export const NODE_UNIT_TEST_FILES = [
   "tests/timezone-utils.test.ts",
   "tests/timezone.test.ts",
   "tests/url-schemas.test.ts",
+  "tests/validation-messages.test.ts",
   "tests/vote-consultation-tally.test.ts",
   "tests/vote-derived-status.test.ts",
   "tests/vote-tally-policy.test.ts",

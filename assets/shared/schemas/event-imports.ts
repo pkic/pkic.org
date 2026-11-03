@@ -2,10 +2,10 @@ import {
   frontendPathPattern,
   slugPattern,
   successResponseSchema,
-  termKeyPattern,
+  termKeySchema,
   trimmedString,
   utcInstantSchema,
-  versionPattern,
+  termVersionSchema,
 } from "./api-common";
 import { z } from "zod";
 import {
@@ -27,8 +27,8 @@ export const eventImportSourceSchema = z.enum(EVENT_IMPORT_SOURCES);
 export type EventImportSource = z.infer<typeof eventImportSourceSchema>;
 
 const importedTermSchema = z.object({
-  termKey: z.string().trim().regex(termKeyPattern),
-  version: z.string().trim().regex(versionPattern),
+  termKey: termKeySchema,
+  version: termVersionSchema,
   required: z.boolean().optional(),
   contentRef: trimmedString(1, 500).optional(),
   displayText: trimmedString(3, 4000).optional(),

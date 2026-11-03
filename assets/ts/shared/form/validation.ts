@@ -1,4 +1,10 @@
-import { clearFieldErrors, findControlFieldError, findFieldErrorTarget, setFieldMessage } from "./validation-map";
+import {
+  clearFieldErrors,
+  findControlFieldError,
+  findFieldErrorTarget,
+  focusFirstInvalidField,
+  setFieldMessage,
+} from "./validation-map";
 import { applyFieldState, type FieldState } from "../../ui/field-state";
 import { normalizedEmailSchema } from "../../../shared/schemas/api-common";
 import { httpUrlSchema } from "../../../shared/schemas/urls";
@@ -197,16 +203,9 @@ export function validateBeforeSubmit(form: HTMLFormElement, _statusEl: HTMLEleme
   validateNativeFields(form);
   // Inline [data-field-error] messages handle per-field feedback; the first
   // one may be far above the submit button, so take the person to it.
-  focusFirstInvalidControl(form);
-  return false;
-}
-
-/** Moves focus, and with it the viewport, to the first invalid control in visible order. */
-function focusFirstInvalidControl(form: HTMLFormElement): void {
-  const controls = form.querySelectorAll<FormControl>("input[name], select[name], textarea[name]");
-  const first = Array.from(controls).find(
-    (control) => !control.disabled && isNativelyValidated(control) && !control.checkValidity(),
+  focusFirstInvalidField(
+    form,
+    [...form.querySelectorAll<FormControl>("input[name], select[name], textarea[name]")].filter(isNativelyValidated),
   );
-  // Focusing scrolls the control into view.
-  first?.focus();
+  return false;
 }

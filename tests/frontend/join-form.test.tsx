@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { renderToString } from "preact-render-to-string";
 import { JoinFlow } from "../../assets/ts/site/JoinFlow";
+import { focusSubmitError } from "../../assets/ts/shared/form/submit";
 import { installMembershipLegalValidation } from "../../assets/ts/member-flows/membership-legal-validation";
 import { ApiClientError } from "../../assets/ts/shared/api-client";
 import { installLiveValidation, validateBeforeSubmit } from "../../assets/ts/shared/form/validation";
@@ -182,6 +183,8 @@ describe("join-form helpers", () => {
   it("takes the applicant to an unanswered category on submit and reports it in the category's own slot", () => {
     document.body.innerHTML = renderToString(<JoinFlow documents={[]} />);
     const form = document.querySelector<HTMLFormElement>("form[data-join-application-form]")!;
+    // Verification shows the application form before the applicant can submit it.
+    form.hidden = false;
     renderMembershipCategories(form.querySelector<HTMLElement>("[data-membership-categories]")!, categories);
     form.querySelector<HTMLInputElement>('input[name="firstName"]')!.value = "Ada";
     form.querySelector<HTMLInputElement>('input[name="lastName"]')!.value = "Lovelace";
@@ -276,6 +279,7 @@ describe("join-form helpers", () => {
       />,
     );
     const form = document.querySelector<HTMLFormElement>("form")!;
+    form.hidden = false;
     const fields = [formField("agrees_bylaws")];
     configureMembershipLegalFields(form, fields);
     const status = document.querySelector<HTMLElement>("[data-flow-status]")!;
@@ -314,6 +318,13 @@ describe("join-form helpers", () => {
     expect(header.querySelector(".pk-field--invalid")).not.toBeNull();
     expect(card.querySelector("[data-field-error]")?.textContent).toContain("Review the updated terms");
     expect(input.getAttribute("aria-invalid")).toBe("true");
+    // Isolate this refused agreement from the unanswered application fields.
+    form.replaceChildren(card);
+    document.body.append(status);
+    status.tabIndex = -1;
+    status.focus();
+    focusSubmitError(form, status);
+    expect(document.activeElement).toBe(input);
 
     input.click();
     expect(legal.validate()).toBe(false);

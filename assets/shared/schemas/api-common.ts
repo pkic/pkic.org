@@ -1,4 +1,6 @@
 import { z } from "zod";
+// Installs plain-language contract messages before any schema in this runtime parses.
+import "../validation-messages.ts";
 import { EMAIL_AUTH_TOKEN_MAX_LENGTH } from "../constants/email-auth.ts";
 import { databaseIdSchema } from "./identifiers.ts";
 import { asciiEmailDomain, EMAIL_ADDRESS_PATTERN } from "../email-address.ts";
@@ -54,7 +56,23 @@ export type EmailMessageType = z.infer<typeof emailMessageTypeSchema>;
 export const namePattern = /^[\p{L}\p{M}\p{N} .,'’\p{Pd}()&/\u200c\u200d]+$/u;
 export const slugPattern = /^[a-z0-9]+(?:[a-z0-9-]*[a-z0-9])?$/;
 export const termKeyPattern = /^[a-z0-9][a-z0-9._-]{1,127}$/;
+/** A term's stable key, such as `code-of-conduct`. */
+export const termKeySchema = z
+  .string()
+  .trim()
+  .regex(
+    termKeyPattern,
+    "Use 2 to 128 lowercase letters, numbers, dots, hyphens or underscores, starting with a letter or number, such as code-of-conduct.",
+  );
 export const versionPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+/** A term version, such as `v1` or `2026-11-03`. */
+export const termVersionSchema = z
+  .string()
+  .trim()
+  .regex(
+    versionPattern,
+    "Use 1 to 64 letters, numbers, dots, hyphens or underscores, starting with a letter or number, such as v1.",
+  );
 export const tokenCharactersPattern = /^[A-Za-z0-9_.-]+$/;
 export const frontendPathPattern = /^\/[A-Za-z0-9\-._~!$&'()*+,;=:@/%]*$/;
 
