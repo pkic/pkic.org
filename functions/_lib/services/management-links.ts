@@ -9,7 +9,7 @@
 export const PORTAL_UI_PATH = "/portal/";
 
 export type ManagementLink =
-  | { kind: "mcp-oauth"; returnTo: string; token?: string; error?: string }
+  | { kind: "mcp-oauth"; requestId: string }
   | { kind: "organization-content-reviews" }
   | { kind: "membership-application"; id: string }
   | { kind: "sponsorship-list" }
@@ -31,9 +31,7 @@ function portalHashUrlWithQuery(appBaseUrl: string, path: string, query: URLSear
 export function buildManagementLink(appBaseUrl: string, link: ManagementLink): string {
   switch (link.kind) {
     case "mcp-oauth": {
-      const query = new URLSearchParams({ return_to: link.returnTo });
-      if (link.token) query.set("token", link.token);
-      if (link.error) query.set("error", link.error);
+      const query = new URLSearchParams({ request: link.requestId });
       return portalHashUrlWithQuery(appBaseUrl, "/auth/oauth", query).toString();
     }
     case "organization-content-reviews":

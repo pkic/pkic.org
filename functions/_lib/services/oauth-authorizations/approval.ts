@@ -1,3 +1,8 @@
+import type { SessionPasskeyAuthentication } from "../../../../assets/shared/schemas/session-authentication";
+import {
+  passkeySessionAuthenticationEvidence,
+  sessionHasActivePasskeyAuthentication,
+} from "../../auth/passkey-session-authentication";
 import type { AuthRequest } from "@cloudflare/workers-oauth-provider";
 import type { AuthMember, DatabaseLike, UserBackedAuthAdmin } from "../../types";
 import {
@@ -7,6 +12,8 @@ import {
 } from "../../../../assets/shared/schemas/oauth-authorizations";
 import {
   oauthClientDisplayName,
+  oauthAuthorizationDeadline,
+  DEFAULT_OAUTH_PASSKEY_AUTHORIZATION_TTL_SECONDS,
   OAUTH_AUTHORIZATION_MAX_CONTEXTS,
   OAUTH_COMPLETION_WINDOW_MS,
 } from "../../../../assets/shared/oauth-authorization-policy";
@@ -32,6 +39,8 @@ export async function approveOauthAuthorization(
     actingIdentityId: string | null;
     expectedActingIdentityId: string | null;
     staffIdleExpiresAt: string;
+    passkeyAuthentication?: SessionPasskeyAuthentication;
+    passkeyAuthorizationTtlSeconds?: number;
     clientName: string;
     selectedScopes: unknown;
     signingSecret: string;
@@ -53,7 +62,24 @@ export async function approveOauthAuthorization(
   const scopes = oauthAuthorizationScopesSchema.parse(contexts);
   const id = crypto.randomUUID(),
     at = nowIso();
-  const expiry = Math.min(Date.parse(input.actor.expiresAt ?? ""), Date.parse(input.staffIdleExpiresAt));
+  // An old or unverifiable proof cannot extend access; the ordinary short authorization remains available.
+  const verifiedPasskey =
+    input.passkeyAuthentication &&
+    input.actor.sessionId &&
+    (await sessionHasActivePasskeyAuthentication(
+      db,
+      input.actor.id,
+      input.actor.sessionId,
+      input.passkeyAuthentication,
+    ))
+      ? input.passkeyAuthentication
+      : undefined;
+  const expiry = oauthAuthorizationDeadline({
+    sessionExpiresAt: input.actor.expiresAt ?? "",
+    staffIdleExpiresAt: input.staffIdleExpiresAt,
+    passkeyAuthentication: verifiedPasskey,
+    passkeyTtlSeconds: input.passkeyAuthorizationTtlSeconds ?? DEFAULT_OAUTH_PASSKEY_AUTHORIZATION_TTL_SECONDS,
+  });
   if (!input.actor.sessionId || !Number.isFinite(expiry) || expiry - Date.now() < 60000)
     throw new AppError(401, "AUTH_EXPIRED", "Sign in again to authorize this client");
   if (
@@ -66,16 +92,15 @@ export async function approveOauthAuthorization(
     clientId: input.request.clientId,
     clientName: oauthClientDisplayName(input.clientName, input.request.clientId),
   });
-  const expiresAt =
-    Date.parse(input.actor.expiresAt!) <= Date.parse(input.staffIdleExpiresAt)
-      ? input.actor.expiresAt!
-      : input.staffIdleExpiresAt;
+  const expiresAt = new Date(expiry).toISOString();
+  const passkeyAuthentication = expiry > Date.parse(input.staffIdleExpiresAt) ? verifiedPasskey : undefined;
   const attemptUntil = addSeconds(at, Math.min(expiry - Date.parse(at), OAUTH_COMPLETION_WINDOW_MS) / 1000);
   const props = buildMcpOauthProps(
     { ...input.actor, oauthAuthorizationId: id },
     selected,
     "oauth",
     input.staffIdleExpiresAt,
+    passkeyAuthentication,
   );
   const ciphertext = await sealOauthCompletion(
     { request: { ...input.request, scope: requested }, props },
@@ -86,6 +111,14 @@ export async function approveOauthAuthorization(
   try {
     await db.batch([
       preparePermissionsAuthorizationGuard(db, input.actor, requirements),
+      ...(passkeyAuthentication
+        ? [
+            prepareAuthorizationGuard(
+              db,
+              passkeySessionAuthenticationEvidence(input.actor.id, input.actor.sessionId!, passkeyAuthentication),
+            ),
+          ]
+        : []),
       ...(input.actingIdentityId
         ? [
             prepareAuthorizationGuard(

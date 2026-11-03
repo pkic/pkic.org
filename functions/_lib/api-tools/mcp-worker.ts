@@ -10,8 +10,8 @@ import OAuthProvider from "@cloudflare/workers-oauth-provider";
 import { createMcpHandler } from "agents/mcp";
 import { WorkerEntrypoint } from "cloudflare:workers";
 import type { Hono } from "hono";
-import { AUTH_SCOPES } from "../auth/scopes";
 import type { Env } from "../types";
+import { resolveAppBaseUrl } from "../config";
 import {
   parseMcpOauthProps,
   resolveMcpExternalToken,
@@ -191,17 +191,11 @@ export function createMcpWorkerFetch(
     }
 
     const oauthProvider = new OAuthProvider<McpOAuthEnv>({
-      ...mcpOauthProviderSettings(env),
+      ...mcpOauthProviderSettings(env, resolveAppBaseUrl(env, request)),
       apiRoute: MCP_PATH,
       apiHandler: McpApiHandler,
       defaultHandler: mcpOauthDefaultHandler,
       resolveExternalToken: resolveMcpExternalToken,
-      resourceMetadata: {
-        resource: new URL(MCP_PATH, request.url).toString(),
-        scopes_supported: [...AUTH_SCOPES],
-        bearer_methods_supported: ["header"],
-        resource_name: "PKI Consortium MCP",
-      },
     });
 
     return await oauthProvider.fetch(request, env as McpOAuthEnv, ctx);

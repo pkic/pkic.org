@@ -146,7 +146,6 @@ export function App() {
     let cancelled = false;
 
     async function run(): Promise<void> {
-      if (isMcpAuthorization) return;
       if (isPublicLinkScreen) {
         finishAuthCheck();
         return;
@@ -260,10 +259,6 @@ export function App() {
     };
   }, []);
 
-  if (isMcpAuthorization) {
-    return <McpAuthorization />;
-  }
-
   if (isIdentityInvitation) {
     return <IdentityInvitationAcceptance />;
   }
@@ -322,6 +317,7 @@ export function App() {
     );
 
   if (isAuthed.value) {
+    if (isMcpAuthorization) return <McpAuthorization onSessionExpired={() => loadPortalSession()} />;
     const meetingDestination = meetingEntryReturnUrl(window.location.hash);
     if (meetingDestination) return <MeetingEntryReturn destination={meetingDestination} />;
     const signedIn = portalSession.value;

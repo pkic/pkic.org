@@ -18,17 +18,10 @@ describe("semantic management links", () => {
     );
   });
 
-  it("builds MCP authorization links while preserving the sanitized return target", () => {
+  it("builds MCP authorization links with only a short request reference", () => {
     expect(
-      buildManagementLink(appBaseUrl, {
-        kind: "mcp-oauth",
-        returnTo: "/api/v1/auth/oauth/authorize?client_id=client-1",
-        token: "oauth-token",
-        error: "denied",
-      }),
-    ).toBe(
-      "https://app.test/portal/#/auth/oauth?return_to=%2Fapi%2Fv1%2Fauth%2Foauth%2Fauthorize%3Fclient_id%3Dclient-1&token=oauth-token&error=denied",
-    );
+      buildManagementLink(appBaseUrl, { kind: "mcp-oauth", requestId: "00000000-0000-4000-8000-000000000001" }),
+    ).toBe("https://app.test/portal/#/auth/oauth?request=00000000-0000-4000-8000-000000000001");
   });
 });
 

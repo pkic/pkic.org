@@ -238,7 +238,19 @@ describe("D1 read replication", () => {
 
   it("uses existing D1 bookmarks for canonical staff GET sessions and emits the next bookmark", async () => {
     const { primaryDb, withSessionCalls } = createDbWithSessionRecorder({ bookmark: "next/bookmark" });
-    const adminToken = await createAdminToken("prior/bookmark");
+    const initial = await verifyUserSessionToken(signingSecret, await createAdminToken("prior/bookmark"));
+    if (!initial.ok) throw new Error("Expected a valid staff fixture session");
+    const passkeyAuthentication = {
+      credentialId: crypto.randomUUID(),
+      authenticatedAt: new Date().toISOString(),
+    };
+    const lastActivityAt = Math.floor(Date.now() / 1000) - 60;
+    const adminToken = await signUserSessionToken(signingSecret, {
+      ...initial.claims,
+      passkeyAuthentication,
+      lastActivityAt,
+      staffLastActivityAt: lastActivityAt,
+    });
 
     const response = await worker.fetch(
       new Request("https://app.test/api/v1/users", {
@@ -254,6 +266,9 @@ describe("D1 read replication", () => {
     expect(rotatedToken).toBeTruthy();
     const verified = await verifyUserSessionToken(signingSecret, rotatedToken!);
     expect(verified.ok && verified.claims.state).toBe("next/bookmark");
+    expect(verified.ok && verified.claims.passkeyAuthentication).toEqual(passkeyAuthentication);
+    expect(verified.ok && verified.claims.lastActivityAt).toBe(lastActivityAt);
+    expect(verified.ok && verified.claims.staffLastActivityAt).toBe(lastActivityAt);
     expect(response.headers.has("set-cookie")).toBe(false);
   });
 

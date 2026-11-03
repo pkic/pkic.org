@@ -1,3 +1,7 @@
+import {
+  sessionPasskeyAuthenticationSchema,
+  type SessionPasskeyAuthentication,
+} from "../../../../assets/shared/schemas/session-authentication";
 import { z } from "zod";
 import { permissionSchema } from "../../../../assets/shared/schemas/permissions";
 import { utcInstantSchema } from "../../../../assets/shared/schemas/api-common";
@@ -16,7 +20,11 @@ const userProps = z.object({
   state: z.string().nullable(),
 });
 export const mcpDelegatedOAuthPropsSchema = userProps
-  .extend({ authTransport: z.literal("oauth"), authorizationId: databaseIdSchema })
+  .extend({
+    authTransport: z.literal("oauth"),
+    authorizationId: databaseIdSchema,
+    passkeyAuthentication: sessionPasskeyAuthenticationSchema.optional(),
+  })
   .strict();
 export const mcpOAuthPropsSchema = z.union([
   mcpDelegatedOAuthPropsSchema,
@@ -46,6 +54,7 @@ export function buildMcpOauthProps(
   scopes: readonly AuthScope[],
   authTransport: McpOAuthTransport,
   staffIdleExpiresAt?: string,
+  passkeyAuthentication?: SessionPasskeyAuthentication,
 ): McpOAuthProps {
   const shared = { id: admin.id, email: admin.email, scopes: [...scopes] };
   if (admin.identityType === "service") {
@@ -70,7 +79,20 @@ export function buildMcpOauthProps(
   if (authTransport === "oauth") {
     if (!admin.oauthAuthorizationId)
       throw new AppError(500, "MCP_AUTHORIZATION_REQUIRED", "A persisted authorization is required");
-    return { ...user, authTransport, authorizationId: admin.oauthAuthorizationId };
+    return {
+      ...user,
+      authTransport,
+      authorizationId: admin.oauthAuthorizationId,
+      ...(passkeyAuthentication ? { passkeyAuthentication } : {}),
+    };
   }
   return { ...user, authTransport };
+}
+
+/** Only a delegated OAuth authorization with passkey proof can outlive the frozen staff inactivity deadline. */
+export function mcpSessionDeadline(props: McpUserOAuthProps): number {
+  return Math.min(
+    Date.parse(props.sessionExpiresAt),
+    props.authTransport === "oauth" && props.passkeyAuthentication ? Infinity : Date.parse(props.sessionIdleExpiresAt),
+  );
 }

@@ -121,6 +121,8 @@ export interface Env {
   CONFIRMATION_LINK_TTL_HOURS?: string;
   MCP_OAUTH_ACCESS_TOKEN_TTL_SECONDS?: string;
   MCP_OAUTH_REFRESH_TOKEN_TTL_SECONDS?: string;
+  /** Longer MCP authorizations require verified passkey sign-in; zero disables them. */
+  MCP_OAUTH_PASSKEY_AUTHORIZATION_TTL_SECONDS?: string;
   REMINDER_INTERVAL_DAYS?: string;
   PENDING_CONFIRMATION_REMINDER_INTERVAL_DAYS?: string;
   MAX_INVITE_REMINDERS?: string;

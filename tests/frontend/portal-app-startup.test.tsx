@@ -563,3 +563,29 @@ it("takes an accepted identity invitation straight to sign-in without a second p
   expect(host.textContent).not.toContain("Open portal");
   expect(mocks.renderShell).not.toHaveBeenCalled();
 });
+
+it("uses normal portal login for an MCP request and preserves its reference in the email contract", async () => {
+  const returnPath = "/auth/oauth?request=00000000-0000-4000-8000-000000000001";
+  window.location.hash = `#${returnPath}`;
+  let sent: unknown;
+  fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input) === "/api/v1/auth/request-link") {
+      sent = JSON.parse(String(init?.body));
+      return Response.json({ success: true });
+    }
+    return refusal(401, "Sign in required");
+  });
+  await mount();
+  await vi.waitFor(() => expect(host.querySelector('input[name="email"]:not(:disabled)')).not.toBeNull());
+  const email = host.querySelector<HTMLInputElement>('input[name="email"]')!;
+  await act(() => {
+    email.value = "admin@pkic.org";
+    email.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(() => {
+    host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true }));
+  });
+  await vi.waitFor(() => expect(sent).toBeDefined());
+  expect(userAuthRequestSchema.parse(sent)).toEqual({ email: "admin@pkic.org", returnPath });
+  expect(fetchMock.mock.calls.some(([input]) => String(input) === "/api/v1/auth/oauth/authorize")).toBe(false);
+});

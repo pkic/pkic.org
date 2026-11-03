@@ -1,3 +1,4 @@
+import { requireSessionPasskeyAuthentication } from "../passkey-session-authentication";
 import {
   OAuthError,
   GrantType,
@@ -8,16 +9,16 @@ import { prepareCurrentUserBackedAdmin } from "../admin";
 import { signMcpSessionToken } from "../mcp-session";
 import { AppError } from "../../errors";
 import type { Env } from "../../types";
-import { parseMcpOauthProps, type McpOAuthProps } from "./props";
+import { parseMcpOauthProps, mcpSessionDeadline, type McpOAuthProps } from "./props";
 import { prepareActiveOauthAuthorization } from "./authorization-ceiling";
-import { mcpOauthLifetimes } from "./policy";
+import { mcpOauthLifetimes, mcpPasskeyAuthorizationTtlSeconds } from "./policy";
 import { effectiveMcpPermissionContexts } from "./grantable-permissions";
 
 /** Frozen session deadlines and approved resource limits both cap live authority. */
 export async function resolveActiveMcpSession(env: Env, props: McpOAuthProps, clientId?: string) {
   if (props.identityType === "service") return { remainingSeconds: null, scopes: props.scopes };
-  const idleExpiresAt = Date.parse(props.sessionIdleExpiresAt);
-  if (!Number.isFinite(idleExpiresAt) || idleExpiresAt <= Date.now())
+  const sessionDeadline = mcpSessionDeadline(props);
+  if (!Number.isFinite(sessionDeadline) || sessionDeadline <= Date.now())
     throw new AppError(401, "AUTH_EXPIRED", "Your MCP authorization session expired. Sign in again.");
   const authorizationRead =
     props.authTransport === "oauth"
@@ -38,9 +39,14 @@ export async function resolveActiveMcpSession(env: Env, props: McpOAuthProps, cl
   const authorization = authorizationRead?.decode(loaded.slice(0, authorizationRead.statements.length));
   const admin = adminRead.decode(loaded.slice(authorizationRead?.statements.length ?? 0));
 
+  const passkey = props.authTransport === "oauth" ? props.passkeyAuthentication : undefined;
+  if (passkey) await requireSessionPasskeyAuthentication(env.DB, props.id, props.sessionId, passkey);
+  const passkeyDeadline = passkey
+    ? Date.parse(passkey.authenticatedAt) + mcpPasskeyAuthorizationTtlSeconds(env) * 1000
+    : Infinity;
   const expiresAt = Math.min(
-    Date.parse(props.sessionExpiresAt),
-    idleExpiresAt,
+    sessionDeadline,
+    passkeyDeadline,
     Date.parse(admin?.expiresAt ?? ""),
     authorization ? Date.parse(authorization.expiresAt) : Infinity,
   );
@@ -129,7 +135,12 @@ export async function authorizationHeaderForMcp(
     email: oauthProps.email,
     state: oauthProps.state ?? undefined,
     scopes: active.scopes,
-    ...(oauthProps.authTransport === "oauth" ? { authorizationId: oauthProps.authorizationId } : {}),
+    ...(oauthProps.authTransport === "oauth"
+      ? {
+          authorizationId: oauthProps.authorizationId,
+          ...(oauthProps.passkeyAuthentication ? { passkeyAuthentication: oauthProps.passkeyAuthentication } : {}),
+        }
+      : {}),
   });
   return `Bearer ${token}`;
 }

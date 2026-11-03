@@ -90,12 +90,14 @@ export async function processOauthAuthorizationCompletion(env: Env, id: string, 
     if (!row.requestCiphertext) throw new AppError(401, "MCP_AUTHORIZATION_INACTIVE", "Authorize the MCP client again");
     const payload = await openOauthCompletion(row.requestCiphertext, secret, id);
     const { actor, scopes } = await completionAuthority(env.DB, row, payload);
-    await env.DB.batch(pendingOauthCompletionGuards(env.DB, row, lease.token, actor, scopes));
+    await env.DB.batch(
+      pendingOauthCompletionGuards(env.DB, row, lease.token, actor, scopes, payload.props.passkeyAuthentication),
+    );
     const oauth =
       provider ??
       getOAuthApi(
         {
-          ...mcpOauthProviderSettings(env),
+          ...mcpOauthProviderSettings(env, payload.request.resource),
           defaultHandler: { fetch: async () => new Response(null, { status: 404 }) },
         },
         env,
@@ -112,7 +114,7 @@ export async function processOauthAuthorizationCompletion(env: Env, id: string, 
     const redirectCiphertext = await sealOauthRedirect(redirectTo, secret, id),
       at = nextIsoRevision(row.revision);
     await env.DB.batch([
-      ...pendingOauthCompletionGuards(env.DB, row, lease.token, actor, scopes),
+      ...pendingOauthCompletionGuards(env.DB, row, lease.token, actor, scopes, payload.props.passkeyAuthentication),
       env.DB.prepare(`UPDATE oauth_authorization_completions SET status='completed',request_ciphertext=NULL,
         redirect_ciphertext=?,processing_token=NULL,lease_expires_at=NULL,last_error_code=NULL,updated_at=?
         WHERE authorization_id=? AND status='processing' AND processing_token=?`).bind(

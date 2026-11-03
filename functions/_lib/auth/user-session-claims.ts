@@ -137,6 +137,7 @@ export async function resolveUserSessionClaims(
   if (recordAudit) recordAuditActingIdentity(identity.id, actingIdentityId);
   return {
     identity: { id: identity.id, email: identity.email },
+    ...(claims.passkeyAuthentication ? { passkeyAuthentication: claims.passkeyAuthentication } : {}),
     sessionId: row.id,
     expiresAt: row.expiresAt,
     idleExpiresAt,

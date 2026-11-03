@@ -1,3 +1,4 @@
+import { DEFAULT_OAUTH_PASSKEY_AUTHORIZATION_TTL_SECONDS } from "../../../../assets/shared/oauth-authorization-policy";
 import type { Env } from "../../types";
 export const MCP_PATH = "/api/v1/mcp";
 export const MCP_OAUTH_AUTHORIZE_PATH = "/api/v1/auth/oauth/authorize";
@@ -12,4 +13,15 @@ export function mcpOauthLifetimes(env: Env) {
     accessTokenTTL: ttlSeconds(env.MCP_OAUTH_ACCESS_TOKEN_TTL_SECONDS, 3600),
     refreshTokenTTL: ttlSeconds(env.MCP_OAUTH_REFRESH_TOKEN_TTL_SECONDS, 8 * 3600),
   };
+}
+
+/** Zero disables longer authorizations; malformed configuration keeps the conservative default. */
+export function mcpPasskeyAuthorizationTtlSeconds(
+  env: Pick<Env, "MCP_OAUTH_PASSKEY_AUTHORIZATION_TTL_SECONDS">,
+): number {
+  const configured = env.MCP_OAUTH_PASSKEY_AUTHORIZATION_TTL_SECONDS;
+  const parsed = Number(configured);
+  return configured !== undefined && /^(0|[1-9][0-9]*)$/.test(configured) && Number.isSafeInteger(parsed)
+    ? parsed
+    : DEFAULT_OAUTH_PASSKEY_AUTHORIZATION_TTL_SECONDS;
 }

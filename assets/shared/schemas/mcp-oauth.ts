@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { normalizedEmailSchema, successResponseSchema } from "./api-common";
+import { normalizedEmailSchema } from "./api-common";
 import { oauthSelectedScopesSchema } from "./oauth-authorizations";
 import { PERMISSION_DOMAINS } from "../permission-metadata";
 import { databaseIdSchema } from "./identifiers";
@@ -33,18 +33,10 @@ export const mcpOauthContextSchema = z.object({
     }),
   ),
 });
-export const mcpOauthMagicLinkResponseSchema = successResponseSchema.extend({
-  sentTo: normalizedEmailSchema.nullable(),
-});
 export const mcpOauthRedirectResponseSchema = z.object({ redirectTo: z.string() });
 
 const mcpOauthReturnToSchema = z.string().trim().min(1).max(2048);
 export const mcpOauthAuthorizeActionSchema = z.discriminatedUnion("action", [
-  z.object({
-    action: z.literal("request-link"),
-    email: normalizedEmailSchema,
-    return_to: mcpOauthReturnToSchema,
-  }),
   z.object({
     action: z.literal("approve"),
     return_to: mcpOauthReturnToSchema,
@@ -53,3 +45,6 @@ export const mcpOauthAuthorizeActionSchema = z.discriminatedUnion("action", [
   }),
   z.object({ action: z.literal("deny"), return_to: mcpOauthReturnToSchema }),
 ]);
+
+/** Locator for a validated authorization request; it conveys no sign-in or API authority. */
+export const mcpOauthRequestIdSchema = z.uuid();

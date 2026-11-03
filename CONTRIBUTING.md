@@ -407,6 +407,21 @@ This follows [Vite's production load-error handling](https://vite.dev/guide/buil
 and [Cloudflare's standard static-asset validators](https://developers.cloudflare.com/workers/static-assets/headers/).
 Production recovery does not use Vite's development-only HMR hooks.
 
+### MCP authorization lifetimes
+
+Email-authenticated and existing unmarked sessions retain the current staff
+inactivity deadline for MCP authorization. A successful, user-verified passkey
+sign-in can authorize longer access, capped by the eight-hour staff-session
+lifetime. Registering a passkey alone does not qualify.
+
+`MCP_OAUTH_PASSKEY_AUTHORIZATION_TTL_SECONDS` limits longer access from the
+original passkey sign-in time (default `28800`); `0` disables longer grants.
+Session renewal, acting-identity changes, and OAuth refresh never advance that
+time or widen approved permissions. Both access and refresh check the live
+session, current permissions, and the authenticating passkey's ownership and
+revocation. Existing sessions need a new passkey sign-in to qualify; no D1
+migration is required.
+
 ### System role permission defaults
 
 System role IDs and names identify product responsibilities and remain immutable;

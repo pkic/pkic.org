@@ -1,5 +1,6 @@
 import type { OAuthProviderOptions } from "@cloudflare/workers-oauth-provider";
 import type { Env } from "../../types";
+import { resolveAppBaseUrl } from "../../config";
 import { AUTH_SCOPES } from "../scopes";
 import { mcpTokenLifetime } from "./session-authorization";
 import {
@@ -13,6 +14,7 @@ import {
 /** One protocol/TTL policy for HTTP token exchange and durable approval completion. */
 export function mcpOauthProviderSettings(
   env: Env,
+  baseUrl: string = resolveAppBaseUrl(env),
 ): Pick<
   OAuthProviderOptions<Env>,
   | "apiRoute"
@@ -22,7 +24,7 @@ export function mcpOauthProviderSettings(
   | "scopesSupported"
   | "accessTokenTTL"
   | "refreshTokenTTL"
-  | "allowPlainPKCE"
+  | "resourceMetadata"
   | "clientIdMetadataDocumentEnabled"
   | "tokenExchangeCallback"
 > {
@@ -34,7 +36,12 @@ export function mcpOauthProviderSettings(
     clientRegistrationEndpoint: MCP_OAUTH_REGISTER_PATH,
     scopesSupported: [...AUTH_SCOPES],
     ...lifetimes,
-    allowPlainPKCE: false,
+    resourceMetadata: {
+      resource: new URL(MCP_PATH, baseUrl).toString(),
+      scopes_supported: [...AUTH_SCOPES],
+      bearer_methods_supported: ["header"],
+      resource_name: "PKI Consortium MCP",
+    },
     clientIdMetadataDocumentEnabled: true,
     tokenExchangeCallback: (exchange) => mcpTokenLifetime(env, exchange.props, lifetimes.accessTokenTTL, exchange),
   };

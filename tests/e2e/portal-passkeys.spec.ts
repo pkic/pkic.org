@@ -12,54 +12,15 @@
  * browser before the application is reached — see scripts/e2e-start.sh.
  * @covers account.7.7
  */
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
+import { attachVirtualAuthenticator, openOwnUserRecord, openAddPasskey, enrollPasskey } from "./helpers/passkeys";
 import { signInToPortal } from "./helpers/portal-auth";
 import { runRowAction } from "./helpers/data-table";
 import { acceptConfirmDialog } from "./helpers/confirm-dialog";
 
 const PASSKEY_EMAIL = e2eAdminEmail("portal-passkeys");
 const DEVICE_NAME = "E2E virtual authenticator";
-
-/**
- * Attaches a resident-key authenticator that reports a verified user, matching
- * the `residentKey: "required"` / `userVerification: "required"` policy the
- * registration options ask for.
- */
-async function attachVirtualAuthenticator(page: Page, transport: "internal" | "usb"): Promise<void> {
-  const client = await page.context().newCDPSession(page);
-  await client.send("WebAuthn.enable");
-  await client.send("WebAuthn.addVirtualAuthenticator", {
-    options: {
-      protocol: "ctap2",
-      transport,
-      hasResidentKey: true,
-      hasUserVerification: true,
-      isUserVerified: true,
-      automaticPresenceSimulation: true,
-    },
-  });
-}
-
-async function openOwnUserRecord(page: Page): Promise<void> {
-  await page.goto("/portal/#/users/current");
-  await expect(page.getByRole("heading", { name: "Passkeys", exact: true })).toBeVisible({ timeout: 15_000 });
-}
-
-/** Opens the add form: the panel's menu leads to a dialog holding the device name and its button. */
-async function openAddPasskey(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Passkeys actions" }).click();
-  await page.getByRole("menuitem", { name: "Add a passkey" }).click();
-  await expect(page.getByRole("dialog", { name: "Add a passkey" })).toBeVisible();
-}
-
-async function enrollPasskey(page: Page, deviceName: string): Promise<void> {
-  const dialog = page.getByRole("dialog", { name: "Add a passkey" });
-  await dialog.getByLabel("Device name (optional)").fill(deviceName);
-  await dialog.getByRole("button", { name: "Add a passkey", exact: true }).click();
-  await expect(page.getByText("Passkey added")).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByRole("listitem").filter({ hasText: deviceName })).toBeVisible();
-}
 
 for (const transport of ["internal", "usb"] as const) {
   test(`a ${transport} passkey can be registered, used to sign in, and removed`, async ({ page }, testInfo) => {

@@ -1,3 +1,4 @@
+import { requireSessionPasskeyAuthentication } from "./passkey-session-authentication";
 import { userSessionRequestAuthorizationEvidence } from "./user-session-evidence";
 import {
   userSessionActingIdentitySelection,
@@ -259,6 +260,8 @@ async function prepareMcpAdminRequest(
       verified.reason === "expired" ? "MCP session expired" : "Invalid MCP session token",
     );
   const claims = verified.claims;
+  if (claims.passkeyAuthentication)
+    await requireSessionPasskeyAuthentication(db, claims.sub, claims.sid, claims.passkeyAuthentication);
   const authorization = claims.authorizationId
     ? prepareActiveOauthAuthorization(db, { id: claims.authorizationId, userId: claims.sub, sessionId: claims.sid })
     : null;

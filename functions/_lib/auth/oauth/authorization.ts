@@ -1,5 +1,7 @@
 import {
   OAuthError,
+  AuthorizationError,
+  authorizationErrorRedirect,
   type AuthRequest,
   type OAuthHelpers,
   type ResolveExternalTokenInput,
@@ -9,20 +11,16 @@ import { mcpOauthContextSchema } from "../../../../assets/shared/schemas/mcp-oau
 import { getCachedAdminAuthTransport, requireAdminFromRequest } from "../admin";
 import { resolveUserSessionFromRequest, type UserSessionResult } from "../user-session";
 import { normalizeMcpOauthScopes, type AuthScope } from "../scopes";
-import { getConfig, resolveAppBaseUrl } from "../../config";
-import { processOutboxByIdBackground } from "../../email/outbox";
 import { handleError } from "../../http";
 import { oauthClientDisplayName } from "../../../../assets/shared/oauth-authorization-policy";
 import { AppError } from "../../errors";
-import { getClientIp, getUserAgent, hashOptional, requireInternalSecret } from "../../request";
-import { enforceRateLimit } from "../../rate-limit";
 import { buildManagementLink } from "../../services/management-links";
-import { requestUserSignInLink } from "../../services/user-auth-flow";
 import type { AuthAdmin, Env } from "../../types";
 
+import { resolveAppBaseUrl } from "../../config";
 import { permissionAreas } from "../../../../assets/shared/permission-metadata";
 import { delegablePermissionContexts } from "./grantable-permissions";
-import { MCP_OAUTH_AUTHORIZE_PATH } from "./policy";
+import { MCP_PATH, MCP_OAUTH_AUTHORIZE_PATH } from "./policy";
 export { isAuthScope, normalizeMcpOauthScopes } from "../scopes";
 export { MCP_OAUTH_AUTHORIZE_PATH, MCP_OAUTH_TOKEN_PATH, MCP_OAUTH_REGISTER_PATH } from "./policy";
 const MCP_OAUTH_MAX_RETURN_TO_LENGTH = 2048;
@@ -40,6 +38,7 @@ export {
 
 export type McpOAuthEnv = Env & {
   OAUTH_PROVIDER: OAuthHelpers;
+  OAUTH_KV: KVNamespace;
 };
 
 export function currentAuthorizeReturnTo(request: Request): string {
@@ -47,35 +46,19 @@ export function currentAuthorizeReturnTo(request: Request): string {
   return `${url.pathname}${url.search}`;
 }
 
-export function resolveAuthorizeReturnTo(request: Request): string {
-  const requested = new URL(request.url).searchParams.get("return_to");
-  return requested ? sanitizeAuthorizeReturnTo(requested) : currentAuthorizeReturnTo(request);
-}
-
 export function wantsJsonResponse(request: Request): boolean {
   return (request.headers.get("accept") ?? "").includes("application/json");
 }
 
-export function buildMcpOauthUiUrl(
-  env: Pick<Env, "APP_BASE_URL">,
-  request: Request,
-  returnTo: string,
-  error?: string,
-): string {
+export function buildMcpOauthUiUrl(env: Pick<Env, "APP_BASE_URL">, request: Request, requestId: string): string {
   return buildManagementLink(resolveAppBaseUrl(env, request), {
     kind: "mcp-oauth",
-    returnTo: sanitizeAuthorizeReturnTo(returnTo),
-    error,
+    requestId,
   });
 }
 
-export function redirectToMcpOauthUi(
-  env: Pick<Env, "APP_BASE_URL">,
-  request: Request,
-  returnTo: string,
-  error?: string,
-): Response {
-  return Response.redirect(buildMcpOauthUiUrl(env, request, returnTo, error), 302);
+export function redirectToMcpOauthUi(env: Pick<Env, "APP_BASE_URL">, request: Request, requestId: string): Response {
+  return Response.redirect(buildMcpOauthUiUrl(env, request, requestId), 302);
 }
 
 export function sanitizeAuthorizeReturnTo(value: string | null | undefined): string {
@@ -156,7 +139,7 @@ export async function resolveMcpExternalToken({
   token,
   request,
   env,
-}: ResolveExternalTokenInput): Promise<{ props: McpOAuthProps } | null> {
+}: ResolveExternalTokenInput<Env>): Promise<{ props: McpOAuthProps; audience: string } | null> {
   const headers = new Headers(request.headers);
   headers.set("authorization", `Bearer ${token}`);
   const authRequest = new Request(request, { headers });
@@ -167,6 +150,7 @@ export async function resolveMcpExternalToken({
     const session = admin.identityType === "user" ? await resolveMcpOauthSession(authRequest, env as Env) : null;
     if (admin.identityType === "user" && !session?.staff) return null;
     return {
+      audience: new URL(MCP_PATH, resolveAppBaseUrl(env, request)).toString(),
       props: buildMcpOauthProps(
         admin,
         normalizeMcpOauthScopes(admin.scopes ?? []),
@@ -181,56 +165,10 @@ export async function resolveMcpExternalToken({
 }
 
 export function redirectAuthorizationDenied(authRequest: AuthRequest): Response {
-  const redirectUrl = new URL(authRequest.redirectUri);
-  redirectUrl.searchParams.set("error", "access_denied");
-  redirectUrl.searchParams.set("error_description", "The user denied the authorization request.");
-  redirectUrl.searchParams.set("state", authRequest.state);
-  return Response.redirect(redirectUrl.toString(), 302);
-}
-
-export async function sendMcpAuthorizeMagicLink(options: {
-  request: Request;
-  env: Env;
-  executionCtx: ExecutionContext;
-  email: string;
-  returnTo: string;
-}): Promise<void> {
-  const secret = requireInternalSecret(options.env);
-  const clientIp = getClientIp(options.request);
-  await enforceRateLimit({
-    binding: options.env.EMAIL_RATE_LIMITER,
-    namespace: "mcp-authorize-request-link:email",
-    key: options.email,
-  });
-  await enforceRateLimit({
-    binding: options.env.IP_RATE_LIMITER,
-    namespace: "mcp-authorize-request-link:ip",
-    key: clientIp,
-  });
-
-  const config = getConfig(options.env, options.request);
-  const [ipHash, userAgentHash] = await Promise.all([
-    hashOptional(clientIp, secret),
-    hashOptional(getUserAgent(options.request), secret),
-  ]);
-  const appBaseUrl = resolveAppBaseUrl(options.env, options.request);
-  const result = await requestUserSignInLink(options.env.DB, {
-    email: options.email,
-    ipHash,
-    userAgentHash,
-    ttlMinutes: config.magicLinkTtlMinutes,
-    signingSecret: secret,
-    magicLinkBaseUrl: buildManagementLink(appBaseUrl, {
-      kind: "mcp-oauth",
-      returnTo: sanitizeAuthorizeReturnTo(options.returnTo),
-    }),
-  });
-
-  if (!result.outboxId) {
-    return;
-  }
-
-  options.executionCtx.waitUntil(processOutboxByIdBackground(options.env.DB, options.env, result.outboxId));
+  return Response.redirect(
+    authorizationErrorRedirect(authRequest, "access_denied", "The user denied the authorization request."),
+    302,
+  );
 }
 
 export function grantedMcpOauthScopes(admin: AuthAdmin, requestedScopes: readonly AuthScope[]): AuthScope[] {
@@ -240,6 +178,7 @@ export function grantedMcpOauthScopes(admin: AuthAdmin, requestedScopes: readonl
 }
 
 export function toOAuthErrorResponse(error: unknown): Response {
+  if (error instanceof AuthorizationError) return handleError(new AppError(400, error.code, error.description));
   if (error instanceof OAuthError) {
     return handleError(new AppError(error.statusCode, error.code, error.description));
   }

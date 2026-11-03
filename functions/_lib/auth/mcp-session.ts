@@ -1,8 +1,13 @@
+import {
+  sessionPasskeyAuthenticationSchema,
+  type SessionPasskeyAuthentication,
+} from "../../../assets/shared/schemas/session-authentication";
 import { databaseIdSchema } from "../../../assets/shared/schemas/identifiers";
 import { signJwt, verifyJwt, type JwtVerifyResult } from "../utils/jwt";
 
 export interface McpSessionTokenClaims {
   typ: "mcp-session";
+  passkeyAuthentication?: SessionPasskeyAuthentication;
   sub: string;
   sid: string;
   email: string;
@@ -16,6 +21,8 @@ function isMcpSessionClaims(value: object): value is McpSessionTokenClaims {
   const claims = value as Partial<McpSessionTokenClaims>;
   return (
     claims.typ === "mcp-session" &&
+    (claims.passkeyAuthentication === undefined ||
+      sessionPasskeyAuthenticationSchema.safeParse(claims.passkeyAuthentication).success) &&
     !("role" in claims) &&
     typeof claims.sub === "string" &&
     typeof claims.sid === "string" &&

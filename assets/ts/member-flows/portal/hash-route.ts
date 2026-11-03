@@ -8,6 +8,7 @@
  * portal's own `#`, never a host — so a link can only ever land inside the
  * portal.
  */
+import { mcpOauthRequestIdSchema } from "../../../shared/schemas/mcp-oauth";
 import { portalReturnPathSchema } from "../../../shared/schemas/user-auth";
 import { parseEventFlowPath } from "../../../shared/event-flow-paths";
 
@@ -64,15 +65,18 @@ export function eventFlowReturnPath(next: string | null): string | null {
 /**
  * Where a sign-in started from, when that is somewhere worth going back to.
  * The portal's own entry points — home, the login and verify screens, the
- * OAuth hand-off — are not; a deep link such as a working group is.
+ * invitation screens — are not; a pending OAuth request is a resumable destination.
  */
 export function portalReturnPath(hash: string): string | undefined {
   const route = portalHashPath(hash);
+  if (route === "/auth/oauth") {
+    const request = hashQuery(hash).get("request");
+    return mcpOauthRequestIdSchema.safeParse(request).success ? `/auth/oauth?request=${request}` : undefined;
+  }
   if (
     route === "/" ||
     route === "/login" ||
     route === "/verify" ||
-    route === "/auth/oauth" ||
     route === "/identity-invitations" ||
     route === "/email-verifications"
   )

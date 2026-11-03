@@ -21,6 +21,14 @@ describe("portal return path", () => {
     expect(portalReturnPath("#/identity-invitations?token=secret-token")).toBeUndefined();
   });
 
+  it("preserves only the short authorization reference through canonical email login", () => {
+    const path = "/auth/oauth?request=00000000-0000-4000-8000-000000000001";
+    expect(portalReturnPath(`#${path}&token=untrusted&return_to=https://evil.example`)).toBe(path);
+    expect(userAuthRequestSchema.safeParse({ email: "a@b.test", returnPath: path }).success).toBe(true);
+    expect(portalMagicLinkReturnPath(`#/verify?token=synthetic&next=${encodeURIComponent(path)}`)).toBe(path);
+    expect(portalReturnPath("#/auth/oauth?request=invalid")).toBeUndefined();
+  });
+
   it("reads a public identity invitation token without treating it as a login link", () => {
     const hash = "#/identity-invitations?token=secret-token";
     expect(portalHashPath(hash)).toBe("/identity-invitations");
