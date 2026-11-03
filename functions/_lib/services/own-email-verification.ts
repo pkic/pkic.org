@@ -23,6 +23,7 @@ import {
   verifyEmailAuthCapabilityToken,
 } from "../auth/email-auth-capabilities";
 import { prepareQueueEmailStatement } from "../email/outbox-queue";
+import { requireDeliverableTemplate } from "../email/templates";
 import { first } from "../db/queries";
 import { AppError } from "../errors";
 import {
@@ -65,6 +66,7 @@ export async function prepareOwnEmailVerificationMessage(
     at: string;
   } & OwnEmailVerificationDelivery,
 ): Promise<{ outboxId: string; statements: StatementLike[] }> {
+  await requireDeliverableTemplate(db, "user_email_verification");
   const capability = await queueEmailAuthCapability({
     signingSecret: input.signingSecret,
     purpose: PURPOSE,

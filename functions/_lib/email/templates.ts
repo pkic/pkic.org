@@ -278,6 +278,21 @@ export function requireResolvedTemplates(
   return templates;
 }
 
+/**
+ * Refuses an email someone is waiting for when its template cannot render, so
+ * the page never says it was sent. Operators find the cause in the log.
+ */
+export async function requireDeliverableTemplate(db: DatabaseLike, templateKey: string): Promise<void> {
+  const resolution = (await resolveTemplateSet(db, [templateKey])).get(templateKey);
+  if (resolution?.ok) return;
+  console.error("[email] template unavailable", { templateKey, code: resolution?.code });
+  throw new AppError(
+    503,
+    "EMAIL_TEMPLATE_UNAVAILABLE",
+    "We could not send this email right now. Try again later, or contact us if it keeps happening.",
+  );
+}
+
 export async function resolveTemplate(db: DatabaseLike, templateKey: string): Promise<ResolvedEmailTemplate> {
   const templates = await resolveTemplates(db, [templateKey]);
   return templates.get(templateKey)!;

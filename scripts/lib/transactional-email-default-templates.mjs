@@ -6,8 +6,8 @@ export const DEFAULT_TRANSACTIONAL_EMAIL_TEMPLATES = [
     key: "event_proposal_verify",
     subjectTemplate: "Verify your email for {{eventName}}",
     content:
-      "Use this short-lived link to verify your email address for {{eventName}}.\n\n{{verificationUrl}}\n\nIf you did not request this link, you can ignore this email.",
-    contentType: "text",
+      'Verify your email address to continue your proposal for **{{eventName}}**.\n\n<div class="cta-navy"><a href="{{verificationUrl}}">Verify your email &rarr;</a></div>\n\nThe link works for a short time. If you did not request it, you can ignore this email.',
+    contentType: "markdown",
     messageType: "transactional",
   },
   {

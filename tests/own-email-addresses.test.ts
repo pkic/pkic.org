@@ -129,6 +129,25 @@ describe("a person's own email addresses", () => {
     environment = { ...env, EMAIL_RATE_LIMITER: createTestRateLimiter(50), IP_RATE_LIMITER: createTestRateLimiter(50) };
   });
 
+  it("refuses to promise address verification when its template is unavailable", async () => {
+    const { token } = await signedIn("template-owner@example.test");
+    await env.DB.prepare("DELETE FROM email_template_versions WHERE template_key = 'user_email_verification'").run();
+    const response = await call(
+      token,
+      "",
+      "POST",
+      ownEmailAddressAddSchema.parse({ email: "template-extra@example.test" }),
+    );
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ error: { code: "EMAIL_TEMPLATE_UNAVAILABLE" } });
+    expect(
+      await queryAll(env.DB, "SELECT id FROM email_outbox WHERE recipient_email='template-extra@example.test'"),
+    ).toHaveLength(0);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM user_emails WHERE normalized_email='template-extra@example.test'"),
+    ).toHaveLength(0);
+  });
+
   it("explicitly consolidates a proved unverified primary into the current account without importing access", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const source = await findOrCreateUser(env.DB, {

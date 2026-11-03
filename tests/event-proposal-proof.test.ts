@@ -57,6 +57,17 @@ async function start(email: string, options: { session?: string; unaffiliatedAtt
 }
 
 describe("event proposal mailbox proof", () => {
+  it("refuses a verification request when its active template has no body", async () => {
+    await seedEventAndAdmin(env.DB);
+    await env.DB.prepare(
+      "UPDATE email_template_versions SET body = '' WHERE template_key = 'event_proposal_verify'",
+    ).run();
+    const response = await request("/proof", { email: "template-check@official.example", consents });
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ error: { code: "EMAIL_TEMPLATE_UNAVAILABLE" } });
+    expect(await queryAll(env.DB, "SELECT id FROM email_outbox")).toHaveLength(0);
+  });
+
   it("requires current terms before queueing and returns the same start response for known and new mailboxes", async () => {
     await seedEventAndAdmin(env.DB);
     await insertUser(env.DB, "known@official.example");
