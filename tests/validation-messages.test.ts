@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { termKeySchema, trimmedString } from "../assets/shared/schemas/api-common";
+import { termKeySchema, termVersionSchema, trimmedString } from "../assets/shared/schemas/api-common";
 
 const message = (schema: z.ZodType, value: unknown) => schema.safeParse(value).error?.issues[0]?.message;
 
@@ -24,5 +24,17 @@ describe("plain-language contract messages", () => {
   it("keeps a message written on the schema", () => {
     expect(message(trimmedString(1, 80, "Give the role a name."), "")).toBe("Give the role a name.");
     expect(message(termKeySchema, "Code of Conduct")).toMatch(/^Use 2 to 128 lowercase letters/);
+  });
+});
+
+describe("term version guidance", () => {
+  it.each(["-v1", "v 1", "", "v".repeat(65)])("explains the allowed format for %s", (value) => {
+    expect(message(termVersionSchema, value)).toBe(
+      "Use 1 to 64 letters, numbers, dots, hyphens or underscores, starting with a letter or number, such as v1.",
+    );
+  });
+
+  it.each(["v1", "2026-11-03", "Release_1.0", "v".repeat(64)])("accepts %s", (value) => {
+    expect(termVersionSchema.parse(` ${value} `)).toBe(value);
   });
 });

@@ -65,6 +65,14 @@ export const termKeySchema = z
     "Use 2 to 128 lowercase letters, numbers, dots, hyphens or underscores, starting with a letter or number, such as code-of-conduct.",
   );
 export const versionPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+/** A term version, such as `v1` or `2026-11-03`. */
+export const termVersionSchema = z
+  .string()
+  .trim()
+  .regex(
+    versionPattern,
+    "Use 1 to 64 letters, numbers, dots, hyphens or underscores, starting with a letter or number, such as v1.",
+  );
 export const tokenCharactersPattern = /^[A-Za-z0-9_.-]+$/;
 export const frontendPathPattern = /^\/[A-Za-z0-9\-._~!$&'()*+,;=:@/%]*$/;
 

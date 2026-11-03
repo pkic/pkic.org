@@ -203,6 +203,9 @@ export function validateBeforeSubmit(form: HTMLFormElement, _statusEl: HTMLEleme
   validateNativeFields(form);
   // Inline [data-field-error] messages handle per-field feedback; the first
   // one may be far above the submit button, so take the person to it.
-  focusFirstInvalidField(form);
+  focusFirstInvalidField(
+    form,
+    [...form.querySelectorAll<FormControl>("input[name], select[name], textarea[name]")].filter(isNativelyValidated),
+  );
   return false;
 }

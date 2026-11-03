@@ -43,7 +43,7 @@ test("starts from the work email and steers a personal address to the explicit i
   await expect(page.getByText(/H5 — PhD students researching PKI or cryptography/)).toBeHidden();
 });
 
-test("verifies an organization email before submitting the D1-backed membership form", async ({ page }) => {
+test("verifies an organization email before submitting the D1-backed membership form", async ({ page }, testInfo) => {
   const unique = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const email = `membership-${unique}@organization-${unique}.test`;
   const sinceVerification = await capturedEmailCount();
@@ -128,6 +128,32 @@ test("verifies an organization email before submitting the D1-backed membership 
   await page.locator('[name="custom.job_title"]').fill("Membership contact");
   await page.getByLabel("About yourself", { exact: false }).fill("I work on PKI interoperability.");
   await page.getByLabel("About your organization", { exact: false }).fill("We build PKI services.");
+  // A server refusal must reach the named answer after both validators display errors.
+  await page.route("**/api/v1/members/applications", async (route) => {
+    await route.fulfill({
+      status: 400,
+      contentType: "application/json",
+      body: JSON.stringify({
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Review your application.",
+          details: { fieldErrors: { "answers.reason": ["Explain your organization's contribution."] } },
+        },
+      }),
+    });
+    await page.unroute("**/api/v1/members/applications");
+  });
+  await page.getByRole("button", { name: "Submit membership application", exact: true }).click();
+  await expect(page.locator('[name="custom.reason"]')).toBeFocused();
+  await expect(page.getByText("Explain your organization's contribution.", { exact: true })).toBeVisible();
+  for (const width of [1280, 375]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.locator('[name="custom.reason"]').scrollIntoViewIfNeeded();
+    await expect(page.getByText("Explain your organization's contribution.", { exact: true })).toBeInViewport();
+    await page.screenshot({ path: testInfo.outputPath(`server-refusal-${width}.png`) });
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.locator('[name="custom.reason"]').fill("We contribute PKI interoperability expertise and testing.");
   const submission = page.waitForResponse(
     (response) => response.url().endsWith("/api/v1/members/applications") && response.request().method() === "POST",
   );

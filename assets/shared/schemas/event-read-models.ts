@@ -2,7 +2,7 @@ import { parseDateTimeLocal } from "../timezone";
 import { z } from "zod";
 import { attendanceIconSchema } from "../event-attendance-icons";
 import { eventAttendanceOptionSchema as configuredAttendanceOptionSchema } from "./event-configuration";
-import { eventIdSchema, termKeySchema, versionPattern } from "./api-common";
+import { eventIdSchema, termKeySchema, termVersionSchema } from "./api-common";
 
 /** Canonical public event identity embedded in event workflow responses. */
 export const eventSummarySchema = z.object({
@@ -14,7 +14,7 @@ export const eventSummarySchema = z.object({
 /** Canonical configurable event term returned to attendee and speaker frontends. */
 export const requiredTermSchema = z.object({
   termKey: termKeySchema,
-  version: z.string().trim().regex(versionPattern),
+  version: termVersionSchema,
   required: z.boolean(),
   contentRef: z.string().nullable(),
   displayText: z.string().nullable().optional(),

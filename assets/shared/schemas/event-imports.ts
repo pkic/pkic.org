@@ -5,7 +5,7 @@ import {
   termKeySchema,
   trimmedString,
   utcInstantSchema,
-  versionPattern,
+  termVersionSchema,
 } from "./api-common";
 import { z } from "zod";
 import {
@@ -28,7 +28,7 @@ export type EventImportSource = z.infer<typeof eventImportSourceSchema>;
 
 const importedTermSchema = z.object({
   termKey: termKeySchema,
-  version: z.string().trim().regex(versionPattern),
+  version: termVersionSchema,
   required: z.boolean().optional(),
   contentRef: trimmedString(1, 500).optional(),
   displayText: trimmedString(3, 4000).optional(),

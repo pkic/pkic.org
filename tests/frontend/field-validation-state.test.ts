@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { createElement, render } from "preact";
+import { ConsentCard } from "../../assets/ts/components/ConsentCard";
 import { afterEach, describe, expect, it } from "vitest";
 import { installLiveValidation, validateBeforeSubmit } from "../../assets/ts/shared/form/validation";
 import { applyFieldErrors, focusFirstInvalidField, setFieldMessage } from "../../assets/ts/shared/form/validation-map";
@@ -118,6 +120,38 @@ describe("validation state on server-rendered fields", () => {
     submit.focus();
     expect(validateBeforeSubmit(form, document.createElement("p"))).toBe(false);
     expect(document.activeElement).toBe(form.querySelector('[name="firstName"]'));
+  });
+
+  it("focuses a required consent on the first submit before its error marker renders", () => {
+    const form = buildForm('<div data-consents></div><button type="submit">Submit</button>');
+    render(
+      createElement(ConsentCard, {
+        term: {
+          termKey: "code-of-conduct",
+          version: "v1",
+          required: true,
+          contentRef: null,
+          displayText: "Code of conduct",
+        },
+      }),
+      form.querySelector("[data-consents]")!,
+    );
+    const consent = form.querySelector<HTMLInputElement>('[name="consents"]')!;
+    form.querySelector<HTMLButtonElement>("button")!.focus();
+    expect(form.querySelector(".pk-field--invalid, [aria-invalid='true']")).toBeNull();
+    expect(validateBeforeSubmit(form, document.createElement("p"))).toBe(false);
+    expect(document.activeElement).toBe(consent);
+    render(null, form.querySelector("[data-consents]")!);
+  });
+
+  it("does not use native constraints to focus a field owned by its contract", () => {
+    const form = buildForm(
+      '<div data-contract-validation><input name="contract" required /></div><button>Submit</button>',
+    );
+    const submit = form.querySelector<HTMLButtonElement>("button")!;
+    submit.focus();
+    validateBeforeSubmit(form, document.createElement("p"));
+    expect(document.activeElement).toBe(submit);
   });
 
   it("focuses the field a server refusal names, or the refusal message when it names none", () => {

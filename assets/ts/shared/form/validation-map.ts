@@ -152,13 +152,20 @@ function moveFocusTo(control: HTMLElement): boolean {
  * whether focus moved; when it did not, the caller falls back to the refusal
  * message, and a visible marked field is at least scrolled into view.
  */
-export function focusFirstInvalidField(form: HTMLFormElement): boolean {
+export function focusFirstInvalidField(
+  form: HTMLFormElement,
+  nativeControls: Iterable<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement> = [],
+): boolean {
   const marked = [...form.querySelectorAll<HTMLElement>(".pk-field--invalid, [aria-invalid='true']")];
   for (const field of marked) {
     const controls = field.matches(FOCUSABLE_CONTROL)
       ? [field]
       : [...field.querySelectorAll<HTMLElement>(FOCUSABLE_CONTROL)];
     if (controls.some(moveFocusTo)) return true;
+  }
+  // Client validation can refuse a consent before its component renders an error marker.
+  for (const control of nativeControls) {
+    if (!control.validity.valid && moveFocusTo(control)) return true;
   }
   marked.find((field) => !field.closest("[hidden], [inert]"))?.scrollIntoView({ block: "center" });
   return false;

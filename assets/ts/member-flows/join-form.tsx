@@ -9,11 +9,11 @@ import { getJson, postJson } from "../shared/api-client";
 import { renderCustomFields, readCustomFieldValues } from "../shared/widgets/custom-fields";
 import { render } from "preact";
 import { useState } from "preact/hooks";
-import { withLoadingButton, handleSubmitError } from "../shared/form/submit";
+import { withLoadingButton, focusSubmitError } from "../shared/form/submit";
 import { setStatus, readField, findSubmitButton } from "../shared/form/helpers";
 import { SuccessPanel } from "../components/SuccessPanel";
 import { replaceFormWithSuccess } from "../shared/form/success-panel";
-import { focusFirstInvalidField } from "../shared/form/validation-map";
+import { focusFirstInvalidField, normalizeValidation } from "../shared/form/validation-map";
 import { formatCurrencyAmount } from "../../shared/format-currency";
 import {
   filterApplicationFieldsForApplicantKind,
@@ -519,9 +519,10 @@ async function main(): Promise<void> {
         );
         showSuccessPanel(root, applicationForm, result.applicationId, result.manageToken, applicantName);
       } catch (error) {
-        handleSubmitError(error, null, statusEl);
         applicationValidation.refuse(error);
         legalValidation?.refuse(error);
+        setStatus(statusEl, normalizeValidation(error).globalMessage, true);
+        focusSubmitError(applicationForm, statusEl);
       }
     });
   });
