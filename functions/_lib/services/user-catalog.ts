@@ -50,7 +50,14 @@ export function buildUserCatalogPageQuery(
   if (query.q) {
     const search =
       searchMatch === "exactEmail"
-        ? { sql: "u.normalized_email = ?", bindings: [query.q.toLowerCase()] }
+        ? {
+            sql: `u.id IN (
+              SELECT id FROM users WHERE normalized_email = ?
+              UNION
+              SELECT user_id FROM user_emails WHERE normalized_email = ?
+            )`,
+            bindings: [query.q.toLowerCase(), query.q.toLowerCase()],
+          }
         : buildUserIdentitySearchFilter(query.q);
     conditions.push(search.sql);
     bindings.push(...search.bindings);
