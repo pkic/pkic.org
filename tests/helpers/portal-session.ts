@@ -94,3 +94,17 @@ export function portalProfileFixture(session: PortalSession) {
     activeIdentities: [],
   });
 }
+
+/** Synthetic organization and individual choices for portal entry. */
+export const organizationActingIdentityFixture = {
+  id: "00000000-0000-4000-8000-0000000000a1",
+  organizationId: "00000000-0000-4000-8000-0000000000b1",
+  organizationName: "Alpha Org",
+  jobTitle: "Delegate",
+};
+export const individualActingIdentityFixture = {
+  id: "00000000-0000-4000-8000-0000000000a2",
+  organizationId: null,
+  organizationName: null,
+  jobTitle: null,
+};
