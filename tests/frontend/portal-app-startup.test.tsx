@@ -68,7 +68,7 @@ import { App } from "../../assets/ts/member-flows/portal/App";
 import { rememberedActingIdentityId } from "../../assets/ts/member-flows/portal/acting-identity";
 import { myActiveIdentitySwitchSchema } from "../../assets/shared/schemas/me";
 import { memoryStorage } from "./helpers/browser-storage";
-import { portalProfileFixture, portalSessionFixture } from "../helpers/portal-session";
+import { portalIdentityChoiceFixtures, portalProfileFixture, portalSessionFixture } from "../helpers/portal-session";
 import { userAuthVerifySchema, userAuthRequestSchema } from "../../assets/shared/schemas/user-auth";
 import { scannerTransportUnavailable } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/scanner-offline-context";
 let host: HTMLElement;
@@ -420,18 +420,7 @@ it("does not let an initial pending session response overwrite a new same-tab li
   expect(window.location.hash).toBe("#/groups/synthetic");
 });
 
-const ALPHA_IDENTITY = {
-  id: "00000000-0000-4000-8000-0000000000a1",
-  organizationId: "00000000-0000-4000-8000-0000000000b1",
-  organizationName: "Alpha Org",
-  jobTitle: "Delegate",
-};
-const INDIVIDUAL_IDENTITY = {
-  id: "00000000-0000-4000-8000-0000000000a2",
-  organizationId: null,
-  organizationName: null,
-  jobTitle: null,
-};
+const { organization: ALPHA_IDENTITY, individual: INDIVIDUAL_IDENTITY } = portalIdentityChoiceFixtures;
 
 /** A person holding two identities; the server answers the session and the active-identity endpoint. */
 function serveSeveralIdentities() {
