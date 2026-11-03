@@ -50,7 +50,7 @@ test("MCP consent uses portal sign-in and requires a passkey for longer access",
   await page.screenshot({ path: "test-results/mcp-login-phone.png", fullPage: true });
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.getByRole("button", { name: "Sign in with an email link", exact: true }).click();
-  await page.getByLabel("Work email", { exact: false }).fill(email);
+  await page.getByLabel("Email").fill(email);
   const since = await capturedEmailCount();
   await page.getByRole("button", { name: "Send sign-in link" }).click();
   await expect(
