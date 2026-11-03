@@ -118,7 +118,7 @@ export function AddTeamMemberPage({
                 />
               )}
             </Field>
-            <Field label="Role" {...form.of("role")}>
+            <Field label="Role" required {...form.of("role")}>
               {(control) => (
                 <Select
                   {...control}

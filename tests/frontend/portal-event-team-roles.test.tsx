@@ -126,6 +126,10 @@ describe("one event team roster", () => {
   it("grants access explicitly to the selected person with the canonical contract", async () => {
     setup();
     await mount({ section: USER_ID, personId: "access" });
+    const role = controlFor<HTMLSelectElement>(container, "Role");
+    expect(role.required).toBe(true);
+    expect(role.value).toBe("");
+    expect(role.labels?.[0]?.textContent).toContain("(required)");
     // No role is chosen for the reader: submitting first is refused and sends nothing.
     await submitForm();
     expect(controlFor(container, "Role").getAttribute("aria-invalid")).toBe("true");
