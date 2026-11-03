@@ -85,9 +85,21 @@ describe("attendee day, attendance and waitlist filters", () => {
     expect(matches({ attendance_type: "virtual", waitlisted: "true" })).toEqual([]);
     expect(matches({ day_dates: "2026-12-02", attendance_type: "virtual", waitlisted: "true" })).toEqual([]);
   });
-  it("keeps whole-registration waitlist exclusion when no days are selected", () => {
+  it("matches nonwaitlisted days of the selected type without excluding other days", () => {
     const result = matches({ attendance_type: "in_person", waitlisted: "false" });
-    expect(result).toEqual(["both", "declined", "expired", "other-day"]);
+    expect(result).toEqual(["both", "declined", "expired", "mixed", "other-day"]);
+  });
+  it("does not exclude an accepted type because another type is waitlisted", () => {
+    db.exec(`INSERT INTO users VALUES ('cross-type');
+      INSERT INTO registrations VALUES ('cross-type','cross-type','event','registered','2026-11-01T00:00:00.000Z');
+      INSERT INTO registration_day_attendance VALUES ('cross-type','one','in_person'),('cross-type','two','virtual');
+      INSERT INTO event_day_waitlist_entries VALUES ('cross-type','two','waiting',NULL);`);
+    expect(matches({ attendance_type: "in_person", waitlisted: "false" })).toContain("cross-type");
+    expect(matches({ attendance_type: "virtual", waitlisted: "false" })).not.toContain("cross-type");
+    expect(matches({ attendance_type: "virtual", waitlisted: "true" })).toContain("cross-type");
+    expect(matches({ attendance_type: "in_person", waitlisted: "true" })).not.toContain("cross-type");
+    expect(matches({ waitlisted: "false" })).not.toContain("cross-type");
+    expect(matches({ waitlisted: "false" })).not.toContain("mixed");
   });
   it("uses the identical validated scope for the table, CSV export and badge population", () => {
     const scope = {

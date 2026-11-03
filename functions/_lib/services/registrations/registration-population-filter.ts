@@ -39,9 +39,8 @@ export function registrationPopulationFilter(
   const dayWaitlist = `EXISTS (SELECT 1 FROM event_day_waitlist_entries w
     WHERE w.registration_id = r.id AND w.event_day_id = ed.id
       AND ${dayWaitlistStatusSql("w")} IN ('waiting', 'offered'))`;
-  if (dates.length && params.waitlisted)
+  if ((dates.length || params.attendance_type) && params.waitlisted)
     dayConditions.push(params.waitlisted === "true" ? dayWaitlist : `NOT ${dayWaitlist}`);
-  else if (params.attendance_type && params.waitlisted === "true") dayConditions.push(dayWaitlist);
   if (dates.length || params.attendance_type) {
     const matchedDays = `FROM registration_day_attendance selected_day
       JOIN event_days ed ON ed.id = selected_day.event_day_id WHERE ${dayConditions.join(" AND ")}`;
@@ -56,8 +55,8 @@ export function registrationPopulationFilter(
     conditions.push(`${registrationBadgeDisplayRoleSql("r")} = ?`);
     bindings.push(params.badge_role);
   }
-  if (!dates.length) {
-    if (params.waitlisted === "true" && !params.attendance_type) conditions.push(activeDayWaitlistExistsSql("r"));
+  if (!dates.length && !params.attendance_type) {
+    if (params.waitlisted === "true") conditions.push(activeDayWaitlistExistsSql("r"));
     else if (params.waitlisted === "false") conditions.push(`NOT ${activeDayWaitlistExistsSql("r")}`);
   }
   const search = (params.q ?? "").trim();
