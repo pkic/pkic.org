@@ -103,6 +103,15 @@ test("an organization contact adds a colleague and can take the access away agai
   // confirm, and merely following the URL does not activate the identity.
   const invitationEmail = await waitForCapturedEmail(colleagueEmail, "Invitation to act for", { since: emailCount });
   const invitationUrl = extractEmailUrl(invitationEmail, "/portal/#/identity-invitations?token=");
+  // The inviter is a different person from the invited coworker.
+  await page.goto("about:blank");
+  await page.goto(invitationUrl);
+  await expect(page.getByText("You are signed in as someone else", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Accept identity", exact: true })).toHaveCount(0);
+  for (const width of [1280, 375]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.screenshot({ path: test.info().outputPath(`wrong-account-invitation-${width}.png`) });
+  }
   await page.context().clearCookies();
   await signInToPortal(page, colleagueEmail);
   await openMyProfile(page);
@@ -127,6 +136,12 @@ test("an organization contact adds a colleague and can take the access away agai
   );
   await page.getByRole("button", { name: "Accept identity" }).click();
   expect((await accepted).status()).toBe(200);
+  await expect(page.getByText("Invitation accepted", { exact: true })).toBeVisible();
+  for (const width of [1280, 375]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.screenshot({ path: test.info().outputPath(`accepted-invitation-${width}.png`) });
+  }
+  await page.getByRole("link", { name: "Sign in to continue", exact: true }).click();
   await expect(page).toHaveURL(/\/portal\/#\/users\/current$/);
   await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toBeEnabled();
   await expect(page.getByRole("link", { name: "Open portal" })).toHaveCount(0);
