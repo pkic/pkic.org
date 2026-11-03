@@ -4,11 +4,8 @@ import type { DatabaseLike } from "../types";
 import type { EventFormResponseInput } from "../services/forms";
 import type { FormFieldDefinition } from "../services/forms/read";
 
-export interface CustomAnswerRow {
-  label: string;
-  displayValue: string;
-}
-
+export type { EmailCustomAnswerRow as CustomAnswerRow } from "../../../assets/shared/schemas/email-template-data";
+import type { EmailCustomAnswerRow as CustomAnswerRow } from "../../../assets/shared/schemas/email-template-data";
 /**
  * Map a parsed custom-answers record to display rows using the form field definitions
  * for human-readable labels. Boolean fields (T&C-style checkboxes) are skipped here

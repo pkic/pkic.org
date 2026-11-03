@@ -1,7 +1,23 @@
+import { renderEmail } from "../functions/_lib/email/render";
+import { assertCampaignRenderedReferences } from "../functions/_lib/services/event-email-campaign/template-validation";
 import { describe, expect, it } from "vitest";
 import { applyCampaignCustomText } from "../functions/_lib/email/campaign-custom";
 
 describe("applyCampaignCustomText", () => {
+  it("refuses unresolved output preserved only in an HTML attribute", async () => {
+    const rendered = await renderEmail(
+      '<img src="{{firstName}}">',
+      { firstName: "{{#if missing}}" },
+      "{{{body_html}}}",
+      "html",
+    );
+    expect(rendered.text).not.toContain("{{");
+    expect(rendered.html).toContain("{{#if missing}}");
+    expect(() => assertCampaignRenderedReferences({}, "Update", rendered)).toThrowError(
+      expect.objectContaining({ status: 422, code: "CAMPAIGN_TEMPLATE_UNRESOLVED" }),
+    );
+  });
+
   it("replaces message placeholder in markdown templates", () => {
     const template = "Dear {{#if firstName}}{{firstName}}{{/if}},\n\n{{message}}";
     const custom = "**Update**\n\n- Item 1\n- Item 2";

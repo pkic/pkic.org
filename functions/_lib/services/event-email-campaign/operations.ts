@@ -11,9 +11,7 @@ import {
 } from "../../../../assets/shared/schemas/event-email-campaigns";
 import type { EmailContentType } from "../../../../assets/shared/schemas/email-templates";
 import { loadEmailRenderResources } from "../../email/partials";
-import { renderEmail, renderSubject, templateVariableNames, unresolvedTemplateTokens } from "../../email/render";
-import type { z } from "zod";
-import type { apiValidationErrorDetailsSchema } from "../../../../assets/shared/schemas/api-common";
+import { renderEmail, renderSubject } from "../../email/render";
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
 import { buildEventEmailVariables, type EventRecord } from "../events";
@@ -26,6 +24,9 @@ import {
   acceptCampaignSnapshot,
 } from "./snapshots";
 import { verifyCampaignPreviewToken } from "./preview-token";
+import { analyzeTemplateReferences } from "../../email/template-references";
+import { prepareEventFormFieldKeys } from "../forms/event-field-catalog";
+import { assertCampaignAuthoredReferences, assertCampaignRenderedReferences } from "./template-validation";
 import { campaignAuthoredTemplates } from "./template-content";
 import { buildPersonalCampaignTemplateData } from "./template-data";
 import { dispatchEventEmailCampaignPage } from "./dispatch";
@@ -62,7 +63,6 @@ export async function previewEventEmailCampaign(
   if (!input.bodyContent && !input.templateKey) {
     throw new AppError(400, "CAMPAIGN_NO_CONTENT", "Provide a message body or select a template before previewing.");
   }
-  assertCampaignBroadcastSafety(input, recipients, template);
 
   const { partials, layoutHtml } = await loadEmailRenderResources(db);
   const sample = recipients[0];
@@ -84,6 +84,23 @@ export async function previewEventEmailCampaign(
     "baseUrl",
     "brandBaseUrl",
   ]);
+  const authored = campaignAuthoredTemplates(input, template);
+  const templateReferences = authored.map((source) => analyzeTemplateReferences(source, partials));
+  const referencedNames = templateReferences.flatMap((analysis) =>
+    analysis.references.map((reference) => reference.name),
+  );
+  const fields = await prepareEventFormFieldKeys(
+    db,
+    event.id,
+    isAttendeeCampaignAudience(input.filter.audience) ? "event_registration" : "proposal_submission",
+    referencedNames,
+  ).all<{ key: string }>();
+  for (const field of fields.results) known.add(field.key);
+  assertCampaignBroadcastSafety(input, recipients, template, {
+    recipientVariables: fields.results.map((field) => field.key),
+    partials,
+  });
+  assertCampaignAuthoredReferences(input, known, templateReferences);
   const sampleData = buildPersonalCampaignTemplateData(sample, canonicalData, known);
   if (input.filter.audience === "attendees") {
     sampleData.manageUrl = registrationManagePageUrl(options.appBaseUrl, event, "preview-token");
@@ -91,8 +108,6 @@ export async function previewEventEmailCampaign(
 
   let subject: string;
   let rendered: { html: string; text: string };
-  /** What the author wrote, every branch of it, before any one recipient's data chooses a path. */
-  const authored = campaignAuthoredTemplates(input, template);
   if (input.bodyContent) {
     const data = { ...sampleData, _partials: partials };
     subject = renderSubject(input.subjectOverride ?? null, `Update: ${event.name}`, data);
@@ -108,33 +123,7 @@ export async function previewEventEmailCampaign(
     rendered = await renderEmail(content, data, layoutHtml, contentType, options.appBaseUrl);
   }
 
-  // Check authored names even in skipped branches. Optional recipient values render empty;
-  // validation only loads the bounded sample, regardless of the snapshot audience size.
-  const unresolvedIn = (source: string, output: string) => [
-    ...new Set([
-      ...templateVariableNames([source])
-        .filter((name) => !known.has(name))
-        .map((name) => `{{${name}}}`),
-      ...unresolvedTemplateTokens(output),
-    ]),
-  ];
-  const subjectTokens = unresolvedIn(authored[1], subject);
-  const bodyTokens = unresolvedIn(authored[0], rendered.text);
-  const unresolved = [...new Set([...subjectTokens, ...bodyTokens])];
-  if (unresolved.length)
-    throw new AppError(
-      422,
-      "CAMPAIGN_TEMPLATE_UNRESOLVED",
-      `Fix the message before sending: ${unresolved.join(", ")} ${unresolved.length === 1 ? "is" : "are"} not a known variable or a closed block.`,
-      {
-        fieldErrors: {
-          ...(subjectTokens.length ? { subjectOverride: [`Unknown or unclosed: ${subjectTokens.join(", ")}`] } : {}),
-          ...(bodyTokens.length
-            ? { [input.bodyContent ? "bodyContent" : "templateKey"]: [`Unknown or unclosed: ${bodyTokens.join(", ")}`] }
-            : {}),
-        },
-      } satisfies z.infer<typeof apiValidationErrorDetailsSchema>,
-    );
+  assertCampaignRenderedReferences(input, subject, rendered);
 
   return eventEmailCampaignPreviewResponseSchema.parse({
     success: true,

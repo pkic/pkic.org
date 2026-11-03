@@ -1,6 +1,8 @@
 import { renderEmail, renderSubject } from "../functions/_lib/email/render";
+import { loadEmailRenderResources } from "../functions/_lib/email/partials";
 import { readDirectEmailBody } from "../functions/_lib/email/direct-body";
 import { resolveEmailTemplateData } from "../functions/_lib/email/plain-text";
+import { seedCampaignForm, attachCampaignFormResponse } from "./helpers/campaign-forms";
 import { profileD1Flow } from "./helpers/d1-flow-profile";
 import { apiValidationErrorDetailsSchema } from "../assets/shared/schemas/api-common";
 import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./helpers/administrator";
@@ -271,6 +273,45 @@ describe("event email campaign recipients", () => {
     expect(subjectFields?.subjectOverride?.[0]).toContain("{{unknownSubject}}");
     expect(subjectFields?.bodyContent).toBeUndefined();
 
+    for (const bodyContent of [
+      '{{#if eq doesNotExist ""}}Wrong branch{{/if}}',
+      "{{#unless doesNotExist}}Wrong branch{{/unless}}",
+      "{{#each doesNotExist}}{{this}}{{/each}}",
+      "{{#if and firstName doesNotExist}}Wrong branch{{/if}}",
+    ]) {
+      const conditional = await campaignRequest(env.DB, token, "/api/v1/events/pqc-2026/email/campaigns/previews", {
+        subjectOverride: "Update",
+        bodyContent,
+        sendMode: "personal",
+        batchSize: 50,
+        filter: { audience: "attendee_invitations" },
+      });
+      expect(conditional.status, await conditional.clone().text()).toBe(422);
+      const error = (await conditional.json()) as { error: { details: unknown } };
+      expect(apiValidationErrorDetailsSchema.parse(error.error.details).fieldErrors?.bodyContent?.[0]).toContain(
+        "{{doesNotExist}}",
+      );
+    }
+    const htmlVersion = await createTemplateVersion(env.DB, {
+      templateKey: "event_invite_attendee",
+      content: '<img src="{{#if firstName}}">',
+      contentType: "html",
+      subjectTemplate: "Update",
+      createdByUserId: admin.id,
+    });
+    await activateTemplateVersion(env.DB, { templateKey: "event_invite_attendee", version: htmlVersion.version });
+    const html = await campaignRequest(env.DB, token, "/api/v1/events/pqc-2026/email/campaigns/previews", {
+      templateKey: "event_invite_attendee",
+      sendMode: "personal",
+      batchSize: 50,
+      filter: { audience: "attendee_invitations" },
+    });
+    expect(html.status, await html.clone().text()).toBe(422);
+    const htmlError = (await html.json()) as { error: { details: unknown } };
+    expect(apiValidationErrorDetailsSchema.parse(htmlError.error.details).fieldErrors?.templateKey?.[0]).toContain(
+      "{{#if firstName}}",
+    );
+
     // Known variables in any branch are fine.
     const known = await campaignRequest(env.DB, token, "/api/v1/events/pqc-2026/email/campaigns/previews", {
       subjectOverride: "Update for {{eventName}}",
@@ -283,51 +324,43 @@ describe("event email campaign recipients", () => {
   });
 
   it.each([
-    { missingIndex: 0, retireField: false },
-    { missingIndex: 1, retireField: false },
-    { missingIndex: 10, retireField: false },
-    { missingIndex: 10, retireField: true },
+    { missingIndex: 0, retireField: false, onlyLast: false },
+    { missingIndex: 1, retireField: false, onlyLast: false },
+    { missingIndex: 10, retireField: false, onlyLast: false },
+    { missingIndex: 10, retireField: true, onlyLast: false },
+    { missingIndex: 0, retireField: false, onlyLast: true },
   ])(
-    "renders absent campaign values empty (recipient $missingIndex, retired field $retireField)",
-    async ({ missingIndex, retireField }) => {
+    "renders absent campaign values empty (recipient $missingIndex, retired field $retireField, later form $onlyLast)",
+    async ({ missingIndex, retireField, onlyLast }) => {
       const { eventId } = await seedEventAndAdmin(env.DB);
       const [admin] = await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL);
       await seedCampaignTemplates(admin.id);
       const token = await createAdminSession(env.DB, admin.id, "campaign-optional-answer");
-      const formId = crypto.randomUUID();
-      await env.DB.batch([
-        env.DB.prepare(`INSERT INTO forms
-        (id, key, scope_type, scope_ref, purpose, status, title, created_at, updated_at)
-        VALUES (?, ?, 'event', ?, 'event_registration', 'active', 'Optional answers', ?, ?)`).bind(
-          formId,
-          `optional-${formId}`,
-          eventId,
-          "2026-01-01T00:00:00.000Z",
-          "2026-01-01T00:00:00.000Z",
-        ),
-        env.DB.prepare(`INSERT INTO form_fields
-        (id, form_id, key, label, field_type, required, sort_order, created_at)
-        VALUES (?, ?, 'dietary', 'Dietary needs', 'text', 0, 0, ?)`).bind(
-          crypto.randomUUID(),
-          formId,
-          "2026-01-01T00:00:00.000Z",
-        ),
-      ]);
-      await env.DB.prepare(`INSERT INTO form_placements
-      (id, form_id, context_type, context_ref, audience, active, created_at, updated_at)
-      VALUES (?, ?, 'event', ?, 'attendee', 1, ?, ?)`)
-        .bind(crypto.randomUUID(), formId, eventId, "2026-01-01T00:00:00.000Z", "2026-01-01T00:00:00.000Z")
-        .run();
+      const { formId } = await seedCampaignForm(env.DB, eventId, onlyLast ? "other" : "dietary");
+      const historicalForm = onlyLast ? await seedCampaignForm(env.DB, eventId, "dietary", false) : null;
+      if (historicalForm) {
+        await env.DB.prepare(`INSERT INTO form_fields (id,form_id,key,label,field_type,required,sort_order,created_at)
+          VALUES (?,?,'meal','Meal','text',0,1,?)`)
+          .bind(crypto.randomUUID(), historicalForm.formId, "2026-01-01T00:00:00.000Z")
+          .run();
+        const partial = await createTemplateVersion(env.DB, {
+          templateKey: "partial_reg_details",
+          content: "Meal preference: {{meal}}",
+          createdByUserId: admin.id,
+        });
+        await activateTemplateVersion(env.DB, { templateKey: "partial_reg_details", version: partial.version });
+      }
       const answersByRecipient = Array.from({ length: 11 }, (_, index) =>
-        index === missingIndex ? {} : { dietary: "Vegetarian" },
+        (onlyLast ? index < 10 : index === missingIndex) ? {} : { dietary: "Vegetarian" },
       );
       for (const [index, answers] of answersByRecipient.entries()) {
         const userId = await insertUser(env.DB, `optional-${String(index).padStart(2, "0")}@example.test`);
+        const registrationId = crypto.randomUUID();
         await env.DB.prepare(`INSERT INTO registrations
         (id, event_id, user_id, status, source_type, custom_answers_json, manage_link_secret, created_at, updated_at)
         VALUES (?, ?, ?, 'registered', 'direct', ?, ?, ?, ?)`)
           .bind(
-            crypto.randomUUID(),
+            registrationId,
             eventId,
             userId,
             JSON.stringify(answers),
@@ -336,12 +369,16 @@ describe("event email campaign recipients", () => {
             "2026-01-01T00:00:00.000Z",
           )
           .run();
+        if (historicalForm && index === 10)
+          await attachCampaignFormResponse(env.DB, historicalForm, registrationId, userId, "Vegetarian");
       }
       const event = await getEventBySlug(env.DB, "pqc-2026");
       const recipients = await listCampaignRecipients(env.DB, event, "https://app.test", { audience: "attendees" });
       expect(
         recipients.map((recipient) => resolveEmailTemplateData(recipient.templateData ?? {}, "text").dietary),
-      ).toEqual(answersByRecipient.map((answers) => answers.dietary ?? ""));
+      ).toEqual(
+        answersByRecipient.map((answers, index) => (onlyLast && index < 10 ? undefined : (answers.dietary ?? ""))),
+      );
 
       const preview = (subjectOverride: string, bodyContent: string, templateKey?: string) =>
         campaignRequest(env.DB, token, "/api/v1/events/pqc-2026/email/campaigns/previews", {
@@ -351,6 +388,21 @@ describe("event email campaign recipients", () => {
           batchSize: 50,
           filter: { audience: "attendees" },
         });
+      const broadcast = await campaignRequest(env.DB, token, "/api/v1/events/pqc-2026/email/campaigns/previews", {
+        subjectOverride: "Update",
+        bodyContent: "Dietary: {{dietary}}",
+        sendMode: "bcc_batch",
+        batchSize: 50,
+        filter: { audience: "attendees" },
+      });
+      expect(broadcast.status, await broadcast.clone().text()).toBe(400);
+      expect(await broadcast.json()).toMatchObject({ error: { code: "CAMPAIGN_BROADCAST_UNSAFE_TEMPLATE" } });
+      const invalidLoop = await preview("Update", "{{#each customAnswerRows}}{{this.missing}}{{/each}}");
+      expect(invalidLoop.status, await invalidLoop.clone().text()).toBe(422);
+      const invalidLoopError = (await invalidLoop.json()) as { error: { details: unknown } };
+      expect(
+        apiValidationErrorDetailsSchema.parse(invalidLoopError.error.details).fieldErrors?.bodyContent?.[0],
+      ).toContain("{{this.missing}}");
       for (const [subject, body] of [
         ["Update", "Your dietary needs: {{dietary}}"],
         ["Your dietary needs: {{dietary}}", "Hello {{firstName}}."],
@@ -374,7 +426,8 @@ describe("event email campaign recipients", () => {
       );
 
       const subjectOverride = "Dietary: {{dietary}}";
-      const bodyContent = "Hello {{firstName}}. Your dietary needs: {{dietary}}.{{#if dietary}} Answered.{{/if}}";
+      const bodyContent =
+        "Hello {{firstName}}. Your dietary needs: {{dietary}}.{{#if dietary}} Answered.{{/if}}{{> reg_details}}{{#each customAnswerRows}} {{label}}: {{displayValue}} {{@index}}{{/each}}";
       const finalPreviewResponse = await preview(subjectOverride, bodyContent);
       expect(finalPreviewResponse.status, await finalPreviewResponse.clone().text()).toBe(200);
       const finalPreview = eventEmailCampaignPreviewResponseSchema.parse(await finalPreviewResponse.json());
@@ -397,11 +450,18 @@ describe("event email campaign recipients", () => {
         [eventId],
       );
       expect(queued).toHaveLength(11);
+      const renderResources = await loadEmailRenderResources(env.DB);
       for (const [index, row] of queued.entries()) {
         const data = JSON.parse(row.payload_json) as Record<string, unknown>;
-        const rendered = await renderEmail(readDirectEmailBody(data)!, data, "{{{body_html}}}", "markdown");
+        const rendered = await renderEmail(
+          readDirectEmailBody(data)!,
+          { ...data, _partials: renderResources.partials },
+          renderResources.layoutHtml,
+          "markdown",
+        );
         expect(rendered.text).not.toContain("{{dietary}}");
-        const answered = !retireField && index !== missingIndex;
+        expect(rendered.text).not.toContain("{{meal}}");
+        const answered = !retireField && (onlyLast ? index === 10 : index !== missingIndex);
         expect(rendered.text.includes("Vegetarian")).toBe(answered);
         expect(rendered.text.includes("Answered.")).toBe(answered);
         expect(renderSubject(subjectOverride, "Update", data)).toBe(answered ? "Dietary: Vegetarian" : "Dietary:");

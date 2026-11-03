@@ -1,4 +1,5 @@
 import { marked } from "marked";
+import { evaluateIfCondition, isTruthy } from "./template-conditions";
 import type { EmailContentType } from "../../../assets/shared/schemas/email-templates";
 import { resolveEmailTemplateData } from "./plain-text";
 import {
@@ -50,55 +51,6 @@ function replaceTemplateBounded(
 }
 
 // ─── Conditional template helpers ────────────────────────────────────────────
-
-function isTruthy(value: unknown): boolean {
-  return Boolean(value) && value !== "false" && value !== "0" && value !== "";
-}
-
-function evaluateIfCondition(condition: string, data: Record<string, unknown>): boolean {
-  // {{#if and var1 var2 ...}}
-  if (condition.startsWith("and ")) {
-    return condition
-      .slice(4)
-      .trim()
-      .split(/\s+/)
-      .filter(Boolean)
-      .every((c) => isTruthy(data[c]));
-  }
-  // {{#if or var1 var2 ...}}
-  if (condition.startsWith("or ")) {
-    return condition
-      .slice(3)
-      .trim()
-      .split(/\s+/)
-      .filter(Boolean)
-      .some((c) => isTruthy(data[c]));
-  }
-  // {{#if eq|ne|gt|gte|lt|lte var "literal"}}
-  const cmpMatch = /^(eq|ne|gt|gte|lt|lte)\s+(\w+)\s+"([^"]*)"$/.exec(condition);
-  if (cmpMatch) {
-    const [, op, variable, literal] = cmpMatch;
-    const value = String(data[variable] ?? "");
-    const n = parseFloat(value),
-      nl = parseFloat(literal);
-    switch (op) {
-      case "eq":
-        return value === literal;
-      case "ne":
-        return value !== literal;
-      case "gt":
-        return !isNaN(n) && !isNaN(nl) && n > nl;
-      case "gte":
-        return !isNaN(n) && !isNaN(nl) && n >= nl;
-      case "lt":
-        return !isNaN(n) && !isNaN(nl) && n < nl;
-      case "lte":
-        return !isNaN(n) && !isNaN(nl) && n <= nl;
-    }
-  }
-  // {{#if var}} — truthy check
-  return isTruthy(data[condition]);
-}
 
 /**
  * Finds the position of the close tag that matches the already-open block,
@@ -561,29 +513,6 @@ export function renderSubject(template: string | null, fallback: string, data: R
 
   const rendered = compileSimpleTemplateWithBudget(template, subjectData, budget, 0);
   return rendered.replace(/[\r\n]+/g, " ").trim();
-}
-
-/**
- * Every variable an authored template can print, in any branch, as the engine
- * substitutes them (`{{name}}`). Loop bodies are skipped, since they read the
- * looped item's fields, unless campaign defaults request their names too.
- * `else`, `this` and `@` loop values are not variables.
- */
-export function templateVariableNames(
-  templates: readonly string[],
-  options: { includeLoopBodies?: boolean } = {},
-): string[] {
-  const names = new Set<string>();
-  for (const template of templates) {
-    const outsideLoops = options.includeLoopBodies
-      ? template
-      : template.replace(/\{\{#each\s+\w+\}\}[\s\S]*?\{\{\/each\}\}/g, "");
-    for (const match of outsideLoops.matchAll(/\{\{([@\w.]+)\}\}/g)) {
-      const name = match[1]!;
-      if (name !== "else" && name !== "this" && !name.startsWith("@") && !name.startsWith("this.")) names.add(name);
-    }
-  }
-  return [...names];
 }
 
 /** Unknown variables and unclosed blocks left visible by the renderer. */
