@@ -14,11 +14,20 @@ export type BadgePrintScope =
   | { kind: "filtered"; endpoint: string; filters: ReturnType<typeof filtersSchema.parse> };
 
 export function filteredBadgePrintScope(endpoint: string, query: Readonly<Record<string, string>>): BadgePrintScope {
-  const { q, status, waitlisted, attendance_type, badge_role, created_since } = query;
+  const { q, status, waitlisted, attendance_type, day_dates, day_match, badge_role, created_since } = query;
   return {
     kind: "filtered",
     endpoint,
-    filters: filtersSchema.parse({ q, status, waitlisted, attendance_type, badge_role, created_since }),
+    filters: filtersSchema.parse({
+      q,
+      status,
+      waitlisted,
+      attendance_type,
+      day_dates,
+      day_match,
+      badge_role,
+      created_since,
+    }),
   };
 }
 
@@ -28,8 +37,8 @@ function assertPrintableRows(
   attendees = new Set<string>(),
 ) {
   for (const row of rows) {
-    if (row.status !== "registered" || registrations.has(row.id) || attendees.has(row.user_id))
-      throw new Error("The matching registrations changed or are not eligible for badges. Reload the registrations.");
+    if (registrations.has(row.id) || attendees.has(row.user_id))
+      throw new Error("The matching registrations changed or contain duplicate attendees. Reload the registrations.");
     registrations.add(row.id);
     attendees.add(row.user_id);
   }

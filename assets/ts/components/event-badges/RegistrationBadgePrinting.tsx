@@ -229,8 +229,13 @@ export function RegistrationBadgePrinting({
   }, [loading, requests]);
   return (
     <div class="pk-stack">
-      <PageHeader title={scope.kind === "selected" ? "Print selected labels" : "Print all matching labels"} />
-      <p>Labels use each attendee’s existing badge code. Attendees without a badge receive one automatically.</p>
+      <PageHeader
+        title={scope.kind === "selected" ? "Print selected badges or labels" : "Print matching badges or labels"}
+      />
+      <p>
+        Use the print preview for labels, full badges, or a printing CSV with QR codes. Existing badge codes are reused;
+        attendees without a badge receive one.
+      </p>
       {loading && <p role="status">Loading matching registrations… {formatNumber(progress)} found.</p>}
       {loadError && <ErrorAlert error={loadError} />}
       {!loading && !loadError && !requests.length && <p>No matching registrations to print.</p>}

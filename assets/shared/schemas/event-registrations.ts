@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { successResponseSchema, utcInstantSchema } from "./api-common";
-import { eventAttendanceTypeValueSchema, eventSummarySchema } from "./event-read-models";
+import { eventAttendanceTypeValueSchema, eventDayDateSchema, eventSummarySchema } from "./event-read-models";
 import { badgeDisplayRoleSchema } from "./participant-roles";
 import { databaseIdSchema } from "./identifiers";
 import { paginatedResponseSchema, searchableListQuerySchema, sortColumnSchema } from "./pagination";
@@ -124,11 +124,19 @@ export const eventRegistrationsListResponseSchema = paginatedResponseSchema(
 });
 export type EventRegistrationsListResponse = z.infer<typeof eventRegistrationsListResponseSchema>;
 
-/**
- * Least-privilege attendee list used by selected-group attendance managers.
- * Referral, form-answer, RSVP payload, delivery, and sponsor-consent fields
- * deliberately remain exclusive to the full administrator read model above.
- */
+/** A bounded, bookmarkable set of event-local calendar dates. */
+export const registrationDayDatesQuerySchema = z
+  .string()
+  .max(340)
+  .refine((value) => {
+    const dates = value.split(",");
+    return (
+      z.array(eventDayDateSchema).min(1).max(31).safeParse(dates).success &&
+      new Set(dates).size === dates.length &&
+      dates.every((date) => date === date.trim())
+    );
+  }, "Choose up to 31 distinct event dates.");
+
 export const eventAttendanceRegistrationsQuerySchema = eventRegistrationsQuerySchema
   .pick({
     q: true,
@@ -141,12 +149,19 @@ export const eventAttendanceRegistrationsQuerySchema = eventRegistrationsQuerySc
   .extend({
     /** Match an attendance option selected on at least one day. */
     attendance_type: eventAttendanceTypeValueSchema.optional(),
+    day_dates: registrationDayDatesQuerySchema.optional(),
+    day_match: z.enum(["any", "all"]).optional(),
     /** The role band the registration's badge prints. */
     badge_role: badgeDisplayRoleSchema.optional(),
     created_since: utcInstantSchema.optional(),
   });
 export type EventAttendanceRegistrationsQuery = z.infer<typeof eventAttendanceRegistrationsQuerySchema>;
 
+/**
+ * Least-privilege attendee list used by selected-group attendance managers.
+ * Referral, form-answer, RSVP payload, delivery, and sponsor-consent fields
+ * deliberately remain exclusive to the full administrator read model above.
+ */
 export const eventAttendanceRegistrationSummarySchema = registrationRecordContextSchema
   .pick({ created_at: true, updated_at: true, user_email: true, display_name: true })
   .extend({

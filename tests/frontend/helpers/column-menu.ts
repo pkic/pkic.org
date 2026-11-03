@@ -26,10 +26,12 @@ export function openColumnMenu(container: ParentNode, column: string): HTMLEleme
 }
 
 /** Opens the filter choices nested inside a column menu. */
-export function openColumnFilterMenu(container: ParentNode, column: string): HTMLElement {
+export function openColumnFilterMenu(container: ParentNode, column: string, group?: string): HTMLElement {
   const popup = openColumnMenu(container, column);
-  const filter = popup.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]');
-  if (filter) void act(() => filter.click());
+  const filter = [...popup.querySelectorAll<HTMLButtonElement>('[aria-haspopup="menu"]')].find(
+    (item) => !group || labelOf(item).replace(/\s*›$/, "") === group,
+  );
+  if (filter && filter.getAttribute("aria-expanded") !== "true") void act(() => filter.click());
   return popup;
 }
 
@@ -42,8 +44,13 @@ export function columnFilterOptions(container: ParentNode, column: string): stri
 }
 
 /** Narrows a column to one of its filter choices, by the choice's label. */
-export async function chooseColumnFilter(container: ParentNode, column: string, option: string): Promise<void> {
-  const popup = openColumnFilterMenu(container, column);
+export async function chooseColumnFilter(
+  container: ParentNode,
+  column: string,
+  option: string,
+  group?: string,
+): Promise<void> {
+  const popup = openColumnFilterMenu(container, column, group);
   const item = [...popup.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')].find(
     (candidate) => labelOf(candidate) === option,
   );

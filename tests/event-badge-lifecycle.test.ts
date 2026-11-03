@@ -6,6 +6,8 @@ import {
   badgeCredentialsQuerySchema,
   badgeCredentialsResponseSchema,
   badgeIssueRequestSchema,
+  badgePrintResponseSchema,
+  badgeLabelRequestSchema,
   badgeIssueResponseSchema,
   type BadgeIssueRequest,
 } from "../assets/shared/schemas/route-contracts-event-badges";
@@ -95,6 +97,37 @@ describe("Event-owned badge lifecycle", () => {
       .bind(fixture.userId)
       .run();
   });
+  it.each(["cancelled", "pending_email_confirmation"])(
+    "prints a %s attendee without granting admission or changing registration status",
+    async (status) => {
+      await env.DB.prepare("UPDATE registrations SET status=? WHERE event_id=? AND user_id=?")
+        .bind(status, fixture.eventId, fixture.userId)
+        .run();
+      const badge = await issued();
+      const artifact = await request(`${base}/labels`, {
+        method: "POST",
+        body: JSON.stringify(
+          badgeLabelRequestSchema.parse({ source: "badge", badgeId: badge.id, operationId: crypto.randomUUID() }),
+        ),
+      });
+      expect(artifact.status, await artifact.clone().text()).toBe(200);
+      expect(badgePrintResponseSchema.parse(await artifact.json()).id).toBe(badge.id);
+      const checked = await fixture.scan(
+        fixture.scanBody({ badgeId: badge.credential, action: "check", occurrenceId: null }),
+      );
+      expect(checked.status).toBe(200);
+      expect(await checked.json()).toMatchObject({
+        outcome: "warning",
+        attendanceRecorded: false,
+        admissionRecorded: false,
+      });
+      expect(
+        await env.DB.prepare("SELECT status FROM registrations WHERE event_id=? AND user_id=?")
+          .bind(fixture.eventId, fixture.userId)
+          .first(),
+      ).toEqual({ status });
+    },
+  );
   it("lists an event-wide bounded inventory with server person/status/search filters and no bearer data", async () => {
     await issued();
     const other = await registeredPerson();

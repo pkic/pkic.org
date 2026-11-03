@@ -24,7 +24,7 @@ import {
 } from "../../../../../shared/schemas/event-registrations";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { Badge } from "../../../../components/Badge";
-import { RegistrationDayStates } from "../../../../components/event-registrations/RegistrationDayStates";
+import { registrationAttendanceColumns } from "../../../../components/event-registrations/registration-attendance-columns";
 import { RegistrationTotals } from "../../../../components/event-registrations/RegistrationTotals";
 import { RegistrationRosterActions } from "../../../../components/event-registrations/RegistrationRosterActions";
 import { Button } from "../../../../ui/Button";
@@ -38,7 +38,6 @@ import { groupEventDaysResponseSchema } from "../../../../../shared/schemas/grou
 import { getJson } from "../../../../shared/api-client";
 import { useData } from "../../../../hooks/useData";
 import { BADGE_DISPLAY_ROLE_LABELS, badgeDisplayRoleSchema } from "../../../../../shared/schemas/participant-roles";
-import { attendanceTypeLabel } from "../../../../shared/attendance";
 import { usePortalHashLocation } from "../../hash-location";
 import { fmtDate, toast } from "../../ui";
 import { ContactOrganization } from "../../../../components/ContactOrganization";
@@ -81,9 +80,6 @@ export function GroupEventRegistrations({
       ),
     [groupId, eventId],
   );
-  const attendanceTypes = [
-    ...new Set((days.data?.days ?? []).flatMap((day) => day.attendanceOptions.map((option) => option.value))),
-  ];
   const registrationEndpoint = `/api/v1/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(eventId)}/registrations`;
   const selectedExportUrl = registrationRosterExportUrl(
     `${registrationEndpoint}/exports`,
@@ -109,19 +105,18 @@ export function GroupEventRegistrations({
           selection.onQueryChange();
           setQuery(next);
         }}
-        selection={canManage && eventSlug && onPrint ? selection.selection : undefined}
+        selection={canManage ? selection.selection : undefined}
         bulkBar={
-          canManage && eventSlug && onPrint ? (
+          canManage ? (
             <BulkBar count={selection.selected.size} total={selection.total} onClear={selection.clear}>
-              <Button
-                onClick={() => startPrinting({ kind: "selected", rows: selection.selectedRows })}
-                disabled={selection.selectedRows.some((row) => row.status !== "registered")}
-              >
-                Print selected labels
-              </Button>
+              {eventSlug && onPrint && (
+                <Button onClick={() => startPrinting({ kind: "selected", rows: selection.selectedRows })}>
+                  Print selected badges or labels
+                </Button>
+              )}
               {selection.selectedRows.length > 0 && (
                 <DownloadAction
-                  label="Download selected registrations (CSV)"
+                  label="Download selected attendee list (CSV)"
                   href={selectedExportUrl ?? ""}
                   disabled={selectedExportUrl === null}
                 />
@@ -136,7 +131,7 @@ export function GroupEventRegistrations({
                 <RegistrationRosterActions
                   promotionsEndpoint={`${registrationEndpoint}/promotions`}
                   exportsEndpoint={registrationRosterExportUrl(`${registrationEndpoint}/exports`, query)}
-                  exportHasStatusFilter={Boolean(query.status)}
+                  exportMatchesFilters
                   onPromoted={() => tableRef.current?.reload()}
                   notify={toast}
                   onPrintAllMatching={
@@ -210,37 +205,7 @@ export function GroupEventRegistrations({
               ],
             },
           },
-          {
-            // Day by day, because the whole-registration type hides exactly
-            // what a manager is looking for. The filter narrows to the rows
-            // still waiting for a seat on any day.
-            header: "Attendance",
-            cell: (registration) => <RegistrationDayStates days={registration.days} />,
-            filter: {
-              param: "waitlisted",
-              options: [
-                { value: "", label: "All attendance" },
-                { value: "true", label: "On a day waitlist" },
-                { value: "false", label: "Not waitlisted" },
-              ],
-            },
-          },
-          {
-            // The option filter also scopes badge print runs; each row still
-            // shows its actual day choices.
-            header: "Attendance type",
-            cell: (registration) => <RegistrationDayStates days={registration.days} />,
-            width: "fit",
-            className: "pk-small",
-            defaultHidden: true,
-            filter: {
-              param: "attendance_type",
-              options: [
-                { value: "", label: "All types" },
-                ...attendanceTypes.map((type) => ({ value: type, label: attendanceTypeLabel(type) })),
-              ],
-            },
-          },
+          ...registrationAttendanceColumns<EventAttendanceRegistrationSummary>(days.data?.days ?? [], query),
           {
             header: "Registered",
             cell: (registration) => fmtDate(registration.created_at),
