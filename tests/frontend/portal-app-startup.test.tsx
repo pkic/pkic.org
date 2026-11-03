@@ -528,7 +528,7 @@ it("asks again when the identity remembered on this device is no longer held", a
   expect(server.selections).toEqual([]);
 });
 
-it("takes an accepted identity invitation straight to sign-in without a second portal-entry screen", async () => {
+it("confirms an accepted identity invitation, then signs the invitee in without another portal-entry screen", async () => {
   history.replaceState({}, "", "/portal/#/identity-invitations?token=synthetic-invitation");
   const previousSession = portalSessionFixture({});
   savePortalSession(previousSession);
@@ -541,7 +541,12 @@ it("takes an accepted identity invitation straight to sign-in without a second p
       );
       return Response.json(
         path.endsWith("preview")
-          ? { success: true, organizationName: "Synthetic Organization", recipientEmail: "new-member@example.test" }
+          ? {
+              success: true,
+              organizationName: "Synthetic Organization",
+              recipientEmail: "new-member@example.test",
+              viewer: "signed_out",
+            }
           : { success: true, identityId: "00000000-0000-4000-8000-000000000042", state: "active" },
       );
     }
@@ -553,6 +558,12 @@ it("takes an accepted identity invitation straight to sign-in without a second p
   expect(fetchMock.mock.calls.map(([input]) => String(input))).toEqual(["/api/v1/identities/invitations/preview"]);
   expect(portalSession.value).toBe(previousSession);
   await act(async () => host.querySelector<HTMLButtonElement>("button")!.click());
+  // Acceptance is confirmed before anything else happens; signing in is the reader's next step.
+  await vi.waitFor(() => expect(host.textContent).toContain("Invitation accepted"));
+  const signIn = [...host.querySelectorAll<HTMLAnchorElement>("a")].find(
+    (link) => link.textContent?.trim() === "Sign in to continue",
+  )!;
+  await act(async () => signIn.click());
   await vi.waitFor(() => expect(window.location.hash).toBe("#/users/current"));
   await vi.waitFor(() => {
     expect(portalSession.value).toBeNull();

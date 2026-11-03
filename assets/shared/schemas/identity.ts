@@ -177,9 +177,20 @@ export const identityInvitationLinkRequestSchema = z.object({
   token: z.string().min(1).max(EMAIL_AUTH_TOKEN_MAX_LENGTH),
 });
 
-export const identityInvitationPreviewResponseSchema = successResponseSchema.extend({
+/**
+ * Who has the invitation open: the invitee signed in, someone else signed in,
+ * or nobody. Only the invitee or a signed-out reader may accept it.
+ */
+export const IDENTITY_INVITATION_VIEWERS = ["invitee", "another_person", "signed_out"] as const;
+
+/** What an emailed identity link names: the organization and the address it was sent to. */
+const identityLinkPreviewResponseSchema = successResponseSchema.extend({
   organizationName: z.string().min(1),
   recipientEmail: normalizedEmailSchema,
+});
+
+export const identityInvitationPreviewResponseSchema = identityLinkPreviewResponseSchema.extend({
+  viewer: z.enum(IDENTITY_INVITATION_VIEWERS),
 });
 
 /**
@@ -194,7 +205,7 @@ export const identityReinstatementRequestResponseSchema = successResponseSchema.
 /** Bearer proof sent to the identity's own address. */
 export const identityReinstatementLinkRequestSchema = identityInvitationLinkRequestSchema;
 
-export const identityReinstatementPreviewResponseSchema = identityInvitationPreviewResponseSchema.extend({
+export const identityReinstatementPreviewResponseSchema = identityLinkPreviewResponseSchema.extend({
   identityId: databaseIdSchema,
 });
 
