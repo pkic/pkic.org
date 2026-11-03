@@ -1,3 +1,6 @@
+import { signInWithPasskey } from "./helpers/passkey-sign-in";
+import { createAdminSession } from "./helpers/auth";
+import { mutateBeforeMatchingQuery } from "./helpers/database-races";
 import {
   createMcpOauthTestClient,
   MCP_TEST_ORIGIN as origin,
@@ -370,6 +373,75 @@ describe("MCP OAuth session interoperability", () => {
       }
     });
   });
+  it.each([false, true])(
+    "executes longer passkey-authorized MCP writes unless revocation wins the command: %s",
+    async (revokeAtWrite) => {
+      const [user] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE normalized_email=?", [
+        "admin@pkic.org",
+      ]);
+      await env.DB.prepare("UPDATE users SET email_verified_at=? WHERE id=?")
+        .bind(new Date().toISOString(), user.id)
+        .run();
+      const emailToken = await createAdminSession(env.DB, user.id, crypto.randomUUID(), env.INTERNAL_SIGNING_SECRET);
+      const passkey = await signInWithPasskey(env, emailToken);
+      const grant = await authorize(passkey.token);
+      const kit = await prepareAttendeePromotion(grant);
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(Date.now() + 65 * 60000);
+      const refreshed = await exchange({
+        grant_type: "refresh_token",
+        client_id: grant.clientId,
+        refresh_token: grant.refresh_token,
+      });
+      expect(refreshed.status).toBe(200);
+      const { access_token: accessToken } = (await refreshed.json()) as { access_token: string };
+      let revoked = false;
+      const db = mutateBeforeMatchingQuery(
+        env.DB,
+        (sql) => revokeAtWrite && sql.includes("INSERT INTO authorization_guards"),
+        async () => {
+          await env.DB.prepare("UPDATE passkey_credentials SET revoked_at=? WHERE id=?")
+            .bind(new Date().toISOString(), passkey.credentialId)
+            .run();
+          revoked = true;
+        },
+      );
+      const refused = await callApi({ ...env, DB: db }, MCP_PATH, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${accessToken}`,
+          "content-type": "application/json",
+          accept: "application/json, text/event-stream",
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 3,
+          method: "tools/call",
+          params: {
+            name: "execute",
+            arguments: {
+              code: `async () => codemode.request(${JSON.stringify(promotionSaveOperation(kit))})`,
+            },
+          },
+        }),
+      });
+      expect(revoked).toBe(revokeAtWrite);
+      expect(refused.status, await refused.clone().text()).toBe(revokeAtWrite ? 401 : 200);
+      if (revokeAtWrite) expect(refused.headers.get("www-authenticate")).toContain("invalid_token");
+      expect(
+        await env.DB.prepare("SELECT COUNT(*) AS count FROM event_promotion_kits WHERE user_id=?")
+          .bind(user.id)
+          .first(),
+      ).toEqual({ count: revokeAtWrite ? 0 : 1 });
+      expect(
+        await env.DB.prepare(
+          "SELECT COUNT(*) AS count FROM audit_log WHERE actor_id=? AND action='promotion_composition_saved'",
+        )
+          .bind(user.id)
+          .first(),
+      ).toEqual({ count: revokeAtWrite ? 0 : 1 });
+    },
+  );
   it("issues only the approved subset and keeps refresh downscoping", async () => {
     const grant = await authorize();
     expect(new Set(grant.scope.split(" "))).toEqual(new Set(["forms:read", "organizations:read", "users:read"]));

@@ -1,4 +1,7 @@
-import { requireSessionPasskeyAuthentication } from "./passkey-session-authentication";
+import {
+  passkeySessionAuthenticationEvidence,
+  requireSessionPasskeyAuthentication,
+} from "./passkey-session-authentication";
 import { userSessionRequestAuthorizationEvidence } from "./user-session-evidence";
 import {
   userSessionActingIdentitySelection,
@@ -272,6 +275,9 @@ async function prepareMcpAdminRequest(
     claims.authorizationId ? { authorizationId: claims.authorizationId } : null,
   );
   const liveEvidence = userSessionAuthorizationEvidence(claims.sub, claims.sid);
+  const passkeyEvidence = claims.passkeyAuthentication
+    ? passkeySessionAuthenticationEvidence(claims.sub, claims.sid, claims.passkeyAuthentication)
+    : null;
   const permissionActor = createUserBackedAuthAdmin({
     id: claims.sub,
     email: claims.email,
@@ -281,10 +287,11 @@ async function prepareMcpAdminRequest(
     ...(claims.authorizationId ? { oauthAuthorizationId: claims.authorizationId } : {}),
   });
   const authorizationEvidence = {
-    sql: `SELECT 1 FROM users u WHERE u.id=? AND u.active=1 AND u.pii_redacted_at IS NULL AND u.merged_into_user_id IS NULL AND ${STAFF_ACCESS_CONDITION} AND EXISTS(${liveEvidence.sql}) ${claims.authorizationId ? `AND EXISTS(SELECT 1 FROM oauth_authorizations authorization WHERE authorization.id=? AND authorization.user_id=u.id AND authorization.session_id=? AND ${activeOauthAuthorizationSql("authorization")})` : ""}`,
+    sql: `SELECT 1 FROM users u WHERE u.id=? AND u.active=1 AND u.pii_redacted_at IS NULL AND u.merged_into_user_id IS NULL AND ${STAFF_ACCESS_CONDITION} AND EXISTS(${liveEvidence.sql}) ${passkeyEvidence ? `AND EXISTS(${passkeyEvidence.sql})` : ""} ${claims.authorizationId ? `AND EXISTS(SELECT 1 FROM oauth_authorizations authorization WHERE authorization.id=? AND authorization.user_id=u.id AND authorization.session_id=? AND ${activeOauthAuthorizationSql("authorization")})` : ""}`,
     bindings: [
       claims.sub,
       ...liveEvidence.bindings,
+      ...(passkeyEvidence?.bindings ?? []),
       ...(claims.authorizationId ? [claims.authorizationId, claims.sid] : []),
     ],
   };
