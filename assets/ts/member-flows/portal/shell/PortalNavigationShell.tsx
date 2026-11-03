@@ -34,7 +34,7 @@ function SettingsNavigation({
 }) {
   const ownsPage = (path: string) => location === path || location.startsWith(`${path}/`);
   const groups = [...new Set(items.map((item) => item.group))];
-  const links = (children: PortalNavItem[]) =>
+  const links = (children: PortalNavItem[]): ComponentChildren =>
     children.map((child) => {
       const active = ownsPage(child.path);
       return (
@@ -47,13 +47,18 @@ function SettingsNavigation({
           >
             <span class="portal-sidebar-group-name">{child.label}</span>
           </Link>
+          {items.some((page) => page.parentPath === child.path) && (
+            <ul class="portal-sidebar-groups" aria-label={`${child.label} pages`}>
+              {links(items.filter((page) => page.parentPath === child.path))}
+            </ul>
+          )}
         </li>
       );
     });
   return (
     <>
       {groups.map((group) => {
-        const children = items.filter((item) => item.group === group);
+        const children = items.filter((item) => item.group === group && !item.parentPath);
         return group ? (
           <li key={group}>
             <details open={children.some((child) => ownsPage(child.path))}>
