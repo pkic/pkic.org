@@ -101,6 +101,11 @@ describe("provider-neutral mailing-list delivery", () => {
         .bind(userId)
         .first("status"),
     ).toBe("pending");
+    expect(
+      await env.DB.prepare("SELECT confirmed_subscribed_at FROM google_groups_observed_membership WHERE user_id=?")
+        .bind(userId)
+        .first("confirmed_subscribed_at"),
+    ).toBeNull();
     const delivery = provider([ordinary("primary@example.test")]);
     await reconcileMailingListDelivery(delivery, listEmail, await listMailingListDeliveryAddresses(env.DB, listEmail), {
       limit: 25,

@@ -10,8 +10,12 @@ export function prepareMailingListEmailChange(db: DatabaseLike, userId: string, 
       SELECT 'mailing-list-email-change:' || lower(hex(randomblob(16))),user_id,desired_action,
         google_group_email,'pending',0,?,? FROM google_groups_membership_desired_state WHERE user_id = ?`)
       .bind(at, at, userId),
+    // An unsubscribe retains its confirmed-presence evidence and suppression.
+    // Only an explicit resubscribe may release that history; an address change
+    // resets the current-mailbox observations without opting the person in.
     db
-      .prepare(`UPDATE google_groups_observed_membership SET confirmed_subscribed_at = NULL,
+      .prepare(`UPDATE google_groups_observed_membership
+      SET confirmed_subscribed_at = CASE WHEN unsubscribed_at IS NULL THEN NULL ELSE confirmed_subscribed_at END,
       last_observed_present_at = NULL,last_observed_absent_at = NULL,updated_at = ? WHERE user_id = ?`)
       .bind(at, userId),
     prepareJobWake(db, "google_groups_sync"),

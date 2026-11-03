@@ -353,6 +353,48 @@ describe("admin user deactivation", () => {
     ).toBe("Test");
   });
 
+  it("changes a member email without discarding a recorded mailing-list unsubscribe", async () => {
+    await setup();
+    const userId = await seedUser(env.DB, "unsubscribed-member@example.test");
+    await insertIndividualMembershipForUser(env.DB, userId);
+    const confirmedAt = "2026-01-01T00:00:00.000Z";
+    const unsubscribedAt = "2026-01-02T00:00:00.000Z";
+    await env.DB.prepare(
+      `INSERT INTO google_groups_observed_membership
+       (user_id, google_group_email, confirmed_subscribed_at, last_observed_present_at,
+        last_observed_absent_at, unsubscribed_at, unsubscribe_source, suppressed)
+       VALUES (?, 'pkic@lists.pkic.org', ?, ?, ?, ?, 'self_unsubscribe', 1)`,
+    )
+      .bind(userId, confirmedAt, confirmedAt, unsubscribedAt, unsubscribedAt)
+      .run();
+
+    const response = await patchUser(
+      createContext(env, adminRequest(`/api/v1/users/${userId}`, "PATCH", { email: "corrected-member@example.test" }), {
+        userId,
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(await env.DB.prepare("SELECT email FROM users WHERE id = ?").bind(userId).first("email")).toBe(
+      "corrected-member@example.test",
+    );
+    expect(
+      await env.DB.prepare(
+        `SELECT confirmed_subscribed_at, last_observed_present_at, last_observed_absent_at,
+                unsubscribed_at, unsubscribe_source, suppressed
+         FROM google_groups_observed_membership WHERE user_id = ?`,
+      )
+        .bind(userId)
+        .first(),
+    ).toEqual({
+      confirmed_subscribed_at: confirmedAt,
+      last_observed_present_at: null,
+      last_observed_absent_at: null,
+      unsubscribed_at: unsubscribedAt,
+      unsubscribe_source: "self_unsubscribe",
+      suppressed: 1,
+    });
+  });
+
   it("preserves users:write name updates without access:grant", async () => {
     await setup();
     const staffId = await seedUser(env.DB, "profile-editor@example.test");
