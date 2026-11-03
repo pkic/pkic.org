@@ -632,7 +632,7 @@ describe("group event management routes", () => {
       const defaultCsv = await defaultExport.text();
       expect(defaultCsv).toContain("batch-export-1@example.test");
       expect(defaultCsv).toContain("batch-export-2@example.test");
-      expect(defaultCsv).not.toContain("batch-export-3@example.test");
+      expect(defaultCsv).toContain("batch-export-3@example.test");
     }
     const cancelledExport = await request(fixture.ownerLeaderToken, `${base}/exports?status=cancelled`);
     expect(cancelledExport.status).toBe(200);

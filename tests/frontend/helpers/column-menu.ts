@@ -36,8 +36,8 @@ export function openColumnFilterMenu(container: ParentNode, column: string, grou
 }
 
 /** The labels of the filter choices a column's menu offers, in order. */
-export function columnFilterOptions(container: ParentNode, column: string): string[] {
-  const popup = openColumnFilterMenu(container, column);
+export function columnFilterOptions(container: ParentNode, column: string, group?: string): string[] {
+  const popup = openColumnFilterMenu(container, column, group);
   return [...popup.querySelectorAll('[role="menuitemradio"]')]
     .filter((item) => !labelOf(item).startsWith("Sort "))
     .map(labelOf);
