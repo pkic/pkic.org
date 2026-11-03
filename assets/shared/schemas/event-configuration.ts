@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { successResponseSchema, termKeyPattern, trimmedString, versionPattern } from "./api-common";
+import { successResponseSchema, termKeySchema, trimmedString, versionPattern } from "./api-common";
 import { addDuplicateStringIssues } from "./refinements";
 import { attendanceIconSchema } from "../event-attendance-icons";
 import { eventAttendanceAccessModeSchema } from "../event-attendance-access";
@@ -10,7 +10,7 @@ import { eventAttendanceAccessModeSchema } from "../event-attendance-access";
  * event domain, while authorization belongs to the route that exposes them.
  */
 export const eventTermInputSchema = z.object({
-  termKey: z.string().trim().regex(termKeyPattern),
+  termKey: termKeySchema,
   version: z.string().trim().regex(versionPattern),
   required: z.boolean().default(true),
   contentRef: trimmedString(1, 500).optional(),

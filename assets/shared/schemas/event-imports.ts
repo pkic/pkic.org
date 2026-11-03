@@ -2,7 +2,7 @@ import {
   frontendPathPattern,
   slugPattern,
   successResponseSchema,
-  termKeyPattern,
+  termKeySchema,
   trimmedString,
   utcInstantSchema,
   versionPattern,
@@ -27,7 +27,7 @@ export const eventImportSourceSchema = z.enum(EVENT_IMPORT_SOURCES);
 export type EventImportSource = z.infer<typeof eventImportSourceSchema>;
 
 const importedTermSchema = z.object({
-  termKey: z.string().trim().regex(termKeyPattern),
+  termKey: termKeySchema,
   version: z.string().trim().regex(versionPattern),
   required: z.boolean().optional(),
   contentRef: trimmedString(1, 500).optional(),

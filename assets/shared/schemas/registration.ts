@@ -15,7 +15,7 @@ import {
   normalizedEmailSchema,
   registrationManageTokenParamsSchema,
   successResponseSchema,
-  termKeyPattern,
+  termKeySchema,
   tokenSchema,
   trimmedString,
   utcInstantSchema,
@@ -164,7 +164,7 @@ export const declineReasonCodeSchema = z.enum([
 ]);
 
 export const consentItemSchema = z.object({
-  termKey: z.string().trim().regex(termKeyPattern),
+  termKey: termKeySchema,
   version: z.string().trim().regex(versionPattern),
 });
 export type ConsentItem = z.infer<typeof consentItemSchema>;
