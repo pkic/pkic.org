@@ -149,6 +149,14 @@ describe("one event team roster", () => {
       search.value = "Ada";
       search.dispatchEvent(new Event("input", { bubbles: true }));
     });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    });
+    expect(requests.some((request) => request.url.includes("/roles/candidates"))).toBe(false);
+    await act(async () => {
+      search.value = "ada@example.test";
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+    });
     await vi.waitFor(() =>
       expect(requests.some((request) => request.url.startsWith("/api/v1/events/workshop/roles/candidates"))).toBe(true),
     );

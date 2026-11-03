@@ -39,6 +39,7 @@ export function buildUserCatalogPageQuery(
   query: UserCatalogListQuery,
   seatableInGroupId?: string,
   eligibility?: AuthorizationEvidence,
+  searchMatch: "identity" | "exactEmail" = "identity",
 ): OffsetPageQuery {
   const conditions = ["u.active = 1", "u.pii_redacted_at IS NULL", "u.merged_into_user_id IS NULL"];
   const bindings: unknown[] = [];
@@ -47,7 +48,10 @@ export function buildUserCatalogPageQuery(
     bindings.push(...eligibility.bindings);
   }
   if (query.q) {
-    const search = buildUserIdentitySearchFilter(query.q);
+    const search =
+      searchMatch === "exactEmail"
+        ? { sql: "u.normalized_email = ?", bindings: [query.q.toLowerCase()] }
+        : buildUserIdentitySearchFilter(query.q);
     conditions.push(search.sql);
     bindings.push(...search.bindings);
   }

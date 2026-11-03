@@ -731,25 +731,38 @@ describe("admin event management endpoints", () => {
     ).toEqual([{ revoked_at: null }]);
   });
 
-  it("lets an event-scoped organizer find anyone to add to the team without global user access", async () => {
+  it("lets an event-scoped organizer find a teammate only by exact email without global user access", async () => {
     const { baseEventId } = await setupAdmin();
     const newcomer = await insertUser(env.DB, "newcomer-for-team@example.test");
+    await insertUser(env.DB, "other-newcomer-for-team@example.test");
     const manager = await createScopedEventManager(baseEventId);
     ADMIN_TOKEN = await createAdminSession(env.DB, manager.userId, `event-team-search-${crypto.randomUUID()}`);
 
     expect((await callAdmin("/api/v1/users?q=newcomer&limit=10&offset=0")).status).toBe(403);
     const found = await callApi(
       env,
-      "/api/v1/events/pqc-2026/roles/candidates?q=newcomer&limit=8&offset=0",
+      "/api/v1/events/pqc-2026/roles/candidates?q=Newcomer-For-Team%40Example.Test&limit=8&offset=0",
       { headers: { authorization: `Bearer ${ADMIN_TOKEN}` } },
       { maxRoundTrips: 1 },
     );
     expect(found.status, await found.clone().text()).toBe(200);
     expect(userCatalogListResponseSchema.parse(await found.json()).users.map((user) => user.id)).toEqual([newcomer]);
 
+    for (const query of ["@", ".", "newcomer", "%", ""]) {
+      const response = await callAdmin(`/api/v1/events/pqc-2026/roles/candidates?q=${encodeURIComponent(query)}`);
+      expect(response.status).toBe(400);
+    }
+    for (const query of ["absent@example.test", "team@example.test"]) {
+      const response = await callAdmin(`/api/v1/events/pqc-2026/roles/candidates?q=${encodeURIComponent(query)}`);
+      expect(response.status).toBe(200);
+      expect(userCatalogListResponseSchema.parse(await response.json()).users).toEqual([]);
+    }
+
     const readerId = await insertUser(env.DB, `event-team-candidate-reader-${crypto.randomUUID()}@example.test`);
     ADMIN_TOKEN = await createAdminSession(env.DB, readerId, `event-team-candidate-reader-${crypto.randomUUID()}`);
-    expect((await callAdmin("/api/v1/events/pqc-2026/roles/candidates?q=newcomer&limit=8&offset=0")).status).toBe(403);
+    expect(
+      (await callAdmin("/api/v1/events/pqc-2026/roles/candidates?q=newcomer-for-team%40example.test")).status,
+    ).toBe(403);
   });
 
   it("rolls back an event-team grant when the scoped manager loses authority before commit", async () => {

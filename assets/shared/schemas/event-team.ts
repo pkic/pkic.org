@@ -1,12 +1,18 @@
 import { z } from "zod";
 import { agendaRoleMemberSchema } from "./event-agenda";
-import { utcInstantSchema } from "./api-common";
+import { normalizedEmailSchema, utcInstantSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
+import { userCatalogListQuerySchema } from "./user-catalog";
 import { paginatedResponseSchema, searchableListQuerySchema, sortColumnSchema } from "./pagination";
 
 export const EVENT_TEAM_ROLES = ["organizer", "program_committee", "moderator", "volunteer"] as const;
 export const eventTeamRoleSchema = z.enum(EVENT_TEAM_ROLES, { error: "Choose an event role." });
 export type EventTeamRole = z.infer<typeof eventTeamRoleSchema>;
+
+export const eventTeamCandidateQuerySchema = userCatalogListQuerySchema.extend({
+  q: userCatalogListQuerySchema.shape.q.pipe(normalizedEmailSchema),
+});
+export type EventTeamCandidateQuery = z.infer<typeof eventTeamCandidateQuerySchema>;
 
 /** Canonical API role names map one-to-one to the persisted RBAC catalog. */
 export const EVENT_TEAM_ROLE_IDS = {

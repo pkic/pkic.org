@@ -25,6 +25,10 @@ function invitationError(error: unknown): string {
 
 export function IdentityInvitationAcceptance() {
   const token = portalIdentityInvitationToken(window.location.hash);
+  return <InvitationAcceptance key={token} token={token} />;
+}
+
+function InvitationAcceptance({ token }: { token: string | null }) {
   const [preview, setPreview] = useState<InvitationPreview | null>(null);
   const [error, setError] = useState<string | null>(token ? null : "This invitation link is incomplete.");
   const [loading, setLoading] = useState(Boolean(token));

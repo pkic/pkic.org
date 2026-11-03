@@ -1,6 +1,6 @@
 import { eventSlugParamsSchema, jsonErrorResponse, successResponseSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
-import { userCatalogListQuerySchema, userCatalogListResponseSchema } from "./user-catalog";
+import { userCatalogListResponseSchema } from "./user-catalog";
 import {
   eventDaysManagementReplaceResponseSchema,
   eventDaysManagementReplaceSchema,
@@ -14,6 +14,7 @@ import {
   eventsListResponseSchema,
 } from "./event-management";
 import {
+  eventTeamCandidateQuerySchema,
   eventTeamRosterQuerySchema,
   eventTeamRosterResponseSchema,
   eventTeamListQuerySchema,
@@ -169,11 +170,11 @@ export const eventTeamRolesListRouteSchema = {
  */
 export const eventTeamRoleCandidatesRouteSchema = {
   tags: ["Events"],
-  summary: "Search people who can be given an event role",
-  request: { params: eventSlugParamsSchema, query: userCatalogListQuerySchema },
+  summary: "Find an event team candidate by exact email address",
+  request: { params: eventSlugParamsSchema, query: eventTeamCandidateQuerySchema },
   responses: {
     "200": {
-      description: "A bounded page of active user identities.",
+      description: "At most one active user matching the complete email address, case-insensitively.",
       content: { "application/json": { schema: userCatalogListResponseSchema } },
     },
     "401": jsonErrorResponse("An authenticated user session is required."),

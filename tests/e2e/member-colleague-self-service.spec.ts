@@ -99,6 +99,14 @@ test("an organization contact adds a colleague and can take the access away agai
   await acceptConfirmDialog(page, "Cancel invitation");
   await expect(cancelRow).toHaveCount(0);
 
+  const nextColleagueEmail = `next-colleague-${suffix}@contact-${suffix}.test`;
+  const nextInvitationCount = await capturedEmailCount();
+  await createPending(nextColleagueEmail, "Next Colleague");
+  const nextInvitationEmail = await waitForCapturedEmail(nextColleagueEmail, "Invitation to act for", {
+    since: nextInvitationCount,
+  });
+  const nextInvitationUrl = extractEmailUrl(nextInvitationEmail, "/portal/#/identity-invitations?token=");
+
   // The email opens a read-only review page. No portal session is needed to
   // confirm, and merely following the URL does not activate the identity.
   const invitationEmail = await waitForCapturedEmail(colleagueEmail, "Invitation to act for", { since: emailCount });
@@ -141,6 +149,13 @@ test("an organization contact adds a colleague and can take the access away agai
     await page.setViewportSize({ width, height: 900 });
     await page.screenshot({ path: test.info().outputPath(`accepted-invitation-${width}.png`) });
   }
+  await page.evaluate((hash) => {
+    window.location.hash = hash;
+  }, new URL(nextInvitationUrl).hash);
+  await expect(page.getByText("Invitation accepted", { exact: true })).toHaveCount(0);
+  await expect(page.getByText(nextColleagueEmail, { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Accept identity", exact: true }).click();
+  await expect(page.getByText("Invitation accepted", { exact: true })).toBeVisible();
   await page.getByRole("link", { name: "Sign in to continue", exact: true }).click();
   await expect(page).toHaveURL(/\/portal\/#\/users\/current$/);
   await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toBeEnabled();

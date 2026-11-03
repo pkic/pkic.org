@@ -11,6 +11,7 @@ import { useContractForm } from "../../../../../hooks/useContractForm";
 import { postJson } from "../../../../../shared/api-client";
 import {
   EVENT_TEAM_ROLES,
+  eventTeamCandidateQuerySchema,
   eventTeamRoleCreateResponseSchema,
   eventTeamRoleCreateSchema,
   type EventTeamRole,
@@ -102,12 +103,14 @@ export function AddTeamMemberPage({
             <Field
               label="Person"
               required
-              help="Search by name or email for someone the portal knows."
+              help="Enter the complete email address of someone who has a portal account."
               {...form.of("userId")}
             >
               {(control) => (
                 <UserPicker
                   endpoint={`/api/v1/events/${encodeURIComponent(slug)}/roles/candidates`}
+                  querySchema={eventTeamCandidateQuerySchema}
+                  placeholder="Enter email address…"
                   value={picked}
                   onChange={setPicked}
                   disabled={Boolean(person)}

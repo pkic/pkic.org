@@ -51,6 +51,39 @@ afterEach(() => {
 });
 
 describe("identity invitation acceptance", () => {
+  it("requires a fresh acceptance after navigating to a second invitation", async () => {
+    const accepted = stubApi("signed_out");
+    await mount();
+    await act(async () => button("Accept identity")!.click());
+    await vi.waitFor(() => expect(button("Sign in to continue")).toBeDefined());
+
+    await act(async () => {
+      window.location.hash = "#/identity-invitations?token=second-token";
+      render(<IdentityInvitationAcceptance />, container);
+    });
+    await vi.waitFor(() => expect(button("Accept identity")).toBeDefined());
+    expect(button("Sign in to continue")).toBeUndefined();
+    await act(async () => button("Accept identity")!.click());
+    await vi.waitFor(() => expect(accepted).toHaveLength(2));
+    expect(identityInvitationLinkRequestSchema.parse(accepted[1])).toEqual({ token: "second-token" });
+  });
+
+  it("clears an unavailable invitation error when the invitation changes", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json({ error: { code: "NOT_FOUND", message: "Gone" } }, { status: 404 })),
+    );
+    await mount();
+    expect(container.querySelector('[role="alert"]')).not.toBeNull();
+    stubApi("signed_out");
+    await act(async () => {
+      window.location.hash = "#/identity-invitations?token=valid-token";
+      render(<IdentityInvitationAcceptance />, container);
+    });
+    await vi.waitFor(() => expect(button("Accept identity")).toBeDefined());
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+  });
+
   it("names the invited address and offers no acceptance to someone signed in as another person", async () => {
     stubApi("another_person");
     await mount();
