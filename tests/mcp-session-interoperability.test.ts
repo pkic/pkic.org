@@ -1,3 +1,4 @@
+import { signMcpSessionToken } from "../functions/_lib/auth/mcp-session";
 import { signInWithPasskey } from "./helpers/passkey-sign-in";
 import { createAdminSession } from "./helpers/auth";
 import { mutateBeforeMatchingQuery } from "./helpers/database-races";
@@ -442,6 +443,57 @@ describe("MCP OAuth session interoperability", () => {
       ).toEqual({ count: revokeAtWrite ? 0 : 1 });
     },
   );
+  it("refuses a write when its signed token expires after verification but before the command", async () => {
+    const grant = await authorize();
+    const kit = await prepareAttendeePromotion(grant);
+    const [session] = await queryAll<{ session_id: string }>(
+      env.DB,
+      "SELECT session_id FROM oauth_authorizations WHERE id=?",
+      [grant.authorizationId],
+    );
+    const now = Date.now();
+    // The verifier observes the request before expiry; D1 observes the commit after expiry.
+    const expiresAt = Math.floor(now / 1000) - 1;
+    const token = await signMcpSessionToken(env.INTERNAL_SIGNING_SECRET, {
+      sub: grant.userId,
+      sid: session.session_id,
+      email: "admin@pkic.org",
+      scopes: ["forms:read", "organizations:read", "users:read"],
+      authorizationId: grant.authorizationId,
+      exp: expiresAt,
+    });
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime((expiresAt - 1) * 1000);
+    let reachedCommand = false;
+    const db = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => sql.includes("INSERT INTO event_promotion_kits"),
+      async () => {
+        vi.setSystemTime(now);
+        reachedCommand = true;
+      },
+    );
+    const operation = promotionSaveOperation(kit);
+    const refused = await callApi({ ...env, DB: db }, operation.path, {
+      method: operation.method,
+      headers: { authorization: `Bearer ${token}`, "x-pkic-machine-auth": "mcp", "content-type": "application/json" },
+      body: JSON.stringify(operation.body),
+    });
+    expect(reachedCommand).toBe(true);
+    expect(refused.status, await refused.clone().text()).toBe(409);
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS count FROM event_promotion_kits WHERE user_id=?")
+        .bind(grant.userId)
+        .first(),
+    ).toEqual({ count: 0 });
+    expect(
+      await env.DB.prepare(
+        "SELECT COUNT(*) AS count FROM audit_log WHERE actor_id=? AND action='promotion_composition_saved'",
+      )
+        .bind(grant.userId)
+        .first(),
+    ).toEqual({ count: 0 });
+  });
   it("issues only the approved subset and keeps refresh downscoping", async () => {
     const grant = await authorize();
     expect(new Set(grant.scope.split(" "))).toEqual(new Set(["forms:read", "organizations:read", "users:read"]));

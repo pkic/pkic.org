@@ -287,9 +287,10 @@ async function prepareMcpAdminRequest(
     ...(claims.authorizationId ? { oauthAuthorizationId: claims.authorizationId } : {}),
   });
   const authorizationEvidence = {
-    sql: `SELECT 1 FROM users u WHERE u.id=? AND u.active=1 AND u.pii_redacted_at IS NULL AND u.merged_into_user_id IS NULL AND ${STAFF_ACCESS_CONDITION} AND EXISTS(${liveEvidence.sql}) ${passkeyEvidence ? `AND EXISTS(${passkeyEvidence.sql})` : ""} ${claims.authorizationId ? `AND EXISTS(SELECT 1 FROM oauth_authorizations authorization WHERE authorization.id=? AND authorization.user_id=u.id AND authorization.session_id=? AND ${activeOauthAuthorizationSql("authorization")})` : ""}`,
+    sql: `SELECT 1 FROM users u WHERE u.id=? AND ? > CAST(strftime('%s','now') AS INTEGER) AND u.active=1 AND u.pii_redacted_at IS NULL AND u.merged_into_user_id IS NULL AND ${STAFF_ACCESS_CONDITION} AND EXISTS(${liveEvidence.sql}) ${passkeyEvidence ? `AND EXISTS(${passkeyEvidence.sql})` : ""} ${claims.authorizationId ? `AND EXISTS(SELECT 1 FROM oauth_authorizations authorization WHERE authorization.id=? AND authorization.user_id=u.id AND authorization.session_id=? AND ${activeOauthAuthorizationSql("authorization")})` : ""}`,
     bindings: [
       claims.sub,
+      claims.exp,
       ...liveEvidence.bindings,
       ...(passkeyEvidence?.bindings ?? []),
       ...(claims.authorizationId ? [claims.authorizationId, claims.sid] : []),
