@@ -128,6 +128,26 @@ test("verifies an organization email before submitting the D1-backed membership 
   await page.locator('[name="custom.job_title"]').fill("Membership contact");
   await page.getByLabel("About yourself", { exact: false }).fill("I work on PKI interoperability.");
   await page.getByLabel("About your organization", { exact: false }).fill("We build PKI services.");
+  await page.reload();
+  await expect(page.getByLabel("First name", { exact: true })).toHaveValue("Morgan");
+  await expect(page.getByLabel("Last name", { exact: true })).toHaveValue("Member");
+  await expect(page.getByLabel("Organization name")).toHaveValue(`E2E Organization ${unique}`);
+  await expect(page.getByLabel(/F —/)).toBeChecked();
+  await expect(page.locator('[name="custom.reason"]')).toHaveValue("We want to contribute to the PKI community.");
+  await expect(page.getByLabel("About yourself", { exact: false })).toHaveValue("I work on PKI interoperability.");
+  await expect(page.getByLabel("About your organization", { exact: false })).toHaveValue("We build PKI services.");
+  await expect(page.getByText(/We restored the answers/)).toBeVisible();
+  for (const agreement of await page.locator("[data-membership-legal-input]").all())
+    await expect(agreement).not.toBeChecked();
+  for (const width of [1280, 375]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.getByLabel("First name", { exact: true }).scrollIntoViewIfNeeded();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`restored-application-${width}.png`) });
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
+  for (const agreement of await page.locator('[data-join-application-form] input[type="checkbox"][required]').all())
+    await agreement.check();
   // A server refusal must reach the named answer after both validators display errors.
   await page.route(
     "**/api/v1/members/applications",
@@ -166,6 +186,46 @@ test("verifies an organization email before submitting the D1-backed membership 
 
   const confirmation = await waitForCapturedEmail(email, "membership application", { since: sinceConfirmation });
   expect(extractEmailUrl(confirmation, "/application-status/")).toContain("token=");
+  expect(await page.evaluate(() => sessionStorage.getItem("pkic.join.verifiedApplication"))).toBeNull();
+  const returnWithVerifiedEmail = async (address: string) => {
+    await page.goto("/join/");
+    const sinceRepeat = await capturedEmailCount();
+    await page.getByLabel(EMAIL_FIRST_COPY.join.work.label).fill(address);
+    await page.getByRole("button", { name: EMAIL_FIRST_COPY.join.work.action, exact: true }).click();
+    const repeat = await waitForCapturedEmail(address, "Verify your email address", { since: sinceRepeat });
+    await openMembershipVerificationLink(page, extractEmailUrl(repeat, "#verify="));
+  };
+  await returnWithVerifiedEmail(email);
+  await expect(
+    page.getByRole("heading", { name: "Your application is already in progress", exact: true }),
+  ).toBeVisible();
+  await expect(page.locator("[data-join-application-form]")).toBeHidden();
+  for (const width of [1280, 375]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page
+      .getByRole("heading", { name: "Your application is already in progress", exact: true })
+      .scrollIntoViewIfNeeded();
+    await page.screenshot({ path: testInfo.outputPath(`application-in-progress-${width}.png`) });
+  }
+  await page.getByRole("link", { name: "Check application status", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Application status", exact: true })).toBeVisible();
+  await returnWithVerifiedEmail(`colleague@${email.split("@")[1]}`);
+  const organizationNotice = page.getByRole("heading", {
+    name: "An application for your organization is already in progress",
+    exact: true,
+  });
+  await expect(organizationNotice).toBeVisible();
+  await expect(page.locator("[data-join-application-form]")).toBeHidden();
+  await expect(page.getByRole("link", { name: "Check application status", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Email the secretariat", exact: true })).toHaveAttribute(
+    "href",
+    "mailto:contact@pkic.org",
+  );
+  for (const width of [1280, 375]) {
+    await page.setViewportSize({ width, height: 900 });
+    await organizationNotice.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: testInfo.outputPath(`organization-application-in-progress-${width}.png`) });
+  }
 });
 
 test("keeps the individual path an explicit policy exception for an institutional email", async ({ page }) => {

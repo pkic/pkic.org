@@ -193,6 +193,20 @@ function TagPicker({ field, rules, initialValue }: { field: FormField; rules: Fi
   const [selected, setSelected] = useState<Set<string>>(initial);
   const [inputValue, setInputValue] = useState("");
   const textRef = useRef<HTMLInputElement>(null);
+  const hiddenRef = useRef<HTMLInputElement>(null);
+  const editedRef = useRef(false);
+
+  // The set can arrive after mount, when a caller pre-fills a form already rendered.
+  useEffect(() => {
+    if (Array.isArray(initialValue)) setSelected(initial);
+  }, [initial, initialValue]);
+
+  // The value lives in a hidden input no browser event covers, so an edit announces itself to the form.
+  useEffect(() => {
+    if (!editedRef.current) return;
+    editedRef.current = false;
+    hiddenRef.current?.dispatchEvent(new Event("change", { bubbles: true }));
+  }, [selected]);
 
   const addValue = useCallback(
     (raw: string) => {
@@ -211,6 +225,7 @@ function TagPicker({ field, rules, initialValue }: { field: FormField; rules: Fi
       }
 
       textRef.current?.setCustomValidity("");
+      editedRef.current = true;
       setSelected((prev) => new Set(prev).add(trimmed));
       setInputValue("");
     },
@@ -218,6 +233,7 @@ function TagPicker({ field, rules, initialValue }: { field: FormField; rules: Fi
   );
 
   const removeValue = useCallback((value: string) => {
+    editedRef.current = true;
     setSelected((prev) => {
       const next = new Set(prev);
       next.delete(value);
@@ -242,6 +258,7 @@ function TagPicker({ field, rules, initialValue }: { field: FormField; rules: Fi
   return (
     <div class="event-flow-tags">
       <input
+        ref={hiddenRef}
         type="hidden"
         name={`custom.${field.key}`}
         data-custom-widget="tags"
@@ -372,7 +389,11 @@ function RatingButtons({
             class="pk-btn pk-btn--secondary"
             data-value={String(v)}
             aria-pressed="false"
-            onClick={() => select(v)}
+            onClick={() => {
+              select(v);
+              // As with the tag picker: a hidden input's value changes without a browser event.
+              hiddenRef.current?.dispatchEvent(new Event("change", { bubbles: true }));
+            }}
           >
             {v}
           </button>

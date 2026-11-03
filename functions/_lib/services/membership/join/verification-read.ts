@@ -8,6 +8,11 @@ import { identityCreationSelections } from "../../identities/creation-read";
 import { verifiedOwnedEmailSelection } from "../../identities/owned-email";
 import { organizationDomainClaimForEmailSelection } from "../organization-domain-claims";
 import { individualMembershipConflictPredicate } from "../capacity-query";
+import {
+  organizationOpenApplicationSelection,
+  ownOpenApplicationSelection,
+  type OwnOpenApplicationRow,
+} from "./open-application";
 
 /** Request-owned observations for the existing join planners. Mutation guards remain authoritative. */
 export async function readJoinVerification(db: DatabaseLike, email: string, capabilityId: string) {
@@ -42,6 +47,8 @@ export async function readJoinVerification(db: DatabaseLike, email: string, capa
     creation.unresolved,
     creation.latest,
     verifiedOwnedEmailSelection(owner, email),
+    ownOpenApplicationSelection(email, owner),
+    organizationOpenApplicationSelection(claim),
   ];
   const results = await db.batch(reads.map((read) => db.prepare(read.sql).bind(...read.bindings)));
   const address = batchFirst<{ id: string; identity_id: string | null }>(results[10]);
@@ -59,6 +66,10 @@ export async function readJoinVerification(db: DatabaseLike, email: string, capa
       unresolved: batchFirst<{ id: string; started_at: string | null; blocked_at: string | null }>(results[8]),
       latest: batchFirst<{ id: string }>(results[9]),
       emailOwner: address,
+    },
+    openApplication: {
+      own: batchFirst<OwnOpenApplicationRow>(results[11]),
+      organizationHeld: batchFirst<{ id: string }>(results[12]) !== null,
     },
   };
 }

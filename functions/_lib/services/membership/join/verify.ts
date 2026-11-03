@@ -13,6 +13,7 @@ import { prepareOneTimeAuditLog } from "../../audit";
 import { prepareUserSession } from "../../../auth/user-session";
 import { AppError } from "../../../errors";
 import { issueMemberJoinApplicationToken, verifyMemberJoinVerificationToken } from "./capabilities";
+import { resolveOpenJoinApplication } from "./open-application";
 import { readJoinVerification } from "./verification-read";
 import { prepareEligibleMemberRead } from "../../../auth/identity-capacities";
 import { prepareAuthorizationGuard } from "../../../db/authorization-guard";
@@ -58,6 +59,9 @@ export async function verifyMemberJoin(
   const provedUserId = provedMailboxUserId(observed.ownership);
   const claimedMember = observed.member;
   if (!claimedMember) {
+    const open = await resolveOpenJoinApplication(input.signingSecret, observed.openApplication);
+    if (open?.kind === "own") return { status: "application_in_progress", statusPath: open.statusPath };
+    if (open?.kind === "organization") return { status: "organization_application_in_progress" };
     if (capability.applicantKind === "individual" && observed.state?.individual_conflict) {
       return { status: "support_required" };
     }

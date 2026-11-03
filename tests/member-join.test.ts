@@ -11,6 +11,7 @@ import { addRepresentative, insertOrganization, insertUser, seedOrganizationAggr
 import {
   membershipApplicationDescriptionAnswers,
   requiredMembershipApplicationAnswers,
+  seedMemberApplication,
   seedMembershipApplicationForm,
 } from "./helpers/member-applications";
 import { materializeQueuedCapabilityLinks } from "../functions/_lib/auth/capability-links";
@@ -18,6 +19,7 @@ import {
   newMemberJoinCapabilityPayload,
   queuedMemberJoinVerificationToken,
 } from "../functions/_lib/services/membership/join/capabilities";
+import { verifyApplicationManageToken } from "../functions/_lib/services/membership/applications/queries";
 import { createMemberApplication } from "../functions/_lib/services/membership/applications/create";
 import { prepareIndividualIdentityStatement } from "../functions/_lib/services/users";
 import { nowIso } from "../functions/_lib/utils/time";
@@ -544,6 +546,126 @@ describe("verified-email-first membership join", () => {
         "SELECT applicant_user_id, applicant_email FROM member_applications",
       ),
     ).toEqual([{ applicant_user_id: userId, applicant_email: "verified-applicant@organization.example" }]);
+  });
+
+  it("tells an applicant about their open application before the form, with a working status link", async () => {
+    const testEnv = makeEnv();
+    const applicationId = await seedMemberApplication({
+      applicantEmail: "jane@acmegrp.example.com",
+      organizationDomain: "acmegrp.example.com",
+      stage: "processing",
+    });
+    const verification = memberJoinVerifyResponseSchema.parse(
+      await (
+        await verifyJoin(testEnv, await startAndMaterializeVerification(testEnv, "jane@acmegrp.example.com"), {
+          maxRoundTrips: 1,
+        })
+      ).json(),
+    );
+    if (verification.status !== "application_in_progress") throw new Error(`Unexpected ${verification.status}`);
+    const statusLink = new URL(verification.statusPath, "https://app.test");
+    expect(statusLink.searchParams.get("id")).toBe(applicationId);
+    const status = await callApi(
+      testEnv,
+      `/api/v1/members/applications/${applicationId}/status?token=${encodeURIComponent(statusLink.searchParams.get("token")!)}`,
+    );
+    expect(status.status).toBe(200);
+    const documents = await callApi(
+      testEnv,
+      `/api/v1/members/applications/${applicationId}/documents?token=${encodeURIComponent(statusLink.searchParams.get("token")!)}`,
+    );
+    expect(documents.status).toBe(400);
+    await expect(
+      verifyApplicationManageToken(testEnv.DB, applicationId, statusLink.searchParams.get("token")!),
+    ).resolves.toBeNull();
+
+    // A colleague at the same domain learns only that an application for the organization is open.
+    const colleague = memberJoinVerifyResponseSchema.parse(
+      await (
+        await verifyJoin(testEnv, await startAndMaterializeVerification(testEnv, "omar@acmegrp.example.com"))
+      ).json(),
+    );
+    expect(colleague).toEqual({ status: "organization_application_in_progress" });
+
+    // A closed application no longer stands in the way.
+    await testEnv.DB.prepare("UPDATE member_applications SET stage = 'withdrawn' WHERE id = ?")
+      .bind(applicationId)
+      .run();
+    await testEnv.DB.prepare("DELETE FROM organization_domain_claims WHERE application_id = ?")
+      .bind(applicationId)
+      .run();
+    const again = memberJoinVerifyResponseSchema.parse(
+      await (
+        await verifyJoin(testEnv, await startAndMaterializeVerification(testEnv, "jane@acmegrp.example.com"), {
+          maxRoundTrips: 1,
+        })
+      ).json(),
+    );
+    expect(again.status).toBe("application_ready");
+  });
+
+  it("finds an applicant's open application through another verified address on the same account", async () => {
+    const testEnv = makeEnv();
+    const userId = await insertUser(testEnv.DB, "jane@acmegrp.example.com");
+    const applicationId = await seedMemberApplication({
+      applicantUserId: userId,
+      applicantEmail: "jane@acmegrp.example.com",
+      organizationDomain: "acmegrp.example.com",
+      stage: "processing",
+    });
+    for (const alias of ["j.doe@acmegrp.example.com", "jane@acme-labs.example.com"]) {
+      await testEnv.DB.prepare(
+        `INSERT INTO user_emails
+           (id, user_id, email, normalized_email, verified_at, verification_method, created_at)
+         VALUES (?, ?, ?, ?, datetime('now'), 'staff', datetime('now'))`,
+      )
+        .bind(crypto.randomUUID(), userId, alias, alias)
+        .run();
+      const verification = memberJoinVerifyResponseSchema.parse(
+        await (await verifyJoin(testEnv, await startAndMaterializeVerification(testEnv, alias))).json(),
+      );
+      if (verification.status !== "application_in_progress") throw new Error(`Unexpected ${verification.status}`);
+      expect(new URL(verification.statusPath, "https://app.test").searchParams.get("id")).toBe(applicationId);
+    }
+  });
+
+  it("does not hand one account's application to an address that account no longer holds", async () => {
+    const testEnv = makeEnv();
+    const formerHolder = await insertUser(testEnv.DB, "former@elsewhere.example.com");
+    await seedMemberApplication({
+      applicantUserId: formerHolder,
+      applicantEmail: "shared@acmegrp.example.com",
+      organizationDomain: "acmegrp.example.com",
+      stage: "processing",
+    });
+    const verification = memberJoinVerifyResponseSchema.parse(
+      await (
+        await verifyJoin(testEnv, await startAndMaterializeVerification(testEnv, "shared@acmegrp.example.com"))
+      ).json(),
+    );
+    expect(verification).toEqual({ status: "organization_application_in_progress" });
+  });
+
+  it("does not reveal an account's application through an unverified alias reservation", async () => {
+    const testEnv = makeEnv();
+    const userId = await insertUser(testEnv.DB, "owner@reserved-account.example");
+    await seedMemberApplication({
+      applicantUserId: userId,
+      applicantEmail: "owner@reserved-account.example",
+      organizationDomain: "reserved-account.example",
+      stage: "processing",
+    });
+    const alias = "reserved@separate.example";
+    await testEnv.DB.prepare(
+      "INSERT INTO user_emails (id,user_id,email,normalized_email,created_at) VALUES (?,?,?,?,?)",
+    )
+      .bind(crypto.randomUUID(), userId, alias, alias, nowIso())
+      .run();
+    const verified = await verifyJoin(testEnv, await startAndMaterializeVerification(testEnv, alias), {
+      maxRoundTrips: 1,
+    });
+    expect(verified.status).toBe(200);
+    expect(memberJoinVerifyResponseSchema.parse(await verified.json()).status).toBe("application_ready");
   });
 
   it("binds one verified capability to one individual application and rejects replay", async () => {

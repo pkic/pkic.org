@@ -1,6 +1,7 @@
 import { protectsPublicAction } from "./abuse-protection";
 import { z } from "zod";
 import { normalizedEmailSchema } from "./api-common";
+import { sameOriginPathSchema } from "./urls";
 import { authMemberSchema } from "./member-auth";
 import { publicOperation } from "./route-contract";
 import { screensWorkEmailDomain, workEmailStepSchema } from "./work-email";
@@ -28,6 +29,10 @@ export const memberJoinVerifyResponseSchema = z.discriminatedUnion("status", [
   }),
   z.object({ status: z.literal("support_required") }),
   z.object({ status: z.literal("already_member") }),
+  /** The proved address already has an open application; the path is a status-only link to it. */
+  z.object({ status: z.literal("application_in_progress"), statusPath: sameOriginPathSchema }),
+  /** Someone else's open application already holds the organization domain the address links through. */
+  z.object({ status: z.literal("organization_application_in_progress") }),
 ]);
 
 export const memberJoinStartRouteSchema = {

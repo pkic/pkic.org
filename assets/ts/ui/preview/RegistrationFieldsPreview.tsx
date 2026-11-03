@@ -1,4 +1,6 @@
 /** The actual questionnaire controls, with synthetic field definitions. */
+import { useState } from "preact/hooks";
+import { Button } from "../Button";
 import { formFieldOptionsSchema } from "../../../shared/schemas/form-field-rules";
 import { CustomFieldList } from "../../shared/widgets/custom-fields";
 import type { FormField } from "../../shared/types";
@@ -44,11 +46,31 @@ const fields: FormField[] = [
     validation: { allowCustom: true, placeholder: "Type a topic…" },
     sortOrder: 1,
   },
+  {
+    key: "experience",
+    label: "Experience with PKI",
+    fieldType: "number",
+    required: false,
+    options: null,
+    optionSource: null,
+    validation: { uiWidget: "rating_stars", min: 1, max: 5 },
+    sortOrder: 2,
+  },
 ];
 export function RegistrationFieldsPreview() {
+  const [restored, setRestored] = useState(false);
   return (
     <div class="pk-stack">
-      <CustomFieldList fields={fields} context={{ dayAttendance: [] }} initialValues={{ dietary: ["nut_allergy"] }} />
+      <div data-gallery-open>
+        <Button onClick={() => setRestored(true)}>Restore saved answers</Button>
+      </div>
+      <CustomFieldList
+        fields={fields}
+        context={{ dayAttendance: [] }}
+        initialValues={
+          restored ? { dietary: ["nut_allergy"], interests: ["Policy"], experience: 4 } : { dietary: ["nut_allergy"] }
+        }
+      />
     </div>
   );
 }

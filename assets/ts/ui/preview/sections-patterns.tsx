@@ -287,7 +287,7 @@ export const patternSections: PreviewSection[] = [
   {
     id: "registration-fields",
     title: "Questionnaire fields",
-    note: "Configured dietary and topic controls, shared by public and portal registration.",
+    note: "Questionnaire controls with restored tags and ratings, shared by public and portal registration.",
     render: () => <RegistrationFieldsPreview />,
   },
   {
