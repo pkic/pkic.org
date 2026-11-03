@@ -99,4 +99,37 @@ test.describe("portal navigation on a narrow viewport", () => {
     // capability set is the same identity either way.
     expect(new Set(mobileLinks)).toEqual(new Set(desktopLinks));
   });
+
+  test("donation pages sit under the Donations destination", async ({ page }, info) => {
+    for (const width of [1280, 375]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto("/portal/#/sponsors");
+      const sidebar = page.getByRole("navigation", { name: "Portal navigation", exact: true });
+      const openNavigation = async () => {
+        if (width === 375) {
+          await page.getByRole("button", { name: "Open navigation", exact: true }).click();
+          await expect(sidebar).toHaveCSS("left", "0px");
+        }
+      };
+      await openNavigation();
+      await sidebar.getByRole("link", { name: "Donations", exact: true }).click();
+      await expect(page).toHaveURL(/#\/donations$/);
+      await openNavigation();
+      const donations = sidebar.getByRole("listitem").filter({
+        has: page.getByRole("link", { name: "Donations", exact: true }),
+      });
+      const pages = donations.getByRole("list", { name: "Donations pages", exact: true });
+      await expect(pages.getByRole("link", { name: "Share links", exact: true })).toBeVisible();
+      await expect(pages.getByRole("link", { name: "Analytics", exact: true })).toBeVisible();
+      await expect(sidebar.locator("summary").filter({ hasText: "Donations" })).toHaveCount(0);
+      await pages.getByRole("link", { name: "Share links", exact: true }).click();
+      await expect(page).toHaveURL(/#\/donations\/promoters$/);
+      await openNavigation();
+      await pages.getByRole("link", { name: "Analytics", exact: true }).click();
+      await expect(page).toHaveURL(/#\/donations\/analytics$/);
+      await openNavigation();
+      await expect(pages.getByRole("link", { name: "Analytics", exact: true })).toHaveAttribute("aria-current", "page");
+      await page.screenshot({ path: info.outputPath(`donation-navigation-${width}.png`), fullPage: true });
+    }
+  });
 });

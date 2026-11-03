@@ -8,6 +8,8 @@ import type { PortalSession } from "../types";
 
 export interface PortalNavItem {
   group?: string;
+  /** The destination whose list item contains this page in the sidebar. */
+  parentPath?: string;
   path: string;
   section: string;
   label: string;
@@ -516,11 +518,11 @@ export function portalCapacityFallbackPath(session: PortalSession | null, locati
 export function portalSectionChildren(section: string, session: PortalSession | null): PortalNavItem[] {
   const definition = PORTAL_SECTIONS.find((candidate) => candidate.section === section);
   const nested = PORTAL_SECTIONS.filter((child) => child.sidebarParent === section && child.access(session));
-  const children: PortalSectionChild[] = [
+  const children: (PortalSectionChild & { parentPath?: string })[] = [
     ...(definition?.children ?? []),
     ...nested.flatMap((child) => [
       { path: child.path, label: child.label, access: child.access },
-      ...(child.children ?? []).map((page) => ({ ...page, group: child.label })),
+      ...(child.children ?? []).map((page) => ({ ...page, parentPath: child.path })),
     ]),
   ];
   return children
@@ -531,6 +533,7 @@ export function portalSectionChildren(section: string, session: PortalSession | 
       label: child.label,
       description: child.description,
       group: child.group,
+      ...(child.parentPath ? { parentPath: child.parentPath } : {}),
     }));
 }
 

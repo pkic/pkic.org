@@ -397,6 +397,13 @@ describe("portal navigation shell", () => {
       ["Share links", "#/donations/promoters"],
       ["Analytics", "#/donations/analytics"],
     ]);
+    const donations = pages.querySelector('a[href="#/donations"]')!;
+    const donationPages = donations.parentElement!.querySelector('ul[aria-label="Donations pages"]')!;
+    expect([...donationPages.querySelectorAll("a")].map((link) => link.getAttribute("href"))).toEqual([
+      "#/donations/promoters",
+      "#/donations/analytics",
+    ]);
+    expect(pages.querySelector("summary")).toBeNull();
     // The page being read is the one marked, so the sidebar says where you are.
     expect(pages.querySelector('a[aria-current="page"]')?.textContent).toBe("Share links");
 
