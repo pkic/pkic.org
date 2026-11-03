@@ -37,11 +37,11 @@ import { proposalInviteEmailTextVariables } from "./proposal-invite-email-contex
 import { formatProposalSpeakerLineup } from "./proposal-invite-person";
 import { eventInviteWindowEvidence, resolveEventInviteExpiry } from "../invite-validity";
 import { nowIso } from "../utils/time";
-import { sha256Hex } from "../utils/crypto";
 import { isEmailReservationConflict } from "./user-emails";
 import { proposalTermsDigest } from "./event-proposal-proof-capabilities";
 import { prepareIndependentDisclosure, requireIndependentDisclosure } from "./proposal-speaker-independent-disclosure";
 import { prepareInvitedSpeakerRepresentation } from "./proposal-invited-speaker-identity";
+import { outboxIdForOperation } from "../email/outbox-queue";
 
 type ProposalCreateInput = z.infer<typeof proposalCreateSchema>;
 
@@ -321,7 +321,7 @@ export async function submitProposal(
   outboxIds.push(proposerEmail.id);
   if (!actingIdentity) {
     const reviewEmail = prepareQueueEmailStatement(db, {
-      outboxId: (await sha256Hex(`proposal-representation-review:${proposerSpeaker.speakerId}`)).slice(0, 32),
+      outboxId: await outboxIdForOperation(`proposal-representation-review:${proposerSpeaker.speakerId}`),
       idempotencyKey: `proposal-representation-review:${proposerSpeaker.speakerId}`,
       eventId: input.event.id,
       templateKey: "proposal_representation_review",

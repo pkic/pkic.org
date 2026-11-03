@@ -4,13 +4,13 @@ import { hasD1QueryCapacity, type D1QueryBudget } from "../../db/query-budget";
 import { escapeMarkdownText } from "../../email/markdown";
 import { prepareQueueEmailStatement } from "../../email/outbox";
 import type { DatabaseLike, Env, StatementLike } from "../../types";
-import { sha256Hex } from "../../utils/crypto";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
 import { resolveRenewalAction, utcDate, type ResolvedSponsorshipRenewalAction } from "./renewal-policy";
 import { prepareSponsorshipStageTransition } from "./stage-transition";
 import { buildManagementLink } from "../management-links";
+import { outboxIdForOperation } from "../../email/outbox-queue";
 
 const REMINDER_NOTES = {
   "reminder-60": "Renewal reminder sent (60 days)",
@@ -49,10 +49,6 @@ export const SPONSORSHIP_DUE_WORK_QUERY = `
 
 function sponsorName(row: SponsorshipDueWorkRow): string {
   return row.organization_name ?? row.non_member_name ?? row.contact_name ?? "Sponsor";
-}
-
-async function stableOutboxId(operationKey: string): Promise<string> {
-  return (await sha256Hex(operationKey)).slice(0, 32);
 }
 
 async function prepareReminderStatements(
@@ -113,7 +109,7 @@ async function prepareReminderStatements(
     prepareQueueEmailStatement(
       db,
       {
-        outboxId: await stableOutboxId(operationKey),
+        outboxId: await outboxIdForOperation(operationKey),
         idempotencyKey: operationKey,
         templateKey,
         recipientEmail: row.assigned_to_email,
@@ -196,7 +192,7 @@ export async function runSponsorshipDueWork(
           prepareQueueEmailStatement(
             db,
             {
-              outboxId: await stableOutboxId(operationKey),
+              outboxId: await outboxIdForOperation(operationKey),
               idempotencyKey: operationKey,
               templateKey: "sponsorship-lapsed-staff",
               recipientEmail: row.assigned_to_email,

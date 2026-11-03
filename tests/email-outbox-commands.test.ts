@@ -133,6 +133,22 @@ describe("canonical email-outbox commands", () => {
     logged.mockRestore();
   });
 
+  it("refuses an outbox id that is not a database id before writing the row", async () => {
+    const operationKey = `waitlist-offer:${eventId}:registration:day:2026-12-01T00:00:00.000Z`;
+    await expect(
+      queueEmail(env.DB, {
+        outboxId: operationKey,
+        idempotencyKey: operationKey,
+        eventId,
+        templateKey: "attendee_invite",
+        recipientEmail: "offer@example.test",
+        messageType: "transactional",
+        data: {},
+      }),
+    ).rejects.toThrow("must be a database id");
+    expect(await queryAll(env.DB, "SELECT id FROM email_outbox WHERE idempotency_key = ?", [operationKey])).toEqual([]);
+  });
+
   it("rejects empty reset selections before any D1 or provider side effect", async () => {
     const fetchMock = sendGridAccepted();
     vi.stubGlobal("fetch", fetchMock);

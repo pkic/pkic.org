@@ -3,8 +3,8 @@ import { all } from "../../db/queries";
 import { chunkJsonRows } from "../../db/json-bulk";
 import { prepareBulkQueueEmailChunkStatements, type BulkEmailQueueRow } from "../../email/outbox";
 import type { DatabaseLike, StatementLike } from "../../types";
-import { sha256Hex } from "../../utils/crypto";
 import { nowIso } from "../../utils/time";
+import { outboxIdForOperation } from "../../email/outbox-queue";
 
 const COMPLETED_ENROLLMENT_INTENT_SQL = `EXISTS (
   SELECT 1 FROM google_groups_membership_desired_state target
@@ -116,7 +116,7 @@ export async function drainGoogleGroupsEnrollmentNotificationIntents(db: Databas
       const { userId } = intents[0];
       const cohort = await sha256Hex(JSON.stringify(intents.map((intent) => intent.queueId).sort()));
       const idempotencyKey = `google-groups:enrollment:${userId}:${cohort}`;
-      const outboxId = (await sha256Hex(idempotencyKey)).slice(0, 32);
+      const outboxId = await outboxIdForOperation(idempotencyKey);
       return {
         intents,
         outboxId,

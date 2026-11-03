@@ -215,8 +215,8 @@ export function DayAttendanceManager({
         postJson(
           `${registrationEndpoint}/admissions`,
           {
-            mode: "capacity_exempt",
-            reason: "Event manager approved attendance admission",
+            mode: "within_capacity",
+            reason: "Event manager admitted from the waitlist",
             dayDates: targets.map((day) => day.dayDate),
           },
           eventRegistrationAdmitResponseSchema,
