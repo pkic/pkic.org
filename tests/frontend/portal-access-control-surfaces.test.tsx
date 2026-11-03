@@ -13,6 +13,7 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { Grants } from "../../assets/ts/member-flows/portal/sections/access-control/Grants";
 import { RoleAssignForm } from "../../assets/ts/member-flows/portal/sections/access-control/roles/RoleAssignForm";
 import { RoleDetail } from "../../assets/ts/member-flows/portal/sections/access-control/roles/RoleDetail";
@@ -31,6 +32,7 @@ import {
   ROLE,
   settle,
 } from "./helpers/access-control-fixtures";
+import { confirmationButton, confirmationConsequences } from "./helpers/confirm-dialog";
 import { rowActionControlNames } from "./helpers/row-actions";
 
 const mounted: HTMLElement[] = [];
@@ -92,6 +94,14 @@ function stubGrantsApi(extra?: (path: string, init?: RequestInit) => Response | 
     }),
   );
   return requests;
+}
+
+async function pickPermission(container: HTMLElement, permission: string): Promise<void> {
+  const select = controlFor(container, "Permission") as HTMLSelectElement;
+  select.value = permission;
+  await act(() => {
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
 }
 
 function submitGrantForm(container: HTMLElement): Promise<void> {
@@ -174,6 +184,7 @@ describe("Grants on the design system", () => {
     container = mount(<Grants canGrant canRevoke grantSegment="new" onNavigate={() => {}} />);
     await settle();
     await pickCandidate(container);
+    await pickPermission(container, "events:read");
 
     await submitGrantForm(container);
 
@@ -195,6 +206,7 @@ describe("Grants on the design system", () => {
     );
     await settle();
     await pickCandidate(container);
+    await pickPermission(container, "events:read");
 
     await submitGrantForm(container);
 
@@ -206,6 +218,51 @@ describe("Grants on the design system", () => {
     // A granted permission returns to the list rather than leaving a spent
     // form on screen.
     expect(navigated).toEqual([undefined]);
+  });
+
+  it("starts with no permission and refuses a grant until one is chosen", async () => {
+    const requests = stubGrantsApi();
+    const container = mount(<Grants canGrant canRevoke grantSegment="new" onNavigate={() => {}} />);
+    await settle();
+    await pickCandidate(container);
+
+    expect((controlFor(container, "Permission") as HTMLSelectElement).value).toBe("");
+    await submitGrantForm(container);
+
+    expect(controlFor(container, "Permission").getAttribute("aria-invalid")).toBe("true");
+    expect(container.querySelectorAll('[role="alert"]')).toHaveLength(1);
+    expect(requests.some((request) => request.method === "POST")).toBe(false);
+  });
+
+  it("grants a privileged permission only after the reader confirms it", async () => {
+    const requests = stubGrantsApi((path, init) =>
+      path === "/api/v1/permissions/grants" && init?.method === "POST"
+        ? json({ grant: { ...GRANT, permission: "access:grant", userId: CANDIDATE.id, userEmail: CANDIDATE.email } })
+        : undefined,
+    );
+    const container = mount(
+      <>
+        <ConfirmDialogHost />
+        <Grants canGrant canRevoke grantSegment="new" onNavigate={() => {}} />
+      </>,
+    );
+    await settle();
+    await pickCandidate(container);
+    await pickPermission(container, "access:grant");
+
+    await submitGrantForm(container);
+
+    expect(confirmationConsequences(container)).toEqual(["Grant permissions and roles"]);
+    expect(requests.some((request) => request.method === "POST")).toBe(false);
+
+    await act(async () => {
+      confirmationButton("Grant access", container)?.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await settle();
+
+    const posted = requests.find((request) => request.method === "POST");
+    expect(accessGrantCreateSchema.parse(posted!.body).permission).toBe("access:grant");
   });
 });
 
@@ -323,7 +380,7 @@ describe("the role assign form", () => {
 
   it("names each group it is made of, rather than pointing three labels at nothing", () => {
     stubAssignApi();
-    const container = mount(<RoleAssignForm roleId={ROLE.id} onAssigned={vi.fn()} />);
+    const container = mount(<RoleAssignForm role={ROLE} onAssigned={vi.fn()} />);
 
     // The user picker is grouped; the target and expiry are labeled controls.
     expect([...container.querySelectorAll("legend")].map((legend) => legend.textContent)).toEqual(["User"]);
@@ -339,7 +396,7 @@ describe("the role assign form", () => {
 
   it("refuses an assignment with no user in a live region and sends nothing", async () => {
     const requests = stubAssignApi();
-    const container = mount(<RoleAssignForm roleId={ROLE.id} onAssigned={vi.fn()} />);
+    const container = mount(<RoleAssignForm role={ROLE} onAssigned={vi.fn()} />);
 
     await submitAssignForm(container);
 
@@ -352,7 +409,7 @@ describe("the role assign form", () => {
   it("keeps a rejected assignment's reason on the form and does not clear the picker", async () => {
     stubAssignApi(apiError("FORBIDDEN", "You cannot assign that role.", 403));
     const onAssigned = vi.fn();
-    const container = mount(<RoleAssignForm roleId={ROLE.id} onAssigned={onAssigned} />);
+    const container = mount(<RoleAssignForm role={ROLE} onAssigned={onAssigned} />);
     await pickCandidate(container);
 
     await submitAssignForm(container);
@@ -367,7 +424,7 @@ describe("the role assign form", () => {
   it("posts a body the shared userRoleAssignSchema accepts and reloads the list", async () => {
     const requests = stubAssignApi();
     const onAssigned = vi.fn();
-    const container = mount(<RoleAssignForm roleId={ROLE.id} onAssigned={onAssigned} />);
+    const container = mount(<RoleAssignForm role={ROLE} onAssigned={onAssigned} />);
     await pickCandidate(container);
 
     await submitAssignForm(container);

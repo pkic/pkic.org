@@ -29,7 +29,7 @@ export const accessGrantIdParamsSchema = z.object({ id: databaseIdSchema });
 // before the handler ever ran. Reused everywhere a role id appears — params,
 // request bodies, and response payloads alike — so none of them drift
 // back to UUID-only validation individually.
-export const roleIdSchema = trimmedString(1, 80);
+export const roleIdSchema = trimmedString(1, 80, "Choose a role.");
 export const roleIdParamsSchema = z.object({ id: roleIdSchema });
 export const userIdRolesParamsSchema = z.object({ userId: databaseIdSchema });
 export const userRoleIdParamsSchema = z.object({

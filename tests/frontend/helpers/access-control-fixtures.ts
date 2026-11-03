@@ -5,6 +5,7 @@
  */
 import { act } from "preact/test-utils";
 import { vi } from "vitest";
+import type { Role } from "../../../assets/shared/schemas/access-control";
 
 export function json(value: unknown, status = 200): Response {
   return new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
@@ -44,7 +45,7 @@ export const CANDIDATE = {
   organization_name: null,
 };
 
-export const ROLE = {
+export const ROLE: Role = {
   id: "role-custom-1",
   name: "custom_reviewer",
   description: "Reviews things",

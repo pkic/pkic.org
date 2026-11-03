@@ -8,16 +8,21 @@ import { permissionTargetCatalog } from "./catalogs";
 export interface PickedTarget {
   targetType: z.infer<typeof authorizationContextTypeSchema> | null;
   targetId: string | null;
+  /** The picked target's name, for a sentence that says where a grant applies. */
+  targetName?: string | null;
 }
 
 type TargetType = NonNullable<PickedTarget["targetType"]>;
+
+/** A grant with no target: it applies everywhere. */
+export const NO_TARGET: PickedTarget = { targetType: null, targetId: null, targetName: null };
 
 /**
  * The resource kinds a grant can be scoped to. One record drives both the
  * type menu and the search selector's label, so the two cannot drift apart the
  * way copied branches could.
  */
-const TARGET_LABELS: Record<TargetType, string> = {
+export const TARGET_LABELS: Record<TargetType, string> = {
   event: "Event",
   group: "Group",
   organization: "Organization",
@@ -48,7 +53,7 @@ export function TargetPicker({
             disabled={disabled}
             onChange={(e) => {
               const nextType = (e.target as HTMLSelectElement).value as "" | TargetType;
-              onChange({ targetType: nextType || null, targetId: null });
+              onChange({ targetType: nextType || null, targetId: null, targetName: null });
             }}
           >
             <option value="">Global (no target)</option>
@@ -73,7 +78,9 @@ export function TargetPicker({
               value={value.targetId}
               disabled={disabled}
               placeholder={`Select ${TARGET_LABELS[targetType].toLowerCase()}…`}
-              onChange={(target) => onChange({ ...value, targetId: target?.id ?? null })}
+              onChange={(target) =>
+                onChange({ ...value, targetId: target?.id ?? null, targetName: target?.name ?? null })
+              }
             />
           )}
         </Field>

@@ -27,6 +27,8 @@ const SEARCH_DEBOUNCE_MS = 300;
 const loadCollection: CollectionLoader = (url, signal, schema) => getJson(url, schema, { signal });
 
 export interface ServerSearchSelectProps<Item, Response> extends FieldControlProps {
+  /** The canonical request field, used by contract validation to find this control. */
+  name?: string;
   catalog: ServerCatalog<Item, Response>;
   pageSize?: number;
   searchable?: boolean;

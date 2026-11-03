@@ -169,7 +169,7 @@ describe("assigning and unassigning a role", () => {
       throw new Error(`Unexpected request: ${method} ${path}`);
     });
     const onAssigned = vi.fn();
-    const container = mount(<RoleAssignForm roleId={ROLE.id} onAssigned={onAssigned} />);
+    const container = mount(<RoleAssignForm role={ROLE} onAssigned={onAssigned} />);
     await pickCandidate(container);
 
     await chooseOption(controlFor(container, "Target"), "event");

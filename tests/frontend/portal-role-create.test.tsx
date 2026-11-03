@@ -4,6 +4,9 @@
  * refuses, and what it exposes to a reader who never sees the layout.
  */
 import { controlFor } from "./helpers/labeled-control";
+import { confirmationButton, openConfirmation } from "./helpers/confirm-dialog";
+import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
+import { PERMISSION_METADATA } from "../../assets/shared/permission-metadata";
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -257,6 +260,34 @@ describe("RoleEditForm", () => {
     expect(parsed.permissions).toEqual([]);
     expect(parsed.revision).toBe(systemRole.updatedAt);
     expect(onSaved).toHaveBeenCalledOnce();
+  });
+
+  it("asks before a saved role gains privileged access, and sends nothing when declined", async () => {
+    const requests: unknown[] = [];
+    const custom = roleResponseSchema.parse(role({ permissions: ["events:read"] }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        requests.push(JSON.parse(init?.body as string));
+        return new Response(JSON.stringify({ role: custom }), { headers: { "content-type": "application/json" } });
+      }),
+    );
+    mount(<ConfirmDialogHost />);
+    const container = mount(<RoleEditForm role={custom} onSaved={vi.fn()} onCancel={vi.fn()} />);
+    void act(() => controlFor<HTMLInputElement>(container, PERMISSION_METADATA["access:grant"].label).click());
+
+    void submit(container);
+    await vi.waitFor(() => expect(openConfirmation()?.textContent).toContain('Add privileged access to the "'));
+    expect(openConfirmation()?.textContent).toContain(PERMISSION_METADATA["access:grant"].label);
+    await act(() => confirmationButton("Cancel")!.click());
+    await vi.waitFor(() => expect(openConfirmation()).toBeNull());
+    expect(requests).toEqual([]);
+
+    void submit(container);
+    await vi.waitFor(() => expect(confirmationButton("Add access")).not.toBeNull());
+    await act(() => confirmationButton("Add access")!.click());
+    await vi.waitFor(() => expect(requests).toHaveLength(1));
+    expect(roleUpdateSchema.parse(requests[0]).permissions).toContain("access:grant");
   });
 
   it("validates custom-role names through the shared contract before sending", async () => {

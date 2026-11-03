@@ -9,11 +9,15 @@ import type { ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { userRoleAssignSchema } from "../../assets/shared/schemas/access-control";
+import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { UserRoles } from "../../assets/ts/member-flows/portal/sections/access-control/UserRoles";
+import { confirmationButton, confirmationConsequences, openConfirmation } from "./helpers/confirm-dialog";
+import { chooseComboboxOption, controlFor } from "./helpers/labeled-control";
 
 const USER_ID = "00000000-0000-4000-8000-000000000001";
 const ASSIGNMENT_ID = "00000000-0000-4000-8000-000000000002";
 const ROLE_ID = "00000000-0000-4000-8000-000000000003";
+const ADMIN_ROLE_ID = "role-admin";
 const USER_EMAIL = "assignee@example.test";
 const mounted: HTMLElement[] = [];
 
@@ -80,6 +84,16 @@ function assignableRole() {
   };
 }
 
+/** Listed first, so a form that picked the first role would pick this one. */
+function adminRole() {
+  return {
+    ...assignableRole(),
+    id: ADMIN_ROLE_ID,
+    name: "admin",
+    permissions: ["access:grant", "admin:write", "users:read"],
+  };
+}
+
 function assignment() {
   return {
     id: ASSIGNMENT_ID,
@@ -111,7 +125,7 @@ function stubApi(onAssign: (body: unknown) => Response): URL[] {
         return jsonResponse({ users: [subject()], page: pageOf(url, 1, 1) });
       }
       if (url.pathname === "/api/v1/roles") {
-        return jsonResponse({ roles: [assignableRole()], page: pageOf(url, 1, 1) });
+        return jsonResponse({ roles: [adminRole(), assignableRole()], page: pageOf(url, 2, 2) });
       }
       if (url.pathname === `/api/v1/users/${USER_ID}/roles`) {
         return jsonResponse({ roles: [assignment()], page: pageOf(url, 1, 1) });
@@ -137,6 +151,11 @@ async function pickUser(container: HTMLElement): Promise<void> {
   await settle();
   const suggestions = container.querySelector('[role="group"][aria-label="Matching users"]')!;
   void act(() => (suggestions.querySelector("button") as HTMLButtonElement).click());
+  await settle();
+}
+
+async function pickRole(container: HTMLElement, roleId: string): Promise<void> {
+  await chooseComboboxOption(container, "Role", roleId);
   await settle();
 }
 
@@ -167,6 +186,7 @@ describe("UserRoles", () => {
 
     const container = mount(<UserRoles />);
     await pickUser(container);
+    await pickRole(container, ROLE_ID);
     await submitAssignForm(container);
 
     // Parsed through the contract rather than compared field by field: a
@@ -182,6 +202,7 @@ describe("UserRoles", () => {
 
     const container = mount(<UserRoles />);
     await pickUser(container);
+    await pickRole(container, ROLE_ID);
     await submitAssignForm(container);
 
     // role="alert" rather than a toast: the sentence outlives the moment and
@@ -192,6 +213,56 @@ describe("UserRoles", () => {
     expect(container.querySelector(`form[aria-label="Assign a role to ${USER_EMAIL}"]`)).not.toBeNull();
     const assign = [...container.querySelectorAll("button")].find((button) => button.textContent === "Assign")!;
     expect(assign.getAttribute("aria-busy")).toBeNull();
+  });
+
+  it("starts with no role and refuses an assignment until one is chosen", async () => {
+    const posted: unknown[] = [];
+    stubApi((body) => {
+      posted.push(body);
+      return jsonResponse({ role: assignment() }, 201);
+    });
+
+    const container = mount(<UserRoles />);
+    await pickUser(container);
+    await settle();
+
+    expect(controlFor<HTMLElement>(container, "Role").textContent).not.toContain("admin");
+    await submitAssignForm(container);
+
+    expect(controlFor<HTMLElement>(container, "Role").getAttribute("aria-invalid")).toBe("true");
+    expect(container.querySelectorAll('[role="alert"]')).toHaveLength(1);
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("Choose a role.");
+    expect(posted).toEqual([]);
+  });
+
+  it("assigns a privileged role only after a confirmation that names what it grants and where", async () => {
+    const posted: unknown[] = [];
+    stubApi((body) => {
+      posted.push(body);
+      return jsonResponse({ role: { ...assignment(), roleId: ADMIN_ROLE_ID, roleName: "admin" } }, 201);
+    });
+
+    const container = mount(
+      <>
+        <ConfirmDialogHost />
+        <UserRoles />
+      </>,
+    );
+    await pickUser(container);
+    await pickRole(container, ADMIN_ROLE_ID);
+    await submitAssignForm(container);
+
+    expect(openConfirmation(container)?.textContent).toContain("everywhere on the platform");
+    expect(confirmationConsequences(container)).toEqual(["Grant permissions and roles", "Update platform settings"]);
+    expect(posted).toEqual([]);
+
+    await act(async () => {
+      confirmationButton("Grant access", container)?.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await settle();
+
+    expect(userRoleAssignSchema.parse(posted[0]).roleId).toBe(ADMIN_ROLE_ID);
   });
 
   it("names the roster, the form, and every control group it draws", async () => {
