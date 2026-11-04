@@ -8,6 +8,8 @@ import { buildD1JsonMembershipFilter } from "../../db/json-membership";
 import { sqlValue } from "../../db/sql-value";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
+import { activeOauthAuthorizationSql, oauthPermissionCeilingSql } from "../../auth/oauth/authorization-ceiling-query";
+import { userSessionAuthorizationEvidence } from "../../auth/identity-capacities";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../../types";
 
 export const EFFECTIVE_GROUP_LINEAGE_CTE = `WITH RECURSIVE effective_lineage(id, depth, continue_up) AS (
@@ -108,11 +110,40 @@ function groupAuthorizationEvidence(
          ))`
       : "0";
 
+  const session = actor.oauthAuthorizationId
+    ? userSessionAuthorizationEvidence(actor.id, actor.sessionId ?? "")
+    : undefined;
+  const delegatedRequirement =
+    mode === "global"
+      ? "SELECT ? AS permission, NULL AS context_type, NULL AS context_id, 0 AS scanner_legacy_compatible"
+      : "SELECT ? AS permission, 'group' AS context_type, id AS context_id, 0 AS scanner_legacy_compatible FROM requested_groups";
+  const delegatedCeiling = actor.oauthAuthorizationId
+    ? `AND EXISTS (${session!.sql})
+       AND EXISTS (SELECT 1 FROM oauth_authorizations authorization
+         WHERE authorization.id=? AND authorization.user_id=active_actor.id AND authorization.session_id=?
+           AND ${activeOauthAuthorizationSql("authorization")}
+           AND EXISTS (SELECT 1 FROM (${delegatedRequirement}) requirement
+             WHERE ${oauthPermissionCeilingSql("authorization", "requirement")}))`
+    : "";
+
+  // Filter before expanding lineage so an approved target and a different live
+  // target cannot jointly satisfy an "any group" check.
+  const delegatedTargets =
+    actor.oauthAuthorizationId && mode !== "global"
+      ? `SELECT candidate.id FROM requested_group_candidates candidate
+       WHERE EXISTS (SELECT 1 FROM oauth_authorizations authorization
+         WHERE authorization.id=? AND EXISTS (
+           SELECT 1 FROM (SELECT ? AS permission, 'group' AS context_type,
+             candidate.id AS context_id, 0 AS scanner_legacy_compatible) requirement
+           WHERE ${oauthPermissionCeilingSql("authorization", "requirement")}))`
+      : "SELECT id FROM requested_group_candidates";
+
   return {
     sql: `WITH RECURSIVE
-            requested_groups(id) AS (
+            requested_group_candidates(id) AS (
               ${requestedGroups.sql}
             ),
+            requested_groups(id) AS (${delegatedTargets}),
             effective_lineage(target_id, id, depth, continue_up) AS (
               SELECT target.id, target_group.id, 0,
                      CASE WHEN target_group.governance_inheritance_mode = 'inherited' THEN 1 ELSE 0 END
@@ -129,6 +160,7 @@ function groupAuthorizationEvidence(
           SELECT 1
             FROM users active_actor
            WHERE active_actor.id = ? AND active_actor.active = 1
+             ${delegatedCeiling}
              AND (
                EXISTS (
                  SELECT 1
@@ -173,7 +205,17 @@ function groupAuthorizationEvidence(
                )
              )
            LIMIT 1`,
-    bindings: [...requestedGroups.bindings, actor.id, permission, ...selectedMember.bindings, permission],
+    bindings: [
+      ...requestedGroups.bindings,
+      ...(actor.oauthAuthorizationId && mode !== "global" ? [actor.oauthAuthorizationId, permission] : []),
+      actor.id,
+      ...(actor.oauthAuthorizationId
+        ? [...session!.bindings, actor.oauthAuthorizationId, actor.sessionId ?? null, permission]
+        : []),
+      permission,
+      ...selectedMember.bindings,
+      permission,
+    ],
   };
 }
 
@@ -219,6 +261,20 @@ export function groupManagementCandidateAuthorizationEvidence(
     "effective",
     memberSelection,
   );
+}
+
+/** Applies effective read or management permission to a candidate group row. */
+export function groupReadCandidateAuthorizationEvidence(
+  actor: AuthAdmin,
+  groupIdExpression = "g.id",
+): AuthorizationEvidence {
+  const alternatives = ["groups:read", "groups:write"].map((permission) =>
+    groupAuthorizationEvidence(actor, { sql: `SELECT ${groupIdExpression}`, bindings: [] }, permission, "effective"),
+  );
+  return {
+    sql: alternatives.map((evidence) => `SELECT 1 FROM (${evidence.sql})`).join(" UNION ALL "),
+    bindings: alternatives.flatMap((evidence) => [...evidence.bindings]),
+  };
 }
 
 /** Read-only consumers keep the canonical group policy in their replica transaction. */

@@ -191,15 +191,17 @@ describe("MCP OAuth session interoperability", () => {
     expect((await initialize(tokens.access_token)).status).toBe(200);
   });
 
-  it("discovers scoped operations through MCP search", async () => {
+  it("discovers scoped operations through compact MCP discovery", async () => {
     await withAuthorizedMcpClient(async (client) => {
       expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual(
-        expect.arrayContaining(["search", "execute"]),
+        expect.arrayContaining(["discover_operations", "inspect_operation", "request", "execute", "batch_read"]),
       );
       const search = await client.callTool({
-        name: "search",
+        name: "discover_operations",
         arguments: {
-          code: 'async () => { const spec = await codemode.spec(); return Object.keys(spec.paths).filter(path => path === "/api/v1/organizations"); }',
+          q: "/api/v1/organizations",
+          method: "GET",
+          limit: 1,
         },
       });
       expect(search.isError).not.toBe(true);

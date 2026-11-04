@@ -4,7 +4,12 @@ import { requestDb, type AdminContext } from "../../../_lib/db/context";
 import { AppError } from "../../../_lib/errors";
 import { json } from "../../../_lib/http";
 import { openApiRoute } from "../../../_lib/openapi/route";
-import { createGroup, groupManagementCandidateAuthorizationEvidence, listGroups } from "../../../_lib/services/groups";
+import {
+  createGroup,
+  groupManagementCandidateAuthorizationEvidence,
+  groupReadCandidateAuthorizationEvidence,
+  listGroups,
+} from "../../../_lib/services/groups";
 import {
   groupCreateRouteSchema,
   groupsListRouteSchema,
@@ -25,7 +30,9 @@ export const GroupsList = openApiRoute(groupsListRouteSchema, async (c: AdminCon
     requiredAuthorization:
       data.query.manageable && viewer.kind === "user" && viewer.staff
         ? groupManagementCandidateAuthorizationEvidence(viewer.staff)
-        : undefined,
+        : viewer.kind === "user" && viewer.staff?.scopeRestricted
+          ? groupReadCandidateAuthorizationEvidence(viewer.staff)
+          : undefined,
   });
   return json(
     groupsListResponseSchema.parse({

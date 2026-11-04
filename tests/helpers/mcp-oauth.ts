@@ -3,6 +3,7 @@ import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test"
 import type { Env } from "../../functions/_lib/types";
 import app from "./app";
 import { createAdminSession } from "./auth";
+import type { AuthScope } from "../../functions/_lib/auth/scopes";
 import { queryAll } from "./context";
 import { MCP_PATH } from "../../functions/_lib/api-tools/mcp-worker";
 import {
@@ -24,7 +25,12 @@ export function createMcpOauthTestClient(env: Env) {
     return response;
   }
 
-  async function createAuthorization(userToken?: string, client?: { clientId: string; redirectUri: string }) {
+  async function createAuthorization(
+    userToken?: string,
+    client?: { clientId: string; redirectUri: string },
+    selectedScopes?: readonly AuthScope[],
+    actingIdentityId: string | null = null,
+  ) {
     const [user] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE normalized_email = ?", [
       "admin@pkic.org",
     ]);
@@ -52,18 +58,18 @@ export function createMcpOauthTestClient(env: Env) {
       .replace(/\+/g, "-")
       .replace(/\//g, "_")
       .replace(/=+$/, "");
-    const returnTo = `${MCP_OAUTH_AUTHORIZE_PATH}?${new URLSearchParams({ client_id: clientId, redirect_uri: callbackUri, response_type: "code", scope: "forms:read forms:write organizations:read users:read", state: "test-state", code_challenge: challenge, code_challenge_method: "S256", resource: `${origin}${MCP_PATH}` })}`;
+    const returnTo = `${MCP_OAUTH_AUTHORIZE_PATH}?${new URLSearchParams({ client_id: clientId, redirect_uri: callbackUri, response_type: "code", scope: selectedScopes?.join(" ") ?? "forms:read forms:write organizations:read users:read", state: "test-state", code_challenge: challenge, code_challenge_method: "S256", resource: `${origin}${MCP_PATH}` })}`;
     const approval = await call(MCP_OAUTH_AUTHORIZE_PATH, {
       method: "POST",
       headers: { "content-type": "application/json", cookie: `pkic_session=${session}` },
       body: JSON.stringify({
         action: "approve",
         return_to: returnTo,
-        scopes: ["forms:read", "organizations:read", "users:read"],
-        actingIdentityId: null,
+        scopes: selectedScopes ?? ["forms:read", "organizations:read", "users:read"],
+        actingIdentityId,
       }),
     });
-    expect(approval.status).toBe(202);
+    expect(approval.status, await approval.clone().text()).toBe(202);
     const { authorizationId } = (await approval.json()) as { authorizationId: string };
     const completed = await call(`/api/v1/auth/oauth/authorizations/${authorizationId}/completion`, {
       headers: { cookie: `pkic_session=${session}` },
@@ -95,8 +101,12 @@ export function createMcpOauthTestClient(env: Env) {
     });
   }
 
-  async function authorize(userToken?: string) {
-    const grant = await createAuthorization(userToken);
+  async function authorize(
+    userToken?: string,
+    selectedScopes?: readonly AuthScope[],
+    actingIdentityId: string | null = null,
+  ) {
+    const grant = await createAuthorization(userToken, undefined, selectedScopes, actingIdentityId);
     const tokens = await redeemCode(grant);
     expect(tokens.status).toBe(200);
     return {
@@ -130,5 +140,28 @@ export function createMcpOauthTestClient(env: Env) {
     });
   }
 
-  return { call, createAuthorization, redeemCode, authorize, exchange, initialize };
+  async function callTool(token: string, name: string, args: Record<string, unknown>) {
+    const response = await call(MCP_PATH, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+      },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name, arguments: args } }),
+    });
+    expect(response.status).toBe(200);
+    const text = await response.text();
+    const payload = text.startsWith("event:")
+      ? text
+          .split("\n")
+          .find((line) => line.startsWith("data: "))!
+          .slice(6)
+      : text;
+    const rpc = JSON.parse(payload);
+    expect(rpc.error).toBeUndefined();
+    return rpc.result;
+  }
+
+  return { call, callTool, createAuthorization, redeemCode, authorize, exchange, initialize };
 }

@@ -27,14 +27,19 @@ describe("OpenAPI schema generation", () => {
     expect(spec.paths[`${agenda}/participation`]?.get).toBeDefined();
   });
 
-  it("exposes identity corrections through MCP with their delegated permissions", () => {
+  it("preserves canonical identity authentication through MCP", () => {
     const spec = filterOpenApiSpecForMcp(openapi.schema);
     expect(spec.paths["/api/v1/identities"].get.security).toEqual([{ McpSession: ["membership:read"] }]);
     const correction = spec.paths["/api/v1/users/{userId}/identities/{identityId}/corrections"].post;
-    expect(correction.security).toEqual([{ McpSession: ["membership:write", "identities:activate"] }]);
+    expect(correction.security).toEqual([{ McpSession: [] }]);
+    expect(correction[AUTH_EXTENSION]).toEqual(
+      decorateOpenApiSpec(openapi.schema).paths["/api/v1/users/{userId}/identities/{identityId}/corrections"].post[
+        AUTH_EXTENSION
+      ],
+    );
     const email = spec.paths["/api/v1/users/{userId}/identities/{identityId}/email"];
-    expect(email.get.security).toEqual([{ McpSession: ["users:read"] }]);
-    expect(email.put.security).toEqual([{ McpSession: ["membership:write"] }]);
+    expect(email.get.security).toEqual([{ McpSession: [] }]);
+    expect(email.put.security).toEqual([{ McpSession: [] }]);
     expect(correction["x-pkic-mcp"].readonly).toBe(false);
   });
 

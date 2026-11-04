@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { filterOpenApiSpecForMcp } from "../functions/_lib/openapi/mcp.ts";
+import { buildMcpCatalog, MCP_CATALOG_PATH, MCP_CONTRACTS_PATH } from "../functions/_lib/openapi/mcp-catalog.ts";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const environment = process.argv[2] ?? "local";
@@ -106,6 +107,16 @@ try {
     await writeFile(destination, body);
     console.log(`Generated ${path} (${Buffer.byteLength(body)} bytes)`);
   }
+  const { catalog, contracts } = buildMcpCatalog(mcpOpenapi);
+  await rm(artifactPath(MCP_CONTRACTS_PATH), { recursive: true, force: true });
+  await mkdir(artifactPath(MCP_CONTRACTS_PATH), { recursive: true });
+  await writeFile(artifactPath(MCP_CATALOG_PATH), JSON.stringify(catalog));
+  for (const [key, contract] of Object.entries(contracts)) {
+    await writeFile(artifactPath(`${MCP_CONTRACTS_PATH}/${key}.json`), JSON.stringify(contract));
+  }
+  console.log(
+    `Generated MCP discovery index (${Buffer.byteLength(JSON.stringify(catalog))} bytes, ${catalog.length} operations)`,
+  );
 } finally {
   if (child.exitCode === null && child.signalCode === null) {
     const exit = new Promise((resolvePromise) => child.once("exit", resolvePromise));

@@ -7,6 +7,9 @@ import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { getGroup } from "../groups";
 import { requireGroupResourceAccess, managedGroupResourceAuthorizationEvidence } from "../resource-grants";
+import { prepareGroupManagementAuthorizationGuard } from "../groups/governance";
+import { isUserBackedAuthAdmin } from "../../auth/admin-identity";
+import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
 
 export type EventResourceManagementCapability = "manage" | "manage_attendance";
 
@@ -72,10 +75,19 @@ async function executeEventResourceManagementBatch(
   capability: EventResourceManagementCapability,
   statements: StatementLike[],
 ): Promise<D1StatementResult[]> {
+  const delegated = isUserBackedAuthAdmin(actor) && Boolean(actor.oauthAuthorizationId);
   try {
-    return await db.batch([prepareEventResourceManagementGuard(db, actor, context, capability), ...statements]);
+    const results = await db.batch([
+      ...(delegated ? [prepareGroupManagementAuthorizationGuard(db, actor, [context.groupId])] : []),
+      prepareEventResourceManagementGuard(db, actor, context, capability),
+      ...statements,
+    ]);
+    return delegated ? results.slice(1) : results;
   } catch (error) {
-    if (error instanceof Error && error.message.includes("EVENT_RESOURCE_MANAGEMENT_CONTEXT_CHANGED")) {
+    if (
+      (delegated && isAuthorizationGuardFailure(error)) ||
+      (error instanceof Error && error.message.includes("EVENT_RESOURCE_MANAGEMENT_CONTEXT_CHANGED"))
+    ) {
       if (capability === "manage_attendance") {
         throw new AppError(
           409,

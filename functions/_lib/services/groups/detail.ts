@@ -71,13 +71,21 @@ export async function getAuthenticatedGroupContext(
     viewer,
     viewer.admin ? hasPermission(viewer.admin, "groups:read") : false,
   );
-  if (!context || (!context.visible && !context.manager))
+  if (
+    !context ||
+    (!context.visible &&
+      !context.manager &&
+      !(viewer.admin?.scopeRestricted && context.delegatedAuthorized && context.group.active))
+  )
     throw new AppError(404, "GROUP_NOT_FOUND", "Group not found or not visible");
   const { group, participant, manager } = context;
+  if (!context.delegatedAuthorized) {
+    throw new AppError(403, "GROUP_PERMISSION_REQUIRED", "The delegated permissions do not cover this group");
+  }
 
   const capabilities: GroupCapability[] = [
     "view",
-    ...(participant ? (["participate"] as const) : []),
+    ...(participant && !viewer.admin?.scopeRestricted ? (["participate"] as const) : []),
     ...(manager ? (["manage"] as const) : []),
   ];
   return { group, capabilities };

@@ -10,6 +10,8 @@ import site_Router from "./site/router";
 import { decorateOpenApiSpec, filterOpenApiSpecForMcp } from "./_lib/openapi/mcp";
 import { OPENAPI_INFO, OPENAPI_TAGS, OPENAPI_TAG_GROUPS } from "./_lib/openapi/document";
 import { createMcpWorkerFetch, MCP_OPENAPI_JSON_PATH } from "./_lib/api-tools/mcp-worker";
+import { buildMcpCatalog } from "./_lib/openapi/mcp-catalog";
+import { createCatalogSource } from "./_lib/api-tools/catalog-source";
 import { getStaticAssetsBinding } from "./_lib/static-assets";
 import { handleError } from "./_lib/http";
 import type { Env } from "./_lib/types";
@@ -75,13 +77,14 @@ async function builtDocumentResponse(
   return fallback();
 }
 
-async function getMcpOpenApiSchema(request: Request, env: Env): Promise<Record<string, unknown>> {
-  const assets = getStaticAssetsBinding(env);
-  if (assets) {
-    const response = await assets.fetch(new Request(new URL(MCP_OPENAPI_JSON_PATH, request.url)));
-    if (response.ok) return (await response.json()) as Record<string, unknown>;
-  }
-  return filterOpenApiSpecForMcp(openapi.schema);
+// Local development fallback only; production uses the generated index and per-operation assets.
+let fallbackMcpCatalog: ReturnType<typeof buildMcpCatalog> | undefined;
+function getOperationSource(request: Request, env: Env) {
+  return createCatalogSource(
+    getStaticAssetsBinding(env),
+    new URL(request.url).origin,
+    () => (fallbackMcpCatalog ??= buildMcpCatalog(filterOpenApiSpecForMcp(openapi.schema))),
+  );
 }
 
 app.get(OPENAPI_JSON_PATH, (c) => builtDocumentResponse(c.req.raw, c.env, OPENAPI_JSON_PATH, openApiSpecResponse));
@@ -99,6 +102,6 @@ app.route("/events", events_Router);
 app.route("/", site_Router);
 
 // Build the MCP fetch handler after OpenAPI routes are registered.
-const fetchWithMcp = createMcpWorkerFetch({ app, getMcpOpenApiSchema });
+const fetchWithMcp = createMcpWorkerFetch({ app, getOperationSource });
 
 export default fetchWithMcp;
