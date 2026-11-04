@@ -214,7 +214,10 @@ describe("Event-owned badge lifecycle", () => {
           .run();
       const all = badgeCredentialsResponseSchema.parse(await (await request(base)).json());
       expect(all.badges[0]?.displayName).toBeNull();
-      const searched = badgeCredentialsResponseSchema.parse(await (await request(`${base}?q=Ada`)).json());
+      // A short hex-only name fragment can also match a random credential ID.
+      const searched = badgeCredentialsResponseSchema.parse(
+        await (await request(`${base}?q=${encodeURIComponent("Ada Lovelace")}`)).json(),
+      );
       expect(searched.badges).toEqual([]);
       expect((await request(`${base}/${all.badges[0]!.id}`, { method: "DELETE" })).status).toBe(200);
     },

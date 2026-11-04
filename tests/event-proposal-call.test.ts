@@ -13,6 +13,7 @@ import { eventDetailResponseSchema } from "../assets/shared/schemas/event-manage
 import { prepareDirectEventFormSelection } from "../functions/_lib/services/events/direct-form-selection";
 import { getEventById } from "../functions/_lib/services/events";
 import { getActiveFormForEvent } from "../functions/_lib/services/forms";
+import { getActiveFormById } from "../functions/_lib/services/forms/read";
 import { prepareFormSubmissionGuard } from "../functions/_lib/services/forms/submission-command";
 import { readEventProposalCall } from "../functions/_lib/services/events/proposal-call";
 
@@ -65,6 +66,10 @@ async function groupProposalCall(groupManaged = false) {
     env.DB.prepare(
       "INSERT INTO forms(id,key,scope_type,scope_ref,purpose,status,title,created_at,updated_at) VALUES (?, 'group-proposals', 'community', ?, 'proposal_submission', 'active', 'Group proposals', ?, ?)",
     ).bind(formId, groupId, updatedAt, updatedAt),
+    env.DB.prepare(
+      `INSERT INTO form_fields(id,form_id,key,label,field_type,required,validation_json,sort_order,created_at,updated_at)
+       VALUES (?,?,'proposed_topic','Proposed topic','textarea',1,'{"maxLength":2000}',0,?,?)`,
+    ).bind(crypto.randomUUID(), formId, updatedAt, updatedAt),
     ...[eventId, otherEventId].map((id) =>
       env.DB.prepare(
         "INSERT INTO form_placements(id,form_id,owner_group_id,context_type,context_ref,audience,active,created_at,updated_at) VALUES (?, ?, ?, 'event', ?, 'speaker', 1, ?, ?)",
@@ -103,6 +108,8 @@ describe("event call for proposals", () => {
     "lets the manager close and reopen a group-owned form for this event only (group context: %s)",
     async (groupManaged) => {
       const fixture = await groupProposalCall(groupManaged);
+      const definition = await getActiveFormById(env.DB, fixture.formId);
+      expect(definition?.fields).toHaveLength(1);
       const closesAt = at(-1);
       const response = await fixture.save({ proposalSubmissionWindow: { opensAt: null, closesAt } });
       expect(response.status).toBe(200);
@@ -110,6 +117,7 @@ describe("event call for proposals", () => {
       const { event } = responseSchema.parse(await response.json());
       expect((await readEventProposalCall(env.DB, fixture.eventId)).open).toBe(false);
       expect((await readEventProposalCall(env.DB, fixture.otherEventId)).open).toBe(true);
+      expect(await getActiveFormById(env.DB, fixture.formId)).toEqual(definition);
       expect(
         await env.DB.prepare("SELECT owner_group_id, form_id, closes_at FROM form_placements WHERE id=?")
           .bind(fixture.placementId)
@@ -126,6 +134,7 @@ describe("event call for proposals", () => {
         event.updatedAt,
       );
       expect(reopened.status).toBe(200);
+      expect(await getActiveFormById(env.DB, fixture.formId)).toEqual(definition);
       expect((await readEventProposalCall(env.DB, fixture.eventId)).open).toBe(true);
       const stale = await fixture.save({ proposalSubmissionWindow: { opensAt: null, closesAt } });
       expect(stale.status).toBe(409);
