@@ -1,4 +1,4 @@
-import { EVENT_HERO_VARIANT_WIDTHS } from "../event-hero-image-variants";
+import { EVENT_HERO_IMAGE_FILE_PATTERN, EVENT_HERO_VARIANT_WIDTHS } from "../event-hero-image-variants";
 import { z } from "zod";
 import { eventSlugParamsSchema, jsonErrorResponse } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
@@ -83,7 +83,7 @@ export const eventHeroImageGetRouteSchema = {
   tags: ["Events"],
   summary: "Read the current event hero image",
   request: {
-    params: eventSlugParamsSchema.extend({ file: z.string().regex(/^[0-9a-f-]{36}\.(jpg|png|webp)$/) }),
+    params: eventSlugParamsSchema.extend({ file: z.string().regex(EVENT_HERO_IMAGE_FILE_PATTERN) }),
     query: z.object({ width: z.enum(EVENT_HERO_VARIANT_WIDTHS).optional() }),
   },
   responses: {

@@ -12,6 +12,7 @@ import {
 } from "../utils/image-format";
 import { resolveHeroImageSource } from "../utils/hero-image-url";
 import { currentEventHeroImage } from "./events/hero-image";
+import { parseEventHeroImagePath } from "../../../assets/shared/event-hero-image-variants";
 
 export { resolveHeroImageSource } from "../utils/hero-image-url";
 
@@ -96,10 +97,10 @@ export async function fetchHeroImage(
     const signal = AbortSignal.timeout(timeoutMs);
     let response: Response;
     if (source.assetPath) {
-      const uploaded = /^\/api\/v1\/events\/([^/]+)\/images\/([0-9a-f-]{36}\.(?:jpg|png|webp))$/.exec(source.assetPath);
+      const uploaded = parseEventHeroImagePath(source.assetPath);
       response =
         uploaded && env.DB
-          ? await currentEventHeroImage(env.DB, env, decodeURIComponent(uploaded[1]), uploaded[2], {
+          ? await currentEventHeroImage(env.DB, env, uploaded.slug, uploaded.file, {
               width: "1200",
               origin,
             })
