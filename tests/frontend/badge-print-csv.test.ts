@@ -18,7 +18,16 @@ const badge: PrintableBadgePrint = {
   ),
 };
 describe("printer personalization CSV", () => {
-  it("matches the supplied seven-column template, including recovered badge codes", () => {
+  it("matches the seven-column printer template, including recovered badge codes", () => {
+    expect(printerTemplate.columns).toEqual([
+      "role",
+      "first_name",
+      "last_name",
+      "job_title",
+      "organization",
+      "attendee_id",
+      "qr_content",
+    ]);
     expect(badgePrintCsv([badge])).toBe(
       `\uFEFF${printerTemplate.columns.join(",")}\r\nAttendee,Synthetic,Attendee,Cryptography Policy Advisor,Example Research Lab,ABCD-EFGH-JKLM-NPQR,ABCDEFGHJKLMNPQR`,
     );

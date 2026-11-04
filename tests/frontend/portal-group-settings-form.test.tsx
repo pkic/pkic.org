@@ -145,6 +145,34 @@ describe("group settings form", () => {
     await beginRecordEdit(container, "Group settings actions");
     expect((labeled(container, "Name")[0] as HTMLInputElement).value).toBe(group.name);
   });
+  it("preserves a draft across a refresh of the same revision and resets for a new revision", async () => {
+    const onUpdated = vi.fn(async () => undefined);
+    const container = mount(<GroupSettingsForm group={group} onUpdated={onUpdated} />);
+    await settle();
+    await beginRecordEdit(container, "Group settings actions");
+    const name = labeled(container, "Name")[0] as HTMLInputElement;
+    await act(async () => {
+      name.value = "Unsaved edit";
+      name.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(() => render(<GroupSettingsForm group={{ ...group }} onUpdated={onUpdated} />, container));
+    await settle();
+    expect((labeled(container, "Name")[0] as HTMLInputElement).value).toBe("Unsaved edit");
+    await act(() =>
+      render(
+        <GroupSettingsForm
+          group={{ ...group, name: "Updated group", revision: group.revision + 1 }}
+          onUpdated={onUpdated}
+        />,
+        container,
+      ),
+    );
+    await settle();
+    expect(container.textContent).toContain("Updated group");
+    await beginRecordEdit(container, "Group settings actions");
+    expect((labeled(container, "Name")[0] as HTMLInputElement).value).toBe("Updated group");
+  });
+
   it("binds every label to the control it names and draws real choice controls", async () => {
     stubPatch(() => json(saveResponse));
     const container = mount(<GroupSettingsForm group={group} onUpdated={vi.fn(async () => undefined)} />);

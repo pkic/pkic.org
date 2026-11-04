@@ -74,10 +74,12 @@ export function FastScannerView({
 }) {
   const [review, setReview] = useState<EventScanRequest | null>(null);
   const [operatorOpen, setOperatorOpen] = useState(false);
+  const operatorPause = useRef(onOperatorPause);
+  operatorPause.current = onOperatorPause;
   useLayoutEffect(() => {
-    onOperatorPause?.(operatorOpen);
+    operatorPause.current?.(operatorOpen);
     if (!operatorOpen) setReview(null);
-    return () => onOperatorPause?.(false);
+    return () => operatorPause.current?.(false);
   }, [operatorOpen]);
   const pointer = useRef<{ x: number; y: number } | null>(null);
   const trigger = useRef<HTMLButtonElement>(null),

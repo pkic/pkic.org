@@ -68,11 +68,12 @@ export function VirtualRoom({ slug, eventName }: { slug: string; eventName: stri
   const startsAt = sessions[0]?.startAt;
   const waiting = Boolean(startsAt && now < Date.parse(startsAt));
   const previousCountdown = useRef({ roomId, waiting });
+  const reloadStreams = streams.reload;
   useEffect(() => {
     const previous = previousCountdown.current;
     previousCountdown.current = { roomId, waiting };
-    if (previous.roomId === roomId && previous.waiting && !waiting) void streams.reload();
-  }, [roomId, waiting, streams.reload]);
+    if (previous.roomId === roomId && previous.waiting && !waiting) void reloadStreams();
+  }, [roomId, waiting, reloadStreams]);
   if (streams.loading || program.loading) return <Spinner label="Opening the virtual room…" />;
   if (streams.error) return <ErrorAlert error={streams.error} />;
   if (!room)

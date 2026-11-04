@@ -174,7 +174,16 @@ export function SessionActionBar({
   const reason = held || seat ? null : unavailableReason(session);
   const invited = invitedStanding(session);
   return (
-    <form class="pk-stack pk-stack--snug" noValidate {...reserve.handlers} onSubmit={takeSeat}>
+    <form
+      class="pk-stack pk-stack--snug"
+      noValidate
+      {...reserve.handlers}
+      onSubmit={(event) => {
+        void takeSeat(event).catch((error: unknown) =>
+          setError(error instanceof Error ? error.message : "Could not update your seat."),
+        );
+      }}
+    >
       {notice && <Alert tone="warn">{notice}</Alert>}
       {(held || invited || seat || session.liveStreamRoomId || session.onlineAccessAvailable) && (
         <div class="pk-cluster">

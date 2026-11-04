@@ -1,4 +1,6 @@
 import { memo } from "preact/compat";
+import { useState } from "preact/hooks";
+import { Alert } from "../ui/Alert";
 import { formatClockInZone, formatTimeOfDay } from "../../shared/format-date";
 import { formatNumber } from "../../shared/format-number";
 import {
@@ -49,7 +51,13 @@ function keepLabel(message: LiveChatMessage): string {
 }
 
 /** The message's menu: the other actions the policy grants, each sent as the room's own command. */
-function menuItems(message: LiveChatMessage, actions: Set<LiveChatAction>, send: Send): MenuItem[] {
+function menuItems(
+  message: LiveChatMessage,
+  actions: Set<LiveChatAction>,
+  send: Send,
+  onError: () => void,
+  onRetry: () => void,
+): MenuItem[] {
   const messageId = message.id;
   const items: MenuItem[] = [];
   if (actions.has("report"))
@@ -101,14 +109,18 @@ function menuItems(message: LiveChatMessage, actions: Set<LiveChatAction>, send:
       id: "ban",
       label: "Ban from chat",
       danger: true,
-      onSelect: async () => {
-        const confirmed = await confirmAction({
+      onSelect: () => {
+        onRetry();
+        void confirmAction({
           title: `Ban ${message.authorName} from this chat?`,
           body: "They can't read or write in this session's chat, and their messages are hidden from everyone until you lift the ban.",
           confirmLabel: "Ban from chat",
           tone: "danger",
-        });
-        if (confirmed) send({ type: "chat.restrict", messageId, restriction: "banned" });
+        })
+          .then((confirmed) => {
+            if (confirmed) send({ type: "chat.restrict", messageId, restriction: "banned" });
+          })
+          .catch(onError);
       },
     });
   if (actions.has("delete"))
@@ -117,14 +129,18 @@ function menuItems(message: LiveChatMessage, actions: Set<LiveChatAction>, send:
       label: "Delete message",
       danger: true,
       separatorBefore: items.length > 0,
-      onSelect: async () => {
-        const confirmed = await confirmAction({
+      onSelect: () => {
+        onRetry();
+        void confirmAction({
           title: "Delete your message?",
           body: "It's removed for everyone in the session.",
           confirmLabel: "Delete message",
           tone: "danger",
-        });
-        if (confirmed) send({ type: "chat.delete", messageId });
+        })
+          .then((confirmed) => {
+            if (confirmed) send({ type: "chat.delete", messageId });
+          })
+          .catch(onError);
       },
     });
   return items;
@@ -186,8 +202,17 @@ export const LiveChatMessageRow = memo(function LiveChatMessageRow({
   /** The session's zone: a message reads on the room's own clock, like its agenda. */
   timeZone: string;
 }) {
+  const [actionError, setActionError] = useState(false);
   const actions = liveChatMessageActions(message, viewer);
-  const items = disabled ? [] : menuItems(message, actions, send);
+  const items = disabled
+    ? []
+    : menuItems(
+        message,
+        actions,
+        send,
+        () => setActionError(true),
+        () => setActionError(false),
+      );
   const canReact = !disabled && actions.has("react");
   const reactions = LIVE_CHAT_REACTIONS.filter((reaction) => (message.reactions?.[reaction.id] ?? 0) > 0);
   const time = formatClockInZone(message.sentAt, timeZone);
@@ -200,6 +225,7 @@ export const LiveChatMessageRow = memo(function LiveChatMessageRow({
     >
       <Avatar name={message.authorName} src={message.authorPhotoUrl ?? undefined} size="sm" />
       <div class="pk-live-chat__body">
+        {actionError && <Alert tone="danger">Could not complete the action. Please try again.</Alert>}
         <div class="pk-live-chat__byline">
           <LiveAuthorName
             class="pk-live-chat__author"

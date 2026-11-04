@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["typescript"],
+  "plugins": ["typescript", "react", "jsx-a11y", "vitest"],
   "jsPlugins": ["./scripts/oxlint/pkic-rules.mjs"],
   "categories": { "correctness": "off" },
   "options": { "typeAware": true },
@@ -100,8 +100,58 @@
   },
   "overrides": [
     {
-      // typescript-eslint recommendedTypeChecked, with the repository's
-      // overrides. TypeScript itself checks what the first group turns off.
+      // Preact uses the same hook ordering and dependency rules as React.
+      "files": ["assets/ts/**/*.{ts,tsx}"],
+      "rules": {
+        "react/rules-of-hooks": "error",
+        "react/exhaustive-deps": "error"
+      }
+    },
+    {
+      "files": ["assets/ts/**/*.tsx"],
+      "rules": {
+        "jsx-a11y/anchor-has-content": "error",
+        "jsx-a11y/aria-activedescendant-has-tabindex": "error",
+        "jsx-a11y/aria-props": "error",
+        "jsx-a11y/aria-proptypes": "error",
+        "jsx-a11y/aria-role": ["error", { "ignoreNonDOM": true }],
+        "jsx-a11y/aria-unsupported-elements": "error",
+        "jsx-a11y/click-events-have-key-events": "error",
+        "jsx-a11y/control-has-associated-label": [
+          "error",
+          {
+            "ignoreElements": [
+              "audio",
+              "canvas",
+              "embed",
+              "input",
+              "textarea",
+              "tr",
+              "video",
+              "td",
+              "option",
+              "datalist"
+            ]
+          }
+        ],
+        "jsx-a11y/interactive-supports-focus": "error",
+        "jsx-a11y/label-has-associated-control": "error",
+        "jsx-a11y/role-has-required-aria-props": "error",
+        "jsx-a11y/role-supports-aria-props": "error"
+      }
+    },
+    {
+      "files": ["tests/**/*.test.{ts,tsx}", "tests/public-site-catalog.migration.ts"],
+      "excludeFiles": ["tests/e2e/**/*.{ts,tsx}"],
+      "rules": {
+        "vitest/no-focused-tests": "error",
+        "vitest/valid-describe-callback": "error",
+        "vitest/valid-expect": ["error", { "maxArgs": 2 }]
+      }
+    },
+    {
+      // typescript-eslint recommendedTypeChecked, with repository overrides.
+      // The first group avoids selected checks that overlap with TypeScript.
       "files": [
         "functions/**/*.{ts,tsx}",
         "assets/shared/**/*.ts",
@@ -127,7 +177,6 @@
         "no-setter-return": "off",
         "no-this-before-super": "off",
         "no-undef": "off",
-        "no-unreachable": "off",
         "no-unsafe-negation": "off",
         "no-with": "off",
         "no-var": "error",
@@ -149,7 +198,7 @@
         "typescript/no-for-in-array": "error",
         "typescript/no-implied-eval": "error",
         "typescript/no-misused-new": "error",
-        "typescript/no-misused-promises": ["error", { "checksVoidReturn": false }],
+        "typescript/no-misused-promises": "error",
         "typescript/no-namespace": "error",
         "typescript/no-non-null-asserted-optional-chain": "error",
         "typescript/no-require-imports": "error",
@@ -234,12 +283,7 @@
     {
       // Dates and time zones go through one formatter and one wall-clock codec,
       // so no screen silently falls back to the viewer's zone for an event's clock.
-      "files": [
-        "assets/**/*.{js,ts,tsx}",
-        "functions/**/*.{js,ts,tsx}",
-        "site/**/*.ts",
-        "static/scripts/**/*.js"
-      ],
+      "files": ["assets/**/*.{js,ts,tsx}", "functions/**/*.{js,ts,tsx}", "site/**/*.ts", "static/scripts/**/*.js"],
       "rules": {
         "no-restricted-properties": [
           "error",

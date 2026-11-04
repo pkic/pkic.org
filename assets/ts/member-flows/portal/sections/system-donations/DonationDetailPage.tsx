@@ -130,7 +130,11 @@ function DonationDetailView({ donationId, canSync }: { donationId: string; canSy
                 variant="secondary"
                 loading={syncing}
                 disabled={syncing}
-                onClick={() => handleSync(d.checkout_session_id)}
+                onClick={() => {
+                  void handleSync(d.checkout_session_id).catch((error: unknown) =>
+                    toast(error instanceof Error ? error.message : "Could not sync donation.", "error"),
+                  );
+                }}
               >
                 {syncing ? "Syncing…" : "Sync with Stripe"}
               </Button>

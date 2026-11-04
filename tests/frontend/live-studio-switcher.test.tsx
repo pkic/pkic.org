@@ -1,5 +1,10 @@
 // @vitest-environment jsdom
+import { render } from "preact";
 import { act } from "preact/test-utils";
+import {
+  PROGRAM_UNDO_MS,
+  ProgramUndoToast,
+} from "../../assets/ts/member-flows/portal/sections/events/detail/live/studio/StudioSwitcher";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { liveSnapshot } from "./helpers/live-room-socket";
 import {
@@ -188,6 +193,41 @@ describe("the studio's switcher, session bar and phone layout", () => {
       });
       expect(toast()).toBeNull();
     } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps the original undo deadline across refreshes and starts a new deadline for a new snapshot", () => {
+    vi.useFakeTimers();
+    const host = document.createElement("div");
+    const undo = (snapshotId: string) => ({
+      snapshotId,
+      change: { operatorName: "Operator", at: "2026-01-01T00:00:00.000Z" },
+    });
+    const show = (snapshotId: string) =>
+      void act(() => render(<ProgramUndoToast undo={undo(snapshotId)} onUndo={() => {}} />, host));
+    try {
+      show("first");
+      void act(() => {
+        vi.advanceTimersByTime(PROGRAM_UNDO_MS / 2);
+      });
+      show("first");
+      void act(() => {
+        vi.advanceTimersByTime(PROGRAM_UNDO_MS / 2);
+      });
+      expect(host.querySelector(".pk-studio__toast")).toBeNull();
+      show("second");
+      expect(host.querySelector(".pk-studio__toast")).not.toBeNull();
+      void act(() => {
+        vi.advanceTimersByTime(PROGRAM_UNDO_MS - 1);
+      });
+      expect(host.querySelector(".pk-studio__toast")).not.toBeNull();
+      void act(() => {
+        vi.advanceTimersByTime(1);
+      });
+      expect(host.querySelector(".pk-studio__toast")).toBeNull();
+    } finally {
+      void act(() => render(null, host));
       vi.useRealTimers();
     }
   });

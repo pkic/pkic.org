@@ -1,4 +1,5 @@
-import { useEffect, useState } from "preact/hooks";
+import { useState } from "preact/hooks";
+import { useRevisionEffect } from "../../../../hooks/useRevisionEffect";
 import {
   eventOccurrenceResponseSchema,
   eventOccurrenceUpdateSchema,
@@ -39,9 +40,10 @@ export function MeetingOccurrenceEditor({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  useEffect(() => {
+  const draftRevision = JSON.stringify([occurrence.id, occurrence.updatedAt, timeZone]);
+  useRevisionEffect(() => {
     setDraft(draftFromOccurrence(occurrence, timeZone));
-  }, [occurrence.id, occurrence.updatedAt, timeZone]);
+  }, draftRevision);
 
   async function save(event: Event): Promise<void> {
     event.preventDefault();

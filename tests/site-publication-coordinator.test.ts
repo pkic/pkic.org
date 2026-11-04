@@ -379,9 +379,10 @@ async function assertActivationRefused(
       )
     : env.DB;
   const fetcher = activationFetcher(fixture.release);
-  const result = expect(activatePublicationAttempt(db, config, fixture.attempt.id, "token", fetcher)).rejects;
-  if (preflightIdentity) await result.toMatchObject({ code: "AGENDA_REPRESENTATION_IDENTITY_UNAVAILABLE" });
-  else await result.toThrow("AUTHORIZATION_CONTEXT_CHANGED");
+  const result = activatePublicationAttempt(db, config, fixture.attempt.id, "token", fetcher);
+  if (preflightIdentity)
+    await expect(result).rejects.toMatchObject({ code: "AGENDA_REPRESENTATION_IDENTITY_UNAVAILABLE" });
+  else await expect(result).rejects.toThrow("AUTHORIZATION_CONTEXT_CHANGED");
   if (mutate) expect(mutated).toBe(true);
   expect(fetcher.mock.calls.filter(([, init]) => init.method === "POST")).toHaveLength(0);
   expect(await activationState()).toEqual(expected);

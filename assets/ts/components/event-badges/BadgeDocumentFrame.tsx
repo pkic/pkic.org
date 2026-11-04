@@ -47,22 +47,26 @@ export function BadgeDocumentFrame({
       srcDoc={document.html}
       width={width}
       height={height}
-      onLoad={async (event) => {
+      onLoad={(event) => {
         const target = event.currentTarget;
         screenSheet.current = null;
-        try {
-          if (!(await applyBadgePrintPreviewStyles(target, document.css))) return;
-          const content = target.contentDocument;
-          const realm = target.contentWindow as (Window & typeof globalThis) | null;
-          if (!content || !realm) return;
-          const sheet = new realm.CSSStyleSheet();
-          sheet.replaceSync(latestScreenCss.current);
-          content.adoptedStyleSheets = [...content.adoptedStyleSheets, sheet];
-          screenSheet.current = sheet;
-          onReady?.();
-        } catch (cause) {
-          onError?.(cause instanceof Error ? cause.message : "Could not display the badge.");
-        }
+        void (async () => {
+          try {
+            if (!(await applyBadgePrintPreviewStyles(target, document.css))) return;
+            const content = target.contentDocument;
+            const realm = target.contentWindow as (Window & typeof globalThis) | null;
+            if (!content || !realm) return;
+            const sheet = new realm.CSSStyleSheet();
+            sheet.replaceSync(latestScreenCss.current);
+            content.adoptedStyleSheets = [...content.adoptedStyleSheets, sheet];
+            screenSheet.current = sheet;
+            onReady?.();
+          } catch (cause) {
+            onError?.(cause instanceof Error ? cause.message : "Could not display the badge.");
+          }
+        })().catch((cause: unknown) => {
+          console.error("Could not report badge preview failure:", cause);
+        });
       }}
     />
   );

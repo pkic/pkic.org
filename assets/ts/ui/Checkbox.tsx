@@ -20,6 +20,8 @@ export interface ChoiceProps extends ChoiceInputProps {
   label: ComponentChildren;
   /** Fill the available row while sibling actions remain at the trailing edge. */
   fill?: boolean;
+  /** Present a checkbox as an on/off switch. */
+  switch?: boolean;
   /** A second, quieter line under the label. */
   hint?: ComponentChildren;
   /** Extra classes for the wrapping label, e.g. a layout utility. */
@@ -32,6 +34,7 @@ function Choice({
   hint,
   class: className,
   fill = false,
+  switch: isSwitch = false,
   onChange,
   onInput,
   ...rest
@@ -58,7 +61,7 @@ function Choice({
 
   return (
     <label class={["pk-check", fill ? "pk-check--fill" : null, className].filter(Boolean).join(" ")}>
-      <input {...rest} type={type} class="pk-check__input" onInput={respond} />
+      <input {...rest} type={type} role={isSwitch ? "switch" : rest.role} class="pk-check__input" onInput={respond} />
       <span>
         <span class="pk-check__label">{label}</span>
         {hint && <span class="pk-check__hint">{hint}</span>}

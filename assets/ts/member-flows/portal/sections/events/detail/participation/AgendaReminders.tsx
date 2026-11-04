@@ -29,6 +29,7 @@ export function AgendaReminders({
       <PanelBody class="pk-stack" {...form.handlers}>
         <Checkbox
           role="switch"
+          aria-checked={settings.reminderEnabled}
           name="reminderEnabled"
           label="Email me before my sessions"
           checked={settings.reminderEnabled}

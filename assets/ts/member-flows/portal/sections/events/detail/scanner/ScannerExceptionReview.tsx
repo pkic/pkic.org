@@ -45,7 +45,14 @@ export function ScannerExceptionReview({
     }
   }
   return (
-    <form noValidate {...form.handlers} onSubmit={submit} class="pk-stack">
+    <form
+      noValidate
+      {...form.handlers}
+      onSubmit={(event) => {
+        void submit(event).catch(() => setError("The exception observation could not be saved. Retry."));
+      }}
+      class="pk-stack"
+    >
       <p>
         Review the last badge and submit an admission exception for a server decision.{" "}
         {canRecordAttendance ? "Attendance is recorded only if you select it below." : "Attendance is not recorded."}{" "}

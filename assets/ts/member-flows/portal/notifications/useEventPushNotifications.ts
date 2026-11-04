@@ -39,6 +39,7 @@ export function useEventPushNotifications(slug: string) {
   const endpoint = `/api/v1/events/${encodeURIComponent(slug)}/push`;
   useEffect(() => {
     const version = ++scope.current;
+    const scopeRef = scope;
     const controller = new AbortController();
     publicKey.current = null;
     setBusy(false);
@@ -76,7 +77,7 @@ export function useEventPushNotifications(slug: string) {
     })();
     return () => {
       controller.abort();
-      ++scope.current;
+      ++scopeRef.current;
     };
   }, [endpoint, retry]);
   async function enable(reminderMinutes: number) {

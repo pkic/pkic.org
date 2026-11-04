@@ -67,7 +67,13 @@ export function SponsorTiersTab({
     }
   }
   return (
-    <form noValidate {...form.handlers} onSubmit={save}>
+    <form
+      noValidate
+      {...form.handlers}
+      onSubmit={(event) => {
+        void save(event).catch((error: unknown) => setFailure(form.refuse(error)));
+      }}
+    >
       <SettingsEditor
         loading={loading}
         error={error}

@@ -212,7 +212,7 @@ export const dataSections: PreviewSection[] = [
     id: "data",
     title: "Tables",
     note: "Data tables with sorting, selection, and bulk actions.",
-    render: () => {
+    render: function TablePreview() {
       const [sort, setSort] = useState<{ columnId: string; direction: "asc" | "desc" } | undefined>({
         columnId: "name",
         direction: "asc",
@@ -392,7 +392,7 @@ export const dataSections: PreviewSection[] = [
     id: "navigation",
     title: "Navigation",
     note: "Page headers, tabs, breadcrumbs, panels, pagination, and progress indicators.",
-    render: () => {
+    render: function NavigationPreview() {
       const [currentPage, setCurrentPage] = useState(1);
 
       return (

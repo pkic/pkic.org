@@ -208,7 +208,11 @@ function PresentationVersions({
         hidden
         accept=".pdf,.pptx,.ppt,.odp,.pptm"
         disabled={uploading}
-        onChange={handlePresentationUpload}
+        onChange={(event) => {
+          void handlePresentationUpload(event).catch((error: unknown) =>
+            setError(error instanceof Error ? error.message : "Presentation upload failed."),
+          );
+        }}
       />
     </div>
   );

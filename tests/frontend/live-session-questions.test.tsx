@@ -518,6 +518,18 @@ describe("session questions", () => {
     expect(host.querySelector("[data-field-error=answer]")?.textContent).toContain("Pick one of the choices.");
     // Said once, on the question: the room's general notice stays quiet.
     expect(host.querySelector(".pk-live-questions__notice")?.textContent).toBe("");
+    void act(() => radio(host, "TLS endpoints").click());
+    expect(host.querySelector("[data-field-error=answer]")?.textContent ?? "").not.toContain(
+      "Pick one of the choices.",
+    );
+    void act(() => live.latest().deliver({ type: "poll.changed", poll: livePoll() }));
+    expect(host.querySelector("[data-field-error=answer]")?.textContent ?? "").not.toContain(
+      "Pick one of the choices.",
+    );
+    void act(() =>
+      live.latest().deliver({ type: "room.refused", code: "LIVE_POLL_ANSWER", message: "Please choose again." }),
+    );
+    expect(host.querySelector("[data-field-error=answer]")?.textContent).toContain("Please choose again.");
   });
 
   it("shows a closed poll's results without asking for an answer", () => {

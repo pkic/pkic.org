@@ -1,3 +1,4 @@
+import { toast } from "../../../../../ui";
 import type { ClockZone } from "../../../../../../../../shared/event-clock";
 import { formatClockInZone } from "../../../../../../../../shared/format-date";
 import { formatNumber } from "../../../../../../../../shared/format-number";
@@ -127,14 +128,18 @@ function TimerRow({
                 label: "Remove timer",
                 separatorBefore: true,
                 disabled,
-                onSelect: async () => {
-                  const confirmed = await confirmAction({
-                    title: `Remove ${timer.name}?`,
-                    body: "Every output showing this timer stops showing it.",
-                    confirmLabel: "Remove timer",
-                    tone: "danger",
-                  });
-                  if (confirmed) send({ type: "timer.remove", timerId: timer.id });
+                onSelect: () => {
+                  void (async () => {
+                    const confirmed = await confirmAction({
+                      title: `Remove ${timer.name}?`,
+                      body: "Every output showing this timer stops showing it.",
+                      confirmLabel: "Remove timer",
+                      tone: "danger",
+                    });
+                    if (confirmed) send({ type: "timer.remove", timerId: timer.id });
+                  })().catch((error: unknown) =>
+                    toast(error instanceof Error ? error.message : "Could not complete the action.", "error"),
+                  );
                 },
               },
             ]}

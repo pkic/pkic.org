@@ -7,7 +7,7 @@ import { confirmAction } from "../../../../../../components/ConfirmDialog";
 import { useContractForm } from "../../../../../../hooks/useContractForm";
 import { EditActions } from "../../../../../../ui/EditActions";
 import { EventSettingsSummary } from "./EventSettingsSummary";
-import { useEffect, useState } from "preact/hooks";
+import { useCallback, useEffect, useState } from "preact/hooks";
 import { patchJson } from "../../../../../../shared/api-client";
 import {
   eventSettingsUpdateSchema,
@@ -223,7 +223,7 @@ export function GeneralTab({
       setSaving(false);
     }
   }
-  function resetDraft() {
+  const resetDraft = useCallback(() => {
     setSlug(event.slug);
     setName(event.name ?? "");
     setTimezone(event.timezone ?? "UTC");
@@ -246,11 +246,11 @@ export function GeneralTab({
     setVisibility(event.visibility);
     setInviteLimit(event.inviteLimitAttendee);
     setRetentionDays(event.userRetentionDays ? String(event.userRetentionDays) : "");
-  }
+  }, [event]);
   useEffect(() => {
     resetDraft();
     setEditing(false);
-  }, [event]);
+  }, [resetDraft]);
 
   if (!editing)
     return (
@@ -296,7 +296,19 @@ export function GeneralTab({
 
   return (
     <div class="pk">
-      <form noValidate class="pk-stack" {...form.handlers} onSubmit={handleSubmit}>
+      <form
+        noValidate
+        class="pk-stack"
+        {...form.handlers}
+        onSubmit={(event) => {
+          void handleSubmit(event).catch((error: unknown) =>
+            setOutcome({
+              tone: "danger",
+              message: error instanceof Error ? error.message : "Could not save event settings.",
+            }),
+          );
+        }}
+      >
         {/* One disabled fieldset is what keeps a reader out of every control,
             including the schedule fields this surface renders through a child
             component it cannot disable one prop at a time. */}

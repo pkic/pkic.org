@@ -191,18 +191,22 @@ export function RecordingSourceDetails({
             <Button
               type="button"
               disabled={busy}
-              onClick={async () => {
-                setBusy(true);
-                try {
-                  await onRefresh();
-                  request.current = null;
-                  setOperationId(crypto.randomUUID());
-                  setReceipt(null);
-                } catch (failure) {
-                  setError(failure instanceof Error ? failure.message : "Recording status is unavailable.");
-                } finally {
-                  setBusy(false);
-                }
+              onClick={() => {
+                void (async () => {
+                  setBusy(true);
+                  try {
+                    await onRefresh();
+                    request.current = null;
+                    setOperationId(crypto.randomUUID());
+                    setReceipt(null);
+                  } catch (failure) {
+                    setError(failure instanceof Error ? failure.message : "Recording status is unavailable.");
+                  } finally {
+                    setBusy(false);
+                  }
+                })().catch((failure: unknown) =>
+                  setError(failure instanceof Error ? failure.message : "Recording status is unavailable."),
+                );
               }}
             >
               Acquire again
@@ -210,7 +214,15 @@ export function RecordingSourceDetails({
           )}
         </FormSection>
       ) : (
-        <form noValidate {...form.handlers} onSubmit={acquire}>
+        <form
+          noValidate
+          {...form.handlers}
+          onSubmit={(event) => {
+            void acquire(event).catch((error: unknown) =>
+              setError(error instanceof Error ? error.message : "Recording acquisition could not be requested."),
+            );
+          }}
+        >
           <Button type="submit" disabled={busy || !canAcquire} loading={busy}>
             Acquire recording
           </Button>

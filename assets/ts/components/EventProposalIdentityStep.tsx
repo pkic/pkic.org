@@ -440,7 +440,11 @@ export function EventProposalIdentityStep({
       {identity.authenticated && (
         <IdentityCreateDialog
           open={adding}
-          onClose={() => closeAdding()}
+          onClose={() => {
+            void closeAdding().catch((cause: unknown) => {
+              identity.setError(cause instanceof Error ? cause.message : "Could not close the dialog.");
+            });
+          }}
           onCreated={async (identityId) => {
             const session = await getJson("/api/v1/auth/session", userAuthSessionResponseSchema);
             const summary = session.actingIdentities.find((item) => item.id === identityId);

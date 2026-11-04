@@ -1,5 +1,5 @@
 import QRCode from "qrcode";
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import { BADGE_LABEL_PRINTING_CONTEXT } from "../../../shared/badge-label-policy";
 import { composeBadgePrintSvg } from "../../../shared/badge-print-svg";
 import {
@@ -39,9 +39,9 @@ export function RegistrationBadgePrinting({
   const requests = useRef<BadgeLabelBatchRequest[]>([]);
   const responses = useRef<BadgeLabelBatchResponse[]>([]);
   const endpoint = `/api/v1/events/${encodeURIComponent(slug)}/badges`;
-  function requireCurrent() {
+  const requireCurrent = useCallback(() => {
     if (!active.current || !isCurrent()) throw new Error("Sign in again before printing these badges.");
-  }
+  }, [isCurrent]);
   function validateBatch(
     response: BadgeLabelBatchResponse,
     request: BadgeLabelBatchRequest,
@@ -126,7 +126,7 @@ export function RegistrationBadgePrinting({
       controller.abort();
       responses.current = [];
     };
-  }, [scope, eventId, slug, retry]);
+  }, [scope, eventId, slug, retry, endpoint, requireCurrent]);
 
   async function beforeRelease() {
     try {

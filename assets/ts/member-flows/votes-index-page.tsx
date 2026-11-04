@@ -152,14 +152,22 @@ export function VotesIndex({ apiBase, detailBase }: { apiBase: string; detailBas
         section={openSection}
         detailBase={detailBase}
         loading={loadingMore === "open"}
-        onLoadMore={() => loadMore("open")}
+        onLoadMore={() => {
+          void loadMore("open").catch((error: unknown) =>
+            setError(error instanceof Error ? error.message : "Could not load votes."),
+          );
+        }}
       />
       <VoteSectionView
         title="Closed"
         section={closedSection}
         detailBase={detailBase}
         loading={loadingMore === "closed"}
-        onLoadMore={() => loadMore("closed")}
+        onLoadMore={() => {
+          void loadMore("closed").catch((error: unknown) =>
+            setError(error instanceof Error ? error.message : "Could not load votes."),
+          );
+        }}
       />
     </div>
   );

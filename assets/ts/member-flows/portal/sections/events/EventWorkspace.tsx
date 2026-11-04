@@ -74,7 +74,8 @@ function ScopedSponsorLeadsRoute({ slug }: { slug: string }) {
 function ScopedScannerRoute({ slug, sponsorId }: { slug: string; sponsorId?: string }) {
   const [, navigate] = usePortalHashLocation();
   const session = portalSession.value;
-  const request = useMemo(() => new AbortController(), [slug, sponsorId, session?.sessionId, session?.identity.id]);
+  const requestKey = JSON.stringify([slug, sponsorId, session?.sessionId, session?.identity.id]);
+  const request = useMemo(() => ({ key: requestKey, controller: new AbortController() }), [requestKey]).controller;
   useEffect(() => () => request.abort(), [request]);
   const event = useData(() => scannerEventBootstrap.load(slug, sponsorId, request.signal), [request]);
   if (event.loading) return <Spinner label="Loading event scanner…" />;

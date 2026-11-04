@@ -66,6 +66,7 @@ types/
 # The repository's own skills are committed.
 /.agents/skills/*
 !/.agents/skills/pkic-ui/
+!/.agents/skills/pkic-review/
 !/.agents/skills/pkic-backend/
 !/.agents/skills/pkic-content-components/
 

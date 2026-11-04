@@ -125,6 +125,7 @@ export function ReactionPicker({
           ref={popupRef}
           id={popupId}
           role="toolbar"
+          tabIndex={-1}
           aria-label="Reactions"
           aria-orientation="horizontal"
           class="pk-reaction-picker"

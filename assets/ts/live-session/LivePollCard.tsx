@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo } from "preact/hooks";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "preact/hooks";
 import type { CustomAnswerValue } from "../../shared/form-answer-rules";
 import { formatNumber } from "../../shared/format-number";
 import { LIVE_POLL_ANSWER_REFUSAL, type LivePoll, type LivePollField } from "../../shared/schemas/live-session-poll";
@@ -52,9 +52,13 @@ export function LivePollCard({
   useLayoutEffect(sync, [mine, sync]);
 
   // The room's refusal of an answer is said once, on the question it is about.
+  const currentRefusal = useRef({ refusal, fieldKey: field.key, refuseAnswer });
+  currentRefusal.current = { refusal, fieldKey: field.key, refuseAnswer };
+  const refusalSequence = refusal?.sequence;
   useEffect(() => {
-    if (refusal?.code === LIVE_POLL_ANSWER_REFUSAL) refuseAnswer(field.key, refusal.message);
-  }, [refusal?.sequence]);
+    const { refusal, fieldKey, refuseAnswer } = currentRefusal.current;
+    if (refusal?.code === LIVE_POLL_ANSWER_REFUSAL) refuseAnswer(fieldKey, refusal.message);
+  }, [refusalSequence]);
 
   function send(event: Event) {
     event.preventDefault();

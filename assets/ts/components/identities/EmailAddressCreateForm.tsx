@@ -44,7 +44,7 @@ export function EmailAddressCreateForm({
   const [error, setError] = useState("");
   const [formId] = useState(() => nextDomId("email"));
   const form = useContractForm(userEmailAddSchema, { email });
-  useEffect(() => onBusy?.(saving), [saving]);
+  useEffect(() => onBusy?.(saving), [saving, onBusy]);
   if (embedded)
     return (
       <form
@@ -87,35 +87,37 @@ export function EmailAddressCreateForm({
       class="pk-stack pk-stack--snug"
       aria-label="Add email address"
       {...form.handlers}
-      onSubmit={async (event) => {
+      onSubmit={(event) => {
         event.preventDefault();
-        setError("");
-        const checked = form.submit();
-        // The refused field says why and takes focus; an alert would only repeat it.
-        if (!checked.data) return;
-        setSaving(true);
-        try {
-          if (beforeAdd && (await beforeAdd(checked.data.email))) return;
-          if (isSelf) {
-            const added = await postJson(
-              OWN_EMAILS_ENDPOINT,
-              checked.data,
-              ownEmailVerificationRequestedResponseSchema,
-            );
-            await onAdded({ email: added.email, delivery: added.delivery });
-          } else {
-            const added = await postJson(
-              `/api/v1/users/${encodeURIComponent(userId!)}/emails`,
-              checked.data,
-              userEmailAddResponseSchema,
-            );
-            await onAdded({ email: added.email.email });
+        void (async () => {
+          setError("");
+          const checked = form.submit();
+          // The refused field says why and takes focus; an alert would only repeat it.
+          if (!checked.data) return;
+          setSaving(true);
+          try {
+            if (beforeAdd && (await beforeAdd(checked.data.email))) return;
+            if (isSelf) {
+              const added = await postJson(
+                OWN_EMAILS_ENDPOINT,
+                checked.data,
+                ownEmailVerificationRequestedResponseSchema,
+              );
+              await onAdded({ email: added.email, delivery: added.delivery });
+            } else {
+              const added = await postJson(
+                `/api/v1/users/${encodeURIComponent(userId!)}/emails`,
+                checked.data,
+                userEmailAddResponseSchema,
+              );
+              await onAdded({ email: added.email.email });
+            }
+          } catch (cause) {
+            setError(form.refuse(cause));
+          } finally {
+            setSaving(false);
           }
-        } catch (cause) {
-          setError(form.refuse(cause));
-        } finally {
-          setSaving(false);
-        }
+        })().catch((cause: unknown) => setError(form.refuse(cause)));
       }}
     >
       <Field

@@ -7,7 +7,8 @@
  * zone: the browser shows and takes local time, the wire carries UTC, and the
  * conversion happens here and nowhere deeper.
  */
-import { useEffect, useState } from "preact/hooks";
+import { useState } from "preact/hooks";
+import { useRevisionEffect } from "../../../../hooks/useRevisionEffect";
 import {
   groupFormDefinitionResponseSchema,
   groupFormPlacementUpdateSchema,
@@ -71,10 +72,11 @@ export function GroupFormPlacementEditor({
   const [error, setError] = useState("");
   const form = useContractForm(groupFormPlacementUpdateSchema, payloadFrom(draft, timeZone));
   const activeId = `form-placement-active-${placement.id}`;
-  useEffect(() => {
+  const draftRevision = JSON.stringify([placement.id, placement.updatedAt, timeZone]);
+  useRevisionEffect(() => {
     setDraft(draftFrom(placement, timeZone));
     setEditing(false);
-  }, [placement.id, placement.updatedAt]);
+  }, draftRevision);
   function reset() {
     setDraft(draftFrom(placement, timeZone));
     form.reset();

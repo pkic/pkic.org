@@ -15,7 +15,7 @@ export function useScannerSyncHistory(operatorUserId: string, eventId: string) {
     } catch {
       if (current.current === scope) setValue({ scope, time: undefined });
     }
-  }, [operatorUserId, eventId]);
+  }, [operatorUserId, eventId, scope]);
   useEffect(() => {
     current.current = scope;
     void refresh();
@@ -28,6 +28,6 @@ export function useScannerSyncHistory(operatorUserId: string, eventId: string) {
       current.current = "";
       navigator.serviceWorker?.removeEventListener("message", acknowledged);
     };
-  }, [refresh]);
+  }, [refresh, scope]);
   return { lastSync: value?.scope === scope ? value.time : undefined, refresh };
 }

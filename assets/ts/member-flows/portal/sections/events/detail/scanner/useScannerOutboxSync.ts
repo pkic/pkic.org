@@ -38,11 +38,14 @@ export function useScannerOutboxSync({
   const retryTimer = useRef<number | null>(null);
   const activeSyncs = useRef(0);
   const syncAgain = useRef(false);
+  const generation = useRef(0);
   function cancelRetries() {
     syncAgain.current = false;
     if (retryTimer.current !== null) window.clearTimeout(retryTimer.current);
   }
   async function sync() {
+    const activeGeneration = generation.current;
+    const isCurrent = () => generation.current === activeGeneration;
     if (collectorContext) {
       activeSyncs.current++;
       setSyncing(true);
@@ -50,6 +53,8 @@ export function useScannerOutboxSync({
         setPending(await pendingScanCount(operatorUserId));
         setPendingReadyScope(`${slug}:${operatorUserId}`);
         setUploadStatus("Reconnect and check sign-in to verify and upload.");
+      } catch {
+        if (isCurrent()) setUploadStatus("Local scan storage is unavailable. Reopen the scanner to retry.");
       } finally {
         activeSyncs.current--;
         setSyncing(activeSyncs.current > 0);
@@ -93,7 +98,7 @@ export function useScannerOutboxSync({
       setPendingReadyScope(`${slug}:${operatorUserId}`);
       if (remaining > 0 && drained.state !== "authentication_required" && drained.state !== "recovery_required")
         await requestScanOutboxBackgroundSync();
-      if (drained.state === "retry" && navigator.onLine)
+      if (isCurrent() && drained.state === "retry" && navigator.onLine)
         retryTimer.current = window.setTimeout(() => {
           void sync();
         }, drained.retryAfterMs ?? 1000);
@@ -109,28 +114,52 @@ export function useScannerOutboxSync({
                 ? "Uploads will resume when connected."
                 : "Uploading scans in the background…",
       );
+    } catch {
+      if (isCurrent()) setUploadStatus("Sync unavailable. Scans remain saved on this device; retrying automatically.");
+      if (isCurrent() && !authorityPaused.current && navigator.onLine)
+        retryTimer.current = window.setTimeout(() => {
+          void sync();
+        }, 2000);
     } finally {
       activeSyncs.current--;
       setSyncing(activeSyncs.current > 0);
-      if (syncAgain.current) {
+      if (isCurrent() && syncAgain.current) {
         syncAgain.current = false;
         void sync();
       }
     }
   }
+  const lifecycle = useRef({ sync, currentOperation, authorityPaused, presentReceipt, stopCamera });
+  lifecycle.current = { sync, currentOperation, authorityPaused, presentReceipt, stopCamera };
   useEffect(() => {
+    const scopeGeneration = generation;
+    scopeGeneration.current++;
     setPendingReadyScope(null);
+    const stop = () => {
+      lifecycle.current.authorityPaused.current = true;
+      lifecycle.current.stopCamera();
+    };
     const reconnect = () => {
-      void sync();
+      void lifecycle.current.sync();
     };
     window.addEventListener("online", reconnect);
     window.addEventListener("focus", reconnect);
     const acknowledged = scannerWorkerMessageListener({
-      currentOperation,
-      authorityPaused: () => authorityPaused.current,
-      setResult: presentReceipt,
-      refreshPending: async () => setPending(await pendingScanCount(operatorUserId)),
-      syncCurrentOperator: sync,
+      currentOperation: () => lifecycle.current.currentOperation(),
+      authorityPaused: () => lifecycle.current.authorityPaused.current,
+      setResult: (receipt) => lifecycle.current.presentReceipt(receipt),
+      refreshPending: () => {
+        void pendingScanCount(operatorUserId)
+          .then(setPending)
+          .catch(() => {
+            setUploadStatus("Sync unavailable. Scans remain saved on this device; refresh the scanner to retry.");
+          });
+      },
+      syncCurrentOperator: () => {
+        void lifecycle.current.sync().catch(() => {
+          setUploadStatus("Sync unavailable. Scans remain saved on this device; refresh the scanner to retry.");
+        });
+      },
     });
     navigator.serviceWorker?.addEventListener("message", acknowledged);
     const resume = () => {
@@ -139,12 +168,13 @@ export function useScannerOutboxSync({
     document.addEventListener("visibilitychange", resume);
     reconnect();
     return () => {
+      scopeGeneration.current++;
+      syncAgain.current = false;
       window.removeEventListener("online", reconnect);
       window.removeEventListener("focus", reconnect);
       navigator.serviceWorker?.removeEventListener("message", acknowledged);
       document.removeEventListener("visibilitychange", resume);
-      authorityPaused.current = true;
-      stopCamera();
+      stop();
       if (retryTimer.current !== null) window.clearTimeout(retryTimer.current);
     };
   }, [slug, operatorUserId, collectorContext?.epochId]);

@@ -61,19 +61,20 @@ export function LiveLowerThird({ credit, animate }: { credit: LiveCredit | null;
       return;
     }
     dispatch({ type: "change", credit, animate });
-  }, [credit]);
+  }, [credit, animate]);
   const moving = state.phase !== "shown" && state.phase !== "idle";
   useEffect(() => {
     if (!moving) return;
     const fallback = setTimeout(() => dispatch({ type: "done" }), PHASE_FALLBACK_MS);
     return () => clearTimeout(fallback);
-  }, [state.phase, state.shown?.key]);
+  }, [moving, state.phase, state.shown?.key]);
   const shown = state.shown;
   // The phase's own animation ending moves the lower third on. Listened for directly, so it does not
   // depend on how the runtime names the animation event handler.
   const graphic = useRef<HTMLDivElement>(null);
   const phase = useRef(state.phase);
   phase.current = state.phase;
+  const hasShown = shown !== null;
   useEffect(() => {
     const node = graphic.current;
     if (!node) return;
@@ -83,7 +84,7 @@ export function LiveLowerThird({ credit, animate }: { credit: LiveCredit | null;
     };
     node.addEventListener("animationend", ended);
     return () => node.removeEventListener("animationend", ended);
-  }, [shown !== null]);
+  }, [hasShown]);
   return (
     <div class="pk-live-overlay__lower-third" data-showing={shown ? "" : undefined}>
       {shown ? (

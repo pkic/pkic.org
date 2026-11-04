@@ -44,18 +44,19 @@ export function LiveQuestionThread({
   const [notice, setNotice] = useState<string | null>(null);
   const form = useContractForm(liveQuestionAnswerCreateSchema, { text }, { quietWhenEmpty: true });
   const field = form.of("text");
+  const resetForm = form.reset;
   useEffect(() => {
     if (!pending || result?.operationId !== pending.operationId) return;
     if (result.type === "question.answer.result") {
       if (result.questionId !== question.id) return;
       if (pending.type === "question.answer") {
         setText("");
-        form.reset();
+        resetForm();
       }
       setNotice(null);
     } else setNotice(result.message);
     setPending(null);
-  }, [pending, result, question.id]);
+  }, [pending, result, question.id, resetForm]);
 
   function transmit(request: Pending) {
     if (!send(request)) {

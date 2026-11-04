@@ -53,7 +53,7 @@ function LayoutBox({
   const node = useRef<HTMLButtonElement | null>(null);
   useLayoutEffect(() => {
     if (node.current) placeLayoutBox(node.current, box);
-  }, [box.x, box.y, box.w, box.h]);
+  }, [box]);
   const label = LIVE_OVERLAY_ELEMENT_LABELS[element];
   const move = handlers("move", element);
   return (

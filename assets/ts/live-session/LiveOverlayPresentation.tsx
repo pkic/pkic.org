@@ -122,7 +122,11 @@ const MAX_FLOATING_PER_BURST = 24;
 function ReactionsOverlay({ burst }: { burst: LiveRoomState["burst"] }) {
   const [floating, setFloating] = useState<Array<{ id: number; emoji: string; lane: number }>>([]);
   const next = useRef(0);
+  const latestBurst = useRef(burst);
+  latestBurst.current = burst;
+  const burstSequence = burst?.sequence;
   useEffect(() => {
+    const burst = latestBurst.current;
     if (!burst) return;
     const spawned = (Object.entries(burst.counts) as Array<[LiveReactionId, number]>)
       .flatMap(([reaction, count]) => Array.from({ length: count }, () => EMOJI[reaction]))
@@ -132,7 +136,7 @@ function ReactionsOverlay({ burst }: { burst: LiveRoomState["burst"] }) {
     const ids = new Set(spawned.map((item) => item.id));
     const clear = setTimeout(() => setFloating((current) => current.filter((item) => !ids.has(item.id))), 3200);
     return () => clearTimeout(clear);
-  }, [burst?.sequence]);
+  }, [burstSequence]);
   return (
     <div class="pk-live-overlay__reactions" aria-hidden="true">
       {floating.map((item) => (

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "preact/hooks";
+import { useCallback, useEffect, useState } from "preact/hooks";
 import type { z } from "zod";
 import {
   sessionHoldListSchema,
@@ -22,17 +22,20 @@ export function SessionHolds({
     [error, setError] = useState(""),
     [busy, setBusy] = useState(""),
     [message, setMessage] = useState("");
-  async function refresh(signal?: AbortSignal) {
-    const result = await getJson(`${endpoint}/holds`, sessionHoldListSchema, { signal });
-    setItems(result.items);
-  }
+  const refresh = useCallback(
+    async (signal?: AbortSignal) => {
+      const result = await getJson(`${endpoint}/holds`, sessionHoldListSchema, { signal });
+      setItems(result.items);
+    },
+    [endpoint],
+  );
   useEffect(() => {
     const controller = new AbortController();
     void refresh(controller.signal).catch((error) => {
       if (!controller.signal.aborted) setError(error instanceof Error ? error.message : "Holds are unavailable.");
     });
     return () => controller.abort();
-  }, [endpoint, refreshKey]);
+  }, [refresh, refreshKey]);
   async function release(id: string) {
     setBusy(id);
     setError("");

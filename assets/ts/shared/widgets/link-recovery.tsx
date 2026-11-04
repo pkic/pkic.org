@@ -67,7 +67,7 @@ export function showManageLinkRecoveryForm(options: ManageLinkRecoveryOptions): 
   if (resendBtn.dataset.bound === "1") return;
   resendBtn.dataset.bound = "1";
 
-  resendBtn.addEventListener("click", async () => {
+  resendBtn.addEventListener("click", () => {
     if (isButtonBusy(resendBtn)) return;
     const email = emailInput?.value.trim() ?? "";
     if (!email) {
@@ -79,13 +79,15 @@ export function showManageLinkRecoveryForm(options: ManageLinkRecoveryOptions): 
     emailInput?.removeAttribute("aria-invalid");
 
     setButtonBusy(resendBtn);
-    try {
-      await postJson(endpoint, { email }, successResponseSchema);
-      if (statusEl) announce(statusEl, successMessage, "success");
-      clearButtonBusy(resendBtn);
-    } catch {
-      if (statusEl) announce(statusEl, "Something went wrong. Please try again.", "danger");
-      clearButtonBusy(resendBtn);
-    }
+    void (async () => {
+      try {
+        await postJson(endpoint, { email }, successResponseSchema);
+        if (statusEl) announce(statusEl, successMessage, "success");
+        clearButtonBusy(resendBtn);
+      } catch {
+        if (statusEl) announce(statusEl, "Something went wrong. Please try again.", "danger");
+        clearButtonBusy(resendBtn);
+      }
+    })();
   });
 }

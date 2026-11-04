@@ -120,4 +120,28 @@ describe("registration invitation access", () => {
     expect(inviteResendLinkSchema.parse(JSON.parse(init.body))).toEqual({ email: "guest@example.com" });
     await vi.waitFor(() => expect(document.body.textContent).toContain("a fresh link will arrive by email"));
   });
+  it("allows retrying a fresh invitation request after a network failure", async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(respond({ status: "invalid" }))
+      .mockRejectedValueOnce(new TypeError("offline"))
+      .mockResolvedValueOnce(respond({ success: true }));
+    vi.stubGlobal("fetch", fetch);
+    const { gate } = setup();
+    await act(() => gate.check("public"));
+    const submit = () =>
+      button("Send fresh invitation link")
+        .closest("form")!
+        .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await act(async () => {
+      submit();
+    });
+    await vi.waitFor(() => expect(document.querySelector('[role="alert"]')).not.toBeNull());
+    expect(button("Send fresh invitation link").disabled).toBe(false);
+    await act(async () => {
+      submit();
+    });
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(3));
+    await vi.waitFor(() => expect(document.body.textContent).toContain("a fresh link will arrive by email"));
+  });
 });

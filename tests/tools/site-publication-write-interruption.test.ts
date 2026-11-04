@@ -20,17 +20,20 @@ it("keeps the active release served coherently through a failed second candidate
   const active = resolve(root, "active");
   const candidate = resolve(root, "candidate-assets");
   const files = ["index.html", "events/failure/event-data.json", "events/failure/agenda.ics"];
-  const server = createServer(async (request, response) => {
-    try {
-      const file = request.url === "/" ? "index.html" : request.url?.slice(1);
-      if (!file || ![...files, "publication.json"].includes(file)) {
-        response.writeHead(404).end();
-        return;
+  const server = createServer((request, response) => {
+    async function respond() {
+      try {
+        const file = request.url === "/" ? "index.html" : request.url?.slice(1);
+        if (!file || ![...files, "publication.json"].includes(file)) {
+          response.writeHead(404).end();
+          return;
+        }
+        response.writeHead(200).end(await readFile(resolve(active, file)));
+      } catch {
+        response.writeHead(503).end();
       }
-      response.writeHead(200).end(await readFile(resolve(active, file)));
-    } catch {
-      response.writeHead(503).end();
     }
+    respond().catch((error: unknown) => response.destroy(error instanceof Error ? error : new Error(String(error))));
   });
   try {
     async function source(name: string, sequence: number) {

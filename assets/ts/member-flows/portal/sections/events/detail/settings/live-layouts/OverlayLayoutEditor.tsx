@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "preact/hooks";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import {
   LIVE_OVERLAY_PRESET_LAYOUTS,
   resolveLiveOverlayElements,
@@ -88,9 +88,12 @@ export function OverlayLayoutEditor({
   const [notice, setNotice] = useState<{ tone: "ok" | "danger"; text: string } | null>(null);
   const room = useMemo(() => sampleOverlayRoom(Date.now()), []);
   // A save hands back the stored layout; the draft starts again from it.
+  const latestLayout = useRef({ layout, savedPositions });
+  latestLayout.current = { layout, savedPositions };
   useEffect(() => {
-    setName(layout.name);
-    setDrafts(initial());
+    const current = latestLayout.current;
+    setName(current.layout.name);
+    setDrafts({ elements: current.layout.elements, positions: current.savedPositions.elements });
   }, [layout.slug, layout.updatedAt, savedPositions.updatedAt]);
   const form = useContractForm(eventLiveOverlayLayoutPutSchema, {
     expectedUpdatedAt: layout.updatedAt,

@@ -133,14 +133,14 @@ export function RegistrationFlow(props: Props) {
       organization: named && !("refused" in named) ? named.organization : undefined,
     };
   };
-  const choices = () => (element.current ? readDayAttendanceChoices(element.current) : []);
+  const choices = useCallback(() => (element.current ? readDayAttendanceChoices(element.current) : []), [element]);
   const request = useMemo(
     () =>
       withRequiredDayAttendanceChoices(
         updating ? registrationManageSchema : registrationCreateForTermsSchema(forms.requiredTerms),
         choices,
       ),
-    [updating, forms.requiredTerms],
+    [updating, forms.requiredTerms, choices],
   );
   const contract = useContractForm(request, readBody, {
     fieldOf: (name, control) =>
@@ -153,11 +153,21 @@ export function RegistrationFlow(props: Props) {
   );
   const contactReady = useCallback((value: boolean) => setReady(value), []);
 
+  const setup = useRef({
+    props,
+    available,
+    registrationPolicy: forms.registrationPolicy,
+    contactContract,
+    attendanceContract,
+    fields,
+  });
   useLayoutEffect(() => {
+    const { props, available, registrationPolicy, contactContract, attendanceContract, fields } = setup.current;
     if (props.mode !== "create" || !available || !root.current || !element.current || !status.current) return;
+    const reviewElement = review.current;
     const boot: FlowBoot = { ...props.context, root: root.current, form: element.current, statusEl: status.current };
     invitation.current = registrationInvitation(boot);
-    void invitation.current.check(forms.registrationPolicy);
+    void invitation.current.check(registrationPolicy);
     const navigation = installStepNavigation(
       boot.root,
       boot.form,
@@ -202,9 +212,9 @@ export function RegistrationFlow(props: Props) {
     );
     return () => {
       navigation.dispose();
-      if (review.current) render(null, review.current);
+      if (reviewElement) render(null, reviewElement);
     };
-  }, []);
+  }, [element]);
 
   useLayoutEffect(() => {
     const first = root.current?.querySelector<HTMLElement>('[data-step="1"]');
@@ -261,49 +271,62 @@ export function RegistrationFlow(props: Props) {
         onClick={(event) => {
           if (event.target instanceof Element && event.target.closest("button")) questions.handlers.onClick();
         }}
-        onSubmit={async (event) => {
+        onKeyDown={(event) => {
+          if (
+            (event.key === "Enter" || event.key === " ") &&
+            event.target instanceof Element &&
+            event.target.closest("button")
+          )
+            questions.handlers.onClick();
+        }}
+        onSubmit={(event) => {
           event.preventDefault();
-          if (busy || !available || (props.mode === "create" && !invitation.current?.canSubmit())) return;
-          setError("");
-          if (!updating) {
-            const contact = contactContract.submit();
-            if (!contact.data) return setError(contact.formMessage ?? "");
-            if (organization.current.validate?.() === false) return;
-          }
-          const answered = currentQuestions.current.submit();
-          let checked = contract.submit();
-          if (!answered.data) return setError(answered.formMessage ?? "");
-          if (!checked.data) return setError(checked.formMessage ?? "");
-          setBusy(true);
-          try {
-            if (!updating && organization.current.prepare) {
-              if (!(await organization.current.prepare())) return;
-              checked = contract.submit();
-              if (!checked.data) return setError(checked.formMessage ?? "");
+          void (async () => {
+            if (busy || !available || (props.mode === "create" && !invitation.current?.canSubmit())) return;
+            setError("");
+            if (!updating) {
+              const contact = contactContract.submit();
+              if (!contact.data) return setError(contact.formMessage ?? "");
+              if (organization.current.validate?.() === false) return;
             }
-            if (props.mode === "update") await props.save(registrationManageSchema.parse(checked.data));
-            else {
-              const body = registrationCreateSchema.parse(checked.data);
-              const result = props.submit
-                ? await props.submit(body)
-                : await postJson(
-                    `${props.context.apiBase}/events/${encodeURIComponent(props.context.eventSlug)}/registrations`,
-                    body,
-                    registrationSubmissionResponseSchema,
-                    props.context.eventPagePath ? { "x-event-base-path": props.context.eventPagePath } : undefined,
-                  );
-              clearReferralSession();
-              forgetRegistrationEmailProof();
-              await props.onRegistered(result, body, element.current!);
+            const answered = currentQuestions.current.submit();
+            let checked = contract.submit();
+            if (!answered.data) return setError(answered.formMessage ?? "");
+            if (!checked.data) return setError(checked.formMessage ?? "");
+            setBusy(true);
+            try {
+              if (!updating && organization.current.prepare) {
+                if (!(await organization.current.prepare())) return;
+                checked = contract.submit();
+                if (!checked.data) return setError(checked.formMessage ?? "");
+              }
+              if (props.mode === "update") await props.save(registrationManageSchema.parse(checked.data));
+              else {
+                const body = registrationCreateSchema.parse(checked.data);
+                const result = props.submit
+                  ? await props.submit(body)
+                  : await postJson(
+                      `${props.context.apiBase}/events/${encodeURIComponent(props.context.eventSlug)}/registrations`,
+                      body,
+                      registrationSubmissionResponseSchema,
+                      props.context.eventPagePath ? { "x-event-base-path": props.context.eventPagePath } : undefined,
+                    );
+                clearReferralSession();
+                forgetRegistrationEmailProof();
+                await props.onRegistered(result, body, element.current!);
+              }
+            } catch (cause) {
+              if (!invitation.current?.handleError(cause)) {
+                questions.refuse(cause);
+                setError(contract.refuse(cause));
+              }
+            } finally {
+              setBusy(false);
             }
-          } catch (cause) {
-            if (!invitation.current?.handleError(cause)) {
-              questions.refuse(cause);
-              setError(contract.refuse(cause));
-            }
-          } finally {
+          })().catch(() => {
+            setError("Could not save changes. Please try again.");
             setBusy(false);
-          }
+          });
         }}
       >
         <fieldset class="pk-fieldset pk-stack" disabled={busy}>

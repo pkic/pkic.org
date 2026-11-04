@@ -172,7 +172,7 @@ export function Pager({
 
       {pageSize && (
         <div class="pk-pager__size">
-          <label for={sizeId} class="pk-pager__size-label">
+          <label htmlFor={sizeId} class="pk-pager__size-label">
             Rows per page
           </label>
           <select

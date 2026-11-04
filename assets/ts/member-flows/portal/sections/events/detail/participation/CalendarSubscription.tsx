@@ -113,6 +113,7 @@ export function CalendarSubscription({
         </ActionTiles>
         <Checkbox
           role="switch"
+          aria-checked={autosave.settings.includeTentative}
           name="includeTentative"
           label="Include sessions you have not confirmed"
           hint="Starred sessions, and sessions waiting for approval or a free place."

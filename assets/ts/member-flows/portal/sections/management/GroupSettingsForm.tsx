@@ -1,4 +1,5 @@
-import { useEffect, useState } from "preact/hooks";
+import { useState } from "preact/hooks";
+import { useRevisionEffect } from "../../../../hooks/useRevisionEffect";
 import { groupResponseSchema, groupUpdateSchema, type GroupSettingsDetail } from "../../../../../shared/schemas/groups";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { useContractForm } from "../../../../hooks/useContractForm";
@@ -29,11 +30,12 @@ export function GroupSettingsForm({
     description: draft.description.trim() || null,
   };
   const form = useContractForm(groupUpdateSchema, body);
-  useEffect(() => {
+  const draftRevision = JSON.stringify([group.id, group.revision]);
+  useRevisionEffect(() => {
     setDraft(draftFromGroup(group));
     setEditing(false);
     setError(null);
-  }, [group.id, group.revision]);
+  }, draftRevision);
   function reset() {
     setDraft(draftFromGroup(group));
     form.reset();
@@ -63,7 +65,14 @@ export function GroupSettingsForm({
     }
   }
   return (
-    <form noValidate class="pk" {...form.handlers} onSubmit={submit}>
+    <form
+      noValidate
+      class="pk"
+      {...form.handlers}
+      onSubmit={(event) => {
+        void submit(event).catch((error: unknown) => setError(form.refuse(error)));
+      }}
+    >
       <Panel>
         <PanelHeader title="Group settings">
           <EditActions

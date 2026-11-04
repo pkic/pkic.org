@@ -349,55 +349,62 @@ async function main(): Promise<void> {
     );
   });
 
-  applicationForm.addEventListener("submit", async (event) => {
+  applicationForm.addEventListener("submit", (event) => {
     event.preventDefault();
-    const fieldsValid = applicationValidation.validate();
-    const agreementsValid = legalValidation?.validate() ?? true;
-    if (!fieldsValid || !agreementsValid) {
-      // The agreements are checked after the fields, so the first refusal in reading order gets focus again.
-      focusFirstInvalidField(applicationForm);
-      return;
-    }
-    const category = readSelectedCategory(applicationForm);
-    const context = applicationContext;
-    const identity = signedInIdentity;
-    if (!category || (!context && !identity)) {
-      setStatus(statusEl, "Your verified membership path has expired. Please start again.", true);
-      return;
-    }
-    await withLoadingButton(findSubmitButton(applicationForm), async () => {
-      try {
-        const configuredCategory = categories.find((entry) => entry.code === category);
-        if (!configuredCategory) throw new Error("Choose an available membership category");
-        const formFields = applicationFormFields;
-        let payload: object;
-        let applicantName = signedInName;
-        if (identity) {
-          payload = memberApplicationCreateAsIdentitySchemaForCategory(configuredCategory, formFields).parse({
-            identityId: identity.id,
-            membershipCategory: category,
-            answers: readCustomFieldValues(applicationForm),
-          });
-        } else if (context) {
-          const typed = memberApplicationCreateSchemaForCategory(configuredCategory, formFields).parse(
-            buildApplicationPayload(applicationForm, category, context),
-          );
-          payload = typed;
-          applicantName = typed.applicantName;
-        } else return;
-        const result = await postJson(
-          `${API_BASE}/members/applications`,
-          payload,
-          memberApplicationCreateResponseSchema,
-        );
-        forgetJoinDraft();
-        showSuccessPanel(root, applicationForm, result.applicationId, result.manageToken, applicantName);
-      } catch (error) {
-        applicationValidation.refuse(error);
-        legalValidation?.refuse(error);
-        setStatus(statusEl, normalizeValidation(error).globalMessage, true);
-        focusSubmitError(applicationForm, statusEl);
+    void (async () => {
+      const fieldsValid = applicationValidation.validate();
+      const agreementsValid = legalValidation?.validate() ?? true;
+      if (!fieldsValid || !agreementsValid) {
+        // The agreements are checked after the fields, so the first refusal in reading order gets focus again.
+        focusFirstInvalidField(applicationForm);
+        return;
       }
+      const category = readSelectedCategory(applicationForm);
+      const context = applicationContext;
+      const identity = signedInIdentity;
+      if (!category || (!context && !identity)) {
+        setStatus(statusEl, "Your verified membership path has expired. Please start again.", true);
+        return;
+      }
+      await withLoadingButton(findSubmitButton(applicationForm), async () => {
+        try {
+          const configuredCategory = categories.find((entry) => entry.code === category);
+          if (!configuredCategory) throw new Error("Choose an available membership category");
+          const formFields = applicationFormFields;
+          let payload: object;
+          let applicantName = signedInName;
+          if (identity) {
+            payload = memberApplicationCreateAsIdentitySchemaForCategory(configuredCategory, formFields).parse({
+              identityId: identity.id,
+              membershipCategory: category,
+              answers: readCustomFieldValues(applicationForm),
+            });
+          } else if (context) {
+            const typed = memberApplicationCreateSchemaForCategory(configuredCategory, formFields).parse(
+              buildApplicationPayload(applicationForm, category, context),
+            );
+            payload = typed;
+            applicantName = typed.applicantName;
+          } else return;
+          const result = await postJson(
+            `${API_BASE}/members/applications`,
+            payload,
+            memberApplicationCreateResponseSchema,
+          );
+          forgetJoinDraft();
+          showSuccessPanel(root, applicationForm, result.applicationId, result.manageToken, applicantName);
+        } catch (error) {
+          applicationValidation.refuse(error);
+          legalValidation?.refuse(error);
+          setStatus(statusEl, normalizeValidation(error).globalMessage, true);
+          focusSubmitError(applicationForm, statusEl);
+        }
+      });
+    })().catch((error: unknown) => {
+      applicationValidation.refuse(error);
+      legalValidation?.refuse(error);
+      setStatus(statusEl, normalizeValidation(error).globalMessage, true);
+      focusSubmitError(applicationForm, statusEl);
     });
   });
 

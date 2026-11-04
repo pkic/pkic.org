@@ -152,9 +152,10 @@ describe("owned R2 recording acquisition cleanup adapter", () => {
       uploadId: crypto.randomUUID(),
       objectEtag: null,
     });
-    const refusal = expect(pending).rejects.toMatchObject({ code: "RECORDING_DEADLINE" });
-    await vi.advanceTimersByTimeAsync(15_000);
-    await refusal;
+    await Promise.all([
+      expect(pending).rejects.toMatchObject({ code: "RECORDING_DEADLINE" }),
+      vi.advanceTimersByTimeAsync(15_000),
+    ]);
     finishHead(null);
     await Promise.resolve();
     expect(resumeMultipartUpload).not.toHaveBeenCalled();

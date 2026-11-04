@@ -63,42 +63,44 @@ export async function initializeEventSponsorCheckout(root: HTMLElement): Promise
 
   installLiveValidation(form, statusEl);
 
-  form.addEventListener("submit", async (event) => {
+  form.addEventListener("submit", (event) => {
     event.preventDefault();
-    form.classList.add("was-validated");
-    if (!eventSlug) {
-      setStatus(statusEl, "This page is not configured with an event — sponsorship checkout is unavailable.", true);
-      return;
-    }
-    if (!validateBeforeSubmit(form, statusEl)) return;
-
-    await withLoadingButton(findSubmitButton(form), async () => {
-      try {
-        const firstName = readField(form, "firstName");
-        const lastName = readField(form, "lastName");
-        const organizationName = readField(form, "organizationName");
-        const basePath = currentBasePath();
-
-        const data = await postJson(
-          `${apiBase}/sponsors/checkouts`,
-          sponsorshipCheckoutSchema.parse({
-            checkoutAttemptId,
-            contactName: [firstName, lastName].filter(Boolean).join(" "),
-            contactEmail: readField(form, "email"),
-            organizationName: organizationName || undefined,
-            tier: readField(form, "tier"),
-            eventId: eventSlug,
-            successPath: `${basePath}complete/`,
-            cancelPath: basePath,
-          }),
-          sponsorshipCheckoutResponseSchema,
-        );
-
-        window.location.href = data.url;
-      } catch (error) {
-        handleSubmitError(error, form, statusEl);
+    void (async () => {
+      form.classList.add("was-validated");
+      if (!eventSlug) {
+        setStatus(statusEl, "This page is not configured with an event — sponsorship checkout is unavailable.", true);
+        return;
       }
-    });
+      if (!validateBeforeSubmit(form, statusEl)) return;
+
+      await withLoadingButton(findSubmitButton(form), async () => {
+        try {
+          const firstName = readField(form, "firstName");
+          const lastName = readField(form, "lastName");
+          const organizationName = readField(form, "organizationName");
+          const basePath = currentBasePath();
+
+          const data = await postJson(
+            `${apiBase}/sponsors/checkouts`,
+            sponsorshipCheckoutSchema.parse({
+              checkoutAttemptId,
+              contactName: [firstName, lastName].filter(Boolean).join(" "),
+              contactEmail: readField(form, "email"),
+              organizationName: organizationName || undefined,
+              tier: readField(form, "tier"),
+              eventId: eventSlug,
+              successPath: `${basePath}complete/`,
+              cancelPath: basePath,
+            }),
+            sponsorshipCheckoutResponseSchema,
+          );
+
+          window.location.href = data.url;
+        } catch (error) {
+          handleSubmitError(error, form, statusEl);
+        }
+      });
+    })().catch((error: unknown) => handleSubmitError(error, form, statusEl));
   });
 }
 

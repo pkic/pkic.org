@@ -98,7 +98,7 @@ export function EmailFirstStep<Schema extends WorkEmailContract>({
   const [busy, setBusy] = useState(false);
   // State lags a render behind, so two clicks, or Enter and a click, in one tick would both send.
   const sending = useRef(false);
-  useEffect(() => onBusy?.(busy), [busy]);
+  useEffect(() => onBusy?.(busy), [busy, onBusy]);
   if (controller) controller.continue = proceed;
   useEffect(
     () => () => {

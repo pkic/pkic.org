@@ -9,8 +9,8 @@ interface DataState<T> {
 }
 
 /**
- * Fetches data whenever `fetcher` identity changes (wraps it in useCallback at
- * the call site). Returns `{ data, loading, error, reload }`.
+ * Fetches data when the caller-supplied dependency values change.
+ * Returns `{ data, loading, error, reload }`.
  *
  * Usage:
  *   const { data, loading, error, reload } = useData(() => api<MyType>("/api/..."), [dep]);
@@ -26,12 +26,22 @@ export function useData<T>(
   const requestGeneration = useRef(0);
   const owner = useRef<unknown>(null);
   const updatedAt = useRef<string | null>(null);
+  // The caller supplies the fetcher's inputs; preserve the fetcher captured for
+  // each generation even when its inline function is recreated on render.
+  const fetchGeneration = useRef({ deps: [...deps], fetcher });
+  if (
+    deps.length !== fetchGeneration.current.deps.length ||
+    deps.some((dependency, index) => !Object.is(dependency, fetchGeneration.current.deps[index]))
+  ) {
+    fetchGeneration.current = { deps: [...deps], fetcher };
+  }
+  const currentFetchGeneration = fetchGeneration.current;
 
   const load = useCallback(async () => {
     const generation = ++requestGeneration.current;
     setState((s) => ({ ...s, loading: s.data === null, refreshing: s.data !== null, error: null }));
     try {
-      const data = await fetcher();
+      const data = await currentFetchGeneration.fetcher();
       if (generation !== requestGeneration.current) return;
       updatedAt.current = new Date().toISOString();
       setState({ data, loading: false, refreshing: false, error: null });
@@ -44,7 +54,7 @@ export function useData<T>(
         error: e instanceof Error ? e.message : "Request failed",
       }));
     }
-  }, deps);
+  }, [currentFetchGeneration]);
 
   useEffect(() => {
     owner.current = load;

@@ -65,12 +65,14 @@ export function VerifiedOrganizationDetails({
   };
   const detailsForm = useContractForm(identityAffiliationPrepareSchema, body);
   const key = JSON.stringify(body);
+  const draftChange = useRef(onDraftChange);
+  draftChange.current = onDraftChange;
+  const draftOrganizationName =
+    resolved.organizations.find((item) => item.id === organizationId)?.name ?? organizationName;
+  const draftJobTitle = existingJobTitle ?? jobTitle;
   useEffect(() => {
-    onDraftChange?.({
-      organizationName: resolved.organizations.find((item) => item.id === organizationId)?.name ?? organizationName,
-      jobTitle: existingJobTitle ?? jobTitle,
-    });
-  }, [key]);
+    draftChange.current?.({ organizationName: draftOrganizationName, jobTitle: draftJobTitle });
+  }, [draftOrganizationName, draftJobTitle]);
   controller.validate = () => Boolean(detailsForm.submit().data);
   controller.read = () => {
     const checked = identityAffiliationPrepareSchema.safeParse(body);

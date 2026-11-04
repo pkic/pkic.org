@@ -194,57 +194,59 @@ function initForm(root: HTMLElement): (() => void) | undefined {
   });
 
   // ── Donate button ──────────────────────────────────────────────────
-  donateBtn.addEventListener("click", async () => {
-    // Validate identity
-    const name = nameInput?.value.trim() ?? "";
-    if (!name) {
-      showStatus("Please enter your full name.", true);
-      nameInput?.focus();
-      return;
-    }
+  donateBtn.addEventListener("click", () => {
+    void (async () => {
+      // Validate identity
+      const name = nameInput?.value.trim() ?? "";
+      if (!name) {
+        showStatus("Please enter your full name.", true);
+        nameInput?.focus();
+        return;
+      }
 
-    if (!selectedAmount || selectedAmount <= 0) {
-      showStatus("Please select or enter a donation amount.", true);
-      return;
-    }
+      if (!selectedAmount || selectedAmount <= 0) {
+        showStatus("Please select or enter a donation amount.", true);
+        return;
+      }
 
-    const info = currencyInfo(selectedCurrency);
-    const minMajor = minDonationMajorUnits(info);
-    if (selectedAmount < minMajor) {
-      showStatus(`Minimum donation is ${info.symbol}${minMajor}.`, true);
-      return;
-    }
+      const info = currencyInfo(selectedCurrency);
+      const minMajor = minDonationMajorUnits(info);
+      if (selectedAmount < minMajor) {
+        showStatus(`Minimum donation is ${info.symbol}${minMajor}.`, true);
+        return;
+      }
 
-    donateBtn.disabled = true;
-    const originalText = donateBtn.textContent;
-    donateBtn.textContent = "Loading…";
-    clearStatus();
+      donateBtn.disabled = true;
+      const originalText = donateBtn.textContent;
+      donateBtn.textContent = "Loading…";
+      clearStatus();
 
-    const email = emailInput?.value.trim() || undefined;
-    const organizationName = orgInput?.value.trim() || undefined;
+      const email = emailInput?.value.trim() || undefined;
+      const organizationName = orgInput?.value.trim() || undefined;
 
-    try {
-      const smallestUnit = toSmallestUnit(selectedAmount, selectedCurrency);
-      const payload = donationCheckoutSchema.parse({
-        checkoutAttemptId,
-        amount: smallestUnit,
-        currency: selectedCurrency,
-        name,
-        email,
-        organizationName,
-        successPath: config.successPath || undefined,
-        cancelPath: config.cancelPath || undefined,
-        metadata: config.source ? { source: config.source } : undefined,
-        embedded: true,
-      });
-      const res = await postJson(`${API_BASE}/donations/checkout`, payload, donationCheckoutEmbeddedResponseSchema);
-      if (!disposed) await mountEmbeddedCheckout(res.clientSecret, res.publishableKey);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Something went wrong. Please try again.";
-      showStatus(message, true);
-      donateBtn.disabled = false;
-      donateBtn.textContent = originalText;
-    }
+      try {
+        const smallestUnit = toSmallestUnit(selectedAmount, selectedCurrency);
+        const payload = donationCheckoutSchema.parse({
+          checkoutAttemptId,
+          amount: smallestUnit,
+          currency: selectedCurrency,
+          name,
+          email,
+          organizationName,
+          successPath: config.successPath || undefined,
+          cancelPath: config.cancelPath || undefined,
+          metadata: config.source ? { source: config.source } : undefined,
+          embedded: true,
+        });
+        const res = await postJson(`${API_BASE}/donations/checkout`, payload, donationCheckoutEmbeddedResponseSchema);
+        if (!disposed) await mountEmbeddedCheckout(res.clientSecret, res.publishableKey);
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : "Something went wrong. Please try again.";
+        showStatus(message, true);
+        donateBtn.disabled = false;
+        donateBtn.textContent = originalText;
+      }
+    })();
   });
 
   // ── Back button ────────────────────────────────────────────────────────

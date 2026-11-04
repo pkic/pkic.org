@@ -23,7 +23,7 @@ export interface PictureCommandOptions {
   onUpload: (file: File) => Promise<unknown>;
   /** Absent when the picture cannot be removed from this surface. */
   onRemove?: () => Promise<unknown>;
-  onChanged: () => void;
+  onChanged: () => void | Promise<void>;
   toast: PictureNotifier;
   /** Replaces "Photo uploaded" where the upload does something else, such as entering review. */
   uploadedMessage?: string;
@@ -39,13 +39,22 @@ export function usePictureCommands(options: PictureCommandOptions) {
 
   async function upload(file: File) {
     setBusy(true);
+    let uploaded = false;
     try {
       const outcome = await options.onUpload(file);
       if (outcome === false) return;
+      uploaded = true;
       options.toast(options.uploadedMessage ?? `${Noun} uploaded`, "success");
-      options.onChanged();
+      await options.onChanged();
     } catch (error) {
-      options.toast((error as Error).message, "error");
+      options.toast(
+        error instanceof Error && error.message
+          ? error.message
+          : uploaded
+            ? `${Noun} uploaded, but the page could not refresh. Reload the page.`
+            : `Could not upload ${options.noun}. Please try again.`,
+        "error",
+      );
     } finally {
       setBusy(false);
       setAttempt((current) => current + 1);
@@ -54,19 +63,28 @@ export function usePictureCommands(options: PictureCommandOptions) {
 
   async function remove() {
     if (!options.onRemove) return;
-    const confirmed = await confirmAction({
-      title: options.removeConfirmation,
-      confirmLabel: removeLabel,
-      tone: "danger",
-    });
-    if (!confirmed) return;
-    setBusy(true);
+    let removed = false;
     try {
+      const confirmed = await confirmAction({
+        title: options.removeConfirmation,
+        confirmLabel: removeLabel,
+        tone: "danger",
+      });
+      if (!confirmed) return;
+      setBusy(true);
       await options.onRemove();
+      removed = true;
       options.toast(`${Noun} removed`, "success");
-      options.onChanged();
+      await options.onChanged();
     } catch (error) {
-      options.toast((error as Error).message, "error");
+      options.toast(
+        error instanceof Error && error.message
+          ? error.message
+          : removed
+            ? `${Noun} removed, but the page could not refresh. Reload the page.`
+            : `Could not remove ${options.noun}. Please try again.`,
+        "error",
+      );
     } finally {
       setBusy(false);
     }

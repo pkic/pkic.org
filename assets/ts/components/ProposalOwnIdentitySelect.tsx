@@ -1,4 +1,4 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import type { ActingIdentity } from "../../shared/schemas/identity";
 import { userAuthSessionResponseSchema } from "../../shared/schemas/user-auth";
 import { ApiClientError, getJson } from "../shared/api-client";
@@ -70,8 +70,9 @@ export function ProposalOwnIdentitySelect({
       setLoading(false);
     }
   }
+  const initialLoad = useRef(() => loadOwnIdentities(true));
   useEffect(() => {
-    void loadOwnIdentities(true);
+    void initialLoad.current();
   }, []);
   if (ownerEmail && actorMatches)
     return (

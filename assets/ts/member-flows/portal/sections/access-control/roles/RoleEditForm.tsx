@@ -66,7 +66,14 @@ export function RoleEditForm({
   }
 
   return (
-    <form noValidate class="pk pk-stack" {...form.handlers} onSubmit={handleSave}>
+    <form
+      noValidate
+      class="pk pk-stack"
+      {...form.handlers}
+      onSubmit={(event) => {
+        void handleSave(event).catch((error: unknown) => setError(form.refuse(error)));
+      }}
+    >
       {/* One `disabled` attribute takes the whole form out of play while the
           save is in flight, including the checkboxes a child component
           renders and which no prop from here could otherwise reach. */}

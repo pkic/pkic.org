@@ -22,8 +22,9 @@ export function usePointerDragSession<State extends PointerDragState>(
   end.current = finish;
 
   useEffect(() => {
+    const gestureRef = gesture;
     const escape = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && gesture.current?.started) {
+      if (event.key === "Escape" && gestureRef.current?.started) {
         event.preventDefault();
         end.current(false);
       }
@@ -33,7 +34,7 @@ export function usePointerDragSession<State extends PointerDragState>(
       document.removeEventListener("keydown", escape);
       end.current(false);
     };
-  }, []);
+  }, [gesture]);
 
   return {
     release: (event: PointerEvent) => {

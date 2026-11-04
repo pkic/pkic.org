@@ -9,11 +9,12 @@ export function useScanCooldown(durationMs = 600) {
     setRemaining(0);
     setSaving(false);
   }, [durationMs]);
+  const coolingDown = remainingMs > 0;
   useEffect(() => {
-    if (remainingMs <= 0) return;
+    if (!coolingDown) return;
     const timer = window.setInterval(() => setRemaining(gate.current.remaining()), 50);
     return () => window.clearInterval(timer);
-  }, [remainingMs > 0]);
+  }, [coolingDown]);
   return {
     remainingMs,
     saving,

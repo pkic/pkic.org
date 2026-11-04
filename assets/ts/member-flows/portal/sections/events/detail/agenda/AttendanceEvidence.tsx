@@ -121,7 +121,14 @@ export function AttendanceCorrectionReview({
         policy.
       </p>
       {canCorrect && (
-        <form noValidate {...form.handlers} onSubmit={submit} class="pk-stack">
+        <form
+          noValidate
+          {...form.handlers}
+          onSubmit={(event) => {
+            void submit(event).catch((error: unknown) => setError(form.refuse(error)));
+          }}
+          class="pk-stack"
+        >
           <Field label="Correction reason" {...form.of("reasonCode")}>
             {(control) => (
               <Select

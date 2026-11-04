@@ -36,12 +36,15 @@ describe("choice controls", () => {
     const root = mount(
       <>
         <Radio name="kind" value="a" label="A" />
-        <Checkbox name="on" label="On" role="switch" />
+        <Checkbox name="on" label="On" switch checked />
       </>,
     );
     const [radio, sw] = [...root.querySelectorAll<HTMLInputElement>("input")];
     expect(radio.type).toBe("radio");
     expect(sw.getAttribute("role")).toBe("switch");
+    expect(sw.checked).toBe(true);
+    void act(() => render(<Checkbox name="on" label="On" switch checked={false} />, root));
+    expect(root.querySelector<HTMLInputElement>("input")?.checked).toBe(false);
   });
 });
 

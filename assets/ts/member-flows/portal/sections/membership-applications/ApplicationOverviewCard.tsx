@@ -1,6 +1,7 @@
 import { ApplicationStageBadge } from "./ApplicationStageBadge";
 import type { ApplicationUpdate } from "../../../../../shared/schemas/membership-application-management";
 import { useEffect, useState } from "preact/hooks";
+import { useEditorDraft } from "../../../../hooks/useEditorDraft";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { fmt } from "../../ui";
 import { type MembershipCategoryCatalogEntry } from "../../../../../shared/schemas/membership-categories";
@@ -40,18 +41,9 @@ export function ApplicationOverviewCard({
 }) {
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState("");
-  const [editForm, setEditForm] = useState<ApplicationEditFormValue | null>(null);
-
-  function setEditing(next: boolean) {
-    onEditingChange?.(next);
-  }
-
-  // The draft is built from the record the moment the editor is asked for,
-  // so it always starts from what is on screen.
-  useEffect(() => {
-    if (!editing) return;
+  const [editForm, setEditForm] = useEditorDraft<ApplicationEditFormValue>(editing, () => {
     const answers = detail.answers;
-    setEditForm({
+    return {
       applicantName: detail.applicantName,
       applicantEmail: detail.applicantEmail,
       organizationName: detail.organizationName ?? "",
@@ -72,9 +64,15 @@ export function ApplicationOverviewCard({
         warranted_authority: asBool(answers.warranted_authority ?? answers.warrantedAuthority),
         working_groups: asStringArray(answers.working_groups),
       },
-    });
-    setEditError("");
-    // Only the opening matters: the record is what the draft is read from.
+    };
+  });
+
+  function setEditing(next: boolean) {
+    onEditingChange?.(next);
+  }
+
+  useEffect(() => {
+    if (editing) setEditError("");
   }, [editing]);
 
   async function saveEdit(body: ApplicationUpdate) {

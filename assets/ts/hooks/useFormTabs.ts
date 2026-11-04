@@ -23,7 +23,7 @@
  *   tabs.revealErrors();
  */
 import { useHashQueryParam } from "./useHashQueryParam";
-import { useEffect, useId, useState } from "preact/hooks";
+import { useEffect, useId, useRef, useState } from "preact/hooks";
 import type { ComponentChildren } from "preact";
 import type { ContractForm } from "./useContractForm";
 import type { TabListItem } from "../ui/TabList";
@@ -52,20 +52,24 @@ export function useFormTabs<Id extends string>(
     tabs.filter((tab) => tab.fields.some((field) => form.errorsWithin(field).length > 0)).map((tab) => tab.id),
   );
   const panelId = (id: Id) => `${prefix}-panel-${id}`;
+  const firstInvalid = tabs.find((tab) => invalid.has(tab.id))?.id;
+  const revealTarget = useRef({ firstInvalid, setActive });
+  revealTarget.current = { firstInvalid, setActive };
 
   useEffect(() => {
     if (!reveal) return;
-    const first = tabs.find((tab) => invalid.has(tab.id));
-    if (!first) return;
-    setActive(first.id);
+    const { firstInvalid, setActive } = revealTarget.current;
+    if (!firstInvalid) return;
+    setActive(firstInvalid);
     setFocusAt(reveal);
   }, [reveal]);
 
   // Runs after the selected panel is shown, so its refused control can take focus.
   useEffect(() => {
     if (!focusAt) return;
-    document.getElementById(panelId(active))?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
-  }, [focusAt]);
+    document.getElementById(`${prefix}-panel-${active}`)?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+    setFocusAt(0);
+  }, [focusAt, active, prefix]);
 
   const items: TabListItem[] = tabs.map((tab) => ({
     id: tab.id,

@@ -22,12 +22,17 @@ export function AgendaSourcesPanel({
     onClose();
     trigger.current?.focus({ preventScroll: true });
   }
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   useEffect(() => {
     if (!open) return;
     trigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     panel.current?.querySelector<HTMLButtonElement>("button")?.focus({ preventScroll: true });
     const escape = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !event.defaultPrevented) close();
+      if (event.key === "Escape" && !event.defaultPrevented) {
+        onCloseRef.current();
+        trigger.current?.focus({ preventScroll: true });
+      }
     };
     document.addEventListener("keydown", escape);
     return () => document.removeEventListener("keydown", escape);

@@ -1,5 +1,5 @@
 import { contractClock } from "../../../../../../../shared/event-clock";
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import type { ComponentProps } from "preact";
 import {
   scannerTargetQuerySchema,
@@ -28,6 +28,8 @@ export function ScannerTargetPicker({
     ...(roomId ? { roomId } : {}),
     ...(timeWindow ? { timeWindow } : {}),
   });
+  const onTimeZone = useRef(location.onTimeZone);
+  onTimeZone.current = location.onTimeZone;
   useEffect(() => {
     const controller = new AbortController();
     setCatalog(null);
@@ -50,7 +52,7 @@ export function ScannerTargetPicker({
         if (!controller.signal.aborted) {
           setCatalog(response);
           setDays(placement?.eventDays.map((day) => day.dayDate) ?? []);
-          location.onTimeZone?.(contractClock(response));
+          onTimeZone.current?.(contractClock(response));
         }
       })
       .catch(() => {

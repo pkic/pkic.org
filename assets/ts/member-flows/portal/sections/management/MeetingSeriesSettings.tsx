@@ -1,5 +1,6 @@
 import { MEETING_CALENDAR_HELP } from "../../../../../shared/meeting-calendar-policy";
-import { useEffect, useState } from "preact/hooks";
+import { useState } from "preact/hooks";
+import { useRevisionEffect } from "../../../../hooks/useRevisionEffect";
 import {
   eventSeriesResponseSchema,
   eventSeriesUpdateSchema,
@@ -48,11 +49,12 @@ export function MeetingSeriesSettings({
     setError("");
   }
 
-  useEffect(() => {
+  const draftRevision = JSON.stringify([series.id, series.updatedAt]);
+  useRevisionEffect(() => {
     setDraft(draftFromSeries(series));
     setActive(series.active);
     setEditing(false);
-  }, [series.id, series.updatedAt]);
+  }, draftRevision);
 
   async function save(event: Event): Promise<void> {
     event.preventDefault();

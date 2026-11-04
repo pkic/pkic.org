@@ -1,18 +1,18 @@
-import { useEffect, useState } from "preact/hooks";
+import { useCallback, useEffect, useState } from "preact/hooks";
 import { agendaTimeSteps } from "./schedule-time-controls";
 
 /** An event-scoped display preference shared by the calendar and scheduling settings. */
 export function useAgendaTimeStep(eventSlug: string) {
   const key = `agenda.time-step:${eventSlug}`;
-  function read() {
+  const read = useCallback(() => {
     try {
       return agendaTimeSteps.find((step) => step === Number(sessionStorage.getItem(key))) ?? 5;
     } catch {
       return 5;
     }
-  }
+  }, [key]);
   const [timeStep, setValue] = useState<number>(read);
-  useEffect(() => setValue(read()), [eventSlug]);
+  useEffect(() => setValue(read()), [read]);
   function setTimeStep(minutes: number) {
     const next = agendaTimeSteps.find((step) => step === minutes);
     if (next === undefined) return;

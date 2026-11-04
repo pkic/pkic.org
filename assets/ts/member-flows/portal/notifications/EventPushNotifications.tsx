@@ -17,7 +17,7 @@ export function EventPushNotifications({
   return (
     <div class="pk-stack pk-stack--snug">
       <Checkbox
-        role="switch"
+        switch
         name="pushEnabled"
         label="Notify me on this device"
         hint="Before your sessions and when your schedule changes."

@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "preact/hooks";
+import { useCallback, useEffect, useState, useRef } from "preact/hooks";
 import { formatNumber } from "../../../../../../../shared/format-number";
 import { Field } from "../../../../../../ui/Field";
 import { FileInput } from "../../../../../../ui/FileInput";
@@ -49,7 +49,7 @@ export function ScannerRecovery({
   const [epochCount, setEpochCount] = useState(0);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     const [archived, pending, snapshot] = await Promise.all([
       scanHistoryCount(operatorUserId, slug),
       pendingRecoveryCount(operatorUserId, slug),
@@ -58,10 +58,10 @@ export function ScannerRecovery({
     setCount(archived);
     setPendingCount(pending);
     setEpochCount(snapshot.scannerEpochs.length);
-  };
+  }, [operatorUserId, slug]);
   useEffect(() => {
     void refresh().catch(() => setMessage("Local recovery storage is unavailable."));
-  }, [slug, operatorUserId]);
+  }, [refresh]);
   async function restore() {
     setBusy(true);
     try {

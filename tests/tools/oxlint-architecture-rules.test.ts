@@ -43,15 +43,26 @@ function run(path: string): string {
   }
 }
 
-function lint(path: string, source: string): Diagnostic[] {
+function lint(path: string, source: string, plugin = "pkic"): Diagnostic[] {
   const file = join(workspace, path);
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, source);
   const report = JSON.parse(run(path)) as { diagnostics: Diagnostic[] };
-  return report.diagnostics.filter((diagnostic) => diagnostic.code.startsWith("pkic("));
+  return report.diagnostics.filter((diagnostic) => diagnostic.code.startsWith(`${plugin}(`));
 }
 
 const codes = (diagnostics: Diagnostic[]) => diagnostics.map((diagnostic) => diagnostic.code);
+
+describe("Oxlint TypeScript coverage", () => {
+  it("reports unreachable code in TypeScript", () => {
+    const diagnostics = lint(
+      "functions/example.ts",
+      "export function example() { return 1; console.log(2); }",
+      "eslint",
+    );
+    expect(codes(diagnostics)).toContain("eslint(no-unreachable)");
+  });
+});
 
 describe("pkic Oxlint architecture rules", () => {
   describe("API adapters", () => {
@@ -144,5 +155,62 @@ describe("pkic Oxlint architecture rules", () => {
       expect(lint("assets/ts/pages/Example.tsx", "export const A = () => <form target='_blank' />;\n")).toEqual([]);
       expect(lint("assets/ts/ui/Example.tsx", source)).toEqual([]);
     });
+  });
+});
+
+describe("Oxlint frontend and Vitest plugin rules", () => {
+  it("checks hook ordering and dependencies in Preact components", () => {
+    const source = `import { useEffect, useState } from "preact/hooks";
+      export function Example({ value, ready }) {
+        if (ready) useState(0);
+        useEffect(() => console.log(value), []);
+        return null;
+      }`;
+    expect(codes(lint("assets/ts/pages/Example.tsx", source, "react-hooks"))).toEqual(
+      expect.arrayContaining(["react-hooks(rules-of-hooks)", "react-hooks(exhaustive-deps)"]),
+    );
+  });
+
+  it("checks accessible names, ARIA, and keyboard support in JSX", () => {
+    const source = `export const Example = () => <><button /><div aria-invalid="wrong" /><div onClick={() => {}} /></>;`;
+    expect(codes(lint("assets/ts/pages/Example.tsx", source, "jsx-a11y"))).toEqual(
+      expect.arrayContaining([
+        "jsx-a11y(control-has-associated-label)",
+        "jsx-a11y(aria-proptypes)",
+        "jsx-a11y(click-events-have-key-events)",
+      ]),
+    );
+  });
+
+  it("requires labels to be associated with a control", () => {
+    const source = `export const Example = () => <><label>Name</label><label htmlFor="email">Email</label><input id="email" /></>;`;
+    expect(codes(lint("assets/ts/pages/Example.tsx", source, "jsx-a11y"))).toEqual([
+      "jsx-a11y(label-has-associated-control)",
+    ]);
+  });
+
+  it("allows table cells, datalist options, and business roles without exempting controls", () => {
+    const source = `export const Example = () => <><table><tbody><tr><td /></tr></tbody></table>
+      <datalist><option value="example" /></datalist><LivePanel role="operator" /><button /></>;`;
+    expect(codes(lint("assets/ts/pages/Example.tsx", source, "jsx-a11y"))).toEqual([
+      "jsx-a11y(control-has-associated-label)",
+    ]);
+  });
+
+  it("checks Vitest assertions, focused tests, and describe callbacks", () => {
+    const source = `import { describe, expect, it } from "vitest";
+      describe("suite", (unexpected) => {});
+      it.only("case", () => { expect(Promise.resolve(1)).resolves.toBe(1); });`;
+    expect(codes(lint("tests/example.test.ts", source, "vitest"))).toEqual(
+      expect.arrayContaining(["vitest(no-focused-tests)", "vitest(valid-describe-callback)", "vitest(valid-expect)"]),
+    );
+  });
+
+  it("accepts Vitest assertion messages and excludes Playwright files", () => {
+    const source = `import { expect, test } from "vitest";
+      test.only("case", () => { expect(1, "context").toBe(1); });`;
+    expect(codes(lint("tests/example.test.ts", source, "vitest"))).toEqual(["vitest(no-focused-tests)"]);
+    expect(lint("tests/e2e/example.test.ts", source, "vitest")).toEqual([]);
+    expect(lint("tests/e2e/example.spec.ts", source, "vitest")).toEqual([]);
   });
 });

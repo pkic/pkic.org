@@ -158,47 +158,55 @@ async function main(): Promise<void> {
   const contentEl = boot.root.querySelector<HTMLElement>("[data-proposal-manage-content]");
   if (contentEl) contentEl.hidden = false;
 
-  boot.form.addEventListener("submit", async (event) => {
+  boot.form.addEventListener("submit", (event) => {
     event.preventDefault();
-    // `was-validated` is not set here any more: `validateBeforeSubmit` adds it
-    // in the one case it means anything — a submission that failed — and
-    // setting it up front marked a form the reader had not got wrong yet.
-    if (!validateBeforeSubmit(boot.form, boot.statusEl)) return;
+    void (async () => {
+      // `was-validated` is not set here any more: `validateBeforeSubmit` adds it
+      // in the one case it means anything — a submission that failed — and
+      // setting it up front marked a form the reader had not got wrong yet.
+      if (!validateBeforeSubmit(boot.form, boot.statusEl)) return;
 
-    await withLoadingButton(findSubmitButton(boot.form), async () => {
-      try {
-        const response = await patchJson(
-          proposalAccessPath(apiBase, manageToken),
-          {
-            proposalType: readField(boot.form, "proposalType"),
-            title: readField(boot.form, "title"),
-            abstract: readField(boot.form, "abstract"),
-            ...(proposalData && isProposalCommitteeNotesEditableStatus(proposalData.proposal.status)
-              ? { committeeNotes: readField(boot.form, "committeeNotes") || null }
-              : {}),
-          },
-          proposalAccessPatchResponseSchema,
-        );
-        setStatus(boot.statusEl, `Proposal updated. Current status: '${response.proposal.status}'.`);
-      } catch (error) {
-        handleSubmitError(error, boot.form, boot.statusEl);
-      }
+      await withLoadingButton(findSubmitButton(boot.form), async () => {
+        try {
+          const response = await patchJson(
+            proposalAccessPath(apiBase, manageToken),
+            {
+              proposalType: readField(boot.form, "proposalType"),
+              title: readField(boot.form, "title"),
+              abstract: readField(boot.form, "abstract"),
+              ...(proposalData && isProposalCommitteeNotesEditableStatus(proposalData.proposal.status)
+                ? { committeeNotes: readField(boot.form, "committeeNotes") || null }
+                : {}),
+            },
+            proposalAccessPatchResponseSchema,
+          );
+          setStatus(boot.statusEl, `Proposal updated. Current status: '${response.proposal.status}'.`);
+        } catch (error) {
+          handleSubmitError(error, boot.form, boot.statusEl);
+        }
+      });
+    })().catch((error: unknown) => {
+      handleSubmitError(error, boot.form, boot.statusEl);
     });
   });
 
   const withdrawButton = boot.form.querySelector<HTMLButtonElement>("[data-action='withdraw']");
-  withdrawButton?.addEventListener("click", async () => {
-    try {
-      const response = await patchJson(
-        proposalAccessPath(apiBase, manageToken),
-        { status: "withdrawn" },
-        proposalAccessPatchResponseSchema,
-      );
-      setStatus(boot.statusEl, `Proposal updated. Current status: '${response.proposal.status}'.`);
-    } catch (error) {
-      const normalized = normalizeValidation(error);
-      setStatus(boot.statusEl, normalized.globalMessage, true);
-    }
+  withdrawButton?.addEventListener("click", () => {
+    void (async () => {
+      try {
+        const response = await patchJson(
+          proposalAccessPath(apiBase, manageToken),
+          { status: "withdrawn" },
+          proposalAccessPatchResponseSchema,
+        );
+        setStatus(boot.statusEl, `Proposal updated. Current status: '${response.proposal.status}'.`);
+      } catch (error) {
+        const normalized = normalizeValidation(error);
+        setStatus(boot.statusEl, normalized.globalMessage, true);
+      }
+    })().catch((error: unknown) => {
+      setStatus(boot.statusEl, normalizeValidation(error).globalMessage, true);
+    });
   });
 
   // Co-speaker invite
@@ -216,38 +224,42 @@ async function main(): Promise<void> {
     },
   );
 
-  inviteBtn?.addEventListener("click", async () => {
-    const email = (q<HTMLInputElement>("#cs-email", boot.root)?.value ?? "").trim();
-    const firstName = (q<HTMLInputElement>("#cs-first-name", boot.root)?.value ?? "").trim() || undefined;
-    const lastName = (q<HTMLInputElement>("#cs-last-name", boot.root)?.value ?? "").trim() || undefined;
-    const role = q<HTMLSelectElement>("#cs-role", boot.root)?.value ?? "speaker";
+  inviteBtn?.addEventListener("click", () => {
+    void (async () => {
+      const email = (q<HTMLInputElement>("#cs-email", boot.root)?.value ?? "").trim();
+      const firstName = (q<HTMLInputElement>("#cs-first-name", boot.root)?.value ?? "").trim() || undefined;
+      const lastName = (q<HTMLInputElement>("#cs-last-name", boot.root)?.value ?? "").trim() || undefined;
+      const role = q<HTMLSelectElement>("#cs-role", boot.root)?.value ?? "speaker";
 
-    if (!email) {
-      if (csStatus) setStatus(csStatus, "Please enter an email address.", true);
-      return;
-    }
-
-    await withLoadingButton(inviteBtn, async () => {
-      try {
-        const invited = await postJson(
-          proposalAccessPath(apiBase, manageToken, "speakers"),
-          { email, firstName, lastName, role },
-          coSpeakerInviteResponseSchema,
-        );
-        if (csStatus) {
-          setStatus(csStatus, invited.queued ? `Invite sent to ${email}.` : `${email} already has an active invite.`);
-        }
-        const emailEl = q<HTMLInputElement>("#cs-email", boot.root);
-        const firstEl = q<HTMLInputElement>("#cs-first-name", boot.root);
-        const lastEl = q<HTMLInputElement>("#cs-last-name", boot.root);
-        if (emailEl) emailEl.value = "";
-        if (firstEl) firstEl.value = "";
-        if (lastEl) lastEl.value = "";
-        await reloadSpeakers();
-      } catch (error) {
-        const normalized = normalizeValidation(error);
-        if (csStatus) setStatus(csStatus, normalized.globalMessage, true);
+      if (!email) {
+        if (csStatus) setStatus(csStatus, "Please enter an email address.", true);
+        return;
       }
+
+      await withLoadingButton(inviteBtn, async () => {
+        try {
+          const invited = await postJson(
+            proposalAccessPath(apiBase, manageToken, "speakers"),
+            { email, firstName, lastName, role },
+            coSpeakerInviteResponseSchema,
+          );
+          if (csStatus) {
+            setStatus(csStatus, invited.queued ? `Invite sent to ${email}.` : `${email} already has an active invite.`);
+          }
+          const emailEl = q<HTMLInputElement>("#cs-email", boot.root);
+          const firstEl = q<HTMLInputElement>("#cs-first-name", boot.root);
+          const lastEl = q<HTMLInputElement>("#cs-last-name", boot.root);
+          if (emailEl) emailEl.value = "";
+          if (firstEl) firstEl.value = "";
+          if (lastEl) lastEl.value = "";
+          await reloadSpeakers();
+        } catch (error) {
+          const normalized = normalizeValidation(error);
+          if (csStatus) setStatus(csStatus, normalized.globalMessage, true);
+        }
+      });
+    })().catch((error: unknown) => {
+      if (csStatus) setStatus(csStatus, normalizeValidation(error).globalMessage, true);
     });
   });
 }

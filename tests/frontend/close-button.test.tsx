@@ -106,6 +106,44 @@ describe("shared close control", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it("dismisses a sheet only for a complete backdrop gesture or Escape", async () => {
+    const onClose = vi.fn();
+    const host = mount(
+      <BottomSheet open={false} title="Filters" onClose={onClose}>
+        <p>Sheet body</p>
+      </BottomSheet>,
+    );
+    const dialog = host.querySelector("dialog")!;
+    const panel = host.querySelector(".pk-sheet__panel")!;
+    const pointer = (target: Element, type: string, id = 1) => {
+      const event = new Event(type, { bubbles: true });
+      Object.defineProperty(event, "pointerId", { value: id });
+      target.dispatchEvent(event);
+    };
+    await act(() => {
+      pointer(panel, "pointerdown");
+      pointer(dialog, "pointerup");
+    });
+    await act(() => {
+      pointer(dialog, "pointerdown");
+      pointer(panel, "pointerup");
+    });
+    await act(() => {
+      pointer(dialog, "pointerdown", 1);
+      pointer(dialog, "pointerup", 2);
+    });
+    expect(onClose).not.toHaveBeenCalled();
+    await act(() => {
+      pointer(dialog, "pointerdown");
+      pointer(dialog, "pointerup");
+    });
+    expect(onClose).toHaveBeenCalledTimes(1);
+    await act(() => {
+      dialog.dispatchEvent(new Event("cancel", { cancelable: true }));
+    });
+    expect(onClose).toHaveBeenCalledTimes(2);
+  });
+
   it("closes a portal side panel", async () => {
     const onClose = vi.fn();
     const host = mount(

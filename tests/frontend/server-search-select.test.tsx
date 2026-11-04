@@ -62,7 +62,7 @@ async function typeSearch(input: HTMLInputElement, value: string): Promise<void>
   });
 }
 
-async function press(input: HTMLInputElement, key: string): Promise<void> {
+async function press(input: HTMLElement, key: string): Promise<void> {
   await act(async () => {
     input.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
     await vi.advanceTimersByTimeAsync(0);
@@ -259,6 +259,39 @@ describe("ServerSearchSelect", () => {
     expect(input.getAttribute("aria-expanded")).toBe("false");
     expect(container.querySelector('[role="listbox"]')).toBeNull();
     expect(onChange).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps options out of tab order while allowing a focused option to select by keyboard", async () => {
+    vi.useFakeTimers();
+    stubFetch((url) => json(pagedItems(url, 2)));
+    const onChange = vi.fn();
+    const container = mount(
+      <Field label="Working group">
+        {(control) => (
+          <ServerSearchSelect
+            {...control}
+            catalog={catalog}
+            searchLabel="Working group"
+            value={null}
+            onChange={onChange}
+          />
+        )}
+      </Field>,
+    );
+    document.body.append(container);
+    await elapse(0);
+    const input = controlFor(container, "Working group");
+    for (const key of ["Enter", " "]) {
+      await press(input, "ArrowDown");
+      const options = [...container.querySelectorAll<HTMLElement>('[role="option"]')];
+      expect(options.every((option) => option.tabIndex === -1)).toBe(true);
+      options[1]!.focus();
+      expect(document.activeElement).toBe(options[1]);
+      await press(options[1]!, key);
+      expect(onChange).toHaveBeenLastCalledWith({ id: "item-0", name: "Item 0" });
+      expect(input.getAttribute("aria-expanded")).toBe("false");
+    }
+    expect(onChange).toHaveBeenCalledTimes(2);
   });
 
   it("selects with the pointer and shows the chosen label in the closed input", async () => {

@@ -162,16 +162,18 @@ function MeetingsPanel() {
     [],
   );
   const series = meetings.data?.series ?? [];
+  const meetingSeries = meetings.data?.series;
+  const reloadMeetings = meetings.reload;
   useEffect(() => {
     const timer = window.setInterval(() => {
       const current = Date.now();
       setNow(current);
-      if (meetings.data?.series.some((meeting) => Date.parse(meeting.nextEndsAt) <= current)) {
-        void meetings.reload();
+      if (meetingSeries?.some((meeting) => Date.parse(meeting.nextEndsAt) <= current)) {
+        void reloadMeetings();
       }
     }, 60_000);
     return () => window.clearInterval(timer);
-  }, [meetings.data?.series, meetings.reload]);
+  }, [meetingSeries, reloadMeetings]);
 
   return (
     <PanelCard title="Upcoming meetings" footer={series.length > 0 && <span>Personal calendar · Do not share</span>}>
@@ -266,12 +268,13 @@ function EventsPanel() {
       .filter((instant) => instant > at);
     return future.length > 0 ? Math.min(...future) : null;
   });
+  const reloadEvents = events.reload;
   const previous = useRef(now);
   useEffect(() => {
     if (previous.current === now) return;
     previous.current = now;
-    void events.reload();
-  }, [now]);
+    void reloadEvents();
+  }, [now, reloadEvents]);
 
   return (
     <section class="pk-stack" aria-label="Events">
@@ -382,7 +385,11 @@ function HomeShortcuts() {
 
 export function Home() {
   const session = portalSession.value;
-  if (!portalHasCapacity(session)) return <AccountOnlyHome />;
+  return portalHasCapacity(session) ? <MemberHome /> : <AccountOnlyHome />;
+}
+
+function MemberHome() {
+  const session = portalSession.value;
   const isMember = Boolean(session?.member);
   const firstName = profile.value?.preferredName || profile.value?.firstName || "";
   // Settled once per mount: the visit that records itself must not then greet as returning.

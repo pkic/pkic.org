@@ -245,8 +245,10 @@ export function App() {
         if (portalSession.value?.sessionId === current.sessionId) clearAuth();
       }
     }
-    async function reconnect() {
-      if (!(await resumePendingUserLogout()) && !portalSession.value) await loadPortalSession();
+    function reconnect() {
+      void (async () => {
+        if (!(await resumePendingUserLogout()) && !portalSession.value) await loadPortalSession();
+      })().catch(() => setSessionError("Could not reconnect. Please try again."));
     }
     const unsubscribe = subscribeUserSessionState(() => {
       void changed();

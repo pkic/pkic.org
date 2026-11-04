@@ -145,7 +145,15 @@ export function SessionHistoryEditor({
       </PanelHeader>
       <PanelBody>
         {canEdit && (
-          <form noValidate onSubmit={save} class="pk-stack">
+          <form
+            noValidate
+            onSubmit={(event) => {
+              void save(event).catch((error: unknown) =>
+                setError(error instanceof Error ? error.message : "Unable to save session archive."),
+              );
+            }}
+            class="pk-stack"
+          >
             <p class="pk-muted">
               Corrections update the draft. Approve the agenda again to publish a new historical version.
             </p>

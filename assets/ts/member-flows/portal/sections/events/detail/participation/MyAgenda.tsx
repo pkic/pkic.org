@@ -234,7 +234,7 @@ function PersonalAgenda({
     return () => observer.disconnect();
   }, [content, nothingSaved, program.loading, mineOnly]);
   useEffect(() => {
-    if (openId !== revised) setRevised(null);
+    setRevised((current) => (openId !== current ? null : current));
   }, [openId]);
   const previousOpen = useRef<string | null>(null);
   const focusClosed = useRef(onFocusClosed);

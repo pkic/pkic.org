@@ -1,6 +1,6 @@
 import { VerifiedOrganizationNameField } from "./VerifiedOrganizationNameField";
 /** The existing verified name/domain step, opened from the shared select-and-add control. */
-import { useState, useEffect, useRef } from "preact/hooks";
+import { useState, useEffect, useRef, useCallback } from "preact/hooks";
 import type { z } from "zod";
 import {
   identityAffiliationPrepareBaseSchema,
@@ -34,6 +34,7 @@ export function VerifiedOrganizationCreateDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const active = useRef(true);
+  const request = useRef(0);
   useEffect(
     () => () => {
       active.current = false;
@@ -41,32 +42,39 @@ export function VerifiedOrganizationCreateDialog({
     [],
   );
   const form = useContractForm(organizationFields, { organizationName: name, domain: resolved.domain || undefined });
-  async function changeDomain(domain: string) {
-    setBusy(true);
-    setError("");
-    try {
-      const result = await resolve(domain);
-      if (active.current) setResolved(result);
-    } catch (cause) {
-      if (active.current) setError(form.refuse(cause));
-    } finally {
-      if (active.current) setBusy(false);
-    }
-  }
+  const refuse = form.refuse;
+  const changeDomain = useCallback(
+    async (domain: string) => {
+      const currentRequest = ++request.current;
+      setBusy(true);
+      setError("");
+      try {
+        const result = await resolve(domain);
+        if (active.current && request.current === currentRequest) setResolved(result);
+      } catch (cause) {
+        if (active.current && request.current === currentRequest) setError(refuse(cause));
+      } finally {
+        if (active.current && request.current === currentRequest) setBusy(false);
+      }
+    },
+    [resolve, refuse],
+  );
   const initialized = useRef(false);
   useEffect(() => {
     if (!open) {
+      request.current++;
+      setBusy(false);
       setResolved(initial);
       initialized.current = false;
     }
-  }, [initial.domain]);
+  }, [initial, open]);
   useEffect(() => {
     if (!open || initialized.current) return;
     initialized.current = true;
     const specific = initial.domains.find((item) => item.canLink);
     if (specific && specific.domain !== initial.domain) void changeDomain(specific.domain);
-  }, [open]);
-  function useOrganization() {
+  }, [open, initial, changeDomain]);
+  function selectOrganization() {
     if (busy) return;
     const checked = form.submit();
     if (!checked.data) return;
@@ -79,7 +87,7 @@ export function VerifiedOrganizationCreateDialog({
       closeLabel="Close add organization"
       confirmLabel="Use organization"
       confirmDisabled={busy}
-      onConfirm={useOrganization}
+      onConfirm={selectOrganization}
       onCancel={onClose}
     >
       <form
@@ -88,7 +96,7 @@ export function VerifiedOrganizationCreateDialog({
         {...form.handlers}
         onSubmit={(event) => {
           event.preventDefault();
-          useOrganization();
+          selectOrganization();
         }}
       >
         {resolved.domains.length > 1 && (

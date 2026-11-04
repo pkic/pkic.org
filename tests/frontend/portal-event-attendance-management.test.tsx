@@ -23,6 +23,7 @@ import { GroupEventRegistrationRecord } from "../../assets/ts/member-flows/porta
 import { GroupEventRegistrations } from "../../assets/ts/member-flows/portal/sections/management/GroupEventRegistrations";
 import { chooseColumnFilter, columnFilterOptions } from "./helpers/column-menu";
 import { menuItemNamed } from "./helpers/row-actions";
+import { installAttendanceApi } from "./helpers/group-event-attendance-api";
 import { controlFor } from "./helpers/labeled-control";
 import {
   GROUP_ID,
@@ -33,9 +34,7 @@ import {
   MANAGE_ACCESS_ENDPOINT,
   json,
   registrationList,
-  attendanceDetail,
 } from "./helpers/group-event-attendance-fixtures";
-import { configuredDays } from "./helpers/configured-days";
 
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", vi.fn()] }));
 
@@ -72,49 +71,6 @@ async function settle(): Promise<void> {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
-}
-
-function installApi(waitlisted: boolean) {
-  const requests: Array<{ path: string; method: string; body?: unknown; search?: string }> = [];
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
-      const url = new URL(
-        typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
-        location.origin,
-      );
-      const method = init.method ?? "GET";
-      const body = typeof init.body === "string" ? JSON.parse(init.body) : undefined;
-      requests.push({ path: url.pathname, method, body, search: url.search });
-      if (method === "GET" && url.pathname.endsWith(`/events/${EVENT_ID}/days`)) return json(configuredDays());
-      if (method === "GET" && url.pathname.endsWith(`/events/${EVENT_ID}/registrations`)) {
-        return json(registrationList());
-      }
-      if (method === "GET" && url.pathname === REGISTRATION_ENDPOINT) return json(attendanceDetail(waitlisted));
-      if (method === "PATCH" && url.pathname === `${REGISTRATION_ENDPOINT}/day-attendance`) {
-        return json({ success: true });
-      }
-      if (method === "PATCH" && url.pathname === REGISTRATION_ENDPOINT) {
-        const detail = attendanceDetail(waitlisted);
-        return json({ success: true, ...detail, registration: { ...detail.registration, status: "cancelled" } });
-      }
-      if (method === "POST" && url.pathname === MANAGE_ACCESS_ENDPOINT) {
-        return json({ manageUrl: "https://portal.example.test/events/architecture-workshop/manage#token" });
-      }
-      if (method === "POST" && url.pathname === `${REGISTRATION_ENDPOINT}/notifications`) {
-        return json({ success: true, message: "Email queued" });
-      }
-      if (method === "POST" && url.pathname === `${REGISTRATION_ENDPOINT}/admissions`) {
-        return json({
-          success: true,
-          registration: attendanceDetail(false).registration,
-          admittedDayDates: ["2026-09-01"],
-        });
-      }
-      throw new Error(`Unexpected request: ${method} ${url.pathname}`);
-    }),
-  );
-  return requests;
 }
 
 afterEach(() => {
@@ -155,7 +111,7 @@ function statFigures(root: Element | null): Record<string, { value: string; note
 
 describe("group event registrations roster", () => {
   it("hands the filtered print population to the dedicated Badges view instead of replacing the roster", async () => {
-    installApi(false);
+    installAttendanceApi(false);
     const onPrint = vi.fn();
     const container = mount(
       <GroupEventRegistrations
@@ -180,7 +136,7 @@ describe("group event registrations roster", () => {
     expect(container.textContent).not.toContain("Print all matching attendee badges");
   });
   it("names the roster and every one of its columns, with no blank action column", async () => {
-    installApi(false);
+    installAttendanceApi(false);
     const container = mountRoster();
     await settle();
 
@@ -195,7 +151,7 @@ describe("group event registrations roster", () => {
   });
 
   it("makes each row a link to the registration's own page, never an expansion between the rows", async () => {
-    const requests = installApi(false);
+    const requests = installAttendanceApi(false);
     const container = mountRoster();
     await settle();
 
@@ -210,7 +166,7 @@ describe("group event registrations roster", () => {
   });
 
   it("summarizes attendance by type while retaining exact waitlisted days in accessible labels", async () => {
-    installApi(false);
+    installAttendanceApi(false);
     const container = mountRoster();
     await settle();
     const badges = [...container.querySelectorAll('tbody .pk-badge-group [role="img"]')];
@@ -224,7 +180,7 @@ describe("group event registrations roster", () => {
   });
 
   it("offers attendance types in the compact Attendance header for filtering and printing", async () => {
-    const requests = installApi(false);
+    const requests = installAttendanceApi(false);
     const container = mountRoster();
     await settle();
     expect(columnFilterOptions(container, "Attendance", "Attendance type")).toEqual([
@@ -241,7 +197,7 @@ describe("group event registrations roster", () => {
   });
 
   it("offers the waitlist as the Attendance column's filter and sends it to the query", async () => {
-    const requests = installApi(false);
+    const requests = installAttendanceApi(false);
     const container = mountRoster();
     await settle();
 
@@ -259,7 +215,7 @@ describe("group event registrations roster", () => {
   });
 
   it("states the totals in words beside the figures, including the waitlisted share", async () => {
-    installApi(false);
+    installAttendanceApi(false);
     const container = mountRoster();
     await settle();
 
@@ -310,7 +266,7 @@ describe("group event registrations roster", () => {
 
 describe("group event registration record", () => {
   it("names the record after its attendee and states the type in the shared words", async () => {
-    installApi(true);
+    installAttendanceApi(true);
     const container = mountRecord();
     await settle();
     await settle();
@@ -342,7 +298,7 @@ describe("group event registration record", () => {
   }
 
   it("returns an accepted in-person day to its per-day waitlist through the canonical group route", async () => {
-    const requests = installApi(false);
+    const requests = installAttendanceApi(false);
     const container = mountRecord();
     await settle();
     await settle();
@@ -371,7 +327,7 @@ describe("group event registration record", () => {
   });
 
   it("admits a selected waitlisted day without changing a registration-wide waitlist status", async () => {
-    const requests = installApi(true);
+    const requests = installAttendanceApi(true);
     const container = mountRecord();
     await settle();
     await settle();
@@ -398,7 +354,7 @@ describe("group event registration record", () => {
   });
 
   it("shows the capacity override only with event manage and sends its explicit selected-day payload", async () => {
-    const hiddenRequests = installApi(false);
+    const hiddenRequests = installAttendanceApi(false);
     const hidden = mountRecord(false);
     await settle();
     await settle();
@@ -410,7 +366,7 @@ describe("group event registration record", () => {
     expect(hiddenRequests.some(({ method }) => method === "POST")).toBe(false);
 
     vi.unstubAllGlobals();
-    const requests = installApi(false);
+    const requests = installAttendanceApi(false);
     const container = mountRecord(true);
     await settle();
     await settle();
@@ -451,7 +407,7 @@ describe("group event registration record", () => {
   });
 
   it("moves the selected days to another attendance method from the list's bulk bar", async () => {
-    const requests = installApi(false);
+    const requests = installAttendanceApi(false);
     const container = mountRecord(true);
     await settle();
     await settle();
@@ -497,7 +453,7 @@ describe("group event registration record", () => {
   });
 
   it("cancels the registration only through the confirm dialog, and only with event manage", async () => {
-    const requests = installApi(false);
+    const requests = installAttendanceApi(false);
     const container = mountRecord(true);
     await settle();
     await settle();
@@ -518,7 +474,7 @@ describe("group event registration record", () => {
   });
 
   it("opens the attendee's own manage page through the event's signed access route", async () => {
-    const requests = installApi(false);
+    const requests = installAttendanceApi(false);
     const opened = vi.fn();
     vi.stubGlobal("open", opened);
     const container = mountRecord(true, EVENT_SLUG);
@@ -543,7 +499,7 @@ describe("group event registration record", () => {
     const toastArea = document.createElement("div");
     toastArea.id = "portal-toast-area";
     document.body.append(toastArea);
-    const requests = installApi(false);
+    const requests = installAttendanceApi(false);
     const container = mountRecord(true, EVENT_SLUG);
     await settle();
     await settle();
@@ -564,7 +520,7 @@ describe("group event registration record", () => {
   });
 
   it("offers the manage page only with event manage", async () => {
-    installApi(false);
+    installAttendanceApi(false);
     const container = mountRecord(false, EVENT_SLUG);
     await settle();
     await settle();

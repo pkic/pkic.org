@@ -6,7 +6,7 @@
  * is checked in; a note says when they are not registered for the day, attend
  * it online, or have no seat booked for the session.
  */
-import { useMemo, useState } from "preact/hooks";
+import { useState } from "preact/hooks";
 import { contractClock } from "../../../../../../shared/event-clock";
 import { formatCalendarDate, formatClockRangeInZone } from "../../../../../../shared/format-date";
 import {
@@ -61,7 +61,7 @@ function CheckInConfirmation({ slug, token }: { slug: string; token: string }) {
         : Promise.resolve(INVALID),
     [slug, token],
   );
-  const operationId = useMemo(() => crypto.randomUUID(), [token]);
+  const [operationId] = useState(() => crypto.randomUUID());
   const [recorded, setRecorded] = useState<AttendancePointResult | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");

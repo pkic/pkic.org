@@ -1,3 +1,4 @@
+import { toast } from "../../../../ui";
 import { useState } from "preact/hooks";
 import { useHashQueryParam } from "../../../../../../hooks/useHashQueryParam";
 import { StudioCreateAction } from "./studio/StudioCreateAction";
@@ -36,14 +37,18 @@ function rowMenu(poll: LivePoll, send: Send, onOpen: () => void): MenuItem[] {
       label: "Delete poll",
       danger: true,
       separatorBefore: true,
-      onSelect: async () => {
-        const confirmed = await confirmAction({
-          title: "Delete this poll?",
-          body: `“${poll.field.label}” is removed for every operator.`,
-          confirmLabel: "Delete poll",
-          tone: "danger",
-        });
-        if (confirmed) send({ type: "poll.delete", pollId: poll.id });
+      onSelect: () => {
+        void (async () => {
+          const confirmed = await confirmAction({
+            title: "Delete this poll?",
+            body: `“${poll.field.label}” is removed for every operator.`,
+            confirmLabel: "Delete poll",
+            tone: "danger",
+          });
+          if (confirmed) send({ type: "poll.delete", pollId: poll.id });
+        })().catch((error: unknown) =>
+          toast(error instanceof Error ? error.message : "Could not complete the action.", "error"),
+        );
       },
     });
   return items;

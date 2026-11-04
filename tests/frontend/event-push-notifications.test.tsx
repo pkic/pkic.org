@@ -11,7 +11,7 @@ vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/scan
 import { useEventPushNotifications } from "../../assets/ts/member-flows/portal/notifications/useEventPushNotifications";
 let host: HTMLDivElement;
 let current: ReturnType<typeof useEventPushNotifications>;
-let permission: ReturnType<typeof vi.fn>,
+let permission: ReturnType<typeof vi.fn<() => Promise<string>>>,
   register: ReturnType<typeof vi.fn>,
   subscribe: ReturnType<typeof vi.fn>,
   unsubscribe: ReturnType<typeof vi.fn>;

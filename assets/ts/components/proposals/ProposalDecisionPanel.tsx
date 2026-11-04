@@ -94,14 +94,15 @@ export function ProposalDecisionPanel({
   const selectedPreview =
     preview?.messages.find((message) => message.id === selectedPreviewId) ?? preview?.messages[0] ?? null;
 
+  const resetForm = form.reset;
   // Reset the record's draft before controls become interactive. A deferred
   // effect can otherwise erase a decision chosen just after opening this tab.
   useLayoutEffect(() => {
     setDecisionStatus("");
     setDecisionNote("");
     setChanging(false);
-    form.reset();
-  }, [proposal]);
+    resetForm();
+  }, [proposal, resetForm]);
 
   useEffect(() => {
     setPreview(null);

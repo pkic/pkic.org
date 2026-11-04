@@ -4,7 +4,7 @@ import { splitBadgePrintSvg } from "../../../shared/badge-print-svg";
 import { badgeCredentialSchema, formatBadgeCredential } from "../../../shared/schemas/badge-credential";
 import { BADGE_DISPLAY_ROLE_LABELS } from "../../../shared/schemas/participant-roles";
 import { badgeLabelSvg } from "../../../shared/badge-label-svg";
-import { BADGE_GENERIC_FONT_LICENSE } from "../../../shared/badge-generic-template-assets";
+import { BADGE_GENERIC_FONT_LICENSE } from "../../../shared/badge-generic-font-license";
 import { compileBadgeTemplate, BADGE_PRINT_CONTENT_SECURITY_POLICY } from "../../../shared/badge-template-render";
 import type { BadgePrintingContext } from "../../../shared/schemas/route-contracts-event-badges";
 import type { BadgePrintDesign } from "../../../shared/schemas/event-badge-template";
@@ -106,7 +106,7 @@ export function badgePrintCredential(badge: PrintableBadgePrint): string | null 
 }
 
 export function badgePrintCsv(badges: readonly PrintableBadgePrint[]): string {
-  // Exact column names from the printer’s supplied personalization template.
+  // Column names follow the printer personalization template.
   const header = printerTemplate.columns;
   const rows = badges.map((badge) => {
     const credential = badgePrintCredential(badge);

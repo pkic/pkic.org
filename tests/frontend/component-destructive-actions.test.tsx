@@ -104,6 +104,74 @@ describe("PictureTile logo confirmation", () => {
     expect(onRemove).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps the control busy until the refresh after removal completes", async () => {
+    let finishRefresh: () => void = () => {
+      throw new Error("Refresh did not start");
+    };
+    const onChanged = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishRefresh = resolve;
+        }),
+    );
+    const container = mount(
+      <>
+        <ConfirmDialogHost />
+        <PictureTile {...props({ onChanged })} />
+      </>,
+    );
+
+    await act(() => namedControl(container, "Remove logo of Example Corp").click());
+    await act(() => dialogButton(container, "Remove logo").click());
+    await settle();
+    expect(onChanged).toHaveBeenCalledTimes(1);
+    expect(namedControl(container, "Remove logo of Example Corp").disabled).toBe(true);
+
+    await act(() => finishRefresh());
+    await settle();
+    expect(namedControl(container, "Remove logo of Example Corp").disabled).toBe(false);
+  });
+
+  it("reports a failed refresh and releases the control after removal", async () => {
+    const toast = vi.fn();
+    const onChanged = vi.fn(async () => {
+      throw new Error("Refresh failed");
+    });
+    const container = mount(
+      <>
+        <ConfirmDialogHost />
+        <PictureTile {...props({ onChanged, toast })} />
+      </>,
+    );
+
+    await act(() => namedControl(container, "Remove logo of Example Corp").click());
+    await act(() => dialogButton(container, "Remove logo").click());
+    await settle();
+
+    expect(onChanged).toHaveBeenCalledTimes(1);
+    expect(toast).toHaveBeenCalledWith("Refresh failed", "error");
+    expect(namedControl(container, "Remove logo of Example Corp").disabled).toBe(false);
+  });
+
+  it("reports a non-Error refresh failure after a successful removal", async () => {
+    const toast = vi.fn();
+    const onChanged = vi.fn<() => Promise<void>>().mockRejectedValue(null);
+    const container = mount(
+      <>
+        <ConfirmDialogHost />
+        <PictureTile {...props({ onChanged, toast })} />
+      </>,
+    );
+
+    await act(() => namedControl(container, "Remove logo of Example Corp").click());
+    await act(() => dialogButton(container, "Remove logo").click());
+    await settle();
+
+    expect(toast).toHaveBeenCalledWith("Logo removed", "success");
+    expect(toast).toHaveBeenCalledWith("Logo removed, but the page could not refresh. Reload the page.", "error");
+    expect(namedControl(container, "Remove logo of Example Corp").disabled).toBe(false);
+  });
+
   it("keeps the logo when the confirmation is cancelled", async () => {
     const onRemove = vi.fn(async () => undefined);
     const container = mount(

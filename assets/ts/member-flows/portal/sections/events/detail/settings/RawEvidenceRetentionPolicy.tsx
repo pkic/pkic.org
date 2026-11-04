@@ -265,7 +265,16 @@ function PolicyForm({ event, canWrite }: { event: RetentionEvent; canWrite: bool
     </Panel>
   );
   return editing ? (
-    <form noValidate {...form.handlers} onSubmit={save}>
+    <form
+      noValidate
+      {...form.handlers}
+      onSubmit={(event) => {
+        void save(event).catch((error: unknown) => {
+          setMessageTone("danger");
+          setMessage(error instanceof Error ? error.message : "Policy could not be saved. Your draft is preserved.");
+        });
+      }}
+    >
       {panel}
     </form>
   ) : (

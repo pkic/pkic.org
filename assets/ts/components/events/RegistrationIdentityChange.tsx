@@ -32,19 +32,21 @@ export function RegistrationIdentityChange({
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [refreshPending, setRefreshPending] = useState(false);
   const form = useRef<HTMLFormElement>(null);
   const profileEdited = useRef(false);
   const contract = useContractForm(registrationIdentityChangeSchema, {
     identityId: selected?.id,
     expectedIdentityId: data.identityId ?? null,
   });
+  const resetContract = contract.reset;
   useEffect(() => {
     if (!open) return;
     profileEdited.current = false;
     let active = true;
     setLoading(true);
     setError("");
-    contract.reset();
+    resetContract();
     void getJson("/api/v1/auth/session", userAuthSessionResponseSchema)
       .catch(() => null)
       .then((current) => {
@@ -62,7 +64,16 @@ export function RegistrationIdentityChange({
     return () => {
       active = false;
     };
-  }, [open, data]);
+  }, [open, data, resetContract]);
+  async function refresh(): Promise<void> {
+    try {
+      await onChanged();
+      setRefreshPending(false);
+      setError("");
+    } catch {
+      setError("Your changes were saved, but the registration could not be refreshed. Try refreshing again.");
+    }
+  }
   return (
     <>
       <Button
@@ -71,25 +82,41 @@ export function RegistrationIdentityChange({
         aria-label="Change representation"
         title="Change representation"
         loading={loading}
+        disabled={refreshPending}
         onClick={show}
       >
         <IconPencil />
       </Button>
+      {!open && error && <Alert tone="danger">{error}</Alert>}
+      {!open && refreshPending && (
+        <Button type="button" onClick={() => void refresh()}>
+          Retry refresh
+        </Button>
+      )}
       {createPortal(
         <Dialog
           open={open}
           title="Change representation"
           closeLabel="Close change representation"
-          confirmLabel={session ? "Save changes" : "Close"}
+          confirmLabel={refreshPending ? "Retry refresh" : session ? "Save changes" : "Close"}
           cancelLabel={session ? "Cancel" : null}
           confirmDisabled={busy || loading}
-          onConfirm={() => (session ? form.current?.requestSubmit() : close())}
-          onCancel={async () => {
+          onConfirm={() => {
+            if (session) form.current?.requestSubmit();
+            else void close().catch((cause: unknown) => setError(contract.refuse(cause)));
+          }}
+          onCancel={() => {
             if (busy) return;
-            await close();
-            if (profileEdited.current) await onChanged();
+            void (async () => {
+              await close();
+              if (profileEdited.current) {
+                setRefreshPending(true);
+                await refresh();
+              }
+            })().catch((cause: unknown) => setError(contract.refuse(cause)));
           }}
         >
+          {error && <Alert tone="danger">{error}</Alert>}
           {loading ? (
             <Spinner label="Loading your representations…" />
           ) : session ? (
@@ -98,30 +125,35 @@ export function RegistrationIdentityChange({
               noValidate
               {...contract.handlers}
               class="pk-stack"
-              onSubmit={async (event) => {
+              onSubmit={(event) => {
                 event.preventDefault();
-                if (busy) return;
-                const checked = contract.submit();
-                if (!checked.data) return setError(checked.formMessage ?? "");
-                setBusy(true);
-                setError("");
-                try {
-                  await putJson(
-                    `/api/v1/registrations/${encodeURIComponent(data.registration.id)}/identity`,
-                    checked.data,
-                    registrationIdentityChangeResponseSchema,
-                  );
-                  await close();
-                  await onChanged();
-                } catch (cause) {
-                  setError(contract.refuse(cause));
-                } finally {
-                  setBusy(false);
-                }
+                void (async () => {
+                  if (busy) return;
+                  setBusy(true);
+                  setError("");
+                  try {
+                    if (!refreshPending) {
+                      const checked = contract.submit();
+                      if (!checked.data) return setError(checked.formMessage ?? "");
+                      await putJson(
+                        `/api/v1/registrations/${encodeURIComponent(data.registration.id)}/identity`,
+                        checked.data,
+                        registrationIdentityChangeResponseSchema,
+                      );
+                      setRefreshPending(true);
+                    }
+                    await close();
+                    await refresh();
+                  } catch (cause) {
+                    setError(contract.refuse(cause));
+                  } finally {
+                    setBusy(false);
+                  }
+                })();
               }}
             >
-              {error && <Alert tone="danger">{error}</Alert>}
-              {open && (
+              {refreshPending && <p>Your changes were saved. Continue to refresh the registration.</p>}
+              {open && !refreshPending && (
                 <RegistrationIdentityField
                   presentation="picker"
                   preferred={selected}

@@ -28,7 +28,7 @@ vi.mock("../../assets/ts/member-flows/portal/shell/portal-sections", async (orig
 vi.mock("@simplewebauthn/browser", () => ({ browserSupportsWebAuthn: () => false }));
 
 let host: HTMLDivElement;
-let fetchMock: ReturnType<typeof vi.fn>;
+let fetchMock: ReturnType<typeof vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>>;
 // The shell is lazy; transform it before the tests so mounting waits for portal state, not a cold module graph.
 beforeAll(async () => {
   await import("../../assets/ts/member-flows/portal/shell/PortalShell");
@@ -40,7 +40,7 @@ beforeEach(() => {
   history.replaceState({}, "", "/portal/#/events/analytics?analytics.section=profile");
   host = document.createElement("div");
   document.body.append(host);
-  fetchMock = vi.fn();
+  fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>();
   vi.stubGlobal("fetch", fetchMock);
   vi.spyOn(window, "scrollTo").mockImplementation(() => {});
   Object.defineProperty(HTMLElement.prototype, "scrollTo", { configurable: true, value: vi.fn() });

@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { h, render } from "preact";
 import { act } from "preact/test-utils";
 import { ApiClientError } from "../../assets/ts/shared/api-client";
 import { useData } from "../../assets/ts/hooks/useData";
+import { useRevisionEffect } from "../../assets/ts/hooks/useRevisionEffect";
 
 interface Deferred<T> {
   promise: Promise<T>;
@@ -45,6 +46,60 @@ describe("useData request ordering", () => {
       void act(() => render(null, container));
       container.remove();
     }
+  });
+
+  it("keeps the fetcher generation until dependencies change and reloads the current generation", async () => {
+    const calls = vi.fn(async (resource: string, captured: string) => `${resource}:${captured}`);
+    let latest!: State;
+    const container = document.createElement("div");
+    mounted.push(container);
+    function Inline({ resource, captured }: { resource: string; captured: string }) {
+      latest = useData(() => calls(resource, captured), [resource]);
+      return null;
+    }
+    const show = async (resource: string, captured: string) => {
+      await act(() => render(<Inline resource={resource} captured={captured} />, container));
+      await act(flush);
+    };
+    await show("one", "original");
+    expect(latest.data).toBe("one:original");
+    await show("one", "rerendered");
+    expect(calls).toHaveBeenCalledTimes(1);
+    await act(async () => latest.reload());
+    expect(calls).toHaveBeenLastCalledWith("one", "original");
+    await show("two", "new");
+    expect(calls).toHaveBeenCalledTimes(3);
+    expect(latest.data).toBe("two:new");
+    await act(async () => latest.reload());
+    expect(calls).toHaveBeenLastCalledWith("two", "new");
+  });
+
+  it("refetches on a dependency change even when the fetcher has stable identity", async () => {
+    const fetcher = vi.fn(async () => "result");
+    const container = document.createElement("div");
+    mounted.push(container);
+    function Stable({ resource }: { resource: string }) {
+      useData(fetcher, [resource]);
+      return null;
+    }
+    await act(() => render(<Stable resource="one" />, container));
+    await act(flush);
+    await act(() => render(<Stable resource="two" />, container));
+    await act(flush);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not publish a pending response after unmount", async () => {
+    const request = deferred<string>();
+    const observed = vi.fn();
+    const container = document.createElement("div");
+    mounted.push(container);
+    await act(() => render(<Harness resourceId="one" fetcher={() => request.promise} onState={observed} />, container));
+    await act(() => render(null, container));
+    const countAfterUnmount = observed.mock.calls.length;
+    request.resolve("late");
+    await act(flush);
+    expect(observed).toHaveBeenCalledTimes(countAfterUnmount);
   });
 
   it("does not let an older dependency request overwrite the current resource", async () => {
@@ -145,5 +200,28 @@ describe("useData request ordering", () => {
     requests[3].resolve("Second resource");
     await act(flush);
     expect(latest.data).toBe("Second resource");
+  });
+});
+
+describe("useRevisionEffect", () => {
+  it("runs on mount and revision changes with the latest record, not on same-revision refreshes", async () => {
+    const reset = vi.fn();
+    const host = document.createElement("div");
+    function RecordDraft({ revision, name }: { revision: string; name: string }) {
+      useRevisionEffect(() => reset(name), revision);
+      return null;
+    }
+    try {
+      await act(() => render(<RecordDraft revision="1" name="initial" />, host));
+      expect(reset).toHaveBeenCalledTimes(1);
+      expect(reset).toHaveBeenLastCalledWith("initial");
+      await act(() => render(<RecordDraft revision="1" name="refreshed" />, host));
+      expect(reset).toHaveBeenCalledTimes(1);
+      await act(() => render(<RecordDraft revision="2" name="latest" />, host));
+      expect(reset).toHaveBeenCalledTimes(2);
+      expect(reset).toHaveBeenLastCalledWith("latest");
+    } finally {
+      await act(() => render(null, host));
+    }
   });
 });

@@ -266,7 +266,7 @@ export const patternSections: PreviewSection[] = [
         <Radio name="preview-choice" value="available" label="Available option" />
         <Radio name="preview-disabled-choice" label="Unavailable option" disabled />
         <Checkbox label="Selected checkbox" defaultChecked />
-        <Checkbox label="Enabled switch" role="switch" defaultChecked />
+        <Checkbox label="Enabled switch" switch defaultChecked />
       </div>
     ),
   },

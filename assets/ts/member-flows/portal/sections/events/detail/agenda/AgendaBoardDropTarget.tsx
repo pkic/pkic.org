@@ -27,7 +27,7 @@ export function AgendaBoardDropTarget({
         timeZone={contractClock(snapshot)}
         timeStep={target.timeStep}
         proposalId={placement.selected.id}
-        onPlace={placement.place}
+        onPlace={placement.placeFromEvent}
       />
     );
   return target.dragged || target.resizing ? (

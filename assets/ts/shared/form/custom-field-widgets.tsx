@@ -126,7 +126,7 @@ function SelectInput({ field, rules }: { field: FormField; rules: FieldRules }) 
       required={field.required}
     >
       <option value="">{firstLabel}</option>
-      {optionsFor(field).map((opt) => (
+      {optionsFor(field.options).map((opt) => (
         <option key={opt.value} value={opt.value}>
           {opt.label}
         </option>
@@ -136,7 +136,7 @@ function SelectInput({ field, rules }: { field: FormField; rules: FieldRules }) 
 }
 
 function MultiSelectCheckboxes({ field }: { field: FormField }) {
-  const options = optionsFor(field);
+  const options = optionsFor(field.options);
   return (
     // Named as one group, so the set is announced as the question it answers
     // rather than as a run of unrelated checkboxes. The gap between the boxes
@@ -164,7 +164,7 @@ function MultiSelectCheckboxes({ field }: { field: FormField }) {
 function RadioChoices({ field }: { field: FormField }) {
   return (
     <div class="pk-stack pk-stack--snug" role="radiogroup" aria-label={field.label}>
-      {optionsFor(field).map((option, index) => (
+      {optionsFor(field.options).map((option, index) => (
         <label key={option.value} class="pk-check" for={`custom-${field.key}-${index}`}>
           <input
             type="radio"
@@ -182,7 +182,7 @@ function RadioChoices({ field }: { field: FormField }) {
 }
 
 function TagPicker({ field, rules, initialValue }: { field: FormField; rules: FieldRules; initialValue?: unknown }) {
-  const options = useMemo(() => optionsFor(field), [field.options]);
+  const options = useMemo(() => optionsFor(field.options), [field.options]);
   const shuffledOptions = useMemo(() => shuffled(options), [options]);
 
   const initial = useMemo(() => {

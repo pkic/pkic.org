@@ -84,7 +84,8 @@ function SessionBadgeIssuance({
   session: PortalSession;
 }) {
   const endpoint = `/api/v1/events/${encodeURIComponent(slug)}/badges`;
-  const request = useMemo(() => new AbortController(), [endpoint, session]);
+  const requestScope = useMemo(() => ({ endpoint, session, controller: new AbortController() }), [endpoint, session]);
+  const request = requestScope.controller;
   useEffect(() => () => request.abort(), [request]);
   const [printing, setPrinting] = useState<BadgePrintingContext | null>(null);
   const [printBody, setPrintBody] = useState<BadgeLabelRequest | null>(null);
@@ -246,7 +247,13 @@ function SessionBadgeIssuance({
           This creates an additional badge for the selected registration attendee. It does not replace an existing code.
         </p>
       )}
-      <form noValidate {...form.handlers} onSubmit={issue}>
+      <form
+        noValidate
+        {...form.handlers}
+        onSubmit={(event) => {
+          void issue(event).catch((error: unknown) => setError(form.refuse(error)));
+        }}
+      >
         {!replacement && !userId && (
           <Field label="Attendee" required {...form.of("userId")}>
             {(control) => (

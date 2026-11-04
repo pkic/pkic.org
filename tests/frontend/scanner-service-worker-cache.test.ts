@@ -15,7 +15,7 @@ const branding = ["/img/logo.svg", "/img/icon-180x180-white-trans.png"];
 let listeners: Map<string, (event: WorkerEvent) => void>;
 let entries: Map<string, Response>;
 let generations: Map<string, Map<string, Response>>;
-let fetcher: ReturnType<typeof vi.fn>;
+let fetcher: ReturnType<typeof vi.fn<(key: Request | string) => Promise<Response>>>;
 const requestKey = (key: Request | string) => (typeof key === "string" ? new URL(key, origin).href : key.url);
 const inventory = JSON.stringify({
   version: 1,
@@ -141,8 +141,10 @@ describe("offline scanner branding cache", () => {
   });
   it("retains explicitly prewarmed camera and fallback modules for a fresh offline decoder load", async () => {
     const modules = ["/_assets/qr-scanner.min.camera.js", "/_assets/qr-scanner-worker.min.decoder.js"];
-    fetcher.mockImplementation(async (request: Request) => {
-      const response = new Response(request.url.endsWith("decoder.js") ? "fallback decoder module" : "camera module");
+    fetcher.mockImplementation(async (request: Request | string) => {
+      const response = new Response(
+        requestKey(request).endsWith("decoder.js") ? "fallback decoder module" : "camera module",
+      );
       Object.defineProperty(response, "type", { value: "basic" });
       return response;
     });

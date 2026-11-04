@@ -85,7 +85,7 @@ export function StudioPanelFrame({
   // The grid position is a runtime value, so it rides custom properties the stylesheet reads.
   useLayoutEffect(() => {
     if (node.current) placeStudioCell(node.current, panel);
-  }, [panel.x, panel.y, panel.w, panel.h]);
+  }, [panel]);
   const resize = (size: { w?: number; h?: number }) => change((all) => resizeStudioPanel(all, panel.id, size));
   const bounds = studioGridBounds(panel.type);
   const items: MenuItem[] = [

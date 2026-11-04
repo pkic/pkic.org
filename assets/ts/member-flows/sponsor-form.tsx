@@ -121,20 +121,22 @@ async function main(): Promise<void> {
     websiteField.value = normalizeUrl(websiteField.value);
   });
 
-  form.addEventListener("submit", async (event) => {
+  form.addEventListener("submit", (event) => {
     event.preventDefault();
-    form.classList.add("was-validated");
-    if (!validateBeforeSubmit(form, statusEl)) return;
+    void (async () => {
+      form.classList.add("was-validated");
+      if (!validateBeforeSubmit(form, statusEl)) return;
 
-    await withLoadingButton(findSubmitButton(form), async () => {
-      try {
-        const payload = sponsorshipInquirySchema.parse(buildSponsorshipPayload(form));
-        await postJson(`${API_BASE}/sponsors/inquiries`, payload, sponsorshipInquiryResponseSchema);
-        showSuccessPanel(root, form);
-      } catch (error) {
-        handleSubmitError(error, form, statusEl);
-      }
-    });
+      await withLoadingButton(findSubmitButton(form), async () => {
+        try {
+          const payload = sponsorshipInquirySchema.parse(buildSponsorshipPayload(form));
+          await postJson(`${API_BASE}/sponsors/inquiries`, payload, sponsorshipInquiryResponseSchema);
+          showSuccessPanel(root, form);
+        } catch (error) {
+          handleSubmitError(error, form, statusEl);
+        }
+      });
+    })().catch((error: unknown) => handleSubmitError(error, form, statusEl));
   });
 }
 
