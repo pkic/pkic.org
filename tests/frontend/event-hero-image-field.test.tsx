@@ -12,6 +12,7 @@ vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", vi.fn()
 afterEach(cleanup);
 const writableEvent = eventDetailSchema.parse({
   ...responseEvent,
+  registrationPath: null,
   ownerGroupId: null,
   capabilities: ["read", "write", "manage"],
   sourceMode: "integration",
